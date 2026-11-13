@@ -41,6 +41,17 @@ function collectionRuntime() {
   return { make, facts, send: f => report(null, f, {}), HeightPreview, SizeIndex, maps: () => mapCount };
 }
 
+test('a partly visible lead leaves the first visible data key and its signed offset', () => {
+  const { make } = collectionRuntime(), c = make();
+  c.index.fixed = [300, 800];
+  Object.assign(c.el, { scrollTop: 150, clientHeight: 200 });
+  expect(c.scrollAnchor()).toEqual(['0', -150]);
+  c.el.scrollTop = 0;
+  expect(c.scrollAnchor()).toEqual([null, 0]);
+  c.el.scrollTop = 10350;
+  expect(c.scrollAnchor()).toEqual([null, 0]);
+});
+
 test('collection padding alone publishes a revision and rejects older same-token feedback', () => {
   for (const horizontal of [false, true]) {
     const { make, facts, send } = collectionRuntime(), c = make(horizontal);

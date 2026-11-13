@@ -75,10 +75,18 @@ fn boot_start(rows: &str, follow: bool, start: &str) -> Runner<NoData> {
     let source = format!(
         r#"component App
   state rows: number[] = {rows}
+  state ends = 0
+  state first = none
+  state within = 0
+  action moved(x: number, y: number, e: ScrollEvent)
+    first = e.firstVisibleKey
+    within = e.firstVisibleOffset
+  action edge
+    ends = ends + 1
   action prepend
     rows = [0].concat(rows)
   view
-    list virtualized=true appearance="none" height=200 width=300 estimated-item-height=100 scrollFollowEnd={follow} scroll-start="{start}" testId="feed"
+    list virtualized=true appearance="none" height=200 width=300 estimated-item-height=100 scrollFollowEnd={follow} scroll-start="{start}" reachend=edge reach-margin="0px" scroll=moved testId="feed"
       text "Lead" height=300 testId="lead"
       for x in rows key=x
         text `${{x}}` height=100
@@ -197,6 +205,34 @@ fn an_empty_for_keeps_both_fixed_sides() {
     let c = r.collections().remove(0);
     assert_eq!((c.count, c.total_extent), (0, 1100.0));
     assert!(c.fixed.iter().all(|f| !f.roots.is_empty()));
+}
+
+#[test]
+fn the_first_visible_key_names_data_below_a_partly_visible_lead() {
+    let mut r = boot("[1, 2, 3]", false);
+    report(&mut r, 0.0, [300.0, 800.0]);
+    let view = r.collections()[0].view;
+    for (top, key, within) in [
+        (0.0, Value::NONE, 0.0),
+        (150.0, Value::some(Value::str("1")), -150.0),
+        (850.0, Value::NONE, 0.0),
+    ] {
+        r.dispatch(
+            view,
+            exact_runner::Event::Scroll(exact_runner::ScrollEvent {
+                left: 0.0,
+                top,
+                width: 300.0,
+                height: 1400.0,
+                client_width: 300.0,
+                client_height: 200.0,
+                zoom: 1.0,
+            }),
+        )
+        .unwrap();
+        assert_eq!(r.slot("first"), Some(&key), "at {top}");
+        assert_eq!(r.slot("within"), Some(&Value::Number(within)), "at {top}");
+    }
 }
 
 #[test]

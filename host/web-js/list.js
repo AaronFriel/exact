@@ -343,7 +343,7 @@ class Collection {
     // as shown: edges within half a device pixel of the port's start are
     // drawn at it (traversal.rs).
     const half = 0.5 / (globalThis.devicePixelRatio || 1), unit = v => Math.round(v * 64) / 64;
-    let p = i.rowAt(Math.max(0, offset));
+    let p = i.rowAt(Math.max(i.fixed[0], offset));
     for (let q; p !== null && unit(i.prefix(p + 1)) - offset < half && (q = i.rowAt(i.prefix(p + 1))) !== null && q > p;) p = q;
     if (p === null || port <= 0 || i.prefix(p) >= offset + port) return [null, 0];
     const within = offset - i.prefix(p), drawn = offset - unit(i.prefix(p));

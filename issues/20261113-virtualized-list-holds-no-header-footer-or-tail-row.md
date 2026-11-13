@@ -33,12 +33,12 @@ recomputed that list on each token; that cost was reported, not measured.
 
 Select LLP 1035.005.000 D11 with these consumers: fixed nodes before and
 after the `for` in a virtualized list, as a scrolling container on the web
-holds them, laid out as rows that do not recycle. A streaming reply is then
-a footer row reading its own state, and a token rewrites only that row.
+holds them. Measure them as items in the height index, retaining authored
+padding and the children's formatting context.
 
-Until then, the chat-thread recipe should show the streaming case as it must
-be written today (the tail kept in its own state and appended by a derive)
-and name D11 as the coming form, and the refusal could point at that recipe.
+The approved chat recipe keeps a streaming reply as the keyed last data row
+so its focus, selection and state survive completion. A fixed trail serves
+loading and end notices.
 
 ## Implementation
 

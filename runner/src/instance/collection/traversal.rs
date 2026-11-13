@@ -113,7 +113,7 @@ impl Tree {
         // pixel's, and is not counted either.
         let half = 0.5 / f64::from(kernel.display_scale());
         let unit = |v: f64| (v * 64.0).round() / 64.0;
-        let mut position = c.index.row_at(offset.max(0.0)).ok()??;
+        let mut position = c.index.row_at(offset.max(c.index.fixed_size(0))).ok()??;
         // Past each row drawn before the port: `row_at` passes rows of no
         // height, and this, rows too short to reach it.
         while let Some(end) = c.index.prefix(position + 1) {
