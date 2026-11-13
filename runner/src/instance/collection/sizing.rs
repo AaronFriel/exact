@@ -132,11 +132,12 @@ impl Collection {
 }
 
 impl Collection {
-    pub(crate) fn create(
+    pub(in crate::instance) fn create(
         u: &mut Update<'_>,
         node: NodesId,
         view: ViewId,
         frames: &[Frame],
+        children: &mut Vec<Child>,
     ) -> Result<Option<Box<Self>>, InstanceError> {
         let plan = u.env.plan;
         let descriptor = plan.node(node);
@@ -235,11 +236,7 @@ impl Collection {
         if descriptor.node_type != exact_kernel::NodeType::List as u8 {
             return Err(invalid("virtualized requires List"));
         }
-        let child_sites = u.sites.children(Some(node), descriptor.arm);
-        let [(_, Site::Region(region))] = child_sites else {
-            return Err(invalid("fixed content around a virtualized list is not implemented by this runner yet; move it outside the list"));
-        };
-        let region = *region;
+        let (region, fixed) = fixed::create(u, node, axis, frames, children)?;
         let row = plan.region(region);
         if row.kind != RegionKind::Each || row.arms.len != 1 {
             return Err(invalid("collection needs one `for` arm"));
@@ -281,6 +278,7 @@ impl Collection {
             view,
             axis,
             region,
+            fixed,
             index: {
                 let mut index = SizeIndex::new(estimated_height).map_err(index_error)?;
                 index

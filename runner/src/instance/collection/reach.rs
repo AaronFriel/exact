@@ -187,6 +187,13 @@ impl Collection {
                         .index
                         .window_led(g.offset, g.port_main, band, [None, None])
                         .map_err(index_error)?;
+                    if self.fixed.is_some() && g.port_main > 0.0 {
+                        let offset = g.offset.max(0.0);
+                        return Ok([
+                            offset - band[0] <= 0.0,
+                            offset + g.port_main + band[1] >= self.index.total_height(),
+                        ]);
+                    }
                     Ok([0, self.index.len() - 1]
                         .map(|i| reach.segments.iter().any(|range| range.contains(&i))))
                 };

@@ -627,6 +627,7 @@ fn binary_feedback_roundtrips_and_rejects_malformed_reports() {
 #[test]
 fn snapshot_json_preserves_u64_metadata_as_decimal_strings() {
     let snapshot = CollectionSnapshot {
+        fixed: Vec::new(),
         view: 1,
         axis: ListAxis::Vertical,
         parent: None,

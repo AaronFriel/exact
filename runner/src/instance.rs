@@ -82,17 +82,12 @@ type CreateList = fn(
     NodesId,
     ViewId,
     &[Frame],
+    &mut Vec<Child>,
 ) -> Result<Option<Box<collection::Collection>>, InstanceError>;
-/// A list's data update, given its end-follow policy, scroll behavior and
-/// `keep-mounted` value.
 type UpdateList = fn(
     &mut collection::Collection,
     &mut Update<'_>,
-    &[Frame],
-    bool,
-    bool,
-    Option<&Value>,
-    [Option<&Value>; 2],
+    collection::DataUpdate<'_>,
 ) -> Result<(), InstanceError>;
 type ListTypography = fn(&mut [Child], &mut Update<'_>, &[Frame]) -> Result<(), InstanceError>;
 
@@ -281,7 +276,6 @@ impl Ids {
         });
     }
 
-    /// A binding of `node`'s evaluated, and whether it came out as before.
     fn evaluated(&mut self, node: NodesId, unchanged: bool) {
         if let Some(w) = self.work.sites.get_mut(node.0 as usize) {
             w.evaluated += 1;
@@ -709,7 +703,6 @@ fn roots_of(children: &[Child]) -> Vec<ViewId> {
     out
 }
 
-/// The first of [`roots_of`], without collecting the rest.
 fn first_root(children: &[Child]) -> Option<ViewId> {
     children.iter().find_map(|c| match c {
         Child::Node(n) => Some(n.view),
@@ -829,7 +822,8 @@ impl NodeInst {
         let realized = (|| {
             let wait = tabs::wait(u, node, view);
             if let Some(lists) = lists.filter(|_| !wait) {
-                inst.set_collection((lists.create)(u, node, view, frames)?);
+                let collection = (lists.create)(u, node, view, frames, &mut inst.children)?;
+                inst.set_collection(collection);
             }
             if !wait && inst.collection().is_none() {
                 inst.children = realize(u, Some(node), row.arm, frames)?;
@@ -1200,7 +1194,10 @@ impl NodeInst {
         .and_then(|w| w.or_else(|| self.bound_prop(plan, u.sites, EstimatedItemHeight)));
         let gap = (self.collection())
             .and_then(|_| self.bound_style(plan, u.sites, exact_kernel::StyleId::ColumnGap));
-        if let Some(collection) = self.collection_mut() {
+        if self.collection().is_some() {
+            update_all(u, &mut self.children, frames)?;
+        }
+        if let Some(collection) = rare::list_mut(&mut self.rare) {
             collection.around = theme::Around {
                 retheme: false,
                 ..u.theme.clone()
@@ -1208,11 +1205,14 @@ impl NodeInst {
             (u.env.lists.ok_or_else(unlinked)?.update)(
                 collection,
                 u,
-                frames,
-                follow,
-                smooth,
-                keep.as_ref(),
-                [estimate.as_ref(), gap.as_ref()],
+                collection::DataUpdate {
+                    frames,
+                    follow,
+                    smooth,
+                    keep: keep.as_ref(),
+                    sizing: [estimate.as_ref(), gap.as_ref()],
+                    children: &self.children,
+                },
             )?;
         } else if update_all(u, &mut self.children, frames)? {
             self.emit_children(u);

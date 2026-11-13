@@ -183,7 +183,7 @@ fn collect(
 ) -> Result<(), InstanceError> {
     for child in children {
         match child {
-            Child::Node(n) if !hidden(n, u.env.plan, u.sites) => {
+            Child::Node(n) if n.collection().is_none() && !hidden(n, u.env.plan, u.sites) => {
                 let selectable = selectable.at(n, (u.env.plan, u.sites), policy);
                 if policy == ListTextPolicy::MacOS
                     && u.env.plan.node(n.node).node_type == NodeType::Control as u8

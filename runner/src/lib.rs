@@ -115,10 +115,10 @@ pub use format::formatting;
 pub use head::Head;
 pub use instance::collection::{set_bootstrap_extent, set_lead_scale};
 pub use instance::collection::{
-    AnchorCorrection, CollectionFeedback, CollectionFill, CollectionRow, CollectionSnapshot,
-    FeedbackError, ListAxis, ReorderBinding, ReorderEnding, ReorderFrame, ReorderGeometry,
-    ReorderPhase, ReorderProgress, ReorderStart, ReorderStep, ReorderToken, ReorderWrapper,
-    RowMeasurement,
+    AnchorCorrection, CollectionFeedback, CollectionFill, CollectionFixed, CollectionRow,
+    CollectionSnapshot, FeedbackError, ListAxis, ReorderBinding, ReorderEnding, ReorderFrame,
+    ReorderGeometry, ReorderPhase, ReorderProgress, ReorderStart, ReorderStep, ReorderToken,
+    ReorderWrapper, RowMeasurement,
 };
 pub use instance::{DocNode, DocTree, DocTreeError, ListLinks, SurfaceUpdate, LISTS};
 pub use page::Page;

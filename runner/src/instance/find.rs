@@ -19,7 +19,7 @@ fn has_root(children: &[Child], view: ViewId) -> bool {
 
 /// The root among `children` whose view is `target`, pushing the frames
 /// of the arms and rows crossed to reach it; `scanned` counts rows compared.
-fn locate<'a>(
+pub(super) fn locate<'a>(
     children: &'a [Child],
     target: ViewId,
     frames: &mut Vec<Frame>,

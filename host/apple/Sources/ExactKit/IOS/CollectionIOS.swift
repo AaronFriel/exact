@@ -43,6 +43,10 @@ extension CollectionHost {
     }
     /// A list's facts on its own axes (LLP 1070 H1): a row list's offset,
     /// port and measured sizes run along x, its cross along y.
+    // Fixed children are refused before boot and by the snapshot parser.
+    // Supporting them requires measuring their occupied flow extent without
+    // wrappers, reporting both fixed measurement identities, following the
+    // trail's end, and excluding its accessibility subtree until the last row.
     package func geometry(_ id: UInt32) -> CollectionFacts? {
         guard let node = presenter?.views[id], let scroll = node.scroll, !hidden(node) else { return nil }
         // Layout's box, not the one drawn on the pixel grid (`PixelGridIOS.swift`): the runner lays rows to it.

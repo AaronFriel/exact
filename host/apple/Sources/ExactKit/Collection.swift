@@ -161,6 +161,10 @@ struct CollectionSnapshot {
     var underWay: Bool { seeking || waiting }
 
     init?(_ value: [String: Any]) {
+        guard value["fixed"] == nil else {
+            fputs("exact: fixed collection content needs Apple fixed-item geometry; move it outside the list until CollectionIOS.swift and CollectionMac.swift support it\n", stderr)
+            return nil
+        }
         guard let view = Self.viewID(value["view"]), let revision = Self.uint(value["revision"]),
               let sequence = Self.uint(value["scrollSequence"]), let extent = Self.number(value["totalExtent"]),
               let rawRows = value["rows"] as? [[String: Any]] else { return nil }

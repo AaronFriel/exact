@@ -571,7 +571,7 @@ fn open_in(
                     // A virtualized list that is a panel makes its window's
                     // rows now, as it would have when made.
                     match u.env.lists {
-                        Some(lists) => (lists.create)(u, n.node, n.view, frames)
+                        Some(lists) => (lists.create)(u, n.node, n.view, frames, &mut n.children)
                             .map(|made| n.set_collection(made)),
                         None => Ok(()),
                     }

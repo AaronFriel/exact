@@ -216,6 +216,33 @@ export function collectionController({ root, views, report, settled=()=>{}, agen
     return { raw: port.start - origin - bounce, portStart: port.start, portMain: port.main, portCross: port.cross,
       cross: s.el[A.crossClient] - number(css[A.crossPads[0]]) - number(css[A.crossPads[1]]), padding: [leading, number(css[A.padEnd])] };
   }
+  // Fixed children share their authored formatting context. The physical
+  // window boundaries delimit their extent; no logical row position is
+  // subtracted, and authored padding retains its own meaning.
+  function fixedMeasurements(s, g) {
+    const fixed = s.snapshot.fixed;
+    if (!fixed?.length) return [];
+    if (s.axis !== 'y' || fixed.length !== 2) throw Error('fixed collection content needs a vertical list with lead and trail geometry');
+    // Offset geometry is layout geometry; client rects include paint transforms.
+    const top = el => {
+      let at = el.offsetTop;
+      for (let p = el.offsetParent; p; p = p.offsetParent) at += p.offsetTop + p.clientTop;
+      return at;
+    };
+    const origin = top(s.el) + s.el.clientTop + g.padding[0];
+    const roots = fixed.map(item => item.roots.map(id => views.get(id)).filter(Boolean));
+    const bounds = el => {
+      if (!el.getClientRects().length) return null;
+      const at = top(el), css = getComputedStyle(el);
+      if (el.hasAttribute('data-exiting') || css.position === 'absolute' || css.position === 'fixed') return null;
+      return [at - number(css.marginTop), at + el.offsetHeight + number(css.marginBottom)];
+    };
+    const middle = [...s.el.children].filter(el => !roots.some(group => group.includes(el))).map(bounds).filter(Boolean);
+    const bottom = Math.max(origin, ...roots.flat().map(bounds).filter(Boolean).map(b => b[1]));
+    const start = middle[0]?.[0] ?? roots[1].map(bounds).find(Boolean)?.[0] ?? bottom;
+    const end = middle.at(-1)?.[1] ?? start;
+    return fixed.map((item, side) => ({ view: item.view, epoch: item.epoch, size: Math.max(0, side ? bottom - end : start - origin) }));
+  }
   const dimensionsOf = g => `${g.portCross},${g.portMain},${g.cross}`;
   function liveView(s, element) {
     let owner;
@@ -380,9 +407,11 @@ export function collectionController({ root, views, report, settled=()=>{}, agen
           measuredSizes.set(row.el, `${rect.width},${rect.height}`);
           return { view: row.view, epoch: row.epoch, size: rect[A.size] };
         });
+        measurements.push(...fixedMeasurements(s, g));
         s.written.clear();
       } else if (releases.includes(s)) {
         g = { raw: old.offset, portCross: old.port_cross, portMain: old.port_main, cross: old.cross, padding: old.padding };
+        measurements.push(...(s.snapshot.fixed ?? []).map(item => ({ view: item.view, epoch: item.epoch, size: item.size })));
       } else continue;
       readScroll(s);
       // The window may report a destination while first reveal follows the actual port.
@@ -479,7 +508,7 @@ export function collectionController({ root, views, report, settled=()=>{}, agen
     }
   }
   function observe(s) {
-    const elements = new Set([s.el, s.port, ...s.rows.map(r => r.el)]);
+    const elements = new Set([s.el, s.port, ...s.rows.map(r => r.el), ...(s.snapshot.fixed ?? []).flatMap(item => item.roots.map(id => views.get(id))).filter(Boolean)]);
     for (const el of s.observed.keys()) if (!elements.has(el)) { s.observer.unobserve(el); s.observed.delete(el); s.written.delete(el); }
     touch(s);
     for (const el of elements) {
@@ -577,7 +606,7 @@ export function collectionController({ root, views, report, settled=()=>{}, agen
         ||!g||old?.interaction_view!==lease.view||old.offset!==Math.max(-g.padding[0],g.raw)
         ||old.port_cross!==g.portCross||old.port_main!==g.portMain||old.cross!==g.cross
         ||s.port[AXES[s.axis].offset]!==s.offset) return null;
-      const facts={...old,revision:s.snapshot.revision,interaction_view:view,measurements:[]};
+      const facts={...old,revision:s.snapshot.revision,interaction_view:view,measurements:(s.snapshot.fixed ?? []).map(item => ({view:item.view,epoch:item.epoch,size:item.size}))};
       const bytes=collectionBytes(facts);reportsLeft--;delivering=true;let accepted;
       try { accepted=report(bytes,facts)!==false; } finally { delivering=false; }
       if(!accepted)return null;
@@ -769,7 +798,7 @@ export function collectionController({ root, views, report, settled=()=>{}, agen
         if (!f || !s.valid || !s.el.isConnected) continue;
         touch(s); // a row this commit wrote inside is read at the next pass, which its own notification asks for
         const css = getComputedStyle(s.el);
-        if (number(css[A.padStart]) !== f.padding[0] || number(css[A.padEnd]) !== f.padding[1]) enqueue(s, true);
+        if (s.snapshot.fixed?.length || number(css[A.padStart]) !== f.padding[0] || number(css[A.padEnd]) !== f.padding[1]) enqueue(s, true);
       }
     },
     // An authored offset on a collection (glue.js): on the list's own axis

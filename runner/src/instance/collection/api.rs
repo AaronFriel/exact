@@ -131,6 +131,17 @@ pub struct CollectionRow {
     /// Whether the estimate has been confirmed in this epoch.
     pub measured: bool,
 }
+/// An always-mounted item around the data rows. Its identity is for
+/// measurement and anchoring only; its authored roots remain list children.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CollectionFixed {
+    /// Measurement identity, outside the kernel view tree.
+    pub view: ViewId,
+    /// Authored root views, in sibling order, without a wrapper.
+    pub roots: Vec<ViewId>,
+    /// Indexed extent along the main axis.
+    pub size: f64,
+}
 /// Apply only if the host has not advanced beyond `scroll_sequence`, unless
 /// it is relative (`from`).
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -215,6 +226,8 @@ pub struct CollectionSnapshot {
     /// rows and, where rows are rebound, the few held past the window for
     /// the rows it needs next (LLP 1078).
     pub rows: Vec<CollectionRow>,
+    /// Lead then trail, or empty for a list without fixed content.
+    pub fixed: Vec<CollectionFixed>,
     /// Optional anchor correction; consume at most once per revision.
     pub correction: Option<AnchorCorrection>,
     /// A limited report left window rows unbuilt or rows past the window
@@ -444,6 +457,23 @@ pub fn snapshots_json(snapshots: &[CollectionSnapshot]) -> String {
         if c.request > 0 {
             write!(out, "\"lastRequest\":{},", c.request).unwrap();
         }
+        if !c.fixed.is_empty() {
+            out.push_str("\"fixed\":[");
+            for (i, fixed) in c.fixed.iter().enumerate() {
+                if i > 0 {
+                    out.push(',');
+                }
+                write!(
+                    out,
+                    "{{\"view\":{},\"roots\":{:?},\"size\":{},\"epoch\":\"1\"}}",
+                    fixed.view,
+                    fixed.roots,
+                    exact_num::Shortest(fixed.size)
+                )
+                .unwrap();
+            }
+            out.push_str("],");
+        }
         write!(out, "\"revision\":\"{}\",\"scrollSequence\":\"{}\",\"count\":{},\"totalExtent\":{},\"rows\":[", c.revision, c.scroll_sequence, c.count, exact_num::Shortest(c.total_extent)).unwrap();
         for (i, row) in c.rows.iter().enumerate() {
             if i > 0 {
@@ -505,6 +535,7 @@ impl super::Collection {
             revision: self.revision,
             scroll_sequence: self.geometry.as_ref().map_or(0, |g| g.scroll_sequence),
             count: self.index.len(),
+            fixed: self.fixed_snapshot(),
             total_extent: self.index.total_height(),
             rows: self
                 .mounted

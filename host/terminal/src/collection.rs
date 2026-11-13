@@ -149,6 +149,19 @@ impl<D: DataSource> Host<D> {
                             size: n.frame.height as f64,
                         })
                     })
+                    .chain(snapshot.fixed.iter().enumerate().map(|(side, fixed)| {
+                        RowMeasurement {
+                            view: fixed.view,
+                            epoch: 1,
+                            size: kernel
+                                .collection_fixed_sizes(
+                                    snapshot.view,
+                                    &snapshot.fixed[0].roots,
+                                    &snapshot.fixed[1].roots,
+                                )
+                                .expect("fixed collection layout")[side],
+                        }
+                    }))
                     .collect();
                 let focus_view = self
                     .focus

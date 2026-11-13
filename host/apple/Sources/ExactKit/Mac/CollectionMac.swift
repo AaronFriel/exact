@@ -283,6 +283,10 @@ extension CollectionHost {
     }
 
     /// A list's facts on its own axes (LLP 1070 H1).
+    // Fixed children are refused before boot and by the snapshot parser.
+    // Supporting them requires measuring their occupied flow extent without
+    // wrappers, reporting both fixed measurement identities, following the
+    // trail's end, and excluding its accessibility subtree until the last row.
     package func geometry(_ id: UInt32) -> CollectionFacts? {
         guard let node = presenter?.views[id], let scroll = node.scroll,
               !node.isHiddenOrHasHiddenAncestor else { return nil }

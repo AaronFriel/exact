@@ -332,7 +332,9 @@ impl Build<'_> {
             Some(list) => list
                 .iter()
                 .map(|child| match child {
-                    ListChild::Spacer(view, _) | ListChild::Row(view, ..) => *view,
+                    ListChild::Fixed(view)
+                    | ListChild::Spacer(view, _)
+                    | ListChild::Row(view, ..) => *view,
                 })
                 .collect(),
             None => roots_of(&n.children),
@@ -366,7 +368,15 @@ impl Build<'_> {
             )));
         }
         for child in list {
+            if let ListChild::Fixed(view) = child {
+                if let Some(root) = super::find::locate(&n.children, view, &mut Vec::new(), &mut 0)
+                {
+                    self.node(root, here, depth + 1)?;
+                }
+                continue;
+            }
             let (view, style, props, roots) = match child {
+                ListChild::Fixed(_) => unreachable!(),
                 ListChild::Spacer(view, style) => {
                     let mut props = PropList::new();
                     props.set(
