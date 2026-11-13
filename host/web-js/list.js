@@ -278,7 +278,8 @@ function collectionKey(value, unique) {
 
 // ---------------------------------------------------------------- collections
 /** Every mounted collection by its list's view id. */
-const Lists = new Map();
+const Lists = new Map(), SelectionLists = new Map();
+let Selection;
 let Controller = null, Loading = null, Published = "";
 const Deferred = []; // [collection, targets]: an end edge waits for the first edge's requests (runner/collection.rs)
 
@@ -301,6 +302,21 @@ class Collection {
       kept: new Map(), manual: !!o.manual, restored: false, restoredAt: null, startOffset: 0, inner: [], target: null, scrolling: false, animating: false, portUnknown: false, request: 0, status: null, preview: null, atEnd: !!o.atEnd, opensAtEnd: !!o.atEnd, endTravel: 0, keepKeys: [] });
     this.edges = [o.start, o.end]; this.reach = reachMargin(o.reach);
   }
+  syncFixedAX() {
+    if (!this.fixed) return;
+    const fixed = this.fixedItems();
+    for (const item of fixed) for (const id of item.roots) {
+      const el = Views.get(id);
+      if (el?.hasAttribute('data-exact-list-item')) {
+        el.$collectionFixed = true; el.setAttribute('role', 'presentation');
+        if (item.hidden) {
+          el.setAttribute('aria-hidden', 'true'); el.setAttribute('inert', '');
+        } else {
+          el.removeAttribute('aria-hidden'); el.removeAttribute('inert');
+        }
+      }
+    }
+  }
   fixedSide(view) { return this.fixed ? [viewId(this.fixed.a), viewId(this.fixed.b)].indexOf(view) : -1; }
   fixedItems() {
     const groups = [[], []]; let side = 0;
@@ -309,7 +325,7 @@ class Collection {
       if (el === this.fixed.b) { side = 1; continue; }
       if (side >= 0 && el.nodeType === 1) groups[side].push(viewId(el));
     }
-    return [this.fixed.a, this.fixed.b].map((el, side) => ({ view: viewId(el), roots: groups[side], size: this.index.fixed[side], epoch: 1 }));
+    return [this.fixed.a, this.fixed.b].map((el, side) => ({ view: viewId(el), roots: groups[side], size: this.index.fixed[side], epoch: 1, hidden: side === 1 && !!this.fixed.hidden }));
   }
   snapshot() {
     const g = this.geometry;
@@ -521,6 +537,10 @@ class Collection {
   }
   // ------------------------------------------------ the window (mod.rs realize_window)
   realize(update, fill) {
+    if (this.fixed) {
+      const g = this.geometry;
+      this.fixed.hidden = this.index.len > 0 && (!g || g.port_main <= 0 || this.index.window(g.offset, g.port_main).overscan[1] < this.index.len);
+    }
     const limit = update ? null : fill.limit ?? null, g = this.geometry, owed = [];
     let port = null, ranges;
     if (g) {
@@ -684,6 +704,7 @@ class Collection {
     return true;
   }
   emit() {
+    this.syncFixedAX();
     const kids = [];
     let cursor = 0, n = 0;
     for (let i = 0; i <= this.mounted.length; i++) {
@@ -1119,6 +1140,7 @@ export function vl(el, subject, key, row, o) {
   if (outer) { outer.inner.push(c); c.up = outer.list; c.site = o.site + "/" + outer.inner.length; }
   Lists.set(c.view, c);
   el.$list = c;
+  SelectionLists.set(el, c);
   // A rendered page's rows are adopted by key as the first window takes
   // them (`createRow`); the rest of it (spacers, rows the window doesn't
   // take) leaves at that window's `emit`.
@@ -1139,7 +1161,7 @@ export function vl(el, subject, key, row, o) {
   }
   el.$n = null;
   el.$jump = (name, at) => { if (el[name] !== at) (jumps ??= []).push([c.view, at, name]); };
-  onEnd(() => Lists.delete(c.view));
+  onEnd(() => { Lists.delete(c.view); SelectionLists.delete(el); });
   let first = true, previousInputs;
   if (o.follow) effect(() => { c.followEnd = !!o.follow(); });
   // A computed estimate or gap is read again as it changes.
@@ -1213,6 +1235,7 @@ Hosts.scrollIntoView = (...a) => a.length !== 7 ? element(...a) : intoView(a[0],
 const intoViewState = () => [...[...Lists.values()].filter(c => c.status).map(c => ({ list: c.view, key: c.status[0], status: c.status[1] })), ...Refused];
 function publish() {
   // As the web host sends `collections`: only when a snapshot changed.
+  for (const c of Lists.values()) c.syncFixedAX();
   const snapshots = [...Lists.values()].sort((a, b) => a.view - b.view).map(c => c.snapshot());
   const text = JSON.stringify(snapshots);
   if (text !== Published) { Published = text; Controller?.commit(snapshots); }
@@ -1250,6 +1273,7 @@ function remount() {
 }
 // Limit opaque invalidation to app commits so measurement feedback can settle
 Before.push(() => {
+  Selection?.before();
   for (const c of Lists.values()) {
     if (c.o.opaque) { c.bodyDirty = true; }
   }
@@ -1259,15 +1283,20 @@ After.push(() => {
     if (c.bodyDirty) { c.update(c.items, [c.idents, c.dups], true); }
   }
   remount(); release(); wake(); publish();
+  Selection?.after();
 });
 function load() {
   if (Loading || typeof requestAnimationFrame !== "function" || globalThis.__exactRender) return;
   runtime.collectionScrollPending = () => Controller?.scrollPending() ?? false;
   inflight.n++;
-  Loading = new Promise(r => requestAnimationFrame(() => r())).then(() => import("./collection-glue.js")).then(({ collectionController }) => {
+  Loading = new Promise(r => requestAnimationFrame(() => r())).then(() => Promise.all([import("./collection-glue.js"), import("./list-selection.js"), import("./list-text.js")])).then(([{ collectionController }, , { listText }]) => {
     Controller = collectionController({ root: document.getElementById("exact-root"), views: Views, report, agent: clock.agent, settled() {} });
+    Selection = globalThis.exact.installListSelection({ root: document.getElementById("exact-root"), lists: SelectionLists,
+      index: (el, key) => SelectionLists.get(el)?.index.pos.get(key) ?? 0xffffffff,
+      text: (el, a, b) => listText(SelectionLists.get(el), a, b) });
     Published = "";
     publish();
+    Selection.after();
   }).catch(e => console.error("exact: collections:", e)).finally(() => inflight.n--);
   (globalThis.exact ??= {}).lists = { settle: () => Controller?.settle(), pending: () => Loading, fireOwedScrolls: async () => await Controller?.fireOwedScrolls() ?? { fired: false, owed: 0 }, owedScrolls: () => Controller?.owedScrolls() ?? 0, scrollsFired: () => Controller?.scrollsFired() ?? 0,
     into: (view, key, block = "start", inline = "nearest") => {

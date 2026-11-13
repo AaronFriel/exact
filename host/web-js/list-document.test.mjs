@@ -83,6 +83,25 @@ test.each(['js', 'rust'])('%s-rendered list items keep their links through adopt
   } finally { await browser?.close(); server.stop(true); }
 }, 60000);
 
+test('a Rust-rendered gated trail is inert before activation and skipped by Tab', async () => {
+  const { dist } = rendered.get('rust');
+  const server = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch(request) {
+    const path = new URL(request.url).pathname;
+    return new Response(Bun.file(resolve(dist, path === '/' ? 'index.html' : path.slice(1))));
+  } });
+  const browser = await suiteBrowser('chromium');
+  try {
+    const page = await browser.newPage({ javaScriptEnabled: false });
+    await page.goto(server.url.href);
+    const trail = page.locator('[data-testid="fixed-trail"]');
+    expect(await trail.getAttribute('aria-hidden')).toBe('true');
+    expect(await trail.getAttribute('inert')).not.toBeNull();
+    await page.locator('[data-testid="fixed-input"]').focus();
+    await page.keyboard.press('Tab');
+    expect(await page.evaluate(() => document.activeElement.dataset.testid)).toBe('after-fixed');
+  } finally { await browser.close(); server.stop(true); }
+}, 60000);
+
 test.each(['js', 'rust'])('%s-rendered fixed children keep early edits, focus and presses through activation', async renderer => {
   const { dist } = rendered.get(renderer);
   const server = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch(request) {

@@ -80,3 +80,15 @@ test('initial follow measures fixed geometry before choosing an end anchor', asy
   })()`);
   expect(result).toEqual([0,1300,0,1200]);
 });
+
+test('fling preloading does not expose the trail before the geometric window reaches it', async () => {
+  const result=await evaluate(`(() => {
+    const port=document.createElement('div');document.querySelector('main').append(port);
+    const own=rt.scope(()=>list.vl(port,()=>[1,2,3],i=>i(),()=>{}, {est:100,pw:[300],ph:[200],fixed:[()=>{},()=>{}]}));
+    const c=port.$list;c.index.fixed=[300,800];c.geometry={offset:0,port_main:200,cross:300};
+    c.realize(false,{velocity:4000});const fling=c.fixed.hidden;
+    c.geometry.offset=101;c.realize(false,{});const near=c.fixed.hidden;
+    rt.end(own);port.remove();return [fling,near];
+  })()`);
+  expect(result).toEqual([true,false]);
+});

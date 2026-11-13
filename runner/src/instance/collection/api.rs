@@ -139,6 +139,8 @@ pub struct CollectionFixed {
     pub view: ViewId,
     /// Authored root views, in sibling order, without a wrapper.
     pub roots: Vec<ViewId>,
+    /// Excluded from accessibility until the window reaches the last data row.
+    pub hidden: bool,
     /// Indexed extent along the main axis.
     pub size: f64,
 }
@@ -465,10 +467,11 @@ pub fn snapshots_json(snapshots: &[CollectionSnapshot]) -> String {
                 }
                 write!(
                     out,
-                    "{{\"view\":{},\"roots\":{:?},\"size\":{},\"epoch\":\"1\"}}",
+                    "{{\"view\":{},\"roots\":{:?},\"size\":{},\"epoch\":\"1\",\"hidden\":{}}}",
                     fixed.view,
                     fixed.roots,
-                    exact_num::Shortest(fixed.size)
+                    exact_num::Shortest(fixed.size),
+                    fixed.hidden
                 )
                 .unwrap();
             }

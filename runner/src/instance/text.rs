@@ -13,7 +13,7 @@ pub(super) fn list_region<'a>(
     view: ViewId,
     frames: &mut Vec<Frame>,
     policy: ListTextPolicy,
-) -> Option<(&'a collection::Collection, Selection)> {
+) -> Option<(&'a collection::Collection, Selection, &'a [Child])> {
     fn walk<'a>(
         plan: Option<(&Plan, &SiteIndex)>,
         children: &'a [Child],
@@ -21,13 +21,15 @@ pub(super) fn list_region<'a>(
         frames: &mut Vec<Frame>,
         selectable: Selection,
         policy: ListTextPolicy,
-    ) -> Option<(&'a collection::Collection, Selection)> {
+    ) -> Option<(&'a collection::Collection, Selection, &'a [Child])> {
         for child in children {
             match child {
                 Child::Node(n) => {
                     let selectable = plan.map_or(selectable, |p| selectable.at(n, p, policy));
                     if n.view == view {
-                        return n.collection().map(|c| (c, selectable));
+                        return n
+                            .collection()
+                            .map(|c| (c, selectable, n.children.as_slice()));
                     }
                     // A nested list lives in a mounted row (LLP 1070 §4.7).
                     if let Some(c) = n.collection() {
@@ -272,7 +274,7 @@ impl Tree {
         policy: ListTextPolicy,
     ) -> Result<String, InstanceError> {
         let mut frames = Vec::new();
-        let (list, selectable) = list_region(
+        let (list, selectable, fixed) = list_region(
             Some((u.env.plan, u.sites)),
             &self.children,
             view,
@@ -280,6 +282,7 @@ impl Tree {
             policy,
         )
         .ok_or(InstanceError::List("unknown list"))?;
+        let all = range.is_none();
         let mut start = (0, 0, 0);
         let mut end = (list.logical_len().saturating_sub(1), usize::MAX, usize::MAX);
         if let Some((a, b)) = range {
@@ -296,6 +299,16 @@ impl Tree {
         }
         let mounted: exact_kernel::SortedMap<usize, &Row> = list.mounted_rows().collect();
         let mut result = String::new();
+        if all {
+            fixed_text(
+                u,
+                list.logical_fixed(fixed, false),
+                &frames,
+                selectable,
+                policy,
+                &mut result,
+            )?;
+        }
         for i in start.0..list.logical_len().min(end.0.saturating_add(1)) {
             let temporary;
             let row = if let Some(row) = mounted.get(&i) {
@@ -342,6 +355,45 @@ impl Tree {
             u.ops.clear();
             u.surfaces.clear();
         }
+        if all {
+            fixed_text(
+                u,
+                list.logical_fixed(fixed, true),
+                &frames,
+                selectable,
+                policy,
+                &mut result,
+            )?;
+        }
         Ok(result)
     }
+}
+
+fn fixed_text(
+    u: &mut Update<'_>,
+    children: &[Child],
+    frames: &[Frame],
+    selectable: Selection,
+    policy: ListTextPolicy,
+    result: &mut String,
+) -> Result<(), InstanceError> {
+    let mut paragraphs = Vec::new();
+    collect(
+        u,
+        children,
+        frames,
+        false,
+        selectable,
+        policy,
+        &mut paragraphs,
+    )?;
+    for (text, selectable) in paragraphs {
+        if selectable && !text.is_empty() {
+            if !result.is_empty() {
+                result.push_str("\n\n");
+            }
+            result.push_str(&text);
+        }
+    }
+    Ok(())
 }

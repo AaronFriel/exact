@@ -681,6 +681,7 @@ impl Collection {
         required: Option<usize>,
         retire_leaving: bool,
     ) -> Result<(), InstanceError> {
+        self.fixed_window()?;
         let limit = fill.limit.filter(|_| !update);
         let glimpse = fill.glimpse && limit.is_some();
         let mut owed: Vec<std::ops::Range<usize>> = Vec::new();

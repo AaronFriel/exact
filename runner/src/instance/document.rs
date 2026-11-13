@@ -332,7 +332,7 @@ impl Build<'_> {
             Some(list) => list
                 .iter()
                 .map(|child| match child {
-                    ListChild::Fixed(view)
+                    ListChild::Fixed(view, _)
                     | ListChild::Spacer(view, _)
                     | ListChild::Row(view, ..) => *view,
                 })
@@ -368,15 +368,31 @@ impl Build<'_> {
             )));
         }
         for child in list {
-            if let ListChild::Fixed(view) = child {
+            if let ListChild::Fixed(view, hidden) = child {
                 if let Some(root) = super::find::locate(&n.children, view, &mut Vec::new(), &mut 0)
                 {
                     self.node(root, here, depth + 1)?;
+                    if hidden {
+                        let index = self
+                            .doc
+                            .index
+                            .get(&view)
+                            .copied()
+                            .expect("fixed root emitted");
+                        self.doc.nodes[index as usize].props.set(
+                            exact_kernel::PropId::Inert,
+                            exact_kernel::PropValue::Bool(true),
+                        );
+                        self.doc.nodes[index as usize].props.set(
+                            exact_kernel::PropId::AccessibilityElementsHidden,
+                            exact_kernel::PropValue::Bool(true),
+                        );
+                    }
                 }
                 continue;
             }
             let (view, style, props, roots) = match child {
-                ListChild::Fixed(_) => unreachable!(),
+                ListChild::Fixed(..) => unreachable!(),
                 ListChild::Spacer(view, style) => {
                     let mut props = PropList::new();
                     props.set(

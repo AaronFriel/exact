@@ -24,6 +24,8 @@ mod commands;
 mod each;
 #[path = "list_options.rs"]
 mod list_options;
+#[path = "list_text.rs"]
+mod list_text;
 #[path = "lower.rs"]
 pub(crate) mod lower;
 #[path = "markdown.rs"]

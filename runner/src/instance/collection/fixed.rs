@@ -6,6 +6,9 @@ pub(super) struct Fixed {
     pub(super) split: usize,
     pub(super) views: [ViewId; 2],
     pub(super) roots: [Vec<ViewId>; 2],
+    pub(super) trail_hidden: bool,
+    authored_exclusion: BTreeMap<ViewId, [Option<bool>; 2]>,
+    published_exclusion: BTreeMap<ViewId, [Option<bool>; 2]>,
 }
 
 pub(super) fn create(
@@ -65,8 +68,25 @@ pub(super) fn create(
             split,
             views: [u.ids.fresh(), u.ids.fresh()],
             roots: [roots_of(&children[..split]), roots_of(&children[split..])],
+            trail_hidden: true,
+            authored_exclusion: authored_exclusion(u, &children[split..]),
+            published_exclusion: BTreeMap::new(),
         }),
     ))
+}
+
+fn authored_exclusion(u: &Update<'_>, children: &[Child]) -> BTreeMap<ViewId, [Option<bool>; 2]> {
+    roots_of(children)
+        .into_iter()
+        .map(|view| {
+            let value = [PropId::AccessibilityElementsHidden, PropId::Inert].map(|prop| {
+                super::super::find::locate(children, view, &mut Vec::new(), &mut 0)
+                    .and_then(|n| n.bound_prop(u.env.plan, u.sites, prop))
+                    .and_then(|v| v.as_bool())
+            });
+            (view, value)
+        })
+        .collect()
 }
 
 fn refuse_nested(plan: &Plan, sites: &SiteIndex, site: Site) -> Result<(), InstanceError> {
@@ -111,6 +131,7 @@ impl Collection {
         let Some(fixed) = &mut self.fixed else {
             return Ok(());
         };
+        fixed.authored_exclusion = authored_exclusion(u, &children[fixed.split..]);
         let roots = [
             roots_of(&children[..fixed.split]),
             roots_of(&children[fixed.split..]),
@@ -129,8 +150,85 @@ impl Collection {
                     view: fixed.views[side],
                     roots: fixed.roots[side].clone(),
                     size: self.index.fixed_size(side),
+                    hidden: side == 1 && fixed.trail_hidden,
                 })
                 .collect()
+        })
+    }
+
+    pub(super) fn fixed_window(&mut self) -> Result<(), InstanceError> {
+        let Some(fixed) = &mut self.fixed else {
+            return Ok(());
+        };
+        fixed.trail_hidden = self.index.len() > 0
+            && match &self.geometry {
+                Some(g) if g.port_main > 0.0 => {
+                    self.index
+                        .window(g.offset, g.port_main, [None, None])
+                        .map_err(index_error)?
+                        .overscan
+                        .end
+                        < self.index.len()
+                }
+                _ => true,
+            };
+        Ok(())
+    }
+
+    pub(super) fn fixed_accessibility(&mut self, u: &mut Update<'_>) {
+        let Some(fixed) = &mut self.fixed else { return };
+        fixed
+            .published_exclusion
+            .retain(|view, _| fixed.roots[1].contains(view));
+        for view in &fixed.roots[1] {
+            let values = if fixed.trail_hidden {
+                [Some(true); 2]
+            } else {
+                fixed
+                    .authored_exclusion
+                    .get(view)
+                    .copied()
+                    .unwrap_or([None; 2])
+            };
+            for (index, prop) in [PropId::AccessibilityElementsHidden, PropId::Inert]
+                .into_iter()
+                .enumerate()
+            {
+                let value = values[index];
+                // An authored update can write either prop while the gate is closed.
+                let written = u.ops.iter().any(|op| {
+                    matches!(op,
+                    Op::SetProp { id, prop: p, .. } | Op::ClearProp { id, prop: p }
+                    if id == view && *p == prop)
+                });
+                if !written && fixed.published_exclusion.get(view).map(|v| v[index]) == Some(value)
+                {
+                    continue;
+                }
+                match value {
+                    Some(value) => u.ops.push(Op::SetProp {
+                        id: *view,
+                        prop,
+                        value: exact_kernel::PropValue::Bool(value),
+                    }),
+                    None => u.ops.push(Op::ClearProp { id: *view, prop }),
+                }
+            }
+            fixed.published_exclusion.insert(*view, values);
+        }
+    }
+
+    pub(in crate::instance) fn logical_fixed<'a>(
+        &self,
+        children: &'a [Child],
+        trail: bool,
+    ) -> &'a [Child] {
+        self.fixed.as_ref().map_or(&[], |fixed| {
+            if trail {
+                &children[fixed.split..]
+            } else {
+                &children[..fixed.split]
+            }
         })
     }
 

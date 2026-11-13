@@ -55,6 +55,10 @@ fn boot_start(rows: &str, follow: bool, start: &str) -> Runner<NoData> {
 }
 
 fn report(r: &mut Runner<NoData>, at: f64, fixed: [f64; 2]) -> f64 {
+    report_velocity(r, at, fixed, 0.)
+}
+
+fn report_velocity(r: &mut Runner<NoData>, at: f64, fixed: [f64; 2], velocity: f64) -> f64 {
     let c = r.collections().remove(0);
     let measurements = c
         .rows
@@ -75,19 +79,25 @@ fn report(r: &mut Runner<NoData>, at: f64, fixed: [f64; 2]) -> f64 {
                 }),
         )
         .collect();
-    r.collection_feedback(CollectionFeedback {
-        view: c.view,
-        revision: c.revision,
-        scroll_sequence: c.scroll_sequence + 1,
-        offset: at,
-        port_main: 200.0,
-        port_cross: 300.0,
-        cross: 300.0,
-        padding: [0.0; 2],
-        measurements,
-        focus_view: None,
-        interaction_view: None,
-    })
+    r.collection_feedback_filled(
+        CollectionFeedback {
+            view: c.view,
+            revision: c.revision,
+            scroll_sequence: c.scroll_sequence + 1,
+            offset: at,
+            port_main: 200.0,
+            port_cross: 300.0,
+            cross: 300.0,
+            padding: [0.0; 2],
+            measurements,
+            focus_view: None,
+            interaction_view: None,
+        },
+        exact_runner::CollectionFill {
+            velocity,
+            ..Default::default()
+        },
+    )
     .unwrap();
     r.collections()[0].correction.map_or(at, |c| c.offset)
 }
@@ -603,6 +613,167 @@ try {
     assert!(differences.is_empty(), "{differences:#?}");
     assert_eq!(results.len(), cases.len());
 }
+
+#[test]
+fn the_trail_waits_for_the_data_window_but_full_copy_keeps_document_order() {
+    let mut r = boot("[1, 2, 3]", false);
+    report(&mut r, 0.0, [300.0, 800.0]);
+    let c = r.collections().remove(0);
+    assert!(c.fixed[1].hidden);
+    let doc = r.document_tree().unwrap();
+    for root in &c.fixed[1].roots {
+        assert_eq!(
+            doc.node(*root)
+                .unwrap()
+                .props
+                .bool(exact_kernel::PropId::Inert),
+            if c.fixed[1].hidden { Some(true) } else { None }
+        );
+        assert_eq!(
+            doc.node(*root)
+                .unwrap()
+                .props
+                .bool(exact_kernel::PropId::AccessibilityElementsHidden),
+            if c.fixed[1].hidden { Some(true) } else { None }
+        );
+
+        assert_eq!(
+            r.kernel()
+                .node(*root)
+                .unwrap()
+                .props
+                .bool(exact_kernel::PropId::Inert),
+            if c.fixed[1].hidden { Some(true) } else { None }
+        );
+        assert_eq!(
+            r.kernel()
+                .node(*root)
+                .unwrap()
+                .props
+                .bool(exact_kernel::PropId::AccessibilityElementsHidden),
+            Some(true)
+        );
+    }
+    assert_eq!(
+        r.list_text(c.view, None, exact_runner::ListTextPolicy::Web)
+            .unwrap(),
+        "Lead\n\n1\n\n2\n\n3\n\nTrail"
+    );
+    report(&mut r, 1200.0, [300.0, 800.0]);
+    let c = r.collections().remove(0);
+    assert!(!c.fixed[1].hidden);
+    let doc = r.document_tree().unwrap();
+    for root in &c.fixed[1].roots {
+        assert_eq!(
+            doc.node(*root)
+                .unwrap()
+                .props
+                .bool(exact_kernel::PropId::Inert),
+            if c.fixed[1].hidden { Some(true) } else { None }
+        );
+        assert_eq!(
+            doc.node(*root)
+                .unwrap()
+                .props
+                .bool(exact_kernel::PropId::AccessibilityElementsHidden),
+            if c.fixed[1].hidden { Some(true) } else { None }
+        );
+
+        assert_eq!(
+            r.kernel()
+                .node(*root)
+                .unwrap()
+                .props
+                .bool(exact_kernel::PropId::Inert),
+            if c.fixed[1].hidden { Some(true) } else { None }
+        );
+        assert_eq!(
+            r.kernel()
+                .node(*root)
+                .unwrap()
+                .props
+                .bool(exact_kernel::PropId::AccessibilityElementsHidden),
+            None
+        );
+    }
+}
+#[test]
+fn a_fling_does_not_expose_the_trail_before_the_geometric_window_reaches_it() {
+    let mut r = boot("[1, 2, 3]", false);
+    report(&mut r, 0., [300., 800.]);
+    report_velocity(&mut r, 0., [300., 800.], 4000.);
+    assert!(r.collections()[0].fixed[1].hidden);
+    report(&mut r, 101., [300., 800.]);
+    assert!(!r.collections()[0].fixed[1].hidden);
+}
+
+#[test]
+fn the_trail_restores_authored_inertness_including_updates_while_gated() {
+    let source = r#"component App
+  state locked = true
+  action toggle
+    locked = !locked
+  view
+    list virtualized=true appearance="none" height=200 estimated-item-height=100
+      button "Toggle" press=toggle testId="toggle"
+      for n in range(20) key=n
+        text `${n}` height=100
+      column inert=locked testId="trail"
+        button "End"
+"#;
+    let mut r = Runner::boot(
+        contract::compile(source).unwrap(),
+        NoData,
+        Kernel::with_monospace(),
+        Default::default(),
+        "/",
+    )
+    .unwrap();
+    let id = |r: &Runner<NoData>, name| {
+        r.kernel()
+            .node_by_key(r.kernel().find_by_test_id(name)[0])
+            .unwrap()
+            .id
+    };
+    let trail = id(&r, "trail");
+    let toggle = id(&r, "toggle");
+    let inert = |r: &Runner<NoData>| {
+        r.kernel()
+            .node(trail)
+            .unwrap()
+            .props
+            .bool(exact_kernel::PropId::Inert)
+    };
+    for authored in [true, false, true] {
+        report(&mut r, 0., [300., 800.]);
+        assert_eq!(inert(&r), Some(true));
+        assert_eq!(
+            r.document_tree()
+                .unwrap()
+                .node(trail)
+                .unwrap()
+                .props
+                .bool(exact_kernel::PropId::Inert),
+            Some(true)
+        );
+        report(&mut r, 2400., [300., 800.]);
+        assert!(!r.collections()[0].fixed[1].hidden);
+        assert_eq!(inert(&r), Some(authored));
+        assert_eq!(
+            r.document_tree()
+                .unwrap()
+                .node(trail)
+                .unwrap()
+                .props
+                .bool(exact_kernel::PropId::Inert),
+            Some(authored)
+        );
+        report(&mut r, 0., [300., 800.]);
+        r.dispatch(toggle, exact_runner::Event::Press).unwrap();
+        assert_eq!(inert(&r), Some(true));
+    }
+}
+
 
 #[test]
 fn logical_copy_excludes_a_nested_collections_fixed_content() {
