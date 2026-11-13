@@ -4987,15 +4987,19 @@ resizing and Linux headless presenter resizing do not measure physical refresh.
 ### Intersection visibility
 
 `reachstart` and `reachend` belong only to `list virtualized=true` with one
-direct `for` (LLP 1010). Only a non-empty collection has edges: its geometric
-window reaches the first or last supplied row. An empty collection fires neither
-event. A plain list lays out all its children and has no collection window;
+direct keyed `for` (LLP 1010). A vertical list with `appearance="none"` can
+also hold always-mounted lead and trail children; Apple hosts currently refuse
+this shape. Only a non-empty data collection fires edges. Without fixed content,
+its geometric window reaches the first or last supplied row. With fixed content,
+the edge is the lead's start or the trail's end. An empty data collection fires
+neither event. A plain list lays out all its children and has no collection window;
 the Contract compiler refuses either handler there, on every target.
 
-A row that is not an item, such as a line saying that older messages are loading
-or that the thread starts here, is one more item of the `for`'s list, put first
-by a `derive`. The `for`'s one root draws it by its key, and it is the edge row
-that `reachstart` watches:
+In a list with no fixed content, a loading or start-of-thread notice can be
+one more item of the `for`'s list, put first by a `derive`. The `for`'s root
+draws it by its key, and `reachstart` watches that edge row. For a notice in
+fixed content, see [Long lists](recipes/long-lists.md): the lead's start is
+the edge.
 
 ```text
 derive rows = [Message(id="older", body=(atStart ? "Start of the chat" : "Loading…"))].concat(thread)

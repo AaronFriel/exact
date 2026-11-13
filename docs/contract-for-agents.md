@@ -2154,9 +2154,16 @@ lists, use `list virtualized=true` (no other tag takes it), one direct keyed
 may also hold fixed content before and after that `for`; a second direct `for`
 needs an element around it (all its rows mount). Fixed content cannot hold a
 virtualized list. Fixed roots use static or relative positioning without vertical
-offsets and nonnegative literal margins (`lower-collection-fixed-flow`). Host support for fixed content is being implemented; a host
-without it refuses the shape. Its `reachstart` and `reachend` fire when the
-first or last row comes within `reach-margin` of the port (one port by default),
+offsets and nonnegative literal margins (`lower-collection-fixed-flow`). Apple hosts currently refuse fixed content pending their
+presenter implementation. Fixed content keeps its authored sibling layout and
+stays mounted even when the `for` is empty. It has no data-row key, cell styling,
+`keep-mounted` entry or place in `aria-setsize`; give it an `id` for element
+`scrollIntoView(id)`. Authored padding stays before the lead and after the trail.
+A `for` inside a fixed element is eager and still receives
+the development `long-list` notice at 200 rows.
+The list's `reachstart` and `reachend` fire when its content edges (the lead's
+start and the trail's end, when present) come within `reach-margin` of the port
+(one port by default),
 and further ahead while a fling travels toward it; page from them rather than from
 `scroll` (`docs/reference.md`, "Intersection visibility"). A vertical list needs `height`, `max-height`
 or a growing `flex`, which may be computed (`max-height=(narrow ? "320px" : "640px")`).

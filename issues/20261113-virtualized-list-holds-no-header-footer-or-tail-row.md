@@ -8,28 +8,14 @@
 
 ## What is wrong
 
-`list virtualized=true` takes exactly one direct `for` and nothing beside it.
-`Lowerer` refuses any other child list in `contract/lower/src/collection.rs`
-(the `let [Node::Each { body, .. }] = children else` arm, about line 166):
+The compiler and the runner, web, painted and terminal presenters admit fixed
+lead and trail content around a vertical virtualized list's keyed `for` with
+`appearance="none"`. The remaining work is the Apple presenter and its
+simulator, macOS and device runs.
 
-```
-[lower-collection-template] a virtualized list initially supports exactly one direct `for`
-```
-
-Confirmed at `49ae6357` with a list holding a `for` and a `text` after
-it. The limit is deliberate for now, and its remedy is recorded and not
-selected: LLP 1035.005.000 D11, "Fixed rows around a virtualized `each`",
-recommends fixed nodes before and after the `for`, designed under LLP 1070,
-and sits in that LLP's stage 4 (runtime designs, each with its consumer),
-which is unselected. These reports are new consumers for it.
-
-The cost is that every row that is not a record has to be invented as one.
-An app puts its header, footer, loading and end states into the list's data
-and dispatches them back out in the row view. A chat app streaming a reply
-cannot keep the reply in progress as a row of its own beside the settled
-transcript; it derives `bubbles.concat([tail])`, so each token that changes
-the tail recomputes a list as long as the transcript. That recomputation was
-reported, not measured here.
+The original refusal forced headers, loading and end states into synthetic
+data rows. A streaming reply concatenated to the transcript through a derive
+recomputed that list on each token; that cost was reported, not measured.
 
 ## The failure
 
@@ -89,8 +75,11 @@ children without wrappers, report both fixed measurement identities, preserve
 anchors inside them, follow and reach the trail's end, gate trail accessibility,
 and pass eager parity, end-growth and device interaction runs.
 
-The JS target also implements fixed items. The web and shared Linux
-presenter pass eager layout parity and followed trail growth; the terminal
-passes eager box parity with its cell lengths. Accessibility,
-logical copy, Lean observation and the remaining qualification and guides
-follow in subsequent stages.
+The JS target also implements fixed items. Web, Linux and terminal pass eager
+box parity and followed trail growth. The trail's accessibility gate and logical
+copy order are covered, and the fixed-content corpus agrees across the runner,
+Lean and JS target. The long-list notice still applies inside fixed content.
+
+The issue remains open for the Apple stage described above. The Linux lane
+cannot run UIKit, AppKit, momentum, rubber banding, keyboard/refresh or VoiceOver
+qualification on Apple devices.

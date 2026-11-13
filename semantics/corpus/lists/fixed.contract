@@ -14,7 +14,7 @@ component App
         for x in [1, 2] key=x
           button "Trail" press=hit testId=`trail-${x}`
       button "Empty" press=empty testId="empty"
-      text `${hits}` testId="hits"
+      text `${hits}` font-variant-numeric="tabular-nums" testId="hits"
 
 test "fixed children keep their scopes and outlive an empty data window"
   tap "lead"

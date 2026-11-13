@@ -456,15 +456,20 @@ none of it.
 A virtualized list has one direct keyed `for`, whose body has one flow root.
 A vertical list with `appearance="none"` can hold fixed content before and after
 it. Put a second `for` inside an element (all its rows mount); fixed content
-cannot hold a virtualized list. Fixed roots use static or relative positioning
-without vertical offsets and nonnegative literal margins
-(`lower-collection-fixed-flow`). Hosts without fixed-content support refuse it.
+cannot hold a virtualized list. Fixed roots use static or relative positioning without vertical
+offsets and nonnegative literal margins (`lower-collection-fixed-flow`). Apple hosts currently refuse fixed content.
+Fixed children keep their authored sibling layout and stay mounted, including
+when the `for` is empty. They have no data-row key or cell styling; give one an
+`id` to reach it with element `scrollIntoView(id)`. The list's end, including
+`scroll-start="end"`, `scrollFollowEnd` and `reachend`, includes the trail.
+An eager `for` inside a fixed element still receives the development long-list
+notice at 200 rows.
 A vertical list needs a real height bound (`height`, `max-height`, or growing
 `flex` in a bounded parent). A horizontal one needs a literal `display="flex"` and
 a positive `height` in points, literal or computed, takes `estimated-item-width`
 (literal or computed) and CSS's `gap` between its cards, and refuses
 `justify-content` other than `flex-start`. Padding along the list's
-axis is room before the first row and after the last, as in CSS: a length or an
+axis is room before the first child and after the last, as in CSS: a length or an
 `env()` inset, not a percentage. On iOS a list's pull-to-refresh spinner draws
 below its `padding-top`, so a header laid over that padding does not hide it. A
 virtualized list's `scroll-padding` insets where `scrollIntoView` aligns a row,

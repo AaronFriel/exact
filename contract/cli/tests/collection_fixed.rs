@@ -1,3 +1,44 @@
+#[test]
+fn logical_copy_excludes_a_nested_collections_fixed_content() {
+    let source = r#"component App
+  view
+    list virtualized=true appearance="none" height=200 estimated-item-height=80 testId="outer"
+      text "Header"
+      for n in range(3) key=n
+        column
+          text `Before ${n}`
+          list virtualized=true appearance="none" height=40 estimated-item-height=40
+            text "Inner header"
+            for m in range(3) key=m
+              text "Inner row" height=40
+            text "Inner footer"
+          text `After ${n}`
+      text "Footer"
+"#;
+    let r = Runner::boot(
+        contract::compile(source).unwrap(),
+        NoData,
+        Kernel::with_monospace(),
+        Default::default(),
+        "/",
+    )
+    .unwrap();
+    let outer = r
+        .kernel()
+        .node_by_key(r.kernel().find_by_test_id("outer")[0])
+        .unwrap()
+        .id;
+    for policy in [
+        exact_runner::ListTextPolicy::Web,
+        exact_runner::ListTextPolicy::MacOS,
+    ] {
+        assert_eq!(
+            r.list_text(outer, None, policy).unwrap(),
+            "Header\n\nBefore 0\n\nAfter 0\n\nBefore 1\n\nAfter 1\n\nBefore 2\n\nAfter 2\n\nFooter"
+        );
+    }
+}
+
 //! Fixed content around a virtualized list.
 
 #[test]
@@ -789,7 +830,7 @@ fn events_in_fixed_content_reach_their_authored_scope() {
       column
         for n in [1, 2] key=n
           button "Trail" press=press testId=`trail-${n}`
-      text `${presses}` testId="presses"
+      text `${presses}` font-variant-numeric="tabular-nums" testId="presses"
 "#;
     let mut r = Runner::boot(
         contract::compile(source).unwrap(),
@@ -829,23 +870,20 @@ fn reachend_tracks_the_trail_end_and_rearms_while_reading_fixed_content() {
 }
 
 #[test]
-fn logical_copy_excludes_a_nested_collections_fixed_content() {
+fn an_eager_for_inside_fixed_content_still_reports_the_long_list_notice() {
     let source = r#"component App
+  state n = 1
+  action grow
+    n = 200
   view
-    list virtualized=true appearance="none" height=200 estimated-item-height=80 testId="outer"
-      text "Header"
-      for n in range(3) key=n
-        column
-          text `Before ${n}`
-          list virtualized=true appearance="none" height=40 estimated-item-height=40
-            text "Inner header"
-            for m in range(3) key=m
-              text "Inner row" height=40
-            text "Inner footer"
-          text `After ${n}`
-      text "Footer"
+    list virtualized=true appearance="none" height=200
+      for x in [1, 2] key=x
+        text `${x}`
+      column
+        for n in range(n) key=n
+          text `${n}`
 "#;
-    let r = Runner::boot(
+    let mut r = Runner::boot(
         contract::compile(source).unwrap(),
         NoData,
         Kernel::with_monospace(),
@@ -853,18 +891,12 @@ fn logical_copy_excludes_a_nested_collections_fixed_content() {
         "/",
     )
     .unwrap();
-    let outer = r
-        .kernel()
-        .node_by_key(r.kernel().find_by_test_id("outer")[0])
-        .unwrap()
-        .id;
-    for policy in [
-        exact_runner::ListTextPolicy::Web,
-        exact_runner::ListTextPolicy::MacOS,
-    ] {
-        assert_eq!(
-            r.list_text(outer, None, policy).unwrap(),
-            "Header\n\nBefore 0\n\nAfter 0\n\nBefore 1\n\nAfter 1\n\nBefore 2\n\nAfter 2\n\nFooter"
-        );
-    }
+    r.measure(true, false);
+    r.act("grow", Vec::new()).unwrap();
+    assert_eq!(
+        r.journal()
+            .filter(|line| line.contains("long-list:") && line.contains("repeats 200 rows"))
+            .count(),
+        1
+    );
 }
