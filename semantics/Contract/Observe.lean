@@ -21,9 +21,10 @@ state in exactly this form; the two texts are compared line by line.
   `queued <name> <count>`   each `queue` mutation's waiting sends
   `command <name> <value>…` each command the step's commit issued
   `view <testId> <text>`   each element with a `testId`, in preorder, but
-                           none inside a virtualized `list`: the runner
-                           shows the rows its window lays out (a layout
-                           fact), the semantics every row. An unopened
+                           omitting virtualized data rows: the runner
+                           shows only its window, the semantics every row.
+                           Fixed lead and trail children are observed.
+                           An unopened
                            tab panel has no descendants to observe
 
 Values: a number is `n` and its 16 hex digits of IEEE bits (every NaN is

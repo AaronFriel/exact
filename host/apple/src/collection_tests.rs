@@ -703,3 +703,25 @@ component App
         );
     }
 }
+
+#[test]
+fn fixed_collection_content_is_refused_before_the_apple_presenters_run() {
+    let source = include_str!("../../../contract/corpus/list-fixed.contract");
+    let plan = contract::compile(source).unwrap().encode();
+    let error = match Host::boot(
+        &plan,
+        Rows::default(),
+        Box::new(MonospaceMeasurer::default()),
+        400.,
+        600.,
+    ) {
+        Ok(_) => panic!("Apple has no fixed-item presenter yet"),
+        Err(error) => error.to_string(),
+    };
+    assert!(
+        error.contains("CollectionIOS.swift")
+            && error.contains("CollectionMac.swift")
+            && error.contains("outside the list"),
+        "{error}"
+    );
+}

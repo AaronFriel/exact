@@ -198,7 +198,11 @@ impl Collection {
                         .map(|i| reach.segments.iter().any(|range| range.contains(&i))))
                 };
                 reached = within(self.reach.band(g.port_main, velocity))?;
-                let measured = self.index.range_measured(window.overscan);
+                // With fixed content filling the port, no data row is in
+                // the overscan, and the window's geometry is still known.
+                let fixed_only =
+                    self.fixed.is_some() && g.port_main > 0.0 && window.overscan.is_empty();
+                let measured = self.index.range_measured(window.overscan.clone()) || fixed_only;
                 if self.start_owed && measured {
                     self.edge_armed[0] = true;
                     self.start_owed = false;

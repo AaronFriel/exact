@@ -10,8 +10,8 @@
 //! scratch kernel, never the runner's.
 //!
 //! It is a guess, and may be short: derives are not settled over the
-//! writes, a `for` is walked as last keyed, a virtualized list is not
-//! entered. A miss costs what no warm costs.
+//! writes, a `for` is walked as last keyed, and a virtualized list
+//! enters its fixed children but not its windowed rows. A miss costs what no warm costs.
 
 use super::region::init_owned;
 use super::*;
@@ -58,7 +58,7 @@ fn walk(
     for c in children {
         match c {
             Child::Node(n) => {
-                if n.collection().is_none() && u.stale(&sites.data.deps.nodes[n.node.0 as usize]) {
+                if u.stale(&sites.data.deps.nodes[n.node.0 as usize]) {
                     walk(u, &n.children, frames, Some(n.view), out)?;
                 }
             }

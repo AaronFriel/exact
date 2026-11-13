@@ -203,8 +203,8 @@ structure VNode where
   `input` whose literal `type` is `checkbox`, `radio`, `range`, `date`, …): its
   payloads follow HTML's rules, which the semantics leaves out. -/
   control : Option String := .none
-  /-- A `list` whose `virtualized` is literally `true`: the runner shows
-  the rows its window lays out, which the observation leaves out. -/
+  /-- A synthetic group around a virtualized list's data region: the
+  observation omits those rows and retains authored fixed children. -/
   windowed : Bool := false
   navigation : TabInfo := {}
   /-- The rows this element stands in, innermost first. -/
@@ -267,12 +267,17 @@ def render : Nat → RenderCx → Locals → List Node → RowStore → Result (
         let values ← (tabProps props).mapM fun (name, e) => do
           pure (name, ← unsetRefused (eval fuel cx.env false ls e))
         let navigation := cx.tabs.element props (values.filterMap fun (n, v) => v.map (n, ·))
+        let windowed := tag == "list" && ((lookupField "virtualized" props).map tabLiteral matches .some (.bool true))
+        -- Only the direct data region is hidden from observation and tab discovery.
+        let children := if windowed then children.map (fun child => match child with
+          | .each .. => .element "#window" [] [] [] [child]
+          | _ => child) else children
         let (kids, live) ← (if navigation.opened then
           render fuel { cx with tabs := cx.tabs.children props } ls children live
           else pure ([], live))
         pure ([{ tag, testId, text, handlers := hs, locals := ls, rows := cx.rows,
                  control := elementControl tag props,
-                 windowed := tag == "list" && ((lookupField "virtualized" props).map tabLiteral matches .some (.bool true)),
+                 windowed := tag == "#window",
                  navigation, children := kids : VNode }], live)
       | .when tag c thn els => do
         match ← eval fuel cx.env false ls c with

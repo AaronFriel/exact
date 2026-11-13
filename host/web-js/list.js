@@ -1107,7 +1107,7 @@ class Collection {
       const w = this.index.window(g.offset, g.port_main), n = this.index.len - 1;
       const within = band => { if (this.fixed && g.port_main > 0) return [Math.max(0,g.offset) - band[0] <= 0, Math.max(0,g.offset) + g.port_main + band[1] >= this.index.total]; const s = this.index.window(g.offset, g.port_main, band).segments; return [0, n].map(e => s.some(r => e >= r[0] && e < r[1])); };
       [reached[0], reached[1]] = within(reachBand(this.reach, g.port_main, velocity));
-      const measured = this.index.rangeMeasured(...w.overscan);
+      const measured = this.index.rangeMeasured(...w.overscan) || (this.fixed && g.port_main > 0 && w.overscan[0] === w.overscan[1]);
       if (this.startOwed && measured) { this.edgeArmed[0] = true; this.startOwed = false; }
       if (!(this.edgeArmed[0] && this.edgeArmed[1]) && measured) {
         const rest = within(reachBand(this.reach, g.port_main, 0));

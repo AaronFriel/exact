@@ -10,11 +10,11 @@ pub(crate) struct CollectionEdges {
     pub end_after_noop: bool,
 }
 
-/// A mounted wrapper's measured border-box size on the list's main axis,
-/// using its published epoch.
+/// A mounted item's measured main-axis extent: a data wrapper's border
+/// box, or a fixed item's occupied flow extent, using its published epoch.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RowMeasurement {
-    /// Wrapper view, not the authored child root.
+    /// Data wrapper view or fixed measurement identity, never a data key.
     pub view: ViewId,
     /// Epoch copied from the snapshot used for this layout.
     pub epoch: u64,
@@ -30,8 +30,8 @@ pub struct CollectionFeedback {
     pub revision: u64,
     /// Monotonically increasing host scroll/layout sequence.
     pub scroll_sequence: u64,
-    /// Actual offset on the main axis from the first row's start, clamped
-    /// past rubber-banding: `scrollTop` less the padding before the rows for
+    /// Actual offset from the content origin after authored padding, before
+    /// any fixed lead, clamped past rubber-banding: `scrollTop` less that padding for
     /// a vertical list. Negative while the port is in that padding, down to
     /// it (`scrollTop` 0, LLP 1010 §6.9).
     pub offset: f64,
@@ -46,7 +46,7 @@ pub struct CollectionFeedback {
     /// the host laid it out: the room `offset` counts past and the scroll
     /// range runs into (LLP 1010 §6.9).
     pub padding: [f64; 2],
-    /// Only currently mounted row wrappers may be measured.
+    /// Mounted data wrappers and both fixed items, when present.
     pub measurements: Vec<RowMeasurement>,
     /// Focused authored descendant; pins at most its containing row.
     pub focus_view: Option<ViewId>,

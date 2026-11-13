@@ -776,6 +776,59 @@ fn the_trail_restores_authored_inertness_including_updates_while_gated() {
 
 
 #[test]
+fn events_in_fixed_content_reach_their_authored_scope() {
+    let source = r#"component App
+  state presses = 0
+  action press
+    presses = presses + 1
+  view
+    list virtualized=true appearance="none" height=200
+      button "Lead" press=press testId="lead"
+      for x in [1, 2] key=x
+        text `${x}` height=40
+      column
+        for n in [1, 2] key=n
+          button "Trail" press=press testId=`trail-${n}`
+      text `${presses}` testId="presses"
+"#;
+    let mut r = Runner::boot(
+        contract::compile(source).unwrap(),
+        NoData,
+        Kernel::with_monospace(),
+        Default::default(),
+        "/",
+    )
+    .unwrap();
+    for id in ["lead", "trail-2"] {
+        let view = r
+            .kernel()
+            .node_by_key(r.kernel().find_by_test_id(id)[0])
+            .unwrap()
+            .id;
+        r.dispatch(view, exact_runner::Event::Press).unwrap();
+    }
+    let text = r
+        .kernel()
+        .node_by_key(r.kernel().find_by_test_id("presses")[0])
+        .unwrap();
+    assert_eq!(text.props.str(exact_kernel::PropId::Text), Some("2"));
+}
+
+#[test]
+fn reachend_tracks_the_trail_end_and_rearms_while_reading_fixed_content() {
+    let mut r = boot("[1, 2, 3]", false);
+    for _ in 0..3 {
+        report(&mut r, 0.0, [300.0, 800.0]);
+    }
+    assert_eq!(r.slot("ends").unwrap().as_number(), Some(0.0));
+    report(&mut r, 1200.0, [300.0, 800.0]);
+    assert_eq!(r.slot("ends").unwrap().as_number(), Some(1.0));
+    report(&mut r, 850.0, [300.0, 800.0]);
+    report(&mut r, 1200.0, [300.0, 800.0]);
+    assert_eq!(r.slot("ends").unwrap().as_number(), Some(2.0));
+}
+
+#[test]
 fn logical_copy_excludes_a_nested_collections_fixed_content() {
     let source = r#"component App
   view
