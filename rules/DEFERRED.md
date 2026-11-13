@@ -1667,6 +1667,14 @@ reading. Nothing that isn't HTML is added by it.
   `virtualized`, `runner/src/instance/window.rs`) is deleted first, before either
   capability lands. Still out: grids, masonry, wrapping and inverted lists; RTL
   row lists; nesting deeper than one level; host keep-alive of an inner list's views.
+  **Expanded (Charlie, approved 2026-11-12):** a vertical
+  windowed list holds always-mounted nodes before and after its one direct
+  keyed `for`, in the height index with their own anchoring identities.
+  Unblocks feed headers, footers, loading and empty states without synthetic
+  data rows. Take: none; Charlie waived the trade. The first slice requires
+  `appearance="none"`; hosts without fixed-item geometry refuse the shape.
+  Still out: a second direct `for`, sections, sticky headers, fixed content
+  on horizontal lists, and a windowed list inside fixed content.
 - No host keep-alive of heavy views by row key, and no reuse of a web view
   or of a native-module view without that module's opt-in (LLP 1068 §4.7,
   §4.8, §5.3; Charlie, 2026-09-27). A reused view is indistinguishable from a

@@ -54,7 +54,7 @@ Until then, the chat-thread recipe should show the streaming case as it must
 be written today (the tail kept in its own state and appended by a derive)
 and name D11 as the coming form, and the refusal could point at that recipe.
 
-## Status (2026-11-13)
+## Implementation
 
 The refusal now says what to write today and names `docs/recipes/long-lists.md`,
 whose loading row is the pattern: a row of the `for`'s collection, appended by
@@ -71,3 +71,11 @@ build changes only the compiler: fixed nodes before and after the `for` lower to
 synthetic rows of the same collection with reserved keys. The trigger is a third
 diary hitting this, not a performance number. This issue stays open as that
 evidence.
+
+## Height-index build
+
+The compiler admits lead and trail nodes around the one direct keyed `for`
+on a vertical list with `appearance="none"`, with named refusals for the
+unsupported shapes. Runtimes without fixed-item geometry refuse the shape.
+This issue stays open until the Apple implementation and its parity and
+accessibility runs land; the Linux lane cannot qualify Apple behavior.

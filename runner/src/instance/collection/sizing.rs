@@ -237,7 +237,7 @@ impl Collection {
         }
         let child_sites = u.sites.children(Some(node), descriptor.arm);
         let [(_, Site::Region(region))] = child_sites else {
-            return Err(invalid("collection needs one direct `for`"));
+            return Err(invalid("fixed content around a virtualized list is not implemented by this runner yet; move it outside the list"));
         };
         let region = *region;
         let row = plan.region(region);

@@ -453,7 +453,12 @@ empty state), and `appearance="none"` on the list keeps rows that are yours, a
 transcript or a feed of cards. A list laid out sideways is a carousel and gets
 none of it.
 
-A virtualized list has exactly one direct `for`, whose body has one flow root.
+A virtualized list has one direct keyed `for`, whose body has one flow root.
+A vertical list with `appearance="none"` can hold fixed content before and after
+it. Put a second `for` inside an element (all its rows mount); fixed content
+cannot hold a virtualized list. Fixed roots use static or relative positioning
+without vertical offsets and nonnegative literal margins
+(`lower-collection-fixed-flow`). Hosts without fixed-content support refuse it.
 A vertical list needs a real height bound (`height`, `max-height`, or growing
 `flex` in a bounded parent). A horizontal one needs a literal `display="flex"` and
 a positive `height` in points, literal or computed, takes `estimated-item-width`
