@@ -788,13 +788,19 @@ impl SizeIndex {
         // The port's bottom where the port is, in the padding before the
         // rows too (`capture_anchor` has refused a bad offset or port).
         let bottom = raw.min(self.max_offset(viewport)).max(-self.leading) + viewport;
+        // In the rows' coordinates; a bottom inside fixed content keeps the
+        // top anchor, which holds a fixed region by its own identity.
+        let data = bottom - self.fixed[0];
+        if self.fixed != [0.0; 2] && !(0.0..=self.data_extent()).contains(&data) {
+            return Ok(anchor);
+        }
         // Below the rows, the last row with a height: a zero-height tail
         // shows nothing to keep.
-        let row =
-            (self.tree.find(bottom, true)).or_else(|| self.tree.find(self.tree.total(), true));
-        let within = row.map_or(0.0, |i| bottom - self.tree.prefix(i + 1));
+        let row = (self.tree.find(data, true)).or_else(|| self.tree.find(self.tree.total(), true));
+        let within = row.map_or(0.0, |i| data - self.tree.prefix(i + 1));
         Ok(Anchor {
             row,
+            fixed: None,
             within,
             bottom: row.is_some(),
             ..anchor

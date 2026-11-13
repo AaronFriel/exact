@@ -11,7 +11,7 @@
 use crate::code::{self, Scope, Uses};
 use crate::style;
 use exact_kernel::{NodeType, PropId};
-use exact_plan::{BindingKind, EventKind, NodesId, Plan, RegionKind, Value};
+use exact_plan::{BindingKind, EventKind, NodesId, Plan, Value};
 use exact_web::host::template::Parts;
 use std::collections::HashMap;
 use std::fmt::Write as _;
@@ -1444,19 +1444,7 @@ impl Em<'_> {
             let _ = write!(self.out, "{tp}({e},()=>{{");
         }
         if virtualized {
-            let opts = self.list_options(i, scope, &edges)?;
-            let &[Site::Region(r)] = self.sites.of_node(i) else {
-                return Err(format!(
-                    "node {i}: fixed content around a virtualized list is not implemented by the JS target yet; move it outside the list"
-                ));
-            };
-            if plan.regions[r as usize].kind != RegionKind::Each {
-                return Err(format!(
-                    "node {i}: fixed content around a virtualized list is not implemented by the JS target yet; move it outside the list"
-                ));
-            }
-            self.list = true;
-            self.each(r, &e, scope, Some(opts))?;
+            self.collection_children(i, &e, scope, &edges)?;
         } else {
             self.children(self.sites.of_node(i), &parent_of_children, scope)?;
         }

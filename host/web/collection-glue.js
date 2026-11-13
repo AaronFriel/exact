@@ -230,11 +230,19 @@ export function collectionController({ root, views, report, settled=()=>{}, agen
       return at;
     };
     const origin = top(s.el) + s.el.clientTop + g.padding[0];
-    const roots = fixed.map(item => item.roots.map(id => views.get(id)).filter(Boolean));
+    const roots = fixed.map(item => item.roots.map(id => {
+      const el = views.get(id), shell = el?.parentElement;
+      return shell?.hasAttribute('data-exact-list-item') ? shell : el;
+    }).filter(Boolean));
     const bounds = el => {
-      if (!el.getClientRects().length) return null;
-      const at = top(el), css = getComputedStyle(el);
+      const css = getComputedStyle(el);
       if (el.hasAttribute('data-exiting') || css.position === 'absolute' || css.position === 'fixed') return null;
+      if (!el.getClientRects().length) {
+        if (css.display !== 'contents') return null;
+        const children = [...el.children].map(bounds).filter(Boolean);
+        return children.length ? [Math.min(...children.map(b => b[0])), Math.max(...children.map(b => b[1]))] : null;
+      }
+      const at = top(el);
       return [at - number(css.marginTop), at + el.offsetHeight + number(css.marginBottom)];
     };
     const middle = [...s.el.children].filter(el => !roots.some(group => group.includes(el))).map(bounds).filter(Boolean);
@@ -507,8 +515,13 @@ export function collectionController({ root, views, report, settled=()=>{}, agen
       for (let n = r.target; n && n !== s.el; n = n.parentNode) if (s.observed.has(n)) { s.written.add(n); break; }
     }
   }
+  function layoutBoxes(el) {
+    if (!el) return [];
+    return getComputedStyle(el).display === 'contents' ? [...el.children].flatMap(layoutBoxes) : [el];
+  }
   function observe(s) {
-    const elements = new Set([s.el, s.port, ...s.rows.map(r => r.el), ...(s.snapshot.fixed ?? []).flatMap(item => item.roots.map(id => views.get(id))).filter(Boolean)]);
+    const fixed = (s.snapshot.fixed ?? []).flatMap(item => item.roots.flatMap(id => layoutBoxes(views.get(id))));
+    const elements = new Set([s.el, s.port, ...s.rows.map(r => r.el), ...fixed]);
     for (const el of s.observed.keys()) if (!elements.has(el)) { s.observer.unobserve(el); s.observed.delete(el); s.written.delete(el); }
     touch(s);
     for (const el of elements) {
@@ -675,6 +688,10 @@ export function collectionController({ root, views, report, settled=()=>{}, agen
         const epochs = new Map(s.rows.map(row => [row.view, row.epoch]));
         const freshRows = snapshot.rows.some(row => epochs.get(row.view) !== row.epoch);
         s.snapshot = snapshot;
+        for (const fixed of snapshot.fixed ?? []) for (const id of fixed.roots) {
+          const root = views.get(id), shell = root?.hasAttribute('data-exact-list-item') ? root : root?.parentElement;
+          if (shell?.hasAttribute('data-exact-list-item')) { shell.$collectionFixed = true; shell.setAttribute('role', 'presentation'); }
+        }
         s.sequence = s.sequence > BigInt(snapshot.scrollSequence) ? s.sequence : BigInt(snapshot.scrollSequence);
         for (const row of s.rows) if (row.el) rowOwners.delete(row.el);
         s.rows = snapshot.rows.map(row => ({ ...row, el: views.get(row.view) }));

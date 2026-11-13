@@ -380,6 +380,10 @@ impl Build<'_> {
                 ListChild::Spacer(view, style) => {
                     let mut props = PropList::new();
                     props.set(
+                        exact_kernel::PropId::Dataset,
+                        exact_kernel::PropValue::Str(r#"{"exact-list-spacer":""}"#.into()),
+                    );
+                    props.set(
                         exact_kernel::PropId::AccessibilityElementsHidden,
                         exact_kernel::PropValue::Bool(true),
                     );

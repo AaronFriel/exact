@@ -79,3 +79,18 @@ on a vertical list with `appearance="none"`, with named refusals for the
 unsupported shapes. Runtimes without fixed-item geometry refuse the shape.
 This issue stays open until the Apple implementation and its parity and
 accessibility runs land; the Linux lane cannot qualify Apple behavior.
+
+The runner, shared painted presenter (Linux and Windows), terminal presenter
+and web geometry reader now measure fixed items separately from authored
+padding. Runner tests cover an empty data set, a followed trail growing,
+and anchoring inside long fixed content when history grows. Apple refuses
+the shape before boot. Its remaining stage must measure the authored fixed
+children without wrappers, report both fixed measurement identities, preserve
+anchors inside them, follow and reach the trail's end, gate trail accessibility,
+and pass eager parity, end-growth and device interaction runs.
+
+The JS target also implements fixed items. The web and shared Linux
+presenter pass eager layout parity and followed trail growth; the terminal
+passes eager box parity with its cell lengths. Accessibility,
+logical copy, Lean observation and the remaining qualification and guides
+follow in subsequent stages.

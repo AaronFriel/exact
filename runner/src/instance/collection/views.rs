@@ -177,6 +177,11 @@ fn spacer(u: &mut Update<'_>, axis: ListAxis, size: f64) -> Result<ViewId, Insta
         prop: PropId::AccessibilityElementsHidden,
         value: PropValue::Bool(true),
     });
+    u.ops.push(Op::SetProp {
+        id: view,
+        prop: PropId::Dataset,
+        value: PropValue::Str(r#"{"exact-list-spacer":""}"#.into()),
+    });
     style(u, view, &spacer_rows(axis, size))?;
     Ok(view)
 }
