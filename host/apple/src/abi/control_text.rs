@@ -146,8 +146,15 @@ impl<D: DataSource> Bridge<D> {
         });
         self.emit(out)
     }
-    /// The safe-area insets changed.
+    /// The safe-area insets changed. Before a boot, the next boot's first
+    /// layout takes them (the latest told).
     pub fn insets(&mut self, top: f32, right: f32, bottom: f32, left: f32) -> u32 {
+        if self.host.is_none() {
+            if ![top, right, bottom, left].iter().all(|v| v.is_finite()) {
+                return self.refuse("insets must be finite");
+            }
+            self.launch_layout.insets = Some([top, right, bottom, left]);
+        }
         let out = self
             .host
             .as_mut()

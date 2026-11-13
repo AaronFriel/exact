@@ -369,12 +369,12 @@ mod rebind_tests;
 
 impl<D: DataSource> Bridge<D> {
     /// The root font size in points (LLP 1069.000 D3): a relayout.
+    /// The latest valid one is also the next boot's first layout's.
     pub fn set_root_font_size(&mut self, px: f64) -> u32 {
-        if self.host.is_none() {
-            if !px.is_finite() || !(px as f32).is_finite() || px <= 0.0 {
-                return self.refuse("root font size must be finite and positive");
-            }
+        if (px as f32).is_finite() && px as f32 > 0.0 {
             self.launch_layout.root_font_size = Some(px as f32);
+        } else if self.host.is_none() {
+            return self.refuse("root font size must be finite and positive");
         }
         let out = self
             .host
@@ -385,12 +385,12 @@ impl<D: DataSource> Bridge<D> {
 
     /// The display's scale (LLP 1115.000 D10.3): a relayout where a row is a
     /// hairline.
+    /// The latest valid one is also the next boot's first layout's.
     pub fn set_display_scale(&mut self, scale: f64) -> u32 {
-        if self.host.is_none() {
-            if !scale.is_finite() || !(scale as f32).is_finite() || scale <= 0.0 {
-                return self.refuse("display scale must be finite and positive");
-            }
+        if (scale as f32).is_finite() && scale as f32 > 0.0 {
             self.launch_layout.display_scale = Some(scale as f32);
+        } else if self.host.is_none() {
+            return self.refuse("display scale must be finite and positive");
         }
         let out = self
             .host

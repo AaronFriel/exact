@@ -898,6 +898,7 @@ impl<D: DataSource> Bridge<D> {
         self.presenter_hooks(&mut candidate.host, &candidate.hooks);
         self.executor = executor;
         let batch = Host::ending(self.host.replace(candidate.host), candidate.batch);
+        self.launch_layout.insets = None;
         self.adopt_app_module();
         self.rebind();
         self.parked.clear();
@@ -1435,6 +1436,10 @@ mod collection_tests;
 #[cfg(test)]
 #[path = "abi/canvas_scale_tests.rs"]
 mod canvas_scale_tests;
+
+#[cfg(test)]
+#[path = "abi/launch_layout_tests.rs"]
+mod launch_layout_tests;
 
 #[path = "abi_collections.rs"]
 mod collections;
