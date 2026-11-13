@@ -30,21 +30,3 @@ impl<'a> PlanBytes<'a> {
         }
     }
 }
-
-/// Apple collection presenters have not implemented the fixed-item geometry
-/// yet. Reject the plan before boot, including shapes in inactive branches.
-pub(crate) fn has_fixed_collection(plan: &Plan) -> bool {
-    use exact_plan::{BindingKind, NodesId, Opcode};
-    plan.nodes.iter().enumerate().any(|(i, node)| {
-        let virtualized = node.bindings.iter().map(|b| plan.binding(b)).any(|b| {
-            b.kind == BindingKind::Prop
-                && b.id == exact_kernel::PropId::Virtualized as u16
-                && plan.code(b.expr) == [Opcode::Bool as u8, 1, Opcode::Return as u8]
-        });
-        let parent = Some(NodesId(i as u32));
-        virtualized
-            && (plan.nodes.iter().filter(|n| n.parent == parent).count()
-                + plan.regions.iter().filter(|r| r.parent == parent).count()
-                > 1)
-    })
-}

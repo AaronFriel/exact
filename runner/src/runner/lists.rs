@@ -13,9 +13,11 @@ pub enum ListTextPolicy {
 /// A text position that survives retirement of a list row's native views.
 #[derive(Debug, Clone, Copy)]
 pub struct ListTextPosition<'a> {
-    /// The opaque key published on the row wrapper.
+    /// The opaque row-wrapper key; ignored for fixed positions.
     pub key: &'a str,
-    /// Zero-based paragraph within the row.
+    /// Fixed lead (`Some(false)`) or trail (`Some(true)`); `None` addresses a row.
+    pub fixed: Option<bool>,
+    /// Zero-based paragraph within the row or fixed region.
     pub paragraph: usize,
     /// UTF-16 offset within that paragraph, as on the DOM and Apple text APIs.
     pub offset: usize,

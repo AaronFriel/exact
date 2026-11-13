@@ -1,44 +1,3 @@
-#[test]
-fn logical_copy_excludes_a_nested_collections_fixed_content() {
-    let source = r#"component App
-  view
-    list virtualized=true appearance="none" height=200 estimated-item-height=80 testId="outer"
-      text "Header"
-      for n in range(3) key=n
-        column
-          text `Before ${n}`
-          list virtualized=true appearance="none" height=40 estimated-item-height=40
-            text "Inner header"
-            for m in range(3) key=m
-              text "Inner row" height=40
-            text "Inner footer"
-          text `After ${n}`
-      text "Footer"
-"#;
-    let r = Runner::boot(
-        contract::compile(source).unwrap(),
-        NoData,
-        Kernel::with_monospace(),
-        Default::default(),
-        "/",
-    )
-    .unwrap();
-    let outer = r
-        .kernel()
-        .node_by_key(r.kernel().find_by_test_id("outer")[0])
-        .unwrap()
-        .id;
-    for policy in [
-        exact_runner::ListTextPolicy::Web,
-        exact_runner::ListTextPolicy::MacOS,
-    ] {
-        assert_eq!(
-            r.list_text(outer, None, policy).unwrap(),
-            "Header\n\nBefore 0\n\nAfter 0\n\nBefore 1\n\nAfter 1\n\nBefore 2\n\nAfter 2\n\nFooter"
-        );
-    }
-}
-
 //! Fixed content around a virtualized list.
 
 #[test]
@@ -49,6 +8,7 @@ fn vertical_collections_accept_fixed_content_and_name_unsupported_shapes() {
         (source.replace("      text \"Trail\"", "      for y in [3] key=y\n        text `${y}`"), "lower-collection-template", "element"),
         (source.replace("height=200", "height=200 display=\"flex\""), "lower-collection-fixed", "vertical"),
         (source.replace("appearance=\"none\" ", ""), "lower-collection-fixed", "appearance=\"none\""),
+        (source.replace("appearance=\"none\"", "appearance=\"auto\""), "lower-grouped-list", "appearance=\"none\""),
         (source.replace("      text \"Trail\"", "      column\n        list virtualized=true height=40\n          for y in [3] key=y\n            text `${y}`"), "lower-collection-fixed", "row"),
     ] {
         let error = contract::compile(&source).unwrap_err();
@@ -851,7 +811,6 @@ fn the_trail_restores_authored_inertness_including_updates_while_gated() {
     }
 }
 
-
 #[test]
 fn events_in_fixed_content_reach_their_authored_scope() {
     let source = r#"component App
@@ -935,4 +894,82 @@ fn an_eager_for_inside_fixed_content_still_reports_the_long_list_notice() {
             .count(),
         1
     );
+}
+
+#[test]
+fn logical_ranges_retain_fixed_endpoints_after_data_rows_retire() {
+    use exact_runner::{ListTextPolicy, ListTextPosition};
+    let mut r = boot("[1, 2, 3]", false);
+    let view = r.collections()[0].view;
+    let at = |fixed, key, offset| ListTextPosition {
+        fixed,
+        key,
+        paragraph: 0,
+        offset,
+    };
+    for offset in [0., 1200.] {
+        report(&mut r, offset, [300., 800.]);
+        for (a, b, expected) in [
+            (
+                at(Some(false), "", 2),
+                at(Some(true), "", 4),
+                "ad\n\n1\n\n2\n\n3\n\nTrai",
+            ),
+            (at(None, "n:2", 0), at(Some(true), "", 5), "2\n\n3\n\nTrail"),
+            (at(Some(false), "", 0), at(None, "n:2", 1), "Lead\n\n1\n\n2"),
+            (at(Some(true), "", 1), at(Some(true), "", 4), "rai"),
+        ] {
+            assert_eq!(
+                r.list_text(view, Some((a, b)), ListTextPolicy::MacOS)
+                    .unwrap(),
+                expected
+            );
+            assert_eq!(
+                r.list_text(view, Some((b, a)), ListTextPolicy::MacOS)
+                    .unwrap(),
+                expected
+            );
+        }
+    }
+}
+
+#[test]
+fn logical_copy_excludes_a_nested_collections_fixed_content() {
+    let source = r#"component App
+  view
+    list virtualized=true appearance="none" height=200 estimated-item-height=80 testId="outer"
+      text "Header"
+      for n in range(3) key=n
+        column
+          text `Before ${n}`
+          list virtualized=true appearance="none" height=40 estimated-item-height=40
+            text "Inner header"
+            for m in range(3) key=m
+              text "Inner row" height=40
+            text "Inner footer"
+          text `After ${n}`
+      text "Footer"
+"#;
+    let r = Runner::boot(
+        contract::compile(source).unwrap(),
+        NoData,
+        Kernel::with_monospace(),
+        Default::default(),
+        "/",
+    )
+    .unwrap();
+    let outer = r
+        .kernel()
+        .node_by_key(r.kernel().find_by_test_id("outer")[0])
+        .unwrap()
+        .id;
+    for policy in [
+        exact_runner::ListTextPolicy::Web,
+        exact_runner::ListTextPolicy::MacOS,
+    ] {
+        assert_eq!(
+            r.list_text(outer, None, policy).unwrap(),
+            "Header\n\nBefore 0\n\nAfter 0\n\nBefore 1\n\nAfter 1\n\nBefore 2\n\nAfter 2\n\nFooter"
+        );
+    }
 }

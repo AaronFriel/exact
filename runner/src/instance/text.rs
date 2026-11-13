@@ -282,14 +282,19 @@ impl Tree {
             policy,
         )
         .ok_or(InstanceError::List("unknown list"))?;
-        let all = range.is_none();
         let mut start = (0, 0, 0);
-        let mut end = (list.logical_len().saturating_sub(1), usize::MAX, usize::MAX);
+        let mut end = (list.logical_len() + 1, usize::MAX, usize::MAX);
         if let Some((a, b)) = range {
             let position = |p: ListTextPosition<'_>| {
-                list.logical_index(p.key)
-                    .map(|i| (i, p.paragraph, p.offset))
-                    .ok_or(InstanceError::List("selection row no longer exists"))
+                let row = match p.fixed {
+                    Some(false) => 0,
+                    Some(true) => list.logical_len() + 1,
+                    None => list
+                        .logical_index(p.key)
+                        .map(|i| i + 1)
+                        .ok_or(InstanceError::List("selection row no longer exists"))?,
+                };
+                Ok::<_, InstanceError>((row, p.paragraph, p.offset))
             };
             start = position(a)?;
             end = position(b)?;
@@ -299,47 +304,50 @@ impl Tree {
         }
         let mounted: exact_kernel::SortedMap<usize, &Row> = list.mounted_rows().collect();
         let mut result = String::new();
-        if all {
-            fixed_text(
-                u,
-                list.logical_fixed(fixed, false),
-                &frames,
-                selectable,
-                policy,
-                &mut result,
-            )?;
-        }
-        for i in start.0..list.logical_len().min(end.0.saturating_add(1)) {
-            let temporary;
-            let row = if let Some(row) = mounted.get(&i) {
-                *row
-            } else {
-                temporary = list.logical_row(u, i, &frames)?;
-                &temporary
-            };
-            let mut inner = frames.clone();
-            inner.push(row.frame.clone());
+        for row in start.0..=end.0 {
             let mut paragraphs = Vec::new();
-            collect(
-                u,
-                &row.roots,
-                &inner,
-                false,
-                selectable,
-                policy,
-                &mut paragraphs,
-            )?;
+            if row == 0 || row == list.logical_len() + 1 {
+                collect(
+                    u,
+                    list.logical_fixed(fixed, row != 0),
+                    &frames,
+                    false,
+                    selectable,
+                    policy,
+                    &mut paragraphs,
+                )?;
+            } else {
+                let i = row - 1;
+                let temporary;
+                let item = if let Some(item) = mounted.get(&i) {
+                    *item
+                } else {
+                    temporary = list.logical_row(u, i, &frames)?;
+                    &temporary
+                };
+                let mut inner = frames.clone();
+                inner.push(item.frame.clone());
+                collect(
+                    u,
+                    &item.roots,
+                    &inner,
+                    false,
+                    selectable,
+                    policy,
+                    &mut paragraphs,
+                )?;
+            }
             for (p, (text, selectable)) in paragraphs.into_iter().enumerate() {
-                if !selectable || (i, p) < (start.0, start.1) || (i, p) > (end.0, end.1) {
+                if !selectable || (row, p) < (start.0, start.1) || (row, p) > (end.0, end.1) {
                     continue;
                 }
                 let units: Vec<_> = text.encode_utf16().collect();
-                let lo = if (i, p) == (start.0, start.1) {
+                let lo = if (row, p) == (start.0, start.1) {
                     start.2.min(units.len())
                 } else {
                     0
                 };
-                let hi = if (i, p) == (end.0, end.1) {
+                let hi = if (row, p) == (end.0, end.1) {
                     end.2.min(units.len())
                 } else {
                     units.len()
@@ -355,45 +363,6 @@ impl Tree {
             u.ops.clear();
             u.surfaces.clear();
         }
-        if all {
-            fixed_text(
-                u,
-                list.logical_fixed(fixed, true),
-                &frames,
-                selectable,
-                policy,
-                &mut result,
-            )?;
-        }
         Ok(result)
     }
-}
-
-fn fixed_text(
-    u: &mut Update<'_>,
-    children: &[Child],
-    frames: &[Frame],
-    selectable: Selection,
-    policy: ListTextPolicy,
-    result: &mut String,
-) -> Result<(), InstanceError> {
-    let mut paragraphs = Vec::new();
-    collect(
-        u,
-        children,
-        frames,
-        false,
-        selectable,
-        policy,
-        &mut paragraphs,
-    )?;
-    for (text, selectable) in paragraphs {
-        if selectable && !text.is_empty() {
-            if !result.is_empty() {
-                result.push_str("\n\n");
-            }
-            result.push_str(&text);
-        }
-    }
-    Ok(())
 }

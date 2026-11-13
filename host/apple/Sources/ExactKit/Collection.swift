@@ -123,6 +123,12 @@ struct CollectionSnapshot {
         let size: Double?
         let measured: Bool
     }
+    struct Fixed {
+        let view: UInt32
+        let roots: [UInt32]
+        let epoch: UInt64
+        let size: Double
+    }
     struct Correction {
         let sequence: UInt64
         let offset: Double
@@ -142,6 +148,7 @@ struct CollectionSnapshot {
     let sequence: UInt64
     let extent: Double
     let rows: [Row]
+    let fixed: [Fixed]
     let correction: Correction?
     /// Logical item count, mounted or not.
     let count: Int
@@ -161,10 +168,6 @@ struct CollectionSnapshot {
     var underWay: Bool { seeking || waiting }
 
     init?(_ value: [String: Any]) {
-        guard value["fixed"] == nil else {
-            fputs("exact: fixed collection content needs Apple fixed-item geometry; move it outside the list until CollectionIOS.swift and CollectionMac.swift support it\n", stderr)
-            return nil
-        }
         guard let view = Self.viewID(value["view"]), let revision = Self.uint(value["revision"]),
               let sequence = Self.uint(value["scrollSequence"]), let extent = Self.number(value["totalExtent"]),
               let rawRows = value["rows"] as? [[String: Any]] else { return nil }
@@ -176,6 +179,19 @@ struct CollectionSnapshot {
             rows.append(Row(view: id, root: root, epoch: epoch, index: Self.uint(item["index"]).map { Int(clamping: $0) } ?? -1,
                             size: Self.number(item["size"]), measured: item["measured"] as? Bool ?? false))
         }
+        var fixed: [Fixed] = []
+        if let value = value["fixed"] {
+            guard let items = value as? [[String: Any]], items.count == 2 else { return nil }
+            for item in items {
+                guard let id = Self.viewID(item["view"]), let epoch = Self.uint(item["epoch"]), epoch == 1,
+                      let size = Self.number(item["size"]), let roots = item["roots"] as? [Any],
+                      seen.insert(id).inserted else { return nil }
+                let ids = roots.compactMap(Self.viewID)
+                guard ids.count == roots.count else { return nil }
+                fixed.append(Fixed(view: id, roots: ids, epoch: epoch, size: size))
+            }
+        }
+        guard fixed.isEmpty || (value["axis"] as? String) != "x" else { return nil }
         var correction: Correction?
         if let raw = value["correction"], !(raw is NSNull) {
             guard let raw = raw as? [String: Any], let seq = Self.uint(raw["scrollSequence"]),
@@ -185,7 +201,7 @@ struct CollectionSnapshot {
         self.view = view; self.revision = revision; self.sequence = sequence
         self.horizontal = (value["axis"] as? String) == "x"
         self.parent = Self.viewID(value["parent"])
-        self.extent = extent; self.rows = rows; self.correction = correction
+        self.extent = extent; self.rows = rows; self.fixed = fixed; self.correction = correction
         self.count = Self.uint(value["count"]).map { Int(clamping: $0) } ?? rows.count
         self.pending = (value["pending"] as? NSNumber)?.boolValue ?? false
         self.seeking = value["seeking"] as? Bool == true
@@ -511,11 +527,14 @@ package final class CollectionHost {
             for snapshot in snapshots {
                 if let entry = entries[snapshot.view] {
                     if snapshot.revision >= entry.snapshot.revision {
-                        // A row the last report measured, still in the newer snapshot at that epoch and not acknowledged
-                        // there: the runner hasn't taken that measurement (a report it turned away), so it's owed.
+                        // A rejected report still owes any measurement the newer snapshot
+                        // has not acknowledged at that identity and epoch.
                         if snapshot.revision > entry.snapshot.revision, let sent = entry.lastFacts?.measurements {
                             let rows = Dictionary(snapshot.rows.map { ($0.view, $0) }, uniquingKeysWith: { a, _ in a })
-                            if sent.contains(where: { m in rows[m.view].map { $0.epoch == m.epoch && !Self.acknowledges($0, m) } ?? false }) {
+                            if sent.contains(where: { m in
+                                if let row = rows[m.view] { return row.epoch == m.epoch && !Self.acknowledges(row, m) }
+                                return snapshot.fixed.contains { $0.view == m.view && $0.epoch == m.epoch && $0.size != m.size }
+                            }) {
                                 entry.owed = true
                             }
                         }
@@ -745,6 +764,23 @@ package final class CollectionHost {
         fillPending.insert(view)
         requestFill?()
     }
+    /// Both identities are reported even when no data row is mounted.
+    /// The kernel measures the authored flow, before pixel snapping, and
+    /// excludes display-hidden margins just as an eager list does.
+    func fixedMeasurements(_ id: UInt32) -> [CollectionMeasurement] {
+        guard let fixed = entries[id]?.snapshot.fixed, fixed.count == 2 else { return [] }
+        guard let sizes = presenter?.session?.runtime.collectionFixedSizes(id, lead: fixed[0].roots.count, trail: fixed[1].roots.count) else { return [] }
+        return fixed.enumerated().map { side, item in CollectionMeasurement(view: item.view, epoch: item.epoch, size: sizes[side]) }
+    }
+    /// Fixed regions join the data rows' coverage, without becoming data
+    /// items. Their logical bounds use the same height index as corrections.
+    func fixedSpans(_ id: UInt32) -> [(first: Bool, last: Bool, start: Double, end: Double)] {
+        guard let snapshot = entries[id]?.snapshot, snapshot.fixed.count == 2 else { return [] }
+        let lead = snapshot.fixed[0].size, trail = snapshot.fixed[1].size
+        return [(first: true, last: snapshot.count == 0 && trail == 0, start: 0, end: lead),
+                (first: snapshot.count == 0 && lead == 0, last: true, start: snapshot.extent - trail, end: snapshot.extent)]
+            .filter { $0.end > $0.start }
+    }
     /// The agent's `clock settle`: every list reports until none is owed a
     /// report, so rows a reply mounted are measured before the agent reads
     /// or moves them, as a turn of the main queue would do between a
@@ -812,6 +848,10 @@ package final class CollectionHost {
         // Each list once per flush, at most, without a report (bounded
         // even if a visit re-dirties its list).
         var free = entries.count
+        // Lists whose fixed sizes the kernel could not answer this flush:
+        // they retry on the next turn, not again in this loop.
+        var unmeasured = Set<UInt32>()
+        defer { dirty.formUnion(unmeasured) }
         while !dirty.isEmpty {
             // A slice in flight holds every report until it lands (T4).
             if filling?() == true { return }
@@ -861,6 +901,20 @@ package final class CollectionHost {
                           crossSize(row.view, horizontal: horizontal) == facts.cross else { return nil }
                     return CollectionMeasurement(view: row.view, epoch: row.epoch, size: size)
                 }
+                // The runner rejects a fixed list's report without both
+                // fixed sizes, and a sent report is taken as delivered. The
+                // kernel has no answer while main serves the owner, so the
+                // list stays owed until it does.
+                let fixedSizes = fixedMeasurements(id)
+                if entry.snapshot.fixed.count == 2 && fixedSizes.isEmpty {
+                    entry.owed = true
+                    unmeasured.insert(id)
+                    if let retireLimit { retireOwed[id] = retireLimit }
+                    free -= 1
+                    budget.end(reported: free < 0)
+                    continue
+                }
+                facts.measurements += fixedSizes
                 // A slice builds its limit once; later passes and every
                 // report while moving or owed a continuation only measure
                 // and rescue what shows. At rest a report is unlimited.

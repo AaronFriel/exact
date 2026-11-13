@@ -931,11 +931,11 @@ package final class Runtime {
             return index == UInt32.max ? nil : Int(index)
         }
     }
-    package func listText(_ view: UInt32, first: (String, Int, Int)?, last: (String, Int, Int)?) -> String {
+    package func listText(_ view: UInt32, first: (String, Int, Int, Bool?)?, last: (String, Int, Int, Bool?)?) -> String {
         return on(busy: "") {
             let a = first?.0 ?? "", b = last?.0 ?? ""
             let n = write(a + b)
-            let len = exact_list_text(rt, view, UInt32(a.utf8.count), UInt32(n), UInt32(first?.1 ?? 0), UInt32(first?.2 ?? 0), UInt32(last?.1 ?? 0), UInt32(last?.2 ?? 0))
+            let len = exact_list_text(rt, view, UInt32(a.utf8.count), UInt32(n), UInt32(first?.1 ?? 0), UInt32(first?.2 ?? 0), UInt32(last?.1 ?? 0), UInt32(last?.2 ?? 0), first?.3.map { $0 ? 1 : 0 } ?? UInt32.max, last?.3.map { $0 ? 1 : 0 } ?? UInt32.max)
             return String(decoding: Data(bytes: exact_out(rt), count: Int(len)), as: UTF8.self)
         }
     }

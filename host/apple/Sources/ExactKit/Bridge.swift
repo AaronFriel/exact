@@ -3,6 +3,13 @@ import CExact
 import Foundation
 
 extension Runtime {
+    func collectionFixedSizes(_ view: UInt32, lead: Int, trail: Int) -> [Double]? {
+        on(busy: nil) {
+            let sizes = (0..<2).map { exact_collection_fixed_size(rt, view, UInt32(lead), UInt32(trail), UInt32($0)) }
+            return sizes.allSatisfy { $0.isFinite && $0 >= 0 } ? sizes : nil
+        }
+    }
+
     func collectionSnap(_ view: UInt32, proposed: Double, port: Double, minimum: Double = 0, maximum: Double, distance: Double = .infinity) -> Double? {
         on(busy: nil) {
             let value = exact_collection_snap(rt, view, proposed, port, minimum, maximum, distance)

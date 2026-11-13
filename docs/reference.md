@@ -4988,8 +4988,8 @@ resizing and Linux headless presenter resizing do not measure physical refresh.
 
 `reachstart` and `reachend` belong only to `list virtualized=true` with one
 direct keyed `for` (LLP 1010). A vertical list with `appearance="none"` can
-also hold always-mounted lead and trail children; Apple hosts currently refuse
-this shape. Only a non-empty data collection fires edges. Without fixed content,
+also hold always-mounted lead and trail children. Only a non-empty data
+collection fires edges. Without fixed content,
 its geometric window reaches the first or last supplied row. With fixed content,
 the edge is the lead's start or the trail's end. An empty data collection fires
 neither event. A plain list lays out all its children and has no collection window;

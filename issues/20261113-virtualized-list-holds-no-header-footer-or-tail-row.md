@@ -8,14 +8,16 @@
 
 ## What is wrong
 
-The compiler and the runner, web, painted and terminal presenters admit fixed
-lead and trail content around a vertical virtualized list's keyed `for` with
-`appearance="none"`. The remaining work is the Apple presenter and its
-simulator, macOS and device runs.
+`list virtualized=true` takes exactly one direct `for` and nothing beside it.
+`Lowerer` refuses a header, footer or tail beside the loop:
 
-The original refusal forced headers, loading and end states into synthetic
-data rows. A streaming reply concatenated to the transcript through a derive
-recomputed that list on each token; that cost was reported, not measured.
+```
+[lower-collection-template] a virtualized list initially supports exactly one direct `for`
+```
+
+The refusal forces headers, loading and end states into synthetic data rows.
+A streaming reply concatenated to the transcript through a derive recomputes
+that list on each token; that cost was reported, not measured.
 
 ## The failure
 
@@ -58,28 +60,42 @@ synthetic rows of the same collection with reserved keys. The trigger is a third
 diary hitting this, not a performance number. This issue stays open as that
 evidence.
 
+## Decision (2026-11-15)
+
+LLP 1035.005.000 D11 is selected and built as LLP 1070 §14's height-index
+model, superseding the decision of 2026-11-14 above (Charlie, who had
+approved the model on 2026-11-12, before that panel met). Fixed nodes are
+always-mounted items in the height index under their own identities, not
+synthetic data rows, so row counts, `aria-setsize`, `firstVisibleKey`, keyed
+`scrollIntoView`, reorder and the reach events name data rows alone.
+
 ## Height-index build
 
-The compiler admits lead and trail nodes around the one direct keyed `for`
-on a vertical list with `appearance="none"`, with named refusals for the
-unsupported shapes. Runtimes without fixed-item geometry refuse the shape.
-This issue stays open until the Apple implementation and its parity and
-accessibility runs land; the Linux lane cannot qualify Apple behavior.
+The compiler admits lead and trail nodes around one direct keyed `for` on a
+vertical list with `appearance="none"`. Cells lists, horizontal fixed content,
+a second direct `for` and a virtualized list inside fixed content remain
+refused by name.
 
-The runner, shared painted presenter (Linux and Windows), terminal presenter
-and web geometry reader now measure fixed items separately from authored
-padding. Runner tests cover an empty data set, a followed trail growing,
-and anchoring inside long fixed content when history grows. Apple refuses
-the shape before boot. Its remaining stage must measure the authored fixed
-children without wrappers, report both fixed measurement identities, preserve
-anchors inside them, follow and reach the trail's end, gate trail accessibility,
-and pass eager parity, end-growth and device interaction runs.
+The runner and hosts measure fixed items separately from authored padding.
+Apple uses the shared kernel's occupied-flow measurement before pixel
+snapping, reports both fixed identities even without mounted data rows, and
+includes fixed regions in UIKit coverage and AppKit's prepared content.
+Anchors retain fixed-region offsets; a followed end follows a growing trail.
+Nested lists keep a visible data key with its signed offset, or a fixed
+identity when no data shows, across their outer row's retirement.
 
-The JS target also implements fixed items. Web, Linux and terminal pass eager
-box parity and followed trail growth. The trail's accessibility gate and logical
-copy order are covered, and the fixed-content corpus agrees across the runner,
-Lean and JS target. The long-list notice still applies inside fixed content.
+The trail stays accessibility-hidden and inert until the geometric data window
+reaches the last data row, then restores both authored values. Whole-list
+copy on the wasm web target, the default JS web target and AppKit includes
+fixed text and every logical data row when tall fixed content leaves no
+mounted data rows. The JS target installs the selection controller after
+paint and evaluates compiled text expressions for unmounted rows; compiled-app
+clipboard tests cover both tall fixed sides, row scopes, selection exclusions
+and nested collection boundaries before and after retirement. AppKit keeps
+fixed-region and data endpoints when Select All becomes a range. The web observes layout
+boxes beneath contents shells, so intrinsic image growth needs no app-state
+commit. Display-hidden fixed children contribute no margins or extent.
 
-The issue remains open for the Apple stage described above. The Linux lane
-cannot run UIKit, AppKit, momentum, rubber banding, keyboard/refresh or VoiceOver
-qualification on Apple devices.
+Still owed on a physical Apple device: momentum and rubber-banding while a
+followed trail grows, and VoiceOver navigation from the last data row into
+the trail. This issue remains open for those runs.

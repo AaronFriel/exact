@@ -469,9 +469,6 @@ impl<D: DataSource> Host<D> {
             }
         }
         let plan = plan_bytes.decode().map_err(HostError::Plan)?;
-        if crate::plan_bytes::has_fixed_collection(&plan) {
-            return Err(HostError::Layout("fixed content in a virtualized list needs Apple fixed-item measurement, anchoring, end-follow and accessibility support in CollectionIOS.swift and CollectionMac.swift; move it outside the list until that stage lands".into()));
-        }
         let entry_props = match plan_bytes {
             PlanBytes::Entry(_, _, props, configuration)
                 if props.is_some() || configuration.is_some() =>

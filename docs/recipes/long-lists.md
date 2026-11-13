@@ -2,8 +2,7 @@
 
 Virtualize rows, each holding N cards (two here). The list has one direct keyed
 `for`; its template has one root in normal flow. Loading content follows the
-`for` as a fixed child. Apple hosts currently refuse fixed children in a
-virtualized list.
+`for` as a fixed child.
 
 ```contract
 shape Product

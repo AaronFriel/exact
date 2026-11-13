@@ -792,7 +792,7 @@ package final class Presenter {
     /// boxes where the viewer sees them (LLP 1051.000 D1).
     var onScrolled: ((UInt32?, Double, Double) -> Void)?
     var onListIndex: ((UInt32, String) -> Int?)?
-    var onListText: ((UInt32, (String, Int, Int)?, (String, Int, Int)?) -> String)?
+    var onListText: ((UInt32, (String, Int, Int, Bool?)?, (String, Int, Int, Bool?)?) -> String)?
     private(set) var listViews: [UInt32: NodeView] = [:]
     /// Views this batch renewed for another list item (RenewMac.swift), and the accessibility watch that allows it.
     var renewing = Set<UInt32>(), rowReuseWatch: [NSKeyValueObservation] = []

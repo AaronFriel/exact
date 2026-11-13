@@ -705,23 +705,33 @@ component App
 }
 
 #[test]
-fn fixed_collection_content_is_refused_before_the_apple_presenters_run() {
+fn fixed_collection_geometry_reports_the_shared_flow_extents() {
     let source = include_str!("../../../contract/corpus/list-fixed.contract");
-    let plan = contract::compile(source).unwrap().encode();
-    let error = match Host::boot(
-        &plan,
-        Rows::default(),
-        Box::new(MonospaceMeasurer::default()),
-        400.,
-        600.,
-    ) {
-        Ok(_) => panic!("Apple has no fixed-item presenter yet"),
-        Err(error) => error.to_string(),
-    };
-    assert!(
-        error.contains("CollectionIOS.swift")
-            && error.contains("CollectionMac.swift")
-            && error.contains("outside the list"),
-        "{error}"
+    let (mut bridge, _, _) = fixture(source);
+    let snapshot = snapshot(&bridge);
+    let lead = snapshot.fixed[0].roots.len() as u32;
+    let trail = snapshot.fixed[1].roots.len() as u32;
+    let sizes = [0, 1].map(|side| bridge.collection_fixed_size(snapshot.view, lead, trail, side));
+    assert_eq!(sizes[0], 95.0);
+    assert!(sizes[1] >= 300.0);
+    assert!(bridge
+        .collection_fixed_size(snapshot.view, lead, trail, 2)
+        .is_nan());
+    assert!(bridge
+        .collection_fixed_size(snapshot.view, u32::MAX, trail, 0)
+        .is_nan());
+    let mut report = facts(&snapshot, 0.0);
+    report.measurements.extend(
+        snapshot
+            .fixed
+            .iter()
+            .enumerate()
+            .map(|(side, f)| RowMeasurement {
+                view: f.view,
+                epoch: 1,
+                size: sizes[side],
+            }),
     );
+    let batch = send(&mut bridge, &report, 1.0);
+    assert!(batch.contains("\"error\":null"), "{batch}");
 }

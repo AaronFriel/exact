@@ -2153,10 +2153,10 @@ lists, use `list virtualized=true` (no other tag takes it), one direct keyed
 `for`, and one flow root per row. A vertical list with `appearance="none"`
 may also hold fixed content before and after that `for`; a second direct `for`
 needs an element around it (all its rows mount). Fixed content cannot hold a
-virtualized list. Fixed roots use static or relative positioning without vertical
-offsets and nonnegative literal margins (`lower-collection-fixed-flow`). Apple hosts currently refuse fixed content pending their
-presenter implementation. Fixed content keeps its authored sibling layout and
-stays mounted even when the `for` is empty. It has no data-row key, cell styling,
+virtualized list. Fixed roots require nonnegative margin lengths, including percentages and
+font-relative units, and static or relative positioning without vertical offsets
+(`lower-collection-fixed-flow`).
+Fixed content keeps its authored sibling layout and stays mounted even when the `for` is empty. It has no data-row key, cell styling,
 `keep-mounted` entry or place in `aria-setsize`; give it an `id` for element
 `scrollIntoView(id)`. Authored padding stays before the lead and after the trail.
 A `for` inside a fixed element is eager and still receives

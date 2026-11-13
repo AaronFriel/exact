@@ -18,7 +18,7 @@ pub struct RowMeasurement {
     pub view: ViewId,
     /// Epoch copied from the snapshot used for this layout.
     pub epoch: u64,
-    /// Finite nonnegative border-box size along the main axis.
+    /// Finite nonnegative measured extent along the main axis.
     pub size: f64,
 }
 /// Facts from the actual nested scrollport. Never use the window's size instead.
