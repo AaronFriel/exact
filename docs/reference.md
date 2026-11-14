@@ -2284,6 +2284,18 @@ then `expect` reads the state before it; on the web build an answer given at
 once is there already), and on a device it lands a few milliseconds after the
 input.
 
+Natively, a data module has no global error hook: its global has no `onerror`,
+`onunhandledrejection`, `addEventListener` or `reportError`, and the rejection
+tracker that journals an unhandled rejection is Exact's, installed before the
+built-ins are frozen, so the module cannot replace it. On the web the module's
+realm is the browser's and has them, so a listener registered there does
+nothing natively: a feature-detected one is skipped, and an unguarded
+`addEventListener` throws. To report errors to a service, catch them where the
+answer runs: wrap each source's function (or `answer`) in `try`/`catch`, await
+what it starts, and send the report from the `catch` while the answer is still
+in flight, as `fetch` requires. What the answer does not catch fails it
+(`failure(x).code`, above) and reaches `logs`.
+
 A newer send may replace a mutation's reply. An operation already issued still
 runs, in the order it was issued; the replaced reply is dropped, and that
 answer's Store writes are not the live answer's. A send dropped before it has
