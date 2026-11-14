@@ -263,10 +263,6 @@ component App
         copied = true
       case none
         copied = false
-  task theming mount
-    after(1, applyTheme)
-  action applyTheme
-    setScheme(theme)
   action chooseTheme(value: string)
     theme = value
     setScheme(value)

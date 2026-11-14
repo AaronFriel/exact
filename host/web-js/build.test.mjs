@@ -233,6 +233,20 @@ test.each([false, true])('named focus, blur, scheme, clipboard and haptic comman
     expect(await page.evaluate(() => [document.documentElement.style.colorScheme, exact.asked.scheme.value])).toEqual(['', 'dark']);
     await page.evaluate(() => exact.asked.scheme.apply());
     expect(await page.evaluate(() => document.documentElement.style.colorScheme)).toBe('dark');
+    // The choice is kept, held or not, and the next load is in it when the page first renders.
+    expect(await page.evaluate(() => Object.entries(localStorage).filter(([k]) => k.endsWith('#scheme')).map(([, v]) => v))).toEqual(['"dark"']);
+    await page.addInitScript(() => {
+      new MutationObserver((_, o) => {
+        if (!document.getElementById('exact-root')?.firstChild) return;
+        globalThis.firstScheme = document.documentElement.style.colorScheme;
+        o.disconnect();
+      }).observe(document, { childList: true, subtree: true });
+    });
+    await page.reload();
+    await page.getByTestId('apply').waitFor();
+    expect(await page.evaluate(() => globalThis.firstScheme)).toBe('dark');
+    await page.getByTestId('clear').dispatchEvent('click');
+    expect(await page.evaluate(() => Object.keys(localStorage).filter(k => k.endsWith('#scheme')))).toEqual([]);
     expect(errors).toEqual([]);
   } finally {
     await browser?.close(); server?.stop(true); rmSync(dir, { recursive: true, force: true });

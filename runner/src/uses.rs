@@ -690,6 +690,12 @@ pub fn chooses_locale(plan: &Plan) -> bool {
     runs_command(plan, &["setLocale"])
 }
 
+/// Whether the plan runs `setScheme`: then the scheme it chose is kept
+/// across launches.
+pub fn chooses_scheme(plan: &Plan) -> bool {
+    runs_command(plan, &["setScheme"])
+}
+
 fn runs_command(plan: &Plan, names: &[&str]) -> bool {
     let mut runs = false;
     plan.each_code(&mut |code| {

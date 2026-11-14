@@ -58,9 +58,9 @@ component App
   The web needs SVG (`forma-icon-missing`). Prefer a role;
   `sf/<name>` is blank on the web. Use `image "symbol:icon.play"`; `color` tints it,
   its font sizes it ([symbols](symbols.md)).
-- **The scheme:** `setScheme("light" | "dark" | "system")` sets the app's (in its action, and a
-  `mount` task for a kept one); `color-scheme`
-  fixes a subtree in one. Modes the person picks (Dim, Black) are axes ([a brand](forma.md)).
+- **The scheme:** `setScheme("light" | "dark" | "system")` sets it, kept from
+  a relaunch's first frame (`system` forgets it); `color-scheme` fixes a subtree in one.
+  Modes the person picks (Dim, Black) are axes ([a brand](forma.md)).
 - **Check it:** `bun exact.mjs forma check .` (`pair=` warns below 4.5:1); a drive or a test
   says `prefer prefers-color-scheme dark` (then `light`) before an `expect` or
   `screenshot`; `check both` judges both schemes.

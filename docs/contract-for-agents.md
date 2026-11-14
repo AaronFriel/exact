@@ -6658,6 +6658,9 @@ Recipe:
 `color-scheme="dark"` (or `"light"`) on a node makes that subtree resolve
 `light-dark()`, platform colours and glass in that scheme, as a sheet that is
 always dark does; leave it off to follow the surrounding scheme (LLP 1034 §8).
+A Theme setting calls `setScheme("light" | "dark" | "system")` in its action; the
+choice is kept across launches and shown from the first frame, and `"system"`
+forgets it.
 An app that is always one scheme says `"userInterfaceStyle": "light"` or `"dark"` in
 `app.json` (`automatic`, the default, follows the device). It is the app's appearance from
 launch, as the device's would be: the launch screen, the first frame, sheets, alerts and the

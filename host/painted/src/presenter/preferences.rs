@@ -412,6 +412,16 @@ pub fn scrub_frame_drawn() {
     write_scrub(&fresh, Some(Some(turned)));
 }
 
+/// The app's `setScheme` argument as what a `light-dark()` colour resolves to
+/// here (LLP 1034 D2): dark, light, or, for `system`, no override.
+pub(crate) fn app_dark(scheme: Option<&exact_plan::Value>) -> Option<bool> {
+    match scheme.and_then(exact_plan::Value::as_str) {
+        Some("dark") => Some(true),
+        Some("light") => Some(false),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

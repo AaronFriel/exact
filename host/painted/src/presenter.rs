@@ -661,6 +661,10 @@ impl<D: DataSource> Presenter<D> {
         };
         p.read_ranges();
         p.set_system_scheme(false);
+        // The scheme the app chose at an earlier launch, in the first frame
+        // whenever the host runs the boot's commands.
+        let kept = preferences::app_dark(p.host.runner().asked().scheme.as_ref());
+        p.app_scheme(kept);
         let e = p.after_commit();
         p.booting = false;
         if let Some(reason) = p.assets.take_refusal() {

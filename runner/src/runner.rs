@@ -970,6 +970,7 @@ impl<D: DataSource> Runner<D> {
         };
         runner.init_slots(carried, launch)?;
         runner.carry_modes(carried.map_or(&[], |c| &c.modes));
+        runner.ask_kept_scheme();
         runner.derives = vec![None; runner.plan.derives.len()];
         // Resources: carry only the same named source and a value that still
         // fits the declared shape; a carried value can refuse nothing.
