@@ -21,7 +21,7 @@ mkdirSync(resolve(root, 'web'));
 writeFileSync(resolve(root, 'web/address-space.js'), 'export const setSpaceState = () => {};');
 const webJs = name => resolve(fileURLToPath(new URL(`../../web-js/${name}`, import.meta.url)));
 
-const REAL = ['rt.js', 'format.js', 'clock.js', 'resources.js', 'tree.js', 'events.js', 'pieces.js', 'mount.js', 'strings.js', 'request-send.js', 'presence-bindings.js', 'rows.js', 'uploads.js', 'held.js', 'font-family.js', 'observers.js', 'grid.js', 'overlay.js', 'roster.js', 'router.js', 'route-pattern.js', 'schedule.js', 'budget.js', 'shape.js', 'modules.js', 'permissions.js', 'samples.js', 'spans.js', 'update.js', 'arrival.js', 'devices.js', 'wakes.js', 'reach.js', 'members.js', 'resource-inspection.js', 'sheets.js'];
+const REAL = ['commands.js', 'rt.js', 'format.js', 'clock.js', 'resources.js', 'tree.js', 'events.js', 'pieces.js', 'mount.js', 'strings.js', 'request-send.js', 'presence-bindings.js', 'rows.js', 'uploads.js', 'held.js', 'font-family.js', 'observers.js', 'grid.js', 'overlay.js', 'roster.js', 'router.js', 'route-pattern.js', 'schedule.js', 'budget.js', 'shape.js', 'modules.js', 'permissions.js', 'samples.js', 'spans.js', 'update.js', 'arrival.js', 'devices.js', 'wakes.js', 'reach.js', 'members.js', 'resource-inspection.js', 'sheets.js'];
 for (const f of REAL) copyFileSync(webJs(f), resolve(dir, f));
 // The stand-ins export what these modules and ts-data.js import; the values the tests read are stated.
 const STATED = {
@@ -617,7 +617,9 @@ test('a key handler stops and prevents its event while a view transition holds t
   globalThis.requestAnimationFrame = f => setTimeout(f, 0);
   globalThis.document = { getElementById: () => ({}) };
   try {
-    const { on, onKey, act, C, pr, pieces } = await import(resolve(dir, 'rt.js'));
+    const { on, onKey, act, C, pr, pieces, useCommands } = await import(resolve(dir, 'rt.js'));
+    const { preventDefault, stopPropagation } = await import(resolve(dir, 'commands.js'));
+    useCommands({ preventDefault, stopPropagation });
     pr({}); await pieces();
     const listeners = [];
     const el = { addEventListener: (type, f) => listeners.push([type, f]) };
@@ -642,7 +644,9 @@ test('a key handler hears isComposing last in its KeyboardEvent record', async (
 });
 
 test('capture stop ends Exact key handlers but leaves Enter submission and the browser default available', async () => {
-  const { on, onKey, onSubmit, Hosts } = await import(resolve(dir, 'rt.js'));
+  const { on, onKey, onSubmit, Hosts, useCommands } = await import(resolve(dir, 'rt.js'));
+  const { preventDefault, stopPropagation } = await import(resolve(dir, 'commands.js'));
+  useCommands({ preventDefault, stopPropagation });
   const saved = globalThis.addEventListener, windowListeners = [];
   globalThis.addEventListener = (type, f) => windowListeners.push([type, f]);
   try {
@@ -1362,7 +1366,9 @@ test('a submit runs before the field\'s next key or edit applies; the edit lands
 
 
 test('clipboard handlers preserve the default unless prevented and restore the enclosing event', async () => {
-  const { on, onClipboard, Hosts } = await import(resolve(dir, 'rt.js'));
+  const { on, onClipboard, Hosts, useCommands } = await import(resolve(dir, 'rt.js'));
+  const { preventDefault, stopPropagation } = await import(resolve(dir, 'commands.js'));
+  useCommands({ preventDefault, stopPropagation });
   const event = () => ({ defaultPrevented: false, stopped: false,
     clipboardData: { getData: () => 'clipboard text' },
     preventDefault() { this.defaultPrevented = true; },
@@ -1393,11 +1399,36 @@ test('clipboard handlers preserve the default unless prevented and restore the e
   expect(outer.defaultPrevented).toBe(true);
 });
 
+test('linked unload commands cancel the current event and restore it after the handler', async () => {
+  const page = globalThis.document, listen = globalThis.addEventListener;
+  globalThis.document = { getElementById: () => ({}) };
+  let listener;
+  globalThis.addEventListener = (_, f) => { listener = f; };
+  try {
+    const { onUnload, Hosts, useCommands } = await freshRuntime('unload-commands');
+    const { preventDefault, stopPropagation } = await import(resolve(root, 'web-js-unload-commands', 'commands.js'));
+    useCommands({ preventDefault, stopPropagation });
+    onUnload({ isConnected: true }, 'unload', () => { Hosts.preventDefault(); Hosts.stopPropagation(); });
+    const event = { type: 'beforeunload', defaultPrevented: false, returnValue: 'unchanged',
+      preventDefault() { this.defaultPrevented = true; } };
+    listener(event);
+    expect([event.defaultPrevented, event.returnValue, event.$stopped]).toEqual([true, '', true]);
+    event.defaultPrevented = false; event.returnValue = 'restored'; delete event.$stopped;
+    Hosts.preventDefault(); Hosts.stopPropagation();
+    expect([event.defaultPrevented, event.returnValue, event.$stopped]).toEqual([false, 'restored', undefined]);
+  } finally {
+    if (page === undefined) delete globalThis.document; else globalThis.document = page;
+    if (listen === undefined) delete globalThis.addEventListener; else globalThis.addEventListener = listen;
+  }
+});
+
 test('focus handlers stop bubbling while a view transition holds their commit', async () => {
   globalThis.requestAnimationFrame = f => setTimeout(f, 0);
   globalThis.document = { getElementById: () => ({}) };
   try {
-    const { on, onFocusWithin, act, C, pr, pieces } = await freshRuntime('focus-events');
+    const { on, onFocusWithin, act, C, pr, pieces, useCommands } = await freshRuntime('focus-events');
+    const { preventDefault, stopPropagation } = await import(resolve(root, 'web-js-focus-events', 'commands.js'));
+    useCommands({ preventDefault, stopPropagation });
     pr({}); await pieces();
     for (const kind of ['focusin', 'focusout']) {
       const listeners = [], heard = [];
