@@ -1869,6 +1869,59 @@ out (LLP 1157).
   default logger calls `Math.random()`, which a data module refuses), then
   `await http.query(api.messages.list, { channel })`.
 
+#### Convex Auth
+
+With Convex Auth (`@convex-dev/auth`) the deployment runs the OAuth flow, and
+the client calls three of its mutations: one that starts a sign-in (`{
+redirectTo }` to `{ redirect, state }`), one that completes it (`{ code, state
+}` to tokens) and `refreshSession` (`{ refreshToken }` to tokens). Its React
+hooks and browser session manager do not run in a data module. Call the
+mutations with `cx.mutation`, open `redirect` with `openAuthSession` (it and
+`authCallback` are declared for every app in `app.contract.d.ts`), keep the
+refresh token with `store.set` under a `secret.keep` grant, and give the access
+token to `cx.setAuth`. The mutations' names are the deployment's:
+
+```ts
+const SESSION = 'example.session';
+export const grants = [`net.websocket ${CONVEX}`, 'auth.session https://accounts.google.com', `secret.keep ${SESSION}`].join('\n');
+
+// a source of `sources`
+signIn: async (_a, store) => {
+  const callback = authCallback(), mine = crypto.randomUUID();
+  const started = await cx.mutation(api.auth.startSignInWithGoogle, { redirectTo: `${callback}?state=${mine}` });
+  const back = new URL(await openAuthSession(started.redirect, { callback, state: mine })).searchParams;
+  const failed = back.get('convexAuthError');
+  if (failed !== null) return { ok: false, error: failed };
+  const done = await cx.mutation(api.auth.completeSignInWithGoogle, { code: back.get('convexAuthCode') ?? '', state: started.state });
+  if (done.status !== 'complete') return { ok: false, error: done.userError.error };
+  store.set(SESSION, done.tokens.refreshToken);
+  cx.setAuth(done.tokens.accessToken);
+  return { ok: true, error: '' };
+},
+```
+
+- **The state goes in `redirectTo`.** `openAuthSession` completes only on a
+  callback that carries the `state` it was given, and Convex Auth sends back
+  only `convexAuthCode` or `convexAuthError`. It keeps `redirectTo`'s query, so
+  a state drawn in data code and written there comes back.
+- **The code is `convexAuthCode`,** not `code`: an empty code is
+  `INVALID_CODE`.
+- **Resuming and signing out.** At launch, once `live.status` is `ready`, a
+  source sends `refreshSession` with the kept token, keeps the new refresh
+  token and calls `cx.setAuth`; a reply with no new tokens means the session
+  ended, so it forgets the kept one (`store.forget`). Renew the same way when
+  `live.authError` says the token expired. To sign out, forget the kept token,
+  call the deployment's sign-out mutation, then `cx.setAuth(undefined)`.
+- **A drive needs a fixed origin.** Convex Auth checks `redirectTo`'s origin
+  against its allowed redirect origins, and the driver picks a new port each
+  run: drive with `agent web --port 3000` (or `EXACT_PORT`) and allow
+  `http://127.0.0.1:3000`.
+- **Hosts.** This flow has run on the web. Convex Auth takes only an `http` or
+  `https` `redirectTo`, so natively it cannot return to a custom-scheme
+  callback (`auth.callback`); macOS's fixed-port loopback callback is `http`
+  but has not been tried with it, and Android answers 501 for a loopback or
+  HTTPS callback.
+
 ### Child processes (`@exact/child-process`)
 
 A desktop app's data code starts a program with Node's names (LLP 1133.007).
