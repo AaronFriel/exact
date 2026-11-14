@@ -805,16 +805,24 @@ test('a named update sends the module only the arguments that changed since its 
   assert.deepEqual(last(), [['full', {saved: '<saved>', count: 6}], ['changed', {count: 7}]]);
 });
 
-test('R14 the canvas size reaches the module before each bind, whole or changed, which may tick a new world',async()=>{
+test('R14 the canvas size reaches the module before its first bind, which may tick a new world, and then as it changes',async()=>{
   const f=await fixture(), calls=[];
+  let reads=0;
   f.gpu.gpu_size=(id,w,h)=>{calls.push(['size',id,w,h]);return true;};
   f.gpu.gpu_bind_at=id=>{calls.push(['bind',id]);return true;};
   f.gpu.gpu_bind_changed_at=id=>{calls.push(['changed',id]);return true;};
-  f.create(1);
-  for(const seed of [2,3]) await f.applyBatch({ops:[{op:'surface',id:1,name:'world',values:{seed}}],timers:false,motion:false});
-  f.exact.gpu.retier('high'); f.exact.gpu.schedule();
+  const host=f.create(1), read=host.getBoundingClientRect;
+  host.getBoundingClientRect=function(){reads++;return read.call(this);};
   const size=['size',1,10,10];
-  assert.deepEqual(calls,[size,['bind',1],size,['bind',1],size,['changed',1],size,['changed',1]]);
+  assert.deepEqual(calls,[size,['bind',1]]);
+  // A bind in a batch reads no geometry, which would force the layout of what the batch wrote before it (#533).
+  for(const seed of [2,3]) await f.applyBatch({ops:[{op:'surface',id:1,name:'world',values:{seed}}],timers:false,motion:false});
+  assert.equal(reads,0);
+  // The ResizeObserver, after layout, tells a new size.
+  host.getBoundingClientRect=()=>({width:30,height:20});
+  f.resize();
+  f.exact.gpu.retier('high'); f.exact.gpu.schedule();
+  assert.deepEqual(calls,[size,['bind',1],['bind',1],['changed',1],['size',1,30,20],['changed',1]]);
 });
 
 test('E10 focused Contract buttons consume activation keys before the world', async () => {

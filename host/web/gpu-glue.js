@@ -172,8 +172,7 @@ async function settled() {
   catch (error) { retainTrap(error); return []; }
 }
 
-function size(el) {
-  const r = el.getBoundingClientRect();
+function size(el, r = el.getBoundingClientRect()) {
   return { w: Math.max(r.width, 1), h: Math.max(r.height, 1), s: devicePixelRatio || 1 };
 }
 
@@ -506,10 +505,6 @@ padPoller(() => [...surfaces.values()].find(e => e.pads && live(e.view) === e &&
 // forgets the baseline, for positional values, and when an argument is gone, which only a whole bind returns to its
 // default. What was sent becomes the baseline only once the module accepts it.
 function bindValues(entry, module, values, at, whole = false) {
-  // The canvas's size goes first: a stamped bind may tick a new world, which
-  // frames itself for its canvas before its first tick (`Game::first_frame`).
-  const r = entry.host.getBoundingClientRect();
-  if (r.width > 0 && r.height > 0 && module.gpu_size && !module.gpu_size(entry.id, r.width, r.height)) console.error("exact gpu:", module.gpu_error());
   const named = values !== null && typeof values === "object" && !Array.isArray(values);
   const last = named && !whole ? entry.bound : null;
   const object = (keys, wire) => `{${keys.map(k => `${JSON.stringify(k)}:${wire.get(k)}`).join(",")}}`;
@@ -529,14 +524,22 @@ function bindValues(entry, module, values, at, whole = false) {
   entry.bound = named ? {values, wire} : null;
   return true;
 }
+// The canvas's size in points, at creation and then from the ResizeObserver, after layout. A bind reads no geometry:
+// in the middle of a batch that would force the layout of everything the batch wrote so far.
+function tellSize(entry, module, r = entry.host.getBoundingClientRect()) {
+  if (r.width > 0 && r.height > 0 && module.gpu_size && !module.gpu_size(entry.id, r.width, r.height)) console.error("exact gpu:", module.gpu_error());
+}
 // Creation/binding is a hard result. Staging never publishes or attaches listeners.
 function create(entry, module, carry) {
-  const { w, h, s } = size(entry.host);
+  const r = entry.host.getBoundingClientRect(), { w, h, s } = size(entry.host, r);
   entry.el.width = Math.max(1, Math.round(w * s));
   entry.el.height = Math.max(1, Math.round(h * s));
   entry.id = module.gpu_create(entry.name, entry.el, entry.el.width, entry.el.height);
   if (!entry.id) throw new Error(`surface ${entry.name}: create: ${module.gpu_error()}`);
   module.gpu_lifecycle(entry.id, hidden ? 0 : 1);
+  // The canvas's size goes before the first bind: a stamped bind may tick a new world, which frames itself for its
+  // canvas before its first tick (`Game::first_frame`).
+  tellSize(entry, module, r);
   if (!bindValues(entry, module, entry.values, exact.now?.(), true)) throw new Error(`surface ${entry.name}: bind: ${module.gpu_error()}`);
   if (carry !== undefined) {
     entry.carry = carry;
@@ -553,7 +556,7 @@ function attach(entry) {
   schedulePerformance();
   // A canvas that rested draws again at its new size, at the present time (its last frame's is
   // the start of its rest); one that now wants more frames gets them.
-  entry.observer = new ResizeObserver(() => { if (entry.id && !entry.terminal) { render(entry, entry.wants ? frameAt ?? performance.now() : performance.now()); flush(); if (entry.wants) schedule(); } });
+  entry.observer = new ResizeObserver(() => { if (entry.id && !entry.terminal) { tellSize(entry, gpu); render(entry, entry.wants ? frameAt ?? performance.now() : performance.now()); flush(); if (entry.wants) schedule(); } });
   entry.observer.observe(entry.el);
   entry.wantsInput = gpu.gpu_wants_input(entry.id);
   entry.hdr = gpu.gpu_high_dynamic_range?.(entry.id) === true;
