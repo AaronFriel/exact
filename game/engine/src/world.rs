@@ -237,8 +237,8 @@ pub struct World {
     pub(crate) event_types: BTreeMap<&'static str, crate::events::Registration>,
     pub(crate) event_overflow: RefCell<BTreeSet<&'static str>>,
     registry: BTreeMap<&'static str, Registration>,
-    components: BTreeMap<&'static str, Box<dyn Erased>>,
-    resources: BTreeMap<&'static str, Box<dyn Erased>>,
+    components: Storages,
+    resources: Storages,
     // Registered queries over `components`; never saved, replaced with them on load.
     pub(crate) leases: Leases,
     // Animation-owned derived data, populated only when animation is linked and used; never saved.
@@ -300,8 +300,8 @@ impl World {
             event_types: BTreeMap::new(),
             event_overflow: RefCell::default(),
             registry: BTreeMap::new(),
-            components: BTreeMap::new(),
-            resources: BTreeMap::new(),
+            components: Storages::default(),
+            resources: Storages::default(),
             leases: Leases::default(),
             animation_runtime: RefCell::new(None),
             journal: RefCell::new(VecDeque::new()),
@@ -364,7 +364,7 @@ impl World {
         reg
     }
     pub(crate) fn storage<C: Component>(&self) -> Option<&Storage<C>> {
-        self.components.get(C::NAME)?.any().downcast_ref()
+        self.components.typed::<C>()?.any().downcast_ref()
     }
     /// Spawn in the lowest free slot.
     pub fn spawn(&mut self, bundle: impl Bundle) -> Entity {
@@ -423,9 +423,7 @@ impl World {
             .checked_add(1)
             .expect("entity generation exhausted");
         self.leases.restructure();
-        for s in self.components.values_mut() {
-            s.remove(e.index as usize);
-        }
+        self.components.remove_entity(e.index as usize);
         self.index_name(e.index, false);
         let slot = &mut self.state.slots[e.index as usize];
         slot.generation = generation;
@@ -583,10 +581,9 @@ impl World {
         // @ref llp/1046.003-game-engine-as-built.explainer.md#row-leases-2026-09-23
         self.leases.restructure();
         self.components
-            .entry(C::NAME)
             // Presentation rows have an epoch of their own: rebuilding them never
             // counts as a simulation mutation (settling, observation).
-            .or_insert_with(|| {
+            .get_or_insert::<C>(C::NAME, || {
                 let epoch = if C::PRESENTATION {
                     self.presentation_epoch.clone()
                 } else {
@@ -632,7 +629,7 @@ impl World {
         }
         self.leases.restructure();
         self.components
-            .get_mut(C::NAME)?
+            .typed_mut::<C>()?
             .any_mut()
             .downcast_mut::<Storage<C>>()?
             .remove(e.index as usize)
@@ -921,8 +918,9 @@ impl World {
         self.sim_writes(format_args!("inserted resource `{}`", R::NAME));
         self.register_resource::<R>();
         self.resources
-            .entry(R::NAME)
-            .or_insert_with(|| storage::make_cell::<R>(R::NAME, self.epoch.clone()))
+            .get_or_insert::<R>(R::NAME, || {
+                storage::make_cell::<R>(R::NAME, self.epoch.clone())
+            })
             .any_mut()
             .downcast_mut::<storage::Singleton<R>>()
             .unwrap()
@@ -930,7 +928,7 @@ impl World {
     }
     fn resource_storage<R: Resource>(&self) -> &storage::Singleton<R> {
         self.resources
-            .get(R::NAME)
+            .typed::<R>()
             .and_then(|s| s.any().downcast_ref())
             .unwrap_or_else(|| panic!("resource {} is absent", R::NAME))
     }
@@ -938,7 +936,7 @@ impl World {
     #[track_caller]
     pub fn try_resource<R: Resource>(&self) -> Option<Ref<'_, R>> {
         self.resources
-            .get(R::NAME)?
+            .typed::<R>()?
             .any()
             .downcast_ref::<storage::Singleton<R>>()?
             .get(Location::caller())
@@ -1110,7 +1108,7 @@ impl World {
         ] {
             w.field(kind);
             w.begin_struct();
-            for (name, s) in storages {
+            for (name, s) in storages.iter() {
                 if self.registry[name].presentation {
                     continue;
                 }
@@ -1294,7 +1292,7 @@ impl World {
                         } else {
                             &mut self.components
                         };
-                        if dest.insert(key, s).is_some() {
+                        if dest.insert(key, reg.id, s).is_some() {
                             return Err(DataError::new("duplicate storage").at(name));
                         }
                     }
@@ -1463,3 +1461,6 @@ mod handle;
 
 mod builders;
 pub use builders::{PropBuilder, SpriteBuilder};
+
+mod storages;
+use storages::Storages;
