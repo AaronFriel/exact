@@ -4803,6 +4803,11 @@ files. Compile against the files to check keys and placeholders. A language
 setting calls `setLocale("de")` (`setLocale("")` for System) in its action; the
 choice is kept across launches and read before the first frame. Formatting
 functions accept a narrow set of literal formats; app wording is an app `fn`.
+On Apple platforms the tables are the bundle's localizations, base first, so the
+system's own words and the direction of the chrome it draws (bars, the Mac's
+split view, sidebar and toolbar) follow the table it picks. AppKit mirrors a
+window only on a Mac whose system language is right to left, as it does for any
+hand-built app, while the content follows the table everywhere.
 
 #### Folds on iOS
 

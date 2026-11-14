@@ -369,10 +369,8 @@ export const tvReach = (reach) => {
     entitlements: (reach.entitlements ?? []).filter((name) => !omit.has(name)) };
 };
 
-/** The device grants' derivations (LLP 1069.008 D4), from the bake's
- * `reach` (`bake/src/reach.rs`, over the runner's one table): each usage key
- * with the base locale's purpose, and `CFBundleLocalizations` with every
- * strings table's tag. Nothing when the app grants no device. */
+/** The device grants' derivations (LLP 1069.008 D4), from the bake's `reach` (`bake/src/reach.rs`, over the runner's
+ * one table): each usage key with the base locale's purpose. Nothing when the app grants no device. */
 export const usageKeys = (reach) => {
   const usage = Object.entries(reach?.usage ?? {});
   if (!usage.length) return {};
@@ -380,10 +378,12 @@ export const usageKeys = (reach) => {
     ...Object.fromEntries(usage.map(([key, texts]) => [key, texts[reach.base]])),
     ...Object.fromEntries((reach.flags ?? []).map((key) => [key, true])),
     ...(reach.bonjour?.length ? { NSBonjourServices: reach.bonjour } : {}),
-    CFBundleDevelopmentRegion: reach.base,
-    CFBundleLocalizations: reach.locales,
   };
 };
+
+/** The bundle's localizations, one per strings table, the base as the development region. The system takes the app's
+ * language from them, and with it the direction of the chrome it draws: UIKit's bars, AppKit's split view (#486). */
+export const localizationKeys = (reach) => reach?.locales?.length ? { CFBundleDevelopmentRegion: reach.base, CFBundleLocalizations: reach.locales } : {};
 
 /** `<tag>.lproj/InfoPlist.strings` under `dir`, one per strings table, with
  * that table's purposes (a missing translation already fell back to the
@@ -450,7 +450,7 @@ export const infoPlist = (app, device = false, { executable = appleExecutableNam
   if (clip) dict.NSAppClip = { NSAppClipRequestEphemeralUserNotification: false, NSAppClipRequestLocationConfirmation: false };
   else Object.assign(dict, openingLinks({ ...app, widgetTV: tv, widgetHost: id !== app.id }, 'ios', development, distributed), shortcutKeys(app, tv ? 'tvos' : 'ios'));
   Object.assign(dict, updateActivation(app));
-  Object.assign(dict, usageKeys(reach));
+  Object.assign(dict, usageKeys(reach), localizationKeys(reach));
   Object.assign(dict, icon);
   Object.assign(dict, distribution, orientationKeys(app.manifest.orientation), interfaceStyle(app), tv || clip ? {} : storeKeys(app, 'ios'));
   return plistFile(withPackageKeys(dict, reach));
@@ -512,7 +512,7 @@ export const macInfoPlist = (app, { development = null, icon = {}, reach = null,
   ...bundleVersion(),
   LSMinimumSystemVersion: app.manifest.host?.macos?.minimumOS ?? '14.0',
   NSHighResolutionCapable: true,
-  ...usageKeys(reach), // usage strings for the devices the app's grants name (LLP 1069.008)
+  ...usageKeys(reach), ...localizationKeys(reach), // usage strings for the devices the app's grants name (LLP 1069.008)
   ...(app.manifest.host?.macos?.activationPolicy === 'accessory' ? { LSUIElement: true } : {}), // a menu-bar app (LLP 1133.025 D6)
   ...(app.manifest.host?.macos?.window ? { ExactWindow: app.manifest.host.macos.window } : {}),
   ...(app.manifest.display_override?.length ? { ExactDisplayOverride: app.manifest.display_override } : {}),

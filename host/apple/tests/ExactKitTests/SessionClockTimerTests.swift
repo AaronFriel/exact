@@ -61,6 +61,16 @@ final class SessionClockTimerTests: XCTestCase {
         XCTAssertEqual(session.launchPlace, launch)
     }
 
+    /// The table is chosen for the first preferred language a strings table serves, as the system chooses the
+    /// bundle's localization, so their directions agree (#486).
+    func testTheViewerLocaleIsTheFirstPreferredLanguageATableServes() {
+        XCTAssertEqual(SessionFacts.viewerLocale(preferred: ["fr-FR", "ar-MA"], localizations: ["en", "ar"]), "ar-MA")
+        XCTAssertEqual(SessionFacts.viewerLocale(preferred: ["zh-Hant-TW", "en"], localizations: ["en", "zh-hant"]), "zh-Hant-TW")
+        XCTAssertEqual(SessionFacts.viewerLocale(preferred: ["en-GB", "ar"], localizations: ["en", "ar"]), "en-GB")
+        XCTAssertEqual(SessionFacts.viewerLocale(preferred: ["fr-FR", "de"], localizations: ["en", "ar"]), "fr-FR", "none served: the runner takes the base")
+        XCTAssertEqual(SessionFacts.viewerLocale(preferred: ["fr-FR"], localizations: []), "fr-FR")
+    }
+
     /// The hour cycle the user forces is the format locale's `hc` keyword,
     /// read from the locale's preferred hour, and told again when Foundation
     /// says the locale changed. `hourPatternOverride` stands in for the

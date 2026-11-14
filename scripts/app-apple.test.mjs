@@ -524,8 +524,14 @@ test('device grants derive the plists, their translations and the release entitl
     assert.match(plist, /<key>NSSpeechRecognitionUsageDescription<\/key><string>Transcribes.<\/string>/);
     assert.match(plist, /<key>CFBundleLocalizations<\/key><array><string>en<\/string><string>fr<\/string><\/array>/);
   }
-  // No device grant, no key: the plists are what they were.
-  for (const plist of [infoPlist(app, false), macInfoPlist(app, { reach: { ...reach, usage: {} } })]) assert.doesNotMatch(plist, /UsageDescription|CFBundleLocalizations/);
+  // No device grant, no usage key; the strings tables are still the bundle's localizations (#486).
+  for (const plist of [infoPlist(app, false, { reach: { ...reach, usage: {} } }), macInfoPlist(app, { reach: { ...reach, usage: {} } })]) {
+    assert.doesNotMatch(plist, /UsageDescription/);
+    assert.match(plist, /<key>CFBundleDevelopmentRegion<\/key><string>en<\/string>/);
+    assert.match(plist, /<key>CFBundleLocalizations<\/key><array><string>en<\/string><string>fr<\/string><\/array>/);
+  }
+  // No strings table, no localization.
+  for (const plist of [infoPlist(app, false), macInfoPlist(app, { reach: { ...reach, usage: {}, base: null, locales: null } })]) assert.doesNotMatch(plist, /UsageDescription|CFBundleLocalizations|CFBundleDevelopmentRegion/);
   const dir = mkdtempSync(resolve(tmpdir(), 'exact-usage-'));
   try {
     writeUsageStrings(reach, dir);

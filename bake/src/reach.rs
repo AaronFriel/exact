@@ -55,11 +55,10 @@ pub(crate) fn derive(
     {
         return Err("grant-device: `device.calls` stays out of production builds until exact2 has a call transport: a call is a test call until then (LLP 1133.033 §13 question 4); begin the line in app.ts with `development` (`development device.calls purpose.calls`), which a production bake leaves out".into());
     }
-    let strings = if devices.iter().all(|g| !g.device.purpose) {
-        None
-    } else {
-        contract::strings_tables(app_dir)?
-    };
+    // The tables give a grant's purpose and are the Apple bundle's localizations (#486).
+    let read = devices.iter().any(|g| g.device.purpose) || app_dir.join("strings").is_dir();
+    let tables = read.then(|| contract::strings_tables(app_dir));
+    let strings = tables.transpose()?.flatten();
     let mut errors = Vec::new();
     // Key → locale → text, a translation lacking a key falling back to the
     // base as `t` does.
@@ -949,6 +948,8 @@ mod tests {
         assert_eq!(c.id, "old");
         assert!(c.inputs.get("grantPurposes").is_none());
         assert_eq!(c.reach["usage"], json!({}));
+        derive(&app(&[("en", "{}"), ("fr", "{}")]).0, "macos", None, &mut c).unwrap();
+        assert_eq!(c.reach["locales"], json!(["en", "fr"]));
         let mut ios = compat("device.speech-recognition p");
         let dir = app(&[("en", r#"{"p": "Transcribes."}"#)]);
         derive(&dir.0, "ios", None, &mut ios).unwrap();

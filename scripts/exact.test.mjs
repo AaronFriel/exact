@@ -107,7 +107,7 @@ test.skipIf(!tools)('widget packaging preserves parent platform and device capab
     mkdirSync(framework, { recursive: true });
     const parent = { CFBundleVersion: '8', CFBundleShortVersionString: '1.0.0', MinimumOSVersion: '17.0',
       UIDeviceFamily: [1, 2], CFBundleSupportedPlatforms: [device ? 'iPhoneOS' : 'iPhoneSimulator'], DTPlatformName: platform, ExactWidgetGeneration: 'fixture',
-      ...(device ? { UIRequiredDeviceCapabilities: ['arm64'] } : {}) };
+      CFBundleDevelopmentRegion: 'ar', CFBundleLocalizations: ['ar', 'en'], ...(device ? { UIRequiredDeviceCapabilities: ['arm64'] } : {}) };
     writeFileSync(resolve(bundle, 'Info.plist'), plistFile(parent));
     writeFileSync(resolve(framework, 'Info.plist'), plistFile({ CFBundleIdentifier: 'dev.exact.fixture.runtime' }));
     let signed = null;
@@ -135,6 +135,8 @@ test.skipIf(!tools)('widget packaging preserves parent platform and device capab
     }
     assert.deepEqual(info.CFBundleSupportedPlatforms, parent.CFBundleSupportedPlatforms);
     assert.equal(info.CFBundleVersion, parent.CFBundleVersion);
+    assert.equal(info.CFBundleDevelopmentRegion, 'ar');
+    assert.deepEqual(info.CFBundleLocalizations, ['ar', 'en']);
   }
 }));
 for (const device of [true, false]) {
