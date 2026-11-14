@@ -476,8 +476,10 @@ While the function runs, a read waits only if it names a preload with no definit
 yet. It proceeds when that name is handed over, the function returns, or five
 seconds pass, then uses the ordinary holding rule. Unnamed reads and reads under
 an update selection wait only for existing holds. The manifest's definitions may
-hold any eligible read for one second. The function's deadline also aborts its
-blocking fetch. Requests handed over before it stand; later handoffs are refused.
+hold unnamed reads for one second; a missing name waits through the handoff to the
+function, or until the manifest's definitions are handed if there is no function.
+The function's deadline also aborts its blocking fetch. Requests handed over
+before it stand; later handoffs are refused.
 A panic cancels the function's requests where the build unwinds (a development
 build); a release build aborts on a panic there as anywhere in the crate.
 
@@ -485,18 +487,41 @@ A read may name its preload: `fetch(url, { exactPreload: "feed" })`, or
 `Request::get(url).preload("feed")?` in Rust. Names must match `^[a-z][a-z0-9-]*$`.
 The held reply must have the same method and URL; headers and body may differ.
 With an update selected, including a plan-only update, only full request equality
-can take a preload. A missing or mismatched name also falls back to equality.
+can take a preload. Only a name with no definition yet waits while the launch can
+still define it; when that wait ends, the read falls back to equality. A name
+already defined for another method or URL falls back to equality at once.
+Names are unique across the manifest and launch function: a second handover with
+the same name is refused and leaves the first definition in place.
 A refresh drops both the preload it names at an equal method and URL and any
 fully equal hold; under an update selection only equality applies.
 On the web the option is accepted and ignored. A TypeScript bundle naming it needs
 runtime 13 (LLP 1162.000 D1, D2).
 
 For a read the next screen will make, use `fetch(url, { exactPrefetch: true })`
-or `Request::get(url).prefetch()` in Rust. The option is accepted and checked on
-every host, and the request is made as written, as an ordinary fetch. No host holds
-its reply yet. A tool's, wake's or device's plain read may use it too. A send,
-a mutation, a stream, a file-bodied or an independent request, or native work,
-refuses it. In TypeScript the value must be a boolean.
+or `Request::get(url).prefetch()` in Rust. On Apple, Linux, Windows and Android hosts,
+the option starts a preload only when the app's own read would go to the network
+now as an unconditional request and could take its hold; otherwise it is the plain read.
+For example, a read waiting for earlier work or launch definitions, one taking a
+hold or using an HTTP-cache entry, an `only-if-cached` miss, and a request with a
+body over 64 KiB start none.
+A forced ask, `reload` or `no-cache` cannot take a hold. A full worker lane alone
+does not stop a preload. A skipped preload is never started later.
+The caller's fetch and the app's own later equal reads wait for that preload and
+take its reply; if it fails, is refused or is dropped, each read is sent itself. The preload uses
+the asking source's grants at every redirect and is speculative, so Low Data Mode
+may refuse it while the caller's read still runs. Forgetting or aborting the caller
+leaves the preload running.
+
+A reply is held for ten seconds after completion, within the cache's byte limits.
+A refresh of the same request or a send to its URL drops it. Eight prefetch preloads
+fit beside the launch's eight: a ninth evicts the oldest complete one; with eight
+in flight it starts no preload. Prefetches have no name; `exactPreload` keeps its
+usual meaning on the caller's read. These native executors hold replies
+also when they adopted no launch preloads. The render host, the web and an executor
+without an HTTP cache make an ordinary fetch. A tool's, wake's or device's plain read
+starts no preload and never waits for or takes a hold. A send, a mutation, a stream,
+a file-bodied or an independent request, or native work, refuses the option.
+In TypeScript the value must be a boolean.
 A TypeScript bundle naming it needs runtime 13; the Rust module seam needs ABI 9
 or later (LLP 1162.000 D5).
 

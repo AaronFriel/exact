@@ -14,6 +14,9 @@ impl Core {
     ) -> Result<(), (&'static str, Option<OwnedWork>)> {
         let ordered = r.request.is_ordered();
         let overlap = reads::overlaps(&r, work.is_some());
+        let first_admission = cache_store_withheld.is_none();
+        let preloads =
+            (first_admission && r.request.prefetch).then(|| self.preloads.lock().unwrap());
         let mut state = self.shared.state.lock().unwrap();
         state.dispatched = true;
         // A deadline on work that cannot take one (a stream but an upload, a continuation, native work), or a
@@ -219,6 +222,7 @@ impl Core {
                 cached: false,
                 cache_exchange: None,
                 cache_replacing: cache::replacing(&r.request, r.class, r.forced, work.is_some()),
+                refresh: None,
                 cache_barrier: cache::barrier(&r.request, r.class, work.is_some()),
                 invalidates: cache::invalidates(&r.request, work.is_some()),
             });
@@ -251,12 +255,13 @@ impl Core {
         if let Some(cache) = state.cache.as_mut() {
             preload::refresh(cache, &r);
         }
-        state.jobs[lane].push_back(Job {
+        let job = Job {
             ticket: r.ticket,
             request: r.request,
             forced: r.forced,
             work,
             waiting_charge: charge,
+            waited_for_preload: false,
             charge,
             limit,
             forgotten,
@@ -264,7 +269,12 @@ impl Core {
             overlap,
             class: r.class,
             cache_store_withheld,
-        });
+        };
+        // A fenced read sends itself when admitted again (LLP 1162.000 D5).
+        if let Some(mut preloads) = preloads {
+            self.prefetch(&mut state, &mut preloads, &job);
+        }
+        state.jobs[lane].push_back(job);
         cache::serve_ready(&mut state);
         #[cfg(test)]
         self.shared

@@ -59,6 +59,8 @@ struct Job {
     charge: usize,
     /// Request buffers in the backlog, excluding a preload waiter's reply reservation.
     waiting_charge: usize,
+    /// A hold's end must not let later hits take this read's room (LLP 1162.000 D1).
+    waited_for_preload: bool,
     /// The ceiling: request buffers plus the response allowance.
     limit: usize,
     /// The runner no longer wants its reply (`Core::forget`).
@@ -110,6 +112,7 @@ struct Running {
     cache_exchange: Option<cache::Exchange>,
     cache_barrier: bool,
     cache_replacing: Option<cache::Key>,
+    refresh: Option<preload::Refresh>,
     invalidates: Option<(String, bool)>,
 }
 struct Completed {
@@ -701,7 +704,7 @@ impl Core {
             let mut state = self.shared.state.lock().unwrap();
             state.retired = true;
             if let Some(cache) = state.cache.as_mut() {
-                preload::cancel_all(cache);
+                preload::close(cache);
             }
             state.cache = None;
             for run in &mut state.running {
