@@ -2,10 +2,95 @@
 // (`__exact_env.mjs` `inlineSettings`, `__exact_launch_setting.mjs`), what a launch's environment is to the check of a
 // build's freshness, and how js/src/launch.js names the setting in a grant refusal.
 import { expect, test } from 'bun:test';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
+
+test('a setting checks as a string across build values, native launches and web bundles', async () => {
+  const {check,configure,injectBackendOrigin,staticFacts} = await import('../src/typescript.mjs');
+  const {parseSync} = await import('rolldown/utils');
+  const {inlineSettings} = await import('../src/__exact_env.mjs');
+  const libraries=resolve(dirname(fileURLToPath(import.meta.resolve(`@typescript/typescript-${process.platform}-${process.arch}/package.json`))),'lib');
+  const root=mkdtempSync(resolve(tmpdir(),'exact-setting-types-')), app=resolve(root,'app'), stage=resolve(root,'stage');
+  mkdirSync(app);
+  mkdirSync(stage);
+  const code=`type Mode = 'demo' | 'live';
+const MODE = import.meta.env.ISSUE_502_MODE ?? 'demo';
+const EXPLICIT = (import.meta.env.ISSUE_502_MODE ?? 'demo') as string;
+const UNION = (import.meta.env.ISSUE_502_MODE ?? 'demo') as 'demo' | 'live';
+const SATISFIES = (import.meta.env.ISSUE_502_MODE ?? 'demo') satisfies 'demo' | 'live';
+const CONSTANT = (import.meta.env.ISSUE_502_MODE ?? 'demo') as const;
+const ANGLE = <'demo' | 'live'>(import.meta.env.ISSUE_502_MODE ?? 'demo');
+const ANGLE_CONST = <const>(import.meta.env.ISSUE_502_MODE ?? 'demo');
+const SATISFIES_UNION = ((import.meta.env.ISSUE_502_MODE ?? 'demo') satisfies Mode) as Mode;
+const CONSTANT_UNION = ((import.meta.env.ISSUE_502_MODE ?? 'demo') as const) as Mode;
+const ANGLE_SATISFIES = <Mode>((import.meta.env.ISSUE_502_MODE ?? 'demo') satisfies Mode)!;
+const ANGLE_CONSTANT = <Mode>(<const>(import.meta.env.ISSUE_502_MODE ?? 'demo'))!;
+const UNPAREN = import.meta.env.ISSUE_502_DIRECT as 'demo' | 'live';
+const NONNULL = ((import.meta.env.ISSUE_502_MODE ?? 'demo')!);
+const labels = {demo:'Demo',live:'Live'};
+export const label = labels[UNION] + labels[ANGLE] + labels[UNPAREN];
+export const stacked = labels[SATISFIES_UNION] + labels[CONSTANT_UNION] + labels[ANGLE_SATISFIES] + labels[ANGLE_CONSTANT];
+export const checked: string[] = [SATISFIES, CONSTANT, ANGLE_CONST];
+export const nonnull = NONNULL === 'live';
+const origin = import.meta.env.ISSUE_502_ORIGIN ?? 'https://built.example';
+const API: \`https://\${string}\` = import.meta.env.ISSUE_502_ORIGIN ?? 'https://built.example';
+export const url: \`https://\${string}\` = API;
+export const greeting = MODE === 'live' ? 'Live' : 'Demo';
+export const explicit = EXPLICIT === 'live';
+export const moved = origin === 'https://other.example';
+// @ts-expect-error A setting is a string, not a number.
+const number: number = MODE;
+// @ts-expect-error A setting is not restricted to this build's literal value.
+const literal: 'demo' = MODE;
+`;
+  try {
+    writeFileSync(resolve(stage,'__exact_paths.json'),JSON.stringify({app,mounts:[]}));
+    for (const launch of [false,true]) for (const web of [false,true]) for (const value of [null,'demo','live']) {
+      const names=['ISSUE_502_MODE','ISSUE_502_DIRECT','ISSUE_502_API'];
+      writeFileSync(resolve(app,'app.json'),JSON.stringify({env:[...names.map(name=>launch ? {name,launch:true} : name),'ISSUE_502_ORIGIN']}));
+      const file=resolve(app,'.env');
+      writeFileSync(file,`ISSUE_502_DIRECT=${value ?? 'demo'}\n${value===null ? '' : `ISSUE_502_MODE=${value}\nISSUE_502_API=https://${value}.example\n`}`);
+      // Narrow annotations reject a replaceable native string, even when its build value fits.
+      const rejection=launch && !web ? '// @ts-expect-error A launch may give any string.\n' : '';
+      const annotated=`${rejection}const ANNOTATED: 'demo' | 'live' = import.meta.env.ISSUE_502_MODE ?? 'demo';
+export const annotated = labels[ANNOTATED];
+${rejection}const TEMPLATE: \`https://\${string}\` = import.meta.env.ISSUE_502_API ?? 'https://built.example';
+export const template: \`https://\${string}\` = TEMPLATE;
+const STRING: string = import.meta.env.ISSUE_502_MODE ?? 'demo';
+export const string = STRING === 'live';
+`;
+      const source=code+annotated+'export const grants = `net.fetch ${origin}`;\n';
+      if (value===null) {
+        rmSync(file);
+        expect(() => inlineSettings(source,app,parseSync,{},{launches:!web})).toThrow('import.meta.env.ISSUE_502_DIRECT has no value');
+        writeFileSync(file,'ISSUE_502_DIRECT=demo\n');
+      }
+      writeFileSync(resolve(app,'app.ts'),source);
+      writeFileSync(resolve(stage,'app.ts'),source);
+      writeFileSync(resolve(stage,'__exact_entry.ts'),"export * from './app';\n");
+      // configure is synchronous: restore the shared environment before yielding to the checker.
+      const saved=Object.fromEntries(['EXACT_BACKEND_ORIGIN','EXACT_BACKEND_PROVENANCE',...names,'ISSUE_502_ORIGIN'].map(name=>[name,process.env[name]]));
+      try {
+        for (const name of Object.keys(saved)) delete process.env[name];
+        configure(stage,false,parseSync,web);
+      } finally {
+        for (const [name,value] of Object.entries(saved)) { if (value===undefined) delete process.env[name]; else process.env[name]=value; }
+      }
+      await check(stage,resolve(libraries,'tsc'),libraries);
+      const configured=readFileSync(resolve(stage,'app.ts'),'utf8'), suffix=launch ? names.map(name=>'\nenv.launch '+name).join('') : '';
+      expect(staticFacts(configured,parseSync).grants).toBe('net.fetch https://built.example'+suffix);
+      const moved=injectBackendOrigin(configured,'https://selected.example',parseSync);
+      expect(staticFacts(moved,parseSync).grants).toBe('net.fetch https://selected.example'+suffix);
+      writeFileSync(resolve(stage,'app.ts'),moved);
+      await check(stage,resolve(libraries,'tsc'),libraries);
+    }
+  } finally {
+    rmSync(root,{recursive:true,force:true});
+  }
+});
 
 test('a marked setting is read at launch with the build\'s value behind it, an unmarked one is inlined as before, and its misuses are refused', async () => {
   const {inlineSettings,settingLines} = await import('../src/__exact_env.mjs');
@@ -27,13 +112,13 @@ test('a marked setting is read at launch with the build\'s value behind it, an u
     const set=inline(code);
     // The marked read takes the launch's value where the bundle asked for one, else the build's; the unmarked one is its value.
     // The read takes what the stage's launch module exported, which app.ts's copy imports last, so no line moves.
-    expect(set.code).toBe('const API = __exact_launch["API_BASE_URL"] ?? "http://127.0.0.1:9999";\nconst PICTURES = "https://pictures.example";\nexport const grants = `net.fetch https:\\nnet.fetch ${PICTURES}`;\n\nimport { launched as __exact_launch } from \'./__exact_launch\';\n');
+    expect(set.code).toBe('const API = (__exact_launch["API_BASE_URL"] ?? "http://127.0.0.1:9999");\nconst PICTURES = ("https://pictures.example" as string);\nexport const grants = `net.fetch https:\\nnet.fetch ${PICTURES}`;\n\nimport { launched as __exact_launch } from \'./__exact_launch\';\n');
     // A name app.ts already spells is not taken.
-    expect(inline("const __exact_launch = 1;\nconst API = import.meta.env.API_BASE_URL ?? 'http://x';\nconst PICTURES = import.meta.env.PICTURES;\n",{PICTURES:'p'}).code).toBe('const __exact_launch = 1;\nconst API = __exact_launch_["API_BASE_URL"] ?? "http://127.0.0.1:9999";\nconst PICTURES = "p";\n\nimport { launched as __exact_launch_ } from \'./__exact_launch\';\n');
+    expect(inline("const __exact_launch = 1;\nconst API = import.meta.env.API_BASE_URL ?? 'http://x';\nconst PICTURES = import.meta.env.PICTURES;\n",{PICTURES:'p'}).code).toBe('const __exact_launch = 1;\nconst API = (__exact_launch_["API_BASE_URL"] ?? "http://127.0.0.1:9999");\nconst PICTURES = ("p" as string);\n\nimport { launched as __exact_launch_ } from \'./__exact_launch\';\n');
     expect(set.record).toEqual({API_BASE_URL:{value:'http://127.0.0.1:9999',source:'.env',launch:true},PICTURES:{value:'https://pictures.example',source:'.env'}});
     // The web's bundles, which no launch gives a value: the build's, inlined, and the same record.
     const web=inlineSettings(code,dir,parseSync,{},{launches:false});
-    expect(web).toEqual({code:'const API = "http://127.0.0.1:9999";\nconst PICTURES = "https://pictures.example";\nexport const grants = `net.fetch https:\\nnet.fetch ${PICTURES}`;\n',record:set.record});
+    expect(web).toEqual({code:'const API = ("http://127.0.0.1:9999" as string);\nconst PICTURES = ("https://pictures.example" as string);\nexport const grants = `net.fetch https:\\nnet.fetch ${PICTURES}`;\n',record:set.record});
     expect(staticFacts(set.code,parseSync).grants).toBe('net.fetch https:\nnet.fetch https://pictures.example');
     // The grants carry each marked name, which a host answers a launch's value for and no other; the bake writes them.
     expect(staticFacts(launchGrants(set.code,parseSync,['API_BASE_URL']),parseSync).grants).toBe('net.fetch https:\nnet.fetch https://pictures.example\nenv.launch API_BASE_URL');
@@ -68,7 +153,7 @@ test('a marked setting is read at launch with the build\'s value behind it, an u
     // `"launch": false`, or only a name, is the bare name: inlined, byte for byte.
     for (const entry of ['API_BASE_URL',{name:'API_BASE_URL'},{name:'API_BASE_URL',launch:false}]) {
       declare(entry);
-      expect(inline("const API = import.meta.env.API_BASE_URL ?? 'http://x';\n")).toEqual({code:'const API = "http://x";\n',record:{API_BASE_URL:{value:'http://x',source:'default'}}});
+      expect(inline("const API = import.meta.env.API_BASE_URL ?? 'http://x';\n")).toEqual({code:'const API = ("http://x" as string);\n',record:{API_BASE_URL:{value:'http://x',source:'default'}}});
     }
     // The stage's launch module asks for the marked names, and the entry imports it first; with none marked, neither is there.
     const entry='import * as app from \'./app\';\nexport const answer = app.answer;\n', at=name=>resolve(dir,name);

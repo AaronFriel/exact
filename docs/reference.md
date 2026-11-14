@@ -3862,8 +3862,14 @@ top-level `const` holding one). Numbers keep their type: `1 + 2` is `3`, while
 A backend override (`--backend`, `EXACT_BACKEND_ORIGIN` or `.exact/backend-origin`)
 needs one top-level `const origin`, set to a literal http(s) string or a setting
 such as `import.meta.env.API_BASE_URL ?? 'https://api.example'`, and used in
-`net.fetch ${origin}`. Settings are inlined before the override. A refused
-selection names its selector and reports `backend-selection`, including in
+`net.fetch ${origin}`. Settings are inlined before the override. An unannotated
+setting without an authored type assertion has type `string`, so comparisons
+such as `MODE === 'live'` type-check whatever value the build supplies. Binding
+annotations and surrounding assertions are preserved for inlined values. Native launch reads
+retain `as` and angle-bracket assertions, parenthesized around the whole read;
+`satisfies` and const assertions are removed because a launch can supply any
+string. Binding annotations on native launch reads must accept `string`.
+A refused selection names its selector and reports `backend-selection`, including in
 `contract build --json`.
 
 For grants that differ by backend, write an object literal such as

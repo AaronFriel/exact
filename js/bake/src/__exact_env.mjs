@@ -139,7 +139,7 @@ const READ = 'import.meta.env is read only in a top-level const of app.ts: const
  * launch's value, which the stage's `__exact_launch.ts` asked for before any module's code ran (`typescript.mjs`
  * `launchModule`), else `value`, the build's. app.ts imports it as `local` on a line of its own after its last, so no
  * line moves. */
-const launchRead = (local, name, value) => `${local}[${JSON.stringify(name)}] ?? ${JSON.stringify(value)}`;
+const launchRead = (local, name, value) => `(${local}[${JSON.stringify(name)}] ?? ${JSON.stringify(value)})`;
 // The top-level consts the binding `name`'s value reads, however deep: through a template, `+`, `.join`, another const.
 const constsRead = (body, name) => {
   const consts = new Map();
@@ -196,7 +196,10 @@ export function inlineSettings(code, app, parse, env = process.env, { launches =
       const read = fallback ? bare(init.left) : init;
       if (d.id.type !== 'Identifier' || read?.type !== 'MemberExpression' || !metaEnv(bare(read.object)) || key(read) === null) continue;
       allowed.add(bare(read.object).start);
-      reads.push({ name: key(read), id: d.id.name, node: d.init, fallback, at: at(read.start) });
+      const wrappers = [];
+      for (let node = d.init; node !== init; node = node.expression) wrappers.push(node);
+      const typed = wrappers.some(node => ['TSAsExpression', 'TSSatisfiesExpression', 'TSTypeAssertion'].includes(node.type));
+      reads.push({ name: key(read), id: d.id.name, node: init, wrappers, widen: !d.id.typeAnnotation && !typed, fallback, at: at(read.start) });
     }
   }
   // Grants are the build's (LLP 1153.002 D3): over a marked name's const they would hold the build's value, which a
@@ -220,14 +223,22 @@ export function inlineSettings(code, app, parse, env = process.env, { launches =
   // app.ts's name for the launch's values: one its text never spells, so it neither shadows nor is shadowed.
   let local = '__exact_launch';
   while (code.includes(local)) local += '_';
-  for (const { name, node, fallback, at } of reads) {
+  for (const { name, node, wrappers, widen, fallback, at } of reads) {
     if (!declared.includes(name)) continue;
     const given = fallback ? literal(fallback) : null;
     if (fallback && given === null) { refusals.push(`app.ts:${at}: import.meta.env.${name}'s default after ?? must be a string literal`); continue; }
     const setting = values[name] ?? (fallback ? { value: given, source: 'default' } : null);
     if (!setting) { if (!refusals.some(r => r.startsWith(`import.meta.env.${name} has no value`))) refusals.push(`import.meta.env.${name} has no value: set it in the environment, in .env.local or in .env beside app.json (read in that order), or write a default: import.meta.env.${name} ?? '…'`); continue; }
     record[name] ??= launch.has(name) ? { ...setting, launch: true } : setting;
-    edits.push([node.start, node.end, launches && launch.has(name) ? launchRead(local, name, setting.value) : JSON.stringify(setting.value)]);
+    // Widen only inferred reads: authored types check the selected literal themselves.
+    const value = widen ? `(${JSON.stringify(setting.value)} as string)` : JSON.stringify(setting.value);
+    const launched = launches && launch.has(name);
+    edits.push([node.start, node.end, launched ? launchRead(local, name, setting.value) : value]);
+    // A launch may give any string: remove literal checks, keeping the other wrappers around the read.
+    if (launched) for (const wrapper of wrappers) {
+      if (wrapper.type !== 'TSSatisfiesExpression' && wrapper.typeAnnotation?.typeName?.name !== 'const') continue;
+      edits.push([wrapper.start, wrapper.expression.start, ''], [wrapper.expression.end, wrapper.end, '']);
+    }
   }
   if (refusals.length) throw new Error(refusals.join('\n'));
   for (const [start, end, value] of edits.sort((a, b) => b[0] - a[0])) code = code.slice(0, start) + value + code.slice(end);

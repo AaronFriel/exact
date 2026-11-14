@@ -1110,7 +1110,7 @@ test('a setting is read from the environment, then .env.local, then .env, and wh
     // And so it reaches the module, though `.env.development`, the one file that holds it, is not read.
     writeFileSync(resolve(dir,'app.json'),JSON.stringify({env:['D']}));
     const {parseSync}=await import('rolldown/utils'), {inlineSettings}=await import('../js/bake/src/__exact_env.mjs');
-    expect(inlineSettings('const D_ = import.meta.env.D;\n',dir,parseSync,exported)).toEqual({code:'const D_ = "d-development";\n',record:{D:{value:'d-development',source:'environment'}}});
+    expect(inlineSettings('const D_ = import.meta.env.D;\n',dir,parseSync,exported)).toEqual({code:'const D_ = ("d-development" as string);\n',record:{D:{value:'d-development',source:'environment'}}});
     // An edit after the command started: the given value still wins; the one Bun loaded gives way to the file.
     writeFileSync(resolve(dir,'.env'),'A=a-edited\nC=c-env\n');
     expect(settingValues(dir,['A'],exported)).toEqual({A:{value:'a-env',source:'environment'}});
@@ -1136,11 +1136,11 @@ test('import.meta.env inlines each declared setting in app.ts, its grant follows
     writeFileSync(resolve(dir,'.env'),'API_BASE_URL=http://127.0.0.1:9999\n');
     const code="const API = import.meta.env.API_BASE_URL;\nexport const grants = `net.fetch ${API}`;\n";
     const set=inline(code);
-    expect(set.code).toBe('const API = "http://127.0.0.1:9999";\nexport const grants = `net.fetch ${API}`;\n');
+    expect(set.code).toBe('const API = ("http://127.0.0.1:9999" as string);\nexport const grants = `net.fetch ${API}`;\n');
     expect(set.record).toEqual({API_BASE_URL:{value:'http://127.0.0.1:9999',source:'.env'}});
     expect(staticFacts(set.code,parseSync).grants).toBe('net.fetch http://127.0.0.1:9999');
     // Exported, wrapped, or with a default the environment overrides; a const origin it sets is one the backend selection may move.
-    expect(inline("export const API = (import.meta.env['API_BASE_URL'] ?? 'http://x') as string;",{API_BASE_URL:'https://api.example'}).code).toBe('export const API = "https://api.example";');
+    expect(inline("export const API = (import.meta.env['API_BASE_URL'] ?? 'http://x') as string;",{API_BASE_URL:'https://api.example'}).code).toBe('export const API = ("https://api.example") as string;');
     const origin=inline("const origin = import.meta.env.API_BASE_URL;\nexport const grants = `net.fetch ${origin}`;\n").code;
     expect(staticFacts(injectBackendOrigin(origin,'http://127.0.0.1:4790',parseSync),parseSync).grants).toBe('net.fetch http://127.0.0.1:4790');
     rmSync(resolve(dir,'.env'));
@@ -1159,7 +1159,7 @@ test('import.meta.env inlines each declared setting in app.ts, its grant follows
     ].join('\n'));
     // One name read twice takes one default.
     declare('API_BASE_URL');
-    expect(inline("const A = import.meta.env.API_BASE_URL ?? 'http://a';\nconst B = import.meta.env.API_BASE_URL ?? 'http://a';\n").code).toBe('const A = "http://a";\nconst B = "http://a";\n');
+    expect(inline("const A = import.meta.env.API_BASE_URL ?? 'http://a';\nconst B = import.meta.env.API_BASE_URL ?? 'http://a';\n").code).toBe('const A = ("http://a" as string);\nconst B = ("http://a" as string);\n');
     expect(() => inline("const A = import.meta.env.API_BASE_URL ?? 'http://a';\nconst B = import.meta.env.API_BASE_URL ?? 'http://b';\nconst C = import.meta.env.API_BASE_URL;\n")).toThrow([
       'app.ts:2:11: import.meta.env.API_BASE_URL is read again with "http://b", and at app.ts:1:11 with "http://a": read it once, or give every read the same default',
       'app.ts:3:11: import.meta.env.API_BASE_URL is read again with no default, and at app.ts:1:11 with "http://a": read it once, or give every read the same default',
