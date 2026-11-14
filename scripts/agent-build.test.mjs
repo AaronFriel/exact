@@ -1,5 +1,6 @@
 // A native drive's build first (agent-build.mjs, LLP 1116.002 D4): the decision an app's exact.mjs makes before
 // `test ios|macos` and `agent ios|macos`, on the driver's own record, with no simulator and no build run.
+import { simulatorPlanPath } from '../host/apple/assets.mjs';
 import { afterEach, beforeEach, test, expect } from 'bun:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -870,6 +871,10 @@ test('a plan-only edit runs its bake on the existing build; any other edit, or a
     bakeSays = '';
     assert.deepEqual(kept(), { plan: resolve(overrideDir('ios', app), 'app.plan'), dir: overrideDir('ios', app) });
     assert.equal(readFileSync(kept().plan, 'utf8'), 'plan two');
+    const firstDrive = resolve(app.target, 'drive-first'), editedDrive = resolve(app.target, 'drive-edited');
+    assert.equal(readFileSync(simulatorPlanPath(kept().plan, firstDrive), 'utf8'), 'plan two');
+    assert.equal(readFileSync(resolve(firstDrive, 'app.hbc'), 'utf8'), 'bytecode');
+    assert.deepEqual(JSON.parse(readFileSync(resolve(firstDrive, 'app.module.json'))), module);
     assert.ok(!existsSync(bakes[0]), 'the bake is staged, then moved beside the build');
 
     // Driven again with nothing edited: it runs as it is, saying nothing.
@@ -887,6 +892,9 @@ test('a plan-only edit runs its bake on the existing build; any other edit, or a
     assert.deepEqual([said.length, builds.length, bakes.length], [1, 0, 1]);
     assert.match(said[0], /^iOS: (app\.contract, app\.ts|app\.ts, app\.contract) changed; running the new plan on the existing build \(no native rebuild\)\. Only the agent's drives run it: .*`bun exact\.mjs ios` before timing one$/);
     assert.ok(kept());
+    assert.equal(readFileSync(simulatorPlanPath(kept().plan, editedDrive), 'utf8'), 'plan two');
+    assert.equal(readFileSync(resolve(editedDrive, 'app.hbc'), 'utf8'), 'bytecode');
+    assert.deepEqual(JSON.parse(readFileSync(resolve(editedDrive, 'app.module.json'))), module);
 
     // A newer real build retires it: fresh, the build's own plan runs; a later touch of the same sources does not bring it back.
     build({}, 40, 'two');

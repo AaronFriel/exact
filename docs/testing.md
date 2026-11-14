@@ -180,6 +180,11 @@ For an iOS simulator drive without a GUI, set `EXACT_SHOW_SIMULATOR=0`. The simu
 boots and runs the app, but the driver opens neither Simulator nor Device Hub.
 Use a simulator you created when another person shares the Mac.
 
+Apple agent drives keep iframe website data in memory. Unpartitioned frames share
+one store across all sessions in the process, separate from named partitions.
+A new drive process starts empty, even when it reuses an Exact scratch-store name.
+Ordinary app launches keep their saved website data.
+
 ## UI tests
 
 - **Programmatic input over gestures.** Typing text and programmatic presses are

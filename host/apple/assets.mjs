@@ -686,6 +686,28 @@ export function iosExecutableRefusal(manifest, name, key = 'app.name') {
  *  under the Mac's `Contents/Resources`, at the top of an iOS bundle. */
 export const APPLE_STATIC_TREES = ['assets', 'deck', 'shaders', 'exact-metal', 'rust', 'plans', 'typescript', 'activities'];
 
+/** Normal simulator launches read the installed bundle. Copy an explicit override into the drive's temporary
+ * directory, dereferencing symlinks so its reads stay outside protected checkout paths. Live dev generations
+ * deliver their own asset bytes through the dev connection, independently of this launch generation. */
+export function simulatorAssetRoot(installed, source, stage) {
+  if (!source) return installed;
+  cpSync(resolve(source), resolve(stage), { recursive: true, dereference: true });
+  return stage;
+}
+
+/** ExactDevelopmentPlan reads the plan, its JavaScript pair and Rust replacements beside it. Copy those bytes
+ * outside protected user folders for each drive, including a bake selected after a plan-only edit. */
+export function simulatorPlanPath(source, stage) {
+  const root = dirname(resolve(source));
+  mkdirSync(stage, { recursive: true });
+  copyFileSync(source, resolve(stage, basename(source)));
+  for (const name of ['app.module.json', 'app.hbc', 'rust']) {
+    if (existsSync(resolve(root, name)))
+      cpSync(resolve(root, name), resolve(stage, name), { recursive: true, dereference: true });
+  }
+  return resolve(stage, basename(source));
+}
+
 /** What the Mac build writes under `Contents/Resources` (bundle.mjs, intents.mjs) beside
  *  the trees an app declares, which may not take one of these places; and a
  *  `<locale>.lproj` for each usage string (`writeUsageStrings`). */

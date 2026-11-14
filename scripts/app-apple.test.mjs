@@ -18,6 +18,58 @@ delete process.env.DEVELOPMENT_TEAM;
 
 const packagingTools = process.platform === 'darwin' && ['clang', 'codesign', 'sips', 'dsymutil', 'nm'].every((tool) => Bun.which(tool));
 
+test('simulator assets use the installed bundle or a private copy of an explicit override', async () => {
+  const { simulatorAssetRoot } = await import('../host/apple/assets.mjs');
+  const dir = mkdtempSync(resolve(tmpdir(), 'exact-simulator-assets-'));
+  const installed = resolve(dir, 'container/App.app'), stage = resolve(dir, 'drive/assets');
+  try {
+    assert.equal(simulatorAssetRoot(installed), installed);
+    assert.equal(existsSync(stage), false);
+    for (const folder of ['Desktop', 'Documents', 'Downloads', 'Library/Mobile Documents/com~apple~CloudDocs']) {
+      const source = resolve(dir, folder, 'app/target/clients/capture');
+      mkdirSync(resolve(source, 'assets'), { recursive: true });
+      writeFileSync(resolve(source, 'assets/page.html'), folder);
+      writeFileSync(resolve(source, 'local.html'), 'a root-relative fixture');
+      symlinkSync(resolve(source, 'assets/page.html'), resolve(source, 'assets/linked.html'));
+      symlinkSync(resolve(source, 'assets'), resolve(source, 'linked-assets'));
+      assert.equal(simulatorAssetRoot(installed, source, stage), stage);
+      assert.equal(realpathSync(resolve(stage, 'assets/page.html')), resolve(realpathSync(stage), 'assets/page.html'));
+      assert.equal(readFileSync(resolve(stage, 'assets/page.html'), 'utf8'), folder);
+      assert.equal(readFileSync(resolve(stage, 'local.html'), 'utf8'), 'a root-relative fixture');
+      rmSync(source, { recursive: true });
+      assert.equal(readFileSync(resolve(stage, 'assets/page.html'), 'utf8'), folder);
+      assert.equal(readFileSync(resolve(stage, 'assets/linked.html'), 'utf8'), folder);
+      assert.equal(readFileSync(resolve(stage, 'linked-assets/page.html'), 'utf8'), folder);
+      rmSync(stage, { recursive: true });
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('simulator plans stage the initial generation and a later plan-only edit with their modules', async () => {
+  const { simulatorPlanPath } = await import('../host/apple/assets.mjs');
+  const dir = mkdtempSync(resolve(tmpdir(), 'exact-simulator-plan-'));
+  const source = resolve(dir, 'Desktop/app/target/clients/ios/plan');
+  try {
+    for (const generation of ['initial', 'edited']) {
+      mkdirSync(resolve(source, 'rust/native'), { recursive: true });
+      const files = ['app.plan', 'app.module.json', 'app.hbc', 'rust/native/app.dylib', 'rust/native/app.module.json'];
+      for (const name of files) writeFileSync(resolve(source, name), `${generation}:${name}`);
+      const stage = resolve(dir, `drive-${generation}/plan`);
+      assert.equal(simulatorPlanPath(resolve(source, 'app.plan'), stage), resolve(stage, 'app.plan'));
+      rmSync(source, { recursive: true });
+      for (const name of files) {
+        assert.equal(readFileSync(resolve(stage, name), 'utf8'), `${generation}:${name}`);
+        assert.equal(realpathSync(resolve(stage, name)), resolve(realpathSync(stage), name));
+      }
+    }
+    mkdirSync(source, { recursive: true });
+    writeFileSync(resolve(source, 'fixture.plan'), 'bare plan');
+    const bare = simulatorPlanPath(resolve(source, 'fixture.plan'), resolve(dir, 'bare'));
+    assert.equal(readFileSync(bare, 'utf8'), 'bare plan');
+    assert.equal(existsSync(resolve(dir, 'bare/app.hbc')), false);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('Apple production optimization defaults, manifest choices and command-line overrides agree with artifact paths', async () => {
   const { appleProduction } = await import('../host/apple/link.mjs');
   const { appleArtifacts } = await import('../host/apple/build.mjs');

@@ -370,6 +370,9 @@ final class WebArm: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
         _ = template.defaultWebpagePreferences
         return template
     }()
+    /// Unpartitioned agent frames share one process store, outside the
+    /// named partitions and the person's persistent default store.
+    static let agentStore = WKWebsiteDataStore.nonPersistent()
     /// Unsaid, as Safari has them (@ref LLP 1020.002 D1, D5): a scripted
     /// window needs a person's gesture, and a page's `requestFullscreen()`
     /// takes the screen.
@@ -427,6 +430,7 @@ final class WebArm: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
         // and cookies) and default preferences. The script bridge stays per
         // view (@ref LLP 1020 D2, LLP 1068 §0.1 Q3: views are not pooled).
         let configuration = WebArm.template.copy() as! WKWebViewConfiguration
+        if agent { configuration.websiteDataStore = Self.agentStore }
         // A copy shares the template's preference objects: a frame whose
         // hatch may write on them, or that says its own scheduling policy,
         // has its own, so no other frame's change.
