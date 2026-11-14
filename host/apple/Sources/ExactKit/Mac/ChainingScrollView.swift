@@ -10,7 +10,22 @@ import AppKit
 package final class ChainingScrollView: NSScrollView {
     /// Empty document and clip hits take this view. The node owns their
     /// mouse contact, even if a handler removes the scroll view mid-press.
-    weak var pointerOwner: NodeView? { didSet { followScrollerStyle() } }
+    weak var pointerOwner: NodeView? {
+        didSet {
+            followScrollerStyle()
+            if pointerOwner?.kind == "list" { lineScroll = Self.tableLine }
+        }
+    }
+    /// A `list` scrolls a line as AppKit's table does (LLP 1115.000 D8.2):
+    /// `NSTableView` sets its scroll view's line to its row height (`tile()`),
+    /// and a SwiftUI `List` keeps an untouched table's, whatever its rows'
+    /// heights; 24 points on macOS 27. Any other scroller keeps
+    /// `NSScrollView`'s 10, as a SwiftUI `ScrollView` and an `NSTextView` do.
+    private static let tableLine: CGFloat = {
+        let scroll = NSScrollView()
+        scroll.documentView = NSTableView()
+        return scroll.verticalLineScroll
+    }()
     package override func accessibilityChildrenInNavigationOrder() -> [any NSAccessibilityElementProtocol]? { treeNavigationOrder }
     // A Markdown field's atoms follow it among the scrolled children (`NodeView.withAtoms`).
     package override func accessibilityChildren() -> [Any]? {
@@ -355,8 +370,8 @@ package final class ChainingScrollView: NSScrollView {
         }
         (superview as? NodeView)?.presenter?.personScrolls += 1 // a wheel's notch is no live scroll (Fragment.swift)
         // Precise deltas (a trackpad) are in points; a wheel's are in lines,
-        // of the height AppKit scrolls a line by (10 points unless set; it
-        // was 40 here, a browser's tick).
+        // of the height AppKit scrolls a line by (10 points, or a list's
+        // `tableLine`; it was 40 here, a browser's tick).
         let precise = event.hasPreciseScrollingDeltas
         var dx = precise ? event.scrollingDeltaX : event.deltaX * horizontalLineScroll
         var dy = precise ? event.scrollingDeltaY : event.deltaY * verticalLineScroll
