@@ -61,7 +61,7 @@ extension Runtime {
     }
 
     package func replaced(_ batch: Batch) -> Batch {
-        if batch.error == nil && !batch.busy && !batch.held { completions.replace() }
+        if batch.error == nil && !batch.pending && !batch.busy && !batch.held { completions.replace() }
         return batch
     }
 }

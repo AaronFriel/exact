@@ -125,4 +125,22 @@ final class RuntimeCompletionTests: XCTestCase {
         XCTAssertEqual(b.noticesInFlight, 0)
         XCTAssertNil(b.timerDue)
     }
+
+    func testAStalePreparedCandidateKeepsTheLiveRunnersLeases() throws {
+        let session = ExactApp.shared.makeSession(label: "door-stale-candidate")
+        defer { session.destroy() }
+        let runtime = session.runtime, plan = try fixturePlan("ASYNC_ADVANCE")
+        XCTAssertNil(runtime.bootPlan(plan, width: 400, height: 600).error)
+        let live = runtime.completionLease, platform = SessionLease(session)
+        XCTAssertNil(runtime.preparePlan(plan, width: 400, height: 600).error)
+        XCTAssertNil(runtime.advance(now: 1000).error)
+        let state = runtime.agent(#"{"op":"state"}"#)
+
+        let refused = runtime.commitPlan()
+        XCTAssertNil(refused.error)
+        XCTAssertTrue(refused.pending, "the live clock changed after preparation")
+        XCTAssertEqual(runtime.agent(#"{"op":"state"}"#), state, "the live runner stays current")
+        XCTAssertTrue(runtime.accepts(live), "outstanding completions still belong to the live runner")
+        XCTAssertTrue(platform.session === session, "platform callbacks keep their requesting session")
+    }
 }
