@@ -194,6 +194,11 @@ test('a taken event writes its key and ExactHostEvents; a grant with no taker, o
   assert.match(appleMetadataProblem('host.ios.infoPlist.CKSharingSupported: not a known key'), /Exact writes this key itself/);
 }, 60_000);
 
+test("ExactKit's host events are the build's list (HostEvents.swift)", () => {
+  const swift = readFileSync(resolve(import.meta.dir, 'Sources/ExactKit/HostEvents.swift'), 'utf8');
+  assert.deepEqual([...swift.matchAll(/Event\(name: "([^"]+)"/g)].map((m) => m[1]).sort(), [...HOST_EVENTS.keys()].sort());
+});
+
 test('a grant is signed where it is granted, and on the Mac where the chosen profile signed its row', () => {
   const key = 'com.apple.developer.group-session', compat = { inputs: { grantCeiling: 'net.fetch https://x\ndevice.shareplay' } };
   assert.equal(signsGrant('device.shareplay', compat), true);

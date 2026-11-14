@@ -229,6 +229,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         }
         a = exact.makeSession(delegate: delegate, label: "a")
         b = exact.makeSession(delegate: delegate, label: "b")
+        exact.installHostEvents(applicationDelegate: nil, sceneDelegate: SceneDelegate.self)
         #if !os(tvOS)
         exact.installNotificationClicks(boot: { $0.bootForWake() }, activate: nil)
         #endif
@@ -259,6 +260,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         guard let ws = scene as? UIWindowScene else { return }
         #if !os(tvOS)
         if let response = connectionOptions.notificationResponse { exact.openNotification(response) }
+        exact.hostEvents(connectionOptions: connectionOptions)
         #endif
         let w = ExactWindow(windowScene: ws)
         let rootController = RootController()

@@ -787,6 +787,9 @@ final class Delegate: NSObject, NSApplicationDelegate {
 }
 
 let delegate = Delegate()
+// Before the delegate is set: the methods of the host events this build takes, an app-wide one going to the
+// front window's session (LLP 1133.001.000 D2).
+exact.installHostEvents(applicationDelegate: Delegate.self, sceneDelegate: nil, session: { frontWindow()?.session })
 app.delegate = delegate
 
 // A supervisor's SIGTERM follows the same cancellable quit as the menu

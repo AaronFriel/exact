@@ -181,7 +181,7 @@ public final class ExactApp {
         let live = Set(sessionRefs.compactMap { $0.session?.label })
         let named = label.isEmpty ? (1...).lazy.map { "session-\($0)" }.first { !live.contains($0) }! : label
         let s = ExactSession(app: self, label: named)
-        s.delegate = delegate; PushRegistration.listen() // before its packages can register
+        s.delegate = delegate; PushRegistration.listen(); HostEvents.listen() // before its packages can register or drain
         sessionRefs.append(WeakSession(s))
         sessionRefs.removeAll { $0.session == nil }
         return s
@@ -189,6 +189,7 @@ public final class ExactApp {
 
     func forget(_ session: ExactSession) {
         sessionRefs.removeAll { $0.session == nil || $0.session === session }
+        HostEvents.ended(session.label)
     }
 
     /// Connect to the app URL (LLP 1023 D1–D3): the envelope resolved, the

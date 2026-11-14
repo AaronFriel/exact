@@ -201,6 +201,8 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
             planRefusal = ExactDevelopmentPlan(path).installInitial(on: exact)
         }
         session = exact.makeSession(delegate: adapter, label: "main")
+        // Before any scene connects: the delegate methods of the host events this build takes (LLP 1133.001.000 D2).
+        exact.installHostEvents(applicationDelegate: nil, sceneDelegate: SceneDelegate.self)
         #if !os(tvOS)
         // A notification's background action that launched the app with no scene boots it with none (LLP 1133.004 stage 2).
         exact.installNotificationClicks(boot: { $0.bootForWake() }, activate: nil)
@@ -269,6 +271,8 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         #if !os(tvOS)
         let notificationResponse = connectionOptions.notificationResponse
         if let notificationResponse { exact.openNotification(notificationResponse) }
+        // A taken host event that launched the app (an accepted iCloud share); the URLs below route as ever.
+        exact.hostEvents(connectionOptions: connectionOptions)
         #endif
         let contexts = connectionOptions.urlContexts.map(\.url).sorted { $0.absoluteString < $1.absoluteString }
         let activities = connectionOptions.userActivities.filter { $0.activityType == NSUserActivityTypeBrowsingWeb }

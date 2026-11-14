@@ -235,6 +235,7 @@ final class Delegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func windowDidChangeOcclusionState(_ notification: Notification) { for (_, s) in sessions { s.occlusionChanged() } }
 }
 let appDelegate = Delegate()
+exact.installHostEvents(applicationDelegate: Delegate.self, sceneDelegate: nil)
 app.delegate = appDelegate
 window.delegate = appDelegate
 

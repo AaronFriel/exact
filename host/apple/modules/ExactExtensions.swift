@@ -379,9 +379,10 @@ extension ExactExtensions {
     static func context(_ m: ExactModule, _ name: String, session: String) -> ExactPackageContext {
         let module = m.context, tracks = tables[ObjectIdentifier(m)] as? ExactTracks ?? ExactTracks()
         tables[ObjectIdentifier(m)] = tracks
+        let label = module.poster["session"].flatMap { $0.isEmpty ? nil : $0 }
         return ExactPackageContext(
             agent: module.agent && !real.contains(name), session: session, hostSession: module.poster["owner"] ?? "",
-            label: module.poster["session"].flatMap { $0.isEmpty ? nil : $0 },
+            label: label,
             data: module.data, cache: module.cache, temporary: module.temporary,
             changed: { [weak module] topic in module?.changed(topic) },
             log: { [weak module] line in module?.diagnostics.log(line) },
@@ -447,6 +448,11 @@ extension ExactExtensions {
                 let box = NSMutableDictionary(dictionary: ["op": "read"])
                 NotificationCenter.default.post(name: Notification.Name("exact.push"), object: box)
                 return box["reply"] as? [String: Any]
+            },
+            hostEvents: ExactHostEvents { event in
+                let box = NSMutableDictionary(dictionary: ["event": event, "session": label ?? session])
+                NotificationCenter.default.post(name: Notification.Name("exact.hostEvents"), object: box)
+                return (box["reply"] as? [String: Any])?["items"] as? [NSObject] ?? []
             },
             expireWake: { [weak module] id in module?.expireWake(name, id: id) },
             state: { [weak module] fields in
