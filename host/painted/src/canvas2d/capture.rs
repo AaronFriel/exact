@@ -1,8 +1,8 @@
 //! A 2D canvas's kept bitmap as an image file (LLP 1056 D9, as amended for
 //! expo/exact#188 and #504; `exact_runner::canvas_capture`). The bitmap is
-//! the replayer's own pixmap, every list applied (the painters show a copy
-//! of it), so an accumulating drawing, its images and its text are what the
-//! capture holds. tiny-skia's encoder writes a PNG straight-alpha RGBA8,
+//! the replayer's own pixmap, every list applied (the painters share it, and
+//! a list drawn while one holds it draws into a copy), so an accumulating
+//! drawing, its images and its text are what the capture holds. tiny-skia's encoder writes a PNG straight-alpha RGBA8,
 //! which a PNG without a colour chunk is read as sRGB. A JPEG is the bitmap
 //! over opaque black, as `toBlob` writes one: by WIC on Windows
 //! ([JPEG encoder options](https://learn.microsoft.com/windows/win32/wic/jpeg-format-overview)),

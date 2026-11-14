@@ -27,7 +27,7 @@ fn replay(w: u32, h: u32, scale: f64, draw: impl Fn(&Context2d)) -> Pixmap {
     for l in ctx.take_lists() {
         r.apply(&l, &env).unwrap();
     }
-    r.pixmap
+    Arc::unwrap_or_clone(r.pixmap)
 }
 
 fn at(p: &Pixmap, x: u32, y: u32) -> [u8; 4] {
@@ -278,4 +278,42 @@ fn a_jpeg_capture_is_the_bitmap_over_opaque_black() {
         .map(|c| [c.red(), c.green(), c.blue(), c.alpha()])
         .collect();
     assert_eq!(rgba, [[0, 0, 0, 255], [128, 0, 0, 255]]);
+}
+
+#[test]
+fn a_redraw_copies_the_bitmap_only_while_a_painter_holds_the_last_one() {
+    let draw = |fresh: bool, x: f64| {
+        let ctx = Context2d::new();
+        ctx.set_fill_style_str("#f00");
+        ctx.fill_rect(x, 0., 1., 1.);
+        CanvasList {
+            view: 7,
+            lifetime: 1,
+            generation: 0,
+            seq: 1,
+            fresh,
+            pixel_width: 4,
+            pixel_height: 4,
+            scale: 1.,
+            stretch: false,
+            lists: ctx.take_lists(),
+            animating: false,
+            settings: Default::default(),
+        }
+    };
+    let shown = |c: &Canvases| c.snapshots()[&7].pixels.clone();
+    let mut canvases = Canvases::default();
+    assert!(canvases.apply(vec![draw(true, 0.)]).is_empty());
+    let first = Arc::as_ptr(&shown(&canvases));
+    // No painter holds the snapshot: the next list draws into the same bitmap.
+    assert!(canvases.apply(vec![draw(false, 1.)]).is_empty());
+    let held = shown(&canvases);
+    assert_eq!(Arc::as_ptr(&held), first);
+    // A painter holds it: the next list draws into a copy, and the held one stays as it was.
+    assert!(canvases.apply(vec![draw(false, 2.)]).is_empty());
+    let now = shown(&canvases);
+    assert_ne!(Arc::as_ptr(&now), Arc::as_ptr(&held));
+    assert_eq!(at(&held, 2, 0)[3], 0);
+    assert_eq!(at(&now, 2, 0), [255, 0, 0, 255]);
+    assert_eq!(at(&now, 1, 0), [255, 0, 0, 255]);
 }

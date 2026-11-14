@@ -585,7 +585,10 @@ impl Backend for Ink {
     }
     fn canvas(&mut self, pixels: &Arc<Pixmap>, dst: Rect4, clips: &[Shape], ts: Transform) {
         self.observe_transform(ts);
-        let result = self.images.pixmap(&mut self.device, pixels);
+        let size = [pixels.width(), pixels.height()];
+        // A canvas is drawn at its own device-pixel size: no mip chain unless shrunk.
+        let mipmapped = images::minified(size, dst, self.device_transform(ts));
+        let result = self.images.pixmap(&mut self.device, pixels, mipmapped);
         if let Some(texture) = self.accept(result) {
             self.picture(
                 texture,
