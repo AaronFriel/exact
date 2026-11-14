@@ -23,6 +23,7 @@ import { bakeOutput, gpuModules, linuxBinary, moduleDirectory, pendingBuildInput
 import { directoryInputSnapshot, packageTests, watchedTree, watchOutput } from './cargo-dep-info.mjs';
 import { HOST_CRATES } from './cargo-check.mjs';
 import { webSourceRoots } from '../host/web/build.mjs';
+import { changedContractReads } from './web-build.mjs';
 import { CONFIG_JSON, DECLARATIONS, MODULE_FILE, moduleGraph } from './module-graph.mjs';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -1199,7 +1200,10 @@ export function webChanges(dist, app) {
   if (!existsSync(marker)) return { app: [], shared: [], all: [] };
   const built = JSON.parse(readFileSync(marker, 'utf8'));
   if (built.inputs && !built.inputRoots) return { app: [], shared: [shown(marker)], all: [shown(marker)] };
-  const changed = path => !built.inputs || built.inputs[path] !== contentDigest(path);
+  const contract = built.reads?.contract;
+  const recorded = new Set((built.inputRoots ?? []).filter(root => root.file).map(root => resolve(root.file)));
+  const byContractReceipt = path => contract && path.endsWith('.contract') && !recorded.has(resolve(ROOT, path));
+  const changed = path => !byContractReceipt(path) && (!built.inputs || built.inputs[path] !== contentDigest(path));
   // Candidates: what changed since the build read its inputs (`inputsAt`, as it started, less the file
   // system's clock grain), else since its marker.
   const since = typeof built.inputsAt === 'number' ? built.inputsAt - 2000 : statSync(marker).mtimeMs;
@@ -1208,8 +1212,9 @@ export function webChanges(dist, app) {
   if (!inputRoots) try { inputRoots = webSourceRoots(app, built.target === 'js'); } catch { return { app: [], shared: [shown(marker)], all: [shown(marker)] }; }
   const { app: own, shared: roots } = webInputs(app, built.target === 'js', since, inputRoots);
   const appChanges = own.filter(changed), shared = roots.filter(changed);
+  if (contract) for (const path of changedContractReads(contract)) (within(app.dir, path) ? appChanges : shared).push(shown(path));
   // A file the build read that is gone since (a source deleted) is a change too: absence is an input.
-  for (const path of Object.keys(built.inputs ?? {})) if (!['EXACT_BACKEND_ORIGIN', 'PORT'].includes(path) && !setting(path) && built.inputs[path] !== null && !appChanges.includes(path) && !existsSync(resolve(ROOT, path))) (within(app.dir, resolve(ROOT, path)) ? appChanges : shared).push(path);
+  for (const path of Object.keys(built.inputs ?? {})) if (!byContractReceipt(path) && !['EXACT_BACKEND_ORIGIN', 'PORT'].includes(path) && !setting(path) && built.inputs[path] !== null && !appChanges.includes(path) && !existsSync(resolve(ROOT, path))) (within(app.dir, resolve(ROOT, path)) ? appChanges : shared).push(path);
   if ((built.inputs?.EXACT_BACKEND_ORIGIN ?? null) !== (process.env.EXACT_BACKEND_ORIGIN ?? null)) appChanges.push('EXACT_BACKEND_ORIGIN');
   if ((built.inputs?.PORT ?? null) !== (process.env.PORT ?? null)) appChanges.push('PORT');
   // A setting whose value or source moved, one the build read and is no longer declared, or one declared since.

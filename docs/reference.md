@@ -1608,8 +1608,12 @@ builds also write manifests, under `Contents/Resources` for apps and
 
 ## Open the same development URL on Apple hosts
 
-Start `bun host/web/dev.mjs` and open a printed URL in your browser. Build
-and launch the app's native client with that same address:
+Start `bun host/web/dev.mjs` and open a printed URL in your browser. Its build
+outputs belong to that app's loop and target. `test web`, `verify web` and
+automatic builds for `agent web` each use a temporary directory of their own,
+removed when the command exits; they can run beside the loop.
+
+Build and launch the app's native client with that same address:
 
 ```sh
 bun host/apple/build.mjs --run --url http://127.0.0.1:8765/

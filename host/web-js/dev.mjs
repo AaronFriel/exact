@@ -22,6 +22,7 @@ import { builtSettings } from '../../js/bake/src/__exact_env.mjs';
 import { alsoOnIPv6Loopback, appManifestDigest, appSources, buildFileCards, listenDelay, replaceBuild, saveTrace, sendStaticBody, watchLauncher, webContentType } from '../web/serve.mjs';
 import { generationFile, generationPath, servedFile } from '../web/generations.mjs';
 import { besidePattern } from '../web/beside.mjs';
+import { contractReadReceipt } from '../../scripts/web-build.mjs';
 import { localInstaller } from '../web/local-install.mjs';
 import { designPath, frameOnlyByTool, tamberServer } from '../../scripts/tamber-server.mjs';
 import { pluginOnLoopback } from '../../scripts/tamber-remote.mjs';
@@ -172,7 +173,8 @@ function build(app, dist, keep = () => false, compiler = null, superseded = null
       // `sources` as host/web/build.mjs records it: null when a file came or went while it built.
       const after = appSources(app.dir, resolve(dist)).digest;
       writeFileSync(resolve(stage, '.exact-build.json'), JSON.stringify({ exactBuild: 1, target: 'js', app: { id: app.id, name: app.displayName },
-        manifestSha256: appManifestDigest(app), files: buildFileCards(stage), sources: after === sources ? after : null, ...builtSettings(stage) }) + '\n');
+        manifestSha256: appManifestDigest(app), files: buildFileCards(stage), sources: after === sources ? after : null,
+        reads: { contract: contractReadReceipt(resolve(stage, '.gen')) }, ...builtSettings(stage) }) + '\n');
       // Once more after the watchers' events queued meanwhile are taken.
       setImmediate(() => {
         if (moved()) return setAside();

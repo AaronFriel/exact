@@ -25,6 +25,7 @@ import { guardFlags } from '../../scripts/help.mjs';
 import { webPortRange } from '../../scripts/agent-launch.mjs';
 import { localInstaller } from './local-install.mjs';
 import { claimDevLoop, runBuildTree, startupBuilds, stopBuildTree } from './dev-startup.mjs';
+import { loopWebDist } from '../../scripts/web-build.mjs';
 import { designPath, frameOnlyByTool, tamberServer } from '../../scripts/tamber-server.mjs';
 import { pluginOnLoopback, remoteArgs } from '../../scripts/tamber-remote.mjs'; import { openRemoteCanvas } from '../../scripts/tamber-canvas.mjs';
 import { designDigest, patchDesign } from '../../scripts/tamber-patch.mjs';
@@ -71,10 +72,9 @@ const allowHosts = allowHostArgs(argv);
 let doors = null; const remoteAsked = remoteArgs(argv, { exit: true }); /* the wire's remote doors (stage 10 B), refused without a design */ if ((remoteAsked.remote || remoteAsked.tunnel != null || remoteAsked.plugin || remoteAsked.relay) && servedAs == null && !designPath(app.dir)) { const named = [remoteAsked.remote && '--remote', remoteAsked.tunnel != null && '--trust-tunnel', remoteAsked.plugin && '--allow-plugin-origin', remoteAsked.relay && '--relay'].filter(Boolean); console.error(`${named.join(' and ')} ${named.length > 1 ? 'serve' : 'serves'} the design wire: this app has no design (app.tamber)`); process.exit(2); }
 const gate = developmentGate(origins, servedAs ?? port, allowHosts);
 const root = resolve(fileURLToPath(new URL('../..', import.meta.url)));
-// An outside app's wasm loop builds apart from the JS target's `target/web-dist`,
-// so `web` and `web --wasm` can run at once without one serving the other's files.
-if (argv.includes('--wasm') && servedAs == null && app.outside && !process.env.EXACT_WEB_DIST)
-  process.env.EXACT_WEB_DIST = buildEnv.EXACT_WEB_DIST = resolve(app.target, 'web-dist-wasm');
+if (!process.env.EXACT_WEB_DIST)
+  process.env.EXACT_WEB_DIST = loopWebDist(app, argv.includes('--wasm') || app.manifest.game ? 'wasm' : 'js');
+buildEnv.EXACT_WEB_DIST = process.env.EXACT_WEB_DIST;
 const dist = webDist(app);
 const source = resolve(app.dir, 'app.contract');
 // The JS target (LLP 1071): the runtime the app ships, rebuilt and reloaded

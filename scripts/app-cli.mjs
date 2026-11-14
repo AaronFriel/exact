@@ -523,6 +523,13 @@ if (verb === 'contract') {
     // A server entry that does not read DB is refused before the build too, not after it (verify.mjs `withAppServer`, LLP 1116.008 D1).
     const refusal = verb === 'test' ? (await import(resolve(exact2, 'scripts/verify.mjs'))).appServer(dir)?.refusal : null;
     if (refusal) { console.error(`test: ${refusal}`); return log(1); }
+    if (drivesWeb) {
+      const { resolveApp } = await import(resolve(exact2, 'scripts/app.mjs'));
+      const { privateWebBuild } = await import(resolve(exact2, 'scripts/web-build.mjs'));
+      const build = privateWebBuild(resolveApp(dir), verb);
+      Object.assign(process.env, build.env);
+      process.once('exit', build.close);
+    }
     const prepared = await prepare();
     if (prepared) return log(prepared);
     // An `agent` drive's check hashes the build's inputs, and the driver need not again (LLP 1012.001.000 D1: once a drive).
