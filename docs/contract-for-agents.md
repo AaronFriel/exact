@@ -3129,12 +3129,20 @@ carries it beside a Linux executable or, signed, in an Apple bundle's `Framework
 does not list; two dependencies declaring `native` (`bake-native-twice`).
 `packages/fixtures/vault` is a whole one, its library built by `test/library.mjs`.
 
-### A package's Info.plist keys
+### What a package may ask of the Apple host
 
-A package's Apple implementation (`apple/exact.json`) adds to the Info.plist of every app
-that uses it, whether or not the app grants a device. `plistKeys` sets a key to a value,
-and only a key on the Apple host's allow-list, with the one value the list gives it
-(`PLIST_KEYS` in `host/apple/plist.mjs`), for the platforms it names:
+A package's native code cannot reach three things only the host owns: the app's Info.plist,
+its signed entitlements, and the system's calls on the app and scene delegates. Each is a
+closed list in exact2 (LLP 1133.001.000). A package opts into entries on a list and never
+adds one, so installing a package never changes what the app is trusted with; a package
+that needs an entry the lists lack asks exact2 for one. Nothing here reads the package's
+scope: a package kept outside this repository takes its author's (`@fixture/invites`, a
+whole one under `packages/fixtures/invites`), and `@exact/` names exact2's standard library.
+
+**Info.plist keys.** A package's Apple implementation (`apple/exact.json`) adds to the
+Info.plist of every app that uses it, whether or not the app grants a device. `plistKeys`
+sets a key to a value, and only a key on the Apple host's allow-list, with the one value the
+list gives it (`PLIST_KEYS` in `host/apple/plist.mjs`), for the platforms it names:
 
 ```json
 "plistKeys": { "SKIncludeConsumableInAppPurchaseHistory": true }
@@ -3146,6 +3154,41 @@ option, each valued by its base-locale text:
 The build refuses, naming the package, a key not on the list, another value, a `plist`
 entry that is not `"<call>.<option>"`, and any key the build itself writes. An app has
 no Info.plist field of its own.
+
+**Entitlements.** A package has no field for one. Its interface's `grants` lists the device
+rows (`runner/src/device.rs`) its names need, as alternatives; a name that needs a row of its
+own lists it in its own `grants`. An app that uses such a name without the line gets
+`grant-missing` naming the line, and at run time the name is refused `NotAllowedError`; the app
+writes the line, the build signs the row's entitlements, and `exact deploy`'s reach table shows
+it. `device.shareplay`, added for such a package, signs Group Activities'
+`com.apple.developer.group-session` on iOS and, under a provisioning profile that allows it,
+on the Mac; not on tvOS. A Mac build without such a profile signs none and still ships.
+
+**Host events.** A call the system makes on a delegate, held by ExactKit until the package
+that takes it drains it, even when it came before the package's module loaded. The list is
+`HOST_EVENTS` in `host/apple/plist.mjs`; ExactKit's `HostEvents.swift` names the same events.
+
+| Event | Platforms | Delivered by | Needs | Writes |
+| --- | --- | --- | --- | --- |
+| `cloudkit-share` | iOS, macOS | iOS: the scene delegate's `windowScene(_:userDidAcceptCloudKitShareWith:)`, or the connection options' `cloudKitShareMetadata` when it launched the app; macOS: the application delegate's `application(_:userDidAcceptCloudKitShareWith:)` | `device.cloudkit`, not yet a row: no build takes it | `CKSharingSupported` |
+
+The Apple implementation declares what it takes, `"hostEvents": ["cloudkit-share"]`, and its
+interface `"start": "load"`, so an instance exists once the module loads. The build refuses,
+naming the package, an event not on the list and one two bound packages declare. An event is
+taken where a bound package declares it and the build signs its grant (on the Mac, under the
+profile it chose); a taken event's key and `ExactHostEvents`, the names taken, are written to
+Info.plist, and for any other neither. At launch ExactKit adds a taken event's delegate methods
+by selector; an app that takes none answers none.
+
+Each payload is the system's object, as an `NSObject` the package casts (ExactKit links neither
+CloudKit nor GroupActivities), addressed to a session: in an iOS app its one session; on the Mac
+the front window's; from an embedder, the session it passes to `ExactApp.hostEvent(_:_:session:)`.
+One for a session that has ended goes to the first live session. At most 16 are held per event,
+the oldest dropped beyond that, and one identical or equal to one still held for the session is
+held once. The implementation takes what is held for its session with
+`context.hostEvents.take("cloudkit-share")` and hears each later one as
+`ExactHostEvents.arrived` (`userInfo` `{event, session}`, the session its `context.label`). A
+test delivers one by posting `ExactHostEvents.deliver` with `{event, payload, session?}`.
 
 ### Arranged panes
 

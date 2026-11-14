@@ -701,6 +701,18 @@ commit and push everything." No take named. It adds no runner surface, global
 or grant kind. A data module's own way to announce a change (LLP 1157 §8
 question 1) is not admitted.
 
+**Expanded (Charlie, 2026-11-14, issue panel D1; LLP 1133.001.000):** a
+package outside exact2 opts into closed lists that stay exact2's: Info.plist
+keys, device rows (`device.shareplay` added; `device.cloudkit` once the
+package can be read) and host events (`cloudkit-share`, held until the
+package takes it, writing `CKSharingSupported` when it is taken). A row is
+admitted for a package readable at a pinned version. Consumer: nqh-packages'
+CloudKit and SharePlay packages (#531, #532, #526). Unblocks sharing an iCloud
+zone and a SharePlay session from a package on an unpatched exact2. Take:
+waived by Charlie, 2026-11-14, after the panel. Still out: a package adding to
+a list; CloudKit and SharePlay as standard modules; silent notifications for
+CloudKit; an Android event seam.
+
 **Expanded (Daehyeon Mun, 2026-10-23; LLP 1133.005):** a local listener,
 `exactListen("unix:<path>", options)`: a data capability in `fetch`'s shape
 whose connections reach the stream mapper with LLP 1016.000 D7's sends, under
