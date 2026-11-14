@@ -93,6 +93,17 @@ impl<D: DataSource> Bridge<D> {
         self.emit(out)
     }
 
+    /// Make the UTF-8 location in the input buffer the window's only visit
+    /// (LLP 1030.004 D2), a batch.
+    pub fn host_root(&mut self, len: usize, now_ms: f64) -> u32 {
+        let location = String::from_utf8_lossy(&self.input[..len.min(self.input.len())]);
+        let out = self
+            .host
+            .as_mut()
+            .map_or_else(not_booted, |h| h.host_root(&location, now_ms));
+        self.emit(out)
+    }
+
     /// Deliver native Forward at the navigation root, a batch.
     pub fn host_forward(&mut self, root: u32, now_ms: f64) -> u32 {
         let out = self

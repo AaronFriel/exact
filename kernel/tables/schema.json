@@ -1514,7 +1514,7 @@
       "id": 229,
       "name": "target",
       "kind": "str",
-      "_comment": "HTML's link `target`, `_blank` or `_self`: where the web opens a link's URL. Unset, a link to an absolute URL opens in a new browsing context, as the native hosts open it in the system browser (x2apps chat F11, hn-reader F3); natively a path navigates in the app and any other URL leaves it, whatever the target."
+      "_comment": "HTML's link `target` (LLP 1030.004 D1): empty, `_self`, `_parent` or `_top` navigates in place, `_blank` opens a new window, and a name opens the window of that name or brings it forward. Unset, a link to an absolute URL opens in a new browsing context, as the native hosts open it in the system browser (x2apps chat F11, hn-reader F3). Natively any URL that is not one of the app's paths leaves the app, whatever the target; a path's target opens a window on macOS and navigates in place on the hosts without windows."
     },
     {
       "id": 230,

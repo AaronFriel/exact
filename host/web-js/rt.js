@@ -894,6 +894,22 @@ export const Store = {
         if (k.startsWith(p)) this.map.set(k.slice(p.length), localStorage.getItem(k));
       }
     } catch {}
+    // Another tab of the app wrote or removed a key, or cleared the store (LLP 1030.004 D2).
+    globalThis.addEventListener?.('storage', e => {
+      if (e.storageArea !== globalThis.localStorage) return;
+      if (e.key == null) for (const k of [...this.map.keys()]) this.peer(k, null);
+      else if (e.key.startsWith(p)) this.peer(e.key.slice(p.length), e.newValue);
+    });
+  },
+  /** Another tab's write of key `k` (`v`, or null removed): taken, unless this tab's own write of it is owed, and the
+   * store's readers asked again, as after a write outside a commit (the runner's `store_changed`). */
+  peer(k, v) {
+    if (this.pending.has(k) || this.writes.some(w => w[0] === k) || (this.map.get(k) ?? null) === v) return;
+    if (v == null) this.map.delete(k);
+    else this.map.set(k, v);
+    Rev++;
+    lateReaders();
+    recommit(lateIdle, "another tab's store write");
   },
 };
 // A release build's DEVELOPMENT_STORE is null: it inspects nothing, and its bundle drops the inspection's code.

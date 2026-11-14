@@ -142,6 +142,7 @@ mod motion;
 mod motion_feel;
 mod multicol_width;
 mod mutation;
+mod named_windows;
 mod names;
 mod native_buttons;
 mod navigation_bar;

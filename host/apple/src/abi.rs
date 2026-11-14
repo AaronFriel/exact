@@ -530,6 +530,15 @@ impl<D: DataSource> Bridge<D> {
         }
     }
 
+    /// Another session of the app announced `topic` after a durable write
+    /// (LLP 1030.004 D2): this session's watching answers are asked again.
+    /// The write was not this session's, so it reports no storage change.
+    pub fn peer_changed(&mut self, topic: &str) {
+        if let Some(host) = &mut self.host {
+            host.native_slot().changed(topic);
+        }
+    }
+
     fn adopt_app_module(&self) {
         if let Some(host) = &self.host {
             let slot = host.native_slot();

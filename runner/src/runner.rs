@@ -546,6 +546,7 @@ pub struct Runner<D: DataSource> {
     viewport_geometry: crate::viewport::Geometry,
     // @ref LLP 1069.000 D2 — visibility, connectivity, the share sheet.
     page: crate::page::Page,
+    window_name: String, // the page's `name` (LLP 1030.004 D2)
     // @ref LLP 1027.000.000 — the date, once the host says it.
     time: crate::time::WallTime,
     live_times: live_time::LiveTimes,
@@ -939,6 +940,7 @@ impl<D: DataSource> Runner<D> {
             live_times: Default::default(),
             text_axes: Default::default(),
             place: launched_place.clone().unwrap_or_default(),
+            window_name: crate::time::launch_window_name(),
             surface_records: Default::default(),
             canvas_performance: Default::default(),
             surface_refusals: Default::default(),

@@ -270,12 +270,72 @@
         env.enqueue(op);
       });
     }
-    function statement(raw) {
+    // LLP 1030.004 D2: a write that landed announces its topics to the app's other sessions, and a read in an answer
+    // watches them, so one session's write re-asks another's reads. A database's topic is `sqlite:<path>`; an app
+    // file's is its URL, and its directory's, which lists it.
+    function fileTopics(path) {
+      if (typeof path !== "string" || !/^app:\//.test(path)) return [];
+      var href;
+      try {
+        href = new URL(path).href.replace(/\/$/, "");
+      } catch (e) {
+        return [];
+      }
+      var parent = href.slice(0, href.lastIndexOf("/"));
+      return /^app:\/./.test(parent) ? [href, parent] : [href];
+    }
+    function watchTopics(topics) {
+      var call = env.current();
+      if (call && call.status === "pending" && !call.replied)
+        topics.forEach(function (topic) {
+          host(6, "watch", topic);
+        });
+    }
+    // Announced with the next call that has a store, when the write landed between answers.
+    var unannounced = [];
+    function announce(topics) {
+      topics.forEach(function (topic) {
+        if (unannounced.indexOf(topic) < 0) unannounced.push(topic);
+      });
+      unannounced = unannounced.filter(function (topic) {
+        try {
+          return host(6, "announce", topic) !== "announced";
+        } catch (e) {
+          return true;
+        }
+      });
+    }
+    function announcing(promise, topics, changed) {
+      return promise.then(function (value) {
+        if (!changed || changed(value)) announce(topics);
+        return value;
+      });
+    }
+    // A SQLite write announces only when it changed rows: a DML statement whose `changes` is above zero. SQLite
+    // reports changes only for DML and leaves the last DML's count after any other statement
+    // (https://www.sqlite.org/c3ref/changes.html), and a `CREATE TABLE IF NOT EXISTS` run on every read must not
+    // announce, or two windows would re-ask each other without end.
+    function changedRows(sql) {
+      return function (result) {
+        var dml = typeof sql === "string" && /^\s*(insert|update|delete|replace|with)\b/i.test(sql);
+        return dml && !!result && Number(result.changes) > 0;
+      };
+    }
+    function changedAny(batch) {
+      return function (results) {
+        return Array.isArray(results) && results.some(function (r, i) {
+          return changedRows(batch[i] && batch[i].sql)(r);
+        });
+      };
+    }
+    function statement(raw, path, sql) {
+      var topic = ["sqlite:" + path];
       return Object.freeze({
         execute: function (params) {
-          return storageCall(raw, "execute", [params]);
+          return announcing(storageCall(raw, "execute", [params]), topic, changedRows(sql));
         },
         query: function (params) {
+          watchTopics(topic);
           return storageCall(raw, "query", [params]);
         },
         close: function () {
@@ -337,15 +397,19 @@
     function database(raw, path, by) {
       var handle = { path: path, by: by, told: false };
       openDatabases.add(handle);
+      var topic = ["sqlite:" + path];
       return Object.freeze({
         execute: function (sql, params) {
-          return storageCall(raw, "execute", [sql, params]);
+          return announcing(storageCall(raw, "execute", [sql, params]), topic, changedRows(sql));
         },
         query: function (sql, params) {
+          watchTopics(topic);
           return storageCall(raw, "query", [sql, params]);
         },
         prepare: function (sql) {
-          return storageCall(raw, "prepare", [sql], statement);
+          return storageCall(raw, "prepare", [sql], function (s) {
+            return statement(s, path, sql);
+          });
         },
         // Read now, not when a queued call is issued: what the caller changes after the call never changes what runs.
         transaction: function (commands, options) {
@@ -355,7 +419,7 @@
           } catch (e) {
             return Promise.reject(storageError(String((e && e.message) || e), "failed"));
           }
-          return storageCall(raw, "transaction", args);
+          return announcing(storageCall(raw, "transaction", args), topic, changedAny(args[0]));
         },
         // A close counts once issued; one refused or failed leaves the database open, and tracked.
         close: function () {
@@ -389,7 +453,15 @@
       "digest",
     ].forEach(function (method) {
       files[method] = function () {
-        return storageCall(nativeStorage && nativeStorage.fs, method, arguments);
+        var result = storageCall(nativeStorage && nativeStorage.fs, method, arguments);
+        var topics = fileTopics(arguments[0]);
+        if (method === "rename" || method === "copyFile")
+          topics = (method === "rename" ? topics : []).concat(fileTopics(arguments[1]));
+        if (!/^(writeFile|atomicWriteFile|appendFile|mkdir|rm|rename|copyFile|chmod|symlink)$/.test(method)) {
+          watchTopics(topics);
+          return result;
+        }
+        return announcing(result, topics);
       };
     });
     // LLP 1069.010.000 D4: a kept file the app replaces with its own atomic write stays kept: the host reads what the
@@ -625,6 +697,9 @@
       }
       return storageCall(nativeStorage && nativeStorage.fs, method, [from, to].concat(tail), function (value) {
         return typeof value === "string" ? record(value.split("\t"), tail) : value;
+      }).then(function (written) {
+        announce(fileTopics(written && written.path));
+        return written;
       });
     }
     files.compressImage = function (from, to, options) {

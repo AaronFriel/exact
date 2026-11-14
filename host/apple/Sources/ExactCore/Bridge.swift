@@ -29,6 +29,9 @@ public struct Batch {
     public var timerDueMs: Double? = nil
     /// A data module's timer continuation an advance released is still out: the agent's jump waits for it.
     public var landing = false
+    /// A store write this batch's commits made has landed: the app's other sessions refresh (LLP 1030.004 D2).
+    public var stored = false
+    public var announced: [String] = []
     /// Store refresh acknowledged no runner commit; keep the current timers.
     public var unchanged = false
     public var storeReadPending = false
@@ -794,6 +797,7 @@ package final class Runtime {
         return on { read(exact_host_back_to(rt, source, destination, now)) }
     }
     package func launch(_ location: String) { on { () -> Void in let n = write(location); _ = exact_set_launch_location(rt, n) } }
+    package func launchWindow(_ name: String, rooted: Bool) { on { () -> Void in let n = write(name); _ = exact_set_launch_window(rt, n, rooted ? 1 : 0) } }
     package func navigate(_ view: UInt32, _ location: String, now: Double) -> Batch {
         return on {
             let n = write(location)
@@ -804,6 +808,9 @@ package final class Runtime {
     package func hostBack(_ key: String, now: Double) -> Batch? {
         guard let id = UInt64(key) else { return nil }
         return on { read(exact_host_back(rt, id, now)) }
+    }
+    package func hostRoot(_ location: String, now: Double) -> Batch {
+        on { read(exact_host_root(rt, write(location), now)) }
     }
     package func hostGo(_ location: String, now: Double) -> Batch {
         on { read(exact_host_go(rt, write(location), now)) }
@@ -1082,6 +1089,13 @@ package final class Runtime {
         let rt = rt
         Owner.shared.notify {
             topic.withUnsafeBytes { exact_app_changed(rt, $0.bindMemory(to: UInt8.self).baseAddress, topic.count) }
+        }
+    }
+    /// Another session of the app announced a topic (LLP 1030.004 D2): a notification.
+    package func peerChanged(_ topic: String) {
+        let rt = rt, bytes = Array(topic.utf8)
+        Owner.shared.notify {
+            bytes.withUnsafeBufferPointer { exact_peer_changed(rt, $0.baseAddress, $0.count) }
         }
     }
     /// A notification (LLP 1072 T5): queued to the owner, never waited for,

@@ -234,6 +234,33 @@ const changed = (r, topic) => {
 };
 const announce = (topic, why) => commit(() => { const m = moduleWatched.get(topic); for (const r of Resources) if (r.watches?.has(topic) || m?.has(r.source)) changed(r, topic); }, `${why} ${topic}`);
 const watch = topic => answering.call.watches.add(topic);
+// Another tab's durable write (LLP 1030.004 D2): its topics cross between the app's tabs on a channel of the app's,
+// after the write lands, and a tab never hears its own. An answer's read watches them, which opens the channel: in
+// its first turn the answer's call, after an await the pending one (`activeCall`), or the one that opened the database.
+// Outside a browser (a test's Bun) the channel keeps no process alive.
+let tabs = null;
+const channel = () => tabs ??= typeof BroadcastChannel === 'function'
+  ? Object.assign(new BroadcastChannel(`exact.topics.${appId ?? ''}`), { onmessage: e => typeof e.data === 'string' && announce(e.data, 'another tab') })
+  : { postMessage() {} };
+const listening = () => { const c = channel(); c.unref?.(); return c; };
+const shared = {
+  watch: (topics, opener) => {
+    const call = answering.call ?? activeCall() ?? opener;
+    if (!call?.watches || call.settled || call.mutation || !topics.length) return;
+    listening();
+    for (const t of topics) call.watches.add(t);
+  },
+  relay: topics => topics.forEach(t => listening().postMessage(t)),
+};
+// An app file's topic is its URL; its directory's, which lists it, too (js/src/storage.js `fileTopics`).
+const fileTopics = path => {
+  if (typeof path !== 'string' || !path.startsWith('app:/')) return [];
+  let href;
+  try { href = new URL(path).href.replace(/\/$/, ''); } catch { return []; }
+  const parent = href.slice(0, href.lastIndexOf('/'));
+  return /^app:\/./.test(parent) ? [href, parent] : [href];
+};
+const FILE_WRITES = /^(writeFile|atomicWriteFile|appendFile|mkdir|rm|rename|copyFile)$/;
 // A native module's name called from data code (LLP 1133.002 D14): admitted by
 // the page runtime's modules.js as a Contract read is; a source's reader is
 // asked again when its answer changes, as a topic's is.
@@ -476,7 +503,8 @@ function storageOf(grants) {
   const image = (method, from, to, options, limits) => {
     const out = imageOptions(method, from, to, options, limits);
     if (out instanceof Error) return Promise.reject(out);
-    return (admitted ? queued(`${method} ${from}`, () => files().then(f => f[method](from, to, out))) : denied(`fs.${method}`)).catch(refused);
+    return (admitted ? queued(`${method} ${from}`, () => files().then(f => f[method](from, to, out))) : denied(`fs.${method}`)).catch(refused)
+      .then(written => { shared.relay(fileTopics(written?.path ?? to)); return written; });
   };
   const compressImage = (from, to, options) => {
     const limits = compressLimits(from, to, options);
@@ -507,9 +535,12 @@ function storageOf(grants) {
         const captured = structuredClone(args);
         const run = () => copiesIn(m, captured) ? documents().then(files).then(f => globalThis.exact.documents.copyFile(captured[0], captured[1], grants, f))
           : isDocument(captured) ? documents().then(f => f[m](...captured)) : files().then(f => f[m](...captured), orEmpty(m, captured[0]));
-        return (admitted ? queued(`${m}${typeof args[0] === 'string' ? ` ${args[0]}` : ''}`, run) : denied(`fs.${m}`, isDocument(captured) && !copiesIn(m, captured))).catch(refused);
+        const done = (admitted ? queued(`${m}${typeof args[0] === 'string' ? ` ${args[0]}` : ''}`, run) : denied(`fs.${m}`, isDocument(captured) && !copiesIn(m, captured))).catch(refused);
+        const topics = [...(m === 'copyFile' ? [] : fileTopics(captured[0])), ...(/^(rename|copyFile)$/.test(m) ? fileTopics(captured[1]) : [])];
+        if (!FILE_WRITES.test(m)) { shared.watch(topics); return done; }
+        return done.then(v => { shared.relay(topics); return v; });
       })])) }),
-    sqlite: Object.freeze({ open: path => ordinary(() => { const call = answering.call; return (admitted ? queued(`open ${path}`, () => databases().then(([d]) => d.open(path))).then(d => sqlite.then(([, m]) => m.database(d, path, call, queued, openDatabases))) : denied(`sqlite.open ${path}: no grant covers it; grant \`sqlite.open ${path}\`, or \`sqlite.open ${String(path).slice(0, String(path).lastIndexOf('/'))}\` for every file there (a grant covers its path and what is below it, by whole names)`)).catch(refused); }) }),
+    sqlite: Object.freeze({ open: path => ordinary(() => { const call = answering.call; return (admitted ? queued(`open ${path}`, () => databases().then(([d]) => d.open(path))).then(d => sqlite.then(([, m]) => m.database(d, path, call, queued, openDatabases, shared))) : denied(`sqlite.open ${path}: no grant covers it; grant \`sqlite.open ${path}\`, or \`sqlite.open ${String(path).slice(0, String(path).lastIndexOf('/'))}\` for every file there (a grant covers its path and what is below it, by whole names)`)).catch(refused); }) }),
     work: promise => Promise.resolve(promise),
   });
 }

@@ -240,6 +240,13 @@ macro_rules! host {
             $crate::abi::with_entry(&EXACT_RUNTIMES, rt, |e| e.bridge.app_changed(&topic));
         }
 
+        /// Another session of the app announced a topic (LLP 1030.004 D2).
+        #[no_mangle]
+        pub extern "C" fn exact_peer_changed(rt: u32, topic: *const u8, len: usize) {
+            let topic = $crate::app_module::text(topic, len);
+            $crate::abi::with_entry(&EXACT_RUNTIMES, rt, |e| e.bridge.peer_changed(&topic));
+        }
+
         /// The plan-font hook, called synchronously by each boot on this
         /// runtime before its first text measurement, with `ctx`.
         #[no_mangle]
@@ -364,6 +371,12 @@ macro_rules! host {
         #[no_mangle]
         pub extern "C" fn exact_build_tabs(rt: u32, len: usize, now_ms: f64) -> u32 {
             $crate::abi::with_runtime(&EXACT_RUNTIMES, rt, false, |b, _| b.build_tabs(len, now_ms), |n| n)
+        }
+
+        /// Make a UTF-8 location the window's only visit, a batch. @ref LLP 1030.004 D2
+        #[no_mangle]
+        pub extern "C" fn exact_host_root(rt: u32, len: usize, now_ms: f64) -> u32 {
+            $crate::abi::with_runtime(&EXACT_RUNTIMES, rt, false, |b, _| b.host_root(len, now_ms), |n| n)
         }
 
         /// Follow a UTF-8 location with the runner's own go.
@@ -862,6 +875,12 @@ macro_rules! host {
         #[no_mangle]
         pub extern "C" fn exact_set_launch_time(rt: u32, epoch_at_zero: f64, utc_offset: f64) -> u32 {
             $crate::abi::with_runtime(&EXACT_RUNTIMES, rt, false, |b, _| { b.set_launch_time(epoch_at_zero, utc_offset); 0 }, |n| n)
+        }
+
+        /// The window's name (UTF-8 input) and whether it launches rooted, for the next boot. @ref LLP 1030.004 D2
+        #[no_mangle]
+        pub extern "C" fn exact_set_launch_window(rt: u32, len: usize, rooted: u32) -> u32 {
+            $crate::abi::with_runtime(&EXACT_RUNTIMES, rt, false, |b, _| { b.set_launch_window(len, rooted != 0); 0 }, |n| n)
         }
 
         /// Where the viewer is (`locale NUL timeZone NUL seed` input) for the next boot or candidate, before it.

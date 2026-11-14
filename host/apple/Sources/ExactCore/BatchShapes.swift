@@ -39,9 +39,10 @@ extension BatchReader {
         var seq: (UInt64, UInt64)?
         var alerts: [String] = []
         var journal: [String] = []
+        var announced: [String] = []
         var modes: [String: String]?
         var live: String?, unsupported = false, design: String?, facts = false, wakelock: Bool?, orientation: OrientationRequest?, mustFinish: Bool?
-        var unchanged = false, storeReadPending = false, storeActivationPending = false, landing = false
+        var unchanged = false, storeReadPending = false, storeActivationPending = false, landing = false, stored = false
         var seen: Set<String> = []
         try object { r, key in
             guard seen.insert(key).inserted else { try r.skip(); return }
@@ -69,6 +70,7 @@ extension BatchReader {
             case "clock": clock = try r.number()
             case "timer_due_ms": due = try r.number()
             case "landing": landing = try r.bool()
+            case "stored": stored = try r.bool()
             case "error": error = try r.string()
             case "modes": if case .object(let object) = try r.value() { modes = object.compactMapValues { $0.string } }
             case "live": live = try r.string()
@@ -80,6 +82,7 @@ extension BatchReader {
             case "orientationlock": if case .object(let o) = try r.value() { orientation = OrientationRequest(o) }
             case "alerts": alerts = try r.array { try $0.string() }
             case "journal": journal = try r.array { try $0.string() }
+            case "announced": announced = try r.array { try $0.string() }
             case "seq":
                 let range = try r.array { try $0.number() }
                 if range.count == 2, range.allSatisfy({ $0 >= 0 && $0 == $0.rounded() }) { seq = (UInt64(range[0]), UInt64(range[1])) }
@@ -89,6 +92,8 @@ extension BatchReader {
         var batch = Batch(ops: ops, timers: timers, motion: motion, clock: clock, error: error, timerDueMs: due, pending: pending, busy: busy)
         batch.unchanged = unchanged
         batch.landing = landing
+        batch.stored = stored
+        batch.announced = announced
         batch.storeReadPending = storeReadPending
         batch.storeActivationPending = storeActivationPending
         batch.spatial = spatial

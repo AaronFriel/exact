@@ -122,6 +122,14 @@ pub(crate) unsafe extern "C" fn host_door(
                     (*store).observe_topic(&b);
                 }
                 Ok(None)
+            } else if a == "announce" {
+                // A durable write the app's other sessions are told of (LLP
+                // 1030.004 D2). With no store (between answers) the prelude
+                // keeps it for the next call that has one.
+                Ok(state.store.map(|store| {
+                    (*store).announce_topic(&b);
+                    "announced".into()
+                }))
             } else if a == "kept" {
                 // What the app keeps across launches (LLP 1069.010.000 D5):
                 // the device's, and a candidate on trial changes none of it.

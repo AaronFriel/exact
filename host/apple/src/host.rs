@@ -273,6 +273,8 @@ pub struct Host<D: DataSource> {
     /// or grants that do not parse).
     secrets: Option<Box<dyn crate::store::KeptStore>>,
     pending_store_writes: Vec<exact_runner::StoreWrite>,
+    /// A store write landed since the last batch was written (`Batch::stored`).
+    stored: bool,
     pending_store_stamps: std::collections::BTreeMap<String, exact_data::secrets::Stamp>,
     /// What the disk held for each owed name when its write first failed.
     pending_store_bases: std::collections::BTreeMap<String, Option<Vec<u8>>>,
@@ -633,6 +635,7 @@ impl<D: DataSource> Host<D> {
             doc_watch: None,
             secrets,
             pending_store_writes: Vec::new(),
+            stored: false,
             pending_store_stamps: Default::default(),
             pending_store_bases: Default::default(),
             reported_store_failures: BTreeSet::new(),
@@ -980,6 +983,11 @@ impl<D: DataSource> Host<D> {
     /// Return to the visit selected in the platform's Back-history menu.
     pub fn host_back_to(&mut self, source: u64, destination: u64, now_ms: f64) -> String {
         self.own_navigation(now_ms, |runner| runner.host_back_to(source, destination))
+    }
+
+    /// Make `location` a rooted window's only visit (LLP 1030.004 D2).
+    pub fn host_root(&mut self, location: &str, now_ms: f64) -> String {
+        self.own_navigation(now_ms, |runner| runner.host_root(location))
     }
 
     /// Follow a declared route without an authored navigate handler.

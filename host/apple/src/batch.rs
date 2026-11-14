@@ -68,6 +68,12 @@ pub struct Batch {
     /// A timer's continuation an advance released is still out
     /// (`Runner::data_timer_landing`): the agent's jump waits for its reply.
     pub landing: bool,
+    /// A store write the batch's commits made has landed (`Host::persist`):
+    /// the app's other sessions refresh (LLP 1030.004 D2).
+    pub stored: bool,
+    /// Topics the batch's durable writes announced, for the app's other
+    /// sessions (LLP 1030.004 D2).
+    pub announced: Vec<String>,
     /// Whether a displayed element holds the wake lock, when that changed
     /// (`Host::wakelock_moved`, LLP 1125 D11).
     pub wakelock: Option<bool>,
@@ -1075,6 +1081,9 @@ impl Batch {
         if self.landing {
             s.push_str(",\"landing\":true");
         }
+        if self.stored {
+            s.push_str(",\"stored\":true");
+        }
         if let Some(held) = self.wakelock {
             let _ = write!(s, ",\"wakelock\":{held}");
         }
@@ -1103,7 +1112,11 @@ impl Batch {
         if let Some((first, last)) = self.seq {
             let _ = write!(s, ",\"seq\":[{first},{last}]");
         }
-        for (key, lines) in [("alerts", &self.alerts), ("journal", &self.journal)] {
+        for (key, lines) in [
+            ("alerts", &self.alerts),
+            ("journal", &self.journal),
+            ("announced", &self.announced),
+        ] {
             if lines.is_empty() {
                 continue;
             }

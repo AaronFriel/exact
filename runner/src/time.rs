@@ -121,6 +121,13 @@ pub struct Launch {
     /// The claims that cold share drew from, so a later share this launch
     /// draws its tokens and file names past them.
     pub claims: Option<crate::share_in::Claims>,
+    /// The window's name, which the page's `name` reads as `window.name`:
+    /// `main` when none is told, the first window on every host (LLP
+    /// 1030.004 D2).
+    pub window_name: Option<String>,
+    /// The router launches rooted: the launch location's screen alone, as a
+    /// window opened at a route shows it (LLP 1030.004 D2).
+    pub rooted: bool,
 }
 
 impl Launch {
@@ -131,6 +138,8 @@ impl Launch {
         clock: None,
         shared: Vec::new(),
         claims: None,
+        window_name: None,
+        rooted: false,
     };
 }
 
@@ -169,6 +178,8 @@ pub fn launching_with<T>(launch: Launch, boot: impl FnOnce() -> T) -> T {
             .filter(|t| (0.0..=crate::MAX_CLOCK_MS).contains(t)),
         shared: launch.shared,
         claims: launch.claims,
+        window_name: launch.window_name,
+        rooted: launch.rooted,
     };
     let _restore = Restore(Some(LAUNCH.with(|l| l.replace(launch))));
     boot()
@@ -206,6 +217,18 @@ pub(crate) fn launch_shared() -> Vec<(String, crate::share_in::SharedFiles)> {
 /// The claims a cold share drew from, when a boot under [`launching_with`] was told.
 pub(crate) fn launch_claims() -> Option<crate::share_in::Claims> {
     LAUNCH.with(|l| l.borrow().claims.clone())
+}
+
+/// The window's name a boot under [`launching_with`] was told, else `main`.
+pub(crate) fn launch_window_name() -> String {
+    LAUNCH
+        .with(|l| l.borrow().window_name.clone())
+        .unwrap_or_else(|| "main".into())
+}
+
+/// Whether a boot under [`launching_with`] launches its router rooted.
+pub(crate) fn launch_rooted() -> bool {
+    LAUNCH.with(|l| l.borrow().rooted)
 }
 
 /// Where the viewer is, when a boot under [`launching_with`] was told.

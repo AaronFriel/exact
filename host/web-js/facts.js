@@ -71,7 +71,10 @@ function shareReporter() {
   if (!facts) return;
   (globalThis.exact ??= {}).page = { prefer: p => { facts.prefer(p); pageChanged(); if (p?.["gpu-tier"]) viewportChanged(); return facts.read(); }, read: () => facts.read() };
 }
-const pageFields = f => ({ visibilityState: f["visibility-state"], frozen: f.frozen, onLine: f.online, canShare: f["can-share"], canShareFiles: f["can-share-files"], canSharePictures: f["can-share-pictures"], canOpenFiles: f["can-open-files"], hasFocus: f["has-focus"], navigationType: f["navigation-type"], persisted: f.persisted, restores: f.restores, iframePartition: f["iframe-partition"] === true });
+const pageFields = f => ({ visibilityState: f["visibility-state"], frozen: f.frozen, onLine: f.online, canShare: f["can-share"], canShareFiles: f["can-share-files"], canSharePictures: f["can-share-pictures"], canOpenFiles: f["can-open-files"], hasFocus: f["has-focus"], navigationType: f["navigation-type"], persisted: f.persisted, restores: f.restores, iframePartition: f["iframe-partition"] === true, name: windowName() });
+// `window.name`, an empty one set to `main` the first time it is read, so the tab the person opened is `main` and one a
+// link's `target` opened keeps its name (LLP 1030.004 D2). A render has no window: `main`.
+const windowName = () => typeof window === "object" && typeof window.name === "string" ? (window.name ||= "main") : "main";
 export function page(readers) {
   pageReaders = readers;
   const facts = reporter();

@@ -196,6 +196,15 @@ impl<D: DataSource> Bridge<D> {
         }
     }
 
+    /// The window the session runs in, for every boot from here: its name,
+    /// which the page's `name` reads, and whether the router launches
+    /// rooted at the launch location (LLP 1030.004 D2).
+    pub fn set_launch_window(&mut self, len: usize, rooted: bool) {
+        let name = String::from_utf8_lossy(&self.input[..len.min(self.input.len())]).into_owned();
+        self.launch_facts.window_name = Some(name);
+        self.launch_facts.rooted = rooted;
+    }
+
     /// Where the viewer is, for the next boot's first settle, as
     /// `set_place` reads it from the input buffer (`locale NUL timeZone NUL
     /// seed`); the running host is not told. A fact that does not validate

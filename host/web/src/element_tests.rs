@@ -374,12 +374,15 @@ fn a_link_out_of_the_app_opens_a_new_browsing_context() {
         kept("NoOpener help")
     );
     assert_eq!(link_rel("/c/42", None, Some("help")).1, Some("help".into()));
-    let app = |t: &str| {
-        format!("component A\n  view\n    link href=\"/x\" target=\"{t}\"\n      text \"x\"\n")
-    };
-    assert!(contract::compile(&app("_blank")).is_ok());
-    let e = contract::compile(&app("_top")).unwrap_err().to_string();
-    assert!(e.contains("`target` takes"), "{e}");
+    // A window's name is no new browsing context; HTML's keywords match in any case.
+    assert_eq!(
+        link("/compose", Some("compose")),
+        (Some("compose".into()), None)
+    );
+    assert_eq!(
+        link("/c/42", Some("_BLANK")),
+        (Some("_BLANK".into()), Some("noopener".into()))
+    );
 }
 
 /// @ref LLP 1075.003 §3.3 — every `data-` name this host writes on an

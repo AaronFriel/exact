@@ -62,6 +62,7 @@ enum ResetGate {
     /// Held calls dropped, by `Runtime` method, and why; any other held call is dropped too (as about the old tree).
     static let dropped: [String: String] = [
         "holdBegin(_:property:now:)": "a gesture beginning on the old tree",
+        "hostRoot(_:now:)": "a link in another window retargeting this rooted one over the teardown (LLP 1030.004 D2): it keeps its screen, as a press on the old tree would",
         "heightDragBegin(_:targetKey:now:)": "a height drag beginning on the old tree",
         "transformMotion(_:)": "a transform drag's packet for the old tree",
         "holdUpdate(_:x:y:now:)": "a gesture moving on the old tree",

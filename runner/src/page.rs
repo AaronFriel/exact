@@ -9,7 +9,8 @@
 //! (`document.hasFocus()`, #114), how the browser loaded the page
 //! (Navigation Timing's `type`), and whether the page is put away in, and
 //! how often it came back from, the back/forward cache (`pagehide` and
-//! `pageshow` with `persisted`). The host observes them; the app reads them
+//! `pageshow` with `persisted`), and the window's name (`window.name`,
+//! fixed at launch: [`crate::time::Launch`]). The host observes them; the app reads them
 //! by field name from one reserved source. The word also carries the
 //! device's GPU tier, which an app reads as `exactViewport().gpuTier`.
 //! @ref LLP 1069.000 D2; LLP 1069.003 D5; LLP 1069.010 D2, D8; LLP 1125 D12; LLP 1139.003 D2
@@ -32,6 +33,7 @@ pub const FIELDS: &[&str] = &[
     "persisted",
     "restores",
     "iframePartition",
+    "name",
 ];
 
 /// `navigationType`'s words, by their wire code (bits 5–6): the web's

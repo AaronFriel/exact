@@ -362,6 +362,9 @@ public final class ExactSession {
     /// Nil until this session's launch route is journaled.
     var seenNavigationEntries: Set<UInt64>?
     var pendingLaunchLocations: [String] = []
+    /// The host's window for a link's `target`, `_blank` or a name (LLP 1030.004 D1); unset, links navigate in place.
+    /// `resume` (Settings…, D5): the window forward as it stands, or opened where it last was.
+    public var openWindow: ((_ location: String, _ window: String, _ resume: Bool) -> Void)?
     var heldModuleEvents: [String] = [] // module events before first pixel (SessionActivation.swift)
     var protocolHandlers: [[String: String]] = ExactEnv.appMetadata["ExactProtocolHandlers"] as? [[String: String]] ?? []
     private var textPressure: DispatchSourceMemoryPressure?
@@ -1073,7 +1076,7 @@ public final class ExactSession {
         guard !fillInFlight, !tickInFlight, !advanceInFlight, !canvasInFlight, noticesInFlight == 0, changesNothing(batch) else { apply(batch); return }
         updateTimerState(batch)
         // Its transactions are reported once (LLP 1079 D3): account for them, at no presentation cost.
-        sampler?.batch(batch.seq, ms: 0); logAlerts(batch.alerts); logJournal(batch.journal)
+        sampler?.batch(batch.seq, ms: 0); logAlerts(batch.alerts); logJournal(batch.journal); relayStore(batch)
         if let q = batch.seq { natives.hatchClock.seq = q.1 } // its commits are the hatches' latest
         timerDue = batch.timerDueMs; timerLanding = batch.landing
         scheduleClock(due: batch.timerDueMs)
@@ -1146,7 +1149,7 @@ public final class ExactSession {
         applying = true
         // What applying it cost, with its transactions, for the next sampled frame (LLP 1079 D3), told to the sampler there was when it began while the session keeps it: a recording the batch starts makes a new one, and one it stops lets a production bake's go.
         let timed = sampler, began = CACurrentMediaTime()
-        defer { if let timed, timed === sampler { timed.batch(batch.seq, ms: outermost ? (CACurrentMediaTime() - began) * 1000 : 0) }; if let q = batch.seq { natives.hatchClock.seq = q.1 }; logAlerts(batch.alerts); logJournal(batch.journal) }
+        defer { if let timed, timed === sampler { timed.batch(batch.seq, ms: outermost ? (CACurrentMediaTime() - began) * 1000 : 0) }; if let q = batch.seq { natives.hatchClock.seq = q.1 }; logAlerts(batch.alerts); logJournal(batch.journal); relayStore(batch) }
         defer { if outermost { recordFrameHealthApply(batch, began: began) } }
         if batch.facts { app.scheduleStatus() } // the app's own `setMode` or `setRootFontSize` (LLP 1122 D4)
         if let must = batch.mustFinish { finishHold.moved(must) }

@@ -58,6 +58,10 @@ pub struct Store {
     /// Device topics the answer being made watches (`native.watch`, LLP
     /// 1016.002): taken by the runner after each answer.
     topics: std::cell::RefCell<Vec<String>>,
+    /// Topics the app's durable writes announced (`sqlite:<path>`,
+    /// `app:/<path>`, LLP 1030.004 D2): the host takes them and tells the
+    /// app's other sessions, never this one.
+    announced: std::cell::RefCell<Vec<String>>,
     /// Socket operations the mutation being answered, or the mapper of the
     /// frame being parsed, staged, by the index of the resource that owns
     /// each socket (LLP 1016.000 D7): taken by the runner after each such
@@ -303,6 +307,7 @@ impl Store {
             reads: std::cell::Cell::new(0),
             entropy: std::cell::Cell::new(0),
             topics: Default::default(),
+            announced: Default::default(),
             sockets: Vec::new(),
             answer_sockets: Vec::new(),
             socket_buffered: Vec::new(),
@@ -767,6 +772,19 @@ impl Store {
     /// The topics watched since the last take.
     pub fn take_topics(&self) -> Vec<String> {
         std::mem::take(&mut self.topics.borrow_mut())
+    }
+
+    /// A durable write changed what `topic` names (LLP 1030.004 D2).
+    pub fn announce_topic(&self, topic: &str) {
+        let mut announced = self.announced.borrow_mut();
+        if !announced.iter().any(|t| t == topic) {
+            announced.push(topic.to_owned());
+        }
+    }
+
+    /// The topics announced since the last take.
+    pub fn take_announced(&self) -> Vec<String> {
+        std::mem::take(&mut self.announced.borrow_mut())
     }
 
     /// How many device-state observations so far, including secret reads.

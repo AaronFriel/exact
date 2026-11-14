@@ -1010,6 +1010,18 @@ pub(crate) fn bool_words(prop: PropId) -> Option<(&'static str, &'static str)> {
         _ => None,
     }
 }
+/// Whether a literal `target` is HTML's (empty, or `_blank`, `_self`,
+/// `_parent`, `_top`, matched ASCII case-insensitively) or a name an author
+/// may give a window: not starting with `_`, and not `window-<n>`.
+fn target_literal(s: &str) -> bool {
+    if let Some(rest) = s.strip_prefix('_') {
+        return ["blank", "self", "parent", "top"]
+            .iter()
+            .any(|k| rest.eq_ignore_ascii_case(k));
+    }
+    !s.strip_prefix("window-")
+        .is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+}
 /// A prop attribute's value by the prop's type: text for most, a bool for
 /// `disabled`, a whole number for `aria-level`, either for [`bool_words`].
 pub(crate) fn check_prop_value(
@@ -1029,16 +1041,19 @@ pub(crate) fn check_prop_value(
     {
         return Ok(());
     }
-    // An app's browsing contexts are its window and new ones: `_parent` and
-    // `_top` name frames an app does not have, a name one it cannot open.
-    if prop == PropId::Target
-        && matches!(value, Expr::Str(s, _) if !matches!(s.as_str(), "_blank" | "_self"))
-    {
-        return err(
-            "lower-attr-value",
-            "`target` takes \"_blank\" or \"_self\"",
-            span,
-        );
+    // @ref LLP 1030.004 D1 — HTML's keywords, in any case, or a window's
+    // name. `window-<n>` is the agent's label for an unnamed window.
+    if let (PropId::Target, Expr::Str(s, _)) = (prop, value) {
+        if !target_literal(s) {
+            return err(
+                "lower-attr-value",
+                format!(
+                    "`target` accepts {}; given \"{s}\"",
+                    vocab::accepts(prop).unwrap()
+                ),
+                span,
+            );
+        }
     }
     if prop == PropId::StatusBarStyle
         && matches!(value, Expr::Str(s, _) if !matches!(s.as_str(), "light-content" | "dark-content" | "auto"))

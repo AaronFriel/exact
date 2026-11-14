@@ -500,6 +500,9 @@ typedef void (*ExactAppCallFn)(void *ctx, const uint8_t *body, size_t len, void 
 void exact_set_app_module(ExactRuntime rt, ExactAppLaterFn later, ExactAppCallFn call, void *ctx);
 void exact_app_answer(void *slot, uint32_t status, const uint8_t *bytes, size_t len);
 void exact_app_changed(ExactRuntime rt, const uint8_t *topic, size_t len);
+/* Another session of the app announced a topic after a durable write
+ * (LLP 1030.004 D2); this session's watching answers are asked again. */
+void exact_peer_changed(ExactRuntime rt, const uint8_t *topic, size_t len);
 void exact_app_reply(void *reply, uint32_t status, const uint8_t *bytes, size_t len);
 
 /* A document the app kept was forgotten by the app (LLP 1069.010.000 D5):
@@ -604,6 +607,9 @@ void exact_module_invoke(ExactRuntime rt, size_t len, ExactInvokeReply reply, vo
  * authored Back control under a root with no `navigate` handler: the
  * router's `back` as a commit of its own. A batch. */
 uint32_t exact_host_back(ExactRuntime rt, uint64_t id, double now_ms);
+/* LLP 1030.004 D2: the UTF-8 location in exact_in as a rooted window's only
+ * visit, one commit. A batch. */
+uint32_t exact_host_root(ExactRuntime rt, size_t len, double now_ms);
 /* The runner's own go to the UTF-8 location in exact_in, a batch. */
 uint32_t exact_host_go(ExactRuntime rt, size_t len, double now_ms);
 /* Native Forward at the navigation root, a batch. */
@@ -834,6 +840,10 @@ uint32_t exact_set_launch_time(ExactRuntime rt, double epoch_at_zero, double utc
  * seed, then optionally NUL formatLocale), for the next boot or candidate; the running runner is not told.
  * Returns zero when accepted, otherwise an error batch length; keeps the last valid fact. */
 uint32_t exact_set_launch_place(ExactRuntime rt, size_t len);
+/* LLP 1030.004 D2: the window's name (UTF-8 in exact_in), which the page's
+ * `name` reads, and whether its router launches rooted (`rooted` nonzero),
+ * for every boot from here. Not a batch. */
+uint32_t exact_set_launch_window(ExactRuntime rt, size_t len, uint32_t rooted);
 /* Beside the date: the locale and IANA time zone, as locale NUL timeZone input,
  * then optionally NUL seed NUL formatLocale. */
 uint32_t exact_set_place(ExactRuntime rt, size_t len);

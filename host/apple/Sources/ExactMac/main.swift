@@ -228,7 +228,11 @@ final class ExactWindow: NSWindow {
 /// window shows no document until one lands in it — and the windows share one
 /// `tabbingIdentifier`, so AppKit's window tabs come with them.
 final class DocumentWindow: NSObject, NSWindowDelegate {
+    /// The agent's label: the window's name (`main`, or a link's `target`),
+    /// or `window-<n>` for one that has none (LLP 1030.004 D3).
     let label: String
+    /// Opened at a route by its name: the route alone (LLP 1030.004 D2).
+    let rooted: Bool
     let session: ExactSession
     let view: ExactView
     let window: NSWindow
@@ -249,9 +253,11 @@ final class DocumentWindow: NSObject, NSWindowDelegate {
     let footprintBefore = footprint()
     private var stamped = false
 
-    init(label: String, first: Bool) {
+    init(label: String, first: Bool, rooted: Bool = false) {
         self.label = label
+        self.rooted = rooted
         session = exact.makeSession(delegate: adapter, label: label)
+        session.openWindow = { location, target, resume in openTarget(location, target, resume: resume) }
         // Each document's window is its session's own; the process is several
         // sessions', so none owns it (LLP 1075.003.000.001 §2.1.1).
         session.hatchesOwnWindow = true
@@ -469,7 +475,7 @@ final class DocumentWindow: NSObject, NSWindowDelegate {
     /// What the agent's `state` says of this window (LLP 1069.010).
     var observed: [String: Any] {
         var row: [String: Any] = [
-            "session": label, "title": window.title, "document": document ?? NSNull(),
+            "session": label, "name": name, "location": session.location ?? NSNull(), "rooted": rooted, "title": window.title, "document": document ?? NSNull(),
             "edited": window.isDocumentEdited, "representedURL": window.representedURL?.path ?? NSNull(),
             "key": window.isKeyWindow, "visible": window.isVisible, "tabs":window.tabbedWindows?.count ?? 1,
             "fullScreen": window.styleMask.contains(.fullScreen), "opacity": Double(window.alphaValue),
@@ -481,14 +487,19 @@ final class DocumentWindow: NSObject, NSWindowDelegate {
         return row
     }
 
-    /// Whether a close puts this window away rather than closing it: the
-    /// app keeps running without it, or its status item is placed (LLP
-    /// 1133.025 D4).
-    var keepsWindow: Bool { ExactDocuments.keepsWindow(only: windows.count == 1, placesStatusItems: session.placesStatusItems) }
+    /// Whether a close puts this window away rather than closing it: it is
+    /// `main`, and the app keeps running without it or its status item is
+    /// placed (LLP 1133.025 D4, LLP 1030.004 D3).
+    var keepsWindow: Bool { ExactDocuments.keepsWindow(main: label == "main", placesStatusItems: session.placesStatusItems) }
+
+    /// The window's name, as the page's `name` reads it: empty for one
+    /// opened without a name (LLP 1030.004 D2).
+    var name: String { label.hasPrefix("window-") ? "" : label }
 
     /// The red button, File ▸ Close Window and ⌘W ask the app first
-    /// (`beforeunload`, studio diary R17); a window it keeps stays. The one
-    /// window of an app that keeps running is hidden instead (LLP 1069.010 D8).
+    /// (`beforeunload`, studio diary R17); a window it keeps stays. The
+    /// `main` window of an app that keeps running is hidden instead (LLP
+    /// 1069.010 D8).
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         if !closing, ExactDocuments.hidesOnClose(window, only: true, keepsRunning: keepsWindow) { return false }
         return closing || session.beforeUnload()
@@ -506,6 +517,7 @@ final class DocumentWindow: NSObject, NSWindowDelegate {
     /// its views, its label on the carrier.
     func windowWillClose(_ notification: Notification) {
         Agent.route(label, nil)
+        if rooted, let location = session.location { lastLocation[label] = location }
         PageFacts.closed(window)
         // After AppKit has finished closing the window this holds.
         DispatchQueue.main.async { [self] in
@@ -539,6 +551,9 @@ var windows = [firstWindow]
 /// Windows closed whose sessions wait for the quit (`windowWillClose`).
 var closedForQuit: [DocumentWindow] = []
 var windowCount = 1
+/// Where each rooted window that closed last stood, by name: Settings…
+/// reopens there (LLP 1030.004 D5).
+var lastLocation: [String: String] = [:]
 let session = firstWindow.session
 let view = firstWindow.view
 let window = firstWindow.window
@@ -572,12 +587,23 @@ func frontWindow() -> DocumentWindow? {
 
 /// A window of its own (LLP 1069.010 D4): a new session, booted at the
 /// window's size from the plan the first one runs, then shown beside the
-/// window in front — or as a tab of it when its tab bar is showing.
+/// window in front — or as a tab of it when its tab bar is showing. A
+/// window opened by a link's `target` boots at the link's `location`
+/// (LLP 1030.004): one with a name is rooted there, except `main`, which
+/// is the whole app, and keeps its frame under that name; `_blank` and
+/// File ▸ New Window have none.
 @discardableResult
-func openWindow(asTab: Bool = false) -> DocumentWindow {
-    windowCount += 1
+func openWindow(asTab: Bool = false, named: String? = nil, at location: String? = nil) -> DocumentWindow {
     let beside = frontWindow()
-    let w = DocumentWindow(label: "window-\(windowCount)", first: false)
+    let label = named ?? { windowCount += 1; return "window-\(windowCount)" }()
+    let w = DocumentWindow(label: label, first: false, rooted: named != nil && named != "main")
+    w.session.launchWindow(name: w.name, at: location, rooted: w.rooted)
+    if named == "settings" {
+        // Apple's Settings window: no minimize, no zoom, never a tab (LLP 1030.004 D5).
+        w.window.styleMask.remove(.miniaturizable)
+        w.window.standardWindowButton(.zoomButton)?.isEnabled = false
+        w.window.tabbingMode = .disallowed
+    }
     let size = w.window.contentLayoutRect.size
     if let path = ExactEnv.environment["EXACT_PLAN"], !ExactDevelopmentPlan(path).hasModule,
        let bytes = FileManager.default.contents(atPath: path) {
@@ -589,7 +615,11 @@ func openWindow(asTab: Bool = false) -> DocumentWindow {
     w.coverChrome()
     windows.append(w)
     Agent.route(w.label, w.session)
-    if let beside {
+    // A named window is where the person left it, as `main` is.
+    let frame = scripted || named == nil ? nil : (ExactEnv.appMetadata["CFBundleIdentifier"] as? String).map { $0 + "." + label }
+    if let frame, w.window.setFrameUsingName(frame) {
+        w.window.setFrameAutosaveName(frame)
+    } else if let beside {
         if asTab || beside.window.tabGroup?.isTabBarVisible == true {
             beside.window.addTabbedWindow(w.window, ordered: .above)
         } else {
@@ -598,8 +628,28 @@ func openWindow(asTab: Bool = false) -> DocumentWindow {
     } else {
         w.window.center()
     }
+    if let frame { w.window.setFrameAutosaveName(frame) }
     w.front()
     return w
+}
+
+/// A link to one of the app's paths whose `target` is `_blank` or a name
+/// (LLP 1030.004 D1): `_blank` opens a window each time; the window of that
+/// name comes forward, navigated to `location` when it shows another (a
+/// rooted window's root replaced, after its `beforeunload`); none open, one
+/// of that name opens there. `resume` (Settings…, D5) brings the window
+/// forward as it stands, or opens it where it last stood.
+func openTarget(_ location: String, _ target: String, resume: Bool = false) {
+    guard target != "_blank" else { openWindow(at: location); return }
+    guard let open = windows.first(where: { $0.label == target && !$0.closing }) else {
+        openWindow(named: target, at: resume ? lastLocation[target] ?? location : location)
+        return
+    }
+    if !resume, !open.session.shows(location) {
+        if !open.rooted { open.session.navigate(location) }
+        else if open.session.beforeUnload() { open.session.reroot(location) }
+    }
+    open.front()
 }
 
 /// Every route in ends here (LLP 1033 D3; the router `ExactDocuments.route`
@@ -692,10 +742,18 @@ final class Delegate: NSObject, NSApplicationDelegate {
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         // Hidden by `keepRunning`, by a close while a status item is placed,
         // or by a launch with no window (LLP 1133.025 D4, D6).
-        if !flag, ExactDocuments.launchMode != "navigate-new",
-           let hidden = windows.first(where: { !$0.window.isVisible && !$0.window.isMiniaturized }) {
-            hidden.front()
-            return false
+        // `main` first, as it was; closed (an app that does not keep
+        // running, another window still open), booted again at the start
+        // location (LLP 1030.004 D3).
+        if !flag, ExactDocuments.launchMode != "navigate-new" {
+            let away = { (w: DocumentWindow) in !w.window.isVisible && !w.window.isMiniaturized }
+            if let main = windows.first(where: { $0.label == "main" && !$0.closing }) {
+                if away(main) { main.front(); return false }
+            } else if !windows.isEmpty {
+                openWindow(named: "main")
+                return false
+            }
+            if let hidden = windows.first(where: away) { hidden.front(); return false }
         }
         guard !flag, windows.isEmpty, ExactDocuments.launchMode == "navigate-new" else { return true }
         openWindow()

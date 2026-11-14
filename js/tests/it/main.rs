@@ -47,6 +47,7 @@ mod storage;
 mod storage_documents;
 mod superseded;
 mod timers;
+mod topics;
 mod turn_budget;
 mod upload;
 mod waiters;
