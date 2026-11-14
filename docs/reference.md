@@ -4354,36 +4354,42 @@ A data crate answers the view's sources in Rust instead of `app.ts`: an app's
 | `app_id()` | The app's identity, which names its storage: `com.example.my-app-3f9a2c` (`exact new` writes the name and six random hex digits), or for a game `com.exact.<Game::ID>` unless its app.json names one. A source that names none takes app.json's `app.id` in the app's build, so its storage (`app:/data`, kept answers, `persist` states, an agent drive's `--storage`) is the app's; one that names its own keeps it, so write the same id as app.json or leave it out. |
 | `grants()` | One grant per line, the lines `app.ts`'s `grants` takes (`net.fetch …`, `sqlite.open …`, `fs.read …`). |
 
-An app outside this checkout that answers in Rust has its own Cargo workspace beside app.json (LLP 1153
-D1.4). `exact new <path> --rust` writes one: `data/`, whose type answers the starter's source (the view's
-shapes are generated into it by `contract rust`), and the host crates `apple/` and `web/`, shaped as
-[Sparkline](../apps/sparkline)'s are, with a resolved `Cargo.lock`. Another host's crate (`linux/`) is
-copied from Sparkline. To give an existing app a data crate instead:
+An app outside this checkout names its data crate in app.json (LLP 1153.003 D2):
 
-1. Run a native verb once (`bun exact.mjs ios --no-install`), which writes the generated workspace to
-   `.exact/shells/`, then copy it up: `cp -R .exact/shells/. . && rm -rf .exact/shells .stamp.json`.
-2. Write `data/` and replace the copied `apple/` and `web/` crates with Sparkline's: each `Cargo.toml`,
-   `build.rs` and `src/lib.rs`, and `web/src/bin/sparkline-dev.rs` (the dev loop's driver, renamed with the
-   crate's `[[bin]]`), not the TypeScript ones the shells hold. Rename `sparkline` in them, and
-   write each path into Exact as `<exact2>/…` (`contract` as `<exact2>/contract/cli` too), and each
-   `build.rs`'s `../../../Cargo.lock` as `../Cargo.lock`. An app with an update store
-   (`deploy.store.ios` or `deploy.store.macos` other than `"0"`) adds `exact-apple-update = { path =
-   "<exact2>/host/apple-update" }` to `apple/`'s dependencies, which Sparkline's lacks. Add `"data"` to
-   the root `Cargo.toml`'s `members`, and delete `app.ts`.
-3. Run `bun exact.mjs update`, which resolves `<exact2>` and points `exact-*` crates at this checkout,
-   then `bun exact.mjs lock`.
+```json
+"rust": { "data": { "crate": "field-log-data", "type": "field_log_data::FieldLog" } }
+```
 
-A build script binds the source before asking its grants (`let source = my_app_data::MyApp::default();
-let grants = source.grants();`): `my_app_data::MyApp::default().grants()` borrows a temporary (E0716).
-The web build copies the source `web/build.rs` passes to `contract::bake(plan, …)` into a module of its
-own, where build.rs's `use`s and locals are not: write it as a path from the data crate
-(`my_app_data::MyApp`), or its `::default()` or `::new(…)` whose arguments are literals
-(`my_app_data::MyApp::new(true)`), across lines as rustfmt writes it or not: what it copies is the source
-the app runs, so a constructor for the bake alone is not one. For a mixed app, the build
-copies the third argument to `exact_js_bake::build_mixed_with`, a reference to the same kind of source.
-TypeScript answers the other sources. A source built from anything else (a local, a path read at build
-time) is exported by a crate of the app's own instead, named in app.json's `rust.module.package`
-(Update Lab's `logic/`), which supplies the module instead of a generated one.
+`source`, optional, is what every host and the web's module run: the type itself, its `::default()` (the
+default) or its `::new(…)` with literal arguments (`"field_log_data::FieldLog::new(true)"`). A source
+built from anything else (a local, a path read at build time) is exported by a crate of the app's own,
+named in app.json's `rust.module.package` (Update Lab's `logic/`), which supplies the module instead.
+
+The crate sits beside app.json and joins the workspace exact2 generates: its `Cargo.toml` sets
+`package.workspace = "../.exact/shells"` and takes exact2's crates as workspace dependencies
+(`exact-runner.workspace = true`; `contract.workspace = true` for a build script). The host crates are
+generated under `.exact/shells/` and link it; without `app.ts` they link no JavaScript engine. With
+`app.ts` beside it the two compose: Rust answers the sources the crate lists in `pub const RUST_SOURCES:
+&[&str]`, TypeScript the rest. `exact new <path> --rust` writes such an app: `data/`, whose type answers
+the starter's source (the view's shapes are generated into it by `contract rust`), and `rust.data`.
+
+`cargo test`, `cargo clippy` and rust-analyzer work in `data/` once a verb has written `.exact/shells/`
+(`bun exact.mjs lock` writes it): exact2 also writes `rust-toolchain.toml` and `.cargo/config.toml`
+beside app.json, listed in `.gitignore`, so they use exact2's compiler and the app's `target/`. The
+workspace resolves against exact2's `Cargo.lock` until the crate needs a version that lock lacks; a build
+then stops and says to run `bun exact.mjs lock`, which captures `Cargo.lock` beside app.json. Commit it.
+
+An app that `exact new --rust` made with `apple/` and `web/` crates and a root `Cargo.toml`, or one that
+copied the generated workspace up only for a data or GPU crate, moves by hand:
+
+1. Delete the root `Cargo.toml`, `Cargo.lock`, `.cargo/`, `rust-toolchain.toml` and the host crates
+   (`apple/`, `web/`, and any `linux/`, `android/` or `windows/`).
+2. In each remaining crate's `Cargo.toml`, set `package.workspace = "../.exact/shells"` (a GPU crate:
+   `"../.exact/gpu"`), and write exact2's crates as workspace dependencies: `exact-runner.workspace =
+   true`, `contract.workspace = true`; a GPU crate's `exact-gpu`, `wasm-bindgen`, `wasm-bindgen-futures`
+   and `web-sys` likewise (`docs/recipes/gpu-module.md`).
+3. Add `rust.data` to app.json, naming the source the deleted build scripts baked.
+4. Run `bun exact.mjs lock`.
 
 A source that wraps another implements `exact_runner::DataSourceWrapper`.
 Every method is required, so adding a data-source method cannot silently use
@@ -4399,6 +4405,30 @@ generates the module bindings. For a build script,
 pass to `contract::rust`; the names are compiler metadata, outside the binary
 plan. Both map scoped names such as `Point__exact` to `PointExact`.
 `Value::Number`, `Value::str`, `Value::Bool` and `Value::list` are the rest.
+
+### An authored workspace
+
+An app whose host crate does what no generated one does (its own `build.rs` or render entry, or a
+dependency of the host crate itself) writes its whole Cargo workspace (LLP 1153.003 D3). A `Cargo.toml`
+beside app.json makes every crate in it the app's: exact2 generates no host crate, and checks the
+workspace's `[patch.crates-io]` and toolchain against its own. Nothing converts one shape into the
+other. To start one, copy the generated workspaces up and rebase what pointed into them:
+
+1. Run a native verb once (`bun exact.mjs mac`): it writes `.exact/shells/`, and `.exact/gpu/` for a
+   GPU crate.
+2. Copy the host's up: `cp -R .exact/shells/. . && rm -rf module .stamp.json`. The web build makes its
+   own Rust module for an authored workspace.
+3. The copied files are two directories shallower than they were, so each of their paths drops two
+   `../`. Run this on the root `Cargo.toml` and each copied host crate's `Cargo.toml` and `build.rs`, not
+   on your own crates: `sed -i.bak 's#"\.\./\.\./#"#g' Cargo.toml web/Cargo.toml web/build.rs apple/Cargo.toml
+   apple/build.rs` (and `linux/`, `android/`, `windows/` when copied), then delete the `.bak` files.
+4. In the root `Cargo.toml`, `members` lists `"data"` and `"gpu"`, not `"module"`. For a GPU crate, add
+   the lines under `[workspace.dependencies]` in `.exact/gpu/Cargo.toml` to the root's, each path
+   dropping two `../` as in step 3.
+5. In each of your own crates, `package.workspace` becomes `".."`.
+6. Delete `.exact/` and `Cargo.gpu.lock`, and remove `/rust-toolchain.toml` and `/.cargo/config.toml`
+   from `.gitignore`: the copied toolchain and configuration are the workspace's now, and committed.
+7. Run `bun exact.mjs lock`, then build as before.
 
 ### A two-way socket
 

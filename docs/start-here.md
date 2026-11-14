@@ -187,7 +187,8 @@ For EAS Build, use [iOS](recipes/eas-ios.md) or [Android](recipes/eas-android.md
 |brand colours, light and dark, icon tokens|`theme`, `forma`|
 |an icon: in a button, a tab, beside a label (a symbol, never a character such as ▦ ☏ ★ or an emoji)|`symbols`|
 |a module in Swift that `app.ts` asks (a resource that reads `native.available` or calls `native.call` keeps its answer across launches); a value a launch gives is a setting, not a module (`contract vocab env`)|`native-module`|
-|a canvas drawn in Rust on the GPU (a `Surface`); Rust of the app's own, in its own Cargo workspace|`gpu-module`|
+|a canvas drawn in Rust on the GPU (a `Surface`): a crate beside app.json, in a workspace exact2 generates|`gpu-module`|
+|data answered in Rust instead of `app.ts` (`exact new --rust`, app.json's `rust.data`)|`bun exact.mjs docs Rust data sources`|
 |app.json keys, `assets/`, the `modules` folder|`app-json`|
 |labels in Arabic, Hebrew, Persian or Urdu, laid out right to left; a second language|`rtl`|
 |an action Siri, Shortcuts or a browser's agent calls (a `tool` line and its face)|`tools`|
