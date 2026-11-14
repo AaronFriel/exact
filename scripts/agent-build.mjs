@@ -70,7 +70,10 @@ export function nativeBuild(host, app, { sample = false, checked = null, launch 
 
 /** The receipt of the build a drive of `app` on `host` (`ios`, else macOS) launches, or undefined without one. */
 export function receiptPath(host, app, { sample = false } = {}) {
-  if (host === 'ios') return [resolve(appleArtifacts(app, { destination: 'ios-simulator', host: sample }).bundle, 'receipt.json')].find(existsSync);
+  if (host === 'ios') {
+    const paths = appleArtifacts(app, { destination: 'ios-simulator', host: sample });
+    return [resolve(paths.products, 'receipt.json'), resolve(paths.bundle, 'receipt.json')].find(existsSync);
+  }
   return [resolve(appleArtifacts(app, { host: sample }).products, 'receipt.json'), resolve(appleArtifacts(app, { host: sample }).bundle, 'Contents/Resources/receipt.json')].find(existsSync);
 }
 

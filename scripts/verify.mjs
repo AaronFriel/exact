@@ -1016,6 +1016,7 @@ async function deviceMain(argv, emitJSON, declined, ended) {
     const { privateWebBuild, privateNativeBuild } = await import('./web-build.mjs');
     const build = (host === 'web' ? privateWebBuild : privateNativeBuild)(app, 'verify');
     Object.assign(process.env, build.env);
+    if (host !== 'web') await build.seed(host);
     process.once('exit', build.close);
   }
   if (host === 'android') process.env.EXACT_ANDROID_READER = '1'; // the APK, as `test android` drives it

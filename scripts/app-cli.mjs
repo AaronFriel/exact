@@ -520,6 +520,7 @@ if (verb === 'contract') {
     const { privateWebBuild, privateNativeBuild } = await import(resolve(exact2, 'scripts/web-build.mjs'));
     const build = (host === 'web' ? privateWebBuild : privateNativeBuild)(resolveApp(dir), verb);
     Object.assign(process.env, build.env);
+    if (host !== 'web') await build.seed(host);
     process.once('exit', build.close);
   }
   if (drivesWeb || drivesNative) {

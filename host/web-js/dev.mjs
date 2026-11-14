@@ -22,7 +22,7 @@ import { builtSettings } from '../../js/bake/src/__exact_env.mjs';
 import { alsoOnIPv6Loopback, appManifestDigest, appSources, buildFileCards, listenDelay, replaceBuild, saveTrace, sendStaticBody, watchLauncher, webContentType } from '../web/serve.mjs';
 import { generationFile, generationPath, servedFile } from '../web/generations.mjs';
 import { besidePattern } from '../web/beside.mjs';
-import { cargoContractReads, contractReadReceipt } from '../../scripts/web-build.mjs';
+import { cargoContractReads, changedContractReads, contractReadReceipt } from '../../scripts/web-build.mjs';
 import { webSourceRoots } from '../web/build.mjs';
 import { localInstaller } from '../web/local-install.mjs';
 import { designPath, frameOnlyByTool, tamberServer } from '../../scripts/tamber-server.mjs';
@@ -163,16 +163,21 @@ function build(app, dist, keep = () => false, compiler = null, superseded = null
       const types = /^app\.contract\.d\.ts: .*$/m.exec(log)?.[0];
       if (types) console.log(types);
       if (code !== 0) { rmSync(stage, { recursive: true, force: true }); return done({ packages, error: log.split('\n').filter((l) => l.trim() && !/^\s*(Compiling|Finished|Running|warning)/.test(l) && !compilerWarnings(l).length).slice(-12).join('\n') || `build exited ${code}` }); }
+      let cargo;
+      try { cargo = cargoContractReads(webSourceRoots(app, true), began); }
+      catch (error) { rmSync(stage, { recursive: true, force: true }); return done({ packages, error: error.message }); }
+      packages.sources = [...new Set([...packages.sources, ...Object.keys(cargo)])];
+      lastSources = packages.sources;
+      if (changedContractReads(cargo).length) return setAside();
       const logic = readFileSync(resolve(stage, '.exact-dev-logic.json'), 'utf8').trim();
       const design = devDesign(stage), designSource = mapDesignSource(app, stage);
       if (keep(design, logic)) {
         return setImmediate(() => {
-          if (moved()) return setAside();
+          if (moved() || changedContractReads(cargo).length) return setAside();
           rmSync(stage, { recursive: true, force: true }); done({ error: null, logic, packages, design, designSource, kept: true, warnings: compilerWarnings(log) });
         });
       }
       try {
-        const cargo = cargoContractReads(webSourceRoots(app, true));
         // `sources` as host/web/build.mjs records it: null when a file came or went while it built.
         const after = appSources(app.dir, resolve(dist)).digest;
         writeFileSync(resolve(stage, '.exact-build.json'), JSON.stringify({ exactBuild: 1, target: 'js', app: { id: app.id, name: app.displayName },
@@ -181,7 +186,7 @@ function build(app, dist, keep = () => false, compiler = null, superseded = null
       } catch (error) { rmSync(stage, { recursive: true, force: true }); return done({ packages, error: error.message }); }
       // Once more after the watchers' events queued meanwhile are taken.
       setImmediate(() => {
-        if (moved()) return setAside();
+        if (moved() || changedContractReads(cargo).length) return setAside();
         replaceBuild(stage, dist);
         done({ error: null, logic, packages, design, designSource, warnings: compilerWarnings(log) });
       });

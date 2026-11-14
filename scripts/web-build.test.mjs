@@ -1,11 +1,13 @@
 import { expect, mock, test } from 'bun:test';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { captureWebProducts, cargoContractReads, changedContractReads, contractReadReceipt, loopWebDist, privateNativeBuild, privateWebBuild } from './web-build.mjs';
 import { appleArtifacts } from '../host/apple/build.mjs';
+import { buildFirst, nativeBuild, planOverride } from './agent-build.mjs';
+import { linkedBakeDir } from './linked-plan.mjs';
 import { resolveApp } from './app.mjs';
 import { webChanges, webInputDigests } from './agent-launch.mjs';
 import { replaceBuild } from '../host/web/serve.mjs';
@@ -149,6 +151,81 @@ test('native verification owns its captures, products, bundle and receipt throug
   }
 });
 
+test.each(['ios', 'macos'])('repeated private %s drives reuse a validated build', async host => {
+  const dir = mkdtempSync(resolve(tmpdir(), 'exact-native-reuse-')), saved = { ...process.env };
+  const sha256 = text => createHash('sha256').update(text).digest('hex');
+  let builds = 0, bakes = 0, signed;
+  const module = { appId: 'test.reuse', abi: 1, grants: '', surfaces: {}, bytecodeVersion: 96 };
+  const outputs = [];
+  try {
+    writeFileSync(resolve(dir, 'app.json'), JSON.stringify({ name: 'reuse', app: { id: 'test.reuse', name: 'Reuse' } }));
+    writeFileSync(resolve(dir, 'app.contract'), 'component App\n  text "Ready"\n');
+    const source = resolve(dir, 'native.swift'); writeFileSync(source, 'native source');
+    const app = resolveApp(dir);
+    const drive = async (plan = false) => {
+      const owned = privateNativeBuild(app, 'agent'); outputs.push(owned);
+      Object.assign(process.env, owned.env);
+      await owned.seed?.(host);
+      const code = await buildFirst(host, app, { say() {}, wait() {}, bake: async (app, into) => {
+        bakes++; mkdirSync(into, { recursive: true });
+        for (const [file, text] of [['app.plan', 'new plan'], ['app.hbc', 'bytecode'], ['app.module.json', JSON.stringify(module)]]) writeFileSync(resolve(into, file), text);
+        return { code: 0, output: '' };
+      }, build: async () => {
+        builds++;
+        const paths = appleArtifacts(app, { destination: host === 'ios' ? 'ios-simulator' : 'macos' });
+        const bin = host === 'ios' ? resolve(paths.bundle, paths.executable) : resolve(paths.bundle, 'Contents/MacOS', paths.executable);
+        mkdirSync(resolve(bin, '..'), { recursive: true }); writeFileSync(bin, 'executable');
+        const generated = resolve(owned.env.EXACT_BAKE_OUTPUT, 'module.bin');
+        mkdirSync(resolve(generated, '..'), { recursive: true }); writeFileSync(generated, 'captured input');
+        const linked = linkedBakeDir(process.env, host, paths.target);
+        mkdirSync(linked, { recursive: true });
+        writeFileSync(resolve(linked, 'app.plan'), 'original plan'); writeFileSync(resolve(linked, 'app.module.json'), JSON.stringify(module));
+        const receipt = { target: paths.target, started: new Date(Date.now() + 60_000).toISOString(), build: { trust: 'development',
+          compat: { inputs: { platform: host, linked: ['router', 'io', 'markdown'], rustMode: 'off' }, embedded: { plan: { sha256: sha256('original plan') } } }, graph: { uses: [] },
+          binary: { sha256: 'binary', inputs: [source, generated].map(path => ({ path, name: path, sha256: sha256(readFileSync(path)) })), missing: [], directories: [] } } };
+        signed = JSON.stringify(receipt);
+        for (const path of [resolve(paths.products, 'receipt.json'), host === 'ios' ? resolve(paths.bundle, 'receipt.json') : resolve(paths.bundle, 'Contents/Resources/receipt.json')]) {
+          mkdirSync(resolve(path, '..'), { recursive: true }); writeFileSync(path, JSON.stringify(receipt));
+        }
+        return { code: 0, output: '' };
+      } });
+      expect(code).toBe(0);
+      expect(nativeBuild(host, app).missing).not.toBe(true);
+      const state = nativeBuild(host, app);
+      if (plan) expect(planOverride(host, app, state)).not.toBeNull();
+      else expect(state.changed).toEqual([]);
+      const paths = appleArtifacts(app, { destination: host === 'ios' ? 'ios-simulator' : 'macos' });
+      expect(readFileSync(host === 'ios' ? resolve(paths.bundle, 'receipt.json') : resolve(paths.bundle, 'Contents/Resources/receipt.json'), 'utf8')).toBe(signed);
+      owned.close();
+      expect(existsSync(owned.env.EXACT_APPLE_OUTPUT)).toBe(false);
+    };
+    const identity = createHash('sha256').update(resolve(app.dir)).digest('hex').slice(0, 16);
+    const cache = resolve(app.target, 'native-reuse', identity, host, 'development/current');
+    await drive();
+    const firstArtifact = readFileSync(resolve(cache, 'artifact.json'), 'utf8');
+    await drive();
+    expect(readFileSync(resolve(cache, 'artifact.json'), 'utf8')).toBe(firstArtifact);
+    expect(builds).toBe(1);
+    writeFileSync(resolve(dir, 'app.contract'), 'component App\n  text "Updated"\n');
+    const later = new Date(Date.now() + 120_000); utimesSync(resolve(dir, 'app.contract'), later, later);
+    await drive(true); await drive(true);
+    expect(builds).toBe(1); expect(bakes).toBe(1);
+    utimesSync(resolve(dir, 'app.contract'), 1, 1);
+    writeFileSync(source, 'changed native source');
+    await drive();
+    expect(builds).toBe(2);
+    const artifact = JSON.parse(readFileSync(resolve(cache, 'artifact.json'), 'utf8'));
+    const executable = artifact.files.find(([path, kind]) => kind === 'file' && path.includes('.app/') && !path.endsWith('.json'))[0];
+    writeFileSync(resolve(cache, 'files', executable), 'corrupt cached executable');
+    await drive();
+    expect(builds).toBe(3);
+  } finally {
+    for (const owned of outputs) owned.close();
+    for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];
+    Object.assign(process.env, saved); rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 
 test('Cargo claims use the platform locking implementation on Windows', () => {
   const source = `import {mock} from 'bun:test';
@@ -186,6 +263,23 @@ test.each(['contract', 'cargo'])('a JS loop keeps an unchanged %s read fresh aft
     rmSync(file);
     expect(webChanges(dist, app).all).toContain(file);
   } finally { fallbackRoots = []; rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('Cargo includes changed at the build start or deleted remain uncertain reads', () => {
+  const dir = mkdtempSync(resolve(tmpdir(), 'exact-cargo-build-start-')), file = resolve(dir, 'included.contract');
+  try {
+    writeFileSync(file, 'compiled bytes');
+    const began = Date.now() + 60_000, roots = [{ file }];
+    expect(changedContractReads(cargoContractReads(roots, began))).toEqual([]);
+    utimesSync(file, 1, 1);
+    expect(cargoContractReads(roots, statSync(file).ctimeMs)).toEqual({ [file]: null });
+    writeFileSync(file, 'later bytes'); utimesSync(file, began / 1000, began / 1000);
+    expect(cargoContractReads(roots, began)).toEqual({ [file]: null });
+    expect(changedContractReads(cargoContractReads(roots, began))).toEqual([file]);
+    rmSync(file);
+    expect(cargoContractReads(roots, began)).toEqual({ [file]: null });
+    expect(changedContractReads(cargoContractReads(roots, began))).toEqual([file]);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
 

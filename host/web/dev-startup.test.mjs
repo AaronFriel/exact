@@ -1,7 +1,7 @@
 import { afterEach, expect, test } from 'bun:test';
 import { spawnSync } from 'node:child_process';
 import { EventEmitter } from 'node:events';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { request } from 'node:http';
 import { createServer } from 'node:net';
 import { resolve } from 'node:path';
@@ -324,14 +324,16 @@ test('a frontend claim names its live owner, separates targets, and releases aft
 });
 
 test.each([false, true])('JS receipt recovers from metadata errors and records Cargo reads first seen during build: %s', async firstRead => {
-  const { cargoContractReads, contractReadReceipt } = await import('../../scripts/web-build.mjs');
+  const { cargoContractReads, changedContractReads, contractReadReceipt } = await import('../../scripts/web-build.mjs');
   const { webChanges } = await import('../../scripts/agent-launch.mjs');
   const source = readFileSync(resolve(root, 'host/web-js/dev.mjs'), 'utf8');
   const body = source.slice(source.indexOf('function build('), source.indexOf('\nconst mtimeMs'));
   const dir = mkdtempSync(resolve(root, 'target/dev-receipt-')), dist = resolve(dir, 'dist');
   const file = resolve(dir, 'cargo.contract'), app = { dir, target: resolve(dir, 'target'), name: 'receipt', manifest: {} };
-  let produced = !firstRead, failed = false;
-  const env = { resolve, createHash, rmSync, existsSync, readFileSync, writeFileSync, cargoContractReads, contractReadReceipt,
+  let produced = !firstRead, failed = false, edit = null;
+  const began = Date.now() + 60_000;
+  const env = { resolve, createHash, rmSync, existsSync, readFileSync, writeFileSync, cargoContractReads, changedContractReads, contractReadReceipt,
+    Date: class extends Date { static now() { return began; } },
     root, appSources: () => ({ digest: 'sources' }), installedFileDependencies() {}, designPath: () => null,
     devPackages: () => ({ sources: [], trees: [], shallow: [] }), changedSince: () => false, compilerWarnings: () => [],
     devDesign: () => null, mapDesignSource: () => null, appManifestDigest: () => 'app', buildFileCards: () => ({}), builtSettings: () => ({}),
@@ -344,6 +346,8 @@ test.each([false, true])('JS receipt recovers from metadata errors and records C
       writeFileSync(resolve(stage, '.gen/app.plan.map.json'), JSON.stringify({ sources: [] }));
       writeFileSync(resolve(stage, '.exact-dev-logic.json'), 'logic');
       produced = true;
+      if (edit === 'delete') rmSync(file);
+      else if (edit) { writeFileSync(file, edit); utimesSync(file, began / 1000, began / 1000); }
       const child = Object.assign(new EventEmitter(), { pid: 2 ** 30, stdout: new EventEmitter(), stderr: new EventEmitter() });
       queueMicrotask(() => child.emit('exit', 0)); return child;
     },
@@ -358,6 +362,17 @@ test.each([false, true])('JS receipt recovers from metadata errors and records C
     expect((await build(app, dist)).error).toBe('cargo metadata: invalid manifest');
     expect(readFileSync(resolve(dist, '.exact-build.json'), 'utf8')).toBe(before);
     failed = false;
+    expect((await build(app, dist)).error).toBeNull();
+    for (const change of ['edited during compilation', 'delete']) {
+      edit = change;
+      const result = await build(app, dist);
+      expect(result.superseded).toBe(true);
+      expect(result.packages.sources).toContain(file);
+      expect(readFileSync(resolve(dist, '.exact-build.json'), 'utf8')).toBe(before);
+    }
+    edit = null;
+    writeFileSync(file, 'new Cargo include');
+    utimesSync(file, 1, 1);
     expect((await build(app, dist)).error).toBeNull();
     // Give freshness the roots recorded by the successful build, without another Cargo query.
     const marker = JSON.parse(readFileSync(resolve(dist, '.exact-build.json'))); marker.inputRoots = [{ file }];
