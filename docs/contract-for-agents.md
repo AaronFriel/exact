@@ -6184,7 +6184,7 @@ schema's control-role table says which, per host
 terminal, which draws no colour, nor tvOS or watchOS, which have no column), a
 parameter you set that the host there does not honour is said once, one line
 for each declaration that sets it, naming every host and control
-(`tamber-unreachable: accent-color on macOS switches: NSSwitch draws the
+(`forma-unreachable: accent-color on macOS switches: NSSwitch draws the
 system accent (the first at line 12; LLP 1121 D9)`): the platform's look is
 the answer there, or a control of your own (`appearance="none"`, or a styled
 pressable for a disabled prominent button). It is information, not a
@@ -6199,7 +6199,7 @@ with no such line has no gap on record, which is not a measurement. For each
 target the app ships, a style you set that the host there does not draw at
 all is said once, naming every such target (`style-undrawn: \`mix-blend-mode\`
 is not drawn on ios (app.json \`host.ios\`): …`): the node draws there as if the
-style were unset. It is information, as `tamber-unreachable` is. tvOS reads
+style were unset. It is information, as `forma-unreachable` is. tvOS reads
 iOS's entries; a host that draws a style differently (`differs`) is said by
 `vocab` alone.
 
@@ -6385,7 +6385,7 @@ colour. An entry named like a role (`-exact-secondary-label`, or LLP 1095 D4's
 bare `secondary-label`, or `Canvas`) overrides that role where a row names it.
 Cycles, and a name inside `light-dark()`, are refused (LLP 1095 D4).
 An app with a brand, or modes the person picks, writes its design in
-`app.tamber` beside `app.contract` (or the file `app.json`'s `"tamber"` names)
+`app.forma` beside `app.contract` (or the file `app.json`'s `"forma"` names)
 instead (LLP 1121): a `theme` block of tokens (`surface.card =
 light-dark(#f1f3f5, #16181c)`, written as CSS, dotted names allowed), and an
 `axes` block of app modes (`dark-style = black | dim  under scheme=dark`), each
@@ -6401,7 +6401,7 @@ agent's `prefer mode dark-style=dim` sets it from a drive (the app's own
 `setMode` still wins after it: an app that restores a kept mode at launch
 overrides an earlier `prefer`, so prefer after `clock data`; a dev reload keeps
 the window's mode unless the edit removed it), `layout <id>` shows
-the token beside each row's value, and `bun exact.mjs tamber check | eval --mode
+the token beside each row's value, and `bun exact.mjs forma check | eval --mode
 … | ir | fmt` checks the design, prints its tokens in a mode, writes its IR, or
 puts it in its one layout (`fmt --check` changes nothing). The
 rule: a role if the platform has one, a token if it is the brand. A token one
@@ -6410,7 +6410,7 @@ under media) says so with `scheme=fixed` after its value (`white_100 = #ffffff
 scheme=fixed`), and `lower-colour-one-scheme` leaves it alone; an unmarked one
 is reported once, at its line in the design. `pair=surface.page` after a
 foreground's value names what it is drawn on (a token or a role);
-`contract tamber check` warns when the two fall below 4.5:1 (`tamber-contrast`).
+`contract forma check` warns when the two fall below 4.5:1 (`forma-contrast`).
 The brand's states come from the theme, not a hatch (LLP 1129): `AccentColor =
 accent` is the app's tint, so the keyboard's focus ring is drawn in it (on the web
 a solid 2 px line, which reads on a control filled with the accent); `Highlight`
@@ -6426,12 +6426,12 @@ theme's (`lower-theme-tint`).
 A type token is CSS `font` syntax (`type.body = -exact-body/1.35 "InterVariable"`):
 `font="type.body"` writes only the longhands it names, so the text style's own
 weight applies where it names none, and a size in px is warned of
-(`tamber-type-fixed`: it does not follow the person's text size). A family token
+(`forma-type-fixed`: it does not follow the person's text size). A family token
 is a stack (`family.text = "InterVariable", system-ui`), named by `font-family`.
 The checker validates family stacks in both token kinds even when no row reads
 them. Unsupported generics such as `cursive` are refused at the token's value.
 One that varies by a mode goes on the text, not its container
-(`tamber-inherited-axis`); on the JS target each row it writes is a property
+(`forma-inherited-axis`); on the JS target each row it writes is a property
 per mode (`--x-type-body-size`).
 A component declares what a designer may tweak in a `params` section (LLP 1121
 D15), one param a line: `radius: length = "radius.md"  range="0..40"  step=1
@@ -6439,7 +6439,7 @@ control="slider"  group="Shape"  priority=1  label="Corner radius"`. A param is 
 token the component owns: its default is any token value (a literal, a token, or
 an expression over tokens and the component's other params), and its rows and
 defaults name it `param.radius`; a generated internal token name is refused
-(`tamber-param-unknown`). Every instance shares it. Its full name is the
+(`forma-param-unknown`). Every instance shares it. Its full name is the
 component's declaring file and name, `post.contract#PostButton.radius` (an import
 alias never changes it; moving the file makes it a new param), and
 `PostButton.radius` where no other component has that name (a package's file
@@ -6452,22 +6452,22 @@ applies is that component's (LLP 1139 D3); one in a `style` another
 component applies too, a `keyframes` or a state's value,
 or in what a row computes (a function's argument, a condition, a comparison,
 a callback), or that a child reads otherwise than as a row's value, is refused
-(`tamber-param-scope`). A param no
+(`forma-param-scope`). A param no
 row of its component reads (a state part's row counts: `:active`'s
 `background-color = "param.pressed"`), directly or through another param, is refused
-(`tamber-param-unused`); a ranged length is px (`tamber-range-unit`), or a base
+(`forma-param-unused`); a ranged length is px (`forma-range-unit`), or a base
 name or an expression over one, checked in every platform's column, and its
 default must be inside the range in every mode; `control` follows the kind
 (`color`, `slider`, `stepper`, `token`, `select` with `options="a|b"`, `none`),
 and `priority` is 1 to 3. A design token may not be named `param.…`.
-`contract tamber ir` and the design server's `describe` list them under
-`components`; `contract tamber check` builds an app with params to admit its
+`contract forma ir` and the design server's `describe` list them under
+`components`; `contract forma check` builds an app with params to admit its
 design (a dial only a param reads is read), counts them apart, and charges a
 refusal or warning on one to its default. A view that isn't Contract (a native module's, a Rust canvas
 component) declares its params in the design instead: `component MapCard`, then
 an indented `params` block of lines like a dial's, any kind (`inset: length =
 8px  in 0..24  control=slider  priority=2`). Its identity is the design file
-and the name (`app.tamber#MapCard`); its declaration keeps every param, and
+and the name (`app.forma#MapCard`); its declaration keeps every param, and
 what its default reads, as the code reads them by name; a `when` is not the
 component's (the app's design sets a param per mode).
 The app sets a param's value in its
@@ -6476,12 +6476,12 @@ every instance shares; the design server's `set-param` writes it,
 `unset-param` takes it back to the component's default, and a line naming no
 param of the app is warned of.
 A package can ship a design (LLP 1121 D11): a file named for the last part of
-its `package.json` name (`@exact/reading` → `reading.tamber`) beside its entry
+its `package.json` name (`@exact/reading` → `reading.forma`) beside its entry
 file (what `exports` maps `.` to, else `index.contract`), or the file its
-`package.json` `"tamber"` names inside the package. It starts `tamber reading`
+`package.json` `"forma"` names inside the package. It starts `forma reading`
 and holds one `theme` block of tokens named `reading.…`, which the package's
 views name. An app that uses the package gets them. The app's design sets one
-by its full name (`reading.card = #abcdef` in `app.tamber`), which replaces the
+by its full name (`reading.card = #abcdef` in `app.forma`), which replaces the
 package's, `when` lines and all. A package's design may declare its
 components' params (`component Map` with `params`, named
 `<package>/<file>#Map`, as its Contract components are), whose values the
@@ -6492,15 +6492,15 @@ design overrides one by full name under its `icons`, whole. An icon's SVG path
 is relative to the `assets/` of the root whose file writes it: the app's
 directory for the app's, the package's root for a package's (an icon's, or a
 param default's `icon(svg …)` in its design or its Contract), so a package
-whose `"tamber"` is `theme/palette.tamber` still reads `<package>/assets/`; in v1 it must be a one-colour template
-(`tamber-icon-svg`). It declares no axes, dials, `params` lines or `exports`
-(`tamber-package-block`; its `when` lines name the app's axes), declares only `reading.…` names and none of the
-base names (`tamber-package-name`), and a token in it names only tokens the
+whose `"forma"` is `theme/palette.forma` still reads `<package>/assets/`; in v1 it must be a one-colour template
+(`forma-icon-svg`). It declares no axes, dials, `params` lines or `exports`
+(`forma-package-block`; its `when` lines name the app's axes), declares only `reading.…` names and none of the
+base names (`forma-package-name`), and a token in it names only tokens the
 same file declares, roles, and the base names `space.xs`…`space.xl` and
 `radius.sm`…`radius.full`, which the app's design defines until the base scale
-ships (`tamber-unknown-token`). An app can't use two packages whose names end
+ships (`forma-unknown-token`). An app can't use two packages whose names end
 alike (`@acme/reading` and `@other/reading`) when both ship a design. A
-refusal points at its line in the package's file. `contract tamber
+refusal points at its line in the package's file. `contract forma
 check|eval|ir|gen` and the design server fold the app's design with its
 packages' tokens, as the build does.
 A length token may name a base name bare (`card.pad: length = space.md`) or in
@@ -6542,9 +6542,9 @@ provider is outside the package, and per-platform host entries (no syntax
 for them). A field names its active option with `aria-activedescendant`
 ([combobox recipe](recipes/combobox.md)). Its names are its API: an app line or a Contract row naming a
 name under its namespace that it doesn't define, or a param line naming one
-it lacks, fails the build (`tamber-package-unknown`; the nine base names are
+it lacks, fails the build (`forma-package-unknown`; the nine base names are
 no package's), and its params are named in full, a short name that names
-none too (`tamber-param-short-library`). The in-repo `@exact/actions`'
+none too (`forma-param-short-library`). The in-repo `@exact/actions`'
 `BarItem` and `HeaderButton` are for an app's own authored bar and header (a
 design's, as Bluesky's are); the platform's `tabs` and `header` routes stay
 the platform's, and no library component wraps them. A `BarItem` says its
@@ -6626,22 +6626,22 @@ unchanged. Still paths: `BarItem`'s and `HeaderButton`'s icons, which are their
 caller's `d` (a prop), not the package's.
 Code outside a view names a token by its name too (LLP 1121 D12): a data module
 returns a `ColorToken` (or a `LengthToken`, `TypeToken`, … of its kind:
-`contract types` declares the design's, so an unknown one fails `tsc`), and `bun exact.mjs tamber gen ts|rust|swift|kotlin .` writes bindings into
-`.exact/tamber/` (never committed): `tamber.ts` and `tamber.css` (each token's
-CSS per mode), `tamber.rs` (`pub const SURFACE_CARD: Token<Color>`, and
+`contract types` declares the design's, so an unknown one fails `tsc`), and `bun exact.mjs forma gen ts|rust|swift|kotlin .` writes bindings into
+`.exact/forma/` (never committed): `forma.ts` and `forma.css` (each token's
+CSS per mode), `forma.rs` (`pub const SURFACE_CARD: Token<Color>`, and
 `Token<Length>`, `Token<Number>`, `Token<Type>` for those kinds, which
-`session.tamber().get(SURFACE_CARD, place)` resolves in a running session), or
-`tamber.swift` (`ExactTamberToken.surfaceCard`, for a native view's
-`ExactTamber(view).color(.surfaceCard)`, `.length(_:)`, `.number(_:)` and
+`session.forma().get(SURFACE_CARD, place)` resolves in a running session), or
+`forma.swift` (`ExactFormaToken.surfaceCard`, for a native view's
+`ExactForma(view).color(.surfaceCard)`, `.length(_:)`, `.number(_:)` and
 `.font(_:fallback:)`, a font at the person's text size with Bold Text's step),
-or `TamberTokens.kt` (`TamberColor.SURFACE_CARD`, `TamberLength`,
-`TamberNumber`, for `ExactTamber(view).color(…)` in the app's hatches). A
+or `FormaTokens.kt` (`FormaColor.SURFACE_CARD`, `FormaLength`,
+`FormaNumber`, for `ExactForma(view).color(…)` in the app's hatches). A
 component's param is named by `<Component>.<param>` there (`mapCardInset`,
 `MAP_CARD_INSET`); two names that map alike are refused, naming both. The Apple
-build writes `tamber.swift` and the Android reader's `TamberTokens.kt` before
+build writes `forma.swift` and the Android reader's `FormaTokens.kt` before
 an app's modules compile.
 Recipe:
-[a brand](recipes/tamber.md).
+[a brand](recipes/forma.md).
 `color-scheme="dark"` (or `"light"`) on a node makes that subtree resolve
 `light-dark()`, platform colours and glass in that scheme, as a sheet that is
 always dark does; leave it off to follow the surrounding scheme (LLP 1034 §8).

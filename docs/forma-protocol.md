@@ -1,9 +1,9 @@
-# The Tamber protocol, `tamber/1`
+# The Forma protocol, `forma/1`
 
 The reference for the design server's wire (LLP 1121 D13), versioned with it. This page
-describes **`tamber/1.18`**, the version `hello` reports. The design and the reasons are in LLP 1121
+describes **`forma/1.18`**, the version `hello` reports. The design and the reasons are in LLP 1121
 D13 and LLP 1122 D2, D9 and D10; what was built and how it differs from them is in each RFC's §10.
-The recipe is `docs/recipes/tamber.md`. Each change to the wire changes this page in the same
+The recipe is `docs/recipes/forma.md`. Each change to the wire changes this page in the same
 commit.
 
 **Development only.** A release build has no endpoint, no token and no server. The server runs
@@ -11,16 +11,16 @@ on macOS and Linux.
 
 ## Versions
 
-- `hello` reports the protocol (`"tamber/1.18"`) and the IR's format number (`format`).
+- `hello` reports the protocol (`"forma/1.18"`) and the IR's format number (`format`).
 - **A minor version** adds requests or fields. A client ignores fields it doesn't know.
 - **No request carries a client's version.** A client checks `hello`'s `protocol` itself and stops
   on a major version it doesn't speak.
-- `tamber/1.0` was LLP 1121 stage 3. `tamber/1.1` added:
+- `forma/1.0` was LLP 1121 stage 3. `forma/1.1` added:
   - `history`, `revert`, `import` and `requires`;
   - the tool's files;
   - the long poll's `wait`;
   - the reply fields marked *1.1* below.
-- `tamber/1.2` (LLP 1121 stage 4, with LLP 1122 D4) added:
+- `forma/1.2` (LLP 1121 stage 4, with LLP 1122 D4) added:
   - `class` judged by the edit's whole closure, and `synthetic` on `propose` and transactions;
   - `hello`'s `live` and `builds`;
   - `pin` and `preview`, and `{client}` on the subscription and the long poll;
@@ -30,7 +30,7 @@ on macOS and Linux.
   - `uses`, scrub sessions (`scrub`, `scrub-release`, `scrub-cancel`, the `scrub` event) and
     `propose`'s `texts` (stage 4, commit 6);
   - the items marked *1.2* below.
-- `tamber/1.3` (LLP 1122 T2) added:
+- `forma/1.3` (LLP 1122 T2) added:
   - `hello`'s `page`;
   - `frame-ancestors` on a dev loop's HTML;
   - a build's `pinRevision` and `unsupported`;
@@ -38,19 +38,19 @@ on macOS and Linux.
   - the `selection` event, `outline` (the request and the command), and the source map's
     `sources` (each source's SHA-256 as compiled);
   - the items marked *1.3* below.
-- `tamber/1.4` (LLP 1121 stage 5, commit 6) added `export`, and `import`'s reading of a Tamber export
+- `forma/1.4` (LLP 1121 stage 5, commit 6) added `export`, and `import`'s reading of a Forma export
   against its baseline.
-- `tamber/1.5` (LLP 1121 stage 6, commit B) added length and number tokens: each IR token's real
+- `forma/1.5` (LLP 1121 stage 6, commit B) added length and number tokens: each IR token's real
   `kind` (`color`, `length`, `number`), `resolve`'s length and number tuples, and `uses` over the rows
   of a length or number token's kind.
-- `tamber/1.6` (LLP 1122 T2b) added the `inspect` event: inspect mode's owners as they move.
-- `tamber/1.7` (LLP 1122 T2b) added a click's token on `selected`, which the `outline` answering it
+- `forma/1.6` (LLP 1122 T2b) added the `inspect` event: inspect mode's owners as they move.
+- `forma/1.7` (LLP 1122 T2b) added a click's token on `selected`, which the `outline` answering it
   names.
-- `tamber/1.8` (LLP 1121 stage 6, commit D) added shadow tokens: the IR's `box-shadow` and
+- `forma/1.8` (LLP 1121 stage 6, commit D) added shadow tokens: the IR's `box-shadow` and
   `text-shadow` kinds, and `resolve`'s shadow tuples.
-- `tamber/1.9` (LLP 1121 stage 6, commit E) added motion tokens: the IR's `duration` and `easing`
+- `forma/1.9` (LLP 1121 stage 6, commit E) added motion tokens: the IR's `duration` and `easing`
   kinds, `resolve`'s motion tuples, and `uses`' source-literal sites for one. A motion token's name
-  is dotted (`tamber-motion-name`). A transaction or `propose` that changes one is `rebuild`.
+  is dotted (`forma-motion-name`). A transaction or `propose` that changes one is `rebuild`.
   The 1.9 window also takes LLP 1122 T2c's optional fields, marked *1.9*: a build's `planDigest`
   (on `register`, `status` and its record), and source maps by plan, each build joined and
   outlined from its own plan's map.
@@ -60,10 +60,10 @@ on macOS and Linux.
   changes only a type token's style, weight, size or line height is `live`.
   Stage 6 F added under the same version: the IR's `icons` and `resolve`'s icon tuples. A
   transaction or `propose` that changes an icon is `rebuild`; an operation does not write one.
-- `tamber/1.10` (LLP 1121 stage 7, commit A) added component params: `describe`'s
-  `ir.components` (and `contract tamber ir`'s), each component's params by full name. Stage 7's
+- `forma/1.10` (LLP 1121 stage 7, commit A) added component params: `describe`'s
+  `ir.components` (and `contract forma ir`'s), each component's params by full name. Stage 7's
   later wire changes add under the same version.
-- `tamber/1.11` (LLP 1121 stage 8, commit D) added the app's own Contract sources to the design's
+- `forma/1.11` (LLP 1121 stage 8, commit D) added the app's own Contract sources to the design's
   files (`hello`, every reply's `files`, the journal, `commit`, `history` and `revert`) and the
   state part operations `set-state` and `unset-state`; real-time scrubs added a scrub frame's mark
   (`scrub` on a batch and the snapshot), the `mismatch` end of a scrub, and the build channel's
@@ -72,7 +72,7 @@ on macOS and Linux.
   `hold`/`held` in its listing, a `selection`'s `held` rows, and a lowered `:active` row's `state`
   and `at` in the map; LLP 1122 T3 added the selection's param rung. The window's later additive
   changes (stage 8) add under the same version.
-- `tamber/1.12` (LLP 1121 stage 9, commit D1) added `set-row`'s address to the selection join:
+- `forma/1.12` (LLP 1121 stage 9, commit D1) added `set-row`'s address to the selection join:
   a row its author wrote carries `at`, the attribute's place, with the file's `sha256` as
   compiled, and `attr`, its name as written (a shorthand's for an expansion); real-time scrubs
   added the long poll's held revision (`held` on each answer, and `held` on the request to leave
@@ -86,12 +86,12 @@ on macOS and Linux.
   version: D2's `set-row`, D3's `add-param` and `remove-param`; C1's `explain` of an icon and a
   param, and `describe`'s icon `draws`; C2's `uses` of an icon and a motion token's sites by
   instance.
-- `tamber/1.13` (LLP 1121 stage 10, commit A1) checks every request's scope in one place (see
+- `forma/1.13` (LLP 1121 stage 10, commit A1) checks every request's scope in one place (see
   Scopes, under Authentication): `hello` says the client's `scope` and whether its token is the
   local one (`local`), and a request above its client's scope is 403 naming both (`scope`,
   `needs`). Stage 10's later wire changes add under the same version: A2's pairing, clients and
   revoke; `pair-code`'s `remote`, the remote doors open (B).
-- `tamber/1.14` (LLP 1121 stage 10b, after stage 10 closed) adds `import`'s `baseline`, a
+- `forma/1.14` (LLP 1121 stage 10b, after stage 10 closed) adds `import`'s `baseline`, a
   re-import's `dials` and `pins`, `export`'s `digest`, and an import read in a process of its own
   (413/503 past its cost). Stage 11's wire changes add under the same version, and so do LLP 1122
   T7's: the `navigate` method and command, and a `status`'s `location`; and stage 10c's relay
@@ -115,7 +115,7 @@ on macOS and Linux.
   source map behind them (development only, never on the wire) keys each state part by its row and
   state: a binding's `states`, `[{state, origin, at?}]` (no `at` for a conditional class's part,
   either style's).
-- `tamber/1.15` (LLP 1121 stage 12, after stage 11 closed) adds `resolve`'s and `explain`'s per-column
+- `forma/1.15` (LLP 1121 stage 12, after stage 11 closed) adds `resolve`'s and `explain`'s per-column
   values for a length over unset base names (stage 12 D1); a shadow token's lengths as expressions over
   length tokens and base names, those over unset base names kept as written: in `resolve`'s shadows such a length is null among `lengths`, and
   `length_texts` (only then) gives every length's text, with the base names they read in `bases`
@@ -136,7 +136,7 @@ on macOS and Linux.
   with `states: [{state, source, editable}]`, each folded part's place and its own edit; the
   development-only source map lists each Contract source's `home`, from which a param's full name
   is built.
-- `tamber/1.16` (after stage 12 closed) adds a shadow token's per-column values over unset base names:
+- `forma/1.16` (after stage 12 closed) adds a shadow token's per-column values over unset base names:
   `columns` on `explain`'s value, each `when` line and each of `resolve`'s tuples (D1's form, but for the
   terminal's), and each of `resolve`'s shadows' `columns` with its `value` and `lengths`; and a shadow's
   `lengths` (*1.15*, stage 12 B3) write a zero as 0, never -0 (`calc(space.md * -0)`), a correction;
@@ -159,13 +159,13 @@ on macOS and Linux.
   page whose selection moved while the frame was on its way reports its selection as it is now;
   `unsupported` with `what: "inspect"` is only a page that can't step at all (none of the shipped hosts now: the web pages and Apple's step),
   which a client takes as no `select` there, not as no inspect.
-- `tamber/1.17` (stage 14, after stage 13 closed) is opened by the `pen` importer (stage 14 A): it adds `import`'s kind `pen`, Pencil's `.pen` file
+- `forma/1.17` (stage 14, after stage 13 closed) is opened by the `pen` importer (stage 14 A): it adds `import`'s kind `pen`, Pencil's `.pen` file
   (stage 13 B, carried into stage 14 A), and every import's `notes` (in the held proposal's `review`
   when it has any): what decided a choice the source didn't say, a Pencil number's kind; and an
   import's `prefix` is at most 128 characters, for every kind (a correction: a longer one is refused).
-  It also adds the checker's own limits (the checker bound): `tamber-value-size`, `tamber-value-depth`,
-  `tamber-length-size` and `tamber-reference-depth`, refused alike by `check`, the build and every write and import.
-  It also adds `GET /__tamber/events?after=<cursor>&epoch=<e>&client=<c>` (stage 14 D): the events read for a client
+  It also adds the checker's own limits (the checker bound): `forma-value-size`, `forma-value-depth`,
+  `forma-length-size` and `forma-reference-depth`, refused alike by `check`, the build and every write and import.
+  It also adds `GET /__forma/events?after=<cursor>&epoch=<e>&client=<c>` (stage 14 D): the events read for a client
   that re-asks by cursor (LLP 1016.000 D8's `exactLongPoll`), with the POST read's token, scope and doors. Each
   answer carries a `cursor`, which is opaque (a client only compares it and sends it back), and `asked`, the cursor
   it answers (null with none), so a client sees one it never had (a reply coalesced away); nothing new in 25 s is a
@@ -184,8 +184,8 @@ on macOS and Linux.
   It also adds **`resolve` with `tokens: [name, …]`** (the third pass's #5 B), in place of `token`: several names from
   one snapshot and one fold, `{files, answers}`, each answer the one `resolve` with that `token` gives but its `files`
   (said once), and a name one would refuse answered `{error}` in its place. At most 4,096 names: more, `token` beside
-  it, or `tokens` not a list of names is refused whole, before any fold (`tamber-resolve-batch` for the bound); its
-  answers are at most 16 MiB, refused whole (`tamber-resolve-batch`) once they pass it, inside an Exact fetch's
+  it, or `tokens` not a list of names is refused whole, before any fold (`forma-resolve-batch` for the bound); its
+  answers are at most 16 MiB, refused whole (`forma-resolve-batch`) once they pass it, inside an Exact fetch's
   default reply cap (64 MiB; a stream's is 1 MiB). The clone's answers are about 370 B a name, 4,096 of them about
   1.5 MB. The design tool asks at most 1,024 names at once, its reply cap said as 17 MiB, and an ask refused for its
   bytes again in halves. Its
@@ -199,10 +199,10 @@ on macOS and Linux.
   1.16 `levels` for a page of an older build, and the page's selection reports `moved: {up, stepped}` (see The build channel's `inspect`). A slot's host
   is a step; past the last copy, the root. A plan past the copies limit (2^20 sites, 512 KiB encoded) gets none, and
   a `select` there is `unsupported` (`what: "inspect"`), not stale; a site past the copies held, within a map, is stale.
-  Then the sweep's: `tamber-axes` (32 axes) and `tamber-whens` (64 `when` lines a token), design limits alike everywhere,
-  and `tamber-ops-size` (1024 operations in a client's request).
+  Then the sweep's: `forma-axes` (32 axes) and `forma-whens` (64 `when` lines a token), design limits alike everywhere,
+  and `forma-ops-size` (1024 operations in a client's request).
   The local token's body may be 16 MiB, every other client's 1 MiB.
-- `tamber/1.18` (stage 15, after stage 14 closed) is opened by the selection's chain as the page walks it (stage 15 D):
+- `forma/1.18` (stage 15, after stage 14 closed) is opened by the selection's chain as the page walks it (stage 15 D):
   `source.chain`'s entry `i` is where a `select` of `up: i + 1` lands (the page's own walk up its tree, by `copies`), a
   slot's host one of its entries with `slot: true`, named by its own call, and a component with no element of its
   own none. The field is optional: an older server never sends it, and an older client shows the entry as a plain
@@ -224,17 +224,17 @@ on macOS and Linux.
   `Content-Security-Policy: frame-ancestors 'self' http://127.0.0.1:7740` (*1.3*): the tool's
   origin and the page's own may frame it, no other. `'self'` lets a page the canvas shows frame
   its own pages. No `X-Frame-Options`. Development only; the tool never scripts the frame.
-- **Alone.** `bun exact.mjs tamber serve <app> [--port <n>] [--lan] [--remote <host:port>] [--trust-tunnel <port>]` runs it with no app running.
+- **Alone.** `bun exact.mjs forma serve <app> [--port <n>] [--lan] [--remote <host:port>] [--trust-tunnel <port>]` runs it with no app running.
   It binds loopback unless `--lan`, and a client reaching it over the LAN still can't get the token.
-- **One writer per project.** The design process holds `.exact/tamber.lock`. When a second server
-  for the same app can't take the lock, its design process exits. Its `POST /__tamber` and
-  `/__tamber/subscribe` then answer 503 with the lock error, and its long poll answers as in
+- **One writer per project.** The design process holds `.exact/forma.lock`. When a second server
+  for the same app can't take the lock, its design process exits. Its `POST /__forma` and
+  `/__forma/subscribe` then answer 503 with the lock error, and its long poll answers as in
   "The change stream".
-- **Layers.** `scripts/tamber-server.mjs` is the HTTP wire. It speaks JSON lines to
-  `contract tamber serve --stdio <app>`, which owns the files: the digests, the lock, the journal
+- **Layers.** `scripts/forma-server.mjs` is the HTTP wire. It speaks JSON lines to
+  `contract forma serve --stdio <app>`, which owns the files: the digests, the lock, the journal
   and every write. The wire writes no design file itself.
-- **The scripted client.** `bun exact.mjs tamber op <url> '<request JSON>'` sends one request.
-  `tamber op <url> subscribe` prints the change stream.
+- **The scripted client.** `bun exact.mjs forma op <url> '<request JSON>'` sends one request.
+  `forma op <url> subscribe` prints the change stream.
 
 ## Transport
 
@@ -242,12 +242,12 @@ No WebSocket (LLP 1121 §10, stage 3 commit 4). Everything is HTTP on the server
 
 | Path | Method | What |
 |---|---|---|
-| `/__tamber/token` | GET | the write token, to a local request only |
-| `/__tamber` | POST | one request, one reply |
-| `/__tamber/subscribe` | POST | the change stream, as server-sent events on the response |
-| `/__tamber/events` | POST | the change stream as a long poll, for a client whose `fetch` reads a whole body |
-| `/__tamber/events?after=…` | GET | the same, re-asked by cursor (`exactLongPoll`, *1.17*): first from `open=…` at once, a `cursor` in each answer, 204 after 25 s with nothing new |
-| `/__tamber/tool/…` | GET, HEAD | the design tool's built files, to a local request (*1.1*) and on the remote doors (stage 10 B) |
+| `/__forma/token` | GET | the write token, to a local request only |
+| `/__forma` | POST | one request, one reply |
+| `/__forma/subscribe` | POST | the change stream, as server-sent events on the response |
+| `/__forma/events` | POST | the change stream as a long poll, for a client whose `fetch` reads a whole body |
+| `/__forma/events?after=…` | GET | the same, re-asked by cursor (`exactLongPoll`, *1.17*): first from `open=…` at once, a `cursor` in each answer, 204 after 25 s with nothing new |
+| `/__forma/tool/…` | GET, HEAD | the design tool's built files, to a local request (*1.1*) and on the remote doors (stage 10 B) |
 
 - **The development gate runs first.** It answers 421 with an empty body to an unknown host, or to
   a browser POST whose `Origin` isn't the server's own (`scripts/install-page.mjs`).
@@ -255,11 +255,11 @@ No WebSocket (LLP 1121 §10, stage 3 commit 4). Everything is HTTP on the server
   the digests an `import` carries to the server). A larger one gets 413, or the connection is cut
   while it is being read. (*1.17*) The local loopback token's body may be 16 MiB (a CLI import's
   sources, which the server plans as any import), judged from its length before a byte is read;
-  every paired, remote or relayed client's stays 1 MiB. `tamber tool --via`'s proxy sends on an
+  every paired, remote or relayed client's stays 1 MiB. `forma tool --via`'s proxy sends on an
   `import` that carries a token up to 16 MiB, for the server to judge that token, and every other
   request up to 1 MiB.
 - **A client's `ops`** (*1.17*) are at most 1024 in one request (`transaction`, `propose`, a
-  scrub): more is refused with 400 and `id: "tamber-ops-size"` before any is read. Operations the
+  scrub): more is refused with 400 and `id: "forma-ops-size"` before any is read. Operations the
   server applies itself (accepting a held proposal, a revert's, an import it plans) are no
   client's request; a value edited in a held proposal is `edit-held`'s, which sends none.
 - **A field of the wrong type** is an error. An optional field given as `null` reads as absent.
@@ -290,26 +290,26 @@ statuses:
 
 - **The token** is random, minted in memory when the server starts, and never written to disk.
   Each run of the server has its own.
-- **`GET /__tamber/token`** answers `{"token": "…"}` only to a request the development gate calls
+- **`GET /__forma/token`** answers `{"token": "…"}` only to a request the development gate calls
   local: loopback peer, loopback host, no forwarding header (`access.local`,
   `scripts/install-page.mjs`). Any other request gets the install endpoint's not-found.
-- **Every POST** carries the token as `x-exact-tamber-token`, never in a URL. Reads need it too,
+- **Every POST** carries the token as `x-exact-forma-token`, never in a URL. Reads need it too,
   since a design may be unreleased.
 - **A client follows no redirects** when fetching the token.
 - **Remote clients** pair (*1.13*, LLP 1121 stage 10 A2, below) for a token of their own; the
   remote listener and its TLS are stage 10 B (below).
-- **No cookie** is ever read for authentication: a token travels only in `x-exact-tamber-token`
+- **No cookie** is ever read for authentication: a token travels only in `x-exact-forma-token`
   (canvas page code, the app under development, can set cookies this port receives).
-- **The remote listener** (stage 10 B, `scripts/tamber-remote.mjs`) is off unless asked:
-  `--remote <host:port>` on a dev loop (`bun exact.mjs web`) or on `tamber serve` opens a second
+- **The remote listener** (stage 10 B, `scripts/forma-remote.mjs`) is off unless asked:
+  `--remote <host:port>` on a dev loop (`bun exact.mjs web`) or on `forma serve` opens a second
   listener, bound only where it names, that speaks TLS only.
   - Its certificate is self-signed, made for the run in memory (ECDSA P-256), never written to
     disk. Its SHA-256 fingerprint is printed at start-up, for a remote client to pin.
   - Plain HTTP to it gets no protocol: the handshake fails and the connection closes, the
     pairing endpoint included.
-  - It serves `/__tamber`, `/__tamber/subscribe`, `/__tamber/events`, `/__tamber/pair`, and the
-    design tool's own static files under `/__tamber/tool/` (no token: they hold no secret). Every
-    other path, `/__tamber/token` and the app's pages included, is not found.
+  - It serves `/__forma`, `/__forma/subscribe`, `/__forma/events`, `/__forma/pair`, and the
+    design tool's own static files under `/__forma/tool/` (no token: they hold no secret). Every
+    other path, `/__forma/token` and the app's pages included, is not found.
   - A request there is never `access.local`: it is `{remote: true, tunnel: false, peer}`, the peer
     its socket's (no forwarding header is read). Its `Cookie` header is removed before the wire
     sees it, and a request whose `Origin` is not the listener's own is refused (403).
@@ -330,9 +330,9 @@ statuses:
   the wire only with `--allow-plugin-origin`, on the tunnel door, on a relay's door (its
   certificate a real one: stage 10c) and on the main loopback port (from this machine, naming a
   loopback host), never the TLS door, whose certificate no page can pin. There, `Origin: null` on
-  `/__tamber`, `/__tamber/subscribe`, `/__tamber/events` and `/__tamber/pair` gets CORS
+  `/__forma`, `/__forma/subscribe`, `/__forma/events` and `/__forma/pair` gets CORS
   (`Access-Control-Allow-Origin: null`; a preflight `OPTIONS` answered 204, `POST` with
-  `content-type` and `x-exact-tamber-token`); every such request is a remote one, so only a
+  `content-type` and `x-exact-forma-token`); every such request is a remote one, so only a
   paired token works, never the local one. No other path gives a sandboxed page CORS: the token
   route keeps the dev gate's rule, so such a page cannot read it.
 - **A hosted relay** (*1.14*; stage 10c R1, LLP 1121 §5 10c): `--relay <host[:port]> --relay-account
@@ -409,7 +409,7 @@ statuses:
   served only when the certificate covers them, and no word of the relay's that carries the token
   becomes a name, an address or a log line.
   The connector's own protocol (`EXACT-RELAY/1`, one random `run` id on every connection of a run)
-  is outside `tamber/1`: scripts/tamber-relay.mjs; the relay itself, docs/tamber-relay-service.md.
+  is outside `forma/1`: scripts/forma-relay.mjs; the relay itself, docs/forma-relay-service.md.
 
 ### Pairing (*1.13*)
 
@@ -419,11 +419,11 @@ statuses:
   checks before it pairs (the lead's ruling 2), and `{origin, tunnel: true}` for a trusted tunnel's
   local end, and `{origin, fingerprint, spki, relay: true, caa?}` for a relay's session (*1.14*; `caa` with names of the developer's own, above; `spki`,
   the base64 SHA-256 of its certificate's public key, the same across renewals with the account's
-  one key, a non-browser client's pin, *1.15*). It is absent when none is open. `bun exact.mjs tamber pair <url> --scope
+  one key, a non-browser client's pin, *1.15*). It is absent when none is open. `bun exact.mjs forma pair <url> --scope
   read|propose|write [--name <name>]` mints one from this machine and prints them. A code is 50 random bits, written `XXXXX-XXXXX` in Crockford base32 (case, hyphens, `I`,
   `L` and `O` forgiven), valid two minutes, used once. At most 8 are live: a ninth replaces the
   oldest.
-- **`POST /__tamber/pair {code, name?}`** needs no token, and is the one request of the protocol a
+- **`POST /__forma/pair {code, name?}`** needs no token, and is the one request of the protocol a
   remote request makes without one (the design tool's static files aside). It answers `{token, client, scope, expires}` once. A wrong code is 403,
   saying nothing of which codes exist. A wrong attempt can't be told from a guess at any one code,
   so it counts against every live code, and a code with five is burned. A peer gets a burst of
@@ -433,7 +433,7 @@ statuses:
   A code that is not a string of at most 32 characters is 400. Each burn and the first limit hit
   of each burst are logged (with the peer, never a code) and told as a `pairing` event.
 - **The token** is 32 random bytes, kept in memory only (a restart revokes every paired client),
-  by its SHA-256. It lives 12 hours (`--pair-ttl <duration>` on `tamber serve` and the dev loops:
+  by its SHA-256. It lives 12 hours (`--pair-ttl <duration>` on `forma serve` and the dev loops:
   `90m`, `12h`, `2d`, from a minute to 30 days). It carries the scope its code gave.
 - **The client** is named by the server: `remote:`, the code's or the request's `name`, then `#n`
   (`remote:laptop#1`). On every request a paired token makes, `client` is that name, whatever the
@@ -449,7 +449,7 @@ statuses:
   LAN peer holding it is no one (404).
 - **Off this machine** (stage 10 B's listener, or a tunnel the developer trusts) nothing is local:
   no token page, and the local token is no one. Without a paired token a request reaches only
-  `POST /__tamber/pair`, and the design tool's own static files (no design is in them).
+  `POST /__forma/pair`, and the design tool's own static files (no design is in them).
 - **`clients`** (the local token only) answers `{clients}`: the local token (`{client: "local",
   local: true, scope: "write"}`), then each paired client's `{client, name, scope, peer, created,
   expires, lastSeen}`. No token is ever listed.
@@ -461,13 +461,13 @@ statuses:
 
 ### Scopes (*1.13*)
 
-Every method has one scope, in `scripts/tamber-pairing.mjs`'s table, which the wire checks
+Every method has one scope, in `scripts/forma-pairing.mjs`'s table, which the wire checks
 before any handler runs. A method the table doesn't name is refused (400). A request above its
 client's scope is 403 with `{message, scope, needs}` in `error`, the change stream's paths too.
 
 | Scope | Requests |
 |---|---|
-| `read` | `hello`, `describe`, `resolve`, `explain`, `uses`, `history`, `export`, `canvas` (paired clients only), `inspect` (read-only below `write`: `refresh` only), and the change stream (`/__tamber/subscribe`, `/__tamber/events`) |
+| `read` | `hello`, `describe`, `resolve`, `explain`, `uses`, `history`, `export`, `canvas` (paired clients only), `inspect` (read-only below `write`: `refresh` only), and the change stream (`/__forma/subscribe`, `/__forma/events`) |
 | `propose` | `propose` (held or not), `import`, `revert`, and `drop`, `edit-held` and `choose` (*1.18*) of the client's own held proposal |
 | `write` | `transaction`, `undo`, `commit`, `accept`, `drop`, `edit-held` and `choose` (*1.18*) of another client's proposal, `pin`, `preview`, `outline`, `hold`, `navigate`, `scrub`, `scrub-release`, `scrub-cancel` |
 | the local token only | `pair-code`, `clients`, `revoke` (a paired `write` client may not) |
@@ -483,12 +483,12 @@ token is `write`.
 
 ## Requests
 
-Each request is `POST /__tamber` with `{"method": "…", …}`.
+Each request is `POST /__forma` with `{"method": "…", …}`.
 
 ### Files and digests
 
-- **The design's files** are the app's design (`app.tamber`, or the file `app.json`'s `"tamber"`
-  names) and every other `*.tamber` file directly in the app's directory, then the app's own
+- **The design's files** are the app's design (`app.forma`, or the file `app.json`'s `"forma"`
+  names) and every other `*.forma` file directly in the app's directory, then the app's own
   Contract sources (*1.11*, LLP 1121 stage 8 D: each `.contract` file its `app.contract` reads
   from inside the app; a package's are read-only and not among them), whose state parts
   `set-state` writes. Paths are relative to the app's directory. A hand edit of either kind is
@@ -513,7 +513,7 @@ Each request is `POST /__tamber` with `{"method": "…", …}`.
   report's `{state, reason}` on the last hold frame sent it (null until it reports on that frame),
   *1.11*; see [The build channel](#the-build-channel-llp-1122-d4-12));
 - `files`;
-- `app`: the app's directory, absolute, for the local client (`local: true`), which `tamber tool` tells
+- `app`: the app's directory, absolute, for the local client (`local: true`), which `forma tool` tells
   its own server by (*1.1*); for any other client (paired, through a remote door or a tunnel) the
   directory's name alone. Every `file` an answer or event carries is named by one rule, for every
   client: from the app's directory where the file is in it (`node_modules/@acme/reading/index.contract`),
@@ -528,8 +528,8 @@ Each request is `POST /__tamber` with `{"method": "…", …}`.
   False from a server no dev loop runs.
 - `design`: the app's design file, the one an operation with no `file` edits (*1.1*);
 - `page` (*1.3*): the dev loop's own origin (`http://127.0.0.1:<port>`), as it prints it, or null
-  from a server no dev loop runs (`tamber serve`, `tamber tool` without `--via`). Through
-  `tamber tool --via`, the forwarded `hello` is the loop's, so `page` is the loop's. The design
+  from a server no dev loop runs (`forma serve`, `forma tool` without `--via`). Through
+  `forma tool --via`, the forwarded `hello` is the loop's, so `page` is the loop's. The design
   tool opens it in a tab as given, and frames it as `http://localhost:<port>` (the dev loops answer
   on [::1] too): another site than the tool's, so a browser with site isolation runs it in its own
   process. That frame's cookies and storage are its own, apart from a tab at `page`.
@@ -547,7 +547,7 @@ A `client` given in a hello is not a write's attribution (see `transaction`).
   - `icons` (*1.9*), when the design has any: each `{name, sf, material, svg}`, its sources as
     written, null where unwritten (D10), and `draws` (*1.12*): `{target: source}` for each target the
     app ships, the source that target draws (`sf`, `svg`) or null for none, by D10's rule (the one
-    `tamber-icon-missing` checks).
+    `forma-icon-missing` checks).
   - `components` (*1.10*, LLP 1121 D15), when the app's Contract or its design declares params, or
     it uses an exported library component (*1.15*): each
     component `{identity, name, params}`, its identity its declaring file and name
@@ -570,7 +570,7 @@ A `client` given in a hello is not a write's attribution (see `transaction`).
     with no params is listed too, with `params: []` (*1.15*, stage 12 D3).
     A component that isn't Contract, declared in the design (`component MapCard` over
     `params`, stage 7 D), is listed the same way, its identity the design file and its name
-    (`app.tamber#MapCard`).
+    (`app.forma#MapCard`).
   - `resolve`, `explain` and `uses` take a param's full or short name as `token` and answer by its
     full name (*1.10*); an icon param, like an icon, is read through `describe` and `resolve`,
     and since *1.12* through `explain` and `uses` too (below).
@@ -584,7 +584,7 @@ A `client` given in a hello is not a write's attribution (see `transaction`).
 - `pairs`: `{token: [{name, token, fallback}]}`, what each token says it is drawn on (`pair=`,
   LLP 1121 D3): `token` is whether `name` is a token of the design; a role no token overrides
   has its `fallback` `{light, dark}` (*1.1*).
-- `warnings`: `[{file, line, col, id, message}]`, the design's `tamber-contrast` warnings, a pair
+- `warnings`: `[{file, line, col, id, message}]`, the design's `forma-contrast` warnings, a pair
   below 4.5:1 at its lowest tuple and scheme. They never refuse the design (*1.1*).
 - `base` (*1.14*, LLP 1121 stage 11): the base scale, every base name in the kernel's table's
   order (`space.xs` to `space.xl`, `radius.sm` to `radius.full`), each a **base row**
@@ -786,7 +786,7 @@ The app's build failing is an error (`the app does not build: …`).
 
 ### `canvas` (*1.13*, LLP 1121 stage 10 C, LLP 1122 D12)
 
-A paired client sends this request with its token in `x-exact-tamber-token`:
+A paired client sends this request with its token in `x-exact-forma-token`:
 
 ```json
 {"method": "canvas"}
@@ -847,7 +847,7 @@ design (a `set-state` or `unset-state`: the Contract source that declares its `s
   through `contract fmt`, and is refused, writing nothing, unless the whole app then builds (the
   build's diagnostics answer it). Its inverse restores the file's bytes as they were, an
   unformatted file's included.
-- **A design edit splices only the lines it touches,** laid out as `tamber fmt` would, and leaves
+- **A design edit splices only the lines it touches,** laid out as `forma fmt` would, and leaves
   every other byte alone. So a value edit is a one-line diff, even in a file that wasn't formatted.
   A `.contract` write is laid out whole by `contract fmt` (above): one line only in a file
   already formatted, and in one that isn't, its other lines laid out too.
@@ -857,22 +857,22 @@ design (a `set-state` or `unset-state`: the Contract source that declares its `s
 - **The limits are the checker's:**
   - a token's `kind` is one stage 6 built (`color`, `length`, `number`, `box-shadow`,
     `text-shadow`, `duration`, `easing`, `type`, `family`);
-  - the axes may make at most 64 tuples; (*1.17*) a design has at most 32 axes (`tamber-axes`) and
-    a token at most 64 `when` lines (`tamber-whens`), refused before anything walks them, and an
+  - the axes may make at most 64 tuples; (*1.17*) a design has at most 32 axes (`forma-axes`) and
+    a token at most 64 `when` lines (`forma-whens`), refused before anything walks them, and an
     importer that would pass either refuses with the same id;
-  - (*1.17*) a value is at most 4096 bytes (`tamber-value-size`) and nests at most 32 functions or calc
-    groups deep (`tamber-value-depth`), refused before anything reads it, in every op that
+  - (*1.17*) a value is at most 4096 bytes (`forma-value-size`) and nests at most 32 functions or calc
+    groups deep (`forma-value-depth`), refused before anything reads it, in every op that
     carries one (a name or metadata word past 4096 bytes too), in words that give its size and
     never echo it; each importer refuses a source value past them with the same id;
-  - (*1.17*) a length over base names expands to at most 256 terms (`tamber-length-size`): a chain of
+  - (*1.17*) a length over base names expands to at most 256 terms (`forma-length-size`): a chain of
     tokens each naming the next more than once, or a sum of many, is refused where it passes;
-  - (*1.17*) a chain of tokens naming one another, with the functions their values nest, is at most 512 deep (`tamber-reference-depth`), past
+  - (*1.17*) a chain of tokens naming one another, with the functions their values nest, is at most 512 deep (`forma-reference-depth`), past
     the importers' 256 links;
   - naming a dial, token, `when` or axis value the design doesn't have is refused.
 - **A param's value** (*1.10*): `name` is a param's full name (`post.contract#PostButton.radius`)
   or its short one (`PostButton.radius`); a name no param of the app answers, or a short name two
-  components share (whichever has the param, or neither), is refused (`tamber-param-unknown`,
-  `tamber-param-ambiguous`). The line is written by the name the design's line already has, or an
+  components share (whichever has the param, or neither), is refused (`forma-param-unknown`,
+  `forma-param-ambiguous`). The line is written by the name the design's line already has, or an
   earlier op of the transaction wrote, or the name given, so a transaction never gives one param
   two lines. An exported library component's param is written by its full name whatever name it
   was given, since the build refuses a short one (LLP 1139 D8): a new line, and a line spelled
@@ -880,14 +880,14 @@ design (a `set-state` or `unset-state`: the Contract source that declares its `s
   and other `when` lines kept; the `params` block is made at the end when there is none, indented as its lines are,
   and goes when its last line does. A `when` line needs the param's own line first. After any
   write to an app with params, every param folds with the design and is inside its range, each
-  value written (a `when`'s too) at its own line (`tamber-param-range`, `tamber-range-unit`; a
+  value written (a `when`'s too) at its own line (`forma-param-range`, `forma-range-unit`; a
   length over a base name the design leaves unset, bare or in an expression, in every column of
   the scale, the refusal naming the first column outside), so an
   unset that unmasks a default out of range is refused. The inverse is the preimage, so undoing
   the first `set-param` restores absence. A param's value is `live` where the plan folds it, as a
   token's is, `rebuild` for a duration or easing param (a motion param is written into its rows at
   build, wherever its component is used), and a live one can be scrubbed. A token's rename renames
-  the `params` values, their `pair=` references and `.tamber` component defaults naming it,
+  the `params` values, their `pair=` references and `.forma` component defaults naming it,
   keeping kind annotations. A rename that changes a folded value is refused, including a
   component default that an override hides or that belongs to a standalone design
   (for example, a literal font family or icon source selector that shares a token's name).
@@ -953,7 +953,7 @@ A digest it carries is checked as a transaction's is, and a stale one is 409 (wi
 
 A token or dial dragged in the tool previews on every running build as a live batch, is written
 to no file while the gesture lasts, and is written once, on release. The wire runs it
-(`scripts/tamber-scrub.mjs`); the dev loop that mounts the wire previews it.
+(`scripts/forma-scrub.mjs`); the dev loop that mounts the wire previews it.
 
 - **`scrub`** `{client, ops, files, scrub?}` opens a scrub, or updates the client's open one
   (`scrub` its id). It needs `write` scope and a present client (a subscription or long poll that
@@ -1037,7 +1037,7 @@ to no file while the gesture lasts, and is written once, on release. The wire ru
   answers, however long it takes; it never answers 504 and then lands. A server that exits fails
   every request in flight. Reads still time out at 120 seconds (504).
 - **Under the lock:** the digests are checked, the checker runs, and the files are committed as a
-  set (temporary files fsynced, an intent record in `.exact/tamber.journal`, the renames, the
+  set (temporary files fsynced, an intent record in `.exact/forma.journal`, the renames, the
   record removed). A refused transaction changes nothing.
 - **A server that starts and finds a record** completes it, or withdraws it if none of its files
   landed. If it can't judge the record (a partial landing it can't account for, a temporary
@@ -1056,7 +1056,7 @@ to no file while the gesture lasts, and is written once, on release. The wire ru
   checkout.
 - **Refused by the checker:** `{message: "refused", diagnostics: [{file, line, col, id,
   message}]}`. A write (or a propose) that would make a role override vary by an app axis is
-  refused the same way, `tamber-role-axis`, since the build would refuse it (*1.1*).
+  refused the same way, `forma-role-axis`, since the build would refuse it (*1.1*).
   So is a write, or a scrub's resting value (`scrub-fold`'s verify; its frames before that only
   preview), that would hide an exported library component's slot fill: a node of the slot's chain
   given `opacity` 0, a zero size, `display: none` and the rest of LLP 1139 D4's list, in any tuple
@@ -1305,7 +1305,7 @@ list is unchanged: it keeps its own.
   too, is checked where it lands, against the app's vocabulary: one the design has of another
   kind, one that would leave a design token reading it (or a dial) unfolded, and one naming a
   token so refused, is in `unmapped` instead of `ops`.
-- **Astryx is refused here** and keeps its CLI (`bun exact.mjs tamber import astryx …`), since
+- **Astryx is refused here** and keeps its CLI (`bun exact.mjs forma import astryx …`), since
   resolving its package needs a Bun install.
 - **The import is held as a proposal** whose `review` is `{importer, counted, unmapped, offers,
   tokens, notes?, dials?, pins?}` (`notes` *1.17*, what decided a choice the source didn't say; the
@@ -1327,7 +1327,7 @@ list is unchanged: it keeps its own.
   are busy"). A proposal (its diff and review) over 4 MiB is not held: 413. With no design file, an
   import answers 409. Within that, the DTCG importer's and re-import's work is bounded too
   (references, groups and aliases that multiply are refused).
-- **A re-import's dials and pins** (*1.14*, LLP 1121 §5 stage 10b): re-importing a Tamber export, a
+- **A re-import's dials and pins** (*1.14*, LLP 1121 §5 stage 10b): re-importing a Forma export, a
   changed value whose line is one colour dial alone (`accent.fill = accent`), changed to one literal
   in every context where that dial line wins, proposes `set-dial` for that dial instead of a literal
   over the line. The review lists it in `dials`, `[{dial, value, from, impact}]`: `from` the tokens
@@ -1353,10 +1353,10 @@ list is unchanged: it keeps its own.
 ### `export` (*1.4*, LLP 1121 D14)
 
 `{kind: "dtcg"}`, read-only for the design: the app's design as DTCG Format 2025.10 with the Resolver
-Module 2025.10, as `bun exact.mjs tamber export dtcg <app>` writes it, from the same serializer.
+Module 2025.10, as `bun exact.mjs forma export dtcg <app>` writes it, from the same serializer.
 - **The reply** is `{kind, text, baseline, digest}`: `text` is the file, `digest` its header's design
   digest (*1.14*, the baseline an `import` may name), `baseline` where it is kept, by
-  path from the app (`.exact/tamber-dtcg/<digest>.json`, the design's digest). Each export keeps
+  path from the app (`.exact/forma-dtcg/<digest>.json`, the design's digest). Each export keeps
   what it wrote there, the newest 16, in a directory whose own `.gitignore` (`*`) keeps them out of
   every commit. A link in a baseline's place is replaced, never written through. Below `write`
   scope (*1.13*), or with `keep: false`, no baseline is kept (`baseline: null`): keeping one prunes
@@ -1366,7 +1366,7 @@ Module 2025.10, as `bun exact.mjs tamber export dtcg <app>` writes it, from the 
   tokens (every kind since stage 6 G, under *1.9*), a colour checked to read back as the colour a
   host renders before it is written. The header is the root
   `$extensions["exact"]` of the one token document of a set `exact`, first in `resolutionOrder`
-  (the resolver's own root takes no `$extensions`): `export` (`"tamber-dtcg/1"`), `design`,
+  (the resolver's own root takes no `$extensions`): `export` (`"forma-dtcg/1"`), `design`,
   `digest`, `conversions`, `axes`, `contexts` (each context's `modes` and `scheme`) and `dials`.
   The root `description` names the conversions too.
 - **Each token** is `$type: color` with its value as a 2025.10 colour object (`hex` the 8-bit sRGB
@@ -1451,11 +1451,11 @@ Every event carries `seq` (rising, per run) and `epoch` (this run). The server k
 
 - **A write is announced once,** from its reply. A hand edit made just before a write is announced
   first, as its own event.
-- **`POST /__tamber/subscribe`** opens with `{event: "subscribed", seq, epoch, files, proposals,
+- **`POST /__forma/subscribe`** opens with `{event: "subscribed", seq, epoch, files, proposals,
   builds}`, then sends one `data:` line per later event. It replays nothing kept. Catching up is
   the long poll's job. Its body may be `{client}` (*1.2*), which makes that client present while
   it is open (see the build channel's ownership).
-- **`POST /__tamber/events`** `{after, epoch?, wait?, client?, held?}` answers `{events, seq, epoch, missed,
+- **`POST /__forma/events`** `{after, epoch?, wait?, client?, held?}` answers `{events, seq, epoch, missed,
   files, held, proposals?}` (`proposals` left out when `held` names the current revision, *1.12*):
   - with the events after `after`, once there is one, or after 25 s with none;
   - at once with `wait: false` (*1.1*), for a client's first ask.
@@ -1474,7 +1474,7 @@ Every event carries `seq` (rising, per run) and `epoch` (this run). The server k
 
 A write reaches every running development build at once. Release builds take none of this.
 
-- **A value-only edit publishes no plan.** When only `.tamber` files changed and the new plan's
+- **A value-only edit publishes no plan.** When only `.forma` files changed and the new plan's
   structure is the published one's, the dev loop sends the changed tokens as a batch instead, and
   nothing reloads. This is decided by content, so a hand edit and a write through the wire are the
   same case. The plan file is still written, for a host that watches the file instead of the
@@ -1484,14 +1484,14 @@ A write reaches every running development build at once. Release builds take non
     take at boot. The dev loop compares it; it does not go on the wire.
   - **Anything else** still publishes a plan and reloads: a Contract edit, a token the plan keeps
     added or gone, or one starting to vary, a role override gained or lost, a synthetic token
-    gained or lost. Which tokens the plan keeps is LLP 1121 D7's retention (`tamber::Retention`):
+    gained or lost. Which tokens the plan keeps is LLP 1121 D7's retention (`forma::Retention`):
     every role override, what the views may name, and in an app that can name a token outside its
     views (a data or native module) every token, bounded by `exports`. `propose` and a
     transaction's `class` reuse the build's view analysis and close native component params
     over the current design, including package defaults. A plain app's token no view or
     native param names is `live` to add, and the dev loops publish nothing for it.
 - **The batch** is an event on the dev stream the builds already hold (`/__dev`; the JS target's
-  `/__dev/page`): `{kind: "tamber-batch", structure, base, design, tokens: [{name, value,
+  `/__dev/page`): `{kind: "forma-batch", structure, base, design, tokens: [{name, value,
   slices}]}`.
   - `structure` is the digest of the design's **shape** (`design::shape`): the axes, and each
     token's name, role and slice count (which tokens override which role, not with what). The JS
@@ -1518,7 +1518,7 @@ A write reaches every running development build at once. Release builds take non
     (`var(--exact-label, #…)`); a release build writes the values.
 - **Applied only on its base.** A build applies a batch whose `base` is the design it runs, in one
   commit with no layout for colours. A build on another design answers stale and fetches the
-  **snapshot**: `GET /__dev/design` answers `{kind: "tamber-snapshot", structure, base: null,
+  **snapshot**: `GET /__dev/design` answers `{kind: "forma-snapshot", structure, base: null,
   design, tokens}` with every token, the role overrides among them, or 204 when no value-only
   edit came after the published plan. A build re-presents roles only where an override moved.
   A build applies a batch or a snapshot only when its `structure` equals the shape of the plan it
@@ -1921,18 +1921,18 @@ The tool drives no input into an app; a command changes only what `prefer` would
 
 ## The design tool's files (*1.1*)
 
-- **`GET /__tamber/tool/…`** serves the built tool (`target/design-tool-web`) to local requests,
+- **`GET /__forma/tool/…`** serves the built tool (`target/design-tool-web`) to local requests,
   and on stage 10 B's remote doors (no design is in it; it pairs before it reads one). It serves no
   dot file, and follows no symlink out of the build.
-- **`bun exact.mjs tamber tool [<app>] [--via <dev url>]`** serves the tool at the fixed origin
+- **`bun exact.mjs forma tool [<app>] [--via <dev url>]`** serves the tool at the fixed origin
   `http://127.0.0.1:7740`, which the tool's grant names. So one tool runs per machine, on one
-  project. With `--via`, port 7740 forwards `/__tamber` to the dev loop that holds the design.
+  project. With `--via`, port 7740 forwards `/__forma` to the dev loop that holds the design.
   A loop that doesn't answer yet (refused while its first build runs, or reset, one restarting, or its design server
   starting, its `hello` held past 120 s) is waited for, probed every 2 s, saying why in one line per reason, for at most 20 minutes
-  (`EXACT_TAMBER_VIA_WAIT_MS`, `EXACT_TAMBER_HELLO_MS` and `EXACT_TAMBER_VIA_EVERY_MS` shorten the 20 minutes, the
-  hello's 120 s and the 2 s between probes, read only under `EXACT_TAMBER_TEST_TIMING=1`, as the server's clocks are); an answer
+  (`EXACT_FORMA_VIA_WAIT_MS`, `EXACT_FORMA_HELLO_MS` and `EXACT_FORMA_VIA_EVERY_MS` shorten the 20 minutes, the
+  hello's 120 s and the 2 s between probes, read only under `EXACT_FORMA_TEST_TIMING=1`, as the server's clocks are); an answer
   that is another app's, or no design server, still fails at once, and so does a
-  second `tamber tool --via` when port 7740 already serves this design (that loop is probed once, not waited for). Port 7740 is taken only once
+  second `forma tool --via` when port 7740 already serves this design (that loop is probed once, not waited for). Port 7740 is taken only once
   the loop answers.
   See `apps/design-tool/README.md`.
 

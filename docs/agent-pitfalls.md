@@ -540,7 +540,7 @@ This list holds what the [agent guide](contract-for-agents.md)'s rules don't mak
   Cause: a brand written as hex on a page, a card or text (`#f3f5f1`, `#ffffff`,
   `#18392d`); it stays the same in dark mode while the platform's text and controls
   turn dark. Four of round 4's five hex-heavy bake-off apps broke so. Fix: write no
-  colour (the accent is the platform's blue; a brand is an `app.tamber`); surfaces and text
+  colour (the accent is the platform's blue; a brand is an `app.forma`); surfaces and text
   are roles (`-exact-label`) or unsaid. Look in both schemes: `"prefer prefers-color-scheme dark"` as a drive's
   first op, or `prefer prefers-color-scheme dark` before a test's first
   observation. A later `prefer prefers-color-scheme light` switches back.
@@ -1875,8 +1875,8 @@ price: answers arrive `Later`, outside the action's transaction (LLP 1027.002 D1
 
 - **The web build refuses every brand token (`color="ink.light"` is not a valid
   `color`) that `contract build` accepted a moment ago.** Cause: a later line
-  in `app.tamber` was refused (here `color-mix(in oklab, AccentColor 16%,
-  transparent)`, `tamber-residual`), and the web build reports the tokens the
+  in `app.forma` was refused (here `color-mix(in oklab, AccentColor 16%,
+  transparent)`, `forma-residual`), and the web build reports the tokens the
   design would have defined, not the design's refusal. Run `bun exact.mjs
   contract build app.contract --json`, which names the design's line. Also:
   a token's name is identifiers joined by dots (`hue.rose`, never `hue.1`).
@@ -1890,7 +1890,7 @@ price: answers arrive `Later`, outside the action's transaction (LLP 1027.002 D1
   ancestor box's `color` (a token on `fill` itself draws black on the web).
   (Harmony, 2026-10-21.)
 
-- **`bun exact.mjs tamber check .` in an app outside the checkout says each icon's
+- **`bun exact.mjs forma check .` in an app outside the checkout says each icon's
   SVG under `assets/` is missing though it is there.** The check resolves
   `assets/<path>` from the process's working directory, which `exact.mjs`
   moves to the checkout; the app's build finds the files. Trust

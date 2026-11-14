@@ -1,6 +1,6 @@
 # DTCG 2025.10's JSON Schemas (LLP 1121 stage 5, commit 6)
 
-Pinned copies, which `scripts/tamber-dtcg.test.mjs` validates Tamber's DTCG export against. Each
+Pinned copies, which `scripts/forma-dtcg.test.mjs` validates Forma's DTCG export against. Each
 is self-contained: the schemas it references are bundled in its `definitions` under their `$id`s.
 
 | File | Source | Fetched | SHA-256 |

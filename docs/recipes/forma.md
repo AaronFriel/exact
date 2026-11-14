@@ -1,11 +1,11 @@
 # Recipe: a brand in Light, Dim and Black
 
-An app's own colours are its design, `app.tamber` beside `app.contract` (LLP
+An app's own colours are its design, `app.forma` beside `app.contract` (LLP
 1121). Rows name its tokens as they name roles; a mode the person picks (Dim or
 Black for dark) is an app axis, set by `setMode` and held by a pin.
 
-```tamber
-tamber brand
+```forma
+forma brand
 
 axes
   dark-style = black | dim  under scheme=dark
@@ -40,9 +40,9 @@ component App
 
 What to know:
 
-- **Names, not values.** `bun exact.mjs tamber check .` checks the design;
-  `tamber eval . --mode dark-style=dim` prints each token in that mode;
-  `tamber fmt .` formats it.
+- **Names, not values.** `bun exact.mjs forma check .` checks the design;
+  `forma eval . --mode dark-style=dim` prints each token in that mode;
+  `forma fmt .` formats it.
   `no-tells` reads the design: a token is not a literal.
 - **An axis is the app's.** `under scheme=dark` keeps the light side; a `when`
   line gives the mode's value; the first value is the default.
@@ -57,14 +57,14 @@ What to know:
   #ffffff  scheme=fixed`; an unmarked one-colour token is warned once, at its
   line here.
 - **One way to write a colour:** a role if the platform has one, a token if it
-  is the brand: `ink`, or `var(--ink)`. `tamber import css <file>` writes a
+  is the brand: `ink`, or `var(--ink)`. `forma import css <file>` writes a
   stylesheet's here.
 - **The brand's states** (the focus ring, selection, a filled button's hover,
-  a sheet's corners, a row's `:hover`): `contract-for-agents.md`, Tamber.
+  a sheet's corners, a row's `:hover`): `contract-for-agents.md`, Forma.
 - **Edit it while it runs** (development only): the dev loop serves
-  `/__tamber`; `bun exact.mjs tamber op <url> '{"method":"describe"}'` reads,
-  and `history` and `revert` read and undo token edits. `bun exact.mjs tamber
+  `/__forma`; `bun exact.mjs forma op <url> '{"method":"describe"}'` reads,
+  and `history` and `revert` read and undo token edits. `bun exact.mjs forma
   tool .` opens the design tool on it (LLP 1122) at `http://127.0.0.1:7740`,
-  one per machine: to switch, ctrl-c it and run `tamber tool <other app>`
+  one per machine: to switch, ctrl-c it and run `forma tool <other app>`
   (`--via <its URL>` when its dev loop runs).
-  Reference: `docs/tamber-protocol.md`.
+  Reference: `docs/forma-protocol.md`.

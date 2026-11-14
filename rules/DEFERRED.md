@@ -798,7 +798,7 @@ names no take; `:focus-within` remains out.
   state* — slots by name where their types still fit, settled resources where
   their arguments still match, the clock — and is otherwise a restart: no patch
   format, no generations, no identity matching. LLP 1007 §6; Charlie, 2026-08-28.)
-  **Admitted (Charlie, 2026-10-14; LLP 1121 §9 Q3), development builds only:** Tamber's
+  **Admitted (Charlie, 2026-10-14; LLP 1121 §9 Q3), development builds only:** Forma's
   live table, which replaces design token values in a running development session without
   a reload (LLP 1121 D13). It patches values only: no code, no slots, no tree. A scrub
   session previews values for the length of a gesture. Release builds change their
@@ -1869,7 +1869,7 @@ highlight is (a shrink is feedback, not motion).
 TUI host came off on 2026-10-06: §Surfaces.)
 
 **Admitted (Charlie, 2026-10-14; LLP 1122 §9 Q2 and LLP 1121 §9 Q3), development
-builds only:** the Tamber protocol server (`tamber/1`, LLP 1121 D13) and the design tool
+builds only:** the Forma protocol server (`forma/1`, LLP 1121 D13) and the design tool
 (LLP 1122). The tool is a web JS-target app, and every client edits through the protocol.
 Each host's development build gains an **inspect mode** and a build channel: four commands
 down (inspect, outline, hold, pin) and three reports up (status, a selection,
@@ -1880,7 +1880,7 @@ captures of running apps, and a hosted relay.
 
 **Admitted (Charlie, 2026-10-30, "when you're happy with it, have astra implement it";
 LLP 1155 r2), development builds only, for a two-day experiment:** a Chrome DevTools
-inspection adapter in the Bun dev tooling, over the agent carrier (Stage 0) and the Tamber
+inspection adapter in the Bun dev tooling, over the agent carrier (Stage 0) and the Forma
 build channel (Stage 1), with one bounded read command on that channel and a one-instance
 outline; it shows the mounted tree, observed layout, style provenance and Contract
 locations through the stock frontend at a recorded version. Read-only, loopback,
@@ -1957,7 +1957,7 @@ have landed (1035.005 §1's order), and `contract` blocks as executable assertio
 (LLP 1006 §8) stay off the doing-list. The witness, dataflow and any general
 provenance explorer stay refused.
 **Read (LLP 1151, 2026-10-28; waiver approved by Charlie the same day, "approve waiver yes"):** formatting and navigation have landed; the authored-test grammar's `always`, `after` and `never refuses` blocks (test files, compiled to nothing an app runs) are read as outside this take; executable assertions in a component stay refused.
-**Widened (Charlie, 2026-10-14; LLP 1122 §9 Q2), development builds only:** the Tamber
+**Widened (Charlie, 2026-10-14; LLP 1122 §9 Q2), development builds only:** the Forma
 server may also read the map, to join a build's inspect report with its source for the
 design tool (LLP 1122 D5). It records each file's source digest and each winning row's
 attribute span. A host still never reads a map, and no map is in a bake. The tool shows

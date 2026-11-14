@@ -3,13 +3,13 @@
 **Status:** Closed
 **Resolution:** Allow token-bearing import requests through the proxy up to the local 16 MiB limit
 **Severity:** P2
-**Systems:** `scripts/tamber-server.mjs`, Tamber tool proxy
+**Systems:** `scripts/forma-server.mjs`, Forma tool proxy
 **Author:** Codex
 **Date:** 2026-11-02
 **Reviewed commit:** `5b94c216a6fee8fca42026f5cb2e9a80063da03a`
 
 Local token holders may import up to 16 MiB through the design server
-(`scripts/tamber-server.mjs:544-552`), but `tamber tool --via` rejects every
+(`scripts/forma-server.mjs:544-552`), but `forma tool --via` rejects every
 body above its approximately 1 MiB limit before forwarding it
 (`1439-1445`). A supported local DTCG or stylesheet import therefore fails
 depending on whether the tool connects directly or through the usual dev-loop
@@ -27,8 +27,8 @@ and changes no project files. The normal tool CLI was not launched.
 Preserve the design server's local-import allowance through the proxy while
 keeping authentication, method-specific limits, and the smaller paired-client
 limit enforced upstream. Add a proxy-path counterpart to the existing large
-local import case in `scripts/tamber-pairing-server.test.mjs:65-85`.
-The generic proxy limit test in `scripts/tamber-body-limit.test.mjs:102-139`
+local import case in `scripts/forma-pairing-server.test.mjs:65-85`.
+The generic proxy limit test in `scripts/forma-body-limit.test.mjs:102-139`
 does not exercise a valid local import.
 
 No duplicate found in this checkout or the open and closed issue corpora in
@@ -40,4 +40,4 @@ Allow token-bearing import requests through the proxy up to the local 16 MiB lim
 
 ## Verification
 
-`bun test --isolate scripts/tamber-pairing-server.test.mjs scripts/tamber-body-limit.test.mjs` passes an authenticated 2 MiB proxy import, paired-client/method refusals and generic proxy bounds. The suites use the prebuilt contract binary.
+`bun test --isolate scripts/forma-pairing-server.test.mjs scripts/forma-body-limit.test.mjs` passes an authenticated 2 MiB proxy import, paired-client/method refusals and generic proxy bounds. The suites use the prebuilt contract binary.

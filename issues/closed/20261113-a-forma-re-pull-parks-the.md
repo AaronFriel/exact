@@ -1,8 +1,8 @@
-# A Tamber re-pull parks the light mode when the kept context changes
+# A Forma re-pull parks the light mode when the kept context changes
 
 **Status:** Closed
 **Resolution:** A pull remembers a light mode's id under every context it stands for, its twins in `also` included, so a later export that keeps another of them reuses that mode, default and values, with nothing parked or removed.
-**Systems:** tools/figma-tamber
+**Systems:** tools/figma-forma
 **Severity:** P2
 **Author:** Grok 4.7
 **Date:** 2026-11-13
@@ -13,7 +13,7 @@ If that mode is the collection default it is renamed `unused:…` and left as th
 
 ## Where
 
-`tools/figma-tamber/src/mapping.ts`, `pull`, `lightTwins`, and `contextsMoved`. `tools/figma-tamber/src/code.ts`, the reuse of `prior[kept context]`, the park of an unused default, and the `contextIds` write.
+`tools/figma-forma/src/mapping.ts`, `pull`, `lightTwins`, and `contextsMoved`. `tools/figma-forma/src/code.ts`, the reuse of `prior[kept context]`, the park of an unused default, and the `contextIds` write.
 
 ## How to reproduce
 

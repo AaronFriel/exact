@@ -13,8 +13,8 @@ The only required reading; the rest is lookup. A website reads [Start here: a we
    colour or size names a role (`-exact-secondary-label`, `font="-exact-footnote"`; `bun
    <exact2>/scripts/no-tells.mjs .` lists literals). Leave the accent unsaid: it is the
    platform's blue, and a filled button keeps its white label (a pale accent under
-   it is warned, `tamber-contrast`). A brand is an `app.tamber`; a colour names a role or
-   one of its tokens, `color="ink"` or `color="var(--ink)"` (`recipes/tamber.md`). A card
+   it is warned, `forma-contrast`). A brand is an `app.forma`; a colour names a role or
+   one of its tokens, `color="ink"` or `color="var(--ink)"` (`recipes/forma.md`). A card
    is `-exact-secondary-background` (`-exact-secondary-grouped-background` on a grouped page).
 3. **Design your content:** a focal point (big type, a fill, a shape), a hierarchy in
    rows, an empty state with its next step in the list's place. A labelled entry or settings
@@ -184,7 +184,7 @@ For EAS Build, use [iOS](recipes/eas-ios.md) or [Android](recipes/eas-android.md
 |a release build for a phone: the commands, signing, where the artifact lands|`mobile-build`|
 |a metronome, drum machine, sequencer or MIDI app: sound, MIDI, a transport (built in; write no native audio module)|`sequencer`; ["Sound, MIDI and media"](contract-for-agents.md#sound-midi-and-media); `apps/metronome`|
 |transitions, keyframes, exit and layout animation|`motion`|
-|brand colours, light and dark, icon tokens|`theme`, `tamber`|
+|brand colours, light and dark, icon tokens|`theme`, `forma`|
 |an icon: in a button, a tab, beside a label (a symbol, never a character such as ▦ ☏ ★ or an emoji)|`symbols`|
 |a module in Swift that `app.ts` asks (a resource that reads `native.available` or calls `native.call` keeps its answer across launches); a value a launch gives is a setting, not a module (`contract vocab env`)|`native-module`|
 |a canvas drawn in Rust on the GPU (a `Surface`); Rust of the app's own, in its own Cargo workspace|`gpu-module`|
