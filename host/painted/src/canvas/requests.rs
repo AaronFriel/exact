@@ -6,6 +6,7 @@
 
 use super::CanvasHost;
 use exact_runner::DataSource;
+use serde_json::Value as Json;
 
 impl<D: DataSource + Default> CanvasHost<D> {
     /// What the presenter asks of the reader since it last took them, as
@@ -130,11 +131,30 @@ impl<D: DataSource + Default> CanvasHost<D> {
     }
 
     /// A person's act on what an extension posted on the platform's own UI
-    /// (a notification's tap, `Native.activate`): its event, raised with a
-    /// person's origin as Apple's notification delegate raises it (LLP
-    /// 1133.004 D6, D7). `args` is a JSON array.
-    pub fn extension_activated(&mut self, extension: &str, event: &str, args: &str) {
+    /// (a notification's tap or action, `Native.activate`): its event,
+    /// raised with a person's origin as Apple's notification delegate raises
+    /// it (LLP 1133.004 D6, D7). `args` is a JSON array. An action's
+    /// `action`, the declared record its post carried, raises only while the
+    /// plan declares it, as Apple's categories are its current declarations.
+    pub fn extension_activated(
+        &mut self,
+        extension: &str,
+        event: &str,
+        args: &str,
+        action: Option<&str>,
+    ) {
         let runner = self.p.host_mut().runner_mut();
+        if let Some(action) = action {
+            let record = serde_json::from_str(action).unwrap_or(Json::Null);
+            if !runner.declares_action(extension, &record) {
+                let name = record["action"].as_str().unwrap_or("");
+                runner.log(format!(
+                    "{extension}: the action \"{name}\" is not one this version of the app declares, and raised nothing"
+                ));
+                self.force = true;
+                return;
+            }
+        }
         if let Err(e) =
             runner.raise_module_event(extension, event, args, exact_runner::CallOrigin::App)
         {

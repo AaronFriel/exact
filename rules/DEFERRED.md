@@ -894,8 +894,18 @@ names no take; `:focus-within` remains out.
   for that one action, held until its work has ended or the system's time has
   run out. Consumer: expo/exact#127's app, whose pushes carry Approve. Unblocks
   a notification's Snooze, Reply and Approve without app Swift. Take: none
-  named; the ruling stands as its own waiver. Not built: actions on Android,
-  Windows and the web; the dismissal; `requireInteraction`.
+  named; the ruling stands as its own waiver. Not built: actions on Windows
+  and the web; the dismissal; `requireInteraction`.
+  **Expanded (Charlie, 2026-11-14, expo/exact#537, after a three-seat panel;
+  LLP 1133.004.000):** notifications on Android: the module's names, declared
+  channels (`host.android.notificationChannels`), the `monochrome` icon as the
+  small icon, a click through an unexported alias, timed posts and actions
+  (each delivered in the foreground until Android's headless session).
+  Consumer: expo/exact#537's gatehouse app. Take: waived by Charlie,
+  2026-11-14, after the panel. Built and run on Android 37.2 and Android 11
+  emulators. Owed on a phone: delivery after an OEM's background limits have
+  stopped the app, Doze over hours, and the channel's sound and heads-up on a
+  locked screen.
 
 **Components** — roughly 15 built-in tags, not 40; roughly 12 Facet components, not 47.
 

@@ -113,8 +113,8 @@ macro_rules! canvas_jni_extensions {
         }
 
         /// A person's act on an extension's own platform UI (a
-        /// notification's tap, `Activations.kt`): its event raised with a
-        /// person's origin (LLP 1133.004 D6).
+        /// notification's tap or action, `Activations.kt`): its event raised
+        /// with a person's origin (LLP 1133.004 D6).
         #[no_mangle]
         pub unsafe extern "system" fn Java_dev_exact_canvas_Native_activate(
             env: *mut JNIEnv,
@@ -122,11 +122,13 @@ macro_rules! canvas_jni_extensions {
             extension: jstring,
             event: jstring,
             args: jstring,
+            action: jstring,
         ) {
             let extension = string(env, extension);
             let event = string(env, event);
             let args = string(env, args);
-            with(|h| h.extension_activated(&extension, &event, &args));
+            let action = (!action.is_null()).then(|| string(env, action));
+            with(|h| h.extension_activated(&extension, &event, &args, action.as_deref()));
         }
 
         /// A line for the session's journal (`Exact.journal`).

@@ -11,6 +11,10 @@
 // - A post to a channel the person turned off, or with the app's notifications off, refuses `NotAllowedError`, as
 //   `denied` does: the platform would drop it without a word.
 // - A post with a `showTrigger` in the future is kept and posted then, with no session ([Later]).
+// - Actions (stage 2's declared list) are buttons, three at most, a fourth dropped and journaled. Each starts the
+//   app through its alias, a background action too (LLP 1133.004.000 D5), and writes the action's name and the reply
+//   into the event; the notification closes. `authenticationRequired` asks for the unlock from Android 12; Android
+//   has no destructive style.
 // - The small icon is the app's `monochrome` icon (`exact_notification`), else the platform's generic glyph.
 // - A post's tap is the host's activation ([ExtensionContext.activation]): it opens `navigate` as a link's location,
 //   or raises `notificationclick` with a person's origin, warm or from a cold start.
@@ -30,6 +34,7 @@ import android.Manifest
 import android.app.Notification
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.app.RemoteInput
 import android.content.Context
 import android.graphics.drawable.Icon
 import android.os.Build
@@ -46,6 +51,8 @@ class NotificationsModule(context: ExtensionContext) : ExactExtension(context) {
         const val ID = 0
         /** The group a silent post joins (the key AndroidX's `setSilent` uses). */
         const val SILENT_GROUP = "silent"
+        /** The actions Android shows on one notification ([Notification.Builder.addAction]). */
+        const val SHOWN = 3
         /** The platform's `CATEGORY_*` values `android.category` may name. */
         val CATEGORIES = setOf("alarm", "call", "email", "err", "event", "location_sharing", "message", "missed_call", "navigation",
             "progress", "promo", "recommendation", "reminder", "service", "social", "status", "stopwatch", "sys", "transport", "workout")
@@ -65,6 +72,21 @@ class NotificationsModule(context: ExtensionContext) : ExactExtension(context) {
         /** The channel [record] posts on: its own, or the quiet one for a silent post below Android 12. */
         fun channel(app: Context, record: JSONObject): String =
             if (record.optBoolean("silent") && Build.VERSION.SDK_INT < 31) Channels.quiet(app) else record.getString("channel")
+
+        /** The button of [action], a declared action's record: an activity start through the app's alias, as every
+         * action is on Android (LLP 1133.004.000 D5), mutable only when it has a text field, whose reply the
+         * platform writes into it. */
+        private fun action(app: Context, identifier: String, action: JSONObject, args: JSONArray, slot: Int): Notification.Action {
+            val name = action.getString("action")
+            val intent = ExtensionContext.action(app, "notifications", "notificationclick", args, 1, action, identifier, ID)
+            val placeholder = if (action.isNull("placeholder")) null else action.optString("placeholder")
+            val mutable = if (placeholder == null) PendingIntent.FLAG_IMMUTABLE else if (Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0
+            val pending = PendingIntent.getActivity(app, code(identifier, 2 + slot), intent, PendingIntent.FLAG_UPDATE_CURRENT or mutable)
+            val button = Notification.Action.Builder(null as Icon?, action.optString("title").ifEmpty { name }, pending)
+            if (placeholder != null) button.addRemoteInput(RemoteInput.Builder(ExtensionContext.REPLY).setLabel(placeholder).build())
+            if (Build.VERSION.SDK_INT >= 31 && action.optBoolean("authenticationRequired")) button.setAuthenticationRequired(true)
+            return button.build()
+        }
 
         /** Posts [record] (`record`'s fields): with a session or without one. Throws `SecurityException` when the
          * platform refuses it. */
@@ -91,6 +113,8 @@ class NotificationsModule(context: ExtensionContext) : ExactExtension(context) {
             if (record.optBoolean("silent") && Build.VERSION.SDK_INT >= 31) builder.setGroupAlertBehavior(Notification.GROUP_ALERT_SUMMARY).setGroup(SILENT_GROUP)
             if (record.has("category")) builder.setCategory(record.getString("category"))
             if (record.has("number")) builder.setNumber(record.getInt("number"))
+            val actions = record.optJSONArray("actions") ?: JSONArray()
+            for (i in 0 until actions.length()) builder.addAction(action(app, identifier, actions.getJSONObject(i), JSONArray().put(tag).put(event), i))
             app.getSystemService(NotificationManager::class.java).notify(identifier, ID, builder.build())
         }
     }
@@ -128,7 +152,6 @@ class NotificationsModule(context: ExtensionContext) : ExactExtension(context) {
     }
 
     private fun show(args: JSONObject, reply: (JSONObject) -> Unit) {
-        if ((args.optJSONArray("actions")?.length() ?: 0) > 0) return reply(refused("NotSupportedError", "actions are not on Android yet"))
         val words = args.optJSONObject("android") ?: JSONObject()
         val channel = if (words.isNull("channelId")) Channels.DEFAULT else words.optString("channelId")
         if (Channels.declared(app)?.none { it.id == channel } != false) return reply(refused("TypeError", "android.channelId \"$channel\" is not a channel host.android.notificationChannels declares"))
@@ -139,7 +162,7 @@ class NotificationsModule(context: ExtensionContext) : ExactExtension(context) {
         ask {
             val status = status().also(::announce)
             if (status.getString("state") != "granted") return@ask reply(refused("NotAllowedError", "notifications are off for this app"))
-            val record = record(args, channel, category, number)
+            val record = record(args, channel, category, number, actions(args))
             val posted = channel(app, record)
             if (manager.getNotificationChannel(posted)?.importance == NotificationManager.IMPORTANCE_NONE) {
                 return@ask reply(refused("NotAllowedError", "the channel \"$posted\" is off in Settings"))
@@ -164,14 +187,27 @@ class NotificationsModule(context: ExtensionContext) : ExactExtension(context) {
 
     /** What a post shows, as the receiver that posts it later keeps it: the post's own fields and its identifier,
      * which is its tag, or a fresh one for an untagged post. */
-    private fun record(args: JSONObject, channel: String, category: String?, number: Double?): JSONObject {
+    private fun record(args: JSONObject, channel: String, category: String?, number: Double?, actions: JSONArray): JSONObject {
         val tag = if (args.isNull("tag")) "" else args.optString("tag")
         val record = JSONObject().put("tag", tag).put("identifier", tag.ifEmpty { java.util.UUID.randomUUID().toString() })
             .put("title", args.optString("title")).put("channel", channel).put("silent", args.optBoolean("silent", false))
         for (key in listOf("body", "data", "navigate")) if (!args.isNull(key)) record.put(key, args.optString(key))
         category?.let { record.put("category", it) }
         number?.let { record.put("number", it.toInt()) }
+        if (actions.length() > 0) record.put("actions", actions)
         return record
+    }
+
+    /** The post's actions, the first [SHOWN]: Android shows no more, so the rest are dropped and journaled. */
+    private fun actions(args: JSONObject): JSONArray {
+        val all = args.optJSONArray("actions") ?: return JSONArray()
+        val shown = JSONArray()
+        for (i in 0 until minOf(all.length(), SHOWN)) shown.put(all.getJSONObject(i))
+        if (all.length() > SHOWN) {
+            val dropped = (SHOWN until all.length()).joinToString(", ") { "\"${all.getJSONObject(it).optString("action")}\"" }
+            context.journal("showNotification: Android shows $SHOWN actions; $dropped not shown")
+        }
+        return shown
     }
 
     /** The runtime permission's dialog while it is `prompt` (Android 13 and later), then [done]; at once otherwise. */

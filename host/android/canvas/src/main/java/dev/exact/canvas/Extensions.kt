@@ -296,6 +296,9 @@ class ExtensionContext internal constructor(val application: Context, private va
 
     fun log(line: String) { Log.i("exact", line) }
 
+    /** A line for the session's journal, which the agent's `logs` reads. Main thread. */
+    fun journal(line: String) = Exact.journal(line)
+
     /**
      * The intent a tap on what this extension posts starts (a notification's content intent or action, LLP 1133.004
      * D6; LLP 1133.004.000 D4): the app's unexported alias, which comes forward and opens [navigate] as a link's
@@ -389,6 +392,19 @@ class ExtensionContext internal constructor(val application: Context, private va
          * extension scheduled while the app was not running. */
         @JvmStatic fun activation(context: Context, extension: String, event: String, args: JSONArray, navigate: String? = null): android.content.Intent =
             Activations.intent(context, extension, event, args, navigate)
+
+        /**
+         * The intent a notification's action starts (LLP 1133.004 stage 2): [event] of [extension] with [args], the
+         * name of [action] (a declared action's record) and the reply written into `args[chosen]`, raised only while
+         * the plan declares [action]; the notification [tag], [id] is closed. Activities only: Android shows a
+         * background action in the foreground (LLP 1133.004.000 D5). An action with a text field reads its reply
+         * under [Activations.REPLY].
+         */
+        @JvmStatic fun action(context: Context, extension: String, event: String, args: JSONArray, chosen: Int, action: JSONObject, tag: String, id: Int): android.content.Intent =
+            Activations.action(context, extension, event, args, chosen, action, tag, id)
+
+        /** The `RemoteInput` key of an action's text field. */
+        const val REPLY = Activations.REPLY
     }
 
     /** [requestPermissions] for [name], keeping the history [permission] reads. */

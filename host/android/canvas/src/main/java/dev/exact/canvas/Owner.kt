@@ -722,10 +722,10 @@ internal object Exact {
     /** What the extensions tell exact2 ([Native.changed], [Native.bindExtensions]): on exact2's thread, in order. */
     fun changed(topic: String) { val o = owner; if (o != null) o.call { Native.changed(topic) } else Native.changed(topic) }
     /** A person's act on what an extension posted ([Activations]): its event raised with a person's origin, as an
-     * input, on exact2's thread. */
-    fun activate(extension: String, event: String, args: String) {
+     * input, on exact2's thread; [action] is the declared action's record a notification's action carries. */
+    fun activate(extension: String, event: String, args: String, action: String?) {
         val o = owner
-        if (o != null) { o.input(); o.call { Native.activate(extension, event, args) } } else Native.activate(extension, event, args)
+        if (o != null) { o.input(); o.call { Native.activate(extension, event, args, action) } } else Native.activate(extension, event, args, action)
     }
     /** A line for the session's journal, on exact2's thread. */
     fun journal(line: String) { val o = owner; if (o != null) o.call { Native.journal(line) } else Native.journal(line) }

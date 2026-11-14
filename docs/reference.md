@@ -2822,6 +2822,15 @@ grant beside this one: see [Push](#push).
   immediately as unheard. Replacing its runner releases an action's held
   completion as superseded; a response still awaiting declarations waits for
   the replacement.
+- On Android (LLP 1133.004.000 D5) an action is a button that brings the
+  app forward, with `foreground=false` too: Android has no headless session
+  yet, so no handler could run with the app in the background. Android shows
+  three actions; a fourth is dropped there and journaled. A chosen action is
+  raised only while the app still declares it as the post wrote it: a button
+  posted before an update changed or removed it brings the app forward and
+  raises nothing. `authenticationRequired` asks for the unlock from Android
+  12; Android has no destructive style. After a reply, Android may keep the
+  notification, showing the reply, until the person dismisses it.
 - A remote notification's click opens its payload's `navigate` and nothing
   else ([Push](#push)).
 - `setAppBadge(contents=)` sets the app icon's badge, best effort: a number, no
