@@ -4517,7 +4517,15 @@ installed binary's `EXACT_VERSION` and `EXACT_BUILD_NUMBER` at bake time (defaul
 older bake without them answers `""`. The web JS build uses the same variables
 at build time, with `""` for each unset variable. Rust-rendered pages read those
 values from the web build, including when the server has neither variable set.
-`state.delivery` mirrors them.
+`state.delivery` mirrors them. Its boolean `production` is whether the
+installed binary was baked with production trust (`EXACT_UPDATE_TRUST=production`:
+Apple's `--release`, `--distribution` and `exact release`, Android's `--bundle`,
+`host/web/build.mjs --out`; other builds are development ones unless the variable
+is set). It is the answer the runner uses to keep agent mode and development
+overrides out of a shipped binary, and an over-the-air update cannot change it.
+Gate a developer-only control on it, and gate what that control reads as well, so
+a production build never asks for it:
+`resource overrides = loadOverrides() when not build.production as shape Overrides`.
 `exactViewport().displayMode` is a string: the current CSS display
 mode on the web, `fullscreen`, `window-controls-overlay` (the tall title row
 `display_override` asks for) or `standalone` on macOS, `standalone` on other
