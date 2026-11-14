@@ -70,6 +70,7 @@ impl std::error::Error for BakeError {}
 /// mixed entries below do.
 pub fn build(app: &Path, platform: &str) -> Result<(), BakeError> {
     println!("cargo:rerun-if-env-changed=EXACT_BAKED");
+    println!("cargo:rerun-if-env-changed=EXACT_WEB_TYPES");
     library::link(app, platform, std::env::var_os("EXACT_BAKED").is_some()).map_err(BakeError)?;
     icon::link();
     match std::env::var_os("EXACT_BAKED") {
@@ -1354,7 +1355,6 @@ fn compile_bytecode(stage: &Path, hermesc: &Path) -> Result<(), String> {
         stage,
     )
 }
-
 fn write_declarations(
     app: &Path,
     stage: &Path,
@@ -1363,9 +1363,10 @@ fn write_declarations(
     trust: Option<&str>,
 ) -> Result<(), String> {
     write_changed(&stage.join(DECLARATIONS), declarations.as_bytes())?;
-    // The editor's copy is not a captured input. A one-shot native development
-    // build uses the production producer with development trust.
-    if development || trust.is_none_or(|trust| trust == "development") {
+    // Checks leave the editor's copy to the dev loop (LLP 1172.010 E11).
+    if (development || trust.is_none_or(|trust| trust == "development"))
+        && std::env::var("EXACT_WEB_TYPES").as_deref() != Ok("private")
+    {
         write_changed(&app.join(DECLARATIONS), declarations.as_bytes())?;
     }
     Ok(())

@@ -13,7 +13,7 @@
  *   bun scripts/evidence.mjs note <host> "<what was seen>" [--app <name>] [--device "<model, OS>"]
  */
 import { createHash } from 'node:crypto';
-import { appendFileSync, existsSync, mkdirSync, readFileSync, realpathSync } from 'node:fs';
+import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, realpathSync, statSync, utimesSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { platformCrateKind, resolveApp, webDist as defaultWebDist } from './app.mjs';
 import { nativeBuild, receiptPath } from './agent-build.mjs';
@@ -41,8 +41,15 @@ function buildRecord(app, host, { webDist, device } = {}) {
 export function recordRun(appName, { host, what, result, timing = 'agent', touch, device, sim, target, webDist, kind = 'run' }) {
   try {
     const app = resolveApp(appName), record = buildRecord(app, host, { webDist, device: device || !!target });
+    let receipt;
+    if (host === 'web' && record) {
+      receipt = resolve(app.target, 'web-receipts', digest(record), '.exact-build.json');
+      mkdirSync(dirname(receipt), { recursive: true });
+      copyFileSync(record, receipt);
+      const info = statSync(record); utimesSync(receipt, info.atime, info.mtime);
+    }
     const line = { at: new Date().toISOString(), kind, host, target: target ?? (device ? 'device' : host === 'ios' ? sim ?? process.env.EXACT_SIM ?? 'simulator' : host === 'web' ? process.env.EXACT_WEB_BROWSER ?? 'chrome' : host),
-      timing, ...(touch && touch !== 'agent' ? { touch } : {}), what, result, commit: git(['rev-parse', '--short=10', 'HEAD']).trim(), build: record ? digest(record) : null };
+      timing, ...(touch && touch !== 'agent' ? { touch } : {}), what, result, commit: git(['rev-parse', '--short=10', 'HEAD']).trim(), build: record ? digest(record) : null, ...(receipt ? { receipt } : {}) };
     mkdirSync(resolve(app.dir, '.exact'), { recursive: true });
     appendFileSync(runsOf(app), JSON.stringify(line) + '\n');
   } catch { /* the record is advice */ }
@@ -55,9 +62,9 @@ export function runs(app) {
 }
 
 /** The host's build now: its id, and what changed since it was built ([] when fresh); null where unidentified. */
-function buildNow(app, host) {
+function buildNow(app, host, receipt) {
   if (host === 'web') {
-    const dist = defaultWebDist(app), marker = resolve(dist, '.exact-build.json');
+    const dist = receipt ? dirname(receipt) : defaultWebDist(app), marker = resolve(dist, '.exact-build.json');
     return existsSync(marker) ? { id: digest(marker), changed: webChanges(dist, app).all } : null;
   }
   if (host === 'macos' || host === 'ios') {
@@ -68,12 +75,13 @@ function buildNow(app, host) {
 }
 
 /** Each run with its standing: `current`, `stale` (and why), or `unchecked`. */
-export function standing(app, all = runs(app), now = (host) => buildNow(app, host)) {
+export function standing(app, all = runs(app), now = (host, receipt) => buildNow(app, host, receipt)) {
   const builds = new Map();
   return all.map((r) => {
     if (!r.build) return { ...r, standing: 'unchecked', why: ['web', 'macos', 'ios'].includes(r.host) ? 'a device build is not identified yet' : `a ${r.host} build is not identified yet` };
-    if (!builds.has(r.host)) builds.set(r.host, now(r.host));
-    const b = builds.get(r.host);
+    const key = r.receipt ?? r.host;
+    if (!builds.has(key)) builds.set(key, now(r.host, r.receipt));
+    const b = builds.get(key);
     if (!b) return { ...r, standing: 'stale', why: `no ${r.host} build is there now` };
     if (b.id !== r.build) return { ...r, standing: 'stale', why: 'a later build replaced the one it ran on' };
     if (b.changed.length) return { ...r, standing: 'stale', why: `${b.changed.slice(0, 3).join(', ')}${b.changed.length > 3 ? ` and ${b.changed.length - 3} more` : ''} changed after` };

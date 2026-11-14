@@ -165,18 +165,10 @@ function build(app, { quiet = false, distribution = false, identity = null } = {
   refuseForeignBundle(app, bundle);
   return bundle;
 }
-/** The dev loop's plan, when the one on disk is *this* app's.
- *
- * `host/web/dev.mjs` writes every rebuild to one shared `host/web/dist`, so
- * the plan sitting there belongs to whichever app the dev server is running.
- * Pointing a client at another app's plan does not live-reload it — the
- * runner refuses the boot outright (`AppMismatch`) and you get no window.
- * The dist marker says whose it is, so this asks rather than assumes: a
- * match is live reload, anything else is the baked plan and a printed line
- * saying so. `EXACT_DEV_PLAN` in the environment always wins. */
-async function devPlan(app) {
+/** The loop's plan, checked against the app's identity before native launch. */
+export async function devPlan(app) {
   if (process.env.EXACT_DEV_PLAN) return { path: process.env.EXACT_DEV_PLAN, why: 'EXACT_DEV_PLAN' };
-  const dist = resolve(ROOT, 'host/web/dist');
+  const dist = process.env.EXACT_WEB_DIST ?? (await import('./web-build.mjs')).loopWebDist(app, 'wasm');
   const plan = resolve(dist, 'app.plan');
   if (!existsSync(plan)) return { path: null, why: `no dev server has built into ${dist.replace(ROOT + '/', '')}` };
   if (!await builtAppMatches(dist, app).finally(closeFilesystemReader)) return { path: null, why: `${dist.replace(ROOT + '/', '')} holds another app's build` };

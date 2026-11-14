@@ -1201,18 +1201,21 @@ export function webChanges(dist, app) {
   const built = JSON.parse(readFileSync(marker, 'utf8'));
   if (built.inputs && !built.inputRoots) return { app: [], shared: [shown(marker)], all: [shown(marker)] };
   const contract = built.reads?.contract;
-  const recorded = new Set((built.inputRoots ?? []).filter(root => root.file).map(root => resolve(root.file)));
-  const byContractReceipt = path => contract && path.endsWith('.contract') && !recorded.has(resolve(ROOT, path));
-  const changed = path => !byContractReceipt(path) && (!built.inputs || built.inputs[path] !== contentDigest(path));
   // Candidates: what changed since the build read its inputs (`inputsAt`, as it started, less the file
   // system's clock grain), else since its marker.
   const since = typeof built.inputsAt === 'number' ? built.inputsAt - 2000 : statSync(marker).mtimeMs;
   let inputRoots = built.inputRoots;
   // A root query that fails (Cargo's lock, a manifest) leaves the build unverified: the build says why.
   if (!inputRoots) try { inputRoots = webSourceRoots(app, built.target === 'js'); } catch { return { app: [], shared: [shown(marker)], all: [shown(marker)] }; }
+  const recorded = new Set(inputRoots.filter(root => root.file).map(root => resolve(root.file)));
+  const unusedContract = notBuildInput(app.dir, shaderWatchRoots(app), new Set());
+  const byContractReceipt = path => contract && path.endsWith('.contract') && !recorded.has(resolve(ROOT, path))
+    && (resolve(ROOT, path) === resolve(app.dir, 'app.contract') || unusedContract(resolve(ROOT, path)));
+  const changed = path => !byContractReceipt(path) && (!built.inputs || built.inputs[path] !== contentDigest(path));
   const { app: own, shared: roots } = webInputs(app, built.target === 'js', since, inputRoots);
   const appChanges = own.filter(changed), shared = roots.filter(changed);
   if (contract) for (const path of changedContractReads(contract)) (within(app.dir, path) ? appChanges : shared).push(shown(path));
+  for (const path of changedContractReads(built.reads?.cargo ?? {})) (within(app.dir, path) ? appChanges : shared).push(shown(path));
   // A file the build read that is gone since (a source deleted) is a change too: absence is an input.
   for (const path of Object.keys(built.inputs ?? {})) if (!byContractReceipt(path) && !['EXACT_BACKEND_ORIGIN', 'PORT'].includes(path) && !setting(path) && built.inputs[path] !== null && !appChanges.includes(path) && !existsSync(resolve(ROOT, path))) (within(app.dir, resolve(ROOT, path)) ? appChanges : shared).push(path);
   if ((built.inputs?.EXACT_BACKEND_ORIGIN ?? null) !== (process.env.EXACT_BACKEND_ORIGIN ?? null)) appChanges.push('EXACT_BACKEND_ORIGIN');

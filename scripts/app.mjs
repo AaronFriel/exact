@@ -338,7 +338,7 @@ export function checkModuleRoster(app, provided, where, release) {
  * on stable (@ref LLP 1047: a GPU crate keeps its toolchain's std), as the wasm target's bake does
  * (the JS target has no bake); the wasm target passes false, having built them.
  * `check` validates tooling without building or packaging; wasm-opt is optional. */
-export function webGpuArtifacts(app, stage, { cargo = false, check = false, env = process.env, profile = 'web' } = {}) {
+export function webGpuArtifacts(app, stage, { cargo = false, check = false, env = process.env, profile = 'web', products = {} } = {}) {
   const artifacts = [...(app.hasGpu ? [{ crate: app.crate('gpu'), stem: 'gpu' }] : []),
     ...gpuModules(app.manifest).map(({ name }) => ({ crate: app.crate(`gpu-${name}`), stem: `gpu/${name}` }))];
   if (artifacts.length) webGpuTools(env);
@@ -348,7 +348,7 @@ export function webGpuArtifacts(app, stage, { cargo = false, check = false, env 
     if (cargo) buildCommand('cargo', ['build', ...cargoReproducibilityFlags(app), ...injectedProfiles(app), ...wasmRemapFlags(app), '-p', crate,
       '--target', 'wasm32-unknown-unknown', '--profile', profile, '--lib', '--config', `profile.${profile}.strip=false`], app, cargoEnvironment({ ...env, CARGO_TARGET_DIR: app.target }), 'inherit');
     const wasm = resolve(app.target, 'wasm32-unknown-unknown', profile, crate.replace(/-/g, '_') + '.wasm');
-    note += `${note ? '; ' : ''}${packageGpuWasm(crate, wasm, stage, stem, { env, profile })}`;
+    note += `${note ? '; ' : ''}${packageGpuWasm(crate, products[wasm] ?? wasm, stage, stem, { env, profile })}`;
   }
   return { note: note || 'no GPU crate', built: artifacts.length > 0 };
 }
@@ -1278,8 +1278,8 @@ export function buildBake(app, platform, target, options = {}) {
   });
   const releases = [];
   try {
-    if (apple) for (const path of appleCargoClaims(app, target, selected.map(({unit}) => unit))) {
-      releases.push(claimBuildOutput(app, path));
+    if (apple || platform === 'web') for (const path of appleCargoClaims(app, target, selected.map(({unit}) => unit))) {
+      releases.push(awaitBuildOutput(app, path, owner => console.error(`waiting for the ${platform} build of ${owner}`)));
     }
   for(const {pkg,unit} of selected) {
     if (pkg.id === graph.root.id && pkg.targets.some(t => t.kind.includes('custom-build'))) env.EXACT_BAKE_PACKAGE_DIR = realpathSync(dirname(pkg.manifest_path));

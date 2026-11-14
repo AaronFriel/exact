@@ -161,7 +161,7 @@ export function appleArtifacts(app, { destination = 'macos', composition, trust 
   composition ??= app.manifest.deploy?.store?.[platform] === '0' ? 'embedded' : 'updating';
   if (!['embedded', 'updating'].includes(composition) || !['development', 'production'].includes(trust)) throw new Error('invalid Apple composition or trust policy');
   const target = destination === 'macos' ? bakeTarget('macos') : destination === 'ios' ? 'aarch64-apple-ios' : destination === 'tvos-simulator' ? tvosTarget : destination === 'tvos' ? tvosDeviceTarget : iosTarget;
-  const owner = resolve(app.target, 'clients', appSourceKey(app), app.id);
+  const owner = resolve(process.env.EXACT_APPLE_OUTPUT ?? resolve(app.target, 'clients'), appSourceKey(app), app.id);
   const namespace = resolve(owner, destination, target, composition, trust);
   // `product` is the Swift package's; `executable`, what it is linked to, is the app's name, as Xcode's (a sample host keeps its own).
   const product = destination === 'macos' ? (host ? 'ExactHostMac' : 'ExactMac') : (host ? 'ExactHostIOS' : 'ExactIOS');

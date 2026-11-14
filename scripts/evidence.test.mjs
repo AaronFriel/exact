@@ -5,7 +5,9 @@ import { existsSync, mkdirSync, mkdtempSync, renameSync, rmSync, symlinkSync, ut
 import { createHash } from 'node:crypto';
 import { dirname, resolve } from 'node:path';
 import { resolveApp } from './app.mjs';
-import { changedPaths, hostsTouched, standing } from './evidence.mjs';
+import { changedPaths, hostsTouched, recordRun, runs, standing } from './evidence.mjs';
+import { privateWebBuild } from './web-build.mjs';
+import { webInputDigests } from './agent-launch.mjs';
 import { appleArtifacts, appleRunBinary } from '../host/apple/build.mjs';
 
 const ROOT = resolve(import.meta.dir, '..');
@@ -18,6 +20,34 @@ const appAt = (path) => {
     else process.env.EXACT_APP_DIR = previous;
   }
 };
+
+test('web evidence keeps its receipt after temporary publications are removed', () => {
+  mkdirSync(resolve(ROOT, 'target'), { recursive: true });
+  const dir = mkdtempSync(resolve(ROOT, 'target/evidence-web-'));
+  const previous = process.env.EXACT_APP_DIR, distBefore = process.env.EXACT_WEB_DIST;
+  try {
+    writeFileSync(resolve(dir, 'app.json'), JSON.stringify({ name: 'evidence-web', app: { id: 'com.exact.evidence-web', name: 'Evidence Web' } }));
+    const source = resolve(dir, 'app.contract');
+    writeFileSync(source, 'component App\n  text "hello"\n');
+    const app = resolveApp(dir), build = privateWebBuild(app, 'test');
+    process.env.EXACT_WEB_DIST = build.dist;
+    mkdirSync(build.dist, { recursive: true });
+    writeFileSync(resolve(build.dist, '.exact-build.json'), JSON.stringify({ target: 'js', inputs: webInputDigests(app, true, []), inputRoots: [], inputsAt: 0 }));
+    recordRun(dir, { host: 'web', what: 'test', result: 'passed' });
+    build.close();
+    expect(existsSync(build.dist)).toBe(false);
+    const recorded = runs(app);
+    expect(recorded).toHaveLength(1);
+    expect(existsSync(recorded[0].receipt)).toBe(true);
+    expect(standing(app, recorded)[0].standing).toBe('current');
+    writeFileSync(source, 'changed');
+    expect(standing(app, recorded)[0].standing).toBe('stale');
+  } finally {
+    if (previous === undefined) delete process.env.EXACT_APP_DIR; else process.env.EXACT_APP_DIR = previous;
+    if (distBefore === undefined) delete process.env.EXACT_WEB_DIST; else process.env.EXACT_WEB_DIST = distBefore;
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 test('a run is current while its build is the host\'s and fresh', () => {
   const runs = [

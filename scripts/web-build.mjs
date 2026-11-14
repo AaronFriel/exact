@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { basename, resolve } from 'node:path';
 
 // LLP 1172.010 E11: a frontend owns its publication; checks own one per invocation.
 export function loopWebDist(app, target) {
@@ -13,7 +13,31 @@ export function privateWebBuild(app, kind) {
   mkdirSync(root, { recursive: true });
   const directory = mkdtempSync(resolve(root, `${kind}-`));
   const dist = resolve(directory, 'dist');
-  return { dist, env: { EXACT_WEB_DIST: dist, EXACT_WEB_TYPES: 'private' }, close: () => rmSync(directory, { recursive: true, force: true }) };
+  return { dist, env: { EXACT_WEB_DIST: dist, EXACT_BAKE_OUTPUT: resolve(directory, 'bake'), EXACT_WEB_TYPES: 'private' }, close: () => rmSync(directory, { recursive: true, force: true }) };
+}
+
+export function privateNativeBuild(app, kind) {
+  const root = resolve(app.target, 'native-runs');
+  mkdirSync(root, { recursive: true });
+  const directory = mkdtempSync(resolve(root, `${kind}-`));
+  return { env: { EXACT_APPLE_OUTPUT: resolve(directory, 'apple'), EXACT_BAKE_OUTPUT: resolve(directory, 'bake'), EXACT_WEB_TYPES: 'private' },
+    close: () => rmSync(directory, { recursive: true, force: true }) };
+}
+
+/** Copy while the producer still holds its Cargo product claims (LLP 1172.010 E11). */
+export function captureWebProducts(receipt, directory) {
+  mkdirSync(directory, { recursive: true });
+  return Object.fromEntries(receipt.products.filter(product => product.path.endsWith('.wasm')).map(product => {
+    const path = resolve(directory, basename(product.path));
+    copyFileSync(product.path, path);
+    if (createHash('sha256').update(readFileSync(path)).digest('hex') !== product.sha256) throw new Error(`Cargo product changed before capture: ${product.path}`);
+    return [product.path, path];
+  }));
+}
+
+export function cargoContractReads(roots) {
+  return Object.fromEntries(roots.filter(root => root.file?.endsWith('.contract') && existsSync(root.file))
+    .map(({ file }) => [file, createHash('sha256').update(readFileSync(file)).digest('hex')]));
 }
 
 /** Hashes of the text the compiler consumed, never a reread of moving sources. */

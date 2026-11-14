@@ -1012,9 +1012,9 @@ async function deviceMain(argv, emitJSON, declined, ended) {
   const host = chosen.host;
   if (!['web', 'ios', 'windows', 'android'].includes(host)) { console.error(`verify: web, ios, windows or android, not ${host} (test ${host} runs the tests there)`); return declined(2); }
   if (host === 'windows' && process.platform !== 'win32') { console.error('verify windows runs on Windows (bun exact.mjs verify windows there)'); return declined(2); }
-  if (host === 'web') {
-    const { privateWebBuild } = await import('./web-build.mjs');
-    const build = privateWebBuild(app, 'verify');
+  if (host === 'web' || host === 'ios') {
+    const { privateWebBuild, privateNativeBuild } = await import('./web-build.mjs');
+    const build = (host === 'web' ? privateWebBuild : privateNativeBuild)(app, 'verify');
     Object.assign(process.env, build.env);
     process.once('exit', build.close);
   }

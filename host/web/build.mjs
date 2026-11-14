@@ -52,7 +52,7 @@ import { appManifestDigest, appSources, buildFileCards, copyStaticTreeIfPresent,
 import { foreignBeside } from './generations.mjs';
 import { androidAssociation, writeAppleAssociation } from './association.mjs';
 import { cargoInputPaths, compilerPaths } from '../../scripts/cargo-dep-info.mjs';
-import { contractReadReceipt } from '../../scripts/web-build.mjs';
+import { captureWebProducts, contractReadReceipt } from '../../scripts/web-build.mjs';
 
 const SDK_ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const metadataCache = new Map();
@@ -329,7 +329,10 @@ const previous = `${dist}.previous`;
 if (!existsSync(dist) && existsSync(previous)) renameSync(previous, dist);
 else if (existsSync(dist) && existsSync(previous)) rmSync(previous, { recursive: true, force: true });
 const buildEnv = developmentBuildEnv();
-buildEnv.EXACT_BAKE_OUTPUT = bakeOutput(app, buildEnv);
+mkdirSync(resolve(app.target, 'web-bakes'), { recursive: true });
+const packaging = mkdtempSync(resolve(app.target, 'web-bakes/build-'));
+process.once('exit', () => rmSync(packaging, { recursive: true, force: true }));
+buildEnv.EXACT_BAKE_OUTPUT = process.env.EXACT_BAKE_OUTPUT ?? resolve(packaging, 'bake');
 // Proofs select the requested game profile under either trust mode; ordinary builds ship web.
 const proofProfile = game ? process.env.EXACT_GAME_PROOF_PROFILE : undefined;
 if (proofProfile && !['gpu-dev', 'release'].includes(proofProfile)) throw new Error('EXACT_GAME_PROOF_PROFILE must be gpu-dev or release');
@@ -350,7 +353,9 @@ if (keepNames || !unsplit) buildEnv.CARGO_PROFILE_WEB_STRIP = 'debuginfo';
 const inputsAt = Date.now(), inputs = webInputDigests(app, false, inputRoots), sources = appSources(app.dir, dist).digest;
 const generated = game ? generatedInputFiles(app.dir) : [];
 const warmInputs = !bakeOnly ? warmGameInputs(app, {...buildEnv, EXACT_GAME_PROOF_PROFILE:proofProfile}) : null;
-const buildReceipt = contractLast(() => buildBake(app, 'web', 'wasm32-unknown-unknown', {env:buildEnv, check:bakeOnly, gpuProfile}));
+let products;
+const buildReceipt = contractLast(() => buildBake(app, 'web', 'wasm32-unknown-unknown', {env:buildEnv, check:bakeOnly, gpuProfile,
+  capture: receipt => { products = captureWebProducts(receipt, resolve(packaging, 'products')); } }));
 // Game bakes create, replace and prune assets. Capture those outputs before packaging;
 // authored files keep their initial digests, including handwritten assets beside generated ones.
 if (game) {
@@ -360,7 +365,7 @@ if (game) {
     else if (outputs.has(path)) inputs[path] = createHash('sha1').update(readFileSync(path)).digest('hex');
   }
 }
-const built = resolve(app.target, 'wasm32-unknown-unknown/web', crate.replace(/-/g, '_') + '.wasm');
+const built = products[resolve(app.target, 'wasm32-unknown-unknown/web', crate.replace(/-/g, '_') + '.wasm')];
 // Build one app into its own staging directory. Only a complete build replaces
 // dist, so a server sees the previous app or the next one, never a mixture;
 // replacing the directory also drops every stale optional/private artifact.
@@ -713,7 +718,7 @@ if (authReach.sessions) {
 // the web) and wasm-opt. Only when the app has a GPU crate.
 // Each declared GPU module (LLP 1009 D6) is its own wasm under gpu/, fetched
 // the first time a canvas of one of its surfaces mounts.
-const gpu = bakeOnly ? { note: 'none (--bake)', built: false } : webGpuArtifacts(app, stage, {profile:gpuProfile});
+const gpu = bakeOnly ? { note: 'none (--bake)', built: false } : webGpuArtifacts(app, stage, {profile:gpuProfile, products});
 let gpuNote = gpu.note;
 if (gpu.built) {
   copyHostFiles('gpu');

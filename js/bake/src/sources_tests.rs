@@ -900,7 +900,7 @@ fn development_trust_refreshes_editor_declarations_in_a_one_shot_bake() {
         );
         assert_eq!(
             std::fs::read_to_string(&beside).unwrap(),
-            if refresh {
+            if refresh && std::env::var("EXACT_WEB_TYPES").as_deref() != Ok("private") {
                 "fresh source signature"
             } else {
                 "old source signature"
@@ -919,4 +919,22 @@ fn development_trust_refreshes_editor_declarations_in_a_one_shot_bake() {
             "unchanged declarations must not trigger an editor watcher"
         );
     }
+}
+
+#[test]
+fn private_checks_keep_editor_declarations() {
+    let result = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "sources_tests::development_trust_refreshes_editor_declarations_in_a_one_shot_bake",
+        ])
+        .env("EXACT_WEB_TYPES", "private")
+        .output()
+        .unwrap();
+    assert!(
+        result.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&result.stdout),
+        String::from_utf8_lossy(&result.stderr)
+    );
 }

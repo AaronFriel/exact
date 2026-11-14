@@ -70,8 +70,10 @@ import * as rust from ${JSON.stringify(resolve(root, 'scripts/rust.mjs'))};
 import * as serve from ${JSON.stringify(resolve(root, 'host/web/serve.mjs'))};
 import * as startup from ${JSON.stringify(resolve(root, 'host/web/dev-startup.mjs'))};
 import * as modules from ${JSON.stringify(resolve(root, 'host/web-js/module.mjs'))};
+import * as webBuild from ${JSON.stringify(resolve(root, 'host/web/build.mjs'))};
 const spawn = children.spawn, spawnSync = children.spawnSync;
 const watch = files.watch;
+mock.module(${JSON.stringify(resolve(root, 'host/web/build.mjs'))}, () => ({ ...webBuild, webSourceRoots: () => [] }));
 mock.module('node:fs', () => ({ ...files, watch(...args) {
   if (process.env.FIXTURE_PHASE !== 'queued-edit' || args[0] !== process.env.FIXTURE_DIR) return watch(...args);
   const callback = args.at(-1); let signalled = false;

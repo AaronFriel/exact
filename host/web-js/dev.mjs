@@ -22,7 +22,8 @@ import { builtSettings } from '../../js/bake/src/__exact_env.mjs';
 import { alsoOnIPv6Loopback, appManifestDigest, appSources, buildFileCards, listenDelay, replaceBuild, saveTrace, sendStaticBody, watchLauncher, webContentType } from '../web/serve.mjs';
 import { generationFile, generationPath, servedFile } from '../web/generations.mjs';
 import { besidePattern } from '../web/beside.mjs';
-import { contractReadReceipt } from '../../scripts/web-build.mjs';
+import { cargoContractReads, contractReadReceipt } from '../../scripts/web-build.mjs';
+import { webSourceRoots } from '../web/build.mjs';
 import { localInstaller } from '../web/local-install.mjs';
 import { designPath, frameOnlyByTool, tamberServer } from '../../scripts/tamber-server.mjs';
 import { pluginOnLoopback } from '../../scripts/tamber-remote.mjs';
@@ -120,6 +121,7 @@ function build(app, dist, keep = () => false, compiler = null, superseded = null
   // would be sources moved since it began, and it would be set aside (#115).
   try { installedFileDependencies(app.dir); } catch (error) { return Promise.resolve({ packages: devPackages(stage), error: error.message }); }
   const began = Date.now(), sources = appSources(app.dir, resolve(dist)).digest;
+  const cargo = cargoContractReads(webSourceRoots(app, true));
   // The app's own inputs beside its Contract sources, and which were there.
   const own = [designPath(app.dir) ?? resolve(app.dir, 'app.tamber'), resolve(app.dir, 'app.ts'), resolve(app.dir, 'app.json'), resolve(app.dir, '.exact/backend-origin'), resolve(app.dir, '.env.local'), resolve(app.dir, '.env')];
   const there = new Set(own.filter((path) => existsSync(path)));
@@ -174,7 +176,7 @@ function build(app, dist, keep = () => false, compiler = null, superseded = null
       const after = appSources(app.dir, resolve(dist)).digest;
       writeFileSync(resolve(stage, '.exact-build.json'), JSON.stringify({ exactBuild: 1, target: 'js', app: { id: app.id, name: app.displayName },
         manifestSha256: appManifestDigest(app), files: buildFileCards(stage), sources: after === sources ? after : null,
-        reads: { contract: contractReadReceipt(resolve(stage, '.gen')) }, ...builtSettings(stage) }) + '\n');
+        reads: { contract: contractReadReceipt(resolve(stage, '.gen')), cargo }, ...builtSettings(stage) }) + '\n');
       // Once more after the watchers' events queued meanwhile are taken.
       setImmediate(() => {
         if (moved()) return setAside();
