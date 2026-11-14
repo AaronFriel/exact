@@ -220,8 +220,7 @@ export function checks(sha, since, selection = {}) {
     ['fmt', 'cargo', ['fmt', '--all', '--', '--check']],
     ['caps', 'bun', ['scripts/caps.mjs']],
     ['boot', 'bun', ['scripts/boot.mjs']],
-    // The bytes each web app ships against its budget (LLP 1047.002 D5), in seconds here rather
-    // than after `metrics --long`'s macOS build, so a VIOLATION is filed in the commit's first minute.
+    // Shared runtime and app byte ceilings fail this step (LLP 1172.011 E1), before metrics --long's native builds.
     ['web-bytes', 'bun', ['scripts/metrics.mjs', '--web-bytes']],
     // Every web host unit test (LLP 1012.001.000 D9; Charlie, 2026-09-30)
     // and the source capture fixtures, in the existing async glue step.

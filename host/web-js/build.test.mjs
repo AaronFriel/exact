@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync, statSync, utimesSync } from 'node:fs';
 import { createServer, get as httpGet } from 'node:http';
 import { tmpdir } from 'node:os';
-import { brotliCompressSync, brotliDecompressSync, constants } from 'node:zlib';
+import { brotliDecompressSync } from 'node:zlib';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { bakedRustSource, buildModule, moduleGrants, webCompiler } from './module.mjs';
@@ -121,49 +121,6 @@ test.each([[false, false], [true, false], [true, true]])('a list first opened of
     await page.getByTestId('rows').evaluate(el => { el.scrollTop = 3600; });
     await page.getByTestId('row-90').waitFor();
     expect(await page.getByTestId('row-0').count()).toBe(0);
-  } finally {
-    await browser?.close(); server?.stop(true); rmSync(dir, { recursive: true, force: true });
-  }
-}, 60000);
-
-test('the production starter stays within its 45 KiB budget and its header button works', async () => {
-  if (webCompiler().cmd === 'cargo') throw new Error('build the compiler first: cargo build -p exact-web-js');
-  const root = resolve(import.meta.dir, '../..'), dir = mkdtempSync(resolve(root, 'target/starter-bytes-'));
-  const app = resolve(dir, 'starter'), dev = resolve(dir, 'development'), dist = resolve(dir, 'production');
-  let browser, server;
-  try {
-    const run = (args, env = {}) => {
-      const result = spawnSync(process.execPath, args, { cwd: root, env: { ...process.env, ...env }, encoding: 'utf8' });
-      expect(result.status, result.stdout + result.stderr).toBe(0);
-    };
-    run(['scripts/exact.mjs', 'new', app, '--bundle-id', 'com.example.starter']);
-    run(['host/web/build.mjs', 'starter-web'], { EXACT_APP_DIR: app, EXACT_WEB_DIST: dev });
-    run(['host/web-js/build.mjs', 'starter', '--plan', resolve(dev, 'app.plan'), '--out', dist, '--production'], { EXACT_APP_DIR: app });
-    const entry = readFileSync(resolve(dist, 'app.js'));
-    const bytes = brotliCompressSync(entry, { params: {
-      [constants.BROTLI_PARAM_QUALITY]: 11, [constants.BROTLI_PARAM_SIZE_HINT]: entry.length,
-    } }).length;
-    // scripts/metrics.mjs JS_TARGET_KIB: the production artifact, compressed as it ships.
-    expect(bytes).toBeLessThanOrEqual(45 * 1024);
-    expect(entry.toString()).not.toContain('focus window');
-    expect(entry.toString()).not.toContain('clipboard');
-    expect(entry.toString()).not.toContain('vibrate');
-    server = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch(request) {
-      const path = new URL(request.url).pathname;
-      return new Response(Bun.file(resolve(dist, path === '/' ? 'index.html' : path.slice(1))));
-    } });
-    browser = await suiteBrowser();
-    const page = await browser.newPage(), errors = [];
-    page.on('pageerror', error => errors.push(error.message));
-    await page.goto(server.url.href + '?agent&epoch=1&seed=3');
-    await page.waitForFunction(() => globalThis.exact?.ready);
-    expect(await page.evaluate(() => exact.clock.agent)).toBe(false);
-    await page.waitForFunction(() => document.querySelector('[data-testid=greeting]')?.textContent === 'Hello from Starter.');
-    await page.getByTestId('like').click();
-    expect(await page.getByTestId('like').getAttribute('aria-label')).toBe('Unlike');
-    await page.getByTestId('like').click();
-    expect(await page.getByTestId('like').getAttribute('aria-label')).toBe('Like');
-    expect(errors).toEqual([]);
   } finally {
     await browser?.close(); server?.stop(true); rmSync(dir, { recursive: true, force: true });
   }

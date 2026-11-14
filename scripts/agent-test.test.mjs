@@ -948,3 +948,26 @@ test('replay selects the original ordinal among duplicate names and host variant
     expect(r.stdout).toContain('completed');
   } finally {rmSync(dir, {recursive:true, force:true});}
 }, 30000);
+
+test('at keeps the origin of a remote web test', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'exact-remote-at-')), script = join(dir, 'check.mjs');
+  writeFileSync(join(dir, 'app.contract'), 'component App\n  view\n    text "Test"\n');
+  writeFileSync(join(dir, 'app.test.contract'), 'test "remote route"\n  at "/settings?panel=account#name"\n  expect state ready == true\n');
+  writeFileSync(script, `
+    import assert from 'node:assert/strict';
+    import { mock } from 'bun:test';
+    const urls = [];
+    mock.module(${JSON.stringify(fileURLToPath(new URL('./agent.mjs', import.meta.url)))}, () => ({ open: async options => {
+      urls.push(options.url);
+      return {host:'web',now:0,op:async()=>({clock:0,lines:[]}),clock:async()=>({}),state:async()=>({mutationRequests:0,slots:{ready:true}}),logs:async()=>({lines:[]}),close:async()=>{}};
+    }}));
+    const {runTests} = await import(${JSON.stringify(fileURLToPath(new URL('./agent-test.mjs', import.meta.url)))});
+    const result = await runTests({host:'web',app:${JSON.stringify(dir)},file:${JSON.stringify(join(dir, 'app.test.contract'))},url:'http://fixture.invalid:4321/'});
+    assert.equal(result.failed, 0, JSON.stringify(result));
+    assert.deepEqual(urls, ['http://fixture.invalid:4321/settings?panel=account#name']);
+  `);
+  try {
+    const result = spawnSync(process.execPath, [script], { encoding: 'utf8', timeout: 30000 });
+    expect(result.status, result.stdout + result.stderr).toBe(0);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+}, 30000);

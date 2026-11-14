@@ -715,30 +715,12 @@ export const Hosts = {
     if (e) e.scrollBy(x, y);
     else say(`scrollBy "${id}" refused: no live node with that id`);
   },
-  // journal lines only; marks.js replaces these when the app has launch modules
-  observe: n => say(`observe ${n}`),
-  observeAttributes: () => {},
-  observeError: m => say(`observeError ${m}`),
 };
 // commands.js's, each by name as the compiled plan imported it for an action that names it (emit.rs, LLP 1047.002 D1):
 // a factory over the journal and whether the agent drives the page; one no action names is never linked
 export function useCommands(table) {
   for (const name in table) Hosts[name] = table[name](say, () => agentMode());
 }
-// A handler's `preventDefault()` and `stopPropagation()` act on its event (events.js `KeyEvent`, `Propagating`):
-// commands run before its commit returns; a stopped key reaches no ancestor's `key` handler, its default still does
-// (files diary F8); a prevented beforeunload is the browser's "Leave site?" (Safari reads `returnValue`)
-Hosts.preventDefault = () => {
-  KeyEvent?.preventDefault();
-  if (KeyEvent?.type === 'beforeunload') KeyEvent.returnValue = '';
-  // A pointerdown handler's: the browser keeps the focus, places no caret, starts no selection; the click still fires
-  // (LLP 1005 §3).
-  if (!KeyEvent && Propagating?.type === 'pointerdown') Propagating.preventDefault();
-};
-Hosts.stopPropagation = () => {
-  const e = KeyEvent ?? Propagating;
-  if (e) e.$stopped = true;
-};
 // The voice table's and the MIDI queue's commands (LLP 1096 D5, LLP 1125 D7): the runtime's own, never a host's;
 // sounds.js and midi.js apply a commit's once it stood, and transport.js reads the sequences in the gate step and plays
 // them once it stood (LLP 1125 D2).
