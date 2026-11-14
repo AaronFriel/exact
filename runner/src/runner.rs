@@ -52,20 +52,20 @@ mod held;
 mod live;
 mod mode;
 pub use held::Asked;
+mod forma;
 mod root_font;
 mod shown;
 mod sounds;
-mod tamber;
 mod theme;
 pub use event::{
     ActionBinding, ActionBindingError, ActionBindingRefusal, ControlValue, Event, KeyModifiers,
     KeyboardEvent, ScrollEvent,
 };
-pub use live::{LiveApplied, LiveRefusal};
-pub use tamber::{
-    Color as ColorKind, Font, Kind, Length as LengthKind, Number as NumberKind, Place, Tamber,
+pub use forma::{
+    Color as ColorKind, Font, Forma, Kind, Length as LengthKind, Number as NumberKind, Place,
     Token, Type as TypeKind,
 };
+pub use live::{LiveApplied, LiveRefusal};
 mod canvas2d;
 pub use canvas2d::{
     engine as canvas_engine, CanvasEngine, CanvasList, DrawReply, DrawRequest, Drawn, Geometry,
@@ -383,7 +383,7 @@ pub struct Runner<D: DataSource> {
     /// A development build admitting live batches ([`Runner::admit_live`]), and its last scrub frame.
     live: live::Live,
     /// What a binding was told of this plan's tokens (a name it lacks), each said once (LLP 1121 D12).
-    tamber_said: Vec<String>,
+    forma_said: Vec<String>,
     /// How many times a token's value moved (`set_tokens`): a binding's input.
     design_moves: u64,
     /// Its role overrides, its own (LLP 1121 stage 5; [`Runner::roles`]).
@@ -865,7 +865,7 @@ impl<D: DataSource> Runner<D> {
             reorder_kept: Default::default(),
             design: None,
             live: Default::default(),
-            tamber_said: Vec::new(),
+            forma_said: Vec::new(),
             design_moves: 0,
             roles: exact_kernel::style::roles::Installed::new(roles.clone()),
             reorder_session: None,

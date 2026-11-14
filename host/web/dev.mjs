@@ -25,10 +25,10 @@ import { guardFlags } from '../../scripts/help.mjs';
 import { webPortRange } from '../../scripts/agent-launch.mjs';
 import { localInstaller } from './local-install.mjs';
 import { claimDevLoop, runBuildTree, startupBuilds, stopBuildTree } from './dev-startup.mjs';
-import { designPath, frameOnlyByTool, tamberServer } from '../../scripts/tamber-server.mjs';
-import { pluginOnLoopback, remoteArgs } from '../../scripts/tamber-remote.mjs'; import { openRemoteCanvas } from '../../scripts/tamber-canvas.mjs';
-import { designDigest, patchDesign } from '../../scripts/tamber-patch.mjs';
-import { relayChannel, serveCommands, serveReport, streamFrame } from '../../scripts/tamber-builds.mjs';
+import { designPath, frameOnlyByTool, formaServer } from '../../scripts/forma-server.mjs';
+import { pluginOnLoopback, remoteArgs } from '../../scripts/forma-remote.mjs'; import { openRemoteCanvas } from '../../scripts/forma-canvas.mjs';
+import { designDigest, patchDesign } from '../../scripts/forma-patch.mjs';
+import { relayChannel, serveCommands, serveReport, streamFrame } from '../../scripts/forma-builds.mjs';
 import { captureAssets, assetCards, alsoOnIPv6Loopback, freeOnIPv6Loopback, listenDelay, applyShaderTreeChange, sendStaticBody, watchLauncher, applyStaticChange, applyStaticTreeChange, builtAppMatches, developmentOpenPage, readDevGenerationAsync, readStaticFileAsync, readWebRequest, readModuleFile, reflectShaderFiles, saveTrace, retainDevGeneration, shaderInterfaceDigests, syncStaticTree, watchStaticTrees, webContentType, webEnvelope, devGenerationDigest, MODULE_FILES, moduleCards } from './serve.mjs';
 import { fileURLToPath } from 'node:url';
 const argv = guardFlags('web', process.argv.slice(2)); // --help, or a flag it does not take, before anything starts
@@ -68,7 +68,7 @@ const host = lan && servedAs == null ? '0.0.0.0' : '127.0.0.1';
 // The addresses printed at startup are the only names requests may use.
 const origins = installBrowserOrigins({ host: lan ? '0.0.0.0' : '127.0.0.1', port: servedAs ?? port });
 const allowHosts = allowHostArgs(argv);
-let doors = null; const remoteAsked = remoteArgs(argv, { exit: true }); /* the wire's remote doors (stage 10 B), refused without a design */ if ((remoteAsked.remote || remoteAsked.tunnel != null || remoteAsked.plugin || remoteAsked.relay) && servedAs == null && !designPath(app.dir)) { const named = [remoteAsked.remote && '--remote', remoteAsked.tunnel != null && '--trust-tunnel', remoteAsked.plugin && '--allow-plugin-origin', remoteAsked.relay && '--relay'].filter(Boolean); console.error(`${named.join(' and ')} ${named.length > 1 ? 'serve' : 'serves'} the design wire: this app has no design (app.tamber)`); process.exit(2); }
+let doors = null; const remoteAsked = remoteArgs(argv, { exit: true }); /* the wire's remote doors (stage 10 B), refused without a design */ if ((remoteAsked.remote || remoteAsked.tunnel != null || remoteAsked.plugin || remoteAsked.relay) && servedAs == null && !designPath(app.dir)) { const named = [remoteAsked.remote && '--remote', remoteAsked.tunnel != null && '--trust-tunnel', remoteAsked.plugin && '--allow-plugin-origin', remoteAsked.relay && '--relay'].filter(Boolean); console.error(`${named.join(' and ')} ${named.length > 1 ? 'serve' : 'serves'} the design wire: this app has no design (app.forma)`); process.exit(2); }
 const gate = developmentGate(origins, servedAs ?? port, allowHosts);
 const root = resolve(fileURLToPath(new URL('../..', import.meta.url)));
 // An outside app's wasm loop builds apart from the JS target's `target/web-dist`,
@@ -82,7 +82,7 @@ const source = resolve(app.dir, 'app.contract');
 // A game (LLP 1071 §8: its runtime is on wasm), and `--wasm` (the loop a
 // native client opening the dev URL reads), run the resident wasm loop below.
 if (!argv.includes('--wasm') && servedAs == null && app.manifest.game === undefined) {
-  await (await import('../web-js/dev.mjs')).devJs({ app, dist, port, host, origins, gate, lan, allowHosts, remoteAsked, pairTtlMs: (await import('../../scripts/tamber-pairing.mjs')).pairTtlOf(argv), residentPort: named != null && !webPortRange() ? port + 1 : 0 });
+  await (await import('../web-js/dev.mjs')).devJs({ app, dist, port, host, origins, gate, lan, allowHosts, remoteAsked, pairTtlMs: (await import('../../scripts/forma-pairing.mjs')).pairTtlOf(argv), residentPort: named != null && !webPortRange() ? port + 1 : 0 });
 }
 // Behind the JS loop (`--serve-as`) an app's resident loop is its producers
 // alone: nothing loads its page, so its builds are the web crate's bake
@@ -253,7 +253,7 @@ const designBytes = () => { try { return createHash('sha256').update(readFileSyn
 // A frame larger than this, in UTF-8 bytes, goes as a notice instead: a
 // native host's event frames are bounded (PlanURL.swift's 64 KiB).
 const DESIGN_FRAME = 32 * 1024;
-const designNotice = (s) => ({ kind: 'tamber-batch', structure: s.structure, base: s.design, design: s.design, tokens: [], ...(s.scrub ? { scrub: s.scrub } : {}) }); // a scrub's mark kept
+const designNotice = (s) => ({ kind: 'forma-batch', structure: s.structure, base: s.design, design: s.design, tokens: [], ...(s.scrub ? { scrub: s.scrub } : {}) }); // a scrub's mark kept
 // The TypeScript producer's last design (`{structure, digest, tokens}`).
 let moduleDesign = null;
 /** The batch and snapshot from design `from` to `to`, or null when the
@@ -263,8 +263,8 @@ function designBatch(from, to) {
     || from.tokens.some((t, i) => t.name !== to.tokens[i].name)) return null;
   const same = (a, b) => a.value === b.value && a.slices.length === b.slices.length && a.slices.every((s, i) => s === b.slices[i]);
   return {
-    batch: { kind: 'tamber-batch', structure: to.shape, base: from.digest, design: to.digest, tokens: to.tokens.filter((t, i) => !same(t, from.tokens[i])) },
-    snapshot: { kind: 'tamber-snapshot', structure: to.shape, base: null, design: to.digest, tokens: to.tokens },
+    batch: { kind: 'forma-batch', structure: to.shape, base: from.digest, design: to.digest, tokens: to.tokens.filter((t, i) => !same(t, from.tokens[i])) },
+    snapshot: { kind: 'forma-snapshot', structure: to.shape, base: null, design: to.digest, tokens: to.tokens },
   };
 }
 function pushDesign({ batch, snapshot }) {
@@ -275,7 +275,7 @@ function pushDesign({ batch, snapshot }) {
   let frame = JSON.stringify(batch);
   if (Buffer.byteLength(frame) > DESIGN_FRAME) frame = JSON.stringify(designNotice(snapshot));
   for (const res of clients) streamFrame(res, frame, () => designSnapshot && designNotice(designSnapshot)); // a build behind gets the latest
-  tamber?.channel.broadcast(JSON.parse(frame));
+  forma?.channel.broadcast(JSON.parse(frame));
 }
 /** A scrub's batch and snapshot (`live`, or a compiler's reply) shown, each marked `frame` (*1.11*). */
 function scrubShown(live, frame) {
@@ -337,7 +337,7 @@ async function scrubPreview(texts, frame) {
     return {};
   });
 }
-/** A scrub's frame patched (tamber-scrub.mjs `patch`), compiling nothing; `{fallback}`: compile it instead. */
+/** A scrub's frame patched (forma-scrub.mjs `patch`), compiling nothing; `{fallback}`: compile it instead. */
 async function scrubPatch(values, frame, files) {
   previewing = true;
   if (!typescript && portableRust) return { error: 'this app\'s own producer publishes every plan: its design edits reload' };
@@ -396,7 +396,7 @@ async function scrubRestore(frame) {
 const epoch = randomBytes(16).toString('hex');
 const installer = localInstaller({ app: () => app, origins, port: servedAs ?? port, gate, listener: { host, port } });
 // The design tool uses the map for a build's plan digest, falling back to the current
-// generation. The parent JS loop owns Tamber under --serve-as (LLP 1122 T2).
+// generation. The parent JS loop owns Forma under --serve-as (LLP 1122 T2).
 const plannedMaps = new Map(), mapsBySha = new Map();
 function keepMap(digest, bytes) {
   plannedMaps.delete(digest); plannedMaps.set(digest, bytes);
@@ -411,12 +411,12 @@ function announcePlan(plan, bytes) {
   const sha = bytes && createHash('sha256').update(bytes).digest('hex');
   try { writeSync(mapFd, JSON.stringify({ plan, map: bytes ? { sha256: sha, bytes: bytes.length, url: `/__dev/map/${sha}` } : null }) + '\n'); } catch { /* the parent went */ }
 }
-const tamber = servedAs == null && designPath(app.dir) ? tamberServer({ appDir: app.dir, pairTtlMs: (await import('../../scripts/tamber-pairing.mjs')).pairTtlOf(argv), remote: () => doors?.list() ?? [], live: () => typescript || !portableRust, page: `http://127.0.0.1:${port}`, scrub: { patch: scrubPatch, verify: scrubVerify, preview: scrubPreview, restore: scrubRestore, released: scrubReleased }, sourceMap: (digest) => plannedMaps.get(digest ?? current?.envelope.plan.sha256) || (!digest && current?.files.get('app.plan.map.json')) || (!digest && readMap()) || null, designServed: () => designSnapshot && !previewing ? { digest: designSnapshot.design ?? null, source: designSource } : null }) : null;
+const forma = servedAs == null && designPath(app.dir) ? formaServer({ appDir: app.dir, pairTtlMs: (await import('../../scripts/forma-pairing.mjs')).pairTtlOf(argv), remote: () => doors?.list() ?? [], live: () => typescript || !portableRust, page: `http://127.0.0.1:${port}`, scrub: { patch: scrubPatch, verify: scrubVerify, preview: scrubPreview, restore: scrubRestore, released: scrubReleased }, sourceMap: (digest) => plannedMaps.get(digest ?? current?.envelope.plan.sha256) || (!digest && current?.files.get('app.plan.map.json')) || (!digest && readMap()) || null, designServed: () => designSnapshot && !previewing ? { digest: designSnapshot.design ?? null, source: designSource } : null }) : null;
 // The resident compiler's map beside the plan it wrote (a generation from a
 // Rust producer carries none); the server checks its digest.
 function readMap() { try { return readFileSync(resolve(dist, 'app.plan.map.json')); } catch { return null; } }
 // A polled stream (Linux) is told the design to run when it opens.
-tamber?.channel.greet(() => designSnapshot && designNotice(designSnapshot));
+forma?.channel.greet(() => designSnapshot && designNotice(designSnapshot));
 const generationCache = resolve(root, 'target/dev-generations', createHash('sha256').update(canonicalBytes({ app: app.id, path: app.dir, dist })).digest('hex'));
 let current = null; const { promise: firstGeneration, resolve: generated } = Promise.withResolvers(); // what a test's listen delay can wait for (serve.mjs `listenDelay`)
 let currentModule = null;
@@ -575,7 +575,7 @@ function startCompiler() {
         if (releaseMark) { scrubShown(live, releaseMark); releaseMark = null; } else pushDesign(live);
       } else if (kind === 'plan') {
         if (assetsNeedRebuild) continue;
-        designSnapshot = null; tamber?.compete(); // a new plan ends a scrub
+        designSnapshot = null; forma?.compete(); // a new plan ends a scrub
         const [bytes, saved, compile, bake, ready] = rest.map(Number);
         seq += 1;
         if (!first) pending.set(seq, { saved, ready });
@@ -710,7 +710,7 @@ async function startModuleCompiler() {
           }
           continue;
         }
-        designSnapshot = null; designSource = source; tamber?.compete(); // a new plan ends a scrub
+        designSnapshot = null; designSource = source; forma?.compete(); // a new plan ends a scrub
         moduleCards(candidate, app.id);
         const previous = currentModule;
         currentModule = candidate;
@@ -898,7 +898,7 @@ function startRustCompiler() {
 // App-relative names the Rust source watcher leaves to other producers (a
 // design edit is the TypeScript producer's, as a batch or a generation).
 const rustWatchIgnores = name => skipped.test(name) || /(^|[\\/])\./.test(name)
-  || /\.(ts|json|tamber)$/.test(name) || gpuOnly([resolve(app.dir, name)])
+  || /\.(ts|json|forma)$/.test(name) || gpuOnly([resolve(app.dir, name)])
   || assetTrees.some(([tree]) => resolve(app.dir,name) !== tree && within(tree, resolve(app.dir,name)));
 const killCompiler = () => {
   const gpuChild = gpuBuildChild; gpuBuildChild = null;
@@ -918,7 +918,7 @@ const stop = () => shutdown ??= (async () => {
   const exits = [dev, rustChild, gpuBuildChild, hostBuildChild].map(stopBuildTree);
   tuning?.close(); killCompiler();
   // The design server lets go of its lock before this exits.
-  exits.push(tamber?.close(), doors?.close());
+  exits.push(forma?.close(), doors?.close());
   const install = installer.child;
   if (install && install.exitCode === null && install.signalCode === null) { exits.push(new Promise(ok => install.once('exit', ok))); install.kill('SIGTERM'); }
   await Promise.all(exits); process.exit(process.exitCode ?? 0);
@@ -1125,7 +1125,7 @@ function watchCompilerInputs() {
         && !(name.endsWith('.swift') && swiftSourceDirectories.has(dir))) return;
       // The TypeScript producer takes the app's sources and its design (a
       // value-only design edit is a batch, never a host rebuild).
-      if (typescript && within(app.dir, resolve(dir, name)) && /\.(ts|contract|tamber)$/.test(name)) return;
+      if (typescript && within(app.dir, resolve(dir, name)) && /\.(ts|contract|forma)$/.test(name)) return;
       if (portableRust && rustInputFiles.has(path)) {
         // A Contract source the Rust source watcher sees has already started
         // its build (that watcher tracks .contract names, never .rs).
@@ -1270,23 +1270,23 @@ async function produceGpuArtifact(files, { stem, kind, module }) {
 
 const serve = async (req, res) => {
   // Every HTML answer is framed by the design tool only (LLP 1122 T2); a sandboxed page's wire request (stage 10b) is the wire's first.
-  frameOnlyByTool(res); if (remoteAsked.plugin && tamber && await pluginOnLoopback(tamber, req, res)) return;
+  frameOnlyByTool(res); if (remoteAsked.plugin && forma && await pluginOnLoopback(forma, req, res)) return;
   const access = gate.check(req);
   if (!access.allowed) { res.writeHead(421, { 'cache-control': 'no-store' }); res.end(); return; }
   const url = webRequestURL(req.url);
   if (!url) { res.writeHead(404, { 'cache-control': 'no-store' }); res.end(); return; }
-  if (tamber && await tamber.handle(req, res, url, access)) return; if (url.pathname === '/__dev/gallery' || url.pathname.startsWith('/__dev/gallery/')) { res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' }); res.end('the gallery runs on the JS dev loop (host/web-js/dev.mjs), not this one\n'); return; } // the variant gallery's
+  if (forma && await forma.handle(req, res, url, access)) return; if (url.pathname === '/__dev/gallery' || url.pathname.startsWith('/__dev/gallery/')) { res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'no-store' }); res.end('the gallery runs on the JS dev loop (host/web-js/dev.mjs), not this one\n'); return; } // the variant gallery's
   const devBeacon = url.pathname === '/__dev/reloaded' || url.pathname === '/__dev/painted' || url.pathname === '/__dev/gpu';
   // The build channel (LLP 1122 D4): a build's reports up, with its stream's
   // nonce; a build that holds no stream (Linux) opens a polled one.
   if (url.pathname === '/__dev/report' && req.method === 'POST') {
-    if (!tamber) { res.writeHead(404, { 'cache-control': 'no-store' }); res.end(); return; }
-    await serveReport(tamber.channel, req, res);
+    if (!forma) { res.writeHead(404, { 'cache-control': 'no-store' }); res.end(); return; }
+    await serveReport(forma.channel, req, res);
     return;
   }
   if ((url.pathname === '/__dev/hello' || url.pathname === '/__dev/commands') && req.method === 'GET') {
-    if (!tamber) { res.writeHead(404, { 'cache-control': 'no-store' }); res.end(); return; }
-    serveCommands(tamber.channel, url, res, url.pathname === '/__dev/hello' ? announcement() : {});
+    if (!forma) { res.writeHead(404, { 'cache-control': 'no-store' }); res.end(); return; }
+    serveCommands(forma.channel, url, res, url.pathname === '/__dev/hello' ? announcement() : {});
     return;
   }
   const localInstall = url.pathname === LOCAL_IOS_INSTALL_ENDPOINT;
@@ -1360,7 +1360,7 @@ const serve = async (req, res) => {
     let gone = false, opened = null;
     const end = () => { if (gone) return; gone = true; opened?.close(); clients.delete(res); };
     req.on('close', end); res.on('close', end);
-    opened = tamber?.channel.open(write) ?? (servedAs != null ? await relayChannel(`http://127.0.0.1:${servedAs}`, write, 250, () => res.end()) : null);
+    opened = forma?.channel.open(write) ?? (servedAs != null ? await relayChannel(`http://127.0.0.1:${servedAs}`, write, 250, () => res.end()) : null);
     if (gone) { opened?.close(); return; }
     res.write(`data: ${hello(opened?.nonce)}\n\n`);
     for (const [stem, version] of gpuSides) res.write(`data: ${JSON.stringify({gpu:version, ...(stem === 'gpu' ? {} : {module:stem.slice(4)})})}\n\n`);
@@ -1417,10 +1417,10 @@ const serve = async (req, res) => {
   } catch { try { res.writeHead(404); res.end(); } catch { /* mid-write */ } }
 };
 const server = early?.server ?? createServer(serve);
-let six = null; server.on('error', async (e) => { console.error(`cannot listen on ${host}:${port}: ${e.code ?? e.message}${e.code === 'EADDRINUSE' ? ' (another dev loop? --port <n> picks another)' : ''}`); six?.close(); killCompiler(); await tamber?.close(); process.exit(1); });
+let six = null; server.on('error', async (e) => { console.error(`cannot listen on ${host}:${port}: ${e.code ?? e.message}${e.code === 'EADDRINUSE' ? ' (another dev loop? --port <n> picks another)' : ''}`); six?.close(); killCompiler(); await forma?.close(); process.exit(1); });
 await readStaticFileAsync(dist, '/index.html'); if (!early) await listenDelay(process.env, firstGeneration); // warm the reader before advertising readiness (a test may wait too)
 // (and on [::1], for a localhost URL: the design tool's canvas)
-if (servedAs == null) six = await alsoOnIPv6Loopback(server, port).catch(async (e) => { console.error(`cannot listen on [::1]:${port}: ${e.code} (another server there would answer a localhost URL; --port <n> picks another)`); killCompiler(); await tamber?.close(); process.exit(1); });
+if (servedAs == null) six = await alsoOnIPv6Loopback(server, port).catch(async (e) => { console.error(`cannot listen on [::1]:${port}: ${e.code} (another server there would answer a localhost URL; --port <n> picks another)`); killCompiler(); await forma?.close(); process.exit(1); });
 early?.phase('host', 'ready'); early?.serve(serve);
 const banner = () => {
   // Every usable IPv4 with --lan, none silently picked (D8): a utun/VPN
@@ -1433,5 +1433,5 @@ const banner = () => {
   console.log(`  (dev loop on ${source.replace(root + '/', '')} and the wasm's crates; ${lan ? 'LAN bind — any peer on this network can read the app, its compile errors and dev generations; macOS may ask to allow bun' : 'loopback only — --lan to serve a phone on this network'}; ctrl-c to stop)`);
 };
 if (early) banner(); else await new Promise(ok => server.listen(port, host, () => { banner(); ok(); }));
-doors = servedAs == null && tamber ? await openRemoteCanvas(tamber, remoteAsked, `http://127.0.0.1:${port}`).catch(async (e) => { console.error(`cannot listen: ${e.message}`); server.close(); server.closeAllConnections?.(); process.exitCode = 1; await stop(); }) : null;
+doors = servedAs == null && forma ? await openRemoteCanvas(forma, remoteAsked, `http://127.0.0.1:${port}`).catch(async (e) => { console.error(`cannot listen: ${e.message}`); server.close(); server.closeAllConnections?.(); process.exitCode = 1; await stop(); }) : null;
 watchLauncher(stop); listening = true; for (const line of readyLines.splice(0)) console.log(line); // once it answers and its doors are open

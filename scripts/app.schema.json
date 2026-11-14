@@ -1373,9 +1373,9 @@
         }
       }
     },
-    "tamber": {
+    "forma": {
       "type": "string",
-      "description": "The app's design (LLP 1121 D2): a `.tamber` file, relative to app.json. Without it, `app.tamber` beside app.contract is the design when there is one."
+      "description": "The app's design (LLP 1121 D2): a `.forma` file, relative to app.json. Without it, `app.forma` beside app.contract is the design when there is one."
     },
     "purchases": {
       "type": "object",

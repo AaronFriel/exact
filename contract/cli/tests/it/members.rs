@@ -280,7 +280,7 @@ component App
 ";
     app.write("more.contract", "members App\n  state c = \"param.fill\"\n");
     let error = app.refuse(root);
-    assert_eq!(error.id, "tamber-param-scope", "{error}");
+    assert_eq!(error.id, "forma-param-scope", "{error}");
     assert_eq!(error.span.source_id, 1, "{error}");
 }
 

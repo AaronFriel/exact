@@ -322,7 +322,7 @@ class Natives(
         e.node.endRecording()
     }
 
-    /** The node id of the element whose view is [view] or holds it ([ExactTamber]'s place), or null (main thread). */
+    /** The node id of the element whose view is [view] or holds it ([ExactForma]'s place), or null (main thread). */
     fun place(view: View): Int? {
         var v: View? = view
         while (v != null && v !== this) {

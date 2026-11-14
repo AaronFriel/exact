@@ -442,7 +442,7 @@ test.skipIf(process.env.EXACT_GATE_DRIVES !== '1')('the mutation: a package\'s u
 test('the inventory reads any legal token or param name: dotted more than once, hyphenated, a literal default', () => {
   const root = mkdtempSync(join(tmpdir(), 'iosfix-s13c-inventory-'));
   for (const pkg of ['lists', 'cards', 'actions']) cpSync(join(import.meta.dir, '..', 'packages', pkg), join(root, 'packages', pkg), { recursive: true });
-  const cards = join(root, 'packages/cards/cards.tamber'), row = join(root, 'packages/lists/list-row.contract');
+  const cards = join(root, 'packages/cards/cards.forma'), row = join(root, 'packages/lists/list-row.contract');
   writeFileSync(cards, `${readFileSync(cards, 'utf8').trimEnd()}\n  cards.header.frame: length = 37px\n  cards.extra-ink: color = #123456\n`);
   writeFileSync(row, readFileSync(row, 'utf8').replace(/(\n  params\n)/, '$1    extra-tint: color = "lists.switch-on" control = "token"\n    literal: color = "#abcdef" control = "token"\n'));
   expect(newTokens(root).filter(t => ['cards.header.frame', 'cards.extra-ink'].includes(t.name))).toEqual([{ name: 'cards.header.frame', kind: 'length' }, { name: 'cards.extra-ink', kind: 'color' }]);

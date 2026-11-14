@@ -189,9 +189,9 @@ test('b5-edges: agent layout reports a lowered node\'s rows as it reports the in
 }, 240000);
 
 test('a scheme flip and a mode change mid-session repaint a lowered node as the inline one (condition 5)', async () => {
-  const design = 'tamber t\n\naxes\n  ink = tint | plain\n\ntheme\n  surface.card = light-dark(#ffffff, #101010)\n    when ink=plain: light-dark(#eeeeee, #202020)\n  text.primary = light-dark(#0f1419, #e7e9ea)\n    when ink=plain: light-dark(#333333, #cccccc)\n';
+  const design = 'forma t\n\naxes\n  ink = tint | plain\n\ntheme\n  surface.card = light-dark(#ffffff, #101010)\n    when ink=plain: light-dark(#eeeeee, #202020)\n  text.primary = light-dark(#0f1419, #e7e9ea)\n    when ink=plain: light-dark(#333333, #cccccc)\n';
   const source = 'component App\n  state s = "a"\n  state plain = false\n  action set(v: string)\n    s = v\n  action ink\n    plain = not plain\n  view\n    column testId="root" -exact-mode=(plain ? "ink=plain" : "ink=tint")\n      button testId="to-b" press=set("b") "b"\n      button testId="ink" press=ink "ink"\n      text testId="card" "card" background-color=(s == "a" ? "surface.card" : "-exact-secondary-background") border-color=(s == "a" ? "text.primary" : "AccentColor") border-style="solid" border-width=2\n';
-  const [lowDist, inlineDist] = [await build('b5-modes', source, true, { files: { 'app.tamber': design } }), await build('b5-modes', source, false, { files: { 'app.tamber': design } })];
+  const [lowDist, inlineDist] = [await build('b5-modes', source, true, { files: { 'app.forma': design } }), await build('b5-modes', source, false, { files: { 'app.forma': design } })];
   expect(readFileSync(resolve(lowDist, '.gen/app.js'), 'utf8')).toContain('Pc(');
   const { suite, low, inline } = await pair(lowDist, inlineDist);
   try {

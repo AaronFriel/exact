@@ -422,14 +422,14 @@ if (es) {
   const modes = async () => { const x = globalThis.exact; await x.ready; return x.wasm?.exact_set_mode ? JSON.parse(x.readOut(x.wasm.exact_set_mode(x.writeIn("?")))).modes ?? null : null; };
   // The design this build runs: the runner's, said beside any answer (a
   // batch for no structure changes nothing).
-  const designNow = async () => { const x = globalThis.exact; await x.ready; if (typeof x.wasm?.exact_design_rows !== "function") return null; const out = JSON.parse(x.readOut(x.wasm.exact_design_rows(x.writeIn(JSON.stringify({ kind: "tamber-batch", structure: "", base: "", design: "", tokens: [] })))));  return out.design ?? null; };
+  const designNow = async () => { const x = globalThis.exact; await x.ready; if (typeof x.wasm?.exact_design_rows !== "function") return null; const out = JSON.parse(x.readOut(x.wasm.exact_design_rows(x.writeIn(JSON.stringify({ kind: "forma-batch", structure: "", base: "", design: "", tokens: [] })))));  return out.design ?? null; };
   // The root's own size, the app's `setRootFontSize` rule set aside (navigation.js `beneathApp`).
   const hostSize = () => { const rule = document.getElementById("exact-root-font-size"); if (rule) rule.disabled = true; try { return parseFloat(getComputedStyle(document.documentElement).fontSize) || 16; } finally { if (rule) rule.disabled = false; } };
   // The facts as they paint: the root's `color-scheme` (the app's
   // `setScheme` over the pin's, over the browser's `light dark`), resolved by
   // the system's scheme, which is a pin's while one is held.
   // The digest of the plan this page runs, which its source map names
-  // (tamber/1.8): read from the runner once per generation.
+  // (forma/1.8): read from the runner once per generation.
   // (None said is kept too: asked again only with the next generation. A
   // generation this page verified says its plan's digest itself.)
   let planDigestOf, planDigestNow = null;
@@ -666,7 +666,7 @@ if (es) {
   // generation finds the node by its site and instance path again, or says
   // it is gone.
   // A click's selection carries a token (`click`), and the outline that
-  // answers it names it (tamber/1.7): that one leaves the page where it is,
+  // answers it names it (forma/1.7): that one leaves the page where it is,
   // since the copy clicked is under the pointer. A refresh of it re-sends
   // its token, so an answer to either report stays put. A token is this
   // page's inspect session (a random prefix, new each time inspect mode
@@ -937,7 +937,7 @@ if (es) {
     if (r.reason) end(revision, at.epoch);
     report(r.reason ? { kind: "held", state: null, reason: r.reason, revision } : { kind: "held", state: h.state, revision });
   };
-  // `{select: {up, plan, from, instance}}` (tamber/1.16; 1.17 by this page's own tree), as host/web-js/inspect-dev.js's
+  // `{select: {up, plan, from, instance}}` (forma/1.16; 1.17 by this page's own tree), as host/web-js/inspect-dev.js's
   // `selectUp`: walking up from the selection, its own copy seen, each ancestor of a copy not yet seen is one step; at
   // step `up` it lands on that copy's outermost ancestor, with fewer on the root, reported with `moved: {up, stepped}`.
   // Each site's copy is the plan's `copies`, sent with inspect mode on, once per plan.
@@ -1049,7 +1049,7 @@ if (es) {
       })().catch(error => { show(String(error), "gpu"); console.error('exact dev:', error); });
       return;
     }
-    if (message.kind === "tamber-batch" || message.kind === "tamber-snapshot") { design(message); return; }
+    if (message.kind === "forma-batch" || message.kind === "forma-snapshot") { design(message); return; }
     if (message.kind === "hold") {
       if (message.revision < lastRevision) { ended.clear(); epoch += 1; }
       lastRevision = message.revision;

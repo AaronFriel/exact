@@ -23,7 +23,7 @@
 // ending "verify: clean" or "verify: N problems" (`--json`: one object). Exit 1 when the build, a test, a launch
 // or the relaunch fails; check's findings, the accessibility tree's, the relaunch's, those at the largest text size and the compiler's warnings
 // (`contract build`'s, whether or not this run built) are counted in the last line but fail it only under `--strict`, since check reads the screen
-// by heuristics and some of either only advise; a warning that is information (`tamber-unreachable`) is said, not
+// by heuristics and some of either only advise; a warning that is information (`forma-unreachable`) is said, not
 // counted. Without an owned server the web's tests and its two launches run at once. With one, first screens
 // precede the tests, each on an empty server; the chosen test is replayed before relaunch. A simulator takes
 // one drive at a time, with UIKit's bars (`--chrome platform`). An app's own server runs where the app calls it,

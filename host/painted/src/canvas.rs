@@ -237,13 +237,13 @@ mod stream;
 mod undrawn;
 use undrawn::{path_bounds, undrawn};
 #[cfg(target_os = "android")]
+#[path = "canvas/forma.rs"]
+mod forma;
+#[cfg(target_os = "android")]
 #[path = "canvas/surface.rs"]
 mod surface;
 #[path = "canvas/svg.rs"]
 mod svg;
-#[cfg(target_os = "android")]
-#[path = "canvas/tamber.rs"]
-mod tamber;
 pub use picture::Picture;
 use picture::WeakPicture;
 #[cfg(target_os = "android")]

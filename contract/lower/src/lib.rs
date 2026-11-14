@@ -114,7 +114,7 @@ pub use native_typed::{DeclaredView, DeclaredViews, EVENT_MARKER};
 pub use sites::{ButtonSite, Declared, NodeSite, Origin, Sites, Written};
 pub use states::PRESS_OPACITY_TO;
 pub use swipe_rows::expand_row_deletes;
-pub use theme::vocab as tamber_vocab;
+pub use theme::vocab as forma_vocab;
 
 /// The base scale's names (LLP 1121 stage 11, the lead's ruling 2).
 pub const BASE_SCALE: [&str; 9] = theme::packages::BASE;
@@ -129,25 +129,25 @@ pub fn package_line(line: u32) -> Option<(usize, u32)> {
 /// as the build folds them (LLP 1121 D11); what it refuses of them is the
 /// build's to say.
 pub fn with_package_designs(
-    design: Option<exact_tamber::Design>,
+    design: Option<exact_forma::Design>,
     packages: &[contract_syntax::DesignSource],
-) -> Option<exact_tamber::Design> {
+) -> Option<exact_forma::Design> {
     theme::packages::merge(design, packages).0
 }
 
 /// [`with_package_designs`], and what the build refuses of the packages'
 /// designs before the fold (each at its line in its file).
 pub fn join_package_designs(
-    design: Option<exact_tamber::Design>,
+    design: Option<exact_forma::Design>,
     packages: &[contract_syntax::DesignSource],
-) -> (Option<exact_tamber::Design>, Vec<LowerError>) {
+) -> (Option<exact_forma::Design>, Vec<LowerError>) {
     theme::packages::merge(design, packages)
 }
 
 /// What the build refuses of a folded joined design's package tokens: a
 /// name, a pair or a dial that isn't theirs to name (LLP 1121 D11).
 pub fn package_references(
-    folding: &exact_tamber::Folding,
+    folding: &exact_forma::Folding,
     packages: &[contract_syntax::DesignSource],
     all: &[params::ParamToken],
     identities: &[String],

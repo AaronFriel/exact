@@ -35,8 +35,8 @@ export function watchModuleSources(directory, ignore, changed) {
             continue;
           }
           if (stat.isDirectory()) { walk(path,name+'/',depth+1); continue; }
-          // A design (`.tamber`) is a source: a value-only edit goes as a batch (LLP 1121 stage 4).
-          if (!/\.(ts|contract|json|tamber)$/.test(name) && !['.exact/backend-origin', '.env.local', '.env'].includes(name)) continue;
+          // A design (`.forma`) is a source: a value-only edit goes as a batch (LLP 1121 stage 4).
+          if (!/\.(ts|contract|json|forma)$/.test(name) && !['.exact/backend-origin', '.env.local', '.env'].includes(name)) continue;
           if (!stat.isFile()) { state.push([name,'not-regular']); continue; }
           bytes += Number(stat.size);
           if (stat.size > 16n*1024n*1024n || bytes > 64*1024*1024 || next.size >= 2048) throw new Error('module watcher source graph exceeds its file/byte budget');

@@ -457,8 +457,8 @@ fn a_computed_state_row_keeps_the_tokens_it_may_name() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(
-        dir.join("app.tamber"),
-        "tamber t\n\ntheme\n  brand-on = #0a7aff\n  brand-off = #888888\n",
+        dir.join("app.forma"),
+        "forma t\n\ntheme\n  brand-on = #0a7aff\n  brand-off = #888888\n",
     )
     .unwrap();
     std::fs::write(dir.join("app.contract"), "component App\n  state suffix = \"on\"\n  state busy = false\n  view\n    column disabled=busy\n      :disabled\n        background-color=`brand-${suffix}`\n      text \"b\"\n").unwrap();
@@ -544,8 +544,8 @@ fn a_param_read_only_by_a_state_part_is_reached() {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(
-        dir.join("app.tamber"),
-        "tamber t\n\ntheme\n  accent.fill = #0a7aff\n  ink = #111111\n",
+        dir.join("app.forma"),
+        "forma t\n\ntheme\n  accent.fill = #0a7aff\n  ink = #111111\n",
     )
     .unwrap();
     std::fs::write(
@@ -608,7 +608,7 @@ fn a_param_read_only_by_a_state_part_is_reached() {
     // applying it reads its params (LLP 1139 D3).
     std::fs::write(dir.join("app.contract"), "component App\n  view\n    PostButton()\n    column class=Look\n      text \"x\"\n\nstyle Look\n  :active\n    background-color = \"param.fill\"\n\ncomponent PostButton\n  params\n    fill: color = \"accent.fill\"\n  view\n    column class=Look background-color=\"param.fill\"\n      text \"Post\"\n").unwrap();
     let e = contract::compile_path(&dir.join("app.contract")).unwrap_err();
-    assert_eq!(e.id, "tamber-param-scope", "{e:?}");
+    assert_eq!(e.id, "forma-param-scope", "{e:?}");
     let _ = std::fs::remove_dir_all(&dir);
 }
 

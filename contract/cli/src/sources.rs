@@ -310,15 +310,15 @@ fn unnamed(package: &str) -> String {
 }
 
 /// Where the app's design is (LLP 1121 D2): the file `app.json`'s
-/// `"tamber"` names, else `app.tamber` beside the app's `app.contract`.
+/// `"forma"` names, else `app.forma` beside the app's `app.contract`.
 pub fn design_path(root: &Path) -> Option<PathBuf> {
     let dir = root.parent()?;
     let named = std::fs::read_to_string(dir.join("app.json"))
         .ok()
         .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
-        .and_then(|app| app.get("tamber")?.as_str().map(|p| dir.join(p)));
+        .and_then(|app| app.get("forma")?.as_str().map(|p| dir.join(p)));
     named.or_else(|| {
-        let beside = dir.join("app.tamber");
+        let beside = dir.join("app.forma");
         (root.file_name()? == "app.contract" && beside.is_file()).then_some(beside)
     })
 }
@@ -401,7 +401,7 @@ fn design(
     let read = scrubbed.map_or_else(|| std::fs::read_to_string(&path), Ok);
     let text = read.map_err(|e| CompileError {
         pass: "use",
-        id: "tamber-unreadable".into(),
+        id: "forma-unreadable".into(),
         message: format!("the app's design `{}`: {e}", path.display()),
         span: Span::default(),
         file: Some(path.clone().into()),

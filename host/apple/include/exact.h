@@ -886,7 +886,7 @@ uint32_t exact_design_rows(ExactRuntime rt, size_t len);
  * plan lacks or a value that is no colour (the binding keeps its fallback).
  * `inputs` moves when anything the answer read does. A view that is not live,
  * or names that are not strings, answer {"error"}. Not a batch. */
-uint32_t exact_tamber(ExactRuntime rt, size_t len);
+uint32_t exact_forma(ExactRuntime rt, size_t len);
 /* The design digest the running app runs (its plan's, or the live table's
  * applied since), UTF-8 in exact_out, length 0 before boot. Not a batch. */
 uint32_t exact_design_digest(ExactRuntime rt);

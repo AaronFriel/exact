@@ -565,8 +565,8 @@ fn file_icons_app(source: &str, case: &str) -> (Vec<u8>, std::path::PathBuf) {
     )
     .unwrap();
     std::fs::write(
-        dir.join("app.tamber"),
-        "tamber t\n\nicons\n  icon.ai = icon(svg \"ai.svg\")\n  icon.colours = icon(svg \"colours.svg\")\n  icon.rectangle = icon(svg \"rectangle.svg\")\n  icon.template = icon(svg \"template.svg\")\n",
+        dir.join("app.forma"),
+        "forma t\n\nicons\n  icon.ai = icon(svg \"ai.svg\")\n  icon.colours = icon(svg \"colours.svg\")\n  icon.rectangle = icon(svg \"rectangle.svg\")\n  icon.template = icon(svg \"template.svg\")\n",
     )
     .unwrap();
     let entry = dir.join("app.contract");

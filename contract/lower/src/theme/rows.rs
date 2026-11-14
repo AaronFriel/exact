@@ -56,7 +56,7 @@
 use super::{bind, fold, profiles, scan, Origin, Refusals, Sink, ThemeEntry};
 use crate::{DeclaredFont, LowerError};
 use contract_syntax::{Attr, Expr, Span};
-use exact_tamber as tamber;
+use exact_forma as forma;
 use std::cell::RefCell;
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -82,7 +82,7 @@ pub struct Left {
 impl Left {
     /// Whether a write to `touched`, folded as `folded`, reaches a use the
     /// row map leaves to the build, whose refusal only a build can place.
-    pub fn reaches(&self, touched: &[&str], folded: &tamber::Folding) -> bool {
+    pub fn reaches(&self, touched: &[&str], folded: &forma::Folding) -> bool {
         self.computed
             || reach(touched, folded)
                 .iter()
@@ -656,9 +656,9 @@ pub struct Broken {
 pub fn check(
     rows: &[Row],
     touched: &[&str],
-    after: &tamber::Design,
-    folded: &tamber::Folding,
-    before: impl FnOnce() -> Option<tamber::Design>,
+    after: &forma::Design,
+    folded: &forma::Folding,
+    before: impl FnOnce() -> Option<forma::Design>,
     exprs: &[(String, bool)],
     params: &[crate::params::ParamToken],
 ) -> Vec<Broken> {
@@ -716,8 +716,8 @@ pub fn check(
 pub fn first_failing(
     rows: &[Row],
     touched: &[&str],
-    after: &tamber::Design,
-    folded: &tamber::Folding,
+    after: &forma::Design,
+    folded: &forma::Folding,
     exprs: &[(String, bool)],
     params: &[crate::params::ParamToken],
 ) -> Option<Broken> {
@@ -741,7 +741,7 @@ pub fn first_failing(
 /// over who names whom, once.
 pub(crate) fn reach(
     touched: &[&str],
-    folded: &tamber::Folding,
+    folded: &forma::Folding,
 ) -> std::collections::HashSet<String> {
     let mut named_by: std::collections::HashMap<&str, Vec<&str>> = Default::default();
     for t in &folded.tokens {
@@ -901,7 +901,7 @@ impl Sink for Quiet {
     fn said(&self, _: Span, _: &str) -> bool {
         false
     }
-    fn plan(&mut self, _: &[ThemeEntry], _: &tamber::Folding) {}
+    fn plan(&mut self, _: &[ThemeEntry], _: &forma::Folding) {}
     fn stacks(&mut self, entries: &[ThemeEntry]) -> Vec<String> {
         entries.iter().map(|e| e.value.clone()).collect()
     }
@@ -913,8 +913,8 @@ impl Sink for Quiet {
 /// says the design). `Ok(true)` a row that passes, `Ok(false)` one not
 /// judged here ([`judge`]).
 fn judged(
-    design: &tamber::Design,
-    folded: Option<&tamber::Folding>,
+    design: &forma::Design,
+    folded: Option<&forma::Folding>,
     rows: &[&Row],
     exprs: &[(String, bool)],
     params: &[crate::params::ParamToken],
@@ -982,8 +982,8 @@ fn judge(
         None => Vec::new(),
     };
     let kind = match a.name.as_str() {
-        "font" => Some((tamber::Kind::Type, &uses[..])),
-        "font-family" => Some((tamber::Kind::Family, &[][..])),
+        "font" => Some((forma::Kind::Type, &uses[..])),
+        "font-family" => Some((forma::Kind::Family, &[][..])),
         _ => None,
     };
     if let (Some((kind, uses)), Some(f)) = (kind, fonts) {
@@ -1012,7 +1012,7 @@ fn judge(
 struct Kept {
     shown: Vec<crate::params::ParamToken>,
     params: Vec<crate::params::ParamToken>,
-    measures: Vec<(String, tamber::Kind, Vec<String>)>,
+    measures: Vec<(String, forma::Kind, Vec<String>)>,
     motion: Vec<(String, String)>,
     axes: Vec<(String, Vec<String>)>,
     roles: Vec<(String, Span)>,
@@ -1055,14 +1055,14 @@ mod tests {
     fn a_check_puts_the_threads_tables_back() {
         let sentinel = vec![(
             "kept".to_string(),
-            tamber::Kind::Length,
+            forma::Kind::Length,
             vec!["1px".to_string()],
         )];
         super::super::MEASURES.with(|m| *m.borrow_mut() = sentinel.clone());
         super::super::ROLES.with(|r| *r.borrow_mut() = vec![("label".into(), Span::default())]);
         crate::scale::declare(vec!["kept".into()]);
-        let design = tamber::parse("tamber t\n\ntheme\n  gap = 10px\n").unwrap();
-        let folded = tamber::check_design(design.clone(), &super::super::vocab()).unwrap();
+        let design = forma::parse("forma t\n\ntheme\n  gap = 10px\n").unwrap();
+        let folded = forma::check_design(design.clone(), &super::super::vocab()).unwrap();
         let row = Row {
             attr: Attr {
                 name: "padding".into(),
@@ -1115,13 +1115,13 @@ mod tests {
             within: None,
         };
         let design = |gap: &str| {
-            tamber::parse(&format!(
-                "tamber t\n\ntheme\n  gap = {gap}\n  wide = {gap}\n  bad = #222222\n"
+            forma::parse(&format!(
+                "forma t\n\ntheme\n  gap = {gap}\n  wide = {gap}\n  bad = #222222\n"
             ))
             .unwrap()
         };
         let after = design("#333333");
-        let folded = tamber::check_design(after.clone(), &super::super::vocab()).unwrap();
+        let folded = forma::check_design(after.clone(), &super::super::vocab()).unwrap();
         // `bad` fails before and after at one element; `gap` passes before at
         // the other and fails after: refused, by its element's key.
         let rows = [at(6, "bad"), at(8, "gap")];
@@ -1195,10 +1195,10 @@ mod tests {
                 m.modified().ok(),
             )],
         ));
-        let parse = |t: &str| tamber::parse(t).unwrap();
-        let before = "tamber t\n\ntheme\n  body = 400 1rem \"F\"\n";
-        let after = parse("tamber t\n\ntheme\n  body = 700 1rem \"F\"\n");
-        let folded = tamber::check_design(after.clone(), &super::super::vocab()).unwrap();
+        let parse = |t: &str| forma::parse(t).unwrap();
+        let before = "forma t\n\ntheme\n  body = 400 1rem \"F\"\n";
+        let after = parse("forma t\n\ntheme\n  body = 700 1rem \"F\"\n");
+        let folded = forma::check_design(after.clone(), &super::super::vocab()).unwrap();
         let row = Row {
             attr: Attr {
                 name: "font".into(),
@@ -1275,10 +1275,10 @@ mod tests {
     /// token a write makes a family, is not the write's to refuse.
     #[test]
     fn a_font_row_not_judged_here_never_passed() {
-        let parse = |t: &str| tamber::parse(t).unwrap();
-        let before = "tamber t\n\ntheme\n  choice = 1\n";
-        let after = parse("tamber t\n\ntheme\n  choice: family = Georgia\n");
-        let folded = tamber::check_design(after.clone(), &super::super::vocab()).unwrap();
+        let parse = |t: &str| forma::parse(t).unwrap();
+        let before = "forma t\n\ntheme\n  choice = 1\n";
+        let after = parse("forma t\n\ntheme\n  choice: family = Georgia\n");
+        let folded = forma::check_design(after.clone(), &super::super::vocab()).unwrap();
         let row = Row {
             attr: Attr {
                 name: "font".into(),

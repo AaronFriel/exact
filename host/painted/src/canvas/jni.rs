@@ -1174,17 +1174,17 @@ macro_rules! canvas_jni {
                 with(|h| h.feed().map_or(0, |v| v as jint)).unwrap_or(0)
             }
 
-            /// What `ExactTamber(view)` asks (LLP 1121 D12), a JSON request,
-            /// and its answer (`Host::tamber_json`, `host/painted/src/tamber.rs`),
+            /// What `ExactForma(view)` asks (LLP 1121 D12), a JSON request,
+            /// and its answer (`Host::forma_json`, `host/painted/src/forma.rs`),
             /// on the host's thread; both by UTF-16, so a name crosses whole.
             #[no_mangle]
-            pub unsafe extern "system" fn Java_dev_exact_canvas_Native_tamber(
+            pub unsafe extern "system" fn Java_dev_exact_canvas_Native_forma(
                 env: *mut JNIEnv,
                 _class: jclass,
                 request: jstring,
             ) -> jstring {
                 let request = $crate::canvas::field::text(env, request);
-                let reply = with(|h| h.tamber_json(&request));
+                let reply = with(|h| h.forma_json(&request));
                 let reply = reply.unwrap_or_else(|| r#"{"error":"no host on this thread"}"#.into());
                 $crate::canvas::field::java(env, &reply)
             }

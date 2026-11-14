@@ -872,18 +872,18 @@ const USAGE = `exact — run an Exact app from the command line (macOS)
                                with paths relative to where you run it
   exact docs <heading words>   the one section of the guides and recipes with
                                that heading, with its path and line
-  exact tamber check|eval|ir|fmt <app>  the app's design (app.tamber): checked,
+  exact forma check|eval|ir|fmt <app>  the app's design (app.forma): checked,
                                its tokens in one mode (eval --mode dark-style=dim),
-                               its IR, tamber.json (ir -o <file>), or its layout (fmt)
-  exact tamber serve <app>     the design server alone (development only): /__tamber
-  exact tamber op <url> <request JSON>|subscribe  its scripted client
-  exact tamber pair <url> --scope read|propose|write [--name <n>]  a pairing code for a remote client
-  exact tamber tool [<app>] [--via <dev url>]  the design tool, at http://127.0.0.1:7740/__tamber/tool/
-  exact tamber import css <stylesheet> [--app <app>]  its custom properties into app.tamber, between
+                               its IR, forma.json (ir -o <file>), or its layout (fmt)
+  exact forma serve <app>     the design server alone (development only): /__forma
+  exact forma op <url> <request JSON>|subscribe  its scripted client
+  exact forma pair <url> --scope read|propose|write [--name <n>]  a pairing code for a remote client
+  exact forma tool [<app>] [--via <dev url>]  the design tool, at http://127.0.0.1:7740/__forma/tool/
+  exact forma import css <stylesheet> [--app <app>]  its custom properties into app.forma, between
                                markers a later import of the same file rewrites
-  exact tamber import shadcn|tailwind|dtcg|pen|astryx <source> <url> --app <app>  a theme as held proposals
+  exact forma import shadcn|tailwind|dtcg|pen|astryx <source> <url> --app <app>  a theme as held proposals
                                (astryx: bun scripts/astryx-tokens.mjs resolves its pinned package first)
-  exact tamber export dtcg <app> [-o <file>]  the design as DTCG 2025.10; its baseline in .exact/
+  exact forma export dtcg <app> [-o <file>]  the design as DTCG 2025.10; its baseline in .exact/
 
 An app is a directory under apps/ (or EXACT_APP_DIR for one outside this repo).
 EXACT_BIN_DIR names where a shim goes; the default is the first of ~/.local/bin,
@@ -1396,17 +1396,17 @@ async function main(argv) {
   if (verb === 'list') return list();
   // The compiler parses its own flags; its help is printed here, so asking compiles nothing (LLP 1116 D4).
   if (verb === 'contract') return process.exit(argv.includes('--help') || argv.includes('-h') ? (console.log(helpText('contract')), 0) : await contract(argv.slice(1)));
-  // An app's design on its own (LLP 1121 D2): the compiler's `tamber` verbs.
-  if (verb === 'tamber' && (argv.includes('--help') || argv.includes('-h'))) return console.log(helpText('tamber'));
+  // An app's design on its own (LLP 1121 D2): the compiler's `forma` verbs.
+  if (verb === 'forma' && (argv.includes('--help') || argv.includes('-h'))) return console.log(helpText('forma'));
   // The design server's wire and its scripted client (LLP 1121 D13): development only.
-  if (verb === 'tamber' && name === 'serve') return import('./tamber-server.mjs').then(m => m.serveAlone(rest)).then(code => process.exit(code));
-  // A stylesheet's custom properties written into app.tamber (LLP 1153 D6): the compiler's, with no server.
-  if (verb === 'tamber' && name === 'import' && rest[0] === 'css') return process.exit(await contract(['tamber', ...argv.slice(1)]));
-  if (verb === 'tamber' && name === 'import') return import('./tamber-server.mjs').then(m => m.importTheme(rest)).then(code => process.exit(code));
-  if (verb === 'tamber' && name === 'op') return import('./tamber-server.mjs').then(m => m.op(rest)).then(code => process.exit(code));
-  if (verb === 'tamber' && name === 'pair') return import('./tamber-pairing.mjs').then(m => m.pairCode(rest)).then(code => process.exit(code));
-  if (verb === 'tamber' && name === 'tool') return import('./tamber-server.mjs').then(m => m.toolCommand(rest)).then(code => process.exit(code));
-  if (verb === 'tamber') return process.exit(await contract(['tamber', ...argv.slice(1)]));
+  if (verb === 'forma' && name === 'serve') return import('./forma-server.mjs').then(m => m.serveAlone(rest)).then(code => process.exit(code));
+  // A stylesheet's custom properties written into app.forma (LLP 1153 D6): the compiler's, with no server.
+  if (verb === 'forma' && name === 'import' && rest[0] === 'css') return process.exit(await contract(['forma', ...argv.slice(1)]));
+  if (verb === 'forma' && name === 'import') return import('./forma-server.mjs').then(m => m.importTheme(rest)).then(code => process.exit(code));
+  if (verb === 'forma' && name === 'op') return import('./forma-server.mjs').then(m => m.op(rest)).then(code => process.exit(code));
+  if (verb === 'forma' && name === 'pair') return import('./forma-pairing.mjs').then(m => m.pairCode(rest)).then(code => process.exit(code));
+  if (verb === 'forma' && name === 'tool') return import('./forma-server.mjs').then(m => m.toolCommand(rest)).then(code => process.exit(code));
+  if (verb === 'forma') return process.exit(await contract(['forma', ...argv.slice(1)]));
   if (verb === 'hatch') return hatch(guardFlags('hatch', argv.slice(1)));
   if (verb === 'add') return add(guardFlags('add', argv.slice(1)));
   if (verb === 'pattern') return pattern(guardFlags('pattern', argv.slice(1)));

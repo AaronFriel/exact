@@ -580,7 +580,7 @@ function references(graph, file, literals, pkgDir, as) {
         // A container, or the code's own directory or one above it, is where its paths start; a build script reads
         // the one above it (an app's crate builds its app).
         if ((!test && CONTAINERS.has(target)) || (as !== 'build' && (own === target || own.startsWith(`${target}/`)))) return;
-        // (`tamber tool` serves apps/design-tool, a path into one app; a table of hosts names each platform's, and a
+        // (`forma tool` serves apps/design-tool, a path into one app; a table of hosts names each platform's, and a
         // tool for games names game/ to make one)
         if (!reaches(target) && !/^(?:apps|examples|packages)\//.test(unitOf(target)) && !/^include_(?:str|bytes)!$/.test(call)) return;
         // Skip a directory of tests named by code other than a test: it names it to run the tests there (`build.mjs

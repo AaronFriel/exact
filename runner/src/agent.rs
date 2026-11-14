@@ -84,7 +84,7 @@ pub fn handle<D: DataSource>(runner: &Runner<D>, request: &str) -> String {
         // development page outlines by, without a node's whole explanation.
         Some("sites") => runner.view_sites_json(),
         // A view and each logical ancestor to the root with its plan site (null for none): what a development
-        // page walks to move a selection up its call sites (tamber/1.16 `inspect` `select`), with no node's rows.
+        // page walks to move a selection up its call sites (forma/1.16 `inspect` `select`), with no node's rows.
         Some("ancestors") => match field_num(request, "id") {
             Some(n) if n >= 0.0 && n == n.trunc() => lineage::ancestors(runner, n as u32),
             _ => error("ancestors needs a numeric id"),

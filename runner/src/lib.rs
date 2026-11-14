@@ -143,15 +143,15 @@ pub use runner::{
     BACKGROUND, JOURNAL_RING, MAX_CLOCK_MS, PICKED, QUEUE_BOUND, RESIZE_UNDELIVERED,
     TIMER_FIRE_LIMIT, VIRTUAL_FRAME_MS,
 };
-pub use runner::{AppState, LiveApplied, LiveRefusal, Place, Tamber};
+pub use runner::{AppState, Forma, LiveApplied, LiveRefusal, Place};
 pub use runner::{CallHow, WakeHow};
 pub use runner::{ModuleIdentity, ModuleInstance};
 pub use upload::{UPLOAD_PROGRESS, UPLOAD_SENDING};
-/// The binding core's names (LLP 1121 D12): what `contract tamber gen rust`
+/// The binding core's names (LLP 1121 D12): what `contract forma gen rust`
 /// writes (`pub const SURFACE_CARD: Token<Color>`) and resolves.
-pub mod tamber {
+pub mod forma {
     pub use crate::runner::{
-        ColorKind as Color, Font, Kind, LengthKind as Length, NumberKind as Number, Place, Tamber,
+        ColorKind as Color, Font, Forma, Kind, LengthKind as Length, NumberKind as Number, Place,
         Token, TypeKind as Type,
     };
 }

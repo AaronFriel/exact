@@ -47,7 +47,7 @@ test("a design's entries are read at the block's own indent, with or without a k
   const { designTokens } = await import('./no-tells.mjs');
   const dir = mkdtempSync(join(tmpdir(), 'no-tells-design-'));
   writeFileSync(join(dir, 'app.json'), '{}');
-  writeFileSync(join(dir, 'app.tamber'), 'tamber t\n\ntheme\n    surface.card: color = #ffffff\n      when x=y: #000000\n    brand = #c8102e\n');
+  writeFileSync(join(dir, 'app.forma'), 'forma t\n\ntheme\n    surface.card: color = #ffffff\n      when x=y: #000000\n    brand = #c8102e\n');
   assert.deepEqual([...designTokens(join(dir, 'app.contract'))], ['surface.card', 'brand']);
 });
 

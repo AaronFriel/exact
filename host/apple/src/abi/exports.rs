@@ -995,8 +995,8 @@ macro_rules! host {
         /// The binding core (LLP 1121 D12): `{"view", "names"}` in the input
         /// buffer, `{"inputs", "colors"}` UTF-8 in the output buffer.
         #[no_mangle]
-        pub extern "C" fn exact_tamber(rt: u32, len: usize) -> u32 {
-            $crate::abi::with_runtime(&EXACT_RUNTIMES, rt, false, |b, _| b.tamber(len), |n| n)
+        pub extern "C" fn exact_forma(rt: u32, len: usize) -> u32 {
+            $crate::abi::with_runtime(&EXACT_RUNTIMES, rt, false, |b, _| b.forma(len), |n| n)
         }
 
         /// The design digest the running app runs, UTF-8; empty before boot.

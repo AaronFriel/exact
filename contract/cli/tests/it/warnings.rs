@@ -853,7 +853,7 @@ fn symbols_answer_to_apple_names_and_aliases_and_the_plan_carries_the_role() {
         .unwrap_err();
         assert!(error.to_string().contains("not a role"), "{name}: {error}");
     }
-    // `sf/` stays distinct: Apple's name, opaque, no warning (a role's own: tamber_icons).
+    // `sf/` stays distinct: Apple's name, opaque, no warning (a role's own: forma_icons).
     let (plan, warnings) =
         contract::compile_warned("component App\n  view\n    image \"symbol:sf/gearshape.2\"\n");
     let strings = plan.unwrap().strings;

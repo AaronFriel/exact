@@ -264,7 +264,7 @@ fn a_native_controls_part_is_the_control_group_alone() {
     assert!(with(&src, id).is_empty(), "{:?}", with(&src, id));
 }
 
-/// LLP 1139 D5: the Tamber IR file's `library` block, each component that
+/// LLP 1139 D5: the Forma IR file's `library` block, each component that
 /// names parts with its parts (groups, and the slot's holder) and its
 /// variant props (an enum or bool a class condition or a row's `?:` reads).
 #[test]
@@ -280,8 +280,8 @@ fn the_ir_lists_parts_slot_and_variants() {
     )
     .unwrap();
     std::fs::write(dir.join("card.contract"), card).unwrap();
-    let app = contract::tamber_params::params_of(&dir.join("app.contract"));
-    let ir = contract::tamber_params::library(&app, None);
+    let app = contract::forma_params::params_of(&dir.join("app.contract"));
+    let ir = contract::forma_params::library(&app, None);
     let _ = std::fs::remove_dir_all(&dir);
     assert_eq!(
         ir,
@@ -380,8 +380,8 @@ fn variants_are_read_by_classes_and_rows() {
     )
     .unwrap();
     std::fs::write(dir.join("card.contract"), card).unwrap();
-    let app = contract::tamber_params::params_of(&dir.join("app.contract"));
-    let ir = contract::tamber_params::library(&app, None);
+    let app = contract::forma_params::params_of(&dir.join("app.contract"));
+    let ir = contract::forma_params::library(&app, None);
     let _ = std::fs::remove_dir_all(&dir);
     let props: Vec<&str> = ir[0]["variants"]
         .as_array()
@@ -431,8 +431,8 @@ fn a_match_arms_binding_is_no_variant() {
     )
     .unwrap();
     std::fs::write(dir.join("card.contract"), card).unwrap();
-    let app = contract::tamber_params::params_of(&dir.join("app.contract"));
-    let ir = contract::tamber_params::library(&app, None);
+    let app = contract::forma_params::params_of(&dir.join("app.contract"));
+    let ir = contract::forma_params::library(&app, None);
     let _ = std::fs::remove_dir_all(&dir);
     let props: Vec<&str> = ir[0]["variants"]
         .as_array()

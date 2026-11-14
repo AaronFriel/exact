@@ -46,7 +46,7 @@ mod width;
 pub(crate) use width::horizontal_flex;
 
 /// At most this many warnings from one compile. A blank SF Symbol's uses,
-/// `tamber-unreachable` and colours that stay one scheme follow, each site briefly: a repair
+/// `forma-unreachable` and colours that stay one scheme follow, each site briefly: a repair
 /// of the first twenty would only show the next (rules/RULES.md, "Loop shape").
 pub const MAX_WARNINGS: usize = 20;
 
@@ -182,7 +182,7 @@ pub(crate) fn with_text_styles(
     );
     // @ref LLP 1121 D15 — the design's values of params the app no longer has.
     if let Some(source) = &checked.file.design {
-        if let Ok(design) = exact_tamber::parse(&source.text) {
+        if let Ok(design) = exact_forma::parse(&source.text) {
             let params = crate::params::tokens(checked.file);
             out.extend(crate::anatomy::unknown_params(
                 &design,
@@ -215,7 +215,7 @@ struct Tokens {
     /// The tokens one colour in light and dark, not marked `scheme=fixed`,
     /// with that colour and whether in every tuple (`theme::one_scheme_tokens`).
     one: Vec<(String, String, bool)>,
-    /// The tokens are a design's (`app.tamber`), which can mark one, not an inline `theme`'s.
+    /// The tokens are a design's (`app.forma`), which can mark one, not an inline `theme`'s.
     design: bool,
 }
 
@@ -1117,7 +1117,7 @@ fn one_scheme(
             s.name.clone(),
         ))
     });
-    let why = "Leave the accent unsaid (the platform's; a brand is an `app.tamber`), or write it as a role or one `light-dark(light, dark)` pair on `accent-color`. A forced `color-scheme` is no repair: the app then has no dark mode (docs/contract-for-agents.md, \"Colours: say a role, not a value\")";
+    let why = "Leave the accent unsaid (the platform's; a brand is an `app.forma`), or write it as a role or one `light-dark(light, dark)` pair on `accent-color`. A forced `color-scheme` is no repair: the app then has no dark mode (docs/contract-for-agents.md, \"Colours: say a role, not a value\")";
     // `#fff` on `color` stays; `#fff`, `#eee` on `background-color` stay.
     let shown = |s: &Site| {
         let mut shown: Vec<String> = s.colours.iter().take(3).map(|c| format!("`{c}`")).collect();
@@ -1134,7 +1134,7 @@ fn one_scheme(
     // A token's line names it and both ways out (LLP 1121 D3).
     let mark = match tokens.design {
         true => "mark it `scheme=fixed` in the design if one colour is deliberate (an ink on a fixed fill, a ground under media)",
-        false => "an inline `theme` cannot mark one deliberate: move it to `app.tamber` and mark it `scheme=fixed`",
+        false => "an inline `theme` cannot mark one deliberate: move it to `app.forma` and mark it `scheme=fixed`",
     };
     let token = |s: &Site| {
         // Marked only where it is one colour in every app mode.

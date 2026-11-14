@@ -658,8 +658,8 @@ fn a_colour_keyframe_takes_the_designs_tokens() {
     let dir = std::env::temp_dir().join(format!("keyframe-token-axis-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(
-        dir.join("app.tamber"),
-        "tamber t\n\naxes\n  tone = calm | loud\n\ntheme\n  c.chip = #cfced4\n    when tone=loud: #ff0000\n",
+        dir.join("app.forma"),
+        "forma t\n\naxes\n  tone = calm | loud\n\ntheme\n  c.chip = #cfced4\n    when tone=loud: #ff0000\n",
     )
     .unwrap();
     std::fs::write(

@@ -458,7 +458,7 @@ fn fold_constant_families(value: &mut Expr) {
 }
 
 fn family_names(value: &str, span: Span) -> Result<Vec<String>, LowerError> {
-    exact_tamber::family_names(value).map_err(|e| LowerError {
+    exact_forma::family_names(value).map_err(|e| LowerError {
         id: e.id,
         message: e.message,
         span,

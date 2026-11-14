@@ -825,7 +825,7 @@ fn gallery_manifest(app: &crate::Manifest, design: Option<&Path>, out: &Path) ->
         let design = design
             .canonicalize()
             .unwrap_or_else(|_| design.to_path_buf());
-        json["tamber"] = relative(out, &design).into();
+        json["forma"] = relative(out, &design).into();
     }
     format!(
         "{}\n",
@@ -1306,9 +1306,9 @@ mod tests {
         assert_eq!(
             relative(
                 Path::new("/a/b/target/g"),
-                Path::new("/a/b/apps/x/app.tamber")
+                Path::new("/a/b/apps/x/app.forma")
             ),
-            "../../apps/x/app.tamber"
+            "../../apps/x/app.forma"
         );
     }
 }

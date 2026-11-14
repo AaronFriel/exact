@@ -460,7 +460,7 @@ fn shorthand(a: &Attr, names: &Substituted) -> Result<(), LowerError> {
     if a.name == "font"
         && crate::type_tokens::tokens_named(
             &a,
-            exact_tamber::Kind::Type,
+            exact_forma::Kind::Type,
             &[],
             &Default::default(),
             false,

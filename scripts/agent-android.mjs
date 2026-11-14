@@ -29,7 +29,7 @@
 // EXACT_FONTS. The painter is the CPU one unless EXACT_PAINTER says
 // otherwise: the GPU painter needs a real GPU's Vulkan (an emulator's
 // SwiftShader crashes it).
-import { writeTamberNames } from './tamber-names.mjs';
+import { writeFormaNames } from './forma-names.mjs';
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { inflateRawSync } from 'node:zlib';
@@ -1082,7 +1082,7 @@ export function buildApk(app, env, profile, writeLocks = false, bundle = false) 
   const compose = uses.includes('dates') ? ['-Pcompose=1'] : [];
   const development = JSON.parse(readFileSync(resolve(out, 'compat.json'), 'utf8')).embedded?.trust !== 'production';
   // The token names its hatches read (LLP 1121 D12), beside them in the build.
-  if (existsSync(resolve(app.dir, 'modules/android'))) writeTamberNames(app, 'kotlin');
+  if (existsSync(resolve(app.dir, 'modules/android'))) writeFormaNames(app, 'kotlin');
   const graph = mavenGraph(app, writeLocks, maven, env);
   if (!graph) return null;
   let assembled;

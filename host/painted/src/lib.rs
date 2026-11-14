@@ -85,6 +85,7 @@ pub mod paint;
 pub mod picker;
 mod placement;
 // Asked only on Linux: elsewhere this host refuses the document pickers.
+mod forma;
 #[cfg_attr(any(not(unix), target_os = "android"), allow(dead_code))]
 mod portal;
 pub mod presence_secrets;
@@ -94,7 +95,6 @@ mod scroll_anchor;
 mod sound;
 mod surface_haptics;
 mod surfaces;
-mod tamber;
 pub mod teardown;
 pub mod text;
 #[cfg(any(target_os = "android", test))]

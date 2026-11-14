@@ -63,8 +63,8 @@ fn consumer(tag: &str, source: &str) -> PathBuf {
     );
     std::fs::write(dir.join("app.contract"), source).unwrap();
     std::fs::write(
-        dir.join("app.tamber"),
-        "tamber consumer\n\ntheme\n  ink = #111111\n",
+        dir.join("app.forma"),
+        "forma consumer\n\ntheme\n  ink = #111111\n",
     )
     .unwrap();
     std::fs::write(
@@ -249,8 +249,8 @@ fn an_app_recolours_the_primary_fill_and_ink_by_full_name_and_not_the_overlay() 
     ] {
         let dir = consumer(tag, &source);
         std::fs::write(
-            dir.join("app.tamber"),
-            format!("tamber consumer\n\ntheme\n  ink = #111111\n{design}"),
+            dir.join("app.forma"),
+            format!("forma consumer\n\ntheme\n  ink = #111111\n{design}"),
         )
         .unwrap();
         let r = boot(&dir);

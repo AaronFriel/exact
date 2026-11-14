@@ -60,7 +60,7 @@ pub(crate) fn grid_tokens(a: &Attr, rows: &[StyleId]) -> Option<Attr> {
                     let unit = before.ends_with(|c: char| c.is_ascii_digit() || c == '.');
                     out.push_str(before);
                     match crate::theme::measure_written(&word[..end]).filter(|_| !unit) {
-                        Some((exact_tamber::Kind::Length, values)) if values.len() == 1 => {
+                        Some((exact_forma::Kind::Length, values)) if values.len() == 1 => {
                             out.push_str(&values[0]);
                             *changed = true;
                         }

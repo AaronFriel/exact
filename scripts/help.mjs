@@ -385,7 +385,7 @@ artifacts under game/target only. Ports none. Runs to completion.`,
   verify <file.contract> [--runner-only] [--js] [--walks N] [--steps M] [--walk-seed N] [--confirm N] [--types] [--prove <Module>]
   rust <file.contract> [-o <shapes.rs>]
   lean <file.contract> [--components] [--name <ident>] [-o <file.lean>]
-  tamber check <app> | eval <app> [--mode <axis>=<value>] | ir <app> [-o <tamber.json>] | fmt <app> [--check]   (a flag before or after <app>)
+  forma check <app> | eval <app> [--mode <axis>=<value>] | ir <app> [-o <forma.json>] | fmt <app> [--check]   (a flag before or after <app>)
                                           the app's design (LLP 1121): checked, its tokens in one mode, its IR
 The first call compiles the compiler (minutes on a cold checkout).
 Ports    none. Runs to completion: exit 0 when it compiled.`,
@@ -416,12 +416,12 @@ passes its own tests and no-tells; rest's and site's run with test or verify, wh
 Ports    none. Runs to completion.`,
     example: 'bun exact.mjs pattern list-detail && bun exact.mjs test web',
   },
-  tamber: {
-    line: 'the app\'s design (app.tamber): checked, its tokens in one mode, its IR',
-    usage: 'bun exact.mjs tamber check <app> | eval <app> [--mode <axis>=<value>] | ir <app> [-o <tamber.json>] | fmt <app> [--check] | gen ts|rust|swift|kotlin <app> [-o <dir>] | serve <app> [--port <n>] [--lan] [--remote <host:port>] [--trust-tunnel <port>] [--allow-host <name>] [--allow-plugin-origin] [--relay <host> --relay-account <label> …] [--pair-ttl <duration>] | pair <url> --scope read|propose|write [--name <name>] | op <url> <request JSON>|subscribe | import css <stylesheet> [--app <app>] | import shadcn|tailwind|dtcg|pen|astryx <source> <url> [--app <app>] [--prefix <p>] | tool [<app>] [--via <dev url>] [--no-open]   (<app>: its directory, app.contract or a .tamber file; a flag before or after it)',
+  forma: {
+    line: 'the app\'s design (app.forma): checked, its tokens in one mode, its IR',
+    usage: 'bun exact.mjs forma check <app> | eval <app> [--mode <axis>=<value>] | ir <app> [-o <forma.json>] | fmt <app> [--check] | gen ts|rust|swift|kotlin <app> [-o <dir>] | serve <app> [--port <n>] [--lan] [--remote <host:port>] [--trust-tunnel <port>] [--allow-host <name>] [--allow-plugin-origin] [--relay <host> --relay-account <label> …] [--pair-ttl <duration>] | pair <url> --scope read|propose|write [--name <name>] | op <url> <request JSON>|subscribe | import css <stylesheet> [--app <app>] | import shadcn|tailwind|dtcg|pen|astryx <source> <url> [--app <app>] [--prefix <p>] | tool [<app>] [--via <dev url>] [--no-open]   (<app>: its directory, app.contract or a .forma file; a flag before or after it)',
     flags: [
       ['--mode <axis>=<value>[,…]', 'eval: the mode to print the tokens in; the rest at their defaults'],
-      ['-o <file>', 'ir: write the IR (tamber.json, generated, never committed) there; gen: the directory (else the app\'s .exact/tamber/)'],
+      ['-o <file>', 'ir: write the IR (forma.json, generated, never committed) there; gen: the directory (else the app\'s .exact/forma/)'],
       ['--check', 'fmt: write nothing; exit 1 where the layout would change'],
       ['--port <n>', 'serve: the port (else any free one)'],
       ['--lan', 'serve: bind every interface; a client there still cannot have the token'],
@@ -436,25 +436,25 @@ Ports    none. Runs to completion.`,
       ['--via <url>', 'tool: the app\'s dev loop, which holds its design; the tool reaches it through its own port, waiting (up to 20 min) while the loop starts'],
       ['--no-open', 'tool: print the URL; open no browser'],
     ],
-    body: `The design is the file app.json's "tamber" names, else app.tamber beside app.contract
+    body: `The design is the file app.json's "forma" names, else app.forma beside app.contract
 (LLP 1121). check prints each refusal at its line; eval prints "name = value" a token.
-serve is the design server (the dev loops mount it too, at /__tamber): reads, edits,
+serve is the design server (the dev loops mount it too, at /__forma): reads, edits,
 undo and a change stream, with a token only this machine's loopback can have. gen writes
-bindings from the IR, generated and never committed (LLP 1121 D12): ts, tamber.ts (a
-ColorToken union, each token's CSS per mode) and tamber.css; rust, tamber.rs, a
-Token<Color> constant a token (SURFACE_CARD), which session.tamber().get resolves; swift,
-tamber.swift, ExactTamberToken.surfaceCard; kotlin, TamberTokens.kt for Android native views.
+bindings from the IR, generated and never committed (LLP 1121 D12): ts, forma.ts (a
+ColorToken union, each token's CSS per mode) and forma.css; rust, forma.rs, a
+Token<Color> constant a token (SURFACE_CARD), which session.forma().get resolves; swift,
+forma.swift, ExactFormaToken.surfaceCard; kotlin, FormaTokens.kt for Android native views.
 op takes the server's token and sends one request, or prints the change stream (subscribe).
 import css writes :root custom properties into the design, between markers a later
 import of it rewrites, naming each it refuses (LLP 1153 D6). import <kind> holds another
 system's theme on the server as proposals: the tokens as one, each role override apart.
 tool is the design tool (LLP 1122), built if stale, served by the design server at
-http://127.0.0.1:7740/__tamber/tool/ and opened. docs/recipes/tamber.md.
+http://127.0.0.1:7740/__forma/tool/ and opened. docs/recipes/forma.md.
 Ports    serve: a loopback port (printed), until ctrl-c; tool: 127.0.0.1:7740, the one its
 grants name, until ctrl-c (EXACT_TOOL_PORT names another: the tool is built for it, and a dev
 loop must be started with the same to let it frame its pages). The rest: none; they run to
 completion.`,
-    example: 'bun exact.mjs tamber eval . --mode dark-style=dim',
+    example: 'bun exact.mjs forma eval . --mode dark-style=dim',
   },
   add: {
     line: 'a standard module (geolocation): its dependency in package.json, installed',

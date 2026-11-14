@@ -290,7 +290,7 @@ function gitHead() {
  * `assets/` or `deck/`, which `carriedAssets` carries whatever its type; never what a build or a tool writes. */
 function pushReads(file) {
   if (/(^|\/)(target|node_modules|\.git|\.exact)(\/|$)/.test(file) || /(^|\/)\.DS_Store$/.test(file)) return false;
-  return /^(assets|deck)\//.test(file) || /\.(contract|tamber|rs|toml|json|png|jpe?g|webp|gif|svg|ttf|otf|mjs|ts|css|html)$/.test(file);
+  return /^(assets|deck)\//.test(file) || /\.(contract|forma|rs|toml|json|png|jpe?g|webp|gif|svg|ttf|otf|mjs|ts|css|html)$/.test(file);
 }
 
 /** Candidates for signed cohorts, without building their hosts. Deploy calls

@@ -91,7 +91,7 @@ pub const RECIPES: &[(&str, &str)] = &[
     recipe!("suspending-feed"),
     recipe!("symbols"),
     recipe!("tabs"),
-    recipe!("tamber"),
+    recipe!("forma"),
     recipe!("tests"),
     recipe!("theme"),
     recipe!("timer-in-a-component"),

@@ -233,7 +233,7 @@ test('push --watch publishes after a save to what a push reads, and not to what 
     while (!listener) await settle();
     const pushes = async (file) => { const before = rows.length; listener('change', file); await settle(); return rows.length - before; };
     // The design, and an asset or a deck's file of any type (`carriedAssets`)
-    for (const file of ['app.contract', 'app.tamber', 'assets/logo.png', 'assets/Inter.ttf', 'assets/chime.wav', 'assets/clip.mov', 'deck/deck.js']) {
+    for (const file of ['app.contract', 'app.forma', 'assets/logo.png', 'assets/Inter.ttf', 'assets/chime.wav', 'assets/clip.mov', 'deck/deck.js']) {
       expect([file, await pushes(file)]).toEqual([file, 1]);
     }
     // What the app's own state, a build or the Finder writes

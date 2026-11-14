@@ -43,7 +43,7 @@ test('large module warning replies keep the producer alive and discard supersede
     MODULE_FILES: { native: 'app.hbc', web: 'app.js' }, captureAssets: () => new Map(),
     currentModule: null, assetCards: () => [], isEntryFile: () => false,
     moduleDesign: null, moduleScrubbed: null, moduleReleased: false,
-    designBytes: () => '', designSource: null, designSnapshot: null, tamber: null,
+    designBytes: () => '', designSource: null, designSnapshot: null, forma: null,
     app: { id: 'test.warnings' }, moduleCards() {}, seq: 0, captureGeneration() {}, pending: new Map(), sayReady() {},
     announcement: () => ({ seq: context.seq }), push: message => published.push(message),
     watchPackages() {}, rmSync() {}, moduleStage: null, produce: () => { retries++; },

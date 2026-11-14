@@ -60,11 +60,11 @@ pub use contract_analyze::SuggestionCheck;
 pub use properties::{check_properties_path, check_suggestions_path, properties, tests};
 mod tests_json;
 pub use tests_json::{authored_json, tests_json};
-pub mod snapshot;
-pub mod tamber_levels;
-pub mod tamber_params;
+pub mod forma_levels;
+pub mod forma_params;
 /// `uses` (LLP 1121 stage 4, commit 6): where the app reads a token.
-pub mod tamber_uses;
+pub mod forma_uses;
+pub mod snapshot;
 pub mod terminal;
 mod typescript;
 pub mod watch;
@@ -589,7 +589,7 @@ pub fn rerun_if_changed(path: &Path) {
         // A package design or bundled SVG image not there yet.
         if consulted
             .extension()
-            .is_some_and(|e| e == "tamber" || e.eq_ignore_ascii_case("svg"))
+            .is_some_and(|e| e == "forma" || e.eq_ignore_ascii_case("svg"))
         {
             println!(
                 "cargo:metadata=exact-optional-input={}",

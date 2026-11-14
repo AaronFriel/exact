@@ -10,7 +10,7 @@
 // app publishes a reload or a kept design (`designKept`), never before, so
 // it follows each kept edit, not a scrub's frames. It stops with the loop,
 // and a minute after it was last asked for with no page of it open. The
-// page registers on the build channel with `page: 'gallery'` (tamber/1.15),
+// page registers on the build channel with `page: 'gallery'` (forma/1.15),
 // a label only.
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';

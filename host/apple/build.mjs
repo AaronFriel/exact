@@ -1102,9 +1102,9 @@ async function main(args, lockHeld = false) {
   })), packageSources = packages.length ? [seam, ...packageCopies.flat()] : [];
   if (composing) writeFileSync(composed, composedModule(packages, modules.apple.length > 0));
   if (composing) writeDataKeys(app, dataKeys, ios ? 'ios' : 'macos');
-  // @ref LLP 1121 D12 — the token names `contract tamber gen swift` writes from the design (never committed).
-  if (composing) (await import('../../scripts/tamber-names.mjs')).writeTamberNames(app, 'swift'); const tamberNames = resolve(app.dir, '.exact/tamber/tamber.swift');
-  const moduleSources = composing ? [...moduleSeam(resolve, root), composed, ...(existsSync(tamberNames) ? [tamberNames] : []), dataKeys, ...snapshot.copies] : [];
+  // @ref LLP 1121 D12 — the token names `contract forma gen swift` writes from the design (never committed).
+  if (composing) (await import('../../scripts/forma-names.mjs')).writeFormaNames(app, 'swift'); const formaNames = resolve(app.dir, '.exact/forma/forma.swift');
+  const moduleSources = composing ? [...moduleSeam(resolve, root), composed, ...(existsSync(formaNames) ? [formaNames] : []), dataKeys, ...snapshot.copies] : [];
   const modulesBuilt = moduleSources.length ? resolve(webBuildDir, modulesLoadName) : null;
   const frameworkTarget = (forIos, simulator, arch) => ({ platform: forIos ? (tv ? 'tvos' : 'ios') : 'macos', variant: forIos && simulator ? (simulator === true ? 'simulator' : simulator) : undefined, arch });
   const frameworkSlice = (fw, forIos, simulator, arch) => moduleFrameworks([fw], frameworkTarget(forIos, simulator, arch));

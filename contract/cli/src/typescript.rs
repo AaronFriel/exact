@@ -254,7 +254,7 @@ fn language_model_tools(plan: &Plan, out: &mut String) {
 /// `contract`, when it has a design that lists them (LLP 1121 D7).
 pub fn design_exports(contract: &std::path::Path) -> Option<Vec<String>> {
     let path = crate::design_path(contract)?;
-    let design = exact_tamber::parse(&std::fs::read_to_string(path).ok()?).ok()?;
+    let design = exact_forma::parse(&std::fs::read_to_string(path).ok()?).ok()?;
     Some(design.exports?.into_iter().map(|e| e.value).collect())
 }
 
@@ -282,13 +282,13 @@ fn tokens(plan: &Plan, exports: Option<&[String]>, out: &mut String) {
             // A role override by the role's spelling, as a row writes it and
             // the generators name it (`CanvasText`, `-exact-secondary-label`).
             let name = role.unwrap_or(plan.str(row.name));
-            // A component's param is every binding's (D15), as `tamber gen` names it
+            // A component's param is every binding's (D15), as `forma gen` names it
             // (stage 7 D, over A's leaving it out: a data module may return one).
             let exported = name.starts_with(contract_lower::params::PREFIX)
                 || exports.is_none_or(|lines| {
                     lines
                         .iter()
-                        .any(|line| exact_tamber::exports_names(line, name, role))
+                        .any(|line| exact_forma::exports_names(line, name, role))
                 });
             if exported && !name.contains('(') && !names.contains(&name) {
                 names.push(name);

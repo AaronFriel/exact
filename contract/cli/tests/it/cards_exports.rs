@@ -54,8 +54,8 @@ fn consumer(tag: &str, source: &str) -> PathBuf {
     );
     std::fs::write(dir.join("app.contract"), source).unwrap();
     std::fs::write(
-        dir.join("app.tamber"),
-        "tamber consumer\n\ntheme\n  ink = #111111\n",
+        dir.join("app.forma"),
+        "forma consumer\n\ntheme\n  ink = #111111\n",
     )
     .unwrap();
     std::fs::write(

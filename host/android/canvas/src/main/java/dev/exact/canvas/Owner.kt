@@ -448,7 +448,7 @@ internal class Owner(private val hwbuf: Boolean, private val fast: Boolean, prio
     }
 
     /** Run [f] on the exact thread and wait for it, publishing nothing: a question that changes nothing
-     * ([ExactTamber]). */
+     * ([ExactForma]). */
     fun <T> ask(f: () -> T): T {
         if (Looper.myLooper() == thread.looper) return f()
         val task = FutureTask<T> { f() }
@@ -474,7 +474,7 @@ internal class Owner(private val hwbuf: Boolean, private val fast: Boolean, prio
         val access = if (accessible) try { Native.access(accessAgain).also { accessAgain = false } } catch (e: UnsatisfiedLinkError) { accessible = false; null } else null
         // The bindings ask again first, so a frame's colours read the new answers; every turn, as a token only
         // native code reads moves no paint (one inputs call per binding).
-        Tambers.turned()
+        Formas.turned()
         if (fresh == null && (told != null || fields != null || bars != null || access != null)) {
             queue.add(Pub(timerReports.publish(), null, true, seq, 0, told, fields, bars, access))
             Native.timerObservation(readerScrolling, readerSampling, true, false)
@@ -642,10 +642,10 @@ internal object Exact {
         return o.sync { o.drainWindow(); String(Native.agent(line.toByteArray(Charsets.UTF_8)), Charsets.UTF_8) }
     }
 
-    /** What an [ExactTamber] asks ([Native.tamber], LLP 1121 D12): on exact2's thread, waited for, publishing
+    /** What an [ExactForma] asks ([Native.forma], LLP 1121 D12): on exact2's thread, waited for, publishing
      * nothing. An error's JSON where no host runs or the library predates the call. */
-    fun tamber(request: String): String {
-        val f = { try { Native.tamber(request) } catch (e: UnsatisfiedLinkError) { "{\"error\":\"no tamber in this library\"}" } }
+    fun forma(request: String): String {
+        val f = { try { Native.forma(request) } catch (e: UnsatisfiedLinkError) { "{\"error\":\"no forma in this library\"}" } }
         val o = owner
         return if (o != null) o.ask(f) else if (live) f() else "{\"error\":\"no host\"}"
     }

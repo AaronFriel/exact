@@ -286,7 +286,7 @@ private final class Host {
 /// reads it: the page and its envelope link, each generation's envelope and
 /// plan, the `/__dev` stream (a hello with a nonce, then announcements and
 /// commands), and `/__dev/report`, which answers a register with the pin it
-/// holds for the build's id, as scripts/tamber-builds.mjs does. `stop` drops
+/// holds for the build's id, as scripts/forma-builds.mjs does. `stop` drops
 /// every connection and the listener; `start` listens again on the same
 /// port as a new process: a new epoch, its sequence from 1. Its pins outlive
 /// a restart, as a channel kept by a process the restart does not take down.
@@ -560,7 +560,7 @@ final class DevServerStub: @unchecked Sendable {
         finish(client)
     }
 
-    /// As tamber-builds.mjs: a nonce no open stream holds is 403, a report
+    /// As forma-builds.mjs: a nonce no open stream holds is 403, a report
     /// before a register 409; a register is answered on its stream with the
     /// pin held for its id (revision 0 and null when there is none).
     private func report(_ client: Int32, _ data: Data) {

@@ -69,7 +69,7 @@ async function copies(wasm) {
   // router's tests hold.)
   const app = wasm ? resolve(ROOT, 'apps/theme-fixture') : mkdtempSync(join(tmpdir(), 'exact-dev-copies-'));
   if (!wasm) {
-    for (const f of ['app.tamber', 'app.json']) cpSync(resolve(ROOT, 'apps/theme-fixture', f), join(app, f));
+    for (const f of ['app.forma', 'app.json']) cpSync(resolve(ROOT, 'apps/theme-fixture', f), join(app, f));
     writeFileSync(join(app, 'app.contract'), APP);
   }
   const dist = mkdtempSync(join(tmpdir(), 'exact-dev-copies-dist-'));
@@ -93,12 +93,12 @@ async function copies(wasm) {
   for (const end = Date.now() + 600_000; !said.includes(`127.0.0.1:${port}/`);) { if (Date.now() > end || dev.exitCode !== null) throw new Error(`the dev loop never served: ${said}`); await Bun.sleep(100); }
   const browser = await (await import('playwright-core')).chromium.launch({ executablePath: chromium().executable, headless: true });
   try {
-    const token = (await fetch(`${base}/__tamber/token`).then(r => r.json())).token;
-    const call = body => fetch(`${base}/__tamber`, { method: 'POST', headers: { 'x-exact-tamber-token': token }, body: JSON.stringify(body) }).then(async r => ({ status: r.status, ...(await r.json()) }));
-    const events = () => fetch(`${base}/__tamber/events`, { method: 'POST', headers: { 'x-exact-tamber-token': token }, body: JSON.stringify({ after: 0, wait: false, client: 'copies' }) }).then(r => r.json()).then(r => r.events ?? []);
+    const token = (await fetch(`${base}/__forma/token`).then(r => r.json())).token;
+    const call = body => fetch(`${base}/__forma`, { method: 'POST', headers: { 'x-exact-forma-token': token }, body: JSON.stringify(body) }).then(async r => ({ status: r.status, ...(await r.json()) }));
+    const events = () => fetch(`${base}/__forma/events`, { method: 'POST', headers: { 'x-exact-forma-token': token }, body: JSON.stringify({ after: 0, wait: false, client: 'copies' }) }).then(r => r.json()).then(r => r.events ?? []);
     // Present throughout: a subscription held open (a poll's presence lapses in 35 s).
     const presence = new AbortController();
-    fetch(`${base}/__tamber/subscribe`, { method: 'POST', headers: { 'x-exact-tamber-token': token }, body: JSON.stringify({ client: 'copies' }), signal: presence.signal }).then(r => r.body?.pipeTo(new WritableStream())).catch(() => {});
+    fetch(`${base}/__forma/subscribe`, { method: 'POST', headers: { 'x-exact-forma-token': token }, body: JSON.stringify({ client: 'copies' }), signal: presence.signal }).then(r => r.body?.pipeTo(new WritableStream())).catch(() => {});
     await events();
     let logs = [];
     const until = async (read, pass, what, ms = 120_000) => { for (const end = Date.now() + ms; ;) { const v = await read(); if (pass(v)) return v; if (Date.now() > end) throw new Error(`${what}: ${JSON.stringify(v)?.slice(0, 2000)}\nthe pages said: ${logs.slice(-20).join('\n')}\nevents: ${JSON.stringify((await events()).filter(e => e.event === 'unsupported'))}`); await Bun.sleep(250); } };

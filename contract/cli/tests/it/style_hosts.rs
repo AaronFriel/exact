@@ -102,6 +102,6 @@ fn best_effort_and_an_unset_value_say_nothing() {
 }
 
 #[test]
-fn it_is_information_like_tamber_unreachable() {
+fn it_is_information_like_forma_unreachable() {
     assert!(contract_lower::warning_rank::information("style-undrawn"));
 }

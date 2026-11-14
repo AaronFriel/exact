@@ -1,4 +1,4 @@
-//! `tamber-unreachable` (LLP 1121 D9, stage 8 C2): for each target the app
+//! `forma-unreachable` (LLP 1121 D9, stage 8 C2): for each target the app
 //! ships, each control parameter the app sets that the target's host does
 //! not honour there, from the schema's control-role table
 //! (`exact_kernel::generated::CONTROLS`). A lint: the platform's look is
@@ -9,7 +9,7 @@
 //! field's by the design's `Field`, `FieldText` or `placeholder`, unless
 //! the field writes its own row (a node's own row wins over the role).
 //!
-//! Beside it, `tamber-contrast` for the design's `AccentColor` under a
+//! Beside it, `forma-contrast` for the design's `AccentColor` under a
 //! prominent button's white label (LLP 1116.019 D3), which `check` judges
 //! only on a screen a drive reaches.
 
@@ -56,7 +56,7 @@ struct Used {
 }
 
 /// Unlowered, nothing read the app's targets or its design: forget an
-/// earlier compile's, so no `tamber-unreachable` reads them.
+/// earlier compile's, so no `forma-unreachable` reads them.
 pub(crate) fn unlowered() {
     note_accent(None);
     crate::icons::clear(None);
@@ -133,7 +133,7 @@ pub(crate) fn unreachable(view: &[Node], styles: &[StyleDecl], out: &mut Vec<Low
     if let (Some((r, dark)), Some(u), Some(set)) = (low, filled, role("AccentColor")) {
         let scheme = if dark { "dark" } else { "light" };
         out.push(LowerError {
-            id: "tamber-contrast",
+            id: "forma-contrast",
             message: format!(
                 "`AccentColor` is {:.2}:1 under a prominent button's white label in {scheme}: below {LABEL_CONTRAST}:1, a control label's ratio; UIKit keeps the label white on any tint, so leave the accent unsaid (the platform's blue) or deepen its {scheme} side (the first at line {}; LLP 1116.019 D3)",
                 (r * 100.0).floor() / 100.0,
@@ -241,7 +241,7 @@ pub(crate) fn unreachable(view: &[Node], styles: &[StyleDecl], out: &mut Vec<Low
     // that six controls leave alone is one thing to know, not six.
     for f in found {
         out.push(LowerError {
-            id: "tamber-unreachable",
+            id: "forma-unreachable",
             message: f.message(),
             span: f.span,
         });

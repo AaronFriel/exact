@@ -409,15 +409,15 @@ test('app.json\'s before_build runs before each command that builds, and its fai
     assert.equal(driven.status, 0, driven.stderr);
     assert.equal(driven.stdout, '{"drove":true}\n');
     assert.deepEqual(runs(), ['fetch --small in app', 'build true', 'drive']);
-    // A Contract subcommand that compiles or checks the app prepares, before the device's preflight, as do the Tamber
+    // A Contract subcommand that compiles or checks the app prepares, before the device's preflight, as do the Forma
     // ones that compile its design and a pattern added to it; a verb that compiles and checks nothing does not.
     rmSync(resolve(dir, 'assets'), { recursive: true });
     assert.equal(exact(['contract', 'build', 'app.contract']).status, 0);
     assert.deepEqual(runs(), ['fetch --small in app', 'preflight true', 'exact contract build']);
-    const preparing = [['contract', 'types'], ['contract', 'verify'], ['contract', 'lean'], ['contract', 'symbols'], ['tamber', 'check'], ['tamber', 'gen'], ['tamber', 'tool'], ['tamber', 'import', 'css'], ['pattern', 'card']];
+    const preparing = [['contract', 'types'], ['contract', 'verify'], ['contract', 'lean'], ['contract', 'symbols'], ['forma', 'check'], ['forma', 'gen'], ['forma', 'tool'], ['forma', 'import', 'css'], ['pattern', 'card']];
     for (const args of preparing) assert.equal(exact(args).status, 0, args.join(' '));
     assert.deepEqual(runs(), preparing.flatMap((args) => ['fetch --small in app', `exact ${args.slice(0, 2).join(' ')}`]));
-    const reading = [['contract', 'fmt'], ['contract', 'vocab'], ['contract', 'sources'], ['contract', 'migrate'], ['docs', 'padding'], ['tamber', 'fmt'], ['tamber', 'op'], ['tamber', 'pair'], ['tamber', 'tool', '--via', 'http://localhost:1'], ['pattern'], ['hatch'], ['backend'], ['update']];
+    const reading = [['contract', 'fmt'], ['contract', 'vocab'], ['contract', 'sources'], ['contract', 'migrate'], ['docs', 'padding'], ['forma', 'fmt'], ['forma', 'op'], ['forma', 'pair'], ['forma', 'tool', '--via', 'http://localhost:1'], ['pattern'], ['hatch'], ['backend'], ['update']];
     for (const args of reading) assert.equal(exact(args).status, 0, args.join(' '));
     assert.deepEqual(runs().filter((line) => line.startsWith('fetch')), []);
     // share builds the iPhone app it publishes.

@@ -3,7 +3,7 @@
 
 /** The module side's fixed Swift, in `root`: the table, its view entries, the hatch bindings, extensions and service query,
  * and ExactCore's walk to an app file through no link, which an extension's `file` takes too. */
-export const moduleSeam = (resolve, root) => ['ExactNativeModule.swift', 'ExactNativeViews.swift', 'ExactTamber.swift', 'ExactExtensions.swift', 'ExactServices.swift']
+export const moduleSeam = (resolve, root) => ['ExactNativeModule.swift', 'ExactNativeViews.swift', 'ExactForma.swift', 'ExactExtensions.swift', 'ExactServices.swift']
   .map(f => resolve(root, 'host/apple/modules', f)).concat(resolve(root, 'host/apple/Sources/ExactCore/AppFileWalk.swift'));
 
 /** Link declared system frameworks even when only an Objective-C category uses them. Frameworks introduced

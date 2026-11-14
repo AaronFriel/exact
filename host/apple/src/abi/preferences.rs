@@ -122,15 +122,15 @@ impl<D: DataSource> Bridge<D> {
     }
 
     /// The binding core's answer (LLP 1121 D12, stage 5) to the request in
-    /// the input buffer ([`Host::tamber_json`]), UTF-8 in the output buffer.
+    /// the input buffer ([`Host::forma_json`]), UTF-8 in the output buffer.
     /// Not a batch: nothing changes.
-    pub fn tamber(&mut self, len: usize) -> u32 {
+    pub fn forma(&mut self, len: usize) -> u32 {
         let text = std::str::from_utf8(&self.input[..len.min(self.input.len())])
             .unwrap_or("")
             .to_owned();
         self.output = match self.host.as_mut() {
-            Some(h) => h.tamber_json(&text),
-            None => exact_runner::agent::error("tamber: not booted"),
+            Some(h) => h.forma_json(&text),
+            None => exact_runner::agent::error("forma: not booted"),
         }
         .into_bytes();
         self.output.len() as u32

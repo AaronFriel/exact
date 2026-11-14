@@ -222,8 +222,8 @@ android {
         } + "</symbols>\n")
         sourceSets["main"].res.directories.add(res.path)
     }
-    // The token names `bun exact.mjs tamber gen kotlin` wrote (LLP 1121 D12; never committed).
-    appDir.resolve(".exact/tamber/TamberTokens.kt").takeIf { it.isFile }?.let { sourceSets["main"].kotlin.directories.add(it.parent) }
+    // The token names `bun exact.mjs forma gen kotlin` wrote (LLP 1121 D12; never committed).
+    appDir.resolve(".exact/forma/FormaTokens.kt").takeIf { it.isFile }?.let { sourceSets["main"].kotlin.directories.add(it.parent) }
     if (app == "shelf") sourceSets["test"].kotlin.directories.addAll(listOf(
         "../../../packages/quick-actions/android", "../../../packages/quick-actions/test/android",
     ))

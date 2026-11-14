@@ -934,11 +934,11 @@ dependencies = [
  "contract-syntax",
  "contract-types",
  "exact-data",
+ "exact-forma",
  "exact-kernel",
  "exact-motion",
  "exact-plan",
  "exact-runner",
- "exact-tamber",
  "libc",
  "serde_json",
  "sha2 0.10.9",
@@ -976,13 +976,13 @@ dependencies = [
  "contract-syntax",
  "contract-types",
  "exact-color",
+ "exact-forma",
  "exact-kernel",
  "exact-motion",
  "exact-num",
  "exact-plan",
  "exact-route",
  "exact-svg-file",
- "exact-tamber",
  "icu_locale",
  "serde_json",
  "sha2 0.10.9",
@@ -1660,6 +1660,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "exact-forma"
+version = "0.1.0"
+dependencies = [
+ "exact-color",
+ "exact-kernel",
+ "exact-motion",
+ "exact-num",
+ "exact-plan",
+ "libc",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "exact-gpu"
 version = "0.1.0"
 dependencies = [
@@ -2122,20 +2136,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "exact-tamber"
-version = "0.1.0"
-dependencies = [
- "exact-color",
- "exact-kernel",
- "exact-motion",
- "exact-num",
- "exact-plan",
- "libc",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "exact-terminal"
 version = "0.1.0"
 dependencies = [
@@ -2531,6 +2531,48 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb4cb245038516f5f85277875cdaa4f7d2c9a0fa0468de06ed190163b1581fcf"
 dependencies = [
  "percent-encoding",
+]
+
+[[package]]
+name = "forma-host-android"
+version = "0.1.0"
+dependencies = [
+ "contract",
+ "exact-bake",
+ "exact-painted",
+ "forma-host-data",
+]
+
+[[package]]
+name = "forma-host-apple"
+version = "0.1.0"
+dependencies = [
+ "contract",
+ "exact-apple",
+ "exact-bake",
+ "exact-logic",
+ "forma-host-data",
+ "ibex2-sqlite",
+]
+
+[[package]]
+name = "forma-host-data"
+version = "0.1.0"
+dependencies = [
+ "exact-plan",
+ "exact-runner",
+]
+
+[[package]]
+name = "forma-host-web"
+version = "0.1.0"
+dependencies = [
+ "contract",
+ "exact-bake",
+ "exact-logic",
+ "exact-web",
+ "exact-web-capabilities",
+ "forma-host-data",
 ]
 
 [[package]]
@@ -6092,48 +6134,6 @@ dependencies = [
  "serde",
  "slotmap",
  "smallvec",
-]
-
-[[package]]
-name = "tamber-host-android"
-version = "0.1.0"
-dependencies = [
- "contract",
- "exact-bake",
- "exact-painted",
- "tamber-host-data",
-]
-
-[[package]]
-name = "tamber-host-apple"
-version = "0.1.0"
-dependencies = [
- "contract",
- "exact-apple",
- "exact-bake",
- "exact-logic",
- "ibex2-sqlite",
- "tamber-host-data",
-]
-
-[[package]]
-name = "tamber-host-data"
-version = "0.1.0"
-dependencies = [
- "exact-plan",
- "exact-runner",
-]
-
-[[package]]
-name = "tamber-host-web"
-version = "0.1.0"
-dependencies = [
- "contract",
- "exact-bake",
- "exact-logic",
- "exact-web",
- "exact-web-capabilities",
- "tamber-host-data",
 ]
 
 [[package]]

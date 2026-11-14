@@ -17,7 +17,7 @@ export function compileFixtures(root, run, env, dir, prefix, appId) {
   const iconApp = resolve(dir, 'entries/raster-icons');
   mkdirSync(resolve(iconApp, 'assets'), { recursive: true });
   writeFileSync(resolve(iconApp, 'app.json'), JSON.stringify({ app: { id: appId, name: 'Raster icons' }, host: { ios: {}, macos: {} } }));
-  writeFileSync(resolve(iconApp, 'app.tamber'), 'tamber icons\n\nicons\n  icon.two = icon(svg "two.svg")\n');
+  writeFileSync(resolve(iconApp, 'app.forma'), 'forma icons\n\nicons\n  icon.two = icon(svg "two.svg")\n');
   writeFileSync(resolve(iconApp, 'assets/two.svg'), '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="20" viewBox="0 0 24 24"><path fill="#ff0000" d="M0 0h12v24H0Z"/><path fill="#0000ff" d="M12 0h12v24H12Z"/></svg>');
   writeFileSync(resolve(iconApp, 'app.contract'), 'component App\n  view\n    column\n      button\n        image "symbol:icon.two" -exact-symbol-rendering="multicolor"\n        text "Colours"\n      image "symbol:icon.two" -exact-symbol-rendering="multicolor" width=80 testId="raster-wide"\n');
   contract([resolve(iconApp, 'app.contract'), '-o', env[`${prefix}_RASTER_ICONS_PLAN`] = resolve(dir, 'raster-icons.plan')]);

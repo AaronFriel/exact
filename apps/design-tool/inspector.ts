@@ -31,7 +31,7 @@ const CSS: Record<string, string> = {
 // The rows lowering writes itself with no source place, at their own defaults (stage 15 D4 batch 1 #5): a symbol's
 // tint as `currentcolor` (contract/lower symbols/ink.rs). Folded with the rows nothing sets, never named as editable.
 const LOWERED: Record<string, string> = { tint_color: 'currentcolor' };
-// (Only a row with no source place: the join's own words for one, scripts/tamber-inspect.mjs `editableOf`; an authored
+// (Only a row with no source place: the join's own words for one, scripts/forma-inspect.mjs `editableOf`; an authored
 // row of the same value, a package's read-only one among them, has a place and another reason.)
 // A class's `color` lowers to the tint too, in its class: "a style's row (Name) the map gives no place for".
 const UNPLACED = /^(a value|a style's row \([^)]*\)) the map gives no place for: the source's to edit$/;

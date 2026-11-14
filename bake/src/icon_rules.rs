@@ -277,7 +277,7 @@ mod tests {
             r#"{"app":{"id":"dev.test.rules","name":"Rules"}}"#,
         )
         .unwrap();
-        std::fs::write(dir.join("app.tamber"), "tamber t\n\ntheme\n  ink = #000000\n\nicons\n  icon.ring = icon(svg \"icons/ring.svg\")\n").unwrap();
+        std::fs::write(dir.join("app.forma"), "forma t\n\ntheme\n  ink = #000000\n\nicons\n  icon.ring = icon(svg \"icons/ring.svg\")\n").unwrap();
         std::fs::write(dir.join("assets/icons/ring.svg"), format!(r#"<svg viewBox="0 0 24 24"><path fill-rule="{rule}" d="M2 2H22V22H2Z M8 8H16V16H8Z"/></svg>"#)).unwrap();
         std::fs::write(
             dir.join("app.contract"),
@@ -375,7 +375,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(odd);
     }
 
-    /// C2 round 1 (Astra 2): a literal even-odd source with no tamber
+    /// C2 round 1 (Astra 2): a literal even-odd source with no forma
     /// declaration makes no `icons` row, and still needs the rule: the
     /// compatibility id reads the plan's literal sources too.
     #[test]

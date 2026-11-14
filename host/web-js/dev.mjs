@@ -23,11 +23,11 @@ import { alsoOnIPv6Loopback, appManifestDigest, appSources, buildFileCards, list
 import { generationFile, generationPath, servedFile } from '../web/generations.mjs';
 import { besidePattern } from '../web/beside.mjs';
 import { localInstaller } from '../web/local-install.mjs';
-import { designPath, frameOnlyByTool, tamberServer } from '../../scripts/tamber-server.mjs';
-import { pluginOnLoopback } from '../../scripts/tamber-remote.mjs';
-import { openRemoteCanvas } from '../../scripts/tamber-canvas.mjs';
-import { mapCard, pullMap } from '../../scripts/tamber-inspect.mjs';
-import { serveCommands, serveReport, streamFrame } from '../../scripts/tamber-builds.mjs';
+import { designPath, frameOnlyByTool, formaServer } from '../../scripts/forma-server.mjs';
+import { pluginOnLoopback } from '../../scripts/forma-remote.mjs';
+import { openRemoteCanvas } from '../../scripts/forma-canvas.mjs';
+import { mapCard, pullMap } from '../../scripts/forma-inspect.mjs';
+import { serveCommands, serveReport, streamFrame } from '../../scripts/forma-builds.mjs';
 import { EXE, depInfoOf, fresh, freshCompiler, webCompiler } from './module.mjs';
 import { RustMissing, fromSets, launch, rustMissing, toolEnv } from '../../scripts/tools.mjs';
 import { hostModuleSources } from './glue.mjs';
@@ -121,7 +121,7 @@ function build(app, dist, keep = () => false, compiler = null, superseded = null
   try { installedFileDependencies(app.dir); } catch (error) { return Promise.resolve({ packages: devPackages(stage), error: error.message }); }
   const began = Date.now(), sources = appSources(app.dir, resolve(dist)).digest;
   // The app's own inputs beside its Contract sources, and which were there.
-  const own = [designPath(app.dir) ?? resolve(app.dir, 'app.tamber'), resolve(app.dir, 'app.ts'), resolve(app.dir, 'app.json'), resolve(app.dir, '.exact/backend-origin'), resolve(app.dir, '.env.local'), resolve(app.dir, '.env')];
+  const own = [designPath(app.dir) ?? resolve(app.dir, 'app.forma'), resolve(app.dir, 'app.ts'), resolve(app.dir, 'app.json'), resolve(app.dir, '.exact/backend-origin'), resolve(app.dir, '.env.local'), resolve(app.dir, '.env')];
   const there = new Set(own.filter((path) => existsSync(path)));
   const known = new Set(lastSources.filter((path) => existsSync(path)));
   return new Promise((done) => {
@@ -290,10 +290,10 @@ export async function devJs({ app, dist, port, host, origins, gate, lan, allowHo
   // Ready lines wait for the server to answer (and its doors), as a test or an agent connects on them.
   let listening = false; const held = [], sayReady = (line) => { if (listening) console.log(line); else held.push(line); };
   // The design server's wire, once made below (a rebuild may come first).
-  let tamber = null, doors = null;
+  let forma = null, doors = null;
   const clients = new Set();
-  // A batch to a page behind waits, then the latest design's notice goes instead (tamber-builds.mjs).
-  const push = (m) => { for (const res of clients) if (m.kind === 'tamber-batch') streamFrame(res, JSON.stringify(m), () => snapshot && notice(snapshot)); else res.write(`data: ${JSON.stringify(m)}\n\n`); };
+  // A batch to a page behind waits, then the latest design's notice goes instead (forma-builds.mjs).
+  const push = (m) => { for (const res of clients) if (m.kind === 'forma-batch') streamFrame(res, JSON.stringify(m), () => snapshot && notice(snapshot)); else res.write(`data: ${JSON.stringify(m)}\n\n`); };
   // The live table (LLP 1121 stage 4): the design the page in dist was built
   // with, and the one the pages run after value-only edits since.
   let design = built.design ?? null, snapshot = null;
@@ -301,7 +301,7 @@ export async function devJs({ app, dist, port, host, origins, gate, lan, allowHo
   // a scrub's frame must have been folded over to be patched on it.
   let designFrom = built.designSource ?? null;
   // A snapshot's notice keeps a scrub frame's mark (*1.11*).
-  const notice = (s) => ({ kind: 'tamber-batch', structure: s.structure, base: s.design, design: s.design, tokens: [], ...(s.scrub ? { scrub: s.scrub } : {}) });
+  const notice = (s) => ({ kind: 'forma-batch', structure: s.structure, base: s.design, design: s.design, tokens: [], ...(s.scrub ? { scrub: s.scrub } : {}) });
   // A batch larger than this, in UTF-8 bytes, goes as the snapshot's notice
   // instead, as the resident loop sends it (host/web/dev.mjs DESIGN_FRAME):
   // a native host's event frames are bounded (PlanURL.swift's 64 KiB).
@@ -523,7 +523,7 @@ export async function devJs({ app, dist, port, host, origins, gate, lan, allowHo
   let backendSeen = backendOf();
   const pending = new Map(); // seq -> the save it answers
   // The variant gallery (dev-gallery.mjs), started by its first page: told of each publication after it is out.
-  const gallery = galleryLoop({ app, root, appDist: dist, channel: () => tamber?.channel, design: () => design?.digest ?? null, idleMs: Number(process.env.EXACT_DEV_GALLERY_IDLE_MS) || undefined,
+  const gallery = galleryLoop({ app, root, appDist: dist, channel: () => forma?.channel, design: () => design?.digest ?? null, idleMs: Number(process.env.EXACT_DEV_GALLERY_IDLE_MS) || undefined,
     // (The reader's binary while it is fresh, asked without building it or the reader again; else no table yet.)
     tableTool: () => (tool.ready && tool.path && toolCurrent() ? launch(tool.path) : null),
     compiler: () => { const copy = compilerCopy(app); return freshCompiler(copy) ? copy : null; },
@@ -535,13 +535,13 @@ export async function devJs({ app, dist, port, host, origins, gate, lan, allowHo
     // A path that existed during the save and is gone by now (an editor's
     // or sed's temporary file) edited nothing; one already gone when its
     // event came (a deleted asset) is an edit.
-    const designs = [...edited].filter((path) => path.endsWith('.tamber'));
-    const designOnly = designs.length > 0 && [...edited].every((path) => path.endsWith('.tamber') || (!existsSync(path) && appeared.has(path)));
+    const designs = [...edited].filter((path) => path.endsWith('.forma'));
+    const designOnly = designs.length > 0 && [...edited].every((path) => path.endsWith('.forma') || (!existsSync(path) && appeared.has(path)));
     // A value-only design edit (LLP 1121 stage 4): its design from the
     // compiler, no build, sent as a batch; the page in dist stays, as a kept
     // build's does; the full build after it checks what the read cannot (the
     // modules' inputs, the whole compile). One that moves the design's shape
-    // (or fails) builds. Only the app's own design: another .tamber may be
+    // (or fails) builds. Only the app's own design: another .forma may be
     // any build's input.
     const file = designPath(app.dir);
     const fast = designOnly && design && designs.every((path) => path === file);
@@ -585,14 +585,14 @@ export async function devJs({ app, dist, port, host, origins, gate, lan, allowHo
         design = next;
         served = { digest: design.digest ?? null, source: designFrom = createHash('sha256').update(text).digest('hex') };
         const keep = scrubbed && released ? releasedMark() : undefined;
-        const committed = { kind: 'tamber-snapshot', structure: design.shape, base: null, design: design.digest, tokens: design.tokens, scrub: keep };
+        const committed = { kind: 'forma-snapshot', structure: design.shape, base: null, design: design.digest, tokens: design.tokens, scrub: keep };
         if (scrubbed) aside = committed; else { snapshot = committed; const kept = design.digest; setImmediate(() => gallery.designKept(kept)); } // (the gallery: a kept design, never a scrub's, once the batch below is out)
         const tokens = design.tokens.filter((tk, i) => !same(tk, from.tokens[i]));
         if (tokens.length && !scrubbed) {
           console.log(`edit → batch ready ${Date.now() - at} ms (design read in ${Date.now() - t} ms, no build) · ${tokens.length} token${tokens.length === 1 ? '' : 's'} to ${clients.size} page${clients.size === 1 ? '' : 's'}, no reload`);
-          const batch = framed({ kind: 'tamber-batch', structure: design.shape, base: from.digest, design: design.digest, tokens, scrub: keep });
+          const batch = framed({ kind: 'forma-batch', structure: design.shape, base: from.digest, design: design.digest, tokens, scrub: keep });
           push(batch);
-          tamber?.channel.broadcast(batch);
+          forma?.channel.broadcast(batch);
         }
         // A check already under way is set aside, and done again after it.
         if (building) { for (const p of pendingEdits) edited.add(p); for (const p of pendingAppeared) appeared.add(p); again = true; return; }
@@ -664,23 +664,23 @@ export async function devJs({ app, dist, port, host, origins, gate, lan, allowHo
       // While a scrub previews the pages stay on it: this changes only what
       // its end restores. A released scrub's build goes from it, and ends it.
       const keep = scrubbed && released ? releasedMark() : undefined;
-      const committed = { kind: 'tamber-snapshot', structure: design.shape, base: null, design: design.digest, tokens: design.tokens, scrub: keep };
+      const committed = { kind: 'forma-snapshot', structure: design.shape, base: null, design: design.digest, tokens: design.tokens, scrub: keep };
       if (scrubbed) aside = committed; else { snapshot = committed; const kept = design.digest; setImmediate(() => gallery.designKept(kept)); }
       // A batch sent before this build: it checked out, and stands.
       if (fast && !tokens.length) console.log(`edit → checked in ${Date.now() - t} ms · the batch stands`);
       if (tokens.length && !scrubbed) {
         console.log(`edit → batch ready ${Date.now() - at} ms (built in ${Date.now() - t} ms) · ${tokens.length} token${tokens.length === 1 ? '' : 's'} to ${clients.size} page${clients.size === 1 ? '' : 's'}, no reload`);
-        const batch = framed({ kind: 'tamber-batch', structure: design.shape, base: from.digest, design: design.digest, tokens, scrub: keep });
+        const batch = framed({ kind: 'forma-batch', structure: design.shape, base: from.digest, design: design.digest, tokens, scrub: keep });
         push(batch);
         // The one source of batches: the resident loop's devices and Linux
         // take them through the channel's polled streams.
-        tamber?.channel.broadcast(batch);
+        forma?.channel.broadcast(batch);
       }
     }
     else {
       // A reload ends a scrub's preview: the pages boot the committed design.
       // The scrub ends too: a frame folded on its sources would leave this edit out.
-      tamber?.compete();
+      forma?.compete();
       scrubbed = null; aside = null; released = false;
       const next = built.design ?? null;
       keepPageMap();
@@ -691,13 +691,13 @@ export async function devJs({ app, dist, port, host, origins, gate, lan, allowHo
       const shaped = from && next && from.shape === next.shape && from.tokens.length === next.tokens.length && next.tokens.every((tk, i) => tk.name === from.tokens[i].name);
       design = next;
       designFrom = built.designSource ?? null;
-      snapshot = shaped ? { kind: 'tamber-snapshot', structure: next.shape, base: null, design: next.digest, tokens: next.tokens } : null;
+      snapshot = shaped ? { kind: 'forma-snapshot', structure: next.shape, base: null, design: next.digest, tokens: next.tokens } : null;
       // A native build on the resident producer keeps its plan and takes
       // this design as a batch only when its shape held: then it is served,
       // from the bytes compiled; else no build runs it but on its own plan.
       served = shaped ? { digest: next.digest ?? null, source: built.designSource } : null;
       const changedTokens = shaped ? next.tokens.filter((tk, i) => !same(tk, from.tokens[i])) : [];
-      if (changedTokens.length) tamber?.channel.broadcast(framed({ kind: 'tamber-batch', structure: next.shape, base: from.digest, design: next.digest, tokens: changedTokens }));
+      if (changedTokens.length) forma?.channel.broadcast(framed({ kind: 'forma-batch', structure: next.shape, base: from.digest, design: next.digest, tokens: changedTokens }));
       logicRevision = built.logic;
       pending.set(++seq, at);
       sayReady(`edit → plan ready ${Date.now() - at} ms (rebuilt in ${Date.now() - t} ms) · ${clients.size} page${clients.size === 1 ? '' : 's'} reloading`);
@@ -706,11 +706,11 @@ export async function devJs({ app, dist, port, host, origins, gate, lan, allowHo
     }
     if (again) { again = false; rebuild(); }
   };
-  // An editor's temporary name for a `.tamber` file beside it: the file's
+  // An editor's temporary name for a `.forma` file beside it: the file's
   // name with `.tmp` (and a hex or numeric suffix, a pid or a hash), `.swp`,
   // `.swx`, `~`, JetBrains' or Emacs's marks; anchored, so no other file
-  // named after it (`app.tamber.tmp.png`) is one.
-  const TEMPORARY = /^(?:\.?(.+\.tamber)(?:\.tmp(?:[.-][0-9a-f]+)?|\.sw[px]|~|___jb_(?:tmp|old)___)|#(.+\.tamber)#|\.#(.+\.tamber))$/;
+  // named after it (`app.forma.tmp.png`) is one.
+  const TEMPORARY = /^(?:\.?(.+\.forma)(?:\.tmp(?:[.-][0-9a-f]+)?|\.sw[px]|~|___jb_(?:tmp|old)___)|#(.+\.forma)#|\.#(.+\.forma))$/;
   const temporaryOfDesign = (path) => {
     const m = TEMPORARY.exec(basename(path));
     const design = m && (m[1] ?? m[2] ?? m[3]);
@@ -736,7 +736,7 @@ export async function devJs({ app, dist, port, host, origins, gate, lan, allowHo
     // The declarations a build writes beside app.ts, for an editor.
     if (base === app.dir && String(name) === 'app.contract.d.ts') return;
     // An editor's temporary for a design beside it (an atomic save writes
-    // `app.tamber.tmp` and renames it over `app.tamber`; its event can come
+    // `app.forma.tmp` and renames it over `app.forma`; its event can come
     // before or after the rename): never an input, whenever it comes.
     if (name && temporaryOfDesign(resolve(base, String(name)))) return;
     // A screenshot, film, log or note written into the app folder, outside the input trees and not named by
@@ -830,11 +830,11 @@ const inspector=ready().then(()=>import('/__dev/inspect.js')).then(m=>{m.install
 let due=false;const moved=()=>{if(due||!ch.nonce)return;due=true;setTimeout(()=>{due=false;const b=facts();if(JSON.stringify(b)!==ch.told){ch.told=JSON.stringify(b);rep(b)}},0)},seen=new MutationObserver(moved);if(cp)ready().then(()=>{globalThis.exact.onAsked=moved});seen.observe(document.documentElement,{attributes:true,attributeFilter:['style','data-x-modes']});seen.observe(document.head,{childList:true,subtree:true,characterData:true});for(const k of['pushState','replaceState']){const w=history[k];history[k]=function(...a){const o=w.apply(this,a);moved();return o}}addEventListener('popstate',moved);addEventListener('hashchange',moved);
 const nav=m=>{liveQ=liveQ.then(async()=>{await ready();const mine=()=>m.stream===ch.nonce;if(!mine())return;const x=globalThis.exact,u=new URL(m.location,location.origin),to=u.pathname+u.search,no=d=>{if(mine())rep({kind:'unsupported',what:'navigate',detail:String(d).slice(0,1024),revision:m.seq})};if(u.origin!==location.origin||u.pathname.startsWith('//'))return no("the location is no path on this page's origin");const there=()=>history.state?.url===to||location.pathname+location.search===to,before=history.state?.url;try{if(!there()){const why=typeof x?.goTo==='function'?x.goTo(to):'this page has no router';if(why)return no(why)}for(let i=0;i<100&&!there()&&history.state?.url===before;i++)await new Promise(ok=>setTimeout(ok,10));if(mine()&&there()&&u.hash!==location.hash)history.replaceState(history.state,'',location.origin+location.pathname+location.search+u.hash)}catch(e){return no(String(e))}moved()}).catch(e=>console.error('exact dev:',e))};
 const pin=m=>{liveQ=liveQ.then(async()=>{await ready();const r=document.documentElement.style,p=m.pin,x=globalThis.exact,was=x.held;let rm=0;x.held=cp&&p?Object.fromEntries([['scheme',!!p.scheme],['rootFontSize',!!p.rootFontSize],...Object.keys(p.mode??{}).map(a=>['mode:'+a,true])]):null;ch.before??={fontSize:r.fontSize,hostFont:r.getPropertyValue('--exact-host-font-size'),mode:x?.modes?.read?.()??{}};const sh=document.getElementById('exact-dev-pin')??document.head.appendChild(Object.assign(document.createElement('style'),{id:'exact-dev-pin'}));const fx=document.querySelector('meta[name="color-scheme"]')?.content,sc=p?.scheme&&(cp||!['light','dark'].includes(fx))?p.scheme:null;sh.textContent=sc?':root{color-scheme:'+sc+(cp?'!important':'')+'}':'';if((x.systemScheme??null)!==sc){x.systemScheme=sc;dispatchEvent(new Event('resize'))}r.removeProperty('font-size');if(cp&&p?.rootFontSize)r.setProperty('font-size',p.rootFontSize+'px','important');else r.fontSize=p?.rootFontSize?p.rootFontSize+'px':ch.before.fontSize;if(p?.rootFontSize)r.setProperty('--exact-host-font-size',r.fontSize);else if(ch.before.hostFont)r.setProperty('--exact-host-font-size',ch.before.hostFont);else r.removeProperty('--exact-host-font-size');const last=ch.pin?.mode??{},back=Object.fromEntries(Object.entries(ch.before.mode??{}).filter(([a])=>a in last&&!(a in(p?.mode??{}))&&!(cp&&x.asked?.['mode:'+a]))),mode=Object.entries(p?(cp?{...back,...(p.mode??{})}:{...ch.before.mode,...(p.mode??{})}):back);if(mode.length&&x?.modes?.set){const why=x.modes.set(mode);if(why){rm=1;rep({kind:'unsupported',what:'pin.mode',detail:why,revision:m.revision});if(!cp)x.modes.set(Object.entries(ch.before.mode));if(x.held){for(const k of Object.keys(x.held))if(k.startsWith('mode:'))delete x.held[k];for(const [k,on]of Object.entries(was??{}))if(on&&k.startsWith('mode:'))x.held[k]=true}}dispatchEvent(new Event('resize'))}if(p?.contrast)rep({kind:'unsupported',what:'pin.contrast',detail:"a web page cannot pin the browser's contrast",revision:m.revision});for(const [f,on]of Object.entries(was??{}))if(on&&!x.held?.[f])x.asked?.[f]?.apply();if(!p)ch.before=null;ch.pin=p?(cp&&rm?{...p,mode:last}:p):null;ch.revision=m.revision;status()}).catch(e=>console.error('exact dev:',e))};
-es.onmessage=e=>{const m=JSON.parse(e.data);if(m.kind==='tamber-batch'||m.kind==='tamber-snapshot'){live(m);return}if(m.kind==='pin'){pin(m);return}if(m.kind==='navigate'){m.stream=ch.nonce;nav(m);return}if(m.kind==='inspect'||m.kind==='outline'||m.kind==='hold'){m.stream=ch.nonce;inspector.then(i=>i.frame(m)).catch(e=>rep({kind:'unsupported',what:m.kind,detail:String(e)}));return}if(m.nonce&&m.nonce!==ch.nonce){const n=ch.nonce=m.nonce;ch.registered=ready().then(async()=>{const id=await bid,got=await post(n,{kind:'register',id,host:'web-js',capabilities:${page ? `['pin','inspect','copies','hold'],page:'${page}'` : "['pin','inspect','copies','hold','navigate']"},plan:null,planDigest:globalThis.exact?.plan??null,design:globalThis.exact?.designDigest??null}),ok=got.ok;if(!ok)console.warn('exact dev: the dev loop refused the register of this page ('+got.status+'), so no tool sees it');if(ok&&window!==parent)parent.postMessage({type:'exact-build',id},'*');return ok}).catch(e=>{console.warn('exact dev: this page could not register with the dev loop, so no tool sees it: '+e);return false});status()}if(m.error!==undefined)show(m.error);if(m.reload>seq&&!reloading){reloading=true;if(!globalThis.exact){location.reload();return}ready().then(async()=>{const checkpoint=capture(m.revision!==logicRevision),id=crypto.getRandomValues(new Uint32Array(4)).join('-');console.info('exact dev reload: checkpoint',m.reload);const saved=await fetch('${base}/checkpoint?id='+id+'&seq='+m.reload+'&revision='+encodeURIComponent(m.revision??''),{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(checkpoint)});if(saved.status===403){console.info('exact dev reload: no checkpoint at this scope; a fresh load');location.reload();return}if(!saved.ok)throw new Error('checkpoint handoff answered '+saved.status);const next=new URL(location.href);next.searchParams.set('__exactDev',id);if(admission)for(const [k,v]of admission)if(!next.searchParams.has(k))next.searchParams.set(k,v);location.replace(next.href)}).catch(e=>{reloading=false;console.error('exact dev reload: current page retained; checkpoint handoff failed',e)})}}})()</script>`;
+es.onmessage=e=>{const m=JSON.parse(e.data);if(m.kind==='forma-batch'||m.kind==='forma-snapshot'){live(m);return}if(m.kind==='pin'){pin(m);return}if(m.kind==='navigate'){m.stream=ch.nonce;nav(m);return}if(m.kind==='inspect'||m.kind==='outline'||m.kind==='hold'){m.stream=ch.nonce;inspector.then(i=>i.frame(m)).catch(e=>rep({kind:'unsupported',what:m.kind,detail:String(e)}));return}if(m.nonce&&m.nonce!==ch.nonce){const n=ch.nonce=m.nonce;ch.registered=ready().then(async()=>{const id=await bid,got=await post(n,{kind:'register',id,host:'web-js',capabilities:${page ? `['pin','inspect','copies','hold'],page:'${page}'` : "['pin','inspect','copies','hold','navigate']"},plan:null,planDigest:globalThis.exact?.plan??null,design:globalThis.exact?.designDigest??null}),ok=got.ok;if(!ok)console.warn('exact dev: the dev loop refused the register of this page ('+got.status+'), so no tool sees it');if(ok&&window!==parent)parent.postMessage({type:'exact-build',id},'*');return ok}).catch(e=>{console.warn('exact dev: this page could not register with the dev loop, so no tool sees it: '+e);return false});status()}if(m.error!==undefined)show(m.error);if(m.reload>seq&&!reloading){reloading=true;if(!globalThis.exact){location.reload();return}ready().then(async()=>{const checkpoint=capture(m.revision!==logicRevision),id=crypto.getRandomValues(new Uint32Array(4)).join('-');console.info('exact dev reload: checkpoint',m.reload);const saved=await fetch('${base}/checkpoint?id='+id+'&seq='+m.reload+'&revision='+encodeURIComponent(m.revision??''),{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(checkpoint)});if(saved.status===403){console.info('exact dev reload: no checkpoint at this scope; a fresh load');location.reload();return}if(!saved.ok)throw new Error('checkpoint handoff answered '+saved.status);const next=new URL(location.href);next.searchParams.set('__exactDev',id);if(admission)for(const [k,v]of admission)if(!next.searchParams.has(k))next.searchParams.set(k,v);location.replace(next.href)}).catch(e=>{reloading=false;console.error('exact dev reload: current page retained; checkpoint handoff failed',e)})}}})()</script>`;
   const checkpoints = new Map();
   /** A scrub's design: the compiler's, with its text in place of the design file's; written nowhere. */
   const scrubDesign = designOf;
-  // A scrub's frames patched (tamber-scrub.mjs `patch`), by the optimised
+  // A scrub's frames patched (forma-scrub.mjs `patch`), by the optimised
   // reader resident (`exact-web-js design-serve`): the app compiled once per
   // committed design, each frame's folded rows set on that plan, compiling
   // nothing. Started at a scrub's first frame, again after the reader
@@ -916,12 +916,12 @@ es.onmessage=e=>{const m=JSON.parse(e.data);if(m.kind==='tamber-batch'||m.kind==
     // A new preview is no released scrub's.
     scrubbed = next;
     released = false;
-    snapshot = { kind: 'tamber-snapshot', structure: next.shape, base: null, design: next.digest, tokens: next.tokens, scrub: frame };
+    snapshot = { kind: 'forma-snapshot', structure: next.shape, base: null, design: next.digest, tokens: next.tokens, scrub: frame };
     const tokens = next.tokens.filter((t, i) => !same(t, from.tokens[i]));
     if (tokens.length) {
-      const batch = framed({ kind: 'tamber-batch', structure: next.shape, base: from.digest, design: next.digest, tokens, scrub: frame });
+      const batch = framed({ kind: 'forma-batch', structure: next.shape, base: from.digest, design: next.digest, tokens, scrub: frame });
       push(batch);
-      tamber?.channel.broadcast(batch);
+      forma?.channel.broadcast(batch);
     }
     return {};
   }
@@ -937,13 +937,13 @@ es.onmessage=e=>{const m=JSON.parse(e.data);if(m.kind==='tamber-batch'||m.kind==
     const from = scrubbed;
     scrubbed = null;
     // The committed design's snapshot (a page fetching it applies nothing new).
-    snapshot = { ...(aside ?? { kind: 'tamber-snapshot', structure: design.shape, base: null, design: design.digest, tokens: design.tokens }), scrub: frame };
+    snapshot = { ...(aside ?? { kind: 'forma-snapshot', structure: design.shape, base: null, design: design.digest, tokens: design.tokens }), scrub: frame };
     aside = null; const kept = design.digest; setImmediate(() => gallery.designKept(kept)); // an edit kept meanwhile reaches the gallery, after the restore's batch
     const tokens = design.tokens.filter((t, i) => !same(t, from.tokens[i]));
     if (!tokens.length) return;
-    const batch = framed({ kind: 'tamber-batch', structure: design.shape, base: from.digest, design: design.digest, tokens, scrub: frame });
+    const batch = framed({ kind: 'forma-batch', structure: design.shape, base: from.digest, design: design.digest, tokens, scrub: frame });
     push(batch);
-    tamber?.channel.broadcast(batch);
+    forma?.channel.broadcast(batch);
   }
   // The install pages (LLP 1030.003 D6a) and, from a loopback page on a Mac,
   // the local iOS build (D6b): this server's, since only it sees the real
@@ -975,19 +975,19 @@ es.onmessage=e=>{const m=JSON.parse(e.data);if(m.kind==='tamber-batch'||m.kind==
       await new Promise((ok) => setTimeout(ok, 250));
     }
   };
-  tamber = designPath(app.dir) ? tamberServer({ appDir: app.dir, pairTtlMs, remote: () => doors?.list() ?? [], live: true, page: `http://127.0.0.1:${port}`, sourceMap: (digest) => (digest ? residentMaps.get(digest) ?? pageMaps.get(digest) ?? gallery.map(digest) : residentMaps.get(residentPlan)) ?? null, designServed: () => (scrubbed ? null : served), scrub: { patch: scrubPatch, verify: scrubVerify, preview: scrubPreview, restore: scrubRestore, released: (frame) => { released = scrubbed != null && (frame ?? true); }, inline: inlineWhy } }) : null;
+  forma = designPath(app.dir) ? formaServer({ appDir: app.dir, pairTtlMs, remote: () => doors?.list() ?? [], live: true, page: `http://127.0.0.1:${port}`, sourceMap: (digest) => (digest ? residentMaps.get(digest) ?? pageMaps.get(digest) ?? gallery.map(digest) : residentMaps.get(residentPlan)) ?? null, designServed: () => (scrubbed ? null : served), scrub: { patch: scrubPatch, verify: scrubVerify, preview: scrubPreview, restore: scrubRestore, released: (frame) => { released = scrubbed != null && (frame ?? true); }, inline: inlineWhy } }) : null;
   // A polled stream (Linux, the resident loop's relay) is told the design to run.
-  tamber?.channel.greet(() => snapshot && notice(snapshot));
+  forma?.channel.greet(() => snapshot && notice(snapshot));
   const server = createServer(async (req, res) => {
     // Every HTML answer is framed by the design tool only (LLP 1122 T2).
     frameOnlyByTool(res);
     // A sandboxed page's (a Figma plugin's) wire request, with --allow-plugin-origin (stage 10b): the wire's, before the gate.
-    if (remoteAsked.plugin && tamber && await pluginOnLoopback(tamber, req, res)) return;
+    if (remoteAsked.plugin && forma && await pluginOnLoopback(forma, req, res)) return;
     const access = gate.check(req);
     if (!access.allowed) { res.writeHead(421, { 'cache-control': 'no-store' }); res.end(); return; }
     const url = webRequestURL(req.url);
     if (!url) { res.writeHead(404, { 'cache-control': 'no-store' }); res.end(); return; }
-    if (tamber && await tamber.handle(req, res, url, access)) return;
+    if (forma && await forma.handle(req, res, url, access)) return;
     if (await installer.handle(req, res, url, access)) return;
     // The build channel (LLP 1122 D4): the page's stream gives it a nonce;
     // reports come up by POST; a build with no stream here (the resident
@@ -1020,18 +1020,18 @@ es.onmessage=e=>{const m=JSON.parse(e.data);if(m.kind==='tamber-batch'||m.kind==
     }
     if (await gallery.handle(req, res, url)) return; // the variant gallery's page, files and stream (dev-gallery.mjs)
     if (url.pathname === '/__dev/report' && req.method === 'POST') {
-      if (!tamber) { res.writeHead(404, { 'cache-control': 'no-store' }); res.end(); return; }
-      await serveReport(tamber.channel, req, res);
+      if (!forma) { res.writeHead(404, { 'cache-control': 'no-store' }); res.end(); return; }
+      await serveReport(forma.channel, req, res);
       return;
     }
     if ((url.pathname === '/__dev/hello' || url.pathname === '/__dev/commands') && req.method === 'GET') {
-      if (!tamber) { res.writeHead(404, { 'cache-control': 'no-store' }); res.end(); return; }
-      serveCommands(tamber.channel, url, res);
+      if (!forma) { res.writeHead(404, { 'cache-control': 'no-store' }); res.end(); return; }
+      serveCommands(forma.channel, url, res);
       return;
     }
     if (url.pathname === '/__dev/page') {
       res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store', connection: 'keep-alive' });
-      const opened = tamber?.channel.open(frame => res.write(`data: ${JSON.stringify(frame)}\n\n`));
+      const opened = forma?.channel.open(frame => res.write(`data: ${JSON.stringify(frame)}\n\n`));
       // Ended once, by whichever close comes first: under Bun a request on a socket handed to the server
       // (emit('connection'): the TLS door's, an old [::1] door's) never fires req 'close'; its res 'close' does.
       let done = false;
@@ -1205,7 +1205,7 @@ es.onmessage=e=>{const m=JSON.parse(e.data);if(m.kind==='tamber-batch'||m.kind==
     const buildExit = stopCompilers();
     for (const w of watchers) w.close(); residentChild?.kill('SIGTERM'); server.close(); server.closeAllConnections?.();
     // The design server lets go of its lock before this exits.
-    await Promise.all([buildExit, tamber?.close(), doors?.close(), gallery.stop()]);
+    await Promise.all([buildExit, forma?.close(), doors?.close(), gallery.stop()]);
     // A local iOS build in flight is stopped and waited for, as the resident loop does.
     const install = installer.child;
     if (install && install.exitCode === null && install.signalCode === null) { const exit = new Promise((ok) => install.once('exit', ok)); install.kill('SIGTERM'); await exit; }
@@ -1215,10 +1215,10 @@ es.onmessage=e=>{const m=JSON.parse(e.data);if(m.kind==='tamber-batch'||m.kind==
   watchLauncher(stop);
   await listenDelay();
   // (and on [::1], for a localhost URL: the design tool's canvas)
-  const six = await alsoOnIPv6Loopback(server, port).catch(async (e) => { console.error(`cannot listen on [::1]:${port}: ${e.code} (another server there would answer a localhost URL; --port <n> picks another)`); stopping = true; stopGroup(tool.child); stopGroup(tool.cleaner); await tamber?.close(); process.exit(1); });
+  const six = await alsoOnIPv6Loopback(server, port).catch(async (e) => { console.error(`cannot listen on [::1]:${port}: ${e.code} (another server there would answer a localhost URL; --port <n> picks another)`); stopping = true; stopGroup(tool.child); stopGroup(tool.cleaner); await forma?.close(); process.exit(1); });
   await new Promise((ok, fail) => { server.on('error', fail); server.listen(port, host, ok); })
-    .catch(async (e) => { console.error(`cannot listen on ${host}:${port}: ${e.code ?? e.message}${e.code === 'EADDRINUSE' ? ' (another dev loop? --port <n> picks another)' : ''}`); six?.close(); stopping = true; stopGroup(tool.child); stopGroup(tool.cleaner); await tamber?.close(); process.exit(1); });
-  doors = tamber ? await openRemoteCanvas(tamber, remoteAsked, `http://127.0.0.1:${port}`).catch(async (e) => { console.error(`cannot listen: ${e.message}`); process.exitCode = 1; await stop(); }) : null;
+    .catch(async (e) => { console.error(`cannot listen on ${host}:${port}: ${e.code ?? e.message}${e.code === 'EADDRINUSE' ? ' (another dev loop? --port <n> picks another)' : ''}`); six?.close(); stopping = true; stopGroup(tool.child); stopGroup(tool.cleaner); await forma?.close(); process.exit(1); });
+  doors = forma ? await openRemoteCanvas(forma, remoteAsked, `http://127.0.0.1:${port}`).catch(async (e) => { console.error(`cannot listen: ${e.message}`); process.exitCode = 1; await stop(); }) : null;
   const urls = origins.map((o) => `${o.origin}/`);
   console.log(urls.join('\n'));
   console.log(urls.map(url => `  Open in native: ${url}__dev/open`).join('\n'));

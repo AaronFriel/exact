@@ -124,10 +124,10 @@ export function warningLines(dir, host, warnings) {
   return [...said, ...group, `${count}${fresh.length < warnings.length ? `, ${fresh.length} new (above)` : ''}; ${where} lists them all`];
 }
 
-/** A compiler warning that is information, not a problem: `tamber-unreachable` names a control whose host draws the
+/** A compiler warning that is information, not a problem: `forma-unreachable` names a control whose host draws the
  *  platform's own look, which the author should know of and cannot change (LLP 1121 D9, amended 2026-10-30). A drive
  *  and verify say it but do not count it. contract's `warning_rank::information` is the same test. */
-export const information = (w) => / warning \[(tamber-unreachable|style-undrawn)\] /.test(w);
+export const information = (w) => / warning \[(forma-unreachable|style-undrawn)\] /.test(w);
 
 /** The colours that stay one in dark mode (`lower-colour-one-scheme`), past one, as one line: their closing line with
  *  the first three sites' `file:line`, theme tokens included, at the first's place (LLP 1168.000 D7.2: a chat app said
@@ -179,7 +179,7 @@ export function appVerbs(name, dir, { host = 'web', game = false, os = process.p
     lock: ['scripts/app-cli.mjs', '--lock', dir],
     add: ['scripts/exact.mjs', 'add'],
     contract: ['scripts/exact.mjs', 'contract'],
-    tamber: ['scripts/exact.mjs', 'tamber'],
+    forma: ['scripts/exact.mjs', 'forma'],
     hatch: ['scripts/exact.mjs', 'hatch'],
     snapback: ['scripts/exact.mjs', 'snapback', dir],
     backend: ['scripts/exact.mjs', 'backend', dir],
@@ -208,14 +208,14 @@ export const beforeBuild = {
   linux: true, windows: true, android: true, update: false, lock: false, hatch: false, snapback: true, backend: false, docs: false,
   feedback: false, add: false,
   contract: ([command, ...rest]) => ['build', 'types', 'rust', 'verify', 'test', 'lean', 'symbols', 'gallery'].includes(command)
-    || command === 'tamber' && checksDesign(rest),
-  tamber: (rest) => checksDesign(rest),
+    || command === 'forma' && checksDesign(rest),
+  forma: (rest) => checksDesign(rest),
   pattern: (rest) => rest.some((arg) => !arg.startsWith('-')),
   // A game's own: its compile, Rust tests and proof prepare; `shells` writes .shells/ without a build
   check: true, game: false, 'test-rust': true, shells: false, prove: true,
 };
 
-/** The Tamber commands that compile the app's design: its check, evaluation, IR and generated code, the tokens it
+/** The Forma commands that compile the app's design: its check, evaluation, IR and generated code, the tokens it
  * imports from CSS, which it checks, and the design it serves (`tool` without `--via`, which reaches the app's dev loop
  * instead). */
 const checksDesign = ([command, ...rest]) => ['check', 'eval', 'ir', 'gen', 'serve'].includes(command)
@@ -245,11 +245,11 @@ async function verbRun({ dir, name, game = false, exact2, args }, reply) {
   // Before any process starts: which settings Bun loaded from this directory's `.env` files (LLP 1153 D4).
   noteBunLoaded();
   // The design tool's tests, drives and verify run on this checkout's own port (port-lock.mjs `checkoutPort`, unless
-  // EXACT_TOOL_PORT names one), from a copy staged with that origin and its stub (tamber-tool-port.mjs
+  // EXACT_TOOL_PORT names one), from a copy staged with that origin and its stub (forma-tool-port.mjs
   // `stageToolTests`), so its stub never binds the 7740 a person's tool holds; EXACT_TOOL_PORT=7740 runs them in place.
   if (['test', 'agent', 'verify'].includes(args[0]) && !args.includes('--help') && !args.includes('-h') && existsSync(resolve(exact2, 'apps/design-tool')) && realpathSync(dir) === realpathSync(resolve(exact2, 'apps/design-tool'))) {
     process.env.EXACT_TOOL_PORT ??= String((await import(resolve(exact2, 'scripts/port-lock.mjs'))).checkoutPort(resolve(exact2)));
-    const tool = await import(resolve(exact2, 'scripts/tamber-tool-port.mjs')), rest = args.slice(1);
+    const tool = await import(resolve(exact2, 'scripts/forma-tool-port.mjs')), rest = args.slice(1);
     const tested = tool.testFiles(args[0], rest, (await import(resolve(exact2, 'scripts/help.mjs'))).knownFlags(args[0]));
     const staged = tool.stageToolTests(dir, rest, i => tested.has(i));
     if (staged) { dir = staged.dir; args = [args[0], ...staged.args]; }

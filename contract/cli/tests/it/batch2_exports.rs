@@ -55,8 +55,8 @@ fn a_consumer_uses_empty_state_and_the_menu_from_the_packages_and_its_plan_holds
     }
     std::fs::write(dir.join("app.contract"), CONSUMER).unwrap();
     std::fs::write(
-        dir.join("app.tamber"),
-        "tamber consumer\n\ntheme\n  ink = #111111\n",
+        dir.join("app.forma"),
+        "forma consumer\n\ntheme\n  ink = #111111\n",
     )
     .unwrap();
     std::fs::write(

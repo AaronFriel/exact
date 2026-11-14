@@ -75,6 +75,8 @@ mod paint;
 #[path = "paragraph.rs"]
 mod paragraph;
 use paragraph::props_for;
+#[path = "forma.rs"]
+mod forma;
 #[path = "persistence.rs"]
 mod persistence;
 #[path = "presence.rs"]
@@ -83,8 +85,6 @@ mod presence;
 mod renew;
 #[path = "route_overflow.rs"]
 mod route_overflow;
-#[path = "tamber.rs"]
-mod tamber;
 #[cfg(test)]
 #[path = "transform_drag_tests.rs"]
 mod transform_drag_tests;

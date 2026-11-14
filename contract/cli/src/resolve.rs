@@ -387,7 +387,7 @@ fn package(spec: &str, dir: &Path, consulted: &mut Vec<PathBuf>) -> Result<Resol
 }
 
 /// Where a package's design is (LLP 1121 D11): the file its
-/// `package.json`'s `"tamber"` names (`named`), else `<name>.tamber` beside
+/// `package.json`'s `"forma"` names (`named`), else `<name>.forma` beside
 /// its entry (what `exports` maps `.` to, or `index.contract`), where
 /// `<name>` is its namespace; and the package's own name (its
 /// `package.json`'s, whatever name a `use` installed it under). The file
@@ -402,7 +402,7 @@ pub(crate) fn package_design(root: &Path, manifest: &Path) -> Option<PackageDesi
     let json: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(manifest).ok()?).ok()?;
     let name = json["name"].as_str()?.to_owned();
-    if let Some(named) = json["tamber"].as_str() {
+    if let Some(named) = json["forma"].as_str() {
         return Some(PackageDesign {
             path: lexical(&root.join(named)),
             named: true,
@@ -413,7 +413,7 @@ pub(crate) fn package_design(root: &Path, manifest: &Path) -> Option<PackageDesi
     let dir = lexical(&root.join(entry.strip_prefix("./").unwrap_or(&entry)))
         .parent()?
         .to_path_buf();
-    let path = dir.join(format!("{}.tamber", namespace(&name)));
+    let path = dir.join(format!("{}.forma", namespace(&name)));
     Some(PackageDesign {
         path,
         named: false,

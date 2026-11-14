@@ -491,8 +491,8 @@ final class FaceSymbolTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: dir) }
         try #"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M2 2 L22 2 L22 22 L2 22 Z"/></svg>"#
             .write(to: dir.appendingPathComponent("assets/icons/reply.svg"), atomically: true, encoding: .utf8)
-        try "tamber t\n\ntheme\n  ink = #000000\n\nicons\n  icon.reply = icon(svg \"icons/reply.svg\")\n"
-            .write(to: dir.appendingPathComponent("app.tamber"), atomically: true, encoding: .utf8)
+        try "forma t\n\ntheme\n  ink = #000000\n\nicons\n  icon.reply = icon(svg \"icons/reply.svg\")\n"
+            .write(to: dir.appendingPathComponent("app.forma"), atomically: true, encoding: .utf8)
         try """
         routes nav
           tab today "/"

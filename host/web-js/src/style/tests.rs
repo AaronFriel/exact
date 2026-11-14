@@ -115,12 +115,12 @@ fn a_bound_theme_name_writes_its_entry() {
 /// expression, bound, read their folded colours as the kernel does.
 #[test]
 fn a_bound_design_name_and_synthetic_token_write_their_values() {
-    let dir = std::env::temp_dir().join(format!("exact-web-js-tamber-{}", std::process::id()));
+    let dir = std::env::temp_dir().join(format!("exact-web-js-forma-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(
-        dir.join("app.tamber"),
-        "tamber t\n\ntheme\n  brand = #c8102e\n  surface.card = #000000\n",
+        dir.join("app.forma"),
+        "forma t\n\ntheme\n  brand = #c8102e\n  surface.card = #000000\n",
     )
     .unwrap();
     std::fs::write(dir.join("app.contract"), "component App\n  state c: string = \"brand\"\n  view\n    column\n      text \"a\" color=c\n      text \"b\" color=\"light-dark(brand, surface.card)\"\n").unwrap();

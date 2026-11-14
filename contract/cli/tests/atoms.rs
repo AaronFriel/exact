@@ -137,14 +137,14 @@ component App
 
 /// A design with a token whose slice the `dark-style` axis picks, and one
 /// that does not vary.
-const MODES: &str = "tamber t\n\naxes\n  dark-style = black | dim  under scheme=dark\n\ntheme\n  ink = light-dark(#111111, #eeeeee)\n    when dark-style=dim: light-dark(#111111, #cccccc)\n  brand = #c8102e\n";
+const MODES: &str = "forma t\n\naxes\n  dark-style = black | dim  under scheme=dark\n\ntheme\n  ink = light-dark(#111111, #eeeeee)\n    when dark-style=dim: light-dark(#111111, #cccccc)\n  brand = #c8102e\n";
 
 /// An app beside its design, booted from its baked plan.
 fn designed(name: &str, contract: &str) -> Runner<NoData> {
     let dir = std::env::temp_dir().join(format!("exact2-atoms-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    std::fs::write(dir.join("app.tamber"), MODES).unwrap();
+    std::fs::write(dir.join("app.forma"), MODES).unwrap();
     std::fs::write(dir.join("app.contract"), contract).unwrap();
     let plan = contract::bake(
         contract::compile_path(&dir.join("app.contract")).unwrap(),

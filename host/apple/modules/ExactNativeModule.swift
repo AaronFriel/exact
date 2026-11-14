@@ -562,9 +562,9 @@ final class ExactHatches {
     typealias OwnsFn = @convention(c) (UnsafeMutableRawPointer?, UnsafePointer<UInt8>?, UInt32, UInt32, UInt32, UnsafeMutableRawPointer?, UnsafePointer<UInt8>?, UInt32, UInt32) -> Int32
     typealias PartsFn = @convention(c) (UnsafeMutableRawPointer?, UInt32, UnsafePointer<UInt8>?, UInt32, UnsafePointer<UnsafeMutableRawPointer?>?, UInt32) -> Int32
     let ownsFn: OwnsFn?, partsFn: PartsFn?
-    /// One of 104 or more: the bindings' answer (LLP 1121 D12; ExactTamber.swift).
-    typealias TamberFn = @convention(c) (UnsafeMutableRawPointer?, UnsafeMutableRawPointer?, UnsafePointer<UInt8>?, UInt32, UnsafeMutablePointer<UInt8>?, UInt32) -> UInt32
-    let tamberFn: TamberFn?
+    /// One of 104 or more: the bindings' answer (LLP 1121 D12; ExactForma.swift).
+    typealias FormaFn = @convention(c) (UnsafeMutableRawPointer?, UnsafeMutableRawPointer?, UnsafePointer<UInt8>?, UInt32, UnsafeMutablePointer<UInt8>?, UInt32) -> UInt32
+    let formaFn: FormaFn?
     /// One of 120 or more: `app.onLine`.
     typealias OnLineFn = @convention(c) (UnsafeMutableRawPointer?) -> UInt32
     let onLineFn: OnLineFn?
@@ -620,8 +620,8 @@ final class ExactHatches {
         let regions = table.load(as: UInt32.self) >= 96
         ownsFn = regions ? table.load(fromByteOffset: 80, as: UnsafeRawPointer?.self).map { unsafeBitCast($0, to: OwnsFn.self) } : nil
         partsFn = regions ? table.load(fromByteOffset: 88, as: UnsafeRawPointer?.self).map { unsafeBitCast($0, to: PartsFn.self) } : nil
-        tamberFn = table.load(as: UInt32.self) >= 104
-            ? table.load(fromByteOffset: 96, as: UnsafeRawPointer?.self).map { unsafeBitCast($0, to: TamberFn.self) } : nil
+        formaFn = table.load(as: UInt32.self) >= 104
+            ? table.load(fromByteOffset: 96, as: UnsafeRawPointer?.self).map { unsafeBitCast($0, to: FormaFn.self) } : nil
         onLineFn = table.load(as: UInt32.self) >= 120
             ? table.load(fromByteOffset: 112, as: UnsafeRawPointer?.self).map { unsafeBitCast($0, to: OnLineFn.self) } : nil
         let audio = table.load(as: UInt32.self) >= 136
@@ -1102,11 +1102,11 @@ private let moduleConnect: @convention(c) (UnsafeMutableRawPointer?, UnsafeRawPo
     m.context.coalescingAfterFn = m.hatches?.coalescingAfterFn
 }
 
-/// `tamber(module)`: a batch moved what a binding reads (LLP 1121 D12); each
-/// place is asked again, and each that moved redrawn (ExactTamber.swift).
-private let moduleTamber: @convention(c) (UnsafeMutableRawPointer?) -> Void = { raw in
+/// `forma(module)`: a batch moved what a binding reads (LLP 1121 D12); each
+/// place is asked again, and each that moved redrawn (ExactForma.swift).
+private let moduleForma: @convention(c) (UnsafeMutableRawPointer?) -> Void = { raw in
     guard module(raw) != nil else { return }
-    Tambers.moved()
+    Formas.moved()
 }
 
 /// `tick(module, kind, token, now, seq)`: a frame ticket's tick (0) or an
@@ -1258,7 +1258,7 @@ private let moduleElement: @convention(c) (UnsafeMutableRawPointer?, UInt32, Uns
     element.data = ExactData(object["data"] as? [String: String] ?? [:])
     element.view = view.map { Unmanaged<ExactNativeView>.fromOpaque($0).takeUnretainedValue() }
     // A hatched node's view is a place a binding finds, as a module view is (LLP 1121 D12).
-    if let view = element.view { Tambers.made(view, by: m) }
+    if let view = element.view { Formas.made(view, by: m) }
     if event == 3 {
         if let platform { m.elementConfiguration(element, Unmanaged<AnyObject>.fromOpaque(platform).takeUnretainedValue()) }
         return 0
@@ -1433,7 +1433,7 @@ private let table: UnsafeMutableRawPointer = {
     t.storeBytes(of: unsafeBitCast(moduleWindow, to: UnsafeRawPointer.self), toByteOffset: 192, as: UnsafeRawPointer.self)
     t.storeBytes(of: unsafeBitCast(moduleTick, to: UnsafeRawPointer.self), toByteOffset: 200, as: UnsafeRawPointer.self)
     t.storeBytes(of: unsafeBitCast(moduleWillQuit, to: UnsafeRawPointer.self), toByteOffset: 208, as: UnsafeRawPointer.self)
-    t.storeBytes(of: unsafeBitCast(moduleTamber, to: UnsafeRawPointer.self), toByteOffset: 216, as: UnsafeRawPointer.self)
+    t.storeBytes(of: unsafeBitCast(moduleForma, to: UnsafeRawPointer.self), toByteOffset: 216, as: UnsafeRawPointer.self)
     t.storeBytes(of: unsafeBitCast(ExactNativeViewABI.createView, to: UnsafeRawPointer.self), toByteOffset: 224, as: UnsafeRawPointer.self)
     t.storeBytes(of: unsafeBitCast(moduleAuthenticate, to: UnsafeRawPointer.self), toByteOffset: 232, as: UnsafeRawPointer.self)
     t.storeBytes(of: unsafeBitCast(moduleImage, to: UnsafeRawPointer.self), toByteOffset: 240, as: UnsafeRawPointer.self)

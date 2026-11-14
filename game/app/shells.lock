@@ -472,7 +472,7 @@ dependencies = [
  "exact-kernel",
  "exact-plan",
  "exact-runner",
- "exact-tamber",
+ "exact-forma",
  "libc",
  "serde_json",
  "sha2 0.10.9",
@@ -500,7 +500,7 @@ dependencies = [
  "exact-plan",
  "exact-route",
  "exact-svg-file",
- "exact-tamber",
+ "exact-forma",
  "icu_locale",
  "serde_json",
  "sha2 0.10.9",
@@ -1509,7 +1509,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "exact-tamber"
+name = "exact-forma"
 version = "0.1.0"
 dependencies = [
  "exact-color",
