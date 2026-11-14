@@ -567,7 +567,7 @@ impl Parser {
                     Token { kind: TokenKind::Ident(value) | TokenKind::Str(value), .. } => value,
                     token => return Err(SyntaxError {
                         id: "syntax-expected-step",
-                        message: "`prefer` takes a preference, `root-font-size` or a module's permission and its value, as `prefer prefers-color-scheme dark`, `prefer root-font-size \"24\"` or `prefer permission.notifications granted`".into(),
+                        message: "`prefer` takes a media feature, a page fact (including `root-font-size`) or a module permission and its value. Quote numbers and values with punctuation, as `prefer root-font-size \"24\"` or `prefer permission.notifications granted`. Folds (`posture`, `segments`, `gap`), mode pins and extension substitutes are drive-only for now".into(),
                         span: token.span,
                     }),
                 };
@@ -1316,16 +1316,69 @@ pub fn is_launch(step: &Step) -> bool {
 }
 
 /// Whether two launch lines set the same fact: `fail fetch` lines, the same
-/// prefix; media preferences, the same feature name.
+/// prefix; preferences, the same fact after resolving drive aliases.
 pub fn same_launch(a: &Step, b: &Step) -> bool {
     if let (Step::FailFetch { prefix: x, .. }, Step::FailFetch { prefix: y, .. }) = (a, b) {
         return x == y;
     }
     if let (Step::Prefer { name: x, .. }, Step::Prefer { name: y, .. }) = (a, b) {
-        return x == y;
+        return prefer_key(x) == prefer_key(y);
     }
     let word = launch_word(a);
     !word.is_empty() && word == launch_word(b)
+}
+
+// Match `scripts/agent-prefer.mjs`'s `preferGroups`. Unknown names, including
+// module permissions, keep their exact spelling for the driver's validation.
+fn prefer_key(name: &str) -> &str {
+    fn norm(name: &str) -> String {
+        let letters: String = name
+            .chars()
+            .flat_map(char::to_lowercase)
+            .filter(char::is_ascii_lowercase)
+            .collect();
+        letters
+            .strip_prefix("prefers")
+            .or_else(|| letters.strip_prefix("prefer"))
+            .unwrap_or(&letters)
+            .to_owned()
+    }
+    let normalized = norm(name);
+    [
+        "display-mode",
+        "prefers-reduced-motion",
+        "prefers-reduced-transparency",
+        "prefers-contrast",
+        "prefers-color-scheme",
+        "color-gamut",
+        "dynamic-range",
+        "pointer",
+        "hover",
+        "frozen",
+        "visibility-state",
+        "online",
+        "can-share",
+        "can-share-files",
+        "can-share-pictures",
+        "can-open-files",
+        "iframe-partition",
+        "has-focus",
+        "keyboard-navigation",
+        "bold-text",
+        "root-font-size",
+        "display-scale",
+        "gpu-tier",
+        "posture",
+        "segments",
+        "gap",
+        "mode",
+        "midi.state",
+        "midi.inputs",
+        "midi.outputs",
+    ]
+    .into_iter()
+    .find(|key| norm(key) == normalized)
+    .unwrap_or(name)
 }
 
 /// `YYYY-MM-DD`, alone or before a `T` time: what the driver's epoch reads.

@@ -7,7 +7,7 @@ import { connect } from 'node:net';
 import { homedir } from 'node:os';
 import { basename, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { faultRequest as rawFaultRequest, PREFERENCES, preferGroups } from './agent-prefer.mjs';
+import { faultRequest as rawFaultRequest, preferGroups } from './agent-prefer.mjs';
 import { open } from './agent.mjs';
 import { duringOp } from './agent-drag.mjs';
 import { perfDelta } from './agent-inspect.mjs';
@@ -769,15 +769,16 @@ export async function runTests({ host, browser, file, plan, app, size, env, webD
       continue;
     }
     const prefer = async (st) => {
-      const facts = { [st.name]: st.value };
-      const permission = preferGroups(facts).extension.permission != null; // The driver's diagnostic for a bad name or value.
-      if (!permission && !Object.hasOwn(PREFERENCES, st.name) && st.name !== 'root-font-size') throw new Error(`test prefer: expected a CSS media feature (${Object.keys(PREFERENCES).join(', ')}), root-font-size or a module's permission (permission.<name> granted|denied|prompt)`);
+      const name = st.name.toLowerCase().replace(/[^a-z]/g, '').replace(/^prefers?/, '');
+      if (['posture', 'segments', 'gap', 'mode', 'extension'].includes(name)) throw new Error(`test prefer: ${st.name} is drive-only for now; authored tests cannot set folds (posture, segments, gap), mode pins or extension substitutes`);
+      const parsed = preferGroups({ [st.name]: st.value });
+      if (Object.keys(parsed.midi).length) throw new Error('test prefer: use prefer midi inside a test for MIDI facts');
+      const facts = { ...parsed.media, ...parsed.page, ...Object.fromEntries(Object.entries(parsed.extension.permission ?? {}).map(([name, value]) => [`permission.${name}`, value])) };
       const r = await s.prefer(facts);
       if (r?.error) throw new Error(r.error);
-      if (permission) return void Object.assign(permissions, facts);
+      const retained = parsed.extension.permission ? permissions : media;
       // Preserve last-application order: pointer and hover emulation affect each other.
-      delete media[st.name];
-      Object.assign(media, facts);
+      for (const [name, value] of Object.entries(facts)) { delete retained[name]; retained[name] = value; }
     };
     const mutationClock = testMutationClock();
     // The app's data lands before the first step, as `clock data` lands it: activation and every request in flight,

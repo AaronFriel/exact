@@ -585,13 +585,16 @@ test "an expected refusal before reload does not accept the next journal"
   } finally { server.close(); rmSync(dir,{recursive:true,force:true}); }
 },180_000);
 
-test('authored media preferences apply before observations, override by name, and survive reload', async () => {
+test('authored preferences use the drive parser, override by name, and survive reload', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'exact-test-media-'));
   const contract = join(dir, 'app.contract'), plan = join(dir, 'app.plan'), dist = join(dir, 'dist'), file = join(dir, 'app.test.contract');
   writeFileSync(contract, `shape Viewport
   prefersColorScheme: string
   prefersReducedMotion: bool
+shape Page
+  onLine: bool
 component App
+  resource page = exactPage() as shape Page
   resource viewport = exactViewport() as shape Viewport
   view
     column
@@ -632,7 +635,15 @@ test "invalid later value"
   expect text "scheme" == "dark"
   prefer prefers-color-scheme banana
 
-test "page facts are outside the test media grammar"
+test "page facts use the drive parser"
+  prefer online false
+  expect state page.onLine == false
+  reload
+  expect state page.onLine == false
+  prefer online true
+  expect state page.onLine == true
+  reload
+  expect state page.onLine == true
   prefer online false
 
 test "a failure does not stop the next test"
@@ -653,6 +664,9 @@ test "invalid text size"
 
 test "text size does not leak into another test"
   expect text "scheme" == "dark"
+
+test "a host refuses an unsupported page fact"
+  prefer keyboard-navigation true
 `);
   const root = fileURLToPath(new URL('..', import.meta.url));
   const compile = spawnSync(join(process.env.CARGO_TARGET_DIR ?? join(root, 'target'), 'debug', 'contract'), ['build', contract, '-o', plan], { cwd: root, encoding: 'utf8' });
@@ -673,25 +687,39 @@ test "text size does not leak into another test"
       await t.restart();
       expect(textExpectation((await s.tree()).nodes, 'scheme', dark ? 'dark' : 'light')).toBeNull();
       expect(await rootSize()).toBe(fontSize);
+      if (t.launch.media.online != null) expect((await s.state()).resources.page.onLine).toBe(false);
       ends.push(t.launch.media);
       return {};
     } });
-    expect(r.results.map(t => t.end?.error)).toEqual(Array(11).fill(undefined));
-    expect(r.results.map(t => t.failures.length)).toEqual([0, 0, 1, 1, 1, 1, 0, 0, 0, 1, 0]);
+    expect(r.results.map(t => t.end?.error)).toEqual(Array(12).fill(undefined));
+    expect(r.results.map(t => t.failures.length)).toEqual([0, 0, 1, 1, 1, 0, 0, 0, 0, 1, 0, 1]);
     for (const [index, line, name, value] of [[2, 24, 'prefers-color-scheme', 'banana'], [3, 28, 'unknown', 'dark'], [4, 33, 'prefers-color-scheme', 'banana']]) {
       const hint = name === 'unknown' ? 'did you mean `prefer prefers-color-scheme dark`? ' : '';
       expect(r.results[index].failures[0]).toContain(`line ${line}: prefer: ${name} ${value}: ${hint}expected`);
     }
-    expect(r.results[5].failures[0]).toContain('test prefer: expected a CSS media feature');
     expect(r.results[9].failures[0]).toContain('prefer: root-font-size 0: expected');
+    expect(r.results[11].failures[0]).toContain('prefer: keyboard-navigation: true is not a page fact this host sets');
+    expect(r.results[11].failures[0]).not.toContain('test prefer:');
     expect(ends).toEqual([
       { 'prefers-color-scheme': 'light', 'prefers-reduced-motion': 'reduce' },
       { 'prefers-color-scheme': 'light', 'prefers-reduced-motion': 'reduce' },
+      { 'prefers-color-scheme': 'dark', 'prefers-reduced-motion': 'reduce', online: false },
       { 'prefers-color-scheme': 'dark', 'prefers-reduced-motion': 'reduce' },
-      { 'prefers-color-scheme': 'dark', 'prefers-reduced-motion': 'reduce', 'root-font-size': '24' },
-      { 'prefers-color-scheme': 'dark', 'prefers-reduced-motion': 'reduce', 'root-font-size': '28px' },
+      { 'prefers-color-scheme': 'dark', 'prefers-reduced-motion': 'reduce', 'root-font-size': 24 },
+      { 'prefers-color-scheme': 'dark', 'prefers-reduced-motion': 'reduce', 'root-font-size': 28 },
       { 'prefers-color-scheme': 'dark', 'prefers-reduced-motion': 'reduce' },
     ]);
+    for (const [inherited, own] of [['displayScale', 'display-scale'], ['display-scale', 'displayScale']]) {
+      writeFileSync(file, `prefer ${inherited} "2"
+test "scale override before launch"
+  prefer ${own} "1"
+  expect text "scheme" == "light"
+  reload
+  expect text "scheme" == "light"
+`);
+      const overridden = await runTests({ host: 'web', file, app: 'caltrain', url: `http://127.0.0.1:${server.address().port}/` });
+      expect(overridden.results.map(t => t.failures)).toEqual([[]]);
+    }
   } finally { server.close(); rmSync(dir, { recursive: true, force: true }); }
 }, 180_000);
 
@@ -1013,3 +1041,37 @@ test('the APK carrier skips a test that names a size, saying why, and refuses a 
     expect(r.stdout).toContain('completed');
   } finally {rmSync(dir, {recursive:true, force:true});}
 }, 60000);
+test('single-value page facts replay by canonical name and drive-only forms are refused', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'exact-test-page-')), script = join(dir, 'check.mjs');
+  writeFileSync(join(dir, 'app.contract'), 'component App\n  view\n    text "Test"\n');
+  const pageFacts = {frozen:'false', 'visibility-state':'hidden', online:'false', 'can-share':'false', 'can-share-files':'false', 'can-share-pictures':'false', 'can-open-files':'false', 'iframe-partition':'false', 'has-focus':'false', 'keyboard-navigation':'true', 'bold-text':'true', 'root-font-size':'24px', 'display-scale':'2', 'gpu-tier':'low'};
+  const driveOnly = {posture:'folded', segments:'2x1', gap:'40', mode:'density=compact', extension:'nfc.field=clear', Segments:'2x1', Mode:'density=compact', Extension:'nfc.field=clear'};
+  writeFileSync(join(dir, 'app.test.contract'), `test "page facts"\n${Object.entries(pageFacts).map(([name,value]) => `  prefer ${name} ${JSON.stringify(value)}\n`).join('')}  expect state ready == true\n  prefer Online true\n  prefer rootFontSize "28px"\n  reload\n  expect state ready == true\n${Object.entries(driveOnly).map(([name,value]) => `test "refuse ${name}"\n  prefer ${name} ${JSON.stringify(value)}\n`).join('')}`);
+  writeFileSync(script, `
+    import assert from 'node:assert/strict';
+    import {mock} from 'bun:test';
+    import {preferGroups} from ${JSON.stringify(fileURLToPath(new URL('./agent-prefer.mjs', import.meta.url)))};
+    let page, opens = 0, calls = [];
+    mock.module(${JSON.stringify(fileURLToPath(new URL('./agent.mjs', import.meta.url)))}, () => ({open: async () => {
+      opens++; page = {};
+      return {host:'linux', now:0, prefer:async facts=>{calls.push(facts); Object.assign(page,preferGroups(facts).page); return {};},
+        op:async()=>({clock:0,lines:[]}), clock:async()=>({}), state:async()=>({mutationRequests:0,slots:{ready:true}}),
+        logs:async()=>({lines:[]}), close:async()=>{}};
+    }}));
+    const {runTests} = await import(${JSON.stringify(fileURLToPath(new URL('./agent-test.mjs', import.meta.url)))});
+    const expected = {...preferGroups(${JSON.stringify(pageFacts)}).page, online:true, 'root-font-size':28};
+    const r = await runTests({host:'linux', app:${JSON.stringify(dir)}, file:${JSON.stringify(join(dir, 'app.test.contract'))},
+      atEnd:async(s,t)=>{if(t.name === 'page facts') {assert.deepEqual(page,expected); assert.deepEqual(t.launch.media,expected);} return {};}});
+    assert.equal(r.passed,1,JSON.stringify(r));
+    assert.equal(r.failed,${Object.keys(driveOnly).length},JSON.stringify(r));
+    assert.equal(r.results[0].end?.error,undefined);
+    for (const t of r.results.slice(1)) assert.match(t.failures[0],new RegExp(t.name.slice(7)+' is drive-only for now'));
+    assert.equal(opens,${Object.keys(driveOnly).length+2});
+    assert.equal(calls.length,${Object.keys(pageFacts).length*2+2});
+    assert.ok(calls.every(facts=>!Object.hasOwn(facts,'Online')&&!Object.hasOwn(facts,'rootFontSize')));
+  `);
+  try {
+    const r = spawnSync(process.execPath, [script], {encoding:'utf8', timeout:30000});
+    expect(r.status, r.stdout + r.stderr).toBe(0);
+  } finally {rmSync(dir, {recursive:true, force:true});}
+}, 30000);

@@ -5581,8 +5581,10 @@ they do not set its appearance before mount. MIDI's `prefer midi.…` remains a
 step inside a test.
 
 `prefer root-font-size "24"` sets the root text size in pixels for a large-text
-fixture. It follows the same launch, override and reload rules; other page facts
-are not admitted by this test form.
+fixture. Other single-value page facts, such as `prefer online false`, follow
+the same launch, override and reload rules and use the drive's parser and name
+aliases. Hosts refuse facts they cannot substitute. Folds (`posture`, `segments`,
+`gap`), mode pins and extension substitutes are drive-only for now.
 
 Before the first step (and after a `reload`) the driver waits for the app's data
 as `clock data` does: its data module activated and every request launch started

@@ -962,6 +962,60 @@ fn media_preferences_inherit_by_name_and_can_change_between_steps() {
     assert!(contract::tests_json(&midi).contains("prefer-midi"));
 }
 
+#[test]
+fn preference_aliases_share_launch_defaults_and_duplicate_detection() {
+    for (alias, canonical) in [
+        ("displayScale", "display-scale"),
+        ("color-scheme", "prefers-color-scheme"),
+        ("rootFontSize", "root-font-size"),
+        ("PREFER-ONLINE", "online"),
+        ("Segments", "segments"),
+        ("preferMode", "mode"),
+    ] {
+        for (inherited, own) in [(alias, canonical), (canonical, alias)] {
+            let source = format!(
+                "prefer {inherited} \"2\"\ntest \"override\"\n  prefer {own} \"1\"\n  expect tree has \"root\"\n"
+            );
+            let tests = contract::tests(&source).unwrap();
+            assert_eq!(tests[0].steps.len(), 2, "{source}");
+            assert!(
+                matches!(&tests[0].steps[0], Step::Prefer { name, value, .. }
+                if name == own && value == "1"),
+                "{source}"
+            );
+            for prefix in ["", "test \"duplicates\"\n  "] {
+                let indent = if prefix.is_empty() { "" } else { "  " };
+                let source =
+                    format!("{prefix}prefer {inherited} \"2\"\n{indent}prefer {own} \"1\"\n");
+                assert_eq!(
+                    contract::tests(&source).unwrap_err().id,
+                    "syntax-duplicate-declaration",
+                    "{source}"
+                );
+            }
+        }
+    }
+    for (first, second) in [
+        ("permission.notifications", "permission.Notifications"),
+        ("permission.health.steps", "permission.healthsteps"),
+        ("unknown-name", "unknownName"),
+        ("extension", "Extension"),
+        ("preferSegments", "segments"),
+    ] {
+        let source =
+            format!("prefer {first} granted\ntest \"distinct\"\n  prefer {second} denied\n");
+        assert_eq!(contract::tests(&source).unwrap()[0].steps.len(), 2);
+        let source =
+            format!("test \"distinct\"\n  prefer {first} granted\n  prefer {second} denied\n");
+        assert_eq!(contract::tests(&source).unwrap()[0].steps.len(), 2);
+        let source = format!("prefer {first} granted\nprefer {first} denied\n");
+        assert_eq!(
+            contract::tests(&source).unwrap_err().id,
+            "syntax-duplicate-declaration"
+        );
+    }
+}
+
 /// `clock held [<resource>…]` (LLP 1016.000 D9): the driver's `clock held`, real time with the clock frozen until each
 /// held request, or each named, has had a reply; the line's names are its targets, the next line's step its own.
 #[test]

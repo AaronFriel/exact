@@ -744,7 +744,7 @@ launch        = "size" NUMBER "x" NUMBER NL          (* written 1200x800 *)
               | "fresh" [ STRING ] NL                (* the Snapback dev server emptied first, seeded from the file *)
               | "before" "data" NL                   (* the first step does not wait for data *)
               | "prefer" IDENT { "." IDENT } ( IDENT | STRING ) NL
-                                                     (* media feature, root-font-size, or permission.<module>; before observations *)
+                                                     (* media feature, page fact, or permission.<module>; before observations *)
               | "fail" "fetch" STRING [ "times" NUMBER ] NL ; (* armed before the first data load *)
 step          = "tap" "midi" STRING ( HEX { HEX } | "clock" NUMBER NUMBER ) NL
                                                      (* bytes into an input; or clock ticks: bpm, ms *)
@@ -770,7 +770,8 @@ step          = "tap" "midi" STRING ( HEX { HEX } | "clock" NUMBER NUMBER ) NL
               | "clock" "until" "state" IDENT { "." ( IDENT | NUMBER ) } "==" scalar "within" NUMBER NL
                                                      (* real time, the clock frozen, until it holds *)
               | "resize" NUMBER "x" NUMBER NL        (* the window, mid-test: 800x600 *)
-              | "prefer" IDENT { "." IDENT } IDENT NL (* change a media preference or a module's permission now *)
+              | "prefer" IDENT { "." IDENT } ( IDENT | STRING ) NL
+                                                     (* change a media preference, page fact or module permission now *)
               | "prefer" midi-fact { midi-fact } NL  (* each fact at most once *)
               | "reload" NL
               | "fail" "fetch" STRING [ "times" NUMBER ] NL (* later fetches whose URL starts with it fail *)
@@ -927,9 +928,12 @@ as `--url` with a path does. Written at the top of the file they apply to every 
 name its own; either way they override the drive's flags. Media preferences
 (`prefer prefers-color-scheme dark`), text size (`prefer root-font-size "24"`) and
 a module's permission (`prefer permission.notifications granted`, `denied` or
-`prompt`) also lead a test or the file, and may change between steps. Defaults
-merge by name; duplicate names among
-leading lines are errors. A bad name or value fails that test at its line.
+`prompt`) also lead a test or the file, and may change between steps. Other
+single-value page facts, such as `prefer online false`, use the drive's parser
+and aliases; quote numeric values. Folds (`posture`, `segments`, `gap`), mode
+pins and extension substitutes are drive-only for now. Defaults
+merge by resolved fact name, so aliases override each other; duplicate leading
+lines for one fact are errors. A bad name or value fails that test at its line.
 The latest values survive `reload` and verify's relaunch. A file whose
 assertions depend on the date says so in the file. `epoch now` is the machine's
 clock, read once as each test launches, for a test whose app talks to a live
