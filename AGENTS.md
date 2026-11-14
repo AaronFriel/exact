@@ -264,7 +264,8 @@ section binds (`rules/RULES.md`, "Agents").
   instead: the host's two Rust modules, by the SHA-256 of every input
   (`~/.cache/exact/apple-modules`, `host/apple/modules.mjs`), and, into a
   `target/` that has compiled nothing, the registry crates another build
-  compiled, which Cargo then accepts or not by its own fingerprints
+  compiled and, for an app, the checkout's own crates another app of the
+  checkout compiled, which Cargo then accepts or not by its own fingerprints
   (`~/.cache/exact/apple-crates`, `host/apple/crates.mjs`). A development web
   build takes the compiler and the leaf wasm modules the same way
   (`~/.cache/exact/web-modules`, `host/web-js/module.mjs`; `bun

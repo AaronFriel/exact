@@ -848,9 +848,9 @@ async function main(args, lockHeld = false) {
   const kept = cargoProfile === HOST_DEV ? keptModules({ root, moduleTarget, target, profile: cargoProfile, env: moduleEnv, sdk, metal: metalTools.stdout }) : null;
   const moduleLib = {};
   // And a target directory that has compiled nothing starts with the registry
-  // crates this machine has compiled, which Cargo takes or not by its own
-  // fingerprints (crates.mjs): a second checkout's first build 78 → 57 s.
-  const keptRegistry = cargoProfile === HOST_DEV ? keptCrates({ root, env: moduleEnv, profile: cargoProfile }) : null;
+  // crates (and the checkout's, another app of it compiled) this machine has, which
+  // Cargo takes or not by its fingerprints (crates.mjs): a second checkout 78 → 57 s.
+  const keptRegistry = cargoProfile === HOST_DEV ? keptCrates({ root, env: moduleEnv, profile: cargoProfile, app: { dir: app.dir, workspace: app.workspace } }) : null;
   keptRegistry?.take(app.target, 'app');
   const buildModules = (crates, log) => {
     const started = Date.now(), compile = crates.filter(crate => !(moduleLib[crate] = kept?.find(crate)));

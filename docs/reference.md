@@ -1115,8 +1115,12 @@ beside the app's Rust; the host's two Rust modules build in
 `<target>/apple-modules`, and a checkout that has not built one takes it from
 `~/.cache/exact/apple-modules` when another checkout of this machine compiled
 it from the same bytes. A target directory that has compiled nothing starts
-with the registry crates this machine has compiled
-(`~/.cache/exact/apple-crates`; Cargo decides which it can use). Delete either
+with the registry crates this machine has compiled, and an app's also with the
+checkout's own crates (runner, kernel, hosts) another app naming that checkout
+compiled, when the app builds in its own `target/` (`~/.cache/exact/apple-crates`; Cargo decides which it can use, and a
+crate edited, pulled or switched since compiles again). An app's own crates are
+never kept; a checkout unused for 14 days, or gone, is forgotten, and
+`EXACT_APPLE_KEEP_CHECKOUT=0` keeps registry crates only. Delete either
 directory to compile everything here. Every production Apple build (`--release`,
 `--archive`, `exact release`, or `EXACT_UPDATE_TRUST=production`) uses the whole-module
 Swift build and strips its executable, writing `<executable>.dSYM` beside the staged
