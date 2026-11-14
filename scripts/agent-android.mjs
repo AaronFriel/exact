@@ -46,7 +46,7 @@ import { androidImplementations, packageConfig } from '../js/bake/src/typescript
 import { recordBuiltSettings } from '../js/bake/src/__exact_env.mjs';
 import { configMetaData, fragmentPermissions, manifestFragment, withMetaData, withAuthCallbacks } from './android-manifest.mjs';
 import { androidShareActivity } from './share-target.mjs';
-import { CHANNELS_RECEIVER, androidNotificationResources } from './android-channels.mjs';
+import { CHANNELS_RECEIVER, androidNotificationResources, googleServices } from './android-channels.mjs';
 import { pickIcon, placeRgba, readPng, resize } from './app-icons.mjs';
 import { encodePng } from './png.mjs';
 import { copyStaticTreeIfPresent } from '../host/web/serve.mjs';
@@ -1047,6 +1047,16 @@ export function buildApk(app, env, profile, writeLocks = false, bundle = false) 
   if (!writeLocks && !mavenLocksPresent(app, maven)) return null;
   let config;
   try { config = packageConfig(app.dir, 'android', { extensions, release: profile === 'release' }); } catch (error) { console.error(`${app.name}: ${error.message}`); return null; }
+  // Firebase's options for an app that pushes (LLP 1133.004.000 D6). The file beside app.json needs no configuration
+  // line, so the refusal is the push implementation's own rather than a `required` key's.
+  let firebase = null;
+  if (bound.some((b) => b.extension === 'push')) {
+    const id = androidPackageId(app.manifest ?? { app }) + (process.env.ORG_GRADLE_PROJECT_idSuffix ?? '');
+    firebase = googleServices(app.dir, id, config.get('push')?.googleServices);
+    const missing = `google-services.json from Firebase with a client whose package_name is ${id}, beside app.json or at the path app.json "packages": {"@exact/push": {"android": {"googleServices": "<path>"}}} names`;
+    if (!firebase && profile === 'release') { console.error(`${app.name}: push-google-services-missing: a release build that pushes needs a ${missing}`); return null; }
+    if (!firebase) console.warn(`${app.name}: push is unavailable in this development build, which finds no ${missing} (a release build refuses it)`);
+  }
   const uses = planUses(out);
   // The page-size argument is in every rustflags source the build makes or Cargo was handed (`androidCargo`), but a
   // table in the app's Cargo configuration takes precedence over the build's own and can leave it out.
@@ -1083,7 +1093,7 @@ export function buildApk(app, env, profile, writeLocks = false, bundle = false) 
     assembled = runGradle(['--no-watch-fs', ...(env.CI || graph.env.GRADLE_USER_HOME ? ['--no-daemon'] : []), bundle ? ':app:bundleRelease' : ':app:assembleRelease', `-Papp=${app.name}`, `-PappDir=${app.manifest.game ? app.workspace : app.dir}`,
       `-PexactDevelopment=${development ? '1' : '0'}`,
       `-PappBuildDir=${dirs.app}`, `-PcanvasBuildDir=${dirs.canvas}`, `-PndkPath=${env.ANDROID_NDK_HOME}`, '--project-cache-dir', dirs.cache, `-Pkotlin.project.persistent.dir=${dirs.kotlin}`,
-      ...gpuArgs, ...(icons.icon ? [`-PappIcon=${icons.icon}`] : []), ...(icons.banner ? [`-PappBanner=${icons.banner}`] : []), ...(launch ? [`-PappTheme=${launch}`] : []), ...compose, ...extensionArgs(app, out, config, bound), ...graph.args], { env: { ...env, ANDROID_HOME: androidSdk(env), ...graph.env } }, process.platform, { lockAdvice: maven.length && !writeLocks ? `${app.name}: Gradle locks or verification metadata do not match its dependencies; for an intended graph change, run ${androidLockCommand(app)}, then review and commit gradle.lockfile and gradle-verification.xml` : null });
+      ...gpuArgs, ...(icons.icon ? [`-PappIcon=${icons.icon}`] : []), ...(icons.banner ? [`-PappBanner=${icons.banner}`] : []), ...(launch ? [`-PappTheme=${launch}`] : []), ...compose, ...extensionArgs(app, out, config, bound, firebase), ...graph.args], { env: { ...env, ANDROID_HOME: androidSdk(env), ...graph.env } }, process.platform, { lockAdvice: maven.length && !writeLocks ? `${app.name}: Gradle locks or verification metadata do not match its dependencies; for an intended graph change, run ${androidLockCommand(app)}, then review and commit gradle.lockfile and gradle-verification.xml` : null });
     if (assembled) graph.kept();
   } finally {
     graph.done();
@@ -1183,7 +1193,7 @@ export function coldGradleHome(env = process.env) {
  * permissions the app's grant lines derive (the bake's `reach.android`) with those its names derive, and the
  * components its packages' manifest fragments declare with the meta-data `config` (`packageConfig`'s) carries, as
  * Gradle properties. */
-function extensionArgs(app, out, config, bound) {
+function extensionArgs(app, out, config, bound, firebase) {
   const generated = resolve(apkDirs(app).app, 'extensions');
   rmSync(generated, { recursive: true, force: true });
   let permissions = [], services = {}, features = [], callbacks = [], reach = null;
@@ -1219,9 +1229,10 @@ function extensionArgs(app, out, config, bound) {
   for (const [name, targets] of Object.entries(app.manifest?.packages ?? {})) for (const [key, value] of Object.entries(targets?.android ?? {})) {
     if (typeof value?.env === 'string' && !process.env[value.env] && config.has(name.split('/').at(-1))) console.warn(`${app.name}: ${value.env} is unset, so ${name}'s ${key} is absent from this development build (a release build refuses it)`);
   }
-  // The notification channels, strings, sounds and small icon (LLP 1133.004.000 D1, D3), for an app that grants
-  // notifications, with the receiver that makes the channels again when the app is updated.
-  const notify = androidNotificationResources(app.manifest, app.dir, resolve(apkDirs(app).app, 'notify/res'), { channels: reach?.androidChannels, locales: reach?.locales, base: reach?.base });
+  // The notification channels, strings, sounds and small icon (LLP 1133.004.000 D1, D3), and Firebase's options for
+  // an app that pushes (D6), for an app that grants notifications, with the receiver that makes the channels again
+  // when the app is updated.
+  const notify = androidNotificationResources(app.manifest, app.dir, resolve(apkDirs(app).app, 'notify/res'), { channels: reach?.androidChannels, locales: reach?.locales, base: reach?.base, firebase });
   if (notify && !notify.icon) console.warn(`${app.name}: app.json's icons have no "monochrome" one, so its notifications show the platform's generic glyph in the status bar; add a white glyph on a transparent background with "purpose": "monochrome"`);
   // The share target's filters on the app's activity (LLP 1133.024 D5), inside the same `<application>`.
   const fragment = withAuthCallbacks(withMetaData(manifestFragment(bound, { privacyPolicy: app.manifest?.privacy_policy ?? null }), [...configMetaData(config), ...(androidShareActivity(app.manifest?.share_target) ?? []), ...(notify ? CHANNELS_RECEIVER : [])]), callbacks), fragmentFile = resolve(apkDirs(app).app, 'manifest-fragment.xml');

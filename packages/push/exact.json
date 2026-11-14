@@ -11,6 +11,11 @@
     "field": "state",
     "denied": "NotAllowedError"
   },
+  "config": {
+    "android": {
+      "googleServices": { "type": "string" }
+    }
+  },
   "shapes": {
     "ApplePushSubscription": {
       "deviceToken": "string"

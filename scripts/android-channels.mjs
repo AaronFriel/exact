@@ -1,8 +1,9 @@
-// An Android app's notification resources (LLP 1133.004.000 D1, D3), written under `res` for the Gradle shell: the
-// channels the bake resolved (`reach.androidChannels`, `bake/src/channels.rs`) as a list the host reads
+// An Android app's notification resources (LLP 1133.004.000 D1, D3, D6), written under `res` for the Gradle shell:
+// the channels the bake resolved (`reach.androidChannels`, `bake/src/channels.rs`) as a list the host reads
 // (`xml/exact_channels.xml`, `Channels.kt`), their names and descriptions as string resources per strings table,
-// their sounds in `res/raw`, and the status bar's small icon from the manifest's `monochrome` icon.
-import { copyFileSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+// their sounds in `res/raw`, the status bar's small icon from the manifest's `monochrome` icon, and Firebase's
+// options from `google-services.json` for an app that pushes.
+import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, extname, resolve } from 'node:path';
 import { pickIcon, placeRgba, readPng, resize } from './app-icons.mjs';
 import { encodePng } from './png.mjs';
@@ -47,10 +48,32 @@ export function notificationIcon(manifest, dir) {
   }));
 }
 
+/** Firebase's options for the client in `google-services.json` whose `package_name` is `id` (D6), as the string
+ * resources the Google Services Gradle plugin would write, name to text
+ * ([the plugin's processing](https://developers.google.com/android/guides/google-services-plugin)), read without
+ * the plugin. `path` is `packages["@exact/push"].android.googleServices`, relative to the app, tried before the file
+ * beside app.json. Null when neither yields that client. */
+export function googleServices(dir, id, path) {
+  for (const file of new Set([path, 'google-services.json'].filter((f) => typeof f === 'string'))) {
+    let json;
+    try { json = JSON.parse(readFileSync(resolve(dir, file), 'utf8')); } catch { continue; }
+    const client = (Array.isArray(json?.client) ? json.client : []).find((c) => c?.client_info?.android_client_info?.package_name === id);
+    if (typeof client?.client_info?.mobilesdk_app_id !== 'string') continue;
+    const project = json.project_info ?? {};
+    return Object.fromEntries(Object.entries({ google_app_id: client.client_info.mobilesdk_app_id, gcm_defaultSenderId: project.project_number,
+      google_api_key: client.api_key?.[0]?.current_key, project_id: project.project_id, google_storage_bucket: project.storage_bucket })
+      .filter(([, v]) => typeof v === 'string' && v));
+  }
+  return null;
+}
+
 /** Writes the notification resources under `res` (emptied first) and returns what the build says: `null` when the
  * app grants no notifications (`channels` absent), else `{ icon }`, whether the manifest gave a small icon. `channels`
- * is the bake's `reach.androidChannels`; `locales` and `base` its strings tables'. */
-export function androidNotificationResources(manifest, dir, res, { channels, locales, base }) {
+ * is the bake's `reach.androidChannels`; `locales` and `base` its strings tables'; `firebase` is `googleServices`'
+ * values, for an app that pushes. Without a `monochrome` icon, `exact_notification` is the platform's generic glyph,
+ * so the drawable is there for every app that grants notifications and a manifest fragment can name it (Firebase's
+ * `default_notification_icon`). */
+export function androidNotificationResources(manifest, dir, res, { channels, locales, base, firebase = null }) {
   rmSync(res, { recursive: true, force: true });
   if (!Array.isArray(channels)) return null;
   const write = (path, text) => { mkdirSync(dirname(resolve(res, path)), { recursive: true }); writeFileSync(resolve(res, path), text); };
@@ -75,11 +98,14 @@ export function androidNotificationResources(manifest, dir, res, { channels, loc
   });
   for (const [folder, lines] of strings) write(`${folder}/exact_channels.xml`, `<resources>\n${lines.join('\n')}\n</resources>\n`);
   write('xml/exact_channels.xml', `<channels>\n${items.map((l) => `${l}\n`).join('')}</channels>\n`);
+  if (firebase) write('values/exact_google_services.xml', `<resources>\n${Object.entries(firebase)
+    .map(([name, text]) => `    <string name="${name}" translatable="false">${resourceText(text)}</string>\n`).join('')}</resources>\n`);
   const icon = notificationIcon(manifest, dir);
   if (icon) for (const [density, image] of Object.entries(icon)) {
     mkdirSync(resolve(res, `drawable-${density}`), { recursive: true });
     writeFileSync(resolve(res, `drawable-${density}`, 'exact_notification.png'), encodePng(image));
   }
+  else write('drawable/exact_notification.xml', '<inset xmlns:android="http://schemas.android.com/apk/res/android" android:drawable="@android:drawable/ic_popup_reminder" />\n');
   return { icon: !!icon };
 }
 

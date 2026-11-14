@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
-import { androidNotificationResources, resourceText, valuesDirectory } from './android-channels.mjs';
+import { androidNotificationResources, googleServices, resourceText, valuesDirectory } from './android-channels.mjs';
 import { readPng } from './app-icons.mjs';
 import { encodePng } from './png.mjs';
 
@@ -22,7 +22,9 @@ test('declared channels become a list, strings per table and raw sounds, with th
     { id: 'news', name: { en: '@news' }, description: null, importance: 'low', sound: null },
   ];
   assert.deepEqual(androidNotificationResources({}, dir, res, { channels, locales: ['en', 'pt-BR'], base: 'en' }), { icon: false });
-  assert.deepEqual(files(res), ['raw/exact_channel_urgencies.wav', 'values-b+pt+BR/exact_channels.xml', 'values/exact_channels.xml', 'xml/exact_channels.xml']);
+  // With no monochrome icon, the small icon is the platform's glyph.
+  assert.deepEqual(files(res), ['drawable/exact_notification.xml', 'raw/exact_channel_urgencies.wav', 'values-b+pt+BR/exact_channels.xml', 'values/exact_channels.xml', 'xml/exact_channels.xml']);
+  assert.match(readFileSync(resolve(res, 'drawable/exact_notification.xml'), 'utf8'), /android:drawable="@android:drawable\/ic_popup_reminder"/);
   assert.equal(readFileSync(resolve(res, 'xml/exact_channels.xml'), 'utf8'), [
     '<channels>',
     '    <channel id="urgencies" importance="high" name="@string/exact_channel_urgencies_name" description="@string/exact_channel_urgencies_description" sound="@raw/exact_channel_urgencies" />',
@@ -58,6 +60,30 @@ test('the small icon is the monochrome glyph trimmed into 22 of 24 dp per densit
   // 88 px wide (22 of 24 dp), 44 tall, centred: columns 4 to 91, rows 26 to 69.
   assert.deepEqual([pixel(icon, 3, 48)[3], pixel(icon, 4, 48), pixel(icon, 48, 25)[3], pixel(icon, 48, 26)], [0, [255, 255, 255, 255], 0, [255, 255, 255, 255]]);
   assert.ok(pixel(icon, 90, 48)[3] < 255 && pixel(icon, 90, 48)[3] > 0);
+}));
+
+test("google-services.json's client for the app becomes Firebase's string resources, the configured path first (LLP 1133.004.000 D6)", () => inDir((dir) => {
+  const file = (clients, project = { project_number: '123', project_id: 'gate-1', storage_bucket: 'gate-1.appspot.com' }) => JSON.stringify({ project_info: project, client: clients });
+  const client = (id, app = `1:123:android:${id}`) => ({ client_info: { mobilesdk_app_id: app, android_client_info: { package_name: id } }, api_key: [{ current_key: `key-${id}` }] });
+  assert.equal(googleServices(dir, 'dev.exact.gate', undefined), null);
+  writeFileSync(resolve(dir, 'google-services.json'), file([client('dev.exact.other'), client('dev.exact.gate')]));
+  const values = googleServices(dir, 'dev.exact.gate', undefined);
+  assert.deepEqual(values, { google_app_id: '1:123:android:dev.exact.gate', gcm_defaultSenderId: '123', google_api_key: 'key-dev.exact.gate', project_id: 'gate-1', google_storage_bucket: 'gate-1.appspot.com' });
+  // No client for the id is none at all.
+  assert.equal(googleServices(dir, 'dev.exact.absent', undefined), null);
+  // The configured path is read first; a path that yields no client leaves the file beside app.json.
+  mkdirSync(resolve(dir, 'ci'));
+  writeFileSync(resolve(dir, 'ci/firebase.json'), file([client('dev.exact.gate', '1:9:android:ci')], { project_number: '9', project_id: 'ci' }));
+  assert.deepEqual(googleServices(dir, 'dev.exact.gate', 'ci/firebase.json'), { google_app_id: '1:9:android:ci', gcm_defaultSenderId: '9', google_api_key: 'key-dev.exact.gate', project_id: 'ci' });
+  assert.deepEqual(googleServices(dir, 'dev.exact.gate', 'ci/missing.json'), values);
+  writeFileSync(resolve(dir, 'google-services.json'), '{');
+  assert.equal(googleServices(dir, 'dev.exact.gate', 'ci/missing.json'), null);
+
+  const res = resolve(dir, 'res');
+  androidNotificationResources({}, dir, res, { channels: [], base: 'en', firebase: { google_app_id: '1:2:android:3', project_id: '@p' } });
+  assert.equal(readFileSync(resolve(res, 'values/exact_google_services.xml'), 'utf8'), ['<resources>',
+    '    <string name="google_app_id" translatable="false">1:2:android:3</string>',
+    '    <string name="project_id" translatable="false">\\@p</string>', '</resources>', ''].join('\n'));
 }));
 
 test('a strings table goes to its resource directory, and its text escapes as the resource compiler reads it', () => {

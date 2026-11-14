@@ -26,6 +26,19 @@ test('package implementation filters use the supplied identities and ignore unus
   } finally { rmSync(app, { recursive: true, force: true }); }
 });
 
+test("push's Android configuration is the path of google-services.json, never required by packageConfig (LLP 1133.004.000 D6)", () => {
+  const app = mkdtempSync(resolve(tmpdir(), 'exact-push-config-'));
+  try {
+    mkdirSync(resolve(app, 'node_modules/@exact'), { recursive: true });
+    symlinkSync(resolve(import.meta.dir, '../packages/push'), resolve(app, 'node_modules/@exact/push'), 'dir');
+    writeFileSync(resolve(app, 'app.contract'), 'component App\n  view\n    text "plain"\n');
+    const extensions = { push: '@exact/push' };
+    assert.deepEqual(packageConfig(app, 'android', { extensions, release: true }).get('push'), {});
+    writeFileSync(resolve(app, 'app.json'), JSON.stringify({ packages: { '@exact/push': { android: { googleServices: 'ci/firebase.json' } } } }));
+    assert.deepEqual(packageConfig(app, 'android', { extensions, release: true }).get('push'), { googleServices: 'ci/firebase.json' });
+  } finally { rmSync(app, { recursive: true, force: true }); }
+});
+
 test('only the selected interface supplies an implementation and configuration when basenames match', () => {
   const app = mkdtempSync(resolve(tmpdir(), 'exact-package-scopes-'));
   try {
@@ -191,17 +204,51 @@ test("payments' callbacks service is exported only to Play services' binder, wit
 test('a meta-data is only a listed name with its value, both strings', () => {
   const pay = 'com.google.android.gms.wallet.api.enabled';
   const refuses = (metadata, what) => assert.throws(() => manifestFragment(impl({ metadata })), (e) => e.message.includes(what) && e.message.includes("alarms's Android implementation"));
-  refuses([{ name: 'review.unknown' }], 'without a string name and value');
+  refuses([{ name: 'review.unknown' }], 'without a string name and one string value or resource');
   refuses([{ name: 'review.unknown', value: 'true' }], 'review.unknown');
-  refuses([{ value: 'true' }], 'without a string name and value');
-  refuses([{ name: pay }], 'without a string name and value');
-  refuses([{ name: pay, value: true }], 'without a string name and value');
+  refuses([{ value: 'true' }], 'without a string name and one string value or resource');
+  refuses([{ name: pay }], 'without a string name and one string value or resource');
+  refuses([{ name: pay, value: true }], 'without a string name and one string value or resource');
   refuses([{ name: pay, value: 'false' }], 'not on the list');
   refuses([{ name: 'a"/><provider android:name="x', value: 'true' }], 'not on the list');
   refuses([{ name: '__proto__', value: 'true' }], 'not on the list');
-  refuses([null], 'without a string name and value');
-  refuses([7], 'without a string name and value');
+  refuses([null], 'without a string name and one string value or resource');
+  refuses([7], 'without a string name and one string value or resource');
   assert.match(manifestFragment(impl({ metadata: [{ name: pay, value: 'true' }] })), /<meta-data android:name="com\.google\.android\.gms\.wallet\.api\.enabled" android:value="true" \/>/);
+  // A resource is its own field: never a value's text, and never both.
+  const icon = 'com.google.firebase.messaging.default_notification_icon';
+  refuses([{ name: icon, value: '@drawable/exact_notification' }], 'not on the list');
+  refuses([{ name: icon, resource: '@drawable/other' }], 'not on the list');
+  refuses([{ name: pay, resource: 'true' }], 'not on the list');
+  refuses([{ name: icon, resource: '@drawable/exact_notification', value: 'x' }], 'one string value or resource');
+  assert.match(manifestFragment(impl({ metadata: [{ name: icon, resource: '@drawable/exact_notification' }] })), /<meta-data android:name="com\.google\.firebase\.messaging\.default_notification_icon" android:resource="@drawable\/exact_notification" \/>/);
+});
+
+test("Firebase's messaging service is unexported for its own receiver, and its start-up provider is removed (LLP 1133.004.000 D6)", () => {
+  const push = (manifest) => manifestFragment([{ extension: 'push', className: 'exact.push.PushModule', manifest }]);
+  const service = { name: 'exact.push.PushService', actions: ['com.google.firebase.MESSAGING_EVENT'] };
+  const xml = push({ services: [service], metadata: [
+    { name: 'firebase_messaging_auto_init_enabled', value: 'false' },
+    { name: 'com.google.firebase.messaging.default_notification_channel_id', value: 'default' },
+    { name: 'com.google.firebase.messaging.default_notification_icon', resource: '@drawable/exact_notification' }] });
+  assert.equal(xml, ['    <application>',
+    '        <service android:name="exact.push.PushService" android:exported="false">', '            <intent-filter>',
+    '                <action android:name="com.google.firebase.MESSAGING_EVENT" />', '            </intent-filter>', '        </service>',
+    '        <meta-data android:name="firebase_messaging_auto_init_enabled" android:value="false" />',
+    '        <meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" android:value="default" />',
+    '        <meta-data android:name="com.google.firebase.messaging.default_notification_icon" android:resource="@drawable/exact_notification" />',
+    '        <provider android:name="com.google.firebase.provider.FirebaseInitProvider" tools:node="remove" />',
+    '    </application>'].join('\n'));
+  const refuses = (manifest, what) => assert.throws(() => push(manifest), (e) => e.message.includes(what) && e.message.includes("push's Android implementation"));
+  refuses({ services: [{ ...service, actions: ['android.intent.action.MAIN'] }] }, 'not one library');
+  refuses({ services: [{ ...service, actions: [...service.actions, ...service.actions] }] }, 'not one library');
+  refuses({ services: [{ ...service, actions: [] }] }, 'not one library');
+  refuses({ services: [{ ...service, directBootAware: true }] }, 'direct boot');
+  refuses({ services: [{ ...service, foregroundServiceType: 'systemExempted' }] }, 'foreground type');
+  refuses({ services: [{ ...service, name: 'com.google.firebase.messaging.FirebaseMessagingService' }] }, 'not a class in exact.push');
+  refuses({ metadata: [{ name: 'firebase_messaging_auto_init_enabled', value: 'true' }] }, 'not on the list');
+  // A package that declares no such service removes no provider.
+  assert.doesNotMatch(push({ services: [{ name: 'exact.push.Other' }] }), /provider/);
 });
 
 test('app and package Maven coordinates share validation and refuse conflicting versions by owner', async () => {
