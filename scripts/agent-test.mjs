@@ -711,6 +711,7 @@ export async function runTests({ host, browser, file, plan, app, size, env, webD
       lines.push(st.line);
       leading++;
     }
+    if (host === 'web' && opensAt && /^https?:\/\//.test(url ?? '')) opensAt = new URL(opensAt, url).href;
     // Replay uses the already-resolved facts, including an authored `epoch now` (LLP 1116.007 D3.4).
     if (replayLaunch) Object.assign(facts, replayLaunch);
     // A zone or locale the driver refuses fails this test at its line, not the run. `epoch now` is read here, once

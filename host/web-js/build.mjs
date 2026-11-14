@@ -26,6 +26,7 @@ import { createHash } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, normalize, posix, relative, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { brotliCompressSync, constants } from 'node:zlib';
 import { transformSync, parseSync, Visitor } from 'rolldown/utils';
 import { copyGpuCache } from './gpu-cache.mjs';
 import { analyze } from './page-style.mjs';
@@ -958,6 +959,18 @@ const preloadModules = [];
   // `scripts/metrics.mjs --web-bytes` (LLP 1047.002 D5): what of the runtime an app's plan reached.
   const moduleName = (id) => { const name = relative(gen, id); return name.startsWith('..') ? basename(id) : name; };
   writeFileSync(resolve(gen, 'modules.json'), JSON.stringify(Object.fromEntries(Object.entries(entry.modules).map(([id, m]) => [moduleName(id), m.renderedLength]).filter(([, n]) => n > 0).sort((a, b) => b[1] - a[1]))));
+  // Compress each tree-shaken module alone for attribution (LLP 1172.011 E1). These shares do not add up to a chunk:
+  // its minifier and compressor also share names and strings across modules.
+  if (production) {
+    const moduleBytes = {};
+    for (const chunk of built.output.filter(file => file.type === 'chunk')) {
+      moduleBytes[chunk.fileName] = Object.fromEntries(Object.entries(chunk.modules).filter(([, m]) => m.renderedLength > 0).map(([id, m]) => {
+        const code = Buffer.from(transformSync('module.js', m.code, { minify: true }).code);
+        return [moduleName(id), brotliCompressSync(code, { params: { [constants.BROTLI_PARAM_QUALITY]: 11, [constants.BROTLI_PARAM_SIZE_HINT]: code.length } }).length];
+      }));
+    }
+    writeFileSync(resolve(gen, 'module-bytes.json'), JSON.stringify(moduleBytes));
+  }
   await b.close();
 }
 

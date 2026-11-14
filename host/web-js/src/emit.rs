@@ -1007,8 +1007,18 @@ impl Em<'_> {
             || presence.contains("--exact-press-opacity-to:")
             || presence.contains("--exact-press-background-color:")
             || presence.contains("--exact-press-color:")
+            || !parts.looks.is_empty()
+            || plan
+                .node(NodesId(i))
+                .bindings
+                .iter()
+                .map(|b| plan.binding(b))
+                .any(|b| {
+                    b.kind == BindingKind::Prop && b.id == PropId::AccessibilityKeyShortcuts as u16
+                })
             || attrs.iter().any(|a| {
                 a.0 == "data-button-style"
+                    || a.0 == "aria-keyshortcuts"
                     || (a.0 == "role" && ["radiogroup", "tablist", "menu"].contains(&a.1.as_str()))
             })
         {

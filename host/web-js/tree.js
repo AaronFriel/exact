@@ -8,13 +8,10 @@ import { regions } from './regions.js';
 import { backdropValue as backdropCss } from './backdrop.js';
 import { onEnd, effect, say, inflight, After, Paint, Probes, Media, Links, Scrolls, Selects } from './rt.js';
 import { Adopt, adopting } from './mount.js';
-import { input } from './pieces.js';
 import { autofocusProp } from './focus.js';
 const SVG = 'http://www.w3.org/2000/svg';
 /** An element under `p`: its static class, attributes and text. */
 export function h(p, tag, cls, attrs, text, ns) {
-  // (a look snaps by its edges too, LLP 1121 D8)
-  if (attrs?.['aria-keyshortcuts'] != null || attrs?.['data-exact-looks'] != null) input();
   if (Adopt) {
     const e = adopt(p, tag, cls, attrs);
     if (tag === 'video' || tag === 'audio') Media.media(e, attrs);
@@ -185,7 +182,6 @@ const navigable = v => {
 };
 /** A dynamic prop, by the DOM name the live host uses (`applyProps`). */
 export function P(e, name, f) {
-  if (name === 'aria-keyshortcuts') input();
   if (name === 'data-scrolldocument') Docs.add(e);
   effect(() => {
     let v = f();

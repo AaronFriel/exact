@@ -812,14 +812,16 @@ async function drive(t, report, targetFail, dir, ws, js) {
   // The app's own tests on each executor.
   const tests = resolve(root, 'apps', t.app, 'app.test.contract');
   if (!t.contract && !t.urls && existsSync(tests)) {
-    const run = (url, browser = 'chrome', host = 'web') => new Promise(ok => {
-      const child = spawn('bun', ['scripts/agent.mjs', host, ...(host === 'web' ? ['--browser', browser, '--url', url] : []), '--app', t.app, '--test', tests], { cwd: root, stdio: ['ignore', 'pipe', 'pipe'] });
+    const run = (url, browser = 'chrome', host = 'web', dist = t.dist) => new Promise(ok => {
+      const child = spawn('bun', ['scripts/agent.mjs', host, ...(host === 'web' ? ['--browser', browser, '--url', url] : []), '--app', t.app, '--test', tests], {
+        cwd: root, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, ...(host === 'web' ? { EXACT_WEB_DIST: dist } : {}) },
+      });
       let output = ''; child.stdout.on('data', d => { output += d; }); child.stderr.on('data', d => { output += d; });
       child.on('error', error => ok({ output: output + error.message, status: 127 })); child.on('exit', status => ok({ output, status: status ?? 128 }));
     });
     const [w2, j2] = await Promise.all([serve(crossBrowser ? t.dist : t.wasm), serve(t.dist)]);
     const browsers = crossBrowser ? readyBrowsers : ['chrome'];
-    const [rw, ...results] = await Promise.all([run(w2.url), ...browsers.map(browser => run(j2.url, browser))]);
+    const [rw, ...results] = await Promise.all([run(w2.url, 'chrome', 'web', crossBrowser ? t.dist : t.wasm), ...browsers.map(browser => run(j2.url, browser))]);
     w2.close(); j2.close();
     const lines = s => s.split('\n').filter(l => l.startsWith('test '));
     const lw = lines(rw.output);
@@ -857,7 +859,7 @@ async function activation(t, report, fail, url, browser) {
   const step = `${crossBrowser ? `${browser} ` : ''}activation ${url}`;
   let S, early = null;
   try {
-    S = await open({ host: 'web', browser, app: t.app, url });
+    S = await open({ host: 'web', browser, app: t.app, webDist: t.dist, url });
     const ev = S.carrier.evaluate, page = new URL(url);
     page.searchParams.delete('agent');
     await ev(`location.href = ${JSON.stringify(page.href)}`).catch(() => {});
@@ -955,7 +957,7 @@ async function bootPress(t, report, fail, dist, browser) {
     });
     const port = await new Promise(ok => proxy.listen(0, '127.0.0.1', () => ok(proxy.address().port)));
     const url = `http://127.0.0.1:${port}/`;
-    S = await open({ host: 'web', browser, app: t.app, url });
+    S = await open({ host: 'web', browser, app: t.app, webDist: dist, url });
     const ev = S.carrier.evaluate;
     const q = id => `document.querySelector('#exact-root[data-boot] [data-testid="${id}"]')`;
     // Twice: the field edited without focus (the page's focus on <body>),
