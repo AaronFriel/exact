@@ -44,11 +44,20 @@ copied or archived checkout, or a fresh `HOME`, needs `exact setup` again.
 same set. On a CI worker, `bun <exact2>/scripts/exact.mjs setup --check
 --platform ios --device` checks the archive's prerequisites; `--platform
 android` checks the APK/AAB prerequisites, including JDK 17+ and the NDK's
-actual compiler paths. A scoped check fails when any of its rows is missing
+actual compiler paths. A scoped check fails when a prerequisite is missing
 and does not check unrelated web tools. Native `--platform` scopes are check-only;
 install commands are in the platform's CI recipe. `setup --platform web` installs
 [web prerequisites](#web-ci-preparation). The general check still reports
 optional tools separately (LLP 1086 D6).
+
+For Android, an `Android JDK JIT` row names an AArch64 JDK affected by
+[JDK-8335662](https://bugs.openjdk.org/browse/JDK-8335662), which can crash Gradle.
+This advisory appears in general and Android-scoped checks and does not block
+setup or a first Android build.
+Set `JAVA_HOME` to JDK 17.0.16 or later in 17, 21.0.8 or later in 21, or 24 or newer.
+Setup does not install or replace a JDK. Android builds warn before Gradle
+starts and name matching JVM crash logs after a failure. JVM options stay yours;
+the warning reports the affected version even with a JIT workaround enabled.
 
 ### Windows painter
 

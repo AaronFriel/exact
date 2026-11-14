@@ -96,6 +96,41 @@ export function androidJavaFix(env = process.env, platform = process.platform, s
   return `Android needs a JDK 17 or newer (${rejected} is unusable): set JAVA_HOME to a JDK directory${env.JAVA_HOME ? '' : ', or put java and javac on PATH'}`;
 }
 
+const JDK_CRASH_FIX = 'Set JAVA_HOME to JDK 17.0.16 or later in 17, 21.0.8 or later in 21, or JDK 24 or newer';
+
+/** JDK-8335662 affects C1's AArch64 OSR entry. Check the JVM's architecture, including a JVM run under Rosetta. */
+export function androidJdkRisk(settings) {
+  const version = /^\s*java\.version\s*=\s*(\S+)/m.exec(settings)?.[1];
+  const arch = /^\s*os\.arch\s*=\s*(\S+)/m.exec(settings)?.[1];
+  const parts = /^(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:\.\d+)*(?:[-+][\w.+-]+)?$/.exec(version ?? '');
+  if (!parts || !['aarch64', 'arm64'].includes(arch)) return null;
+  const major = Number(parts[1]), interim = Number(parts[2] ?? 0), update = Number(parts[3] ?? 0);
+  const fixed = major >= 24 || major === 17 && (interim > 0 || update >= 16) || major === 21 && (interim > 0 || update >= 8);
+  if (major < 17 || fixed) return null;
+  return `JDK ${version} on ${arch} can crash Gradle (JDK-8335662: C1 OSR entry, "Field too big for insn"). ${JDK_CRASH_FIX}`;
+}
+
+/** Inspect the JDK selected by androidJavaEnv without changing the caller's JVM options. */
+export function androidJavaRisk(env = process.env, platform = process.platform) {
+  const java = env.JAVA_HOME ? resolve(env.JAVA_HOME.replaceAll('"', ''), 'bin', platform === 'win32' ? 'java.exe' : 'java')
+    : Bun.which(platform === 'win32' ? 'java.exe' : 'java', { PATH: env.PATH ?? '' });
+  if (!java) return null;
+  const result = spawnSync(java, ['-XshowSettings:properties', '-version'], { env, encoding: 'utf8', timeout: 5000 });
+  return result.status === 0 ? androidJdkRisk(`${result.stderr ?? ''}\n${result.stdout ?? ''}`) : null;
+}
+
+function gradleCrashLogs(dir) {
+  let files;
+  try { files = readdirSync(dir).filter(file => /^hs_err_pid\d+\.log$/.test(file)); } catch { return; }
+  for (const file of files) {
+    const path = resolve(dir, file);
+    let log;
+    try { log = readFileSync(path, 'utf8'); } catch { continue; }
+    if (log.includes('Field too big for insn') && /assembler_aarch64|LIR_Assembler::osr_entry/.test(log))
+      console.error(`Gradle failed; ${path} matches the JVM crash JDK-8335662. It may be from an earlier run; check its date. ${JDK_CRASH_FIX}.`);
+  }
+}
+
 function sdkManager(env, platform) {
   const root = resolve(androidSdk(env), 'cmdline-tools'), suffix = platform === 'win32' ? '.bat' : '';
   const versions = existsSync(root) ? readdirSync(root).filter(v => v !== 'latest').sort((a, b) => b.localeCompare(a, undefined, { numeric: true })) : [];
@@ -780,10 +815,13 @@ async function gradleWithAdvice(command, args, advice) {
  * could not be started is said so. */
 export function runGradle(args, options, platform = process.platform, { studio, run = spawnSync, lockAdvice } = {}) {
   const env = androidJavaEnv(options.env, platform, studio) ?? options.env;
+  const risk = androidJavaRisk(env, platform);
+  if (risk) console.error(`warning: ${risk}`);
   const [command, ...prefix] = gradleWrapper(platform, env);
   const invocation = lockAdvice ? [process.execPath, ['--no-env-file', '-e', `await (${gradleWithAdvice})(...JSON.parse(process.argv[1]))`, JSON.stringify([command, [...prefix, ...args], lockAdvice])]] : [command, [...prefix, ...args]];
   const gradle = run(...invocation, { cwd: READER, stdio: 'inherit', ...options, env });
   if (gradle.error) console.error(`could not start Gradle (${command}): ${gradle.error.message}`);
+  if (gradle.status !== 0) gradleCrashLogs(options.cwd ?? READER);
   return gradle.status === 0;
 }
 

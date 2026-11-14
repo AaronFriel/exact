@@ -59,7 +59,7 @@ const { builtAppMatches, jsTargetBuild } = await import('../host/web/serve.mjs')
 const { signRelease } = await import('../host/apple/assets.mjs');
 const { appleCrossReport, CROSS_IOS_ROWS, hasCrossSdk, iosSimulatorTarget } = await import('../host/apple/sdk.mjs');
 const { chromium } = await import('./agent-launch.mjs');
-const { androidLockCommand, androidSdk, androidSdkPackages, androidSdkFix, androidJavaEnv, androidJavaFix, androidToolchainEnv } = await import('./agent-android.mjs');
+const { androidLockCommand, androidSdk, androidSdkPackages, androidSdkFix, androidJavaEnv, androidJavaFix, androidJavaRisk, androidToolchainEnv } = await import('./agent-android.mjs');
 const { hermesAndroidBundle } = await import('./hermes-android.mjs');
 const { guardFlags, helpText } = await import('./help.mjs');
 const { backendOrigin, literalBackendOrigin } = await import('../js/bake/src/typescript.mjs');
@@ -425,6 +425,7 @@ export async function setup({check = false, platform = null, device = false} = {
   }
   const rows = sdkReport(process.env, { only: platform, device });
   const report = [...(platform ? (await platformReport(platform, rows, { device })).map(row => ({ ...row, required: true })) : rows), cratesRow()];
+  if (platform === 'android') report.push(...rows.filter(row => row.name === 'Android JDK JIT'));
   printReport(report);
   const missing = report.filter(row => row.required && !row.ok);
   if (missing.length) throw new Error(`${missing.map(row => row.name).join(', ')} ${missing.length === 1 ? 'is' : 'are'} missing or differ; run exact setup (it installs what it can and names the rest)`);
@@ -602,6 +603,8 @@ export function sdkReport(env = process.env, { only = null, device = false, tv =
   if (only === 'android' || !only && existsSync(androidSdk(env))) {
     const java = androidJavaEnv(env);
     rows.push(row('Android JDK', java ? java.JAVA_HOME ?? 'java and javac on PATH' : '', 'JDK 17 or newer', !!java, java ? '' : androidJavaFix(env), 'Android'));
+    const risk = java && androidJavaRisk(java);
+    if (risk) rows.push(row('Android JDK JIT', java.JAVA_HOME ?? 'java on PATH', 'JDK without JDK-8335662', false, risk, 'Android'));
     let ndk = '', fault = '';
     try { ndk = androidToolchainEnv(env).ANDROID_NDK_HOME; } catch (error) { fault = error.message; }
     rows.push(row('Android NDK', ndk, 'NDK with the aarch64 toolchain', !!ndk, fault, 'Android'));

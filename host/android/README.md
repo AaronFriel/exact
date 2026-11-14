@@ -45,7 +45,16 @@ What changed on the way in, one commit each:
 
 It needs the Android SDK (`ANDROID_HOME`, else `~/Library/Android/sdk` or `~/Android/Sdk`) with platform 37.2 and an
 NDK (`ANDROID_NDK_HOME`, else the newest under the SDK), a JDK (17 or newer) and the Rust target
-(`exact setup` adds it to the pinned toolchain). It:
+(`exact setup` adds it to the pinned toolchain).
+
+On AArch64, JDK 17 before 17.0.16, 21 before 21.0.8, and JDK 18–20, 22 and 23 can crash Gradle's JVM
+([JDK-8335662](https://bugs.openjdk.org/browse/JDK-8335662)). `exact setup --check` reports the selected JDK,
+and the build warns before Gradle starts. Set `JAVA_HOME` to a fixed JDK: 17.0.16 or later in 17,
+21.0.8 or later in 21, or 24 or newer. Setup leaves JDK installation and selection to you, as it does the Android SDK.
+The warning does not change JVM options or disappear when you set a JIT workaround. After Gradle fails, a matching
+`hs_err_pid*.log` in its working directory is named; check its date, since it may belong to an earlier run.
+
+The build:
 
 1. writes the app's launcher icon and TV banner, from its manifest's `icons` (LLP 1163 D6), as resources under
    `app/build/<app>/icons/res/`: from a square `maskable` PNG an adaptive icon, with a `monochrome` glyph as its

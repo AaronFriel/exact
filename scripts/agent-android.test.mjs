@@ -1,6 +1,6 @@
 // The Android carrier's reader variables, drive setup and reverse mappings (agent-android.mjs).
 // Stand-in adb devices exercise relay cleanup without an emulator or a device.
-import { test, expect } from 'bun:test';
+import { test, expect, spyOn } from 'bun:test';
 import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -12,6 +12,95 @@ import { androidJavaEnv, androidSdk, androidSdkPackages, androidScreenState, rev
 
 const screenFixtures = resolve(import.meta.dir, 'fixtures/android-screen');
 const screenDump = (state, kind) => readFileSync(resolve(screenFixtures, `${state}.${kind}.txt`), 'utf8');
+
+test('Android names JDK-8335662 only for affected AArch64 JDK versions', async () => {
+  const { androidJdkRisk } = await import('./agent-android.mjs');
+  const settings = (version, arch = 'aarch64') => `Property settings:\n    java.version = ${version}\n    os.arch = ${arch}\n`;
+  for (const version of ['17', '17.0.6', '17.0.15+6', '18.0.2', '19', '20.0.2', '21', '21.0.7', '22', '23.0.2']) {
+    const risk = androidJdkRisk(settings(version));
+    expect(risk).toContain(`JDK ${version} on aarch64`);
+    expect(risk).toContain('JDK-8335662');
+    expect(risk).toContain('17.0.16');
+    expect(risk).toContain('21.0.8');
+    expect(risk).toContain('24');
+    expect(risk).toContain('JAVA_HOME');
+  }
+  for (const version of ['11.0.20', '16.0.2', '17.0.16', '17.0.16+8', '17.0.17', '21.0.8', '21.0.8.1', '24', '25.0.1'])
+    expect(androidJdkRisk(settings(version))).toBeNull();
+  for (const arch of ['x86_64', 'amd64', 'x86', 'arm']) expect(androidJdkRisk(settings('17.0.6', arch))).toBeNull();
+  expect(androidJdkRisk(settings('21.0.7', 'arm64'))).toContain('arm64');
+  for (const text of ['', 'no properties', settings('unknown'), 'java.version = 17.0.6']) expect(androidJdkRisk(text)).toBeNull();
+});
+
+test.skipIf(process.platform === 'win32')('setup and Gradle name the selected affected JDK before running Gradle', async () => {
+  const { sdkReport, platformReport } = await import('./exact.mjs');
+  const { bringPlatform } = await import('./app-shells.mjs');
+  const { runGradle } = await import('./agent-android.mjs');
+  const dir = mkdtempSync(resolve(tmpdir(), 'exact-jdk-risk-'));
+  const errors = spyOn(console, 'error').mockImplementation(() => {});
+  try {
+    mkdirSync(resolve(dir, 'bin'));
+    const java = version => writeFileSync(resolve(dir, 'bin/java'), `#!/bin/sh\necho 'openjdk version "${version}"' >&2\necho '    java.version = ${version}' >&2\necho '    os.arch = aarch64' >&2\n`, { mode: 0o755 });
+    writeFileSync(resolve(dir, 'bin/javac'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+    const env = { ...process.env, JAVA_HOME: dir, JAVA_TOOL_OPTIONS: '-Xint' };
+    java('17.0.6');
+    const rows = sdkReport(env, { only: 'android' });
+    const risk = rows.find(row => row.name === 'Android JDK JIT');
+    expect(risk?.ok).toBe(false);
+    expect(risk?.fix).toContain('17.0.6');
+    const report = await platformReport('android', rows);
+    // Other prerequisites are ready: the affected JDK must not refuse a first Android build.
+    const ready = report.map(row => row.name === 'Android JDK JIT' ? row : { ...row, ok: true });
+    const app = resolve(dir, 'app'); mkdirSync(app);
+    writeFileSync(resolve(app, 'app.json'), JSON.stringify({ name: 'Fixture', app: { id: 'dev.exact.fixture', name: 'Fixture' }, host: { web: {} } }));
+    writeFileSync(resolve(app, 'Cargo.toml'), '[workspace]\nmembers = []\n');
+    expect((await bringPlatform(app, 'android', { report: ready })).refused).toBeUndefined();
+    expect(JSON.parse(readFileSync(resolve(app, 'app.json'), 'utf8')).host.android).toBeDefined();
+    expect(report.some(row => row.name === risk?.name)).toBe(false);
+    const scoped = spawnSync(process.execPath, [resolve(import.meta.dir, 'exact.mjs'), 'setup', '--check', '--platform', 'android'], {
+      env, encoding: 'utf8', timeout: 30_000,
+    });
+    expect(scoped.error).toBeUndefined();
+    expect(scoped.stdout).toContain('Android JDK JIT');
+    expect(scoped.stdout).toContain('JDK-8335662');
+    expect(scoped.stderr).not.toMatch(/Android JDK JIT[^\n]*missing or differ/);
+    expect(sdkReport(env, { only: 'web' }).some(row => row.name === 'Android JDK JIT')).toBe(false);
+    let called = 0;
+    const run = (_command, _args, options) => {
+      expect(options.env.JAVA_HOME).toBe(dir);
+      expect(errors.mock.calls.flat().join('\n')).toContain('JDK-8335662');
+      called++; return { status: 0 };
+    };
+    expect(runGradle(['help'], { env, cwd: dir }, process.platform, { run })).toBe(true);
+    expect(called).toBe(1);
+    errors.mockClear();
+    java('17.0.16');
+    expect(sdkReport(env, { only: 'android' }).some(row => row.name === 'Android JDK JIT')).toBe(false);
+    expect(runGradle(['help'], { env, cwd: dir }, process.platform, { run: () => ({ status: 0 }) })).toBe(true);
+    expect(errors).not.toHaveBeenCalled();
+  } finally { errors.mockRestore(); rmSync(dir, { recursive: true, force: true }); }
+}, 60_000);
+
+test('a failed Gradle run names a matching JVM crash log, including one left by an earlier run', async () => {
+  const { runGradle } = await import('./agent-android.mjs');
+  const dir = mkdtempSync(resolve(tmpdir(), 'exact-gradle-crash-'));
+  const errors = spyOn(console, 'error').mockImplementation(() => {});
+  try {
+    const log = resolve(dir, 'hs_err_pid123.log');
+    const run = status => runGradle(['help'], { cwd: dir, env: { JAVA_HOME: resolve(dir, 'absent'), PATH: '' } }, process.platform, { run: () => ({ status }) });
+    writeFileSync(log, '# SIGSEGV in an unrelated library\n');
+    expect(run(1)).toBe(false);
+    expect(errors).not.toHaveBeenCalled();
+    writeFileSync(log, '# Internal Error (assembler_aarch64.hpp:267)\n# guarantee(chk == -1 || chk == 0) failed: Field too big for insn\nV LIR_Assembler::osr_entry()\n');
+    expect(run(0)).toBe(true);
+    expect(errors).not.toHaveBeenCalled();
+    expect(run(1)).toBe(false);
+    expect(errors.mock.calls.flat().join('\n')).toContain(log);
+    expect(errors.mock.calls.flat().join('\n')).toContain('JDK-8335662');
+    expect(errors.mock.calls.flat().join('\n')).toContain('earlier run');
+    expect(errors.mock.calls.flat().join('\n')).toContain('JAVA_HOME');
+  } finally { errors.mockRestore(); rmSync(dir, { recursive: true, force: true }); }
+});
 
 test('the Android reader variable filter and activity allowlist include the auth fixture; loopback URLs select ports', async () => {
   const { readerVariables, reversedPorts } = await import('./agent-android.mjs');
