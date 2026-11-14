@@ -54,11 +54,13 @@ extension NodeView {
     #endif
 
     /// Its words: the text it shows, its descendants' joined.
-    var accessibleText: String { contentText(naming: false) }
+    package var accessibleText: String { contentText(naming: false) }
     /// `naming`: accname's name from content (step 2F), in which a
     /// descendant's own label stands for its content, so a labelled image
     /// inside a link counts in the link's name, as on the web.
-    private func contentText(naming: Bool) -> String {
+    /// `unshown`: the words of a subtree CSS or `aria-hidden` hides are read
+    /// too, which only an explicit reference to it asks for (`labelledBy`).
+    private func contentText(naming: Bool, unshown: Bool = false) -> String {
         // A Markdown text reads as the words it draws, its syntax hidden (LLP 1045,
         // "Accessibility"), each inline atom its accessible name (LLP 1045.000 D8).
         if let text = props["text"], props["markup"] == "markdown", let plain = MarkdownLink.installed?.plain(text, range: nil, atoms: props["atoms"] ?? "", faces: props["atomFaces"] ?? "", spoken: true) { return plain }
@@ -67,20 +69,33 @@ extension NodeView {
         // read from the kernel, current on its first batch (LLP 1069.011.000 D1).
         if isNativeButton { return face?.title ?? "" }
         if isParagraph { return visibleParagraphText }
-        // accname: an `aria-hidden` child names nothing (habits F16: a tab's icon glyph).
-        let children = container.subviews.compactMap { $0 as? NodeView }.filter { $0.props["accessibilityElementsHidden"] != "true" }
-        return children.map { naming ? $0.authoredLabel ?? $0.contentText(naming: true) : $0.accessibleText }.filter { !$0.isEmpty }.joined(separator: " ")
+        // accname step 2A: a child that is not rendered, or is `aria-hidden`, names
+        // nothing (habits F16: a tab's icon glyph). One the host hides still
+        // names: a native control draws its words (a grouped list's sections,
+        // a segmented control's tabs).
+        let children = container.subviews.compactMap { $0 as? NodeView }.filter { unshown || !$0.leftOut }
+        return children.map { naming ? $0.authoredLabel ?? $0.contentText(naming: true) : $0.contentText(naming: false, unshown: unshown) }.filter { !$0.isEmpty }.joined(separator: " ")
     }
+    /// Not rendered (`display: none`) or left out of the accessibility tree (`aria-hidden`).
+    private var leftOut: Bool { style["display"]?.string == "none" || props["accessibilityElementsHidden"] == "true" }
     /// Its `aria-labelledby` text, else its `aria-label`, unless empty
     /// (accname: an empty label names nothing).
-    var authoredLabel: String? { labelledBy ?? props["accessibilityLabel"].flatMap { $0.isEmpty ? nil : $0 } }
-    /// accname's first step (ledger2 Rough 3): the text of the elements
+    package var authoredLabel: String? { labelledBy ?? props["accessibilityLabel"].flatMap { $0.isEmpty ? nil : $0 } }
+    /// accname's step 2B (ledger2 Rough 3): the text of the elements
     /// `aria-labelledby` names, in order — each by its own label or content,
-    /// never its own `aria-labelledby`, as accname does not recurse.
+    /// never its own `aria-labelledby`, as accname does not recurse. An
+    /// element that is itself hidden, or is inside a hidden one, still names:
+    /// all its words are read, shown or not (step 2A's exception for a hidden
+    /// node the relation references directly). Hidden by CSS or `aria-hidden`,
+    /// never by a host that draws the element some other way.
     var labelledBy: String? {
         guard let refs = props["accessibilityLabelledBy"], let presenter else { return nil }
         let text = refs.split(separator: " ").compactMap { presenter.chrome.named[String($0)]?.min().flatMap { presenter.views[$0] } }
-            .map { $0.props["accessibilityLabel"].flatMap { $0.isEmpty ? nil : $0 } ?? $0.accessibleText }
+            .map { named -> String in
+                if let label = named.props["accessibilityLabel"], !label.isEmpty { return label }
+                let hidden = sequence(first: named as PlatformView, next: \.superview).contains { ($0 as? NodeView)?.leftOut == true }
+                return named.contentText(naming: false, unshown: hidden)
+            }
             .filter { !$0.isEmpty }.joined(separator: " ")
         return text.isEmpty ? nil : text
     }

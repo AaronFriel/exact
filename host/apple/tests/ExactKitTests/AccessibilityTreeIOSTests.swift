@@ -235,6 +235,40 @@ final class AccessibilityTreeIOSTests: XCTestCase {
     }
     private func elements(_ ax: [String: Any]) -> [[String: Any]] { ax["elements"] as? [[String: Any]] ?? [] }
 
+    /// A tablist's tabs are hidden by the host while a segmented control draws their words: what the
+    /// tablist labels, and a live region that holds it, read the same once the control is adopted.
+    func testATablistASegmentedControlDrawsStillNamesAndSpeaks() throws {
+        let p = try fixture()
+        p.apply(wireBatch([
+            ["op": "create", "id": 29, "kind": "view", "props": ["accessibilityLive": "polite"]],
+            ["op": "create", "id": 30, "kind": "view", "props": ["id": "views"]],
+            ["op": "create", "id": 31, "kind": "button", "handlers": ["press"], "props": ["accessibilityRole": "tab"]],
+            ["op": "create", "id": 32, "kind": "button", "handlers": ["press"], "props": ["accessibilityRole": "tab"]],
+            ["op": "create", "id": 33, "kind": "text", "props": ["text": "One"]],
+            ["op": "create", "id": 34, "kind": "text", "props": ["text": "Two"]],
+            ["op": "create", "id": 35, "kind": "control", "props": ["type": "checkbox", "accessibilityLabelledBy": "views"], "handlers": ["change"]],
+            ["op": "children", "id": 31, "ids": [33]], ["op": "children", "id": 32, "ids": [34]],
+            ["op": "children", "id": 30, "ids": [31, 32]], ["op": "children", "id": 29, "ids": [30]],
+            ["op": "children", "id": 1, "ids": [2, 3, 4, 29, 35]],
+            ["op": "frame", "id": 29, "x": 0, "y": 220, "w": 250, "h": 40],
+            ["op": "frame", "id": 30, "x": 0, "y": 0, "w": 250, "h": 40],
+            ["op": "frame", "id": 35, "x": 0, "y": 270, "w": 22, "h": 22],
+        ]))
+        let live = try XCTUnwrap(p.views[29]), tab = try XCTUnwrap(p.views[31]), control = try XCTUnwrap(p.controls.controls[35])
+        func reads(_ when: String) {
+            p.syncAccessibility()
+            XCTAssertEqual(control.accessibilityLabel, "One Two", when)
+            XCTAssertEqual(live.liveText, "One Two", when)
+        }
+        XCTAssertNil(p.segments.control(of: 30))
+        XCTAssertFalse(tab.isHidden)
+        reads("as authored")
+        p.apply(wireBatch([["op": "props", "id": 30, "set": ["accessibilityRole": "tablist"]]]))
+        XCTAssertNotNil(p.segments.control(of: 30))
+        XCTAssertTrue(tab.isHidden)
+        reads("drawn by the segmented control")
+    }
+
     func testProjectedSegmentsJoinTheirAuthoredTabsAndStaySuppressedWithTheirOwner() throws {
         guard Presenter.axRuntimeLoaded else { throw missing("accessibility", "UIKit's segments need its accessibility runtime") }
         let p = try fixture()

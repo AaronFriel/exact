@@ -146,7 +146,7 @@ extension Runtime {
     /// What native containers cover of boxes (LLP 1075.003 §3.5), under one
     /// layout: `edges` add to a box's padding; `whole` lays it out as
     /// `display: none`; nil clears.
-    func covers(_ covers: [(UInt32, HostCover?)]) -> Batch {
+    package func covers(_ covers: [(UInt32, HostCover?)]) -> Batch {
         return on(layout: true) {
             var bytes = Data(capacity: covers.count * 24)
             for (view, cover) in covers {

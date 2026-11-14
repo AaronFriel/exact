@@ -66,9 +66,14 @@ impl<D: DataSource> Presenter<D> {
         // A press on it is a press on the switch. A switch left out of the
         // tree leaves the row as it is, and the switch's `aria-disabled` is
         // the node's, as it would be its own.
+        // A row with a text or an image that has a press of its own is no such row:
+        // each of its parts is walked as it is written.
         let kernel = self.host.kernel();
-        let toggle = (kernel.grouped_toggle(id).and_then(|t| kernel.node(t)))
-            .filter(|t| !self.access_excluded(t));
+        let acts = |id| (self.host.runner().handlers_of(id)).contains(&EventKind::Press);
+        let toggle = (kernel
+            .grouped_toggle(id, &acts)
+            .and_then(|t| kernel.node(t)))
+        .filter(|t| !self.access_excluded(t));
         if let Some((target, kind)) =
             toggle.and_then(|t| Some((t, ControlKind::of(t.node_type, t.props)?)))
         {
