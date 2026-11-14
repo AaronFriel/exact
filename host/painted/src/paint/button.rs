@@ -27,13 +27,13 @@ fn active_background(node: &NodeRef<'_>, dark: bool, down: bool) -> Option<[u8; 
 
 /// The neutral look's button type (LLP 1115.000 D17), as the page's sheet
 /// sets it: the size the button inherits, or the one its `controlSize`
-/// names in rem (LLP 1069.011.001 D8), at weight 500 on a line 1.25 of it.
+/// names in rem (LLP 1069.011.001 D8), at weight 500 on its font's own line.
 /// A size or weight the author wrote is theirs.
 fn neutral_typography(style: &StyleProps, size: Option<f32>) -> StyleProps {
     let mut out = style.clone();
     out.font_family = 0;
     out.font_style = exact_kernel::FontStyle::Normal;
-    out.line_height = exact_kernel::LineHeight::Number(look::number(metric::CONTROL_LINE_HEIGHT));
+    out.line_height = exact_kernel::LineHeight::Normal;
     out.letter_spacing = 0.0;
     if let Some(size) = size.filter(|_| !style.mask.has(StyleId::FontSize)) {
         out.font_size = size;

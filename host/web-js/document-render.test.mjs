@@ -32,7 +32,7 @@ test('bare text styles keep their fills and inherited rows through server adopti
       expect(before).toEqual({
         alone: ['600', 'normal'], 'clear-above': ['600', 'normal'],
         'clear-own': ['400', 'normal'], nested: ['400', 'normal'], relative: ['700', '40px'],
-        'shorthand-child': ['600', 'normal'], 'heading-child': ['700', 'normal'], 'control-child': ['500', '20px'], 'control-own': ['500', '20px'], ...changing(weighted),
+        'shorthand-child': ['600', 'normal'], 'heading-child': ['700', 'normal'], 'control-child': ['500', 'normal'], 'control-own': ['500', 'normal'], ...changing(weighted),
       });
       // Static fills must become classes, so adoption cannot leave a stale inline weight.
       const alone = html('').match(/<[^>]*data-testid="alone"[^>]*>/)?.[0];

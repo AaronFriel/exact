@@ -45,12 +45,13 @@
      on the app's root is the canvas (`--exact-root-background`, web-js canvas.rs). */
   html { background-color: var(--exact-root-background, var(--exact-background)); color: var(--exact-label); }
 
-  /* Buttons. One box: 36 px (44 on a touch device) in every engine, so a line's height is said (`normal` is each
-     engine's own, 18 px or 20 for the system font), and a 1 px edge every style keeps so they line up. `bordered` and
-     the unsaid button are an outline in the label's ink; `gray` a neutral fill; `filled` the accent under the ink that
-     reads on it; `tinted` and `plain` the accent as ink. `destructive` is the red as the button's accent, so an outline
-     or a grey button takes red ink. */
-  #exact-root button[data-button-style] { min-height: 2.25em; min-width: 2.25em; border: 1px solid transparent; padding: .4375em 1em; line-height: 1.25; --exact-said-line-height: ; }
+  /* Buttons. One box: 36 px (44 on a touch device) in every engine, its minimum height, and a 1 px edge every style
+     keeps so they line up. The title sits on its font's own line (`normal`), as a UIKit or AppKit control lays out its
+     label, so a tall face is drawn whole and grows the box; the system font's line, 18 px or 20 by engine, fits in
+     it. `bordered` and the unsaid button are an outline in the label's ink; `gray` a neutral fill; `filled` the accent
+     under the ink that reads on it; `tinted` and `plain` the accent as ink. `destructive` is the red as the button's
+     accent, so an outline or a grey button takes red ink. */
+  #exact-root button[data-button-style] { min-height: 2.25em; min-width: 2.25em; border: 1px solid transparent; padding: .4375em 1em; line-height: normal; --exact-said-line-height: ; }
   #exact-root button[data-button-style]:has(> img):where(:not(:has(> :not(img, [data-exact-text]:empty)))):not(:is([navigationPresentation="modal"] > header, [navigationPresentation="modal"] > :where([data-exact-list-item]) > header, [navigationPresentation="modal"] > :first-child:where(:not([data-exact-list-item])) > header:first-child, [navigationPresentation="modal"] > :where([data-exact-list-item]:first-child) > :first-child > header:first-child, [navigationPresentation="modal"] > :first-child:where(:not([data-exact-list-item])) > :where([data-exact-list-item]):first-child > header, [navigationPresentation="modal"] > :where([data-exact-list-item]:first-child) > :first-child > :where([data-exact-list-item]):first-child > header):where(:not([data-exact-site], [data-exact-said~="appearance"])) button[aria-label]:not(:is(h1, h2, h3, h4, h5, h6, [role="heading"]) ~ :has(> img[data-symbol-source="symbol:close"]))) { padding-inline: .5em; }
   /* Mini and small keep their mouse floor on touch devices (`--exact-touch-floor: 0px`, LLP 1069.011.001 D8).
      Written padding removes the floor, as UIKit's contentInsets do, and can make targets smaller than WCAG 2.5.8's

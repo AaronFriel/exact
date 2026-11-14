@@ -365,6 +365,7 @@ impl Em<'_> {
             StyleId::LineClamp if parts.props.contains_key("data-button-style") => vec![
                 ("--exact-button-clamp".into(), String::new(), Some("v=>v>0?v:null".into())),
                 ("--exact-button-title-display".into(), String::new(), Some("v=>v>0?\"-webkit-box\":null".into())),
+                ("--exact-button-title-overflow".into(), String::new(), Some("v=>v>0?\"hidden\":null".into())),
             ],
             StyleId::LineClamp => {
                 let display = parts.css.split(';').find_map(|d| d.strip_prefix("display:"));
@@ -387,6 +388,7 @@ impl Em<'_> {
                     ("overflow".into(), String::new(), when("\"hidden\"")),
                     ("--exact-button-clamp".into(), String::new(), Some("v=>v==null?null:v>0?v:0".into())),
                     ("--exact-button-title-display".into(), String::new(), Some("v=>v==null?null:v>0?\"-webkit-box\":\"block\"".into())),
+                    ("--exact-button-title-overflow".into(), String::new(), Some("v=>v==null?null:v>0?\"hidden\":\"clip\"".into())),
                 ]
             }
             // @ref LLP 1077 D14 — host-owned, as `-exact-press-scale`: the custom
