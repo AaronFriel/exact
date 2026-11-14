@@ -305,7 +305,7 @@ its end. A production bake collects nothing.
 | `perf` | the runner's table by plan site. `perf frames health`, `report`, `capture` and `live` read the reader's own frames in the Apple host's formats (above, "Frame timing"); `perf frames track` answers unavailable |
 | `fail fetch`, `pass fetch`, a test's `reload` | work (Shelf's tests use them) |
 | `check` | refused by `agent.mjs` for every Android carrier ("the web and iOS hosts carry it") |
-| `--plan`, `--world`, a launch URL | refused: the reader boots the plan its APK bakes. `--size` is the phone's. `resize`, a drag and a wheel were not tried |
+| `--plan`, `--world`, a launch URL | refused: the reader boots the plan its APK bakes. `--size` is refused too, since the reader runs at the phone's size, and a test that names a `size` is skipped with that reason (`--headless` takes a size). `resize`, a drag and a wheel were not tried |
 | `tree --ax` | the reader's own answer ("Accessibility", below): what Android has for the window in front, joined to the views |
 
 Shelf's own tests (`apps/shelf/app.test.contract`, eleven) pass on the reader. They found three things on the way,

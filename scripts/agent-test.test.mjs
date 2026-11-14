@@ -982,3 +982,34 @@ test('replay selects the original ordinal among duplicate names and host variant
     expect(r.stdout).toContain('completed');
   } finally {rmSync(dir, {recursive:true, force:true});}
 }, 30000);
+
+test('the APK carrier skips a test that names a size, saying why, and refuses a drive\'s --size (#547)', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'exact-test-apk-size-')), script = join(dir, 'check.mjs');
+  writeFileSync(join(dir, 'app.contract'), 'component App\n  view\n    text "Test"\n');
+  writeFileSync(join(dir, 'app.test.contract'), 'test "wide"\n  size 1280x800\n  expect state ready == true\ntest "phone"\n  expect state ready == true\n');
+  writeFileSync(script, `
+    import assert from 'node:assert/strict';
+    import {mock} from 'bun:test';
+    const sizes = [];
+    mock.module(${JSON.stringify(fileURLToPath(new URL('./agent.mjs', import.meta.url)))}, () => ({open: async (o) => {
+      sizes.push(o.size);
+      return {host:'android', now:0, op:async()=>({clock:0,lines:[]}), clock:async()=>({}), state:async()=>({mutationRequests:0,slots:{ready:true}}), logs:async()=>({lines:[]}), close:async()=>{}};
+    }}));
+    const {runTests} = await import(${JSON.stringify(fileURLToPath(new URL('./agent-test.mjs', import.meta.url)))});
+    const file = ${JSON.stringify(join(dir, 'app.test.contract'))};
+    const r = await runTests({host:'android', reader:true, app:${JSON.stringify(dir)}, file});
+    assert.equal(r.failed, 0, JSON.stringify(r));
+    assert.equal(r.passed, 1);
+    assert.equal(r.results[0].skipped, "size 1280x800: the APK runs at the phone's size; --headless takes it");
+    assert.deepEqual(sizes, [undefined], 'only the phone-sized test opens the app');
+    await assert.rejects(runTests({host:'android', reader:true, app:${JSON.stringify(dir)}, file, size:[1280, 800]}), /--size does not reach the APK/);
+    const headless = await runTests({host:'android', reader:false, app:${JSON.stringify(dir)}, file});
+    assert.equal(headless.passed, 2, '--headless takes the size');
+    console.log('completed');
+  `);
+  try {
+    const r = spawnSync(process.execPath, [script], {encoding:'utf8', timeout:60000});
+    expect(r.status, r.stdout + r.stderr).toBe(0);
+    expect(r.stdout).toContain('completed');
+  } finally {rmSync(dir, {recursive:true, force:true});}
+}, 60000);

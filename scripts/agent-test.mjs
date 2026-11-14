@@ -642,6 +642,9 @@ async function propertyFailure(p, line, state, previous, s, file, test, step, in
  */
 export async function runTests({ host, browser, file, plan, app, size, env, webDist, device = false, phone, reader, url, seed, locale, formatLocale, timeZone, epoch, failFetch, storage = 'test', touch = 'agent', chrome: bars = 'agent', scale, atEnd, atStep, atLine, atResult, port, running, only, testIndex, replayLaunch, replayShots } = {}) {
   const root = resolve(fileURLToPath(new URL('..', import.meta.url))), selected = resolveApp(app);
+  // The APK carrier runs at the phone's size (agent-stdio.mjs reads `reader` the same way).
+  const apk = host === 'android' && (reader ?? !!process.env.EXACT_ANDROID_READER);
+  if (apk && size) throw new Error('test android: --size does not reach the APK, which runs at the phone\'s size; --headless takes it');
   webDist ??= defaultWebDist(selected);
   if (host === 'web' && !url) await backendPreflight(selected, resolve(webDist));
   // A fetch prefix outside every grant fails nothing (sb4 farm wave 4, lane 070: an origin moved in app.ts only).
@@ -722,6 +725,8 @@ export async function runTests({ host, browser, file, plan, app, size, env, webD
     }
     // Replay uses the already-resolved facts, including an authored `epoch now` (LLP 1116.007 D3.4).
     if (replayLaunch) Object.assign(facts, replayLaunch);
+    // A size the carrier cannot give: run at another, the test would fail on what that size was to show.
+    if (apk && facts.size) { landed({ name: t.name, index: n, failures: [], notes, skipped: `size ${facts.size.join('x')}: the APK runs at the phone's size; --headless takes it` }); continue; }
     // A zone or locale the driver refuses fails this test at its line, not the run. `epoch now` is read here, once
     // a test, so a `reload` relaunches from the same date on every host. `facts.epoch` is the date at the clock's zero
     // of the launch now running: a `reload` moves it on by the virtual time that launch reached (LLP 1116.009 D1).
