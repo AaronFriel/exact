@@ -1,6 +1,6 @@
 // What a Mac build signs that only a provisioning profile authorizes (Apple
 // TN3125; LLP 1133.010 D7): the device rows' Mac entitlements (push, App
-// Attest, the Declared Age Range), the keychain group a locked secret is kept
+// Attest, the Declared Age Range, Group Activities), the keychain group a locked secret is kept
 // in (a Mac keeps one only in the data-protection keychain, whose access
 // groups the signature names, TN3137), and a passkey's associated domains.
 // The build picks a macOS profile for the app that allows them all, signs
@@ -22,12 +22,13 @@ export function presenceLines(ceiling = '') {
 const KEYCHAIN = 'keychain-access-groups', DOMAINS = 'com.apple.developer.associated-domains';
 /** Each device row's Mac profile entitlement (`reach.profileEntitlements`, runner/src/device.rs): its line, what the
  * app reports while it is not signed, and whether a release without it is refused. A Mac release without push ships,
- * reporting it unavailable, as Android and the web do (LLP 1133.004 §9 P7); the other two are refused (LLP 1133.028
- * D17). */
+ * reporting it unavailable, as Android and the web do (LLP 1133.004 §9 P7), and so does one without SharePlay, whose
+ * package is not exact2's to name (LLP 1133.001.000 D3); App Attest and the age range are refused (LLP 1133.028 D17). */
 const ROW_EFFECTS = {
   'com.apple.developer.aps-environment': ['device.push', 'pushPermissionState().available is false and subscribePush fails NotSupportedError', false],
   'com.apple.developer.devicecheck.appattest-environment': ['device.attestation', 'attestationStatus().available is false and attest fails NotSupportedError', true],
   'com.apple.developer.declared-age-range': ['device.age-range', 'ageRangeStatus().available is false and requestAgeRange fails NotSupportedError', true],
+  'com.apple.developer.group-session': ['device.shareplay', 'SharePlay is unavailable to the app', false],
 };
 
 /** What a macOS build needs a profile for, from its bake (`compat`): `{ entitlement, lines, effect, mandatory }`
@@ -60,7 +61,7 @@ export function macAllows(p, app, name) {
 
 const signingChoice = method => method === 'developerid'
   ? 'set EXACT_DEVELOPER_ID=<sha1> to choose a Developer ID Application identity'
-  : 'set DEVELOPMENT_TEAM=<team-id> or EXACT_IDENTITY=<sha1> to choose an Apple Development identity, or EXACT_IDENTITY=- to sign ad hoc (drops Mac extensions, leaves push, App Attest, age range, keychain-access groups and passkeys unsigned, and makes stored login-keychain items prompt after rebuilds)';
+  : 'set DEVELOPMENT_TEAM=<team-id> or EXACT_IDENTITY=<sha1> to choose an Apple Development identity, or EXACT_IDENTITY=- to sign ad hoc (drops Mac extensions, leaves push, App Attest, age range, SharePlay, keychain-access groups and passkeys unsigned, and makes stored login-keychain items prompt after rebuilds)';
 const teamSelectedByEnvironment = (team, method) => method === 'development' && !process.env.EXACT_IDENTITY && team === process.env.DEVELOPMENT_TEAM?.trim();
 
 /** The macOS profile a build of `app` signs `required` under: for its id or the team's wildcard, unexpired, of the

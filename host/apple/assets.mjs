@@ -569,7 +569,7 @@ export const macReleaseEntitlements = (compat, widgets = {}) => {
 /** The keys a macOS provisioning profile authorizes (presence.mjs `macProfileEntitlements`). */
 export const PROFILE_KEYS = ['com.apple.application-identifier', 'com.apple.developer.team-identifier', 'keychain-access-groups',
   'com.apple.developer.aps-environment', 'com.apple.developer.devicecheck.appattest-environment', 'com.apple.developer.declared-age-range',
-  'com.apple.developer.associated-domains'];
+  'com.apple.developer.associated-domains', 'com.apple.developer.group-session'];
 
 /** Of `bundle`'s signed entitlements, those a profile authorizes; `signed`: its entitlements as a plist (a test's). */
 export function profileEntitlements(bundle, signed = run('codesign', ['-d', '--entitlements', '-', '--xml', bundle], { encoding: 'utf8', stdio: 'pipe' }).stdout) {

@@ -502,6 +502,18 @@ pub const DEVICES: &[Device] = &[
         tvos: false,
         ..ROW
     },
+    // Group Activities, for a package's SharePlay session (LLP 1133.001.000
+    // D3): nothing is asked here, since SharePlay's own interface does the
+    // asking. The entitlement is a Boolean (Apple, "Group Activities
+    // Entitlement"); a Mac takes it only with a profile. Not on tvOS.
+    Device {
+        name: "shareplay",
+        purpose: false,
+        ios_entitlements: &["com.apple.developer.group-session"],
+        macos_profile: &["com.apple.developer.group-session"],
+        tvos: false,
+        ..ROW
+    },
     // App Tracking Transparency (D13): iOS and tvOS alone; Apple lists the
     // key for no Mac.
     Device {
@@ -826,6 +838,21 @@ mod tests {
             ]
         );
         assert!(!rows[1].device.tvos && rows[0].device.tvos && rows[2].device.tvos);
+    }
+
+    /// LLP 1133.001.000 D3: SharePlay names no purpose and signs Group
+    /// Activities' Boolean entitlement, on iOS and under a Mac profile.
+    #[test]
+    fn shareplay_signs_the_group_session_entitlement() {
+        let rows = device_grants("device.shareplay").unwrap();
+        let row = rows[0].device;
+        assert!(rows[0].purpose.is_empty());
+        assert_eq!(row.ios_entitlements, ["com.apple.developer.group-session"]);
+        assert!(row.ios_entitlement_values.is_empty(), "a Boolean");
+        assert_eq!(row.macos_profile, ["com.apple.developer.group-session"]);
+        assert!(!row.tvos && row.ios.is_empty() && row.macos.is_empty() && row.web.is_none());
+        let errors = device_grants("device.shareplay purpose.play").unwrap_err();
+        assert!(errors[0].contains("names no purpose"), "{errors:?}");
     }
 
     #[test]

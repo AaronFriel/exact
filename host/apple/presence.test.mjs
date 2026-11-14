@@ -253,6 +253,17 @@ test('App Attest and the age range: a Mac build without a profile signs neither,
   expect([entitlementValue('aps-environment', true), entitlementValue('aps-environment', false)]).toEqual(['development', 'production']);
 });
 
+test('SharePlay: a Mac build without a profile signs no Group Activities, and a release ships without it (LLP 1133.001.000 D3)', async () => {
+  const { entitlementValue, macProfileEntitlements } = await import('./presence.mjs');
+  const key = 'com.apple.developer.group-session', compat = bake('device.shareplay', [key]), said = [];
+  expect(macProvisioning(app, compat, { release: true, find: none, log: (l) => said.push(l) })).toBeNull();
+  expect(said).toEqual([expect.stringMatching(/^device\.shareplay: this build signs no com\.apple\.developer\.group-session, since .*: SharePlay is unavailable to the app\.$/)]);
+  expect(macProfileNeeds(compat)).toEqual([{ entitlement: key, lines: 'device.shareplay', effect: 'SharePlay is unavailable to the app', mandatory: false }]);
+  expect(entitlementValue(key, true)).toBe(true);
+  const profile = { prefix: 'TEAM', team: 'TEAM', dev: true };
+  expect(macProfileEntitlements(app, profile, macProfileNeeds(compat), compat)[key]).toBe(true);
+});
+
 test('a release keeps what the build signed under its profile, and nothing else of its signature (LLP 1133.010 D7)', async () => {
   const { profileEntitlements, plistFile } = await import('./assets.mjs');
   const { mkdtempSync, copyFileSync, writeFileSync, rmSync } = await import('node:fs');

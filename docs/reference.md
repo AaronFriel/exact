@@ -1237,7 +1237,7 @@ Some entitlements hold on a Mac only under a provisioning profile that
 authorizes them (Apple TN3125), and the Mac build signs them from one (LLP
 1133.010 D7): push's `com.apple.developer.aps-environment` (`device.push`), App
 Attest's environment (`device.attestation`), the Declared Age Range
-(`device.age-range`), the keychain group a locked secret is kept in
+(`device.age-range`), Group Activities (`device.shareplay`), the keychain group a locked secret is kept in
 (`secret.keep` with a presence policy), and a passkey's associated domains
 (`auth.passkey`). An app whose grants need any of them is built from the
 newest installed macOS profile for its id (or the team's wildcard) that allows
@@ -1262,7 +1262,8 @@ With no profile that fits, a development build signs none of them and says,
 for each grant, what the app then reports (`available: false`,
 `NotSupportedError`). A release build is refused (`grant-needs-profile`) for
 App Attest, the age range, a passkey or a locked secret that is not
-`optional`; one granting push ships without it, reporting push unavailable.
+`optional`; one granting push or SharePlay ships without it, the package
+reporting it unavailable.
 An app with Mac widgets signs both under one profile, of the widgets' team,
 chosen among the profiles that grant the widgets' App Group and shared
 Keychain group and the grants' entitlements; with none that grants both, the
