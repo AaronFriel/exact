@@ -354,6 +354,7 @@ impl Collection {
             reach,
             keep,
             at_end,
+            opens_at_end: at_end,
             end_travel: 0,
             end_sent: f64::NAN,
             reuse,

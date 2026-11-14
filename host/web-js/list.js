@@ -17,8 +17,9 @@ const BOOTSTRAP_ROWS = 16, ESTIMATED = 32, LEAD_SECONDS = 0.25, FAR_VIEWPORTS = 
 // How far short of a fractional end a port at its end may report (index.rs `END_SLACK`): Chrome
 // rounds a scroll range to whole pixels, WebKit floors it (210.72 - 140 scrolls to 71 in one, 70 in the other).
 const END_SLACK = 1;
-// A port in the padding before the first row is at the rows' start, unless the target is there too (start.rs).
-const atTarget = (a, c, offset, sent) => { if (c >= 0) offset = Math.max(0, offset); const gap = Math.abs(c - offset); return gap <= 0.01 || (a.follows && gap < END_SLACK && Math.abs(c - sent) <= 0.01); };
+// A port in the padding before the first row is at the rows' start, unless the target is there too, or the anchor is
+// held by the port's bottom, which the padding moves (start.rs).
+const atTarget = (a, c, offset, sent) => { if (c >= 0 && !a.bottom) offset = Math.max(0, offset); const gap = Math.abs(c - offset); return gap <= 0.01 || (a.follows && gap < END_SLACK && Math.abs(c - sent) <= 0.01); };
 const travelLead = (port, v) => Math.min(Math.abs(v) * LEAD_SECONDS, port * 2);
 const lead = (port, v) => { const extra = travelLead(port, v); return v > 0 ? [port, port + extra] : [port + extra, port]; };
 // `reach-margin` (reach.rs `Margin`, @ref LLP 1145 D4): px or % of the port, before and after an edge; default one port.
@@ -199,22 +200,34 @@ class SizeIndex {
     // offset it was taken at, unclamped, where a port with no row to anchor stays.
     return { order: this.order, row, within, follows, beyond: Math.max(0, raw - max), raw };
   }
+  // index.rs `capture_bottom_anchor` (LLP 1168.000 D1.2): the last row the port shows, by key, and how far the port's
+  // bottom is past that row's end; at a zero offset too. A port below the rows holds the last row with a height. An end
+  // it follows wins.
+  bottomAnchor(offset, port, follow) {
+    const a = this.anchor(offset, port, follow);
+    if (a.follows) return a;
+    // Where the port is, in the padding before the rows too; below the rows, the last row with a height.
+    const bottom = Math.max(-this.leading, Math.min(offset, this.maxOffset(port))) + port;
+    const row = find(this.t, bottom, true) ?? find(this.t, this.t.sums[1], true);
+    return { ...a, row, within: row === null ? 0 : bottom - this.prefix(row + 1), bottom: row !== null };
+  }
   anchorAt(key, within) { const i = this.pos.get(key); return i === undefined ? null : { order: this.order, row: i, within, follows: false, beyond: 0, raw: 0 }; }
-  anchorPosition(a) {
+  anchorPosition(a, port) {
     if (a.row === null) return null;
     let i = this.pos.get(a.order[a.row]);
     if (i === undefined) for (const k of [...a.order.slice(a.row + 1), ...a.order.slice(0, a.row).reverse()]) if ((i = this.pos.get(k)) !== undefined) break;
-    return i === undefined ? null : this.prefix(i) + a.within;
+    if (i === undefined) return null;
+    return a.bottom ? this.prefix(i + 1) + a.within - port : this.prefix(i) + a.within;
   }
   keptRow(a, port) {
-    const offset = this.anchorPosition(a);
+    const offset = this.anchorPosition(a, port);
     return !a.follows && offset !== null && offset >= -this.leading && offset <= this.maxOffset(port);
   }
   restoreAnchor(a, port) {
     const max = this.maxOffset(port);
     if (a.follows) return max + a.beyond;
     if (a.row === null) return a.beyond > 0 ? a.raw : this.clamp(a.raw, port);
-    const offset = this.anchorPosition(a);
+    const offset = this.anchorPosition(a, port);
     return offset === null ? 0 : Math.min(Math.max(offset, -this.leading), max) + a.beyond;
   }
 }
@@ -278,7 +291,7 @@ class Collection {
     this.bootstrap = o.init ?? Math.max(1, Math.min(BOOTSTRAP_ROWS, Math.min(Math.ceil(BOOTSTRAP_ROWS * ESTIMATED / this.est), o.inRow && this.port ? Math.ceil(this.port / this.est) + 1 : Infinity)));
     Object.assign(this, { items: [], idents: [], dups: new Map(), positionDependentKeys: new Set(), bodyDirty: false, mounted: [], spacers: [], children: [], revision: 0, nextEpoch: 0,
       zeros: new Set(), geometry: null, correction: null, endSent: NaN, followEnd: false, edgeArmed: [true, true], edgeFired: [null, null], startOwed: false, pending: false, parent: null,
-      kept: new Map(), manual: !!o.manual, restored: false, restoredAt: null, startOffset: 0, inner: [], target: null, scrolling: false, animating: false, portUnknown: false, request: 0, status: null, preview: null, atEnd: !!o.atEnd, endTravel: 0, keepKeys: [] });
+      kept: new Map(), manual: !!o.manual, restored: false, restoredAt: null, startOffset: 0, inner: [], target: null, scrolling: false, animating: false, portUnknown: false, request: 0, status: null, preview: null, atEnd: !!o.atEnd, opensAtEnd: !!o.atEnd, endTravel: 0, keepKeys: [] });
     this.edges = [o.start, o.end]; this.reach = reachMargin(o.reach);
   }
   snapshot() {
@@ -310,10 +323,12 @@ class Collection {
     if (this.o.keep) this.keepKeys = keepIdents(this.o.keep());
     Remount.delete(this);
     let anchor = this.anchor();
+    const bottom = this.bottomAnchor();
     const dropAnchor = this.dropAnchor?.(), old = this.index.order, last = this.index.order.at(-1), count = this.index.len;
     const rekeyed = resetMeasurements || idents.length !== this.idents.length || idents.some((k, i) => k !== this.idents[i]);
     const positions = resetMeasurements ? [] : this.changedPositions(items, idents);
     if (rekeyed) { this.index.replace(idents); this.idents = idents; this.dups = dups; }
+    anchor = this.endListAnchor(old, anchor, bottom);
     anchor = this.committedAnchor?.(anchor, dropAnchor) ?? anchor;
     const moved = rekeyed || positions.length > 0;
     // A grouped session's offsets move with its rows, at once (LLP 1094 D8).
@@ -395,6 +410,23 @@ class Collection {
   // ------------------------------------------------ scroll-start: end (start.rs)
   // Not while a request is under way: it overrides the kept position (start.rs `follows`).
   follows() { return (this.followEnd || this.atEnd) && !this.preview && !this.target; }
+  // start.rs `bottom_anchor` (LLP 1168.000 D1.2): a list that opens at its end, before an update, holds its last
+  // visible row and the first row the port showed; none while it follows its end, which wins.
+  bottomAnchor() {
+    const g = this.geometry;
+    if (!g || !this.opensAtEnd) return null;
+    const offset = this.anchorOffset(g.offset, g.port_main), anchor = this.index.bottomAnchor(offset, g.port_main, this.follows());
+    if (anchor.follows) return null;
+    const p = this.index.rowAt(Math.min(Math.max(0, offset), Math.max(0, this.index.maxOffset(g.port_main))));
+    return { anchor, first: p === null ? null : [p, this.index.order[p]] };
+  }
+  // start.rs `end_list_anchor`: the last visible row's anchor when the update put rows before the window (the first
+  // row the port showed kept further down, or a page at the list's start, `pageBeforeStart`), else the ordinary one.
+  endListAnchor(old, ordinary, bottom) {
+    if (!bottom?.first) return ordinary;
+    const [was, key] = bottom.first, now = this.index.pos.get(key);
+    return (now !== undefined && now > was) || (was === 0 && this.pageBeforeStart(old)) ? bottom.anchor : ordinary;
+  }
   /** The offset an opening list's anchor is taken at: its end in a port of `port`, no overshoot past it (start.rs). */
   anchorOffset(offset, port) { return this.atEnd ? this.index.maxOffset(port) : offset; }
   /** Before any report: the last rows, and the host told to start at the end. */

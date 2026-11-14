@@ -10,6 +10,7 @@ mod change_tasks;
 mod children;
 mod declared_source;
 mod each;
+mod end_anchor;
 mod failed_readers;
 mod flow_agent;
 mod font_axes;

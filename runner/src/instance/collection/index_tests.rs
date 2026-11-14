@@ -415,6 +415,65 @@ fn a_list_at_its_start_shows_rows_inserted_above() {
     );
 }
 
+/// LLP 1168.000 D1.2: a list that opens at its end holds its last visible
+/// row by its end's distance from the port's bottom, at a zero offset too,
+/// and through a change to its own height; a deleted row falls back as a
+/// top anchor's does. An end it follows wins.
+#[test]
+fn a_bottom_anchor_keeps_the_last_visible_row_off_the_ports_bottom() {
+    let mut index = index(&[10.0; 10]);
+    let top = index.capture_bottom_anchor(0.0, 20.0, false).unwrap();
+    let inside = index.capture_bottom_anchor(5.0, 20.0, false).unwrap();
+    assert_eq!(SizeIndex::anchor_key(&top), Some("k1"));
+    assert_eq!(SizeIndex::anchor_key(&inside), Some("k2"));
+    let follow = index.capture_bottom_anchor(80.0, 20.0, true).unwrap();
+    assert!(SizeIndex::follows_end(&follow));
+    let mut prepended: Vec<Rc<str>> = (0..5).map(|i| Rc::from(format!("p{i}"))).collect();
+    prepended.extend(keys(10));
+    index.replace_keys(prepended).unwrap();
+    assert_eq!(index.restore_anchor(&top, 20.0).unwrap(), 50.0);
+    assert!(index.kept_row(&top, 20.0));
+    assert_eq!(index.restore_anchor(&inside, 20.0).unwrap(), 55.0);
+    assert_eq!(index.restore_anchor(&follow, 20.0).unwrap(), 130.0);
+    let token = index.measurement_token("k1").unwrap();
+    index.set_measured_height("k1", token, 30.0).unwrap();
+    assert_eq!(
+        index.restore_anchor(&top, 20.0).unwrap(),
+        70.0,
+        "its end holds"
+    );
+    let mut without: Vec<Rc<str>> = index.order().iter().cloned().collect();
+    without.retain(|k| &**k != "k1");
+    index.replace_keys(without).unwrap();
+    assert_eq!(index.restore_anchor(&top, 20.0).unwrap(), 50.0, "k2 next");
+}
+
+/// A port in the padding before the rows keeps its place there, and one
+/// whose bottom is below the rows holds the last row with a height, not a
+/// zero-height tail (review r1).
+#[test]
+fn a_bottom_anchor_reads_the_padding_and_skips_a_zero_height_tail() {
+    let prepend = |index: &mut SizeIndex, rows: Vec<Rc<str>>| {
+        let mut order: Vec<Rc<str>> = (0..5).map(|i| Rc::from(format!("p{i}"))).collect();
+        order.extend(rows);
+        index.replace_keys(order).unwrap();
+    };
+    let mut padded = index(&[32.0; 20]);
+    padded.set_leading(20.0);
+    let anchor = padded.capture_bottom_anchor(-20.0, 320.0, false).unwrap();
+    prepend(&mut padded, keys(20));
+    assert_eq!(padded.restore_anchor(&anchor, 320.0).unwrap(), 30.0);
+    let mut tail = index(&[10.0, 10.0, 0.0]);
+    tail.set_trailing(20.0);
+    let anchor = tail.capture_bottom_anchor(0.0, 30.0, false).unwrap();
+    assert_eq!(SizeIndex::anchor_key(&anchor), Some("k1"));
+    prepend(
+        &mut tail,
+        vec!["k0".into(), "k1".into(), "new".into(), "k2".into()],
+    );
+    assert_eq!(tail.restore_anchor(&anchor, 30.0).unwrap(), 50.0);
+}
+
 #[test]
 fn deleted_anchor_chooses_next_survivor_in_old_order_then_previous() {
     let mut index = index(&[10.0; 10]);

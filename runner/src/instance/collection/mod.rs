@@ -255,6 +255,9 @@ pub(crate) struct Collection {
     keep: Vec<Rc<str>>,
     /// `scroll-start: end`, until the list has opened there.
     at_end: bool,
+    /// `scroll-start: end`, for good: rows put before its window keep its
+    /// last visible row (@ref LLP 1168.000 D1.2).
+    opens_at_end: bool,
     /// Consecutive reports that said the port was travelling, while it opens.
     end_travel: u8,
     /// The followed end last sent as a correction (`start::at_target`).
@@ -379,6 +382,7 @@ impl Collection {
         }
         self.instant = instant;
         let anchor = if changed { self.anchor()? } else { None };
+        let bottom = if changed { self.bottom_anchor()? } else { None };
         let drop_anchor = if changed {
             self.drop_anchor(u.env.now_ms)?
         } else {
@@ -473,6 +477,7 @@ impl Collection {
             if self.edge_handlers[0] && self.page_before_start(&order) {
                 self.start_owed = true;
             }
+            let anchor = self.end_list_anchor(&order, anchor, bottom);
             let anchor = self.committed_anchor(anchor, drop_anchor);
             self.cancel_if_row_left();
             self.restore_unless_unknown(anchor)?;
