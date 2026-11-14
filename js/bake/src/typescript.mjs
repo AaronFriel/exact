@@ -503,8 +503,7 @@ export function stagePackages(stage, parse) {
 // captured file by file as the bundle reaches it: each import is resolved
 // from where its importer really is, or from the app for a linked package's peer
 // (Node's lookup, a package's `exports`, `main` and `browser` fields, as a
-// browser bundle resolves them), and the
-// file it leads to is copied into the stage under `node_modules/.packages/
+// browser bundle resolves them), and the file it leads to is copied into the stage under `node_modules/.packages/
 // <name>@<version>/`, with every `package.json` between it and the package's
 // root (their `type` and `sideEffects`). The bundle loads only those copies.
 // `__exact_packages.json` records each file by where it was read and its
