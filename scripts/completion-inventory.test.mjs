@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { discover, inventory, markdown, rustFunctions } from './completion-inventory.mjs';
 
 test('every source entry has exactly one ownership inference with evidence', () => {
-  // The census reads runner/src, host/apple/src, host/web, host/web-js,
+  // The census reads runner/src, host/apple, host/web, host/web-js,
   // host/web-capabilities, host/web-geometry, host/render/src and host/painted/src.
   const result = inventory();
   assert.deepEqual(result.errors, [], result.errors.join('\n'));
@@ -19,7 +19,9 @@ test('every source entry has exactly one ownership inference with evidence', () 
     ['apple', 'exact_fulfill_surface'], ['web', 'exact_fulfill'],
     ['apple', 'exact_frame_health_record'],
     ['apple', 'exact_widget_reload'],
+    ['apple', 'exact_web_answer'], ['apple', 'exact_activity_send'], ['apple', 'exact_native_abi'],
     ['web-js', 'm_end'], ['painted', 'Presenter::pump'],
+    ['painted', 'serve'], ['painted', 'handle'], ['painted', 'handle_for_window'],
     ['painted', 'Java_dev_exact_canvas_Native_answer'], ['render', 'settle_aborts'],
   ]) {
     assert.ok(result.entries.some(e => e.host === host && e.symbol === symbol), `${host}:${symbol} missing`);
@@ -31,7 +33,8 @@ test('every source entry has exactly one ownership inference with evidence', () 
 test('new runner APIs, host exports, adapters and mint sites cannot pass unclassified', () => {
   const root = mkdtempSync(join(tmpdir(), 'exact-completion-inventory-'));
   try {
-    for (const dir of ['runner/src', 'host/apple/src', 'host/apple/Sources', 'host/web/src', 'host/web-js/motion/src',
+    for (const dir of ['runner/src', 'host/apple/src', 'host/apple/Sources', 'host/apple/webarm', 'host/apple/modules',
+      'host/apple/tests', 'host/web/src', 'host/web-js/motion/src',
       'host/web-capabilities/src', 'host/web-geometry/src', 'host/render/src', 'host/painted/src']) {
       mkdirSync(join(root, dir), { recursive: true });
     }
@@ -48,11 +51,14 @@ test('new runner APIs, host exports, adapters and mint sites cannot pass unclass
           #[cfg(test)] { self.next_ticket += 1; }
         }
         fn other_allocator(&mut self) { self.extensions.next += 1; SERIAL.fetch_add(1, Relaxed); }
+        fn unnamed_allocator(&mut self) { self.extensions.arbitrary += 1; }
+        pub fn r#raw_completion(&mut self) -> CommitReceipt { todo!() }
       }
     `);
     writeFileSync(join(root, 'host/apple/src/extra.rs'), `macro_rules! exports { () => {
       #[unsafe(no_mangle)] pub unsafe extern "C" fn new_apple() {}
       #[export_name = "aliased_export"] extern "C" fn internal_name() {}
+      #[no_mangle] pub extern fn implicit_c() {}
     }; }`);
     writeFileSync(join(root, 'runner/src/external.rs'), `macro_rules! shared_exports { () => {
       #[no_mangle] pub extern "C" fn new_external() {}
@@ -62,6 +68,9 @@ test('new runner APIs, host exports, adapters and mint sites cannot pass unclass
       // @_cdecl("comment_only")
       @_cdecl("new_swift_export") public func callback() {}
     `);
+    for (const dir of ['webarm', 'modules', 'tests']) {
+      writeFileSync(join(root, `host/apple/${dir}/Extra.swift`), `@_cdecl("${dir}_answer") public func callback() {}`);
+    }
     writeFileSync(join(root, 'host/web/src/extra.rs'), '#[no_mangle] pub extern "C" fn new_web() {}');
     writeFileSync(join(root, 'host/web-js/motion/src/extra.rs'), '#[no_mangle] pub extern "C" fn new_motion() {}');
     writeFileSync(join(root, 'host/web-capabilities/src/extra.rs'), '#[no_mangle] pub extern "C" fn new_capability() {}');
@@ -69,6 +78,10 @@ test('new runner APIs, host exports, adapters and mint sites cannot pass unclass
     writeFileSync(join(root, 'host/painted/src/extra.rs'), `
       impl<D> CanvasHost<D> { pub fn new_reader_answer(&mut self) {} }
       impl<D> Presenter<D> { pub fn new_presenter_answer(&mut self) {} }
+      pub fn new_agent_answer(p: &mut Presenter<D>) { p.pump(0.0); p.answer(); }
+      impl Agent { pub fn r#answer(&mut self) {} }
+      #[cfg(unix)] pub fn platform_answer() {}
+      #[cfg(windows)] pub fn platform_answer() {}
       #[no_mangle] pub unsafe extern "system" fn Java_new_answer() {}
     `);
     const result = inventory(root, table);
@@ -78,10 +91,15 @@ test('new runner APIs, host exports, adapters and mint sites cannot pass unclass
       'runner:runner/src/runner.rs:Runner::new_completion#next_ticket:1',
       'runner:runner/src/runner.rs:Runner::other_allocator#next:1',
       'runner:runner/src/runner.rs:Runner::other_allocator#SERIAL.fetch_add:1',
+      'runner:runner/src/runner.rs:Runner::unnamed_allocator#arbitrary:1',
+      'runner:runner/src/runner.rs:Runner::raw_completion',
       'apple:host/apple/src/extra.rs:new_apple',
       'apple:host/apple/src/extra.rs:aliased_export',
+      'apple:host/apple/src/extra.rs:implicit_c',
       'apple:runner/src/external.rs:new_external',
       'apple:host/apple/Sources/Extra.swift:new_swift_export',
+      'apple:host/apple/webarm/Extra.swift:webarm_answer',
+      'apple:host/apple/modules/Extra.swift:modules_answer',
       'web:host/web/src/extra.rs:new_web',
       'web-js:host/web-js/motion/src/extra.rs:new_motion',
       'web-capabilities:host/web-capabilities/src/extra.rs:new_capability',
@@ -89,6 +107,10 @@ test('new runner APIs, host exports, adapters and mint sites cannot pass unclass
       'painted:host/painted/src/extra.rs:CanvasHost::new_reader_answer',
       'painted:host/painted/src/extra.rs:Presenter::new_presenter_answer',
       'painted:host/painted/src/extra.rs:Java_new_answer',
+      'painted:host/painted/src/extra.rs:new_agent_answer',
+      'painted:host/painted/src/extra.rs:Agent::answer',
+      'painted:host/painted/src/extra.rs:platform_answer',
+      'painted:host/painted/src/extra.rs:platform_answer#definition:2',
     ];
     assert.deepEqual(result.entries.filter(e => !e.evidence).map(e => e.id).sort(), expected.sort());
     assert.equal(result.errors.length, expected.length);
@@ -98,6 +120,50 @@ test('new runner APIs, host exports, adapters and mint sites cannot pass unclass
     assert.ok(inventory(root, [{ ...table[0], ids: ['gone'] }]).errors.some(e => e === 'stale classification: gone'));
     assert.ok(inventory(root, [{ ...table[0], inference: false }]).errors.some(e => e.startsWith('incomplete classification:')));
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('native send and payment attempt allocators are enumerated', () => {
+  const entries = discover();
+  for (const [file, symbol] of [
+    ['letgo', 'Runner::number_data_call#requests:1'],
+    ['bound', 'Runner::forward_body#requests:1'],
+    ['sheet', 'Runner::sheet_opened#calls:1'],
+    ['sheet', 'Runner::sheet_call#calls:1'],
+  ]) {
+    assert.ok(entries.some(e => e.file === `runner/src/runner/modules/${file}.rs` && e.symbol === symbol), symbol);
+  }
+}, 60_000);
+
+test('Android background timer delivery belongs to the current reader', () => {
+  const entries = inventory().entries;
+  for (const symbol of ['CanvasHost::background', 'Java_dev_exact_canvas_Native_background']) {
+    const e = entries.find(e => e.symbol === symbol);
+    assert.equal(e.family, 'timer fires');
+    assert.equal(e.class, 'UI-owned');
+    assert.match(e.lifetime, /reader|session/);
+    assert.match(e.evidence, /canvas\/timers\.rs/);
+  }
+}, 60_000);
+
+test('raw runner identifiers retain their normalized API name and receipt', () => {
+  const { functions } = rustFunctions('runner/src/fixture.rs', `
+    impl<D> r#Runner<D> { pub fn r#new_completion(&mut self) -> CommitReceipt { todo!() } }
+  `);
+  assert.equal(functions.length, 1);
+  assert.equal(functions[0].owner, 'Runner');
+  assert.equal(functions[0].name, 'new_completion');
+  assert.equal(functions[0].public, true);
+  assert.match(functions[0].returnType, /CommitReceipt/);
+});
+
+test('extern without an ABI string exports the default C ABI', () => {
+  const { functions } = rustFunctions('host/apple/src/fixture.rs', `
+    #[no_mangle] pub extern fn new_completion() {}
+    #[unsafe(export_name = "implicit_alias")] pub unsafe extern fn r#aliased() {}
+    #[no_mangle] pub extern "Rust" fn rust_abi() {}
+  `);
+  assert.deepEqual(functions.map(f => f.cExport), [true, true, false]);
+  assert.equal(functions[1].exportName, 'implicit_alias');
 });
 
 test('the lexer excludes strings, nested comments and test items without hiding following APIs', () => {

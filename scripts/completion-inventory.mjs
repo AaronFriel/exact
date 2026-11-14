@@ -49,7 +49,7 @@ export function tokens(source) {
       continue;
     }
     const word = /^(?:r#)?[A-Za-z_][A-Za-z_0-9]*|^\d+|^(?:->|::|\+=|-=|\*=|\/=|==|!=|=>)/.exec(source.slice(i));
-    consume(i + (word?.[0].length ?? 1), word?.[0] ?? source[i]);
+    consume(i + (word?.[0].length ?? 1), word?.[0].replace(/^r#/, '') ?? source[i]);
   }
   return out;
 }
@@ -132,7 +132,7 @@ export function rustFunctions(file, source) {
     }
     functions.push({ file, line: t[i].line, name: t[i + 1].value, owner, exportName,
       public: /\bpub\b(?!\s*\()/.test(prefix),
-      cExport: /\bextern "(?:C(?:-unwind)?|system)"/.test(prefix) && /\b(?:no_mangle|export_name)\b/.test(prefix),
+      cExport: /\bextern(?: "(?:C(?:-unwind)?|system)"|$)/.test(prefix) && /\b(?:no_mangle|export_name)\b/.test(prefix),
       jni: prefix.includes('extern "system"'),
       signature: source.slice(t[i].at, t[body]?.at ?? source.length).trim(),
       returnType: words(paired.get(args) + 1, body),
@@ -160,6 +160,10 @@ export function discover(root = ROOT) {
   }
   function add(host, kind, f, suffix = '', extra = {}) {
     const name = f.exportName ?? f.name;
+    const base = `${host}:${f.file}:${f.owner ? `${f.owner}::` : ''}${name}${suffix}`;
+    const definitions = entries.filter(e => e.id === base || e.id.startsWith(`${base}#definition:`)).length;
+    // cfg alternatives are separate source definitions of the same API.
+    if (definitions) suffix += `#definition:${definitions + 1}`;
     entries.push({ id: `${host}:${f.file}:${f.owner ? `${f.owner}::` : ''}${name}${suffix}`,
       host, kind, file: f.file, line: f.line, symbol: `${f.owner ? `${f.owner}::` : ''}${name}${suffix}`,
       signature: f.signature, ...extra });
@@ -173,12 +177,13 @@ export function discover(root = ROOT) {
         returnsCommitAggregate: /\b(?:Advanced|Dispatched|Timed)\b/.test(f.returnType),
       });
     }
-    // Also enumerate every counter write, including seeds, restores and other
-    // identity allocators. Their classification distinguishes mint from restore.
+    // Arithmetic writes must not depend on an allocator's field name. Known
+    // identity assignments also include seeds/restores; classify these separately.
     for (let i = 0; i < t.length - 1; i++) {
       const atomic = t[i + 1]?.value === '.' && ['fetch_add', 'try_update', 'fetch_update'].includes(t[i + 2]?.value);
-      const counterWrite = t[i - 1]?.value === '.' && /^(?:next(?:_\w+)?|\w*(?:serial|sequence|generation)|seq|request)$/.test(t[i].value)
-        && ['=', '+=', '-='].includes(t[i + 1].value);
+      const counterWrite = t[i - 1]?.value === '.' && (
+        ['+=', '-='].includes(t[i + 1].value) || (t[i + 1].value === '=' &&
+          /^(?:next(?:_\w+)?|\w*(?:serial|sequence|generation)|seq|request)$/.test(t[i].value)));
       if (!atomic && !counterWrite) continue;
       if (ignored.some(([a, b]) => a <= i && i <= b)) continue;
       const f = functions.filter(f => f.start < i && i < f.end).at(-1);
@@ -213,14 +218,14 @@ export function discover(root = ROOT) {
         const calls = [...f.code.matchAll(/\. (\w+) \(/g)].map(m => m[1]).filter(n => methods.has(n));
         // These hosts have Rust interfaces, not a C ABI. Include private adapters
         // too: render's abort settlement is not a public Host method.
-        if ((host === 'render' && f.public) || (f.public && ['Host', 'CanvasHost', 'Presenter'].includes(f.owner)) ||
+        if (f.public ||
             (calls.length && /\b(?:runner|Runner)\b/.test(`${f.signature} ${f.code}`))) {
           add(host, 'Rust host equivalent', f, '', { runnerCalls: [...new Set(calls)].sort() });
         }
       }
     }
   }
-  for (const path of files(join(root, 'host/apple/Sources'), '.swift')) {
+  for (const path of files(join(root, 'host/apple'), '.swift')) {
     const source = readFileSync(path, 'utf8');
     if (!/@\s*_cdecl/.test(source)) continue;
     const t = tokens(source), file = relative(root, path);

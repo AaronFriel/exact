@@ -7,6 +7,11 @@ function group(family, lifetime, kind, evidence, sites, durableWhen) {
 }
 
 export const classifications = [
+  group("timer fires", "current Android reader/session and its timer deadlines or held tasks", "UI-owned",
+    "host/painted/src/canvas/timers.rs CanvasHost::background calls reader_clock and admit_idle_timer on the current Presenter; canvas/jni_frames.rs forwards the reader callback to it. A stopped activity does not create an independent background round.", [
+    ["painted:host/painted/src/canvas/jni_frames.rs", "Java_dev_exact_canvas_Native_background"],
+    ["painted:host/painted/src/canvas/timers.rs", "CanvasHost::background"],
+  ]),
   group("UI facts", "current session, viewport, page or rendered geometry", "UI-owned", "runner/src/runner/viewport.rs and page.rs settle facts of the live session; these entries carry no app/account operation identity.", [
     ["apple:host/apple/src/abi/exports.rs",
       "exact_control_text_changed exact_insets exact_orientation_applied exact_resize exact_scrolled exact_segments " +
@@ -261,10 +266,6 @@ export const classifications = [
       "exact_dispatch"],
   ]),
   group("background work", "app/module background round until completion or session shutdown; process-local today", "durable", "runner/src/runner/background.rs:87-105 resumes a background round outside Contract slots and then arms its successor; no UI then/commit owns that round.", [
-    ["painted:host/painted/src/canvas/jni_frames.rs",
-      "Java_dev_exact_canvas_Native_background"],
-    ["painted:host/painted/src/canvas/timers.rs",
-      "CanvasHost::background"],
     ["runner:runner/src/runner/background.rs",
       "Runner::background_operations Runner::background_state Runner::send_background#next_ticket:1"],
   ]),
@@ -1159,4 +1160,333 @@ export const classifications = [
     "runner/src/runner/uploads.rs carry_uploads_in reserves numbers above UploadEnd::Sent tickets so a new runner cannot alias the uploads carried from its predecessor.", [
       ["runner:runner/src/runner/uploads.rs", "Runner::carry_uploads_in#next_ticket:1"],
     ]),
+  group("replies", "activity listener/session and runner ticket; ActivityKit state may outlive the window", "UI-owned", "host/apple/activityarm/ActivityArm.swift activitySend copies the body and posts send with its ticket and listener id; send emits that ticket only to the registered listener.", [
+    ["apple:host/apple/activityarm/ActivityArm.swift", "exact_activity_close exact_activity_open exact_activity_send"],
+  ], "durable when the ticket names retained effectful/background work; the lifetime of ActivityKit state alone does not make its UI continuation durable."),
+  group("media and sensors", "live sound/MIDI/video arm, voice or picture-in-picture handle", "UI-owned", "host/apple/soundarm/SoundArm.swift, midiarm/MIDIArm.swift and videoarm/{VideoArm,PictureInPicture}.swift exports act on opened arms and dispose them at close/destroy; their callbacks belong to those handles.", [
+    ["apple:host/apple/midiarm/MIDIArm.swift", "exact_midi_close exact_midi_inputs exact_midi_op exact_midi_open exact_midi_refresh"],
+    ["apple:host/apple/soundarm/SoundArm.swift", "exact_sound_close exact_sound_counts exact_sound_engine exact_sound_op exact_sound_open"],
+    ["apple:host/apple/videoarm/PictureInPicture.swift", "exact_pip_create exact_pip_destroy exact_pip_frame"],
+    ["apple:host/apple/videoarm/VideoArm.swift",
+      "exact_video_create exact_video_destroy exact_video_fullscreen exact_video_state exact_video_toggle " +
+      "exact_video_update exact_video_view"],
+  ]),
+  group("module lifecycle", "loaded native-module ABI table and session-bound module instances", "UI-owned", "host/apple/modules/ExactNativeModule.swift exactNativeAbi returns the module function table; it does not deliver a completion or create an independent operation.", [
+    ["apple:host/apple/modules/ExactNativeModule.swift", "exact_native_abi"],
+  ]),
+  group("web frames", "live WebArm, web view and held ask token until answer or invalidation", "UI-owned", "host/apple/webarm/WebArm.swift ask mints nextAsk into asked; endAsked and invalidate end held requests with their web view. Exports configure, inspect or act on that arm.", [
+    ["apple:host/apple/webarm/WebArm.swift",
+      "exact_web_agent_eval exact_web_answer exact_web_automation exact_web_check_owned exact_web_command " +
+      "exact_web_configure exact_web_create exact_web_destroy exact_web_end_session exact_web_platform_view " +
+      "exact_web_post_message exact_web_set_configuring exact_web_set_document exact_web_set_files exact_web_set_reader " +
+      "exact_web_set_sandbox exact_web_set_src exact_web_snapshot"],
+  ]),
+  group("storage", "committed app store/secret values and write queue", "durable", "host/painted/src/store_writer.rs drains already committed writes and reports write warnings; runner/src/store.rs and store/presence.rs revisions version durable store contents, not UI continuations. host/apple/webarm/WebArm.swift exactWebClearSiteData clears the named browser partition and calls its completion context.", [
+    ["apple:host/apple/webarm/WebArm.swift", "exact_web_clear_site_data"],
+    ["painted:host/painted/src/store_writer.rs", "drain take_warnings"],
+    ["runner:runner/src/store.rs", "Store::forget#revision:1 Store::refresh_snapshot#revision:1 Store::set#revision:1"],
+    ["runner:runner/src/store/presence.rs", "Store::adopt_occupancy#revision:1 Store::set_locked#revision:1"],
+  ]),
+  group("replies", "current presenter/reader session; a request may pump several completion families", "UI-owned", "host/painted/src/agent.rs serve and agent/stdio.rs handle_request pump the current Presenter, then dispatch hold/picker answers and frame work.", [
+    ["painted:host/painted/src/agent.rs", "serve"],
+    ["painted:host/painted/src/agent/stdio.rs", "handle handle_for_window"],
+    ["painted:host/painted/src/canvas/agent.rs", "after_turn next_stream waiting"],
+  ], "durable when the pumped reply names retained effectful/background work; agent dispatch does not change that ownership."),
+  group("session lifecycle", "host/session setup, boot configuration, platform thread or teardown", "UI-owned", "The named host/painted source configures or constructs the current host, platform services or render backend. These entries create no independent durable completion owner.", [
+    ["painted:host/painted/src/android_hint.rs", "colocate fast_thread input session"],
+    ["painted:host/painted/src/android.rs",
+      "background_priority console fast_cores fast_set Handle::send Handle::stop log redirect_stdio release_library_pages " +
+      "release_library_pages_after release_module_pages_too section_begin section_end start trace"],
+    ["painted:host/painted/src/app.rs",
+      "boot_presenter boot_presenter_after_layout_device boot_presenter_with_device boot_presenter_with_metal " +
+      "Config::from_env Config::from_env_static Config::headless Config::initial_window_background Config::painter " +
+      "Config::use_updates Config::windowed Config::windowed_from_env launch_argument launch_location prepare_environment " +
+      "print_baked_receipt row_reuse_from_env run_headless show_material_look show_neutral_look"],
+    ["painted:host/painted/src/canvas/codec.rs", "attach"],
+    ["painted:host/painted/src/canvas/legacy.rs", "attach decode glyph"],
+    ["painted:host/painted/src/canvas/presence.rs", "attach"],
+    ["painted:host/painted/src/canvas/time.rs", "attach format"],
+    ["painted:host/painted/src/com.rs", "ensure_mta ensure_sta"],
+    ["painted:host/painted/src/desktop.rs", "activate install services"],
+    ["painted:host/painted/src/gpu.rs", "Gpu::new"],
+    ["painted:host/painted/src/lib.rs", "set_event_waker"],
+    ["painted:host/painted/src/raster.rs", "Raster::new"],
+    ["painted:host/painted/src/surfaces/apple.rs", "Boot::deadline Boot::new Boot::poll Boot::refused"],
+    ["painted:host/painted/src/zone.rs", "agent_time launch_place local_offset_minutes local_offset_minutes#definition:2"],
+  ]),
+  group("delivery", "app/update stream and resolved signed module artifact", "durable", "host/painted/src/delivery.rs Module resolves local or replacement signed artifacts. Applying a resolved artifact to the current session is a separate operation.", [
+    ["painted:host/painted/src/delivery.rs", "Module::local Module::replacement Module::resolve"],
+  ]),
+  group("delivery", "live development session, pending build exchange or fetched app generation", "UI-owned", "host/painted/src/build_channel.rs Link owns the current development exchange; fetch.rs Poller fetches bytes for the current app/build. Their asynchronous continuations have no independent retained operation record.", [
+    ["painted:host/painted/src/build_channel.rs",
+      "Answer::held Exchange::run Frame::parse Link::exchange Link::missed_design Link::new Link::report Link::settle " +
+      "Link::take_design Link::take_live"],
+    ["painted:host/painted/src/fetch.rs", "fetch_app fetch_changed fetch_design is_url Poller::due_in Poller::new Poller::poll Poller::say Poller::says"],
+  ]),
+  group("picture results", "pending image/picture source, decode generation and current presentation consumers", "UI-owned", "host/painted/src/image.rs and image/{workers,remote,package}.rs own pending image/decode work and current consumers; canvas picture/stream adapters target the reader. Cache bytes surviving a view do not make its presentation continuation durable.", [
+    ["painted:host/painted/src/canvas.rs", "pending_pictures Recorder::new"],
+    ["painted:host/painted/src/canvas/jni_picture.rs", "pixels"],
+    ["painted:host/painted/src/canvas/picture.rs", "Picture::height Picture::width"],
+    ["painted:host/painted/src/canvas/stream.rs", "drawing"],
+    ["painted:host/painted/src/image.rs",
+      "Images::assets Images::diagnostics Images::fit Images::has_refusals Images::new Images::paint_with Images::pending " +
+      "Images::poll Images::renew Images::reset Images::resolve Images::retry_due_in Images::stats Images::sync " +
+      "Images::wait"],
+    ["painted:host/painted/src/image/assets.rs", "Assets::embedded Assets::path Assets::read Assets::read_asset Assets::root Assets::selected Assets::take_refusal"],
+    ["painted:host/painted/src/image/bitmap.rs",
+      "Bitmap::animation_file Bitmap::bytes Bitmap::crop Bitmap::hardware Bitmap::height Bitmap::natural Bitmap::pixels " +
+      "Bitmap::placed Bitmap::shared Bitmap::width"],
+    ["painted:host/painted/src/image/hardware.rs", "hardware_pictures"],
+    ["painted:host/painted/src/image/jpeg.rs", "decoder"],
+    ["painted:host/painted/src/image/package.rs", "Images::package_answer Images::package_asks Images::package_changed Images::set_package_schemes"],
+    ["painted:host/painted/src/image/png.rs", "DecodePlan::full DecodePlan::natural DecodePlan::new DecodePlan::of_key DecodePlan::part DecodePlan::peak_bytes"],
+    ["painted:host/painted/src/image/remote.rs",
+      "Downloads::cached_bytes Downloads::forget Downloads::load Downloads::new Downloads::process Downloads::promote " +
+      "Load::outcome Load::release Load::settled"],
+    ["painted:host/painted/src/image/workers.rs",
+      "Backend::cancel Backend::drain_wake Backend::evict Backend::finish_pictures Backend::forget Backend::generation " +
+      "Backend::message Backend::new Backend::note_scale Backend::prepared Backend::promote Backend::request " +
+      "Backend::retire Backend::source Backend::sources Backend::transient Backend::wake_fd"],
+  ]),
+  group("UI facts", "current reader/session, device facts, field or window configuration", "UI-owned", "host/painted/src/canvas/{device,colors,field,frames}.rs and fields.rs adapt current reader facts and controls; no independent operation record is supplied.", [
+    ["painted:host/painted/src/canvas/colors.rs", "colors"],
+    ["painted:host/painted/src/canvas/device.rs", "configure window"],
+    ["painted:host/painted/src/canvas/field.rs", "attach forget java text"],
+    ["painted:host/painted/src/canvas/frames.rs", "display_period identity"],
+    ["painted:host/painted/src/fields.rs", "host rescale"],
+    ["painted:host/painted/src/presenter/access.rs", "identity"],
+    ["painted:host/painted/src/presenter/device.rs", "touch_only"],
+    ["painted:host/painted/src/presenter/preferences.rs", "scrub_frame_drawn scrub_frames_said"],
+  ]),
+  group("presentation helpers", "current painted frame, geometry, style, ink cache or painter", "UI-owned", "The named host/painted paint, ink, GPU or presenter helper computes geometry, maintains paint state or draws the current frame. These helpers supply no durable operation identity.", [
+    ["painted:host/painted/src/canvas/jni_bytes.rs", "bytes utf8"],
+    ["painted:host/painted/src/canvas/jni.rs", "canvas_buffer canvas_frame copy_bitmap copy_buffer image_buffer release_window window_from_surface window_ready"],
+    ["painted:host/painted/src/gpu/images.rs", "ImageCache::begin ImageCache::brush"],
+    ["painted:host/painted/src/gpu/present.rs", "current_window set_window"],
+    ["painted:host/painted/src/ink.rs", "Ink::from_device Ink::info Ink::new"],
+    ["painted:host/painted/src/ink/images.rs", "Images::begin Images::bitmap Images::pin Images::pixmap Images::unpin"],
+    ["painted:host/painted/src/ink/stats.rs", "counter_state Ink::statistics StatisticsReader::read"],
+    ["painted:host/painted/src/paint.rs",
+      "bbox content_size object_fit PaintedBox::center PaintedBox::contains PaintedBox::surface Painter::backend " +
+      "Painter::flow_failures Painter::last_frame_ms Painter::new Painter::paint Painter::replace_backend " +
+      "Painter::retiring_text_residency Painter::take_notes rgba text_spec"],
+    ["painted:host/painted/src/paint/backend.rs", "Painter::trim WindowLayer::into_pixels"],
+    ["painted:host/painted/src/paint/border.rs",
+      "border_fills border_fills_styled PathOp::points pattern_fills reduced rounded_rect shape_path Shape::within " +
+      "shaped_rect"],
+    ["painted:host/painted/src/paint/damage.rs", "Changes::clear Changes::commit Changes::layout Changes::repaint Painter::damage_rects Painter::paragraph"],
+    ["painted:host/painted/src/paint/dialog_shadow.rs", "DialogShadow::matches DialogShadow::new DialogShadow::rect"],
+    ["painted:host/painted/src/paint/field.rs", "effective_overflow"],
+    ["painted:host/painted/src/paint/look.rs", "page_color"],
+    ["painted:host/painted/src/paint/presented.rs",
+      "PaintValues::color PaintValues::is_empty PaintValues::set PaintValues::value Presented::from_style " +
+      "Presented::translate_at"],
+    ["painted:host/painted/src/paint/rows.rs", "Dirty::commit Dirty::layout Dirty::node"],
+    ["painted:host/painted/src/paint/scrollbar.rs", "Bar::coordinate Bar::destination Bar::length Bar::scroll_offset Bar::start State::ink State::look"],
+    ["painted:host/painted/src/paint/shadow.rs",
+      "ShadowPaint::blurred ShadowPaint::capture ShadowPaint::fills ShadowPaint::inset ShadowPaint::lifted " +
+      "ShadowPaint::over"],
+    ["painted:host/painted/src/paint/shape.rs", "Shape::elliptical Shape::inset Shape::new Shape::rect Shape::rounded Shape::with_corners"],
+    ["painted:host/painted/src/paint/svg.rs", "resolve_with"],
+    ["painted:host/painted/src/presenter/bars/look.rs", "Layout::bottom Layout::paint Layout::target_at Layout::texts Layout::top nav_height top_height"],
+    ["painted:host/painted/src/presenter/clock.rs", "wall_since"],
+    ["painted:host/painted/src/presenter/display_frame.rs", "SubmittedFrame::pixels"],
+    ["painted:host/painted/src/presenter/edit_menu.rs", "EditMenu::enabled"],
+    ["painted:host/painted/src/presenter/painter.rs", "PainterChoice::from_baked PainterChoice::from_env set_custom_painter"],
+    ["painted:host/painted/src/presenter/palette.rs", "material Palette::from_words Palette::report Palette::tell"],
+    ["painted:host/painted/src/presenter/requests.rs", "Haptic::named"],
+    ["painted:host/painted/src/presenter/snap.rs", "area flicked resnap rest"],
+    ["painted:host/painted/src/presenter/top/look.rs", "Layout::desktop Layout::of Layout::paint Layout::target_at Layout::texts origin place"],
+    ["painted:host/painted/src/presenter/top/shape.rs", "alert is_confirmation menu Plan::rows"],
+    ["painted:host/painted/src/raster/geometry.rs", "rounded_rect"],
+    ["painted:host/painted/src/surfaces/android.rs", "buffer_frame window_ready"],
+    ["painted:host/painted/src/surfaces/retry.rs", "Rest::due Rest::rendered Retry::begin Retry::eligible Retry::recorded"],
+  ]),
+  group("module lifecycle", "package instance and current session context or reader binding", "UI-owned", "host/painted/src/package.rs Context exposes a session package instance; canvas/jni_extensions.rs binds the current reader extensions. Session reload replaces the context native slot.", [
+    ["painted:host/painted/src/canvas/jni_extensions.rs", "agent bind_later invoked now sensor_input surface_has under_agent"],
+    ["painted:host/painted/src/package.rs",
+      "Context::agent Context::cache Context::changed Context::data Context::desktop Context::emit Context::extension " +
+      "Context::foreground Context::label Context::log Context::notifier Context::now Context::origin Context::pads " +
+      "Context::request Context::session Context::temporary Entry::of"],
+  ]),
+  group("region and text", "text request/source, font recipe, paint context and current paragraph/cache residency", "UI-owned", "host/painted/src/text.rs and text/transfer.rs prepare and adopt text for its request, source and paint context; text cache and layout helpers retain those presentation values, not app outcomes.", [
+    ["painted:host/painted/src/content_region.rs",
+      "ContentRegionState::binding ContentRegionState::collection_feedback_allowed " +
+      "ContentRegionState::publication_painted ContentRegionState::receipt ContentRegionState::refusal " +
+      "ContentRegionState::text_snapshot ContentRegionState::work_counts"],
+    ["painted:host/painted/src/text.rs",
+      "Paragraph::baselines Paragraph::ellipsized Paragraph::ink_capacity_bytes Paragraph::layout_runs " +
+      "Paragraph::line_bottoms Paragraph::lines Paragraph::paint_glyphs Paragraph::run_backgrounds Paragraph::runs " +
+      "Run::from_kernel Run::from_style Spec::collapse_white_space Spec::from_request Spec::is_empty Spec::markdown " +
+      "Spec::shown TextEngine::declared_face_id TextEngine::face_count TextEngine::glyph_runs " +
+      "TextEngine::handoff_residency TextEngine::install_plan TextEngine::install_runtime TextEngine::measure " +
+      "TextEngine::new TextEngine::normal_line_height TextEngine::paint TextEngine::paragraph TextEngine::residency " +
+      "TextEngine::resolved_face_id TextEngine::shared TextEngine::shared_for_plan"],
+    ["painted:host/painted/src/text/cache.rs",
+      "Cache::before_shape Cache::bind Cache::finish_handoff Cache::get Cache::handoff_residency Cache::hold_measured " +
+      "Cache::identified Cache::identity Cache::identity_owned Cache::insert Cache::intrinsic Cache::invalidate_families " +
+      "Cache::maintain Cache::prepare_handoff Cache::release_handoff Cache::residency Cache::retiring " +
+      "Cache::set_intrinsic Cache::set_source Cache::source Cache::spec Cache::superseding Cache::trim deferring_eviction"],
+    ["painted:host/painted/src/text/catalog_recipe.rs", "Recipe::attach Recipe::catalog Recipe::fonts"],
+    ["painted:host/painted/src/text/flow.rs",
+      "FlowLayout::capacity_bytes Paragraph::flow_incomplete Paragraph::flow_line_height Paragraph::fragments " +
+      "TextEngine::paragraph_flow"],
+    ["painted:host/painted/src/text/fonts.rs", "Described::info Registry::add Registry::source"],
+    ["painted:host/painted/src/text/ink.rs", "Cache::bytes Cache::from_index Cache::matches Cache::reset Index::build Index::glyphs Index::viewport Index::visit"],
+    ["painted:host/painted/src/text/inline.rs", "Ownership::base Ownership::cluster_pieces Ownership::new Ownership::pieces"],
+    ["painted:host/painted/src/text/lines.rs", "Face::id LayoutGlyph::pixel LayoutGlyph::range LayoutGlyph::run Lines::capacity_bytes Lines::glyphs_of"],
+    ["painted:host/painted/src/text/markup.rs", "expand target"],
+    ["painted:host/painted/src/text/stroke.rs", "Cache::bytes Cache::get Cache::insert"],
+    ["painted:host/painted/src/text/transfer.rs",
+      "AdoptedText::metrics AdoptedText::paint_context AdoptedText::paragraph AdoptedText::request " +
+      "CompletedText::ink_capacity_bytes CompletedText::layout_capacity_bytes CompletedText::metrics " +
+      "CompletedText::paint_context CompletedText::request CompletedText::source FontRecipe::capture_cost " +
+      "FontRecipe::catalog_label FontWorker::execute FontWorker::new PaintContext::new PaintContext::scale " +
+      "PreparedCatalog::recipe PreparedSource::shape_capacity_bytes PreparedText::paint_context PreparedText::request " +
+      "PreparedText::source"],
+  ]),
+  group("request lifecycle", "executor pending request, stream/watch or ordered work queue for this session", "UI-owned", "host/painted/src/executor.rs queues, pumps, cancels and retires requests through the shared executor; reply ownership follows its runner ticket. package.rs Reply::send/error enqueue an answer through the wrapped runner Reply.", [
+    ["painted:host/painted/src/executor.rs",
+      "Executor::again Executor::begin_pump Executor::cancel Executor::drain Executor::fd Executor::forget " +
+      "Executor::let_go_started Executor::listen_reader Executor::note Executor::notify Executor::ordered_idle " +
+      "Executor::resume_ordered Executor::retry_reader Executor::run Executor::set_app_roots Executor::socket " +
+      "Executor::socket_reader Executor::start Executor::waker Executor::work_clock"],
+    ["painted:host/painted/src/package.rs", "Reply::error Reply::send"],
+  ], "durable when the request names retained effectful/background work; the executor also carries these requests."),
+  group("frame landings", "current window/frame submission, reader acknowledgement and diagnostic capture", "UI-owned", "host/painted/src/frames.rs tracks submitted/flipped frames; frame_health.rs and frame_health/android.rs record the current reader frame and capture, not app operations.", [
+    ["painted:host/painted/src/frame_health.rs",
+      "Health::capture Health::capturing Health::enabled Health::expire Health::frame Health::landed Health::lateness " +
+      "Health::leased Health::metrics Health::new Health::newest Health::report Health::reset Health::retained " +
+      "Health::set_virtual Health::stop Health::work"],
+    ["painted:host/painted/src/frame_health/android.rs",
+      "Reader::answer Reader::clock Reader::display_period Reader::idle Reader::landed Reader::new " +
+      "Reader::remember_display_period Reader::turned Reader::window_frames"],
+    ["painted:host/painted/src/frames.rs", "app_name Frames::dirty Frames::flipped Frames::host Frames::new Frames::reply Frames::submitted save_trace"],
+  ]),
+  group("media and sensors", "current device, input/sensor session, gamepad watch or haptic request", "UI-owned", "host/painted/src/{gamepad,pads}.rs and surfaces/sensors.rs read live device facts and manage current watches/rumble. These entries carry no independent retained app operation.", [
+    ["painted:host/painted/src/gamepad.rs", "change chronological driver layout_for read State::axis State::events State::key State::new"],
+    ["painted:host/painted/src/pads.rs",
+      "client connect disconnect due end Identity::family list Pads::list Pads::reset Pads::rumble Pads::watch read reset " +
+      "rumble take_lines take_recorded tick watch"],
+    ["painted:host/painted/src/surfaces/sensors.rs", "has write"],
+  ]),
+  group("hatch clocks", "live hatch element, registration, frame or timer ticket", "UI-owned", "host/painted/src/hatches.rs Context registers frames/after/observe; Element acts through the live node and Ticket::stop retires its registration. Overlay and diagnostic helpers share that attachment.", [
+    ["painted:host/painted/src/hatches.rs",
+      "Context::after Context::agent Context::diagnostics Context::frames Context::now Context::observe " +
+      "Diagnostics::begin Diagnostics::count Diagnostics::log Diagnostics::measure Diagnostics::publish " +
+      "Diagnostics::save_trace Element::blur Element::click Element::data Element::diagnostics Element::focus " +
+      "Element::frame Element::hatch Element::id Element::input Element::is_live Element::is_new Element::node " +
+      "Element::overlay Element::words install install_with_reader Overlay::clear Overlay::draw Span::end Ticket::stop"],
+  ]),
+  group("inspection", "session launch/trace journal and diagnostic subscriptions", "UI-owned", "host/painted/src/{journal,launch_marks}.rs record and report the current host launch and command events; they do not establish an independent operation outcome.", [
+    ["painted:host/painted/src/journal.rs",
+      "after_startup Event::json host_command launch_parts_ran LaunchContext::new LaunchContext::state_dir post record " +
+      "subscribe wall"],
+    ["painted:host/painted/src/launch_marks.rs",
+      "boottime items LaunchMarks::activated LaunchMarks::done LaunchMarks::flipped LaunchMarks::launch_end " +
+      "LaunchMarks::line LaunchMarks::new LaunchMarks::report LaunchMarks::submitted LaunchMarks::take_done " +
+      "LaunchMarks::timeout_ms LaunchMarks::turn"],
+  ]),
+  group("navigation", "current router visibility, route survivor or sheet presentation", "UI-owned", "host/painted/src/navigation.rs derives visibility and sheet ownership from the current router; it creates no independent operation.", [
+    ["painted:host/painted/src/navigation.rs", "Navigation::sync Navigation::visibility route_visibility sheet_of survivor"],
+  ]),
+  group("module announcements", "bound package/native slot or retained device reading in the current session", "UI-owned", "host/painted/src/package.rs Notifier delivers through the current Native slot; runner/src/runner/modules/arrival.rs tag_arrives numbers retained NFC readings for that module session.", [
+    ["painted:host/painted/src/package.rs", "Notifier::changed Notifier::emit"],
+    ["runner:runner/src/runner/modules/arrival.rs", "Runner::tag_arrives#last:1"],
+  ]),
+  group("picker results", "current picker/share request and its app file roots", "UI-owned", "host/painted/src/picker.rs configures app file roots and copies/selects paths for the current picker/share. Persistent copies are separate from the UI continuation receiving them.", [
+    ["painted:host/painted/src/picker.rs", "agent cold_share copy_in dimensions file know_roots open place resolve roots set_roots xdg_base"],
+  ]),
+  group("presence storage", "app-scoped secret vault/backend and secret generation", "durable", "host/painted/src/presence_secrets.rs backend/on_keystore select the app vault; system_support.rs SecretSession seeds and remembers secret records. Stored secret state is separate from a session-owned presence check.", [
+    ["painted:host/painted/src/presence_secrets.rs", "backend on_keystore"],
+    ["painted:host/painted/src/system_support.rs", "SecretSession::new SecretSession::remember SecretSession::seed"],
+  ]),
+  group("identity bookkeeping", "local cursor, metric, cache generation or diagnostic count; not a request ticket", "UI-owned", "The named source arithmetic write advances an interpreter/parser cursor, diagnostic count or presentation/cache state. It is enumerated conservatively so an allocator cannot hide behind a field name.", [
+    ["runner:runner/src/conform.rs", "Conformed::list#items_checked:1"],
+    ["runner:runner/src/frame_health/history.rs", "History::push#retained:1"],
+    ["runner:runner/src/instance.rs",
+      "Ids::evaluated#evaluated:1 Ids::evaluated#unchanged:1 Ids::retain#forgotten:1 NodeInst::create#created:1 " +
+      "NodeInst::create#nodes_visited:1 NodeInst::emit_bindings#bindings_evaluated:1 " +
+      "NodeInst::emit_bindings#bindings_evaluated:2 NodeInst::update#nodes_visited:1 update_all#regions_skipped:1 " +
+      "update_row#rows_reused:1 update_row#rows_scanned:1"],
+    ["runner:runner/src/instance/collection/index.rs", "SumTree::fill#zeros:1"],
+    ["runner:runner/src/instance/collection/into_view.rs", "Collection::settle_target#reports:1"],
+    ["runner:runner/src/instance/collection/mod.rs",
+      "Collection::build_row#row_constructed:1 Collection::feedback#size:1 " +
+      "Collection::realize_window_with_row#rows_reused:1 Collection::update_data#regions_skipped:1"],
+    ["runner:runner/src/instance/collection/nest.rs", "Kept::put#clock:1"],
+    ["runner:runner/src/instance/collection/rekey.rs", "Collection::rekey_full#rows_keyed:1 Collection::rekey_shared#rows_keyed:1"],
+    ["runner:runner/src/instance/collection/reuse.rs", "Collection::rebind#row_rebound:1 Collection::rebind#rows_rebound:1"],
+    ["runner:runner/src/instance/collection/within.rs", "Collection::travel_within#rows_reused:1"],
+    ["runner:runner/src/instance/collection/work.rs", "Collection::retire_row#row_retired:1"],
+    ["runner:runner/src/instance/region.rs", "RegionInst::update#rows_keyed:1"],
+    ["runner:runner/src/midi.rs", "Midi::heard#heard:1 Midi::push#ticks:1"],
+    ["runner:runner/src/perf.rs", "queue#1:1 reply#0:1 reply#1:1"],
+    ["runner:runner/src/runner.rs", "Runner::journal_only#journal_start:1"],
+    ["runner:runner/src/runner/admission.rs", "Runner::collect_aborts#1:1"],
+    ["runner:runner/src/runner/apply.rs", "Runner::apply#batch:1 Runner::apply#batch:2"],
+    ["runner:runner/src/runner/background.rs", "Runner::background_landed#rounds:1"],
+    ["runner:runner/src/runner/canvas2d.rs", "Canvases::reply#draws:1"],
+    ["runner:runner/src/runner/faults.rs", "Faults::take#hits:1"],
+    ["runner:runner/src/runner/into_view.rs",
+      "Runner::update_into_views_inner#batch:1 Runner::update_into_views_inner#bindings_evaluated:1 " +
+      "Runner::update_into_views_inner#derives_evaluated:1 Runner::update_into_views_inner#nodes_visited:1 " +
+      "Runner::update_into_views_inner#regions_skipped:1 Runner::update_into_views_inner#rows_keyed:1 " +
+      "Runner::update_into_views_inner#rows_rebound:1 Runner::update_into_views_inner#rows_reused:1 " +
+      "Runner::update_into_views_inner#rows_scanned:1 Runner::update_into_views_inner#store_bytes_copied:1"],
+    ["runner:runner/src/runner/kept.rs", "Runner::send_one#mutation_requests:1"],
+    ["runner:runner/src/runner/lists.rs", "Runner::update_ops#rows_scanned:1"],
+    ["runner:runner/src/runner/live_time.rs", "Runner::tick_live_times#batch:1"],
+    ["runner:runner/src/runner/mapper_turns.rs", "Behind::hold#bytes:1 Behind::hold#messages:1 Behind::next#bytes:1 Behind::next#messages:1"],
+    ["runner:runner/src/runner/modules/pictures.rs", "Runner::picture_admission#0:1 Runner::picture_admission#1:1"],
+    ["runner:runner/src/runner/modules/processes.rs", "Runner::note_child_outcome#bytes_out:1 Runner::note_child_sent#bytes_in:1"],
+    ["runner:runner/src/runner/modules/samples.rs", "Runner::surface_sensor_events#dropped:1"],
+    ["runner:runner/src/runner/perf.rs",
+      "Runner::count_dispatch#committed:1 Runner::count_dispatch#dispatched:1 Runner::count_failure#count:1 " +
+      "Runner::measure#before:1 Runner::measure#created:1 Runner::moved#moved:1 Runner::tally#authored:1 " +
+      "Runner::tally#inherited:1"],
+    ["runner:runner/src/runner/persist.rs", "Reader::eat#at:1 Reader::number#at:1 Reader::space#at:1 Reader::string#at:1"],
+    ["runner:runner/src/runner/picker/shared.rs", "Claimed::copy_with#dropped:1 Claims::claim#2:1 Claims::claim#2:2"],
+    ["runner:runner/src/runner/query.rs", "Runner::count_churn#2:1"],
+    ["runner:runner/src/runner/queue.rs", "Runner::ask_send#mutation_requests:1"],
+    ["runner:runner/src/runner/reply.rs", "Runner::fulfill_inner#messages:1 Runner::message#coalesced:1"],
+    ["runner:runner/src/runner/router.rs", "RouterContext::commit#activations:1"],
+    ["runner:runner/src/runner/settlement.rs", "Runner::settle_pass#derives_evaluated:1"],
+    ["runner:runner/src/runner/sockets.rs", "Runner::socket_published#sent:1"],
+    ["runner:runner/src/runner/text_axes.rs", "Runner::settle_text_axes#batch:1"],
+    ["runner:runner/src/runner/text_axes/present.rs", "Runner::tick_text_axes#batch:1"],
+    ["runner:runner/src/runner/theme.rs", "Runner::set_tokens#design_moves:1"],
+    ["runner:runner/src/sound.rs", "Sounds::trim#evicted:1"],
+    ["runner:runner/src/store.rs", "Store::remember#copied:1"],
+    ["runner:runner/src/stream_timing.rs",
+      "committed#busy_us:1 committed#commits:1 committed#refused:1 decoded#decoded_bytes:1 decoded#decodes:1 " +
+      "entered#messages:1"],
+    ["runner:runner/src/surface_record.rs",
+      "Reader::digits#at:1 Reader::eat#at:1 Reader::hex#at:1 Reader::space#at:1 Reader::string#at:1 Reader::string#at:2 " +
+      "Reader::value#at:1 Reader::value#at:2 Reader::word#at:1"],
+    ["runner:runner/src/transport.rs", "Transport::segment#recorded:1"],
+    ["runner:runner/src/transport/clock.rs", "Follow::feed#ticks:1"],
+    ["runner:runner/src/vm.rs", "Extent::with#bytes:1 Extent::with#nodes:1 measure#bytes:1 measure#nodes:1 Run::load_derive#calls:1"],
+    ["runner:runner/src/vm/column.rs", "Iter::next#at:1"],
+  ]),
+  group("native callbacks", "module invocation or numbered native send and its session-bound caller", "UI-owned", "runner/src/runner/modules/admit.rs next_invocation allocates invocation ids; bound.rs forward_body and letgo.rs number_data_call number native sends so cancellation and held replies identify the call.", [
+    ["runner:runner/src/runner/modules/admit.rs", "Runner::next_invocation#last_id:1"],
+    ["runner:runner/src/runner/modules/bound.rs", "Runner::forward_body#requests:1"],
+    ["runner:runner/src/runner/modules/letgo.rs", "Runner::number_data_call#requests:1"],
+  ]),
+  group("holds", "open payment sheet, request id and current handler attempt", "UI-owned", "runner/src/runner/modules/sheet.rs sheet_opened numbers payment requests; sheet_call allocates Asking.call and sheet_handled refuses mismatched attempts. payment_response numbers synthetic responses for that sheet.", [
+    ["runner:runner/src/runner/modules/sheet.rs", "Runner::payment_response#payments:1 Runner::sheet_call#calls:1 Runner::sheet_opened#calls:1"],
+  ]),
+  group("replies", "parallel mutation send number and the mutation that owns its settlement", "UI-owned", "runner/src/runner/parallel.rs send_target mints Target::Sent; conclude_send ignores an outcome older than the latest send concluded for that mutation.", [
+    ["runner:runner/src/runner/parallel.rs", "Runner::send_target#sends:1"],
+  ]),
+  group("picker results", "current picker and launch-seeded temporary path id", "UI-owned", "runner/src/runner/picker.rs picked_path mints a distinct launch-seeded app:/tmp/picked path for each picked file; the copied bytes are separate from its requesting UI continuation.", [
+    ["runner:runner/src/runner/picker.rs", "Runner::picked_path#picked_count:1"],
+  ]),
+  group("shared tokens", "share token in the current router and launch-seeded copied-file path", "UI-owned", "runner/src/runner/picker/shared.rs Claims::claim advances files for copied paths and tokens for incoming router shares. set_shared admits only the live router token.", [
+    ["runner:runner/src/runner/picker/shared.rs", "Claims::claim#files:1 Claims::claim#tokens:1"],
+  ]),
+  group("wakes", "app wake reference and retry/backoff state", "durable", "runner/src/runner/modules/declared/wake_list.rs wake_entry_ended increments the wake reference retry count and uses it to schedule backoff, independently of a mounted UI.", [
+    ["runner:runner/src/runner/modules/declared/wake_list.rs", "Runner::wake_entry_ended#attempts:1"],
+  ]),
 ];
