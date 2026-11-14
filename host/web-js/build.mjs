@@ -2,6 +2,7 @@ import { grantWords, trimGrant } from '../web/grant-admission.js';
 import { asyncContext, bundleOptions, developmentLocalNetwork, lowered, packageConfig, webImplementations } from '../../js/bake/src/typescript.mjs';
 import { buildPageFiles, writeCrawlerFiles } from '../web/crawl.mjs';
 import { bakeWatchEnv, hatchWords, injectedProfiles, moduleDirectory, resolveApp, webAppManifest, webToolchainEnv } from '../../scripts/app.mjs';
+import { rustDataOf } from '../../scripts/app-shells.mjs';
 import { webIconLinks, webThemeColors } from '../../scripts/app-icons.mjs';
 import { webAudioSession, webCspFile, webHead } from '../../scripts/web-head.mjs';
 import { fileIdentity, resourceIdentities } from '../apple/assets.mjs';
@@ -30,7 +31,7 @@ import { transformSync, parseSync, Visitor } from 'rolldown/utils';
 import { copyGpuCache } from './gpu-cache.mjs';
 import { analyze } from './page-style.mjs';
 import { bundleHostModule, gateAgent, localImports, stageHostGlue } from './glue.mjs';
-import { bakedRustSource, buildEditor, buildFlow, buildMarkdown, buildModule, buildMotion, fresh, leafTaken, moduleGrants, webCompiler, inspectHooked, withInspectHooks, withoutDev, withRuntimeStamp } from './module.mjs';
+import { buildEditor, buildFlow, buildMarkdown, buildModule, buildMotion, moduleSourceDirs, fresh, leafTaken, moduleGrants, webCompiler, inspectHooked, withInspectHooks, withoutDev, withRuntimeStamp } from './module.mjs';
 import { developmentStore } from '../../scripts/agent-launch.mjs';
 import { settingLines } from '../../js/bake/src/__exact_env.mjs';
 import { colorSchemeMeta, interfaceStyle, withInterfaceStyle, withLook } from '../web/look.mjs';
@@ -110,9 +111,9 @@ const webManifest = webAppManifest(manifest, manifest.app?.name ?? manifest.name
 for (const note of manifestNotes) console.log(note);
 writeFileSync(resolve(out, 'manifest.json'), JSON.stringify(webManifest, null, 2) + '\n');
 // Rust data: the app's own module (`rust.module`), or a module generated
-// from the DataSource its web build bakes with (host/web-js/module.mjs).
-const rustSource = bakedRustSource(appDir);
-const rust = !!manifest.rust?.module || !!rustSource;
+// from the source app.json's `rust.data` names (host/web-js/module.mjs).
+const rustData = rustDataOf(manifest);
+const rust = !!manifest.rust?.module || !!rustData;
 // A TypeScript source (`app.ts`) runs in the page, bundled with it; beside a
 // Rust one (LLP 1027.002), the Rust module answers what it owns and the
 // TypeScript module the rest (ts-data.js, rust-data.js). A synthetic plan
@@ -302,14 +303,17 @@ const orientationlock = existsSync(resolve(gen, 'orientationlock.flag'));
 const dialogs = existsSync(resolve(gen, 'dialogs.flag'));
 // App generation may create files imported by app.ts. A mixed app's composer
 // also owns the Rust source roster, so take its declarations from that bake.
-const webScript = resolve(appDir, 'web/build.rs');
-const composed = mixed && rustSource?.call === 'exact_js_bake::build_mixed_with';
-if (ts && existsSync(webScript) && (composed || !/^\s*fn main\(\)\s*\{\s*exact_js_bake::build\w*\(/m.test(readFileSync(webScript, 'utf8')))) {
+// A generated workspace's web crate composes the two when app.json names rust.data (LLP 1153.003 D2).
+const composed = mixed && !!rustData;
+const generatedWeb = composed && resolveApp(appDir).generated;
+const webCrate = generatedWeb ? resolve(appDir, '.exact/shells/web') : resolve(appDir, 'web');
+const webScript = resolve(webCrate, 'build.rs');
+if (ts && (composed || existsSync(webScript)) && (composed || !/^\s*fn main\(\)\s*\{\s*exact_js_bake::build\w*\(/m.test(readFileSync(webScript, 'utf8')))) {
   // With what its bake watches named, as every baking build is (`bakeWatchEnv`): unset, a check reruns it every time.
   // The workspace's lock is checked first, as every build's is, and `--locked` keeps the check from rewriting it (LLP 1153 D2.1).
   resolveApp(appDir).rust();
-  const crate = resolve(appDir, 'web/Cargo.toml');
-  const r = spawnSync('cargo', ['check', '-q', '--locked', '--manifest-path', crate, '--message-format=json-render-diagnostics'], { cwd: root, stdio: ['ignore', 'pipe', 'inherit'], encoding: 'utf8', maxBuffer: 1 << 26, env: { ...process.env, ...bakeWatchEnv({ dir: appDir, manifest }) } });
+  const crate = resolve(webCrate, 'Cargo.toml');
+  const r = spawnSync('cargo', ['check', '-q', '--locked', '--manifest-path', crate, '--message-format=json-render-diagnostics'], { cwd: root, stdio: ['ignore', 'pipe', 'inherit'], encoding: 'utf8', maxBuffer: 1 << 26, env: { ...process.env, ...bakeWatchEnv({ dir: appDir, manifest }), ...(generatedWeb ? { CARGO_TARGET_DIR: resolveApp(appDir).target } : {}) } });
   const messages = (r.stdout ?? '').split('\n').filter(Boolean).map(line => JSON.parse(line));
   for (const message of messages) if (message.reason === 'compiler-message' && message.message.rendered) process.stderr.write(message.message.rendered);
   if (r.status !== 0) { console.error(`${app}: its web build script failed`); process.exit(1); }
@@ -504,6 +508,15 @@ if (rust) {
   const built = from && existsSync(resolve(from, 'rust/wasm/app.module.wasm')) ? resolve(from, 'rust/wasm/app.module.wasm') : buildModule(app, undefined, canvas2d, appDir);
   cpSync(built, resolve(out, 'rust/wasm/app.module.wasm'));
   if (devReload) devLogic.push(['rust', createHash('sha256').update(readFileSync(resolve(out, 'rust/wasm/app.module.wasm'))).digest('hex')]);
+  // The module's crates outside the app's directory (a path dependency) are inputs the dev loop watches, as the
+  // app's own are (LLP 1153.003 D1.6); exact2's are its own build's.
+  const outside = moduleSourceDirs(built).filter(dir => !dir.startsWith(appDir + sep) && !dir.startsWith(root + sep) && !dir.includes(`${sep}.cargo${sep}`));
+  if (devReload && outside.length) {
+    const listed = resolve(gen, 'dev-sources.json');
+    const sources = existsSync(listed) ? JSON.parse(readFileSync(listed, 'utf8')) : {};
+    sources.packages = [...new Set([...(sources.packages ?? []), ...outside])];
+    writeFileSync(listed, JSON.stringify(sources));
+  }
   rustGrants = await moduleGrants(built);
   rustGrantSet = normalizeGrants(ts ? 'Rust module' : 'app', rustGrants, 'rust');
   moduleStorage = rustGrantSet.entries.some(([, , grant]) => ['fs-read', 'fs-write', 'sqlite-open'].includes(grant?.[0]));

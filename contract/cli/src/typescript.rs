@@ -312,18 +312,31 @@ fn tokens(plan: &Plan, exports: Option<&[String]>, out: &mut String) {
 /// The file's top (LLP 1116.006 D7): what `app.ts` writes, one line each, so a builder reads
 /// these lines and not the declarations below. Each source the data module implements with its
 /// arguments and answer, then each named shape those carry, as TypeScript types; comments only.
+/// The sources app.ts answers beside a Rust data source owning `rust_sources`: the plan's, but those the runner, a
+/// module or a fetch answers.
+fn typescript_rows<'a>(
+    plan: &'a Plan,
+    rust_sources: &'a [String],
+) -> impl Iterator<Item = &'a exact_plan::SourcesRow> {
+    plan.sources.iter().filter(|row| {
+        let name = plan.str(row.name);
+        !exact_plan::runner_owned_source(name)
+            && plan.module_named(name).is_none()
+            && plan.fetch_named(name).is_none()
+            && !rust_sources.iter().any(|source| source == name)
+    })
+}
+
+/// The names of the sources app.ts answers beside a Rust data source owning `rust_sources`: what a mixed host's
+/// composition gives the TypeScript module (`exact_data::Mixed::new`).
+pub fn typescript_sources(plan: &Plan, rust_sources: &[String]) -> Vec<String> {
+    typescript_rows(plan, rust_sources)
+        .map(|row| plan.str(row.name).to_string())
+        .collect()
+}
+
 fn summary(plan: &Plan, rust_sources: &[String], out: &mut String) {
-    let sources: Vec<_> = plan
-        .sources
-        .iter()
-        .filter(|row| {
-            let name = plan.str(row.name);
-            !exact_plan::runner_owned_source(name)
-                && plan.module_named(name).is_none()
-                && plan.fetch_named(name).is_none()
-                && !rust_sources.iter().any(|source| source == name)
-        })
-        .collect();
+    let sources: Vec<_> = typescript_rows(plan, rust_sources).collect();
     if sources.is_empty() {
         return;
     }

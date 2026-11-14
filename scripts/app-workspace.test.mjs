@@ -1107,3 +1107,50 @@ test('a generated workspace captures no lock until a dependency leaves exact2\'s
     assert.match(lockShells(dir, workspace), new RegExp(`Cargo\\.lock: resolved\nitoa ${other.replaceAll('.', '\\.')} → ${held.replaceAll('.', '\\.')}`));
   } finally { rmSync(scratch, { recursive: true, force: true }); }
 }, 180_000);
+
+// LLP 1153.003 D2: a data crate the manifest names is linked by generated host crates whose build script is one line,
+// with no exact-js (no Hermes) without app.ts, and composed with the TypeScript module beside it.
+test('rust.data generates host crates over the data crate, composed with app.ts when there is one', async () => {
+  const { createApp } = await import('../game/new.mjs');
+  const { ensureShells } = await import('./app-shells.mjs');
+  const scratch = realpathSync(mkdtempSync(resolve(tmpdir(), 'exact-rust-data-'))), dir = resolve(scratch, 'pins');
+  try {
+    createApp(dir, { with: ['ios', 'linux', 'android'] });
+    mkdirSync(resolve(dir, 'data/src'), { recursive: true });
+    writeFileSync(resolve(dir, 'data/Cargo.toml'), '[package]\nname = "pins-data"\nversion.workspace = true\nedition.workspace = true\nworkspace = "../.exact/shells"\npublish = false\n\n[dependencies]\nexact-runner.workspace = true\n');
+    writeFileSync(resolve(dir, 'data/src/lib.rs'), '');
+    const manifest = JSON.parse(readFileSync(resolve(dir, 'app.json'), 'utf8'));
+    const declare = data => writeFileSync(resolve(dir, 'app.json'), JSON.stringify({ ...manifest, rust: { data } }, null, 2));
+    declare({ crate: 'other-data', type: 'other_data::Pins' });
+    assert.throws(() => ensureShells(dir), /rust\.data\.crate is other-data, which is not a crate beside app\.json that joins the app's workspace/);
+    declare({ crate: 'pins-data', type: 'pins_data::Pins', source: 'pins_data::Pins::new(3)' });
+    rmSync(resolve(dir, 'app.ts'));
+    const { workspace } = ensureShells(dir);
+    const read = file => readFileSync(resolve(workspace, file), 'utf8');
+    assert.match(read('Cargo.toml'), /^members = \["web", "apple", "linux", "android", "module", "\.\.\/\.\.\/data"\]$/m);
+    for (const kind of ['web', 'apple', 'linux', 'android']) {
+      assert.equal(read(`${kind}/build.rs`), `fn main() {\n    exact_bake::host::app("${kind}", "../../..", pins_data::Pins::new(3));\n}\n`);
+      assert.match(read(`${kind}/Cargo.toml`), /^pins-data = \{ path = "\.\.\/\.\.\/\.\.\/data" \}$/m);
+      assert.doesNotMatch(read(`${kind}/Cargo.toml`), /exact-js/);
+    }
+    // The web's module exports the same source; the dev driver bakes with `default()`, so a source given is none.
+    assert.match(read('module/src/lib.rs'), /^exact_logic_abi::export!\(pins_data::Pins, pins_data::Pins::new\(3\)\);$/m);
+    assert.equal(existsSync(resolve(workspace, 'web/src/bin/pins-dev.rs')), false);
+    const loads = spawnSync('cargo', ['metadata', '--no-deps', '--offline', '--format-version', '1'], { cwd: workspace, encoding: 'utf8' });
+    assert.equal(loads.status, 0, loads.stderr);
+    // With app.ts beside it, the crates compose the two: Rust answers its RUST_SOURCES, app.ts the rest.
+    writeFileSync(resolve(dir, 'app.ts'), 'export const grants = "";\n');
+    assert.equal(ensureShells(dir).wrote, true);
+    assert.match(read('web/build.rs'), /exact_js_bake::build_beside\([^]*&pins_data::Pins::new\(3\),\n\s*pins_data::RUST_SOURCES,/);
+    assert.match(read('apple/src/lib.rs'), /exact_data::Mixed::new\([^]*TYPESCRIPT_SOURCES,\n\s*pins_data::RUST_SOURCES,/);
+    // A data crate that names no app takes the module's identity, which `Mixed` requires both sides to share.
+    for (const file of ['web/build.rs', 'apple/src/lib.rs']) assert.match(read(file), /Placed::new\(pins_data::Pins::new\(3\), [^)]+\)\.named\(&app\)/);
+    assert.match(read('linux/Cargo.toml'), /^exact-js = /m);
+    // Without rust.data, the module member goes with it.
+    writeFileSync(resolve(dir, 'app.json'), JSON.stringify(manifest, null, 2));
+    rmSync(resolve(dir, 'data'), { recursive: true });
+    ensureShells(dir);
+    assert.equal(existsSync(resolve(workspace, 'module')), false);
+    assert.match(read('web/build.rs'), /exact_js_bake::build\(/);
+  } finally { rmSync(scratch, { recursive: true, force: true }); }
+}, 180_000);

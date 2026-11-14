@@ -362,6 +362,18 @@ impl<D: DataSource + 'static> Placed<D> {
         self.stages.len()
     }
 
+    /// The app's identity for a source that names none (`DataSource::app_id`'s
+    /// default), as `exact_logic::Swappable::named` gives one app.json's: a
+    /// generated host crate composes an unnamed data crate beside app.ts under
+    /// the module's identity (LLP 1153.003 D2), which `Mixed` requires both
+    /// sides to share. A source that names its own id keeps it.
+    pub fn named(mut self, app: &str) -> Self {
+        if self.app_id.is_empty() {
+            self.app_id = app.into();
+        }
+        self
+    }
+
     /// The placement this was given (what `placement()` reports outside
     /// validation).
     pub fn given_placement(&self) -> Placement {
@@ -1330,7 +1342,8 @@ impl<D: DataSource + 'static> exact_runner::DataSourceWrapper for Placed<D> {
         }
     }
 
-    /// A replacement keeps its placement (LLP 1027.002 §6). A moved source
+    /// A replacement keeps its placement (LLP 1027.002 §6) and the name it
+    /// was given. A moved source
     /// has no `Self` left here to pair; a built one is replaced through its
     /// template.
     fn replacement(&self, plan: &[u8], receipt: &str, module: Vec<u8>) -> Result<Self, DataError> {
@@ -1339,12 +1352,14 @@ impl<D: DataSource + 'static> exact_runner::DataSourceWrapper for Placed<D> {
                 inner.replacement(plan, receipt, module)?,
                 self.placement,
                 Spawn::Build(*build),
-            )),
+            )
+            .named(&self.app_id)),
             (Some(inner), Spawn::Move(moved)) => Ok(Self::with_spawn(
                 inner.replacement(plan, receipt, module)?,
                 self.placement,
                 Spawn::Move(*moved),
-            )),
+            )
+            .named(&self.app_id)),
             (None, _) => Err(unavailable(
                 "a placed source is binary-bound once on its owner; rebuild it",
             )),

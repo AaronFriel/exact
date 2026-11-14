@@ -5,6 +5,8 @@
 #![deny(missing_docs)]
 
 mod android;
+mod mixed;
+pub use mixed::{build_beside, build_mixed, build_mixed_with};
 mod beside;
 pub mod cli;
 mod icon;
@@ -100,37 +102,6 @@ pub const APP_BYTECODE: &[u8] = {
 };
 "#;
 
-/// Bake a mixed app using each source's own identity and grants. Metadata reads
-/// never invoke or activate the Rust implementation; first-frame values bake
-/// through TypeScript alone.
-pub fn build_mixed(app: &Path, platform: &str, rust: &dyn DataSource) -> Result<(), BakeError> {
-    library::link(app, platform, false).map_err(BakeError)?;
-    icon::link();
-    build_sources(app, platform, Some(rust), None, false).map_err(BakeError)
-}
-
-/// Bake a mixed app through its own composer (LLP 1027.002 §5 step 0): the
-/// bake's TypeScript module is composed with the app's Rust source by
-/// `compose`, so a resource only Rust owns bakes its first-frame value
-/// through Rust, with no TypeScript placeholder. `rust_sources` names what
-/// Rust owns, for the TypeScript provider types and the receipt the
-/// development producer seeds from.
-pub fn build_mixed_with(
-    app: &Path,
-    platform: &str,
-    rust: &dyn DataSource,
-    rust_sources: &[&str],
-    compose: impl Fn(Module) -> Box<dyn DataSource>,
-) -> Result<(), BakeError> {
-    library::link(app, platform, false).map_err(BakeError)?;
-    icon::link();
-    let composer = Composer {
-        rust_sources: rust_sources.iter().map(|s| s.to_string()).collect(),
-        compose: Box::new(compose),
-    };
-    build_sources(app, platform, Some(rust), Some(composer), false).map_err(BakeError)
-}
-
 /// How a Cargo bake composes the TypeScript module with the app's Rust.
 struct Composer<'a> {
     rust_sources: Vec<String>,
@@ -147,7 +118,10 @@ fn mixed_grants<'a>(
     rust: Option<&'a dyn DataSource>,
 ) -> Result<Option<&'a str>, String> {
     rust.map(|source| {
-        if javascript["appId"].as_str() != Some(source.app_id()) {
+        // An unnamed source takes the module's identity where it is composed
+        // (`exact_data::Placed::named`, LLP 1153.003 D2).
+        let named = source.app_id();
+        if !named.is_empty() && javascript["appId"].as_str() != Some(named) {
             return Err("mixed bake sources must declare the same app identity".into());
         }
         Ok(source.grants())
@@ -396,6 +370,21 @@ fn build_sources(
         };
         metadata.push_str(&format!(
             "pub const {name}: {placement_type} = {placement_type}::{variant};\n"
+        ));
+    }
+    // Beside a Rust source, the sources the TypeScript module answers: what a generated host's composition gives it
+    // (`exact_data::Mixed::new`, LLP 1153.003 D2).
+    if rust.is_some() {
+        let plan = exact_plan::Plan::decode(&baked.plan).map_err(|e| format!("{e:?}"))?;
+        let rust_sources: Vec<String> = meta["rustSources"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|name| name.as_str().map(str::to_owned))
+            .collect();
+        metadata.push_str(&format!(
+            "#[allow(dead_code)]\npub const TYPESCRIPT_SOURCES: &[&str] = &{:?};\n",
+            contract::typescript_sources(&plan, &rust_sources)
         ));
     }
     replace_changed(&out.join("module.rs"), metadata.as_bytes())?;

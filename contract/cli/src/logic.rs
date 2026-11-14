@@ -28,6 +28,7 @@ pub fn rust_entry_naming(
     inputs: &serde_json::Value,
     app: Option<&str>,
 ) -> Result<String, String> {
+    declared_source(data, constructor, inputs)?;
     let constructor = native_storage_constructor(constructor, inputs)?;
     let constructor = constructor.as_str();
     // The digest of the source this binary compiles `constructor`'s crate
@@ -230,6 +231,47 @@ fn sqlite_refusal(manifest: &std::path::Path) -> String {
         manifest.display(),
         vendored.display()
     )
+}
+
+/// Refuse an entry whose source is not the one app.json's `rust.data` names (LLP 1153.003 D2), as the compatibility
+/// inputs carry it (`rustData`): the web build runs the manifest's, so a build script that passed another would run
+/// one source natively and another on the web. A source the host storage wraps (`exact_data_host::Storage`) is read
+/// inside it. An entry over a source the crate composes itself (`ExactEmbeddedData`, `ExactEmptyData`) names no
+/// constructor of the data crate's; the mixed bake checks that one's type.
+fn declared_source(
+    data: &str,
+    constructor: &str,
+    inputs: &serde_json::Value,
+) -> Result<(), String> {
+    let declared = &inputs["rustData"];
+    let (Some(ty), Some(source)) = (declared["type"].as_str(), declared["source"].as_str()) else {
+        return Ok(());
+    };
+    if matches!(data, "ExactEmbeddedData" | "ExactEmptyData") {
+        return Ok(());
+    }
+    let compact = |text: &str| text.split_whitespace().collect::<String>();
+    let (data, constructor) = (compact(data), compact(constructor));
+    let inner = |text: &str, open: &str, close: char| {
+        text.strip_prefix(open)
+            .and_then(|rest| rest.strip_suffix(close))
+            .map(str::to_owned)
+    };
+    let data = inner(&data, "exact_data_host::Storage<", '>').unwrap_or(data);
+    let constructor =
+        inner(&constructor, "exact_data_host::Storage::new(", ')').unwrap_or(constructor);
+    if data == compact(ty) && constructor == compact(source) {
+        return Ok(());
+    }
+    // A native host crate the app wrote may run another source of the same crate (markdown-stress's Apple host runs
+    // its native document lane); the web's entry runs the module the manifest names, so it must name the same.
+    let library = |path: &str| path.split("::").next().map(str::to_owned);
+    if inputs["platform"] != "web" && library(&data) == library(ty) {
+        return Ok(());
+    }
+    Err(format!(
+        "app.json's rust.data names the source `{source}` (`{ty}`), and this build passes `{constructor}` (`{data}`): pass the source the manifest names, which the web build also runs"
+    ))
 }
 
 /// A Linux app's whole `entry.rs`: [`rust_entry`], its `launch_parts()`, its
@@ -546,6 +588,35 @@ mod tests {
         assert!(super::rust_entry("Data", "data()", "off", &inputs)
             .unwrap()
             .contains("ibex2_sqlite::link();"));
+    }
+
+    /// LLP 1153.003 D2: a build script passes the source app.json's `rust.data` names, which the web build runs.
+    #[test]
+    fn an_entry_over_another_source_than_the_manifests_is_refused() {
+        let inputs = serde_json::json!({
+            "platform": "web", "rustMode": "off",
+            "rustData": {"crate": "pins-data", "type": "pins_data::Pins", "source": "pins_data::Pins::new(3)"}
+        });
+        let entry = |data, constructor| super::rust_entry(data, constructor, "off", &inputs);
+        assert!(entry("pins_data::Pins", "pins_data::Pins::new(3)").is_ok());
+        assert!(entry(
+            "exact_data_host::Storage<pins_data::Pins>",
+            "exact_data_host::Storage::new(pins_data::Pins::new( 3 ))"
+        )
+        .is_ok());
+        let refused = entry("pins_data::Pins", "pins_data::Pins::default()").unwrap_err();
+        assert!(
+            refused.contains("rust.data names the source `pins_data::Pins::new(3)`"),
+            "{refused}"
+        );
+        assert!(entry("other_data::Other", "pins_data::Pins::new(3)").is_err());
+        // A source the crate composes itself is the mixed bake's to check.
+        assert!(entry("ExactEmbeddedData", "embedded_data()").is_ok());
+        // A native host may run another source of the manifest's crate, never another crate's.
+        let native = serde_json::json!({ "platform": "macos", "rustMode": "off", "rustData": inputs["rustData"] });
+        let entry = |data, constructor| super::rust_entry(data, constructor, "off", &native);
+        assert!(entry("pins_data::NativePins", "pins_data::NativePins::default()").is_ok());
+        assert!(entry("other_data::Other", "other_data::Other::default()").is_err());
     }
 
     #[test]

@@ -1,7 +1,7 @@
 // An app's Rust data source as a standalone logic module (LLP 1029.000,
 // ABI 12) for the JS runtime, when the app declares none of its own: a
-// generated crate exporting the same DataSource the web build bakes with
-// (`contract::bake` or `exact_js_bake::build_mixed_with` in web/build.rs).
+// generated crate exporting the source app.json's `rust.data` names (LLP
+// 1153.003 D2), which the native hosts bake with too.
 // usage: bun host/web-js/module.mjs <app> [--out <dir>] → <dir>/app.module.wasm
 //        bun host/web-js/module.mjs --prebuild: what every app's web build
 //        shares (the compiler, the leaf modules), compiled and kept for the
@@ -13,7 +13,9 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 // Also for its PATH: the pinned binaryen (and Cargo) as every web build has
 // them, so a prebuild optimizes and keeps what an app's build would.
-import { WEB_STD, WEB_SIZE, WEB_TOOLCHAIN, wasmRemapFlags, webToolchainEnv } from '../../scripts/app.mjs';
+import { WEB_STD, WEB_SIZE, WEB_TOOLCHAIN, injectedProfiles, resolveApp, wasmRemapFlags, webToolchainEnv } from '../../scripts/app.mjs';
+import { rustDataOf } from '../../scripts/app-shells.mjs';
+import { appCrates } from '../../scripts/cargo-check.mjs';
 import { withHostDeployment } from '../../scripts/filesystem.mjs';
 import { replaceBuild } from '../web/serve.mjs';
 import { proofInputs } from '../../game/inputs.mjs';
@@ -115,6 +117,17 @@ export function crateDir(file) {
 /** The build script directory (`…/build/<package>-<hash>`) of a file a
  * dep-info lists under its `out/`, by either separator. null for others. */
 export const buildScriptDir = (file) => /^(.*[\\/]build[\\/][^\\/]+)[\\/]out[\\/]/.exec(file)?.[1] ?? null;
+/** The dep-info of each module `buildModule` built, by the path it returned. */
+const moduleDepInfo = new Map();
+/** The package directories the module at `built` (what `buildModule` returned) was compiled from, by its dep-info:
+ * the data crate and every path dependency, wherever it is (LLP 1153.003 D1.6). Empty when it has none. */
+export function moduleSourceDirs(built) {
+  try {
+    const text = readFileSync(moduleDepInfo.get(built), 'utf8');
+    const files = text.slice(text.indexOf(': ') + 2).trim().split(/(?<!\\)\s+/).map(f => f.replace(/\\ /g, ' '));
+    return [...new Set(files.map(crateDir).filter(Boolean))];
+  } catch { return []; }
+}
 /** Whether `product` is newer than everything Cargo's dep-info `dep` says
  * it was built from, and than what the build scripts behind it declared
  * (`cargo:rerun-if-changed`, beside each `out/` it read). An unchanged
@@ -158,96 +171,40 @@ function lockFrom(crate) {
 function module(manifest, name, out, label) {
   const wasm = resolve(TARGET, 'wasm32-unknown-unknown/release', `${name}.wasm`), done = resolve(out, 'app.module.wasm');
   mkdirSync(out, { recursive: true });
+  moduleDepInfo.set(done, wasm.replace(/\.wasm$/, '.d'));
   if (fresh(done, wasm.replace(/\.wasm$/, '.d'), [manifest])) return done;
   if (cargoWasm(manifest).status !== 0) throw new Error(`${label} did not build`);
   replace(done, (temp) => optimize(wasm, temp, 'module'));
   return done;
 }
 
-/** Rust's string and character literals, to blank before reading a call's structure (a `,` or `)` in one splits
- * nothing). A lifetime (`'a`) has no closing quote and is left. Raw strings are not read. */
-const QUOTED = /"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])'/g;
-const blank = (text) => text.replace(QUOTED, (s) => ' '.repeat(s.length));
-
-/** The top-level arguments of the call whose `(` ends at `start` in `build`, each as written and trimmed, and the
- * index of its closing `)` (`{ args, end }`), or null when the call is not closed. `code` is `build` with its literals
- * blanked, index for index. A comma before the `)` (rustfmt's, when it breaks a call across lines) ends no argument. */
-function callArguments(build, code, start) {
-  const args = [];
-  let depth = 0, from = start;
-  for (const token of code.slice(start).matchAll(/[()[\]{},]/g)) {
-    const c = token[0], at = start + token.index;
-    if ((c === ',' || c === ')') && depth === 0) {
-      const text = build.slice(from, at).trim();
-      if (c === ',' || text) args.push(text);
-      if (c === ')') return { args, end: at };
-      from = at + 1;
-    } else if ('([{'.includes(c)) depth++;
-    else if (')]}'.includes(c)) depth--;
-  }
-  return null;
-}
-
-/** A Rust literal the generated module can copy: a number (with `_`, a fraction, an exponent, a type suffix), a
- * string, a character or a boolean. */
-const LITERAL = /^(?:-?\d[\d_]*(?:\.\d[\d_]*)?(?:[eE][+-]?\d[\d_]*)?(?:[iuf](?:8|16|32|64|128|size))?|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])'|true|false)$/;
-
-/** A source the generated module can copy, `{ ty, expr }`, or null: a crate path to a type's value (a unit struct),
- * or `Type::new(…)`, `Type::default()` or a tuple struct `Type(…)` whose arguments are literals, since the module
- * has none of build.rs's `use`s and locals. Another function may make a source for the bake alone (one that answers
- * nothing at build), not the one the app runs. `ty`, the type `export!` names, must be crate-qualified and
- * capitalised, not a constant's capitals. The call must be the whole expression: `Type::new(1).with(2)` would lose
- * its `.with(2)`. */
-export function copyableSource(text) {
-  const m = /^((?:[A-Za-z_]\w*\s*::\s*)+[A-Za-z_]\w*)\s*([\s\S]*)$/.exec(text.trim());
-  if (!m) return null;
-  const path = m[1].replace(/\s+/g, ''), rest = m[2];
-  let args = [];
-  if (rest) {
-    if (!rest.startsWith('(')) return null;
-    const call = callArguments(rest, blank(rest), 1);
-    if (!call || call.end !== rest.length - 1 || !call.args.every((a) => LITERAL.test(a))) return null;
-    args = call.args;
-  }
-  const segments = path.split('::'), method = rest && /^[a-z_]/.test(segments.at(-1));
-  // Only the constructors that make the source the app runs: a bake's own (`Type::for_bake()`) may answer nothing.
-  if (method && !['new', 'default'].includes(segments.at(-1))) return null;
-  const ty = method ? segments.slice(0, -1) : segments;
-  if (ty.length < 2 || !/^[A-Z]/.test(ty.at(-1)) || /^[A-Z][A-Z0-9_]+$/.test(ty.at(-1))) return null;
-  return { ty: ty.join('::'), expr: rest ? `${path}(${args.join(', ')})` : path };
-}
-
-/** The Rust source selected by a web bake, before generating its ABI crate: the second argument of
- * `contract::bake(…)`, or the third of `exact_js_bake::build_mixed_with(…)` (written `&<source>`), as
- * `{ call, ty, expr }` with `ty` and `expr` undefined when the module cannot copy it (`copyableSource`). */
-export function bakedRustSource(dir) {
-  const path = resolve(dir, 'web/build.rs');
-  if (!existsSync(path)) return null;
-  // Comments blanked; literals kept, a character's quote (`'"'`) opening no string.
-  const build = readFileSync(path, 'utf8').replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])'/g, m => /^["']/.test(m) ? m : ' '.repeat(m.length));
-  const code = blank(build);
-  const mixed = /exact_js_bake::build_mixed_with\s*\(/.exec(code), bake = /contract::bake\s*\(/.exec(code);
-  const call = mixed ?? bake;
-  if (!call) return null;
-  const args = callArguments(build, code, call.index + call[0].length)?.args ?? [];
-  const written = mixed ? /^&\s*([\s\S]+)$/.exec(args[2] ?? '')?.[1] : args[1];
-  const source = written === undefined ? null : copyableSource(written);
-  return { call: mixed ? 'exact_js_bake::build_mixed_with' : 'contract::bake', ty: source?.ty, expr: source?.expr };
-}
-
 export function buildModule(app, out = resolve(MODULES, app), draw = false, dir = resolve(root, 'apps', app)) {
-  if (JSON.parse(readFileSync(resolve(dir, 'app.json'), 'utf8')).rust?.module?.package) return ownModule(app, out, dir);
-  const source = bakedRustSource(dir), expr = source?.expr;
-  // The source is copied as written into a generated crate whose one dependency is the data crate, where build.rs's
-  // `use`s and locals are not. A call it cannot copy, outside comments and strings, is named rather than taken for none.
-  if (!expr && source?.call === 'contract::bake') {
-    throw new Error(`${app}: ${resolve(dir, 'web/build.rs')} passes contract::bake a source the web build does not copy into the module it generates. It copies a path to the data crate's source (\`<data crate>::<Type>\`), or its \`::default()\` or \`::new(…)\` whose arguments are literals (\`<data crate>::<Type>::new(true)\`), as the module has none of build.rs's \`use\`s and locals. For anything else, write a crate that exports the source (\`exact_logic_abi::export!(<Type>, <constructor>)\`, as apps/update-lab/logic does) and name it in app.json's rust.module.package`);
+  const manifest = JSON.parse(readFileSync(resolve(dir, 'app.json'), 'utf8'));
+  if (manifest.rust?.module?.package) return ownModule(app, out, dir);
+  // The source app.json's rust.data names (LLP 1153.003 D2), exported from a crate of its own whose one dependency is
+  // the data crate.
+  const data = rustDataOf(manifest);
+  if (!data) return ownModule(app, out, dir);
+  // Canvas 2D draws only for a plan that has a 2D surface (logic/abi/src/draw.rs).
+  const lib = `exact_logic_abi::export!(${data.ty}, ${data.source});\n${draw ? `exact_logic_abi::export_draw!(${data.ty});\n` : ''}`;
+  const resolved = resolveApp(dir);
+  // An app whose host crates exact2 generates has the module as a member of that workspace (`.exact/shells/module`),
+  // built --locked against the app's resolution, so a data crate's dependencies resolve once.
+  if (resolved.generated) {
+    const workspace = resolved.rust(), crate = resolve(workspace, 'module');
+    keep(resolve(crate, 'src/lib.rs'), lib);
+    const manifestPath = resolve(crate, 'Cargo.toml'), name = Bun.TOML.parse(readFileSync(manifestPath, 'utf8')).package.name;
+    const wasm = resolve(resolved.target, 'wasm32-unknown-unknown/web', `${name.replaceAll('-', '_')}.wasm`), done = resolve(out, 'app.module.wasm');
+    mkdirSync(out, { recursive: true });
+    moduleDepInfo.set(done, wasm.replace(/\.wasm$/, '.d'));
+    if (fresh(done, wasm.replace(/\.wasm$/, '.d'), [manifestPath])) return done;
+    const args = [`+${WEB}`, 'build', '--locked', '--offline', '--profile', 'web', '--target', 'wasm32-unknown-unknown', '--manifest-path', manifestPath, ...injectedProfiles({ manifest }, workspace), ...LINK_FLAGS()];
+    if (spawnSync('cargo', args, { stdio: ['ignore', 'inherit', 'inherit'], env: { ...process.env, CARGO_TARGET_DIR: resolved.target } }).status !== 0) throw new Error(`${app}: the module did not build`);
+    replace(done, (temp) => optimize(wasm, temp, 'module'));
+    return done;
   }
-  if (!expr && source) throw new Error(`${app}: ${resolve(dir, 'web/build.rs')} passes ${source.call} a Rust source the web build cannot copy. Use a path to a data-crate value, or its ::default() or ::new(…) whose arguments are literals, or export it in app.json's rust.module.package`);
-  if (!expr) return ownModule(app, out, dir);
-  const ty = source.ty;
-  const dataToml = readFileSync(resolve(dir, 'data/Cargo.toml'), 'utf8');
-  const pkg = /^name\s*=\s*"([^"]+)"/m.exec(dataToml)[1];
+  const dataCrate = appCrates(dir).find(crate => crate.name === data.krate)?.dir;
+  if (!dataCrate) throw new Error(`${app}: app.json's rust.data.crate is ${data.krate}, which is not a crate beside app.json`);
   const crate = resolve(out, 'crate');
   mkdirSync(resolve(crate, 'src'), { recursive: true });
   const ws = readFileSync(resolve(root, 'Cargo.toml'), 'utf8');
@@ -260,7 +217,7 @@ publish = false
 [lib]
 crate-type = ["cdylib"]
 [dependencies]
-${pkg} = { path = "${resolve(dir, 'data')}" }
+${data.krate} = { path = "${dataCrate}" }
 exact-logic-abi = { path = "${resolve(root, 'logic/abi')}" }
 [profile.release]
 opt-level = "z"
@@ -272,8 +229,7 @@ strip = true
 ${ws.slice(ws.indexOf('[workspace.dependencies]')).split('\n[workspace.package]')[0]}
 ${patch}
 `);
-  // Canvas 2D draws only for a plan that has a 2D surface (logic/abi/src/draw.rs).
-  keep(resolve(crate, 'src/lib.rs'), `exact_logic_abi::export!(${ty}, ${expr});\n${draw ? `exact_logic_abi::export_draw!(${ty});\n` : ''}`);
+  keep(resolve(crate, 'src/lib.rs'), lib);
   lockFrom(crate);
   return module(resolve(crate, 'Cargo.toml'), `exact_js_module_${app.replaceAll('-', '_')}`, out, `${app}: the module`);
 }

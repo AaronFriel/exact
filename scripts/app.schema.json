@@ -1339,6 +1339,31 @@
               ],
               "additionalProperties": false,
               "description": "The portable logic-wrapper cdylib package exporting the Exact logic ABI. One explicit replacement unit; data/helper crates remain ordinary Cargo dependencies."
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "crate": {
+                  "type": "string",
+                  "pattern": "^[a-zA-Z0-9_-]+$",
+                  "description": "The Cargo package of the data crate, a crate beside app.json."
+                },
+                "type": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z_][A-Za-z0-9_]*(::[A-Za-z_][A-Za-z0-9_]*)+$",
+                  "description": "The DataSource type, by its path from the crate's library: `pinapp_data::Pins`."
+                },
+                "source": {
+                  "type": "string",
+                  "description": "The constructor when it is not `<type>::default()`: the type itself (a unit struct), or `<type>::new(…)` with literal arguments."
+                }
+              },
+              "required": [
+                "crate",
+                "type"
+              ],
+              "additionalProperties": false,
+              "description": "The Rust data crate that answers the app's sources (LLP 1153.003 D2). The host crates link it and bake the first frame through it; with app.ts beside it, it answers the sources its RUST_SOURCES names and TypeScript the rest."
             }
           },
           "additionalProperties": false

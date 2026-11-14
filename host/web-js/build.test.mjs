@@ -6,7 +6,8 @@ import { tmpdir } from 'node:os';
 import { brotliCompressSync, brotliDecompressSync, constants } from 'node:zlib';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { bakedRustSource, buildModule, moduleGrants, webCompiler } from './module.mjs';
+import { buildModule, moduleGrants, webCompiler } from './module.mjs';
+import { rustDataOf } from '../../scripts/app-shells.mjs';
 import { spawnOwned } from '../../scripts/test-children.mjs';
 import { open } from '../../scripts/agent.mjs';
 import { suiteBrowser } from '../../scripts/agent-launch.mjs';
@@ -1329,87 +1330,27 @@ test('package declarations over the cap are named by package, size and the captu
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('a web build.rs bake copies its source as written: across lines, with rustfmt\'s comma, with literal arguments', () => {
-  const dir = mkdtempSync(resolve(tmpdir(), 'exact-module-copies-'));
-  const script = (text) => writeFileSync(resolve(dir, 'web/build.rs'), `fn main() {\n${text}\n}\n`);
-  try {
-    mkdirSync(resolve(dir, 'web'));
-    for (const [text, ty, expr] of [
-      ['    let baked = contract::bake(plan, mail_data::Mail).unwrap();', 'mail_data::Mail', 'mail_data::Mail'],
-      ['    let baked = contract::bake(plan, mail_data::Mail::new()).unwrap();', 'mail_data::Mail', 'mail_data::Mail::new()'],
-      ['    let baked = contract::bake(plan, mail_data::Mail::new(true)).unwrap();', 'mail_data::Mail', 'mail_data::Mail::new(true)'],
-      ['    let baked = contract::bake(plan, mail_data::Mail::new(3, "a, b")).unwrap();', 'mail_data::Mail', 'mail_data::Mail::new(3, "a, b")'],
-      ['    let baked = contract::bake(compiled, mail_data::Mail(7)).unwrap();', 'mail_data::Mail', 'mail_data::Mail(7)'],
-      // Literals whose characters would split or end a call, and numbers as Rust writes them.
-      ["    let baked = contract::bake(plan, mail_data::Mail::new(',', ')')).unwrap();", 'mail_data::Mail', "mail_data::Mail::new(',', ')')"],
-      // A character's quote opens no string, so a comment-like string after it is kept.
-      ['    let baked = contract::bake(plan, mail_data::Mail::new(\'"\', "/*keep*/")).unwrap(); // a ) here', 'mail_data::Mail', 'mail_data::Mail::new(\'"\', "/*keep*/")'],
-      ['    let baked = contract::bake(plan, mail_data::Mail::new(1e-3, 2_000u32, -4.5f64)).unwrap();', 'mail_data::Mail', 'mail_data::Mail::new(1e-3, 2_000u32, -4.5f64)'],
-      // rustfmt's form: the call across lines, a comma after the source.
-      ['    let baked = contract::bake(\n        plan,\n        mail_data::Mail::default(),\n    )\n    .unwrap();', 'mail_data::Mail', 'mail_data::Mail::default()'],
-      ['    let baked = contract::bake(\n        plan, // the plan\n        mail_data::Mail::new(\n            false,\n        ),\n    );', 'mail_data::Mail', 'mail_data::Mail::new(false)'],
-      // A path too long for its line: rustfmt breaks the empty call itself.
-      ['    let baked = match contract::bake(\n        plan,\n        mail_data::Mail::default(\n        ),\n    ) {', 'mail_data::Mail', 'mail_data::Mail::default()'],
-    ]) {
-      script(text);
-      expect(bakedRustSource(dir)).toEqual({ call: 'contract::bake', ty, expr });
-    }
-  } finally { rmSync(dir, { recursive: true, force: true }); }
-});
-
-test('a web build.rs whose data source the module cannot copy is named, with the forms it copies and the way for any other', () => {
+test('the web module exports the source app.json\'s rust.data names, in the grammar it copies (LLP 1153.003 D2)', () => {
+  const data = (fields) => rustDataOf({ rust: { data: { crate: 'mail-data', type: 'mail_data::Mail', ...fields } } });
+  expect(data({})).toEqual({ krate: 'mail-data', ty: 'mail_data::Mail', lib: 'mail_data', source: 'mail_data::Mail::default()' });
+  for (const source of ['mail_data::Mail', 'mail_data::Mail::new()', 'mail_data::Mail::new(true)', 'mail_data::Mail::new(3, "a, b")',
+    "mail_data::Mail::new(',', ')')", 'mail_data::Mail::new(\'"\', "/*keep*/")', 'mail_data::Mail::new(1e-3, 2_000u32, -4.5f64)']) {
+    expect(data({ source }).source).toBe(source);
+  }
+  // A local, a reference, a nested call, a builder chain, another type, or a bake's own constructor names nothing
+  // the module can copy.
+  for (const source of ['mail_data::Mail::new(path)', 'source', 'mail_data::Mail::from(&config)', 'mail_data::Mail::new(mail_data::Mode::Fast)',
+    'mail_data::Mail::new(0..end)', 'mail_data::Mail::new(false).with_auth(true)', 'other_data::Mail', 'mail_data::Mail::for_bake()']) {
+    expect(() => data({ source })).toThrow("a source built from anything else is a module of its own (rust.module.package)");
+  }
+  expect(() => data({ type: 'Mail' })).toThrow('rust.data.type is a path');
+  expect(() => data({ mode: 'off' })).toThrow('not mode');
+  expect(rustDataOf({ rust: { mode: 'off' } })).toBeNull();
+  // An app that names neither a module nor a data crate has no Rust module, and is told.
   const dir = mkdtempSync(resolve(tmpdir(), 'exact-module-source-'));
-  const script = (text) => writeFileSync(resolve(dir, 'web/build.rs'), `fn main() {\n${text}\n}\n`);
-  const fails = () => { try { buildModule('mail', resolve(dir, 'out'), false, dir); } catch (e) { return e.message; } return null; };
   try {
-    mkdirSync(resolve(dir, 'web'));
     writeFileSync(resolve(dir, 'app.json'), '{}');
-    // A local, a reference and a nested call: the generated module has none of build.rs's names.
-    for (const source of [
-      'mail_data::Mail::new(path)', 'source', 'mail_data::Mail::from(&config)', 'mail_data::Mail::new(mail_data::Mode::Fast)',
-      // A range over a local, a builder chain (the module would copy only its first call), a free function and a
-      // constant, which name no type for export!.
-      'mail_data::Mail::new(0..end)', 'mail_data::Mail::new(false).with_auth(true)', 'mail_data::Mail::new(1)(2)',
-      'mail_data::make(true)', 'mail_data::DEFAULT',
-      // A bake's own constructor, which may answer nothing at run time (bench/extra-heavy's `for_bake`).
-      'mail_data::Mail::for_bake()',
-    ]) {
-      const text = `    let baked = contract::bake(plan, ${source}).unwrap();`;
-      script(text);
-      const said = fails();
-      expect(said).toContain(`${resolve(dir, 'web/build.rs')} passes contract::bake a source the web build does not copy`);
-      expect(said).toContain("or its `::default()` or `::new(…)` whose arguments are literals");
-      expect(said).toContain("name it in app.json's rust.module.package");
-    }
-    // A call only in a comment is no call: the build has no Rust source to copy and says that.
-    for (const text of ['    // let baked = contract::bake(plan, mail_data::Mail::new(true));', '    /* contract::bake(plan, mail_data::Mail::new(true)) */', '']) {
-      script(text);
-      expect(fails()).toContain('its web build bakes with no Rust data source');
-    }
-  } finally { rmSync(dir, { recursive: true, force: true }); }
-});
-
-test('a mixed bake selects its Rust source without copying the TypeScript composer', () => {
-  const dir = mkdtempSync(resolve(tmpdir(), 'exact-mixed-module-source-'));
-  try {
-    mkdirSync(resolve(dir, 'web'));
-    writeFileSync(resolve(dir, 'app.json'), '{}');
-    for (const expr of ['notes_data::Backup', 'notes_data::Backup::default()', 'notes_data::Backup::new()']) {
-      writeFileSync(resolve(dir, 'web/build.rs'), `fn main() {
-        // exact_js_bake::build_mixed_with(app, "web", &wrong::Source, names, compose);
-        exact_js_bake::build_mixed_with(
-          std::path::Path::new("../a,b"), "web", &${expr}, notes_data::RUST_SOURCES,
-          |javascript| Box::new(notes_data::mixed(javascript, notes_data::Placement::Main)),
-        ).unwrap();
-      }`);
-      expect(bakedRustSource(dir)).toEqual({ call: 'exact_js_bake::build_mixed_with', ty: 'notes_data::Backup', expr });
-    }
-    writeFileSync(resolve(dir, 'web/build.rs'), 'fn main() { exact_js_bake::build_mixed_with(app, "web", &notes_data::Backup::new(true), names, compose); }');
-    expect(bakedRustSource(dir)).toEqual({ call: 'exact_js_bake::build_mixed_with', ty: 'notes_data::Backup', expr: 'notes_data::Backup::new(true)' });
-    writeFileSync(resolve(dir, 'web/build.rs'), 'fn main() { exact_js_bake::build_mixed_with(app, "web", &notes_data::Backup::new(dir), names, compose); }');
-    expect(() => buildModule('notes', resolve(dir, 'out'), false, dir)).toThrow('passes exact_js_bake::build_mixed_with a Rust source the web build cannot copy');
-    writeFileSync(resolve(dir, 'web/build.rs'), 'fn main() { let example = "exact_js_bake::build_mixed_with("; }');
-    expect(bakedRustSource(dir)).toBeNull();
+    expect(() => buildModule('mail', resolve(dir, 'out'), false, dir)).toThrow('its web build bakes with no Rust data source');
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 

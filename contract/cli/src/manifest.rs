@@ -392,6 +392,14 @@ impl Manifest {
             .to_string()
     }
 
+    /// `rust.data` (LLP 1153.003 D2): the data crate the host crates link, or `None` when the manifest names none.
+    pub fn rust_data(&self) -> Result<Option<RustData>, String> {
+        match self.json.pointer("/rust/data") {
+            None => Ok(None),
+            Some(value) => RustData::from_json(value).map(Some),
+        }
+    }
+
     /// `deploy.store.<platform>`: `"A"` (an update store) or `"0"` (none);
     /// Native defaults to `"A"`; the web host links no updater (LLP 1030 D4).
     pub fn store(&self, platform: &str) -> String {
@@ -403,6 +411,134 @@ impl Manifest {
             .unwrap_or(if platform == "web" { "0" } else { "A" })
             .to_string()
     }
+}
+
+/// `rust.data` (LLP 1153.003 D2): the crate that answers the app's sources, its `DataSource` type and the
+/// constructor the hosts and the web's module run.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RustData {
+    /// The data crate's Cargo package (`pinapp-data`).
+    pub krate: String,
+    /// The source type, by its path from the crate's library (`pinapp_data::Pins`).
+    pub ty: String,
+    /// The constructor: `source`, or `<type>::default()` when the manifest names none.
+    pub source: String,
+}
+
+impl RustData {
+    fn from_json(value: &serde_json::Value) -> Result<RustData, String> {
+        let object = value.as_object().ok_or("rust.data must be an object")?;
+        if let Some(key) = object
+            .keys()
+            .find(|k| !matches!(k.as_str(), "crate" | "type" | "source"))
+        {
+            return Err(format!("rust.data takes crate, type and source, not {key}"));
+        }
+        let text = |key: &str| {
+            object.get(key).map(|v| {
+                v.as_str()
+                    .ok_or(format!("rust.data.{key} must be a string"))
+            })
+        };
+        let krate = text("crate")
+            .ok_or("rust.data requires the data crate's Cargo package in `crate`")??;
+        if krate.is_empty()
+            || !krate
+                .bytes()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, b'-' | b'_'))
+        {
+            return Err(format!(
+                "rust.data.crate is not a Cargo package name: {krate}"
+            ));
+        }
+        let ty = text("type").ok_or("rust.data requires the source type's path in `type`")??;
+        let segments: Vec<&str> = ty.split("::").collect();
+        if segments.len() < 2 || !segments.iter().all(|s| identifier(s)) {
+            return Err(format!(
+                "rust.data.type is a path from the data crate's library, as `pinapp_data::Pins`: {ty}"
+            ));
+        }
+        let source = match text("source").transpose()? {
+            None => format!("{ty}::default()"),
+            Some(source) if constructs(ty, source) => source.to_string(),
+            Some(source) => {
+                return Err(format!(
+                    "rust.data.source is `{ty}`, `{ty}::default()` or `{ty}::new(…)` with literal arguments, not {source}; a source built from anything else is a module of its own (rust.module.package)"
+                ))
+            }
+        };
+        Ok(RustData {
+            krate: krate.to_string(),
+            ty: ty.to_string(),
+            source,
+        })
+    }
+}
+
+fn identifier(s: &str) -> bool {
+    let mut chars = s.chars();
+    chars
+        .next()
+        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+        && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
+/// Whether `source` constructs `ty` in the grammar the web build copies into a module of its own: the type itself
+/// (a unit struct), its `default()`, or its `new(…)` with literal arguments (`host/web-js/module.mjs`).
+fn constructs(ty: &str, source: &str) -> bool {
+    let Some(rest) = source.strip_prefix(ty) else {
+        return false;
+    };
+    if rest.is_empty() || rest == "::default()" {
+        return true;
+    }
+    let Some(args) = rest
+        .strip_prefix("::new(")
+        .and_then(|r| r.strip_suffix(')'))
+    else {
+        return false;
+    };
+    literal_arguments(args)
+}
+
+/// Comma-separated literals: numbers (with an optional suffix), strings, characters, `true` and `false`.
+fn literal_arguments(args: &str) -> bool {
+    let mut items = Vec::new();
+    let (mut start, mut quote, mut escaped) = (0, None, false);
+    for (i, c) in args.char_indices() {
+        match quote {
+            Some(_) if escaped => escaped = false,
+            Some(_) if c == '\\' => escaped = true,
+            Some(q) if c == q => quote = None,
+            Some(_) => {}
+            None if c == '"' || c == '\'' => quote = Some(c),
+            None if c == ',' => {
+                items.push(&args[start..i]);
+                start = i + 1;
+            }
+            None => {}
+        }
+    }
+    if quote.is_some() {
+        return false;
+    }
+    items.push(&args[start..]);
+    if items.len() == 1 && items[0].trim().is_empty() {
+        return true;
+    }
+    items.iter().map(|item| item.trim()).all(|item| {
+        matches!(item, "true" | "false")
+            || (item.len() >= 2
+                && (item.starts_with('"') && item.ends_with('"')
+                    || item.starts_with('\'') && item.ends_with('\'')))
+            || item
+                .trim_start_matches('-')
+                .starts_with(|c: char| c.is_ascii_digit())
+                && item
+                    .trim_start_matches('-')
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '+' | '-'))
+    })
 }
 
 /// Standard base64 with padding, as `keys` validated it.
@@ -479,6 +615,9 @@ fn validate_rust_policy(value: &serde_json::Value, depth: u8) -> Result<(), Stri
                                 "rust.module requires a Cargo package name in `package`".into()
                             );
                         }
+                    }
+                    "data" if depth == 2 => {
+                        RustData::from_json(value)?;
                     }
                     _ => return Err(format!("invalid rust policy key or value: {key}")),
                 }
@@ -682,5 +821,76 @@ mod windows_tests {
         let wrong =
             manifest(serde_json::json!({"host": {"windows": {"window": {"keepRunning": 1}}}}));
         assert!(wrong.windows_window().unwrap_err().contains("keepRunning"));
+    }
+}
+
+#[cfg(test)]
+mod rust_data_tests {
+    use super::{Manifest, RustData};
+
+    fn manifest(data: serde_json::Value) -> Manifest {
+        Manifest {
+            json: serde_json::json!({"rust": {"mode": "off", "data": data}}),
+            id: "test.app".into(),
+            name: "Test".into(),
+            declared: true,
+        }
+    }
+
+    /// LLP 1153.003 D2: the source defaults to the type's `default()`, and is otherwise in the grammar the web
+    /// build copies into a module of its own.
+    #[test]
+    fn rust_data_names_a_crate_a_type_and_a_constructor() {
+        let data = |json| manifest(json).rust_data();
+        assert_eq!(
+            data(serde_json::json!({"crate": "pins-data", "type": "pins_data::Pins"})).unwrap(),
+            Some(RustData {
+                krate: "pins-data".into(),
+                ty: "pins_data::Pins".into(),
+                source: "pins_data::Pins::default()".into(),
+            })
+        );
+        for source in [
+            "pins_data::Pins",
+            "pins_data::Pins::new()",
+            "pins_data::Pins::new(3, \"a, b\", true, -1.5f32, 'x')",
+        ] {
+            let named = data(
+                serde_json::json!({"crate": "pins-data", "type": "pins_data::Pins", "source": source}),
+            );
+            assert_eq!(named.unwrap().unwrap().source, source);
+        }
+        for (json, said) in [
+            (serde_json::json!({"type": "pins_data::Pins"}), "`crate`"),
+            (
+                serde_json::json!({"crate": "pins-data", "type": "Pins"}),
+                "rust.data.type",
+            ),
+            (
+                serde_json::json!({"crate": "pins-data", "type": "pins_data::Pins", "source": "pins_data::Pins::new(path())"}),
+                "rust.data.source",
+            ),
+            (
+                serde_json::json!({"crate": "pins-data", "type": "pins_data::Pins", "source": "other::Pins"}),
+                "rust.data.source",
+            ),
+            (
+                serde_json::json!({"crate": "pins-data", "type": "pins_data::Pins", "mode": "off"}),
+                "not mode",
+            ),
+        ] {
+            let refused = data(json).unwrap_err();
+            assert!(refused.contains(said), "{refused}");
+        }
+        // The policy reader validates it as it validates the rest of `rust`.
+        assert!(manifest(serde_json::json!({"crate": "pins-data"}))
+            .rust_mode("ios", true)
+            .is_err());
+        assert_eq!(
+            manifest(serde_json::json!({"crate": "pins-data", "type": "pins_data::Pins"}))
+                .rust_mode("ios", true)
+                .unwrap(),
+            "off"
+        );
     }
 }

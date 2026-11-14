@@ -114,10 +114,95 @@ export function shellCrates(manifest) {
   return ['web', ...new Set(Object.keys(manifest.host ?? {}).filter(p => p in PLATFORMS).flatMap(p => p === 'android' ? ['linux', 'android'] : [PLATFORMS[p]]))];
 }
 
+/** A constructor's literal arguments, as the web build copies them into a module of its own. */
+const LITERAL = /^(?:-?\d[\d_]*(?:\.\d[\d_]*)?(?:[eE][+-]?\d[\d_]*)?(?:[iuf](?:8|16|32|64|128|size))?|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])'|true|false)$/;
+const literalArguments = text => {
+  const items = [];
+  let start = 0, quote = null;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (quote) { if (c === '\\') i++; else if (c === quote) quote = null; }
+    else if (c === '"' || c === "'") quote = c;
+    else if (c === ',') { items.push(text.slice(start, i)); start = i + 1; }
+  }
+  if (quote) return false;
+  items.push(text.slice(start));
+  return (items.length === 1 && !items[0].trim()) || items.every(item => LITERAL.test(item.trim()));
+};
+
+/** app.json's `rust.data` (LLP 1153.003 D2) as `{ krate, ty, lib, source }`, its constructor `<type>::default()` when
+ * it names none; null when it names no data crate. Its grammar is the one contract's manifest reader checks
+ * (`RustData`): the type itself, its `default()`, or its `new(…)` with literal arguments. */
+export function rustDataOf(manifest) {
+  const data = manifest.rust?.data;
+  if (data === undefined) return null;
+  const at = 'app.json rust.data';
+  if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error(`${at} is an object: { "crate": "<name>-data", "type": "<name>_data::<Type>" }`);
+  const extra = Object.keys(data).find(key => !['crate', 'type', 'source'].includes(key));
+  if (extra) throw new Error(`${at} takes crate, type and source, not ${extra}`);
+  if (typeof data.crate !== 'string' || !/^[A-Za-z0-9_-]+$/.test(data.crate)) throw new Error(`${at}.crate is the data crate's Cargo package name`);
+  if (typeof data.type !== 'string' || !/^[A-Za-z_]\w*(?:::[A-Za-z_]\w*)+$/.test(data.type)) throw new Error(`${at}.type is a path from the data crate's library, as \`pinapp_data::Pins\``);
+  const ty = data.type, source = data.source ?? `${ty}::default()`;
+  const rest = typeof source === 'string' && source.startsWith(ty) ? source.slice(ty.length) : null;
+  const constructs = rest === '' || rest === '::default()' || (rest?.startsWith('::new(') && rest.endsWith(')') && literalArguments(rest.slice(6, -1)));
+  if (!constructs) throw new Error(`${at}.source is \`${ty}\`, \`${ty}::default()\` or \`${ty}::new(…)\` with literal arguments, not ${JSON.stringify(source)}; a source built from anything else is a module of its own (rust.module.package)`);
+  return { krate: data.crate, ty, lib: ty.split('::')[0], source };
+}
+
+/** A Rust-data app's host crate (LLP 1153.003 D2): the data crate the manifest names, linked, and the shared bake
+ * (`exact_bake::host::app`) as its build script's one line; no exact-js, so no Hermes. `data.dependency` is the data
+ * crate's dependency from the crate's directory. */
+function rustCrateFiles(kind, { name, title, dep, app, data }) {
+  const target = { web: `[lib]\ncrate-type = ["cdylib", "rlib"]`, apple: '[lib]\ncrate-type = ["rlib"]', android: '[lib]\ncrate-type = ["cdylib"]\ntest = false\nbench = false' }[kind]
+    ?? `[[bin]]\nname = "${name}-${kind}"\npath = "src/main.rs"${kind === 'windows' ? '\ntest = false\nbench = false' : ''}`;
+  // The web dev loop's resident driver bakes with the source's `default()` (`exact_web::dev::main`).
+  const dev = kind === 'web' && data.source === `${data.ty}::default()`;
+  const sdk = { web: ['logic', 'host/web', 'host/web-capabilities'], apple: ['vendor/ibex/crates/ibex2-sqlite', 'logic', 'host/apple', 'host/apple-update'],
+    linux: ['vendor/ibex/crates/ibex2-sqlite', 'logic', 'host/linux', 'host/painted'], android: ['vendor/ibex/crates/ibex2-sqlite', 'logic', 'host/painted'],
+    windows: ['vendor/ibex/crates/ibex2-sqlite', 'logic', 'host/windows', 'host/painted'] }[kind];
+  const crateOf = path => ({ 'vendor/ibex/crates/ibex2-sqlite': 'ibex2-sqlite', logic: 'exact-logic', 'host/web-capabilities': 'exact-web-capabilities', 'host/apple-update': 'exact-apple-update' })[path] ?? `exact-${path.split('/').pop()}`;
+  const dependencies = [...sdk.map(path => `${crateOf(path)} = ${dep(path)}`), `exact-data-host = ${dep('data/host')}`, `${data.krate} = ${data.dependency}`].join('\n');
+  const on = { web: 'the web', apple: 'Apple platforms', linux: 'Linux', android: 'Android', windows: 'Windows' }[kind];
+  return {
+    'Cargo.toml': `[package]
+name = "${name}-${kind}"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+build = "build.rs"
+
+${target}
+${dev ? `\n[[bin]]\nname = "${name}-dev"\npath = "src/bin/${name}-dev.rs"\ntest = false\nbench = false\n` : ''}
+${kind === 'android' ? `[target.'cfg(target_os = "android")'.dependencies]` : '[dependencies]'}
+${dependencies}
+
+[build-dependencies]
+exact-bake = ${dep('bake')}
+${data.krate} = ${data.dependency}
+`,
+    'build.rs': `fn main() {\n    exact_bake::host::app(${JSON.stringify(kind)}, ${JSON.stringify(app)}, ${data.source});\n}\n`,
+    [['linux', 'windows'].includes(kind) ? 'src/main.rs' : 'src/lib.rs']: `//! ${title} on ${on}: the host over the Rust data crate (\`${data.ty}\`) and the baked plan.
+${kind === 'windows' ? '#![cfg_attr(target_os = "windows", windows_subsystem = "windows")]\n' : ''}
+include!(concat!(env!("OUT_DIR"), "/entry.rs"));
+`,
+    ...(dev ? { [`src/bin/${name}-dev.rs`]: `//! The resident dev driver: \`${name}-dev <source> <out>\`, which the web dev loop runs.
+
+fn main() -> std::process::ExitCode {
+    exact_web::dev::main::<${data.ty}>()
+}
+` } : {}),
+  };
+}
+
+/** A host crate's files for the generated workspace: a Rust-data app's without app.ts (`rustCrateFiles`), else the
+ * TypeScript app's, composed with the data crate when the manifest names one. */
+const hostCrateFiles = (kind, options) => options.data && !options.typescript ? rustCrateFiles(kind, options) : crateFiles(kind, options);
+
 /** A host crate's files, keyed by path under the crate's directory. `dep(path)` is a dependency's path from there and
  * `app` the app directory's, as Rust strings' content; `native` attaches the factory the bake writes for a package
  * that fills the native slot. */
-function crateFiles(kind, { name, title, dep, app, native = false, preload = false }) {
+function crateFiles(kind, { name, title, dep, app, native = false, preload = false, data = null }) {
   const header = (target) => `[package]
 name = "${name}-${kind}"
 version.workspace = true
@@ -130,7 +215,7 @@ ${target}
 
 [dependencies]
 `;
-  const bake = (platform) => `fn main() {
+  const bake = (platform) => data ? beside(platform) : `fn main() {
     exact_js_bake::build(std::path::Path::new(${JSON.stringify(app)}), ${JSON.stringify(platform)}).unwrap_or_else(|error| {
         // What the bake found (tsc's and the compiler's diagnostics), as it is: no panic around it.
         eprintln!("{error}");
@@ -138,7 +223,68 @@ ${target}
     });
 }
 `;
-  const module = (web) => web
+  // Beside the data crate (LLP 1153.003 D2): Rust answers what the crate's RUST_SOURCES names, app.ts the rest.
+  const beside = (platform) => `fn main() {
+${platform === 'apple' ? `    let platform = match std::env::var("CARGO_CFG_TARGET_OS").as_deref() {
+        Ok("ios" | "tvos" | "watchos") => "ios",
+        _ => "macos",
+    };
+` : ''}    exact_js_bake::build_beside(
+        std::path::Path::new(${JSON.stringify(app)}),
+        ${platform === 'apple' ? 'platform' : JSON.stringify(platform)},
+        &${data.source},
+        ${data.lib}::RUST_SOURCES,
+        |javascript, typescript| {
+            let app = exact_runner::DataSource::app_id(&javascript).to_owned();
+            Box::new(
+                exact_data::Mixed::new(
+                    javascript,
+                    exact_data::Placed::new(${data.source}, exact_runner::Placement::Main).named(&app),
+                    typescript,
+                    ${data.lib}::RUST_SOURCES,
+                )
+                .expect("app.ts and the data crate answer different sources, for one app"),
+            )
+        },
+    )
+    .unwrap_or_else(|error| {
+        // What the bake found (tsc's and the compiler's diagnostics), as it is: no panic around it.
+        eprintln!("{error}");
+        std::process::exit(1);
+    });
+}
+`;
+  // The TypeScript module and the data crate's source as one, in host storage: the composition the bake made. A
+  // data crate that names no app takes the module's identity, which is app.json's.
+  const mixed = (web, javascript) => `type ExactEmbeddedData = exact_data_host::Storage<
+    exact_data::Mixed<${web ? 'exact_js_web::Module' : 'exact_js::Placed<exact_js::Module>'}, exact_data::Placed<${data.ty}>>,
+>;
+fn embedded_data() -> ExactEmbeddedData {
+    let javascript =
+${javascript.replace(/^/gm, '    ').trimEnd()};
+    let app = exact_runner::DataSource::app_id(&javascript).to_owned();
+    exact_data_host::Storage::new(
+        exact_data::Mixed::new(
+            javascript,
+            exact_data::Placed::new(${data.source}, RUST_PLACEMENT).named(&app),
+            TYPESCRIPT_SOURCES,
+            ${data.lib}::RUST_SOURCES,
+        )
+        .expect("app.ts and the data crate answer different sources, for one app")
+        .with_embedded_rust(|placed| {
+            let app = exact_runner::DataSource::app_id(placed);
+            Ok(exact_data::Placed::new(${data.source}, placed.given_placement()).named(app))
+        }),
+    )
+}
+`;
+  const module = (web) => data ? mixed(web, web
+    ? `    exact_js_web::Module::new(APP, GRANTS, REVISION)
+        .with_canvas_surfaces(CANVAS_SURFACES)
+        .placed(TYPESCRIPT_PLACEMENT)`
+    : `    exact_js::Module::new(APP_BYTECODE, APP, GRANTS)
+${preload ? '        .with_preloads(PRELOAD)\n' : ''}        .with_canvas_surfaces(CANVAS_SURFACES)
+${native ? '        .with_native(exact_native)\n' : ''}        .placed(TYPESCRIPT_PLACEMENT)`) : web
     ? `type ExactEmbeddedData = exact_js_web::Module;
 fn embedded_data() -> ExactEmbeddedData {
     exact_js_web::Module::new(APP, GRANTS, REVISION)
@@ -159,13 +305,15 @@ const COMPAT: &str = include_str!(concat!(env!("OUT_DIR"), "/compat.json"));
 ` : ''}`;
   const build = `[build-dependencies]
 exact-js-bake = ${dep('js/bake')}
-`;
+${data ? `exact-data = ${dep('data')}\nexact-runner = ${dep('runner')}\n${data.krate} = ${data.dependency}\n` : ''}`;
+  // What the composition links beside the TypeScript module.
+  const linked = data ? `exact-data = ${dep('data')}\nexact-data-host = ${dep('data/host')}\nexact-runner = ${dep('runner')}\n${data.krate} = ${data.dependency}\n` : '';
   if (kind === 'web') return {
     'Cargo.toml': `${header('[lib]\ncrate-type = ["cdylib", "rlib"]')}exact-logic = ${dep('logic')}
 exact-web = ${dep('host/web')}
 exact-web-capabilities = ${dep('host/web-capabilities')}
 exact-js-web = ${dep('js/web')}
-
+${linked}
 ${build}`,
     'build.rs': bake('web'),
     'src/lib.rs': `//! ${title} on the web: the Contract UI and the TypeScript data module.
@@ -190,9 +338,9 @@ exact-logic = ${dep('logic')}
 exact-apple = ${dep('host/apple')}
 exact-apple-update = ${dep('host/apple-update')}
 exact-js = ${dep('js')}
-
+${linked}
 ${build}`,
-    'build.rs': appleBuildScript(app),
+    'build.rs': data ? beside('apple') : appleBuildScript(app),
     // Names no app: a change to only its identity leaves the compiled archive fresh (linked-plan.mjs compiledBakeDir).
     'src/lib.rs': `//! The app on Apple: the Contract UI and the TypeScript data module.
 
@@ -209,7 +357,7 @@ exact-logic = ${dep('logic')}
 exact-linux = ${dep('host/linux')}
 exact-painted = ${dep('host/painted')}
 exact-js = ${dep('js')}
-
+${linked}
 ${build}`,
     'build.rs': bake('linux'),
     'src/main.rs': `//! ${title} on Linux (and Android): the Contract UI and the TypeScript data module.
@@ -234,9 +382,9 @@ ibex2-sqlite = ${dep('vendor/ibex/crates/ibex2-sqlite')}
 exact-logic = ${dep('logic')}
 exact-painted = ${dep('host/painted')}
 exact-js = ${dep('js')}
-
+${linked}
 ${build}`,
-    'build.rs': `fn main() {
+    'build.rs': data ? beside('android') : `fn main() {
     exact_js_bake::build_android(std::path::Path::new(${JSON.stringify(app)})).unwrap_or_else(|error| {
         // What the bake found (tsc's and the compiler's diagnostics), as it is: no panic around it.
         eprintln!("{error}");
@@ -269,7 +417,7 @@ exact-windows = ${dep('host/windows')}
 # The packages' Windows implementations name \`exact_painted::package\` (LLP 1133.022 D10 item 5).
 exact-painted = ${dep('host/painted')}
 exact-js = ${dep('js')}
-
+${linked}
 ${build}`,
     'build.rs': bake('windows'),
     // A GUI executable in every profile, as Excord's: opened from Explorer or the desktop, a development build shows
@@ -311,6 +459,10 @@ const pathWithin = (from, to) =>
 const titleOf = name => name.split('-').map(w => w[0].toUpperCase() + w.slice(1)).join(' ');
 const stampOf = (shells) => { try { return JSON.parse(readFileSync(resolve(shells, '.stamp.json'), 'utf8')); } catch { return null; } };
 
+/** The files under `dir`, by path relative to it, without Cargo's `target/`. */
+const listFiles = (dir, at = '') => readdirSync(resolve(dir, at), { withFileTypes: true }).flatMap(entry =>
+  entry.isDirectory() ? (entry.name === 'target' ? [] : listFiles(dir, `${at}${entry.name}/`)) : [`${at}${entry.name}`]);
+
 /** Write a file only when its bytes differ, so Cargo's times stay. */
 function writeChanged(path, text) {
   if (existsSync(path) && readFileSync(path, 'utf8') === text) return false;
@@ -333,7 +485,7 @@ export function memberRefusal(manifest, declared, workspace, owns) {
 export function appMembers(dir, name) {
   const crates = appCrates(dir), loose = crates.find(crate => !crate.joins);
   if (loose) throw new Error(notAMember(loose));
-  const generated = new Set(['web', ...Object.values(PLATFORMS)].map(kind => `${name}-${kind}`));
+  const generated = new Set(['web', 'module', ...Object.values(PLATFORMS)].map(kind => `${name}-${kind}`));
   const taken = crates.find(crate => generated.has(crate.name));
   if (taken) throw new Error(`${taken.manifest}: ${taken.name} is a host crate's name, and exact2 writes the app's host crates under .exact/shells/. Rename the crate, or, for an app that writes its own host crates, write their workspace (docs/reference.md, "An authored workspace").`);
   return { host: crates.filter(crate => crate.joins === 'host'), gpu: crates.filter(crate => crate.joins === 'gpu') };
@@ -378,18 +530,24 @@ export function ensureShells(dir, manifest = readManifest(dir), name = null) {
   const copied = ['rust-toolchain.toml', '.cargo/config.toml'].map(file => [file, readFileSync(resolve(ROOT, file), 'utf8')]);
   const patches = patchLines(shells, pathWithin);
   const own = members.host.map(member => pathWithin(shells, member.dir));
+  // The data crate the hosts link (LLP 1153.003 D2), one of the app's own; with app.ts beside it, the two compose.
+  const data = rustDataOf(manifest), typescript = existsSync(resolve(dir, 'app.ts'));
+  const dataCrate = data && members.host.find(member => member.name === data.krate);
+  if (data && !dataCrate) throw new Error(`app.json's rust.data.crate is ${data.krate}, which is not a crate beside app.json that joins the app's workspace (package.workspace = "${MEMBER_OF.host}")`);
+  const options = (kind, app, dep) => ({ name, title, native: native.length > 0, preload: Object.keys(manifest.preload ?? {}).length > 0, app, dep, typescript,
+    data: data && { ...data, dependency: `{ path = ${JSON.stringify(pathWithin(resolve(shells, kind), dataCrate.dir))} }` } });
   // The inputs whose change rewrites the workspace: the app's path, the checkout's and its commit, the templates (this
   // module), the files copied from the checkout, its patch table and its lock (a dependency the SDK moved), the
   // manifest's platforms, the app's name, its own crates and the package that fills the native slot.
   const commit = spawnSync('git', ['-C', ROOT, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).stdout?.trim() ?? '';
   const stamp = {
-    exact2: ROOT, app: dir, commit, name, title, crates, native, members: own,
+    exact2: ROOT, app: dir, commit, name, title, crates, native, members: own, data, typescript,
     ...(Object.keys(manifest.preload ?? {}).length ? { preload: true } : {}),
     inputs: createHash('sha256').update([readFileSync(fileURLToPath(import.meta.url), 'utf8'), APPLE_BUILD_SCRIPT, ...copied.map(([, text]) => text), ...patches, readFileSync(resolve(ROOT, 'Cargo.lock'), 'utf8')].join('\0')).digest('hex'),
   };
   besideApp(dir, members.host.length + members.gpu.length > 0);
   const captured = resolve(dir, 'Cargo.lock'), before = stampOf(shells);
-  const expected = ['Cargo.toml', 'Cargo.lock', ...copied.map(([file]) => file), ...crates.flatMap(kind => Object.keys(crateFiles(kind, { name, title, dep: () => '', app: '' })).map(file => `${kind}/${file}`))];
+  const expected = ['Cargo.toml', 'Cargo.lock', ...copied.map(([file]) => file), ...(data ? ['module/Cargo.toml', 'module/src/lib.rs'] : []), ...crates.flatMap(kind => Object.keys(hostCrateFiles(kind, options(kind, '', () => ''))).map(file => `${kind}/${file}`))];
   const complete = expected.every(file => existsSync(resolve(shells, file)));
   if (before && JSON.stringify(before) === JSON.stringify(stamp) && complete) {
     // The captured lock is the workspace's whenever it changed (`bun exact.mjs lock`, a pull).
@@ -401,7 +559,7 @@ export function ensureShells(dir, manifest = readManifest(dir), name = null) {
 # LLP 1153.003 D1): never edited, rewritten when the manifest's platforms, the app's crates or the checkout change. A
 # crate beside app.json joins it with package.workspace = "${MEMBER_OF.host}".
 [workspace]
-members = [${[...crates, ...own].map(c => JSON.stringify(c)).join(', ')}]
+members = [${[...crates, ...(data ? ['module'] : []), ...own].map(c => JSON.stringify(c)).join(', ')}]
 resolver = "2"
 
 [workspace.package]
@@ -419,9 +577,35 @@ ${patches.join('\n')}
 `);
   for (const [file, text] of copied) wrote = writeChanged(resolve(shells, file), text) || wrote;
   for (const kind of crates) {
-    const files = crateFiles(kind, { name, title, native: native.length > 0, preload: Object.keys(manifest.preload ?? {}).length > 0, app: '../../..', dep: path => `{ path = ${JSON.stringify(pathWithin(resolve(shells, kind), resolve(ROOT, path)))} }` });
+    const files = hostCrateFiles(kind, options(kind, '../../..', path => `{ path = ${JSON.stringify(pathWithin(resolve(shells, kind), resolve(ROOT, path)))} }`));
     for (const [file, text] of Object.entries(files)) wrote = writeChanged(resolve(shells, kind, file), text) || wrote;
+    // A file an earlier shape wrote (app.ts added or removed, the dev driver) goes.
+    const keep = new Set(Object.keys(files));
+    for (const file of listFiles(resolve(shells, kind))) if (!keep.has(file)) { rmSync(resolve(shells, kind, file)); wrote = true; }
   }
+  // The web's Rust module (LLP 1153.003 D2): the source app.json's rust.data names, exported for the JS runtime.
+  // host/web-js/module.mjs writes its src/lib.rs, which exports the Canvas 2D draw only for a plan that draws.
+  const module = resolve(shells, 'module');
+  if (data) {
+    mkdirSync(module, { recursive: true });
+    wrote = writeChanged(resolve(module, 'Cargo.toml'), `[package]
+name = "${name}-module"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+test = false
+bench = false
+
+[dependencies]
+${data.krate} = { path = ${JSON.stringify(pathWithin(module, dataCrate.dir))} }
+exact-logic-abi = { path = ${JSON.stringify(pathWithin(module, resolve(ROOT, 'logic/abi')))} }
+`) || wrote;
+    if (!existsSync(resolve(module, 'src/lib.rs'))) wrote = writeChanged(resolve(module, 'src/lib.rs'), `exact_logic_abi::export!(${data.ty}, ${data.source});\n`) || wrote;
+  } else if (existsSync(module)) { rmSync(module, { recursive: true, force: true }); wrote = true; }
   // A crate for a platform no longer named goes with its platform.
   for (const entry of readdirSync(shells, { withFileTypes: true })) {
     if (entry.isDirectory() && Object.values(PLATFORMS).concat('web').includes(entry.name) && !crates.includes(entry.name)) { rmSync(resolve(shells, entry.name), { recursive: true, force: true }); wrote = true; }

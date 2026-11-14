@@ -20,7 +20,7 @@ const TAKEN = new Set(['Self', 'Value', 'DataError', 'DataSource', 'ContractValu
 export function rustNames(crate, title) {
   const type = title.normalize('NFKD').replace(/[^A-Za-z0-9 ]/g, ' ').split(/\s+/).filter(Boolean)
     .map(w => w[0].toUpperCase() + w.slice(1)).join('').replace(/^(?=\d)/, 'App') || 'App';
-  // An all-capitals name (`API`) reads as a constant to the web build, which copies only a type (host/web-js/module.mjs).
+  // An all-capitals type (`API`) fails clippy's default upper_case_acronyms lint.
   return { lib: `${crate.replaceAll('-', '_')}_data`, type: TAKEN.has(type) || /^[A-Z][A-Z0-9_]+$/.test(type) ? `${type}App` : type };
 }
 
@@ -251,6 +251,10 @@ export function writeRustApp(dir, crate, title) {
   rmSync(resolve(dir, 'app.ts'));
   const view = resolve(dir, 'app.contract');
   writeFileSync(view, readFileSync(view, 'utf8').replace('app.ts answers what it asks for.', 'data/src/lib.rs answers what it asks for.'));
+  // The source the hosts and the web's module run (LLP 1153.003 D2).
+  const { lib, type } = rustNames(crate, title), manifest = resolve(dir, 'app.json'), json = JSON.parse(readFileSync(manifest, 'utf8'));
+  json.rust = { ...json.rust, data: { crate: `${crate}-data`, type: `${lib}::${type}` } };
+  writeFileSync(manifest, JSON.stringify(json, null, 2) + '\n');
   for (const [path, text] of Object.entries(rustSources(crate, title))) {
     mkdirSync(dirname(resolve(dir, path)), { recursive: true });
     writeFileSync(resolve(dir, path), text);

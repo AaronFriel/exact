@@ -78,7 +78,7 @@ pub use logic::{
     apple_linked, linux_entry, native_storage_constructor, rust_entry, rust_entry_naming,
     web_linked, web_rust_mode,
 };
-pub use manifest::{Activity, Configuration, Manifest, Parameter, Widget};
+pub use manifest::{Activity, Configuration, Manifest, Parameter, RustData, Widget};
 pub use map::{plan_digest, SourceMap};
 pub use module_rust::module_rust;
 pub use preload::preload_expression;
@@ -89,7 +89,7 @@ pub use sources::{
     Package, Source, SourceGraph,
 };
 pub use symbols::{editor_symbols_json, symbols_json, PartialSymbols};
-pub use typescript::{design_exports, typescript, typescript_exporting};
+pub use typescript::{design_exports, typescript, typescript_exporting, typescript_sources};
 /// The app's strings tables (LLP 1060 D1), `None` for an app without a
 /// `strings` directory, every refusal in one message: the bake reads grant
 /// purposes from them (LLP 1069.008 D1).

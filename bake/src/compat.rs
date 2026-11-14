@@ -750,6 +750,12 @@ fn compatibility_with_trust(
     if hermes {
         inputs["typescriptRuntime"] = json!(TYPESCRIPT_RUNTIME);
     }
+    // The data crate the manifest names (LLP 1153.003 D2), which an entry's
+    // source must be (`contract::rust_entry`). Only apps that name one carry
+    // the key, so no other app's id moves.
+    if let Some(data) = manifest.rust_data()? {
+        inputs["rustData"] = json!({ "crate": data.krate, "type": data.ty, "source": data.source });
+    }
     let id = compatibility_digest(&inputs);
     let version = |name: &str, default: &str| match std::env::var(name) {
         Ok(value) => Ok(value),

@@ -7,7 +7,7 @@ import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from 'nod
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { createApp } from '../game/new.mjs';
-import { bakedRustSource } from '../host/web-js/module.mjs';
+import { rustDataOf } from './app-shells.mjs';
 import { authoredWorkspace } from './cargo-check.mjs';
 
 test('exact new --rust writes a data crate and host crates in a workspace of the app\'s own, with every path resolved', () => {
@@ -25,7 +25,8 @@ test('exact new --rust writes a data crate and host crates in a workspace of the
     assert.deepEqual(JSON.parse(loads.stdout).packages.map(p => p.name).sort(), ['field-log-apple', 'field-log-data', 'field-log-web']);
     // The source answers the starter's one source, under the type the bakes name.
     assert.match(readFileSync(resolve(dir, 'data/src/lib.rs'), 'utf8'), /pub struct FieldLog;[^]*"greeting" =>/);
-    assert.deepEqual(bakedRustSource(dir), { call: 'contract::bake', ty: 'field_log_data::FieldLog', expr: 'field_log_data::FieldLog::default()' });
+    const manifest = JSON.parse(readFileSync(resolve(dir, 'app.json'), 'utf8'));
+    assert.deepEqual(rustDataOf(manifest), { krate: 'field-log-data', ty: 'field_log_data::FieldLog', lib: 'field_log_data', source: 'field_log_data::FieldLog::default()' });
     // What the app tells an agent names its Rust data module, not app.ts or a pattern.
     const notes = readFileSync(resolve(dir, 'AGENTS.md'), 'utf8');
     assert.match(notes, /`data\/src\/lib\.rs` the data module \(Rust/);
@@ -46,12 +47,11 @@ test('exact new --rust refuses, before writing, a platform its scaffold has no c
 
 test('a Rust app\'s source type never takes a name its starter or Rust already uses', async () => {
   const { rustNames, rustListing } = await import('./app-rust.mjs');
-  const { copyableSource } = await import('../host/web-js/module.mjs');
   for (const [title, type] of [['Greeting', 'GreetingApp'], ['Value', 'ValueApp'], ['Data Source', 'DataSourceApp'], ['Self', 'SelfApp'], ['Field Log', 'FieldLog'], ['3D', 'App3D'], ['API', 'APIApp'], ['TV', 'TVApp'], ['Q1', 'Q1App']])
   {
     assert.equal(rustNames('x', title).type, type, title);
-    // The web build copies the bake's source: every name the scaffold gives it must be one it copies.
-    assert.ok(copyableSource(`x_data::${type}::default()`), type);
+    // app.json's rust.data names it: every name the scaffold gives it must be one the manifest admits.
+    assert.ok(rustDataOf({ rust: { data: { crate: 'x-data', type: `x_data::${type}` } } }), type);
   }
   const listing = rustListing('Created /a\n  bun exact.mjs pattern      start\n  bun exact.mjs web          the web dev loop\n  bun exact.mjs linux        build\n  bun exact.mjs windows --run  on');
   assert.equal(listing, 'Created /a (its data is Rust: data/src/lib.rs, which apple/ and web/ link)\n  bun exact.mjs web          the web dev loop');
