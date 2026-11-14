@@ -335,7 +335,9 @@ Ports    none. Runs to completion.`,
     internal: ['--apk', '--install'],
     body: `Builds android/ for aarch64-linux-android, packages it with exact2's Canvas reader
 (host/android) into an APK under target/android/, prints its path and installs it on the
-device: ANDROID_SERIAL, else the one adb lists (with several and none named, it refuses).
+device: ANDROID_SERIAL, else the one adb lists. Several entries must share a nonempty
+ro.serialno and secure android_id and contain at most one ip:port, one matching adb mDNS name and the USB serial
+itself, with no emulator ids; otherwise name ANDROID_SERIAL. Prefer ip:port, then USB.
 With no device it builds and says so. test android and agent android drive the installed
 APK and refuse one older than its sources, naming this command.
 CI       EXACT_BUILD_NUMBER (1 by default) is versionCode; EXACT_VERSION (0.1.0) is versionName.

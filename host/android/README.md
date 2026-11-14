@@ -314,8 +314,11 @@ on screen; and `tap … contextmenu` was refused as a popover though this host p
 it runs unless a driver asks, and cold start with it is the table's above.
 
 A drive refuses an APK older than its sources, naming the build (the record beside the APK, above), and installs it
-only when the device does not already hold the same bytes. With several devices attached and no `ANDROID_SERIAL` it
-refuses to choose. Not built: a drive leaves the phone's night mode, font scale and locale as they are
+only when the device does not already hold the same bytes. Without `ANDROID_SERIAL`, several ready adb entries count
+as one phone only when all report the same nonempty `ro.serialno` and secure `android_id`, and contain at most one `ip:port`, one matching
+`adb-<serial>-…._adb-tls-connect._tcp` name and the USB serial itself, with no `emulator-*` ids. The driver prefers
+`ip:port`, then USB. A lone mDNS entry works too. Any other combination or an unreadable identity requires `ANDROID_SERIAL`.
+Not built: a drive leaves the phone's night mode, font scale and locale as they are
 (`prefer` tells the app, not the phone); and a touch through Android's own input (`adb shell input`, or a
 `UiAutomation`) is still the only way to test what the reader does with a finger.
 

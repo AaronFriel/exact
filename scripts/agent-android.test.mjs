@@ -1117,3 +1117,71 @@ test('an Android picker answer carries local file bytes and names to either carr
     }]);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+test('wireless adb entries for one phone select its address; distinct or unreadable devices refuse', async () => {
+  const { androidDevice } = await import('./agent-android.mjs');
+  const mdns = 'adb-R5CT1234ABC-a1B2c3 (2)._adb-tls-connect._tcp', ip = '192.168.1.20:37099';
+  const env = {}, phone = id => ({ id, serial: 'R5CT1234ABC', androidId: 'd423b93a7ac32ef1' });
+  let devices = [], calls = [];
+  const run = (tool, args) => {
+    calls.push(args);
+    if (args.join(' ') === 'devices') return { status: 0,
+      stdout: 'List of devices attached\n' + devices.map(d => d.id + '\t' + (d.state ?? 'device')).join('\n') };
+    const identity = args[3] === 'settings';
+    expect(args.slice(2)).toEqual(identity ? ['shell', 'settings', 'get', 'secure', 'android_id'] : ['shell', 'getprop', 'ro.serialno']);
+    const d = devices.find(d => d.id === args[1]);
+    const value = (identity ? d?.androidId : d?.serial) ?? '';
+    return { status: (identity ? d?.identityStatus : d?.status) ?? 0, stdout: `${value}\r\n` };
+  };
+  const select = listed => {
+    devices = listed;
+    calls = [];
+    return androidDevice(env, run);
+  };
+  const factory = '0123456789ABCDEF';
+  expect(() => select([{ ...phone(ip), serial: factory },
+    { ...phone(factory), serial: factory, androidId: 'another-phone' }]))
+    .toThrow(`2 Android devices are ready (${ip}, ${factory}): set ANDROID_SERIAL to the one to use`);
+  expect(() => select([{ ...phone(ip), serial: factory, androidId: 'null' },
+    { ...phone(factory), serial: factory, androidId: 'null' }]))
+    .toThrow(`2 Android devices are ready (${ip}, ${factory}): set ANDROID_SERIAL to the one to use`);
+  expect(() => select([{ ...phone(ip), serial: 'unknown', androidId: 'null' },
+    { ...phone('unknown'), serial: 'unknown', androidId: 'null' }]))
+    .toThrow(`2 Android devices are ready (${ip}, unknown): set ANDROID_SERIAL to the one to use`);
+  for (const other of [
+    { ...phone(mdns), androidId: '' }, { ...phone(mdns), androidId: '   ' },
+    { ...phone(mdns), identityStatus: 1 },
+  ]) expect(() => select([phone(ip), other]))
+    .toThrow(`2 Android devices are ready (${ip}, ${mdns}): set ANDROID_SERIAL to the one to use`);
+  for (const ids of [[mdns, ip], [ip, mdns], [mdns, 'R5CT1234ABC', ip]]) {
+    expect(select(ids.map(phone))).toBe(ip);
+    expect(calls).toEqual([
+      ['devices'], ...ids.map(id => ['-s', id, 'shell', 'getprop', 'ro.serialno']),
+      ...ids.map(id => ['-s', id, 'shell', 'settings', 'get', 'secure', 'android_id']),
+    ]);
+  }
+  for (const id of [mdns, ip, 'emulator-5554']) {
+    expect(select([{ id }, { id: 'offline-phone', state: 'offline' }])).toBe(id);
+    expect(calls).toEqual([['devices']]);
+  }
+  for (const ids of [[mdns, 'R5CT1234ABC'], ['R5CT1234ABC', mdns], [ip, 'R5CT1234ABC']])
+    expect(select(ids.map(phone))).toBe(ids.includes(ip) ? ip : 'R5CT1234ABC');
+  for (const ids of [
+    ['emulator-5554', 'emulator-5556'], [ip, '192.168.1.21:37099'],
+    ['USB123', 'USB456'], [mdns, 'USB123'],
+    [mdns, 'adb-R5CT1234ABC-other._adb-tls-connect._tcp'],
+    [ip, 'adb-OTHER-a1B2c3._adb-tls-connect._tcp'],
+  ]) {
+    expect(() => select(ids.map(phone))).toThrow(`${ids.length} Android devices are ready (${ids.join(', ')}): set ANDROID_SERIAL to the one to use`);
+  }
+  for (const other of [
+    { id: 'other-phone', serial: 'OTHER' }, { id: 'emulator-5554', serial: 'EMULATOR35X1' },
+    { id: mdns }, { id: mdns, serial: '   ' }, { id: mdns, serial: 'R5CT1234ABC', status: 1 },
+  ]) {
+    expect(() => select([phone(ip), other])).toThrow(`2 Android devices are ready (${ip}, ${other.id}): set ANDROID_SERIAL to the one to use`);
+  }
+  expect(() => select([])).toThrow('no Android device or emulator is ready');
+  calls = [];
+  expect(androidDevice({ ...env, ANDROID_SERIAL: mdns }, run)).toBe(mdns);
+  expect(calls).toEqual([]);
+});

@@ -196,16 +196,34 @@ export function hermesApi(dir) {
   } catch { return null; }
 }
 
-/** The device a drive uses: ANDROID_SERIAL, else the one adb lists as ready. With several and none named it refuses to
- * choose: another lane's emulator or a person's phone may be among them. */
-export function androidDevice(env = process.env) {
+/** ANDROID_SERIAL, else one ready device. Wireless debugging can expose several transports for the same phone;
+ * matching serials, Android IDs and one entry per transport corroborate their identity. */
+export function androidDevice(env = process.env, run = spawnSync) {
   if (env.ANDROID_SERIAL) return env.ANDROID_SERIAL;
-  const listed = spawnSync(adb(env), ['devices'], { encoding: 'utf8' });
+  const listed = run(adb(env), ['devices'], { encoding: 'utf8' });
   if (listed.error) throw new Error(`adb: ${listed.error.message} (install the SDK's platform-tools, or set ANDROID_HOME)`);
   const ready = listed.stdout.split('\n').map((l) => l.split('\t')).filter(([, s]) => s?.trim() === 'device').map(([id]) => id);
   if (!ready.length) throw new Error('no Android device or emulator is ready: start one (`emulator -avd <name>`), `adb connect <host:port>` one elsewhere, or attach a phone with USB debugging on');
-  if (ready.length > 1) throw new Error(`${ready.length} Android devices are ready (${ready.join(', ')}): set ANDROID_SERIAL to the one to use`);
-  return ready[0];
+  if (ready.length === 1) return ready[0];
+  // `getprop` prints `unknown` for an unset serial and `settings get` prints `null` for a missing ID, both
+  // with status 0: neither names a device, so neither can show two entries are one.
+  const read = (id, args) => {
+    const got = run(adb(env), ['-s', id, 'shell', ...args], { encoding: 'utf8', timeout: 5000 });
+    const value = got.status === 0 ? got.stdout?.trim() : '';
+    return value && value !== 'null' && value !== 'unknown' ? value : null;
+  };
+  const serials = ready.map(id => read(id, ['getprop', 'ro.serialno']));
+  if (serials.every(serial => serial && serial === serials[0]) && !ready.some(id => id.startsWith('emulator-'))) {
+    const identities = ready.map(id => read(id, ['settings', 'get', 'secure', 'android_id']));
+    const serial = serials[0], addresses = ready.filter(id => /^\S+:\d+$/.test(id));
+    const mdns = ready.filter(id => id.startsWith(`adb-${serial}-`) && id.endsWith('._adb-tls-connect._tcp'));
+    const usb = ready.filter(id => id === serial);
+    if (identities.every(identity => identity && identity === identities[0])
+        && addresses.length <= 1 && mdns.length <= 1 && usb.length <= 1
+        && addresses.length + mdns.length + usb.length === ready.length)
+      return addresses[0] ?? usb[0];
+  }
+  throw new Error(`${ready.length} Android devices are ready (${ready.join(', ')}): set ANDROID_SERIAL to the one to use`);
 }
 
 const quote = (s) => `'${String(s).replace(/'/g, "'\\''")}'`;
@@ -1210,7 +1228,7 @@ function extensionArgs(app, out, config, bound) {
 }
 
 /** `--install` (`--run`: and launch it): the APK onto the device `androidDevice` names. With none ready the build
- * stands and says how to install it; with several and no ANDROID_SERIAL it refuses. The exit code. */
+ * stands and says how to install it; several entries must be one phone’s transports or name ANDROID_SERIAL. The exit code. */
 function installApk(app, apk, { run = false, built = 0, installed: onInstalled = () => {} } = {}) {
   let serial;
   try { serial = androidDevice(); } catch (error) {
