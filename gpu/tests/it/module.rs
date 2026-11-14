@@ -911,17 +911,17 @@ fn lifecycle_and_clock_reach_surfaces_without_a_device() {
     m.set_seekable(true); // only changes are delivered
     let agent = m.create_headless("probe").unwrap();
     for id in [live, agent] {
-        for code in [0, 1, 2, 3, 999] {
+        for code in [0, 1, 2, 3, 4, 999] {
             m.lifecycle(id, code);
         }
     }
     assert_eq!(
         m.agent(live, "").unwrap(),
-        "clock:false,clock:true,Hidden,Visible,Interrupted,Resumed"
+        "clock:false,clock:true,Hidden,Visible,Interrupted,Resumed,Activated"
     );
     assert_eq!(
         m.agent(agent, "").unwrap(),
-        "clock:true,Hidden,Visible,Interrupted,Resumed"
+        "clock:true,Hidden,Visible,Interrupted,Resumed,Activated"
     );
     m.set_seekable(false);
     assert!(m.agent(agent, "").unwrap().ends_with("clock:false"));

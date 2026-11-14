@@ -129,6 +129,10 @@ pub enum Lifecycle {
     Interrupted,
     /// The external interruption ended; device work may resume.
     Resumed,
+    /// A trusted press anywhere in the page, delivered inside it: a browser
+    /// starts audio output only in a user gesture, and a press on the app's
+    /// own controls is one even when it never reaches the canvas.
+    Activated,
 }
 
 /// Delivery failure, independent of GPU readiness.
@@ -934,8 +938,8 @@ impl Module {
         }
     }
 
-    /// Deliver host lifecycle codes: 0 hidden, 1 visible, 2 interrupted, 3 resumed.
-    /// Unknown codes are ignored, including from a newer host.
+    /// Deliver host lifecycle codes: 0 hidden, 1 visible, 2 interrupted, 3 resumed,
+    /// 4 activated. Unknown codes are ignored, including from a newer host.
     pub fn lifecycle(&mut self, id: u32, code: u32) {
         self.settle(id);
         let event = match code {
@@ -943,6 +947,7 @@ impl Module {
             1 => Lifecycle::Visible,
             2 => Lifecycle::Interrupted,
             3 => Lifecycle::Resumed,
+            4 => Lifecycle::Activated,
             _ => return,
         };
         if let Some(inst) = self.instances.get_mut(&id) {

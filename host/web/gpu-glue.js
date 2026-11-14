@@ -195,6 +195,14 @@ function lifecycle(code) {
 document.addEventListener("visibilitychange", () => lifecycle(document.hidden ? 0 : 1));
 window.addEventListener("pagehide", () => lifecycle(0));
 window.addEventListener("pageshow", event => lifecycle(event.persisted || !document.hidden ? 1 : 0));
+// A browser starts audio only in a user gesture, so any trusted press in the page is told to every surface inside
+// it, as the Contract sound player resumes its own (sound-glue.js): a press on a Contract control never reaches the
+// canvas, and a game whose controls are those has sound from its first press.
+const activated = (event) => {
+  if (!event.isTrusted || trapped() || recoveringDevice) return;
+  for (const entry of surfaces.values()) if (entry.id && !entry.terminal) gpu?.gpu_lifecycle(entry.id, 4);
+};
+for (const type of ["pointerdown", "keydown", "touchend"]) document.addEventListener(type, activated, true);
 
 // A homography maps child-local points to canvas points. CSS adds the child's
 // kernel offset after its transform, so subtract that offset in homogeneous space.

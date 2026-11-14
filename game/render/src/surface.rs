@@ -367,6 +367,10 @@ impl<G: Game, P: Executor, const ASSETS: bool, H: crate::Hooks> Surface
             Lifecycle::Visible => self.hidden = false,
             Lifecycle::Interrupted => self.interrupted = true,
             Lifecycle::Resumed => self.interrupted = false,
+            Lifecycle::Activated => {
+                self.presentation.unlock();
+                return;
+            }
             _ => return,
         }
         self.presentation.suspend(self.hidden || self.interrupted);
@@ -951,66 +955,8 @@ fn world_state(reply: &str) -> bool {
 #[path = "surface_tests.rs"]
 mod tests;
 #[cfg(test)]
-mod lifecycle_tests {
-    use super::*;
-    #[derive(Default)]
-    struct Hook {
-        seekable: bool,
-        suspended: bool,
-        unlocked: bool,
-    }
-    impl Executor for Hook {
-        fn wants_audio(&self) -> bool {
-            true
-        }
-        fn clock(&mut self, seekable: bool) {
-            self.seekable = seekable;
-        }
-        fn suspend(&mut self, suspended: bool) {
-            self.suspended = suspended;
-        }
-        fn unlock(&mut self) {
-            self.unlocked = !self.seekable && !self.suspended;
-        }
-    }
-    struct GameTest;
-    impl Game for GameTest {
-        type Args = ();
-        const NAME: &'static str = "lifecycle";
-        const ID: &'static str = "test.lifecycle";
-        fn setup(_: &mut World, _: &()) {}
-        fn tick(_: &mut World, _: &exact_game::Input, _: &()) {}
-    }
-    #[test]
-    fn lifecycle_only_changes_presentation_and_clock_precedes_first_input() {
-        let mut surface = WorldSurface::<GameTest, Hook>::default();
-        surface.clock(false);
-        surface.bind(&[], None).unwrap();
-        assert_eq!(surface.messages(), ["exact:audio"]);
-        assert!(surface.messages().is_empty());
-        let saved = surface.carry();
-        surface.input(&InputEvent::Key {
-            code: "KeyW".into(),
-            key: "w".into(),
-            down: true,
-            repeat: false,
-            at_ms: 0.,
-        });
-        assert!(surface.presentation.unlocked);
-        let saved_after_input = surface.carry();
-        for seekable in [false, true] {
-            surface.clock(seekable);
-            surface.lifecycle(Lifecycle::Hidden);
-            surface.lifecycle(Lifecycle::Interrupted);
-            surface.lifecycle(Lifecycle::Visible);
-            assert!(surface.presentation.suspended);
-            surface.lifecycle(Lifecycle::Resumed);
-            assert!(!surface.presentation.suspended);
-            assert_eq!(surface.carry(), saved_after_input);
-        }
-        assert_ne!(saved, saved_after_input); // only the actual input changes saved state
-    }
-}
+#[path = "surface_tests/lifecycle.rs"]
+mod lifecycle_tests;
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod residency_tests {
