@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, w
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
+import { designPath } from './forma-design-path.mjs';
 
 const ROOT = resolve(import.meta.dir, '..');
 const compiler = resolve(ROOT, 'target/debug/contract');
@@ -125,4 +126,71 @@ test('a sibling design with the former extension refuses serve, check and compil
   }
   renameSync(join(dir, 'brand.tamber'), join(dir, 'brand.forma'));
   expect(run(dir, ['forma', 'serve', '--stdio', '.']).status).toBe(0);
+}));
+
+test('a manifest-named nested former app design refuses check, IR, compilation and serving', () => app(dir => {
+  mkdirSync(join(dir, 'design'));
+  const before = 'forma app\n\ntheme\n  brand = #123456\n';
+  const path = join(dir, 'design/theme.tamber');
+  writeFileSync(path, before);
+  writeFileSync(join(dir, 'app.json'), JSON.stringify({ name: 'Rename', app: { id: 'com.exact.rename', name: 'Rename' }, forma: 'design/theme.tamber' }));
+  const direct = run(dir, ['forma', 'check', 'design/theme.tamber']);
+  expect(direct.status).toBe(2);
+  expect(direct.stderr).toContain('rename design/theme.tamber to design/theme.forma');
+  const results = [
+    ['forma', 'check', '.'], ['forma', 'ir', '.'], ['forma', 'serve', '--stdio', '.'], ['build', 'app.contract'],
+  ].map(args => run(dir, args));
+  expect(results.map(r => r.status)).toEqual([1, 1, 1, 1]);
+  for (const r of results) {
+    expect(r.stderr).toMatch(/rename .*design\/theme\.tamber to .*design\/theme\.forma/);
+    expect(r.stdout).not.toContain('"brand"');
+  }
+  expect(results.at(-1).stderr).toContain('forma-name');
+  expect(() => designPath(dir)).toThrow(`rename ${path} to ${join(dir, 'design/theme.forma')}`);
+  expect(readFileSync(path, 'utf8')).toBe(before);
+  expect(existsSync(join(dir, '.exact/forma.lock'))).toBe(false);
+  renameSync(path, join(dir, 'design/theme.forma'));
+  writeFileSync(join(dir, 'app.json'), JSON.stringify({ name: 'Rename', app: { id: 'com.exact.rename', name: 'Rename' }, forma: 'design/theme.forma' }));
+  expect(run(dir, ['forma', 'check', '.']).status).toBe(0);
+  expect(designPath(dir)).toBe(join(dir, 'design/theme.forma'));
+}));
+
+test('a manifest-named nested former package design refuses compilation', () => app(dir => {
+  const pkg = join(dir, 'node_modules/@acme/reading');
+  mkdirSync(join(pkg, 'src'), { recursive: true });
+  writeFileSync(join(pkg, 'src/index.contract'), 'component Card\n  view\n    text "card"\n');
+  writeFileSync(join(dir, 'app.contract'), 'use Card from "@acme/reading"\ncomponent App\n  view\n    Card()\n');
+  const manifest = { name: '@acme/reading', exports: { '.': './src/index.contract' } };
+  const path = join(pkg, 'src/theme.tamber'), before = 'forma reading\n';
+  writeFileSync(path, before);
+  writeFileSync(join(pkg, 'package.json'), JSON.stringify({ ...manifest, forma: 'src/theme.tamber' }));
+  const r = run(dir, ['build', 'app.contract']);
+  expect(r.status).toBe(1);
+  expect(r.stderr).toContain('forma-name');
+  expect(r.stderr).toMatch(/rename .*src\/theme\.tamber to .*src\/theme\.forma/);
+  expect(readFileSync(path, 'utf8')).toBe(before);
+  renameSync(path, join(pkg, 'src/theme.forma'));
+  writeFileSync(join(pkg, 'package.json'), JSON.stringify({ ...manifest, forma: 'src/theme.forma' }));
+  expect(run(dir, ['build', 'app.contract']).status).toBe(0);
+}));
+
+for (const [name, script, before, after] of [
+  ['serve', 'scripts/exact.mjs', ['forma', 'serve'], []],
+  ['tool', 'scripts/exact.mjs', ['forma', 'tool'], ['--no-open']],
+  ['web dev', 'host/web/dev.mjs', ['--app'], []],
+  ['wasm dev', 'host/web/dev.mjs', ['--app'], ['--wasm']],
+  ['remote dev', 'host/web/dev.mjs', ['--app'], ['--allow-plugin-origin']],
+]) test(`JS ${name} prints former design refusals and exits 2 without a stack`, () => app(dir => {
+  for (const former of ['app.tamber', 'design/theme.tamber']) {
+    mkdirSync(join(dir, 'design'), { recursive: true });
+    writeFileSync(join(dir, former), 'forma app\n');
+    writeFileSync(join(dir, 'app.json'), JSON.stringify({ name: 'Rename', app: { id: 'com.exact.rename', name: 'Rename' }, forma: former }));
+    const r = spawnSync(process.execPath, [resolve(ROOT, script), ...before, dir, ...after], {
+      cwd: dir, encoding: 'utf8', timeout: 15_000,
+    });
+    expect(r.status, r.stderr).toBe(2);
+    expect(r.stderr.trim()).toMatch(/^rename .*\.tamber to .*\.forma$/);
+    expect(r.stdout).toBe('');
+    rmSync(join(dir, former));
+  }
 }));

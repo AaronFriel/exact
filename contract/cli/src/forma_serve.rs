@@ -338,6 +338,13 @@ impl Server {
                     dir.display()
                 )
             })?;
+        if design.extension().is_some_and(|e| e == "tamber") {
+            return Err(format!(
+                "rename {} to {}",
+                design.display(),
+                design.with_extension("forma").display()
+            ));
+        }
         // The design is a file inside the app, reached by no link.
         let real = design
             .canonicalize()

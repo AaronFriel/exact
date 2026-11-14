@@ -36,7 +36,8 @@ const arg = (name, fallback) => { const i = argv.indexOf(name); return i >= 0 ? 
 // The dev wasm links every capability (LLP 1047 D7): a new plan that adds
 // one restarts in place, never waiting on a wasm rebuild.
 const buildEnv = {...developmentBuildEnv(),EXACT_UPDATE_TRUST:'development',EXACT_WEB_LINK:'all'};
-let app = resolveApp(arg('--app', undefined));
+let app, appDesign;
+try { app = resolveApp(arg('--app', undefined)); appDesign = designPath(app.dir); } catch (e) { console.error(e.message); process.exit(2); }
 if (app.outside) buildEnv.EXACT_APP_DIR = app.dir;
 if (app.manifest.game) buildEnv.EXACT_GAME_PROOF_PROFILE ??= 'gpu-dev';
 const lan = argv.includes('--lan');
@@ -68,7 +69,9 @@ const host = lan && servedAs == null ? '0.0.0.0' : '127.0.0.1';
 // The addresses printed at startup are the only names requests may use.
 const origins = installBrowserOrigins({ host: lan ? '0.0.0.0' : '127.0.0.1', port: servedAs ?? port });
 const allowHosts = allowHostArgs(argv);
-let doors = null; const remoteAsked = remoteArgs(argv, { exit: true }); /* the wire's remote doors (stage 10 B), refused without a design */ if ((remoteAsked.remote || remoteAsked.tunnel != null || remoteAsked.plugin || remoteAsked.relay) && servedAs == null && !designPath(app.dir)) { const named = [remoteAsked.remote && '--remote', remoteAsked.tunnel != null && '--trust-tunnel', remoteAsked.plugin && '--allow-plugin-origin', remoteAsked.relay && '--relay'].filter(Boolean); console.error(`${named.join(' and ')} ${named.length > 1 ? 'serve' : 'serves'} the design wire: this app has no design (app.forma)`); process.exit(2); }
+let doors = null; const remoteAsked = remoteArgs(argv, { exit: true });
+// The wire's remote doors (stage 10 B), refused without a design.
+if ((remoteAsked.remote || remoteAsked.tunnel != null || remoteAsked.plugin || remoteAsked.relay) && servedAs == null && !appDesign) { const named = [remoteAsked.remote && '--remote', remoteAsked.tunnel != null && '--trust-tunnel', remoteAsked.plugin && '--allow-plugin-origin', remoteAsked.relay && '--relay'].filter(Boolean); console.error(`${named.join(' and ')} ${named.length > 1 ? 'serve' : 'serves'} the design wire: this app has no design (app.forma)`); process.exit(2); }
 const gate = developmentGate(origins, servedAs ?? port, allowHosts);
 const root = resolve(fileURLToPath(new URL('../..', import.meta.url)));
 // An outside app's wasm loop builds apart from the JS target's `target/web-dist`,
@@ -411,7 +414,10 @@ function announcePlan(plan, bytes) {
   const sha = bytes && createHash('sha256').update(bytes).digest('hex');
   try { writeSync(mapFd, JSON.stringify({ plan, map: bytes ? { sha256: sha, bytes: bytes.length, url: `/__dev/map/${sha}` } : null }) + '\n'); } catch { /* the parent went */ }
 }
-const forma = servedAs == null && designPath(app.dir) ? formaServer({ appDir: app.dir, pairTtlMs: (await import('../../scripts/forma-pairing.mjs')).pairTtlOf(argv), remote: () => doors?.list() ?? [], live: () => typescript || !portableRust, page: `http://127.0.0.1:${port}`, scrub: { patch: scrubPatch, verify: scrubVerify, preview: scrubPreview, restore: scrubRestore, released: scrubReleased }, sourceMap: (digest) => plannedMaps.get(digest ?? current?.envelope.plan.sha256) || (!digest && current?.files.get('app.plan.map.json')) || (!digest && readMap()) || null, designServed: () => designSnapshot && !previewing ? { digest: designSnapshot.design ?? null, source: designSource } : null }) : null;
+let forma;
+try {
+  forma = servedAs == null && designPath(app.dir) ? formaServer({ appDir: app.dir, pairTtlMs: (await import('../../scripts/forma-pairing.mjs')).pairTtlOf(argv), remote: () => doors?.list() ?? [], live: () => typescript || !portableRust, page: `http://127.0.0.1:${port}`, scrub: { patch: scrubPatch, verify: scrubVerify, preview: scrubPreview, restore: scrubRestore, released: scrubReleased }, sourceMap: (digest) => plannedMaps.get(digest ?? current?.envelope.plan.sha256) || (!digest && current?.files.get('app.plan.map.json')) || (!digest && readMap()) || null, designServed: () => designSnapshot && !previewing ? { digest: designSnapshot.design ?? null, source: designSource } : null }) : null;
+} catch (e) { console.error(e.message); process.exit(2); }
 // The resident compiler's map beside the plan it wrote (a generation from a
 // Rust producer carries none); the server checks its digest.
 function readMap() { try { return readFileSync(resolve(dist, 'app.plan.map.json')); } catch { return null; } }

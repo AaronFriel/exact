@@ -3,7 +3,7 @@
 // FIFO or a giant there never stalls the server (stage 10b's review).
 
 import { existsSync, readFileSync, statSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { extname, resolve } from 'node:path';
 
 /** `app.json`, read only as a regular file of at most 1 MiB (a
  * FIFO or a giant there never stalls the server); null without one. */
@@ -27,5 +27,7 @@ export function designPath(appDir) {
   checkDesignName(appDir);
   const named = manifestForma(appDir);
   const path = resolve(appDir, typeof named === 'string' ? named : 'app.forma');
-  return existsSync(path) ? path : null;
+  if (!existsSync(path)) return null;
+  if (extname(path) === '.tamber') throw new Error(`rename ${path} to ${path.slice(0, -'.tamber'.length)}.forma`);
+  return path;
 }

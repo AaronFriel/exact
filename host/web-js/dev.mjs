@@ -975,7 +975,9 @@ es.onmessage=e=>{const m=JSON.parse(e.data);if(m.kind==='forma-batch'||m.kind===
       await new Promise((ok) => setTimeout(ok, 250));
     }
   };
-  forma = designPath(app.dir) ? formaServer({ appDir: app.dir, pairTtlMs, remote: () => doors?.list() ?? [], live: true, page: `http://127.0.0.1:${port}`, sourceMap: (digest) => (digest ? residentMaps.get(digest) ?? pageMaps.get(digest) ?? gallery.map(digest) : residentMaps.get(residentPlan)) ?? null, designServed: () => (scrubbed ? null : served), scrub: { patch: scrubPatch, verify: scrubVerify, preview: scrubPreview, restore: scrubRestore, released: (frame) => { released = scrubbed != null && (frame ?? true); }, inline: inlineWhy } }) : null;
+  try {
+    forma = designPath(app.dir) ? formaServer({ appDir: app.dir, pairTtlMs, remote: () => doors?.list() ?? [], live: true, page: `http://127.0.0.1:${port}`, sourceMap: (digest) => (digest ? residentMaps.get(digest) ?? pageMaps.get(digest) ?? gallery.map(digest) : residentMaps.get(residentPlan)) ?? null, designServed: () => (scrubbed ? null : served), scrub: { patch: scrubPatch, verify: scrubVerify, preview: scrubPreview, restore: scrubRestore, released: (frame) => { released = scrubbed != null && (frame ?? true); }, inline: inlineWhy } }) : null;
+  } catch (e) { console.error(e.message); process.exit(2); }
   // A polled stream (Linux, the resident loop's relay) is told the design to run.
   forma?.channel.greet(() => snapshot && notice(snapshot));
   const server = createServer(async (req, res) => {

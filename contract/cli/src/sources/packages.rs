@@ -180,6 +180,17 @@ pub(super) fn read(
             ));
         }
         let path = design.path;
+        if path.extension().is_some_and(|e| e == "tamber") {
+            return Err(refusal(
+                "forma-name",
+                &path,
+                format!(
+                    "rename {} to {}",
+                    path.display(),
+                    path.with_extension("forma").display()
+                ),
+            ));
+        }
         if !design.named && !path.is_file() {
             continue;
         }

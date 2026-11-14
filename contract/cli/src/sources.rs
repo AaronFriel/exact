@@ -431,6 +431,20 @@ fn design(
     let Some(path) = design_path(root) else {
         return Ok(None);
     };
+    if path.extension().is_some_and(|e| e == "tamber") {
+        return Err(CompileError {
+            pass: "use",
+            id: "forma-name".into(),
+            message: format!(
+                "rename {} to {}",
+                path.display(),
+                path.with_extension("forma").display()
+            ),
+            span: Span::default(),
+            file: Some(path.into()),
+            related: Box::new([]),
+        });
+    }
     let key = path.canonicalize().unwrap_or_else(|_| path.clone());
     let scrubbed = DESIGN_TEXT.with(|t| {
         t.borrow()

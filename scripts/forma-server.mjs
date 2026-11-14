@@ -1250,7 +1250,9 @@ async function listen({ host, port, handle, stop, first = null }) {
 export async function serveAlone(argv) {
   const at = name => { const i = argv.indexOf(name); return i < 0 ? undefined : argv[i + 1]; };
   const dir = appOf(resolve(argv.find((a, i) => !a.startsWith('-') && !['--port', '--remote', '--trust-tunnel', '--pair-ttl', '--allow-host', '--relay', '--relay-account', '--relay-cert', '--relay-key', '--relay-name', '--relay-dns-hook', '--relay-acme'].includes(argv[i - 1]) && argv[i - 2] !== '--relay-name') ?? '.'));
-  if (!designPath(dir)) { console.error(`forma serve: ${dir} has no design (app.forma, or the file app.json's "forma" names)`); return 1; }
+  try {
+    if (!designPath(dir)) { console.error(`forma serve: ${dir} has no design (app.forma, or the file app.json's "forma" names)`); return 1; }
+  } catch (e) { console.error(e.message); return 2; }
   let asked;
   try { asked = remoteArgs(argv); } catch (e) { console.error(`forma serve: ${e.message}`); return 2; }
   const ttl = argv.includes('--pair-ttl') ? parseDuration(at('--pair-ttl')) : PAIR_TTL_MS;
@@ -1333,7 +1335,9 @@ export async function toolAnswers(origin = TOOL_ORIGIN, tries = 1) { const got =
 export async function toolCommand(argv) {
   const at = name => { const i = argv.indexOf(name); return i < 0 ? undefined : argv[i + 1]; };
   const dir = appOf(resolve(argv.find((a, i) => !a.startsWith('-') && argv[i - 1] !== '--via') ?? '.'));
-  if (!designPath(dir)) { console.error(`forma tool: ${dir} has no design (app.forma, or the file app.json's "forma" names)`); return 1; }
+  try {
+    if (!designPath(dir)) { console.error(`forma tool: ${dir} has no design (app.forma, or the file app.json's "forma" names)`); return 1; }
+  } catch (e) { console.error(e.message); return 2; }
   const via = at('--via');
   // `--via` with no URL (or as `--via=…`) is refused, never read as absent.
   if (argv.some(a => a.startsWith('--via')) && !via?.startsWith('http')) { console.error('forma tool: --via takes the dev loop\'s URL as the next argument: --via http://127.0.0.1:<port>'); return 2; }
