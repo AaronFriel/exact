@@ -1023,8 +1023,9 @@ with `exact-data.workspace = true`), not under `secret.keep`, which is for secre
 `docs/reference.md`, "Rust data sources", has the requests and a best-times example.
 Games without `game.data` add no data-source dependency. Their Apple builds take one shared host
 (`game/app/apple`, `exact-game-apple`), and the game's own Apple crate holds only its plan and
-compat.json. Two cases keep the game's own host: a `Cargo.lock` captured before that crate existed,
-and a game whose entry differs from the generated one, for example because it has preloads. Games reuse
+compat.json. Two cases keep the game's own host: a `Cargo.lock` captured before that crate existed
+(`bun exact.mjs lock` refreshes it with the shared host), and a game whose entry differs from the
+generated one, for example because it has preloads. Games reuse
 the compiled host only when their builds share a build directory (`CARGO_BUILD_BUILD_DIR`, below).
 
 [Tennis](games/tennis/README.md) uses one for HTTP: the world publishes a numbered

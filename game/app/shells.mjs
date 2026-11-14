@@ -134,8 +134,10 @@ export function sharesAppleEntry(app, env = process.env) {
   return !byPlan || (app.link ?? []).includes('sqlite');
 }
 
-/** `env` is the build's: whether the Apple shell shares `exact-game-apple` follows from it (`sharesAppleEntry`). */
-export function gameShells(dir, game, workspace, {env = process.env} = {}) {
+/** `env` is the build's: whether the Apple shell shares `exact-game-apple` follows from it (`sharesAppleEntry`).
+ * `updateLock`: the workspace is generated for a lock refresh (`prepareGame`), which takes the shared Apple host
+ * whenever the game can have it. */
+export function gameShells(dir, game, workspace, {env = process.env, updateLock = false} = {}) {
   // Relative paths are written from the real directory: /tmp is a symlink on macOS.
   dir = realpathSync(dir);
   // Only this app is materialized. Each bake owns a generated Cargo workspace.
@@ -282,9 +284,9 @@ fn main() {
   if (!existsSync(resolve(root, '.gitignore'))) writeFileSync(resolve(root, '.gitignore'), '*\n!.gitignore\n');
   // A game without a data crate can take its Apple host from exact-game-apple, compiled once
   // for every such game, when its entry would be that crate's. A lock captured before that
-  // crate existed would refuse it, so such a game keeps its own host. A lock captured since
-  // names it, so capturing one leaves the graph it was captured from.
-  const sharedApple = !data && sharesAppleEntry(app, env) && (!existsSync(lock) || /^name = "exact-game-apple"$/m.test(readFileSync(lock, 'utf8')));
+  // crate existed would refuse it under --locked, so a build keeps such a game on its own host;
+  // refreshing the lock resolves it with the shared host, which moves it there.
+  const sharedApple = !data && sharesAppleEntry(app, env) && (updateLock || !existsSync(lock) || /^name = "exact-game-apple"$/m.test(readFileSync(lock, 'utf8')));
   for (const kind of ['gpu', 'web', 'apple', 'linux', 'windows', 'android']) {
     const shell = resolve(root, kind), shared = kind === 'apple' && sharedApple;
     // A cached build script can run from either the game or its deeper proof copy.
@@ -567,7 +569,7 @@ export function prepareGame(dir, game, source = gameRoot, {updateLock = false, f
   // an app object from before app.json gained game.render.
   game = gameDefaults(dir)?.game ?? game;
   const root = resolve(dir, '.shells'), own = resolve(dir, 'Cargo.lock'), shell = resolve(root, 'Cargo.lock');
-  const name = gameShells(dir, game, source, {env}), members = shellMembers(game, name);
+  const name = gameShells(dir, game, source, {env, updateLock}), members = shellMembers(game, name);
   const metadata = locked => (locked ? lockedMetadata : cargoMetadata)(root, ['--offline', ...(locked ? ['--locked'] : []), ...(target ? ['--filter-platform', target] : [])], env);
   const refused = result => new Error(`game Cargo graph: ${result.stderr || result.error?.message || ''}${result.status === null ? ` (cargo metadata ended by ${result.signal})` : ''}\nCrates missing from Cargo's cache, the lock unchanged: cargo fetch --manifest-path ${JSON.stringify(resolve(root, 'Cargo.toml'))}\nA dependency change (or both): ${lockCommand(dir)} fetches, resolves again and captures this game's lock`);
   if (fetch) {

@@ -257,3 +257,19 @@ test('a game shares the Apple host only when the build will bake the shared entr
     expect(sharesAppleEntry({preload:{}}, {})).toBe(true);
   } finally { rmSync(dir, {recursive:true, force:true}); }
 });
+
+test('a lock captured before the shared Apple host keeps the game on its own host until the lock is refreshed (#559)', () => {
+  const dir = mkdtempSync(resolve(tmpdir(), 'exact-shared-apple-'));
+  try {
+    mkdirSync(resolve(dir, 'logic/src'), {recursive:true});
+    writeFileSync(resolve(dir, 'app.json'), JSON.stringify({game:{}}));
+    writeFileSync(resolve(dir, 'logic/src/lib.rs'), 'impl Game for Island { const ID: &\'static str = "island"; }');
+    writeFileSync(resolve(dir, 'Cargo.lock'), 'version = 4\n\n[[package]]\nname = "exact-runner"\nversion = "0.1.0"\n');
+    const game = gameDefaults(dir).game, sdk = resolve(import.meta.dir, '..');
+    const sharesHost = () => /^exact-game-apple\.workspace = true$/m.test(readFileSync(resolve(dir, '.shells/apple/Cargo.toml'), 'utf8'));
+    gameShells(dir, game, sdk, {env:{}});
+    expect(sharesHost()).toBe(false);
+    gameShells(dir, game, sdk, {env:{}, updateLock:true});
+    expect(sharesHost()).toBe(true);
+  } finally { rmSync(dir, {recursive:true, force:true}); }
+});

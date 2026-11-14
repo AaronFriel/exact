@@ -1095,6 +1095,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "exact-game-apple"
+version = "0.1.0"
+dependencies = [
+ "exact-apple",
+ "exact-logic",
+ "exact-runner",
+ "ibex2-sqlite",
+ "serde_json",
+]
+
+[[package]]
 name = "exact-game-audio"
 version = "0.1.0"
 dependencies = [
@@ -1681,6 +1692,7 @@ version = "0.1.0"
 dependencies = [
  "exact-apple",
  "exact-game-app",
+ "exact-game-apple",
  "exact-logic",
  "exact-runner",
  "ibex2-sqlite",
