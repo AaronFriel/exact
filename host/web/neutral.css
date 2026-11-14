@@ -565,8 +565,10 @@
     }
   } }
   /* A full-screen route's ground where its author wrote none: clear, in a colour no author writes, which
-     navigation.js `overPage` reads to tell that route from one whose author wrote a background. */
-  #exact-root [navigationPresentation="fullscreen"] { background-color: rgb(1 2 3 / 0); }
+     navigation.js `overPage` reads to tell that route from one whose author wrote a background. It stands on the
+     sheets' level, so the stack's order, which is the routes' order in the document, decides which presented route is
+     drawn above another, as UIKit presents each above the one it is presented from. */
+  #exact-root [navigationPresentation="fullscreen"] { background-color: rgb(1 2 3 / 0); z-index: 1; }
   #exact-root [data-exact-covered]::after { content: none; }
   #exact-root :is([navigationPresentation="modal"], [data-exact-in-sheet])[data-exact-covered] { box-shadow: none; }
   @media (min-width: 900px) {
