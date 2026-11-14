@@ -164,7 +164,7 @@ pub struct CMetrics {
     pub width: f32,
     /// Points.
     pub height: f32,
-    /// Top to first alphabetic baseline, points; negative when unknown.
+    /// Top to first alphabetic baseline, points; -1 unknown, -2 pending geometry.
     pub baseline: f32,
 }
 
@@ -597,6 +597,7 @@ fn sanitize(m: CMetrics) -> TextMetrics {
             0.0
         },
         first_baseline: (m.baseline.is_finite() && m.baseline >= 0.0).then_some(m.baseline),
+        pending: m.baseline == -2.0,
     }
 }
 
@@ -768,7 +769,8 @@ impl TextMeasurer for CallbackMeasurer {
             return metrics;
         }
         let raw = self.foreign_measure(request, Some(stamp));
-        if raw.baseline == -2.0 {
+        let metrics = sanitize(raw);
+        if metrics.pending {
             self.memo.defer_to_owner(stamp);
         }
         let valid = raw.width.is_finite()
@@ -776,8 +778,7 @@ impl TextMeasurer for CallbackMeasurer {
             && raw.height.is_finite()
             && raw.height >= 0.0
             && raw.baseline.is_finite()
-            && raw.baseline != -2.0; // pending worker metrics are never memoized here
-        let metrics = sanitize(raw);
+            && !metrics.pending;
         // A negative finite baseline is the existing C "unknown" sentinel.
         // Invalid raw output keeps its existing sanitized return behavior, but
         // must retry the callback next time instead of caching a synthetic zero.

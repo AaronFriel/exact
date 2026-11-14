@@ -1052,6 +1052,7 @@ fn measured_baselines_include_padding_and_inherited_direction_relayouts_boxes() 
             TextMetrics {
                 width: 20.,
                 height: h,
+                pending: false,
                 first_baseline: Some(h * 0.75),
             }
         }

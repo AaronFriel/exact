@@ -436,6 +436,9 @@ pub struct TextMetrics {
     pub height: f32,
     /// Distance from the top to the first line's alphabetic baseline, if known.
     pub first_baseline: Option<f32>,
+    /// Geometry is estimated until the host accepts a measurement (LLP 1051.000 D5).
+    /// Pending metrics must not enter a scalar measurement cache.
+    pub pending: bool,
 }
 
 impl TextMetrics {
@@ -824,6 +827,7 @@ impl MonospaceMeasurer {
             width: fragments.iter().map(|f| f.x + f.width).fold(0.0, f32::max),
             height: result.height,
             // No line, no first baseline
+            pending: false,
             first_baseline: (!fragments.is_empty()).then_some(line_height * self.baseline_frac),
         }
     }
@@ -946,6 +950,7 @@ impl MonospaceMeasurer {
         TextMetrics {
             width: laid.lines.iter().map(|l| l.width).fold(0f32, f32::max),
             height: laid.bottoms.last().copied().unwrap_or(0.0),
+            pending: false,
             first_baseline: laid.lines.first().map(|l| l.above),
         }
     }

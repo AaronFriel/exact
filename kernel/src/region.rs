@@ -137,6 +137,7 @@ fn same_metrics(a: TextMetrics, b: TextMetrics) -> bool {
     a.width.to_bits() == b.width.to_bits()
         && a.height.to_bits() == b.height.to_bits()
         && a.first_baseline.map(f32::to_bits) == b.first_baseline.map(f32::to_bits)
+        && a.pending == b.pending
 }
 
 /// Explicit direct children of an independently sized, clipped View.

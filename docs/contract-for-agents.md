@@ -4343,6 +4343,9 @@ the app would end without its window); the agent lists the items as
 
 `frame(id)` and `measure("literal-id")` are action-only geometry reads returning
 `Geometry` (`x`, `y`, `width`, `height`, `provisional`, `unavailable`). Handle `unavailable` and `provisional`.
+Native answers are provisional while text in the subtree has estimated geometry,
+or an image or video awaits its natural size. Accepted text measurements clear
+the estimate at the next layout; unrelated subtrees keep their settled answers.
 The id is an element's `id`, not its `testId`: a literal id no element in the view
 has answers `unavailable` on every host, and the build warns (`lower-geometry-id`).
 `frame` reads the last layout's border box

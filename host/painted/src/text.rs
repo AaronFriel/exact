@@ -1249,6 +1249,7 @@ fn paragraph_metrics(p: &Paragraph) -> TextMetrics {
     TextMetrics {
         width: p.width,
         height: p.height,
+        pending: false,
         first_baseline: Some(p.first_baseline),
     }
 }

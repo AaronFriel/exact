@@ -197,6 +197,7 @@ impl<D: DataSource> Bridge<D> {
                     exact_kernel::TextMetrics {
                         width: metrics.width,
                         height: metrics.height,
+                        pending: false,
                         first_baseline: (metrics.baseline >= 0. || !metrics.baseline.is_finite())
                             .then_some(metrics.baseline),
                     },
