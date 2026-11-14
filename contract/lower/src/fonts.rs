@@ -247,6 +247,8 @@ impl Lowerer<'_> {
         fold_constant_families(&mut emission, false);
         let stacks = if Self::literal_arms(&emission) {
             emission
+        } else if matches!(emission, Expr::Typed(..)) && Self::literal_family_arms(&folded) {
+            folded
         } else {
             let Some(span) = bundled else {
                 return Ok(emission);
