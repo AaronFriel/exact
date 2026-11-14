@@ -2829,16 +2829,51 @@ grant beside this one: see [Push](#push).
   `clearAppBadge()` clears it. The badge is the app's: an embedded host's
   sessions share one. It needs no grant. A negative count is refused
   `TypeError` on every host, under the agent too.
-- `notificationStatus()` reads `{available, state, badge, apple}` (`state`
-  `granted`, `prompt`, `denied` or `unknown`), read again when the app comes
-  back to the front; `requestNotificationPermission()` asks while `prompt` and
-  answers the status.
+- `notificationStatus()` reads `{available, state, badge, apple, android}`
+  (`state` `granted`, `prompt`, `denied` or `unknown`), read again when the app
+  comes back to the front; `requestNotificationPermission()` asks while
+  `prompt` and answers the status.
+- On Android (LLP 1133.004.000) a post goes on a notification channel, which
+  holds its importance and sound; the person may change both in Settings, and
+  Android keeps them once the channel is made. The app declares its channels
+  in `app.json`, and the host makes them after the first frame and when the app
+  is updated, so Settings lists them from the first launch:
+
+  ```json
+  "host": { "android": { "notificationChannels": [
+    { "id": "urgencies", "name": "channel.urgencies", "description": "channel.urgencies.about",
+      "importance": "high", "sound": "assets/urgency.wav" }
+  ] } }
+  ```
+
+  `name` and `description` are strings keys; `importance` is `min`, `low`,
+  `default` or `high` (`high` shows a post heads-up); `sound` is an `.ogg`,
+  `.mp3` or `.wav` file in the app. The declaration needs the
+  `device.notifications` grant (`android-channels-need-notifications`). A post
+  without `android.channelId=` goes on `default`, the platform's default
+  importance and sound, named Notifications; declaring `default` names and
+  tunes it. `android.channelId="urgencies"` names a declared one (another
+  literal is refused at build, `android-channel-undeclared`; a computed one
+  `TypeError`). A changed importance or sound for an installed channel does
+  nothing, as on the platform: declare a new id instead. `silent=true` always
+  wins (from Android 12 the post is silenced alone; below it, it goes on a
+  quiet channel). A post on a channel the person turned off refuses
+  `NotAllowedError`, and `notificationStatus().android.channels` lists each
+  channel's importance as the person left it (`none` when off).
+  `android.category=` and `android.number=` are the platform's category and
+  the launcher's count. The status bar's icon is the app's `"monochrome"` icon
+  (without one, the platform's generic glyph, and the build says so).
+  Android 13 and later ask `POST_NOTIFICATIONS`, which the grant adds to the
+  manifest. There is no badge call (`setAppBadge` refuses
+  `NotSupportedError`; launchers draw their own dot). The app's Kotlin may set
+  more on each post through `NotificationsModule.builderHatch`.
 
 | host | post | `showTrigger` | click | badge |
 | --- | --- | --- | --- | --- |
 | web | `new Notification` in the page | while the page is open: the web has no trigger that outlives the page | while the page is open | `navigator.setAppBadge` where the browser has it, else `NotSupportedError` |
 | macOS, iOS | `UNUserNotificationCenter`, shown with the app in front too | the system's, delivered with the app closed | warm, or the launch | the Dock tile's label; `setBadgeCount` |
-| Linux, terminal, tvOS, Android, Windows | no implementation yet: each call is refused `NotSupportedError`, under the agent too, and the status reads `available: false` | | | |
+| Android | `NotificationManager`, shown with the app in front too | not yet: `NotSupportedError` | warm, or the launch | none: `NotSupportedError` |
+| Linux, terminal, tvOS, Windows | no implementation yet: each call is refused `NotSupportedError`, under the agent too, and the status reads `available: false` | | | |
 
 On macOS, system notifications need an app bundle (`bun host/apple/build.mjs
 --bundle`); the bare development executable has no notification centre, so
