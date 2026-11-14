@@ -2,9 +2,9 @@
 // on this Mac, a test class to an `xctest` process; on a simulator, the
 // `.xctestrun` xcodebuild wrote, without the Thread Performance Checker.
 import { spawn, spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { availableParallelism } from 'node:os';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { appleAssets, appleAssetCatalogInventory, rasterIconAssets, iosAssets, plistFile } from './assets.mjs';
 import { encodePng } from '../../scripts/png.mjs';
 
@@ -96,8 +96,13 @@ export function compileFixtures(root, run, env, dir, prefix, appId) {
   contract([resolve(root, 'host/apple/tests/fixtures/more-tabs.contract'), '-o', env[`${prefix}_MORE_TABS_PLAN`] = resolve(dir, 'more-tabs.plan')]);
   // NotificationActionTests': a post's declared actions and the root's handler.
   contract([resolve(root, 'host/apple/tests/fixtures/notification-actions.contract'), '-o', env[`${prefix}_NOTIFICATION_ACTIONS_PLAN`] = resolve(dir, 'notification-actions.plan')]);
-  const noActions = resolve(dir, 'notification-no-actions.contract');
-  writeFileSync(noActions, readFileSync(resolve(root, 'host/apple/tests/fixtures/notification-actions.contract'), 'utf8').replace(/, actions=\[.*\]/, ''));
+  // Written in this checkout, not beside the plan: its `use … from "@exact/notifications"` resolves from a
+  // node_modules above it, which a CARGO_TARGET_DIR outside the checkout lacks. Renamed into place whole: runs with
+  // other target directories share the name, and a compile must never read it half written.
+  const noActions = resolve(root, 'target/fixture-sources', `${prefix}-notification-no-actions.contract`), writing = `${noActions}.${process.pid}`;
+  mkdirSync(dirname(noActions), { recursive: true });
+  writeFileSync(writing, readFileSync(resolve(root, 'host/apple/tests/fixtures/notification-actions.contract'), 'utf8').replace(/, actions=\[.*\]/, ''));
+  renameSync(writing, noActions);
   contract([noActions, '-o', env[`${prefix}_NOTIFICATION_NO_ACTIONS_PLAN`] = resolve(dir, 'notification-no-actions.plan')]);
   contract([resolve(root, 'host/apple/tests/fixtures/feedback-race.contract'), '-o', env[`${prefix}_FEEDBACK_RACE_PLAN`] = resolve(dir, 'feedback-race.plan')]);
   contract([resolve(root, 'host/apple/tests/fixtures/async-advance.contract'), '-o', env[`${prefix}_ASYNC_ADVANCE_PLAN`] = resolve(dir, 'async-advance.plan')]);

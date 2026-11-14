@@ -145,10 +145,10 @@ test('async help exits before creating or checking out its worktree', () => {
 });
 
 
-test('the existing glue step runs Mac widget packaging, signing and migration tests', () => {
+test('the existing glue step runs Mac widget packaging, signing, migration and fixture-prep tests', () => {
   const glue = glueTests(join(import.meta.dir, '..'));
   const step = checks('new', 'old', { lane: [], glue }).find(([name]) => name === 'glue');
-  for (const file of ['scripts/app-apple.test.mjs', 'scripts/app-keychain.test.mjs', 'scripts/app-manifest.test.mjs', 'scripts/exact.test.mjs', 'host/apple/link.test.mjs', 'host/apple/cloak.test.mjs', 'scripts/agent-drag.test.mjs']) {
+  for (const file of ['scripts/app-apple.test.mjs', 'scripts/app-keychain.test.mjs', 'scripts/app-manifest.test.mjs', 'scripts/exact.test.mjs', 'host/apple/link.test.mjs', 'host/apple/cloak.test.mjs', 'host/apple/xctest-fixtures.test.mjs', 'scripts/agent-drag.test.mjs']) {
     expect(glue).toContain('./' + file);
     expect(step[2].at(-1)).toContain('./' + file);
   }

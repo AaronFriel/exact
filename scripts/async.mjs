@@ -124,8 +124,9 @@ export function glueTests(root) {
   const glob = pattern => [...new Bun.Glob(pattern).scanSync({ cwd: root, onlyFiles: true })];
   const files = [...glob('host/web/**/*.test.{mjs,js}'), ...glob('host/web-js/**/*.test.{mjs,js}'), ...glob('modules/*/tests/*.test.mjs'),
     ...glob('scripts/*.test.mjs')].filter(file => !LEFT_OUT.test(file)).sort().map(file => `./${file}`);
-  // The glue lane is macOS: link.test reads Mach-O load commands with Apple tools.
-  return [...files, './host/apple/link.test.mjs', './host/apple/cloak.test.mjs'];
+  // The glue lane is macOS: link.test reads Mach-O load commands with Apple tools; xctest-fixtures compiles the
+  // XCTests' fixtures with the contract CLI into a directory outside the checkout.
+  return [...files, './host/apple/link.test.mjs', './host/apple/cloak.test.mjs', './host/apple/xctest-fixtures.test.mjs'];
 }
 /**
  * What a commit's checks run (scripts/affected.mjs): the suites whose inputs the files changed since the last commit
