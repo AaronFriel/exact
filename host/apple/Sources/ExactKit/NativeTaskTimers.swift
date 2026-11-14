@@ -116,12 +116,11 @@ extension ExactSession {
               let timer = taskTimers.take() else { return }
         if ExactSession.asyncFills {
             advanceInFlight = true
-            let captured = generation
-            runtime.fireNativeTimerAsync(timer.row, now: timer.cutoff) { [weak self] batch in
-                self?.publish(.advance, batch, captured)
+            runtime.fireNativeTimerAsync(timer.row, now: timer.cutoff) { [weak self] completion in
+                self?.publish(.advance, completion)
                 DispatchQueue.main.async { [weak self] in
-                    guard let self, self.generation == captured else { return }
-                    taskTimers.complete(timer, retry: batch.busy || batch.held)
+                    guard let self, runtime.accepts(completion.lease) else { return }
+                    taskTimers.complete(timer, retry: completion.batch.busy || completion.batch.held)
                 }
             }
         } else {

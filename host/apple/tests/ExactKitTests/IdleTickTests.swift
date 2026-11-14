@@ -20,7 +20,7 @@ final class IdleTickTests: XCTestCase {
         defer { session.destroy() }
         func reply(_ batch: Batch) {
             session.repliesInFlight += 1; session.replySubmissions.append(0)
-            session.publish(.reply, batch, session.generation)
+            session.publish(.reply, RuntimeCompletion(lease: session.runtime.completionLease, batch: batch))
         }
         session.publishTickForTests(wireBatch([]))
         reply(wireBatch([]))
@@ -38,7 +38,7 @@ final class IdleTickTests: XCTestCase {
         session.publishTickForTests(image)
         XCTAssertEqual(session.hostOutstanding, ["published"])
         waitFor("the tick lands") { session.hostOutstanding.isEmpty && !session.ownerInFlight }
-        session.publishFillForTests(1, wireBatch([]), generation: session.generation)
+        session.publishFillForTests(1, wireBatch([]), lease: session.runtime.completionLease)
         XCTAssertEqual(session.hostOutstanding, ["fill"])
         waitFor("the slice lands") { session.hostOutstanding.isEmpty }
     }
@@ -187,10 +187,10 @@ final class IdleTickTests: XCTestCase {
         session.holdFillForTests()
         session.whenIdle { calls.append("pump") }
         session.whenIdle(bound: true, { calls.append("old views") }, cancelled: { calls.append("cancelled") })
-        let staleGeneration = session.generation
+        let staleLease = session.runtime.completionLease
         session.commitForTests()
         session.whenIdle(bound: true) { calls.append("new views") }
-        session.publishFillForTests(1, wireBatch([["op": "create", "id": 999, "kind": "view"]]), generation: staleGeneration)
+        session.publishFillForTests(1, wireBatch([["op": "create", "id": 999, "kind": "view"]]), lease: staleLease)
         session.drainFill()
         XCTAssertTrue(calls.isEmpty, "the commit's tree must apply before its waiters")
         XCTAssertNil(session.presenter.views[999], "a stale slice applies nothing")
@@ -200,7 +200,7 @@ final class IdleTickTests: XCTestCase {
         XCTAssertEqual(calls, ["pump", "cancelled", "new views"])
         session.holdFillForTests()
         session.whenIdle { calls.append("same generation") }
-        session.publishFillForTests(1, Batch(ops: [], timers: false, motion: false, clock: nil, error: nil), generation: session.generation)
+        session.publishFillForTests(1, Batch(ops: [], timers: false, motion: false, clock: nil, error: nil), lease: session.runtime.completionLease)
         session.drainFill()
         XCTAssertEqual(calls.last, "same generation")
     }

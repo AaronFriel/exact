@@ -7,9 +7,9 @@ import ExactPresence
 // generation rules it tests are shared code, run on macOS.
 #if os(macOS)
 /// A platform answer reaches only the session generation that asked
-/// (`GenerationStamp`): a reload keeps the session but starts a runner that
+/// (`SessionLease`): a reload keeps the session but starts a runner that
 /// numbers its calls and nodes from the start again.
-final class GenerationStampTests: XCTestCase {
+final class SessionLeaseTests: XCTestCase {
     override class func setUp() { super.setUp(); ExactPresence.install() }
     private var sessions: [ExactSession] = []
     override func tearDown() { sessions.forEach { $0.destroy() }; sessions = []; super.tearDown() }
@@ -54,13 +54,13 @@ final class GenerationStampTests: XCTestCase {
     /// Drain what the main queue holds now.
     private func drain() { RunLoop.main.run(until: Date().addingTimeInterval(0.05)) }
 
-    func testAStampOutlivesNeitherItsGenerationNorItsSession() throws {
+    func testALeaseOutlivesNeitherItsGenerationNorItsSession() throws {
         let session = try session()
-        let stamp = GenerationStamp(session)
+        let stamp = SessionLease(session)
         XCTAssertTrue(stamp.session === session)
         XCTAssertTrue(session.apply(try compile(Self.plain)), "reloaded")
         XCTAssertNil(stamp.session, "a reload ends the generation")
-        let next = GenerationStamp(session)
+        let next = SessionLease(session)
         XCTAssertTrue(next.session === session)
         session.destroy()
         XCTAssertNil(next.session, "so does the session's end")
@@ -75,14 +75,14 @@ final class GenerationStampTests: XCTestCase {
 
     func testAPresenceAnswerReachesTheGenerationThatAsked() throws {
         let session = try session()
-        session.presenceOp(presence, issued: GenerationStamp(session))
+        session.presenceOp(presence, issued: SessionLease(session))
         drain()
         XCTAssertTrue(logs(session).contains(presenceFailed), logs(session))
     }
 
     func testAPresenceAnswerAfterAReloadReachesNoCall() throws {
         let session = try session()
-        let asked = GenerationStamp(session)
+        let asked = SessionLease(session)
         XCTAssertTrue(session.apply(try compile(Self.plain)))
         session.presenceOp(presence, issued: asked)
         drain()
@@ -141,6 +141,15 @@ final class GenerationStampTests: XCTestCase {
         XCTAssertNil(session.picker.request("attach"), "the new input's picker is still open")
         session.picker.finish(new, files: [])
         XCTAssertEqual(try slots(session)["cancels"] as? Int, 1, "the current generation's cancel")
+    }
+
+    func testAPickerCannotAnswerAnotherSessionsInput() throws {
+        let a = try session(Self.picking), b = try session(Self.picking)
+        let request = try XCTUnwrap(a.picker.request("attach"))
+        b.picker.finish(request, files: [])
+        XCTAssertEqual(try slots(b)["cancels"] as? Int, 0)
+        a.picker.finish(request, files: [])
+        XCTAssertEqual(try slots(a)["cancels"] as? Int, 1)
     }
 
     // MARK: tool calls

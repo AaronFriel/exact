@@ -150,7 +150,7 @@ final class FragmentTests: XCTestCase {
         XCTAssertNotNil(p.fragmentHeld)
         XCTAssertEqual(offset, chosen, accuracy: 1)
         let applied = session.appliedBatches
-        session.publishFillForTests(try node("port").id, wireBatch([]), generation: session.generation)
+        session.publishFillForTests(try node("port").id, wireBatch([]), lease: session.runtime.completionLease)
         session.landFill()
         XCTAssertFalse(session.fillInFlight)
         XCTAssertEqual(session.appliedBatches, applied, "an unchanged fill skips the presenter apply pass")
