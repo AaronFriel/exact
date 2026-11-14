@@ -62,7 +62,7 @@ import { bundleShaderLibraries } from './shader-libraries.mjs';
 import { appleBuildRefusal, guardFlags, reportBuilt } from '../../scripts/help.mjs';
 import { appleImplementations } from '../../js/bake/src/typescript.mjs';
 import { composedModule, moduleSeam, systemFrameworks } from './compose.mjs';
-import { associatedDomains, entitlementValue, grantEntitlements, macSigning, merchantEntitlement, signInEntitlement } from './presence.mjs';
+import { associatedDomains, entitlementValue, grantEntitlements, macSigning, merchantEntitlement, signInEntitlement, signsGrant } from './presence.mjs';
 import { writeDataKeys } from './data-keys.mjs';
 import { backgroundKeys, firstFrameKeys, declaredOrigin, interfaceStyle, localNetworking, memoryEntitlements, modulePlist, nfcKeys, startLocation, storeKeys, transportSecurity, updateActivation, withPackageKeys } from './plist.mjs';
 import { compileFixtures, iosTestRuns, macTests, onlyClasses } from './xctest.mjs';
@@ -906,13 +906,13 @@ async function main(args, lockHeld = false) {
   } }));
   const libDir = paths.capture;
   const bakedCompat = buildReceipt.compat;
-  // What this Apple destination derives from the grants: the bake's, less what tvOS has not.
-  const appleReach = modulePlist(app, tv ? tvReach(bakedCompat.reach) : bakedCompat.reach, tv ? 'tvos' : ios ? 'ios' : 'macos', buildReceipt.graph.extensions, buildReceipt.graph.contractSources);
   // What only a macOS provisioning profile authorizes (LLP 1133.010 D7), resolved with the widgets' signing: one
   // profile, one team, the identity of that team.
   const signing = ios ? null : macSigning(app, bakedCompat, { current: sha1, widgets: macWidgets, release: production || distribution, distribution });
   const provisioning = signing?.provisioning ?? null;
   if (signing) { sha1 = signing.sha1; macWidgets = signing.widgets; widgets = !!macWidgets; }
+  // What this Apple destination derives from the grants: the bake's, less what tvOS has not, and the host events its signed grants let packages take (LLP 1133.001.000 D2).
+  const appleReach = modulePlist(app, tv ? tvReach(bakedCompat.reach) : bakedCompat.reach, tv ? 'tvos' : ios ? 'ios' : 'macos', buildReceipt.graph.extensions, buildReceipt.graph.contractSources, (line) => signsGrant(line, bakedCompat, ios ? undefined : provisioning));
   const level = bakedCompat.inputs?.store?.L;
   if (!['0', 'A'].includes(level)) throw new Error(`host/apple: unsupported baked store level ${level}`);
   const composition = level === '0' ? 'embedded' : 'updating';

@@ -1228,7 +1228,8 @@ export function usedPackages(app) {
  * `macos`, `tvos`), of the `extensions` in the compiled plan (LLP 1133.001
  * D4): each extension, its own Swift module's name,
  * its class, its source files, what it adds to Info.plist (`plist`,
- * `plistKeys`), and the system frameworks it needs from an OS version
+ * `plistKeys`), the host events it takes (`hostEvents`, LLP 1133.001.000
+ * D2), and the system frameworks it needs from an OS version
  * (`frameworks`, LLP 1133.016 D15). */
 export function appleImplementations(app, target, extensions, contractSources = []) {
   const { text } = usedPackages(app), named = `${text}\n${appText(app)}\n${contractSources.map(path => readFileSync(path, 'utf8')).join('\n')}`;
@@ -1256,7 +1257,7 @@ export function appleImplementations(app, target, extensions, contractSources = 
     const events=(i.declaration.names ?? []).some(n=>n.event);
     const credentialMembers = Object.entries(i.declaration.members ?? {}).flatMap(([owner, members]) =>
       Object.keys(members).map(option => `${owner.split('/').at(-1)}.${option}`));
-    return [{privacyManifest:resolve(impl.dir,'PrivacyInfo.xcprivacy'),extension,module:'ExactPkg_'+extension.replace(/\W/g,'_'),className:impl.json.class,sources:files.map(f=>resolve(impl.dir,f)),plist,plistKeys:impl.json.plistKeys ?? null,views:packageViewTags(i,impl),authenticator,start:i.declaration?.start==='load',credentialMembers,frameworks:impl.json.frameworks??{},activity:impl.json.apple?.activity??null}];
+    return [{privacyManifest:resolve(impl.dir,'PrivacyInfo.xcprivacy'),extension,module:'ExactPkg_'+extension.replace(/\W/g,'_'),className:impl.json.class,sources:files.map(f=>resolve(impl.dir,f)),plist,plistKeys:impl.json.plistKeys ?? null,hostEvents:impl.json.hostEvents ?? null,views:packageViewTags(i,impl),authenticator,start:i.declaration?.start==='load',credentialMembers,frameworks:impl.json.frameworks??{},activity:impl.json.apple?.activity??null}];
   });
 }
 

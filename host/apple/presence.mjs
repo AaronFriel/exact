@@ -31,6 +31,16 @@ const ROW_EFFECTS = {
   'com.apple.developer.group-session': ['device.shareplay', 'SharePlay is unavailable to the app', false],
 };
 
+/** Whether a build signs device grant `line` (`device.<row>`): the bake's ceiling grants it, and on the Mac
+ * (`provisioning` given, null where no profile was chosen), each of the row's entitlements a profile authorizes was
+ * signed under the one chosen. An iOS device build that cannot sign a granted row is refused, so there the grant
+ * settles it. */
+export function signsGrant(line, compat, provisioning) {
+  const granted = String(compat?.inputs?.grantCeiling ?? '').split('\n').some((l) => l.trim().split(/\s+/)[0] === line);
+  if (!granted || provisioning === undefined) return granted;
+  return Object.entries(ROW_EFFECTS).filter(([, [row]]) => row === line).every(([key]) => provisioning?.entitlements?.[key] !== undefined);
+}
+
 /** What a macOS build needs a profile for, from its bake (`compat`): `{ entitlement, lines, effect, mandatory }`
  * each, where a mandatory one refuses a release that cannot sign it. */
 export function macProfileNeeds(compat) {

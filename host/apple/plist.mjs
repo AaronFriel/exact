@@ -222,14 +222,60 @@ export function packageKeys(bound, target) {
   return keys;
 }
 
+/** The host events a package's Apple implementation may take (`"hostEvents"`, LLP 1133.001.000 D2): a call the system
+ * makes on the app's or the scene's delegate, which ExactKit holds until the package drains it. Each names its
+ * platforms, the device grant it needs signed, and the Info.plist keys that ask the system to deliver it, written only
+ * where it is taken, so an app claims to receive only what something takes. ExactKit's `HostEvents.swift` installs
+ * the selectors of the same names; a test keeps the two lists alike. A package that needs another event amends this
+ * list. */
+export const HOST_EVENTS = new Map([
+  // An iCloud share accepted: the system opens the app from a share link only when its Info.plist says it supports
+  // sharing (Apple, "CKSharingSupported"). `device.cloudkit` is not yet a row (LLP 1133.001.000 D3), so no build
+  // takes this event.
+  ['cloudkit-share', { platforms: ['ios', 'macos'], needs: 'device.cloudkit', writes: { CKSharingSupported: true } }],
+]);
+
+/** The host events the implementations `bound` declare in `"hostEvents"`, as `{ extension, event }`, those `target`
+ * has. Throws, naming the package, for an event not on `events` and for one two bound packages declare: each event
+ * has one taker in an app. */
+export function packageEvents(bound, target, events = HOST_EVENTS) {
+  const out = [], takers = new Map();
+  for (const impl of bound) {
+    const declared = impl.hostEvents;
+    if (declared == null) continue;
+    const refuse = (what) => { throw new Error(`${impl.extension}'s Apple implementation: its hostEvents ${what} (the list has ${[...events.keys()].join(', ')}; host/apple/plist.mjs HOST_EVENTS)`); };
+    if (!Array.isArray(declared) || declared.some((e) => typeof e !== 'string')) refuse('is not a list of names');
+    for (const event of new Set(declared)) {
+      const entry = events.get(event);
+      if (!entry) refuse(`names ${event}, which is not on the list`);
+      if (takers.has(event)) refuse(`names ${event}, which ${takers.get(event)}'s implementation takes too; an event has one taker in an app`);
+      takers.set(event, impl.extension);
+      if (entry.platforms.includes(target)) out.push({ extension: impl.extension, event });
+    }
+  }
+  return out;
+}
+
+/** The Info.plist rows (`{ extension, key, value }`) of the events in `declared` (from [packageEvents]) that this
+ * build takes, those whose grant `signed(line)` says it signs: each one's `writes`, and `ExactHostEvents`, the names
+ * taken, which ExactKit reads at launch. An event not taken writes neither. */
+export function hostEventKeys(declared, signed, events = HOST_EVENTS) {
+  const taken = declared.filter(({ event }) => signed(events.get(event).needs));
+  if (!taken.length) return [];
+  return [...taken.flatMap(({ extension, event }) => Object.entries(events.get(event).writes).map(([key, value]) => ({ extension, key, value }))),
+    { extension: taken[0].extension, key: 'ExactHostEvents', value: taken.map(({ event }) => event) }];
+}
+
 /** `reach` with what the app's packages' implementations for `target` add to Info.plist (`packages`, as
  * `{ extension, key, value }`), whether or not the app grants a device: each `"plistKeys"` key, and each `"plist"`
- * dictionary, keyed by the strings keys the app passes and valued by their base text (LLP 1133.002 D10). A key two
- * packages declare is written once. */
-export const modulePlist = (app, reach, target, extensions, contractSources = []) => {
+ * dictionary, keyed by the strings keys the app passes and valued by their base text (LLP 1133.002 D10); and the keys
+ * of the host events taken, whose grants `signed(line)` says the build signs, which on a Mac is known once its
+ * profile is chosen. A key two packages declare is written once. */
+export const modulePlist = (app, reach, target, extensions, contractSources = [], signed = () => false) => {
   const bound = appleImplementations(app.dir, target, extensions, contractSources);
   const dictionaries = bound.flatMap((p) => p.plist.map((d) => ({ ...d, extension: p.extension })));
-  const packages = packageKeys(bound, target).filter((k, i, all) => all.findIndex((o) => o.key === k.key) === i);
+  const packages = [...packageKeys(bound, target), ...hostEventKeys(packageEvents(bound, target), signed)]
+    .filter((k, i, all) => all.findIndex((o) => o.key === k.key) === i);
   if (dictionaries.length) {
     const base = reach?.base ?? 'en', strings = JSON.parse(readFileSync(resolve(app.dir, `strings/${base}.json`), 'utf8'));
     for (const { extension, key, keys } of dictionaries) packages.push({ extension, key, value: Object.fromEntries(keys.map((k) => {
@@ -334,6 +380,7 @@ export function appleMetadataOwners() {
   for (const [platform, { infoPlist }] of Object.entries(hosts)) {
     for (const [platforms, keys] of groups) if (platforms.includes(platform)) add(infoPlist, keys);
     for (const [key, { platforms }] of PLIST_KEYS) if (platforms.includes(platform)) add(infoPlist, [key]);
+    for (const [, { platforms, writes }] of HOST_EVENTS) if (platforms.includes(platform)) add(infoPlist, ['ExactHostEvents', ...Object.keys(writes)]);
   }
   add(hosts.macos.infoPlist, ['ExactWidgetSecretsAvailable']);
   add(hosts.ios.infoPlist, ['ExactAlarmCountdown', 'NSSupportsLiveActivities']);
