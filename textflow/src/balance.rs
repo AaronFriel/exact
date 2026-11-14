@@ -66,8 +66,10 @@ const MIN_CANDIDATES: usize = 5;
 /// All of the arithmetic is `f32`, as Blink's. A line's score is its unused
 /// width (from that fit) squared, the final line's included, plus a line
 /// penalty of 4 times `width` times `font_size`; a line ending at a hyphen
-/// adds half that (`SetupParameters`, `LineBreaker::AppendCandidates`), and
-/// one ending at the last break, or at a break followed only by hyphens,
+/// adds half that (`SetupParameters`, `LineBreaker::AppendCandidates`). A
+/// `justified` paragraph (`text-align: justify`) has no line penalty, and its
+/// hyphen penalty is a quarter as much, half of `width` times `font_size`. A
+/// line ending at the last break, or at a break followed only by hyphens,
 /// adds 10,000 (`Optimize`'s orphans penalty). As in `ComputeScores`, a
 /// line's start is skipped when its score plus the last scored start's
 /// unused width squared already reaches the best (`best_hope`), and is
@@ -83,6 +85,7 @@ const MIN_CANDIDATES: usize = 5;
 pub fn balanced_breaks(
     width: f32,
     font_size: f32,
+    justified: bool,
     opportunities: &[(f32, f32, bool)],
     lines: usize,
 ) -> Option<Vec<usize>> {
@@ -96,8 +99,11 @@ pub fn balanced_breaks(
     }
     let width = (width * 64.0).floor() / 64.0;
     let fit = width + 1.0 / 64.0;
-    let hyphen_penalty = width * font_size * 2.0;
-    let line_penalty = hyphen_penalty * 2.0;
+    let (hyphen_penalty, line_penalty) = if justified {
+        (width * font_size / 2.0, 0.0)
+    } else {
+        (width * font_size * 2.0, width * font_size * 4.0)
+    };
     let mut penalty: Vec<f32> = opportunities
         .iter()
         .enumerate()

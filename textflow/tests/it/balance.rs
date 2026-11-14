@@ -61,7 +61,7 @@ fn balanced_lines(text: &str, advance: f32, width: f32, font_size: f32) -> Vec<&
     let spaces: Vec<usize> = text.match_indices(' ').map(|(i, _)| i).collect();
     let opportunities = opportunities(text, advance);
     let lines = greedy_lines(&opportunities, width);
-    let breaks = balanced_breaks(width, font_size, &opportunities, lines).unwrap();
+    let breaks = balanced_breaks(width, font_size, false, &opportunities, lines).unwrap();
     assert_eq!(breaks.len() + 1, lines);
     let mut result = Vec::new();
     let mut start = 0;
@@ -102,7 +102,7 @@ fn balance_breaks_as_chrome_does_not_at_the_narrowest_width() {
     );
     // A line count other than the greedy one keeps the greedy breaks.
     assert_eq!(
-        balanced_breaks(88.0, 16.0, &opportunities("aaaa bb cc dd", 8.0), 3),
+        balanced_breaks(88.0, 16.0, false, &opportunities("aaaa bb cc dd", 8.0), 3),
         None
     );
 }
@@ -136,15 +136,15 @@ fn four_words(word: f32) -> Vec<(f32, f32, bool)> {
 #[test]
 fn balance_fits_lines_a_layout_unit_wider_than_the_box() {
     assert_eq!(
-        balanced_breaks(61.0, 16.0, &four_words(30.0 + 1.0 / 256.0), 2),
+        balanced_breaks(61.0, 16.0, false, &four_words(30.0 + 1.0 / 256.0), 2),
         Some(vec![1])
     );
     assert_eq!(
-        balanced_breaks(61.0, 16.0, &four_words(30.0 + 1.0 / 128.0), 2),
+        balanced_breaks(61.0, 16.0, false, &four_words(30.0 + 1.0 / 128.0), 2),
         Some(vec![1])
     );
     assert_eq!(
-        balanced_breaks(61.0, 16.0, &four_words(30.0 + 5.0 / 512.0), 2),
+        balanced_breaks(61.0, 16.0, false, &four_words(30.0 + 5.0 / 512.0), 2),
         None
     );
 }
@@ -157,7 +157,7 @@ fn balance_fits_lines_a_layout_unit_wider_than_the_box() {
 fn balance_bisects_fewer_than_four_opportunities() {
     let three = opportunities("aa aa aa", 1.0);
     assert_eq!(greedy_lines(&three, 5.0), 2);
-    assert_eq!(balanced_breaks(5.0, 16.0, &three, 2), None);
+    assert_eq!(balanced_breaks(5.0, 16.0, false, &three, 2), None);
     assert_eq!(balanced_width(5.0, |w| greedy_lines(&three, w)), Some(5.0));
 }
 
@@ -174,7 +174,11 @@ fn balance_penalizes_hyphenated_breaks() {
         (64.0, 72.0, false),
         (88.0, 88.0, false),
     ];
-    assert_eq!(balanced_breaks(64.0, 16.0, &soft, 2), Some(vec![2]));
+    assert_eq!(balanced_breaks(64.0, 16.0, false, &soft, 2), Some(vec![2]));
+    // Justified, the hyphen costs a quarter as much (512) and lines nothing:
+    // "aa a- / a aa aa" scores 576.75 + 512 + 64.25, under the 1,153.5 of
+    // "aa aa / aa aa".
+    assert_eq!(balanced_breaks(64.0, 16.0, true, &soft, 2), Some(vec![1]));
 }
 
 // Scores are f32, as Blink's LineBreakScore: breaking after "aa aa" or after
@@ -190,7 +194,7 @@ fn balance_scores_in_f32() {
         (11.0, 12.0, false),
         (end, end, false),
     ];
-    assert_eq!(balanced_breaks(8.0, 16.0, &near, 2), Some(vec![2]));
+    assert_eq!(balanced_breaks(8.0, 16.0, false, &near, 2), Some(vec![2]));
 }
 
 // Coincident breaks, as after a space and an empty inline item, keep the
@@ -206,5 +210,5 @@ fn balance_keeps_the_first_of_coincident_breaks() {
         (3.0, 4.0, false),
         (6.0, 6.0, false),
     ];
-    assert_eq!(balanced_breaks(5.0, 1.0, &same, 2), Some(vec![0]));
+    assert_eq!(balanced_breaks(5.0, 1.0, false, &same, 2), Some(vec![0]));
 }
