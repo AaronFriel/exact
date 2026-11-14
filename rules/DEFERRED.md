@@ -828,8 +828,8 @@ names no take; `:focus-within` remains out.
   the extension redraws it). Consumer: Interview's AI answer being written,
   which only its server can advance. Unblocks a Live Activity that stays true
   while its app is suspended. Still refused: push-to-start, remote
-  notifications (a visible push admitted 2026-11-11, below; a data-only push
-  stays refused), and everything the click ruling left refused. Take: none
+  notifications (a visible push admitted 2026-11-11, and a data-only push as a
+  wake's trigger 2026-11-14, both below), and everything the click ruling left refused. Take: none
   named; the ruling stands as its own waiver.
   **Expanded (Charlie, 2026-10-18, "recs work, go for it", on LLP 1133.002
   §12 question 6):** a readable permission fact for geolocation,
@@ -874,9 +874,17 @@ names no take; `:focus-within` remains out.
   nothing is claimed for a device until that run. Not built: push on macOS (the
   row is omitted there), on Android (after local notifications), and on the web
   (Declarative Web Push or a host worker). Still refused: push-to-start; a
-  data-only push as a wake's trigger (`content-available`, the
-  `remote-notification` background mode); a notification service extension; an
-  event raised by a push, but for a declared action the person chose (below).
+  notification service extension; an event raised by a push, but for a
+  declared action the person chose (below).
+  **Expanded (Charlie, 2026-11-14, "admit", on LLP 1172.016 Q1 after a
+  three-seat panel split two to one for admitting):** a data-only push as a
+  wake's trigger (`content-available`, the `remote-notification` background
+  mode), under LLP 1133.017's wake rules: origin, grants, the first-unlock
+  refusal, owned work and expiry. The system delivers such a push at its own
+  discretion, so it is a best-effort hint to refresh, and no app's correctness
+  may depend on one arriving; foreground recovery stays sufficient. Consumer:
+  an app's server telling it that data changed while it is in the background
+  (LLP 1172.016 E8). Take: none named; the ruling stands as its own waiver.
   **Expanded (Charlie, 2026-11-12, "build the ideal end state now", after a
   design panel; expo/exact#127; LLP 1133.004 stage 2):** a notification's
   actions on macOS and iOS: a post declares them as a literal list, which the
