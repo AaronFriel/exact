@@ -45,6 +45,7 @@ package final class Presenter {
     /// A view's props were written (`NodeView.props`' own observer).
     func propsChanged(_ view: NodeView) {
         chrome.note(view.id, props: view.props)
+        AriaCarriers.note(view, of: self)
         if view.disabled { view.showFieldFocus(false) }
         view.syncDisabledLook()
         view.relook() // a look holds on no disabled node (LLP 1121 D8)
@@ -681,6 +682,7 @@ package final class Presenter {
         hoveredInline = nil
         hoveredNodes = []; hovered = nil
         chrome = ChromeIndex()
+        AriaCarriers.forget(presenter: self)
         scrollers.removeAll()
         pendingScrolls.removeAll()
         heightBindings.removeAll()

@@ -98,6 +98,7 @@ extension NodeView {
     #endif
     /// ARIA disabled applies to focusable descendants, without changing input.
     package var ariaUnavailable: Bool {
+        guard AriaCarriers.any else { return false }
         #if os(macOS)
         var ancestor: NSView? = self
         #else
@@ -1222,3 +1223,38 @@ struct VoiceOverLanding {
     weak var toldFocus: NSView?
 }
 #endif
+
+/// The views whose props carry `accessibilityDisabled`, in every presenter,
+/// noted as their props change: while there are none, no view is
+/// unavailable to assistive technology, and `ariaUnavailable` answers
+/// without walking a row's ancestors, which a list's fills asked for each
+/// view they set props on. A view stays noted after its presenter lets it
+/// go (an exiting view, a popped route UIKit still shows, a parked row keep
+/// their props) until its props drop the prop, or it is freed, or its
+/// presenter resets and it is in no window. Main thread only.
+enum AriaCarriers {
+    private struct Carrier { weak var view: NodeView?; let presenter: ObjectIdentifier }
+    nonisolated(unsafe) private static var carriers: [ObjectIdentifier: Carrier] = [:]
+    nonisolated(unsafe) private static var asked = 0
+    /// Whether a view may carry it. Freed carriers are let go every so
+    /// often, so one that went with its prop does not keep every walk on.
+    static var any: Bool {
+        guard !carriers.isEmpty else { return false }
+        asked &+= 1
+        if asked & 255 == 0 { prune() }
+        return !carriers.isEmpty
+    }
+    static var count: Int { carriers.count }
+    static func prune() {
+        if carriers.values.contains(where: { $0.view == nil }) { carriers = carriers.filter { $0.value.view != nil } }
+    }
+    static func note(_ view: NodeView, of presenter: Presenter) {
+        if view.props["accessibilityDisabled"] != nil { carriers[ObjectIdentifier(view)] = Carrier(view: view, presenter: ObjectIdentifier(presenter)) }
+        else if !carriers.isEmpty { carriers.removeValue(forKey: ObjectIdentifier(view)) }
+    }
+    /// A reset presenter's carriers that are freed or out of every window.
+    static func forget(presenter: Presenter) {
+        let reset = ObjectIdentifier(presenter)
+        carriers = carriers.filter { $0.value.view != nil && ($0.value.presenter != reset || $0.value.view?.window != nil) }
+    }
+}

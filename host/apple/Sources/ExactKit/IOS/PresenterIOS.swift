@@ -73,7 +73,7 @@ package final class Presenter {
     /// Shared elements in flight, by the arriver's id (LLP 1013.000, `FlightsIOS.swift`).
     var flights: [UInt32: Flight] = [:]
     private(set) var chrome = ChromeIndex()
-    func propsChanged(_ view: NodeView) { chrome.note(view.id, props: view.props); DragLink.installed?.updateReorderGesture(view); view.updateRefresh(); view.relook() }
+    func propsChanged(_ view: NodeView) { chrome.note(view.id, props: view.props); AriaCarriers.note(view, of: self); DragLink.installed?.updateReorderGesture(view); view.updateRefresh(); view.relook() }
     package func carrying(_ key: String) -> [NodeView] { chrome.ids(key).sorted().compactMap { views[$0] } }
     func takeChangedNames() -> Set<String> { chrome.takeChangedNames() }
     var scrollers: Set<UInt32> = []
@@ -353,6 +353,7 @@ package final class Presenter {
         views.values.forEach { $0.forget() }
         root.subviews.forEach { $0.removeFromSuperview() }
         chrome = ChromeIndex()
+        AriaCarriers.forget(presenter: self)
         views.removeAll()
         inlineOwners.removeAll()
         scrollers.removeAll(); pendingScrolls.removeAll(); materialNodes.removeAll(); contextNodes.removeAll()
