@@ -71,6 +71,130 @@ HDR keeps D12b's encoded extended-sRGB output, including values above 1.
 `apps/caltrain/gpu` is a complete GPU module; the
 [GPU module recipe](../docs/recipes/gpu-module.md) shows a minimal surface.
 
+## A fragment shader on a canvas
+
+`exact_gpu::wgpu` is wgpu 30, the version this crate pins; use it rather than a
+`wgpu` dependency of the module's own. Code written for another wgpu release
+does not compile as written: in wgpu 30 a render pass and a render pipeline
+take `multiview_mask`, a pipeline layout takes `immediate_size` (immediate
+data, which replaced push constants) and its `bind_group_layouts` are
+`Option`s, and a colour attachment takes `depth_slice`. The surface below runs one WGSL fragment
+shader over a full-screen triangle with one uniform, as `aurora.rs` in
+`apps/caltrain/gpu` does with the canvas's children and a reflected shader
+beside. It rebuilds its pipeline when the target format changes, and writes
+the uniform through a `FrameUniform`, which writes Apple's and Vulkan's buffers
+in place instead of staging a copy each frame:
+
+```rust
+use exact_gpu::{wgpu, Frame, FrameUniform, Surface, SurfaceError, Value};
+
+const WGSL: &str = r#"
+struct U { time: f32, width: f32, height: f32, pad: f32 }
+@group(0) @binding(0) var<uniform> u: U;
+
+@vertex fn vs(@builtin(vertex_index) i: u32) -> @builtin(position) vec4<f32> {
+  let p = vec2<f32>(f32((i << 1u) & 2u), f32(i & 2u));
+  return vec4<f32>(p * 2.0 - 1.0, 0.0, 1.0);
+}
+
+@fragment fn fs(@builtin(position) at: vec4<f32>) -> @location(0) vec4<f32> {
+  let uv = at.xy / vec2<f32>(u.width, u.height);
+  return vec4<f32>(uv, 0.5 + 0.5 * sin(u.time / 1000.0), 1.0);
+}
+"#;
+
+#[derive(Default)]
+pub struct Field {
+    gpu: Option<Gpu>,
+}
+
+struct Gpu {
+    format: wgpu::TextureFormat,
+    pipeline: wgpu::RenderPipeline,
+    uniform: FrameUniform,
+    groups: Vec<wgpu::BindGroup>,
+}
+
+impl Surface for Field {
+    fn bind(&mut self, _inputs: &[Value], _at_ms: Option<f64>) -> Result<(), SurfaceError> {
+        Ok(())
+    }
+
+    fn render(&mut self, frame: &Frame, device: &wgpu::Device, queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder, target: &wgpu::TextureView, format: wgpu::TextureFormat) -> bool {
+        if self.gpu.as_ref().map(|g| g.format) != Some(format) {
+            self.gpu = Some(build(device, format));
+        }
+        let gpu = self.gpu.as_mut().unwrap();
+        let (w, h) = frame.pixels();
+        let bytes: Vec<u8> = [frame.now_ms as f32, w as f32, h as f32, 0.0]
+            .iter().flat_map(|f| f.to_le_bytes()).collect();
+        let slot = gpu.uniform.write(queue, &bytes);
+        let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: target, depth_slice: None, resolve_target: None,
+                ops: wgpu::Operations { load: wgpu::LoadOp::Clear(wgpu::Color::BLACK), store: wgpu::StoreOp::Store },
+            })],
+            ..Default::default()
+        });
+        pass.set_pipeline(&gpu.pipeline);
+        pass.set_bind_group(0, &gpu.groups[slot], &[]);
+        pass.draw(0..3, 0..1);
+        // Another frame: the shader reads the clock.
+        true
+    }
+}
+
+fn build(device: &wgpu::Device, format: wgpu::TextureFormat) -> Gpu {
+    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+        label: Some("field"), source: wgpu::ShaderSource::Wgsl(WGSL.into()),
+    });
+    let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: Some("field"),
+        entries: &[wgpu::BindGroupLayoutEntry {
+            binding: 0, visibility: wgpu::ShaderStages::FRAGMENT, count: None,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None,
+            },
+        }],
+    });
+    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("field"), bind_group_layouts: &[Some(&layout)], immediate_size: 0,
+    });
+    let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("field"),
+        layout: Some(&pipeline_layout),
+        vertex: wgpu::VertexState {
+            module: &shader, entry_point: Some("vs"), buffers: &[], compilation_options: Default::default(),
+        },
+        fragment: Some(wgpu::FragmentState {
+            module: &shader, entry_point: Some("fs"), targets: &[Some(format.into())],
+            compilation_options: Default::default(),
+        }),
+        primitive: Default::default(),
+        depth_stencil: None,
+        multisample: Default::default(),
+        multiview_mask: None,
+        cache: None,
+    });
+    // Four f32s: 16 bytes, a uniform's alignment.
+    let uniform = FrameUniform::new(device, 16, "field uniform");
+    // One bind group per slot of the uniform.
+    let groups = (0..uniform.slots()).map(|slot| device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("field"),
+        layout: &layout,
+        entries: &[wgpu::BindGroupEntry { binding: 0, resource: uniform.buffer(slot).as_entire_binding() }],
+    })).collect();
+    Gpu { format, pipeline, uniform, groups }
+}
+```
+
+Register it as the recipe's `clear` is (`("field", 0, field)` with
+`fn field() -> Box<dyn Surface> { Box::new(Field::default()) }`), and draw it
+with `canvas surface=field() width="100%" height=240`. Its pixels follow the
+canvas's device pixels (`frame.pixels()`); `Frame` has the rest of what the
+host knows (its points, scale, the display's frame period).
+
 ## Frame pacing and timing
 
 A surface that rests returns `false` from `render`; the host then asks for no

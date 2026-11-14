@@ -1,21 +1,20 @@
 # Recipe: a GPU module (a canvas drawn in Rust)
 
 A `canvas surface=name(…)` that no data module draws is drawn by the app's GPU module: a crate
-`gpu/` beside app.json whose surfaces implement `exact_gpu::Surface` (wgpu), loaded after the first
-pixel (`apps/caltrain/gpu` is a whole one). See `gpu/README.md` for performance,
-color-space requests, grants and shader encoding.
+`gpu/` beside app.json whose surfaces implement `exact_gpu::Surface`, loaded after the first pixel
+(`apps/caltrain/gpu` is a whole one). `exact_gpu::wgpu` is wgpu 30, whose fields differ from older
+tutorials': `gpu/README.md` has a shader pipeline, and performance, color and grants.
 
-**It is Rust of the app's own, so the app writes its Cargo workspace** (LLP 1153 D1.4). Start from
-the generated one; don't write a root `Cargo.toml` by hand:
+**It is Rust of the app's own, so the app owns its Cargo workspace** (LLP 1153 D1.4): step 2's copy
+is one-way, by design. Start from the generated one:
 
-1. Run a native verb once (`bun exact.mjs mac`, `ios`…): it writes `.exact/shells/`. It writes it
+1. Run a native verb once (`bun exact.mjs mac`, `ios`…): it writes `.exact/shells/`, but
    only while the app has no crate of its own, so move an existing `gpu/` aside until step 2 is done.
 2. Copy it up: `cp -R .exact/shells/. . && rm -rf .exact/shells .stamp.json`.
 3. Write `gpu/` (below) and add `"gpu"` to `members` in `Cargo.toml`, then run `bun exact.mjs update`
    (it settles the copied crates' paths and `<exact2>`) and `bun exact.mjs lock`.
-4. The web build's wasm-bindgen must be the version `exact setup` installed. When `lock` says the
-   GPU module links another, write the `=` requirement it names in `gpu/Cargo.toml` and
-   run `bun exact.mjs lock` again.
+4. When `lock` says the GPU module links another wasm-bindgen than `exact setup` installed, write
+   the `=` requirement it names in `gpu/Cargo.toml` and run `bun exact.mjs lock` again.
 5. Draw it from the view (below), then `bun exact.mjs web-build`, or `mac`, as any app.
 
 `gpu/Cargo.toml`. Its package is the app's name plus `-gpu`; `module!` exports through the three web
