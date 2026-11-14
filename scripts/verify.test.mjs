@@ -174,6 +174,10 @@ test('the relaunch keeps a test\'s pinned date, zone, locale and seed', () => {
   const dark = { ...defaults, media: { 'prefers-color-scheme': 'dark', 'prefers-reduced-motion': 'reduce' } };
   assert.equal(pinnedLaunch(test(dark), defaults), true);
   assert.deepEqual(relaunchFacts(test(dark)).media, dark.media);
+  assert.equal(pinnedLaunch(test({ ...defaults, permissions: {} }), defaults), false);
+  const allowed = { ...defaults, permissions: { 'permission.notifications': 'granted' } };
+  assert.equal(pinnedLaunch(test(allowed), defaults), true);
+  assert.deepEqual(relaunchFacts(test(allowed)).permissions, allowed.permissions);
 
   assert.equal(pinnedLaunch({ name: 'saves', end: { keep: true } }, defaults), false); // a test run without launch facts
 

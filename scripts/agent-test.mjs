@@ -699,7 +699,7 @@ export async function runTests({ host, browser, file, plan, app, size, env, webD
     // The drive's `--fail-fetch` is every test's, with its own leading `fail fetch` lines added (LLP 1103 D3).
     const facts = { size, seed, locale, formatLocale, timeZone, epoch, failFetch };
     const lines = [], preferences = [];
-    const media = {};
+    const media = {}, permissions = {}; // the latest of each, which a `reload` applies again
     let beforeData = false, leading = 0, reset = null, opensAt = null; // `at`'s location, where the app opens (LLP 1153 D5)
     // `fail fetch` lines that lead the steps are armed before the app's first data load (LLP 1103 D3).
     const armed = new Map(); // prefix -> the line that armed it with a count
@@ -765,10 +765,11 @@ export async function runTests({ host, browser, file, plan, app, size, env, webD
     }
     const prefer = async (st) => {
       const facts = { [st.name]: st.value };
-      preferGroups(facts); // Keep the driver's diagnostic for a bad name or value.
-      if (!Object.hasOwn(PREFERENCES, st.name) && st.name !== 'root-font-size') throw new Error(`test prefer: expected a CSS media feature or root-font-size: ${Object.keys(PREFERENCES).join(', ')}`);
+      const permission = preferGroups(facts).extension.permission != null; // The driver's diagnostic for a bad name or value.
+      if (!permission && !Object.hasOwn(PREFERENCES, st.name) && st.name !== 'root-font-size') throw new Error(`test prefer: expected a CSS media feature (${Object.keys(PREFERENCES).join(', ')}), root-font-size or a module's permission (permission.<name> granted|denied|prompt)`);
       const r = await s.prefer(facts);
       if (r?.error) throw new Error(r.error);
+      if (permission) return void Object.assign(permissions, facts);
       // Preserve last-application order: pointer and hover emulation affect each other.
       delete media[st.name];
       Object.assign(media, facts);
@@ -801,7 +802,8 @@ export async function runTests({ host, browser, file, plan, app, size, env, webD
       if (s.host === 'web') { await s.carrier.reset({ keep: true, failFetch, epoch: facts.epoch }); s.now = 0; s.contact = null; resetLogs(s); }
       else { await s.close(); s = await open({ host, browser, plan, ...facts, failFetch: failFetch ?? facts.failFetch, env: { ...(env ?? {}), ...fixture }, app, webDist, device, phone, reader, url, storage: store, touch: fingers, chrome: bars, scale, port }); }
       s.notes = notes;
-      for (const [name, value] of Object.entries(media)) {
+      // A module's permission is the runner's, which starts again, as a phone keeps a granted one across a restart.
+      for (const [name, value] of Object.entries({ ...media, ...permissions })) {
         const r = await s.prefer({ [name]: value });
         if (r?.error) throw new Error(r.error);
       }
@@ -1141,7 +1143,7 @@ export async function runTests({ host, browser, file, plan, app, size, env, webD
         const pending = (state.pending ?? []).filter((p) => !p.device && !p.held && !p.stream).map((p) => p.name);
         if (pending.length) notes.push(`ended with ${pending.length} request${pending.length === 1 ? '' : 's'} in flight (${pending.join(', ')}): a reply lands at a clock step, so what the test read last may not include it`);
       } catch { /* advice only */ }
-      if (atEnd && closedAt == null) end = await atEnd(s, { name: t.name, index: n, size: facts.size, store, failures, reload: t.steps.some((st) => st.op === 'reload'), launch: { ...launchFacts({ ...facts, epoch: first, env: env ?? {} }), media: { ...media } }, reached: await reached(), typed: [...typed], touched: [...touched], expectedRefusals: [...expectedRefusals], ...(s.host === 'web' ? { restart: async () => { await reload(); await data(); } } : {}) }).catch((e) => ({ error: e.message }));
+      if (atEnd && closedAt == null) end = await atEnd(s, { name: t.name, index: n, size: facts.size, store, failures, reload: t.steps.some((st) => st.op === 'reload'), launch: { ...launchFacts({ ...facts, epoch: first, env: env ?? {} }), media: { ...media }, permissions: { ...permissions } }, reached: await reached(), typed: [...typed], touched: [...touched], expectedRefusals: [...expectedRefusals], ...(s.host === 'web' ? { restart: async () => { await reload(); await data(); } } : {}) }).catch((e) => ({ error: e.message }));
       // A failed test shows what the data module logged, the last lines of it (sb4 farm wave 7, E1: 093 rendered
       // values into the view to see them; `logs` had them all along). Advice only.
       if (failures.length && closedAt == null) try {

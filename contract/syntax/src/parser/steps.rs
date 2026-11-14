@@ -116,7 +116,7 @@ impl Parser {
             .iter()
             .take_while(|s| !launch_word(s).is_empty())
             .count();
-        // Fetch faults and media preferences may also change between steps.
+        // Fetch faults and preferences may also change between steps.
         let late = steps[leading..].iter().find(|s| {
             !launch_word(s).is_empty() && !matches!(s, Step::FailFetch { .. } | Step::Prefer { .. })
         });
@@ -557,12 +557,17 @@ impl Parser {
             "tap" if self.at_ident("midi") => return self.tap_midi(span),
             "prefer" if self.at_ident("midi") => return self.prefer_midi(span),
             "prefer" => {
-                let (name, _) = self.ident()?;
+                // A module's permission is dotted (`permission.notifications`).
+                let (mut name, _) = self.ident()?;
+                while self.eat_punct(".") {
+                    name.push('.');
+                    name.push_str(&self.ident()?.0);
+                }
                 let value = match self.next() {
                     Token { kind: TokenKind::Ident(value) | TokenKind::Str(value), .. } => value,
                     token => return Err(SyntaxError {
                         id: "syntax-expected-step",
-                        message: "`prefer` takes a preference and its value, as `prefer prefers-color-scheme dark` or `prefer root-font-size \"24\"`".into(),
+                        message: "`prefer` takes a preference, `root-font-size` or a module's permission and its value, as `prefer prefers-color-scheme dark`, `prefer root-font-size \"24\"` or `prefer permission.notifications granted`".into(),
                         span: token.span,
                     }),
                 };

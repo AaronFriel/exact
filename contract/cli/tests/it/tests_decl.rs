@@ -944,6 +944,17 @@ fn media_preferences_inherit_by_name_and_can_change_between_steps() {
     // The driver validates media names and values at the failing test's line.
     assert!(contract::tests("test \"t\"\n  prefer unknown banana\n").is_ok());
     assert!(contract::tests("test \"t\"\n  prefer prefers-color-scheme banana\n").is_ok());
+    // A module's permission, as a launch line or a step (#557).
+    let permission = contract::tests(
+        "prefer permission.notifications granted\n\ntest \"t\"\n  prefer permission.health.steps denied\n",
+    )
+    .unwrap();
+    let json: serde_json::Value = serde_json::from_str(&contract::tests_json(&permission)).unwrap();
+    assert_eq!(
+        json[0]["steps"][0],
+        serde_json::json!({"op":"prefer", "name":"permission.notifications", "value":"granted", "line":1})
+    );
+    assert_eq!(json[0]["steps"][1]["name"], "permission.health.steps");
     assert!(contract::tests("prefer midi.state granted\n").is_err());
     let midi =
         contract::tests("test \"midi\"\n  prefer midi.state granted midi.outputs \"synth\"\n")

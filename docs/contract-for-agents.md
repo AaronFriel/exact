@@ -5458,7 +5458,9 @@ test or, for every test, at the top of the file.
 observation. It can lead the test or the file, or appear later to change the
 preference between steps. Use the driver's CSS media feature names and values
 (`prefers-color-scheme light|dark`, `prefers-reduced-motion reduce|no-preference`,
-and the other media preferences listed above). A test's leading value overrides
+and the other media preferences listed above). `prefer permission.notifications
+granted` sets a module's permission the same way, as the driver's `prefer
+permission.<name> granted|denied|prompt` does. A test's leading value overrides
 its file's default for that name only. Duplicate names at file level or among a
 test's leading launch lines are errors; later steps may change the same name.
 A bad name, value or unsupported emulation fails that test at its line.

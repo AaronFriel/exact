@@ -134,9 +134,10 @@ pub enum Step {
         /// Where.
         span: Span,
     },
-    /// A media preference, before observations or between steps.
+    /// A media preference or a module's permission, before observations or
+    /// between steps.
     Prefer {
-        /// CSS media feature name.
+        /// A CSS media feature, or `permission.` and the module's name.
         name: String,
         /// The driver's value.
         value: String,
