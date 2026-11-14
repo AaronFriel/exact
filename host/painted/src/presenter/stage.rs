@@ -8,13 +8,18 @@
 //! scrim of 32 % black that dims the page and its bars. It rests at its
 //! `navigationDetent` heights (`medium` half the tallest, `large` the
 //! window below the status bar, a point height or a percentage of the
-//! tallest, each with the bar under its foot added below), opening at
-//! `navigationInitialDetent`, else the first. It is laid out once, at its
-//! tallest, as Compose lays out a sheet's content: at a lower detent the
-//! rest is below the window's edge. It slides up as it opens and down as it
-//! leaves, and while the keyboard is up it rests at its tallest. A route
-//! pushed while a sheet is on top is shown in it (expo/exact#326), and the
-//! sheet keeps the detents of the route that opened it.
+//! tallest, `fit-content` its route's content measured alone, as the iOS
+//! host measures it, each with the bar under its foot added below and
+//! none above the tallest), opening at `navigationInitialDetent`, else
+//! the first. It is laid out at its tallest, as Compose lays out a sheet's
+//! content: at a lower detent the rest is below the window's edge. It
+//! slides up as it opens and down as it leaves. While the keyboard is up
+//! it rests at its tallest, but for a sheet resting at `fit-content`,
+//! which keeps its content's height on the keys, as Compose's
+//! `ModalBottomSheet` rises with the IME inset, and goes to the tallest
+//! only where that does not fit. A route pushed while a sheet is on top
+//! is shown in it (expo/exact#326), and the sheet keeps the detents of the
+//! route that opened it.
 //!
 //! **Pushes and pops** cross on Material's shared X axis: the route that
 //! leaves slides 30 toward where it goes and fades in the first 35 % of
@@ -163,7 +168,10 @@ struct Sheet {
     /// Its top edge in the page, points.
     top: Glide,
     /// What its heights were computed from: a change places it again.
-    said: (Option<String>, (f32, f32), bool),
+    said: Said,
+    /// Its route's `fit-content` height, by the kernel's layout stamp it
+    /// was measured at ([`Presenter::fit_content`]).
+    measured: Option<((u64, u64, u64), f32)>,
     /// A full-screen route presented above it covers it: it is drawn
     /// beneath that route, as it was, and takes no touch.
     covered: bool,
@@ -246,17 +254,26 @@ pub(super) struct State {
     blocks: Vec<ViewId>,
 }
 
+/// What a sheet's heights are computed from: its `navigationDetent`, the
+/// page's height and the tallest, whether the keyboard is up, and its
+/// `fit-content` height.
+type Said = (Option<String>, (f32, f32), bool, Option<f32>);
+
+/// Whether `detent` names `fit-content`.
+fn fits(detent: Option<&str>) -> bool {
+    detent.is_some_and(|d| d.split_whitespace().any(|w| w == "fit-content"))
+}
+
 /// The sheet heights `detent` asks for on a page `tallest` high below the
-/// status bar, the bar under the foot `foot` high; unreadable words are
-/// left out, and none left is the tallest.
-fn heights(detent: Option<&str>, tallest: f32, foot: f32) -> Vec<f32> {
+/// status bar, the bar under the foot `foot` high, its route's content
+/// `fit` high with that bar; unreadable words are left out, and none left
+/// is the tallest.
+fn heights(detent: Option<&str>, tallest: f32, foot: f32, fit: f32) -> Vec<f32> {
     let mut out: Vec<f32> = (detent.unwrap_or("large").split_whitespace())
         .filter_map(|d| match d {
             "large" => Some(tallest),
             "medium" => Some(tallest / 2.0 + foot),
-            // Laid out at the tallest, a sheet has no height of its own
-            // content to rest at: `fit-content` rests at `medium`.
-            "fit-content" => Some(tallest / 2.0 + foot),
+            "fit-content" => Some(fit),
             d => match d.strip_suffix('%') {
                 Some(p) => p.parse::<f32>().ok().filter(|p| *p > 0.0).map(|p| {
                     if p >= 100.0 {
@@ -402,6 +419,12 @@ impl<D: DataSource> Presenter<D> {
             .preview
             .take_if(|p| !p.live(&keys) || p.returned(now));
         let tallest = (h - status).max(1.0);
+        // What of the page the keyboard covers, where it did not end the
+        // page above it (`interactive-widget: overlays-content`).
+        let lift = match self.window().filter(|_| keyboard) {
+            Some(w) => (h - (w.size.1 - w.keyboard[2] - self.chrome().frame[1])).max(0.0),
+            None => 0.0,
+        };
         for (i, last) in wanted {
             let kernel = self.host.kernel();
             let node = kernel.node(stack[i]).expect("a live route");
@@ -410,20 +433,39 @@ impl<D: DataSource> Presenter<D> {
                 .props
                 .str(PropId::NavigationInitialDetent)
                 .map(str::to_owned);
-            let said = (detent.clone(), (h, tallest), keyboard);
-            let mut found = heights(detent.as_deref(), tallest, foot);
+            let stamp = kernel.layout_stamp();
+            let kept = (self.stage.sheets.iter())
+                .find(|s| s.modal == keys[i])
+                .and_then(|s| s.measured);
+            let measured = match (presents && fits(detent.as_deref()), kept) {
+                (false, _) => None,
+                (true, Some(m)) if m.0 == stamp => Some(m),
+                (true, _) => self.fit_content(keys[i]),
+            };
+            // A `fit-content` sheet rests on the keyboard, as Compose's
+            // `ModalBottomSheet` rises with the IME inset.
+            let fit = measured.map(|(_, content)| (content + foot.max(lift)).clamp(1.0, tallest));
+            let said = (detent.clone(), (h, tallest), keyboard, fit);
+            let mut found = heights(detent.as_deref(), tallest, foot, fit.unwrap_or(tallest));
             if !presents {
                 found = vec![h];
             }
+            let fit_at = |found: &[f32]| {
+                fit.and_then(|fit| found.iter().position(|v| (v - fit).abs() < 0.5))
+            };
+            // While the keyboard is up a sheet rests at its tallest, but
+            // for one resting at `fit-content`, which keeps that height
+            // above the keys (the tallest, where it does not fit there).
             let rest = |found: &[f32]| -> usize {
-                if keyboard {
-                    return found.len() - 1;
-                }
-                let first = heights(initial.as_deref(), tallest, foot);
-                (initial.is_some())
+                let first = heights(initial.as_deref(), tallest, foot, fit.unwrap_or(tallest));
+                let at = (initial.is_some())
                     .then(|| found.iter().position(|v| (v - first[0]).abs() < 0.5))
                     .flatten()
-                    .unwrap_or(0)
+                    .unwrap_or(0);
+                match keyboard && fit_at(found) != Some(at) {
+                    true => found.len() - 1,
+                    false => at,
+                }
             };
             let covered = kinds[i..]
                 .iter()
@@ -432,11 +474,14 @@ impl<D: DataSource> Presenter<D> {
                 Some(sheet) => {
                     sheet.shown = keys[last];
                     sheet.covered = covered;
+                    sheet.measured = measured;
                     if sheet.said != said {
-                        sheet.at = if keyboard {
-                            found.len() - 1
-                        } else {
-                            sheet.at.min(found.len() - 1)
+                        let was = (sheet.said.3)
+                            .filter(|fit| (sheet.heights[sheet.at] - fit).abs() < 0.5);
+                        sheet.at = match (was.and(fit_at(&found)), keyboard) {
+                            (Some(at), _) => at,
+                            (None, true) => found.len() - 1,
+                            (None, false) => sheet.at.min(found.len() - 1),
                         };
                         sheet.top = Glide::still(h - found[sheet.at]);
                         sheet.heights = found;
@@ -457,6 +502,7 @@ impl<D: DataSource> Presenter<D> {
                         at,
                         top,
                         said,
+                        measured,
                         covered,
                     });
                 }
@@ -468,6 +514,17 @@ impl<D: DataSource> Presenter<D> {
         }
         self.place_sheets(&stack, &kinds);
         self.dirty |= self.stage_moving();
+    }
+
+    /// The height a `fit-content` detent asks of a sheet's route, `key`:
+    /// the route laid out alone at its block's width, its own height left
+    /// to its content, as the iOS host measures it (LLP 1075.003 §9.11,
+    /// `Kernel::fit_content_height`), with the kernel's layout stamp. Its
+    /// handle's room is in it, and the bar under its foot is not.
+    fn fit_content(&mut self, key: NodeKey) -> Option<((u64, u64, u64), f32)> {
+        let kernel = self.host.runner_mut().kernel_mut();
+        let height = kernel.fit_content_height(key)? - kernel.cover_bottom(key);
+        Some((kernel.layout_stamp(), height.max(0.0)))
     }
 
     /// The routes in each sheet laid out in its block: the sheet's width

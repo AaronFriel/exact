@@ -1134,11 +1134,15 @@ black that covers the window, the page's bars and the status bar included. It is
 window of its own (LLP 1115.001 D10, amended): the page's own walk paints it, so its fields, its touches and
 TalkBack are the page's, and the bars of the page beneath are drawn in the page under the scrim while it is up (the
 reader is told none). Its heights are `navigationDetent`'s, shortest first: `large` (the default) the window below
-the status bar, `medium` half that, a point height or a percentage of the tallest, each with the gesture bar's room
-added below; `fit-content` rests at `medium` here. It opens at `navigationInitialDetent`, else the first, and rests
-at its tallest while the keyboard is up. Its route is laid out once at its tallest, as Compose lays out a sheet's
-content, inset by the handle's 48 dp at its top and the gesture bar at its foot: at a lower detent the rest is below
-the window's edge. A `modal` route with no header bar therefore starts below the status bar (expo/exact#234).
+the status bar, `medium` half that, a point height or a percentage of the tallest, `fit-content` the route laid out
+on its own with its height left to its content (the handle's room included, as the iOS host measures it), each with
+the gesture bar's room added below and none taller than the tallest. It opens at `navigationInitialDetent`, else the
+first. While the keyboard is up it rests at its tallest, but for a sheet resting at `fit-content`: that keeps its
+content's height and sits on the keys, as Compose's `ModalBottomSheet` rises with the IME inset, and goes to the
+tallest only where its content and the keyboard do not fit under the status bar. Its route is laid out at its
+tallest, as Compose lays out a sheet's content, inset by the handle's 48 dp at its top and the gesture bar at its
+foot: at a lower detent the rest is below the window's edge. A `modal` route with no header bar therefore starts
+below the status bar (expo/exact#234).
 
 It slides up as it opens (350 ms, emphasized decelerate) and down as it leaves (200 ms, emphasized accelerate) from
 where it was, its last drawing kept for that (`paint/tape.rs`), so a sheet the app closes slides out too. A drag

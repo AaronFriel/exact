@@ -510,3 +510,87 @@ fn dismissing_a_sheet_closes_what_was_pushed_inside_it() {
         (false, false)
     );
 }
+
+/// expo/exact#483's sheet: a short form whose route asks `fit-content
+/// large`, and one whose content is taller than the room the keyboard
+/// leaves.
+const FIT: &str = r##"routes nav
+  home "/"
+    resolve "/resolve"
+    long "/long"
+component App
+  state note = ""
+  action open(url: string)
+    nav = push(nav, url)
+  action back
+    nav = back(nav)
+  action write(v: string)
+    note = v
+  view
+    main navigationKey=`${top(nav).id}` navigationBack="back" viewport-fit="cover" width="100%" height="100%"
+      for e in stack(nav) key=e.id
+        if e.name == "home"
+          column navigationKey=`${e.id}` position="absolute" inset=0 padding=16
+            button press=open("/resolve") testId="open" height=40
+              text "Resolve"
+            button press=open("/long") testId="open-long" height=40
+              text "Long"
+        if e.name == "resolve"
+          column navigationKey=`${e.id}` navigationPresentation="modal" navigationDetent="fit-content large" testId="route-resolve" position="absolute" inset=0 gap=16 padding=16 background-color="#FFFFFF"
+            h2 "Resolve"
+            text "A short summary of what is being resolved."
+            input value=note input=write placeholder="Notes (optional)" aria-label="Notes" testId="note" height=40
+            button press=back testId="done" height=40
+              text "Done"
+        if e.name == "long"
+          column navigationKey=`${e.id}` navigationPresentation="modal" navigationDetent="fit-content large" testId="route-long" position="absolute" inset=0 padding=16
+            column height=600
+            button press=back testId="long-done" height=40
+              text "Done"
+"##;
+
+/// The window with the keyboard up, `keys` tall.
+fn keyboard(keys: f32) -> Window {
+    Window {
+        keyboard: [0.0, 0.0, keys, 0.0],
+        ..WINDOW
+    }
+}
+
+#[test]
+fn a_fit_content_sheet_rests_at_its_content_and_on_the_keyboard() {
+    let mut p = phone_source(FIT);
+    tap(&mut p, "open");
+    after(&mut p, 1000.0);
+    // The route's content with the gesture bar under it: the last button's
+    // foot 16 above the bar, well short of `medium`.
+    let done = rect(&mut p, "done");
+    assert!(near(done.1 + done.3 + 16.0, H - FOOT), "{done:?}");
+    let (_, frame) = p.top_sheet().unwrap();
+    assert!(frame.1 > H - ((H - STATUS) / 2.0 + FOOT), "{frame:?}");
+    let resting = frame.1;
+    // The keyboard up: the same height, on the keys.
+    assert_eq!(p.set_window(keyboard(300.0)), None);
+    after(&mut p, 1000.0);
+    let done = rect(&mut p, "done");
+    assert!(near(done.1 + done.3 + 16.0, H - 300.0), "{done:?}");
+    let (_, frame) = p.top_sheet().unwrap();
+    assert!(near(frame.1, resting - 300.0 + FOOT), "{frame:?} {resting}");
+    // And down again: where it was.
+    assert_eq!(p.set_window(WINDOW), None);
+    after(&mut p, 1000.0);
+    assert!(near(p.top_sheet().unwrap().1 .1, resting));
+}
+
+#[test]
+fn a_fit_content_sheet_taller_than_the_keyboard_leaves_goes_to_its_tallest() {
+    let mut p = phone_source(FIT);
+    tap(&mut p, "open-long");
+    after(&mut p, 1000.0);
+    let done = rect(&mut p, "long-done");
+    assert!(near(done.1 + done.3 + 16.0, H - FOOT), "{done:?}");
+    assert_eq!(p.set_window(keyboard(300.0)), None);
+    after(&mut p, 1000.0);
+    let (_, frame) = p.top_sheet().unwrap();
+    assert!(near(frame.1, STATUS), "{frame:?}");
+}
