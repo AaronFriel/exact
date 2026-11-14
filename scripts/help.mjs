@@ -578,7 +578,7 @@ Ports    none; send makes one HTTPS request. Runs to completion.`,
       ['--online', 'use the server without a local device'],
       ['--snapback', 'write a guestbook wired to the Snapback backend above the app'],
       ['--port <n>', 'the Snapback origin’s port with --snapback (default 4400)'],
-      ['--rust', 'app only: the data sources in Rust (data/, with apple/ and web/ host crates) instead of app.ts'],
+      ['--rust', 'app only: the data sources in Rust (data/, which app.json\'s rust.data names) instead of app.ts'],
       ['--game', 'a game (game/README.md): a Rust world under Contract\'s menus'],
       ['--assets', 'with --game: declare game.assets'],
       ['--update', 'rewrite an existing app\'s generated files (its exact.mjs update runs this)'],
@@ -587,8 +587,8 @@ Ports    none; send makes one HTTPS request. Runs to completion.`,
     body: `The app is eight files and no Rust: app.contract, app.ts, app.test.contract, app.json, exact.mjs,
 AGENTS.md, package.json and .gitignore. A native verb (ios, mac, linux, android, windows) names its platform
 in app.json the first time it runs and builds in a workspace generated under .exact/ (LLP 1153 D1). With --rust,
-app.ts is a Rust crate instead: data/ answers the sources, apple/ and web/ link it, in the app's own Cargo
-workspace (docs/reference.md, "Rust data sources"). Give
+app.ts is a Rust crate instead: data/ answers the sources, app.json's rust.data names it, and it is a member of
+that generated workspace (docs/reference.md, "Rust data sources"). Give
 --name and --bundle-id here, before the first build: a later change to the id makes the next build cold
 and leaves the old app installed. Then cd there: its exact.mjs runs everything, and bun exact.mjs help
 lists its verbs. Read docs/start-here-site.md first for a website, else docs/start-here.md.

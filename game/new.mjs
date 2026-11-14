@@ -7,7 +7,7 @@ import { capturedLockDrift, gameDefaults, gameShells, prepareGame, sdkFetch } fr
 import { cargoEnvironment, lockedMetadata, pathFrom, patchLines } from '../scripts/app.mjs';
 import { PLATFORMS, SDK_CRATES, appCrateName, authoredCrate, copiedBuildScripts, namePlatform, withoutPlatformKeys } from '../scripts/app-shells.mjs';
 import { updateManifests, updateScaffold } from './update-manifests.mjs';
-import { RUST_PLATFORMS, rustListing, writeRustApp } from '../scripts/app-rust.mjs';
+import { rustListing, writeRustApp } from '../scripts/app-rust.mjs';
 export { exact2Placeholders } from './update-manifests.mjs';
 import { appCrates, notAMember } from '../scripts/cargo-check.mjs';
 import { APPLE_BUILD_SCRIPT, EARLIER_APPLE_BUILD_SCRIPT } from '../scripts/linked-plan.mjs';
@@ -210,12 +210,7 @@ export function createApp(destination, options = {}) {
   if (options.title !== undefined && (!options.title.trim() || /[\x00-\x1f\x7f]/.test(options.title))) throw new Error('exact new --name: give the name people see, on one line, as --name "Field Log"');
   if (existsSync(dir) && readdirSync(dir).length) throw new Error(`${dir} already exists and is not empty`);
   const crateName = appCrateName(dir, name, options.title ?? null);
-  if (options.rust) {
-    if (options.snapback) throw new Error('exact new: --rust and --snapback are separate starters; Snapback\'s client is TypeScript');
-    checkPlatforms('exact new', options.with ?? []);
-    const other = (options.with ?? []).find(p => !RUST_PLATFORMS.includes(p));
-    if (other) throw new Error(`exact new --rust: its scaffold has host crates for ios and mac; for ${other}, make the app, then copy apps/sparkline's crate for it`);
-  }
+  if (options.rust && options.snapback) throw new Error('exact new: --rust and --snapback are separate starters; Snapback\'s client is TypeScript');
   // Refused before anything is written: wiring is the last step, after the app and the backend's schema above it.
   if (options.snapback && !snapbackDevice) throw new Error(NO_SNAPBACK);
   const port = options.snapback ? snapbackPort(options.snapback.port) : null;
@@ -236,9 +231,9 @@ export function createApp(destination, options = {}) {
     for (const platform of options.with ?? []) namePlatform(dir, platform);
     if (options.rust) {
       writeRustApp(dir, crateName, options.title ?? titleOf(name));
-      // What update says beyond its one line (a path it could not resolve) is said here too.
-      const updated = updateApp(dir, crateName).split('\n').slice(1).filter(line => !/bun exact\.mjs lock/.test(line)).join('\n');
-      return `${rustListing(created)}${updated && `\n${updated}`}`;
+      // writeApp wrote AGENTS.md while app.ts was there; update rewrites it to name the Rust data module.
+      updateApp(dir, crateName);
+      return rustListing(created);
     }
     if (!options.snapback) return created;
     if (!existingBackend) snapbackStarter(dir, crateName, port, JSON.parse(readFileSync(resolve(dir, 'app.json'), 'utf8')).app);
@@ -936,7 +931,7 @@ function agentNotes(dir, name, {game = false} = {}) {
   return `${BEGIN}
 # ${name}: an Exact app
 
-\`app.contract\` is the view, ${rust ? '\`data/src/lib.rs\` the data module (Rust; \`apple/\` and \`web/\` link it)' : '\`app.ts\` the data module'}, \`app.test.contract\` the tests, \`app.json\`
+\`app.contract\` is the view, ${rust ? '\`data/src/lib.rs\` the data module (Rust)' : '\`app.ts\` the data module'}, \`app.test.contract\` the tests, \`app.json\`
 the manifest: set \`app.name\` and \`app.id\` before building. The app uses Exact at
 \`${pathFrom(from, ROOT)}\` by path (\`EXACT\` overrides it).
 

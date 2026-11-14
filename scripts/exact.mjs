@@ -802,9 +802,9 @@ async function newApp(path, {update = false, without = null, with: platforms = [
   const note = created.indexOf(`\n${UNCACHED_CRATES}`);
   console.log(note < 0 ? created : created.slice(0, note));
   if (!noRust) prebuildCompiler();
-  // A Rust app's lock, resolved from this checkout's (scripts/app-rust.mjs): its builds run Cargo --locked. Its
-  // first line and app-cli's note on the GPU module, not each version it chose; the app stands either way, so a
-  // failure says what to run.
+  // A Rust app's generated workspace, written now so that cargo and an editor work in data/ before the first build
+  // (LLP 1153.003 D1.7); its lock stays exact2's until data/ needs a version exact2's lacks. The first line and
+  // app-cli's note on the GPU module; the app stands either way, so a failure says what to run.
   if (rust) {
     try {
       const said = (await (await import('./app-cli.mjs')).lockApp(resolve(path))).split('\n');
