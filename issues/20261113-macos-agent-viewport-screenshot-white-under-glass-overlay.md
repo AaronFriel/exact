@@ -53,11 +53,11 @@ captures a full-size content view with controls overlay, a cover viewport, a gla
 root and a red child. The child remains red in `Capture.picture(of:)`. A CLI drive
 of the glass-root plan also captures its red child and text.
 
-`NodeViewMac.swift` places the authored children in `NSGlassEffectView.contentView`,
-and `Capture.draw` in `Mac/AgentMac.swift` captures those descendants through
-`cacheDisplay`. No glass replacement is needed on this OS. The reported macOS 26.6
-environment was unavailable; window-server comparison was also unavailable because
-the current screen supplied no window image.
+`NodeViewMac.swift` places the authored children in `NSGlassEffectView.contentView`.
+`Capture.picture` in `Mac/CaptureMac.swift` renders a copy of the layer tree
+in paint order, shared with canvas uploads. No glass replacement is needed on
+macOS 27. The reported macOS 26.6 environment was unavailable; window-server
+comparison was also unavailable because the current screen supplied no window image.
 
 A macOS 26.6 run is owed. The macOS 27 regression test does not establish that
-the reported capture failure is fixed; no capture implementation changed.
+the reported capture failure is fixed by the shared compositor.

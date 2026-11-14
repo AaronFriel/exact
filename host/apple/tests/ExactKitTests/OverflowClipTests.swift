@@ -476,7 +476,7 @@ class OverflowClipTests: XCTestCase {
         Capture.draw(root, scale: 1, into: bitmap)
         let image = try XCTUnwrap(bitmap.image?.cgImage)
         #else
-        let rep = try XCTUnwrap(Capture.paintOrderBitmap(of: root, scale: 1))
+        let rep = try XCTUnwrap(Capture.picture(of: root, scale: 1))
         let image = try XCTUnwrap(rep.cgImage)
         #endif
         let context = try XCTUnwrap(CGContext(data: nil, width: 200, height: 200, bitsPerComponent: 8,

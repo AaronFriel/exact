@@ -429,7 +429,7 @@ final class CanvasesHost {
         let scale = CGFloat(metal.layer?.contentsScale ?? 2)
         let w = Int((metal.bounds.width * scale).rounded()), h = Int((metal.bounds.height * scale).rounded())
         guard w > 0, h > 0,
-              let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: w, pixelsHigh: h, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: w * 4, bitsPerPixel: 32),
+              let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: w, pixelsHigh: h, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: w * 4, bitsPerPixel: 32)?.retagging(with: .sRGB),
               let data = rep.bitmapData
         else { return nil }
         rep.size = metal.bounds.size

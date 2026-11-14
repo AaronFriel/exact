@@ -651,7 +651,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
     /// the canvas captures again on this run-loop turn — unless the draw is
     /// the capture's own, or follows a batch that already captured.
     func repaintThrough() {
-        guard !Capture.capturing, let c = canvasAbove, !c.paintedThisTurn else { return }
+        guard !Capture.capturing, !Capture.redrawingBackingStore, let c = canvasAbove, !c.paintedThisTurn else { return }
         c.needsCapture = true
         canvases?.scheduleCapture()
     }
