@@ -1,0 +1,131 @@
+import {mkdirSync} from 'node:fs';
+import {dirname, resolve} from 'node:path';
+import {checkpoint, json, modelState} from './checkpoint.mjs';
+import {blind, digest, externalElements, modelElements, targetPoint, verdict} from './compare.mjs';
+import {command, macHelper, platform} from './platform.mjs';
+
+export function parse(argv) {
+  if (!argv.length || argv.includes('--help')) return {help: true};
+  const options = {host: argv[0], setup: []};
+  if (!['macos', 'ios'].includes(options.host)) throw new Error('see: host must be macos or ios');
+  const args = argv.slice(1);
+  const take = flag => { const value = args.shift(); if (!value || value.startsWith('--')) throw new Error(`${flag} needs a value`); return value; };
+  while (args.length) {
+    const flag = args.shift();
+    if (['--app', '--out', '--sim'].includes(flag)) options[flag.slice(2)] = take(flag);
+    else if (flag === '--setup-tap') options.setup.push(take(flag));
+    else if (flag === '--tap' || flag === '--drag') {
+      if (options.action) throw new Error('see: one input per comparison');
+      options.action = {kind: flag.slice(2), target: take(flag)};
+      if (flag === '--drag') {
+        Object.assign(options.action, {dx: Number(take(flag)), dy: Number(take(flag)), ms: Number(take(flag))});
+        const {dx, dy, ms} = options.action;
+        if (![dx, dy, ms].every(Number.isFinite) || !Math.hypot(dx, dy) || ms <= 0 || ms > 2000)
+          throw new Error('see: drag needs nonzero finite travel and 1–2000 milliseconds');
+      }
+    } else throw new Error(`see: unknown option ${flag}`);
+  }
+  if (!options.app || !options.out) throw new Error('see: --app and --out are required');
+  if (options.host === 'ios' && !options.sim) throw new Error('see: iOS requires --sim naming your booted simulator');
+  return options;
+}
+
+async function internalInput(session, action) {
+  if (action.kind === 'tap') return session.tap(action.target);
+  const down = await session.tap(action.target, {down: true, ...(session.host === 'macos' ? {mouse: true} : {})});
+  if (down.delivery === 'unsupported') throw new Error(down.reason);
+  try {
+    const move = await session.pointer('move', {dx: action.dx, dy: action.dy, ms: action.ms, virtual: true});
+    if (move.delivery === 'unsupported') throw new Error(move.reason);
+    return {down, move};
+  } finally { await session.pointer('up'); }
+}
+
+export async function run(options) {
+  const directory = resolve(options.out);
+  mkdirSync(dirname(directory), {recursive: true});
+  mkdirSync(directory, {recursive: false});
+  const report = {options, started: Date.now(), sessions: [], findings: [],
+    limitation: 'Outside snapshots can activate accessibility machinery. These timings are instrument costs, not app performance.'};
+  try {
+    if (process.platform !== 'darwin') throw new Error('see requires macOS');
+    if (options.host === 'ios') {
+      const devices = JSON.parse(command('xcrun', ['simctl', 'list', 'devices', '--json']));
+      const found = Object.values(devices.devices).flat().find(d => d.udid === options.sim && d.state === 'Booted');
+      if (!found) throw new Error('--sim must name a booted simulator by UDID; see never boots one');
+      process.env.EXACT_SIM = options.sim;
+      process.env.EXACT_SHOW_SIMULATOR = '0';
+    }
+    const helper = options.host === 'macos' ? macHelper() : null;
+    const {open} = await import('../agent-session.mjs');
+    for (const leg of options.action ? ['driver', 'platform'] : ['observe']) {
+      let session, pid, observer;
+      const result = {leg, findings: []};
+      report.sessions.push(result);
+      try {
+        session = await open({host: options.host, app: options.app, chrome: 'platform', timing: 'agent',
+          env: {EXACT_AGENT_ACTIVATE: '1'},
+          touch: options.host === 'ios' ? 'drag' : 'agent', seed: 1172, epoch: '2026-01-01T00:00:00Z',
+          onProcess: child => { if (options.host === 'macos') pid = child.pid; }});
+        observer = platform({host: options.host, pid, session, helper});
+        observer.activate();
+        result.launch = session.launchFacts;
+        for (const target of options.setup) { await session.tap(target); await session.clock('settle'); }
+        const before = await checkpoint(session, observer, resolve(directory, leg, 'before'));
+        result.before = before;
+        if (options.action) {
+          const start = Date.now();
+          try {
+            if (leg === 'driver') result.input = await internalInput(session, options.action);
+            else {
+              const aim = targetPoint(before.outside ?? {}, options.action.target, before.model ?? {});
+              result.aim = aim;
+              result.input = await observer.input(options.action, aim.point, before.outside);
+            }
+          } catch (error) { result.findings.push(blind(`${leg}/input`, error.message)); }
+          result.inputMs = Date.now() - start;
+          result.after = await checkpoint(session, observer, resolve(directory, leg, 'after'));
+        }
+      } catch (error) { result.findings.push(blind(leg, error.message)); }
+      finally {
+        try { await session?.close(); } catch (error) { result.findings.push(blind(`${leg}/cleanup`, error.message)); }
+      }
+      report.findings.push(...result.findings);
+      for (const phase of ['before', 'after']) for (const finding of result[phase]?.report.findings ?? [])
+        report.findings.push({leg, phase, ...finding});
+    }
+    if (options.action) {
+      const [a, b] = report.sessions;
+      const equivalent = checkpoint => ({model: modelElements(checkpoint?.model ?? {}),
+        state: modelState(checkpoint?.state), outside: externalElements(checkpoint?.outside ?? {}).map(e =>
+          Object.fromEntries(['identifier', 'label', 'type', 'enabled', 'selected', 'value'].filter(k => k in e).map(k => [k, e[k]])))});
+      if (!a.before || !b.before || digest(equivalent(a.before)) !== digest(equivalent(b.before)))
+        report.findings.push(blind('input-comparison', 'initial conditions differ or were not observed'));
+      else {
+        const incomplete = !a.after || !b.after || [a, b].some(s => s.findings.length || ['before', 'after'].some(k => s[k].report.status === 'inconclusive'));
+        if (incomplete) report.findings.push(blind('input-comparison', 'delivery or a checkpoint was inconclusive'));
+        if (a.after && b.after && digest(equivalent(a.after)) !== digest(equivalent(b.after)))
+          report.findings.push({kind: 'input-outcome', provisional: incomplete, reason: 'driver and platform input produced different sampled outcomes'});
+      }
+    }
+  } catch (error) { report.findings.push(blind('see', error.message)); }
+  report.ended = Date.now();
+  report.status = verdict(report.findings);
+  json(resolve(directory, 'report.json'), report);
+  const counts = {};
+  for (const finding of report.findings) counts[finding.kind] = (counts[finding.kind] ?? 0) + 1;
+  console.log(JSON.stringify({status: report.status, milliseconds: report.ended - report.started, findings: counts, report: resolve(directory, 'report.json')}, null, 2));
+  return {agreement: 0, disagreement: 1, inconclusive: 2}[report.status];
+}
+
+export async function main(argv) {
+  try {
+    const options = parse(argv);
+    if (options.help) {
+      console.log('see macos|ios --app <name> --out <new-directory> [--sim <owned-UDID>]\n  [--setup-tap <test-id>] [--tap <test-id> | --drag <test-id> <dx> <dy> <ms>]\nSee scripts/see/README.md for checkpoint semantics, blind spots and removal.');
+      return 0;
+    }
+    return await run(options);
+  } catch (error) { console.error(error.message); return 2; }
+}
+if (import.meta.main) process.exitCode = await main(process.argv.slice(2));

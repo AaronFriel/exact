@@ -36,6 +36,10 @@ import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statfsSync, symlinkSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
+// see: removable (LLP 1172.021)
+if (import.meta.main && process.argv[2] === 'see') {
+  process.exit(spawnSync(process.execPath, [fileURLToPath(new URL('./see/main.mjs', import.meta.url)), ...process.argv.slice(3)], {stdio: 'inherit'}).status ?? 2);
+}
 if (import.meta.main && process.argv[2] === 'status' && !process.argv.includes('--help')) {
   const {readStatus, formatStatus} = await import('../game/status.mjs');
   const {resolve} = await import('node:path');
