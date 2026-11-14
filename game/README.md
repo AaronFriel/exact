@@ -609,7 +609,10 @@ frame. After applying app data inside the same world, call
 `w.invalidate_presentation()` to declare a new picture. It uses the same
 `presented` reset as restore: `presented` is true again only after a complete
 frame whose shown models and textures are delivered and prepared, so a look
-whose bytes have not arrived does not count as presented. It also resets draw
+whose bytes have not arrived does not count as presented. Until then no frame
+of the new picture is drawn, but the world keeps ticking and taking input and
+messages, so a later message can still replace or cancel the look; a game that
+should pause meanwhile binds its pause to `presented`. It also resets draw
 histories, without changing simulation state, saves or hashes. Call it once
 after the replacement, not every tick. It does not rerun `Game::first_frame`,
 which remains limited to a world made by `setup`.

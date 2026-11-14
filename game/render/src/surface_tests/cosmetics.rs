@@ -29,8 +29,14 @@ impl Game for Dice {
         if input.messages().iter().any(|m| m == "import") {
             w.invalidate_presentation();
         }
+        // A cancelled import: the die goes back to its own texture.
+        if input.messages().iter().any(|m| m == "cancel") {
+            w.spawn_named("cancelled", (Transform::default(),));
+            w.invalidate_presentation();
+        }
     }
     fn present(p: &mut exact_game::Present<'_>, look: &Look) {
+        let cancelled = p.named("cancelled").is_some();
         let die = p.named("die").unwrap();
         let Mesh::Asset(shape) = (*p.require::<Mesh>(die)).clone() else {
             unreachable!()
@@ -41,7 +47,7 @@ impl Game for Dice {
             _ => "red.tex",
         };
         p.cosmetic_model(&shape, || quad(texture)).unwrap();
-        if look.skin != 0 {
+        if look.skin != 0 && !cancelled {
             let atlas = ["", "blue.tex", "green.tex"][look.skin as usize];
             p.insert(
                 die,
@@ -611,4 +617,55 @@ fn a_tick_after_the_invalidation_that_shows_an_undelivered_texture_waits() {
     assert!(s.assets().requests.contains(&"yellow.tex".to_owned()));
     s.asset("yellow.tex", Ok(&solid([255, 255, 0])));
     assert_eq!(hue(&render_until_ready(&gpu, &mut s, &mut now)), 3);
+}
+
+#[test]
+fn a_new_picture_awaiting_a_texture_keeps_ticking_and_taking_messages() {
+    let Some(gpu) = gpu() else { return };
+    let mut s = WorldSurface::<Dice, crate::ModelExecutor, true>::default();
+    s.device_ready(exact_gpu::wgpu::Features::empty());
+    let live = |now| Frame {
+        seekable: false,
+        ..frame(now)
+    };
+    s.bind(
+        &[Value::Number(0u32.into()), Value::Number(0u32.into())],
+        None,
+    )
+    .unwrap();
+    s.clock(false);
+    s.asset("red.tex", Ok(&solid([255, 0, 0])));
+    let mut now = 0.;
+    render_until_ready(&gpu, &mut s, &mut now);
+    // An import shows a skin whose bytes never arrive.
+    s.bind(
+        &[Value::Number(1u32.into()), Value::Number(0u32.into())],
+        None,
+    )
+    .unwrap();
+    s.input(&exact_gpu::InputEvent::Message {
+        text: "import".into(),
+        at_ms: now + 1.,
+    });
+    for _ in 0..5 {
+        let tick = s.sim().unwrap().world().tick();
+        now += 20.;
+        fixture::render(&gpu, &mut s, &live(now)).unwrap();
+        assert!(
+            !s.frame_ready(),
+            "a shown texture not delivered cannot present"
+        );
+        assert!(
+            s.sim().unwrap().world().tick() > tick,
+            "a picture awaiting its texture keeps ticking"
+        );
+    }
+    assert!(s.assets().requests.contains(&"blue.tex".to_owned()));
+    // A later message runs while the picture waits; its picture presents.
+    s.input(&exact_gpu::InputEvent::Message {
+        text: "cancel".into(),
+        at_ms: now + 1.,
+    });
+    assert_eq!(hue(&render_until_ready(&gpu, &mut s, &mut now)), 0);
+    assert!(s.sim().unwrap().world().named("cancelled").is_some());
 }

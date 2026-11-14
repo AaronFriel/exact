@@ -240,14 +240,17 @@ impl<G: Game> Sim<G> {
     /// ([`World::invalidate_presentation`], restore, restart) waits for.
     /// Stricter than [`Self::presented_assets_ready`], which lets content not
     /// yet delivered appear later. A failed name does not wait; it is reported
-    /// by `asset_failures`. Call [`Self::refresh_presented`] first.
+    /// by `asset_failures`, nor does a name the renderer still draws
+    /// ([`Self::hold_assets`]) that this world does not have: that is the
+    /// previous picture's. Call [`Self::refresh_presented`] first.
     pub fn presented_assets_resident(&self) -> bool {
         use crate::asset::AssetState;
         let assets = &self.world.assets;
         let resident = |n: &str| match assets.states.get(n) {
             Some(AssetState::Loaded) => self.device_ready(n),
             Some(AssetState::Failed(_)) => true,
-            Some(AssetState::Pending) | None => false,
+            Some(AssetState::Pending) => false,
+            None => self.held.contains(n),
         };
         self.presented.iter().all(|n| {
             resident(n)

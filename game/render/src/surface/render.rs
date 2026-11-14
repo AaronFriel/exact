@@ -367,14 +367,10 @@ impl<G: Game, P: Executor, const ASSETS: bool, H: crate::Hooks> WorldSurface<G, 
             sim.refresh_presented();
             sim.presented_assets_ready()
         };
-        // A new picture waits for what it shows to be delivered too; a first
-        // frame lets content not yet delivered appear later.
-        let ready = ready
-            && (!self.picture.1 || {
-                sim.refresh_presented();
-                sim.presented_assets_resident()
-            });
-        if ASSETS && !ready {
+        // A new picture's live frames tick whatever its assets: readiness
+        // permits ticks and leaves pausing to the app (`rules/DEFERRED.md`,
+        // #905). Only its encoding waits, after the ticks below.
+        if ASSETS && !ready && (self.seekable || !self.picture.1) {
             return sim.assets_pending() || asset_work;
         }
         // A new world's first size runs `Game::first_frame`: this frame shows it.
@@ -478,6 +474,10 @@ impl<G: Game, P: Executor, const ASSETS: bool, H: crate::Hooks> WorldSurface<G, 
             !G::paused(sim.args()),
             frame.seekable,
         );
+        self.perf.ticks.push(ticks as f64);
+        if self.error.is_some() {
+            return false;
+        }
         // A tick can replace the picture. It is not presented from here on;
         // prepare its shown assets before encoding.
         if self.picture.0 != sim.picture_generation() {
@@ -486,19 +486,15 @@ impl<G: Game, P: Executor, const ASSETS: bool, H: crate::Hooks> WorldSurface<G, 
             self.assets_dirty = true;
             return true;
         }
-        // A picture still awaiting its first complete frame waits again for
-        // what these ticks show: a tick after the invalidation can change the
-        // look to something not yet delivered.
+        // A picture awaiting its first complete frame encodes only once what
+        // these ticks show is delivered and prepared; until then the frame
+        // draws nothing and `presented` stays false.
         if ASSETS && self.picture.1 && {
             sim.refresh_presented();
             !sim.presented_assets_resident()
         } {
             self.assets_dirty = true;
             return true;
-        }
-        self.perf.ticks.push(ticks as f64);
-        if self.error.is_some() {
-            return false;
         }
         let (renderer, feed) = self.render.as_mut().unwrap();
         let start = (!frame.seekable).then(Stamp::now);
