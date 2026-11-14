@@ -526,6 +526,9 @@ pub fn run(args: &[String]) -> ExitCode {
         eprintln!("{USAGE}");
         return ExitCode::from(2);
     };
+    if crate::forma::refuse_input(Path::new(&input)) {
+        return ExitCode::from(2);
+    }
     // An app whose design is its packages' alone (LLP 1121 D11) has theirs, laid beside an empty one.
     let alone = || {
         let dir = Path::new(&input);

@@ -36,6 +36,9 @@ pub fn plan_alone(args: &[String]) -> ExitCode {
         eprintln!("usage: contract forma import-plan <design file>");
         return ExitCode::from(2);
     };
+    if crate::forma::refuse_input(Path::new(design)) {
+        return ExitCode::from(2);
+    }
     let mut input = String::new();
     if std::io::stdin().read_to_string(&mut input).is_err() {
         return ExitCode::from(2);
@@ -85,6 +88,12 @@ pub fn run(args: &[String]) -> ExitCode {
         eprintln!("{USAGE}");
         return ExitCode::from(2);
     };
+    if app
+        .as_deref()
+        .is_some_and(|a| crate::forma::refuse_input(Path::new(a)))
+    {
+        return ExitCode::from(2);
+    }
     // The source's files: one, or every `.json` under a directory (DTCG's
     // sets and modes), by their paths from it.
     let files = match read_source(Path::new(&source)) {

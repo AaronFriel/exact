@@ -42,6 +42,9 @@ pub fn run(args: &[String]) -> ExitCode {
         eprintln!("contract forma export: no exporter `{kind}` (dtcg)");
         return ExitCode::from(2);
     }
+    if crate::forma::refuse_input(Path::new(&input)) {
+        return ExitCode::from(2);
+    }
     let Some(path) = crate::forma::design(Path::new(&input)) else {
         eprintln!("contract forma export: {input} has no design (an app.forma, or the file app.json's \"forma\" names)");
         return ExitCode::from(2);

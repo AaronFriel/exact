@@ -302,6 +302,20 @@ fn read_plain(path: &Path) -> Result<Option<Vec<u8>>, String> {
     }
 }
 
+fn refuse_former_state(dir: &Path) -> Result<(), String> {
+    for (file, fix) in [
+        ("tamber.journal", "stop the tamber server; resolve the unfinished write recorded in .exact/tamber.journal with its temporary files before renaming any design files, then remove .exact/tamber.journal"),
+        ("tamber.lock", "stop the tamber server, then remove .exact/tamber.lock"),
+    ] {
+        match std::fs::symlink_metadata(dir.join(".exact").join(file)) {
+            Ok(_) => return Err(format!(".exact/{file} exists; {fix}")),
+            Err(e) if e.kind() == ErrorKind::NotFound => {}
+            Err(e) => return Err(format!(".exact/{file}: {e}")),
+        }
+    }
+    Ok(())
+}
+
 impl Server {
     fn start(dir: &Path) -> Result<Server, String> {
         if !cfg!(unix) {
@@ -312,6 +326,7 @@ impl Server {
         let dir = dir
             .canonicalize()
             .map_err(|e| format!("{}: {e}", dir.display()))?;
+        refuse_former_state(&dir)?;
         if let Some(message) = contract::design_name_error(&dir.join("app.contract")) {
             return Err(message);
         }
@@ -525,6 +540,7 @@ impl Server {
 
     /// Whether `.exact` is still the directory the held lock is in.
     fn same_state(&self) -> Result<(), String> {
+        refuse_former_state(&self.dir)?;
         let state = std::fs::symlink_metadata(self.state());
         let lock = std::fs::symlink_metadata(self.state().join("forma.lock"));
         match (state, lock) {
@@ -665,6 +681,9 @@ impl Server {
     /// several, committed as one set), then the app's own Contract sources
     /// (stage 8 D: a state part's row).
     fn files(&self) -> Result<Vec<String>, String> {
+        if let Some(message) = contract::design_name_error(&self.dir.join("app.contract")) {
+            return Err(message);
+        }
         let mut others: Vec<String> = std::fs::read_dir(&self.dir)
             .map_err(|e| format!("{}: {e}", self.dir.display()))?
             .filter_map(|e| {

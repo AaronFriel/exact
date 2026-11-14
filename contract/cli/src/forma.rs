@@ -21,24 +21,6 @@ const USAGE: &str = "usage:
   (a flag may come before the path or after it)";
 
 pub fn run(args: &[String]) -> ExitCode {
-    if !args.iter().any(|a| a == "--help" || a == "-h") {
-        for input in args.iter().skip(1).map(Path::new) {
-            if input.extension().is_some_and(|e| e == "tamber") {
-                eprintln!(
-                    "contract forma: rename {} to {}",
-                    input.display(),
-                    input.with_extension("forma").display()
-                );
-                return ExitCode::from(2);
-            }
-            if input.is_dir() || input.extension().is_some_and(|e| e == "contract") {
-                if let Some(message) = contract::design_name_error(&app_contract(input)) {
-                    eprintln!("contract forma: {message}");
-                    return ExitCode::from(2);
-                }
-            }
-        }
-    }
     if args.first().is_some_and(|a| a == "serve") {
         return crate::forma_serve::run(&args[1..]);
     }
@@ -95,6 +77,9 @@ pub fn run(args: &[String]) -> ExitCode {
         eprintln!("{USAGE}");
         return ExitCode::from(2);
     };
+    if refuse_input(Path::new(&input)) {
+        return ExitCode::from(2);
+    }
     let rest = rest.as_slice();
     // A verb takes only its own flag: refused before the design is read.
     let fits = match (verb, rest) {
@@ -275,6 +260,24 @@ pub fn run(args: &[String]) -> ExitCode {
             ExitCode::from(2)
         }
     }
+}
+
+/// Refuse former names only after the caller has parsed a design or app path.
+pub(crate) fn refuse_input(input: &Path) -> bool {
+    let message = if input.extension().is_some_and(|e| e == "tamber") {
+        Some(format!(
+            "rename {} to {}",
+            input.display(),
+            input.with_extension("forma").display()
+        ))
+    } else {
+        contract::design_name_error(&app_contract(input))
+    };
+    if let Some(message) = message {
+        eprintln!("contract forma: {message}");
+        return true;
+    }
+    false
 }
 
 /// Each SVG the build reads for `folding`'s icons, where it reads it: under

@@ -1353,7 +1353,8 @@ export async function toolCommand(argv) {
   if (built) { console.error('forma tool: the design tool did not build'); return built; }
   const url = `${TOOL_ORIGIN}/__forma/tool/`;
   const open = () => { if (!argv.includes('--no-open') && process.platform === 'darwin') spawnSync('open', [url]); };
-  const there = await toolAnswers();
+  let there;
+  try { there = await toolAnswers(); } catch (e) { console.error(`forma tool: ${e.message}`); return 1; }
   // `--via`'s dev loop, waited for while it starts (its first build, then its design server), saying why (third pass #9).
   const WAITS = { listening: 'not listening yet (its first build can take minutes)', starting: 'its design server is starting' };
   // Say each ask under the test switch, for forma-tool-via.test.mjs to count
@@ -1368,7 +1369,11 @@ export async function toolCommand(argv) {
     // there is reused only when it forwards to that server's run (the same
     // epoch), never its own server or another loop's.
     // (Probed once, never waited for: the tool here answered and that loop does not, so it isn't going through it.)
-    if (target && (await toolAnswers(target, 5))?.epoch !== there.epoch) { console.error(`forma tool: ${TOOL_ORIGIN} already serves this design, not through ${target}; stop it first`); return 1; }
+    if (target) {
+      let upstream;
+      try { upstream = await toolAnswers(target, 5); } catch (e) { console.error(`forma tool: ${e.message}`); return 1; }
+      if (upstream?.epoch !== there.epoch) { console.error(`forma tool: ${TOOL_ORIGIN} already serves this design, not through ${target}; stop it first`); return 1; }
+    }
     // And this checkout's tool, as just built: another checkout's server
     // serves its own.
     // Its page, module and plan (whose names carry no digest) as built here.

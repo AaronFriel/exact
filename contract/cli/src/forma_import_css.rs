@@ -70,6 +70,9 @@ pub fn run(args: &[String]) -> ExitCode {
         }
     };
     let app = app.unwrap_or_else(|| PathBuf::from("."));
+    if crate::forma::refuse_input(&app) {
+        return ExitCode::from(2);
+    }
     let dir = if app.is_dir() {
         app.clone()
     } else {

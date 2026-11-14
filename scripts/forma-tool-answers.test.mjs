@@ -5,9 +5,40 @@
 // (QUEUE "`forma tool --via` gives a dev loop 2 s to answer").
 import { expect, test } from 'bun:test';
 import { createServer } from 'node:net';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { toolAnswers } from './forma-server.mjs';
 
 const free = () => new Promise(ok => { const s = createServer(); s.listen(0, '127.0.0.1', () => { const { port } = s.address(); s.close(() => ok(port)); }); });
+
+test('the tool command prints a former protocol refusal without a stack at either immediate probe', () => {
+  const app = mkdtempSync(join(tmpdir(), 'forma-tool-former-'));
+  try {
+    writeFileSync(join(app, 'app.forma'), 'forma app\n');
+    for (const via of [false, true]) {
+      const source = `
+        import { mock } from 'bun:test';
+        const appModule = await import('./scripts/app.mjs'), launcher = await import('./scripts/agent-launch.mjs'), serve = await import('./host/web/serve.mjs');
+        mock.module('./scripts/app.mjs', () => ({ ...appModule, resolveApp: () => ({ dir: ${JSON.stringify(app)} }) }));
+        mock.module('./scripts/agent-launch.mjs', () => ({ ...launcher, webChanges: () => ({ all: [] }) }));
+        mock.module('./host/web/serve.mjs', () => ({ ...serve, builtAppMatches: async () => true, jsTargetBuild: () => true }));
+        const { toolCommand, TOOL_ORIGIN } = await import('./scripts/forma-server.mjs');
+        globalThis.fetch = async url => {
+          const at = new URL(url);
+          return Response.json(at.pathname === '/__forma/token' ? { token: 't' } : { ok: {
+            app: ${JSON.stringify(app)}, epoch: 'e1', protocol: ${via} && at.origin === TOOL_ORIGIN ? 'forma/1.18' : 'tamber/1.18'
+          } });
+        };
+        process.exitCode = await toolCommand([${JSON.stringify(app)}, '--no-open', ...(${via} ? ['--via', 'http://127.0.0.2:43210'] : [])]);
+      `;
+      const r = spawnSync(process.execPath, ['-e', source], { cwd: resolve(import.meta.dir, '..'), encoding: 'utf8' });
+      expect(r.status, r.stderr).toBe(1);
+      expect(r.stderr).toBe('forma tool: rename protocol tamber/1.18 to forma/1.18\n');
+    }
+  } finally { rmSync(app, { recursive: true, force: true }); }
+});
 
 // A stand-in design server: its token answered after `late(n)` ms on the n-th ask, its hello after `slowHello` ms.
 const loop = (late, slowHello = 0) => {

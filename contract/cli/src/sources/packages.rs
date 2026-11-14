@@ -144,9 +144,41 @@ pub(super) fn read(
 ) -> Result<Vec<(contract_syntax::DesignSource, Package)>, CompileError> {
     let mut found: Vec<(contract_syntax::DesignSource, Package)> = Vec::new();
     for package in packages(sources).0 {
+        let json = std::fs::read_to_string(&package.manifest)
+            .ok()
+            .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok());
+        if json
+            .as_ref()
+            .is_some_and(|json| json.get("tamber").is_some())
+        {
+            return Err(refusal(
+                "forma-name",
+                &package.manifest,
+                "rename package.json's tamber key to forma".into(),
+            ));
+        }
         let Some(design) = package_design(&package.root, &package.manifest) else {
             continue;
         };
+        let former = json
+            .as_ref()
+            .map(|json| package.root.join(crate::resolve::package_entry(json)))
+            .and_then(|entry| {
+                entry
+                    .parent()
+                    .map(|dir| dir.join(format!("{}.tamber", namespace(&design.name))))
+            });
+        if let Some(path) = former.filter(|path| path.symlink_metadata().is_ok()) {
+            return Err(refusal(
+                "forma-name",
+                &path,
+                format!(
+                    "rename {} to {}",
+                    path.display(),
+                    path.with_extension("forma").display()
+                ),
+            ));
+        }
         let path = design.path;
         if !design.named && !path.is_file() {
             continue;
