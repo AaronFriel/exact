@@ -320,9 +320,10 @@ extension CanvasesHost {
         for e in Array(entries.values) { publishRecord(e) }
     }
 
+    /// Each canvas of a surface runs its own world; the first live one alone
+    /// publishes the surface's record (LLP 1046.003).
     func claimPublisher(_ e: Entry) {
         if publishers[e.name] == nil { publishers[e.name] = e }
-        else { fputs("exact gpu: surface \(e.name): duplicate live publisher ignored\n", stderr) }
     }
 
     func releasePublisher(_ e: Entry) {

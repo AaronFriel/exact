@@ -2,9 +2,10 @@ import { test } from 'bun:test';
 import assert from 'node:assert/strict';
 import { fixture } from './surface.mjs';
 
-test('a connected registered publisher is duplicate even before the GPU gives it an id', async () => {
+test('a connected registered publisher keeps the name even before the GPU gives it an id', async () => {
   const f = await fixture({ duplicateDuringLoad: true });
-  assert.equal(f.diagnostics.filter(line => line.includes('duplicate live publisher')).length, 1);
+  assert.deepEqual(f.records, ['world\0{"value":1}']);
+  assert.deepEqual(f.diagnostics, []);
 });
 
 test('player restore flushes its public record before reporting success', async () => {
@@ -103,13 +104,12 @@ for (const stale of ['detached', 'unregistered']) test(`a ${stale} publisher yie
   assert.equal(f.records.at(-1), 'glass\0{"value":2}');
 });
 
-test('first live canvas alone publishes and clears, with one named duplicate diagnostic', async () => {
+test('first live canvas alone publishes and clears; a second canvas of the surface is no fault', async () => {
   const f = await fixture();
   f.create(1); f.create(2);
   f.exact.gpu.surface(2, 'world', []);
   assert.deepEqual(f.records, ['world\0{"value":1}']);
-  assert.equal(f.diagnostics.length, 1);
-  assert.match(f.diagnostics[0], /world.*duplicate/);
+  assert.deepEqual(f.diagnostics, []);
   f.destroy(2);
   assert.equal(f.records.length, 1);
   f.create(3); f.destroy(1);

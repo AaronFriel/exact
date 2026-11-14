@@ -4667,7 +4667,9 @@ on every host. It is false until then, and again after a restore, a restarted
 world, a lost GPU device or a new target, until the next such frame. It changes
 only at those moments, never per frame. Keep a loader over the canvas until it is
 true; a record that says the world is set up is not proof that a frame has
-drawn. A module cannot publish a field of that name.
+drawn. A module cannot publish a field of that name. A surface may have more
+than one live canvas, on two routes at once: each runs a world of its own, and
+the record is the first live canvas's.
 
 ```contract
 shape Table

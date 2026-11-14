@@ -596,7 +596,10 @@ again; no app data module is needed. The whole record may be up to 16 MiB of JSO
 the limit, or one the shape refuses, leaves the last accepted one standing and is
 named, with its size and the limit, in the app's log and the agent's
 `state.surfaceRefusals`.
-Only the first live canvas owns a given surface's public record.
+A surface may have more than one live canvas, on two routes at once (a table and a
+preview pushed over it): each canvas runs a world of its own, and the first live one
+alone publishes the surface's record. When that canvas goes, the record clears, and the
+next canvas of the surface to mount publishes it; one already live stays silent.
 
 The record also carries `presented: bool`, which the host adds and the game cannot
 publish (`publish("presented", …)` panics): true once a complete frame of the
