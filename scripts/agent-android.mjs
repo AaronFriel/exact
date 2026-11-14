@@ -46,6 +46,7 @@ import { androidImplementations, packageConfig } from '../js/bake/src/typescript
 import { recordBuiltSettings } from '../js/bake/src/__exact_env.mjs';
 import { configMetaData, fragmentPermissions, manifestFragment, withMetaData, withAuthCallbacks } from './android-manifest.mjs';
 import { androidShareActivity } from './share-target.mjs';
+import { CHANNELS_RECEIVER, androidNotificationResources } from './android-channels.mjs';
 import { pickIcon, placeRgba, readPng, resize } from './app-icons.mjs';
 import { encodePng } from './png.mjs';
 import { copyStaticTreeIfPresent } from '../host/web/serve.mjs';
@@ -1185,9 +1186,9 @@ export function coldGradleHome(env = process.env) {
 function extensionArgs(app, out, config, bound) {
   const generated = resolve(apkDirs(app).app, 'extensions');
   rmSync(generated, { recursive: true, force: true });
-  let permissions = [], services = {}, features = [], callbacks = [];
+  let permissions = [], services = {}, features = [], callbacks = [], reach = null;
   try {
-    const reach = JSON.parse(readFileSync(resolve(out, 'compat.json'), 'utf8')).reach;
+    reach = JSON.parse(readFileSync(resolve(out, 'compat.json'), 'utf8')).reach;
     permissions = reach?.android ?? [];
     callbacks = reach?.auth?.callbacks ?? [];
     // The reader's foreground services the lines declare, with their purposes' text (LLP 1133.033 D2).
@@ -1218,8 +1219,12 @@ function extensionArgs(app, out, config, bound) {
   for (const [name, targets] of Object.entries(app.manifest?.packages ?? {})) for (const [key, value] of Object.entries(targets?.android ?? {})) {
     if (typeof value?.env === 'string' && !process.env[value.env] && config.has(name.split('/').at(-1))) console.warn(`${app.name}: ${value.env} is unset, so ${name}'s ${key} is absent from this development build (a release build refuses it)`);
   }
+  // The notification channels, strings, sounds and small icon (LLP 1133.004.000 D1, D3), for an app that grants
+  // notifications, with the receiver that makes the channels again when the app is updated.
+  const notify = androidNotificationResources(app.manifest, app.dir, resolve(apkDirs(app).app, 'notify/res'), { channels: reach?.androidChannels, locales: reach?.locales, base: reach?.base });
+  if (notify && !notify.icon) console.warn(`${app.name}: app.json's icons have no "monochrome" one, so its notifications show the platform's generic glyph in the status bar; add a white glyph on a transparent background with "purpose": "monochrome"`);
   // The share target's filters on the app's activity (LLP 1133.024 D5), inside the same `<application>`.
-  const fragment = withAuthCallbacks(withMetaData(manifestFragment(bound, { privacyPolicy: app.manifest?.privacy_policy ?? null }), [...configMetaData(config), ...(androidShareActivity(app.manifest?.share_target) ?? [])]), callbacks), fragmentFile = resolve(apkDirs(app).app, 'manifest-fragment.xml');
+  const fragment = withAuthCallbacks(withMetaData(manifestFragment(bound, { privacyPolicy: app.manifest?.privacy_policy ?? null }), [...configMetaData(config), ...(androidShareActivity(app.manifest?.share_target) ?? []), ...(notify ? CHANNELS_RECEIVER : [])]), callbacks), fragmentFile = resolve(apkDirs(app).app, 'manifest-fragment.xml');
   rmSync(fragmentFile, { force: true });
   if (fragment) { mkdirSync(dirname(fragmentFile), { recursive: true }); writeFileSync(fragmentFile, fragment); }
   return [...(bound.length ? [`-PextensionDirs=${[...bound.flatMap((b) => b.dirs), generated].join(',')}`] : []), ...(permissions.length ? [`-Ppermissions=${permissions.join(',')}`] : []),

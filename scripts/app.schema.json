@@ -1029,7 +1029,7 @@
           "additionalProperties": false
         },
         "android": {
-          "description": "Android: the package `id` (default app.id), the painter, `minimumOS` (default 12), `certificates` for the origin's `assetlinks.json`, and `maven` libraries for the app's Kotlin.",
+          "description": "Android: the package `id` (default app.id), the painter, `minimumOS` (default 12), `notificationChannels`, `certificates` for the origin's `assetlinks.json`, and `maven` libraries for the app's Kotlin.",
           "type": "object",
           "properties": {
             "id": {
@@ -1044,6 +1044,22 @@
             "minimumOS": {
               "description": "The oldest Android the app runs on, as \"12\"; never below 10. Below 12 the APK carries the reader's Android 10 and 11 code (host/android/README.md, \"Android 10 and 11\"); at 12 or later it carries none.",
               "enum": ["10", "11", "12", "13", "14", "15", "16"]
+            },
+            "notificationChannels": {
+              "description": "The app's notification channels (LLP 1133.004.000 D1), made by the host after the first frame and when the app is updated; valid only with `device.notifications` granted. Android keeps a channel's importance and sound once made and the person may change them, so a changed importance needs a new id. `id` `default` names and tunes the channel a post without `android.channelId` takes.",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["id", "name"],
+                "properties": {
+                  "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$", "description": "The NotificationChannel id, an Android resource name; `silent` is reserved." },
+                  "name": { "type": "string", "description": "A strings key (LLP 1060): the channel's name in Settings." },
+                  "description": { "type": "string", "description": "A strings key: the channel's description in Settings." },
+                  "importance": { "enum": ["min", "low", "default", "high"], "description": "The platform's IMPORTANCE_* name; `default` when absent. `high` shows a post heads-up." },
+                  "sound": { "type": "string", "pattern": "\\.(ogg|mp3|wav|OGG|MP3|WAV)$", "description": "An .ogg, .mp3 or .wav file in the app's directory, `assets/alert.wav`, which the channel plays; the platform's sound when absent." }
+                },
+                "additionalProperties": false
+              }
             },
             "maven": {
               "description": "Pinned group:artifact:version coordinates on Google's Maven or Maven Central for the app's Kotlin in modules/android. Like a package implementation's maven array, these join the APK's locked, checksum-verified Gradle graph (LLP 1133.008 D8 item 5; host/android/README.md).",

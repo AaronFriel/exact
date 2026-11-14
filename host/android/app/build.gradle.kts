@@ -93,6 +93,9 @@ android {
     // The icon and banner agent-android.mjs makes from the manifest's `icons` (LLP 1163 D6).
     sourceSets["main"].res.directories.add(out.resolve("icons/res").path)
     sourceSets["main"].res.directories.add(out.resolve("launch/res").path)
+    // The notification channels, their strings and sounds, and the small icon, for an app that grants notifications
+    // (agent-android.mjs `androidNotificationResources`, LLP 1133.004.000 D1, D3).
+    sourceSets["main"].res.directories.add(out.resolve("notify/res").path)
     sourceSets["main"].kotlin.directories.add(if (compose) "src/compose/java" else "src/nocompose/java")
     // The app's Kotlin hatches and module roster (LLP 1115.001.000 D4) in its `modules/android`; -PmodulesDir lets a
     // component fixture compile the app's actual provider without copying its Kotlin.

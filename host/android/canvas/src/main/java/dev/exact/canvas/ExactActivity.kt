@@ -315,6 +315,8 @@ open class ExactActivity : Activity() {
                 if (start > 0 && startPitchDp > 0f) view.scrollBy(start * startPitchDp * Device.scale(this))
                 driver?.contentReady()
                 Extensions.firstFrame()
+                channelLocales = resources.configuration.locales
+                Channels.made(this)
             }
         }
         view.booting = booting
@@ -489,6 +491,9 @@ open class ExactActivity : Activity() {
         override fun onChange(selfChange: Boolean) = configure()
     }
 
+    /** The locales the notification channels were last named in. */
+    private var channelLocales: android.os.LocaleList? = null
+
     /** A configuration changed in place (LLP 1115.001 D15.1): the manifest declares the size, night mode, font scale,
      * bold text, locale, density and keyboard changes, so none of them makes the activity again. The settings go to
      * the host whole ([configure]), and the window with its density ([window]); a new size or new insets arrive
@@ -496,6 +501,8 @@ open class ExactActivity : Activity() {
     override fun onConfigurationChanged(config: android.content.res.Configuration) {
         super.onConfigurationChanged(config)
         configure()
+        // The channels' names are the strings tables' (LLP 1133.004.000 D1).
+        if (config.locales != channelLocales) { channelLocales = config.locales; Channels.made(this) }
         root.rootWindowInsets?.let { window(it) }
     }
 

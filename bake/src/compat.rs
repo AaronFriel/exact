@@ -370,6 +370,9 @@ pub fn compatibility_id_pinned(
         }
     }
     crate::reach::derive(app_dir, platform, plan.as_ref(), &mut compat)?;
+    if target.contains("android") {
+        crate::channels::derive(app_dir, &manifest.json, &mut compat)?;
+    }
     // The plans that ship, each resolved once (the receipt writes the entry
     // plans): an even-odd icon in any moves the id (stage 14 C2,
     // icon_rules.rs), and one that binds `atomFaces` names its record's

@@ -246,13 +246,20 @@ pub const DEVICES: &[Device] = &[
         ..ROW
     },
     // iOS's prompt text is fixed and the web's is not policy-controlled; the
-    // grant still gates the request.
+    // grant still gates the request. Android asks `POST_NOTIFICATIONS` from 13
+    // and grants it at install before; a timed post is armed again after a
+    // reboot, whose broadcast reaches only an app holding the boot permission,
+    // a normal one (LLP 1133.004.000 D5).
     Device {
         name: "notifications",
         ios: &[],
         macos: &[],
         hardened: None,
         web: None,
+        android: &[
+            "android.permission.POST_NOTIFICATIONS",
+            "android.permission.RECEIVE_BOOT_COMPLETED",
+        ],
         ..ROW
     },
     // A visible push (LLP 1133.004 §9 P2): the Push API's name. Nothing asks
@@ -738,6 +745,20 @@ mod tests {
         assert!(alone[0].contains("(grant-needs)"), "{alone:?}");
         let named = device_grants("device.notifications n\ndevice.push purpose.push").unwrap_err();
         assert!(named[0].contains("names no purpose"), "{named:?}");
+    }
+
+    /// LLP 1133.004.000 D5: Android's notifications line derives the runtime
+    /// permission and the boot permission a timed post is armed again with.
+    #[test]
+    fn notifications_derive_the_post_and_boot_permissions_on_android() {
+        let grants = device_grants("device.notifications n").unwrap();
+        assert_eq!(
+            grants[0].device.android,
+            [
+                "android.permission.POST_NOTIFICATIONS",
+                "android.permission.RECEIVE_BOOT_COMPLETED"
+            ]
+        );
     }
 
     /// LLP 1133.021 D13: background location adds to precise location, and
