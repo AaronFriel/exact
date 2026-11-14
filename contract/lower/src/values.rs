@@ -436,6 +436,18 @@ fn style_value(
         .any(|r| matches!(r, StyleId::Resize | StyleId::UserSelect))
     {
         super::shorthands::portable_literal(&a.value, &a.name)?;
+        // Other string rows may carry runtime design-token names.
+        if !matches!(a.value, Expr::Str(..)) {
+            for value in a.value.value_leaves() {
+                let literal = Attr {
+                    value: value.clone(),
+                    span: value.span(),
+                    ..a.clone()
+                };
+                style_value(&literal, rows, ty, fonts, scope, shapes)?;
+            }
+            return Ok(());
+        }
     }
     if four_sided(rows) {
         if let Some(sides) = super::shorthands::sides(&a.name, &a.value)? {
