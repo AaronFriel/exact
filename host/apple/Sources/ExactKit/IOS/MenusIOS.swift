@@ -46,6 +46,21 @@ final class MenuHost {
     /// and the web's are, out of its parent and back at its index after.
     private var agentOpen: [String: Lifted] = [:]
     var presented: [NodeView] { agentOpen.values.sorted { $0.order < $1.order }.compactMap(\.popover) }
+    #if os(iOS)
+    /// The open painted popovers a person sees as UIKit's menu instead, and
+    /// whether each is a context menu rather than an invoker's menu
+    /// (`platformMenu`). The agent paints them to drive them; `check` does
+    /// not judge them as the page.
+    var platformMenus: [(popover: NodeView, context: Bool)] {
+        guard let presenter else { return [] }
+        return agentOpen.values.sorted { $0.order < $1.order }.compactMap { entry in
+            guard let pop = entry.popover else { return nil }
+            if entry.context { return (pop, true) }
+            guard let source = entry.source.flatMap({ presenter.views[$0] }), platformMenu(pop, from: source) else { return nil }
+            return (pop, false)
+        }
+    }
+    #endif
     /// The layers lifted over a dialog's sheet: outside the viewport and the route mounts.
     var sheetLayers: [UIView] { agentOpen.values.sorted { $0.order < $1.order }.map(\.layer).filter { $0.sheet != nil && $0.superview != nil } }
     func logicalParent(of view: UIView) -> UIView? {
@@ -85,12 +100,14 @@ final class MenuHost {
         /// one), which hiding hides it with (LLP 1021 §5, "Submenus").
         let order: Int
         let ancestor: String?
+        /// Opened as a context menu (`agentContext`), not by an invoker.
+        let context: Bool
         let layer: PopoverLayer
         #if os(iOS)
         var relay: MountRelay?
         #endif
-        init(source: UInt32?, popover: NodeView, order: Int, ancestor: String?, presenter: Presenter) {
-            self.source = source; self.popover = popover; self.order = order; self.ancestor = ancestor
+        init(source: UInt32?, popover: NodeView, order: Int, ancestor: String?, context: Bool, presenter: Presenter) {
+            self.source = source; self.popover = popover; self.order = order; self.ancestor = ancestor; self.context = context
             layer = PopoverLayer(presenter: presenter, order: order, popover: popover)
             parent = popover.superview
             index = parent?.subviews.firstIndex(of: popover) ?? 0
@@ -901,7 +918,7 @@ final class MenuHost {
         }
         #endif
     }
-    func agentShow(_ pop: NodeView, named name: String, from row: UInt32?) {
+    func agentShow(_ pop: NodeView, named name: String, from row: UInt32?, context: Bool = false) {
         layOut(pop)
         guard let presenter, live(pop) else { return }
         // A row of an open menu opens a popover that is no menu as the menu's own invoker would (LLP 1021's menu rule).
@@ -921,7 +938,7 @@ final class MenuHost {
             for (other, entry) in agentOpen where entry.popover?.props["popover"] != "manual" && !keep.contains(other) { drop(other) }
         }
         opened += 1
-        let entry = Lifted(source: source, popover: pop, order: opened, ancestor: ancestor, presenter: presenter)
+        let entry = Lifted(source: source, popover: pop, order: opened, ancestor: ancestor, context: context, presenter: presenter)
         entry.layer.rehost = { [weak self] in self?.rehostPopovers() }
         agentOpen[name] = entry
         presenter.popoverEvents.changed(pop, open: true)
@@ -948,7 +965,7 @@ final class MenuHost {
             presenter.session?.log("context menu \(name) refused: no popover has that id")
             return false
         }
-        agentShow(pop, named: name, from: node.id)
+        agentShow(pop, named: name, from: node.id, context: true)
         return true
     }
     /// Whether a tap on `node` goes through the agent's painted popovers —

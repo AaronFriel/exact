@@ -45,6 +45,15 @@ extension Agent {
         }
         roots.forEach(findBars)
         var items: [[String: Any]] = []
+        // A menu UIKit presents to a person, which the system places, sizes and scrolls, is not the page: the painted
+        // stand-in the agent drives is left unjudged, and named as advice.
+        #if os(iOS)
+        let platformMenus = presenter.menus.platformMenus
+        #else
+        let platformMenus: [(popover: NodeView, context: Bool)] = []
+        #endif
+        let unjudged = Set(platformMenus.map { ObjectIdentifier($0.popover) })
+        func inPlatformMenu(_ v: UIView) -> Bool { sequence(first: v, next: \.superview).contains { unjudged.contains(ObjectIdentifier($0)) } }
 
         func rgba(_ c: [Double]?) -> [Double]? {
             guard let c, c.count >= 4, c[3] > 0 else { return nil }
@@ -189,7 +198,7 @@ extension Agent {
             if let top = keyboard, p.y >= top {
                 return reachable(v, hit: nil, above: false) ? nil : ["kind": "keyboard", "name": "the software keyboard"]
             }
-            guard let hit = win.hitTest(p, with: nil), hit !== v, !hit.isDescendant(of: v), !v.isDescendant(of: hit) else { return nil }
+            guard let hit = win.hitTest(p, with: nil), hit !== v, !hit.isDescendant(of: v), !v.isDescendant(of: hit), !inPlatformMenu(hit) else { return nil }
             var owner: UIView? = hit, bar: UIView? = nil, barBox: CGRect? = nil
             while let cur = owner, !(cur is NodeView) {
                 if cur.accessibilityIdentifier?.hasPrefix("exact.host.frame-health") == true { return nil }
@@ -291,7 +300,7 @@ extension Agent {
             let a = alpha * v.alpha
             var heldBelow = held, outBelow = out
             if let n = v as? NodeView {
-                guard !n.inert, !n.cssVisibilityHidden, !presenter.navigation.isInactiveRoute(containing: n) else { return }
+                guard !n.inert, !n.cssVisibilityHidden, !presenter.navigation.isInactiveRoute(containing: n), !unjudged.contains(ObjectIdentifier(n)) else { return }
                 let b = n.convert(n.bounds, to: nil)
                 if b.width > 0, b.height > 0, b.intersects(port) || b.intersects(win.bounds) {
                     var item: [String: Any] = rect(b).merging(["id": Int(n.id)]) { x, _ in x }
@@ -526,6 +535,7 @@ extension Agent {
         var reply: [String: Any] = ["viewport": rect(port), "capture": ["window": true, "w": r2(win.bounds.width), "h": r2(win.bounds.height)],
                                     "scheme": dark ? "dark" : "light", "target": 44, "items": items]
         if let keyboard { reply["keyboard"] = r2(keyboard) }
+        if !platformMenus.isEmpty { reply["advice"] = platformMenus.map { ["kind": "menu", "id": Int($0.popover.id), "context": $0.context] } }
         return reply
     }
 

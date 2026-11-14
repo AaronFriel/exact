@@ -246,9 +246,11 @@ export function line(f, nodes) {
   return `  ${f.kind.padEnd(8)} ${who(f, nodes)} ${box}: ${what}${f.hint ? `; ${f.hint}` : ''}`;
 }
 
-/** An advisory line (LLP 1116.004 D1.3): a phone's layout at a desktop width, which a composed page may mean. Never a finding. */
+/** An advisory line, never a finding: a phone's layout at a desktop width, which a composed page may mean (LLP 1116.004 D1.3), or an
+ *  open menu the platform presents and the driver paints (`menu`, iOS). */
 function advise(a, width, nodes) {
   const who = named(a.id, nodes);
+  if (a.kind === 'menu') return `  advice   ${who}: a person sees this open menu as UIKit's ${a.context ? 'context menu' : 'pull-down'}, which the system places, sizes and scrolls to fit the screen; the driver paints it in the page to drive it, so its rows are not judged (\`--touch platform\` presents UIKit's)`;
   return `  advice   ${who}: ${a.kind === 'tabbar'
     ? `a bottom tab bar ${r0(a.w)} px wide along a ${width}-px window; placed as docs/recipes/tabs.md places it (the last child of the root's flex column, unpositioned) a wide window draws it as a sidebar, or lay out a rail of your own when the window is wide`
     : `the list beneath pushed this detail over the whole ${width}-px window where they would fit side by side; a row that pushes draws the disclosure (\`image "symbol:forward-chevron"\`, last in the row) and a wide window shows the list beside its detail, or set \`navigationSplit\` on the list's route (contract vocab navigationSplit)`}`;
