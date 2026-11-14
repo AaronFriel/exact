@@ -144,6 +144,13 @@ impl<D: DataSource> Presenter<D> {
             }
         }
         let [x, y, w, h] = open.frame.map(|v| v as f32 / open.scale);
+        // A forced palette's scrim stays, as in the page's (`alert.rs`).
+        let scrim = match open.inputs.contrast {
+            Some(p) => [p.window[0], p.window[1], p.window[2], 204],
+            None => self
+                .backdrop(open.node, open.inputs.dark)
+                .unwrap_or([0, 0, 0, 80]),
+        };
         let shadow = &mut self.top.overlay.shadow;
         if cfg!(target_os = "windows")
             && open.kind == SurfaceKind::Alert
@@ -163,9 +170,7 @@ impl<D: DataSource> Presenter<D> {
             rect: (x, y, w, h),
             pixels: self.top.overlay.pixels.as_ref().unwrap().1.clone(),
             modal: open.kind == SurfaceKind::Alert,
-            scrim: open.inputs.contrast.map_or([0, 0, 0, 80], |p| {
-                [p.window[0], p.window[1], p.window[2], 204]
-            }),
+            scrim,
             shadow: shadow
                 .as_ref()
                 .map(|s| (s.pixels.clone(), s.rect((x, y, w, h)))),

@@ -143,6 +143,7 @@ final class DialogHost {
         entries.append(entry)
         if painted, !entry.route {
             entry.backdrop.host = self
+            entry.backdrop.dialog = dialog
             entry.backdrop.autoresizingMask = [.width, .height]
             presenter.viewport.addSubview(entry.backdrop)
             entry.backdrop.addSubview(dialog)
@@ -247,6 +248,11 @@ final class DialogHost {
             if !live(entry.dialog) || entry.dialog.props["semanticTag"] != "dialog" || !connected || presenter.viewport.window == nil {
                 close(entry.dialog, notify: false)
             }
+        }
+        // A `::backdrop` colour that changed while it is open.
+        for entry in entries where !entry.route {
+            if let sheet = entry.sheet, sheet.begun { sheet.paintDim(entry.dialog.backdropColor, shown: true) }
+            else { entry.backdrop.needsDisplay = true }
         }
         var changed = false
         for dialog in presenter.carrying("tag:dialog") where dialog.props["popover"] == nil {
@@ -425,9 +431,11 @@ final class DialogHost {
 
 final class DialogBackdrop: NSView {
     weak var host: DialogHost?
+    /// The dialog over it, whose `::backdrop` colour it draws (LLP 1035.001 D11).
+    weak var dialog: NodeView?
     private var downOutside = false
     override var isFlipped: Bool { true }
-    override func draw(_ dirtyRect: NSRect) { NSColor.black.withAlphaComponent(0.18).setFill(); dirtyRect.fill() }
+    override func draw(_ dirtyRect: NSRect) { (dialog?.backdropColor ?? NSColor.black.withAlphaComponent(0.18)).setFill(); dirtyRect.fill() }
     /// A backdrop is not a control: the click that activates its window does
     /// not also dismiss the dialog (LLP 1115.000 D7.9). The agent's does.
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { NodeView.everyClickCounts }

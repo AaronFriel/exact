@@ -769,6 +769,8 @@ fn spell_property(out: &mut String, id: StyleId) {
         StyleId::TintColor => return out.push_str("--exact-tint"),
         // @ref LLP 1104 D3 — `::placeholder`'s colour, read by index.html.
         StyleId::PlaceholderColor => return out.push_str("--exact-placeholder-color"),
+        // @ref LLP 1035.001 D11 — `::backdrop`'s colour, read by neutral.css.
+        StyleId::BackdropColor => return out.push_str("--exact-backdrop-color"),
         // The tint of a glass material, read by index.html's glass rule.
         StyleId::GlassTint => return out.push_str("--exact-glass-tint"),
         // @ref LLP 1061 D7 — the pressed paint: custom properties input-glue.js

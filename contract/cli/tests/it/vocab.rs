@@ -1085,6 +1085,7 @@ fn every_concepts_code_compiles_and_its_names_are_its_own() {
         "menu",
         "menubar",
         "::placeholder",
+        "::backdrop",
         "glass",
         "titlebar",
         "haptics",
@@ -1125,14 +1126,24 @@ fn menu_bar_attributes_explain_the_fixed_removal_ids() {
     }
 }
 
-/// LLP 1104 D3: `::placeholder` answers with its block, and so does the
-/// name an author guesses for it; the part's declaration is no attribute.
+/// LLP 1104 D3, LLP 1035.001 D11: `::placeholder` and `::backdrop` answer
+/// with their blocks, and so do the names an author guesses for them; a
+/// part's declaration is no attribute.
 #[test]
-fn placeholder_answers_with_its_block() {
-    for name in ["::placeholder", "placeholder-color"] {
+fn parts_answer_with_their_blocks() {
+    let (colour, background) = ("admits `color` alone", "admits `background-color` alone");
+    for (name, part, admits) in [
+        ("::placeholder", "::placeholder", colour),
+        ("placeholder-color", "::placeholder", colour),
+        ("::backdrop", "::backdrop", background),
+        ("scrim", "::backdrop", background),
+    ] {
         let out = stdout(&vocab(&[name]));
-        assert!(out.contains("::placeholder (a concept)"), "{name}: {out}");
-        assert!(out.contains("admits `color` alone"), "{name}: {out}");
+        assert!(
+            out.contains(&format!("{part} (a concept)")),
+            "{name}: {out}"
+        );
+        assert!(out.contains(admits), "{name}: {out}");
         assert!(!out.contains("native module"), "{name}: {out}");
     }
     let all: Value = serde_json::from_str(&stdout(&vocab(&["--json"]))).unwrap();

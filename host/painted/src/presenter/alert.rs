@@ -507,6 +507,7 @@ impl<D: DataSource> Presenter<D> {
         };
         let offset = (f.x - origin.0, f.y - origin.1);
         let dark = self.host.presented(id).dark.unwrap_or(self.dark());
+        let backdrop = self.backdrop(id, dark);
         let scroll = self.alert_scroll(id);
         let title = title.map(|(label, p)| {
             let frame = prefix.expect("a nonempty label has a generated item");
@@ -530,26 +531,11 @@ impl<D: DataSource> Presenter<D> {
         if title.is_none() {
             self.alert.as_mut().unwrap().title = None;
         }
-        let scrim = modal.then(|| {
-            self.colors.contrast.palette.map_or_else(
-                || {
-                    if self.desktop_overlays() {
-                        [0, 0, 0, 77]
-                    } else {
-                        [
-                            0,
-                            0,
-                            0,
-                            (255.
-                                * crate::paint::look::number(
-                                    exact_kernel::generated::metric::SCRIM_ALPHA,
-                                ))
-                            .round() as u8,
-                        ]
-                    }
-                },
-                |p| [p.window[0], p.window[1], p.window[2], 204],
-            )
+        // A forced palette's scrim stays, as forced colours replace an
+        // authored background on the web.
+        let scrim = modal.then(|| match &self.colors.contrast.palette {
+            Some(p) => [p.window[0], p.window[1], p.window[2], 204],
+            None => backdrop.unwrap_or_else(|| self.scrim()),
         });
         self.brush.alert = Some(crate::paint::AlertPicture {
             key,
@@ -575,6 +561,23 @@ impl<D: DataSource> Presenter<D> {
             self.report_top_layer();
         }
         Ok(())
+    }
+    /// The author's `::backdrop` colour beneath the modal dialog `id`, which
+    /// wins over the platform's dim (LLP 1035.001 D11).
+    pub(in crate::presenter) fn backdrop(&self, id: ViewId, dark: bool) -> Option<[u8; 4]> {
+        let node = self.host.kernel().node(id)?;
+        node.style
+            .mask
+            .has(exact_kernel::StyleId::BackdropColor)
+            .then(|| crate::paint::rgba(node.style.rare.backdrop_color.resolve(dark)))
+    }
+    /// The platform's dim beneath a modal dialog.
+    fn scrim(&self) -> [u8; 4] {
+        if self.desktop_overlays() {
+            return [0, 0, 0, 77];
+        }
+        let alpha = crate::paint::look::number(exact_kernel::generated::metric::SCRIM_ALPHA);
+        [0, 0, 0, (255. * alpha).round() as u8]
     }
     fn alert_inputs(&self, id: ViewId) -> Option<Inputs> {
         let k = self.host.kernel();

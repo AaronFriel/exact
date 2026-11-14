@@ -1087,7 +1087,7 @@ pub fn text_input_type(value: &Expr) -> bool {
     }
 }
 
-pub use crate::part::{part_attr, PLACEHOLDER_COLOR};
+pub use crate::part::{part_attr, BACKDROP_COLOR, PLACEHOLDER_COLOR};
 
 /// `name=expr`.
 #[derive(Debug, Clone, PartialEq)]

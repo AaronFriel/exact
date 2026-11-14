@@ -1221,6 +1221,28 @@ component App
 - `::before` and `::after` are refused: Contract has no generated box. Write what they would show as
   a child (a `text`, an `image`).
 
+## ::backdrop: what lies beneath a modal dialog
+names: backdrop, scrim, dim, dimming, modal overlay, overlay colour, backdropColor, UIDimmingView
+
+CSS's `::backdrop { background-color }` is a block: `::backdrop` on its own line under a `dialog`
+(before its children; there a value may compute) or in a `style`, then `background-color=…`
+indented beneath it. It admits `background-color` alone, with its own alpha (`transparent` lays
+nothing over the page), and fades in and out with the dialog. Without one each platform keeps its
+own dim (UIKit's beneath a sheet, the web's and the painted hosts' scrim).
+
+```contract
+component App
+  view
+    column
+      dialog id="confirm" background-color="#0000008C" width="100%" height="100%"
+        ::backdrop
+          background-color="transparent"
+        text "Panel" background-color="#14171D" color="#FFFFFF" padding=24
+```
+
+- Another property in the block (`backdrop-filter`, `opacity`) is refused; so is the block on any
+  element other than a `dialog`.
+
 ## glass: Liquid Glass, a material or a blur behind a box
 names: Liquid Glass, liquid-glass, liquidGlass, material, materials, vibrancy, blur, frosted, UIVisualEffectView, UIGlassEffect, BlurView, GlassView, expo-blur, expo-glass-effect, tintColor, glass tint, tinted glass, isInteractive, UIBlurEffect, dark blur, blur tint, blur intensity, intensity
 

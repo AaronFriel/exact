@@ -660,6 +660,13 @@ the tooltips, toasts, empty states and themed fields of
 `issues/closed/20261009-balanced-text-placeholder-color.md`. This
 amends LLP 1104's placeholder refusal. `-webkit-font-smoothing` stays deferred.
 
+**Admitted (Charlie, 2026-11-14, on a panel; LLP 1035.001 D11):** a
+`::backdrop` part on a `dialog` containing only `background-color`: what lies
+beneath the modal dialog, in place of the platform's dim, fading in and out
+with it. Consumer: Felt's full-window dialog (expo/exact#490), which paints
+its own 55 % dim and read about 64 % over UIKit's 20 %. Its other properties (`backdrop-filter`, `opacity`) stay
+refused.
+
 **Admitted (Daehyeon Mun, 2026-10-28, waived; LLP 1019 D12):**
 `-webkit-font-smoothing: auto | antialiased`, an inherited paint row. This
 amends the 2026-10-12 textrows ruling above, which kept it deferred. Consumer:

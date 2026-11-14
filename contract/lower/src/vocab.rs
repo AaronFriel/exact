@@ -274,7 +274,7 @@ pub fn tags() -> Vec<(&'static str, Tag)> {
 /// earlier are [`COMPILE_ATTRS`].
 pub fn attrs() -> Vec<(&'static str, AttrTarget)> {
     // A part's declaration (`::placeholder color`) is no attribute to write:
-    // `contract vocab ::placeholder` describes the block. Nor is lowering's
+    // `contract vocab ::placeholder` and `::backdrop` describe the blocks. Nor is lowering's
     // own row for `:active`'s `opacity` (LLP 1121 D8).
     let styles: Vec<&'static str> = crate::style_names::STYLE_NAMES
         .iter()

@@ -983,6 +983,7 @@ pub fn style_writes(id: u16, timeline: bool, written: bool) -> Result<Vec<Write>
         ],
         StyleId::TintColor => vec![with("--exact-tint", &TINT_MAP)],
         StyleId::PlaceholderColor => vec![with("--exact-placeholder-color", "v=>v==null?v:/^\\s*(unset)?\\s*$/i.test(v)?'initial':v")],
+        StyleId::BackdropColor => vec![with("--exact-backdrop-color", "v=>v==null?v:/^\\s*(unset)?\\s*$/i.test(v)?'initial':v")],
         // A capsule's ends are half-circles, so it takes no curve (index.html).
         StyleId::ControlCornerStyle => vec![
             with("--exact-control-radius", "v=>v==null?v:v==='capsule'?'calc(infinity * 1px)':'revert'"),
@@ -1294,6 +1295,7 @@ pub(crate) fn css_property(id: StyleId) -> String {
         StyleId::TintColor => return "--exact-tint".into(),
         // @ref LLP 1104 D3 — css.rs's `spell_property`.
         StyleId::PlaceholderColor => return "--exact-placeholder-color".into(),
+        StyleId::BackdropColor => return "--exact-backdrop-color".into(),
         StyleId::GlassTint => return "--exact-glass-tint".into(),
         StyleId::PositionType => return "position".into(),
         StyleId::BackdropFilter => return "backdrop-filter".into(),

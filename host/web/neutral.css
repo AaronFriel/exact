@@ -442,7 +442,13 @@
      its inline end, where an overlay scroll indicator (iOS, a Mac trackpad) draws beside the words, not over them,
      and its actions keep a flat alert's 16px from a row above them (none under only its label's title). */
   :where(#exact-root dialog) { border: none; border-radius: calc(12px * var(--exact-curve-reach)); corner-shape: var(--exact-curve); background-color: var(--exact-secondary-grouped-background); color: var(--exact-label); box-shadow: var(--exact-modal); }
-  :where(#exact-root dialog)::backdrop { background-color: var(--exact-scrim); }
+  /* What lies beneath a modal dialog: the author's `::backdrop` colour (`--exact-backdrop-color`, the dialog's own: a
+     dialog inside it doesn't take it), else the scrim. It fades in as the dialog opens and out as the dialog leaves
+     with its exit animation, over Core Animation's default 0.25 s, as the Apple hosts fade it (LLP 1035.001 D11). */
+  :where(#exact-root dialog) { --exact-backdrop-color: initial; }
+  :where(#exact-root dialog)::backdrop { background-color: var(--exact-backdrop-color, var(--exact-scrim)); transition: background-color .25s; }
+  @starting-style { :where(#exact-root dialog[open])::backdrop { background-color: transparent; } }
+  :where(#exact-root dialog[data-exiting])::backdrop { background-color: transparent; }
   :where(#exact-root dialog[role="alertdialog"]) { width: min(26rem, calc(100vw - 32px)); padding: 24px; gap: 8px 12px; text-align: start; }
   :where(#exact-root dialog[role="alertdialog"][aria-label])::before { font-size: 1.125em; }
   :where(#exact-root dialog[role="alertdialog"] > :not(button, [data-alertpart="message"], [data-alertpart="actions"]), #exact-root dialog[role="alertdialog"] > [data-alertpart="message"] > *) { font-size: 1em; color: var(--exact-secondary-label); }

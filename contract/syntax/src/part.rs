@@ -9,3 +9,6 @@ pub fn part_attr(part: &str, property: &str) -> String {
 
 /// [`part_attr`]`("::placeholder", "color")`.
 pub const PLACEHOLDER_COLOR: &str = "::placeholder color";
+
+/// [`part_attr`]`("::backdrop", "background-color")` (LLP 1035.001 D11).
+pub const BACKDROP_COLOR: &str = "::backdrop background-color";

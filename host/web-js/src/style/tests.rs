@@ -357,6 +357,23 @@ fn a_bound_placeholder_colour_writes_the_private_property() {
     );
 }
 
+/// LLP 1035.001 D11: a bound `::backdrop` colour writes the private property
+/// that neutral.css's `::backdrop` rule reads; cleared, the scrim returns.
+#[test]
+fn a_bound_backdrop_colour_writes_the_private_property() {
+    let writes = style_writes(StyleId::BackdropColor as u16, false, true).unwrap();
+    assert_eq!(writes.len(), 1);
+    assert_eq!(writes[0].name, "--exact-backdrop-color");
+    let map = writes[0].map.unwrap();
+    assert_eq!(
+        run(
+            &format!("v=>({map})(JSON.parse(v))"),
+            &["null", "\"unset\"", "\"#123456\""]
+        ),
+        serde_json::json!([null, "initial", "#123456"])
+    );
+}
+
 #[test]
 fn a_bound_tint_clear_restores_the_symbol_role() {
     let writes = style_writes(StyleId::TintColor as u16, false, true).unwrap();

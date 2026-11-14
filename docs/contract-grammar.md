@@ -149,16 +149,19 @@ or event props. In a conditional class, each prop must be set in both styles or
 neither, unless the node supplies its own value. Each arm's literal is checked
 as a direct attribute would be.
 
-A part is CSS's pseudo-element as a block: `::placeholder`, then its
-declarations indented beneath it, in a `style` (literal) or under an `input` or
-`textarea` before its children (where a value may compute, as the element's own
-attributes do). It admits `color` alone (CSS `::placeholder { color }`, LLP 1104
-D3), its alpha its own; the field's own block wins over its class's, and without
-one the placeholder keeps the platform's colour. Another property in it is
-`lower-unknown-attr`; on another element `lower-attr-tag`; `::before` and
-`::after` are `syntax-part` (Contract has no generated box: write a child), as
-is any other part. `placeholder-color` and `-exact-placeholder-color` are
-refused with the block to write.
+A part is CSS's pseudo-element as a block: `::placeholder` or `::backdrop`,
+then its declarations indented beneath it, in a `style` (literal) or under its
+element before its children (where a value may compute, as the element's own
+attributes do). `::placeholder`, under an `input` or `textarea`, admits `color`
+alone (CSS `::placeholder { color }`, LLP 1104 D3); `::backdrop`, under a
+`dialog`, admits `background-color` alone (CSS `::backdrop { background-color
+}`, LLP 1035.001 D11: what lies over the page beneath the modal dialog, fading
+in and out with it). Each colour's alpha is its own; the element's own block
+wins over its class's, and without one the platform's colour or dim stays.
+Another property in it is `lower-unknown-attr`; on another element
+`lower-attr-tag`; `::before` and `::after` are `syntax-part` (Contract has no
+generated box: write a child), as is any other part. `placeholder-color` and
+`-exact-placeholder-color` are refused with the block to write.
 
 A state part is a block of one state's rows (LLP 1121 D8): `:active`, `:hover`,
 `:focus-visible`, `:disabled` or `:checked` alone on its line, then rows indented

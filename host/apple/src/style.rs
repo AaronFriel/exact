@@ -1009,13 +1009,17 @@ fn style_json_shown(
             .union(StyleMask::of(StyleId::ColorScheme))
     };
     let mut computed = node.computed_style(rows.union(node.style.written));
-    // PlaceholderColor's initial payload is an unread sentinel; absence
-    // selects the platform placeholder colour, including after a clear. So
-    // for the pressed paint: a cleared row is no pressed look (LLP 1061 D7).
-    computed.mask =
-        computed.mask.union(computed.written.minus(
-            StyleMask::of(StyleId::PlaceholderColor).union(crate::looks::press_paint_rows()),
-        ));
+    // PlaceholderColor's and BackdropColor's initial payloads are unread
+    // sentinels; absence selects the platform's placeholder colour or dim,
+    // including after a clear. So for the pressed paint: a cleared row is no
+    // pressed look (LLP 1061 D7).
+    computed.mask = computed.mask.union(
+        computed.written.minus(
+            StyleMask::of(StyleId::PlaceholderColor)
+                .union(StyleMask::of(StyleId::BackdropColor))
+                .union(crate::looks::press_paint_rows()),
+        ),
+    );
     computed.mask.set(StyleId::TextColor);
     paint_over(&mut computed, shown);
     if own && shown.get(Property::Color).is_some() && says_moving_color(node) {
