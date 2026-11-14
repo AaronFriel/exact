@@ -4525,7 +4525,10 @@ once the module loads (`high` before it). Under the agent it is `high` from laun
 `exactPage` answers `visibilityState`, `frozen`, `onLine`, `canShare`,
 `canShareFiles` and `canSharePictures` (whether `share(files=…)` takes
 `app:/` files and an element's `"#id"`; the web never takes a picture),
-`canOpenFiles` and `hasFocus` (`document.hasFocus()`: the app's window has the
+`canOpenFiles`, `name` (the window's name: `main` in the app's first window on
+every host, a link's `target` in the window it opened, empty in a `_blank` one;
+every window runs the root's tasks, so `task t when page.name == "main"` runs
+once however many are open), and `hasFocus` (`document.hasFocus()`: the app's window has the
 system's focus; false while another app or window is in front, so an app can
 choose an in-window message over a system notification), `persisted` and
 `restores` (the back/forward cache: `persisted` is true while the page is put

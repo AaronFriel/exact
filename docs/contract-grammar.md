@@ -1478,9 +1478,23 @@ app: natively it opens in the system browser (the Linux host has none and
 logs it), and on the web in a new
 browsing context (`target="_blank" rel="external noopener"`), so the app is
 still there when the reader comes back. On the web, `target="_self"` keeps
-such a link in the page (it replaces the app) and `target="_blank"` opens a
-path in a new one; natively `target` changes nothing, an app having no
-other tab. `mailto:` and `tel:` links go to their handlers everywhere.
+such a link in the page (it replaces the app). `mailto:` and `tel:` links go
+to their handlers everywhere.
+
+A link to one of the app's paths goes where its `target` says, as HTML's does
+(LLP 1030.004). Empty, `_self`, `_parent` and `_top`, in any case, navigate in
+place; `_blank` opens a new window at the path each press; any other name opens
+the window of that name there, or brings it forward, navigated to the path when
+it shows another. A literal name that starts with `_` and is no keyword, or is
+`window-<n>` (the agent's label for a window with no name), is refused
+(`lower-attr-value`); a bound one that starts with `_` acts as `_blank`. On the
+web these are the browser's windows and tabs. On the Mac each window is a
+session of its own, rooted at its path (that screen alone, no sidebar or other
+tab beneath it), and the windows share the app's store; the window named
+`settings` is Settings…, which a `Meta+,` link opens without a `target`. The
+other native hosts have one window and navigate in place. `exactPage().name`
+says which window a page runs in ([a second window](recipes/second-window.md),
+[a Settings window](recipes/settings-window.md)).
 
 An unset `appearance` is `auto`: the platform's button, unless a background,
 border, radius, rich children or a row the native control cannot carry makes it

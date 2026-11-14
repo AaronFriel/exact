@@ -1089,9 +1089,9 @@ reading. Nothing that isn't HTML is added by it.
   refused where the default is. The agent's tree, `tap … pictureinpicture`
   and `screenshot … window pictureinpicture` reach it. The default stays
   AVKit's. Consumer: the T3 Code clone's server and desktop Browser tabs,
-  matching T3 Code v0.1.6. Still out: an app's second window of its own
-  views (a floating window holding a subtree), and media controls in
-  Exact's window.
+  matching T3 Code v0.1.6. Still out: a floating window holding a subtree
+  of a window, and media controls in Exact's window. A second window at
+  one of the app's routes is LLP 1030.004's.
   **Expanded (Daehyeon Mun, 2026-11-02, evening: "picture in picture
   follows v0.1.6 when several windows open"; LLP 1042 §9.2):** a `"panel"`
   per image, beside the one picture-in-picture window (AVKit's or Exact's
@@ -2074,3 +2074,10 @@ The owner admitted unattended native build commands, signing/version inputs,
 Android App Bundle output and one EAS recipe per platform on 2026-11-12. This unblocks an app repository's
 custom EAS build. Provider adapters and automatic account, credential and
 store provisioning remain deferred.
+
+**A second window at a route (LLP 1030.004; expo/exact#335, #280 item 7).** A
+`link` whose `target` names a window opens that window at the link's route on the
+Mac; the Settings window is the one named `settings`. Unblocks a Mac app with a
+compose window, an inspector window or a Settings window, without app Swift. Take:
+none offered; waived by Charlie, 2026-11-14, after the panel (decision D3: all three
+seats chose to build it).
