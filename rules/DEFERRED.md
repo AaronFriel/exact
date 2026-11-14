@@ -1889,12 +1889,23 @@ stream reaches after its first message, which settlement does not wait for
 from `tree`, `state`, or `layout`. The old repo's six primitives grew eighty wire names
 one reasonable "view" at a time; the count is the cost. (Charlie, 2026-08-29.)
 
-Not shipping: session record/replay, causal trace, behavior diff and verify, mutation
+Not shipping: causal trace, behavior diff and verify, mutation
 dry-run, contract witness / dataflow / ~~source-map~~ / bindings, accessibility audit (narrowed below), plan
 drag, correlate, visual query, network, perf, pasteboard, onboarding,
 revalidate, code grant/resume/cancel. (`perf` shipped as LLP 1079 narrows it: work
 counts and presented frames; never a causal trace, a flame chart, a devtools UI or
 production telemetry.)
+
+**Admitted (Charlie, 2026-11-14: "OK add it"; LLP 1172.021):** recording a session
+into an authored test. `--record` on a drive or a session with a person writes a
+`.test` file in the test grammar: the same operations the driver has (`tap`, `type`,
+`clock` marks, `prefer`), targeted by test ID or role, never by coordinates, with
+the session's network answers kept as fixtures for the executor's test substitute
+(LLP 1172.000 step 3). Replay is running that test. It adds no operation. Recorded
+answers are redacted by default, and a secret field or a secret's value is never
+recorded. Consumer: a real session turned into a regression test, and a bug report
+into a reproduction (LLP 1172.021 E8). Take: none named; the ruling stands as its
+own waiver.
 
 **Narrowed (Charlie, 2026-10-03, waiver: "I guess that trade makes sense ?
 idk wdy"; LLP 1080.002):** `tree --ax` reads the platform's own exposed
