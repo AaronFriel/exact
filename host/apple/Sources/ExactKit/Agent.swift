@@ -23,6 +23,7 @@ public final class Agent {
     weak var pendingTextReveal: TextArea?
     /// The held contact on a `pan` node, recognized (LLP 1057 §10.6).
     var panContact: AgentPan?
+    var checkPicture: AgentPicturePreparation?
     #endif
     #if EXACT_WIDGET_GALLERY && (os(iOS) || os(macOS))
     var widgetPreview: WidgetPreview?

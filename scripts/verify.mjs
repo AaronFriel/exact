@@ -450,6 +450,9 @@ export async function largestText(s, screen) {
     for (let page = 0; page < PAGES; page++) {
       obs = await s.op({ op: 'check' });
       for (const it of obs.items ?? []) looked.add(it.id).add(it.of);
+      // Menu substitutes remain in tree for taps, but their rows are not page content to scroll to.
+      const omit = id => { looked.add(id); for (const child of nodes.get(id)?.children ?? []) omit(child); };
+      for (const a of obs.advice ?? []) if (a.kind === 'menu') omit(a.id);
       const before = found.size;
       const compared = { ...obs, items: (obs.items ?? []).filter(it => !projected.has(it.id) && !projected.has(it.of)) };
       for (const f of judge(compared, null, { host: web ? 'web' : 'ios' })) if (LARGE_KINDS.has(f.kind) && !accepts(ACCEPT, f, nodes) && !found.has(`${f.kind} ${f.id}`)) found.set(`${f.kind} ${f.id}`, f);

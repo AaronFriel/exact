@@ -921,6 +921,61 @@ test('the largest text size: its findings once each with the screens they were o
   assert.equal(web.lines[1], 'largest text size (root font size 53 px at 390x844, iOS\'s body at its largest), 1 screen: nothing spills');
 });
 
+test('the largest text pass leaves native menu substitutes out of page scrolling', async () => {
+  const { largestText } = await import('./verify.mjs');
+  const revealed = [];
+  const nodes = [
+    { id: 1, type: 'View', props: { testId: 'page' } },
+    { id: 9, type: 'View', props: { testId: 'menu' }, children: [10] },
+    { id: 10, type: 'Button', props: { testId: 'menu-row' } },
+    { id: 11, type: 'Text', props: { testId: 'below-fold' } },
+  ];
+  const observation = { viewport: { w: 390, h: 844 }, items: [{ id: 1 }], advice: [{ kind: 'menu', id: 9 }] };
+  const s = { host: 'web', resize: async () => {}, prefer: async () => {}, clock: async () => {},
+    op: async req => req.op === 'tree' ? { nodes } : observation,
+    carrier: { reveal: async id => { revealed.push(id); return { scrolled: false }; } } };
+  const result = await largestText(s, 'menu open');
+  assert.equal(result.error, undefined);
+  assert.deepEqual(revealed, [11], 'only unmeasured page content is revealed');
+});
+
+test('check judges and saves the capture taken with menu substitutes hidden', async () => {
+  const { checkOp } = await import('./agent-check.mjs');
+  const { encodePng, decodePng } = await import('./png.mjs');
+  const dir = mkdtempSync(resolve(tmpdir(), 'check-menu-'));
+  try {
+    const path = resolve(dir, 'check.png');
+    const data = Buffer.alloc(200 * 200 * 4, 0);
+    for (let i = 3; i < data.length; i += 4) data[i] = 255;
+    const png = encodePng({ width: 200, height: 200, data });
+    const obs = { viewport: { w: 200, h: 200 }, scheme: 'light', target: 44,
+      capture: { w: 200, h: 200, scale: 1, window: true }, advice: [{ kind: 'menu', id: 9 }],
+      items: [{ id: 2, x: 20, y: 20, w: 60, h: 20, text: 'Page', fg: [255, 255, 255, 1], size: 17, weight: 400 }] };
+    let hidden = false, fail = false, captures = 0;
+    const session = { host: 'ios', op: async req => {
+      if (req.capture) hidden = true;
+      if (req.release) hidden = false;
+      return req.op === 'check' ? obs : { nodes: [] };
+    }, tagged: x => x,
+      carrier: { screenshot: async (path, window) => {
+        captures++;
+        assert.equal(hidden, true, 'substitutes stay hidden throughout carrier composition');
+        assert.equal(window, true, 'the carrier includes materials and the keyboard');
+        if (fail) throw new Error('display failed');
+        writeFileSync(path, png);
+        return { scale: 1 };
+      } } };
+    const result = await checkOp(session, [], { shots: () => path });
+    assert.deepEqual(result.check[0].findings, []);
+    assert.equal(decodePng(readFileSync(path)).data[0], 0, 'the saved evidence is the page that was judged');
+    assert.equal(captures, 1);
+    assert.equal(hidden, false);
+    fail = true;
+    await assert.rejects(checkOp(session), /display failed/);
+    assert.equal(hidden, false, 'a failed carrier capture restores the menu');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 // Round 21's event-rsvp at the largest text size: a centred caption wider than its column runs past both of its sides and
 // 1.7 pt into the next column's caption, which read "GoingMaybe" while verify said nothing spills. Two texts set flush on
 // purpose only touch, and texts whose boxes overlap where their lines are drawn apart (`ink`) do not run together.
