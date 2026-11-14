@@ -230,7 +230,7 @@ impl Lowerer<'_> {
             return Ok(value.clone());
         }
         let mut folded = value.clone();
-        fold_constant_families(&mut folded);
+        fold_constant_families(&mut folded, true);
         let mut bundled = None;
         family_arms(&folded, &mut |name, span| {
             if self
@@ -241,27 +241,43 @@ impl Lowerer<'_> {
                 bundled = Some(span);
             }
         })?;
-        if !Self::literal_arms(&folded) {
-            if let Some(span) = bundled {
+        // Admission folds shared literals; emission keeps the baseline folds
+        // and classification for runtime expressions (LLP 1172.013 step 4).
+        let mut emission = value.clone();
+        fold_constant_families(&mut emission, false);
+        let stacks = if Self::literal_arms(&emission) {
+            emission
+        } else {
+            let Some(span) = bundled else {
+                return Ok(emission);
+            };
+            if !Self::literal_family_arms(&folded) {
                 return err(
                     "lower-font-runtime-bundled",
                     "a runtime `font-family` string may name installed or generic families only; use a literal choice for a bundled font",
                     span,
                 );
             }
-            return Ok(folded);
-        }
-        self.replace_arms(folded, &mut Vec::new())
+            folded
+        };
+        self.replace_arms(stacks, &mut Vec::new())
     }
 
     pub(super) fn literal_arms(e: &Expr) -> bool {
-        e.value_leaves().all(|leaf| matches!(leaf, Expr::Str(..)))
+        match e {
+            Expr::Str(..) => true,
+            Expr::Ternary(_, yes, no, _) => Self::literal_arms(yes) && Self::literal_arms(no),
+            Expr::Match { some, none, .. } => Self::literal_arms(some) && Self::literal_arms(none),
+            Expr::Let { body, .. } => Self::literal_arms(body),
+            _ => false,
+        }
     }
 
     pub(super) fn literal_family_arms(e: &Expr) -> bool {
         let mut folded = e.clone();
-        fold_constant_families(&mut folded);
-        Self::literal_arms(&folded)
+        fold_constant_families(&mut folded, true);
+        let mut leaves = folded.value_leaves();
+        leaves.all(|leaf| matches!(leaf, Expr::Str(..)))
     }
 
     /// A literal family's stack, declared as `font-family`'s are: `e`, a
@@ -413,7 +429,7 @@ pub(crate) fn font_use(
         .collect();
     if tokens.is_empty() {
         let mut folded = family.value.clone();
-        fold_constant_families(&mut folded);
+        fold_constant_families(&mut folded, true);
         family_arms(&folded, &mut |name, _| names.push(name.to_string()))?;
     }
     for stack in tokens.iter().flatten() {
@@ -466,7 +482,7 @@ fn family_arms(e: &Expr, visit: &mut dyn FnMut(&str, Span)) -> Result<(), LowerE
     Ok(())
 }
 
-fn fold_constant_families(value: &mut Expr) {
+fn fold_constant_families(value: &mut Expr, normalized: bool) {
     match value {
         Expr::Template(parts, span)
             if parts.iter().all(|part| {
@@ -488,18 +504,20 @@ fn fold_constant_families(value: &mut Expr) {
             *value = Expr::Str(text, *span);
         }
         Expr::Ternary(_, yes, no, _) => {
-            fold_constant_families(yes);
-            fold_constant_families(no);
+            fold_constant_families(yes, normalized);
+            fold_constant_families(no, normalized);
         }
         Expr::Match { some, none, .. } => {
-            fold_constant_families(some);
-            fold_constant_families(none);
+            fold_constant_families(some, normalized);
+            fold_constant_families(none, normalized);
         }
         Expr::Let { value, body, .. } => {
-            fold_constant_families(value);
-            fold_constant_families(body);
+            if normalized {
+                fold_constant_families(value, normalized);
+            }
+            fold_constant_families(body, normalized);
         }
-        Expr::Typed(value, ..) => fold_constant_families(value),
+        Expr::Typed(value, ..) if normalized => fold_constant_families(value, normalized),
         _ => {}
     }
 }
