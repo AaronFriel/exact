@@ -29,7 +29,7 @@ import { openRemoteCanvas } from '../../scripts/tamber-canvas.mjs';
 import { mapCard, pullMap } from '../../scripts/tamber-inspect.mjs';
 import { serveCommands, serveReport, streamFrame } from '../../scripts/tamber-builds.mjs';
 import { EXE, depInfoOf, fresh, freshCompiler, webCompiler } from './module.mjs';
-import { launch, toolEnv } from '../../scripts/tools.mjs';
+import { RustMissing, fromSets, launch, rustMissing, toolEnv } from '../../scripts/tools.mjs';
 import { hostModuleSources } from './glue.mjs';
 import { INSPECT_EVENTS } from './inspect-dev.js';
 import { galleryLoop } from './dev-gallery.mjs';
@@ -213,7 +213,12 @@ export async function devJs({ app, dist, port, host, origins, gate, lan, allowHo
   // a value-only edit's and a scrub's. Optimised (host-dev), built as the
   // loop starts and again after any edit that is not a design's, so it is
   // the compiler the builds use; until it is, the debug compiler answers.
-  const tool = { path: resolve(process.env.CARGO_TARGET_DIR ? resolve(process.env.CARGO_TARGET_DIR) : resolve(root, 'target'), `host-dev/exact-web-js${EXE}`), ready: false, built: null, child: null, reading: null, cleaner: null };
+  // Where this build is not fresh, a tool set's compiler is the reader
+  // (`set`), and nothing is built (LLP 1174 D5).
+  const ownTool = resolve(process.env.CARGO_TARGET_DIR ? resolve(process.env.CARGO_TARGET_DIR) : resolve(root, 'target'), `host-dev/exact-web-js${EXE}`);
+  const tool = { path: ownTool, set: false, ready: false, built: null, child: null, reading: null, cleaner: null };
+  // Whether the reader is still what its sources make: its own build by its dep-info, or the set it was taken from.
+  const toolCurrent = () => (tool.set ? fromSets('exact-web-js')?.path === tool.path : fresh(tool.path, depInfoOf(tool.path)));
   const patcher = { child: null, built: null, asks: new Map(), n: 0 };
   const toolExits = new Set(), inspections = new Set();
   const stopGroup = child => {
@@ -364,7 +369,18 @@ export async function devJs({ app, dist, port, host, origins, gate, lan, allowHo
   const buildTool = () => {
     if (stopping) return;
     tool.ready = false;
+    const waited = tool.child || tool.cleaner;
     stopGroup(tool.child);
+    if (!fresh(ownTool, depInfoOf(ownTool))) {
+      const set = fromSets('exact-web-js');
+      if (set || rustMissing()) {
+        Object.assign(tool, { path: set?.path ?? ownTool, set: !!set, ready: !!set, built: null, child: null });
+        console.log(set ? 'design reader ready (a tool set\'s)' : `the design reader did not build (design edits take the full build):\n${new RustMissing('exact-web-js').message}`);
+        if (waited) resumeAfterReader();
+        return;
+      }
+    }
+    Object.assign(tool, { path: ownTool, set: false });
     const started = new Date();
     const child = tool.child = spawn('cargo', ['build', '-q', '--profile', 'host-dev', '-p', 'exact-web-js'], { cwd: root, stdio: ['ignore', 'ignore', 'pipe'], detached: true });
     let err = '';
@@ -407,13 +423,13 @@ export async function devJs({ app, dist, port, host, origins, gate, lan, allowHo
   // edit the loop does not watch, under contract/ or kernel/, rebuilds it).
   const toolFresh = () => {
     if (!tool.ready) return false;
-    if (fresh(tool.path, depInfoOf(tool.path))) return true;
+    if (toolCurrent()) return true;
     buildTool();
     return false;
   };
   // The same, starting nothing: for what a request below write scope reaches
   // (`propose`'s class, stage 10 A1), which may not start a build.
-  const toolReady = () => tool.ready && fresh(tool.path, depInfoOf(tool.path));
+  const toolReady = () => tool.ready && toolCurrent();
   buildTool();
   // The page's inspect table (LLP 1122 T2b, inspect.rs), made for dist's
   // plan when the page first asks (seconds for a large app, so no build
@@ -426,7 +442,8 @@ export async function devJs({ app, dist, port, host, origins, gate, lan, allowHo
       tables.set(digest, new Promise((done) => {
         // (this loop's own: another loop on one target/ may make the same plan's table, and removes its own)
         const out = resolve(app.target, `inspect-${digest}-${process.pid}.json`);
-        const compiler = toolFresh() ? launch(tool.path) : webCompiler();
+        let compiler;
+        try { compiler = toolFresh() ? launch(tool.path) : webCompiler(); } catch (error) { tables.delete(digest); console.log(`inspect table: ${error.message}`); return done(null); }
         const child = spawn(compiler.cmd, [...compiler.pre, 'inspect-table', plan, out], { cwd: root, env: compiler.env, stdio: ['ignore', 'ignore', 'pipe'], detached: true });
         inspections.add(child);
         child.once('close', () => inspections.delete(child));
@@ -449,7 +466,8 @@ export async function devJs({ app, dist, port, host, origins, gate, lan, allowHo
   // only, as it is, never a build or the `cargo run` fallback.
   const designOf = (text, { readOnly = false } = {}) => new Promise((done) => {
     if (readOnly && !toolReady()) return done({ error: 'the design reader is not built' });
-    const compiler = readOnly || toolFresh() ? launch(tool.path) : webCompiler();
+    let compiler;
+    try { compiler = readOnly || toolFresh() ? launch(tool.path) : webCompiler(); } catch (error) { return done({ error: error.message }); }
     // A group: the debug fallback is a `cargo run`, stopped with its compilers.
     const child = tool.reading = spawn(compiler.cmd, [...compiler.pre, 'design', resolve(app.dir, 'app.contract'), '-'], { cwd: root, env: compiler.env, stdio: ['pipe', 'pipe', 'pipe'], detached: true });
     child.on('error', (e) => done({ error: e.message }));
@@ -507,7 +525,7 @@ export async function devJs({ app, dist, port, host, origins, gate, lan, allowHo
   // The variant gallery (dev-gallery.mjs), started by its first page: told of each publication after it is out.
   const gallery = galleryLoop({ app, root, appDist: dist, channel: () => tamber?.channel, design: () => design?.digest ?? null, idleMs: Number(process.env.EXACT_DEV_GALLERY_IDLE_MS) || undefined,
     // (The reader's binary while it is fresh, asked without building it or the reader again; else no table yet.)
-    tableTool: () => (tool.ready && tool.path && fresh(tool.path, depInfoOf(tool.path)) ? launch(tool.path) : null),
+    tableTool: () => (tool.ready && tool.path && toolCurrent() ? launch(tool.path) : null),
     compiler: () => { const copy = compilerCopy(app); return freshCompiler(copy) ? copy : null; },
     client: (n) => client(n, null, { base: '/__dev/gallery', stream: '/__dev/gallery/stream', page: 'gallery' }) });
   const rebuild = async () => {

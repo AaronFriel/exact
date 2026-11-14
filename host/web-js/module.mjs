@@ -18,7 +18,7 @@ import { withHostDeployment } from '../../scripts/filesystem.mjs';
 import { replaceBuild } from '../web/serve.mjs';
 import { proofInputs } from '../../game/inputs.mjs';
 import { keptProducts } from '../../scripts/kept.mjs';
-import { launch } from '../../scripts/tools.mjs';
+import { RustMissing, fromSet, fromSets, fetchedAllowed, launch, rustMissing } from '../../scripts/tools.mjs';
 import { EXE } from '../../scripts/paths.mjs';
 export { EXE };
 import { BINARYEN_DOWNLOAD } from '../web/stages.mjs';
@@ -310,10 +310,10 @@ export async function moduleGrants(path) {
 /** Markdown pieces (LLP 1045 D3) as a loaded capability for the runtime:
  * the web host's own `exact_web_capabilities::markdown::pieces`, exported
  * alone from a wasm module the page fetches on its first Markdown node. */
-export function buildMarkdown({ out = resolve(MODULES, 'markdown'), keepFresh = false } = {}) {
+export function buildMarkdown({ own = false, out = resolve(MODULES, 'markdown'), keepFresh = false } = {}) {
   const ws = readFileSync(resolve(root, 'Cargo.toml'), 'utf8');
   const patch = ws.slice(ws.indexOf('[patch.crates-io]')).split('\n[')[0].replace(/path = "vendor/g, `path = "${root}/vendor`);
-  return buildLeaf('markdown', 'exact-web-capabilities', 'host/web-capabilities', { out, keepFresh, patch, lib: `//! Generated: Markdown pieces for the JS runtime.
+  return buildLeaf('markdown', 'exact-web-capabilities', 'host/web-capabilities', { out, keepFresh, own, patch, lib: `//! Generated: Markdown pieces for the JS runtime.
 static mut OUT: Vec<u8> = Vec::new();
 #[no_mangle]
 pub extern "C" fn alloc(len: usize) -> *mut u8 { let mut v = Vec::<u8>::with_capacity(len); let p = v.as_mut_ptr(); std::mem::forget(v); p }
@@ -340,47 +340,93 @@ pub extern "C" fn output() -> *const u8 { unsafe { OUT.as_ptr() } }
 /** The motion capability (LLP 1071 §7): `exact-web-js-motion`'s exports,
  * the one `exact_motion` Engine, as a wasm module the page fetches after
  * first paint when its plan uses motion. */
-export function buildMotion({ out = resolve(MODULES, 'motion'), keepFresh = false } = {}) {
-  return buildLeaf('motion', 'exact-web-js-motion', 'host/web-js/motion', { out, keepFresh });
+export function buildMotion({ own = false, out = resolve(MODULES, 'motion'), keepFresh = false } = {}) {
+  return buildLeaf('motion', 'exact-web-js-motion', 'host/web-js/motion', { out, keepFresh, own });
 }
 
 /** The Markdown editor's rules (LLP 1045 D5), the crate the wasm host's
  * build makes its `markup-editor.wasm` from. */
-export function buildEditor({ out = resolve(MODULES, 'editor'), keepFresh = false } = {}) {
-  return buildLeaf('markup-editor', 'exact-markdown-editor', 'markdown/editor', { out, keepFresh });
+export function buildEditor({ own = false, out = resolve(MODULES, 'editor'), keepFresh = false } = {}) {
+  return buildLeaf('markup-editor', 'exact-markdown-editor', 'markdown/editor', { out, keepFresh, own });
 }
 
 /** The exclusions walker (LLP 1043.000 §3 D7): `exact-textflow`'s
  * `textflow-web` binary, as the wasm build builds its `textflow.wasm`. */
-export async function buildFlow({ out = resolve(MODULES, 'flow'), keepFresh = false } = {}) {
+export async function buildFlow({ out = resolve(MODULES, 'flow'), keepFresh = false, own = false } = {}) {
   mkdirSync(out, { recursive: true });
-  const target = leafTarget('flow'), product = resolve(target, 'wasm32-unknown-unknown/web/textflow-web.wasm'), wasm = resolve(out, 'textflow.wasm');
-  const depInfo = product.replace(/\.wasm$/, '.d');
+  const { product, depInfo } = FLOW, wasm = resolve(out, 'textflow.wasm'), target = leafTarget('flow');
   // Its group asks rustc and wasm-opt for their versions: only when it is needed.
   const at = () => kept({ name: 'textflow.wasm', crate: 'exact-textflow', product, depInfo, file: wasm, toolchain: WEB, group: ['textflow-web', 'web', WASM_FLAGS_KEY(), OPT, WASM_OPT()],
     buildDirs: [resolve(target, 'wasm32-unknown-unknown/web/build'), resolve(target, 'web/build')], stamp: resolve(MODULES, 'kept', 'textflow.json') });
   // Built again only when something it was built from changed (`fresh`). A
   // prebuild keeps one built earlier on its receipt, or builds it again.
-  if (fresh(wasm, depInfo)) {
+  // `own` (a tool set's): Cargo's build, whose dep-info the set records, never a copy that is merely newer.
+  if (!own && fresh(wasm, depInfo)) {
     if (!keepFresh) return wasm;
     const again = at().keepAgain();
     if (again !== null) { held.set('textflow.wasm', again); return wasm; }
     rmSync(product, { force: true });
   }
-  const leaf = at(), taken = leaf.find();
-  if (taken) { replace(wasm, (temp) => cpSync(taken, temp)); held.set(wasm.split('/').at(-1), true); return wasm; }
+  const leaf = own ? null : taken('textflow.wasm', at);
+  if (leaf?.path) { replace(wasm, (temp) => cpSync(leaf.path, temp)); held.set('textflow.wasm', leaf.kept); return wasm; }
   const started = Date.now();
   const r = await run('cargo', [`+${WEB}`, 'build', '--profile', 'web', '--target', 'wasm32-unknown-unknown', '-p', 'exact-textflow', '--bin', 'textflow-web', ...LINK_FLAGS()],
     { cwd: root, env: { ...process.env, CARGO_TARGET_DIR: target } });
   if (r.status !== 0) throw new Error('textflow.wasm did not build');
   const optimizedFlow = await replace(wasm, async (temp) => !unoptimized.has(await optimizeAsync(product, temp, 'textflow.wasm')));
-  held.set('textflow.wasm', optimizedFlow && leaf.keep(started));
+  held.set('textflow.wasm', optimizedFlow && at().keep(started));
   return wasm;
+}
+const FLOW = { product: resolve(leafTarget('flow'), 'wasm32-unknown-unknown/web/textflow-web.wasm'), depInfo: resolve(leafTarget('flow'), 'wasm32-unknown-unknown/web/textflow-web.d') };
+
+/** A leaf from where D5's order takes it, short of Cargo (LLP 1174): a tool set built on this machine, a module kept
+ * for the machine (`at()`, which only a Rust toolchain can match), or a fetched set where one may run, as
+ * `{ path, kept }` (whether the machine's cache holds it); null where Cargo builds it, which throws `RustMissing`
+ * when Rust is missing. */
+function taken(name, at) {
+  const built = fromSet(name, 'built');
+  if (built) return { path: built.path, kept: true };
+  const missing = rustMissing();
+  const kept = missing ? null : at().find();
+  if (kept) return { path: kept, kept: true };
+  const fetched = fetchedAllowed() ? fromSet(name, 'fetched') : null;
+  if (fetched) return { path: fetched.path, kept: true };
+  if (missing) throw new RustMissing(name);
+  return null;
+}
+/** Whether the leaf `flag` names (host/web-js/build.mjs's `<flag>.flag`) is built and fresh here, or a tool set
+ * holds it: then the web build needs no web toolchain for it. */
+export function leafTaken(flag) {
+  const [name, wasm, depInfo] = { markdown: ['markdown.wasm', ...leafAt('markdown')], motion: ['motion.wasm', ...leafAt('motion')], editor: ['markup-editor.wasm', ...leafAt('markup-editor')],
+    flow: ['textflow.wasm', resolve(MODULES, 'flow/textflow.wasm'), FLOW.depInfo] }[flag];
+  return fresh(wasm, depInfo) || !!fromSets(name);
+}
+/** A `buildLeaf` module's output and the dep-info Cargo writes for it. */
+function leafAt(name) {
+  const dir = name === 'markup-editor' ? 'editor' : name;
+  return [resolve(MODULES, dir, `${name}.wasm`), resolve(leafTarget(name), 'wasm32-unknown-unknown/release', `exact_js_${name.replaceAll('-', '_')}.d`)];
+}
+
+/** Each leaf built here by Cargo, never taken (`tools.mjs keep`), with what its tool set's manifest records: where
+ * its dep-info and build scripts are, and what else decides its bytes. */
+export async function leafRecipes() {
+  const flags = WASM_FLAGS_KEY(), wasmOpt = WASM_OPT()?.trim() ?? null;
+  const leaves = [['markdown.wasm', 'exact-web-capabilities', buildMarkdown, 'markdown'], ['motion.wasm', 'exact-web-js-motion', buildMotion, 'motion'], ['markup-editor.wasm', 'exact-markdown-editor', buildEditor, 'markup-editor']];
+  const recipes = await Promise.all(leaves.map(async ([name, crate, build, dir]) => {
+    const wasm = await build({ own: true });
+    if (unoptimized.has(wasm)) throw new Error(`${name} is not optimized (wasm-opt), and a tool set's leaves are`);
+    const release = resolve(leafTarget(dir), 'wasm32-unknown-unknown/release');
+    return { name, crate, wasm, profile: 'release', toolchain: WEB, flags, wasmOpt, depInfo: leafAt(dir)[1], buildDirs: [resolve(release, 'build'), resolve(leafTarget(dir), 'release/build')] };
+  }));
+  const wasm = await buildFlow({ own: true }), target = leafTarget('flow');
+  if (unoptimized.has(wasm)) throw new Error('textflow.wasm is not optimized (wasm-opt), and a tool set\'s leaves are');
+  return [...recipes, { name: 'textflow.wasm', crate: 'exact-textflow', wasm, profile: 'web', toolchain: WEB, flags, wasmOpt, depInfo: FLOW.depInfo,
+    buildDirs: [resolve(target, 'wasm32-unknown-unknown/web/build'), resolve(target, 'web/build')] }];
 }
 
 // A workspace crate's exports as a size-built wasm module: `<name>.wasm`,
 // in its own target directory, so the leaves an app uses build at once.
-async function buildLeaf(name, pkg, dir, { out, keepFresh, patch = '', lib }) {
+async function buildLeaf(name, pkg, dir, { out, keepFresh, own = false, patch = '', lib }) {
   const crate = resolve(out, 'crate');
   mkdirSync(resolve(crate, 'src'), { recursive: true });
   const ws = readFileSync(resolve(root, 'Cargo.toml'), 'utf8');
@@ -413,19 +459,19 @@ ${patch}`;
     buildDirs: [resolve(release, 'build'), resolve(target, 'release/build')], stamp: resolve(MODULES, 'kept', `${name}.json`) });
   // Built again only when something it was built from changed (`fresh`). A
   // prebuild keeps one built earlier on its receipt, or builds it again.
-  if (fresh(wasm, depInfo, [resolve(crate, 'Cargo.toml')])) {
+  if (!own && fresh(wasm, depInfo, [resolve(crate, 'Cargo.toml')])) {
     if (!keepFresh) return wasm;
     const again = at().keepAgain();
     if (again !== null) { held.set(`${name}.wasm`, again); return wasm; }
     rmSync(product, { force: true });
   }
-  const leaf = at(), taken = leaf.find();
-  if (taken) { replace(wasm, (temp) => cpSync(taken, temp)); held.set(wasm.split('/').at(-1), true); return wasm; }
+  const leaf = own ? null : taken(`${name}.wasm`, at);
+  if (leaf?.path) { replace(wasm, (temp) => cpSync(leaf.path, temp)); held.set(`${name}.wasm`, leaf.kept); return wasm; }
   const started = Date.now();
   const r = await run('cargo', cargoWasmArgs(resolve(crate, 'Cargo.toml')), { env: { ...process.env, CARGO_TARGET_DIR: target } });
   if (r.status !== 0) throw new Error(`${name}.wasm did not build`);
   const optimizedLeaf = await replace(wasm, async (temp) => !unoptimized.has(await optimizeAsync(product, temp, `${name}.wasm`)));
-  held.set(`${name}.wasm`, optimizedLeaf && leaf.keep(started));
+  held.set(`${name}.wasm`, optimizedLeaf && at().keep(started));
   return wasm;
 }
 
@@ -456,9 +502,11 @@ export function withInspectHooks(file, text) {
 export const withRuntimeStamp = (text, files) => text.replace('"exact-runtime-unstamped"', JSON.stringify(createHash('sha256').update(files.map(f => `${f.path}\0${f.text}`).join('\0')).digest('hex').slice(0, 24)));
 export const withoutDev = (text) => text.replace(/^[ \t]*\/\/ dev-only \{.*\n[\s\S]*?^[ \t]*\/\/ dev-only \}.*\n/gm, '');
 
-/** The plan-to-JavaScript compiler (`exact-web-js`) to `launch`: its binary
- * when nothing it was built from changed, one kept for the machine, or
- * `cargo run`, whose binary `done()` keeps. */
+/** The plan-to-JavaScript compiler (`exact-web-js`) to `launch`, in LLP 1174
+ * D5's order: its binary when nothing it was built from changed, a tool set's
+ * built on this machine, one kept for the machine, a fetched set's where one
+ * may run, or `cargo run`, whose binary `done()` keeps. Throws `RustMissing`
+ * where only Cargo could answer and Rust is missing. */
 const COMPILER = resolve(TARGET_DIR, `debug/exact-web-js${EXE}`);
 const compilerKept = () => kept({ crate: 'exact-web-js', product: COMPILER, depInfo: depInfoOf(COMPILER), group: ['debug'], buildDirs: [resolve(TARGET_DIR, 'debug/build')], stamp: resolve(MODULES, 'kept', 'exact-web-js.json') });
 /** `fresh`, for a compiler binary: also stale after an edit to the lockfile
@@ -479,11 +527,23 @@ export function webCompiler() {
   const fast = process.env.EXACT_WEB_COMPILER;
   if (fast && freshCompiler(fast)) return launch(fast);
   if (freshCompiler(COMPILER)) return launch(COMPILER);
-  const at = compilerKept();
-  const taken = at.find();
+  const built = fromSet('exact-web-js', 'built');
+  if (built) return launch(built.path);
+  const missing = rustMissing(), at = compilerKept();
+  const taken = missing ? null : at.find();
   if (taken) return launch(taken);
+  const fetched = fetchedAllowed() ? fromSet('exact-web-js', 'fetched') : null;
+  if (fetched) return launch(fetched.path);
+  if (missing) throw new RustMissing('exact-web-js');
   const started = Date.now();
   return launch('cargo', ['run', '-q', '-p', 'exact-web-js', '--'], () => at.keep(started));
+}
+/** The tool set `webCompiler` takes the compiler from, when it would take it from one (null when this checkout's
+ * own build is fresh, or no set matches): the web build then reads the set's record in place of Cargo's (LLP 1174 D5). */
+export function compilerSet() {
+  const fast = process.env.EXACT_WEB_COMPILER;
+  if ((fast && freshCompiler(fast)) || freshCompiler(COMPILER)) return null;
+  return fromSets('exact-web-js')?.set ?? null;
 }
 
 /** Everything an app's web build shares, compiled where it is not yet and

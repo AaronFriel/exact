@@ -48,7 +48,7 @@ import { basename, delimiter, dirname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { grantAdvice } from './grant-advice.mjs';
 import { installIn } from './package-manager.mjs';
-import { toolEnv } from './tools.mjs';
+import { builtContract, contractTool, launch, toolEnv } from './tools.mjs';
 export { grantAdvice, grantLines } from './grant-advice.mjs';
 const { cargoEnvironment, appleExecutableName, HERMES_INSTALLER, hermesBundle, hermesTarget, pathFrom, resolveApp, WEB_TOOLCHAIN, webToolchainEnv } = await import('./app.mjs');
 const { applyPattern, createApp, createGame, patternList, rustApp, UNCACHED_CRATES, wireSnapback } = await import('../game/new.mjs');
@@ -635,10 +635,6 @@ export function printReport(rows, {onlyMissing = false} = {}) {
     console.log(`${mark} ${row.name}: ${row.have} (SDK ${row.want})${row.need ? ` — for ${row.need}` : ''}${row.ok ? '' : `\n          ${row.fix}`}`);
   }
 }
-/** `exact contract …` — this checkout's compiler, from anywhere (LLP 1086 D4).
- * Debug, as the guides use it; the pinned toolchain whatever rustup would pick
- * from the caller's directory; exact2's own target/, never an inherited one
- * (an app's, or another checkout's). */
 /** Cargo with the pinned toolchain, in this checkout's own target, on the Contract compiler: `run` or `build`. */
 function compilerCargo(verb, env = process.env) {
   const pin = Bun.TOML.parse(readFileSync(resolve(ROOT, 'rust-toolchain.toml'), 'utf8')).toolchain.channel;
@@ -658,21 +654,24 @@ function prebuildCompiler() {
   if (!existsSync(COMPILER)) console.log(`\nBuilding the Contract compiler in the background (pid ${child.pid}), so \`contract\` answers at once when you need it.`);
 }
 
-export function contract(args, env = process.env) {
-  const cargo = compilerCargo('run', env), binary = COMPILER;
-  if (!existsSync(binary)) console.error('exact contract: building the Contract compiler once (about a minute on a cold checkout; `exact new` starts it in the background)…');
+/** `exact contract …` — this checkout's compiler, from anywhere (LLP 1086 D4), in LLP 1174 D5's order: its debug build
+ * (as the guides use it) while fresh, a tool set's, or Cargo: the pinned toolchain whatever rustup would pick from the
+ * caller's directory, in exact2's own target/, never an inherited one (an app's, or another checkout's). */
+export async function contract(args, env = process.env) {
   // `build --json` is one JSON array on stdout and nothing on stderr: the compiler's diagnostics, then app.ts's.
   const json = args[0] === 'build' && args.includes('--json');
-  const result = spawnSync('cargo', [...cargo.args, '--', ...args], {stdio: ['inherit', json ? 'pipe' : 'inherit', 'inherit'], env: cargo.env, encoding: 'utf8', maxBuffer: 1 << 26});
-  if (result.error) throw new Error(`cargo: ${result.error.message} (install rustup from https://rustup.rs)`);
-  // Cargo's own failures exit 101; one that is not rustup's refuses `+<pin>` before the compiler runs.
-  if (result.status === 101) { const fault = cargoProxyFault(cargo.pin, cargo.env); if (fault) console.error(`exact contract: ${fault}`); }
   // A build of an app's `app.contract` refreshes the types its `app.ts` imports (LLP 1116.001 D4.5); of unsaved text
   // (`--stdin`), whose types no file holds, neither refreshes them nor type-checks app.ts.
   const input = args[0] === 'build' && !args.includes('--stdin') ? args.slice(1).find((arg, i, rest) => !arg.startsWith('-') && rest[i - 1] !== '-o') : null;
+  const cargo = compilerCargo('run', env), tool = await contractTool({ cmd: 'cargo', pre: [...cargo.args, '--'], env: cargo.env }, { env, json, file: input ?? '' });
+  if (!tool) return 1;
+  const result = spawnSync(tool.cmd, [...tool.pre, ...args], {stdio: ['inherit', json ? 'pipe' : 'inherit', 'inherit'], env: tool.env, encoding: 'utf8', maxBuffer: 1 << 26});
+  if (result.error) throw new Error(`${tool.cmd}: ${result.error.message}${tool.cmd === 'cargo' ? ' (install rustup from https://rustup.rs)' : ''}`);
+  // Cargo's own failures exit 101; one that is not rustup's refuses `+<pin>` before the compiler runs.
+  if (result.status === 101 && tool.cmd === 'cargo') { const fault = cargoProxyFault(cargo.pin, cargo.env); if (fault) console.error(`exact contract: ${fault}`); }
   if (result.status === 0 && input && basename(input) === 'app.contract') {
     const dir = dirname(resolve(input));
-    refreshTypes(dir, binary, {quiet: json});
+    refreshTypes(dir, tool.cmd === 'cargo' ? launch(COMPILER) : tool, {quiet: json});
     // `--errors-only` leaves out the check's warnings in either form: captured, then said without them.
     const errorsOnly = args.includes('--errors-only'), checked = checkTypes(dir, {capture: json || errorsOnly});
     if (!json && errorsOnly) process.stderr.write(checked.report.split(/(?<=\n)/).filter((line) => !line.startsWith('warning: ') && !/^.+:\d+:\d+ warning \[[\w-]+\] /.test(line)).join(''));
@@ -760,11 +759,11 @@ export function checkWarnings(report, dir) {
  * only when they changed: when a source's signature did (LLP 1116.001 D4.5). The web build and
  * the native development bake write the same file the same way, so a builder never runs the
  * step. Reports a rewrite in one line on stderr, so `--json` stays the build's reply;
- * returns whether it wrote. */
-export function refreshTypes(dir, binary = resolve(ROOT, 'target/debug', process.platform === 'win32' ? 'contract.exe' : 'contract'), {quiet = false} = {}) {
+ * returns whether it wrote. `tool` (`launch`): by default this checkout's debug build, or a tool set's. */
+export function refreshTypes(dir, tool = builtContract(), {quiet = false} = {}) {
   const ts = resolve(dir, 'app.ts'), out = resolve(dir, 'app.contract.d.ts');
-  if (!existsSync(ts) || !existsSync(binary)) return false;
-  const types = spawnSync(binary, ['types', resolve(dir, 'app.contract')], {encoding: 'utf8', maxBuffer: 1 << 26, env: toolEnv()});
+  if (!existsSync(ts) || !tool || !existsSync(tool.cmd)) return false;
+  const types = spawnSync(tool.cmd, [...tool.pre, 'types', resolve(dir, 'app.contract')], {encoding: 'utf8', maxBuffer: 1 << 26, env: tool.env});
   if (types.status !== 0) return false;
   const text = types.stdout;
   const before = existsSync(out) ? readFileSync(out, 'utf8') : null;
@@ -783,7 +782,7 @@ async function newApp(path, {update = false, without = null, with: platforms = [
       console.log(wireSnapback(path, {artifactOnly:true}));
     // A file names what it uses (LLP 1091 D1): an app written before module
     // scope gets the `use` lines its files lack, as `contract fmt --uses` writes them.
-    if (contract(['fmt', '--uses', resolve(path, 'app.contract')]) !== 0)
+    if (await contract(['fmt', '--uses', resolve(path, 'app.contract')]) !== 0)
       console.log('The `use` lines above that no rule writes are the author\'s; `bun exact.mjs contract build app.contract` names them.');
     return;
   }
@@ -1396,18 +1395,18 @@ async function main(argv) {
   }
   if (verb === 'list') return list();
   // The compiler parses its own flags; its help is printed here, so asking compiles nothing (LLP 1116 D4).
-  if (verb === 'contract') return process.exit(argv.includes('--help') || argv.includes('-h') ? (console.log(helpText('contract')), 0) : contract(argv.slice(1)));
+  if (verb === 'contract') return process.exit(argv.includes('--help') || argv.includes('-h') ? (console.log(helpText('contract')), 0) : await contract(argv.slice(1)));
   // An app's design on its own (LLP 1121 D2): the compiler's `tamber` verbs.
   if (verb === 'tamber' && (argv.includes('--help') || argv.includes('-h'))) return console.log(helpText('tamber'));
   // The design server's wire and its scripted client (LLP 1121 D13): development only.
   if (verb === 'tamber' && name === 'serve') return import('./tamber-server.mjs').then(m => m.serveAlone(rest)).then(code => process.exit(code));
   // A stylesheet's custom properties written into app.tamber (LLP 1153 D6): the compiler's, with no server.
-  if (verb === 'tamber' && name === 'import' && rest[0] === 'css') return process.exit(contract(['tamber', ...argv.slice(1)]));
+  if (verb === 'tamber' && name === 'import' && rest[0] === 'css') return process.exit(await contract(['tamber', ...argv.slice(1)]));
   if (verb === 'tamber' && name === 'import') return import('./tamber-server.mjs').then(m => m.importTheme(rest)).then(code => process.exit(code));
   if (verb === 'tamber' && name === 'op') return import('./tamber-server.mjs').then(m => m.op(rest)).then(code => process.exit(code));
   if (verb === 'tamber' && name === 'pair') return import('./tamber-pairing.mjs').then(m => m.pairCode(rest)).then(code => process.exit(code));
   if (verb === 'tamber' && name === 'tool') return import('./tamber-server.mjs').then(m => m.toolCommand(rest)).then(code => process.exit(code));
-  if (verb === 'tamber') return process.exit(contract(['tamber', ...argv.slice(1)]));
+  if (verb === 'tamber') return process.exit(await contract(['tamber', ...argv.slice(1)]));
   if (verb === 'hatch') return hatch(guardFlags('hatch', argv.slice(1)));
   if (verb === 'add') return add(guardFlags('add', argv.slice(1)));
   if (verb === 'pattern') return pattern(guardFlags('pattern', argv.slice(1)));

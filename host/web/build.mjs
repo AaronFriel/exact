@@ -42,7 +42,8 @@ import { authClientMetadata, checkModuleRoster, gpuModules, markWorlds, rustPoli
 import { webAudioSession, webCspFile, webHead } from '../../scripts/web-head.mjs';
 import { buildRust, rustFiles, rustCards, rustPackage } from '../../scripts/rust.mjs';
 import { webAppManifest, webDist, copyShaders, bakeOutput, bakeWatchEnv, buildBake, contractLast, readBake, verifyBakeFiles, developmentBuildEnv, resolveApp, webToolchainEnv } from '../../scripts/app.mjs';
-import { buildEditor, buildFlow } from '../web-js/module.mjs';
+import { buildEditor, buildFlow, compilerSet } from '../web-js/module.mjs';
+import { RustMissing, WEB_CRATES, rustMissing, setMetadata } from '../../scripts/tools.mjs';
 import { closeFilesystemReader } from '../../scripts/filesystem.mjs';
 import { guardFlags, reportBuilt } from '../../scripts/help.mjs';
 import { BINARYEN_DOWNLOAD, optimizeWasm, splitStages, unsplitReason } from './stages.mjs';
@@ -95,7 +96,11 @@ export function webSourceRoots(app, js, render = 'rust') {
     for (const name of ['Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml', '.cargo/config.toml', '.cargo/config']) files.add(resolve(metadata.workspace_root, name));
     workspaces.push({ metadata, packages: local });
   };
-  closure(webMetadata(SDK_ROOT), ['exact-web-js', 'exact-web', 'exact-js-bake', 'exact-markdown-editor', 'exact-web-js-motion', 'exact-textflow']);
+  // The compiler and the leaves from a tool set: its record of Cargo's answer, and Cargo is not asked (LLP 1174 D5).
+  const set = js ? compilerSet() : null, recorded = set && setMetadata(set);
+  // Without Rust only a set answers what Cargo would: said as that, not as `cargo metadata` failing (LLP 1174 D5).
+  if (js && !set && rustMissing()) throw new RustMissing('exact-web-js');
+  closure(recorded ?? webMetadata(SDK_ROOT), WEB_CRATES);
   const names = [], build = resolve(app.dir, 'web/build.rs');
   const authored = existsSync(build) && !/^\s*fn main\(\)\s*\{\s*exact_js_bake::build\w*\(/m.test(readFileSync(build, 'utf8'));
   if (app.crate) {
@@ -122,6 +127,10 @@ export function webSourceRoots(app, js, render = 'rust') {
     if (directory || (watch && !info)) roots.add(path);
     if (!directory) files.add(path);
   };
+  // What the set's products were built from beyond their crates' directories: includes and build-script watches.
+  // (A source build finds the same in the target directory's dep-info, the Contract compiler's and the filesystem
+  // helper's included.)
+  if (recorded) for (const product of Object.values(set.manifest.products)) for (const [file] of product.inputs) add(resolve(SDK_ROOT, file), true);
   const targetsOf = workspaces.flatMap(({ packages }) => packages.flatMap(pkg => pkg.targets ?? []));
   const sources = new Set(targetsOf.map(target => resolve(target.src_path)));
   // rustc names a target's dep-info after its crate (`<crate>-<hash>.d`, `lib<crate>.d`, `<crate>.d`), so the
@@ -230,7 +239,8 @@ const [{ rolldown }, { minifySync }] = await Promise.all([import('rolldown'), im
 // build, and what it refuses is an error; `--wasm` is internal (below).
 const game = app.manifest.game !== undefined;
 const jsTarget = target !== '--wasm' && !game && !bakeOnly;
-const inputRoots = webSourceRoots(app, jsTarget, render[1] ?? 'rust');
+let inputRoots;
+try { inputRoots = webSourceRoots(app, jsTarget, render[1] ?? 'rust'); } catch (error) { if (!error.rustMissing) throw error; console.error(error.message); process.exit(1); }
 if (checkOnly) {
   if (!jsTarget) {
     webToolchainEnv(developmentBuildEnv());

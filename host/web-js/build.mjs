@@ -30,7 +30,7 @@ import { transformSync, parseSync, Visitor } from 'rolldown/utils';
 import { copyGpuCache } from './gpu-cache.mjs';
 import { analyze } from './page-style.mjs';
 import { bundleHostModule, gateAgent, localImports, stageHostGlue } from './glue.mjs';
-import { bakedRustSource, buildEditor, buildFlow, buildMarkdown, buildModule, buildMotion, fresh, moduleGrants, webCompiler, inspectHooked, withInspectHooks, withoutDev, withRuntimeStamp } from './module.mjs';
+import { bakedRustSource, buildEditor, buildFlow, buildMarkdown, buildModule, buildMotion, fresh, leafTaken, moduleGrants, webCompiler, inspectHooked, withInspectHooks, withoutDev, withRuntimeStamp } from './module.mjs';
 import { developmentStore } from '../../scripts/agent-launch.mjs';
 import { settingLines } from '../../js/bake/src/__exact_env.mjs';
 import { colorSchemeMeta, interfaceStyle, withInterfaceStyle, withLook } from '../web/look.mjs';
@@ -227,17 +227,18 @@ if (existsSync(gpuLib) && !checkOnly && !prerequisitesOnly) {
 // The compiler, run as its built binary when nothing it was built from
 // changed (module.mjs `fresh`; `cargo run`'s own check costs ~0.4 s an edit),
 // or as the one another checkout of this machine built from these sources.
-const compiler = webCompiler();
+// Where only Cargo could build it and Rust is missing, said as that, not as a failed check (LLP 1174 D5).
+const rustMissing = (error) => { if (!error.rustMissing) throw error; console.error(error.message); process.exit(1); };
+let compiler;
+try { compiler = webCompiler(); } catch (error) { rustMissing(error); }
 const cargo = spawnSync(compiler.cmd, [...compiler.pre, 'js', input, '-o', gen, '--app', appDir, ...(production ? [] : ['--sites']), ...(devReload ? ['--dev-reload'] : [])], { cwd: root, stdio: checkOnly ? ['ignore', 'ignore', 'pipe'] : 'inherit', encoding: 'utf8', env: { ...compiler.env, EXACT_JS_GPU_SURFACES: (gpuSurfaces ?? []).join(',') } });
-// With no built compiler and no cargo, the build, and app.ts's type check with it, cannot run: said as that, not as a
-// failed check (#460).
-if (cargo.error?.code === 'ENOENT') { console.error(`error [rust-missing]: ${app}: the web compiler (exact-web-js) builds with Rust, and cargo is not on PATH: install rustup from https://rustup.rs, then run bun ${join(root, 'scripts/exact.mjs')} setup`); process.exit(1); }
 if (cargo.status !== 0) { if (checkOnly) process.stderr.write(cargo.stderr ?? ''); process.exit(cargo.status ?? 1); }
 compiler.done();
 const leaves = [['markdown', buildMarkdown, 'markdown.wasm'], ['motion', buildMotion, 'motion.wasm'], ['editor', buildEditor, 'markup-editor.wasm'], ['flow', buildFlow, 'textflow.wasm']]
   .filter(([flag]) => existsSync(resolve(gen, `${flag}.flag`)));
 if (!checkOnly || prerequisitesOnly) {
-  if (rust || leaves.length) webToolchainEnv(process.env);
+  // Not for a leaf built and fresh, or a tool set's (LLP 1174 D5).
+  if (rust || leaves.some(([flag]) => !leafTaken(flag))) webToolchainEnv(process.env);
   if (prerequisitesOnly) process.exit(0);
 }
 const runtime = ['rt.js', 'clock.js', 'resources.js', 'tree.js', 'events.js', 'pieces.js', 'mount.js', 'strings.js', 'request-send.js', 'presence-bindings.js', 'rows.js', 'resource-inspection.js', 'rt-link.js', 'generation-reload.js', 'elements.js', 'editor.js', 'live-time.js', 'font-family.js', 'observers.js', 'grid.js', 'overlay.js', 'roster.js', 'router.js', 'route-pattern.js', 'schedule.js', 'each.js', 'timer-waits.js', 'timer-observations.js', 'budget.js', 'shape.js', 'pointer.js', 'document.js', 'media.js', 'links.js', 'commands.js', 'focus.js', 'backdrop.js', 'persist.js', 'chosen.js', 'modes.js', 'follow.js', 'beat.js', 'regions.js', 'said.js', 'held.js', 'uploads.js', 'lower.js'];
@@ -1040,7 +1041,7 @@ if (auth) {
 // motion engine (host/web-js/motion), the Markdown editor's rules
 // (exact-markdown-editor) and the exclusions walker (exact-textflow's
 // `textflow-web`), each beside its chunk.
-await Promise.all(leaves.map(async ([, build, name]) => cpSync(await build(), resolve(out, name))));
+await Promise.all(leaves.map(async ([, build, name]) => cpSync(await build(), resolve(out, name)))).catch(rustMissing);
 // The app's GPU module (LLP 1009 D2), built here as the wasm target's build
 // makes it, with the web host's glue: a loaded capability.
 // Built again only when something a module was built from changed (Cargo's
