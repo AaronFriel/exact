@@ -59,6 +59,12 @@ export async function checkpoint(session, observer, directory) {
   const treeComparison = before && outsideBefore ? compareTrees(modelElements(before), externalElements(outsideBefore)) : null;
   if (treeComparison) findings.push(...treeComparison.findings);
   const images = {}, facts = {};
+  for (const [source, capture] of [['driver/screenshot-default', insideFrame], ['driver/screenshot-window', windowFrame]]) {
+    if (capture?.moving || capture?.settled === false)
+      findings.push(blind(source, capture.reason ?? 'capture reports unsettled motion'));
+    if (capture?.pixelsWhy && !(capture.pixels === 'display' && capture.pixelsWhy === 'the display as it is, asked for'))
+      findings.push(blind(source, capture.pixelsWhy));
+  }
   for (const [name, capture] of Object.entries({outsideBefore: frameBefore, outsideAfter: frameAfter, inside: insideFrame, window: windowFrame})) {
     if (!capture) continue;
     const path = capture.path ?? capture.screenshot;
@@ -92,5 +98,5 @@ export async function checkpoint(session, observer, directory) {
   const report = {status: verdict(findings), identity: observer.identity, observations, findings, images: facts, stateFields: STATE_FIELDS,
     treeComparison, limitation: 'Sampled stability only; no shared compositor transaction ID. XCTest omits zero-area and out-of-window elements. Anonymous structure and unaligned regions are not compared.'};
   json(resolve(directory, 'checkpoint.json'), report);
-  return {report, model: before, state: stateBefore, outside: outsideBefore};
+  return {report, model: before, state: stateBefore, outside: outsideBefore, outsideAfter};
 }

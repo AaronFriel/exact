@@ -30,17 +30,40 @@ export function parse(argv) {
   return options;
 }
 
-async function internalInput(session, action) {
-  if (action.kind === 'tap') return session.tap(action.target);
-  const down = await session.tap(action.target, {down: true});
-  if (down.delivery === 'unsupported') throw new Error(down.reason);
-  let move, up;
+function delivered(reply, phase) {
+  if (!reply || reply.error != null || reply.delivery === 'unsupported' || reply.settled === false || reply.landError != null)
+    throw new Error(`${phase}: ${reply?.error ?? reply?.landError ?? reply?.reason ?? 'input was not delivered'}`);
+  return reply;
+}
+
+export async function internalInput(session, action) {
+  if (action.kind === 'tap') return delivered(await session.tap(action.target), 'tap');
+  let down, move, up;
   try {
-    move = await session.pointer('move', {dx: action.dx, dy: action.dy, ms: action.ms, virtual: true});
-    if (move.delivery === 'unsupported') throw new Error(move.reason);
-  } finally { up = await session.pointer('up'); }
-  if (up.delivery === 'unsupported') throw new Error(up.reason);
+    down = delivered(await session.tap(action.target, {down: true}), 'drag/down');
+    move = delivered(await session.pointer('move', {dx: action.dx, dy: action.dy, ms: action.ms, virtual: true}), 'drag/move');
+  } finally { up = delivered(await session.pointer('up'), 'drag/up'); }
   return {down, move, up};
+}
+
+export async function setupInput(session, targets) {
+  for (const target of targets) {
+    await internalInput(session, {kind: 'tap', target});
+    await session.clock('settle');
+  }
+}
+
+export async function platformInput(observer, action, before) {
+  if (!before.outside || !before.outsideAfter || digest(before.outside) !== digest(before.outsideAfter))
+    throw new Error('outside observation changed or was missing across the checkpoint; platform input refused');
+  const outside = await observer.tree();
+  if (!outside || outside.error || outside.errors?.length || outside.truncated || outside.frontmost === false)
+    throw new Error('fresh outside observation is incomplete or inactive; platform input refused');
+  if (digest(outside) !== digest(before.outsideAfter))
+    throw new Error('outside observation changed after the checkpoint; platform input refused');
+  const aim = targetPoint(outside, action.target, before.model ?? {});
+  const input = delivered(await observer.input(action, aim.point, outside), 'platform/input');
+  return {aim, input, inputObservation: outside};
 }
 
 export async function run(options) {
@@ -72,20 +95,14 @@ export async function run(options) {
         observer = platform({host: options.host, pid, session, helper});
         observer.activate();
         result.launch = session.launchFacts;
-        for (const target of options.setup) { await session.tap(target); await session.clock('settle'); }
+        await setupInput(session, options.setup);
         const before = await checkpoint(session, observer, resolve(directory, leg, 'before'));
         result.before = before;
         if (options.action) {
           const start = Date.now();
           try {
             if (leg === 'driver') result.input = await internalInput(session, options.action);
-            else {
-              const aim = targetPoint(before.outside ?? {}, options.action.target, before.model ?? {});
-              result.aim = aim;
-              result.input = await observer.input(options.action, aim.point, before.outside);
-            }
-            if (result.input.delivery === 'unsupported' || result.input.settled === false || result.input.landError)
-              throw new Error(result.input.reason ?? result.input.landError ?? 'input was not delivered');
+            else Object.assign(result, await platformInput(observer, options.action, before));
           } catch (error) { result.findings.push(blind(`${leg}/input`, error.message)); }
           result.inputMs = Date.now() - start;
           result.after = await checkpoint(session, observer, resolve(directory, leg, 'after'));

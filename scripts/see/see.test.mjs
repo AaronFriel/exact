@@ -5,11 +5,114 @@ import {resolve} from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {encodePng} from '../png.mjs';
 import {checkpoint} from './checkpoint.mjs';
-import {blind, comparePixels, compareTrees, imageFacts, targetPoint, verdict} from './compare.mjs';
-import {parse} from './main.mjs';
+import {blind, comparePixels, compareTrees, imageFacts, modelElements, targetPoint, verdict} from './compare.mjs';
+import {internalInput, parse, platformInput, setupInput} from './main.mjs';
 import {mainWindow} from './platform.mjs';
 
 const picture = () => ({width: 2, height: 1, data: new Uint8Array([0, 0, 0, 255, 255, 255, 255, 255])});
+
+function displayFixture() {
+  const snapshot = {elements: [{identifier: 'ok', label: 'OK', enabled: true, frame: [0, 0, 2, 1]}], frame: [0, 0, 2, 1]};
+  const session = {host: 'ios', clock: async () => ({settled: true}),
+    tree: async () => ({epoch: 1, incarnation: 1, nodes: [{props: {testId: 'ok', text: 'OK'}}]}),
+    state: async () => ({slots: {value: 1}}),
+    screenshot: async path => { writeFileSync(path, encodePng(picture())); return {screenshot: path, pixels: 'display', w: 2, h: 1, scale: 1}; }};
+  const observer = {identity: {simulator: 'fixture'}, tree: async () => snapshot,
+    capture: async path => { writeFileSync(path, encodePng(picture())); return {path, region: 'display'}; }};
+  return {session, observer};
+}
+
+test('omitted disabled props still compare the enabled state', () => {
+  for (const disabled of [undefined, false, 'false', true, 'true']) {
+    const enabled = ![true, 'true'].includes(disabled);
+    const inside = modelElements({nodes: [{props: {testId: 'ok', disabled}}]});
+    expect(compareTrees(inside, [{identifier: 'ok', enabled: !enabled}]).findings).toContainEqual(
+      expect.objectContaining({kind: 'tree-field', field: 'enabled', inside: enabled, outside: !enabled}));
+    expect(compareTrees(inside, [{identifier: 'ok', enabled}]).findings).toEqual([]);
+  }
+});
+
+test('platform input refuses changed targets and validates a fresh outside read before posting', async () => {
+  const first = {pid: 12, frontmost: true, elements: [
+    {identifier: 'ok', enabled: true, frame: [10, 20, 30, 40]},
+    {identifier: 'cancel', enabled: true, frame: [100, 20, 30, 40]},
+  ]};
+  const swapped = {...first, elements: first.elements.map((e, i) => ({...e, frame: first.elements[1 - i].frame}))};
+  let posted = 0, reads = 0, latest = first;
+  const observer = {tree: async () => { reads++; return latest; },
+    input: async (action, point, tree) => { posted++; return {point, tree}; }};
+  const action = {kind: 'tap', target: 'ok'};
+  await expect(platformInput(observer, action, {outside: first, outsideAfter: swapped})).rejects.toThrow('changed');
+  expect(posted).toBe(0);
+  latest = swapped;
+  await expect(platformInput(observer, action, {outside: first, outsideAfter: first})).rejects.toThrow('changed');
+  expect(posted).toBe(0);
+  latest = {...first, pid: 13};
+  await expect(platformInput(observer, action, {outside: first, outsideAfter: first})).rejects.toThrow('changed');
+  expect(posted).toBe(0);
+  for (latest of [{...first, frontmost: false}, {...first, errors: ['AX denied']}, {...first, truncated: true}, {error: 'read failed'}]) {
+    await expect(platformInput(observer, action, {outside: latest, outsideAfter: latest})).rejects.toThrow();
+    expect(posted).toBe(0);
+  }
+  latest = structuredClone(first);
+  const priorReads = reads;
+  const result = await platformInput(observer, action, {outside: first, outsideAfter: first});
+  expect(reads).toBe(priorReads + 1);
+  expect(result.input.point).toEqual([25, 40]);
+  expect(result.input.tree).toBe(latest);
+  expect(posted).toBe(1);
+});
+
+test('failed tap and setup receipts abort before proceeding', async () => {
+  for (const failure of [{error: 'modal blocks view', delivery: 'recognized'}, {delivery: 'unsupported', reason: 'no touch'},
+    {settled: false, reason: 'still moving'}, {landError: 'landing failed'}]) {
+    let taps = 0, clocks = 0;
+    const session = {tap: async () => { taps++; return failure; }, clock: async () => { clocks++; }};
+    await expect(internalInput(session, {kind: 'tap', target: 'ok'})).rejects.toThrow();
+    taps = 0;
+    await expect(setupInput(session, ['ok', 'next'])).rejects.toThrow();
+    expect(taps).toBe(1);
+    expect(clocks).toBe(0);
+  }
+});
+
+test('drag rejects every failing phase and always releases the pointer', async () => {
+  const action = {kind: 'drag', target: 'ok', dx: 0, dy: 100, ms: 300};
+  for (const phase of ['down', 'move', 'up']) for (const failure of [
+    {error: 'blocked'}, {delivery: 'unsupported', reason: 'not supported'}, {settled: false}, {landError: 'landing failed'},
+  ]) {
+    const calls = [];
+    const reply = async name => { calls.push(name); return name === phase ? failure : {delivery: 'recognized'}; };
+    const session = {tap: () => reply('down'), pointer: reply};
+    await expect(internalInput(session, action)).rejects.toThrow(phase);
+    expect(calls).toEqual(phase === 'down' ? ['down', 'up'] : ['down', 'move', 'up']);
+  }
+  for (const phase of ['down', 'move']) {
+    const calls = [];
+    const reply = async name => { calls.push(name); if (name === phase) throw new Error('transport closed'); return {delivery: 'recognized'}; };
+    await expect(internalInput({tap: () => reply('down'), pointer: reply}, action)).rejects.toThrow('transport closed');
+    expect(calls).toEqual(phase === 'down' ? ['down', 'up'] : ['down', 'move', 'up']);
+  }
+  const receipt = {delivery: 'recognized'};
+  expect(await internalInput({tap: async () => receipt, pointer: async () => receipt}, action)).toEqual(
+    {down: receipt, move: receipt, up: receipt});
+});
+
+test('capture motion and failed correlation cannot pass even when all sampled pixels match', async () => {
+  const dir = mkdtempSync(resolve(tmpdir(), 'see-signals-'));
+  try {
+    for (const window of [false, true]) for (const signal of [{moving: true}, {settled: false},
+      {pixelsWhy: 'the display changed while it was read'}, {pixels: 'unavailable', pixelsWhy: 'capture could not be correlated'}]) {
+      const {session, observer} = displayFixture();
+      const screenshot = session.screenshot;
+      session.screenshot = async (path, isWindow) => ({...await screenshot(path), ...(!!isWindow === window ? signal : {})});
+      const result = await checkpoint(session, observer, resolve(dir, `${window}-${Object.keys(signal).join('-')}-${signal.pixels ?? ''}`));
+      expect(result.report.status).toBe('inconclusive');
+      expect(result.report.findings).toContainEqual(expect.objectContaining({kind: 'blind-spot',
+        source: window ? 'driver/screenshot-window' : 'driver/screenshot-default'}));
+    }
+  } finally { rmSync(dir, {recursive: true, force: true}); }
+});
 
 test('every unpaired semantic element and differing comparable field is retained', () => {
   const r = compareTrees([{identifier: 'a', label: 'Old', enabled: true}, {label: 'inside'}],
@@ -77,14 +180,11 @@ test('CLI rejects unknown flags, missing simulator and invalid gestures', () => 
 test('a declared full-display capture permits agreement, while a changed display is a finding', async () => {
   const dir = mkdtempSync(resolve(tmpdir(), 'see-display-'));
   try {
-    const snapshot = {elements: [{identifier: 'ok', label: 'OK'}], frame: [0, 0, 2, 1]};
-    const session = {host: 'ios', clock: async () => ({settled: true}),
-      tree: async () => ({epoch: 1, incarnation: 1, nodes: [{props: {testId: 'ok', text: 'OK'}}]}),
-      state: async () => ({slots: {value: 1}}),
-      screenshot: async path => { writeFileSync(path, encodePng(picture())); return {screenshot: path, pixels: 'display', w: 2, h: 1, scale: 1}; }};
-    const observer = {identity: {simulator: 'fixture'}, tree: async () => snapshot,
-      capture: async path => { writeFileSync(path, encodePng(picture())); return {path, region: 'display'}; }};
+    const {session, observer} = displayFixture();
     expect((await checkpoint(session, observer, resolve(dir, 'same'))).report.status).toBe('agreement');
+    const screenshot = session.screenshot;
+    session.screenshot = async path => ({...await screenshot(path), pixelsWhy: 'the display as it is, asked for'});
+    expect((await checkpoint(session, observer, resolve(dir, 'display-requested'))).report.status).toBe('agreement');
     observer.capture = async path => { const image = picture(); image.data[0] = 2; writeFileSync(path, encodePng(image)); return {path, region: 'display'}; };
     const changed = await checkpoint(session, observer, resolve(dir, 'changed'));
     expect(changed.report.status).toBe('disagreement');

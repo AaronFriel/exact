@@ -11,7 +11,7 @@ export function modelElements(tree) {
     const p = n.props ?? {};
     return {identifier: p.testId, label: p.accessibilityLabel ?? p.text ?? n.text,
       type: p.semanticTag ?? n.kind, node: n.id, unshown: n.unshown,
-      ...(p.disabled !== undefined ? {enabled: ![true, 'true'].includes(p.disabled)} : {})};
+      enabled: ![true, 'true'].includes(p.disabled)};
   }).filter(n => n.identifier || n.label);
 }
 

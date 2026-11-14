@@ -24,7 +24,9 @@ An input reply means delivery finished, not that presentation finished. The
 driver's `clock settle` is recorded, then two outside tree/frame observations
 bracket the inside reads; inside tree/state reads bracket those observations.
 Changed trees, states, frame pixels, target identity or unsettled work make the
-checkpoint inconclusive. We do not retry until a convenient picture appears.
+checkpoint inconclusive. A screenshot's reported motion or failed display
+correlation also makes it inconclusive, even when the endpoint pixels match.
+We do not retry until a convenient picture appears.
 
 The state comparison covers `slots`, `derives`, `resources`, `pending`, `queued`,
 `tasks`, `device`, `time`, `language`, `navigation`, `dialog`, `keyboard`, `focus`,
@@ -82,6 +84,12 @@ target-relative, requested in platform points and wall milliseconds. The input
 receipt interval is recorded: CGEvent's posting interval, or XCTest's request
 interval including its waits. Neither measures the app's received event times
 or establishes release velocity in the app.
+
+Platform input requires matching outside observations across the checkpoint
+and a fresh read immediately before posting. A changed or incomplete read
+refuses input; the fresh read supplies the coordinates and is saved in the
+report. Setup taps and each drag phase must report successful delivery and
+landing. A failed drag still releases the pointer.
 
 The before checkpoints must agree on their comparable model and outside tree
 before outcomes are compared. Differing initial conditions, a failed delivery,
