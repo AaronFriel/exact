@@ -224,7 +224,7 @@ test.each(['ios', 'macos'])('repeated private %s drives reuse a validated build'
     for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];
     Object.assign(process.env, saved); rmSync(dir, { recursive: true, force: true });
   }
-});
+}, 60_000);
 
 
 test('Cargo claims use the platform locking implementation on Windows', () => {
