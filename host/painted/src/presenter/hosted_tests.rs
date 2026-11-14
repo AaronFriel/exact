@@ -884,3 +884,28 @@ fn a_hosted_edit_asks_beforeinput_and_a_caret_move_is_a_selectionchange() {
     p.run_commands(<()>::default);
     assert_eq!(log(&p), format!("{heard}<0-0><2-2>"));
 }
+
+#[test]
+fn rtl_hosted_fields_carry_direction_and_physical_alignment() {
+    let (_shell, _guard) = shell();
+    for direction in ["rtl", "ltr"] {
+        let source = format!(
+            r#"component App
+  view
+    column direction="{direction}"
+      input value="hello" testId="start"
+      input value="hello" direction="ltr" testId="own"
+      input value="hello" text-align="left" testId="left"
+"#
+        );
+        let mut p = boot(&source);
+        let fields = told(&mut p);
+        let rtl = direction == "rtl";
+        assert_eq!(fields[0].look[0] & 512 != 0, rtl);
+        assert_eq!(fields[0].look[5], if rtl { 2 } else { 0 });
+        assert_eq!(fields[1].look[0] & 512, 0);
+        assert_eq!(fields[1].look[5], 0);
+        assert_eq!(fields[2].look[0] & 512 != 0, rtl);
+        assert_eq!(fields[2].look[5], 0);
+    }
+}

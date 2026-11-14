@@ -999,3 +999,47 @@ fn materials_segmented_group_fits_what_holds_it() {
     assert_eq!(long.2, 100.0);
     assert!(long.3 > 40.0, "{long:?}");
 }
+
+#[test]
+fn rtl_switch_thumb_follows_checked_state_and_direction() {
+    if !material_process() {
+        return;
+    }
+    for on in [false, true] {
+        let source = format!(
+            r#"component App
+  view
+    column direction="rtl" align-items="flex-start"
+      input type="checkbox" switch checked={on} testId="switch"
+"#
+        );
+        let (mut p, error) = Presenter::boot_with(
+            &crate::test_plan(&source),
+            (),
+            (200., 100.),
+            1.,
+            PathBuf::new(),
+            PainterChoice::Cpu,
+        )
+        .unwrap();
+        assert!(error.is_none(), "{error:?}");
+        p.frame();
+        let (x, y, w, h) = p.rect_of(id(&p, "switch")).unwrap();
+        let frame = p.frame();
+        let at = |right: bool| {
+            frame
+                .pixel(
+                    (x + if right { w - h / 2. } else { h / 2. }) as u32,
+                    (y + h / 2.) as u32,
+                )
+                .unwrap()
+                .demultiply()
+        };
+        let thumb = at(!on);
+        let track = at(on);
+        assert!(
+            thumb.red() > track.red(),
+            "on={on}: thumb {thumb:?}, track {track:?}"
+        );
+    }
+}

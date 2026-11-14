@@ -605,6 +605,12 @@ internal class Access(private val host: View) {
  * accessibility services for all of them ([Access]) while one is on. With none on it is a plain frame.
  */
 internal class Root(context: Context) : FrameLayout(context) {
+    init {
+        // The presenter supplies physical coordinates. An explicit direction survives locale changes;
+        // hosted EditTexts take their own computed direction from Fields.
+        layoutDirection = LAYOUT_DIRECTION_LTR
+    }
+
     val access = Access(this)
     /** Whether an accessibility service is on ([ExactActivity]). */
     var accessible = false

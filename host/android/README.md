@@ -846,10 +846,10 @@ stream is drawn). A count, then for each live field, in tree order:
 - the count of the reader's edits that reached exact2, and the value the app shows as of it (a string as the op
   stream writes one);
 - its look, eighteen words: what it is (bit 0 a `textarea`, 1 a password, 2 disabled, 3 read-only, 4 no
-  autocorrect, 5 no suggestions, 6 italic, 7 Enter submits, 8 another field follows it); its keyboard (0 text, 1
+  autocorrect, 5 no suggestions, 6 italic, 7 Enter submits, 8 another field follows it, 9 right-to-left); its keyboard (0 text, 1
   email, 2 URL, 3 telephone, 4 digits, 5 a decimal number, 6 search, 7 none), from `inputmode`, else `type`; its
   capitalization (0 none, 1 sentences, 2 words, 3 characters); its enter key (0 unsaid, 1 enter, 2 done, 3 go, 4
-  next, 5 previous, 6 search, 7 send); its `maxlength` (-1 none); its alignment; the colours of its text, its
+  next, 5 previous, 6 search, 7 send); its `maxlength` (-1 none); its physical alignment (0 left, 1 centre, 2 right); the colours of its text, its
   placeholder, its caret, its handles and its selection (ARGB, as the roles resolve in its scheme: `FieldText`,
   `-exact-placeholder`, the accent for the caret, the handles and, thinned, the selection, with an authored `color`,
   `caret-color` or `accent-color` winning); its font's size in pixels, weight, tracking and line height (the
@@ -1109,7 +1109,7 @@ Not built of D10:
   alert and is refused; nothing hosts a field in a surface's window.
 - A bottom sheet for a chooser or a `dialog` its author lays out (a `modal` route is one: [Sheets](#sheets-and-route-motion-llp-1115001-d10-d12)), submenus as cascades (a row that opens another
   menu replaces the first), a menu or a dialog taller than the window (it is not scrolled), a raster image in a
-  menu row, right-to-left placement.
+  menu row.
 - The ripple, Material's own type scaling above 100% (sizes are sp taken linearly), and the device's own face.
 - An outside tap that dismisses an alert whose author wrote `closedby="any"`: lowering implies `any` for every
   `alertdialog` today, so the two cannot be told apart (LLP 1115.000 D13.4).
@@ -1299,6 +1299,17 @@ has no bars, 90.0 and 90.0. A session an hour earlier against the older base gav
 page is laid out once more as it boots; neither shows. Shelf's APK is 70,644 bytes larger (20,506,607 to
 20,577,251), Caltrain's 10,420.
 
+**Direction.** A projected header and tablist follow their own computed `direction`: the Up arrow, title,
+buttons, destinations, badges and touch targets mirror together. Each heading, button and tab label keeps its
+own computed direction for shaping and truncation. Alerts and menus use their presented element's direction
+for placement; each action, option, section heading and alert text keeps its own direction. Adjacent alert
+message texts with the same direction form one paragraph; a change of direction starts another. Accessibility
+bounds cover the aligned text. Horizontal keys follow the mirrored alert buttons, while Tab keeps its existing order. A switch's off thumb sits at inline start. Hosted text fields receive
+Android's `layoutDirection` and `textDirection`; their resolved CSS alignment and field placement stay physical. The application
+manifest enables RTL support; the activity root stays LTR so the reader's physical coordinates are not mirrored
+again, and popup menus use explicit left/top gravity. These paths are covered by headless presenter and JVM tests; an Android device
+run remains owed.
+
 Not built of D11:
 
 - **The medium and large top app bars**, which collapse as the content scrolls (S3); the colour change as a
@@ -1317,8 +1328,6 @@ Not built of D11:
   from each route's own top edge: a route that begins lower in the page (under a banner of the app's own) would
   have the bar over what is above it. A page under `viewport-fit="cover"` that pads itself by
   `env(safe-area-inset-*)` is inset by the bar as well as by its own padding.
-- **Right to left**: the Up arrow is not mirrored and the bar's sides are not swapped (the host has no door for
-  the direction yet).
 - **The content scroller rule** (`navigationScroll`, else the first node under the route that scrolls up and
   down) is written a second time here, in `presenter/bars.rs`: it is the iOS host's `contentScroller`, in Swift.
 - A bar's symbols are still the symbol table's paths (D14 is S2's), but for the Up arrow.

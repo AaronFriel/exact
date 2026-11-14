@@ -350,10 +350,17 @@ impl<D: DataSource> Presenter<D> {
         }
     }
 
-    fn surface_inputs(&self) -> Inputs {
+    fn surface_inputs(&self, node: ViewId) -> Inputs {
         let scale = self.text_scale;
         let (window, margins) = self.surface_window();
         Inputs {
+            direction: self
+                .host
+                .kernel()
+                .node(node)
+                .map_or(exact_kernel::Direction::Ltr, |n| {
+                    n.computed_row(exact_kernel::StyleId::Direction, |s| s.direction)
+                }),
             dark: self.dark(),
             contrast: self.colors.contrast.palette,
             bold_text: self.host.kernel().bold_text_weights(0),
@@ -376,7 +383,10 @@ impl<D: DataSource> Presenter<D> {
         };
         let mut layout = measure(&mut self.text.borrow_mut(), plan, pop, inputs);
         if let Some(width) = self.select_width(pop) {
-            layout.widen(width.min(inputs.window.0));
+            layout.widen(
+                width.min(inputs.window.0),
+                !self.top.overlay.enabled && inputs.direction == exact_kernel::Direction::Rtl,
+            );
         }
         layout
     }
@@ -510,7 +520,7 @@ impl<D: DataSource> Presenter<D> {
             }
         }
         let serial = self.next_surface_serial();
-        let inputs = self.surface_inputs();
+        let inputs = self.surface_inputs(id);
         let layout = self.measure_surface(&plan, id, &inputs);
         self.top.open = Some(Open {
             serial,
@@ -802,7 +812,9 @@ impl<D: DataSource> Presenter<D> {
             return;
         };
         if open.kind == SurfaceKind::Alert {
-            self.surface_step(backward);
+            let mirrored =
+                !self.top.overlay.enabled && open.inputs.direction == exact_kernel::Direction::Rtl;
+            self.surface_step(backward != mirrored);
         } else if !backward {
             let index = open.focused.filter(|index| {
                 open.plan
@@ -1054,7 +1066,7 @@ impl<D: DataSource> Presenter<D> {
             self.close_surface(now);
             return;
         };
-        let inputs = self.surface_inputs();
+        let inputs = self.surface_inputs(pop);
         let anchor = self.surface_anchor();
         let again = (self.top.open.as_ref()).is_some_and(|o| plan != o.plan || inputs != o.inputs);
         let layout = again.then(|| self.measure_surface(&plan, pop, &inputs));
@@ -1100,7 +1112,12 @@ impl<D: DataSource> Presenter<D> {
             ),
             SurfaceKind::Alert => ((0.0, 0.0), 0),
             SurfaceKind::Menu => {
-                let at = look::place(open.anchor, open.layout.size, window, margins);
+                let direction = if self.top.overlay.enabled {
+                    exact_kernel::Direction::Ltr
+                } else {
+                    open.inputs.direction
+                };
+                let at = look::place(open.anchor, open.layout.size, window, margins, direction);
                 (at, look::origin(open.anchor, at, open.layout.size))
             }
         };
@@ -1235,7 +1252,7 @@ impl<D: DataSource> Presenter<D> {
         let headers: Vec<&str> = match shown.plan {
             Plan::Menu(entries) => (entries.iter())
                 .filter_map(|e| match e {
-                    shape::Entry::Header(title, _) => Some(title.as_str()),
+                    shape::Entry::Header(title, _, _) => Some(title.as_str()),
                     _ => None,
                 })
                 .collect(),

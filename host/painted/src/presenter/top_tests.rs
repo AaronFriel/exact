@@ -444,6 +444,7 @@ fn the_shape_rule_is_the_one_the_apple_hosts_follow() {
         rows,
         cancellable,
         outside,
+        ..
     }) = plan("confirm")
     else {
         panic!("confirm is an alert");
@@ -491,6 +492,7 @@ fn the_shape_rule_is_the_one_the_apple_hosts_follow() {
         rows,
         cancellable,
         outside,
+        ..
     }) = plan("notice")
     else {
         panic!("notice is an alert");
@@ -1460,3 +1462,38 @@ fn mouse_invocation_keeps_the_nearest_press_handler() {
 
 #[path = "top_typography_tests.rs"]
 mod typography;
+
+#[test]
+fn rtl_alert_buttons_follow_the_dialog_direction() {
+    for direction in ["rtl", "ltr"] {
+        let source = APP
+            .replace("main navigationKey", "main direction=\"rtl\" navigationKey")
+            .replace(
+                "dialog id=\"confirm\"",
+                &format!("dialog direction=\"{direction}\" id=\"confirm\""),
+            );
+        let (mut p, error) = Presenter::boot_with(
+            &crate::test_plan(&source),
+            (),
+            (400., 800.),
+            1.,
+            PathBuf::new(),
+            PainterChoice::Cpu,
+        )
+        .unwrap();
+        assert!(error.is_none(), "{error:?}");
+        p.serve_windows(Box::new(Pixels(Rc::new(RefCell::new(Vec::new())))));
+        p.frame();
+        tap(&mut p, "ask").unwrap();
+        let open = p.top.open.as_ref().unwrap();
+        let targets = &open.layout.targets;
+        assert_eq!(targets[0].rect.0 > targets[1].rect.0, direction == "rtl");
+        let target = targets[1];
+        let serial = open.serial;
+        let (x, y, w, h) = target.rect;
+        p.surface_event(serial, 0, x + w / 2., y + h / 2., 1.);
+        p.surface_event(serial, 1, x + w / 2., y + h / 2., 2.);
+        p.run_commands(|| ());
+        assert_eq!(text(&p, "said"), "removed");
+    }
+}

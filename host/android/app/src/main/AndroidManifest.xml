@@ -28,7 +28,7 @@
          launch theme its `background_color` where it names one (LLP 1115.001 D3.6). -->
     <application android:label="${appName}" android:theme="${appTheme}" android:hardwareAccelerated="true"
         android:icon="${appIcon}" android:roundIcon="${appIcon}" android:banner="${appBanner}"
-        android:enableOnBackInvokedCallback="true"
+        android:enableOnBackInvokedCallback="true" android:supportsRtl="true"
         android:fullBackupContent="@xml/exact_backup" android:dataExtractionRules="@xml/exact_data_extraction">
         <meta-data android:name="dev.exact.audioSession" android:value="${audioSession}" />
         <profileable android:shell="true" />

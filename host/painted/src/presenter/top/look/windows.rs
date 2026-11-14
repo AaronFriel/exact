@@ -307,6 +307,8 @@ mod tests {
     fn plan(message: String, count: usize) -> Plan {
         Plan::Alert {
             title: Some("Delete message?".into()),
+            title_direction: Direction::Ltr,
+            message_directions: message.split('\n').map(|_| Direction::Ltr).collect(),
             message: Some(message),
             rows: ["Cancel", "Delete", "Keep a copy"]
                 .into_iter()
@@ -315,6 +317,7 @@ mod tests {
                 .map(|(i, title)| Row {
                     node: i as ViewId + 2,
                     title: title.into(),
+                    direction: exact_kernel::Direction::Ltr,
                     symbol: None,
                     destructive: i == 1,
                     enabled: true,
@@ -355,6 +358,7 @@ mod tests {
         let engine = TextEngine::shared();
         for dark in [false, true] {
             let inputs = Inputs {
+                direction: exact_kernel::Direction::Ltr,
                 bold_text: false,
                 contrast: None,
                 dark,
@@ -431,6 +435,7 @@ mod tests {
             for font_scale in [1., 1.5, 2.] {
                 for width in [240., 400., 1100.] {
                     let inputs = Inputs {
+                        direction: exact_kernel::Direction::Ltr,
                         bold_text: false,
                         contrast: None,
                         dark,
@@ -489,6 +494,7 @@ mod tests {
         };
         for dark in [false, true] {
             let inputs = Inputs {
+                direction: exact_kernel::Direction::Ltr,
                 bold_text: false,
                 contrast: Some(palette),
                 dark,
@@ -540,6 +546,7 @@ mod tests {
     fn windows_alerts_size_to_content_and_put_one_button_at_the_trailing_edge() {
         let engine = TextEngine::shared();
         let inputs = Inputs {
+            direction: exact_kernel::Direction::Ltr,
             bold_text: false,
             contrast: None,
             dark: false,

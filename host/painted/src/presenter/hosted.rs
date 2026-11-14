@@ -128,6 +128,7 @@ const SUBMITS: i32 = 128;
 /// Another field that can take the focus follows it in the tree: an enter
 /// key left unsaid then says Next, as the platform's own field's does.
 const FOLLOWED: i32 = 256;
+const RTL: i32 = 512;
 
 /// What the presenter keeps of one field the reader hosts.
 #[derive(Debug, Default, Clone, Copy)]
@@ -383,6 +384,7 @@ impl<D: DataSource> Presenter<D> {
             (ITALIC, face.italic),
             (SUBMITS, submits),
             (FOLLOWED, followed),
+            (RTL, style.direction == exact_kernel::Direction::Rtl),
         ] {
             if on {
                 what |= bit;

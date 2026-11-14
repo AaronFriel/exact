@@ -110,6 +110,7 @@ fn material_surfaces_refresh_when_bold_text_changes_in_both_directions() {
 fn the_dialog_and_the_menu_keep_materials_metrics() {
     let engine = crate::text::TextEngine::shared();
     let inputs = |width: f32| Inputs {
+        direction: exact_kernel::Direction::Ltr,
         contrast: None,
         bold_text: false,
         dark: false,
@@ -120,6 +121,7 @@ fn the_dialog_and_the_menu_keep_materials_metrics() {
     let row = |title: &str, cancel: bool| Row {
         node: 1,
         title: title.into(),
+        direction: exact_kernel::Direction::Ltr,
         symbol: None,
         destructive: false,
         enabled: true,
@@ -129,7 +131,9 @@ fn the_dialog_and_the_menu_keep_materials_metrics() {
     };
     let alert = |rows: Vec<Row>| Plan::Alert {
         title: Some("Title".into()),
+        title_direction: exact_kernel::Direction::Ltr,
         message: Some("Message".into()),
+        message_directions: vec![exact_kernel::Direction::Ltr],
         rows,
         cancellable: true,
         outside: false,
@@ -175,24 +179,175 @@ fn the_dialog_and_the_menu_keep_materials_metrics() {
     // window ends; ending at its end where the window's side is near.
     let (window, margins, size) = ((400.0, 800.0), (48.0, 48.0), (200.0, 217.0));
     assert_eq!(
-        look::place((20.0, 100.0, 40.0, 40.0), size, window, margins),
+        look::place(
+            (20.0, 100.0, 40.0, 40.0),
+            size,
+            window,
+            margins,
+            exact_kernel::Direction::Ltr
+        ),
         (20.0, 140.0)
     );
     assert_eq!(
-        look::place((20.0, 700.0, 40.0, 40.0), size, window, margins),
+        look::place(
+            (20.0, 700.0, 40.0, 40.0),
+            size,
+            window,
+            margins,
+            exact_kernel::Direction::Ltr
+        ),
         (20.0, 483.0)
     );
     assert_eq!(
-        look::place((340.0, 100.0, 40.0, 40.0), size, window, margins),
+        look::place(
+            (340.0, 100.0, 40.0, 40.0),
+            size,
+            window,
+            margins,
+            exact_kernel::Direction::Ltr
+        ),
         (180.0, 140.0)
     );
     assert_eq!(
-        look::place((340.0, 700.0, 40.0, 40.0), size, window, margins),
+        look::place(
+            (340.0, 700.0, 40.0, 40.0),
+            size,
+            window,
+            margins,
+            exact_kernel::Direction::Ltr
+        ),
         (180.0, 483.0)
     );
     assert_eq!(
-        look::place((20.0, 10.0, 40.0, 20.0), size, window, margins),
+        look::place(
+            (20.0, 10.0, 40.0, 20.0),
+            size,
+            window,
+            margins,
+            exact_kernel::Direction::Ltr
+        ),
         (20.0, 48.0),
         "never under the status bar"
     );
+}
+
+#[test]
+fn alert_horizontal_keys_follow_visual_order_without_changing_tab_order() {
+    for desktop in [false, true] {
+        for direction in ["ltr", "rtl"] {
+            let source = APP.replace(
+                "dialog id=\"three\"",
+                &format!("dialog direction=\"{direction}\" id=\"three\""),
+            );
+            let (mut p, error) = Presenter::boot_with(
+                &crate::test_plan(&source),
+                (),
+                (400., 800.),
+                1.,
+                PathBuf::new(),
+                PainterChoice::Cpu,
+            )
+            .unwrap();
+            assert!(error.is_none(), "{error:?}");
+            if desktop {
+                p.serve_overlays();
+            } else {
+                p.serve_windows(Box::new(Pixels(Rc::new(RefCell::new(Vec::new())))));
+            }
+            p.frame();
+            tap(&mut p, "ask-three").unwrap();
+            let targets = p.top.open.as_ref().unwrap().layout.targets.clone();
+            let mut visual: Vec<_> = targets.iter().collect();
+            visual.sort_by(|a, b| a.rect.0.total_cmp(&b.rect.0));
+            assert!(visual.iter().all(|t| near(t.rect.1, visual[1].rect.1)));
+            for (key, expected) in [
+                ("ArrowLeft", visual[0].node),
+                ("ArrowRight", visual[2].node),
+            ] {
+                assert!(p.surface_focus(visual[1].node));
+                assert!(p.surface_key(key, 1.));
+                let open = p.top.open.as_ref().unwrap();
+                assert_eq!(
+                    open.layout.targets[open.focused.unwrap()].node,
+                    expected,
+                    "{direction}, desktop={desktop}, {key}"
+                );
+            }
+            assert!(p.surface_focus(id(&p, "three-save")));
+            assert!(p.surface_key("Tab", 2.));
+            let open = p.top.open.as_ref().unwrap();
+            assert_eq!(
+                open.layout.targets[open.focused.unwrap()].node,
+                id(&p, "three-later")
+            );
+        }
+    }
+}
+
+#[test]
+fn an_alerts_accessible_message_spans_all_directed_paragraphs() {
+    let source = APP.replace(
+        "text \"It cannot be undone.\"",
+        "text \"It cannot be undone.\" direction=\"ltr\"\n        text \"رسالة أخرى\" direction=\"rtl\"",
+    );
+    let (mut p, error) = Presenter::boot_with(
+        &crate::test_plan(&source),
+        (),
+        (400., 800.),
+        1.,
+        PathBuf::new(),
+        PainterChoice::Cpu,
+    )
+    .unwrap();
+    assert!(error.is_none(), "{error:?}");
+    p.serve_windows(Box::new(Pixels(Rc::new(RefCell::new(Vec::new())))));
+    p.frame();
+    tap(&mut p, "ask").unwrap();
+    let (nodes, _, _) = p.access_tree();
+    let message = nodes
+        .iter()
+        .find(|n| n.name == "It cannot be undone.\nرسالة أخرى")
+        .unwrap();
+    assert_eq!(message.rect[3], 40.);
+    assert!(near(message.rect[0], 24.));
+    let right = p.surface().unwrap().size.0 - 24.;
+    assert!(near(message.rect[0] + message.rect[2], right));
+}
+
+#[test]
+fn short_rtl_alert_texts_have_accessibility_bounds_at_the_right() {
+    let source = APP
+        .replace(
+            "aria-label=\"Delete this?\"",
+            "aria-label=\"عنوان\" direction=\"rtl\"",
+        )
+        .replace(
+            "text \"It cannot be undone.\"",
+            "text \"نعم\"\n        text \"لا\"",
+        );
+    let (mut p, error) = Presenter::boot_with(
+        &crate::test_plan(&source),
+        (),
+        (400., 800.),
+        1.,
+        PathBuf::new(),
+        PainterChoice::Cpu,
+    )
+    .unwrap();
+    assert!(error.is_none(), "{error:?}");
+    p.serve_windows(Box::new(Pixels(Rc::new(RefCell::new(Vec::new())))));
+    p.frame();
+    tap(&mut p, "ask").unwrap();
+    let width = p.surface().unwrap().size.0;
+    let (nodes, _, _) = p.access_tree();
+    for name in ["عنوان", "نعم\nلا"] {
+        let text = nodes.iter().find(|n| n.name == name).unwrap();
+        assert!(text.rect[0] > width / 2., "{name}: {:?}", text.rect);
+        assert!(
+            (text.rect[0] + text.rect[2] - (width - 24.)).abs() < 1.,
+            "{name}: {:?}",
+            text.rect
+        );
+        assert_eq!(text.rect[3], if name == "عنوان" { 32. } else { 20. });
+    }
 }
