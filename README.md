@@ -3,6 +3,9 @@
 **Write an app once. It runs natively on the web, macOS, iOS, and Linux, and an AI
 agent can build it, run it, see it, and test it on every one of them.**
 
+Android and Windows are early and in progress: an app builds and runs on both, and
+what each still lacks is under [Not yet, or not at all](#not-yet-or-not-at-all).
+
 **Building an app?** With the tools installed ([Quick start, step 1](#1-install-the-tools)),
 run `bun scripts/exact.mjs setup` once, make the app with `bun scripts/exact.mjs new <path>`,
 and read [`docs/start-here.md`](docs/start-here.md) (for a website,
