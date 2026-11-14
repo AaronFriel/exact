@@ -1121,15 +1121,21 @@ export function createInputHandlers({ root, views, retiredViews, ready, inertAnc
     // pointerId,` the modifiers held, from the content box): `fire(29, r)` is down, 30 up, 31 a
     // move. The JS target's pointer.js is the same rule.
     pointer(el, on, fire) {
-      let held = null, owner = false, last = null, move = null, frame = 0, downOf = null;
+      let held = null, owner = false, last = null, move = null, frame = 0, spent = false, downOf = null;
       const wants = kind => el.exactHandlers?.includes(kind);
       const record = (e, lifted = false) => pointerLine(el, e, lifted);
       const flush = () => {
-        cancelAnimationFrame(frame); frame = 0;
         const m = move; move = null;
         if (m && wants("pointermove") && ready()) fire(31, record(m));
       };
-      const moved = e => { last = e; move = e; if (!frame) frame = requestAnimationFrame(flush); };
+      // A move goes out in its own event unless one went out since the last animation frame; then the latest goes
+      // at the next frame. Chromium and Firefox deliver moves aligned to frames, so each goes out as it comes.
+      const tick = () => { frame = 0; spent = move !== null; flush(); if (spent) frame = requestAnimationFrame(tick); };
+      const moved = e => {
+        last = e; move = e;
+        if (!spent) { spent = true; flush(); }
+        if (!frame) frame = requestAnimationFrame(tick);
+      };
       // While held: the owner's moves, and every holder's latest point,
       // which a blur's up reports.
       const heldMove = e => { if (e.pointerId !== held) return; last = e; if (owner) moved(e); };
