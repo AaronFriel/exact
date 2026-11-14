@@ -469,22 +469,24 @@ export function unitDepInfo(message, workspace, metadata) {
     if (matches.length === 1) return matches[0];
     if (matches.length > 1) throw new Error(`ambiguous rustc unit dep-info for ${message.target.name}`);
   }
-  // The pinned nightly puts units under build/<package>/<hash>/out,
-  // reporting only the copied product. Watch archives use that layout too.
+  // Cargo 1.100 puts units under build/<package>/<hash>/out,
+  // reporting only the copied product, including executables.
   const pkg = metadata?.packages?.find(p => p.id === message.package_id);
-  for (const file of message.filenames.filter(path => /\.(wasm|a|rlib)$/.test(path))) {
+  for (const file of message.filenames.filter(path => /\.(wasm|a|rlib)$/.test(path) || path === message.executable)) {
     if (!pkg) continue;
     const directory = resolve(dirname(intermediate(file)), 'build', pkg.name);
     if (!existsSync(directory)) continue;
-    const bytes = readFileSync(file), matches = [], extension = file.slice(file.lastIndexOf('.'));
+    const executable = file === message.executable;
+    const bytes = readFileSync(file), matches = [], extension = executable ? (file.endsWith('.exe') ? '.exe' : '') : file.slice(file.lastIndexOf('.'));
     for (const hash of readdirSync(directory)) {
       if (!/^[a-f0-9]+$/.test(hash)) continue;
       const out = resolve(directory, hash, 'out');
       if (!existsSync(out)) continue;
-      const stem = basename(file, extension);
-      for (const name of readdirSync(out).filter(name => name === basename(file) || name === `${stem}-${hash}${extension}`)) {
+      const stem = executable ? message.target.name.replaceAll('-', '_') : basename(file, extension);
+      for (const name of readdirSync(out).filter(name => name === `${stem}${extension}` || name === `${stem}-${hash}${extension}`)) {
         const product = resolve(out, name);
-        const candidate = resolve(out, name.replace(/\.[^.]+$/, '.d').replace(extension === '.wasm' ? /^$/ : /^lib/, ''));
+        const unit = extension ? name.slice(0, -extension.length) : name;
+        const candidate = resolve(out, (executable || extension === '.wasm' ? unit : unit.replace(/^lib/, '')) + '.d');
         if (!existsSync(candidate) || statSync(product).size !== bytes.length || !readFileSync(product).equals(bytes)) continue;
         if (names(readFileSync(candidate, 'utf8'), candidate)) matches.push(candidate);
       }
