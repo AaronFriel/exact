@@ -31,6 +31,7 @@ mod failure;
 mod frame;
 mod frame_commands;
 mod frames;
+pub use frames::walk_view;
 mod geometry;
 mod held;
 mod injects;

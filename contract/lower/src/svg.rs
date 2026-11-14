@@ -963,65 +963,17 @@ fn exit_ends(value: &Expr) -> Result<(), LowerError> {
 
 /// Each string literal `value` can be: through a ternary's or a `match`'s
 /// arms, a type ascription, and a `let`'s body, where a read of the bound
-/// name is its value. Like the length checks, the visits are bounded, as
-/// shared derives can expand exponentially; past the bound the rest is the
-/// runtime's.
+/// name is its value. Shared initializers are visited once.
 fn each_literal(
     value: &Expr,
     check: &mut dyn FnMut(&str, Span) -> Result<(), LowerError>,
 ) -> Result<(), LowerError> {
-    /// `bindings`: each `let` name in scope with its value; `None` for a
-    /// `match` arm's binding, which shadows it.
-    fn visit<'a>(
-        value: &'a Expr,
-        bindings: &mut Vec<(&'a str, Option<&'a Expr>)>,
-        budget: &mut usize,
-        check: &mut dyn FnMut(&str, Span) -> Result<(), LowerError>,
-    ) -> Result<(), LowerError> {
-        if *budget == 0 {
-            return Ok(());
-        }
-        *budget -= 1;
-        match value {
-            Expr::Str(text, span) => check(text, *span),
-            Expr::Ternary(_, yes, no, _) => {
-                visit(yes, bindings, budget, check)?;
-                visit(no, bindings, budget, check)
-            }
-            Expr::Match {
-                var, some, none, ..
-            } => {
-                bindings.push((var, None));
-                let some = visit(some, bindings, budget, check);
-                bindings.pop();
-                some?;
-                visit(none, bindings, budget, check)
-            }
-            Expr::Typed(inner, ..) => visit(inner, bindings, budget, check),
-            Expr::Let {
-                name,
-                value: bound,
-                body,
-                ..
-            } => {
-                bindings.push((name, Some(bound)));
-                let body = visit(body, bindings, budget, check);
-                bindings.pop();
-                body
-            }
-            Expr::Ident(name, _) => {
-                let Some(i) = bindings.iter().rposition(|(bound, _)| bound == name) else {
-                    return Ok(());
-                };
-                let Some(bound) = bindings[i].1 else {
-                    return Ok(());
-                };
-                visit(bound, &mut bindings[..i].to_vec(), budget, check)
-            }
-            _ => Ok(()),
+    for leaf in value.value_leaves() {
+        if let Expr::Str(text, span) = leaf {
+            check(text, *span)?;
         }
     }
-    visit(value, &mut Vec::new(), &mut 4096, check)
+    Ok(())
 }
 
 // These props bypass CSS length resolution. NUL represents only unknown text;

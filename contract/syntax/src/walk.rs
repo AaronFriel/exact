@@ -1,8 +1,7 @@
 //! The one traversal of a view and of an expression: what is directly under a
 //! [`Node`] or an [`Expr`], with the names bound over it. A pass that only
 //! descends uses these instead of matching every kind, so a new kind is
-//! one edit here. A pass that rebuilds a tree, or that treats a kind
-//! differently, keeps its own match.
+//! one edit here. Rebuilding a tree still needs its own match.
 
 use crate::ast::{Attr, Expr, Node, TemplatePart};
 
@@ -146,26 +145,68 @@ impl Node {
     /// and in source order otherwise.
     pub fn walk(nodes: &[Node]) -> Walk<'_> {
         Walk {
-            stack: vec![nodes.iter()],
+            inner: Self::walk_with(nodes, (), |_, _| [Some(()), Some(())]),
+        }
+    }
+
+    /// Walk with a context inherited by each child list. `descend` supplies
+    /// the two contexts in [`Node::child_lists`] order; `None` skips that
+    /// list. It runs before the node is yielded. Siblings keep their parent's
+    /// context. The heap stack uses O(depth) frames, with no Rust recursion.
+    ///
+    /// @ref LLP 1172.013 E1, §4 step 4 — one descent for checks with scopes
+    /// or ancestor facts, as well as checks that only need the nodes.
+    pub fn walk_with<'a, C: Clone, F: FnMut(&'a Node, &C) -> [Option<C>; 2]>(
+        nodes: &'a [Node],
+        context: C,
+        descend: F,
+    ) -> WalkWith<'a, C, F> {
+        WalkWith {
+            stack: vec![(nodes.iter(), context)],
+            descend,
         }
     }
 }
 
 /// The iterator [`Node::walk`] returns.
 pub struct Walk<'a> {
-    stack: Vec<std::slice::Iter<'a, Node>>,
+    inner: WalkWith<'a, (), Unscoped>,
 }
+
+type Unscoped = fn(&Node, &()) -> [Option<()>; 2];
 
 impl<'a> Iterator for Walk<'a> {
     type Item = &'a Node;
 
     fn next(&mut self) -> Option<&'a Node> {
-        while let Some(top) = self.stack.last_mut() {
+        self.inner.next().map(|(node, ())| node)
+    }
+}
+
+/// The iterator [`Node::walk_with`] returns. Each node carries the context
+/// supplied for the list containing it.
+pub struct WalkWith<'a, C, F> {
+    stack: Vec<(std::slice::Iter<'a, Node>, C)>,
+    descend: F,
+}
+
+impl<'a, C: Clone, F: FnMut(&'a Node, &C) -> [Option<C>; 2]> Iterator for WalkWith<'a, C, F> {
+    type Item = (&'a Node, C);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while let Some((top, context)) = self.stack.last_mut() {
             if let Some(node) = top.next() {
-                let [first, second] = node.child_lists();
-                self.stack.push(second.iter());
-                self.stack.push(first.iter());
-                return Some(node);
+                let context = context.clone();
+                let children = node
+                    .child_lists()
+                    .into_iter()
+                    .zip((self.descend)(node, &context));
+                for (list, child) in children.rev() {
+                    if let Some(child) = child.filter(|_| !list.is_empty()) {
+                        self.stack.push((list.iter(), child));
+                    }
+                }
+                return Some((node, context));
             }
             self.stack.pop();
         }
@@ -189,6 +230,87 @@ type OperandsMut<'a> = (
 );
 
 impl Expr {
+    /// The possible result expressions, before a value admission checks them:
+    /// choices become their two arms, ascriptions their value, and a `let`
+    /// read its initializer in the scope where it was declared. An option
+    /// match's binding shadows a `let`; its value remains unknown here.
+    /// Conditions and unused initializers are not result values. Type checks
+    /// still check them, including every ascription's constraint.
+    /// Remaining names and computed expressions are opaque to literal checks;
+    /// a leaf must not be inferred in the caller's scope.
+    ///
+    /// Each initializer is visited at most once, even if several arms read
+    /// it. Work is O(source size × lexical depth), storage O(source size),
+    /// and traversal uses no Rust recursion or expression substitution.
+    /// @ref LLP 1172.013 E1, E6, §4 step 4.
+    pub fn value_leaves(&self) -> impl Iterator<Item = &Expr> {
+        struct Binding<'a> {
+            name: &'a str,
+            value: Option<&'a Expr>,
+            outer: Option<usize>,
+            read: bool,
+        }
+        let mut bindings: Vec<Binding<'_>> = Vec::new();
+        let mut pending = vec![(self, None)];
+        std::iter::from_fn(move || {
+            while let Some((value, scope)) = pending.pop() {
+                match value {
+                    Expr::Ternary(_, yes, no, _) => {
+                        pending.push((no, scope));
+                        pending.push((yes, scope));
+                    }
+                    Expr::Match {
+                        var, some, none, ..
+                    } => {
+                        pending.push((none, scope));
+                        let inner = bindings.len();
+                        bindings.push(Binding {
+                            name: var,
+                            value: None,
+                            outer: scope,
+                            read: false,
+                        });
+                        pending.push((some, Some(inner)));
+                    }
+                    Expr::Typed(inner, ..) => pending.push((inner, scope)),
+                    Expr::Let {
+                        name, value, body, ..
+                    } => {
+                        let inner = bindings.len();
+                        bindings.push(Binding {
+                            name,
+                            value: Some(value),
+                            outer: scope,
+                            read: false,
+                        });
+                        pending.push((body, Some(inner)));
+                    }
+                    Expr::Ident(name, _) => {
+                        let mut found = scope;
+                        while let Some(index) = found {
+                            if bindings[index].name == name {
+                                break;
+                            }
+                            found = bindings[index].outer;
+                        }
+                        if let Some(binding) = found.map(|index| &mut bindings[index]) {
+                            if let Some(initializer) = binding.value {
+                                if !binding.read {
+                                    binding.read = true;
+                                    pending.push((initializer, binding.outer));
+                                }
+                                continue;
+                            }
+                        }
+                        return Some(value);
+                    }
+                    _ => return Some(value),
+                }
+            }
+            None
+        })
+    }
+
     /// The expressions directly under this one, in source order: a list's
     /// items, a template's holes, a call's arguments, every operand of an
     /// operator, a `match`'s subject and arms, an arrow's body, a `let`'s
@@ -446,5 +568,90 @@ mod tests {
         }
         binders(d, &mut bound);
         assert_eq!(bound, ["v", "x", "i"]);
+    }
+
+    #[test]
+    fn inherited_context_stays_in_its_branch_and_can_prune_a_list() {
+        let nodes = view("component App\n  view\n    column\n      if true\n        a\n      else\n        b\n      c\n    d\n");
+        let found: Vec<_> = Node::walk_with(&nodes, 0, |node, depth| match node {
+            Node::When { .. } => [Some(depth + 1), None],
+            _ => [Some(depth + 1), Some(depth + 1)],
+        })
+        .filter_map(|(node, depth)| match node {
+            Node::Element { tag, .. } => Some((tag.as_str(), depth)),
+            _ => None,
+        })
+        .collect();
+        assert_eq!(found, [("column", 0), ("a", 2), ("c", 1), ("d", 0)]);
+    }
+
+    #[test]
+    fn value_choices_resolve_initializers_without_capturing_inner_names() {
+        use crate::{Span, TypeExpr};
+        let span = Span::point(1, 1);
+        let name = || Expr::Ident("x".into(), span);
+        let bind = |value, body| Expr::Let {
+            name: "x".into(),
+            value: Box::new(value),
+            body: Box::new(body),
+            span,
+        };
+        let matched = Expr::Match {
+            subject: Box::new(Expr::Ident("option".into(), span)),
+            var: "x".into(),
+            some: Box::new(name()),
+            none: Box::new(name()),
+            span,
+        };
+        let typed = Expr::Typed(
+            Box::new(matched),
+            TypeExpr::Named("string".into(), span),
+            span,
+        );
+        // The inner initializer reads the outer x; the some arm's x is
+        // unknown, while the none arm reads that initializer.
+        let value = bind(Expr::Str("outer".into(), span), bind(name(), typed));
+        assert_eq!(
+            value.value_leaves().cloned().collect::<Vec<_>>(),
+            [name(), Expr::Str("outer".into(), span),]
+        );
+        let unused = bind(
+            Expr::Str("unused".into(), span),
+            Expr::Str("result".into(), span),
+        );
+        assert_eq!(
+            unused.value_leaves().cloned().collect::<Vec<_>>(),
+            [Expr::Str("result".into(), span)]
+        );
+    }
+
+    #[test]
+    fn shared_choice_initializers_are_read_once() {
+        use crate::Span;
+        let span = Span::point(1, 1);
+        let mut value = Expr::Ident("a11".into(), span);
+        for depth in (0..12).rev() {
+            let initializer = if depth == 0 {
+                Expr::Str("leaf".into(), span)
+            } else {
+                let prior = Expr::Ident(format!("a{}", depth - 1), span);
+                Expr::Ternary(
+                    Box::new(Expr::Bool(true, span)),
+                    Box::new(prior.clone()),
+                    Box::new(prior),
+                    span,
+                )
+            };
+            value = Expr::Let {
+                name: format!("a{depth}"),
+                value: Box::new(initializer),
+                body: Box::new(value),
+                span,
+            };
+        }
+        assert_eq!(
+            value.value_leaves().cloned().collect::<Vec<_>>(),
+            [Expr::Str("leaf".into(), span)]
+        );
     }
 }

@@ -595,8 +595,8 @@ struct View<'a> {
 
 fn check_view(nodes: &[Node], scope: &Scope, view: &View<'_>) -> Vec<AnalyzeError> {
     let mut errors = Vec::new();
-    for n in nodes {
-        check_node(n, scope, view, &mut errors);
+    for (n, scope) in contract_types::walk_view(nodes, scope, view.shapes) {
+        check_node(n, &scope, view, &mut errors);
     }
     errors
 }
@@ -606,12 +606,7 @@ fn check_node(n: &Node, scope: &Scope, view: &View<'_>, errors: &mut Vec<Analyze
     let result = (|| -> Result<(), AnalyzeError> {
         match n {
             Node::Children { .. } => {}
-            Node::Element {
-                tag,
-                attrs,
-                children,
-                ..
-            } => {
+            Node::Element { tag, attrs, .. } => {
                 let control = contract_syntax::payload_control(tag, attrs);
                 for a in attrs {
                     if is_handler(&a.name, &a.value) {
@@ -627,15 +622,10 @@ fn check_node(n: &Node, scope: &Scope, view: &View<'_>, errors: &mut Vec<Analyze
                         ).err());
                     }
                 }
-                errors.extend(check_view(children, scope, view));
             }
             Node::Use {
-                name,
-                args,
-                children,
-                span,
+                name, args, span, ..
             } => {
-                errors.extend(check_view(children, scope, view));
                 if !file.components.iter().any(|x| &x.name == name) {
                     return err(
                         "analyze-unknown-component",
@@ -654,36 +644,7 @@ fn check_node(n: &Node, scope: &Scope, view: &View<'_>, errors: &mut Vec<Analyze
                     }
                 }
             }
-            Node::When {
-                then, otherwise, ..
-            } => {
-                errors.extend(check_view(then, scope, view));
-                errors.extend(check_view(otherwise, scope, view));
-            }
-            Node::Each {
-                var,
-                index,
-                list,
-                body,
-                ..
-            } => {
-                let t = contract_types::infer(list, scope, view.shapes).ok();
-                let item = match t {
-                    Some(Ty::List(item)) => *item,
-                    _ => Ty::Unknown,
-                };
-                let mut inner = scope.clone();
-                inner.push_each(var, index.as_deref(), item);
-                errors.extend(check_view(body, &inner, view));
-            }
-            Node::Match { some, none, .. } => {
-                let mut inner = scope.clone();
-                inner.push_region(Some((some.0.clone(), Ref::Bound(0), Ty::Unknown)));
-                errors.extend(check_view(&some.1, &inner, view));
-                let mut none_scope = scope.clone();
-                none_scope.push_region(None);
-                errors.extend(check_view(none, &none_scope, view));
-            }
+            _ => {}
         }
         Ok(())
     })();
@@ -794,28 +755,19 @@ fn check_handler(
 
 // Check the expanded tree: a component can supply a canvas's controls.
 fn check_controls(nodes: &[Node], in_canvas: bool) -> Result<(), AnalyzeError> {
-    for node in nodes {
-        match node {
-            Node::Element {
-                tag,
-                attrs,
-                children,
-                ..
-            } => {
-                for attr in attrs.iter().filter(|a| a.name == "action") {
-                    if !in_canvas || tag != "button" {
-                        return err(
-                            "analyze-control-parent",
-                            "`action` requires a button inside a canvas",
-                            attr.span,
-                        );
-                    }
-                }
-                check_controls(children, in_canvas || tag == "canvas")?;
-            }
-            node => {
-                for list in node.child_lists() {
-                    check_controls(list, in_canvas)?;
+    let descend = |node: &Node, in_canvas: &bool| {
+        let inner = *in_canvas || matches!(node, Node::Element { tag, .. } if tag == "canvas");
+        [Some(inner), Some(inner)]
+    };
+    for (node, in_canvas) in Node::walk_with(nodes, in_canvas, descend) {
+        if let Node::Element { tag, attrs, .. } = node {
+            for attr in attrs.iter().filter(|a| a.name == "action") {
+                if !in_canvas || tag != "button" {
+                    return err(
+                        "analyze-control-parent",
+                        "`action` requires a button inside a canvas",
+                        attr.span,
+                    );
                 }
             }
         }

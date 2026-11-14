@@ -61,7 +61,7 @@ pub use parser::{
 pub use sequence::Sequence;
 pub use share::share_calls;
 pub use spans::VisitSpans;
-pub use walk::{Binds, Walk};
+pub use walk::{Binds, Walk, WalkWith};
 
 /// A token range in one source file. Lines and byte columns are 1-based.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash, PartialOrd, Ord)]

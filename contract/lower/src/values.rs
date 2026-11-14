@@ -436,6 +436,18 @@ fn style_value(
         .any(|r| matches!(r, StyleId::Resize | StyleId::UserSelect))
     {
         super::shorthands::portable_literal(&a.value, &a.name)?;
+        // Other string rows may carry runtime design-token names.
+        if !matches!(a.value, Expr::Str(..)) {
+            for value in a.value.value_leaves() {
+                let literal = Attr {
+                    value: value.clone(),
+                    span: value.span(),
+                    ..a.clone()
+                };
+                style_value(&literal, rows, ty, fonts, scope, shapes)?;
+            }
+            return Ok(());
+        }
     }
     if four_sided(rows) {
         if let Some(sides) = super::shorthands::sides(&a.name, &a.value)? {
@@ -860,17 +872,12 @@ fn style_value(
     Ok(())
 }
 fn css_wide_branches(e: &Expr, rows: &[StyleId]) -> bool {
-    match e {
+    e.value_leaves().all(|leaf| match leaf {
         Expr::Str(s, _) => rows
             .iter()
             .all(|row| StyleValue::Text(s.as_str().into()).unsets(*row)),
-        Expr::Ternary(_, yes, no, _) => css_wide_branches(yes, rows) && css_wide_branches(no, rows),
-        Expr::Match { some, none, .. } => {
-            css_wide_branches(some, rows) && css_wide_branches(none, rows)
-        }
-        Expr::Let { body, .. } | Expr::Typed(body, _, _) => css_wide_branches(body, rows),
         _ => false,
-    }
+    })
 }
 #[derive(Clone)]
 struct Bound<'a> {
@@ -1246,17 +1253,10 @@ pub(crate) fn check_prop_value(
 }
 /// The string literals `e` can be: itself, or the arms of a `?:`, `match` or `let`.
 fn string_leaves<'e>(e: &'e Expr, out: &mut Vec<(&'e str, Span)>) {
-    match e {
-        Expr::Str(s, span) => out.push((s, *span)),
-        Expr::Ternary(_, a, b, _)
-        | Expr::Match {
-            some: a, none: b, ..
-        } => {
-            string_leaves(a, out);
-            string_leaves(b, out);
+    for leaf in e.value_leaves() {
+        if let Expr::Str(s, span) = leaf {
+            out.push((s, *span));
         }
-        Expr::Let { body: inner, .. } | Expr::Typed(inner, _, _) => string_leaves(inner, out),
-        _ => {}
     }
 }
 /// @ref LLP 1053.000.000 D6 — where a glass group cannot be: beside the
