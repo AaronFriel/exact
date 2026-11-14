@@ -75,6 +75,8 @@ const root = resolve(fileURLToPath(new URL('../..', import.meta.url)));
 if (!process.env.EXACT_WEB_DIST)
   process.env.EXACT_WEB_DIST = loopWebDist(app, argv.includes('--wasm') || app.manifest.game ? 'wasm' : 'js');
 buildEnv.EXACT_WEB_DIST = process.env.EXACT_WEB_DIST;
+process.env.EXACT_BAKE_OUTPUT ??= `${process.env.EXACT_WEB_DIST}-bake`;
+buildEnv.EXACT_BAKE_OUTPUT = process.env.EXACT_BAKE_OUTPUT;
 const dist = webDist(app);
 const source = resolve(app.dir, 'app.contract');
 // The JS target (LLP 1071): the runtime the app ships, rebuilt and reloaded

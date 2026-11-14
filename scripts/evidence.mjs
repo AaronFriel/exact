@@ -5,8 +5,8 @@
  * Each drive and test run (`agent.mjs`, `verify`) appends a line to `<app>/.exact/runs.jsonl`: when, on which host and
  * target, on which clock, what ran, what it found, the commit, and the build it ran on, named by the digest of that
  * build's record (the web's `dist/.exact-build.json`, an Apple build's `receipt.json`). The driver refuses a build
- * older than its sources, so a run's build was fresh when it ran. A run is current while that build is still the
- * host's build and still fresh: the same checks the driver makes (`webChanges`, `nativeBuild`) say what made it stale.
+ * older than its sources, so a run's build was fresh when it ran. Retained receipts keep evidence current after
+ * temporary products are removed; the driver's input checks say what made it stale.
  * Linux, Windows, Android, tvOS and phone builds are not identified yet; their runs are listed as unchecked.
  *
  *   bun scripts/evidence.mjs [--app <name>] [--since <rev>] [--draft]
@@ -15,9 +15,10 @@
 import { createHash } from 'node:crypto';
 import { appendFileSync, copyFileSync, existsSync, mkdirSync, readFileSync, realpathSync, statSync, utimesSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
-import { platformCrateKind, resolveApp, webDist as defaultWebDist } from './app.mjs';
+import { pendingBuildInputs, platformCrateKind, resolveApp, webDist as defaultWebDist } from './app.mjs';
 import { nativeBuild, receiptPath } from './agent-build.mjs';
-import { webChanges } from './agent-launch.mjs';
+import { within } from './paths.mjs';
+import { receiptChanges, webChanges } from './agent-launch.mjs';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = realpathSync(fileURLToPath(new URL('..', import.meta.url)));
@@ -42,8 +43,8 @@ export function recordRun(appName, { host, what, result, timing = 'agent', touch
   try {
     const app = resolveApp(appName), record = buildRecord(app, host, { webDist, device: device || !!target });
     let receipt;
-    if (host === 'web' && record) {
-      receipt = resolve(app.target, 'web-receipts', digest(record), '.exact-build.json');
+    if (record) {
+      receipt = resolve(app.target, host === 'web' ? 'web-receipts' : 'native-receipts', digest(record), host === 'web' ? '.exact-build.json' : 'receipt.json');
       mkdirSync(dirname(receipt), { recursive: true });
       copyFileSync(record, receipt);
       const info = statSync(record); utimesSync(receipt, info.atime, info.mtime);
@@ -66,6 +67,17 @@ function buildNow(app, host, receipt) {
   if (host === 'web') {
     const dist = receipt ? dirname(receipt) : defaultWebDist(app), marker = resolve(dist, '.exact-build.json');
     return existsSync(marker) ? { id: digest(marker), changed: webChanges(dist, app).all } : null;
+  }
+  if ((host === 'macos' || host === 'ios') && receipt) {
+    if (!existsSync(receipt)) return null;
+    const { build } = JSON.parse(readFileSync(receipt, 'utf8'));
+    const output = path => (build?.binary?.watchOutputs ?? [app.target]).some(root => within(root, path));
+    // Generated inputs belong to this completed build; evidence checks the sources that made them.
+    const binary = build?.binary && { ...build.binary, inputs: build.binary.inputs.filter(file => !output(file.path)),
+      directories: build.binary.directories.filter(dir => !output(dir.path)),
+      links: (build.binary.links ?? []).filter(link => !output(link.path)) };
+    return { id: digest(receipt), changed: [...(binary ? pendingBuildInputs({ ...build, binary }) : []),
+      ...receiptChanges(receipt, app, { hashed: true, retained: true })] };
   }
   if (host === 'macos' || host === 'ios') {
     const state = nativeBuild(host, app);

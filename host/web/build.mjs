@@ -332,7 +332,7 @@ const buildEnv = developmentBuildEnv();
 mkdirSync(resolve(app.target, 'web-bakes'), { recursive: true });
 const packaging = mkdtempSync(resolve(app.target, 'web-bakes/build-'));
 process.once('exit', () => rmSync(packaging, { recursive: true, force: true }));
-buildEnv.EXACT_BAKE_OUTPUT = process.env.EXACT_BAKE_OUTPUT ?? resolve(packaging, 'bake');
+buildEnv.EXACT_BAKE_OUTPUT = bakeOutput(app);
 // Proofs select the requested game profile under either trust mode; ordinary builds ship web.
 const proofProfile = game ? process.env.EXACT_GAME_PROOF_PROFILE : undefined;
 if (proofProfile && !['gpu-dev', 'release'].includes(proofProfile)) throw new Error('EXACT_GAME_PROOF_PROFILE must be gpu-dev or release');
@@ -488,11 +488,11 @@ if (bakeOnly ? !!moduleInput : typeof exports.exact_module_artifact === 'functio
   for (const [index, name] of ['app.module.json', 'app.js'].entries()) {
     // The length first: the call can grow memory, detaching an earlier view of it.
     const len = bakeOnly ? 0 : exports.exact_module_artifact(index);
-    const body = bakeOnly ? readFileSync(resolve(moduleInput.path, '..', name)) : Buffer.from(new Uint8Array(exports.memory.buffer, exports.exact_out(), len));
+    const body = bakeOnly ? readFileSync(products[resolve(moduleInput.path, '..', name)]) : Buffer.from(new Uint8Array(exports.memory.buffer, exports.exact_out(), len));
     files.set(name, body); writeFileSync(resolve(stage, name), body);
   }
   if (!moduleInput) throw new Error('the build receipt does not name the paired module output');
-  const bytecode = readFileSync(resolve(moduleInput.path, '..', 'app.hbc'));
+  const bytecode = readFileSync(products[resolve(moduleInput.path, '..', 'app.hbc')]);
   files.set('app.hbc', bytecode);
   // moduleCards checks every byte against the receipt embedded in this wasm,
   // including the native digest/version. A concurrent rebake cannot mix pairs.

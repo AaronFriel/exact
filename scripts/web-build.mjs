@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
-import { basename, resolve } from 'node:path';
+import { basename, dirname, resolve } from 'node:path';
 
 // LLP 1172.010 E11: a frontend owns its publication; checks own one per invocation.
 export function loopWebDist(app, target) {
@@ -20,19 +20,28 @@ export function privateNativeBuild(app, kind) {
   const root = resolve(app.target, 'native-runs');
   mkdirSync(root, { recursive: true });
   const directory = mkdtempSync(resolve(root, `${kind}-`));
-  return { env: { EXACT_APPLE_OUTPUT: resolve(directory, 'apple'), EXACT_BAKE_OUTPUT: resolve(directory, 'bake'), EXACT_WEB_TYPES: 'private' },
+  return { env: { EXACT_APPLE_OUTPUT: resolve(directory, 'apple'), EXACT_WINDOWS_OUTPUT: resolve(directory, 'windows'), EXACT_BAKE_OUTPUT: resolve(directory, 'bake'), EXACT_WEB_TYPES: 'private' },
     close: () => rmSync(directory, { recursive: true, force: true }) };
 }
 
 /** Copy while the producer still holds its Cargo product claims (LLP 1172.010 E11). */
 export function captureWebProducts(receipt, directory) {
-  mkdirSync(directory, { recursive: true });
-  return Object.fromEntries(receipt.products.filter(product => product.path.endsWith('.wasm')).map(product => {
-    const path = resolve(directory, basename(product.path));
+  const copied = {};
+  const take = product => {
+    const path = resolve(directory, createHash('sha256').update(product.path).digest('hex').slice(0, 16), basename(product.path));
+    mkdirSync(dirname(path), { recursive: true });
     copyFileSync(product.path, path);
     if (createHash('sha256').update(readFileSync(path)).digest('hex') !== product.sha256) throw new Error(`Cargo product changed before capture: ${product.path}`);
-    return [product.path, path];
-  }));
+    copied[product.path] = path;
+  };
+  const paired = (receipt.binary?.inputs ?? []).filter(input => input.name.startsWith('generated:') && /[/\\]app\.(hbc|js|module\.json)$/.test(input.path));
+  for (const product of [...receipt.products.filter(product => product.path.endsWith('.wasm')), ...paired]) take(product);
+  // Cargo embeds the JS and receipt, but only the receipt names the bytecode it ships beside them.
+  for (const input of paired.filter(input => input.path.endsWith('app.module.json'))) {
+    const { module } = JSON.parse(readFileSync(copied[input.path], 'utf8'));
+    if (module) take({ path: resolve(dirname(input.path), module.file), sha256: module.sha256 });
+  }
+  return copied;
 }
 
 export function cargoContractReads(roots) {

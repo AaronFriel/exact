@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { captureWebProducts, cargoContractReads, changedContractReads, contractReadReceipt, loopWebDist, privateNativeBuild, privateWebBuild } from './web-build.mjs';
 import { appleArtifacts } from '../host/apple/build.mjs';
 import { resolveApp } from './app.mjs';
@@ -110,17 +111,18 @@ test.each(['asset edit', 'asset deletion', 'Cargo alias', 'loop fallback', 'loop
   } finally { fallbackRoots = []; rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('packaging retains each wasm product after another build replaces the Cargo name', () => {
+test.each(['app.wasm', 'app.hbc', 'app.js'])('packaging retains %s after another bake replaces it', name => {
   const dir = mkdtempSync(resolve(tmpdir(), 'exact-web-products-'));
-  const path = resolve(dir, 'app.wasm'), sha256 = text => createHash('sha256').update(text).digest('hex');
+  const path = resolve(dir, name), sha256 = text => createHash('sha256').update(text).digest('hex');
   try {
     writeFileSync(path, 'first wasm');
-    const first = captureWebProducts({ products: [{ path, sha256: sha256('first wasm') }] }, resolve(dir, 'first'));
+    const receipt = text => ({ products: name.endsWith('.wasm') ? [{ path, sha256: sha256(text) }] : [], binary: { inputs: [{ path, name: `generated:app:web/${name}`, sha256: sha256(text) }] } });
+    const first = captureWebProducts(receipt('first wasm'), resolve(dir, 'first'));
     writeFileSync(path, 'second wasm');
-    const second = captureWebProducts({ products: [{ path, sha256: sha256('second wasm') }] }, resolve(dir, 'second'));
+    const second = captureWebProducts(receipt('second wasm'), resolve(dir, 'second'));
     expect(readFileSync(first[path], 'utf8')).toBe('first wasm');
     expect(readFileSync(second[path], 'utf8')).toBe('second wasm');
-    expect(() => captureWebProducts({ products: [{ path, sha256: sha256('first wasm') }] }, resolve(dir, 'bad'))).toThrow('changed before capture');
+    expect(() => captureWebProducts(receipt('first wasm'), resolve(dir, 'bad'))).toThrow('changed before capture');
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -145,4 +147,182 @@ test('native verification owns its captures, products, bundle and receipt throug
     if (previous === undefined) delete process.env.EXACT_APPLE_OUTPUT; else process.env.EXACT_APPLE_OUTPUT = previous;
     for (const build of builds) build.close();
   }
+});
+
+
+test('Cargo claims use the platform locking implementation on Windows', () => {
+  const source = `import {mock} from 'bun:test';
+    let held = false;
+    const locks = await import(${JSON.stringify(import.meta.resolve('../host/web/build-lock.mjs'))});
+    mock.module(${JSON.stringify(import.meta.resolve('../host/web/build-lock.mjs'))}, () => ({...locks, takeLock(path, options) {
+      if (!path.endsWith('.flock') || options.waitMs !== 0) throw new Error('wrong claim');
+      held = true; return () => { held = false; };
+    }}));
+    const {claimBuildOutput} = await import(${JSON.stringify(import.meta.resolve('./app.mjs'))});
+    const {mkdtempSync, rmSync} = await import('node:fs');
+    const {tmpdir} = await import('node:os');
+    const dir = mkdtempSync(tmpdir() + '/exact-windows-claim-');
+    Object.defineProperty(process, 'platform', {value:'win32'});
+    try { const release = claimBuildOutput({id:'windows', dir}, dir + '/claim');
+      if (!held) throw new Error('platform lock was bypassed'); release();
+      if (held) throw new Error('platform lock was not released');
+    } finally { rmSync(dir, {recursive:true, force:true}); }`;
+  const result = spawnSync(process.execPath, ['--eval', source], { encoding: 'utf8' });
+  expect(result.status, result.stderr).toBe(0);
+});
+
+test.each(['contract', 'cargo'])('a JS loop keeps an unchanged %s read fresh after a save', kind => {
+  const dir = mkdtempSync(resolve(tmpdir(), 'exact-unchanged-contract-'));
+  const app = { dir, target: resolve(dir, 'target'), manifest: {} }, dist = resolve(app.target, 'dist');
+  const file = resolve(dir, 'included.contract');
+  try {
+    mkdirSync(dist, { recursive: true }); writeFileSync(file, 'same bytes');
+    const reads = { contract: {}, [kind]: cargoContractReads([{ file }]) };
+    writeFileSync(resolve(dist, '.exact-build.json'), JSON.stringify({ target: 'js', reads }));
+    fallbackRoots = [{ file }];
+    writeFileSync(file, 'same bytes');
+    const future = new Date(Date.now() + 1000); utimesSync(file, future, future);
+    expect(webChanges(dist, app).all).toEqual([]);
+    rmSync(file);
+    expect(webChanges(dist, app).all).toContain(file);
+  } finally { fallbackRoots = []; rmSync(dir, { recursive: true, force: true }); }
+});
+
+
+test('paired module capture includes bytecode named only by the embedded receipt', () => {
+  const dir = mkdtempSync(resolve(tmpdir(), 'exact-paired-products-'));
+  const path = resolve(dir, 'app.module.json'), bytecode = resolve(dir, 'app.hbc');
+  const sha256 = text => createHash('sha256').update(text).digest('hex');
+  try {
+    writeFileSync(bytecode, 'first bytecode');
+    const text = JSON.stringify({ module: { file: 'app.hbc', sha256: sha256('first bytecode') } }); writeFileSync(path, text);
+    const products = captureWebProducts({ products: [], binary: { inputs: [{ path, name: 'generated:app:web/app.module.json', sha256: sha256(text) }] } }, resolve(dir, 'capture'));
+    writeFileSync(bytecode, 'second bytecode'); writeFileSync(path, '{}');
+    expect(readFileSync(products[bytecode], 'utf8')).toBe('first bytecode');
+    expect(readFileSync(products[path], 'utf8')).toBe(text);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('JS Rust producers generate privately and read grants from their captured module', async () => {
+  const { cpSync } = await import('node:fs');
+  const source = readFileSync(resolve(import.meta.dir, '../host/web-js/build.mjs'), 'utf8');
+  const start = source.indexOf('if (rust) {\n  mkdirSync');
+  const body = source.slice(start, source.indexOf('// The granted secrets:', start));
+  const dir = mkdtempSync(resolve(tmpdir(), 'exact-js-rust-owner-')), out = resolve(dir, 'out'), gen = resolve(out, '.gen');
+  try {
+    mkdirSync(gen, { recursive: true }); writeFileSync(resolve(gen, 'app.bind.plan'), 'plan');
+    const env = { resolve, mkdirSync, existsSync, dirname: path => resolve(path, '..'), cpSync, readFileSync, createHash,
+      rust: true, devReload: true, devLogic: [], opt: () => null, out, gen, app: 'fixture', canvas2d: false, appDir: dir, ts: false,
+      normalizeGrants: () => ({ entries: [] }),
+      buildModule(app, at) {
+        expect(at).toBe(resolve(gen, 'rust-module')); mkdirSync(at, { recursive: true });
+        const path = resolve(at, 'app.module.wasm'); writeFileSync(path, 'captured'); return path;
+      },
+      async moduleGrants(path) { expect(path).toBe(resolve(out, 'rust/wasm/app.module.wasm')); return ''; },
+    };
+    await new Function('env', `return (async () => {const {${Object.keys(env).join(',')}} = env; let moduleStorage, rustGrants, rustGrantSet; ${body}})();`)(env);
+    expect(readFileSync(resolve(out, 'rust/wasm/app.module.wasm'), 'utf8')).toBe('captured');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('a Rust module holds its Cargo product claim through optimization and capture', async () => {
+  const { awaitBuildOutput } = await import('./app.mjs');
+  const { lockHeld } = await import('../host/web/build-lock.mjs');
+  const source = readFileSync(resolve(import.meta.dir, '../host/web-js/module.mjs'), 'utf8');
+  const body = source.slice(source.indexOf('function module('), source.indexOf("/** Rust's string"));
+  const dir = mkdtempSync(resolve(tmpdir(), 'exact-js-rust-cargo-')), out = resolve(dir, 'private');
+  const lock = resolve(dir, '.claims/fixture.lock.flock');
+  try {
+    const env = { TARGET: dir, resolve, dirname: path => resolve(path, '..'), mkdirSync, awaitBuildOutput,
+      fresh: () => false, cargoWasm() { expect(lockHeld(lock)).toBe(true); return { status: 0 }; },
+      replace: (path, write) => write(path), optimize(from, to) { expect(lockHeld(lock)).toBe(true); writeFileSync(to, 'captured module'); },
+    };
+    const build = new Function('env', `const {${Object.keys(env).join(',')}} = env; ${body}; return module;`)(env);
+    expect(readFileSync(build(resolve(dir, 'Cargo.toml'), 'fixture', out, 'fixture'), 'utf8')).toBe('captured module');
+    expect(lockHeld(lock)).toBe(false);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('Windows test, agent and verify allocate private outputs before preparing children', () => {
+  const source = `import {mock} from 'bun:test';
+    import {EventEmitter} from 'node:events';
+    import * as children from 'node:child_process';
+    import * as shells from ${JSON.stringify(import.meta.resolve('./app-shells.mjs'))};
+    import {mkdtempSync, writeFileSync, rmSync} from 'node:fs';
+    import {tmpdir} from 'node:os';
+    const calls = [];
+    mock.module(${JSON.stringify(import.meta.resolve('./app-shells.mjs'))}, () => ({...shells, platformOf: () => null}));
+    mock.module('node:child_process', () => ({...children, spawn(command, args, options) {
+      calls.push({args, env: options.env});
+      const child = new EventEmitter(); child.kill = () => {}; child.unref = () => {};
+      queueMicrotask(() => child.emit('exit', 0)); return child;
+    }}));
+    const {run} = await import(${JSON.stringify(import.meta.resolve('./app-cli.mjs'))});
+    const dir = mkdtempSync(tmpdir() + '/exact-windows-checks-');
+    writeFileSync(dir + '/app.json', JSON.stringify({name:'fixture', app:{id:'com.exact.fixture', name:'Fixture'}, host:{windows:{}}}));
+    writeFileSync(dir + '/app.contract', 'component App\\n  text "hello"\\n');
+    try {
+      const outputs = [];
+      for (const verb of ['test','agent','verify']) {
+        const start = calls.length;
+        const code = await run({dir, name:'fixture', exact2:${JSON.stringify(resolve(import.meta.dir, '..'))}, args:[verb,'windows', ...(verb === 'agent' ? ['tree'] : [])]});
+        if (code) throw new Error('command failed: ' + code);
+        const selected = calls.slice(start).filter(call => ['agent-build.mjs','agent.mjs','verify.mjs'].some(file => call.args[0]?.endsWith('/scripts/' + file)));
+        if (!selected.length || selected.some(call => !call.env.EXACT_WINDOWS_OUTPUT || !call.env.EXACT_BAKE_OUTPUT)) throw new Error(verb + ' bypassed isolation');
+        if (new Set(selected.map(call => call.env.EXACT_WINDOWS_OUTPUT)).size !== 1) throw new Error('preparation and drive disagree');
+        outputs.push(selected[0].env.EXACT_WINDOWS_OUTPUT);
+      }
+      if (new Set(outputs).size !== 3) throw new Error('commands share output');
+    } finally { rmSync(dir, {recursive:true, force:true}); }`;
+  const result = spawnSync(process.execPath, ['--eval', source], { encoding: 'utf8' });
+  expect(result.status, result.stderr).toBe(0);
+});
+
+test('Windows packaging and preparation use the selected executable after Cargo output changes', async () => {
+  const { copyFileSync } = await import('node:fs');
+  const { windowsBuild } = await import('./agent-build.mjs');
+  const source = readFileSync(resolve(import.meta.dir, '../host/windows/build.mjs'), 'utf8');
+  const start = source.indexOf('if (import.meta.main) {') + 'if (import.meta.main) {'.length;
+  const body = source.slice(start, source.lastIndexOf('}'));
+  const dir = mkdtempSync(resolve(tmpdir(), 'exact-windows-products-'));
+  const app = { dir, target: resolve(dir, 'target'), name: 'fixture', id: 'com.exact.fixture', displayName: 'fixture', manifest: {}, crate: () => 'fixture-windows' };
+  const build = privateNativeBuild(app, 'agent'), before = process.env.EXACT_WINDOWS_OUTPUT;
+  try {
+    process.env.EXACT_WINDOWS_OUTPUT = build.env.EXACT_WINDOWS_OUTPUT;
+    const path = resolve(dir, 'fixture-windows.exe'); writeFileSync(path, 'first executable');
+    const env = { process: { platform: 'win32', argv: [], env: build.env }, guardFlags: () => [], resolveApp: () => app, prepareShaders() {},
+      bakeTarget: () => 'x86_64-pc-windows-msvc', pickIcon: () => null, resolve, mkdirSync, developmentBuildEnv: () => build.env,
+      copyFileSync, readFileSync, writeFileSync, createHash, windowsFile: () => 'fixture.exe', closeOpened() {}, syncStaticTree() {}, copyShaders() {},
+      writePackagedReceipt() {}, console: { log() {} },
+      buildBake(app, kind, target, options) {
+        const receipt = { products: [{ path, sha256: createHash('sha256').update('first executable').digest('hex') }], compat: {} };
+        options.capture(receipt); writeFileSync(path, 'later executable'); return receipt;
+      },
+    };
+    await new Function('env', `return (async()=>{const {${Object.keys(env).join(',')}} = env; ${body}})();`)(env);
+    const selected = windowsBuild(app).bin;
+    expect(selected).toBe(resolve(build.env.EXACT_WINDOWS_OUTPUT, 'fixture.exe'));
+    expect(readFileSync(selected, 'utf8')).toBe('first executable');
+  } finally {
+    if (before === undefined) delete process.env.EXACT_WINDOWS_OUTPUT; else process.env.EXACT_WINDOWS_OUTPUT = before;
+    build.close(); rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('one-shot wasm packaging preserves the bake receipt Rust reloads consume', async () => {
+  const { bakeOutput, readBuilds } = await import('./app.mjs');
+  const source = readFileSync(resolve(import.meta.dir, '../host/web/build.mjs'), 'utf8');
+  const start = source.indexOf('const buildEnv = developmentBuildEnv();');
+  const body = source.slice(start, source.indexOf('// Proofs select', start));
+  const dir = mkdtempSync(resolve(tmpdir(), 'exact-persistent-bake-')), app = { id: 'com.exact.fixture', dir, target: resolve(dir, 'target') };
+  const exits = [];
+  try {
+    const env = { app, resolve, mkdirSync, mkdtempSync, rmSync, developmentBuildEnv: () => ({}), bakeOutput,
+      process: { env: {}, once: (event, fn) => exits.push(fn) } };
+    const buildEnv = new Function('env', `const {${Object.keys(env).join(',')}} = env; ${body}; return buildEnv;`)(env);
+    mkdirSync(buildEnv.EXACT_BAKE_OUTPUT, { recursive: true });
+    writeFileSync(resolve(buildEnv.EXACT_BAKE_OUTPUT, 'web-wasm32-unknown-unknown.build.json'), JSON.stringify({ version: 1, compat: { inputs: { app: app.id } } }));
+    for (const exit of exits) exit();
+    expect(readBuilds(app, {}).map(build => build.compat.inputs.app)).toEqual([app.id]);
+  } finally { for (const exit of exits) exit(); rmSync(dir, { recursive: true, force: true }); }
 });

@@ -421,7 +421,7 @@ export async function buildFirst(host, app, { say = line => console.error(line),
 /** What a Windows drive of `app` launches, `dist-windows/<name>.exe`, and its changes since the build that packaged it
  * (`changed`, null when there is none), from the same receipt check the driver uses. */
 export function windowsBuild(app) {
-  const bin = resolve(app.dir, 'dist-windows', `${executableName(app)}.exe`);
+  const bin = resolve(process.env.EXACT_WINDOWS_OUTPUT ?? resolve(app.dir, 'dist-windows'), `${executableName(app)}.exe`);
   if (!existsSync(bin)) return { bin, changed: null };
   return { bin, changed: packagedBuildChanges(resolve(bakeOutput(app), `windows-${bakeTarget('windows')}.build.json`), dirname(bin), app) };
 }

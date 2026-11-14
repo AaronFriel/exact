@@ -227,7 +227,7 @@ export async function open({
     const a = resolveApp(app);
     const bin =
       host === 'windows'
-        ? (process.env.EXACT_WINDOWS_BIN ?? resolve(a.dir, 'dist-windows', `${executableName(a)}.exe`))
+        ? (process.env.EXACT_WINDOWS_BIN ?? resolve(process.env.EXACT_WINDOWS_OUTPUT ?? resolve(a.dir, 'dist-windows'), `${executableName(a)}.exe`))
         : host === 'android'
           ? (process.env.EXACT_ANDROID_BIN ?? androidBinary(a, undefined, reader))
           : (process.env.EXACT_LINUX_BIN ?? linuxBinary(a));

@@ -498,10 +498,10 @@ let moduleStorage = false, rustGrants = '', rustGrantSet = normalizeGrants('Rust
 if (rust) {
   mkdirSync(resolve(out, 'rust/wasm'), { recursive: true });
   const from = opt('--data') ?? (opt('--plan') && dirname(resolve(opt('--plan'))));
-  const built = from && existsSync(resolve(from, 'rust/wasm/app.module.wasm')) ? resolve(from, 'rust/wasm/app.module.wasm') : buildModule(app, undefined, canvas2d, appDir);
+  const built = from && existsSync(resolve(from, 'rust/wasm/app.module.wasm')) ? resolve(from, 'rust/wasm/app.module.wasm') : buildModule(app, resolve(gen, 'rust-module'), canvas2d, appDir);
   cpSync(built, resolve(out, 'rust/wasm/app.module.wasm'));
   if (devReload) devLogic.push(['rust', createHash('sha256').update(readFileSync(resolve(out, 'rust/wasm/app.module.wasm'))).digest('hex')]);
-  rustGrants = await moduleGrants(built);
+  rustGrants = await moduleGrants(resolve(out, 'rust/wasm/app.module.wasm'));
   rustGrantSet = normalizeGrants(ts ? 'Rust module' : 'app', rustGrants, 'rust');
   moduleStorage = rustGrantSet.entries.some(([, , grant]) => ['fs-read', 'fs-write', 'sqlite-open'].includes(grant?.[0]));
   // The module binds with the plan's declarations, not the bake's answers.

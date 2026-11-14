@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 import { dirname, resolve } from 'node:path';
 import { resolveApp } from './app.mjs';
 import { changedPaths, hostsTouched, recordRun, runs, standing } from './evidence.mjs';
-import { privateWebBuild } from './web-build.mjs';
+import { privateNativeBuild, privateWebBuild } from './web-build.mjs';
 import { webInputDigests } from './agent-launch.mjs';
 import { appleArtifacts, appleRunBinary } from '../host/apple/build.mjs';
 
@@ -296,4 +296,40 @@ test('changed paths preserve unstaged edits, filenames and both sides of a renam
     git('commit', '-qm', 'Many changed paths');
     expect(changedPaths(base, root).sort()).toEqual([...before.filter(path => path !== 'runner/src/lib.rs'), ...many].sort());
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+
+test.each(['macos', 'ios'])('%s evidence survives private product and bake cleanup', host => {
+  mkdirSync(resolve(ROOT, 'target'), { recursive: true });
+  const dir = mkdtempSync(resolve(ROOT, 'target/evidence-native-'));
+  const previous = { ...process.env };
+  let build;
+  try {
+    writeFileSync(resolve(dir, 'app.json'), JSON.stringify({ name: 'evidence-native', app: { id: 'com.exact.evidence-native', name: 'Evidence Native' } }));
+    const source = resolve(dir, 'app.contract'), data = resolve(dir, 'logic.rs');
+    writeFileSync(source, 'component App\n  text "hello"\n'); writeFileSync(data, 'logic');
+    const app = resolveApp(dir); build = privateNativeBuild(app, 'test');
+    Object.assign(process.env, build.env);
+    const paths = appleArtifacts(app, { destination: host === 'ios' ? 'ios-simulator' : 'macos' });
+    const receipt = resolve(host === 'ios' ? paths.bundle : paths.products, 'receipt.json');
+    const generated = resolve(build.env.EXACT_BAKE_OUTPUT, 'generated.rs');
+    mkdirSync(build.env.EXACT_BAKE_OUTPUT, { recursive: true }); writeFileSync(generated, 'generated');
+    mkdirSync(dirname(receipt), { recursive: true });
+    const text = JSON.stringify({ target: paths.target, build: { trust: 'development', compat: { inputs: { platform: host } },
+      linkedPlan: build.env.EXACT_BAKE_OUTPUT, linkedInputs: { paths: [source], missing: [], watchedDirectories: [] },
+      binary: { metadata: {}, inputs: [data, generated].map(path => ({ name: path, path, sha256: createHash('sha256').update(path === data ? 'logic' : 'generated').digest('hex') })), missing: [], directories: [], links: [], watchOutputs: [app.target] } } });
+    writeFileSync(receipt, text);
+    recordRun(dir, { host, what: 'test', result: 'passed' });
+    build.close();
+    expect(existsSync(receipt)).toBe(false);
+    const recorded = runs(app);
+    expect(recorded).toHaveLength(1);
+    expect(standing(app, recorded)[0].standing).toBe('current');
+    writeFileSync(data, 'changed');
+    expect(standing(app, recorded)[0].standing).toBe('stale');
+  } finally {
+    build?.close();
+    for (const key of Object.keys(process.env)) if (!(key in previous)) delete process.env[key];
+    Object.assign(process.env, previous); rmSync(dir, { recursive: true, force: true });
+  }
 });

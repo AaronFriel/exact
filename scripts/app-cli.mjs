@@ -515,7 +515,7 @@ if (verb === 'contract') {
     if (!found.length) { console.error(`no test file matches ${named}`); return log(2); }
     tests.push(...found);
   }
-  if (drivesWeb || drivesNative && ['ios', 'macos', 'mac'].includes(host) || verb === 'verify' && ['web', 'ios'].includes(host)) {
+  if (drivesWeb || drivesNative || verb === 'verify' && ['web', 'ios', 'windows'].includes(host)) {
     const { resolveApp } = await import(resolve(exact2, 'scripts/app.mjs'));
     const { privateWebBuild, privateNativeBuild } = await import(resolve(exact2, 'scripts/web-build.mjs'));
     const build = (host === 'web' ? privateWebBuild : privateNativeBuild)(resolveApp(dir), verb);

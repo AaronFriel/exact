@@ -121,7 +121,6 @@ function build(app, dist, keep = () => false, compiler = null, superseded = null
   // would be sources moved since it began, and it would be set aside (#115).
   try { installedFileDependencies(app.dir); } catch (error) { return Promise.resolve({ packages: devPackages(stage), error: error.message }); }
   const began = Date.now(), sources = appSources(app.dir, resolve(dist)).digest;
-  const cargo = cargoContractReads(webSourceRoots(app, true));
   // The app's own inputs beside its Contract sources, and which were there.
   const own = [designPath(app.dir) ?? resolve(app.dir, 'app.tamber'), resolve(app.dir, 'app.ts'), resolve(app.dir, 'app.json'), resolve(app.dir, '.exact/backend-origin'), resolve(app.dir, '.env.local'), resolve(app.dir, '.env')];
   const there = new Set(own.filter((path) => existsSync(path)));
@@ -172,11 +171,14 @@ function build(app, dist, keep = () => false, compiler = null, superseded = null
           rmSync(stage, { recursive: true, force: true }); done({ error: null, logic, packages, design, designSource, kept: true, warnings: compilerWarnings(log) });
         });
       }
-      // `sources` as host/web/build.mjs records it: null when a file came or went while it built.
-      const after = appSources(app.dir, resolve(dist)).digest;
-      writeFileSync(resolve(stage, '.exact-build.json'), JSON.stringify({ exactBuild: 1, target: 'js', app: { id: app.id, name: app.displayName },
-        manifestSha256: appManifestDigest(app), files: buildFileCards(stage), sources: after === sources ? after : null,
-        reads: { contract: contractReadReceipt(resolve(stage, '.gen')), cargo }, ...builtSettings(stage) }) + '\n');
+      try {
+        const cargo = cargoContractReads(webSourceRoots(app, true));
+        // `sources` as host/web/build.mjs records it: null when a file came or went while it built.
+        const after = appSources(app.dir, resolve(dist)).digest;
+        writeFileSync(resolve(stage, '.exact-build.json'), JSON.stringify({ exactBuild: 1, target: 'js', app: { id: app.id, name: app.displayName },
+          manifestSha256: appManifestDigest(app), files: buildFileCards(stage), sources: after === sources ? after : null,
+          reads: { contract: contractReadReceipt(resolve(stage, '.gen')), cargo }, ...builtSettings(stage) }) + '\n');
+      } catch (error) { rmSync(stage, { recursive: true, force: true }); return done({ packages, error: error.message }); }
       // Once more after the watchers' events queued meanwhile are taken.
       setImmediate(() => {
         if (moved()) return setAside();
@@ -1115,7 +1117,7 @@ es.onmessage=e=>{const m=JSON.parse(e.data);if(m.kind==='tamber-batch'||m.kind==
         mkdirSync(dirname(residentDist), { recursive: true });
         // (EXACT_DEV_RESIDENT_SCRIPT: a test's stand-in resident)
         residentChild = spawn(process.execPath, [process.env.EXACT_DEV_RESIDENT_SCRIPT || resolve(root, 'host/web/dev.mjs'), '--app', app.name, '--wasm', '--port', String(internal), '--serve-as', String(port), ...(lan ? ['--lan'] : []), ...allowHosts.flatMap((name) => ['--allow-host', name])],
-          { cwd: root, env: { ...process.env, EXACT_APP_DIR: app.dir, EXACT_WEB_DIST: residentDist, EXACT_LAUNCHER_PID: String(process.pid), EXACT_MAP_FD: '3' }, stdio: ['ignore', 'pipe', 'pipe', 'pipe'] });
+          { cwd: root, env: { ...process.env, EXACT_APP_DIR: app.dir, EXACT_WEB_DIST: residentDist, EXACT_BAKE_OUTPUT: `${residentDist}-bake`, EXACT_LAUNCHER_PID: String(process.pid), EXACT_MAP_FD: '3' }, stdio: ['ignore', 'pipe', 'pipe', 'pipe'] });
         // Its errors as before (piped, so a slow terminal holds it back), the
         // last of them kept: what a start that fails says to the client.
         let errors = '';

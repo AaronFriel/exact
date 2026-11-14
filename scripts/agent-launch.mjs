@@ -1095,7 +1095,7 @@ export function refuseBinaryBackend(bin, app, { receipt, packaged = false, comma
 }
 
 /** An Apple build's receipt: its Rust and Swift inputs by digest, then by mtime the app's own files the receipt leaves out on purpose (the root build script's watches: the contract, app.json, data, shaders, assets — what the baked plan and bundle are made from). */
-export function receiptChanges(receipt, app, { hashed = false, launch } = {}) { // `hashed`: this drive compared its inputs' bytes already; `launch`: pendingBuildInputs'
+export function receiptChanges(receipt, app, { hashed = false, launch, retained = false } = {}) { // `hashed`: this drive compared its inputs' bytes already; `launch`: pendingBuildInputs'
   if (!receipt || !existsSync(receipt)) return [];
   const { build, target, started } = JSON.parse(readFileSync(receipt, 'utf8'));
   // Unsaid, an iOS app's launch is a simulator's, which gives it this environment's `SIMCTL_CHILD_` variables.
@@ -1120,7 +1120,7 @@ export function receiptChanges(receipt, app, { hashed = false, launch } = {}) { 
   // The receipt names what the binary links, not what built it: the Rust
   // archive's own dep-info also names its build script's (the compiler, the bake).
   const archive = `lib${app.crate(platform).replace(/-/g, '_')}.d`;
-  let infos = []; try { infos = readdirSync(resolve(app.target, target)).map(p => resolve(app.target, target, p, archive)).filter(existsSync); } catch {}
+  let infos = []; try { if (!retained) infos = readdirSync(resolve(app.target, target)).map(p => resolve(app.target, target, p, archive)).filter(existsSync); } catch {}
   const info = infos.sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs)[0];
   // It names every source the bake captured (its rerun-if-changed): of the app's own, those the
   // walk above skips are no input here either (a backend app.ts never imports); one gone still counts.
@@ -1131,7 +1131,7 @@ export function receiptChanges(receipt, app, { hashed = false, launch } = {}) { 
   // build's start as its bound.
   const products = new Map((build?.products ?? []).map(p => [resolve(p.path), p.sha256]));
   const inputs = new Set([...(info ? depInfoInputs(null, info, app.workspace) : []),
-    ...(build?.products ?? []).filter(p => p.input).map(p => resolve(p.path))]);
+    ...(retained ? [] : build?.products ?? []).filter(p => p.input).map(p => resolve(p.path))]);
   const replaced = [...inputs].filter(path => products.has(path) && fileDigest(path) !== products.get(path)).map(shown);
   // A linked plan's bake ran before Cargo: the dep-info names what it wrote, the receipt's copy of its record
   // (`linkedInputs`) what it read. Its `inputs.json` is the latest bake's, which may be a later, failed build's.
@@ -1148,7 +1148,7 @@ export function receiptChanges(receipt, app, { hashed = false, launch } = {}) { 
   }
   // Absence recorded by Cargo or the linked bake is unchanged while absent; first creation counts even at an old mtime.
   const absent = new Set([...(build?.binary?.missing ?? []), ...missing]), stillAbsent = path => { const at = resolve(ROOT, path); return absent.has(at) && !existsSync(at); };
-  const tools = info ? [...depInfoNewer(since, null, info, app.workspace, directories, products, outputs), ...watchedNewer(since, baked, directories, products, outputs)].filter(path => !skipped(path) && !products.has(resolve(ROOT, path)) && !stillAbsent(path)) : [];
+  const tools = info || retained ? [...(info ? depInfoNewer(since, null, info, app.workspace, directories, products, outputs) : []), ...watchedNewer(since, baked, directories, products, outputs)].filter(path => !skipped(path) && !products.has(resolve(ROOT, path)) && !stillAbsent(path)) : [];
   return [...new Set([...(build?.binary && !hashed ? pendingBuildInputs(build, { launch }) : []), ...own.filter(path => !products.has(resolve(ROOT, path))), ...tools, ...unread, ...replaced])];
 }
 
@@ -1211,7 +1211,8 @@ export function webChanges(dist, app) {
   const unusedContract = notBuildInput(app.dir, shaderWatchRoots(app), new Set());
   const byContractReceipt = path => contract && path.endsWith('.contract') && !recorded.has(resolve(ROOT, path))
     && (resolve(ROOT, path) === resolve(app.dir, 'app.contract') || unusedContract(resolve(ROOT, path)));
-  const changed = path => !byContractReceipt(path) && (!built.inputs || built.inputs[path] !== contentDigest(path));
+  const hashedRead = path => Object.hasOwn(contract ?? {}, resolve(ROOT, path)) || Object.hasOwn(built.reads?.cargo ?? {}, resolve(ROOT, path));
+  const changed = path => !hashedRead(path) && !byContractReceipt(path) && (!built.inputs || built.inputs[path] !== contentDigest(path));
   const { app: own, shared: roots } = webInputs(app, built.target === 'js', since, inputRoots);
   const appChanges = own.filter(changed), shared = roots.filter(changed);
   if (contract) for (const path of changedContractReads(contract)) (within(app.dir, path) ? appChanges : shared).push(shown(path));

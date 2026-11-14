@@ -13,7 +13,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 // Also for its PATH: the pinned binaryen (and Cargo) as every web build has
 // them, so a prebuild optimizes and keeps what an app's build would.
-import { WEB_STD, WEB_SIZE, WEB_TOOLCHAIN, wasmRemapFlags, webToolchainEnv } from '../../scripts/app.mjs';
+import { awaitBuildOutput, WEB_STD, WEB_SIZE, WEB_TOOLCHAIN, wasmRemapFlags, webToolchainEnv } from '../../scripts/app.mjs';
 import { withHostDeployment } from '../../scripts/filesystem.mjs';
 import { replaceBuild } from '../web/serve.mjs';
 import { proofInputs } from '../../game/inputs.mjs';
@@ -157,10 +157,13 @@ function lockFrom(crate) {
 function module(manifest, name, out, label) {
   const wasm = resolve(TARGET, 'wasm32-unknown-unknown/release', `${name}.wasm`), done = resolve(out, 'app.module.wasm');
   mkdirSync(out, { recursive: true });
-  if (fresh(done, wasm.replace(/\.wasm$/, '.d'), [manifest])) return done;
-  if (cargoWasm(manifest).status !== 0) throw new Error(`${label} did not build`);
-  replace(done, (temp) => optimize(wasm, temp, 'module'));
-  return done;
+  const release = awaitBuildOutput({ id: label, dir: dirname(manifest) }, resolve(TARGET, '.claims', `${name}.lock`));
+  try {
+    if (fresh(done, wasm.replace(/\.wasm$/, '.d'), [manifest])) return done;
+    if (cargoWasm(manifest).status !== 0) throw new Error(`${label} did not build`);
+    replace(done, (temp) => optimize(wasm, temp, 'module'));
+    return done;
+  } finally { release(); }
 }
 
 /** Rust's string and character literals, to blank before reading a call's structure (a `,` or `)` in one splits
