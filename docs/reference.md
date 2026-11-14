@@ -1674,7 +1674,8 @@ URL. Device builds require a connected, provisioned phone. `--url` overrides
 `EXACT_DEV_PLAN` for this launch; it does not change the app's production origin.
 An external app uses these commands with `EXACT_APP_DIR` set as usual.
 Plans and assets reload through the native URL loader. Admitted TypeScript
-module clients reload logic on web/macOS/iOS; declared Rust modules reload on
+module clients reload logic on web/macOS/iOS/Linux/Android (`bun exact.mjs
+android --run --url <url>`); declared Rust modules reload on
 web/macOS/iOS/Linux using the executor selected below. Once built, an agent can drive
 the same URL with `bun scripts/agent.mjs macos --url http://127.0.0.1:8765/ tree state logs`
 (also `web`, `ios`, and `linux`; Linux polls the same URL after first pixel).

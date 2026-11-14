@@ -1234,9 +1234,16 @@ function extensionArgs(app, out, config, bound, firebase) {
     ...(features.length ? [`-PandroidFeatures=${features.join(',')}`] : [])];
 }
 
+/** The `am start` arguments that launch the app `id`, following the dev loop at `url` when there is one (LLP 1122 D4):
+ * `-S` stops a running reader first, since it reads its launch extras once per process. */
+export const launchArgs = (id, url = null) =>
+  ['shell', 'am', 'start', '-W', ...(url ? ['-S'] : []), '-n', `${id}/dev.exact.app.MainActivity`, ...(url ? ['--es', 'x_dev_plan', url] : [])];
+
 /** `--install` (`--run`: and launch it): the APK onto the device `androidDevice` names. With none ready the build
- * stands and says how to install it; several entries must be one phone’s transports or name ANDROID_SERIAL. The exit code. */
-function installApk(app, apk, { run = false, built = 0, installed: onInstalled = () => {} } = {}) {
+ * stands and says how to install it; several entries must be one phone’s transports or name ANDROID_SERIAL. `url`
+ * (`--url`) is a dev loop the launched app follows; a loop on this Mac's loopback is reversed onto the device, and the
+ * mapping stays after this command, as the app keeps polling the loop. The exit code. */
+function installApk(app, apk, { run = false, url = null, built = 0, installed: onInstalled = () => {} } = {}) {
   let serial;
   try { serial = androidDevice(); } catch (error) {
     if (/^no Android device/.test(error.message)) { console.error(`built in ${(built / 1000).toFixed(1)} s; not installed: ${error.message}`); return run ? 1 : 0; }
@@ -1249,8 +1256,20 @@ function installApk(app, apk, { run = false, built = 0, installed: onInstalled =
   console.error(`built in ${(built / 1000).toFixed(1)} s, installed on ${serial} as ${id} in ${((Date.now() - started) / 1000).toFixed(1)} s`);
   onInstalled(serial);
   if (!run) return 0;
-  const launched = spawnSync(adb(), ['-s', serial, 'shell', 'am', 'start', '-W', '-n', `${id}/dev.exact.app.MainActivity`], { encoding: 'utf8' });
+  for (const port of url ? reversedPorts({ EXACT_DEV_PLAN: url }) : []) {
+    const reversed = spawnSync(adb(), ['-s', serial, 'reverse', `tcp:${port}`, `tcp:${port}`], { encoding: 'utf8' });
+    if (reversed.status !== 0) { console.error(`adb reverse tcp:${port}: ${(reversed.stderr || reversed.stdout).trim()}`); return 1; }
+    console.error(`${serial} reaches this Mac's port ${port} (adb reverse; adb reverse --remove tcp:${port} drops it)`);
+  }
+  let launched;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    launched = spawnSync(adb(), ['-s', serial, ...launchArgs(id, url)], { encoding: 'utf8' });
+    // After a reinstall the launcher can start the app again between `-S`'s stop and this start, which then reaches
+    // that process as a new intent, whose extras it no longer reads: stop it and start again.
+    if (!url || !/delivered to currently running top-most instance/.test(launched.stdout)) break;
+  }
   if (launched.status !== 0 || /Error/.test(launched.stdout + launched.stderr)) { console.error(`am start: ${(launched.stderr || launched.stdout).trim()}`); return 1; }
+  if (url) console.error(`${id} follows ${url}: a Contract or app.ts save reloads it with its state; a native change needs a new APK`);
   return 0;
 }
 
@@ -1307,6 +1326,9 @@ if (import.meta.main && process.argv[2] === 'reverse') {
   const bundle = args.includes('--bundle');
   if (bundle && (args.includes('--headless') || args.includes('--run'))) throw new Error('--bundle takes neither --headless nor --run');
   if (args.includes('--no-install') && args.includes('--run')) throw new Error('--no-install takes no --run');
+  const url = args.includes('--url') ? args[args.indexOf('--url') + 1] : null;
+  if (url !== null && (!args.includes('--run') || args.includes('--headless'))) throw new Error('--url is the dev loop the launched APK follows: it goes with --run, not --headless');
+  if (url !== null && !['http:', 'https:'].includes(URL.parse(url ?? '')?.protocol)) throw new Error(`--url takes a dev loop's http(s) URL (bun exact.mjs web prints it), not ${url}`);
   if (bundle) process.env.EXACT_UPDATE_TRUST = 'production';
   const apkWanted = (bundle || args.includes('--apk')) && !args.includes('--headless');
   // The pinned toolchain's targets: the app's workspace builds with it, and rustup in the app's own directory, which
@@ -1337,7 +1359,7 @@ if (import.meta.main && process.argv[2] === 'reverse') {
     // `--json`'s object once the install is done: `installed` names the device, or is null when none was ready.
     const trust = process.env.EXACT_UPDATE_TRUST ?? 'development', install = !bundle && !args.includes('--no-install') && (args.includes('--install') || args.includes('--run'));
     let serial = null;
-    const code = install ? installApk(app, apk, { run: args.includes('--run'), built: Date.now() - started, installed: (s) => { serial = s; } }) : 0;
+    const code = install ? installApk(app, apk, { run: args.includes('--run'), url, built: Date.now() - started, installed: (s) => { serial = s; } }) : 0;
     if (!code && args.includes('--json')) reportBuilt({ path: apk, target: 'android', trust, ...(install ? { installed: serial } : {}) });
     process.exit(code);
   }

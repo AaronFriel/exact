@@ -1167,3 +1167,15 @@ test('wireless adb entries for one phone select its address; distinct or unreada
   expect(androidDevice({ ...env, ANDROID_SERIAL: mdns }, run)).toBe(mdns);
   expect(calls).toEqual([]);
 });
+
+test('android --run --url launches the app following that dev loop, stopping a running one first (#585)', async () => {
+  const { launchArgs, reversedPorts } = await import('./agent-android.mjs');
+  expect(launchArgs('com.example.app')).toEqual(['shell', 'am', 'start', '-W', '-n', 'com.example.app/dev.exact.app.MainActivity']);
+  expect(launchArgs('com.example.app', 'http://127.0.0.1:9147/')).toEqual(['shell', 'am', 'start', '-W', '-S', '-n',
+    'com.example.app/dev.exact.app.MainActivity', '--es', 'x_dev_plan', 'http://127.0.0.1:9147/']);
+  expect(reversedPorts({ EXACT_DEV_PLAN: 'http://127.0.0.1:9147/' })).toEqual(['9147']);
+  const refused = (...args) => spawnSync(process.execPath, [resolve(import.meta.dir, 'agent-android.mjs'), 'build', 'shelf', ...args], { encoding: 'utf8', timeout: 30_000 });
+  expect(refused('--url', 'http://127.0.0.1:9147/').stderr).toContain('--url is the dev loop the launched APK follows');
+  expect(refused('--run', '--headless', '--url', 'http://127.0.0.1:9147/').stderr).toContain('it goes with --run, not --headless');
+  expect(refused('--run', '--url', 'shelf.contract').stderr).toContain("--url takes a dev loop's http(s) URL");
+});

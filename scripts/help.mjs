@@ -321,9 +321,10 @@ Ports    none. Runs to completion.`,
   },
   android: {
     line: 'build the APK and install it (test, agent and verify android drive it)',
-    usage: 'bun exact.mjs android [--run | --no-install | --bundle] [--release] [--headless] [--json]',
+    usage: 'bun exact.mjs android [--run [--url <url>] | --no-install | --bundle] [--release] [--headless] [--json]',
     flags: [
       ['--run', 'launch it once installed'],
+      ['--url <url>', 'with --run: the app follows that dev server (web\'s URL) for live reload; a loopback port is reversed onto the device'],
       ['--no-install', 'build without querying or installing on a device'],
       ['--release', 'optimize the APK for speed; set EXACT_UPDATE_TRUST=production for distribution'],
       ['--bundle', 'build a production .aab with an upload key; implies --release and no install'],

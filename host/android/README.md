@@ -138,15 +138,18 @@ update` once its `app.json` names Android. That verb is `build <app> --apk --ins
 runs the tests, the first screen and the relaunch with screenshots light and dark, without `check`, which this host
 does not observe for yet.
 
-**In a dev loop** (LLP 1122 D4): give the launch the loop's page URL as `x_dev_plan` (exact2's `EXACT_DEV_PLAN`),
-through `adb reverse` since the loop serves this Mac's loopback only: `adb reverse tcp:<port> tcp:<port>`, then
+**In a dev loop** (LLP 1122 D4): `bun exact.mjs android --run --url http://127.0.0.1:<port>/`, with the loop
+(`bun exact.mjs web`) running, launches the app following it. By hand: give the launch the loop's page URL as
+`x_dev_plan` (exact2's `EXACT_DEV_PLAN`), through `adb reverse` since the loop serves this Mac's loopback only:
+`adb reverse tcp:<port> tcp:<port>`, then
 `adb shell am start -S -n <app id>/dev.exact.app.MainActivity --es x_dev_plan http://127.0.0.1:<port>/` (`-S`:
 the environment is read once per process, so a running reader is stopped first). The reader
 polls it as the Linux display does (`CanvasHost`'s turn and wakes): a plan the loop compiles replaces the running
-one with its state carried, and the build channel brings the design server's live batches, pins and `prefer`s, and
-registers the build, so the design tool sees it. A generation that offers a replaceable Rust module's pair (an app
-naming `rust.module`) is refused with the URL loop's message and the running app kept: the APK's Rust is baked in its
-library and its record's `rustMode` is `off`, so a Rust edit needs a new APK. A drive
+one with its state carried, as does the `app.ts` module pair it compiles (the envelope's `module`), and the build
+channel brings the design server's live batches, pins and `prefer`s, and registers the build, so the design tool sees
+it. A generation that offers a replaceable Rust module's pair (an app naming `rust.module`) is refused with the URL
+loop's message and the running app kept: the APK's Rust is baked in its library and its record's `rustMode` is `off`,
+so a Rust edit needs a new APK. A drive
 takes the same URL as `--url` (`agent.mjs android --reader --url http://127.0.0.1:<port>/ …`), which reverses the
 port itself. Drives on the same adb server and device share mappings they create until the last drive releases
 them. Mappings set up outside a drive are kept; a conflicting destination refuses the drive. A production bake
