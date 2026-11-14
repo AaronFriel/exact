@@ -55,7 +55,8 @@ or working on it.
 
 Exact is a cross-platform application runtime. You describe your interface in
 **Contract**, a small declarative language, and you write your data logic in
-**TypeScript or Rust**. The Contract compiler turns the interface into a compact
+**TypeScript or Rust**; a plain HTTP read needs neither, as it can be declared in
+Contract. The Contract compiler turns the interface into a compact
 *plan*. On the web, that plan becomes one ES module over a ~20 KB runtime that drives
 the real DOM. On macOS, iOS, and Linux, a Rust runner executes the same plan, a Rust
 layout kernel computes every box with CSS rules, and each platform draws with its own
@@ -732,7 +733,10 @@ else here was admitted because a real app needed it.
   on Android; iOS shows the `device.camera` line's purpose. It does not record video
   from the camera or hand its frames to code, and it has no Windows, Linux, tvOS, or
   watchOS implementation.
-- **Data.** TypeScript or Rust sources, optionally on a worker. Grant-checked `fetch` and
+- **Data.** TypeScript or Rust sources, optionally on a worker, and sources declared in
+  Contract: an HTTP request whose JSON answer is read field by field. An app whose
+  sources are all declared has no data module, and its native build links no JavaScript
+  engine (LLP 1162.001). Grant-checked `fetch` and
   streams, files and SQLite (native and in the browser), Keychain secrets, and OAuth
   sign-in. A router keeps a stack per tab (LLP 1038).
 - **Native modules.** Platform widgets as hyphenated tags
