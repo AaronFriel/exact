@@ -104,6 +104,10 @@ fn main() -> ExitCode {
 }
 
 fn run() -> ExitCode {
+    if let Err(e) = contract::root::find_for_executable() {
+        eprintln!("contract: {e}");
+        return ExitCode::from(2);
+    }
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.first().map(String::as_str) {
         Some("--help" | "-h") if args.len() == 1 => {

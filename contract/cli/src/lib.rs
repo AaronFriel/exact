@@ -46,6 +46,7 @@ mod package_views;
 pub mod picker;
 mod resolve;
 mod retained;
+pub mod root;
 mod shape_schema;
 pub use retained::{check_path_reusing, retention_build, Check, Kept, Retained, Stop};
 mod properties;

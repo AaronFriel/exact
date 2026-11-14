@@ -308,8 +308,8 @@ test('Conduit lowers nothing: its program and sheet are the comparison build\'s 
   for (const [mode, off] of [['low', false], ['inline', true]]) {
     const env = { ...process.env };
     if (off) env.EXACT_JS_NO_LOWER = '1'; else delete env.EXACT_JS_NO_LOWER;
-    const { cmd, pre } = webCompiler();
-    const r = Bun.spawnSync([cmd, ...pre, 'js', contract, '-o', out(mode)], { cwd: root, env, stdout: 'pipe', stderr: 'pipe' });
+    const { cmd, pre, env: { EXACT_ROOT } } = webCompiler();
+    const r = Bun.spawnSync([cmd, ...pre, 'js', contract, '-o', out(mode)], { cwd: root, env: { ...env, EXACT_ROOT }, stdout: 'pipe', stderr: 'pipe' });
     expect({ mode, status: r.exitCode }).toEqual({ mode, status: 0 });
   }
   const read = (mode, f) => readFileSync(resolve(out(mode), f), 'utf8');

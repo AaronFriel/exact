@@ -13,7 +13,7 @@ const read = (cmd, args, opts = {}) => spawnSync(cmd, args, { encoding: 'utf8', 
 /** Rebuild fixture plans with `env.EXACT_CONTRACT`; write their paths to `<prefix>_<KEY>_PLAN`.
  * Plans embed the current schema digest. App entries need the test app's `appId` to boot. */
 export function compileFixtures(root, run, env, dir, prefix, appId) {
-  const contract = args => run(env.EXACT_CONTRACT, ['build', ...args]);
+  const contract = args => run(env.EXACT_CONTRACT, ['build', ...args], { env });
   const iconApp = resolve(dir, 'entries/raster-icons');
   mkdirSync(resolve(iconApp, 'assets'), { recursive: true });
   writeFileSync(resolve(iconApp, 'app.json'), JSON.stringify({ app: { id: appId, name: 'Raster icons' }, host: { ios: {}, macos: {} } }));

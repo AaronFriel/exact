@@ -200,6 +200,7 @@ mod scroll_drag;
 mod scroll_grows;
 mod scroll_timelines;
 mod scrollend;
+mod sdk_root;
 mod search;
 mod search_tab;
 mod segments;

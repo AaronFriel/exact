@@ -18,6 +18,7 @@ import { withHostDeployment } from '../../scripts/filesystem.mjs';
 import { replaceBuild } from '../web/serve.mjs';
 import { proofInputs } from '../../game/inputs.mjs';
 import { keptProducts } from '../../scripts/kept.mjs';
+import { launch } from '../../scripts/tools.mjs';
 import { EXE } from '../../scripts/paths.mjs';
 export { EXE };
 import { BINARYEN_DOWNLOAD } from '../web/stages.mjs';
@@ -455,9 +456,9 @@ export function withInspectHooks(file, text) {
 export const withRuntimeStamp = (text, files) => text.replace('"exact-runtime-unstamped"', JSON.stringify(createHash('sha256').update(files.map(f => `${f.path}\0${f.text}`).join('\0')).digest('hex').slice(0, 24)));
 export const withoutDev = (text) => text.replace(/^[ \t]*\/\/ dev-only \{.*\n[\s\S]*?^[ \t]*\/\/ dev-only \}.*\n/gm, '');
 
-/** The plan-to-JavaScript compiler (`exact-web-js`) as `[cmd, args]`: its
- * binary when nothing it was built from changed, one kept for the machine,
- * or `cargo run`, whose binary `done()` keeps. */
+/** The plan-to-JavaScript compiler (`exact-web-js`) to `launch`: its binary
+ * when nothing it was built from changed, one kept for the machine, or
+ * `cargo run`, whose binary `done()` keeps. */
 const COMPILER = resolve(TARGET_DIR, `debug/exact-web-js${EXE}`);
 const compilerKept = () => kept({ crate: 'exact-web-js', product: COMPILER, depInfo: depInfoOf(COMPILER), group: ['debug'], buildDirs: [resolve(TARGET_DIR, 'debug/build')], stamp: resolve(MODULES, 'kept', 'exact-web-js.json') });
 /** `fresh`, for a compiler binary: also stale after an edit to the lockfile
@@ -476,13 +477,13 @@ export function webCompiler() {
   // fresh (dev.mjs), the same output, about ten times faster on a large app
   // (the Bluesky clone: 1.2 s, not 11.8).
   const fast = process.env.EXACT_WEB_COMPILER;
-  if (fast && freshCompiler(fast)) return { cmd: fast, pre: [], done() {} };
-  if (freshCompiler(COMPILER)) return { cmd: COMPILER, pre: [], done() {} };
+  if (fast && freshCompiler(fast)) return launch(fast);
+  if (freshCompiler(COMPILER)) return launch(COMPILER);
   const at = compilerKept();
   const taken = at.find();
-  if (taken) return { cmd: taken, pre: [], done() {} };
+  if (taken) return launch(taken);
   const started = Date.now();
-  return { cmd: 'cargo', pre: ['run', '-q', '-p', 'exact-web-js', '--'], done: () => at.keep(started) };
+  return launch('cargo', ['run', '-q', '-p', 'exact-web-js', '--'], () => at.keep(started));
 }
 
 /** Everything an app's web build shares, compiled where it is not yet and

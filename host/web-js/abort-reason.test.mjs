@@ -14,7 +14,7 @@ import { webCompiler } from './module.mjs';
 const ROOT = resolve(import.meta.dir, '../..');
 
 test('an aborted fetch rejects with its signal\'s reason; an exactTimeout is still a Timeout', async () => {
-  const { cmd, pre } = webCompiler();
+  const { cmd, pre, env: toolEnv } = webCompiler();
   if (cmd === 'cargo') throw new Error('build the compiler first: cargo build -p exact-web-js');
   const arrived = [];
   const server = Bun.serve({ hostname: '127.0.0.1', port: 0, idleTimeout: 0, fetch: () => {
@@ -27,7 +27,7 @@ test('an aborted fetch rejects with its signal\'s reason; an exactTimeout is sti
   try {
     const scratch = resolve(dir, 'grants.txt');
     writeFileSync(scratch, `net.fetch ${server.url.origin}`);
-    const run = spawnSync(cmd, [...pre, 'normalize-grants', scratch], { cwd: ROOT, encoding: 'utf8' });
+    const run = spawnSync(cmd, [...pre, 'normalize-grants', scratch], { env: toolEnv, cwd: ROOT, encoding: 'utf8' });
     expect(run.status).toBe(0);
     writeFileSync(resolve(dir, 'admission.js'), readFileSync(resolve(ROOT, 'host/web-js/admission.js'), 'utf8').replace(/'\.\.\/web\/([a-z-]+\.js)'/g, "'./$1'"));
     for (const name of ['grant-admission.js', 'faults.js', 'address-space.js', 'navigation.js']) writeFileSync(resolve(dir, name), hostFixtureFile(resolve(ROOT, 'host/web', name)));
@@ -129,10 +129,10 @@ test('preload and prefetch validate options and leave web requests as written', 
     for (const name of ['grant-admission.js', 'faults.js', 'navigation.js', 'address-space.js']) writeFileSync(resolve(dir, name), hostFixtureFile(resolve(ROOT, 'host/web', name)));
     cpSync(resolve(ROOT, 'host/web-js/rt-link.js'), resolve(dir, 'rt-link.js'));
     cpSync(resolve(ROOT, 'host/web-js/ts-fetch.js'), resolve(dir, 'ts-fetch.js'));
-    const { cmd, pre } = webCompiler(), grants = resolve(dir, 'grants.txt');
+    const { cmd, pre, env: toolEnv } = webCompiler(), grants = resolve(dir, 'grants.txt');
     if (cmd === 'cargo') throw new Error('build the compiler first: cargo build -p exact-web-js');
     writeFileSync(grants, 'net.fetch https://api.example');
-    const normalized = spawnSync(cmd, [...pre, 'normalize-grants', grants], { cwd: ROOT, encoding: 'utf8' });
+    const normalized = spawnSync(cmd, [...pre, 'normalize-grants', grants], { env: toolEnv, cwd: ROOT, encoding: 'utf8' });
     expect(normalized.status).toBe(0);
     writeFileSync(resolve(dir, 'admission-data.js'), `import {createGrantSet} from './admission.js';export const tsGrantSet=createGrantSet(${normalized.stdout});`);
     const { fetch: appFetch } = await import(pathToFileURL(resolve(dir, 'ts-fetch.js')).href);

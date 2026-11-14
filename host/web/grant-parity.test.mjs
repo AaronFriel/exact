@@ -14,9 +14,9 @@ function normalized(spec) {
   try {
     const path = resolve(dir, 'grants');
     writeFileSync(path, spec);
-    const { cmd, pre } = webCompiler();
+    const { cmd, pre, env: toolEnv } = webCompiler();
     if (cmd === 'cargo') throw new Error('build the compiler first: cargo build -p exact-web-js');
-    const result = spawnSync(cmd, [...pre, 'normalize-grants', path], { encoding: 'utf8' });
+    const result = spawnSync(cmd, [...pre, 'normalize-grants', path], { env: toolEnv, encoding: 'utf8' });
     expect(result.status, result.stderr).toBe(0);
     return JSON.parse(result.stdout);
   } finally { rmSync(dir, { recursive: true, force: true }); }

@@ -29,6 +29,7 @@ import { openRemoteCanvas } from '../../scripts/tamber-canvas.mjs';
 import { mapCard, pullMap } from '../../scripts/tamber-inspect.mjs';
 import { serveCommands, serveReport, streamFrame } from '../../scripts/tamber-builds.mjs';
 import { EXE, depInfoOf, fresh, freshCompiler, webCompiler } from './module.mjs';
+import { launch, toolEnv } from '../../scripts/tools.mjs';
 import { hostModuleSources } from './glue.mjs';
 import { INSPECT_EVENTS } from './inspect-dev.js';
 import { galleryLoop } from './dev-gallery.mjs';
@@ -425,8 +426,8 @@ export async function devJs({ app, dist, port, host, origins, gate, lan, allowHo
       tables.set(digest, new Promise((done) => {
         // (this loop's own: another loop on one target/ may make the same plan's table, and removes its own)
         const out = resolve(app.target, `inspect-${digest}-${process.pid}.json`);
-        const compiler = toolFresh() ? { cmd: tool.path, pre: [], done() {} } : webCompiler();
-        const child = spawn(compiler.cmd, [...compiler.pre, 'inspect-table', plan, out], { cwd: root, stdio: ['ignore', 'ignore', 'pipe'], detached: true });
+        const compiler = toolFresh() ? launch(tool.path) : webCompiler();
+        const child = spawn(compiler.cmd, [...compiler.pre, 'inspect-table', plan, out], { cwd: root, env: compiler.env, stdio: ['ignore', 'ignore', 'pipe'], detached: true });
         inspections.add(child);
         child.once('close', () => inspections.delete(child));
         let err = '';
@@ -448,9 +449,9 @@ export async function devJs({ app, dist, port, host, origins, gate, lan, allowHo
   // only, as it is, never a build or the `cargo run` fallback.
   const designOf = (text, { readOnly = false } = {}) => new Promise((done) => {
     if (readOnly && !toolReady()) return done({ error: 'the design reader is not built' });
-    const compiler = readOnly ? { cmd: tool.path, pre: [] } : toolFresh() ? { cmd: tool.path, pre: [] } : webCompiler();
+    const compiler = readOnly || toolFresh() ? launch(tool.path) : webCompiler();
     // A group: the debug fallback is a `cargo run`, stopped with its compilers.
-    const child = tool.reading = spawn(compiler.cmd, [...compiler.pre, 'design', resolve(app.dir, 'app.contract'), '-'], { cwd: root, stdio: ['pipe', 'pipe', 'pipe'], detached: true });
+    const child = tool.reading = spawn(compiler.cmd, [...compiler.pre, 'design', resolve(app.dir, 'app.contract'), '-'], { cwd: root, env: compiler.env, stdio: ['pipe', 'pipe', 'pipe'], detached: true });
     child.on('error', (e) => done({ error: e.message }));
     child.stdin.on('error', () => {});
     child.stdin.end(text);
@@ -506,7 +507,7 @@ export async function devJs({ app, dist, port, host, origins, gate, lan, allowHo
   // The variant gallery (dev-gallery.mjs), started by its first page: told of each publication after it is out.
   const gallery = galleryLoop({ app, root, appDist: dist, channel: () => tamber?.channel, design: () => design?.digest ?? null, idleMs: Number(process.env.EXACT_DEV_GALLERY_IDLE_MS) || undefined,
     // (The reader's binary while it is fresh, asked without building it or the reader again; else no table yet.)
-    tableTool: () => (tool.ready && tool.path && fresh(tool.path, depInfoOf(tool.path)) ? { cmd: tool.path, pre: [] } : null),
+    tableTool: () => (tool.ready && tool.path && fresh(tool.path, depInfoOf(tool.path)) ? launch(tool.path) : null),
     compiler: () => { const copy = compilerCopy(app); return freshCompiler(copy) ? copy : null; },
     client: (n) => client(n, null, { base: '/__dev/gallery', stream: '/__dev/gallery/stream', page: 'gallery' }) });
   const rebuild = async () => {
@@ -825,7 +826,7 @@ es.onmessage=e=>{const m=JSON.parse(e.data);if(m.kind==='tamber-batch'||m.kind==
     if (!toolFresh()) return done({ fallback: true });
     if (!patcher.child || patcher.built !== tool.built) {
       stopGroup(patcher.child);
-      const child = patcher.child = spawn(tool.path, ['design-serve', resolve(app.dir, 'app.contract')], { cwd: root, stdio: ['pipe', 'pipe', 'ignore'], detached: true });
+      const child = patcher.child = spawn(tool.path, ['design-serve', resolve(app.dir, 'app.contract')], { cwd: root, env: toolEnv(), stdio: ['pipe', 'pipe', 'ignore'], detached: true });
       patcher.built = tool.built;
       let buffered = '';
       child.stdin.on('error', () => {});

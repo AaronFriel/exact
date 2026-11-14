@@ -226,6 +226,10 @@ fn patched(plan: &exact_plan::Plan, values: &[(String, Vec<String>)]) -> Option<
 }
 
 fn main() -> ExitCode {
+    if let Err(e) = contract::root::find_for_executable() {
+        eprintln!("exact-web-js: {e}");
+        return ExitCode::from(2);
+    }
     // `--sites` (a development build): each element names its plan node, and
     // a Contract compiled here leaves its source map beside the plan.
     let all: Vec<String> = std::env::args().skip(1).collect();

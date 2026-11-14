@@ -206,13 +206,11 @@ fn contract_file(spec: &str, key: &Path, in_package: bool) -> Result<(), Refusal
     }
 }
 
-/// `@exact/<name>`'s directory in the checkout this compiler was built
-/// from, when it is one of its standard modules.
+/// `@exact/<name>`'s directory in the checkout in use, when it is one of its
+/// standard modules.
 fn standard_module(name: &str) -> Option<PathBuf> {
     let short = name.strip_prefix("@exact/")?;
-    let at = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../packages")
-        .join(short);
+    let at = crate::root::sdk_root().join("packages").join(short);
     let at = at.canonicalize().ok()?;
     at.join("exact.json").is_file().then_some(at)
 }
@@ -286,7 +284,7 @@ fn package(spec: &str, dir: &Path, consulted: &mut Vec<PathBuf>) -> Result<Resol
                     root.display()
                 ),
                 // One of the SDK's standard modules (LLP 1133.001 D8): by a
-                // path into the checkout this compiler was built from.
+                // path into the checkout in use.
                 None => match standard_module(&name) {
                     Some(at) => format!(
                         "no package `{name}` in a `node_modules` above {}: it is exact2's standard module; `exact add {}` (bun {}/scripts/exact.mjs add {} <app>) writes `\"{name}\": \"file:{}\"` into the app's `package.json` and installs it",

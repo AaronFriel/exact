@@ -16,6 +16,7 @@ import { constants, existsSync, readdirSync, readFileSync, statSync } from 'node
 import { open, realpath } from 'node:fs/promises';
 import { join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { toolEnv } from './tools.mjs';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 /** About 1 GiB resident (KiB), 10 s, a 2 MiB answer, a 4 MiB design; four queued, each waiting up to 30 s. */
@@ -28,13 +29,13 @@ function contract(args) {
   const cmd = resolve(process.env.CARGO_TARGET_DIR ?? resolve(ROOT, 'target'), 'debug', 'contract'), argv = args;
   if (!existsSync(cmd)) return null;
   // (a process group of its own, so a kill stops whatever it started)
-  if (process.platform !== 'linux') return spawn(cmd, argv, { cwd: ROOT, stdio: ['pipe', 'pipe', 'pipe'], detached: true });
+  if (process.platform !== 'linux') return spawn(cmd, argv, { cwd: ROOT, env: toolEnv(), stdio: ['pipe', 'pipe', 'pipe'], detached: true });
   // Linux enforces an address-space limit, set too (soft and hard at once:
   // lowering the hard one first fails under an unlimited soft one). Address space is not
   // resident memory (an allocator reserves ahead), so it is generous: the
   // resident watch is the bound, this the backstop.
   const kb = LIMITS.rssKb * 4;
-  return spawn('sh', ['-c', `ulimit -v ${kb} && exec "$0" "$@"`, cmd, ...argv], { cwd: ROOT, stdio: ['pipe', 'pipe', 'pipe'], detached: true });
+  return spawn('sh', ['-c', `ulimit -v ${kb} && exec "$0" "$@"`, cmd, ...argv], { cwd: ROOT, env: toolEnv(), stdio: ['pipe', 'pipe', 'pipe'], detached: true });
 }
 
 /** A process's resident KiB, by `ps`, or null when it can't be read. */

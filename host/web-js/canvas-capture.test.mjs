@@ -21,9 +21,9 @@ async function fixture(source = "export const appId='test.canvas'; export const 
   try {
     const input = resolve(scratch, 'grants.txt');
     writeFileSync(input, 'fs.write app:/tmp\nfs.read app:/tmp');
-    const { cmd, pre } = webCompiler();
+    const { cmd, pre, env: toolEnv } = webCompiler();
     if (cmd === 'cargo') throw new Error('build the compiler first: cargo build -p exact-web-js');
-    const run = spawnSync(cmd, [...pre, 'normalize-grants', input], { encoding: 'utf8' });
+    const run = spawnSync(cmd, [...pre, 'normalize-grants', input], { env: toolEnv, encoding: 'utf8' });
     if (run.status !== 0) throw new Error(run.stderr);
     grants = JSON.parse(run.stdout);
   } finally { rmSync(scratch, { recursive: true }); }

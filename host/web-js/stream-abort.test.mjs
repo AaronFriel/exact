@@ -218,11 +218,11 @@ test("every cache mode reaches the browser from a JS fetch, a stream and a wasm 
   const fixture = runtime('exact-fetch-cache-'), browser = globalThis.fetch, pageLocation = globalThis.location, sent = [];
   globalThis.location = new URL('https://example.test/');
   try {
-    const { cmd, pre } = webCompiler();
+    const { cmd, pre, env: toolEnv } = webCompiler();
     if (cmd === 'cargo') throw new Error('build the compiler first: cargo build -p exact-web-js');
     const grants = resolve(fixture, 'grants.txt');
     writeFileSync(grants, 'net.fetch https://example.test\nnet.fetch https://another.test');
-    const normalized = spawnSync(cmd, [...pre, 'normalize-grants', grants], { cwd: root, encoding: 'utf8' });
+    const normalized = spawnSync(cmd, [...pre, 'normalize-grants', grants], { env: toolEnv, cwd: root, encoding: 'utf8' });
     expect(normalized.status).toBe(0);
     writeFileSync(resolve(fixture, 'admission-data.js'), `import { createGrantSet } from './admission.js'; export const tsGrantSet = createGrantSet(${normalized.stdout});`);
     globalThis.fetch = async (input, init) => {
@@ -331,10 +331,10 @@ test('a JS upload with effective only-if-cached fails before sending; a forced u
     getAllResponseHeaders() { return ''; }
   };
   try {
-    const { cmd, pre } = webCompiler();
+    const { cmd, pre, env: toolEnv } = webCompiler();
     const grants = resolve(fixture, 'grants.txt');
     writeFileSync(grants, 'net.fetch https://example.test');
-    const normalized = spawnSync(cmd, [...pre, 'normalize-grants', grants], { cwd: root, encoding: 'utf8' });
+    const normalized = spawnSync(cmd, [...pre, 'normalize-grants', grants], { env: toolEnv, cwd: root, encoding: 'utf8' });
     expect(normalized.status).toBe(0);
     const { createGrantSet } = await import(at(fixture, 'admission.js'));
     const set = createGrantSet(JSON.parse(normalized.stdout));

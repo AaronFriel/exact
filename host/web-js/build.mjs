@@ -228,7 +228,7 @@ if (existsSync(gpuLib) && !checkOnly && !prerequisitesOnly) {
 // changed (module.mjs `fresh`; `cargo run`'s own check costs ~0.4 s an edit),
 // or as the one another checkout of this machine built from these sources.
 const compiler = webCompiler();
-const cargo = spawnSync(compiler.cmd, [...compiler.pre, 'js', input, '-o', gen, '--app', appDir, ...(production ? [] : ['--sites']), ...(devReload ? ['--dev-reload'] : [])], { cwd: root, stdio: checkOnly ? ['ignore', 'ignore', 'pipe'] : 'inherit', encoding: 'utf8', env: { ...process.env, EXACT_JS_GPU_SURFACES: (gpuSurfaces ?? []).join(',') } });
+const cargo = spawnSync(compiler.cmd, [...compiler.pre, 'js', input, '-o', gen, '--app', appDir, ...(production ? [] : ['--sites']), ...(devReload ? ['--dev-reload'] : [])], { cwd: root, stdio: checkOnly ? ['ignore', 'ignore', 'pipe'] : 'inherit', encoding: 'utf8', env: { ...compiler.env, EXACT_JS_GPU_SURFACES: (gpuSurfaces ?? []).join(',') } });
 // With no built compiler and no cargo, the build, and app.ts's type check with it, cannot run: said as that, not as a
 // failed check (#460).
 if (cargo.error?.code === 'ENOENT') { console.error(`error [rust-missing]: ${app}: the web compiler (exact-web-js) builds with Rust, and cargo is not on PATH: install rustup from https://rustup.rs, then run bun ${join(root, 'scripts/exact.mjs')} setup`); process.exit(1); }
@@ -472,7 +472,7 @@ writeFileSync(resolve(gen, 'draw.js'), tsDraws ? "export { drawer } from './ts-d
 const normalizeGrants = (label, spec, stem) => {
   const file = resolve(gen, `${stem}.grants`);
   writeFileSync(file, spec);
-  const result = spawnSync(compiler.cmd, [...compiler.pre, 'normalize-grants', file], { cwd: root, encoding: 'utf8' });
+  const result = spawnSync(compiler.cmd, [...compiler.pre, 'normalize-grants', file], { cwd: root, encoding: 'utf8', env: compiler.env });
   if (result.status !== 0) { console.error(result.stderr); process.exit(result.status ?? 1); }
   const set = JSON.parse(result.stdout);
   if (set.error) throw new Error(`grant-parse: ${label}: ${set.error}`);

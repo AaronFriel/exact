@@ -162,11 +162,11 @@ impl DataSource for Reader {
 // `spec` as the web's grant set, by the grammar's own normalizer (`exact-web-js normalize-grants`), the compiler the
 // lane built.
 function normalized(spec) {
-  const { cmd, pre } = webCompiler();
+  const { cmd, pre, env: toolEnv } = webCompiler();
   if (cmd === 'cargo') throw new Error('build the compiler first: cargo build -p exact-web-js');
   const scratch = mkdtempSync(resolve(tmpdir(), 'exact-grants-')), input = resolve(scratch, 'grants.txt');
   writeFileSync(input, spec);
-  const run = spawnSync(cmd, [...pre, 'normalize-grants', input], { cwd: ROOT, encoding: 'utf8' });
+  const run = spawnSync(cmd, [...pre, 'normalize-grants', input], { env: toolEnv, cwd: ROOT, encoding: 'utf8' });
   rmSync(scratch, { recursive: true });
   if (run.status !== 0) throw new Error(run.stderr || 'the grant normalizer failed');
   return JSON.parse(run.stdout);

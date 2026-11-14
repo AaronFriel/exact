@@ -40,6 +40,7 @@
 //
 //   bun scripts/verify.mjs [web|ios|windows|android] --app <name> [--sim <udid|name>] [--shots <dir>] [--rescroll] [--strict] [--json]
 import { LAUNCH_MEDIA } from './agent-prefer.mjs';
+import { toolEnv } from './tools.mjs';
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -136,7 +137,7 @@ async function compilerWarningsOf(app) {
   const env = cargoEnvironment(process.env), binary = resolve(ROOT, 'target/debug', process.platform === 'win32' ? 'contract.exe' : 'contract');
   delete env.RUSTUP_TOOLCHAIN; delete env.CARGO_TARGET_DIR; // as `exact contract` runs it: exact2's toolchain and target
   const [command, ...pre] = fresh(binary, resolve(ROOT, 'target/debug/contract.d')) ? [binary] : ['cargo', 'run', '-q', '--manifest-path', resolve(ROOT, 'Cargo.toml'), '-p', 'contract', '--'];
-  const child = spawn(command, [...pre, 'build', '--json', resolve(app.dir, 'app.contract')], { cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = spawn(command, [...pre, 'build', '--json', resolve(app.dir, 'app.contract')], { cwd: ROOT, env: toolEnv(env), stdio: ['ignore', 'pipe', 'pipe'] });
   let said = '';
   for (const stream of [child.stdout, child.stderr]) stream.on('data', (d) => { said += d; });
   await new Promise((done) => { child.on('close', done); child.on('error', done); });
