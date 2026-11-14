@@ -600,7 +600,23 @@ function startCompiler() {
       }
     }
   });
-  dev.on('exit', (code) => { if (dev === me) { console.error(`dev compiler exited ${code}`); killCompiler(); process.exit(code ?? 1); } });
+  dev.on('exit', (code) => { if (dev === me && !stopping) { dev = null; unasked(); compilerExited(code); } });
+}
+// A dev compiler that exits (its build failed: a web crate's build script
+// bakes the Contract, so a Contract error fails it) is a refused generation:
+// the loop keeps serving the last good one and starts the compiler again at
+// the next edit to the Contract sources.
+let compilerDown = null;
+function compilerExited(code) {
+  early?.phase('contract', 'failed');
+  console.error(`dev compiler exited ${code}; the next Contract save starts it again`);
+  push({ error: `the dev compiler exited ${code}; the next Contract save starts it again` });
+  const stamp = contractInputsStamp();
+  compilerDown = watchModuleSources(app.dir, name => skipped.test(name) || (!name.endsWith('.contract') && /\.[^/]+$/.test(name)), () => {
+    if (contractInputsStamp() === stamp) return;
+    compilerDown?.close(); compilerDown = null;
+    startCompiler();
+  });
 }
 let moduleWatch = null, moduleTimer = null, moduleRun = 0, moduleStage = null, moduleSaved = 0;
 /** The Contract sources the app reads from packages (LLP 1091 D10), and
@@ -916,6 +932,7 @@ const killCompiler = () => {
 
   moduleWatch?.close(); moduleWatch = null; clearImmediate(moduleTimer); moduleRun++;
   const d = dev; dev = null; if (d) { try { process.kill(-d.pid, 'SIGKILL'); } catch {} }
+  compilerDown?.close(); compilerDown = null;
   unasked();
   if (moduleStage) { rmSync(moduleStage, { recursive: true, force: true }); moduleStage = null; }
 };

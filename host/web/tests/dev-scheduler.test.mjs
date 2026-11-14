@@ -541,7 +541,7 @@ test('a failed build\'s files ride with the next build, whatever it touches', ()
 test('compiler cleanup kills the recorded GPU cargo group too', () => {
   const cleanup=source.slice(source.indexOf('const killCompiler = () => {'),source.indexOf('\nconst stop ='));
   const killed=[];
-  new Function('process', `const unasked=()=>{};let gpuBuildChild={pid:123},manualTypescript,rustSourceWatch,rustOutputWatch,rustHeartbeat,rustActive,rustChild,moduleWatch,moduleTimer,moduleRun=0,dev,moduleStage; ${cleanup}; killCompiler();`)
+  new Function('process', `const unasked=()=>{};let gpuBuildChild={pid:123},manualTypescript,rustSourceWatch,rustOutputWatch,rustHeartbeat,rustActive,rustChild,moduleWatch,moduleTimer,moduleRun=0,dev,moduleStage,compilerDown; ${cleanup}; killCompiler();`)
     ({kill:(...args)=>killed.push(args)});
   assert.deepEqual(killed,[[-123,'SIGKILL']]);
 });
