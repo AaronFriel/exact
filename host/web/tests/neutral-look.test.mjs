@@ -891,7 +891,7 @@ for (const engine of ['chromium', 'firefox', 'webkit']) test(`${engine}: a sheet
         for (const a of opened.getAnimations()) a.finish();
         return [css('opened', 'position'), box('opened'), CSS.supports('corner-shape', 'superellipse(2)') ? css('opened', 'borderTopLeftRadius') === '18.24px' : css('opened', 'borderTopLeftRadius') === '12px', css('opened', 'borderBottomLeftRadius'), box('tabs')[1] < box('opened')[1] + box('opened')[3], css('opened', 'zIndex'), moving, path.length === 0 || (path[0] === 712 && path[1] > 12 && path[1] < 712)];
       });
-      expect([engine, reducedMotion, got]).toEqual([engine, reducedMotion, ['fixed', [0, 12, 400, 688], true, '0px', true, '1', reducedMotion === 'reduce' ? [] : ['box-shadow', 'translate'], true]]);
+      expect([engine, reducedMotion, got]).toEqual([engine, reducedMotion, ['fixed', [0, 12, 400, 688], true, '0px', true, '1', reducedMotion === 'reduce' ? [] : ['translate'], true]]);
       await context.close();
     }
   } finally {
@@ -937,7 +937,7 @@ for (const engine of ['chromium', 'firefox', 'webkit']) test(`${engine}: a sheet
         select('2'); window.ready = true;</script>`);
       await page.waitForFunction('window.ready === true');
       // The commit removes the sheet once it has risen, asking first, as a runtime does, and names the route beneath.
-      await page.evaluate(() => { const route = document.getElementById('leaving'); finish(route); leave(route); select('1'); });
+      await page.evaluate(() => { const route = document.getElementById('leaving'); for (const a of document.getAnimations()) a.finish(); leave(route); select('1'); });
       // It stays where it was, whole (its ids, so its gradient and `use` still resolve), and moves from where it stood
       // down to the window's bottom edge.
       const leaving = await page.evaluate(() => {
@@ -946,9 +946,12 @@ for (const engine of ['chromium', 'firefox', 'webkit']) test(`${engine}: a sheet
         const at = (t) => { for (const a of ghost.getAnimations()) { a.pause(); a.currentTime = t; } return Math.round(ghost.getBoundingClientRect().top); };
         const path = [at(0), at(200), at(399.9)];
         for (const a of ghost.getAnimations()) a.play();
-        return [ghost.id, ghost.getAttribute('navigationKey'), ghost.getAttribute('aria-hidden'), ghost.inert, ghost.previousElementSibling?.id, ghost.querySelector('rect').getAttribute('fill'), document.getElementById('shade')?.closest('[data-exiting]') === ghost, path[0] === 12 && path[1] > 12 && path[2] > 700, document.getElementById('under').inert];
+        // Only `translate` moves, which the compositor runs (#525), and the scrim fades out on its own box.
+        const moved = [...new Set(ghost.getAnimations().flatMap((a) => a.effect.getKeyframes().flatMap((k) => Object.keys(k).filter((p) => !['offset', 'computedOffset', 'easing', 'composite'].includes(p)))))];
+        const nav = document.getElementById('nav'), scrim = nav.getAnimations({ subtree: true }).filter((a) => a.effect.pseudoElement === '::before').map((a) => a.transitionProperty);
+        return [ghost.id, ghost.getAttribute('navigationKey'), ghost.getAttribute('aria-hidden'), ghost.inert, ghost.previousElementSibling?.id, ghost.querySelector('rect').getAttribute('fill'), document.getElementById('shade')?.closest('[data-exiting]') === ghost, path[0] === 12 && path[1] > 12 && path[2] > 700, document.getElementById('under').inert, moved, nav.getAttribute('data-exact-scrim'), scrim];
       });
-      expect([engine, reducedMotion, leaving]).toEqual([engine, reducedMotion, reducedMotion === 'reduce' ? null : ['leaving', '', 'true', true, 'under', 'url(#shade)', true, true, false]]);
+      expect([engine, reducedMotion, leaving]).toEqual([engine, reducedMotion, reducedMotion === 'reduce' ? null : ['leaving', '', 'true', true, 'under', 'url(#shade)', true, true, false, ['translate'], 'off', ['opacity']]]);
       const gone = await page.evaluate(async () => {
         await Promise.all(document.querySelector('[data-exiting]')?.getAnimations().map((a) => (a.finish(), a.finished)) ?? []);
         await tick();
@@ -956,13 +959,15 @@ for (const engine of ['chromium', 'firefox', 'webkit']) test(`${engine}: a sheet
       });
       expect([engine, reducedMotion, gone]).toEqual([engine, reducedMotion, true]);
       // A sheet that opens while one leaves ends it, as they may share ids; one it uncovers does not, and it slides
-      // down over that one. While one is over the other, only the one above draws the scrim.
+      // down over that one. While one is over the other, the page is under the one scrim and the sheet beneath under
+      // a shade of its own, and the one above draws neither.
       const uncovered = await page.evaluate(async () => {
         const below = route('below', '6'); select('6');
         const above = route('above', '7'); select('7');
         await tick();
-        finish(below, above);
-        const scrims = [below, above].map((r) => getComputedStyle(r).boxShadow !== 'none').concat(getComputedStyle(document.getElementById('under')).visibility === 'visible');
+        for (const a of document.getAnimations()) a.finish();
+        const dim = (el, pseudo) => getComputedStyle(el, pseudo).opacity === '1';
+        const scrims = [dim(document.getElementById('nav'), '::before'), dim(below, '::after'), dim(above, '::after'), getComputedStyle(document.getElementById('under')).visibility === 'visible'];
         leave(above);
         select('6');
         await tick();
@@ -971,7 +976,7 @@ for (const engine of ['chromium', 'firefox', 'webkit']) test(`${engine}: a sheet
         select('1');
         return out;
       });
-      expect([engine, reducedMotion, uncovered]).toEqual([engine, reducedMotion, reducedMotion === 'reduce' ? [false, 'gone', [false, true, true]] : [true, 'over', [false, true, true]]]);
+      expect([engine, reducedMotion, uncovered]).toEqual([engine, reducedMotion, reducedMotion === 'reduce' ? [false, 'gone', [true, true, false, true]] : [true, 'over', [true, true, false, true]]]);
       // A full-screen route it uncovers keeps it too; a sheet that replaces it in the same commit ends it; one closed as
       // it still rises turns back from where it is; one that holds media, a field's painted decorations, or an open
       // dialog or popover closes at once; and one that holds a native view slides, showing what its module left in it.

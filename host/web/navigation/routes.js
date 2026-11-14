@@ -69,17 +69,16 @@ export function sheetLeaves(el) {
   el.setAttribute("data-exiting", "");
   el.setAttribute("aria-hidden", "true");
   el.inert = true;
-  const now = getComputedStyle(el), from = now.translate === "none" ? "0 0" : now.translate, shadow = now.boxShadow;
+  const now = getComputedStyle(el), from = now.translate === "none" ? "0 0" : now.translate;
   Object.assign(el.style, {
     transition: "none",
     pointerEvents: "none"
   });
+  // Only `translate`, so the compositor runs it; the scrim fades on its own box as the projection turns it off.
   const slide = el.animate([{
-    translate: from,
-    boxShadow: shadow
+    translate: from
   }, {
-    translate: "0 100vh",
-    boxShadow: shadow.replace(/rgba?\([^)]*\)|color\([^)]*\)|#[\da-f]+\b/gi, "transparent")
+    translate: "0 100vh"
   }], {
     duration: 400,
     easing: "cubic-bezier(.32, .72, 0, 1)"
@@ -1106,6 +1105,12 @@ export const navigation = {
         const host = sheetAt(routes, selected), presented = host >= 0 ? host : selected;
         const found = splitOf(routes), split = found.width, live = split && !sheet(routes[presented]);
         const modal = overPage(routes[presented]), beneath = routes.findLastIndex((r, i) => i < presented && !overPage(r));
+        // The scrim under a presented sheet is its stack's parent's (neutral.css): written once a sheet has shown, so
+        // it fades out as the last one leaves.
+        const scrim = routes[presented]?.getAttribute("navigationPresentation") === "modal" ? "on" : "off", parent = viewParent(routes[0]);
+        if (parent && parent.getAttribute("data-exact-scrim") !== scrim && (scrim === "on" || parent.hasAttribute("data-exact-scrim"))) {
+          parent.setAttribute("data-exact-scrim", scrim);
+        }
         detailRows(routes, found);
         if (stack === at && list) {
           setInert(list, sheet(routes[presented]) || !!list.authoredInert);
