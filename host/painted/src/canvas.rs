@@ -7,12 +7,10 @@
 //! `Canvas.drawGlyphs` from the same font files Parley shaped with, so
 //! measurement and pixels agree (below API 31, which has no `drawGlyphs`,
 //! with each glyph's outline from those files: `canvas/legacy.rs`).
-//! The presenter lives on the Android main thread ([`CanvasHost`]); every
-//! call comes from there.
+//! The presenter lives on the Android main thread ([`CanvasHost`]); every call comes from there.
 //! The stream is `u32` words (floats as bits), little-endian:
-//! - `1 MATRIX a b c d e f` — device pixels; the rest of the stream until
-//!   the next MATRIX is drawn under it (saved/restored by the reader around
-//!   each clip scope as Canvas does).
+//! - `1 MATRIX a b c d e f` — device pixels; the rest of the stream until the next MATRIX is
+//!   drawn under it (saved/restored by the reader around each clip scope as Canvas does).
 //! - `2 RRECT color x y w h r0x r0y r1x r1y r2x r2y r3x r3y`
 //! - `3 PATH color rule n (tag coords…)×n` — tags 0 move 1 line 2 cubic 3 close
 //! - `4 CLIP_RRECT x y w h radii×8` (save + clip)

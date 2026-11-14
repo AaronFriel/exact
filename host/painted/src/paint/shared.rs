@@ -147,7 +147,14 @@ impl Painter {
             });
         // Symbols, animated pictures and decorated images keep their live drawing.
         // A plain raster can independently interpolate its fitted image rectangle.
-        let plain_image = painted
+        // The reader draws that rectangle upright, so an image rotated, skewed or
+        // scaled by a negative factor (by its own transform or an ancestor's)
+        // keeps its live drawing, which carries the transform; the raster would
+        // fly upright in the bounding box and turn at landing.
+        let upright =
+            transform.kx == 0.0 && transform.ky == 0.0 && transform.sx > 0.0 && transform.sy > 0.0;
+        let plain_image = upright
+            && painted
             && node.node_type == NodeType::Image
             && !node
                 .props

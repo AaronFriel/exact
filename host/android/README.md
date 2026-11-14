@@ -56,8 +56,10 @@ a route's hiding is read at every paint, since a crossing's end changes it with 
 Plain raster images interpolate their full fitted image rectangles in points,
 applying each decoded image's crop afterward. A pending destination keeps the
 source raster, fitted at the destination's density. Symbols, animated images,
-`visibility: hidden` images, and images with tint, filter, mask, clip path, border,
-background or shadow use the live-subtree scale path instead. The largest corner radius is
+`visibility: hidden` images, images with tint, filter, mask, clip path, border,
+background or shadow, and images rotated or turned by a negative scale (their own
+transform or an ancestor's) use the live-subtree scale path instead: it draws the
+transform, where the raster would fly upright. The largest corner radius is
 used while flying. Reversal preserves position, not velocity.
 
 This supports in-page transitions. Separate native dialog panes, presentation

@@ -343,4 +343,30 @@ class SharedElementsTest {
         assertEquals(a.left, b.left + 0.25f * b.width(), 0.01f)
         assertEquals(a.right, b.left + 0.75f * b.width(), 0.01f)
     }
+
+    @Test fun aLiveSubtreeKeepsItsRotationInFlight() {
+        // A 40 point square turned 45 degrees: a diamond in a box 40 * sqrt(2) on a side.
+        val side = 40f * kotlin.math.sqrt(2f)
+        val c = kotlin.math.sqrt(0.5f)
+        fun diamond(left: Float, top: Float) = intArrayOf(1, f(c), f(c), f(-c), f(c), f(left + side / 2f), f(top)) +
+            intArrayOf(2, Color.RED) + rect(RectF(0f, 0f, 40f, 40f)) + IntArray(8)
+        val from = RectF(0f, 0f, side, side)
+        val to = RectF(40f, 40f, 40f + side, 40f + side)
+        // Halfway the box is at 20, 20. Its centre is the diamond's; 26, 40 is beside the diamond and inside the
+        // box's rounded clip, so only an upright drawing covers it.
+        for ((live, beside) in listOf(true to Color.WHITE, false to Color.RED)) {
+            val t = Fixture()
+            t.pictures[7] = Bitmap.createBitmap(40, 40, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.RED) }
+            t.shared.begin(state(listOf(1)))
+            t.define(if (live) definition(1, from, content = diamond(from.left, from.top)) else definition(1, from, 7, 1))
+            t.shared.finish()
+            t.shared.begin(state(listOf(2), listOf(Triple(1, 2, 0.5f))))
+            t.define(if (live) definition(2, to, content = diamond(to.left, to.top)) else definition(2, to, 7, 1))
+            t.shared.finish()
+            val pixels = t.pixels()
+            assertEquals(Color.RED, pixels.getPixel(48, 48))
+            assertEquals("live $live", beside, pixels.getPixel(26, 40))
+            pixels.recycle()
+        }
+    }
 }

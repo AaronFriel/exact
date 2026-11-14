@@ -320,6 +320,45 @@ mod tests {
     }
 
     #[test]
+    fn rotated_shared_images_use_the_live_subtree() {
+        let diagonal = (80. + 60.) * std::f32::consts::FRAC_1_SQRT_2;
+        for (parent, own, fit, size) in [
+            ("", "", 3, (80., 60.)),
+            ("", "scale=2", 3, (160., 120.)),
+            ("", "rotate=\"45deg\"", 0, (diagonal, diagonal)),
+            ("rotate=\"45deg\"", "", 0, (diagonal, diagonal)),
+            ("", "scale=-1", 0, (80., 60.)),
+        ] {
+            let app = format!("component App\n  view\n    column padding=100 {parent}\n      image \"\" sharedElement=\"photo\" object-fit=\"cover\" width=80 height=60 {own}\n");
+            let (mut p, error) = Presenter::boot_with(
+                &crate::test_plan(&app),
+                (),
+                (400., 800.),
+                1.,
+                std::path::PathBuf::new(),
+                PainterChoice::Canvas,
+            )
+            .unwrap();
+            assert!(error.is_none(), "{error:?}");
+            p.frame();
+            let ops = take();
+            let defs = sets(&ops);
+            assert_eq!(defs.len(), 1);
+            let def = defs[0];
+            assert_eq!(
+                def[17], fit,
+                "an upright raster cannot show the transform: {parent} {own}"
+            );
+            // The box is the transformed image's bounding box either way.
+            let (w, h) = (f32::from_bits(def[9]), f32::from_bits(def[10]));
+            assert!(
+                (w - size.0).abs() < 0.01 && (h - size.1).abs() < 0.01,
+                "{parent} {own}: {w}x{h}"
+            );
+        }
+    }
+
+    #[test]
     fn invisible_shared_images_use_the_live_subtree() {
         for (parent, own, fit) in [
             ("", "", 3),
