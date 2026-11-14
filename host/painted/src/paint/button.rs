@@ -31,10 +31,6 @@ fn active_background(node: &NodeRef<'_>, dark: bool, down: bool) -> Option<[u8; 
 /// A size or weight the author wrote is theirs.
 fn neutral_typography(style: &StyleProps, size: Option<f32>) -> StyleProps {
     let mut out = style.clone();
-    out.font_family = 0;
-    out.font_style = exact_kernel::FontStyle::Normal;
-    out.line_height = exact_kernel::LineHeight::Normal;
-    out.letter_spacing = 0.0;
     if let Some(size) = size.filter(|_| !style.mask.has(StyleId::FontSize)) {
         out.font_size = size;
     }
@@ -1336,3 +1332,7 @@ mod tests {
         assert!(measure(&mut engine, &r).height > large.height);
     }
 }
+
+#[cfg(test)]
+#[path = "button_leading_tests.rs"]
+mod leading_tests;

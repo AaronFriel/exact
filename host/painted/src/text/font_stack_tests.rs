@@ -257,3 +257,59 @@ fn bundled_stacks_keep_each_familys_descriptors_and_raster() {
         assert_eq!(actual.path, expected.path);
     }
 }
+
+#[test]
+fn normal_metrics_follow_font_stretch_in_either_query_order() {
+    use exact_plan::builder::{Face, PlanBuilder};
+    use exact_plan::StackMemberKind;
+    let mut builder = PlanBuilder::from_plan(
+        contract::compile("component App\n  view\n    text \"fixture\"\n").unwrap(),
+    );
+    let family = builder.font_family(
+        "WidthFaces",
+        &[
+            Face {
+                source: "narrow",
+                weight: [400, 400],
+                stretch: [750, 750],
+                italic: false,
+            },
+            Face {
+                source: "wide",
+                weight: [400, 400],
+                stretch: [1000, 1000],
+                italic: false,
+            },
+        ],
+    );
+    let family = builder
+        .font_stack(&[(StackMemberKind::Family, Some(family))])
+        .0 as u16;
+    let plan = builder.finish().unwrap();
+    let assets = Assets::selected(
+        Path::new("").into(),
+        Arc::new(|name| {
+            Ok(match name {
+                "narrow" => Some(Arc::from(ARABIC)),
+                "wide" => Some(Arc::from(PLATFORM)),
+                _ => None,
+            })
+        }),
+    );
+    for widths in [[75., 100.], [100., 75.]] {
+        let mut engine = TextEngine::with_catalog(fixture().with_assets(&plan, &assets));
+        for width in widths {
+            let mut s = spec(family, "بيت");
+            s.strut.stretch = width;
+            let expected = if width == 75. {
+                32. * 2.112
+            } else {
+                32. * 2384. / 2048.
+            };
+            assert!(
+                (engine.normal_line_height(&s.strut) - expected).abs() < 0.001,
+                "width {width}"
+            );
+        }
+    }
+}

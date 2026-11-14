@@ -108,6 +108,7 @@ test('the neutral sheet\'s lengths and ratios are the metric table\'s neutral co
     'margin': ['.5em', '1rem', '1em'], '--exact-symbol-away': ['.5em'], '--exact-symbol-toward': ['.5em'], // a button's symbol overhangs its 1em place by half its growth (a bar item's, its 1rem place)
     'padding-block': ['.125em'], // a written height keeps room for a titled button's symbol's ink past its place
     'width': ['1em'], 'height': ['1em'], // a bar item's symbol is its em square times its scale, as a button face's is
+    'overflow-clip-margin': ['.5em'], // a generated sheet title keeps the same ink margin as a text title
     'mask': ['1em'], // a checked menu row's checkmark is drawn in its font's em square
     'padding-inline-start': ['1em'], 'margin-inline-start': ['1em'], 'top': ['.5em'], // a raster row reserves the mark's square and centres it vertically
   };
@@ -1391,8 +1392,8 @@ for (const engine of ['chromium', 'firefox', 'webkit']) test(`${engine}: a sheet
     expect([engine, 'bound width', await fit('class')]).toEqual([engine, 'bound width', [['16px', '16px'], 34, 44, true]]);
     await page.setViewportSize({ width: 320, height: 300 });
     await page.evaluate(() => { for (const [id, name] of [['inline', 'Abbrechen und verwerfen'], ['class', 'Speichern und schließen']]) document.getElementById(id).setAttribute('aria-label', name); document.getElementById('unsized').remove(); document.getElementById('inline').after(document.querySelector('#bar > div')); });
-    const narrow = [await fit('inline'), await fit('class'), await page.evaluate(() => [box('inline')[0] + box('inline')[2] <= box('class')[0], css('inline', 'textOverflow', '::after')])];
-    expect([engine, 'narrow', narrow]).toEqual([engine, 'narrow', [[['16px', '16px'], 34, 44, true], [['16px', '16px'], 34, 44, true], [true, 'ellipsis']]]);
+    const narrow = [await fit('inline'), await fit('class'), await page.evaluate(() => [box('inline')[0] + box('inline')[2] <= box('class')[0], css('inline', 'textOverflow', '::after'), css('inline', 'overflowX', '::after')])];
+    expect([engine, 'narrow', narrow]).toEqual([engine, 'narrow', [[['16px', '16px'], 34, 44, true], [['16px', '16px'], 34, 44, true], [true, 'ellipsis', 'hidden']]]);
     // A button its author made a block keeps the word a block of its own, which `text-overflow` ends.
     await page.evaluate(() => { document.getElementById('inline').style.display = 'block'; });
     expect([engine, 'narrow block', await fit('inline'), await page.evaluate(() => css('inline', 'display', '::after'))]).toEqual([engine, 'narrow block', [['16px', '16px'], 34, 44, true], 'block']);

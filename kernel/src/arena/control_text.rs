@@ -100,6 +100,9 @@ static NEUTRAL_STARTS: std::sync::LazyLock<[StyleProps; 3]> = std::sync::LazyLoc
         let mut start = start.clone();
         start.line_height = crate::LineHeight::Normal;
         start.mask.set(StyleId::LineHeight);
+        // The web's button reset sets font-variant: normal.
+        start.mask.set(StyleId::FontVariantLigatures);
+        start.mask.set(StyleId::FontVariantNumeric);
         start.font_weight = number(metric::CONTROL_WEIGHT) as u16;
         start.mask.set(StyleId::FontWeight);
         start
