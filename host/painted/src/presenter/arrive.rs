@@ -108,7 +108,10 @@ impl<D: DataSource> Presenter<D> {
                 continue;
             }
             self.autofocus_processed.insert(id);
-            if self.focus.is_none() || self.focus == self.autofocus_from {
+            // A `focus()` waiting for its node to land holds the focus it will
+            // take: on the web that node has it, and an `autofocus` yields.
+            let waiting = self.host.flights.focus.is_some();
+            if !waiting && (self.focus.is_none() || self.focus == self.autofocus_from) {
                 return self.set_focus(Some(id), self.host.now());
             }
             break;

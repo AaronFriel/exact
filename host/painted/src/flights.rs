@@ -704,6 +704,63 @@ component App
     }
 
     #[test]
+    fn a_later_focus_supersedes_one_waiting_for_landing() {
+        let app = APP
+            .replace(
+                "            button \"Inside\" press=toggle testId=\"inside\"\n",
+                "            input id=\"field\" testId=\"inside\"\n",
+            )
+            .replace(
+                "    open = not open\n",
+                "    open = not open\n    focus(\"field\")\n",
+            )
+            .replace(
+                "  action remove\n",
+                "  state late = false\n  action more\n    late = true\n  action remove\n",
+            )
+            .replace(
+                "      if not gone\n",
+                "      input testId=\"other\"\n      button \"More\" press=more testId=\"more\"\n      if late\n        input autofocus testId=\"late\"\n      if not gone\n",
+            );
+        for how in ["tap", "set_focus", "autofocus"] {
+            let mut p = presenter(&app);
+            let toggle = id(p.host(), "toggle");
+            p.host_mut().dispatch_at(toggle, Event::Press, 100.0);
+            p.after_commit();
+            p.run_commands(|| ());
+            p.frame();
+            let field = id(p.host(), "inside");
+            assert!(p.host().flying(field));
+            let other = id(p.host(), "other");
+            // A person moves the focus elsewhere while the field flies; an
+            // `autofocus` mounted then is no choice, and yields as on the web.
+            let kept = match how {
+                "tap" => {
+                    p.tap(other).unwrap();
+                    other
+                }
+                "set_focus" => {
+                    assert!(p.set_focus(Some(other), 300.0).is_none());
+                    other
+                }
+                _ => {
+                    let more = id(p.host(), "more");
+                    p.host_mut().dispatch_at(more, Event::Press, 300.0);
+                    p.after_commit();
+                    p.run_commands(|| ());
+                    assert_eq!(p.focus(), None, "an autofocus took a waiting focus's place");
+                    field
+                }
+            };
+            assert!(p.host().flying(field));
+            p.tick(1301.0);
+            p.reader_clock(1301.0, false);
+            assert!(!p.host().flying(field));
+            assert_eq!(p.focus(), Some(kept), "{how}");
+        }
+    }
+
+    #[test]
     fn android_spring_lands_at_the_apple_hosts_threshold() {
         let source = APP.replace("1s linear", "-exact-spring(270, 33, 1)");
         let mut p = presenter(&source);

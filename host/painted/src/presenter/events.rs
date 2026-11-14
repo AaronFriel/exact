@@ -446,6 +446,11 @@ impl<D: DataSource> Presenter<D> {
             let refused = format!("focus refused: {}", crate::host::flights::IN_FLIGHT);
             return (false, Some(refused));
         }
+        // A focus put on a node supersedes a `focus()` waiting for its node
+        // to land, as the later of two `focus()` calls wins on the web.
+        if next.is_some() {
+            self.host.flights.focus = None;
+        }
         let previous = self.focus;
         if previous == next {
             return (false, None);
