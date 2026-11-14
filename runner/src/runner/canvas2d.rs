@@ -1062,6 +1062,7 @@ impl CanvasEngine for Canvases {
             width: b.pixel_width,
             height: b.pixel_height,
             scale: b.scale,
+            encoding: crate::canvas_capture::Encoding::default(),
         })
     }
 

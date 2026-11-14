@@ -557,16 +557,16 @@ export function install(data, mixed = false, modules = null) {
   data.grants = setAppGrantSet(tsGrantSet);
   const storage = globalThis.__exactRender ? renderStorage(null) : storageOf(tsGrantSet);
   if (globalThis.__exactRender) { data.watchedInRender = watchedInRender; data.refusedInRender = refusedInRender; }
-  globalThis.captureCanvas = (surface, path) => {
+  globalThis.captureCanvas = (surface, path, type, quality) => {
     if (overlaying.on) return Promise.reject(inOverlay('captureCanvas()'));
     if (answering.mapper || answering.mapperCall) return Promise.reject(new Error("captureCanvas() is unavailable in a stream's mapper: capture in the answer that opens the stream"));
     const call = answering.call, active = () => !!call && !call.settled && (call.wanted?.() ?? call.turn) && !call.ticket?.r?.gone;
     if (globalThis.__exactRender) return refuseInRender('captureCanvas()', call);
     if (!active()) return Promise.reject(new DOMException('captureCanvas() requires a live answer: call it directly or after await', 'InvalidStateError'));
     return ordinary(() => {
-      const ready = canvasCommitted(surface, active);
+      const ready = canvasCommitted(surface, active, { type, quality });
       return Promise.all([ready, import('./canvas-capture.js')]).then(([, m]) =>
-        m.captureCanvas(surface, path, (path, png) => m.writeCanvas(appId, tsGrantSet, path, png, active), ready, active));
+        m.captureCanvas(surface, path, (path, bytes) => m.writeCanvas(appId, tsGrantSet, path, bytes, active), ready, active));
     });
   };
   // The module's storage, as the runner's `state.background` (LLP 1097 D8).

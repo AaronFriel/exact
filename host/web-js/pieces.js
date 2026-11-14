@@ -88,7 +88,7 @@ export function gs(e, name, values) {
  * capability); `types` are the arguments' declared types where known. */
 let Canvas2d = null;
 const CanvasMounts = new Set();
-export const canvasCommitted = (surface, active = () => true) => committedCanvas(surface, active, Finishes, () => Canvas2d, CanvasMounts);
+export const canvasCommitted = (surface, active = () => true, encoding = {}) => committedCanvas(surface, active, Finishes, () => Canvas2d, CanvasMounts, encoding);
 Link.canvasCommitted = canvasCommitted;
 export function c2(e, name, values, types, names) {
   const c = { e, name, types, names, mounted: clock.now, args: null };

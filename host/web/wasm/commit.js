@@ -327,8 +327,9 @@ function apply(batch) {
           track(p, op.ticket);
           break;
         }
-        // A canvas capture (LLP 1056 D9, as amended for #188): the glue's PNG of the canvas's bitmap, written as a
-        // Rust source's `fs.atomicWriteFile` is; `{path, width, height, scale}` or a refusal by name, both JSON.
+        // A canvas capture (LLP 1056 D9, as amended for #188 and #504): the glue's encoding of the canvas's bitmap,
+        // written as a Rust source's `fs.atomicWriteFile` is; `{path, width, height, scale, type}` or a refusal by
+        // name, both JSON.
         case "canvasCapturePrepare": {
           const owner = host.incarnation;
           // The stylesheet's queued flush precedes this layout read.
@@ -344,13 +345,13 @@ function apply(batch) {
           if (!holds(op.ticket)) break;
           const requestIncarnation = host.incarnation, answer = (status, value) => safelyFulfill(requestIncarnation, op.ticket, 0, status, "", encoder.encode(JSON.stringify(value)));
           const p = new Promise((resolve, reject) => pieces.canvas2d({ capture: op, resolve, reject })).then(async (blob) => {
-            const png = new Uint8Array(await blob.arrayBuffer());
+            const bytes = new Uint8Array(await blob.arrayBuffer());
             const storage = await storageService(requestIncarnation);
             if (!holds(op.ticket, requestIncarnation)) return;
-            await storage.writePng(op.path, png, scopedGrantSet(host.grantSet, op.scope), () => holds(op.ticket, requestIncarnation)).catch((error) => {
+            await storage.writeCapture(op.path, bytes, scopedGrantSet(host.grantSet, op.scope), () => holds(op.ticket, requestIncarnation)).catch((error) => {
               throw Object.assign(error, { name: /denied: /.test(error.message) ? "NotAllowedError" : error.code === "agent" ? "NotSupportedError" : "EncodingError" });
             });
-            answer(200, { path: op.path, width: op.w, height: op.h, scale: op.scale });
+            answer(200, { path: op.path, width: op.w, height: op.h, scale: op.scale, type: blob.type || "image/png" });
           }).catch((error) => answer(400, { name: ["NotAllowedError", "NotSupportedError"].includes(error.name) ? error.name : "EncodingError", message: `${op.path}: ${error.message ?? error}` }));
           track(p, op.ticket);
           break;

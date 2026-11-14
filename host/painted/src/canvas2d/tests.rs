@@ -191,6 +191,7 @@ fn capture_refuses_an_unheld_generation_without_overwriting_a_file() {
         width: 4,
         height: 4,
         scale: 1.,
+        encoding: Default::default(),
     };
     let roots = [root.clone(), root.clone(), root.clone()];
     for held in [false, true] {
@@ -227,9 +228,16 @@ fn capture_refuses_an_unheld_generation_without_overwriting_a_file() {
     ))
     .is_err());
     canvases.completed.insert(7, 1);
-    let outcome = super::capture::capture(&canvases, Ok(c), Some(roots), "fs.write app:/tmp", None);
-    assert!(
-        captured_image(&outcome).is_ok(),
+    let outcome = super::capture::capture(
+        &canvases,
+        Ok(c.clone()),
+        Some(roots.clone()),
+        "fs.write app:/tmp",
+        None,
+    );
+    assert_eq!(
+        captured_image(&outcome).map(|i| i.media_type),
+        Ok("image/png".into()),
         "a completed empty bitmap is capturable"
     );
     assert!(Pixmap::load_png(&path)
@@ -237,5 +245,37 @@ fn capture_refuses_an_unheld_generation_without_overwriting_a_file() {
         .pixels()
         .iter()
         .all(|p| p.alpha() == 0));
+    // A JPEG, as `toBlob` writes one; a type this host has no encoder for is a PNG.
+    for (file, asked, written, magic) in [
+        ("shot.jpg", "image/jpeg", "image/jpeg", &b"\xff\xd8\xff"[..]),
+        ("shot.avif", "image/avif", "image/png", &b"\x89PNG"[..]),
+    ] {
+        c.path = format!("app:/tmp/{file}");
+        c.encoding = exact_runner::canvas_capture::Encoding::new(asked, Some(0.8));
+        let outcome = super::capture::capture(
+            &canvases,
+            Ok(c.clone()),
+            Some(roots.clone()),
+            "fs.write app:/tmp",
+            None,
+        );
+        assert_eq!(
+            captured_image(&outcome).map(|i| i.media_type),
+            Ok(written.into())
+        );
+        assert!(std::fs::read(root.join(file)).unwrap().starts_with(magic));
+    }
     std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn a_jpeg_capture_is_the_bitmap_over_opaque_black() {
+    let mut p = Pixmap::new(2, 1).unwrap();
+    // Transparent, and red at half alpha (premultiplied).
+    p.pixels_mut()[1] = tiny_skia::PremultipliedColorU8::from_rgba(128, 0, 0, 128).unwrap();
+    let flat = super::capture::opaque(&p);
+    let rgba: Vec<_> = (flat.pixels().iter())
+        .map(|c| [c.red(), c.green(), c.blue(), c.alpha()])
+        .collect();
+    assert_eq!(rgba, [[0, 0, 0, 255], [128, 0, 0, 255]]);
 }

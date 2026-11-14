@@ -872,13 +872,15 @@ pub enum SurfaceRequest {
         /// The complete carried state; hosts never project or truncate it.
         bytes: Vec<u8>,
     },
-    /// Write the kept bitmap of a 2D canvas as a PNG file
+    /// Write the kept bitmap of a 2D canvas as an image file
     /// ([`crate::canvas_capture`]).
     Canvas {
         /// The authored canvas surface name.
         name: String,
         /// The `app:/` file to write.
         path: String,
+        /// The image type and quality asked for.
+        encoding: crate::canvas_capture::Encoding,
         /// The runner's owned drawing boundary; absent until the requesting commit stands.
         job: Option<crate::canvas_capture::CaptureJob>,
     },

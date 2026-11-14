@@ -616,19 +616,28 @@ impl Batch {
         self.ops.push(s);
     }
 
-    /// `{"op":"surfaceWork","mode":"canvas","ticket","id","lifetime","generation","w","h"}`:
-    /// the presenter encodes that canvas's bitmap (`canvas_capture.rs`); with
-    /// none, `"refused":true`, which it hands straight back.
+    /// `{"op":"surfaceWork","mode":"canvas","ticket","id","lifetime","generation","w","h","type","quality"?}`:
+    /// the presenter encodes that canvas's bitmap (`canvas_capture.rs`) as
+    /// `type` if ImageIO writes it, else PNG; with none, `"refused":true`,
+    /// which it hands straight back.
     pub fn canvas_capture(
         &mut self,
         ticket: u64,
         c: Option<&exact_runner::canvas_capture::CanvasCapture>,
     ) {
         self.ops.push(match c {
-            Some(c) => format!(
-                "{{\"op\":\"surfaceWork\",\"mode\":\"canvas\",\"ticket\":{ticket},\"id\":{},\"lifetime\":{},\"generation\":{},\"sequence\":{},\"w\":{},\"h\":{}}}",
-                c.view, c.lifetime, c.generation, c.sequence, c.width, c.height
-            ),
+            Some(c) => {
+                let mut op = format!(
+                    "{{\"op\":\"surfaceWork\",\"mode\":\"canvas\",\"ticket\":{ticket},\"id\":{},\"lifetime\":{},\"generation\":{},\"sequence\":{},\"w\":{},\"h\":{},\"type\":",
+                    c.view, c.lifetime, c.generation, c.sequence, c.width, c.height
+                );
+                exact_runner::agent::quote(&c.encoding.media_type, &mut op);
+                if let Some(q) = c.encoding.quality {
+                    op.push_str(&format!(",\"quality\":{}", exact_runner::agent::num(q)));
+                }
+                op.push('}');
+                op
+            }
             None => format!(
                 "{{\"op\":\"surfaceWork\",\"mode\":\"canvas\",\"ticket\":{ticket},\"refused\":true}}"
             ),

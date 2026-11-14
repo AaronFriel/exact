@@ -1844,6 +1844,11 @@ path exists after than before. Still refused: a drawing language in Contract
     size (LLP 1056 D9). Unblocks
     a screenshot annotation tool that exports what its canvas shows. Synchronous
     readback stays refused.
+  - **Expanded (Charlie, 2026-11-14, expo/exact#504; take waived):** the
+    capture takes `toBlob`'s `type` and `quality`: JPEG on every host by the
+    system encoder (Linux by `jpeg-encoder`, having none), another type only
+    where the system encodes it, else PNG (LLP 1056 D9). No WebP, JPEG XL or
+    AVIF encoder ships.
 **Expanded (Seth Webster, 2026-09-26, for grnl; LLP 1061–1064):** paint motion
 on boxes — `transition` and keyframes on `background-color`, `color`, borders,
 `-exact-tint-color` and `box-shadow`, `light-dark()` pairs moving with the appearance —

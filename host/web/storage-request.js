@@ -53,9 +53,9 @@ export function createStorageRequests(appId, admitted) {
   };
   const check = () => { if(disposed)throw new Error('storage source unloaded'); };
   return {
-    /** A canvas capture's PNG at the app file `path` (LLP 1056 D9, as amended for #188), as `fs.atomicWriteFile`
+    /** A canvas capture's encoded file at `path` (LLP 1056 D9, as amended for #188), as `fs.atomicWriteFile`
      *  writes it, under `scope` (the app's grants, or a source's narrower ones). */
-    async writePng(path, png, scope = null, active = () => true) {
+    async writeCapture(path, bytes, scope = null, active = () => true) {
       check();
       scope ??= admitted;
       const invalid = grantError(scope); if (invalid) throw new Error(invalid);
@@ -65,7 +65,7 @@ export function createStorageRequests(appId, admitted) {
         check();
         return active() ? undefined : new DOMException("the capture's ticket is no longer held", 'AbortError');
       };
-      return target.put(new Response(png), png.byteLength, null, refusal, refusal);
+      return target.put(new Response(bytes), bytes.byteLength, null, refusal, refusal);
     },
     async run(payload, scope = null) {
       try {
