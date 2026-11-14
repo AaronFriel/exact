@@ -59,7 +59,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, openSync, closeSync, readFileSync, writeFileSync } from 'node:fs';
 import { availableParallelism, loadavg } from 'node:os';
 import { basename, resolve } from 'node:path';
-import { Graph, LANE_DISTS, PARITY, Repo, WEB_APPS, parityLeg, select, stepEnv, suites } from './affected.mjs';
+import { Graph, LANE_DISTS, PARITY, Repo, WEB_APPS, gameAppleLeg, parityLeg, select, stepEnv, suites } from './affected.mjs';
 import { INPUTS, Inputs, Store, checkEnv, decide, outcomeOf } from './async-inputs.mjs';
 import { main as issue } from './issue.mjs';
 import { noteOf, publish, stoppedEarly } from './known.mjs';
@@ -107,6 +107,7 @@ export const tvosCompile = ['tvos', 'env', ['EXACT_JS_ENGINE=stub', 'bun', 'host
 export const watchosCompile = ['watchos', 'bun', ['host/apple/build.mjs', '--watchos', '--no-install']];
 export const gameScaffoldCheck = ['game-scaffold', 'bun', ['test', 'game/proof-game.test.mjs', 'game/new.test.mjs', '--test-name-pattern', 'proof script|worldPixels|AGENTS.md lists vocab|new logic/tests file']];
 export const gameCheck = ['game', 'cargo', ['test', '--manifest-path', 'game/Cargo.toml', '--workspace', '--locked', '--lib', '--bins', '--tests', '--no-fail-fast']];
+export const gameAppleCheck = ['game-apple', 'sh', ['-c', gameAppleLeg]];
 // Glue files that edit an app's checked-in sources while they run
 const EDITS_APPS = /\/dev-scheduler\.test\.mjs$/;
 /** The glue step's worker processes: half the cores the machine's load leaves idle, at least one. Each worker's file
@@ -155,6 +156,7 @@ export function laneSelection(changed, { root = WT, full = false, repo } = {}) {
     parity: PARITY.filter(smoke => ids.has(`parity:${smoke}`)),
     moduleSeams: ids.has('drive:module-seams'), notificationsWeb: ids.has('drive:notifications-web'),
     ios: ids.has('xctest:ios'), iosOnly, touch: ids.has('touch:ios'), tvos: ids.has('compile:tvos'), watchos: ids.has('compile:watchos'),
+    gameApple: ids.has('compile:game-apple'),
   };
 }
 const WEB_AX = ['./host/web/tests/accessibility-tree.test.mjs', './host/web/tests/presence-preload.test.mjs', './host/web/tests/zero-viewport.test.mjs'];
@@ -162,12 +164,12 @@ const WEB_AX = ['./host/web/tests/accessibility-tree.test.mjs', './host/web/test
 export function everything(root = WT, glue) {
   return { full: true, ids: [], cargo: [], game: true, glue: glue ?? glueTests(root), webBuild: true, webAx: true,
     conform: WEB_APPS, parity: PARITY, moduleSeams: true, notificationsWeb: true,
-    ios: true, iosOnly: null, touch: true, tvos: true, watchos: true };
+    ios: true, iosOnly: null, touch: true, tvos: true, watchos: true, gameApple: true };
 }
 /** No suite: what runs whatever changed. */
 export const nothing = () => ({ full: false, ids: [], cargo: [], game: false, glue: [], webBuild: false, webAx: false,
   conform: [], parity: [], moduleSeams: false, notificationsWeb: false,
-  ios: false, iosOnly: null, touch: false, tvos: false, watchos: false, lane: [] });
+  ios: false, iosOnly: null, touch: false, tvos: false, watchos: false, gameApple: false, lane: [] });
 /** The checks a selection can leave out: a full run's that no suite's selection runs. */
 export const gated = () => {
   const names = selection => new Set(checks('', null, selection).map(([name]) => name));
@@ -215,6 +217,7 @@ export function checks(sha, since, selection = {}) {
       gameScaffoldCheck,
       ['game-assets-scaffold', 'bun', ['test', 'game/new.test.mjs', '--timeout', '3600000', '--test-name-pattern', 'assets scaffold']],
     ]),
+    ...when(selection.gameApple, [gameAppleCheck]),
     ...(lane.length ? [(([command, ...args]) => ['lane', command, args])(cargoTests('--', '--ignored', ...lane))] : []),
     ['clippy', 'cargo', ['clippy', ...workspace, '--all-targets', '--keep-going', '--', '-D', 'warnings']],
     ['fmt', 'cargo', ['fmt', '--all', '--', '--check']],

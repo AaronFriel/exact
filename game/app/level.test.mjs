@@ -2,7 +2,7 @@ import {test, expect} from 'bun:test';
 import {mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, realpathSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {resolve} from 'node:path';
-import {gameDefaults, gameShells} from './shells.mjs';
+import {gameDefaults, gameShells, sharesAppleEntry} from './shells.mjs';
 
 test('external shells use the SDK toolchain and refresh stale generated pins', () => {
   const dir = mkdtempSync(resolve(tmpdir(), 'exact-shell-toolchain-'));
@@ -229,4 +229,31 @@ test('starter and Beacons retarget glow through the row handle', () => {
     expect(source).toContain('beacon.name()');
     expect(source).not.toMatch(/require_mut::<Glow>|\.0\.to\(|tick_end\(/);
   }
+});
+
+test('a game shares the Apple host only when the build will bake the shared entry (#559)', () => {
+  const dir = mkdtempSync(resolve(tmpdir(), 'exact-shared-entry-'));
+  try {
+    mkdirSync(resolve(dir, 'logic/src'), {recursive:true});
+    writeFileSync(resolve(dir, 'app.json'), JSON.stringify({game:{}}));
+    writeFileSync(resolve(dir, 'logic/src/lib.rs'), 'impl Game for Island { const ID: &\'static str = "island"; }');
+    const game = gameDefaults(dir).game, sdk = resolve(import.meta.dir, '..');
+    const shell = () => readFileSync(resolve(dir, '.shells/apple/Cargo.toml'), 'utf8') + readFileSync(resolve(dir, '.shells/apple/build.rs'), 'utf8');
+    const shares = env => {
+      gameShells(dir, game, sdk, {env});
+      const text = shell();
+      // The dependency and the build script's call are one decision.
+      expect(text.includes('exact-game-apple.workspace = true')).toBe(text.includes('bake_shared_declaration('));
+      return text.includes('bake_shared_declaration(');
+    };
+    expect(shares({})).toBe(true);
+    expect(shares({EXACT_APPLE_LINK:'all', EXACT_UPDATE_TRUST:'production'})).toBe(true);
+    expect(shares({EXACT_UPDATE_TRUST:'production'})).toBe(false);
+    expect(shares({EXACT_APPLE_LINK:'plan'})).toBe(false);
+    expect(shares({EXACT_NATIVE_SOURCE:'0'.repeat(64)})).toBe(false);
+    expect(shares({EXACT_RUST_BUNDLE:dir})).toBe(false);
+    expect(sharesAppleEntry({link:['sqlite']}, {EXACT_APPLE_LINK:'plan'})).toBe(true);
+    expect(sharesAppleEntry({preload:{feed:{url:'https://example.com/feed'}}}, {})).toBe(false);
+    expect(sharesAppleEntry({preload:{}}, {})).toBe(true);
+  } finally { rmSync(dir, {recursive:true, force:true}); }
 });

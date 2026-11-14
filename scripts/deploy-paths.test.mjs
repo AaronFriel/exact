@@ -11,6 +11,7 @@ import { pathToFileURL } from 'node:url';
 import { assertCapturedContractSources, assertCapturedPackageDependencies, bake, buildFor, canonicalBytes, classify, classifyArtifacts, cohortReceipt, contractCompiler, copyBake, disposeSnapshot, installedContractPackage, materializeSnapshot, namesNative, nativePlatforms, publishRoot, snapshotOf, sourcePaths, streamHead, unrelocatableContractDependency } from './deploy.mjs';
 import { bakeOutput, bakeTarget, buildBake } from './app.mjs';
 import * as asyncLane from './async.mjs';
+import { gameAppleLeg } from './affected.mjs';
 import { pinned } from './test-workspace.mjs';
 const {changedPaths, failures, owners, retainSkippedFailures} = asyncLane;
 
@@ -367,7 +368,7 @@ test('async runs a check only for the suites selected, its Rust tests built as a
   expect(step('conform-webkit')).toBeUndefined();
   expect(step('glue')[2].at(-1)).toContain('./host/web/a.test.mjs');
   for (const name of ['prepare', 'ios']) expect(step(name)).toBeDefined();
-  for (const name of ['ios-touch', 'tvos', 'watchos', 'game', 'web-ax-test', 'parity-svg', 'parity-motion', 'module-seams', 'notifications-web']) expect(step(name)).toBeUndefined();
+  for (const name of ['ios-touch', 'tvos', 'watchos', 'game', 'game-apple', 'web-ax-test', 'parity-svg', 'parity-motion', 'module-seams', 'notifications-web']) expect(step(name)).toBeUndefined();
   expect(asyncLane.covers('test', selection)).toEqual(['cargo:exact-painted']);
   expect(asyncLane.covers('conform-browsers', selection)).toEqual(['conform:caltrain']);
   expect(asyncLane.covers('ios', selection)).toBe(null);
@@ -381,11 +382,11 @@ test('async runs a check only for the suites selected, its Rust tests built as a
   expect(ranTwo.failures).toEqual(['ios: ExactKitTests.CTests testC failed', 'ios: exit 65 (see log)']);
   const full = asyncLane.checks('new', 'old', {lane:[], glue:['./x.test.mjs']});
   expect(full.find(([n]) => n === 'test')[2]).toEqual(expect.arrayContaining(['cargo', 'test', '--workspace']));
-  for (const name of ['ios', 'ios-touch', 'tvos', 'watchos', 'game', 'web-ax-test', 'conform', 'parity-svg', 'parity-motion', 'module-seams', 'notifications-web']) expect(full.some(([n]) => n === name)).toBe(true);
+  for (const name of ['ios', 'ios-touch', 'tvos', 'watchos', 'game', 'game-apple', 'web-ax-test', 'conform', 'parity-svg', 'parity-motion', 'module-seams', 'notifications-web']) expect(full.some(([n]) => n === name)).toBe(true);
   // A parity leg builds its gallery's Linux host, then drives the smoke on a fresh web build
   expect(full.find(([n]) => n === 'parity-svg').slice(1)).toEqual(['sh', ['-c', 'cargo build --profile host-dev -p svg-gallery-linux && EXACT_PARITY_REBUILD=1 bun scripts/smoke.mjs svg --hosts linux']]);
   // What a selection can leave out is what a full run has and an empty selection has not.
-  expect([...asyncLane.gated()].sort()).toEqual(['conform', 'conform-browsers', 'game', 'game-assets-scaffold', 'game-lock', 'game-pins', 'game-recipes', 'game-scaffold', 'game-vocab', 'glue', 'ios', 'ios-touch', 'lane', 'module-seams', 'notifications-web', 'parity-motion', 'parity-svg', 'prepare', 'test', 'tvos', 'watchos', 'web-ax-test', 'web-build-test']);
+  expect([...asyncLane.gated()].sort()).toEqual(['conform', 'conform-browsers', 'game', 'game-apple', 'game-assets-scaffold', 'game-lock', 'game-pins', 'game-recipes', 'game-scaffold', 'game-vocab', 'glue', 'ios', 'ios-touch', 'lane', 'module-seams', 'notifications-web', 'parity-motion', 'parity-svg', 'prepare', 'test', 'tvos', 'watchos', 'web-ax-test', 'web-build-test']);
 });
 
 test('async runs each module drive whole and keeps its failure until it runs again', () => {
@@ -424,6 +425,12 @@ test('async compiles tvOS per commit with no simulator, and tier 2 installs it',
   const ran = {checks: {tvos: {status: 0}}, failures: []};
   retainSkippedFailures(['tvos: IOS/RemoteTVOS.swift: cannot find type'], ran);
   expect(ran.failures).toEqual([]);
+});
+
+test('async compiles the shared game Apple shell when the lane selects it (#559)', () => {
+  const step = selection => asyncLane.checks('new', 'old', selection).filter(([name]) => name === 'game-apple');
+  expect(step({...asyncLane.nothing(), gameApple: true})).toEqual([['game-apple', 'sh', ['-c', gameAppleLeg]]]);
+  expect(step(asyncLane.nothing())).toEqual([]);
 });
 
 test('async compiles watchOS per commit with no simulator, and tier 2 does not again', () => {

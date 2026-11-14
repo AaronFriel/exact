@@ -10,8 +10,8 @@ pub fn bake_declaration(platform: &str, app_dir: &str) {
 /// Bake a game without a data crate for the Apple shell such games share
 /// (`exact-game-apple`, game/app/apple), which its crate depends on: the entry
 /// only defines the plan and compat.json that shell reads, so the game's own
-/// Apple crate compiles no host. A game the shared entry does not fit bakes as
-/// `bake_declaration` does.
+/// Apple crate compiles no host. `game/app/shells.mjs` (`sharesAppleEntry`)
+/// generates this call only for a game the shared entry fits.
 pub fn bake_shared_declaration(app_dir: &str) {
     require_declaration(app_dir);
     bake_source("apple", app_dir, (), "()", "Default::default()", true);
@@ -162,13 +162,19 @@ fn bake_source<D: contract::DataSource>(
         "windows" => &windows,
         _ => panic!("unsupported game app platform: {platform}"),
     };
-    // The shared shell holds this game's host when the entry it would compile names
-    // nothing of the game but its app id (`SHARED_ENTRY`); otherwise (a production link
-    // set by plan, preloads) the game compiles its own, and exact-game-apple goes unused.
-    if shared
-        && empty_entry(constructor, &compat.inputs, "app_id()")
-            .is_ok_and(|e| format!("{e}\n{}\n", apple_host("plan()", "compat()")) == SHARED_ENTRY)
-    {
+    // The shared shell holds this game's host: the entry it would compile names nothing
+    // of the game but its app id (`SHARED_ENTRY`). shells.mjs decided that from the build's
+    // environment before Cargo ran; a build in another environment finds otherwise.
+    if shared {
+        let entry = empty_entry(constructor, &compat.inputs, "app_id()")
+            .map(|e| format!("{e}\n{}\n", apple_host("plan()", "compat()")));
+        assert!(
+            entry.as_deref() == Ok(SHARED_ENTRY),
+            "this game's Apple entry is not exact-game-apple's (preloads, a link set without SQLite, \
+             EXACT_NATIVE_SOURCE or EXACT_RUST_BUNDLE), but its .shells workspace was generated in \
+             another environment to share it; a build through exact.mjs or host/apple/build.mjs \
+             generates it for its own"
+        );
         fs::write(out.join("entry.rs"), SHARED_SHELL).unwrap();
         return;
     }
