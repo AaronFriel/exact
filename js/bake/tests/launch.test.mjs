@@ -271,3 +271,55 @@ test('a marked read takes what the launch module asked for before any module ran
     } finally { rmSync(dir,{recursive:true,force:true}); }
   }
 });
+
+test('a preload names settings that are undeclared or have no build value, and accepts a module default', async () => {
+  const { inlineSettings } = await import('../src/__exact_env.mjs');
+  const { parseSync } = await import('rolldown/utils');
+  const app = mkdtempSync(resolve(tmpdir(), 'exact-preload-settings-'));
+  const parse = parseSync;
+  try {
+    const write = env => writeFileSync(resolve(app, 'app.json'), JSON.stringify({ env, preload: { feed: { url: '{env:EONE_API}/feed' } } }));
+    write([]);
+    expect(() => inlineSettings('', app, parse, {})).toThrow('preload.feed.url: setting EONE_API is not declared');
+    write([{ name: 'EONE_API', launch: true }]);
+    expect(() => inlineSettings('const API = import.meta.env.EONE_API;', app, parse, {})).toThrow('preload.feed.url: setting EONE_API has no build value');
+    const { record } = inlineSettings("const API = import.meta.env.EONE_API ?? 'https://built.test';", app, parse, {});
+    expect(record).toEqual({ EONE_API: { value: 'https://built.test', source: 'default', launch: true } });
+  } finally { rmSync(app, { recursive: true, force: true }); }
+});
+
+test('a backend selection refuses a preload setting whose origin literal it rewrites', async () => {
+  const { configure } = await import('../src/typescript.mjs');
+  const { parseSync } = await import('rolldown/utils');
+  const root = mkdtempSync(resolve(tmpdir(), 'exact-preload-backend-'));
+  const app = resolve(root, 'app'), stage = resolve(root, 'stage');
+  mkdirSync(app); mkdirSync(stage);
+  const saved = Object.fromEntries(['EXACT_BACKEND_ORIGIN', 'EXACT_BACKEND_PROVENANCE', 'API'].map(name => [name, process.env[name]]));
+  try {
+    process.env.EXACT_BACKEND_ORIGIN = 'https://selected.example';
+    delete process.env.API; delete process.env.EXACT_BACKEND_PROVENANCE;
+    writeFileSync(resolve(app, 'app.json'), JSON.stringify({env:['API'], preload:{feed:{url:'{env:API}/feed'}}}));
+    writeFileSync(resolve(stage, '__exact_paths.json'), JSON.stringify({app, mounts:[]}));
+    writeFileSync(resolve(stage, 'app.ts'), "const origin = import.meta.env.API ?? 'https://built.example';\nexport const grants = `net.fetch ${origin}`;\n");
+    expect(() => configure(stage, false, parseSync)).toThrow('preload.feed.url: setting API');
+    expect(() => configure(stage, false, parseSync)).toThrow('EXACT_BACKEND_ORIGIN selects https://selected.example');
+  } finally {
+    for (const [name, value] of Object.entries(saved)) { if (value === undefined) delete process.env[name]; else process.env[name] = value; }
+    rmSync(root, {recursive:true, force:true});
+  }
+});
+
+test('settings and preloads read the resolved shell manifest together', async () => {
+  const { inlineSettings, declaredSettings } = await import('../src/__exact_env.mjs');
+  const { parseSync } = await import('rolldown/utils');
+  const app = mkdtempSync(resolve(tmpdir(), 'exact-preload-manifest-'));
+  try {
+    writeFileSync(resolve(app, 'app.json'), JSON.stringify({env:['WRONG'], preload:{wrong:{url:'{env:MISSING}'}}}));
+    mkdirSync(resolve(app, '.shells'));
+    writeFileSync(resolve(app, '.shells/app.json'), JSON.stringify({env:['API'], preload:{feed:{url:'{env:API}/feed'}}}));
+    expect(declaredSettings(app)).toEqual(['API']);
+    expect(inlineSettings("const origin = import.meta.env.API ?? 'https://built.example';", app, parseSync, {}).record.API.value).toBe('https://built.example');
+    writeFileSync(resolve(app, '.shells/app.json'), JSON.stringify({env:['API'], preload:{feed:{url:'{env:MISSING}/feed'}}}));
+    expect(() => inlineSettings("const origin = import.meta.env.API ?? 'https://built.example';", app, parseSync, {})).toThrow('preload.feed.url: setting MISSING');
+  } finally { rmSync(app, {recursive:true, force:true}); }
+});

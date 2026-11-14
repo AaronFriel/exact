@@ -43,7 +43,7 @@ fn change_wait(cache: &mut cache::Cache, change: WaitChange) {
     };
 }
 
-/// A plain HTTP request prepared by the host, with its present secrets filled in.
+/// A plain HTTP request with its secrets and launch settings filled in.
 #[derive(Clone)]
 pub struct Definition {
     /// Stable app-defined name used in the journal.
@@ -54,6 +54,86 @@ pub struct Definition {
     pub deadline_ms: Option<u32>,
     /// Secret names whose writes invalidate this request and its reply.
     pub secrets: Vec<String>,
+}
+
+impl Definition {
+    /// Fill the manifest's references before validating or journalling its origin (LLP 1162.000 D2).
+    pub fn fill(
+        definition: &exact_runner::request::Preload,
+        lookup: impl FnMut(&str) -> Option<String>,
+    ) -> Result<Self, Fact> {
+        use ibex2::stdlib::fetch;
+        let mut request = definition.fill(lookup, preload_url).map_err(|error| Fact {
+            name: definition.name.into(),
+            origin: match error {
+                exact_runner::request::PreloadFillError::InvalidUrl => String::new(),
+                exact_runner::request::PreloadFillError::MissingSecret(_) => definition
+                    .fill(|_| Some("redacted".into()), preload_url)
+                    .ok()
+                    .map(|r| origin(&r))
+                    .unwrap_or_default(),
+            },
+            outcome: match error {
+                exact_runner::request::PreloadFillError::MissingSecret(_) => Event::MissingSecret,
+                exact_runner::request::PreloadFillError::InvalidUrl => Event::InvalidUrl,
+            },
+        })?;
+        for (_, value) in &mut request.headers {
+            *value = fetch::normalize_value(value).to_owned();
+        }
+        let invalid = if preload_url(&request.url).is_none() {
+            Some(Event::InvalidUrl)
+        } else if request
+            .headers
+            .iter()
+            .any(|(_, value)| !fetch::is_valid_value(value))
+        {
+            Some(Event::InvalidHeader)
+        } else {
+            None
+        };
+        if let Some(outcome) = invalid {
+            return Err(Fact {
+                name: definition.name.into(),
+                origin: if outcome == Event::InvalidUrl {
+                    String::new()
+                } else {
+                    origin(&request)
+                },
+                outcome,
+            });
+        }
+        Ok(Self {
+            name: definition.name.into(),
+            request,
+            deadline_ms: definition.timeout_ms,
+            secrets: definition.secrets.iter().map(|s| (*s).into()).collect(),
+        })
+    }
+}
+/// Validate a preload URL with the sender's parser and return its normalized scheme and authority
+/// for the secret-boundary check (LLP 1162.000 D2–D3).
+pub fn preload_url(target: &str) -> Option<String> {
+    let parsed = ibex2::stdlib::url::parse(target, None).ok()?;
+    let userinfo = target.split_once(':').is_some_and(|(_, tail)| {
+        tail.trim_start_matches(['/', '\\'])
+            .split(['/', '\\', '?', '#'])
+            .next()
+            .is_some_and(|authority| authority.contains('@'))
+    });
+    (matches!(parsed.protocol.as_str(), "http:" | "https:")
+        && !parsed.hostname.is_empty()
+        && !userinfo
+        && parsed.username.is_empty()
+        && parsed.password.is_empty()
+        && !parsed.href.contains('#'))
+    .then_some(parsed.origin)
+}
+
+fn origin(request: &Request) -> String {
+    url::Url::parse(&request.url)
+        .map(|u| u.origin().ascii_serialization())
+        .unwrap_or_default()
 }
 
 /// An outcome recorded at most once per preload.
@@ -1215,21 +1295,7 @@ pub(super) fn close(cache: &mut cache::Cache) {
 /// Runtime checks for requests supplied by Rust, including filled manifest references.
 pub fn valid_request(request: &Request) -> bool {
     use ibex2::stdlib::fetch::{is_valid_name, is_valid_value, normalize_value, Headers};
-    let Ok(url) = url::Url::parse(&request.url) else {
-        return false;
-    };
-    let userinfo = request.url.split_once(':').is_some_and(|(_, tail)| {
-        tail.trim_start_matches(['/', '\\'])
-            .split(['/', '\\', '?', '#'])
-            .next()
-            .is_some_and(|authority| authority.contains('@'))
-    });
-    if !matches!(url.scheme(), "http" | "https")
-        || url.host_str().is_none()
-        || userinfo
-        || !url.username().is_empty()
-        || url.password().is_some()
-        || url.fragment().is_some()
+    if preload_url(&request.url).is_none()
         || !is_valid_name(&request.method)
         || !request.is_plain_http()
         || request.body.len() > MAX_BODY_BYTES
