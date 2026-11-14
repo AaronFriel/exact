@@ -16,6 +16,7 @@ func attribute(_ element: AXUIElement, _ name: String, errors: inout [String]) -
 func snapshot(_ pid: pid_t) -> [String: Any] {
     var errors: [String] = [], elements: [[String: Any]] = [], seen: Set<AXUIElement> = []
     var truncated = false
+    var mainFrame: [Double]?
     func walk(_ node: AXUIElement, _ depth: Int) {
         guard !seen.contains(node) else { return }
         guard elements.count < 2000 && depth < 64 else { truncated = true; return }
@@ -43,6 +44,15 @@ func snapshot(_ pid: pid_t) -> [String: Any] {
     if AXIsProcessTrusted() {
         let app = AXUIElementCreateApplication(pid)
         AXUIElementSetMessagingTimeout(app, 2)
+        if let value = attribute(app, "AXMainWindow", errors: &errors), CFGetTypeID(value) == AXUIElementGetTypeID() {
+            let window = value as! AXUIElement
+            var point = CGPoint.zero, size = CGSize.zero
+            if let p = attribute(window, "AXPosition", errors: &errors), CFGetTypeID(p) == AXValueGetTypeID(),
+               let s = attribute(window, "AXSize", errors: &errors), CFGetTypeID(s) == AXValueGetTypeID(),
+               AXValueGetValue(p as! AXValue, .cgPoint, &point), AXValueGetValue(s as! AXValue, .cgSize, &size) {
+                mainFrame = [point.x, point.y, size.width, size.height]
+            }
+        }
         walk(app, 0)
     } else { errors.append("Accessibility permission is unavailable for the see helper") }
     let windows = (CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
@@ -55,7 +65,7 @@ func snapshot(_ pid: pid_t) -> [String: Any] {
             return ["id": id, "frame": [rect.minX, rect.minY, rect.width, rect.height],
                     "layer": w[kCGWindowLayer as String] ?? 0, "title": w[kCGWindowName as String] ?? ""]
         }
-    return ["pid": Int(pid), "elements": elements, "errors": Array(Set(errors)).sorted(),
+    return ["pid": Int(pid), "elements": elements, "errors": Array(Set(errors)).sorted(), "mainFrame": mainFrame as Any? ?? NSNull(),
             "truncated": truncated, "windows": windows,
             "frontmost": NSWorkspace.shared.frontmostApplication?.processIdentifier == pid,
             "screenCapture": CGPreflightScreenCaptureAccess()]

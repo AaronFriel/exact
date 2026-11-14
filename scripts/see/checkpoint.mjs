@@ -74,7 +74,11 @@ export async function checkpoint(session, observer, directory) {
     findings.push(...stableFindings(frameBefore.window, frameAfter.window, 'platform/window-identity'));
   }
   if (images.inside && images.outsideBefore) {
-    if (images.inside.width !== images.outsideBefore.width || images.inside.height !== images.outsideBefore.height)
+    const f = outsideBefore?.frame;
+    const fullDisplay = session.host === 'ios' && insideFrame.pixels === 'display' && f?.[0] === 0 && f?.[1] === 0 &&
+      insideFrame.w === f[2] && insideFrame.h === f[3] &&
+      insideFrame.w * insideFrame.scale === images.inside.width && insideFrame.h * insideFrame.scale === images.inside.height;
+    if (fullDisplay || images.inside.width !== images.outsideBefore.width || images.inside.height !== images.outsideBefore.height)
       findings.push(...comparePixels(images.inside, images.outsideBefore, 'default-vs-presented'));
     else findings.push(blind('default-vs-presented', 'equal dimensions alone do not establish viewport-to-window coordinates'));
   }
@@ -86,7 +90,7 @@ export async function checkpoint(session, observer, directory) {
   }
   if (frameBefore?.attachments?.length) findings.push(blind('window-vs-presented', 'attached windows captured separately; no compositing map was established'));
   const report = {status: verdict(findings), identity: observer.identity, observations, findings, images: facts, stateFields: STATE_FIELDS,
-    treeComparison, limitation: 'Sampled stability only; no shared compositor transaction ID. Anonymous structure and unaligned regions are not compared.'};
+    treeComparison, limitation: 'Sampled stability only; no shared compositor transaction ID. XCTest omits zero-area and out-of-window elements. Anonymous structure and unaligned regions are not compared.'};
   json(resolve(directory, 'checkpoint.json'), report);
   return {report, model: before, state: stateBefore, outside: outsideBefore};
 }

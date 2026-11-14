@@ -57,8 +57,15 @@ These are instrument disagreements, not automatically accessibility defects.
 Pictures are compared only at the same pixel size and with an explicit region
 mapping. Different extents are findings and an unaligned region is a blind
 spot; the experiment does not resize, guess a crop, or hide native chrome.
+On the Mac the AX main window's frame must identify exactly one window-server
+window owned by the process; the largest window is not assumed to be the target.
 Every changed pixel in a mapped region contributes to the reported count and
 bounding box. No perceptual threshold declares an unexplained change a pass.
+An iOS default screenshot that declares `pixels: display`, with dimensions and
+scale matching XCTest's full-screen application frame, has an explicit mapping
+to the simulator display. It is already outside pixel evidence; the experiment
+does not describe it as an in-process drawing. XCTest's existing reader omits
+zero-area and out-of-window elements; that coverage limit is in every report.
 
 Reports use `agreement`, `disagreement`, or `inconclusive`; exit codes are 0, 1,
 and 2 respectively. Even `agreement` covers only the listed comparisons.
@@ -71,8 +78,10 @@ driver sessions with the same launch facts and setup (`--setup-tap <test-id>`,
 repeatable). One dispatches through the existing driver, the other uses
 CGEvent or XCTest. Both resolve the same semantic target. Platform coordinates
 come from the outside tree; ambiguity or absence refuses that leg. A drag is
-target-relative, measured in platform points and wall milliseconds. Its
-delivered duration is recorded; release velocity in the app is not inferred.
+target-relative, requested in platform points and wall milliseconds. The input
+receipt interval is recorded: CGEvent's posting interval, or XCTest's request
+interval including its waits. Neither measures the app's received event times
+or establishes release velocity in the app.
 
 The before checkpoints must agree on their comparable model and outside tree
 before outcomes are compared. Differing initial conditions, a failed delivery,
@@ -98,3 +107,38 @@ See `REMOVING.md` for the complete deletion list and its test. Step 2 is a
 hand-judged corpus of disagreements and seeded misses, followed by precision
 measurements for each proposed finding kind. Accepted baselines, cross-host
 layout, replay and changes to `verify` remain outside this experiment.
+
+## First qualification, 2026-11-14
+
+Caltrain and Shelf were built and run on macOS and an isolated iPhone 18 Pro
+simulator, iOS 27.0. The reports and original captures are under `target/see-*`.
+Counts below describe instrument differences, not a count of app defects.
+
+| Checkpoint | Outside versus driver evidence |
+| --- | --- |
+| Caltrain, iOS, initial screen | A stable interval: both driver pictures matched the simulator frame. XCTest exposed 23 elements against 288 driver nodes; 235 named model elements had no outside match. The visible Change station button was one of them, so the outside-targeted tap refused. |
+| Shelf, iOS, initial screen | The same `search` identifier was named Search outside and Search title or author inside. Both tap paths opened `/add`. |
+| Shelf, iOS, Add Book | 19,408 of 3,162,132 window pixels differed, but the outside frames also changed: inconclusive. The outside tree included native New Book navigation and field cells. |
+| Shelf, macOS, Add Book | AX exposed an `AXSheet`; the default driver picture explicitly omitted `SheetWindow`. External window capture failed, while the driver's own window capture succeeded. |
+| Caltrain, macOS | CGEvent and driver taps both opened `/stations`. A 100-point drag over 300 ms posted 18 CGEvent moves in 303 ms; both drag paths left the route unchanged. |
+
+Shelf also accepted a real XCTest drag on `library-list`: a 100-point move
+requested over 300 ms took a 995 ms XCTest request interval, against 23 ms for
+the driver's recognized down/move/up. This does not measure delivered touch
+velocity or scrolling inertia. Caltrain's missing AX target was not bypassed
+with driver coordinates.
+
+macOS Screen Recording preflight was false, and `screencapture` returned
+“could not create image from window.” Those reads are blind spots. The final
+Caltrain iOS checkpoint's two AX reads had a median of 62.5 ms and its two
+display captures 840.5 ms; Shelf's sheet measured 89.5 ms and 481.5 ms. These
+are instrument timings on a shared Mac, not app performance measurements.
+
+The experiment earns keeping as an observer: it found a visible control missing
+from the outside tree. Whole-tree equality is too noisy for a gate: structural
+nodes, off-screen content, native menus, duplicate names and per-launch native
+identifiers produce many differences. Step 2 should judge a small corpus of
+these cases before changing driver verdicts. The LLP's starting inventory also
+needs narrowing: Mac `screenshot window` already uses window-server pixels
+(with canvas substitutions), and both tested iOS screenshot forms reported
+`pixels: display`.

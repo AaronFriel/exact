@@ -22,6 +22,14 @@ export function macHelper() {
   return binary;
 }
 
+export function mainWindow(tree) {
+  const frame = tree?.mainFrame;
+  if (!frame) throw new Error('AXMainWindow has no frame; the capture target is unknown');
+  const matches = (tree.windows ?? []).filter(w => w.frame.every((v, i) => Math.abs(v - frame[i]) < 1));
+  if (matches.length !== 1) throw new Error(`AXMainWindow joins ${matches.length} window-server windows; capture target is ambiguous or missing`);
+  return matches[0];
+}
+
 export function platform({host, pid, session, helper}) {
   const mac = (...args) => {
     const r = JSON.parse(command(helper, args));
@@ -42,18 +50,15 @@ export function platform({host, pid, session, helper}) {
         return {path, source: 'simctl/window-server', region: 'display', frame: tree?.frame};
       }
       const windows = tree?.windows ?? [];
-      const main = windows.filter(w => w.layer === 0).sort((a, b) => b.frame[2] * b.frame[3] - a.frame[2] * a.frame[3]);
-      if (!main.length) throw new Error('no on-screen window belongs to the target PID');
-      if (main.length > 1 && main[0].frame[2] * main[0].frame[3] === main[1].frame[2] * main[1].frame[3])
-        throw new Error('primary window is ambiguous');
-      command('/usr/sbin/screencapture', ['-x', '-o', '-l', String(main[0].id), path]);
+      const main = mainWindow(tree);
+      command('/usr/sbin/screencapture', ['-x', '-o', '-l', String(main.id), path]);
       const attachments = [];
-      for (const w of windows.filter(w => w.id !== main[0].id)) {
+      for (const w of windows.filter(w => w.id !== main.id)) {
         const file = path.replace(/\.png$/, `-window-${w.id}.png`);
         command('/usr/sbin/screencapture', ['-x', '-o', '-l', String(w.id), file]);
         attachments.push({...w, path: file});
       }
-      return {path, source: 'screencapture/window-server', region: 'window', window: main[0], attachments};
+      return {path, source: 'screencapture/window-server', region: 'window', window: main, attachments};
     },
     async input(action, point, tree) {
       if (host === 'macos') return mac('input', String(pid), ...point.map(String),

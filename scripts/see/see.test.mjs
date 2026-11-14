@@ -7,6 +7,7 @@ import {encodePng} from '../png.mjs';
 import {checkpoint} from './checkpoint.mjs';
 import {blind, comparePixels, compareTrees, imageFacts, targetPoint, verdict} from './compare.mjs';
 import {parse} from './main.mjs';
+import {mainWindow} from './platform.mjs';
 
 const picture = () => ({width: 2, height: 1, data: new Uint8Array([0, 0, 0, 255, 255, 255, 255, 255])});
 
@@ -15,6 +16,7 @@ test('every unpaired semantic element and differing comparable field is retained
     [{identifier: 'a', label: 'New', enabled: false}, {label: 'outside'}]);
   expect(r.findings.map(f => f.kind)).toEqual(['tree-field', 'tree-field', 'inside-only', 'outside-only']);
   expect(compareTrees([{label: 'same'}], [{label: 'same'}]).joins[0].via).toBe('name-only');
+  expect(compareTrees([{identifier: 'a', label: 'OK'}], [{identifier: 'a'}]).findings[0]).toMatchObject({kind: 'tree-field', outside: ''});
   expect(compareTrees([{identifier: 'a'}], [{identifier: 'a'}, {identifier: 'a'}]).findings.some(f => f.kind === 'blind-spot')).toBe(true);
 });
 
@@ -33,6 +35,13 @@ test('outside aiming never falls back to model coordinates', () => {
   const tree = {elements: [{identifier: 'button', frame: [10, 20, 30, 40]}]};
   expect(targetPoint(tree, 'button', {}).point).toEqual([25, 40]);
   expect(() => targetPoint({elements: [...tree.elements, ...tree.elements]}, 'button', {})).toThrow('2 matches');
+});
+
+test('window capture requires one external main-window match, regardless of window size', () => {
+  const mainFrame = [10, 20, 300, 400], main = {id: 1, frame: mainFrame};
+  expect(mainWindow({mainFrame, windows: [main, {id: 2, frame: [0, 0, 900, 900]}]})).toEqual(main);
+  expect(() => mainWindow({mainFrame, windows: [main, {...main, id: 2}]})).toThrow('ambiguous');
+  expect(() => mainWindow({windows: [main]})).toThrow('unknown');
 });
 
 test('checkpoint keeps independent evidence and fails closed on motion, blank capture and permission denial', async () => {
@@ -63,6 +72,24 @@ test('CLI rejects unknown flags, missing simulator and invalid gestures', () => 
   expect(() => parse(['ios', '--app', 'shelf', '--out', 'x'])).toThrow('--sim');
   expect(() => parse(['macos', '--app', 'shelf', '--out', 'x', '--typo'])).toThrow('unknown');
   expect(() => parse(['macos', '--app', 'shelf', '--out', 'x', '--drag', 'row', '0', '0', '300'])).toThrow('nonzero');
+});
+
+test('a declared full-display capture permits agreement, while a changed display is a finding', async () => {
+  const dir = mkdtempSync(resolve(tmpdir(), 'see-display-'));
+  try {
+    const snapshot = {elements: [{identifier: 'ok', label: 'OK'}], frame: [0, 0, 2, 1]};
+    const session = {host: 'ios', clock: async () => ({settled: true}),
+      tree: async () => ({epoch: 1, incarnation: 1, nodes: [{props: {testId: 'ok', text: 'OK'}}]}),
+      state: async () => ({slots: {value: 1}}),
+      screenshot: async path => { writeFileSync(path, encodePng(picture())); return {screenshot: path, pixels: 'display', w: 2, h: 1, scale: 1}; }};
+    const observer = {identity: {simulator: 'fixture'}, tree: async () => snapshot,
+      capture: async path => { writeFileSync(path, encodePng(picture())); return {path, region: 'display'}; }};
+    expect((await checkpoint(session, observer, resolve(dir, 'same'))).report.status).toBe('agreement');
+    observer.capture = async path => { const image = picture(); image.data[0] = 2; writeFileSync(path, encodePng(image)); return {path, region: 'display'}; };
+    const changed = await checkpoint(session, observer, resolve(dir, 'changed'));
+    expect(changed.report.status).toBe('disagreement');
+    expect(changed.report.findings.filter(f => f.kind === 'pixels')).toHaveLength(2);
+  } finally { rmSync(dir, {recursive: true, force: true}); }
 });
 
 test('removal inventory contains every experiment file and every outside hook', () => {

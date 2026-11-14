@@ -38,8 +38,14 @@ export function compareTrees(inside, outside) {
     const via = exact.length ? 'identifier' : 'name-only';
     joins.push({inside: a, outside: b, via});
     for (const field of ['label', 'enabled']) {
-      if (a[field] !== undefined && b[field] !== undefined && a[field] !== b[field])
-        findings.push({kind: 'tree-field', target: a.identifier ?? a.label, field, inside: a[field], outside: b[field], via});
+      if (a[field] === undefined) continue;
+      if (field === 'enabled' && b[field] === undefined) {
+        findings.push(blind('tree', `enabled state was not exposed for ${a.identifier ?? a.label}`));
+        continue;
+      }
+      const observed = b[field] ?? '';
+      if (a[field] !== observed)
+        findings.push({kind: 'tree-field', target: a.identifier ?? a.label, field, inside: a[field], outside: observed, via});
     }
   }
   for (const b of outside) if (!used.has(b)) findings.push({kind: 'outside-only', outside: b});

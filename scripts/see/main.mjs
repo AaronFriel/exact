@@ -32,13 +32,15 @@ export function parse(argv) {
 
 async function internalInput(session, action) {
   if (action.kind === 'tap') return session.tap(action.target);
-  const down = await session.tap(action.target, {down: true, ...(session.host === 'macos' ? {mouse: true} : {})});
+  const down = await session.tap(action.target, {down: true});
   if (down.delivery === 'unsupported') throw new Error(down.reason);
+  let move, up;
   try {
-    const move = await session.pointer('move', {dx: action.dx, dy: action.dy, ms: action.ms, virtual: true});
+    move = await session.pointer('move', {dx: action.dx, dy: action.dy, ms: action.ms, virtual: true});
     if (move.delivery === 'unsupported') throw new Error(move.reason);
-    return {down, move};
-  } finally { await session.pointer('up'); }
+  } finally { up = await session.pointer('up'); }
+  if (up.delivery === 'unsupported') throw new Error(up.reason);
+  return {down, move, up};
 }
 
 export async function run(options) {
@@ -82,6 +84,8 @@ export async function run(options) {
               result.aim = aim;
               result.input = await observer.input(options.action, aim.point, before.outside);
             }
+            if (result.input.delivery === 'unsupported' || result.input.settled === false || result.input.landError)
+              throw new Error(result.input.reason ?? result.input.landError ?? 'input was not delivered');
           } catch (error) { result.findings.push(blind(`${leg}/input`, error.message)); }
           result.inputMs = Date.now() - start;
           result.after = await checkpoint(session, observer, resolve(directory, leg, 'after'));
