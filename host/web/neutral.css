@@ -482,7 +482,10 @@
   @position-try --exact-inset-start { left: auto; right: calc(100% - var(--exact-inset-x)); }
   @position-try --exact-inset-up { top: auto; bottom: calc(100% - var(--exact-inset-y)); }
   @position-try --exact-inset-up-start { left: auto; right: calc(100% - var(--exact-inset-x)); top: auto; bottom: calc(100% - var(--exact-inset-y)); }
-  #exact-root :is([role="menu"], [data-exact-chooser]) button[data-button-style] { min-height: 2em; border: none; border-radius: calc(8px * var(--exact-curve-reach)); corner-shape: var(--exact-curve); padding: .25em .625em; background-color: transparent; color: var(--exact-label); font-weight: 400; --exact-said-font-weight: ; justify-content: start; text-align: start; --exact-button-space-width: .5em; }
+  /* A menu's rows take the menu's ink: the label's, which the menu's surface says, or a colour the author wrote on the
+     menu, as a written background is its surface. */
+  :where(#exact-root :is([role="menu"], [data-exact-chooser])) { color: var(--exact-label); }
+  #exact-root :is([role="menu"], [data-exact-chooser]) button[data-button-style] { min-height: 2em; border: none; border-radius: calc(8px * var(--exact-curve-reach)); corner-shape: var(--exact-curve); padding: .25em .625em; background-color: transparent; color: inherit; font-weight: 400; --exact-said-font-weight: ; justify-content: start; text-align: start; --exact-button-space-width: .5em; }
   #exact-root :is([role="menu"], [data-exact-chooser]) button[data-button-style][data-destructive="true"] { color: var(--exact-accent); }
   #exact-root :is([role="menu"], [data-exact-chooser]) button[data-button-style]:disabled { color: var(--exact-gray-text); }
   #exact-root :is([role="menu"], [data-exact-chooser]) button[data-button-style]:focus-visible { outline-offset: -2px; }

@@ -156,6 +156,12 @@ This list holds what the [agent guide](contract-for-agents.md)'s rules don't mak
   deliberately light-only design, write `color-scheme="light"` on the root, which
   holds the whole app in light as `overrideUserInterfaceStyle` does. (Shelf port,
   2026-10-09.)
+- **A menu opens white on a dark page.** Cause: `scheme=fixed` tokens colour the
+  boxes they are written on, but the app's scheme is still the device's, so the
+  platform's menus, sheets and alerts stay light. Fix: an always-dark design says
+  `"userInterfaceStyle": "dark"` in `app.json` (or `color-scheme="dark"` on the
+  root); a menu in the brand's colours writes `background-color` and `color` on its
+  `popover` column, which the web draws and its rows take. (#552, 2026-11-14.)
 
 - **The app is wider than the window, and its tests still pass.** A box with
   `width="100%"` and padding is wider than its parent by the padding (`content-box`, as

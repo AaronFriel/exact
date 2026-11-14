@@ -706,6 +706,17 @@ for (const engine of ['chromium', 'firefox', 'webkit']) test(`${engine}: the neu
       expect([at('menu'), Math.abs(menu[0] - invoker[0]) <= 1, menu[1] - invoker[1] - invoker[3], menu[2]]).toEqual([at('menu'), true, 4, 176]);
       expect([at('menu rows'), await page.evaluate(() => [color('item'), color('item', 'backgroundColor'), css('item', 'borderTopStyle'), color('item-delete'), color('menu', 'backgroundColor')])])
         .toEqual([at('menu rows'), [INK[scheme], [0, 0, 0, 0], 'none', RED[scheme], SURFACE[scheme]]]);
+      // A colour the author writes on the menu is its rows' ink, as its background is its surface; a destructive row
+      // stays red. A colour on the page around it is not the menu's.
+      expect([at('menu authored'), await page.evaluate(() => {
+        const menu = document.getElementById('menu'), root = document.getElementById('exact-root'), read = () => [color('item'), color('item-delete')];
+        root.style.color = 'rgb(0, 128, 0)';
+        const page = read();
+        menu.style.color = 'rgb(245, 245, 240)';
+        const said = read();
+        root.style.color = ''; menu.style.color = '';
+        return [page, said];
+      })]).toEqual([at('menu authored'), [[INK[scheme], RED[scheme]], [[245, 245, 240, 1], RED[scheme]]]]);
       // One highlight, the focused row's (the input glue moves the focus with the pointer), with no ring beside it, and
       // no second one under the pointer.
       await page.evaluate(() => document.getElementById('item-delete').focus({ focusVisible: true }));
