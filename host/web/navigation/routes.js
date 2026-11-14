@@ -65,6 +65,8 @@ export function sheetLeaves(el) {
   if (el.contains(document.activeElement)) {
     document.activeElement.blur();
   }
+  // It leaves from where it stands, though the stack under it changes (neutral.css lowers a sheet over another).
+  const top = getComputedStyle(el).top;
   el.setAttribute("navigationKey", "");
   el.setAttribute("data-exiting", "");
   el.setAttribute("aria-hidden", "true");
@@ -74,6 +76,7 @@ export function sheetLeaves(el) {
     transition: "none",
     pointerEvents: "none"
   });
+  el.style.setProperty("top", top, "important");
   // Only `translate`, so the compositor runs it; the scrim fades on its own box as the projection turns it off.
   const slide = el.animate([{
     translate: from

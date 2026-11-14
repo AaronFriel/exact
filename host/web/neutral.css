@@ -546,7 +546,7 @@
      the platform's, as the sidebar's is; a colour the author wrote still wins. */
   :where(#exact-root :is([navigationPresentation="modal"], [data-exact-in-sheet])) { color: var(--exact-label); }
   /* Every browser uses the same sheet ground; an authored ground still wins. */
-  #exact-root :is([navigationPresentation="modal"], [data-exact-in-sheet]) { background-color: var(--exact-background); position: fixed !important; inset: calc(env(safe-area-inset-top, 0px) + 12px) 0 0 !important; margin: 0 !important; box-sizing: border-box !important; width: auto !important; height: auto !important; max-height: none !important; z-index: 1; border-radius: calc(12px * var(--exact-curve-reach)) calc(12px * var(--exact-curve-reach)) 0 0; corner-shape: var(--exact-curve); overflow: clip; transition: translate .4s cubic-bezier(.32, .72, 0, 1); }
+  #exact-root :is([navigationPresentation="modal"], [data-exact-in-sheet]) { background-color: var(--exact-background); position: fixed !important; inset: calc(env(safe-area-inset-top, 0px) + 12px) 0 0 !important; margin: 0 !important; box-sizing: border-box !important; width: auto !important; height: auto !important; max-height: none !important; z-index: 1; border-radius: calc(12px * var(--exact-curve-reach)) calc(12px * var(--exact-curve-reach)) 0 0; corner-shape: var(--exact-curve); overflow: clip; transition: translate .4s cubic-bezier(.32, .72, 0, 1), scale .4s cubic-bezier(.32, .72, 0, 1); }
   /* Its content reads the sheet's own insets (LLP 1123 D9): none at its top, below the status bar; a wide
      window's card, clear of every edge, has none at all. */
   #exact-root :is([navigationPresentation="modal"], [data-exact-in-sheet]) { --exact-safe-area-inset-top: 0px; }
@@ -556,15 +556,25 @@
      `project` marks `data-exact-scrim` while a sheet is presented (a sheet's own would slide with it, inside its
      clip). It fades by `opacity` as the first sheet rises and the last leaves. A presented route beneath the top
      sheet stands on the sheets' level, above the scrim, so it carries a shade of its own that fades the same way, as
-     UIKit dims a sheet another covers: each thing beneath is dimmed once, so the page is no lighter while a second
-     sheet comes or goes. A full-screen route isolates, so its shade stays on its level whatever its author wrote. */
+     UIKit dims what a sheet is presented from: each thing beneath is dimmed once, so the page is no lighter while a
+     second sheet comes or goes. A covered sheet's shade is lighter than the scrim, by iOS 27's share (a sheet under
+     another is dimmed 0.12 over a page dimmed 0.2), so its top edge reads above the sheet over it. A full-screen
+     route isolates, so its shade stays on its level whatever its author wrote. */
   #exact-root [data-exact-scrim]::before { content: ""; position: fixed; inset: 0; z-index: 1; pointer-events: none; background-color: var(--exact-scrim); opacity: 0; transition: opacity .4s cubic-bezier(.32, .72, 0, 1); }
   #exact-root [data-exact-scrim="on"]::before { opacity: 1; }
   @starting-style { #exact-root [data-exact-scrim="on"]::before { opacity: 0; } }
   #exact-root [navigationPresentation="fullscreen"] { isolation: isolate; }
   #exact-root [data-exact-covered]::after { content: none; }
   #exact-root :is([navigationPresentation="modal"], [navigationPresentation="fullscreen"], [data-exact-in-sheet])::after { content: ""; position: absolute; inset: 0; z-index: 2147483647; pointer-events: none; background-color: var(--exact-scrim); opacity: 0; transition: opacity .4s cubic-bezier(.32, .72, 0, 1); }
-  #exact-root [data-exact-scrim="on"] > :is([navigationPresentation="modal"], [navigationPresentation="fullscreen"], [data-exact-in-sheet])[data-exact-covered]::after, #exact-root [data-exact-scrim="on"] > :where([data-exact-list-item]) > :is([navigationPresentation="modal"], [navigationPresentation="fullscreen"], [data-exact-in-sheet])[data-exact-covered]::after { opacity: 1; }
+  #exact-root [data-exact-scrim="on"] > [navigationPresentation="fullscreen"][data-exact-covered]::after, #exact-root [data-exact-scrim="on"] > :where([data-exact-list-item]) > [navigationPresentation="fullscreen"][data-exact-covered]::after { opacity: 1; }
+  #exact-root [data-exact-scrim="on"] > :is([navigationPresentation="modal"], [data-exact-in-sheet])[data-exact-covered]::after, #exact-root [data-exact-scrim="on"] > :where([data-exact-list-item]) > :is([navigationPresentation="modal"], [data-exact-in-sheet])[data-exact-covered]::after { opacity: .6; }
+  /* Narrow, a sheet another covers steps back, as UIKit's does on an iPhone (iOS 27): narrower about its top, which
+     stays where it was, so its top edge shows above the tallest sheet over it, which stands lower by the stack's
+     offset. */
+  @media (width < 900px) {
+    #exact-root [data-exact-scrim="on"] > :is([navigationPresentation="modal"], [data-exact-in-sheet])[data-exact-covered], #exact-root [data-exact-scrim="on"] > :where([data-exact-list-item]) > :is([navigationPresentation="modal"], [data-exact-in-sheet])[data-exact-covered] { scale: .93; transform-origin: 50% 0; }
+    #exact-root [data-exact-scrim="on"]:has(> [navigationPresentation="modal"][data-exact-covered], > :where([data-exact-list-item]) > [navigationPresentation="modal"][data-exact-covered]) > :is([navigationPresentation="modal"], [data-exact-in-sheet]):not([data-exact-covered], [data-exact-detent], [data-exiting]), #exact-root [data-exact-scrim="on"]:has(> [navigationPresentation="modal"][data-exact-covered], > :where([data-exact-list-item]) > [navigationPresentation="modal"][data-exact-covered]) > :where([data-exact-list-item]) > :is([navigationPresentation="modal"], [data-exact-in-sheet]):not([data-exact-covered], [data-exact-detent], [data-exiting]) { top: calc(env(safe-area-inset-top, 0px) + 12px + 10px) !important; }
+  }
   @media (prefers-reduced-motion: reduce) { #exact-root [navigationPresentation="modal"], #exact-root [data-exact-scrim]::before, #exact-root :is([navigationPresentation="modal"], [navigationPresentation="fullscreen"], [data-exact-in-sheet])::after { transition: none; } }
   /* A route pushed inside a sheet (`data-exact-in-sheet`, navigation.js `sheetAt`) takes the sheet's frame, as a
      push in UIKit's presented sheet does. A narrow sheet opens at its detent (navigation.js `selectedDetent`), its

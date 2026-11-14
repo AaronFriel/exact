@@ -86,7 +86,7 @@ test('the neutral sheet\'s lengths and ratios are the metric table\'s neutral co
     'alert-title': ['font-size'], 'alert-message-gap': ['margin-bottom', 'margin-top'], 'alert-scroll-gutter': ['padding-inline-end'],
     'menu-min-width': ['min-width'], 'menu-max-width': ['max-width'], 'menu-margin': ['max-width'], 'menu-padding': ['padding'], 'menu-offset': ['margin'], 'popover-padding': ['padding'], 'popover-margin': ['margin', 'margin-left'],
     'menu-row-height': ['min-height'], 'menu-row-padding-block': ['padding'], 'menu-row-padding-inline': ['padding', 'padding-inline-start'], 'menu-row-gap': ['--exact-button-space-width', 'margin-inline-end', 'padding-inline-start', 'margin-inline-start'],
-    'sheet-wide': ['@media'], 'sheet-width': ['width'], 'sheet-height': ['height', 'max-height'], 'sheet-margin': ['width', 'height', 'max-height'], 'sheet-top': ['inset', 'max-height'], 'sheet-compact-height': ['@media'],
+    'sheet-wide': ['@media'], 'sheet-width': ['width'], 'sheet-height': ['height', 'max-height'], 'sheet-margin': ['width', 'height', 'max-height'], 'sheet-top': ['inset', 'max-height', 'top'], 'sheet-stack-offset': ['top'], 'sheet-compact-height': ['@media'],
     'sheet-padding': ['padding', 'margin', 'margin-inline-end', 'padding-inline-end'], 'sheet-gap': ['padding', 'margin'], 'sheet-action-gap': ['margin'],
     'list-row-inset': ['padding-left', 'padding-right'],
     'raised-shadow-y': ['--exact-raised'], 'raised-shadow-blur': ['--exact-raised'], 'modal-shadow-y': ['--exact-modal'], 'modal-shadow-blur': ['--exact-modal'],
@@ -151,6 +151,7 @@ test('the neutral sheet\'s lengths and ratios are the metric table\'s neutral co
     'raised-shadow-alpha': `--exact-raised: 0 0 0 1px var(--exact-separator), 0 4px 12px rgb(0 0 0 / ${alpha('raised-shadow-alpha')});`,
     'modal-shadow-alpha': `--exact-modal: 0 0 0 1px var(--exact-separator), 0 16px 48px rgb(0 0 0 / ${alpha('modal-shadow-alpha')});`,
     'scrim-alpha': `--exact-scrim: rgb(0 0 0 / ${alpha('scrim-alpha')});`,
+    'sheet-step-scale': `{ scale: ${alpha('sheet-step-scale')}; transform-origin: 50% 0; }`, 'sheet-covered-shade': `[data-exact-covered]::after { opacity: ${alpha('sheet-covered-shade')}; }`,
     'symbol-scale': `{ --exact-symbol-scale: ${value.get('symbol-scale')}; }`,
     'button-symbol-scale': `{ --exact-symbol-scale: ${value.get('button-symbol-scale')}; margin: calc(`,
   };
@@ -960,23 +961,23 @@ for (const engine of ['chromium', 'firefox', 'webkit']) test(`${engine}: a sheet
       expect([engine, reducedMotion, gone]).toEqual([engine, reducedMotion, true]);
       // A sheet that opens while one leaves ends it, as they may share ids; one it uncovers does not, and it slides
       // down over that one. While one is over the other, the page is under the one scrim and the sheet beneath under
-      // a shade of its own, and the one above draws neither.
+      // a lighter shade of its own, and the one above draws neither. Narrow, the one beneath steps back about its top
+      // (#529), the one above stands lower and leaves from there, and the one it uncovers comes forward.
       const uncovered = await page.evaluate(async () => {
         const below = route('below', '6'); select('6');
         const above = route('above', '7'); select('7');
         await tick();
         for (const a of document.getAnimations()) a.finish();
-        const dim = (el, pseudo) => getComputedStyle(el, pseudo).opacity === '1';
-        const scrims = [dim(document.getElementById('nav'), '::before'), dim(below, '::after'), dim(above, '::after'), getComputedStyle(document.getElementById('under')).visibility === 'visible'];
+        const dim = (el, pseudo) => getComputedStyle(el, pseudo).opacity, scrims = [dim(document.getElementById('nav'), '::before'), dim(below, '::after'), dim(above, '::after'), getComputedStyle(document.getElementById('under')).visibility === 'visible'], stacked = [getComputedStyle(below).scale, getComputedStyle(below).transformOrigin, getComputedStyle(below).top, getComputedStyle(above).scale, getComputedStyle(above).top];
         leave(above);
         select('6');
         await tick();
-        const out = [above.isConnected, !above.isConnected ? 'gone' : above.compareDocumentPosition(below) & Node.DOCUMENT_POSITION_PRECEDING && getComputedStyle(above).zIndex === getComputedStyle(below).zIndex ? 'over' : 'under', scrims];
+        const out = [above.isConnected, !above.isConnected ? 'gone' : above.compareDocumentPosition(below) & Node.DOCUMENT_POSITION_PRECEDING && getComputedStyle(above).zIndex === getComputedStyle(below).zIndex ? 'over' : 'under', scrims, [...stacked, above.isConnected ? getComputedStyle(above).top : 'gone', (document.getAnimations().forEach((a) => a.finish()), getComputedStyle(below).scale)]];
         finish(below, above); below.remove(); above.remove();
         select('1');
         return out;
       });
-      expect([engine, reducedMotion, uncovered]).toEqual([engine, reducedMotion, reducedMotion === 'reduce' ? [false, 'gone', [true, true, false, true]] : [true, 'over', [true, true, false, true]]]);
+      expect([engine, reducedMotion, uncovered]).toEqual([engine, reducedMotion, reducedMotion === 'reduce' ? [false, 'gone', ['1', '0.6', '0', true], ['0.93', '200px 0px', '12px', 'none', '22px', 'gone', 'none']] : [true, 'over', ['1', '0.6', '0', true], ['0.93', '200px 0px', '12px', 'none', '22px', '22px', 'none']]]);
       // A full-screen route it uncovers keeps it too; a sheet that replaces it in the same commit ends it; one closed as
       // it still rises turns back from where it is; one that holds media, a field's painted decorations, or an open
       // dialog or popover closes at once; and one that holds a native view slides, showing what its module left in it.
