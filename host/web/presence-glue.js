@@ -16,19 +16,20 @@
 // with the authored one and a moving parent carries it. A size change is the
 // surface's alone, as native frame animation shows it: the element keeps its
 // laid-out box, so its content and children never scale, and a stand-in
-// behind it (the element's background, border, radius and shadow, which it
-// stops painting for the while) grows or shrinks from its top-left corner;
-// an element that clips its children clips them to the shown box. A spring
-// is lowered here, per move, from its displacement and velocity in points,
-// on the grid and rest threshold the engine settles on natively
-// (`exact_motion::spring`).
+// behind it (the element's background, border, radius, shadow and backdrop
+// filter, which it stops painting for the while) grows or shrinks from its
+// top-left corner; an element that clips its children clips them to the
+// shown box. A spring is lowered here, per move, from its displacement and
+// velocity in points, on the grid and rest threshold the engine settles on
+// natively (`exact_motion::spring`).
 import { unwrapListItem, viewParent } from './navigation.js';
 import { translation } from './motion-glue.js';
 const LAYOUT = '--exact-layout-transition';
 const PAINT = ['backgroundColor', 'backgroundImage', 'backgroundSize', 'backgroundPosition', 'backgroundRepeat', 'backgroundOrigin', 'backgroundClip',
-  'borderTop', 'borderRight', 'borderBottom', 'borderLeft', 'borderRadius', 'boxShadow', 'opacity', 'translate', 'rotate', 'scale', 'transform', 'transformOrigin'];
+  'borderTop', 'borderRight', 'borderBottom', 'borderLeft', 'borderRadius', 'boxShadow', 'backdropFilter', 'opacity', 'translate', 'rotate', 'scale', 'transform',
+  'transformOrigin'];
 const CLEAR = { backgroundColor: 'transparent', backgroundImage: 'none', borderTopColor: 'transparent', borderRightColor: 'transparent',
-  borderBottomColor: 'transparent', borderLeftColor: 'transparent', boxShadow: 'none' };
+  borderBottomColor: 'transparent', borderLeftColor: 'transparent', boxShadow: 'none', backdropFilter: 'none' };
 
 // A 2D matrix of an element's own transforms about its origin, from its
 // computed style: `translate`, `rotate`, `scale`, then `transform`. Its
@@ -225,8 +226,8 @@ function createPresence(root) {
   // The element's surface, standing in for it behind it while its size
   // moves: a zero-size anchor before it (so the size never moves the
   // anchor, whatever its parent's alignment), and in it a box with the
-  // element's background, border, radius, shadow and own transforms, placed
-  // over the element's laid-out box. Behind its content in the parent's
+  // element's background, border, radius, shadow, backdrop filter and own
+  // transforms, placed over the element's laid-out box. Behind its content in the parent's
   // stacking context, isolated structurally by the kernel.
   function surface(el, place) {
     const cs = getComputedStyle(el), stand = document.createElement('div'), box = document.createElement('div');

@@ -198,6 +198,17 @@ check('a growing surface follows live paint, opacity and pressed transforms', as
   expect(await evaluate('getComputedStyle(surface()).borderTopWidth')).toBe('2px');
 });
 
+check('a resizing surface carries the box\'s backdrop filter, which the box drops while the surface draws', async () => {
+  const blurred = card + ';background:#0008;backdrop-filter:blur(20px)';
+  await fixture(`<div id="card" style="${blurred}"></div>`);
+  await style(blurred.replace('40px', '140px'));
+  await evaluate('seek(500)');
+  expect(await evaluate('getComputedStyle(surface()).backdropFilter')).toBe('blur(20px)');
+  expect(await evaluate('getComputedStyle(document.getElementById("card")).backdropFilter')).toBe('none');
+  await evaluate('document.getAnimations().forEach(a => a.finish()); Promise.resolve()');
+  expect(await evaluate('getComputedStyle(document.getElementById("card")).backdropFilter')).toBe('blur(20px)');
+});
+
 check('paint transitions retain their clocks and restore their paint when size motion ends', async () => {
   const css = card + ';border:2px solid red;transition:background-color 1s linear,border-color 1s linear,opacity 1s linear';
   await fixture(`<div id="card" style="${css}"></div>`);
