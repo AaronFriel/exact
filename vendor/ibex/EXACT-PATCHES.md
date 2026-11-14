@@ -22,10 +22,28 @@ receipt-listed archive, header, compiler and ICU filter against its digest,
 independently of the selected Intl data tier. Android’s JSI, Boost and base ICU archives
 must be present in the manifest.
 
+## Android certificate verification
+
+HTTP and WebSocket TLS share `transport/tls.rs`. Android uses
+`rustls-platform-verifier`, initialized with the application's JVM context before
+network work starts. The local Kotlin companion in `crates/ibex2/android` uses
+`AndroidCAStore` for the phone's system and user-installed roots unless the base
+APK's manifest declares a network security configuration; it makes that trust
+manager again after `KeyChain.ACTION_TRUST_STORE_CHANGED`, because a manager
+over an explicit keystore copies its anchors once. With that declaration,
+it initializes the default trust manager with a null keystore to honor the app's
+anchors and exclusions. Both paths pass the hostname to
+`X509TrustManagerExtensions`. The Rust crate is pinned to the companion's JNI
+interface. The Canvas reader compiles these
+classes and keeps them through R8. Other Android consumers must compile these
+classes instead of the published Android AAR and call
+`transport::initialize_android` before TLS; an uninitialized consumer receives
+an error.
+
 ## Distrusted emSign keys
 
-The portable transports trust what `webpki-roots` compiles in when the system
-has no roots, and verify with `rustls-webpki`. Both locks, like Exact's root
+Off Android, the portable transports trust what `webpki-roots` compiles in when
+the system has no roots, and verify with `rustls-webpki`. Both locks, like Exact's root
 lock, hold `webpki-roots` 1.0.12, without the emSign roots Mozilla removed
 (RUSTSEC-2026-0381), and `rustls-webpki` 0.103.17, which refuses a path holding
 the distrusted emSign intermediate keys (RUSTSEC-2026-0382). Exact's

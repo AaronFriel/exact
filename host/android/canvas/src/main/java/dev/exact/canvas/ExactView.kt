@@ -187,6 +187,7 @@ class ExactView(context: Context, private val live: Boolean, private val onFirst
         } else {
             val dir = context.filesDir.absolutePath
             try { Native.hardwarePictures(hwbuf) } catch (e: UnsatisfiedLinkError) { }
+            Native.trust(context.applicationContext)
             started = Native.start(window.first, window.second, Device.scale(context), dir, live)
         }
         // Executor replies and decoded images wake the main looper; poll drains them. A wake with no turn to take

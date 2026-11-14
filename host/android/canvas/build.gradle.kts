@@ -8,6 +8,7 @@ android {
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     // A package's unit tests compile its Kotlin into this module's tests; the reader links none of it.
     sourceSets {
+        getByName("main").kotlin.directories.add("../../../vendor/ibex/crates/ibex2/android")
         getByName("test").kotlin.directories.addAll(listOf(
             "../../../packages/age-range/android", "../../../packages/age-range/test",
             "../../../packages/barcode-detection/android", "../../../packages/barcode-detection/test",

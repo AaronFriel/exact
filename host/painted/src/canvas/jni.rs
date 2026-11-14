@@ -42,6 +42,8 @@ macro_rules! canvas_jni {
         #[global_allocator]
         static EXACT_ALLOCATOR: $crate::canvas::jni::Allocator = $crate::canvas::jni::Allocator;
 
+        $crate::canvas_jni_tls!();
+
         mod exact_canvas_jni {
             #![allow(clippy::missing_safety_doc, unsafe_code)]
             use std::cell::RefCell;

@@ -157,8 +157,9 @@ outside exact2:
 
 - **The network permission.** The shell's manifest asked for none, so a `fetch` failed at the name lookup
   ("failed to lookup address information"). It now asks for `android.permission.INTERNET` for every app it packages;
-  what an app may reach is still its grants' to say. TLS is rustls with the compiled-in roots: the journal says
-  "no system trust store" on Android.
+  what an app may reach is still its grants' to say. HTTPS and secure WebSockets use rustls with Android's trust
+  manager: an explicit network security configuration controls trust; otherwise the phone's system and
+  user-installed roots do.
 - Storage needed nothing: `app:/data` is under the `XDG_DATA_HOME` the reader sets (the app's own files
   directory), and Shelf's library survives a force-stop and a cold start.
 - The clock needed nothing: a book added on the phone sorts above the seeded ones.

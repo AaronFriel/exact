@@ -210,6 +210,9 @@ mod layer;
 #[path = "canvas/legacy.rs"]
 pub mod legacy;
 #[cfg(target_os = "android")]
+#[path = "canvas/tls.rs"]
+pub mod tls;
+#[cfg(target_os = "android")]
 pub use jni_sys;
 #[path = "canvas/picture.rs"]
 mod picture;

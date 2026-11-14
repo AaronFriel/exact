@@ -92,6 +92,7 @@ open class ExactActivity : Activity() {
         edgeToEdge()
         // exact2's thread, made before the assets are checked: it loads exact2's library meanwhile.
         owner()
+        Native.trust(applicationContext)
         // The modules' implementations the APK carries answer their names (LLP 1133.001 D5).
         Extensions.bind(this)
         installAssets(File(storage, "app"))
