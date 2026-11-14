@@ -1094,7 +1094,7 @@ test('a pattern replaces the template, refuses an edited file unless forced, and
   try {
     const dir = resolve(parent, 'field-log');
     createApp(dir);
-    assert.deepEqual(patterns().map(p => p.name), ['one-screen', 'list-detail', 'tabs', 'dashboard', 'rest', 'site']);
+    assert.deepEqual(patterns().map(p => p.name), ['one-screen', 'list-detail', 'tabs', 'dashboard', 'chat', 'rest', 'site']);
     for (const { line } of patterns()) assert.ok(line.length > 20 && line.length <= 92 && !line.startsWith('//'), line);
     const read = (file) => readFileSync(resolve(dir, file), 'utf8');
     // The app's own id (LLP 1116.004 D8), which app.json carries.

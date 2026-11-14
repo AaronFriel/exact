@@ -404,7 +404,7 @@ Ports    none. Runs to completion.`,
     example: 'bun exact.mjs docs tabular numbers',
   },
   pattern: {
-    line: 'start from a working, tested app: one-screen, list-detail, tabs, dashboard, rest, site',
+    line: 'start from a working, tested app: one-screen, list-detail, tabs, dashboard, chat, rest, site',
     usage: 'bun exact.mjs pattern [<name>] [--force]',
     common: ['pattern [<name>]    a working, tested starter'],
     flags: [['--force', 'replace a file you edited (without it, it is refused, named)']],

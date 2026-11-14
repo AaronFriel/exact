@@ -755,7 +755,7 @@ export const answer: Answer = (source, args, store, storage, native) =>
  * on the web by the async lane. A pattern.json there holds keys the app's app.json
  * gains (site's `env` and `server`). Its first line names the app `Starter` and says what it is. */
 export const PATTERNS = resolve(ROOT, 'docs/patterns');
-const PATTERN_ORDER = ['one-screen', 'list-detail', 'tabs', 'dashboard', 'rest', 'site'];
+const PATTERN_ORDER = ['one-screen', 'list-detail', 'tabs', 'dashboard', 'chat', 'rest', 'site'];
 
 /** Each pattern's name and line, in the order to read them. */
 export function patterns() {

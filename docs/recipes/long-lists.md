@@ -76,3 +76,4 @@ export const answer: Answer = (source, args, store, storage, native) => sources[
 - `reach-margin` is a nonnegative px or % of the list's port (default one port,
   `"100%"`); increase it to prefetch earlier. A fling can extend the lead. A first
   page shorter than two ports loads the next on first paint.
+- Toward the start too (a chat): `bun exact.mjs pattern chat`.
