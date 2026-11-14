@@ -144,8 +144,9 @@ through `adb reverse` since the loop serves this Mac's loopback only: `adb rever
 the environment is read once per process, so a running reader is stopped first). The reader
 polls it as the Linux display does (`CanvasHost`'s turn and wakes): a plan the loop compiles replaces the running
 one with its state carried, and the build channel brings the design server's live batches, pins and `prefer`s, and
-registers the build, so the design tool sees it. A generation whose Rust pair changed is refused with the URL loop's
-message and the running app kept: the APK's Rust is baked in its library, so a Rust edit needs a new APK. A drive
+registers the build, so the design tool sees it. A generation that offers a replaceable Rust module's pair (an app
+naming `rust.module`) is refused with the URL loop's message and the running app kept: the APK's Rust is baked in its
+library and its record's `rustMode` is `off`, so a Rust edit needs a new APK. A drive
 takes the same URL as `--url` (`agent.mjs android --reader --url http://127.0.0.1:<port>/ …`), which reverses the
 port itself. Drives on the same adb server and device share mappings they create until the last drive releases
 them. Mappings set up outside a drive are kept; a conflicting destination refuses the drive. A production bake
@@ -1682,8 +1683,10 @@ The cut was the smallest one. Left in the reader:
 - **A GPU canvas over children**: a `Composite` surface (Caltrain's sky, `glass`, which refracts the content inside
   it) is given its children's picture (`gpu_texture`) and the page no longer paints them over it; built and unit
   tested on a Mac, not seen on a device.
-- **No update store** and no replaced Rust module: the Canvas host has neither, though an app's compatibility
-  record is computed as its Linux crate's is, and Caltrain's names both (`store.L` is `A`, `rustMode` is `native`).
+- **No update store** and no replaced Rust module: the Canvas host has neither. An app's compatibility record is
+  computed as its Linux crate's is, but with no store (`store.L` is `0`, and `deploy.store.android` can only be
+  `"0"`; absent, it is `"0"`). Its `rustMode` is `off` in every trust (LLP 1030.006 D1): the library links no Rust
+  executor, so no generation's Rust pair is admitted.
 - **No picture from a URL.** The Linux host's pictures are files under the asset root (`host/painted/src/image`), on
   every shell it has: Shelf's covers, which Open Library serves, are the grey box behind them in Discover and a gap on
   a book's page. Nothing of this host's is missing for it; the loader has no door for a remote source.

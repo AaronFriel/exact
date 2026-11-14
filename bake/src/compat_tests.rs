@@ -954,6 +954,66 @@ fn web_receipts_name_the_linked_composition_and_refuse_an_unlinked_store() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// The APK links no update store (host/android/README.md), so its bake
+/// records none, whatever the Linux binary of the same app has, and
+/// production trust asks for no stream.
+#[test]
+fn the_android_bake_records_no_updater_and_refuses_one() {
+    let dir = app("android-store");
+    let mut manifest = Manifest::read(&dir).unwrap();
+    manifest.json["app"]["origin"] = serde_json::json!("https://updates.example");
+    let android = |m: &Manifest| {
+        compatibility_with_trust(
+            &dir,
+            "linux",
+            "aarch64-linux-android",
+            m,
+            None,
+            "production",
+        )
+    };
+    for store in [None, Some("0")] {
+        manifest.json["deploy"]["store"] = match store {
+            Some(store) => serde_json::json!({"linux":"A","android":store}),
+            None => serde_json::json!({"linux":"A"}),
+        };
+        let plain = android(&manifest).unwrap();
+        assert_eq!(plain.inputs["store"]["L"], "0");
+        assert!(plain.inputs["keys"].is_null());
+        assert!(plain.inputs["trust"].is_null());
+        assert!(plain.origin.is_none());
+    }
+    let linux =
+        compatibility_with_trust(&dir, "linux", "aarch64", &manifest, None, "development").unwrap();
+    assert_eq!(linux.inputs["store"]["L"], "A", "Linux keeps its store");
+    // No Rust executor either (LLP 1030.006 D1), though a Linux binary of the
+    // same app replaces its module.
+    manifest.json["rust"] = serde_json::json!({"module":{"package":"app-logic"}});
+    manifest.json["deploy"]["store"]["linux"] = serde_json::json!("0");
+    for trust in ["development", "production"] {
+        let linux =
+            compatibility_with_trust(&dir, "linux", "aarch64", &manifest, None, trust).unwrap();
+        assert_eq!(linux.inputs["rustMode"], "native", "{trust}");
+        let android = compatibility_with_trust(
+            &dir,
+            "linux",
+            "aarch64-linux-android",
+            &manifest,
+            None,
+            trust,
+        )
+        .unwrap();
+        assert_eq!(android.inputs["rustMode"], "off", "{trust}");
+        assert!(android.inputs["rustAbi"].is_null(), "{trust}");
+    }
+    for setting in [serde_json::json!("A"), serde_json::json!(0)] {
+        manifest.json["deploy"]["store"]["android"] = setting;
+        let error = android(&manifest).unwrap_err();
+        assert!(error.contains("Android host links no updater"), "{error}");
+    }
+    let _ = std::fs::remove_dir_all(dir);
+}
+
 #[test]
 fn production_trust_requires_keys_and_has_a_distinct_cohort() {
     let dir = app("trust");

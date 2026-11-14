@@ -531,7 +531,25 @@ fn compatibility_with_trust(
     {
         return Err("the web host links no updater; deploy.store.web must be \"0\"".into());
     }
-    let store = manifest.store(platform);
+    // Android bakes as Linux (its library is the Linux host's presenter), but
+    // the APK links no update store (host/android/README.md), so its record
+    // says so whatever `deploy.store.linux` says of a Linux binary, and an
+    // absent `deploy.store.android` is "0", not the native default of "A"
+    // (LLP 1030.006 D2).
+    let android = target.contains("android");
+    if android
+        && manifest
+            .json
+            .pointer("/deploy/store/android")
+            .is_some_and(|value| value.as_str() != Some("0"))
+    {
+        return Err("the Android host links no updater; deploy.store.android must be \"0\"".into());
+    }
+    let store = if android {
+        "0".to_string()
+    } else {
+        manifest.store(platform)
+    };
     if !matches!(store.as_str(), "0" | "A") {
         return Err(format!("deploy.store.{platform} must be \"0\" or \"A\""));
     }
@@ -562,8 +580,11 @@ fn compatibility_with_trust(
     // app that names none has nothing to replace, so it links none
     // (LLP 1047.001 D7, as `web_rust_mode` already does on the web). The
     // policy is still validated.
+    // The APK links no Rust executor (`rules/DEFERRED.md` keeps Android below
+    // the replaceable Rust module), so its record admits no Rust pair whatever
+    // the manifest's policy (LLP 1030.006 D1).
     let rust_mode = match manifest.rust_mode(platform, trust == "development")? {
-        _ if rust_module.is_none() => "off",
+        _ if rust_module.is_none() || android => "off",
         mode => mode,
     };
     let mut executors = executors(app_dir, platform);
