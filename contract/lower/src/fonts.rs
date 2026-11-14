@@ -402,25 +402,17 @@ fn family_clear(s: &str) -> bool {
 /// Visit the literal family names for validation, including ones beside
 /// runtime arms; the remaining string is resolved when it changes.
 fn family_arms(e: &Expr, visit: &mut dyn FnMut(&str, Span)) -> Result<(), LowerError> {
-    match e {
-        Expr::Str(name, _) if name.trim().is_empty() || family_clear(name) => Ok(()),
-        Expr::Str(name, span) => {
+    for leaf in e.value_leaves() {
+        if let Expr::Str(name, span) = leaf {
+            if name.trim().is_empty() || family_clear(name) {
+                continue;
+            }
             for member in family_names(name, *span)? {
                 visit(&member, *span);
             }
-            Ok(())
         }
-        Expr::Ternary(_, yes, no, _) => {
-            family_arms(yes, visit)?;
-            family_arms(no, visit)
-        }
-        Expr::Match { some, none, .. } => {
-            family_arms(some, visit)?;
-            family_arms(none, visit)
-        }
-        Expr::Let { body, .. } => family_arms(body, visit),
-        _ => Ok(()),
     }
+    Ok(())
 }
 
 fn fold_constant_families(value: &mut Expr) {

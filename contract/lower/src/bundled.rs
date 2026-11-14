@@ -188,19 +188,16 @@ fn raster(bytes: &[u8]) -> bool {
 /// The literal strings `e` can be: a string, a template of literals, either
 /// arm of a choice.
 fn literals(e: &Expr, out: &mut Vec<(String, Span)>) {
-    match e {
-        Expr::Str(s, at) => out.push((s.clone(), *at)),
-        Expr::Template(parts, at) => {
-            if let Some(s) = crate::symbols::constant(parts) {
-                out.push((s, *at));
+    for leaf in e.value_leaves() {
+        match leaf {
+            Expr::Str(s, at) => out.push((s.clone(), *at)),
+            Expr::Template(parts, at) => {
+                if let Some(s) = crate::symbols::constant(parts) {
+                    out.push((s, *at));
+                }
             }
+            _ => {}
         }
-        Expr::Ternary(_, a, b, _) => {
-            literals(a, out);
-            literals(b, out);
-        }
-        Expr::Let { body, .. } => literals(body, out),
-        _ => {}
     }
 }
 

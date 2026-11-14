@@ -127,7 +127,7 @@ pub(super) fn check(file: &File, types: &Types, expanded: &Component) -> Result<
     }
     for (ci, c) in file.components.iter().enumerate() {
         let scoped = if ci == 0 { expanded } else { c };
-        let mut scope = types.component_scope(scoped, &types.components[ci]);
+        let scope = types.component_scope(scoped, &types.components[ci]);
         // The component's `provide` section covers its whole view (LLP
         // 1035.005.000 D9); a slot fill is walked in its caller's view.
         let providers = c
@@ -135,7 +135,7 @@ pub(super) fn check(file: &File, types: &Types, expanded: &Component) -> Result<
             .iter()
             .map(|b| (b.name.clone(), graph.binding(ci, &b.expr, &scope, b.span)))
             .collect();
-        graph.nodes(ci, &c.view, &mut scope, &providers)?;
+        graph.nodes(ci, &c.view, &scope, &providers)?;
     }
     while let Some(id) = graph.queue.pop_front() {
         let need = graph.interfaces[id]
@@ -394,17 +394,13 @@ impl Graph<'_> {
         &mut self,
         ci: usize,
         nodes: &[Node],
-        scope: &mut Scope,
+        scope: &Scope,
         providers: &Providers,
     ) -> Result<(), AnalyzeError> {
-        for node in nodes {
+        for (node, scope) in contract_types::walk_view(nodes, scope, &self.types.shapes) {
+            let scope = &scope;
             match node {
-                Node::Element {
-                    tag,
-                    attrs,
-                    children,
-                    ..
-                } => {
+                Node::Element { tag, attrs, .. } => {
                     let control = contract_syntax::payload_control(tag, attrs);
                     for attr in attrs {
                         if !HANDLERS.contains(&attr.name.as_str()) {
@@ -453,16 +449,8 @@ impl Graph<'_> {
                             None,
                         )?;
                     }
-                    self.nodes(ci, children, scope, providers)?;
                 }
-                Node::Use {
-                    name,
-                    args,
-                    children,
-                    ..
-                } => {
-                    // Slot fills are expanded in the caller's lexical/provider scope.
-                    self.nodes(ci, children, scope, providers)?;
+                Node::Use { name, args, .. } => {
                     let target = self.component_ids[name.as_str()];
                     for (i, p) in self.file.components[target].props.iter().enumerate() {
                         let Some(id) = self.params[target][i] else {
@@ -487,26 +475,7 @@ impl Graph<'_> {
                         }
                     }
                 }
-                Node::Children { .. } => {}
-                Node::When {
-                    then, otherwise, ..
-                } => {
-                    self.nodes(ci, then, scope, providers)?;
-                    self.nodes(ci, otherwise, scope, providers)?;
-                }
-                Node::Each {
-                    var, index, body, ..
-                } => {
-                    scope.push_each(var, index.as_deref(), Ty::Unknown);
-                    self.nodes(ci, body, scope, providers)?;
-                    scope.pop();
-                }
-                Node::Match { some, none, .. } => {
-                    scope.push_region(Some((some.0.clone(), Ref::Bound(0), Ty::Unknown)));
-                    self.nodes(ci, &some.1, scope, providers)?;
-                    scope.pop();
-                    self.nodes(ci, none, scope, providers)?;
-                }
+                _ => {}
             }
         }
         Ok(())
