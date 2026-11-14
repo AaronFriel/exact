@@ -59,6 +59,8 @@ mod requests;
 
 #[cfg(test)]
 mod refusal_tests;
+#[cfg(test)]
+mod store_tests;
 
 impl<D: DataSource> Bridge<D> {
     /// Empty; `boot` fills it.
@@ -95,7 +97,8 @@ impl<D: DataSource> Bridge<D> {
 
     /// The page's snapshot of the app's kept secrets (LLP 1018 D6): the
     /// input buffer's first `len` bytes (`page_snapshot`), taken by the next
-    /// `boot` (a `boot_plan` carries the running store instead).
+    /// `boot` or `boot_plan` (a `boot_plan` beside a running host carries its
+    /// store instead).
     pub fn store(&mut self, len: usize) {
         self.snapshot = page_snapshot(&self.input[..len.min(self.input.len())]);
     }
@@ -334,6 +337,9 @@ impl<D: DataSource> Bridge<D> {
     pub fn boot_plan(&mut self, len: usize, data: D, width: f64, height: f64, launch: &str) -> u32 {
         let plan = self.input[..len.min(self.input.len())].to_vec();
         let carried = self.host.as_ref().map(Host::carry);
+        // A page's first dev boot has no host to carry from: it reads the
+        // store the page handed in, as `boot` does.
+        let snapshot = std::mem::take(&mut self.snapshot);
         let viewport = exact_runner::Viewport {
             width,
             height,
@@ -347,7 +353,7 @@ impl<D: DataSource> Bridge<D> {
                 &plan,
                 data,
                 carried.as_ref(),
-                Vec::new(),
+                snapshot,
                 self.compat,
                 viewport,
                 launch,
