@@ -24,11 +24,11 @@ concat: xs.concat(ys) -> T[]
 filter: xs.filter(x => bool) -> T[]
 flat: xs.flat() -> T[]
 first: first(xs) -> option<T>
-formatDate: formatDate(msOrDayKey, offsetMinutes, "medium"|"month-year"|"iso") -> string
-formatDay: formatDay(then, now, offsetMinutes, "day"|"day-time"|"list"|"section") -> string  (Today)
+formatDate: formatDate(msOrDayKey, offset, "medium"|"month-year"|"month-day"|"iso") -> string
+formatDay: formatDay(then, now, offset, "day"|"day-time"|"list"|"section") -> string  (Today)
 formatDecimal: (cents to "12.34"; literal digits)
-formatNumber: formatNumber(n, "compact"|"decimal"|"percent"|"currency", "USD") -> string  (1,234.5; 26%)
-formatTime: ("2:13 PM"; minutes east of UTC)
+formatNumber: formatNumber(n, "compact"|"decimal"|"percent"|"currency", "USD"|digits) -> string  (1,234.5; 26%)
+formatTime: formatTime(ms, offset, "short"|"2-digit") -> string  ("2:13 PM"; offset: min east of UTC)
 frame: (action)
 includes: s.includes(x) -> bool  (text or list)
 indexOf: s.indexOf(x) -> number  (-1 for none)
@@ -163,7 +163,7 @@ action add
 text items.join(", ")
 ```
 ### a dated record
-The write reads the clock, not a ticked `now`; `performanceNow()` alone is 0 each launch. `"iso"` is the day, compared as text; its label `formatDay(at, now, …)`: Today, Yesterday. Tests pin `epoch` and `time-zone`.
+The write reads the clock, not a ticked `now`; `performanceNow()` alone restarts at 0. `"iso"` is the day, compared as text; its label `formatDay(at, now, …)`: Today, Yesterday. Tests pin `epoch` and `time-zone`.
 ```contract
 shape Time
   epochAtZero: number
@@ -175,7 +175,7 @@ action log
   days = days.concat([formatDate(at, time.utcOffset, "iso")])
 ```
 ### a test, and verify
-Tests start with empty storage. `clock data` lands replies, `clock settle` ends transitions, `clock held` lands held replies; `reload` keeps storage. `bun exact.mjs verify` tests, checks end screens, relaunches; `verify ios` last; `--shots <dir>` keeps screenshots.
+Tests start with empty storage. `clock data` lands replies, `clock settle` ends transitions, `clock held` lands held replies; `reload` keeps storage. `bun exact.mjs verify` tests, checks end screens, relaunches; `verify ios` last; `--shots <dir>` keeps shots.
 It runs `contract verify`; keep its receipt.
 ```contract-test
 test "a pick survives a relaunch"

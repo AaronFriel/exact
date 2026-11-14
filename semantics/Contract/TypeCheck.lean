@@ -68,11 +68,14 @@ theorem boundedTy_some {p : Program} {o : Option Ty} {t : Ty} (h : boundedTy p o
 
 /-- `formatNumber`'s literal parameters (`type-format-style`), then the
 format locale. The embedding fills an omitted code with `""`; only
-non-currency styles take that default. `Format.currencies` has the roster's admitted code literals. -/
+non-currency styles take that default. `Format.currencies` has the roster's admitted code literals.
+`decimal` may take a fraction digit count instead; one past 0–100 or not whole is refused when
+evaluated, as `toFixed`'s is. -/
 def numberFormatArgs : List Expr → Bool
   | [_, .str style, .str code, _] =>
     if style == "currency" then Format.currencies.any (fun c => c.1 == code)
     else ["compact", "decimal", "percent"].contains style && code == ""
+  | [_, .str "decimal", .num _, _] => true
   | _ => false
 
 mutual

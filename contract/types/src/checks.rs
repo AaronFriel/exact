@@ -36,7 +36,9 @@ pub(super) fn roster_spelling(f: exact_plan::Stdlib, spec: &str) -> &str {
         (Stdlib::ToString, "any") => "number | string | bool",
         (Stdlib::First | Stdlib::At, "any") => "list",
         // The ISO 4217 codes `"currency"` takes (LLP 1116 D8), too many to spell here.
-        (Stdlib::FormatNumber, code) if code.starts_with("\"USD\"") => "\"USD\" | \"EUR\" | …",
+        (Stdlib::FormatNumber, code) if code.starts_with("\"USD\"") => {
+            "\"USD\" | \"EUR\" | … | 0..=100"
+        }
         _ => spec,
     }
 }

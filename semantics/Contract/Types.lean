@@ -86,7 +86,9 @@ def unsupportedTy (name : String) (ts : List Ty) : Option Ty :=
         (name = "formatDate" ∧ ts = [.string, .number, .string, .string]) then .some .string
     else .none
   else if name = "formatNumber" then
-    match ts with | [.number, .string, .string, .string] => .some .string | _ => .none
+    match ts with
+    | [.number, .string, .string, .string] | [.number, .string, .number, .string] => .some .string
+    | _ => .none
   else if name = "toFixed" ∨ name = "formatDecimal" then
     match ts with | [.number, .number] => .some .string | _ => .none
   else if name = "formatDay" then

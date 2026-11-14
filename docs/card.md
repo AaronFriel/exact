@@ -17,11 +17,11 @@ functions: call -> result
   first(xs) -> option<T>
   xs.flat() -> T[]
   floor(n) -> number
-  formatDate(msOrDayKey, offsetMinutes, "medium"|"month-year"|"iso") -> string
-  formatDay(then, now, offsetMinutes, "day"|"day-time"|"list"|"section") -> string  (Today)
+  formatDate(msOrDayKey, offset, "medium"|"month-year"|"month-day"|"iso") -> string
+  formatDay(then, now, offset, "day"|"day-time"|"list"|"section") -> string  (Today)
   formatDecimal(units, digits) -> string  (cents to "12.34"; literal digits)
-  formatNumber(n, "compact"|"decimal"|"percent"|"currency", "USD") -> string  (1,234.5; 26%)
-  formatTime(ms, offsetMinutes, "short") -> string  ("2:13 PM"; minutes east of UTC)
+  formatNumber(n, "compact"|"decimal"|"percent"|"currency", "USD"|digits) -> string  (1,234.5; 26%)
+  formatTime(ms, offset, "short"|"2-digit") -> string  ("2:13 PM"; offset: min east of UTC)
   fragment(entry) -> string
   frame(id) -> Geometry  (action)
   go(router, location) -> Router
@@ -171,7 +171,7 @@ reading and writing data: app.ts's `loadItems`, `addItem` answer exactly their s
   action add
     send added = addItem("Milk")
   text items.join(", ")
-a dated record: The write reads the clock, not a ticked `now`; `performanceNow()` alone is 0 each launch. `"iso"` is the day, compared as text; its label `formatDay(at, now, …)`: Today, Yesterday. Tests pin `epoch` and `time-zone`.
+a dated record: The write reads the clock, not a ticked `now`; `performanceNow()` alone restarts at 0. `"iso"` is the day, compared as text; its label `formatDay(at, now, …)`: Today, Yesterday. Tests pin `epoch` and `time-zone`.
   shape Time
     epochAtZero: number
     utcOffset: number
@@ -180,7 +180,7 @@ a dated record: The write reads the clock, not a ticked `now`; `performanceNow()
   action log
     let at = time.epochAtZero + performanceNow()
     days = days.concat([formatDate(at, time.utcOffset, "iso")])
-a test, and verify: Tests start with empty storage. `clock data` lands replies, `clock settle` ends transitions, `clock held` lands held replies; `reload` keeps storage. `bun exact.mjs verify` tests, checks end screens, relaunches; `verify ios` last; `--shots <dir>` keeps screenshots. It runs `contract verify`; keep its receipt.
+a test, and verify: Tests start with empty storage. `clock data` lands replies, `clock settle` ends transitions, `clock held` lands held replies; `reload` keeps storage. `bun exact.mjs verify` tests, checks end screens, relaunches; `verify ios` last; `--shots <dir>` keeps shots. It runs `contract verify`; keep its receipt.
   test "a pick survives a relaunch"
     tap "pick"
     clock data

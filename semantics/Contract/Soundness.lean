@@ -111,9 +111,7 @@ theorem stdlib_unsupported {env : Env} {p : Program} {name : String} {vs : List 
   rw [ite_neg hn] at h
   by_cases hn : name = "formatNumber"
   · subst hn; rw [ite_pos rfl] at h
-    split at h <;> simp at h
-    subst h
-    simp only [stdlib]; exact formatting_good
+    split at h <;> simp at h <;> subst h <;> simp only [stdlib] <;> exact formatting_good
   rw [ite_neg hn] at h
   by_cases hn : name = "toFixed" ∨ name = "formatDecimal"
   · rw [ite_pos hn] at h

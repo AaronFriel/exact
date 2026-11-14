@@ -901,8 +901,17 @@ fn infer_unbounded(e: &Expr, scope: &Scope, shapes: &Shapes) -> Result<Ty, TypeE
                 }
                 let mut given = Vec::with_capacity(args.len());
                 for (i, (arg, spec)) in args.iter().zip(f.params()).enumerate() {
+                    // String literals that end in a digit range (`formatNumber`'s
+                    // code or fraction digits) take a number literal in it.
+                    let range = spec.rsplit(" | ").next().and_then(|r| r.split_once("..="));
+                    if let (true, Some(range), Expr::Number(..)) = (spec.starts_with('"'), range, arg) {
+                        literals::digits_argument(name, i, range, arg)?;
+                        given.push(Ty::Number);
+                        continue;
+                    }
                     if spec.starts_with('"') {
-                        literals::literal_argument(name, i, spec, arg)?;
+                        let spec = spec.split(" | ").filter(|c| c.starts_with('"')).collect::<Vec<_>>().join(" | ");
+                        literals::literal_argument(name, i, &spec, arg)?;
                         given.push(Ty::String);
                         continue;
                     }

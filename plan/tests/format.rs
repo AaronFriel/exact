@@ -1041,12 +1041,15 @@ fn a_plan_without_compiled_values_keeps_every_other_data_range() {
 /// terminal (LLP 1030 D3a). Executable instance expressions add `owner` and
 /// `unsettled` to derives; those hosts must also rebuild for the new rows.
 /// `formatDay` takes `"section"` (LLP 1168.000 D5), which a runner before it
-/// does not print: every host rebuilds for it.
+/// does not print: every host rebuilds for it. `formatTime` takes
+/// `"2-digit"`, `formatDate` `"month-day"` and `formatNumber` a `decimal`
+/// digit count (expo/exact#491), and a table's format data gains their
+/// fields: every host rebuilds for them.
 /// The digest covers all of `tables/format.json`, including comments.
 #[test]
 fn the_format_digest_is_pinned() {
     assert_eq!(
-        FORMAT_DIGEST, 0xf2bc_9538_fd30_6275,
+        FORMAT_DIGEST, 0xafe3_eb09_1549_1423,
         "the plan format digest moved: if intended, name the break and the hosts that move"
     );
 }
