@@ -309,7 +309,16 @@ pub(crate) fn text_of(node: &NodeRef<'_>) -> Option<String> {
 impl GroupedRow {
     /// A standard cell's title and second text, and how each is set: the
     /// second a subtitle under the title, else a value beside it.
+    /// Neither is set when either text is Markdown: the cell's strings are
+    /// plain, so the row keeps its views, which draw the Markdown (LLP 1045 D3).
     fn texts(&mut self, title: &NodeRef<'_>, second: Option<&NodeRef<'_>>, subtitle: bool) {
+        let markdown = |n: &NodeRef<'_>| {
+            crate::text::Markup::from_prop(n.props.str(PropId::Markup))
+                == crate::text::Markup::Markdown
+        };
+        if markdown(title) || second.is_some_and(markdown) {
+            return;
+        }
         self.title = text_of(title);
         self.title_look = TextLook::of(title);
         self.secondary = second.and_then(text_of);

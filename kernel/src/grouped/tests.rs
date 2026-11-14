@@ -161,6 +161,64 @@ fn sheet_boxes_and_a_rows_minimum_height_keep_standard_cells() {
 }
 
 #[test]
+fn a_rows_markdown_text_keeps_its_views() {
+    for column in [false, true] {
+        for lines in [1, 2] {
+            for markdown in 3..3 + lines as ViewId {
+                let mut k = Kernel::with_monospace();
+                let mut ops = vec![];
+                for (id, node_type) in [
+                    (1, NodeType::View),
+                    (3, NodeType::Text),
+                    (4, NodeType::Text),
+                ] {
+                    ops.push(Op::CreateView { id, node_type });
+                }
+                if column {
+                    ops.push(style(
+                        1,
+                        &[
+                            (StyleId::Display, "flex"),
+                            (StyleId::FlexDirection, "column"),
+                        ],
+                        false,
+                    ));
+                }
+                ops.extend([
+                    Op::SetProp {
+                        id: 3,
+                        prop: PropId::Text,
+                        value: "A **bold** word".into(),
+                    },
+                    Op::SetProp {
+                        id: 4,
+                        prop: PropId::Text,
+                        value: "Detail".into(),
+                    },
+                    Op::SetProp {
+                        id: markdown,
+                        prop: PropId::Markup,
+                        value: "markdown".into(),
+                    },
+                    Op::SetChildren {
+                        id: 1,
+                        children: (3..3 + lines as ViewId).collect(),
+                    },
+                    Op::AttachRoot { id: 1 },
+                ]);
+                k.apply(0, 1, &ops).unwrap();
+                let r = k.grouped_row(&k.node(1).unwrap());
+                assert!(
+                    r.custom,
+                    "column={column}, lines={lines}, markdown text={markdown}"
+                );
+                assert_eq!((r.title, r.secondary), (None, None));
+            }
+        }
+    }
+}
+
+#[test]
 fn custom_radio_rows_keep_their_selection_target_and_checked_state() {
     for (property, value) in [
         (StyleId::Height, "80"),
