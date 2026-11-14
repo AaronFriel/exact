@@ -131,6 +131,7 @@ impl<D: DataSource> Presenter<D> {
                         || self.top.overlay.keyboard
                 }),
                 hovered: open.hovered,
+                ripple: None,
             };
             open.layout
                 .paint(&mut raster, &mut self.text.borrow_mut(), feedback);

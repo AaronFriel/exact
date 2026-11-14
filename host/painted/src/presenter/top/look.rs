@@ -109,7 +109,8 @@ const MENU_RULE: (f32, f32) = (1.0, 8.0);
 /// label, in the variant's colour: it names the items under it and takes no
 /// press.
 const MENU_HEADER: f32 = 32.0;
-/// Material's state layer under a press or a keyboard's focus.
+/// Material's state layer under a keyboard's focus, and under a press that
+/// shows no ripple.
 pub(in crate::presenter) const STATE_LAYER: f32 = 0.10;
 
 /// What a surface's look depends on besides what it says.
@@ -144,10 +145,14 @@ pub(in crate::presenter) struct Feedback {
     pub pressed: Option<usize>,
     pub focused: Option<usize>,
     pub hovered: Option<usize>,
+    /// A finger's ripple on a Material surface's target (LLP 1115.001 D9):
+    /// the target, the ripple, the instant and whether motion is removed.
+    /// It takes the place of the pressed target's state layer.
+    pub ripple: Option<(usize, crate::paint::ripple::Ripple, f64, bool)>,
 }
 
 /// A row as it can be touched: its box, the authored node it stands for,
-/// and the state layer a press shows.
+/// and the shape and colour its press and its focus show in.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Target {
     /// Its box in the surface, points.
@@ -157,6 +162,14 @@ pub struct Target {
     /// Whether it takes a press.
     pub enabled: bool,
     layer: (Shape, [u8; 4]),
+}
+
+impl Target {
+    /// A point of the surface as an offset into the shape its press shows in.
+    pub(in crate::presenter) fn held_at(&self, x: f32, y: f32) -> (f32, f32) {
+        let (left, top, ..) = self.layer.0.rect;
+        (x - left, y - top)
+    }
 }
 
 /// A surface measured: its size, its container and what it draws.
@@ -343,11 +356,13 @@ impl Layout {
             backend.push_clip(&container, ts);
             backend.push_clip(&Shape::rect(clip), ts);
         }
-        let lit = feedback.focused.into_iter().chain(
-            feedback
-                .pressed
-                .filter(|i| self.windows.is_none() && Some(*i) != feedback.focused),
-        );
+        let ripple = feedback.ripple.filter(|_| self.windows.is_none());
+        let lit = feedback
+            .focused
+            .into_iter()
+            .chain(feedback.pressed.filter(|i| {
+                self.windows.is_none() && Some(*i) != feedback.focused && ripple.is_none()
+            }));
         for target in lit.filter_map(|i| self.targets.get(i)) {
             let (shape, mut tint) = target.layer;
             if self.windows.is_some() {
@@ -364,6 +379,13 @@ impl Layout {
                 tint[3] = (f32::from(tint[3]) * STATE_LAYER).round() as u8;
             }
             backend.fill(&shape, tint, ts);
+        }
+        if let Some((target, ripple, now, still)) =
+            ripple.and_then(|(i, r, now, still)| Some((self.targets.get(i)?, r, now, still)))
+        {
+            let (shape, tint) = target.layer;
+            let wave = ripple.wave(shape.rect, now, still);
+            crate::paint::ripple::fill(backend, &shape, tint, wave, ts);
         }
         for item in &self.items {
             match item {

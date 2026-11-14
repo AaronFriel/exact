@@ -351,3 +351,49 @@ fn short_rtl_alert_texts_have_accessibility_bounds_at_the_right() {
         assert_eq!(text.rect[3], if name == "عنوان" { 32. } else { 20. });
     }
 }
+
+/// A finger on a Material surface's row ripples in its state layer's shape
+/// (LLP 1115.001 D9), as the page's and the bars' targets do: nothing at
+/// the touch's instant, the wave at rest after 450 ms, the surface told
+/// again at each new instant while it moves and once at rest, and as it
+/// was once the wave has left after a lift outside the row.
+#[test]
+fn a_menu_row_and_an_alert_button_ripple_and_are_told_at_each_instant() {
+    for (trigger, row) in [("more", "menu-share"), ("ask", "confirm-cancel")] {
+        let (mut p, pictures) = windowed();
+        tap(&mut p, trigger).unwrap();
+        assert_eq!(told(&mut p).len(), 1);
+        let last = || pictures.borrow().last().unwrap().clone();
+        let rest = last();
+        let node = id(&p, row);
+        let shown = p.surface().unwrap();
+        let serial = shown.serial;
+        let (x, y, w, h) = shown.targets.iter().find(|t| t.node == node).unwrap().rect;
+        p.clock(1000.);
+        p.surface_event(serial, 0, x + w / 2.0, y + h / 2.0, 1000.);
+        assert_eq!(told(&mut p).len(), 1, "{trigger}: pressed");
+        assert_eq!(last().data(), rest.data(), "{trigger}: nothing at first");
+        assert!(
+            p.needs_animation_frame(),
+            "{trigger}: the ripple owes frames"
+        );
+        assert!(told(&mut p).is_empty(), "{trigger}: the same instant once");
+        p.clock(1500.);
+        assert_eq!(told(&mut p).len(), 1, "{trigger}: a new instant");
+        let held = last();
+        assert_ne!(held.data(), rest.data(), "{trigger}: the wave at rest");
+        assert!(!p.needs_animation_frame(), "{trigger}: at rest");
+        // Lifted outside the row: it chooses nothing, and the wave leaves.
+        p.surface_event(serial, 2, 0.5, 0.5, 1500.);
+        p.surface_event(serial, 1, 0.5, 0.5, 1500.);
+        assert!(p.surface().is_some(), "{trigger}: nothing chosen");
+        assert!(p.needs_animation_frame());
+        p.clock(1700.);
+        assert_eq!(told(&mut p).len(), 1, "{trigger}: leaving");
+        p.clock(1900.);
+        assert_eq!(told(&mut p).len(), 1, "{trigger}: gone");
+        assert_eq!(last().data(), rest.data(), "{trigger}: as it was");
+        assert!(!p.needs_animation_frame());
+        assert!(told(&mut p).is_empty());
+    }
+}

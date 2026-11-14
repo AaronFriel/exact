@@ -291,6 +291,7 @@ impl<D: DataSource> Presenter<D> {
         self.host.land_presses();
         self.brush.ripples.land(self.host.now());
         self.land_bar_ripple();
+        self.land_surface_ripple();
         self.dirty = true;
     }
     pub(crate) fn contact_event_ms(&self) -> Option<f64> {

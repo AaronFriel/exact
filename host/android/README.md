@@ -527,7 +527,7 @@ bounded by the pressed shape, spreading to rest in 450 ms while the finger is do
 middle, and fading out over 375 ms once the finger has lifted and those 450 ms are over. No state layer shows beside
 it, as Compose shows none for a press; a hover's 8% does. The wave's sparkles are not drawn. With animations removed,
 and on the agent's clock, a press is the wave at rest and a release takes it away. The bars' targets ripple too, in
-the shape their state layer had (below); the top layer's rows and buttons still show the 10% state layer alone.
+the shape their state layer had (below), and so do the top layer's menu rows and alert buttons.
 
 **The launch window.** From Android 14 the launch theme names the platform's `system_surface_light` and
 `system_surface_dark` (`res/values-v34`, `values-night-v34`), the colour the first frame's unsaid background has, with
@@ -1034,10 +1034,10 @@ tells the reader the size the window is to be.
 | `Native.surface(serial, what, x, y)` (`CanvasHost::surface`, `Presenter::surface_event`) | reader tells, on exact2's thread | What happened in that surface's window: a touch (`what` 0 down, 1 up, 2 move, 3 cancel) at the window's own pixels; the system dismissed the window (8: Back, Escape, a tap outside a menu); the reader could not make it (9); a key (16 Enter, 17 Tab, 18 Shift+Tab, 19 to 22 the arrows, 23 Space). What is said of a serial that is no longer open is dropped |
 | `Native.touch` with action 4 | reader tells | The touch that is down has been held still for the system's long-press time (`ViewConfiguration.getLongPressTimeout`), which the reader measures. What names a context menu there opens it, the long-press haptic is asked for, and the touch presses nothing when it lifts |
 
-exact2 does the hit testing: it knows each row's box in the surface, lights the row a finger holds (Material's
-state layer, not its ripple), and chooses the row the finger lifts in. A driver reads the open surface from the
-agent's `state.surface` (each row's authored node and its box in the window) and `tap`s a row by that node; `tree`
-rows are not marked.
+exact2 does the hit testing: it knows each row's box in the surface, ripples the row a finger holds (in the row's
+state-layer shape, the surface told again at each instant while the wave moves, as a bar is), and chooses the row
+the finger lifts in. A driver reads the open surface from the agent's `state.surface` (each row's authored node and
+its box in the window) and `tap`s a row by that node; `tree` rows are not marked.
 
 **What a window gives, and what closes it.** Seen on a Pixel 10 Pro XL (Android 16):
 
@@ -1110,7 +1110,7 @@ Not built of D10:
 - A bottom sheet for a chooser or a `dialog` its author lays out (a `modal` route is one: [Sheets](#sheets-and-route-motion-llp-1115001-d10-d12)), submenus as cascades (a row that opens another
   menu replaces the first), a menu or a dialog taller than the window (it is not scrolled), a raster image in a
   menu row.
-- The ripple, Material's own type scaling above 100% (sizes are sp taken linearly), and the device's own face.
+- Material's own type scaling above 100% (sizes are sp taken linearly), and the device's own face.
 - An outside tap that dismisses an alert whose author wrote `closedby="any"`: lowering implies `any` for every
   `alertdialog` today, so the two cannot be told apart (LLP 1115.000 D13.4).
 - The arrow keys reach a surface; nothing else of D7.6's hardware keys is built for the page.

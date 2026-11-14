@@ -23,8 +23,8 @@
 //!
 //! **What crosses.** Out, on the one channel (`requests.rs`, kind 7): the
 //! surface as a statement, told when it is not what the shell was last told
-//! (it opened, a press lit a row, a type or colour preference changed, it
-//! closed), with its size, its place and its stream. In, one call
+//! (it opened, a press lit a row or its ripple moved, a type or colour
+//! preference changed, it closed), with its size, its place and its stream. In, one call
 //! ([`Presenter::surface_event`]): a touch in the window at the surface's
 //! own points, a key, that the system dismissed the window (a tap outside a
 //! menu, Back, Escape), or that the shell could not make it.
@@ -41,6 +41,7 @@
 //! to itself. System Back closes it before any route is asked
 //! ([`Presenter::system_back`]).
 use super::*;
+use crate::paint::ripple::Ripple;
 use exact_kernel::invocation::Action;
 use exact_kernel::NodeKey;
 
@@ -166,6 +167,10 @@ struct Open {
     origin: u32,
     /// The row under the finger, and the row a keyboard focused.
     pressed: Option<usize>,
+    /// The ripple of the last row a finger held (LLP 1115.001 D9), and the
+    /// clock the shell was last told it at.
+    ripple: Option<(usize, Ripple)>,
+    rippled: Option<f64>,
     /// Where a finger that went down in a scrolling menu went down and
     /// last was, and whether it has moved far enough to scroll it.
     drag: Option<(f32, f32, bool)>,
@@ -543,6 +548,8 @@ impl<D: DataSource> Presenter<D> {
             scale: self.brush.scale,
             origin: 0,
             pressed: None,
+            ripple: None,
+            rippled: None,
             drag: None,
             focused: None,
             hovered: None,
@@ -691,11 +698,14 @@ impl<D: DataSource> Presenter<D> {
         }
     }
 
-    /// A touch in the surface: a row is lit while a finger holds it, and
+    /// A touch in the surface: a row ripples while a finger holds it, and
     /// chosen when the finger lifts in it. A finger that leaves its row
     /// lets go of it. In a menu taller than its window, a finger that moves
     /// past the touch slop scrolls the rows instead, and chooses none.
     fn surface_touch(&mut self, action: i32, x: f32, y: f32, now_ms: f64) {
+        // Material's surfaces ripple; WinUI's do not.
+        let ripples = !self.top.overlay.enabled;
+        let now = now_ms.max(self.host.now());
         let Some(open) = self.top.open.as_mut() else {
             return;
         };
@@ -707,6 +717,11 @@ impl<D: DataSource> Presenter<D> {
             0 => {
                 open.pressed = at;
                 open.drag = open.layout.menu_scroll().map(|_| (y, y, false));
+                if let Some(index) = at.filter(|_| ripples) {
+                    let point = open.layout.targets[index].held_at(x, y);
+                    open.ripple = Some((index, Ripple::new(Some(point), now)));
+                    open.rippled = None;
+                }
             }
             2 if open.drag.is_some() => {
                 let (start, last, moving) = open.drag.unwrap();
@@ -727,6 +742,15 @@ impl<D: DataSource> Presenter<D> {
             _ => {
                 open.pressed = None;
                 open.drag = None;
+            }
+        }
+        if before.is_some() && open.pressed.is_none() {
+            // A finger that scrolled the rows, or was taken, pressed none.
+            let cancelled = scrolled || action == 3;
+            if let Some((_, ripple)) = &mut open.ripple {
+                if !ripple.release(now, cancelled) {
+                    open.ripple = None;
+                }
             }
         }
         if open.pressed != before || scrolled {
@@ -1080,6 +1104,7 @@ impl<D: DataSource> Presenter<D> {
             open.layout = layout;
             (open.plan, open.inputs) = (plan, inputs);
             open.pressed = None;
+            open.ripple = None;
             open.hovered = None;
             let targets = &open.layout.targets;
             open.focused = focused.and_then(|node| targets.iter().position(|t| t.node == node));
@@ -1167,10 +1192,14 @@ impl<D: DataSource> Presenter<D> {
         let open = self.top.open.as_ref()?;
         let scale = open.scale;
         let layout = &open.layout;
+        let (now, still) = self.surface_clock();
         let feedback = look::Feedback {
             pressed: open.pressed,
             focused: open.focused,
             hovered: open.hovered,
+            ripple: open
+                .ripple
+                .map(|(index, ripple)| (index, ripple, now, still)),
         };
         let painter = self.top.painter.as_mut()?;
         let stream = painter.record(layout.size, scale, &mut |backend| {
@@ -1199,6 +1228,7 @@ impl<D: DataSource> Presenter<D> {
             return;
         }
         self.sync_surface();
+        self.ripple_surface();
         let now = self
             .top
             .open
@@ -1225,6 +1255,57 @@ impl<D: DataSource> Presenter<D> {
             self.queue(Request::Surface(surface));
         }
         self.top.told = now;
+    }
+
+    /// The host's clock, and whether motion is removed, for a surface's ripple.
+    fn surface_clock(&self) -> (f64, bool) {
+        let still = self.host.runner().viewport().preferences.reduced_motion;
+        (self.host.now(), still)
+    }
+
+    /// A surface's ripple moves on: its picture is made again at each new
+    /// instant of the clock while it moves, once more at rest, and once
+    /// gone without it, as a bar's is (`bars.rs`).
+    fn ripple_surface(&mut self) {
+        let (now, still) = self.surface_clock();
+        let Some(open) = self.top.open.as_mut() else {
+            return;
+        };
+        let Some((_, ripple)) = open.ripple else {
+            return;
+        };
+        let told = open.rippled;
+        if ripple.gone(now, still) {
+            open.ripple = None;
+            open.revision += 1;
+        } else if told != Some(now)
+            && (ripple.moving(now, still) || told.is_none_or(|t| ripple.moving(t, still)))
+        {
+            open.rippled = Some(now);
+            open.revision += 1;
+        }
+    }
+
+    /// Whether a surface's ripple owes a frame: it moves, or is to be taken away.
+    pub(super) fn surface_ripple_moving(&self) -> bool {
+        let (now, still) = self.surface_clock();
+        (self.top.open.as_ref())
+            .and_then(|open| open.ripple)
+            .is_some_and(|(_, r)| r.moving(now, still) || r.gone(now, still))
+    }
+
+    /// The agent's clock: a surface's held ripple is at rest, a released one gone.
+    pub(super) fn land_surface_ripple(&mut self) {
+        let now = self.host.now();
+        let Some(open) = self.top.open.as_mut() else {
+            return;
+        };
+        if let Some((_, ripple)) = &mut open.ripple {
+            if !ripple.land(now) {
+                open.ripple = None;
+            }
+            open.revision += 1;
+        }
     }
 
     /// The open surface for the agent's `state`: what it is, the authored
