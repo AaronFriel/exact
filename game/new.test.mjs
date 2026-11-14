@@ -117,6 +117,9 @@ test('generated commands run from an external author directory with quoted paths
     for (const file of ['app-cli.mjs', 'bun.mjs']) cpSync(resolve(import.meta.dir, '../scripts', file), resolve(sdk, 'scripts', file));
     mkdirSync(resolve(sdk, 'js/bake/src'), { recursive: true });
     cpSync(resolve(import.meta.dir, '../js/bake/src/__exact_env.mjs'), resolve(sdk, 'js/bake/src/__exact_env.mjs'));
+    // An installed checkout's: a verb that builds is refused without node_modules (app-cli.mjs).
+    mkdirSync(resolve(sdk, 'node_modules/.bin'), { recursive: true });
+    writeFileSync(resolve(sdk, 'node_modules/.bin/rolldown'), '');
     writeFileSync(resolve(sdk,'host/windows/build.mjs'),`console.log(JSON.stringify({args:process.argv.slice(2),app:process.env.EXACT_APP_DIR}));`);
     const windows=spawnSync(process.execPath,['exact.mjs','windows','--release','--run'],{cwd:app,env:{...process.env,EXACT:sdk},encoding:'utf8'});
     assert.equal(windows.status,0,windows.stderr);
