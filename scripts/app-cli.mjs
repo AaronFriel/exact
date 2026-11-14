@@ -661,15 +661,22 @@ function bindgenFinding(dir, workspace, options) {
       : `Require wasm-bindgen = "=${pin}" in ${own}'s wasm32 dependencies, then run bun exact.mjs lock again: Cargo moves wasm-bindgen and the crates that name its version with it.`);
 }
 
-/** Explicit app lock repair: preserve selected versions and resolve only manifest drift. */
+/** Explicit app lock repair: preserve selected versions and resolve only manifest drift. An app without a workspace of
+ * its own resolves its generated one (LLP 1153.003 D1.4), capturing a lock only when its crates leave exact2's. */
 export async function lockApp(dir) {
   const { cargoEnvironment } = await import('./app.mjs');
-  const { authoredWorkspace, shellsDir } = await import('./cargo-check.mjs');
+  const { appCrates, authoredWorkspace, shellsDir } = await import('./cargo-check.mjs');
+  const { ensureShells, lockShells, lockChanges } = await import('./app-shells.mjs');
   const options = { cwd: dir, env: cargoEnvironment(), encoding: 'utf8', maxBuffer: 1 << 26 };
-  // An app that authored no workspace has the generated one once a native verb wrote it (LLP 1153 D1.3), else no Rust.
-  const workspace = authoredWorkspace(dir) ?? (existsSync(resolve(shellsDir(dir), 'Cargo.toml')) ? shellsDir(dir) : null);
-  if (!workspace) return `${dir}: no Rust here yet; a native verb (bun exact.mjs ios, mac, linux, android, windows) brings it`;
-  const lock = resolve(workspace, 'Cargo.lock');
+  const authored = authoredWorkspace(dir);
+  if (!authored) {
+    if (!appCrates(dir).length && !existsSync(resolve(shellsDir(dir), 'Cargo.toml'))) return `${dir}: no Rust here yet; a native verb (bun exact.mjs ios, mac, linux, android, windows) brings it`;
+    const { workspace } = ensureShells(dir);
+    const said = lockShells(dir, workspace);
+    const found = bindgenFinding(dir, workspace, options);
+    return found ? `${said}\n${found}` : said;
+  }
+  const workspace = authored, lock = resolve(workspace, 'Cargo.lock');
   const before = existsSync(lock) ? readFileSync(lock, 'utf8') : '';
   let result = spawnSync('cargo', ['metadata', '--offline', '--format-version', '1'], { ...options, cwd: workspace });
   if (result.status !== 0 && /no matching package named|--offline was specified|attempting to make an HTTP request|in the offline mode|offline mode \(via `--offline`\)/.test(result.stderr ?? '')) {
@@ -677,7 +684,6 @@ export async function lockApp(dir) {
     result = spawnSync('cargo', ['metadata', '--format-version', '1'], { ...options, cwd: workspace });
   }
   if (result.status !== 0) throw new Error(`could not resolve ${lock}: ${result.stderr || result.error?.message}`);
-  const { lockChanges } = await import('../game/app/shells.mjs');
   const changes = lockChanges(before, readFileSync(lock, 'utf8'));
   const said = `${lock}: ${changes.length ? `resolved\n${changes.join('\n')}` : 'current; no changes'}`;
   const found = bindgenFinding(dir, workspace, options);

@@ -496,7 +496,8 @@ test('a Windows game shell links the shared presenter its baked entry uses', () 
 });
 
 test('the SDK lock decides every version; a game that adds packages captures its own lock', async () => {
-  const {outsideSdkLock,sdkLock}=await import('./app/shells.mjs');
+  const {sdkLock}=await import('./app/shells.mjs');
+  const {outsideSdkLock}=await import('../scripts/app-shells.mjs');
   const lock=packages=>`version = 4\n\n${packages.map(([name,version,source,deps])=>`[[package]]\nname = "${name}"\nversion = "${version}"\n${source?`source = "registry+https://github.com/rust-lang/crates.io-index"\nchecksum = "${source}"\n`:''}${deps?`dependencies = [\n${deps.map(d=>` "${d}",\n`).join('')}]\n`:''}`).join('\n')}`;
   const sdk=lock([['glam','0.33.7','aa',['approx','libm']],['approx','0.5.1','bb'],['libm','0.2.16','cc'],['exact-game','0.1.0',null,['glam']]]);
   const members=new Set(['x-logic','x-gpu']);
@@ -513,7 +514,8 @@ test('the SDK lock decides every version; a game that adds packages captures its
 }, 120000);
 
 test('a root crate\'s new registry dependency or new path crate resolves before the SDK lock is refreshed', async () => {
-  const {outsideSdkLock,withRootPins}=await import('./app/shells.mjs');
+  const {withRootPins}=await import('./app/shells.mjs');
+  const {outsideSdkLock}=await import('../scripts/app-shells.mjs');
   const registry='registry+https://github.com/rust-lang/crates.io-index';
   const block=(name,version,checksum)=>`[[package]]\nname = "${name}"\nversion = "${version}"\n${checksum?`source = "${registry}"\nchecksum = "${checksum}"\n`:''}`;
   const lock=(...blocks)=>`version = 4\n\n${blocks.join('\n')}`;
@@ -553,7 +555,8 @@ test('an empty Cargo cache permits adapter generation and refuses offline resolu
 
 
 test('lockDrift names what exact2 added and moved under a captured lock, never what the game chose', async () => {
-  const {lockDrift,lockChanges}=await import('./app/shells.mjs');
+  const {lockDrift}=await import('./app/shells.mjs');
+  const {lockChanges}=await import('../scripts/app-shells.mjs');
   const lock=packages=>`version = 4\n\n${packages.map(([name,version,source,deps])=>`[[package]]\nname = "${name}"\nversion = "${version}"\n${source?`source = "registry+https://github.com/rust-lang/crates.io-index"\nchecksum = "${source}"\n`:''}${deps?`dependencies = [\n${deps.map(d=>` "${d}",\n`).join('')}]\n`:''}`).join('\n')}`;
   // exact2's text crate moved to parley, which brings fontique and a newer harfrust;
   // another shell's rand 0.8 is in the SDK lock, and this game chose rand 0.9.
@@ -588,7 +591,7 @@ test('lockDrift names what exact2 added and moved under a captured lock, never w
 });
 
 test('lock seeds the SDK lock\'s versions, a same-series bump included, and keeps the game\'s own packages', async () => {
-  const {lockSeed,staleLock}=await import('./app/shells.mjs');
+  const {lockSeed,staleLock}=await import('../scripts/app-shells.mjs');
   const block=(name,version,source)=>`[[package]]\nname = "${name}"\nversion = "${version}"\n${source?`source = "${source}"\n`:''}`;
   const lock=(...blocks)=>`version = 4\n\n${blocks.join('\n')}`;
   const crates='registry+https://github.com/rust-lang/crates.io-index';

@@ -43,10 +43,10 @@ import { filesystem, installedModules, OFFLINE_MISSING, removePrivateTree, withH
 import { installedFileDependencies } from './file-dependencies.mjs';
 import { startSweep } from './sweep.mjs';
 import { WEB_TOOLCHAIN, WEB_STD, WEB_SIZE, WEB_RUSTFLAGS, webToolchainEnv, cargoEnvironment,
-  NO_WORKSPACE, androidCargo, appleCargo, authoredWorkspace, cargoDiagnosticsCommand,
-  cargoOnPath, claimTargetCrates, knownWorkspace, rememberWorkspace, shellsDir, targetRustflags } from './cargo-check.mjs';
+  androidCargo, appCrates, appleCargo, authoredWorkspace, cargoDiagnosticsCommand, cargoOnPath, claimTargetCrates,
+  declaredWorkspace, knownWorkspace, refuseLoose, rememberWorkspace, shellsDir, targetRustflags } from './cargo-check.mjs';
 export { WEB_TOOLCHAIN, WEB_STD, WEB_SIZE, webToolchainEnv, cargoEnvironment, cargoOnPath } from './cargo-check.mjs';
-import { appCrateName, ensureShells } from './app-shells.mjs';
+import { appCrateName, ensureShells, settleLock } from './app-shells.mjs';
 import { installProblems } from './install-page.mjs';
 import { gameDefaults, lintGame, prepareGame } from '../game/app/shells.mjs';
 import { generatedInputFiles } from '../game/inputs.mjs';
@@ -443,22 +443,18 @@ export function resolveApp(nameOrCrate) {
     // without moving its sources. Look at authored member manifests rather
     // than guessing a workspace from the app's name or enclosing directory.
     const memberDirs = [dir, ...readdirSync(dir, { withFileTypes: true }).filter(entry => entry.isDirectory()).map(entry => resolve(dir, entry.name))];
-    const declared = [...new Set(memberDirs.flatMap(member => {
-      const path = resolve(member, 'Cargo.toml');
-      if (!existsSync(path)) return [];
-      const owner = Bun.TOML.parse(readFileSync(path, 'utf8')).package?.workspace;
-      return owner === undefined ? [] : [realpathSync(resolve(member, owner))];
-    }))];
-    if (declared.length > 1) throw new Error(`${dir}: app crates declare different Cargo workspaces: ${declared.join(', ')}`);
+    const declared = declaredWorkspace(dir, memberDirs);
     // Ordinary external apps may belong to an enclosing Cargo workspace. Games
     // always use their generated workspace below and need no Cargo process here.
     const manifests = memberDirs.map(member => resolve(member, 'Cargo.toml')), known = knownWorkspace(dir, !!outside, manifests);
     if (known) workspace = known;
     else {
-      if (declared.length) workspace = declared[0];
+      if (declared) workspace = declared;
       // From the files, never `cargo locate-project`: a web verb runs no Cargo in the app (LLP 1153 D2.1). An app that
       // authored no workspace builds in the generated one (scripts/app-shells.mjs), written when a build asks (`rust`).
       else if (outside || !manifests.some(existsSync)) workspace = authoredWorkspace(dir) ?? shellsDir(dir);
+      // A crate beside app.json that names no workspace, with none above to own it, joins none (LLP 1153.003 D1.1).
+      if (workspace === dir && !existsSync(resolve(dir, 'Cargo.toml'))) refuseLoose(dir);
       // EXACT_APP_DIR may name an app of this repo; only another workspace is checked, its lock when a build asks.
       if (workspace !== ROOT && workspace !== shellsDir(dir) && existsSync(resolve(workspace, 'Cargo.toml'))) {
         const problems = outsideWorkspaceProblems(workspace);
@@ -484,7 +480,7 @@ export function resolveApp(nameOrCrate) {
     rusted = true;
     // A deploy builds its capture of the app where the app builds (scripts/deploy.mjs `materializeSnapshot`).
     if (process.env.CARGO_TARGET_DIR && own !== ROOT && !process.env.EXACT_DEPLOY_CAPSULE) claimTargetCrates(target, name, dir);
-    if (generated) { ensureShells(dir, manifest, name); checkOutsideLock(workspace); } else checkLock?.();
+    if (generated) { ensureShells(dir, manifest, name); settleLock(dir, workspace); } else checkLock?.();
     return workspace;
   };
   startSweep(target);
@@ -503,7 +499,7 @@ export function resolveApp(nameOrCrate) {
     if (!packages) {
       rust();
       const result = lockedMetadata(workspace, true);
-      if (result.status !== 0) throw new Error(`cargo metadata: ${result.stderr || result.error?.message}${existsSync(resolve(workspace, 'Cargo.toml')) ? '' : `\nThe crates beside app.json have no Cargo workspace. ${NO_WORKSPACE}`}`);
+      if (result.status !== 0) throw new Error(`cargo metadata: ${result.stderr || result.error?.message}`);
       packages = JSON.parse(result.stdout).packages;
     }
     return packages.find(pkg => pkg.name === crate(kind));

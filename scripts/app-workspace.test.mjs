@@ -3,7 +3,7 @@
 import { test } from 'bun:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { basename, delimiter, dirname, resolve, sep } from 'node:path';
 import { resolveApp, buildBake, bakeTarget } from './app.mjs';
@@ -652,6 +652,10 @@ test.each(['notes', 'planner'])('OS-specific folders resolve for %s without app-
     write('app.contract', 'use App from "./src/app.contract"\n');
     write('app.json', JSON.stringify({name,app:{id:`com.exact.${name}`,name}}));
     for (const p of ['ios','macos','web']) write(`${p}/Cargo.toml`, `[package]\nname="${name}-${p}"\nversion="0.1.0"\n`);
+    // Host crates the app writes are its authored workspace's (LLP 1153.003 D3).
+    const { patchLines } = await import('./app.mjs');
+    write('Cargo.toml', `[workspace]\nmembers = ["ios", "macos", "web"]\nresolver = "2"\n\n[patch.crates-io]\n${patchLines(dir).join('\n')}\n`);
+    write('rust-toolchain.toml', readFileSync(resolve(import.meta.dir, '../rust-toolchain.toml'), 'utf8'));
     write('ios/modules/Input.swift'); write('macos/modules/Input.swift'); write('web/modules/index.js');
     const app = resolveApp(`${name}-ios`);
     assert.equal(app.crate('ios'), `${name}-ios`); assert.equal(app.crate('macos'), `${name}-macos`);
@@ -816,7 +820,7 @@ test('update refuses, before writing, a root the crates it adds cannot load in',
       ['[workspace]\nmembers = []\n[workspace.package]\nedition = "2021"\n', /Cargo\.toml has no version, license in \[workspace\.package\]/],
     ]) {
       writeFileSync(root, text);
-      assert.throws(() => createApp(dir, { update: true }), (e) => said.test(e.message) && /contract vocab gpu-module/.test(e.message), text);
+      assert.throws(() => createApp(dir, { update: true }), (e) => said.test(e.message) && /"An authored workspace"/.test(e.message), text);
       assert.deepEqual([readFileSync(root, 'utf8'), existsSync(resolve(dir, 'linux')), existsSync(resolve(dir, 'exact.mjs.tmp'))], [text, false, false], 'nothing written');
     }
   } finally { rmSync(scratch, { recursive: true, force: true }); }
@@ -1010,3 +1014,96 @@ test('the host target is the pinned toolchain\'s when rustup has no default', ()
     assert.equal(run.stdout.trim(), bakeTarget('linux'));
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+// LLP 1153.003 D1: an app's own crates join the workspace exact2 generates, which keeps writing every host crate.
+test('a crate beside app.json joins the generated workspace by naming it, and one that names none is refused with the line to add', async () => {
+  const { createApp } = await import('../game/new.mjs');
+  const { ensureShells } = await import('./app-shells.mjs');
+  const scratch = realpathSync(mkdtempSync(resolve(tmpdir(), 'exact-members-'))), dir = resolve(scratch, 'field-log'), was = process.env.EXACT_APP_DIR, target = process.env.CARGO_TARGET_DIR;
+  const crate = (path, name, workspace) => {
+    mkdirSync(resolve(dir, path, 'src'), { recursive: true });
+    writeFileSync(resolve(dir, path, 'Cargo.toml'), `[package]\nname = "${name}"\nversion.workspace = true\nedition.workspace = true\n${workspace ? `workspace = "${workspace}"\n` : ''}publish = false\n\n[dependencies]\nexact-runner.workspace = true\n`);
+    writeFileSync(resolve(dir, path, 'src/lib.rs'), '');
+  };
+  try {
+    createApp(dir, { with: ['ios'] });
+    delete process.env.CARGO_TARGET_DIR;
+    process.env.EXACT_APP_DIR = dir;
+    crate('data', 'field-log-data', null);
+    assert.throws(() => resolveApp(), /data\/Cargo\.toml: a crate beside app\.json joins the app's generated workspace\. Add, under \[package\], workspace = "\.\.\/\.exact\/shells" \(a GPU crate: workspace = "\.\.\/\.exact\/gpu"\)/);
+    assert.throws(() => ensureShells(dir), /a crate beside app\.json joins the app's generated workspace/);
+    crate('data', 'field-log-data', '../.exact/shells');
+    const { workspace } = ensureShells(dir);
+    const shell = readFileSync(resolve(workspace, 'Cargo.toml'), 'utf8');
+    assert.match(shell, /^members = \["web", "apple", "\.\.\/\.\.\/data"\]$/m);
+    assert.match(shell, /^exact-runner = \{ path = "[^"]*\/runner" \}$/m);
+    const loads = spawnSync('cargo', ['metadata', '--no-deps', '--offline', '--format-version', '1'], { cwd: workspace, encoding: 'utf8' });
+    assert.equal(loads.status, 0, loads.stderr);
+    assert.deepEqual(JSON.parse(loads.stdout).packages.map(p => p.name).sort(), ['field-log-apple', 'field-log-data', 'field-log-web']);
+    const app = resolveApp();
+    assert.deepEqual([app.generated, app.workspace, app.target], [true, workspace, resolve(dir, 'target')]);
+    // Cargo run in the member finds exact2's toolchain and the app's target directory, written beside app.json (D1.5).
+    const toolchain = spawnSync('rustup', ['show', 'active-toolchain'], { cwd: resolve(dir, 'data'), encoding: 'utf8' });
+    if (toolchain.status === 0) assert.match(toolchain.stdout, new RegExp(`^${readFileSync(resolve(import.meta.dir, '../rust-toolchain.toml'), 'utf8').match(/channel = "([^"]+)"/)[1].replaceAll('.', '\\.')}`));
+    const inMember = spawnSync('cargo', ['metadata', '--no-deps', '--offline', '--format-version', '1'], { cwd: resolve(dir, 'data'), encoding: 'utf8' });
+    assert.equal(inMember.status, 0, inMember.stderr);
+    assert.equal(JSON.parse(inMember.stdout).target_directory, resolve(dir, 'target'));
+    assert.match(readFileSync(resolve(dir, '.gitignore'), 'utf8'), /^\/rust-toolchain\.toml\n\/\.cargo\/config\.toml$/m);
+    // A crate that takes a generated host crate's name is the authored workspace's (D3).
+    crate('helper', 'field-log-web', '../.exact/shells');
+    assert.throws(() => ensureShells(dir), /field-log-web is a host crate's name, and exact2 writes the app's host crates under \.exact\/shells\//);
+    rmSync(resolve(dir, 'helper'), { recursive: true });
+    // A GPU crate alone joins the GPU workspace, and the host crates stay generated (D1.2).
+    rmSync(resolve(dir, 'data'), { recursive: true });
+    crate('gpu', 'field-log-gpu', '../.exact/gpu');
+    assert.deepEqual([resolveApp().generated, resolveApp().workspace], [true, workspace]);
+    assert.match(readFileSync(resolve(ensureShells(dir).workspace, 'Cargo.toml'), 'utf8'), /^members = \["web", "apple"\]$/m);
+    // A crate naming another workspace beside one that joins a generated one is refused.
+    crate('data', 'field-log-data', '../elsewhere');
+    mkdirSync(resolve(dir, 'elsewhere'));
+    assert.throws(() => resolveApp(), /app crates declare different Cargo workspaces/);
+  } finally {
+    if (was === undefined) delete process.env.EXACT_APP_DIR; else process.env.EXACT_APP_DIR = was;
+    if (target !== undefined) process.env.CARGO_TARGET_DIR = target;
+    rmSync(scratch, { recursive: true, force: true });
+  }
+}, 120_000);
+
+// LLP 1153.003 D1.4, a game's rule (LLP 1046.011 D2): an app captures a lock only when its crates leave exact2's.
+test('a generated workspace captures no lock until a dependency leaves exact2\'s, and keeps a captured one across a rewrite', async () => {
+  const { createApp } = await import('../game/new.mjs');
+  const { ensureShells, settleLock, lockShells } = await import('./app-shells.mjs');
+  const scratch = realpathSync(mkdtempSync(resolve(tmpdir(), 'exact-member-lock-'))), dir = resolve(scratch, 'field-log');
+  const sdk = readFileSync(resolve(import.meta.dir, '../Cargo.lock'), 'utf8');
+  // A version this machine's Cargo cache holds and exact2's lock does not: itoa beside exact2's.
+  const held = /name = "itoa"\nversion = "([^"]+)"/.exec(sdk)[1];
+  const cache = resolve(process.env.CARGO_HOME ?? resolve(homedir(), '.cargo'), 'registry/cache');
+  const other = (existsSync(cache) ? readdirSync(cache).flatMap(index => readdirSync(resolve(cache, index))) : [])
+    .map(file => /^itoa-(1\.\d+\.\d+)\.crate$/.exec(file)?.[1]).find(version => version && version !== held);
+  const data = (deps = '') => writeFileSync(resolve(dir, 'data/Cargo.toml'), `[package]\nname = "field-log-data"\nversion.workspace = true\nedition.workspace = true\nworkspace = "../.exact/shells"\npublish = false\n\n[dependencies]\nexact-runner.workspace = true\n${deps}`);
+  try {
+    createApp(dir);
+    mkdirSync(resolve(dir, 'data/src'), { recursive: true });
+    writeFileSync(resolve(dir, 'data/src/lib.rs'), '');
+    data();
+    const { workspace } = ensureShells(dir);
+    settleLock(dir, workspace);
+    assert.match(lockShells(dir, workspace), /resolves against exact2's lock; its crates add nothing, so it commits no lock of its own/);
+    assert.equal(existsSync(resolve(dir, 'Cargo.lock')), false);
+    if (!other) return; // no second itoa in this machine's cache to leave exact2's lock with
+    data(`itoa = "=${other}"\n`);
+    assert.throws(() => settleLock(dir, workspace), new RegExp(`the app's crates need versions exact2's lock does not hold \\(itoa ${other.replaceAll('.', '\\.')} [^)]*\\)\\. An app whose crates add dependencies commits a lock of its own: \`bun exact\\.mjs lock\``));
+    assert.match(lockShells(dir, workspace), /Cargo\.lock: captured \(\d+ packages\); commit it/);
+    const captured = readFileSync(resolve(dir, 'Cargo.lock'), 'utf8');
+    assert.match(captured, new RegExp(`name = "itoa"\nversion = "${other.replaceAll('.', '\\.')}"`));
+    settleLock(dir, workspace);
+    // A rewrite of the shell (here, its stamp as a moved checkout leaves it) keeps the captured lock.
+    writeFileSync(resolve(workspace, '.stamp.json'), '{}\n');
+    assert.equal(ensureShells(dir).wrote, true);
+    assert.equal(readFileSync(resolve(workspace, 'Cargo.lock'), 'utf8'), captured);
+    // A dependency changed since the capture is the lock's to settle, never a build's.
+    data(`itoa = "=${held}"\n`);
+    assert.throws(() => settleLock(dir, workspace), /Cargo\.lock does not match the app's crates [^]*`bun exact\.mjs lock` in /);
+    assert.match(lockShells(dir, workspace), new RegExp(`Cargo\\.lock: resolved\nitoa ${other.replaceAll('.', '\\.')} → ${held.replaceAll('.', '\\.')}`));
+  } finally { rmSync(scratch, { recursive: true, force: true }); }
+}, 180_000);

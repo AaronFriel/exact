@@ -641,6 +641,17 @@ through to the ideal end state). Still out, and the data module's: token
 refresh, pagination across requests, offline queues and retries, an overlay,
 streams, uploads, form bodies, and an origin from `app.json`'s `env`.
 
+**Expanded (expo/exact#423, #427, #578; LLP 1153.003):** an app's own crates (a
+data crate, a GPU module) sit beside `app.json` and join the workspaces exact2
+generates under `.exact/`, so an app with Rust data writes no host crate and no
+workspace: `app.json`'s `rust.data` names the crate, the host crates link it and
+bake through one shared call, and the app captures a lock only when its crates
+leave exact2's. Consumer: an app made by `exact new --rust`, and every
+in-repository Rust-data app's manifest. Take: waived by Charlie, 2026-11-14,
+after the panel. Still out: a host crate the app writes beside generated ones
+(an authored workspace is the escape), and a crate deeper than one level below
+`app.json` as a member.
+
 ## Features carried over as "no"
 
 **Admitted (Charlie, 2026-10-12, textrows ruling):** bounded

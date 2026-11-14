@@ -9,7 +9,7 @@ import { PLATFORMS, SDK_CRATES, appCrateName, authoredCrate, copiedBuildScripts,
 import { updateManifests, updateScaffold } from './update-manifests.mjs';
 import { RUST_PLATFORMS, rustListing, writeRustApp } from '../scripts/app-rust.mjs';
 export { exact2Placeholders } from './update-manifests.mjs';
-import { APP_CRATES, NO_WORKSPACE } from '../scripts/cargo-check.mjs';
+import { appCrates, notAMember } from '../scripts/cargo-check.mjs';
 import { APPLE_BUILD_SCRIPT, EARLIER_APPLE_BUILD_SCRIPT } from '../scripts/linked-plan.mjs';
 // Snapback's client (snapback4/) is optional: a checkout without it builds every app that does not mount it.
 const snapbackDevice = existsSync(new URL('../snapback4/web/device-build.mjs', import.meta.url)) ? await import('../snapback4/web/device-build.mjs') : null;
@@ -962,12 +962,13 @@ ${END}
 `;
 }
 
-/** Whether the app authored its host crates (an app `exact new` made before LLP 1153, or one that needs Rust of its
- * own): a workspace manifest or a crate beside app.json. Otherwise its native workspace is generated (scripts/app-shells.mjs). */
 /** Whether the app's data module is a Rust crate (`exact new --rust`): a data crate and no app.ts. */
 export const rustApp = dir => existsSync(resolve(dir, 'data/Cargo.toml')) && !existsSync(resolve(dir, 'app.ts'));
 
-export const authoredApp = dir => existsSync(resolve(dir, 'Cargo.toml')) || APP_CRATES.some(kind => existsSync(resolve(dir, kind, 'Cargo.toml')));
+/** Whether the app authored its workspace (an app `exact new` made before LLP 1153, or one that writes its own host
+ * crates, LLP 1153.003 D3): a workspace manifest beside app.json, or a crate there that joins no generated workspace.
+ * Otherwise its native workspaces are generated (scripts/app-shells.mjs), with its own crates as members. */
+export const authoredApp = dir => existsSync(resolve(dir, 'Cargo.toml')) || appCrates(dir).some(crate => !crate.joins);
 
 /** Feedback, required of every agent (Charlie, 2026-11-01): the triggers and the one-line note
  * (scripts/feedback-note.mjs), and \`feedback status\`, which prints the authoring diary's instructions
@@ -1368,14 +1369,14 @@ function updateApp(dir, name, { without = null, with: platforms = [] } = {}) {
     defaultTest(dir);
     return `Updated ${dir}: exact.mjs${edits.length ? `, ${edits.join(', ')}` : ''}${notes.length ? `, ${notes.join(', ')}` : ''}${unmounted ? `\n${unmounted}` : ''}`;
   }
-  if (!existsSync(resolve(dir, 'Cargo.toml'))) throw new Error(`${dir}: its crates name no workspace of their own (no Cargo.toml beside app.json). ${NO_WORKSPACE}`);
+  if (!existsSync(resolve(dir, 'Cargo.toml'))) throw new Error(notAMember(appCrates(dir).find(crate => !crate.joins)));
   // Before anything is written: a host crate update would add needs the root the copied-up workspace has.
   {
     let m = {}; try { m = JSON.parse(readFileSync(resolve(dir, 'app.json'), 'utf8')); } catch {}
     const ships = (p) => p !== without && (p in (m.host ?? {}) || platforms.includes(p));
     const adds = (ships('linux') || ships('android') || 'linux' in (m.deploy?.store ?? {}) && without !== 'linux') && !existsSync(resolve(dir, 'linux')) || ships('android') && !existsSync(resolve(dir, 'android'));
     const refused = adds && rootRefusal(resolve(dir, 'Cargo.toml'));
-    if (refused) throw new Error(`update: ${refused}. ${NO_WORKSPACE}`);
+    if (refused) throw new Error(`update: ${refused} (docs/reference.md, "An authored workspace", lists what the root holds)`);
   }
   writeFileSync(resolve(dir, 'rust-toolchain.toml'), readFileSync(resolve(ROOT, 'rust-toolchain.toml')));
   mkdirSync(resolve(dir, '.cargo'), { recursive: true });
