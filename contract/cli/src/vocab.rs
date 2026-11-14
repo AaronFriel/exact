@@ -539,6 +539,9 @@ fn one_text(name: &str, shown: &mut Shown) -> bool {
         ) {
             println!("  how motion is written, and what animates: `contract vocab motion` (docs/recipes/motion.md)");
         }
+        if name == "direction" {
+            println!("  one box's direction; an app in a right-to-left language takes the page's from its strings table: `contract vocab rtl`");
+        }
         if name == "-exact-fit" {
             println!("  on a `text`: \"shrink\" draws a line too wide for its box smaller until it fits, down to half its size, as UIKit's adjustsFontSizeToFitWidth (a timer's readout at the largest text size); with `white-space=\"nowrap\"` the whole line fits, else its longest word (LLP 1116.001 D1.4)");
         }

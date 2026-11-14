@@ -327,6 +327,36 @@ fn every_table_refusal_is_reported_in_one_run() {
     assert_eq!(app.refusals(), ["strings-base-missing"]);
 }
 
+/// A base with no table is refused with both repairs: its table, or
+/// `strings.base` naming a table the app has.
+#[test]
+fn a_missing_base_table_names_strings_base() {
+    let message = |tables: &[(&str, &str)]| {
+        let app = AppDir::new("component App\n  view\n    text \"x\"\n", tables);
+        let errors = app.compile().expect_err("refused");
+        assert_eq!(errors.len(), 1, "{errors:?}");
+        errors[0].message.clone()
+    };
+    assert_eq!(
+        message(&[("strings/ur.json", r#"{"title": "سلام"}"#)]),
+        "the base locale is `en` (app.json names no `strings.base`), and it has no table: add `strings/en.json`, or make `ur` the base with `\"strings\": { \"base\": \"ur\" }` in app.json"
+    );
+    assert_eq!(
+        message(&[("strings/ur.json", "{}"), ("strings/ar.json", "{}")]),
+        "the base locale is `en` (app.json names no `strings.base`), and it has no table: add `strings/en.json`, or make one of `ar`, `ur` the base, as in `\"strings\": { \"base\": \"ar\" }` in app.json"
+    );
+    assert_eq!(
+        message(&[
+            ("strings/fr.json", "{}"),
+            (
+                "app.json",
+                r#"{"name":"S","app":{"id":"com.exact.s","name":"S"},"strings":{"base":"ur"}}"#,
+            )
+        ]),
+        "the base locale is `ur` (app.json's `strings.base`), and it has no table: add `strings/ur.json`, or make `fr` the base with `\"strings\": { \"base\": \"fr\" }` in app.json"
+    );
+}
+
 /// A child component's loop variable named like the string function does not
 /// hide it: expansion renames the child's locals, never a call's name.
 #[test]

@@ -1471,3 +1471,19 @@ fn an_iframe_takes_a_frame_name() {
         );
     }
 }
+
+/// expo/exact#488: a builder looking up right to left found CSS's
+/// `direction`, not the strings table that sets the page's `lang` and `dir`.
+#[test]
+fn right_to_left_leads_to_the_strings_table() {
+    for name in ["rtl", "dir", "right-to-left"] {
+        let out = stdout(&vocab(&[name]));
+        assert!(out.contains("rtl (a concept)"), "{name}: {out}");
+        assert!(
+            out.contains("\"strings\": { \"base\": \"ur\" }"),
+            "{name}: {out}"
+        );
+    }
+    let out = stdout(&vocab(&["direction"]));
+    assert!(out.contains("`contract vocab rtl`"), "{out}");
+}

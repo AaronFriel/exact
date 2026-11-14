@@ -156,7 +156,7 @@ a timer: `every(ms, action)` repeats; `after(ms, action)` runs once. Options: `w
   action step
     now = performanceNow()
   text `${now}`
-keeping a value: Root `state` only: a number, string or bool (or an option or list of one) up to 16 KB. Records belong in a source (`files-and-grants`).
+keeping a value: Root `state` only: a number, string or bool (or an option or list of one) up to 16 KB. Records go in a source (`files-and-grants`).
   state units = "C" persist
 colour: Leave the accent unsaid (a brand is an app.tamber) and controls unpainted; elsewhere a role (follows the scheme): text `label`, `secondary-label`; a card `secondary-background`; a fill `secondary-fill`; a hue `system-red`…. No hex.
   main
@@ -213,5 +213,5 @@ component App
 - `min`, `max`, `step` are numbers; with `inputmode="decimal"` a negative `min` gives the pad its ± key.
 - Symbols: `"symbol:<role>"` (below); `symbol:sf/<name>` is Apple-only.
 - Not in Contract (`vocab <name>` says what instead): abs pow sqrt sort reduce find some every contains padStart parseInt.
-idioms with code (vocab <name>): scroll loading plural choice select screen notfound modal confirm date persist swipe task mutation resource source match for if let fn shape props derive action stepper gradients menu search menubar ::placeholder glass bar-buttons haptics status-bar toast titlebar share use members svg env safe-area var media css cache
+idioms with code (vocab <name>): scroll loading plural choice select screen notfound modal confirm date persist swipe task mutation resource source match for if let fn shape props derive action stepper gradients menu search menubar ::placeholder glass bar-buttons haptics status-bar toast titlebar share use members svg env safe-area var media css cache rtl
 symbol roles: back close compose add microphone send search copy select-text more delete forward home person messages notifications settings repeat activity bookmark document select reorder list cart sort filter heart reply share ellipsis photo play pause skip-back-15 skip-forward-15 skip-back-30 skip-forward-30 speaker speaker-mute moon pin link checkmark forward-chevron at hashtag follow sign-out quote feeds calendar book layers lock people stop circle alert minus-circle pencil waveform info camera star minus chart sparkles refresh menu adjust chooser download install open-app download-pending package mail emoji translate bag phone smartphone article radio; with a <role>-fill: bookmark select heart home notifications person play pause stop star alert info bag

@@ -1704,3 +1704,26 @@ module state lasts one render. An API that sends no `Cache-Control` is asked eve
 its answers, have it say how long they keep.
 
 More: docs/recipes/rest-backend.md
+
+## rtl: an app in Arabic, Hebrew, Persian or Urdu (right to left)
+names: right-to-left, RTL, dir, bidi, I18nManager, isRTL, forceRTL, writing-direction, layout-direction
+
+An app's direction comes from the strings table it shows (LLP 1060): with `strings/ur.json`
+shown, the web's document is `lang="ur" dir="rtl"`, and a native host lays out and reads aloud
+right to left, so rows and alignment mirror with no `direction` written. The table shown is the
+one for the person's language, else the base. The base is `en` unless app.json names another,
+so an app only in Urdu says:
+
+```json
+{ "strings": { "base": "ur" } }
+```
+
+`strings/ur.json` then holds every key a `t("key")` reads, as `{"title": "سلام"}`. Without
+that line, a build with no `strings/en.json` is refused (`strings-base-missing`). On the web the
+agent's `state` shows the page's as `language {"lang":"ur","dir":"rtl"}`.
+
+`direction="rtl"` is CSS's, for one box: it mirrors that box's content and leaves the page's
+`lang` and `dir` alone. Use it for a run that reads against the page, as `direction="ltr"` on a
+phone number in Arabic text.
+
+More: docs/contract-for-agents.md (`t`, `setLocale`)
