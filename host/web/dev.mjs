@@ -74,9 +74,10 @@ let doors = null; const remoteAsked = remoteArgs(argv, { exit: true });
 if ((remoteAsked.remote || remoteAsked.tunnel != null || remoteAsked.plugin || remoteAsked.relay) && servedAs == null && !appDesign) { const named = [remoteAsked.remote && '--remote', remoteAsked.tunnel != null && '--trust-tunnel', remoteAsked.plugin && '--allow-plugin-origin', remoteAsked.relay && '--relay'].filter(Boolean); console.error(`${named.join(' and ')} ${named.length > 1 ? 'serve' : 'serves'} the design wire: this app has no design (app.forma)`); process.exit(2); }
 const gate = developmentGate(origins, servedAs ?? port, allowHosts);
 const root = resolve(fileURLToPath(new URL('../..', import.meta.url)));
-// An outside app's wasm loop builds apart from the JS target's `target/web-dist`,
-// so `web` and `web --wasm` can run at once without one serving the other's files.
-if (argv.includes('--wasm') && servedAs == null && app.outside && !process.env.EXACT_WEB_DIST)
+// An outside app's wasm loop (a game's is always one) builds apart from
+// `target/web-dist`, which the JS target's loop, `agent web` and `test web`
+// build into: no other command replaces the files this loop serves.
+if ((argv.includes('--wasm') || app.manifest.game !== undefined) && servedAs == null && app.outside && !process.env.EXACT_WEB_DIST)
   process.env.EXACT_WEB_DIST = buildEnv.EXACT_WEB_DIST = resolve(app.target, 'web-dist-wasm');
 const dist = webDist(app);
 const source = resolve(app.dir, 'app.contract');

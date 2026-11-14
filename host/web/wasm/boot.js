@@ -5,6 +5,45 @@ import { setInputReady } from "./input.js";
 import { startClock } from "./flow.js";
 import { waitForInflight } from "./agent.js";
 import { forgetList } from "./views.js";
+// A trap leaves the module as it stopped (a Rust borrow held, a batch half
+// applied), so every later call traps again. The first one stops the page's
+// calls: the clock ends, a later call throws `ModuleStopped` without entering
+// the module and is not reported, and the page says so once.
+class ModuleStopped extends Error {}
+function guardedExports(exports) {
+  const guarded = {};
+  for (const [name, value] of Object.entries(exports)) {
+    guarded[name] = typeof value !== "function" ? value : (...args) => {
+      if (host.trapped) {
+        throw new ModuleStopped(`app.wasm stopped after a trap: ${host.trapped}`);
+      }
+      try {
+        return value(...args);
+      } catch (error) {
+        if (error instanceof WebAssembly.RuntimeError) {
+          stopModule(error);
+        }
+        throw error;
+      }
+    };
+  }
+  return guarded;
+}
+function stopModule(error) {
+  if (host.trapped) {
+    return;
+  }
+  host.trapped = error;
+  host.ticker?.dispose();
+  host.ticker = null;
+  host.textflow?.dispose();
+  host.textflow = null;
+  root.dataset.error = String(error);
+  console.error("exact: app.wasm trapped, and the page no longer calls it:", error);
+  globalThis.exact.onTrap?.(error);
+}
+addEventListener("error", (e) => e.error instanceof ModuleStopped && e.preventDefault());
+addEventListener("unhandledrejection", (e) => e.reason instanceof ModuleStopped && e.preventDefault());
 export async function loadRust() {
   if (host.rustLoader) {
     return;
@@ -442,7 +481,8 @@ export async function main() {
       response = download();
     }
   }
-  host.wasm = instance.exports;
+  host.exports = instance.exports;
+  host.wasm = guardedExports(instance.exports);
   const [staged] = WebAssembly.Module.customSections(compiled, "exact.stages");
   if (staged) {
     host.stages = JSON.parse(new TextDecoder().decode(staged)).stages;

@@ -235,11 +235,18 @@ if (es) {
   // The module loader uses this implementation on trusted LAN HTTP too.
   globalThis.exact.moduleDigest = digest;
   let retry = null, activeGeneration = null, firstAssets = null;
+  // A trapped module runs nothing more (wasm/boot.js `stopModule`): the next generation reloads the page.
+  const trapped = () => globalThis.exact.trapped;
+  globalThis.exact.onTrap = (error) => {
+    show(`${error}\napp.wasm trapped, and the page stopped calling it. The next save reloads the page; reload now to start again.`, "trap");
+  };
+  if (trapped()) globalThis.exact.onTrap(trapped());
   // Inspect mode's outline, hidden on a new generation (set below).
   let outlineNone = () => {};
   const client = generationClient({ fetchGeneration: (message, signal) => fetchGeneration(message, signal, false, () => activeGeneration?.assets ?? firstAssets), programChanged: () => { clearTimeout(retry); location.reload(); },
     apply: async (candidate, current) => {
       if (!current()) return false;
+      if (trapped()) { if (new URLSearchParams(location.search).get('agent') !== '1') location.reload(); return false; }
       const t = performance.now();
       const names = candidate.surfaceAssets;
       const liveAssets = Array.isArray(names) && names.length && activeGeneration && sameModule(candidate.module, activeGeneration.module) && sameModule(candidate.rust, activeGeneration.rust)
@@ -267,8 +274,9 @@ if (es) {
     // An inspect outline drawn on the old generation's boxes goes.
     applied: (candidate) => { clearTimeout(retry); if (stillUntil) stillEnds(); show(null); generations += 1; outlineNone(); delete globalThis.exact.designDigest; syncDesign(); channel.plan = candidate?.generation ?? channel.plan; knownPlan(candidate?.planSha256); if (channel.held) command(channel.held); else if (channel.nonce) status(); rehold(); },
     failed: (error, current) => {
-      show(String(error)); console.error("exact dev:", String(error));
       clearTimeout(retry);
+      if (trapped()) return; // said once, by `onTrap`; the next generation reloads
+      show(String(error)); console.error("exact dev:", String(error));
       // A deterministic host refusal needs a new edit, not repeated execution
       // of the same candidate every 250 ms. Network discovery still retries.
       if (error.hostRefused) return;

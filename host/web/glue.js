@@ -142,6 +142,9 @@ host.pointerEvent = null;
 host.pointerDepth = 0;
 // keyEvent: the keydown (or wheel, beforeunload, clipboard event) a handler is running for, which its `preventDefault()` command prevents; pointerEvent: the pointer's down or up, which only its `stopPropagation()` reaches (its default is the browser's), from its own batch alone (`pointerDepth`, `send`)
 host.wasm = null;
+// The module's own exports, which a stage imports; `host.wasm` is what the page calls (boot.js `guardedExports`).
+host.exports = null;
+host.trapped = null;
 host.memory = null;
 host.inputReady = false;
 host.inputHandlers = undefined;
@@ -654,7 +657,7 @@ export function loadStage(name) {
   }
   load = { loaded: false };
   stageLoads.set(name, load);
-  return load.promise = WebAssembly.instantiateStreaming(fetch(new URL(host.stages[name], import.meta.url)), { primary: host.wasm }).then(() => {
+  return load.promise = WebAssembly.instantiateStreaming(fetch(new URL(host.stages[name], import.meta.url)), { primary: host.exports }).then(() => {
     load.loaded = true;
   }, (error) => {
     stageLoads.delete(name);
@@ -852,6 +855,9 @@ globalThis.exact = {
   } : {},
   get wasm() {
     return host.wasm;
+  },
+  get trapped() {
+    return host.trapped;
   },
   assetURL: localAssetURL,
   stages: () => Object.fromEntries(Object.keys(host.stages).map((name) => [name, stageLoaded(name) ? "loaded" : "staged"])),
