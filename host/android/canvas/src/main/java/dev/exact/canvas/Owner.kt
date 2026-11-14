@@ -721,6 +721,14 @@ internal object Exact {
 
     /** What the extensions tell exact2 ([Native.changed], [Native.bindExtensions]): on exact2's thread, in order. */
     fun changed(topic: String) { val o = owner; if (o != null) o.call { Native.changed(topic) } else Native.changed(topic) }
+    /** A person's act on what an extension posted ([Activations]): its event raised with a person's origin, as an
+     * input, on exact2's thread. */
+    fun activate(extension: String, event: String, args: String) {
+        val o = owner
+        if (o != null) { o.input(); o.call { Native.activate(extension, event, args) } } else Native.activate(extension, event, args)
+    }
+    /** A line for the session's journal, on exact2's thread. */
+    fun journal(line: String) { val o = owner; if (o != null) o.call { Native.journal(line) } else Native.journal(line) }
     /** A turn on exact2's thread, which asks for a display frame while a canvas input's samples wait. */
     fun wake() { owner?.call {} }
     fun presence(answer: String) { val o = owner; if (o != null) o.call { Native.presence(answer) } else Native.presence(answer) }

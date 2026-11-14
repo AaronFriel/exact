@@ -297,6 +297,15 @@ class ExtensionContext internal constructor(val application: Context, private va
     fun log(line: String) { Log.i("exact", line) }
 
     /**
+     * The intent a tap on what this extension posts starts (a notification's content intent or action, LLP 1133.004
+     * D6; LLP 1133.004.000 D4): the app's unexported alias, which comes forward and opens [navigate] as a link's
+     * location, or, without one, raises the interface's event [event] with [args] with a person's origin, once the
+     * session can hear it. A `PendingIntent` made from it is the app's alone to send.
+     */
+    fun activation(event: String, args: JSONArray, navigate: String? = null): android.content.Intent =
+        Activations.intent(application, name, event, args, navigate)
+
+    /**
      * The platform's dialog for [permissions], in one request (`Activity.requestPermissions`), then [done], on the main
      * thread: when the result comes, or when the activity resumes without it (a result lost to recreation, LLP 1133.002
      * D9). Overlapping requests queue in order; identical permission sets share a result. [done] receives only the
@@ -375,6 +384,11 @@ class ExtensionContext internal constructor(val application: Context, private va
     companion object {
         /** The embedder's decision on leaving the app ([leave]); null lets every URL go. */
         @JvmStatic var leaving: ((String, String) -> Boolean)? = null
+
+        /** [ExtensionContext.activation] for extension [extension] with no session: a receiver's, which posts what an
+         * extension scheduled while the app was not running. */
+        @JvmStatic fun activation(context: Context, extension: String, event: String, args: JSONArray, navigate: String? = null): android.content.Intent =
+            Activations.intent(context, extension, event, args, navigate)
     }
 
     /** [requestPermissions] for [name], keeping the history [permission] reads. */

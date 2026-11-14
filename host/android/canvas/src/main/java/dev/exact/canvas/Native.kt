@@ -241,6 +241,11 @@ object Native {
     @JvmStatic external fun answer(id: Int, answer: String?)
     /** A topic an extension announced ([ExtensionContext.changed]): its readers are asked again. On the host's thread. */
     @JvmStatic external fun changed(topic: String)
+    /** A person's act on an extension's own platform UI ([Activations]): its event [event] with [args], a JSON array,
+     * raised with a person's origin (LLP 1133.004 D6). On the host's thread. */
+    @JvmStatic external fun activate(extension: String, event: String, args: String)
+    /** A line for the session's journal. On the host's thread. */
+    @JvmStatic external fun journal(line: String)
     /** The extensions the APK carries, one a line ([Extensions]); under the agent, told so unless the drive names them
      * (`--bind`). On the host's thread. */
     @JvmStatic external fun bindExtensions(names: String)

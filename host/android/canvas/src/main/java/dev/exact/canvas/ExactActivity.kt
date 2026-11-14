@@ -114,6 +114,8 @@ open class ExactActivity : Activity() {
         accessibility.addAccessibilityStateChangeListener(accessWatch)
         // A restored share keeps its route; an auth callback can recreate a destroyed activity with saved state.
         if (again && (arrived || intent.data?.let { Auth.claims(this, it) } == true)) received(intent)
+        // A notification's tap that started the process: held until the first frame ([Activations]).
+        else if (!again && arrived) Activations.receive(intent)
     }
 
     /** A URL or a share given to the running activity: its location, as a link's (LLP 1133.023 D15 item 3), or the
@@ -126,6 +128,7 @@ open class ExactActivity : Activity() {
 
     private fun received(intent: android.content.Intent) {
         if (Auth.receive(this, intent)) return
+        if (Activations.receive(intent)) return
         if (Shares.isShare(intent)) Shares.request(this, intent)?.let { Exact.share(it) }
         else intent.data?.let { Exact.open(it.toString()) }
     }
@@ -315,6 +318,7 @@ open class ExactActivity : Activity() {
                 if (start > 0 && startPitchDp > 0f) view.scrollBy(start * startPitchDp * Device.scale(this))
                 driver?.contentReady()
                 Extensions.firstFrame()
+                Activations.started()
                 channelLocales = resources.configuration.locales
                 Channels.made(this)
             }

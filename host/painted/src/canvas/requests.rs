@@ -129,6 +129,26 @@ impl<D: DataSource + Default> CanvasHost<D> {
         self.p.host().runner().native_slot().changed(topic);
     }
 
+    /// A person's act on what an extension posted on the platform's own UI
+    /// (a notification's tap, `Native.activate`): its event, raised with a
+    /// person's origin as Apple's notification delegate raises it (LLP
+    /// 1133.004 D6, D7). `args` is a JSON array.
+    pub fn extension_activated(&mut self, extension: &str, event: &str, args: &str) {
+        let runner = self.p.host_mut().runner_mut();
+        if let Err(e) =
+            runner.raise_module_event(extension, event, args, exact_runner::CallOrigin::App)
+        {
+            runner.log(e);
+        }
+        self.force = true;
+    }
+
+    /// A line the reader journals (`Native.journal`).
+    pub fn journal(&mut self, line: String) {
+        self.p.host_mut().runner_mut().log(line);
+        self.force = true;
+    }
+
     /// The extensions the APK carries (`exact.app.ExactExtensions`, LLP
     /// 1133.001 D5), one a line: they answer their names from now on,
     /// outside the agent; under it, those `EXACT_AGENT_BIND` names
