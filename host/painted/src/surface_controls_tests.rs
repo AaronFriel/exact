@@ -931,6 +931,11 @@ fn held_canvas_contact_streams_down_moves_and_up_to_the_canvas() {
         (event["x"].as_f64(), event["y"].as_f64()),
         (Some(50.), Some(70.))
     );
+    let keys = |e: &Value| ["shiftKey", "ctrlKey", "altKey", "metaKey"].map(|k| e[k].clone());
+    assert_eq!(keys(&event), [false, false, false, false].map(Value::from));
+    // Each event carries the modifiers held, by the web's names (#428).
+    p.hold_modifier("ShiftRight", true);
+    p.hold_modifier("MetaLeft", true);
     // 100 points over 100 ms: seven samples, every one a move the world sees.
     let moved = ask(
         &mut p,
@@ -944,6 +949,9 @@ fn held_canvas_contact_streams_down_moves_and_up_to_the_canvas() {
         (event["phase"].as_str(), event["buttons"].as_u64()),
         (Some("move"), Some(1))
     );
+    assert_eq!(keys(&event), [true, false, false, true].map(Value::from));
+    p.hold_modifier("ShiftRight", false);
+    p.hold_modifier("MetaLeft", false);
     assert_eq!(
         event["x"].as_f64(),
         Some(150.),

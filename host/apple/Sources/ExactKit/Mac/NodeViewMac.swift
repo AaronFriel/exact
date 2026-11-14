@@ -1492,6 +1492,8 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
         if presenter?.mouseDrags.transform.scroll(self, event: event) != true, !wheel(event) { super.scrollWheel(with: event) }
     }
     package override func magnify(with event: NSEvent) {
+        // A canvas that wants input hears a pinch as a ctrl wheel, as the web does.
+        if canvasInput?.wheel(event) == true { _ = wheel(event); return }
         if presenter?.mouseDrags.transform.magnify(self, event: event) != true, !wheel(event) { super.magnify(with: event) }
     }
 }

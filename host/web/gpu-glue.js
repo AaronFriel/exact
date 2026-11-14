@@ -702,6 +702,7 @@ function listen(entry) {
   // world's deltas never stop at the canvas or screen edge though the position
   // stays put; unlocked it is the position's change, as on every other host. A
   // down or up carries none.
+  const modifiers = (event) => ({ shiftKey: event.shiftKey, ctrlKey: event.ctrlKey, altKey: event.altKey, metaKey: event.metaKey });
   const lockable = () => (el.dataset.pointerLock ?? entry.el.dataset?.pointerLock) === "true";
   const last = new Map(); // each pointer's last point on the canvas
   on("pointerleave", (event) => { if (document.pointerLockElement !== el) last.delete(event.pointerId); });
@@ -734,7 +735,7 @@ function listen(entry) {
     if (!fallsThrough(event)) return;
     if (phase === "down") { if (!editable(document.activeElement)) el.focus({ preventScroll: true }); try { el.setPointerCapture(event.pointerId); } catch {} }
     if (phase === "down" && event.pointerType === "mouse" && lockable() && document.pointerLockElement !== el) Promise.resolve(el.requestPointerLock?.()).catch(() => {});
-    send(event, { t: "pointer", phase, id: event.pointerId, ...pointerAt(event, phase), kind: event.pointerType || "mouse", buttons: event.buttons });
+    send(event, { t: "pointer", phase, id: event.pointerId, ...pointerAt(event, phase), kind: event.pointerType || "mouse", buttons: event.buttons, ...modifiers(event) });
   });
   on("lostpointercapture", event => {
     const button = controls.get(event.pointerId);
@@ -743,7 +744,8 @@ function listen(entry) {
   on("wheel", (event) => {
     if (!fallsThrough(event)) return;
     event.preventDefault();
-    send(event, { t: "wheel", dx: event.deltaX, dy: event.deltaY, ...point(event) });
+    // A trackpad pinch arrives here as the browser delivers it: a wheel with ctrlKey set.
+    send(event, { t: "wheel", dx: event.deltaX, dy: event.deltaY, ...point(event), ...modifiers(event) });
   }, { passive: false });
   // A restored keydown (including a queued one) still owns its future keyup.
   const held = entry.heldKeys ??= new Set();

@@ -102,6 +102,10 @@ fn device_event_json_preserves_every_variant_and_refuses_fields_by_name() {
                     dy: 0.5,
                     kind: device,
                     buttons: 1,
+                    shift_key: false,
+                    ctrl_key: false,
+                    alt_key: false,
+                    meta_key: false,
                     at_ms: 2.0
                 }
             );
@@ -114,9 +118,33 @@ fn device_event_json_preserves_every_variant_and_refuses_fields_by_name() {
             dy: -120.0,
             x: 2.0,
             y: 3.0,
+            shift_key: false,
+            ctrl_key: false,
+            alt_key: false,
+            meta_key: false,
             at_ms: 4.0
         }
     );
+    // The modifiers held, the web's names; a pinch is a wheel with Control.
+    assert_eq!(
+        parse_input(r#"{"t":"wheel","dx":0,"dy":-8,"x":2,"y":3,"ctrlKey":true,"at":4}"#).unwrap(),
+        InputEvent::Wheel {
+            dx: 0.0,
+            dy: -8.0,
+            x: 2.0,
+            y: 3.0,
+            shift_key: false,
+            ctrl_key: true,
+            alt_key: false,
+            meta_key: false,
+            at_ms: 4.0
+        }
+    );
+    assert!(matches!(
+        parse_input(r#"{"t":"pointer","phase":"down","id":1,"x":0,"y":0,"dx":0,"dy":0,"kind":"mouse","buttons":1,"shiftKey":true,"altKey":false,"metaKey":true,"at":2}"#).unwrap(),
+        InputEvent::Pointer { shift_key: true, ctrl_key: false, alt_key: false, meta_key: true, .. }
+    ));
+    assert!(parse_input(r#"{"t":"wheel","dx":0,"dy":0,"x":0,"y":0,"ctrlKey":1,"at":4}"#).is_err());
     assert_eq!(
         parse_input(r#"{"t":"blur","at":5}"#).unwrap(),
         InputEvent::Blur { at_ms: 5.0 }

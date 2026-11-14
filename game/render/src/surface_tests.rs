@@ -688,6 +688,10 @@ fn fresh_touch_region_matches_rendered_and_headless_worlds() {
             dy: 0.,
             kind: exact_gpu::PointerKind::Touch,
             buttons: 1,
+            shift_key: false,
+            ctrl_key: false,
+            alt_key: false,
+            meta_key: false,
             at_ms: 0.,
         });
     }

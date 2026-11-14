@@ -214,6 +214,10 @@ fn world_surface_supplies_pointer_sample_and_traces_the_drawn_camera() {
         dy: 0.,
         kind: exact_gpu::PointerKind::Touch,
         buttons: 1,
+        shift_key: false,
+        ctrl_key: false,
+        alt_key: false,
+        meta_key: false,
         at_ms: 1.,
     });
     surface
@@ -230,6 +234,10 @@ fn world_surface_supplies_pointer_sample_and_traces_the_drawn_camera() {
         dy: 0.,
         kind: exact_gpu::PointerKind::Touch,
         buttons: 1,
+        shift_key: false,
+        ctrl_key: false,
+        alt_key: false,
+        meta_key: false,
         at_ms: 11.,
     });
     frame.now_ms = 12.; // The second simulation tick is not due yet.
