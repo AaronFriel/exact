@@ -97,7 +97,7 @@ pub(super) enum Claim {
 }
 
 /// Claim `run`'s transition for `claim`, if nothing has: whether it won.
-fn claim(state: &mut State, run: Run, claim: Claim) -> bool {
+pub(super) fn claim(state: &mut State, run: Run, claim: Claim) -> bool {
     match find(&mut state.running, run) {
         Some(r) if !r.terminal && r.claim == Claim::None => {
             r.claim = claim;

@@ -92,7 +92,7 @@ struct Running {
     read: bool,
     overlap: bool,
     class: RequestClass,
-    /// The asynchronous core's (LLP 1120 D3, D5); workers leave them be.
+    /// The asynchronous core's lifecycle (LLP 1120 D3, D5).
     /// The outcome is published.
     terminal: bool,
     /// Physical work still running: hops on the wire, a reader.
@@ -1376,7 +1376,11 @@ fn execute(
     } else {
         result
     }
-    .and_then(|r| body_to::receive(r, staged, limit, within));
+    .and_then(|r| {
+        body_to::receive(r, staged, limit, within, || {
+            body_to::admit(cache_job.0, cache_job.1, abort, deadline.as_ref())
+        })
+    });
     match result {
         Ok(r) => {
             let mut response = Response {
