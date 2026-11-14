@@ -9,7 +9,7 @@ use crate::package::{json, Entry, Json};
 use crate::presenter::PainterChoice;
 use crate::Presenter;
 use exact_runner::DataSource;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 #[path = "../../../packages/dock/windows/lib.rs"]
@@ -23,6 +23,9 @@ mod login_item;
 struct Fake {
     said: RefCell<Vec<String>>,
     login: RefCell<Option<bool>>,
+    /// Whether the system has given bare Print Screen back.
+    print_screen: Cell<bool>,
+    watchers: RefCell<Vec<(String, Box<dyn Fn() + Send>)>>,
 }
 
 impl Services for Fake {
@@ -38,7 +41,7 @@ impl Services for Fake {
         self.said.borrow_mut().push(format!(
             "register {session} {id} {keys} repeat={repeat} {extension}.{event}"
         ));
-        if keys == "Control+Alt+Delete" {
+        if keys == "Control+Alt+Delete" || (keys == "PrintScreen" && !self.print_screen.get()) {
             Err("reserved")
         } else {
             Ok(())
@@ -81,6 +84,10 @@ impl Services for Fake {
     }
     fn login_launch(&self) -> Option<bool> {
         Some(true)
+    }
+    fn watch_reserved(&self, session: &str, changed: Box<dyn Fn() + Send>) {
+        self.said.borrow_mut().push(format!("watch {session}"));
+        self.watchers.borrow_mut().push((session.into(), changed));
     }
 }
 
@@ -245,5 +252,54 @@ fn the_windows_implementations_use_the_hosts_services() {
     assert!(
         journal.contains("requestAttention: the window is in front"),
         "{journal}"
+    );
+}
+
+/// #503: a reader of bare Print Screen has the host watch for Snipping
+/// Tool's setting, once per session, and a reading asked again after the
+/// system took the chord back is no longer one the session releases.
+#[test]
+fn a_print_screen_reader_is_asked_again_as_the_system_takes_it() {
+    let fake = Rc::new(Fake::default());
+    crate::desktop::install(fake.clone());
+    let plan = crate::test_plan("component App\n  view\n    text \"Hi\"\n");
+    let (mut p, _) = Presenter::boot_with(
+        &plan,
+        Nothing,
+        (400., 800.),
+        1.,
+        std::path::PathBuf::new(),
+        PainterChoice::Cpu,
+    )
+    .unwrap();
+    p.serve_packages(vec![Entry::of::<global_shortcuts::GlobalShortcuts>(
+        "global-shortcuts",
+    )]);
+    let read = |keys: &str| json!({"extension": "global-shortcuts", "source": "globalShortcut", "args": {"id": "snap", "keys": keys}});
+    let release = json!({"extension": "global-shortcuts", "release": "globalShortcut", "args": {"id": "snap", "keys": "PrintScreen"}});
+
+    assert_eq!(call(&mut p, read("PrintScreen"))["reason"], "reserved");
+    fake.print_screen.set(true);
+    // The host's watcher asks the session's readings again.
+    for (_, changed) in fake.watchers.borrow().iter() {
+        changed();
+    }
+    assert_eq!(call(&mut p, read("PrintScreen"))["registered"], true);
+    fake.print_screen.set(false);
+    assert_eq!(call(&mut p, read("PrintScreen"))["reason"], "reserved");
+    call(&mut p, release.clone());
+    fake.print_screen.set(true);
+    assert_eq!(call(&mut p, read("PrintScreen"))["registered"], true);
+    call(&mut p, release);
+    assert_eq!(
+        *fake.said.borrow(),
+        [
+            "watch 1",
+            "register 1 snap PrintScreen repeat=false global-shortcuts.globalshortcut",
+            "register 1 snap PrintScreen repeat=false global-shortcuts.globalshortcut",
+            "register 1 snap PrintScreen repeat=false global-shortcuts.globalshortcut",
+            "register 1 snap PrintScreen repeat=false global-shortcuts.globalshortcut",
+            "unregister 1 snap PrintScreen",
+        ]
     );
 }
