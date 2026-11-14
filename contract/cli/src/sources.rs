@@ -323,6 +323,18 @@ pub fn design_path(root: &Path) -> Option<PathBuf> {
     })
 }
 
+/// A former design name must not silently leave an app without its design.
+pub fn design_name_error(root: &Path) -> Option<String> {
+    let dir = root.parent()?;
+    if dir.join("app.tamber").symlink_metadata().is_ok() {
+        return Some("rename app.tamber to app.forma".into());
+    }
+    let manifest: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(dir.join("app.json")).ok()?).ok()?;
+    manifest.get("tamber")?;
+    Some("rename app.json's tamber key to forma".into())
+}
+
 std::thread_local! {
     /// A scrub's design text (LLP 1121 stage 4, commit 6), compiled in
     /// place of the file's while [`with_design_text`] runs.
@@ -389,6 +401,16 @@ fn design(
     root: &Path,
     sources: &mut Sources,
 ) -> Result<Option<contract_syntax::DesignSource>, CompileError> {
+    if let Some(message) = design_name_error(root) {
+        return Err(CompileError {
+            pass: "use",
+            id: "forma-name".into(),
+            message,
+            span: Span::default(),
+            file: Some(root.into()),
+            related: Box::new([]),
+        });
+    }
     let Some(path) = design_path(root) else {
         return Ok(None);
     };

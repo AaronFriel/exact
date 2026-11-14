@@ -139,6 +139,17 @@ fn reads_answer_on_the_clones_design() {
     let mut s = Serve::start(&dir, &[]);
     let (hello, _) = s.ask(json!({"method": "hello", "client": "test"}));
     assert_eq!(hello["ok"]["protocol"], "forma/1.18");
+    for protocol in ["tamber/1", "tamber/1.18"] {
+        let (reply, events) = s.ask(json!({"method": "hello", "protocol": protocol}));
+        assert_eq!(
+            reply["error"]["message"],
+            format!(
+                "rename protocol {protocol} to {}",
+                protocol.replace("tamber/", "forma/")
+            )
+        );
+        assert!(reply.get("ok").is_none() && events.is_empty());
+    }
     assert_eq!(hello["ok"]["builds"], json!([]));
     assert_eq!(
         hello["ok"]["files"]["app.forma"],

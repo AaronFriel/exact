@@ -312,6 +312,9 @@ impl Server {
         let dir = dir
             .canonicalize()
             .map_err(|e| format!("{}: {e}", dir.display()))?;
+        if let Some(message) = contract::design_name_error(&dir.join("app.contract")) {
+            return Err(message);
+        }
         let design = contract::design_path(&dir.join("app.contract"))
             .filter(|p| p.is_file())
             .ok_or_else(|| {
@@ -729,6 +732,14 @@ impl Server {
             Ok(ok) => json!({"id": id, "ok": ok}),
             Err(error) => json!({"id": id, "error": error}),
         };
+        if let Some(protocol) = request["protocol"]
+            .as_str()
+            .filter(|p| p.starts_with("tamber/"))
+        {
+            return vec![reply(Err(
+                json!({"message": format!("rename protocol {protocol} to {}", protocol.replacen("tamber/", "forma/", 1))}),
+            ))];
+        }
         match request["method"].as_str() {
             Some("hello") => vec![reply(self.hello(&request))],
             Some("describe") => vec![reply(self.describe(&request))],

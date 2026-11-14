@@ -251,6 +251,26 @@ test('manifest colours follow the web and retired launch and alias keys are refu
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+test('former design files and manifest keys name the required rename', async () => {
+  const { readManifest } = await import('./app.mjs');
+  const { designPath } = await import('./forma-design-path.mjs');
+  const dir = mkdtempSync(resolve(tmpdir(), 'forma-name-'));
+  try {
+    writeFileSync(resolve(dir, 'app.tamber'), '');
+    for (const read of [() => readManifest(dir, 'test'), () => designPath(dir)]) {
+      assert.throws(read, /rename app.tamber to app.forma/);
+    }
+    writeFileSync(resolve(dir, 'app.forma'), 'forma app\n');
+    assert.throws(() => readManifest(dir, 'test'), /rename app.tamber to app.forma/);
+    rmSync(resolve(dir, 'app.tamber'));
+    writeFileSync(resolve(dir, 'app.json'), '{"tamber":"app.forma"}');
+    assert.throws(() => readManifest(dir, 'test'), /rename app.json's tamber key to forma/);
+    assert.throws(() => designPath(dir), /rename app.json's tamber key to forma/);
+    rmSync(resolve(dir, 'app.json'));
+    assert.equal(designPath(dir), resolve(dir, 'app.forma'));
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('host.web.head takes script, link and meta entries and refuses the rest by entry', async () => {
   const { readManifest } = await import('./app.mjs');
   const dir = mkdtempSync(resolve(tmpdir(), 'exact-manifest-'));

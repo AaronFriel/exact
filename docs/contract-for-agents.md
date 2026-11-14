@@ -6384,6 +6384,11 @@ row and inside shadows and gradients (`color="brand"`,
 colour. An entry named like a role (`-exact-secondary-label`, or LLP 1095 D4's
 bare `secondary-label`, or `Canvas`) overrides that role where a row names it.
 Cycles, and a name inside `light-dark()`, are refused (LLP 1095 D4).
+
+An old design is refused with `rename app.tamber to app.forma`. Change its header
+to `forma <name>` and its manifest's `tamber` key to `forma` too, if present.
+The old CLI verb refuses with the command to use: `bun exact.mjs forma`.
+
 An app with a brand, or modes the person picks, writes its design in
 `app.forma` beside `app.contract` (or the file `app.json`'s `"forma"` names)
 instead (LLP 1121): a `theme` block of tokens (`surface.card =

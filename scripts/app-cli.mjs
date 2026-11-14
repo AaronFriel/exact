@@ -242,6 +242,7 @@ export async function run(options) {
 }
 
 async function verbRun({ dir, name, game = false, exact2, args }, reply) {
+  if (args[0] === 'tamber') { console.error('exact: rename the tamber verb to forma: use `bun exact.mjs forma`'); return 2; }
   // Before any process starts: which settings Bun loaded from this directory's `.env` files (LLP 1153 D4).
   noteBunLoaded();
   // The design tool's tests, drives and verify run on this checkout's own port (port-lock.mjs `checkoutPort`, unless

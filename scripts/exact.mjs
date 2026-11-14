@@ -1369,9 +1369,9 @@ export function docs(words, say = console.log) {
   const also = units.slice(1, 9).map(u => `${at(u.f, u.h.from)} ${u.h.title}`);
   say(`${at(f, from)}${where}\n${f.lines.slice(from, end).join('\n').trimEnd()}${cut}${also.length ? `\nAlso: ${also.join(' · ')}` : ''}`);
 }
-
 async function main(argv) {
   const [verb, name, ...rest] = argv;
+  if (verb === 'tamber') { console.error('exact: rename the tamber verb to forma: use `exact forma`'); return process.exit(2); }
   if (!verb || verb === '--help' || verb === '-h' || verb === 'help') return console.log(USAGE);
   // Help before any work (`setup --help` installed, `new --help` wrote an app); the compiler answers its own.
   if (verb !== 'contract' && argv.some(arg => arg === '--help' || arg === '-h')) return console.log(helpText(verb) ?? USAGE);

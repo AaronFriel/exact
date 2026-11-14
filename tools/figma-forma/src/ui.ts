@@ -59,6 +59,7 @@ async function pair() {
 /** The server speaks forma/1.14 or later, or nothing more is sent to it. */
 async function speaks() {
   const hello = await call(paired, '/__forma', { method: 'hello', client: 'figma' });
+  if (String(hello.protocol).startsWith('tamber/')) throw new Error(`rename protocol ${hello.protocol} to ${String(hello.protocol).replace('tamber/', 'forma/')}`);
   if (!newEnough(hello.protocol)) throw new Error(`this server is too old for the plugin (needs forma/1.14; it speaks ${hello.protocol ?? 'an older protocol'})`);
 }
 

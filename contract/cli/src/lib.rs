@@ -85,8 +85,8 @@ pub use preload::preload_expression;
 pub use resolve::Origin;
 pub use rust::{compile_path_for_rust, rust};
 pub use sources::{
-    code_beside, design_path, with_contract_texts, with_design_text, GraphBase, Package, Source,
-    SourceGraph,
+    code_beside, design_name_error, design_path, with_contract_texts, with_design_text, GraphBase,
+    Package, Source, SourceGraph,
 };
 pub use symbols::{editor_symbols_json, symbols_json, PartialSymbols};
 pub use typescript::{design_exports, typescript, typescript_exporting};

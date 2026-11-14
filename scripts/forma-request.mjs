@@ -2,6 +2,10 @@
 // read whole up to a limit, parsed to an object, and how deep it nests.
 import { TIMING } from './forma-timing.mjs';
 
+/** A former wire name is a refusal, never a second protocol name. */
+export const protocolError = protocol => typeof protocol === 'string' && protocol.startsWith('tamber/')
+  ? `rename protocol ${protocol} to ${protocol.replace('tamber/', 'forma/')}` : null;
+
 /** A request whose body is refused: answered first (a 413), its connection
  * closing after. Until the answer has gone out the rest goes unread; then it
  * is read and dropped, and the connection closed when it ends, so the client's
@@ -115,6 +119,8 @@ export async function probeTool(origin, tries = 1) {
     // (An HTTP error status is an answer, whatever its body does after: no design server here, as for the token.)
     if (!said.ok) return { answer: { app: null } };
     const hello = await said.json();
+    const message = protocolError(hello.ok?.protocol);
+    if (message) return { failed: true, message };
     return { answer: { app: hello.ok?.app ?? null, epoch: hello.ok?.epoch ?? null } };
   } catch (e) { return why(e); } // (refused or reset now: it stopped between the two, a loop restarting)
 }

@@ -15,6 +15,8 @@ on macOS and Linux.
 - **A minor version** adds requests or fields. A client ignores fields it doesn't know.
 - **No request carries a client's version.** A client checks `hello`'s `protocol` itself and stops
   on a major version it doesn't speak.
+- The former `tamber/1` id is refused with `rename protocol tamber/1 to forma/1`;
+  a minor suffix is kept in the replacement. There is no alias for the former id.
 - `forma/1.0` was LLP 1121 stage 3. `forma/1.1` added:
   - `history`, `revert`, `import` and `requires`;
   - the tool's files;

@@ -125,6 +125,10 @@ fn run() -> ExitCode {
         Some("vocab") => vocab::run(&args[1..]),
         Some("gallery") => gallery(&args[1..]),
         Some("forma") => forma::run(&args[1..]),
+        Some("tamber") => {
+            eprintln!("contract: rename the tamber verb to forma: use `contract forma`");
+            ExitCode::from(2)
+        }
         // The union of tokens a binding may name follows the design's `exports` (LLP 1121 D7).
         Some("types") => types(&args[1..], "types", "app.d.ts", |path| {
             let (plan, _) = contract::compile_path_all_unchecked(path, false)

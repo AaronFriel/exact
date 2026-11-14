@@ -106,7 +106,7 @@ export { serveTool, serveToolFiles } from './forma-tool-files.mjs';
 export { op } from './forma-op.mjs';
 import { allows, needs, pairing, PAIR_TTL_MS, parseDuration, refusal } from './forma-pairing.mjs';
 import { opsRefusal, overOps } from './forma-ops-limit.mjs';
-import { earlyAnswer, probeTool, readBody, parseRequest as parse, tooDeep, upstream, viaDoor, waitForAnswer } from './forma-request.mjs'; import { cursorOf, eventsQuery, LONG_POLL_PRESENT_MS } from './forma-events-get.mjs'; import { REAL, TIMING } from './forma-timing.mjs';
+import { earlyAnswer, probeTool, protocolError, readBody, parseRequest as parse, tooDeep, upstream, viaDoor, waitForAnswer } from './forma-request.mjs'; import { cursorOf, eventsQuery, LONG_POLL_PRESENT_MS } from './forma-events-get.mjs'; import { REAL, TIMING } from './forma-timing.mjs';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 // The server's own line limit, less room for the id this adds and an import's `recognised` digests (64, stage 10b).
@@ -704,6 +704,8 @@ export function formaServer({ appDir, spawnServe = spawnContract, watchDir = wat
   /** One request: the server's, or one of the wire's own (`commit`, a held
    * proposal's `accept` and `drop`). */
   async function dispatch(request, scope, local = false, paired = null, signal = undefined, door = undefined) {
+    const message = protocolError(request.protocol);
+    if (message) return { status: 400, error: { message } };
     // Every method's scope, in one place, before any handler: none is no
     // method this wire serves (fail closed; scripts/forma-pairing.mjs).
     const need = needs(request, id => proposals.get(id)?.client ?? null);
@@ -1320,7 +1322,7 @@ async function buildTool() {
 /** What answers at `origin` (TOOL_ORIGIN unless named) now: null for
  * nothing, else the app its design server serves (null when it gave none),
  * and that server run's epoch. */
-export async function toolAnswers(origin = TOOL_ORIGIN, tries = 1) { return (await probeTool(origin, tries)).answer ?? null; } // (scripts/forma-request.mjs probeTool: no answer yet, refused or timed out, is null here)
+export async function toolAnswers(origin = TOOL_ORIGIN, tries = 1) { const got = await probeTool(origin, tries); if (got.message) throw new Error(got.message); return got.answer ?? null; } // (scripts/forma-request.mjs probeTool: no answer yet, refused or timed out, is null here)
 
 /** `bun exact.mjs forma tool [<app>] [--via <dev loop url>] [--no-open]`
  * (LLP 1122 D2): the design tool, built if stale, at its own local URL,
@@ -1381,6 +1383,7 @@ export async function toolCommand(argv) {
   const port = TOOL_PORT;
   if (target) {
     const got = await reach(), upstream = got.answer ?? null;
+    if (got.message) { console.error(`forma tool: ${got.message}`); return 1; }
     let same = false;
     try { same = upstream?.app != null && realpathSync(upstream.app) === realpathSync(dir); } catch { /* gone */ }
     if (!same) { console.error(`forma tool: ${target} ${upstream ? `serves ${upstream.app ? `the design of ${upstream.app}` : 'no design server'}` : `does not answer${after(got)}`}, not ${dir}'s`); return 1; }

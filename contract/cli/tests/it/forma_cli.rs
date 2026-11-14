@@ -31,6 +31,47 @@ fn contract(args: &[&str]) -> (bool, String, String) {
 }
 
 #[test]
+fn former_design_names_are_refused_with_the_fix() {
+    for args in [vec!["tamber"], vec!["tamber", "--help"]] {
+        let (ok, _, error) = contract(&args);
+        assert!(!ok && error.contains("use `contract forma`"), "{error}");
+    }
+    let dir = app("former-name", DESIGN);
+    let at = dir.to_str().unwrap();
+    let source = dir.join("app.contract");
+    let source = source.to_str().unwrap();
+    let old = dir.join("app.tamber");
+    std::fs::rename(dir.join("app.forma"), &old).unwrap();
+    for args in [
+        vec!["build", source],
+        vec!["forma", "check", at],
+        vec!["forma", "gen", "ts", at],
+        vec!["forma", "serve", "--stdio", at],
+    ] {
+        let (ok, _, error) = contract(&args);
+        assert!(
+            !ok && error.contains("rename app.tamber to app.forma"),
+            "{args:?}: {error}"
+        );
+    }
+    let (ok, _, error) = contract(&["forma", "check", old.to_str().unwrap()]);
+    assert!(
+        !ok && error.contains("rename ") && error.contains("app.forma"),
+        "{error}"
+    );
+    std::fs::rename(&old, dir.join("app.forma")).unwrap();
+    std::fs::write(dir.join("app.json"), r#"{"tamber":"app.forma"}"#).unwrap();
+    let (ok, _, error) = contract(&["build", source]);
+    assert!(
+        !ok && error.contains("rename app.json's tamber key to forma"),
+        "{error}"
+    );
+    std::fs::remove_file(dir.join("app.json")).unwrap();
+    assert!(contract(&["forma", "check", at]).0);
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
 fn usage_lists_every_binding_language() {
     for (args, success) in [
         (vec!["forma"], false),

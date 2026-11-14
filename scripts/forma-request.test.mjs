@@ -6,8 +6,15 @@
 import { expect, test } from 'bun:test';
 import { createServer as createPlain } from 'node:http';
 import { connect, createServer as createTLS } from 'node:tls';
-import { readBody } from './forma-request.mjs';
+import { protocolError, readBody } from './forma-request.mjs';
 import { selfSignedCertificate } from './forma-remote.mjs';
+
+test('a former protocol id names the replacement and preserves its minor version', () => {
+  expect(protocolError('tamber/1')).toBe('rename protocol tamber/1 to forma/1');
+  expect(protocolError('tamber/1.18')).toBe('rename protocol tamber/1.18 to forma/1.18');
+  expect(protocolError('forma/1.18')).toBeNull();
+  expect(protocolError(undefined)).toBeNull();
+});
 
 test('a body whose client left mid-way through a TLS door settles as gone, at once', async () => {
   const cert = selfSignedCertificate(['127.0.0.1']);
@@ -86,6 +93,12 @@ test('probeTool: refused is listening, a held hello is starting, a token or hell
   // No design server (the token refused): an answer, `{app: null}`.
   const none = Bun.serve({ port: 0, hostname: '127.0.0.1', fetch: () => new Response('', { status: 404 }) });
   try { expect(await probeTool(`http://127.0.0.1:${none.port}`)).toEqual({ answer: { app: null } }); } finally { none.stop(true); }
+  const former = Bun.serve({ port: 0, hostname: '127.0.0.1', fetch(req) {
+    return Response.json(new URL(req.url).pathname === '/__forma/token' ? { token: 't' } : { ok: { protocol: 'tamber/1.18', app: '/app' } });
+  } });
+  try {
+    expect(await probeTool(`http://127.0.0.1:${former.port}`)).toEqual({ failed: true, message: 'rename protocol tamber/1.18 to forma/1.18' });
+  } finally { former.stop(true); }
 });
 
 test('waitForAnswer: one line a reason, the first answer, and the cap bounding a probe in flight', async () => {

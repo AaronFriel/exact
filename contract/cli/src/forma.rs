@@ -21,6 +21,24 @@ const USAGE: &str = "usage:
   (a flag may come before the path or after it)";
 
 pub fn run(args: &[String]) -> ExitCode {
+    if !args.iter().any(|a| a == "--help" || a == "-h") {
+        for input in args.iter().skip(1).map(Path::new) {
+            if input.extension().is_some_and(|e| e == "tamber") {
+                eprintln!(
+                    "contract forma: rename {} to {}",
+                    input.display(),
+                    input.with_extension("forma").display()
+                );
+                return ExitCode::from(2);
+            }
+            if input.is_dir() || input.extension().is_some_and(|e| e == "contract") {
+                if let Some(message) = contract::design_name_error(&app_contract(input)) {
+                    eprintln!("contract forma: {message}");
+                    return ExitCode::from(2);
+                }
+            }
+        }
+    }
     if args.first().is_some_and(|a| a == "serve") {
         return crate::forma_serve::run(&args[1..]);
     }

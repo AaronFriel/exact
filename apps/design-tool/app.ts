@@ -759,7 +759,8 @@ const sources: Sources = {
   ...pairingSources(call, pairWith, remote), sendSelectUp: async ([client, build, up]) => { stepping.add(String(build)); const r = await call('/__forma', { method: 'inspect', client, build, select: { up } }); if (r.error) stepping.delete(String(build)); return { ok: !r.error, error: r.error }; },
   ...gridSources(call, () => buildsNow, () => selectionNow, () => designAxes), loadCanvasCheck: () => canvasRefusal(API), ...chosenDiffSources(call, () => held.filter(h => h.importer && (h.replaces || h.from)), (p, picked) => chosen(p, picked), p => heldOps.get(p) ?? [], () => heldToken || undefined, () => lastFiles, (p, picked, gen) => heldChoice.inStep(p, picked, gen)), // (D1.1: the diff a card shows follows its choice)
   loadHello: async () => {
-    const { error, reply } = await call('/__forma', { method: 'hello' });
+    const answer = await call('/__forma', { method: 'hello' }), reply = answer.reply, protocol = String(reply?.ok?.protocol ?? '');
+    const error = answer.error || (protocol.startsWith('tamber/') ? `rename protocol ${protocol} to ${protocol.replace('tamber/', 'forma/')}` : '');
     if (error) return { ok: false, error, protocol: '', format: 0, app: '', files: [], page: '', frame: '', live: false, scope: '', local: false, client: '', epoch: '' };
     const ok = reply.ok ?? {};
     // Paired, the server is another machine's whatever its hello says: never this machine's pages.
