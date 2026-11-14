@@ -1,3 +1,4 @@
+import { takeLock } from '../host/web/build-lock.mjs';
 import { capturePrivacyManifest } from '../host/apple/privacy.mjs';
 import { appleMetadataProblem } from '../host/apple/plist.mjs';
 import { appleImplementations } from '../js/bake/src/typescript.mjs';
@@ -26,10 +27,10 @@ import { nativeResourceMappings, nativeResourceInventory, appleAssetCatalogInven
 // validator small enough to live beside the reader; an app without one gets
 // the derived defaults it had before the manifest existed.
 import { spawnSync } from '../host/apple/toolchain.mjs';
-import { closeSync, existsSync, mkdirSync, openSync, mkdtempSync, readFileSync, readdirSync, realpathSync, readlinkSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, readlinkSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { basename, delimiter, dirname, isAbsolute, relative, resolve, sep, toNamespacedPath } from 'node:path';
 import { within } from './paths.mjs';
-import { constants, homedir, tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { BINARYEN, packageGpuWasm, webGpuTools } from '../host/web/stages.mjs';
 import { SHELL_SOURCES } from '../host/web/look.mjs';
@@ -338,7 +339,7 @@ export function checkModuleRoster(app, provided, where, release) {
  * on stable (@ref LLP 1047: a GPU crate keeps its toolchain's std), as the wasm target's bake does
  * (the JS target has no bake); the wasm target passes false, having built them.
  * `check` validates tooling without building or packaging; wasm-opt is optional. */
-export function webGpuArtifacts(app, stage, { cargo = false, check = false, env = process.env, profile = 'web' } = {}) {
+export function webGpuArtifacts(app, stage, { cargo = false, check = false, env = process.env, profile = 'web', products = {} } = {}) {
   const artifacts = [...(app.hasGpu ? [{ crate: app.crate('gpu'), stem: 'gpu' }] : []),
     ...gpuModules(app.manifest).map(({ name }) => ({ crate: app.crate(`gpu-${name}`), stem: `gpu/${name}` }))];
   if (artifacts.length) webGpuTools(env);
@@ -348,7 +349,7 @@ export function webGpuArtifacts(app, stage, { cargo = false, check = false, env 
     if (cargo) buildCommand('cargo', ['build', ...cargoReproducibilityFlags(app), ...injectedProfiles(app), ...wasmRemapFlags(app), '-p', crate,
       '--target', 'wasm32-unknown-unknown', '--profile', profile, '--lib', '--config', `profile.${profile}.strip=false`], app, cargoEnvironment({ ...env, CARGO_TARGET_DIR: app.target }), 'inherit');
     const wasm = resolve(app.target, 'wasm32-unknown-unknown', profile, crate.replace(/-/g, '_') + '.wasm');
-    note += `${note ? '; ' : ''}${packageGpuWasm(crate, wasm, stage, stem, { env, profile })}`;
+    note += `${note ? '; ' : ''}${packageGpuWasm(crate, products[wasm] ?? wasm, stage, stem, { env, profile })}`;
   }
   return { note: note || 'no GPU crate', built: artifacts.length > 0 };
 }
@@ -986,7 +987,7 @@ function buildGraph(app, target, kind, env, gpu) {
 }
 /** What a build writes, known before Cargo runs. A directory watch excludes these from every inventory. */
 const buildOutputs = (app, graph, env) => [app.target, graph.metadata.target_directory, graph.metadata.build_directory,
-  env.CARGO_BUILD_BUILD_DIR, env.EXACT_BAKE_OUTPUT, env.EXACT_WEB_DIST ?? webDist(app),
+  env.CARGO_BUILD_BUILD_DIR, env.EXACT_BAKE_OUTPUT, env.EXACT_WINDOWS_OUTPUT, env.EXACT_WEB_DIST ?? webDist(app),
   ...['dist', 'web-dist', 'dist-windows', 'artifacts'].map(name => resolve(app.dir, name))].filter(Boolean).map(path => resolve(path));
 function completeBuild(app, platform, target, graph, messages, roots, env, prepared = new Map(), generatedInputs = {products:[], watchedDirectories:[]}, privacyManifests = []) {
   const scripts = messages.filter((m) => m.reason === 'build-script-executed' && graph.roles.has(m.package_id));
@@ -1165,25 +1166,22 @@ function completeBuild(app, platform, target, graph, messages, roots, env, prepa
   return {version:1,backendOrigin,...sourceRecord,watchedDirectories:[...packageDirectories([...sourceInputs],watchOutputs), ...generatedInputs.watchedDirectories],...(env.EXACT_RUST_BUNDLE?{rust:resolve(baked,'rust')}:{}),...(optionalInputs.size?{optionalInputs:[...optionalInputs].sort()}:{}),...(baked!==rootOutput?{linkedPlan:baked,linkedInputs:linkedInputs(baked)}:{}),...bakedSettings(baked,app.dir),trust:env.EXACT_UPDATE_TRUST??'development',compat,graph:bundleGraph,binary:{sourceInputs:sourceInputsRecord,...(privacyManifests.length ? {privacyManifests} : {}),...(assetCatalogApp ? {assetCatalogApp} : {}),...(nativeResources.length ? {nativeResourceApp:{dir:app.dir,manifest:app.manifest,platform}} : {}),sha256:buildHash(canonicalBuild(fingerprint)),...fingerprint,inputs:files,watchOutputs,links:[...links.values()],directories:[...directories.values()],missing:[...absent.values()]},products};
 }
 // The permanent companion inode owns exclusion; the JSON claim is only its diagnostic record.
-let buildLock;
 export function claimBuildOutput(app, path) {
-  if (!buildLock) {
-    const { dlopen, read } = import.meta.require('bun:ffi'), errno = process.platform === 'darwin' ? '__error' : '__errno_location';
-    const { symbols } = dlopen(process.platform === 'darwin' ? '/usr/lib/libSystem.B.dylib' : 'libc.so.6', { flock: { args: ['i32', 'i32'], returns: 'i32' }, [errno]: { args: [], returns: 'ptr' } });
-    buildLock = fd => { if (symbols.flock(fd, 6) === 0) return true; const code = read.i32(symbols[errno]()); if (code === constants.errno.EWOULDBLOCK) return false; throw new Error(`cannot lock build output: errno ${code}`); };
-  }
   mkdirSync(resolve(path, '..'), { recursive: true });
-  const fd = openSync(`${path}.flock`, 'a');
-  const busy = () => { let held = 'another build'; try { held = readFileSync(path, 'utf8').trim(); } catch {} return new Error(`Apple build busy for ${app.id}: ${held} (${path})`); };
-  try {
-    if (!buildLock(fd)) throw busy(); // LOCK_EX | LOCK_NB; close releases it even after process death.
-    writeFileSync(path, JSON.stringify({ pid: process.pid, app: app.id, source: realpathSync(app.dir), started: new Date().toISOString() }) + '\n');
-  } catch (error) { closeSync(fd); throw error; }
+  let unlock;
+  try { unlock = takeLock(`${path}.flock`, { waitMs: 0 }); }
+  catch (error) {
+    if (error.code !== 'ELOCKED') throw error;
+    let held = 'another build'; try { held = readFileSync(path, 'utf8').trim(); } catch {}
+    throw new Error(`Apple build busy for ${app.id}: ${held} (${path})`);
+  }
+  try { writeFileSync(path, JSON.stringify({ pid: process.pid, app: app.id, source: realpathSync(app.dir), started: new Date().toISOString() }) + '\n'); }
+  catch (error) { unlock(); throw error; }
   let held = true;
   const release = () => {
     if (!held) return;
     held = false; process.removeListener('exit', release);
-    try { rmSync(path, { force: true }); } finally { closeSync(fd); }
+    try { rmSync(path, { force: true }); } finally { unlock(); }
   };
   process.once('exit', release);
   return release;
@@ -1278,8 +1276,8 @@ export function buildBake(app, platform, target, options = {}) {
   });
   const releases = [];
   try {
-    if (apple) for (const path of appleCargoClaims(app, target, selected.map(({unit}) => unit))) {
-      releases.push(claimBuildOutput(app, path));
+    if (apple || ['web', 'windows'].includes(platform)) for (const path of appleCargoClaims(app, target, selected.map(({unit}) => unit))) {
+      releases.push(awaitBuildOutput(app, path, owner => console.error(`waiting for the ${platform} build of ${owner}`)));
     }
   for(const {pkg,unit} of selected) {
     if (pkg.id === graph.root.id && pkg.targets.some(t => t.kind.includes('custom-build'))) env.EXACT_BAKE_PACKAGE_DIR = realpathSync(dirname(pkg.manifest_path));

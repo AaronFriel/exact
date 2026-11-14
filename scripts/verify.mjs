@@ -1012,6 +1012,13 @@ async function deviceMain(argv, emitJSON, declined, ended) {
   const host = chosen.host;
   if (!['web', 'ios', 'windows', 'android'].includes(host)) { console.error(`verify: web, ios, windows or android, not ${host} (test ${host} runs the tests there)`); return declined(2); }
   if (host === 'windows' && process.platform !== 'win32') { console.error('verify windows runs on Windows (bun exact.mjs verify windows there)'); return declined(2); }
+  if (['web', 'ios', 'windows'].includes(host)) {
+    const { privateWebBuild, privateNativeBuild } = await import('./web-build.mjs');
+    const build = (host === 'web' ? privateWebBuild : privateNativeBuild)(app, 'verify');
+    Object.assign(process.env, build.env);
+    if (host !== 'web') await build.seed(host);
+    process.once('exit', build.close);
+  }
   if (host === 'android') process.env.EXACT_ANDROID_READER = '1'; // the APK, as `test android` drives it
   if (sim) process.env.EXACT_SIM = sim; // as the driver names it (devices.mjs `simulator`)
   const started = Date.now();

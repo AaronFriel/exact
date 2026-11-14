@@ -347,14 +347,15 @@ async function typecheck(checking) {
   const { configure, check, capturedSources, staticFacts, valueExports, CODE_WARNINGS } = await import(resolve(root, 'js/bake/src/typescript.mjs'));
   const libraries = resolve(dirname(fileURLToPath(import.meta.resolve(`@typescript/typescript-${process.platform}-${process.arch}/package.json`))), 'lib');
   const declarations = readFileSync(resolve(gen, 'app.contract.d.ts'), 'utf8');
-  // Beside app.ts too, for an editor, as the native development bake writes
-  // it: never a captured source, written only when it changes, and said in
-  // one line, as `exact.mjs contract build` says it (LLP 1116.001 D4.5).
-  const beside = resolve(appDir, 'app.contract.d.ts');
-  const before = existsSync(beside) ? readFileSync(beside, 'utf8') : null;
-  if (checking && !production && before !== declarations) {
-    writeFileSync(beside, declarations);
-    console.error(`app.contract.d.ts: ${before === null ? 'written' : 'regenerated, since a source\'s signature changed'} (the types app.ts imports)`);
+  // Checks keep declarations in their stage (LLP 1172.010 E11). An ordinary
+  // development build also refreshes the editor's copy, never captured.
+  if (checking && !production && process.env.EXACT_WEB_TYPES !== 'private') {
+    const beside = resolve(appDir, 'app.contract.d.ts');
+    const before = existsSync(beside) ? readFileSync(beside, 'utf8') : null;
+    if (before !== declarations) {
+      writeFileSync(beside, declarations);
+      console.error(`app.contract.d.ts: ${before === null ? 'written' : 'regenerated, since a source\'s signature changed'} (the types app.ts imports)`);
+    }
   }
   // The bake's capture (js/bake/src/lib.rs `sources`): the app's TypeScript,
   // JavaScript and JSON, and each `typescript.sources` mount under its name.
@@ -497,10 +498,10 @@ let moduleStorage = false, rustGrants = '', rustGrantSet = normalizeGrants('Rust
 if (rust) {
   mkdirSync(resolve(out, 'rust/wasm'), { recursive: true });
   const from = opt('--data') ?? (opt('--plan') && dirname(resolve(opt('--plan'))));
-  const built = from && existsSync(resolve(from, 'rust/wasm/app.module.wasm')) ? resolve(from, 'rust/wasm/app.module.wasm') : buildModule(app, undefined, canvas2d, appDir);
+  const built = from && existsSync(resolve(from, 'rust/wasm/app.module.wasm')) ? resolve(from, 'rust/wasm/app.module.wasm') : buildModule(app, resolve(gen, 'rust-module'), canvas2d, appDir);
   cpSync(built, resolve(out, 'rust/wasm/app.module.wasm'));
   if (devReload) devLogic.push(['rust', createHash('sha256').update(readFileSync(resolve(out, 'rust/wasm/app.module.wasm'))).digest('hex')]);
-  rustGrants = await moduleGrants(built);
+  rustGrants = await moduleGrants(resolve(out, 'rust/wasm/app.module.wasm'));
   rustGrantSet = normalizeGrants(ts ? 'Rust module' : 'app', rustGrants, 'rust');
   moduleStorage = rustGrantSet.entries.some(([, , grant]) => ['fs-read', 'fs-write', 'sqlite-open'].includes(grant?.[0]));
   // The module binds with the plan's declarations, not the bake's answers.

@@ -70,7 +70,10 @@ export function nativeBuild(host, app, { sample = false, checked = null, launch 
 
 /** The receipt of the build a drive of `app` on `host` (`ios`, else macOS) launches, or undefined without one. */
 export function receiptPath(host, app, { sample = false } = {}) {
-  if (host === 'ios') return [resolve(appleArtifacts(app, { destination: 'ios-simulator', host: sample }).bundle, 'receipt.json')].find(existsSync);
+  if (host === 'ios') {
+    const paths = appleArtifacts(app, { destination: 'ios-simulator', host: sample });
+    return [resolve(paths.products, 'receipt.json'), resolve(paths.bundle, 'receipt.json')].find(existsSync);
+  }
   return [resolve(appleArtifacts(app, { host: sample }).products, 'receipt.json'), resolve(appleArtifacts(app, { host: sample }).bundle, 'Contents/Resources/receipt.json')].find(existsSync);
 }
 
@@ -421,7 +424,7 @@ export async function buildFirst(host, app, { say = line => console.error(line),
 /** What a Windows drive of `app` launches, `dist-windows/<name>.exe`, and its changes since the build that packaged it
  * (`changed`, null when there is none), from the same receipt check the driver uses. */
 export function windowsBuild(app) {
-  const bin = resolve(app.dir, 'dist-windows', `${executableName(app)}.exe`);
+  const bin = resolve(process.env.EXACT_WINDOWS_OUTPUT ?? resolve(app.dir, 'dist-windows'), `${executableName(app)}.exe`);
   if (!existsSync(bin)) return { bin, changed: null };
   return { bin, changed: packagedBuildChanges(resolve(bakeOutput(app), `windows-${bakeTarget('windows')}.build.json`), dirname(bin), app) };
 }
