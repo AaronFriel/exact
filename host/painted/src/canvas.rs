@@ -206,7 +206,7 @@ mod journal;
 #[path = "canvas/keys.rs"]
 mod keys;
 #[path = "canvas/layer.rs"]
-mod layer;
+pub(crate) mod layer;
 #[path = "canvas/legacy.rs"]
 pub mod legacy;
 #[cfg(target_os = "android")]
@@ -230,6 +230,7 @@ mod requests;
 mod scroll;
 #[path = "canvas/shadow.rs"]
 mod shadow;
+mod shared;
 #[path = "canvas/slot.rs"]
 mod slot;
 #[path = "canvas/stream.rs"]
@@ -319,6 +320,7 @@ pub struct Recorder {
     again: Option<slot::Again>,
     /// Nodes the reader animates, apart (`crate::host::lower`).
     layers: layer::Layers,
+    shared: shared::Shared,
     /// The blur the next glyphs are drawn through, local units (`glyphs.rs`).
     blur: f32,
 }
@@ -378,6 +380,7 @@ impl Recorder {
             slot_contexts: HashMap::new(),
             again: None,
             layers: Default::default(),
+            shared: Default::default(),
             blur: 0.0,
         }
     }
@@ -761,6 +764,7 @@ impl Backend for Recorder {
     }
 
     fn row_begin(&mut self, id: u32, origin: (f32, f32), previous: Option<u32>) {
+        self.shared_row_begin();
         self.row = Some(RowRecording {
             clips: std::mem::take(&mut self.clips),
             matrix: self.matrix.take(),
@@ -815,6 +819,7 @@ impl Backend for Recorder {
             self.kept.get_mut(&old).expect("kept").1 = images;
             self.keep_slots(old, slots);
             self.layers.row_end(old);
+            self.shared_row_end(old);
             return old;
         }
         let body = body.to_vec();
@@ -823,6 +828,7 @@ impl Backend for Recorder {
         self.recorded = Some((id, at));
         self.ops.extend(sets);
         self.layers.row_end(id);
+        self.shared_row_end(id);
         id
     }
 
@@ -866,6 +872,18 @@ impl Backend for Recorder {
 
     fn layer_end(&mut self) {
         self.layer_close();
+    }
+    fn shared_frame(&mut self, s: &crate::paint::SharedState) {
+        self.shared_state(s);
+    }
+    fn shared_begin(&mut self, e: &crate::paint::SharedElement<'_>) -> bool {
+        self.shared_open(e)
+    }
+    fn shared_end(&mut self) {
+        self.shared_close();
+    }
+    fn row_reusable(&self, id: u32, _: (f32, f32)) -> bool {
+        self.shared_row_reusable(id)
     }
 
     fn row_culled(&self, bounds: Rect4) -> bool {
@@ -924,6 +942,7 @@ impl Backend for Recorder {
         self.kept.remove(&id);
         self.slot_contexts.remove(&id);
         self.layers.row_free(id);
+        self.shared.rows.remove(&id);
         self.ops.extend([ROW_FREE, id]);
     }
 
