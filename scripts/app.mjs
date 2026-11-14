@@ -46,7 +46,7 @@ import { WEB_TOOLCHAIN, WEB_STD, WEB_SIZE, WEB_RUSTFLAGS, webToolchainEnv, cargo
   androidCargo, appCrates, appleCargo, authoredWorkspace, cargoDiagnosticsCommand, cargoOnPath, claimTargetCrates,
   declaredWorkspace, knownWorkspace, refuseLoose, rememberWorkspace, shellsDir, targetRustflags } from './cargo-check.mjs';
 export { WEB_TOOLCHAIN, WEB_STD, WEB_SIZE, webToolchainEnv, cargoEnvironment, cargoOnPath } from './cargo-check.mjs';
-import { appCrateName, ensureShells, settleLock } from './app-shells.mjs';
+import { appCrateName, gpuView, joinMetadata, joinsGpu, settleShells } from './app-shells.mjs';
 import { installProblems } from './install-page.mjs';
 import { gameDefaults, lintGame, prepareGame } from '../game/app/shells.mjs';
 import { generatedInputFiles } from '../game/inputs.mjs';
@@ -344,10 +344,10 @@ export function webGpuArtifacts(app, stage, { cargo = false, check = false, env 
     ...gpuModules(app.manifest).map(({ name }) => ({ crate: app.crate(`gpu-${name}`), stem: `gpu/${name}` }))];
   if (artifacts.length) webGpuTools(env);
   if (check) return;
-  let note = '';
+  let note = '', at = gpuView(app);
   for (const { crate, stem } of artifacts) {
-    if (cargo) buildCommand('cargo', ['build', ...cargoReproducibilityFlags(app), ...injectedProfiles(app), ...wasmRemapFlags(app), '-p', crate,
-      '--target', 'wasm32-unknown-unknown', '--profile', profile, '--lib', '--config', `profile.${profile}.strip=false`], app, cargoEnvironment({ ...env, CARGO_TARGET_DIR: app.target }), 'inherit');
+    if (cargo) buildCommand('cargo', ['build', ...cargoReproducibilityFlags(at), ...injectedProfiles(at), ...wasmRemapFlags(at), '-p', crate,
+      '--target', 'wasm32-unknown-unknown', '--profile', profile, '--lib', '--config', `profile.${profile}.strip=false`], at, cargoEnvironment({ ...env, CARGO_TARGET_DIR: app.target }), 'inherit');
     const wasm = resolve(app.target, 'wasm32-unknown-unknown', profile, crate.replace(/-/g, '_') + '.wasm');
     note += `${note ? '; ' : ''}${packageGpuWasm(crate, wasm, stage, stem, { env, profile })}`;
   }
@@ -473,14 +473,15 @@ export function resolveApp(nameOrCrate) {
   // What a build asks for before it runs Cargo in the workspace, once: a generated workspace written current with the
   // manifest (LLP 1153 D1.3) and its copied lock resolved (the first build fetches what the cache lacks), or an
   // authored workspace's lock checked. Every build helper reads `workspace`, so every build passes here; a web
-  // verb reads `dir` and `target` and runs no Cargo (D2.1).
-  let rusted = false;
+  // verb reads `dir` and `target` and runs no Cargo (D2.1). A generated app's GPU crates build in `.exact/gpu`
+  // (LLP 1153.003 D5.1; `gpuWorkspace` is null without any), any other app's with its host crates.
+  let rusted = false, gpuWorkspace = generated ? null : workspace;
   const rust = () => {
     if (rusted) return workspace;
     rusted = true;
     // A deploy builds its capture of the app where the app builds (scripts/deploy.mjs `materializeSnapshot`).
     if (process.env.CARGO_TARGET_DIR && own !== ROOT && !process.env.EXACT_DEPLOY_CAPSULE) claimTargetCrates(target, name, dir);
-    if (generated) { ensureShells(dir, manifest, name); settleLock(dir, workspace); } else checkLock?.();
+    if (generated) gpuWorkspace = settleShells(dir, manifest, name); else checkLock?.();
     return workspace;
   };
   startSweep(target);
@@ -508,10 +509,13 @@ export function resolveApp(nameOrCrate) {
     name, dir, target, crate, generated, rust, outside: !!outside,
     selector,
     get workspace() { return rust(); },
+    get gpuWorkspace() { rust(); return gpuWorkspace; },
     cargoPackage, prepare,
     get hasGpu() {
       if (manifest.game !== undefined) return true;
-      const gpu = resolve(dir, 'gpu'), pkg = existsSync(resolve(gpu, 'Cargo.toml')) ? cargoPackage('gpu') : false;
+      const gpu = resolve(dir, 'gpu');
+      if (generated && joinsGpu(dir, crate('gpu'))) return true;
+      const pkg = existsSync(resolve(gpu, 'Cargo.toml')) && !generated ? cargoPackage('gpu') : false;
       if (pkg === false || pkg && realpathSync(dirname(pkg.manifest_path)) === realpathSync(gpu)) return pkg !== false;
       const named = (() => { try { return Bun.TOML.parse(readFileSync(resolve(gpu, 'Cargo.toml'), 'utf8')).package?.name; } catch { return undefined; } })();
       throw new Error(named === crate('gpu') ? `${gpu}/Cargo.toml (${named}) is not a member of the app's Cargo workspace: add "gpu" to its members` : `${gpu}/Cargo.toml names the package ${named ?? 'nothing'}; the app's GPU module must be named ${crate('gpu')}`);
@@ -960,8 +964,9 @@ function bakeMetadata(app, target, env) {
   return metadata;
 }
 function buildGraph(app, target, kind, env, gpu) {
-  const prepared = app.prepare?.(true, {target, env});
-  const metadata = prepared?.workspace_root === app.workspace ? prepared : bakeMetadata(app, target, env);
+  const prepared = app.prepare?.(true, {target, env}), gpuApp = gpuView(app);
+  const hostMetadata = prepared?.workspace_root === app.workspace ? prepared : bakeMetadata(app, target, env);
+  const metadata = gpuApp !== app && (gpu || gpuModules(app.manifest).length) ? joinMetadata(hostMetadata, bakeMetadata(gpuApp, target, env)) : hostMetadata;
   const packages = new Map(metadata.packages.map((p) => [p.id, p]));
   const nodes = new Map(metadata.resolve.nodes.map((n) => [n.id, n]));
   const root = metadata.packages.find((p) => p.name === app.crate(kind));
@@ -1289,9 +1294,9 @@ export function buildBake(app, platform, target, options = {}) {
     // An Apple app's crate is an rlib to Cargo, so `--workspace` builds type-check it without
     // bundling its whole dependency graph into a 700 MB archive nobody reads. The archive the
     // app links is asked for here, where it is built to be launched.
-    const archive=apple&&pkg.id===graph.root.id;
+    const archive=apple&&pkg.id===graph.root.id, at=gpuPackage(pkg)?gpuView(app):app;
     const whole=wholeProgram(kind,options.profile??'release');
-    const args=[archive?'rustc':options.check?'check':'build',...(archive?['--crate-type','staticlib']:[]),...cargoReproducibilityFlags(app),...injectedProfiles(app),...whole,...(sized||watch?WEB_STD:[]),...(target==='wasm32-unknown-unknown'?wasmRemapFlags(app,sized?WEB_TOOLCHAIN:null):[]),'-p',pkg.name,'--target',target,'--profile',profile,...(['linux','windows'].includes(kind)&&pkg.id===graph.root.id?['--bin',unit.name]:['--lib']),...(gpuPackage(pkg)?['--config',`profile.${profile}.strip=false`]:[]),'--message-format=json-render-diagnostics'];
+    const args=[archive?'rustc':options.check?'check':'build',...(archive?['--crate-type','staticlib']:[]),...cargoReproducibilityFlags(at),...injectedProfiles(at),...whole,...(sized||watch?WEB_STD:[]),...(target==='wasm32-unknown-unknown'?wasmRemapFlags(at,sized?WEB_TOOLCHAIN:null):[]),'-p',pkg.name,'--target',target,'--profile',profile,...(['linux','windows'].includes(kind)&&pkg.id===graph.root.id?['--bin',unit.name]:['--lib']),...(gpuPackage(pkg)?['--config',`profile.${profile}.strip=false`]:[]),'--message-format=json-render-diagnostics'];
     // Refresh Rust bakers through an rlib before they read a coordinated
     // Rust/manifest edit. Generated inputs also predate the first archive.
     if (archive && options.link && !env.EXACT_RUST_BUNDLE && linkable(app,pkg)) {
@@ -1302,7 +1307,7 @@ export function buildBake(app, platform, target, options = {}) {
     const recordInputs = pkg.id === graph.root.id ? cargoBakeInputs(pkg,target,profile,env,platform === 'windows' ? app : null) : () => {};
     // Cargo compiles a TypeScript app's linked bake from a content-addressed copy (linked-plan.mjs compiledBakeDir), so an identity, grants or Canvas roster change leaves its archive fresh; a Rust data crate's bake registers its build script in its own directory and keeps it.
     const shared = archive && env.EXACT_BAKED && !existsSync(resolve(app.dir,'data/Cargo.toml')) && env.CARGO_TARGET_DIR ? compiledBakeDir(env.EXACT_BAKED, resolve(env.CARGO_TARGET_DIR,'bake-compiled')) : null;
-    const result=buildCommand('cargo',args,app,shared?{...env,EXACT_BAKED:shared}:env,'inherit');
+    const result=buildCommand('cargo',args,at,shared?{...env,EXACT_BAKED:shared}:env,'inherit');
     const output=result.stdout.split('\n').filter(Boolean).map((line)=>JSON.parse(line));messages.push(...output);roots.push({package:pkg.id,name:unit.name});
     recordInputs(output);
     if (archive && env.EXACT_BAKED) recordRustBake(env, buildOutputs(app,graph,env));

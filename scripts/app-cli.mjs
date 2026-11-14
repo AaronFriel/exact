@@ -653,7 +653,7 @@ function bindgenFinding(dir, workspace, options) {
   const { held, requiring } = gpuBindgen(JSON.parse(wasm.stdout), [`${app}-gpu`, ...modules.map((m) => `${app}-gpu-${m}`)]);
   if (!held.length || held.every((version) => version === pin)) return null;
   // Paths as the recipe writes them, with `/` on every host.
-  const shown = (path) => relative(workspace, path).split(sep).join('/');
+  const shown = (path) => relative(dir, path).split(sep).join('/');
   const blocking = requiring.filter((r) => !Bun.semver.satisfies(pin, r.req)), own = shown(resolve(dir, 'gpu/Cargo.toml'));
   return `The GPU module's wasm build links wasm-bindgen ${held.join(', ')} (${requiring.map((r) => `${r.name} requires ${r.req}`).join(', ')}), and the web build's wasm-bindgen CLI is ${pin}, which refuses any other: the web build will fail. `
     + (blocking.length
@@ -666,15 +666,16 @@ function bindgenFinding(dir, workspace, options) {
 export async function lockApp(dir) {
   const { cargoEnvironment } = await import('./app.mjs');
   const { appCrates, authoredWorkspace, shellsDir } = await import('./cargo-check.mjs');
-  const { ensureShells, lockShells, lockChanges } = await import('./app-shells.mjs');
+  const { GPU_LOCK, ensureGpuShells, ensureShells, lockShells, lockChanges } = await import('./app-shells.mjs');
   const options = { cwd: dir, env: cargoEnvironment(), encoding: 'utf8', maxBuffer: 1 << 26 };
   const authored = authoredWorkspace(dir);
   if (!authored) {
     if (!appCrates(dir).length && !existsSync(resolve(shellsDir(dir), 'Cargo.toml'))) return `${dir}: no Rust here yet; a native verb (bun exact.mjs ios, mac, linux, android, windows) brings it`;
     const { workspace } = ensureShells(dir);
-    const said = lockShells(dir, workspace);
-    const found = bindgenFinding(dir, workspace, options);
-    return found ? `${said}\n${found}` : said;
+    // The GPU crates' lock is their own (LLP 1153.003 D5.1): Cargo.gpu.lock, captured by the same rule.
+    const gpu = ensureGpuShells(dir), said = [lockShells(dir, workspace), ...(gpu ? [lockShells(dir, gpu, resolve(dir, GPU_LOCK))] : [])];
+    const found = gpu && bindgenFinding(dir, gpu, options);
+    return [...said, ...(found ? [found] : [])].join('\n');
   }
   const workspace = authored, lock = resolve(workspace, 'Cargo.lock');
   const before = existsSync(lock) ? readFileSync(lock, 'utf8') : '';

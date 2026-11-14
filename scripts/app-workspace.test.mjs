@@ -1020,9 +1020,9 @@ test('a crate beside app.json joins the generated workspace by naming it, and on
   const { createApp } = await import('../game/new.mjs');
   const { ensureShells } = await import('./app-shells.mjs');
   const scratch = realpathSync(mkdtempSync(resolve(tmpdir(), 'exact-members-'))), dir = resolve(scratch, 'field-log'), was = process.env.EXACT_APP_DIR, target = process.env.CARGO_TARGET_DIR;
-  const crate = (path, name, workspace) => {
+  const crate = (path, name, workspace, dependency = 'exact-runner') => {
     mkdirSync(resolve(dir, path, 'src'), { recursive: true });
-    writeFileSync(resolve(dir, path, 'Cargo.toml'), `[package]\nname = "${name}"\nversion.workspace = true\nedition.workspace = true\n${workspace ? `workspace = "${workspace}"\n` : ''}publish = false\n\n[dependencies]\nexact-runner.workspace = true\n`);
+    writeFileSync(resolve(dir, path, 'Cargo.toml'), `[package]\nname = "${name}"\nversion.workspace = true\nedition.workspace = true\n${workspace ? `workspace = "${workspace}"\n` : ''}publish = false\n\n[dependencies]\n${dependency}.workspace = true\n`);
     writeFileSync(resolve(dir, path, 'src/lib.rs'), '');
   };
   try {
@@ -1055,7 +1055,7 @@ test('a crate beside app.json joins the generated workspace by naming it, and on
     rmSync(resolve(dir, 'helper'), { recursive: true });
     // A GPU crate alone joins the GPU workspace, and the host crates stay generated (D1.2).
     rmSync(resolve(dir, 'data'), { recursive: true });
-    crate('gpu', 'field-log-gpu', '../.exact/gpu');
+    crate('gpu', 'field-log-gpu', '../.exact/gpu', 'exact-gpu');
     assert.deepEqual([resolveApp().generated, resolveApp().workspace], [true, workspace]);
     assert.match(readFileSync(resolve(ensureShells(dir).workspace, 'Cargo.toml'), 'utf8'), /^members = \["web", "apple"\]$/m);
     // A crate naming another workspace beside one that joins a generated one is refused.
@@ -1088,7 +1088,7 @@ test('a generated workspace captures no lock until a dependency leaves exact2\'s
     data();
     const { workspace } = ensureShells(dir);
     settleLock(dir, workspace);
-    assert.match(lockShells(dir, workspace), /resolves against exact2's lock; its crates add nothing, so it commits no lock of its own/);
+    assert.match(lockShells(dir, workspace), /resolves against exact2's lock; the app's crates there add nothing, so it commits no Cargo\.lock of its own/);
     assert.equal(existsSync(resolve(dir, 'Cargo.lock')), false);
     if (!other) return; // no second itoa in this machine's cache to leave exact2's lock with
     data(`itoa = "=${other}"\n`);
@@ -1154,3 +1154,59 @@ test('rust.data generates host crates over the data crate, composed with app.ts 
     assert.match(read('web/build.rs'), /exact_js_bake::build\(/);
   } finally { rmSync(scratch, { recursive: true, force: true }); }
 }, 180_000);
+
+// LLP 1153.003 D5.1: a GPU module links nothing of the host's, so its crates resolve in a generated workspace of their
+// own, with a lock of their own captured by the host's rule.
+test('a GPU crate builds in .exact/gpu, apart from the host\'s graph, and captures Cargo.gpu.lock only when it leaves exact2\'s', async () => {
+  const { createApp } = await import('../game/new.mjs');
+  const { GPU_LOCK, ensureGpuShells, ensureShells, lockShells } = await import('./app-shells.mjs');
+  const scratch = realpathSync(mkdtempSync(resolve(tmpdir(), 'exact-gpu-workspace-'))), dir = resolve(scratch, 'field-log'), was = process.env.EXACT_APP_DIR, target = process.env.CARGO_TARGET_DIR;
+  const sdk = readFileSync(resolve(import.meta.dir, '../Cargo.lock'), 'utf8');
+  const held = /name = "itoa"\nversion = "([^"]+)"/.exec(sdk)[1];
+  const cache = resolve(process.env.CARGO_HOME ?? resolve(homedir(), '.cargo'), 'registry/cache');
+  const other = (existsSync(cache) ? readdirSync(cache).flatMap(index => readdirSync(resolve(cache, index))) : [])
+    .map(file => /^itoa-(1\.\d+\.\d+)\.crate$/.exec(file)?.[1]).find(version => version && version !== held);
+  // The recipe's manifest (docs/recipes/gpu-module.md).
+  const gpu = (deps = '', workspace = '../.exact/gpu') => writeFileSync(resolve(dir, 'gpu/Cargo.toml'), `[package]\nname = "field-log-gpu"\nversion.workspace = true\nedition.workspace = true\nlicense.workspace = true\npublish = false\nworkspace = "${workspace}"\n\n[lib]\ncrate-type = ["cdylib", "rlib"]\n\n[dependencies]\nexact-gpu.workspace = true\n${deps}\n[target.'cfg(target_arch = "wasm32")'.dependencies]\nwasm-bindgen.workspace = true\nwasm-bindgen-futures.workspace = true\nweb-sys.workspace = true\n`);
+  try {
+    createApp(dir, { with: ['macos'] });
+    delete process.env.CARGO_TARGET_DIR;
+    process.env.EXACT_APP_DIR = dir;
+    mkdirSync(resolve(dir, 'gpu/src'), { recursive: true });
+    writeFileSync(resolve(dir, 'gpu/src/lib.rs'), '');
+    // A GPU crate that names the host's workspace is pointed at its own.
+    gpu('', '../.exact/shells');
+    assert.throws(() => ensureShells(dir), /gpu\/Cargo\.toml: field-log-gpu is a GPU module, which resolves apart from the host's crates: set package\.workspace = "\.\.\/\.exact\/gpu"/);
+    gpu();
+    const app = resolveApp(), workspace = app.workspace, own = resolve(dir, '.exact/gpu');
+    assert.equal(app.gpuWorkspace, own);
+    assert.equal(app.hasGpu, true);
+    const manifest = readFileSync(resolve(own, 'Cargo.toml'), 'utf8');
+    assert.match(manifest, /^members = \["\.\.\/\.\.\/gpu"\]$/m);
+    assert.match(manifest, /^wgpu-hal = \{ path = "[^"]*\/vendor\/wgpu-hal" \}$/m);
+    assert.match(manifest, /^wasm-bindgen = "=\d+\.\d+\.\d+"$/m);
+    const names = at => JSON.parse(spawnSync('cargo', ['metadata', '--locked', '--offline', '--format-version', '1'], { cwd: at, encoding: 'utf8', maxBuffer: 1 << 28 }).stdout).packages.map(p => p.name);
+    assert.ok(names(own).includes('field-log-gpu'));
+    assert.ok(names(own).includes('exact-gpu'));
+    // The host's graph holds neither the GPU crate nor wgpu.
+    assert.equal(names(workspace).some(name => name === 'field-log-gpu' || name === 'exact-gpu' || name === 'wgpu'), false);
+    assert.match(lockShells(dir, own, resolve(dir, GPU_LOCK)), /resolves against exact2's lock; the app's crates there add nothing, so it commits no Cargo\.gpu\.lock of its own/);
+    assert.equal(existsSync(resolve(dir, GPU_LOCK)), false);
+    if (other) {
+      gpu(`itoa = "=${other}"\n`);
+      assert.match(lockShells(dir, own, resolve(dir, GPU_LOCK)), /Cargo\.gpu\.lock: captured \(\d+ packages\); commit it/);
+      assert.match(readFileSync(resolve(dir, GPU_LOCK), 'utf8'), new RegExp(`name = "itoa"\nversion = "${other.replaceAll('.', '\\.')}"`));
+      // The host's lock is untouched: it captures nothing of the GPU crate's.
+      assert.equal(existsSync(resolve(dir, 'Cargo.lock')), false);
+      assert.equal(readFileSync(resolve(workspace, 'Cargo.lock'), 'utf8').includes(`name = "itoa"\nversion = "${other}"`), false);
+    }
+    // Without a GPU crate the workspace goes.
+    rmSync(resolve(dir, 'gpu'), { recursive: true });
+    assert.equal(ensureGpuShells(dir), null);
+    assert.equal(existsSync(own), false);
+  } finally {
+    if (was === undefined) delete process.env.EXACT_APP_DIR; else process.env.EXACT_APP_DIR = was;
+    if (target !== undefined) process.env.CARGO_TARGET_DIR = target;
+    rmSync(scratch, { recursive: true, force: true });
+  }
+}, 300_000);

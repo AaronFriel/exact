@@ -106,8 +106,10 @@ export function webSourceRoots(app, js, render = 'rust') {
   if (app.crate) {
     if (!js || authored) names.push(app.crate('web'));
     if (app.manifest.rust?.module?.package) names.push(app.manifest.rust.module.package);
-    if (app.manifest.game || existsSync(resolve(app.dir, 'gpu/Cargo.toml'))) names.push(app.crate('gpu'));
-    names.push(...gpuModules(app.manifest).map(({ name }) => app.crate(`gpu-${name}`)));
+    const gpu = [...(app.manifest.game || existsSync(resolve(app.dir, 'gpu/Cargo.toml')) ? [app.crate('gpu')] : []), ...gpuModules(app.manifest).map(({ name }) => app.crate(`gpu-${name}`))];
+    // A generated app's GPU crates resolve in a workspace of their own (LLP 1153.003 D5.1).
+    const own = gpu.length && app.gpuWorkspace && app.gpuWorkspace !== app.workspace ? app.gpuWorkspace : null;
+    if (own) closure(webMetadata(own), gpu); else names.push(...gpu);
     const at = (!js || render === 'rust') && ['linux', 'web'].find(dir => existsSync(resolve(app.dir, dir, 'src/bin', `${app.name ?? app.crate('web').replace(/-web$/, '')}-render.rs`)));
     if (at) names.push(app.crate(at));
   }
