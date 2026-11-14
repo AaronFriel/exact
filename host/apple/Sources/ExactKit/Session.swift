@@ -333,7 +333,7 @@ public final class ExactSession {
         didSet { if state != oldValue { let changed = state; app.deliver { [weak self] in guard let self else { return }; delegate?.exactSession(self, didChange: changed) } } }
     }
     /// Bumped by every reboot; a callback from an older generation is dropped.
-    public private(set) var generation = 0
+    public var generation: Int { runtime.completionLease.generation }
     let storeRefresh = SessionStoreRefresh()
     var activatedGeneration: Int?
     /// The generation whose deferred data has activated (or failed to): the
@@ -450,10 +450,10 @@ public final class ExactSession {
     }
     private let published = NSLock()
     /// What the owner committed without main waiting.
-    enum Published { case fill(UInt32), tick, advance, canvas, notice, reply, cancelledReply }
+    enum Published { case fill(UInt32), tick, advance, canvas, notice, reply }
     /// Batches the owner committed without main waiting, in its order: a
     /// slice's (with its list), a frame's tick's and a canvas draw's.
-    private var publishedQueue: [(kind: Published, batch: Batch, generation: Int)] = []
+    private var publishedQueue: [(kind: Published, completion: RuntimeCompletion)] = []
     /// A frame's tick is on the owner (LLP 1072 §7.1): the next one waits.
     var tickInFlight = false
     /// A timer advance is on the owner (LLP 1072.000): the next one waits.
@@ -623,9 +623,8 @@ public final class ExactSession {
     /// Send a build-only slice to the owner; its batch comes back published.
     private func sendFill(_ view: UInt32, _ bytes: Data) {
         fillInFlight = true
-        let captured = generation
         runtime.collectionFeedbackAsync(bytes, now: now()) { [weak self] batch in
-            self?.publish(.fill(view), batch, captured)
+            self?.publish(.fill(view), batch)
         }
     }
 
@@ -641,22 +640,21 @@ public final class ExactSession {
             canvasAsked = false
             guard state != .destroyed, canvasOwed, !canvasInFlight, !tickInFlight else { return }
             canvasInFlight = true
-            let captured = generation
-            runtime.canvasDrawAsync { [weak self] batch in self?.publish(.canvas, batch, captured) }
+            runtime.canvasDrawAsync { [weak self] completion in self?.publish(.canvas, completion) }
         }
     }
 
     /// On the owner: queue a batch for main, in the owner's order.
-    func publish(_ kind: Published, _ batch: Batch, _ generation: Int) {
+    func publish(_ kind: Published, _ completion: RuntimeCompletion) {
         published.lock()
-        publishedQueue.append((kind, batch, generation))
+        publishedQueue.append((kind, completion))
         published.unlock()
         DispatchQueue.main.async { [weak self] in self?.landFill() }
     }
 
     /// A published batch waits to land: any, or one that `which` picks.
     private func hasPublished(_ which: (Batch) -> Bool = { _ in true }) -> Bool {
-        published.withLock { publishedQueue.contains { which($0.batch) } }
+        published.withLock { publishedQueue.contains { which($0.completion.batch) } }
     }
 
     /// Apply the slice the owner published, then what it owes and what
@@ -674,6 +672,7 @@ public final class ExactSession {
             let next = publishedQueue.isEmpty ? nil : publishedQueue.removeFirst()
             published.unlock()
             guard let next else { return }
+            let completion = next.completion
             let began = CACurrentMediaTime()
             var submitted = 0.0
             switch next.kind {
@@ -682,16 +681,16 @@ public final class ExactSession {
             case .advance: advanceInFlight = false
             case .canvas: canvasInFlight = false
             case .notice: noticesInFlight -= 1
-            case .reply, .cancelledReply: submitted = retireReply()
+            case .reply: submitted = retireReply()
             }
-            if case .cancelledReply = next.kind { continue }; if next.batch.held { if case .fill(let view) = next.kind { landedFill(view, stale: true) }; continue } // (held over a reset: as stale, ResetGate replays its work)
-            guard state != .destroyed, next.generation == generation else {
-                if case .reply = next.kind { retryActivation(generation: next.generation) }
+            guard runtime.accepts(completion.lease) else {
+                if case .reply = next.kind { retryActivation(generation: completion.lease.generation) }
                 if case .fill(let view) = next.kind { landedFill(view, stale: true) }
                 continue
             }
+            if completion.batch.held { if case .fill(let view) = next.kind { landedFill(view, stale: true) }; continue } // (held over a reset: as stale, ResetGate replays its work)
             frameHealth.expireCapture(at: began)
-            var batch = next.batch
+            var batch = completion.batch
             if batch.frameWorkTiming != nil { batch.frameWorkTiming?.landed = began }
             if case .advance = next.kind { applyUnlessEmpty(batch) } else if !(changesNothing(batch) && clockUnchanged(batch)) {
                 apply(batch)
@@ -704,7 +703,7 @@ public final class ExactSession {
             frameHealth.chart?.present(); frameHealth.maintain()
             if case .reply = next.kind {
                 sampler?.replyPump(main: submitted + (CACurrentMediaTime() - began) * 1000)
-                retryActivation(generation: next.generation)
+                retryActivation(generation: completion.lease.generation)
             }
             // A draw owed while this one ran, or one a tick left owed.
             if canvasOwed { askCanvasDraw() }
@@ -910,7 +909,7 @@ public final class ExactSession {
             sampler?.reset(); frameHealth.reset() // a new runner numbers its transactions afresh (LLP 1079 D3)
             // A fresh boot over a running app (the dev menu's reload from the baked plan) starts the views over; the library already replaced its host.
             routerOp = nil
-            generation += 1; replaceBackgroundActions()
+            replaceBackgroundActions()
             if booted { awaitingTree = true; resetHeld(); viewsEpoch += 1; forgetAppearances(); presenter.launchAutofocusReleased = false } // a fresh boot's autofocus waits again
             booted = true; app.liveBooted(self)
             text.commitFonts()
@@ -1008,7 +1007,7 @@ public final class ExactSession {
         text = candidate.text
         text.commitFonts()
         updateToken = candidate.token
-        generation += 1; replaceBackgroundActions()
+        replaceBackgroundActions()
         return batch
     }
 
@@ -1115,10 +1114,10 @@ public final class ExactSession {
     var onLandForTests: ((Published, Batch) -> Void)?
     var onApplyForTests: ((Batch) -> Void)?
     /// Tests: a tick's slice the owner published, not yet landed.
-    func publishTickForTests(_ batch: Batch) { tickInFlight = true; publish(.tick, batch, generation) }
+    func publishTickForTests(_ batch: Batch) { tickInFlight = true; publish(.tick, RuntimeCompletion(lease: runtime.completionLease, batch: batch)) }
     func holdFillForTests() { fillInFlight = true }
-    func commitForTests() { generation += 1; viewsEpoch += 1 }
-    func publishFillForTests(_ view: UInt32, _ batch: Batch, generation: Int) { fillInFlight = true; publish(.fill(view), batch, generation) }
+    func commitForTests() { runtime.completions.replace(); viewsEpoch += 1 }
+    func publishFillForTests(_ view: UInt32, _ batch: Batch, lease: RuntimeLease) { fillInFlight = true; publish(.fill(view), RuntimeCompletion(lease: lease, batch: batch)) }
     func oweColorsForTests() { colorsOwed = true }
     #endif
 
@@ -1171,7 +1170,7 @@ public final class ExactSession {
         if !ExactEnv.agentMode { for op in batch.ops where op.op == .sound || op.op == .midi { if op.op == .sound { sound.apply(op.payload) } else { midi.apply(op.payload) } } } // LLP 1096 D8, LLP 1125 D7: the voice table's and the MIDI queue's ops, never under the agent's clock
         // Opened once the batch is applied, off this session's window (LLP 1069.006 D3), unless its generation has ended.
         for op in batch.ops where op.op == .auth || op.op == .presence {
-            let (payload, auth, issued) = (op.payload, op.op == .auth, GenerationStamp(self))
+            let (payload, auth, issued) = (op.payload, op.op == .auth, SessionLease(self))
             DispatchQueue.main.async { if let session = issued.session { if auth { session.authOp(payload) } else { session.presenceOp(payload, issued: issued) } } }
         }
         // Each presenter takes its boot's table, a second one with the same too.
@@ -1440,11 +1439,11 @@ public final class ExactSession {
     /// runtime — and its handle is a stranger from here on.
     public func destroy() {
         guard state != .destroyed else { return }
+        runtime.completions.close()
         state = .destroyed
         agentPasteboard.map(AgentPasteboard.remove)
         let waiting = afterFill; afterFill.removeAll()
         waiting.forEach { $0.cancelled?() }
-        generation += 1
         cancelAuthSessions()
         taskTimers.cancel(); clockTimer?.invalidate(); timerAdmissions.takeover()
         clockTimer = nil

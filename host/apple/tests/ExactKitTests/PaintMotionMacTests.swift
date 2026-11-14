@@ -89,7 +89,7 @@ final class PaintMotionMacTests: XCTestCase {
         let earlier = session.runtime.press(reveal.id, now: session.now())
         session.repliesInFlight = 1
         session.replySubmissions = [0]
-        session.publish(.reply, earlier, session.generation)
+        session.publish(.reply, RuntimeCompletion(lease: session.runtime.completionLease, batch: earlier))
         let later = session.runtime.tick(now: session.now())
         XCTAssertTrue(session.changesNothing(later))
         var reportsAfterReply: [Bool] = []

@@ -123,7 +123,7 @@ public enum ExactTools {
     /// reload's runner numbers its calls from the start again, so asking
     /// the next one would read another call's outcome.
     static func runner(_ session: ExactSession) -> (String) -> String? {
-        let issued = GenerationStamp(session)
+        let issued = SessionLease(session)
         return { issued.session?.agent($0) }
     }
 

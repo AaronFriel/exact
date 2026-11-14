@@ -339,7 +339,7 @@ final class NavigationBasicsIOSTests: XCTestCase {
         session.publishFillForTests(route.node.id, wireBatch([
             ["op": "content", "id": document.id, "w": content.bounds.width, "h": extent],
             ["op": "frame", "id": target.id, "x": moved.minX, "y": moved.minY, "w": moved.width, "h": moved.height],
-        ]), generation: session.generation)
+        ]), lease: session.runtime.completionLease)
         session.landFill()
         until("the fill lands and the target is revealed") { !session.fillInFlight && p.elementScrolls.names.isEmpty && content.contentOffset.y > 0 }
         XCTAssertTrue(content.bounds.contains(target.convert(target.bounds, to: content)), "the reveal uses the target's new frame")

@@ -275,7 +275,7 @@ final class NativeTaskTimersTests: XCTestCase {
             DispatchQueue.main.async { turned.fulfill() }
             wait(for: [turned], timeout: 10)
             XCTAssertTrue(session.taskTimers.hasReady, "A busy owner retains the native delivery")
-            session.publishFillForTests(0, Batch(ops: [], timers: true, motion: false, clock: nil, error: nil), generation: session.generation)
+            session.publishFillForTests(0, Batch(ops: [], timers: true, motion: false, clock: nil, error: nil), lease: session.runtime.completionLease)
             session.landFill()
             // The landed fill resumes the queue: the retained delivery is asked for again, by no hand here.
             let asked = expectation(description: "The queue asks for the retained delivery")

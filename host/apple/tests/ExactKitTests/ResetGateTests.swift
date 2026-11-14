@@ -288,7 +288,7 @@ final class ResetGateTests: XCTestCase {
         let (session, _) = try boot()
         let landed = expectation(description: "the held advance is answered on the owner")
         let (held, replays, entered) = held(session) {
-            session.runtime.advanceAsync(now: session.now()) { batch in XCTAssertTrue(batch.held); landed.fulfill() }
+            session.runtime.advanceAsync(now: session.now()) { completion in XCTAssertTrue(completion.batch.held); landed.fulfill() }
             _ = session.runtime.frame(now: session.now())
         }
         XCTAssertEqual(held, ["advanceAsync(now:frame:admitted:capture:measureFrame:done:)", "frame(now:wall:admitted:)"])

@@ -29,13 +29,13 @@ final class HostBlockMacTests: XCTestCase {
         s.holdFillForTests()
         p.blocks.show(node, in: container, block: .size(CGSize(width: 200, height: 300)),
                       placement: BlockPlacement(rect: CGRect(x: 10, y: 20, width: 200, height: 300), within: 2))
-        let generation = s.generation
+        let lease = s.runtime.completionLease
         s.commitForTests()
         p.reset()
         let replacement = NodeView(id: 1, kind: "view", presenter: p)
         p.views[1] = replacement; p.root.addSubview(replacement)
         let before = s.appliedBatches
-        s.publishFillForTests(1, wireBatch([]), generation: generation)
+        s.publishFillForTests(1, wireBatch([]), lease: lease)
         s.drainFill()
         let released = expectation(description: "captured reports released")
         DispatchQueue.main.async { released.fulfill() }

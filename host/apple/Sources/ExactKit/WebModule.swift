@@ -594,7 +594,7 @@ final class WebViews {
     /// would otherwise run the handler of whatever node has its id now.
     private func later(_ entry: WebEntry, id: UInt32, _ deliver: @escaping (ExactSession) -> Void) {
         guard let session else { return }
-        let issued = GenerationStamp(session)
+        let issued = SessionLease(session)
         DispatchQueue.main.async { [weak self] in
             guard let self, self.entries[id] === entry, let session = issued.session else { return }
             deliver(session)
