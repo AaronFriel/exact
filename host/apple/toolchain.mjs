@@ -8,7 +8,9 @@ import { fileURLToPath } from 'node:url';
 import { plistCommand } from './plist.mjs';
 import { windowsMetalCommand } from './metal.mjs';
 
-const SDK_KEYS = { iphoneos: 'arm64-apple-ios', iphonesimulator: 'arm64-apple-ios-simulator', macosx: 'arm64-apple-macosx', watchsimulator: 'arm64-apple-watchos-simulator' };
+/** The watch app's deployment target: arm64 runs from watchOS 26, and the watch app is built for arm64 alone (LLP 1126.002 D7). */
+export const WATCH_MINIMUM_OS = '26.0';
+const SDK_KEYS = { iphoneos: 'arm64-apple-ios', iphonesimulator: 'arm64-apple-ios-simulator', macosx: 'arm64-apple-macosx', watchos: 'arm64-apple-watchos', watchsimulator: 'arm64-apple-watchos-simulator' };
 
 export function crossSdk(name, env = process.env) {
   if (!Object.hasOwn(SDK_KEYS, name)) throw new Error(`host/apple: no cross SDK mapping for ${name}`);
@@ -21,14 +23,14 @@ export function crossSdk(name, env = process.env) {
   if (!definition?.sdkRootPath || !definition.swiftResourcesPath) throw new Error(`host/apple: ${root} has no ${name} compiler configuration`);
   const sdk = resolve(root, definition.sdkRootPath);
   const settings = JSON.parse(readFileSync(resolve(sdk, 'SDKSettings.json'), 'utf8'));
-  const resources = resolve(root, definition.swiftResourcesPath), runtime = { iphoneos: 'ios', iphonesimulator: 'iossim', macosx: 'osx', watchsimulator: 'watchossim' }[name];
+  const resources = resolve(root, definition.swiftResourcesPath), runtime = { iphoneos: 'ios', iphonesimulator: 'iossim', macosx: 'osx', watchos: 'watchos', watchsimulator: 'watchossim' }[name];
   return { root, sdk, version: settings.Version, resources, runtime: resolve(resources, `clang/lib/darwin/libclang_rt.${runtime}.a`),
     tools: resolve(root, 'toolset/bin'), platform: resolve(sdk, '../../..'), definition };
 }
 
 const valueAfter = (args, name) => args.includes(name) ? args[args.indexOf(name) + 1] : undefined;
 const withoutOption = (args, name) => args.filter((_, i) => args[i] !== name && args[i - 1] !== name);
-const sdkForTriple = triple => /-apple-watchos[\d.]*-simulator$/.test(triple ?? '') ? 'watchsimulator' : /-apple-ios[\d.]*(?:-simulator)?$/.test(triple ?? '')
+const sdkForTriple = triple => /-apple-watchos[\d.]*(?:-simulator)?$/.test(triple ?? '') ? triple.endsWith('-simulator') ? 'watchsimulator' : 'watchos' : /-apple-ios[\d.]*(?:-simulator)?$/.test(triple ?? '')
   ? triple.endsWith('-simulator') ? 'iphonesimulator' : 'iphoneos' : /-apple-macosx[\d.]*$/.test(triple ?? '') ? 'macosx' : null;
 const sdkKey = (name, triple) => SDK_KEYS[name].replace(/^arm64/, triple.startsWith('x86_64-') ? 'x86_64' : 'arm64');
 
@@ -86,17 +88,17 @@ function swiftDestination(sdk, name, triple, args, options) {
 function cargoEnvironment(args, options, env) {
   const end = args.indexOf('--'), buildArgs = end < 0 ? args : args.slice(0, end);
   const targets = buildArgs.flatMap((arg, index) => arg === '--target' ? [buildArgs[index + 1]] : arg.startsWith('--target=') ? [arg.slice(9)] : []);
-  const apple = targets.filter(target => /^(aarch64|x86_64)-apple-(ios(-sim)?|watchos-sim|darwin)$/.test(target ?? ''));
+  const apple = targets.filter(target => /^(aarch64|x86_64)-apple-(ios(-sim)?|watchos(-sim)?|darwin)$/.test(target ?? ''));
   if (!apple.length) return options;
   const environment = { ...env };
   let selectedSdk;
   for (const target of apple) {
-    const mac = target.endsWith('-darwin'), watch = target.endsWith('-watchos-sim'), sim = target.endsWith('-sim') || target === 'x86_64-apple-ios';
-    const name = mac ? 'macosx' : watch ? 'watchsimulator' : sim ? 'iphonesimulator' : 'iphoneos';
+    const mac = target.endsWith('-darwin'), watch = /-watchos(-sim)?$/.test(target), sim = target.endsWith('-sim') || target === 'x86_64-apple-ios';
+    const name = mac ? 'macosx' : watch ? (sim ? 'watchsimulator' : 'watchos') : sim ? 'iphonesimulator' : 'iphoneos';
     const sdk = crossSdk(name, env), minimum = mac ? 'MACOSX_DEPLOYMENT_TARGET' : watch ? 'WATCHOS_DEPLOYMENT_TARGET' : 'IPHONEOS_DEPLOYMENT_TARGET';
     if (selectedSdk && selectedSdk !== sdk.sdk) throw new Error('host/apple: build different Apple SDK targets in separate Cargo invocations');
     selectedSdk = sdk.sdk;
-    const version = env[minimum] ?? (mac ? '14.0' : watch ? '10.0' : '17.0');
+    const version = env[minimum] ?? (mac ? '14.0' : watch ? WATCH_MINIMUM_OS : '17.0');
     if (!/^\d+(\.\d+){0,2}$/.test(version)) throw new Error(`host/apple: invalid ${minimum}: ${version}`);
     const triple = `${target.startsWith('aarch64-') ? 'arm64' : 'x86_64'}-apple-${mac ? 'macosx' : watch ? 'watchos' : 'ios'}${version}${sim ? '-simulator' : ''}`;
     const linkerArgs = ['clang', `--target=${triple}`, '-isysroot', sdk.sdk, '-Xlinker', sdk.runtime,

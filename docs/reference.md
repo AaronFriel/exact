@@ -930,6 +930,13 @@ to LLP 1126.001 §5 Q6's pending ruling.
 `bun host/apple/build.mjs --watchos --no-install` builds a watch simulator
 companion inside the iOS bundle. `--watchos --run --sim <iPhone udid>
 --watch-sim <watch udid>` installs it on an existing, booted pair and opens it.
+A device build of the iPhone app (`--device`, `--archive`, `--unsigned`) embeds
+the watch app in its `Watch/` folder, built for arm64 from watchOS 26: it runs
+on Series 9 and later and Ultra 2 and later (LLP 1126.002 D7).
+`--extensions` without `watch` leaves it out. Signed, the watch app and its
+complications each embed a profile of the iPhone app's team, App ID prefix and
+method, for `<id>.watchkitapp` and `<id>.watchkitapp.widgets`, each granting the
+App Group `group.<id>.watchkitapp`; the build names any that is missing.
 An app whose `app.json` declares a `watch` entry (`{"source", "component"}`:
 its own Contract file and root component, LLP 1126.002 D4) runs that entry live
 on the watch; the bake refuses what the watch does not draw. An app with none

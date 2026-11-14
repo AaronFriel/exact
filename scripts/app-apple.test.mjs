@@ -1230,6 +1230,39 @@ test('watch owns the build before the parent starts and reports a skipped TypeSc
 });
 
 
+test('a device watch app is arm64 from watchOS 26, signed with profiles of the iPhone app\'s kind that grant its group (LLP 1126.002 D7, D10)', async () => {
+  const { watchInfo, watchDestination, watchProfiles, buildWatch } = await import('../host/apple/watch.mjs');
+  const dir = mkdtempSync(resolve(tmpdir(), 'exact-watch-device-'));
+  try {
+    const app = { dir, id: 'com.exact.watchy', displayName: 'Watchy', manifest: { watch: { source: 'watch.contract', component: 'Watch' }, widgets: [{ kind: 'next', families: ['accessoryInline'] }] } };
+    assert.deepEqual(watchDestination(true), { target: 'aarch64-apple-watchos', triple: 'arm64-apple-watchos26.0', sdkName: 'watchos', platform: 'WatchOS' });
+    assert.deepEqual(watchDestination(false), { target: 'aarch64-apple-watchos-sim', triple: 'arm64-apple-watchos26.0-simulator', sdkName: 'watchsimulator', platform: 'WatchSimulator' });
+    const fields = { appInfo: { CFBundleVersion: '7', CFBundleShortVersionString: '1.2' }, group: 'group.com.exact.watchy.watchkitapp', entries: [], live: true, generation: 'g' };
+    const device = watchInfo(app, { ...fields, device: true, toolchain: { DTSDKName: 'watchos27.2' } });
+    assert.deepEqual([device.CFBundleSupportedPlatforms, device.DTPlatformName, device.MinimumOSVersion, device.UIRequiredDeviceCapabilities, device.DTSDKName], [['WatchOS'], 'watchos', '26.0', ['arm64'], 'watchos27.2']);
+    assert.deepEqual([device.WKApplication, device.WKCompanionAppBundleIdentifier, device.CFBundleIdentifier, device.CFBundleVersion], [true, app.id, `${app.id}.watchkitapp`, '7']);
+    const simulator = watchInfo(app, fields);
+    assert.deepEqual([simulator.CFBundleSupportedPlatforms, simulator.MinimumOSVersion, simulator.UIRequiredDeviceCapabilities], [['WatchSimulator'], '26.0', undefined]);
+
+    const make = (id, extra = {}) => ({ name: id, appId: `PREFIX.${id}`, team: 'TEAM', prefix: 'PREFIX', platforms: ['iOS'], expires: new Date(Date.now() + 86400000),
+      method: 'development', dev: true, devices: ['PHONE'], groups: ['group.com.exact.watchy.watchkitapp'], keychain: [], entitlements: [], ...extra });
+    const like = make(app.id, { groups: [] }), watch = make(`${app.id}.watchkitapp`), extension = make(`${app.id}.watchkitapp.widgets`);
+    assert.deepEqual(watchProfiles({ app, udid: 'PHONE', like, installed: [like, watch, extension] }), [watch, extension]);
+    assert.deepEqual(watchProfiles({ app: { ...app, manifest: { watch: app.manifest.watch } }, udid: 'PHONE', like, installed: [watch] }), [watch], 'no complications, no extension profile');
+    assert.deepEqual(watchProfiles({ app: { ...app, manifest: {} }, udid: 'PHONE', like, installed: [] }), [], 'no watch app, no profiles');
+    for (const [changed, why] of [[{ groups: [] }, /does not grant the App Group group.com.exact.watchy.watchkitapp/], [{ team: 'OTHER' }, /is team OTHER's, not TEAM's/],
+      [{ devices: ['OTHER'] }, /does not include this phone/], [{ method: 'adhoc', dev: false }, /is Ad Hoc, not development/]]) {
+      assert.throws(() => watchProfiles({ app, udid: 'PHONE', like, installed: [{ ...watch, ...changed }, extension] }), why, JSON.stringify(changed));
+    }
+    assert.throws(() => watchProfiles({ app, udid: 'PHONE', like, installed: [watch] }), /com.exact.watchy.watchkitapp.widgets.*none on this Mac is for it.*register the App ID com.exact.watchy.watchkitapp.widgets with App Groups/);
+    // An archive's: the App Store profiles of the iPhone app's, which name no device.
+    const store = { method: 'appstore', dev: false, devices: [] };
+    assert.deepEqual(watchProfiles({ app, udid: undefined, like: { ...like, ...store }, installed: [{ ...watch, ...store }, { ...extension, ...store }] }).length, 2);
+    await assert.rejects(buildWatch(app, ['--watchos', '--device'], {}), /a --device or --archive build of the iPhone app embeds its watch app/);
+    await assert.rejects(buildWatch(app, ['--watchos', '--extensions', 'widgets'], {}), /--extensions leaves out/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('a refused parent prevents use of a stale companion bundle', async () => {
   const { buildWatch } = await import('../host/apple/watch.mjs');
   const before = process.exitCode ?? 0, events = [];

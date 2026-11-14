@@ -19,9 +19,10 @@ export const extensionModuleCache = resolve(root, 'target', 'apple-extension-mod
 export const appexArgs = ['-application-extension', '-Xlinker', '-e', '-Xlinker', '_NSExtensionMain'];
 export const keepMain = ['-Xlinker', '-u', '-Xlinker', '_main'];
 
-/** The kinds of app extension `--extensions` chooses among: what an iOS build packages from app.json beside the app
- * (the watch app is `--watchos`'s). Widgets and Live Activities share one appex; an alarm's countdown is drawn by it too. */
-export const EXTENSION_KINDS = ['widgets', 'activities', 'intents', 'alarms'];
+/** The kinds of app extension `--extensions` chooses among: what an iOS build packages from app.json beside the app,
+ * the watch app included (a device build's, and `--watchos`'s). Widgets and Live Activities share one appex; an
+ * alarm's countdown is drawn by it too. */
+export const EXTENSION_KINDS = ['widgets', 'activities', 'intents', 'alarms', 'watch'];
 /** The kinds `--extensions <all|none|kind,…>` keeps; every kind without the flag. An unknown kind is refused, so a
  * typo never builds more (or less) than was asked. */
 export function extensionKinds(args) {

@@ -1,11 +1,11 @@
 import { test, expect, spyOn } from 'bun:test';
 import { chmodSync, copyFileSync, existsSync, mkdtempSync, mkdirSync, readFileSync, readlinkSync, realpathSync, writeFileSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { resolve } from 'node:path';
+import { relative, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { appleCommand, crossSdk, spawnSync as appleSpawnSync } from './toolchain.mjs';
 import { decodeProfile } from './devices.mjs';
-import { appleCrossReport, CROSS_IOS_ROWS, distributionToolchain, ensureWatchSimulatorSDK, installWatchSimulatorSDK } from './sdk.mjs';
+import { appleCrossReport, CROSS_IOS_ROWS, distributionToolchain, ensureWatchSDK, installWatchSDK } from './sdk.mjs';
 import { iosTestRuns } from './xctest.mjs';
 
 test.skipIf(process.platform !== 'darwin')('certificate signing names its identity, bounds keychain waits and explains failures', () => {
@@ -182,40 +182,49 @@ test('Linux setup names missing cross tools and uses the selected LLVM directory
   expect(appleCommand('lipo', ['-archs', 'App'], { env: { EXACT_APPLE_LLVM_BIN: llvm } }, 'linux')[0]).toBe(resolve(llvm, 'llvm-lipo'));
 }));
 
-test('the watch SDK is provisioned from Xcode input with Linux macros and both compiler targets', () => fixture(({ root, env }) => {
-  const xcode = resolve(root, 'Xcode.app'), platform = resolve(xcode, 'Contents/Developer/Platforms/WatchSimulator.platform');
-  const watch = resolve(platform, 'Developer/SDKs/WatchSimulator27.1.sdk');
+test.each([
+  ['watchsimulator', 'WatchSimulator', 'arm64-apple-watchos-simulator', 'aarch64-apple-watchos-sim', '-simulator', 'watch simulator', 'watchossim'],
+  ['watchos', 'WatchOS', 'arm64-apple-watchos', 'aarch64-apple-watchos', '', 'watchOS device', 'watchos'],
+])('the %s SDK is provisioned from Xcode input with Linux macros and both compiler targets', (name, folder, key, target, variant, label, runtime) => fixture(({ root, env }) => {
+  const xcode = resolve(root, 'Xcode.app'), platform = resolve(xcode, `Contents/Developer/Platforms/${folder}.platform`);
+  const watch = resolve(platform, `Developer/SDKs/${folder}27.1.sdk`);
+  // The device SDK shares the iPhone SDK's compiler configuration.
+  const phone = resolve(root, 'Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS.sdk');
+  mkdirSync(phone, { recursive: true }); writeFileSync(resolve(phone, 'SDKSettings.json'), JSON.stringify({ Version: '26.4' }));
+  const installed = JSON.parse(readFileSync(resolve(root, 'swift-sdk.json'), 'utf8'));
+  installed.targetTriples['arm64-apple-ios'] = { ...installed.targetTriples['arm64-apple-ios-simulator'], sdkRootPath: relative(root, phone) };
+  writeFileSync(resolve(root, 'swift-sdk.json'), JSON.stringify(installed));
   const original = JSON.parse(readFileSync(resolve(root, 'swift-sdk.json'), 'utf8'));
-  expect(() => installWatchSimulatorSDK(xcode, env)).toThrow('no watch simulator SDK');
-  expect(() => ensureWatchSimulatorSDK(env)).toThrow('without --slim');
+  expect(() => installWatchSDK(xcode, name, env)).toThrow(`no ${label} SDK`);
+  expect(() => ensureWatchSDK(name, env)).toThrow('without --slim');
   expect(JSON.parse(readFileSync(resolve(root, 'swift-sdk.json'), 'utf8'))).toEqual(original);
   mkdirSync(watch, { recursive: true });
   writeFileSync(resolve(watch, 'SDKSettings.json'), JSON.stringify({ Version: '27.1' }));
   writeFileSync(resolve(watch, 'header.h'), 'int watch_fixture(void);');
-  symlinkSync('WatchSimulator27.1.sdk', resolve(platform, 'Developer/SDKs/WatchSimulator.sdk'));
+  symlinkSync(`${folder}27.1.sdk`, resolve(platform, `Developer/SDKs/${folder}.sdk`));
   writeFileSync(resolve(root, 'OpenAppleMacrosServer'), 'Linux plugin server'); mkdirSync(resolve(root, 'OpenAppleMacrosPlugins'));
-  const sdk = ensureWatchSimulatorSDK(env);
-  expect(ensureWatchSimulatorSDK(env).sdk).toBe(sdk.sdk);
+  const sdk = ensureWatchSDK(name, env);
+  expect(ensureWatchSDK(name, env).sdk).toBe(sdk.sdk);
   expect(sdk.version).toBe('27.1'); expect(readFileSync(resolve(sdk.sdk, 'header.h'), 'utf8')).toBe('int watch_fixture(void);');
-  expect(readlinkSync(resolve(sdk.platform, 'Developer/SDKs/WatchSimulator.sdk'))).toBe('WatchSimulator27.1.sdk');
+  expect(readlinkSync(resolve(sdk.platform, `Developer/SDKs/${folder}.sdk`))).toBe(`${folder}27.1.sdk`);
   expect(realpathSync(resolve(sdk.platform, 'Developer/usr/bin/swift-plugin-server'))).toBe(realpathSync(resolve(root, 'OpenAppleMacrosServer')));
   expect(realpathSync(resolve(sdk.platform, 'Developer/usr/lib/swift/host/plugins'))).toBe(realpathSync(resolve(root, 'OpenAppleMacrosPlugins')));
   const metadata = JSON.parse(readFileSync(resolve(root, 'swift-sdk.json'), 'utf8'));
-  expect(metadata.targetTriples['arm64-apple-ios-simulator']).toEqual(original.targetTriples['arm64-apple-ios-simulator']);
-  const cargo = appleCommand('cargo', ['build', '--target', 'aarch64-apple-watchos-sim'], { cwd: root, env }, 'linux');
-  expect(cargo[2].env.WATCHOS_DEPLOYMENT_TARGET).toBe('10.0'); expect(cargo[2].env.SDKROOT).toBe(sdk.sdk);
-  const linker = readFileSync(cargo[2].env.CARGO_TARGET_AARCH64_APPLE_WATCHOS_SIM_LINKER, 'utf8');
-  expect(linker).toContain('arm64-apple-watchos10.0-simulator'); expect(linker).toContain('watchos-simulator,10.0,27.1');
-  const swift = appleCommand('swift', ['build', '--package-path', root, '--triple', 'arm64-apple-watchos10.0-simulator', '--target', 'ExactCore'], { env }, 'linux');
+  for (const phoneKey of ['arm64-apple-ios-simulator', 'arm64-apple-ios']) expect(metadata.targetTriples[phoneKey]).toEqual(original.targetTriples[phoneKey]);
+  const cargo = appleCommand('cargo', ['build', '--target', target], { cwd: root, env }, 'linux');
+  expect(cargo[2].env.WATCHOS_DEPLOYMENT_TARGET).toBe('26.0'); expect(cargo[2].env.SDKROOT).toBe(sdk.sdk);
+  const linker = readFileSync(cargo[2].env[`CARGO_TARGET_${target.toUpperCase().replaceAll('-', '_')}_LINKER`], 'utf8');
+  expect(linker).toContain(`arm64-apple-watchos26.0${variant}'`); expect(linker).toContain(`watchos${variant},26.0,27.1`);
+  const swift = appleCommand('swift', ['build', '--package-path', root, '--triple', `arm64-apple-watchos26.0${variant}`, '--target', 'ExactCore'], { env }, 'linux');
   const destination = JSON.parse(readFileSync(swift[1].at(-1), 'utf8'));
-  expect(destination.targetTriples['arm64-apple-watchos-simulator'].sdkRootPath).toBe(sdk.sdk);
-  const targetOptions = JSON.parse(readFileSync(destination.targetTriples['arm64-apple-watchos-simulator'].toolsetPaths.at(-1), 'utf8')).swiftCompiler.extraCLIOptions;
+  expect(destination.targetTriples[key].sdkRootPath).toBe(sdk.sdk);
+  const targetOptions = JSON.parse(readFileSync(destination.targetTriples[key].toolsetPaths.at(-1), 'utf8')).swiftCompiler.extraCLIOptions;
   expect(targetOptions).toContain('-external-plugin-path');
   expect(targetOptions).toContain(resolve(sdk.platform, 'Developer/usr/lib/swift/host/plugins') + '#' + resolve(sdk.platform, 'Developer/usr/bin/swift-plugin-server'));
   expect(linker).toContain("'-fuse-ld=lld'"); expect(linker).toContain(`'--ld-path=${resolve(sdk.tools, 'ld64.lld').replaceAll("'", "'\\''")}'`);
-  const compiler = appleCommand('xcrun', ['--sdk', 'watchsimulator', 'swiftc', '-target', 'arm64-apple-watchos10.0-simulator', '-emit-library', 'Views.swift'], { env }, 'linux');
-  expect(compiler[1]).toContain(sdk.runtime); expect(sdk.runtime).toEndWith('libclang_rt.watchossim.a');
-  writeFileSync(resolve(watch, 'header.h'), 'int updated_watch_fixture(void);'); installWatchSimulatorSDK(xcode, env);
+  const compiler = appleCommand('xcrun', ['--sdk', name, 'swiftc', '-target', `arm64-apple-watchos26.0${variant}`, '-emit-library', 'Views.swift'], { env }, 'linux');
+  expect(compiler[1]).toContain(sdk.runtime); expect(sdk.runtime).toEndWith(`libclang_rt.${runtime}.a`);
+  writeFileSync(resolve(watch, 'header.h'), 'int updated_watch_fixture(void);'); installWatchSDK(xcode, name, env);
   expect(readFileSync(resolve(sdk.sdk, 'header.h'), 'utf8')).toContain('updated_watch_fixture');
 }));
 

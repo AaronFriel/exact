@@ -143,7 +143,7 @@ let iosFloor: String = {
 
 let package = Package(
     name: "Exact",
-    platforms: [.macOS(.v14), .iOS(iosFloor), .tvOS(iosFloor), .watchOS(.v10), .visionOS(.v1)],
+    platforms: [.macOS(.v14), .iOS(iosFloor), .tvOS(iosFloor), .watchOS("26.0"), .visionOS(.v1)],
     products: [.library(name: "ExactCore", type: widgetCore ? .dynamic : nil, targets: ["ExactCore"]), .library(name: "ExactSnapshot", type: widgetCore ? .static : nil, targets: ["ExactSnapshot"])] + (testing ? [.library(name: "ExactKit", targets: ["ExactKit"])] : [
         .library(name: "ExactKit", targets: ["ExactKit"]),
         .library(name: "ExactUpdates", targets: ["ExactUpdates"]),
