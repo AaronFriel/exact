@@ -337,6 +337,7 @@ export function css(e, prop, unit, v, rendered) {
     const now = e.style.getPropertyValue(prop);
     if (t == null ? !now : same(now) === (normal(prop, t) || 'unset')) return;
   }
+  if (prop in MOVES) moved(e, MOVES[prop]);
   if (t == null) return e.style.removeProperty(prop);
   // A value not yet seen is probed on the detached style `normal` keeps, so the live node gets only the final write
   // (LLP 1071.001 A8). Every property takes `unset`: one that reads back empty is a property this browser does not
@@ -344,6 +345,33 @@ export function css(e, prop, unit, v, rendered) {
   const valid = prop.startsWith('--') || t === 'unset' || normal(prop, t);
   e.style.setProperty(prop, valid ? t : 'unset');
   if (!valid) say(`unset ${prop}: ${JSON.stringify(v)} is not a value it takes`);
+}
+// A box whose transform changes frame after frame is promoted to a compositor layer of its own while it changes, as
+// `will-change` asks (CSS Will Change 1 §2): the browser then moves and scales the layer's pixels instead of
+// rasterizing its content again at each step, which for a box of iframes costs frames and input latency
+// (expo/exact#543). The hint goes once the transform has held for `SETTLED` ms, so the content is rasterized sharp
+// at its new scale. Two changes within `STEADY` ms of each other are a change every frame (a 10 Hz floor).
+const MOVES = { transform: 'transform', translate: 'translate', scale: 'scale', rotate: 'rotate', '--exact-scale': 'scale' },
+  STEADY = 100,
+  SETTLED = 200;
+function moved(e, prop) {
+  const now = performance.now(),
+    m = (e.$moved ??= { at: -Infinity, props: new Set(), timer: 0 }),
+    steady = now - m.at < STEADY;
+  m.at = now;
+  if (!steady || m.props.has(prop)) return;
+  m.props.add(prop);
+  e.style.setProperty('will-change', [...m.props].join(', '));
+  if (!m.timer) {
+    const settle = () => {
+      const held = performance.now() - m.at;
+      if (held < SETTLED) return void (m.timer = setTimeout(settle, SETTLED - held));
+      m.timer = 0;
+      m.props.clear();
+      e.style.removeProperty('will-change');
+    };
+    m.timer = setTimeout(settle, SETTLED);
+  }
 }
 /** `S` for a row that can reference an element (`url(#…)`): an authored id
  * names the node the kernel's `resolve_id` would, the nearest in the tree
