@@ -10,6 +10,7 @@
 //   quiet channel `silent`, which has no sound or vibration.
 // - A post to a channel the person turned off, or with the app's notifications off, refuses `NotAllowedError`, as
 //   `denied` does: the platform would drop it without a word.
+// - A post with a `showTrigger` in the future is kept and posted then, with no session ([Later]).
 // - The small icon is the app's `monochrome` icon (`exact_notification`), else the platform's generic glyph.
 // - A post's tap is the host's activation ([ExtensionContext.activation]): it opens `navigate` as a link's location,
 //   or raises `notificationclick` with a person's origin, warm or from a cold start.
@@ -100,11 +101,19 @@ class NotificationsModule(context: ExtensionContext) : ExactExtension(context) {
     /** The status last announced, to say a change once. */
     private var said: String? = null
 
+    // A force stop cancels the app's alarms, and its next launch makes this module.
+    init {
+        Later.rearm(app)
+    }
+
     override fun later(name: String, args: JSONObject, reply: (JSONObject) -> Unit) {
         when (name) {
             "showNotification" -> show(args, reply)
             "closeNotification" -> {
-                args.optString("tag").takeIf { it.isNotEmpty() }?.let { manager.cancel(it, ID) }
+                args.optString("tag").takeIf { it.isNotEmpty() }?.let {
+                    manager.cancel(it, ID)
+                    Later.cancel(app, it)
+                }
                 reply(JSONObject())
             }
             "notificationStatus" -> status().also { said = it.toString(); reply(it) }
@@ -119,7 +128,6 @@ class NotificationsModule(context: ExtensionContext) : ExactExtension(context) {
     }
 
     private fun show(args: JSONObject, reply: (JSONObject) -> Unit) {
-        if (!args.isNull("showTrigger")) return reply(refused("NotSupportedError", "showTrigger is not on Android yet"))
         if ((args.optJSONArray("actions")?.length() ?: 0) > 0) return reply(refused("NotSupportedError", "actions are not on Android yet"))
         val words = args.optJSONObject("android") ?: JSONObject()
         val channel = if (words.isNull("channelId")) Channels.DEFAULT else words.optString("channelId")
@@ -136,9 +144,17 @@ class NotificationsModule(context: ExtensionContext) : ExactExtension(context) {
             if (manager.getNotificationChannel(posted)?.importance == NotificationManager.IMPORTANCE_NONE) {
                 return@ask reply(refused("NotAllowedError", "the channel \"$posted\" is off in Settings"))
             }
+            val at = if (args.isNull("showTrigger")) null else args.optDouble("showTrigger").toLong()
             try {
-                post(app, record)
-                context.log("showNotification: shown")
+                // A tag's later post is replaced, as a shown one is.
+                Later.cancel(app, record.getString("identifier"))
+                if (at != null && at > System.currentTimeMillis()) {
+                    Later.schedule(app, record, at)
+                    context.log("showNotification: scheduled")
+                } else {
+                    post(app, record)
+                    context.log("showNotification: shown")
+                }
                 reply(JSONObject())
             } catch (e: SecurityException) {
                 reply(refused("NotAllowedError", e.message ?: "refused"))

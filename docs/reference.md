@@ -2872,7 +2872,7 @@ grant beside this one: see [Push](#push).
 | --- | --- | --- | --- | --- |
 | web | `new Notification` in the page | while the page is open: the web has no trigger that outlives the page | while the page is open | `navigator.setAppBadge` where the browser has it, else `NotSupportedError` |
 | macOS, iOS | `UNUserNotificationCenter`, shown with the app in front too | the system's, delivered with the app closed | warm, or the launch | the Dock tile's label; `setBadgeCount` |
-| Android | `NotificationManager`, shown with the app in front too | not yet: `NotSupportedError` | warm, or the launch | none: `NotSupportedError` |
+| Android | `NotificationManager`, shown with the app in front too | an inexact alarm (`setAndAllowWhileIdle`), delivered with the app closed and after a restart, possibly minutes late under Doze; a force stop cancels it until the app's next launch | warm, or the launch | none: `NotSupportedError` |
 | Linux, terminal, tvOS, Windows | no implementation yet: each call is refused `NotSupportedError`, under the agent too, and the status reads `available: false` | | | |
 
 On macOS, system notifications need an app bundle (`bun host/apple/build.mjs

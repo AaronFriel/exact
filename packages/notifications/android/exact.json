@@ -32,6 +32,20 @@
       "."
     ]
   },
+  "manifest": {
+    "receivers": [
+      {
+        "name": "exact.notifications.PostReceiver"
+      },
+      {
+        "name": "exact.notifications.ArmReceiver",
+        "actions": [
+          "android.intent.action.BOOT_COMPLETED",
+          "android.intent.action.MY_PACKAGE_REPLACED"
+        ]
+      }
+    ]
+  },
   "artifacts": [],
   "class": "exact.notifications.NotificationsModule"
 }
