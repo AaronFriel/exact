@@ -1115,13 +1115,17 @@ const api = {
   // A validated asset generation can reach existing surfaces without replacing their worlds.
   async reloadAssets(cards, names, current = () => true) {
     await ready;
+    // A file the page reads when asked (dev.js `later`) and has not asked for yet reaches surfaces when they request
+    // it. One it has is read before the swap, which does not yield.
+    const asked = names.filter(name => { const old = exact.devAssets?.get(name); return !old?.read || old.bytes || old.held.reading; });
+    const bytes = new Map(await Promise.all(asked.map(async name => [name, cards.get(name)?.read ? await cards.get(name).read() : cards.get(name)?.bytes])));
     return exact.mutate(() => {
       if (!current()) return false;
-      for (const name of names) if (!name.startsWith('assets/') || (!cards.get(name)?.bytes || cards.get(name).bytes.length > 64 * 1024 * 1024)) throw new Error(`missing surface asset ${name}`);
+      for (const name of names) if (!name.startsWith('assets/') || !cards.get(name) || (asked.includes(name) && (!bytes.get(name) || bytes.get(name).length > 64 * 1024 * 1024))) throw new Error(`missing surface asset ${name}`);
       for (const entry of surfaces.values()) if (entry.id && !entry.terminal) {
-        for (const name of names) {
+        for (const name of asked) {
           cancelAssets(entry, new Set([name.slice(7)]));
-          if (!gpu.gpu_asset(entry.id, name.slice(7), cards.get(name).bytes)) throw new Error(gpu.gpu_error());
+          if (!gpu.gpu_asset(entry.id, name.slice(7), bytes.get(name))) throw new Error(gpu.gpu_error());
         }
         messages(entry);
       }

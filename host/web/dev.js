@@ -102,14 +102,26 @@ async function fetchGeneration(message, signal, first = false, held = () => null
   if (!first) await globalThis.exact.ready;
   if (envelope.app?.id !== globalThis.exact.compat?.inputs?.app) throw new Error("the dev generation names another app");
   const assets = new Map(), names = new Set();
-  const load = async (card, name, kept) => {
+  const load = async (card, name, kept, readSignal = signal) => {
     if (!card || !Number.isSafeInteger(card.bytes) || card.bytes < 0 || card.bytes > 64 * 1024 * 1024 || !/^[0-9a-f]{64}$/.test(card.sha256)) throw new Error(`invalid payload card: ${name}`);
     const path = sameOrigin(card.url, url);
     // An unchanged asset keeps the bytes this page fetched and verified for its live generation.
-    if (kept?.sha256 === card.sha256 && kept.bytes.length === card.bytes) return { bytes: kept.bytes, url: path, sha256: card.sha256 };
-    const { bytes } = await readBounded(path, card.bytes, signal);
+    if (kept?.sha256 === card.sha256 && kept.bytes?.length === card.bytes) return { bytes: kept.bytes, url: path, sha256: card.sha256 };
+    const { bytes } = await readBounded(path, card.bytes, readSignal);
     if (bytes.length !== card.bytes || await digest(bytes) !== card.sha256) throw new Error(`payload integrity failed: ${name}`);
     return { bytes, url: path, sha256: card.sha256 };
+  };
+  // A file under assets/ or deck/ is read when the page asks for it (`read`), as the built site fetches it, and
+  // kept once read and verified, for this generation and the next that has it unchanged: a page holds the files
+  // it uses, not every texture family of the folder. Media loads from the file's generation URL. The plan, its
+  // tables, shaders and modules are read with the generation.
+  const deferred = name => /^(assets|deck)\//.test(name) && name !== "assets/exact-tables.json";
+  const later = (card, name, kept) => {
+    if (!card || !Number.isSafeInteger(card.bytes) || card.bytes < 0 || card.bytes > 64 * 1024 * 1024 || !/^[0-9a-f]{64}$/.test(card.sha256)) throw new Error(`invalid payload card: ${name}`);
+    const held = kept?.sha256 === card.sha256 && kept.size === card.bytes && kept.held || { bytes: null, reading: null };
+    return { url: sameOrigin(card.url, url), sha256: card.sha256, size: card.bytes, held, get bytes() { return held.bytes; },
+      read: (readSignal = AbortSignal.timeout(20000)) => held.bytes ? Promise.resolve(held.bytes)
+        : held.reading ??= load(card, name, null, readSignal).then(r => held.bytes = r.bytes).finally(() => { held.reading = null; }) };
   };
   // The asset cards are in the index the envelope names, at most 4 MiB
   // (update/src/envelope.rs); a generation with no assets names none.
@@ -138,7 +150,7 @@ async function fetchGeneration(message, signal, first = false, held = () => null
   // network rounds for the plan, assets and module without raising concurrency.
   // Read now, after the page booted: an announcement of the generation it boots is fetched beside that boot.
   const live = held();
-  const jobs = [[envelope.plan, "app.plan"], ...envelope.assets.map(card => [card, card.name, live?.get(card.name)]),
+  const jobs = [[envelope.plan, "app.plan"], ...envelope.assets.filter(card => !deferred(card.name)).map(card => [card, card.name, live?.get(card.name)]),
     ...(envelope.module ? ['receipt', 'web'].map(key => [envelope.module[key], `module ${key}`]) : []),
     ...(rust ? [[rust.wasm.receipt, 'Rust receipt'], [rust.wasm.module, 'Rust Wasm']] : [])];
   const loaded = new Array(jobs.length);
@@ -149,9 +161,10 @@ async function fetchGeneration(message, signal, first = false, held = () => null
       loaded[index] = await load(...jobs[index]);
     }
   }));
-  const plan = loaded[0];
-  envelope.assets.forEach((card, index) => assets.set(card.name, loaded[index + 1]));
-  const moduleAt = 1 + envelope.assets.length;
+  const plan = loaded[0], read = envelope.assets.filter(card => !deferred(card.name));
+  read.forEach((card, index) => assets.set(card.name, loaded[index + 1]));
+  for (const card of envelope.assets) if (deferred(card.name)) assets.set(card.name, later(card, card.name, live?.get(card.name)));
+  const moduleAt = 1 + read.length;
   const module = envelope.module ? { receipt: loaded[moduleAt].bytes, script: loaded[moduleAt + 1].bytes } : null;
   const rustPayload = rust ? { receipt: loaded.at(-2).bytes, module: loaded.at(-1).bytes } : null;
   const canonical = { assets: [...envelope.assets].sort((a, b) => utf8Compare(a.name, b.name)).map((a) => ({ bytes: a.bytes, name: a.name, sha256: a.sha256 })),

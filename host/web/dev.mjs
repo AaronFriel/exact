@@ -511,6 +511,10 @@ function captureGeneration(reuseCurrentAssets = false, tableUpdate = null) {
   const envelope = webEnvelope(app, planBytes, assets);
   const generation = devGenerationDigest({ sha256: envelope.plan.sha256, bytes: planBytes.length }, assets, module, rust);
   const prefix = `/__dev/generation/${epoch}/${seq}/`;
+  // A table edit's generation is held in memory, the last three only (below). An asset it leaves unchanged keeps
+  // the URL of the generation that wrote it, which a page reading the asset later (dev.js `later`) still finds.
+  const previous = new Map((tableUpdate ? current.envelope.assets : []).map(card => [card.name, card.url]));
+  for (const card of assets) card.url = (tableUpdate && !tableUpdate.has(card.name) && previous.get(card.name)) || prefix + card.name.split('/').map(encodeURIComponent).join('/');
   envelope.dev = { epoch, program, seq, generation, events: '/__dev' };
   if (files.has('app.plan.map.json')) {
     const body = files.get('app.plan.map.json');

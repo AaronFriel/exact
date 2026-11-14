@@ -59,6 +59,14 @@ export async function loadRust() {
 // LLP 1019 D5: FontFace loading is part of host boot. The DOM remains empty until every local face loaded, or 100 ms elapsed. At the barrier, install
 // every face already ready unless its family has a failed sibling; faces that
 // finish later remain unused for this generation (no post-paint swap).
+function devCard(source, assets) {
+  try {
+    const url = new URL(source, document.baseURI);
+    return url.origin === location.origin ? assets?.get(decodeURIComponent(url.pathname.replace(/^\//, ""))) : null;
+  } catch {
+    return null;
+  }
+}
 async function prepareFonts(faces, assets) {
   if (!faces?.length) {
     return [];
@@ -68,11 +76,17 @@ async function prepareFonts(faces, assets) {
     state: "pending",
     loaded: null
   }));
-  const pending = rows.map(async (row) => {
+  // A dev generation's font file, which the page reads when asked (dev.js `later`), is read before the 100 ms
+  // barrier starts: the barrier times the face's load, not the dev server.
+  const read = await Promise.all(faces.map((face) => {
+    const card = devCard(face.source, assets);
+    return card?.read ? card.read().catch(() => null) : null;
+  }));
+  const pending = rows.map(async (row, i) => {
     const { face } = row;
     try {
       const url = new URL(localAssetURL(face.source, assets), document.baseURI).href;
-      row.loaded = await new FontFace(face.family, `url(${JSON.stringify(url)})`, {
+      row.loaded = await new FontFace(face.family, read[i] ?? `url(${JSON.stringify(url)})`, {
         weight: face.weight,
         stretch: face.stretch,
         style: face.style

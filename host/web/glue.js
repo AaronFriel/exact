@@ -416,6 +416,11 @@ export function assetNamespace(cards) {
     otf: "font/otf"
   };
   for (const [name, card] of cards) {
+    // A file the page reads when asked (dev.js `later`) loads from its generation's URL.
+    if (card.read) {
+      assets.set(name, card);
+      continue;
+    }
     const type = types[name.split(".").pop().toLowerCase()];
     assets.set(name, {
       ...card,
