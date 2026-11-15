@@ -426,48 +426,6 @@ final class CanvasPlacedDrawingIOSTests: XCTestCase {
         XCTAssertTrue(child.boxFilter?.casts == true)
     }
 
-    func testOnlyTheChangedChildIsMirroredAgain() throws {
-        let d = try deck("canvas-selective-mirrors")
-        defer { d.session.destroy() }
-        let p = d.session.presenter
-        let first = node(101, p, CGRect(x: 0, y: 0, width: 100, height: 100), in: d.overlay)
-        let second = node(102, p, CGRect(x: 100, y: 0, width: 100, height: 100), in: d.overlay)
-        func fill(_ id: Int, _ color: [Int]) {
-            p.apply(wireBatch([["op": "style", "id": id, "style": ["background_color": color]]]))
-        }
-        fill(101, [255, 0, 0, 255]); fill(102, [0, 255, 0, 255])
-        d.window.layoutIfNeeded()
-        CATransaction.flush()
-        let shadow = try XCTUnwrap(Shadow.shared)
-        var updated: Set<ObjectIdentifier> = []
-        shadow.didMirror = { updated.insert(ObjectIdentifier($0)) }
-        defer { shadow.didMirror = nil }
-        let bitmap = try XCTUnwrap(Bitmap.blank(width: 1200, height: 1200))
-        func capture() throws -> (CGPoint) -> [UInt8] {
-            updated.removeAll()
-            XCTAssertTrue(shadow.render(d.overlay, scale: 3, into: bitmap))
-            return try pixels(try XCTUnwrap(bitmap.image?.cgImage))
-        }
-        let before = try capture()
-        XCTAssertEqual(before(CGPoint(x: 150, y: 150)), [255, 0, 0])
-        XCTAssertEqual(before(CGPoint(x: 450, y: 150)), [0, 255, 0])
-        _ = try capture()
-        XCTAssertFalse(updated.contains(ObjectIdentifier(first.layer)))
-        XCTAssertFalse(updated.contains(ObjectIdentifier(second.layer)))
-        fill(101, [0, 0, 255, 255])
-        let after = try capture()
-        XCTAssertTrue(updated.contains(ObjectIdentifier(first.layer)))
-        XCTAssertFalse(updated.contains(ObjectIdentifier(second.layer)), "the unchanged child keeps its mirror")
-        XCTAssertEqual(after(CGPoint(x: 150, y: 150)), [0, 0, 255])
-        XCTAssertEqual(after(CGPoint(x: 450, y: 150)), [0, 255, 0])
-        p.apply(wireBatch([["op": "frame", "id": 102, "x": 200, "y": 0, "w": 100, "h": 100]]))
-        let moved = try capture()
-        XCTAssertFalse(updated.contains(ObjectIdentifier(first.layer)))
-        XCTAssertTrue(updated.contains(ObjectIdentifier(second.layer)))
-        XCTAssertEqual(moved(CGPoint(x: 450, y: 150)), [0, 0, 0], "the old box is cleared")
-        XCTAssertEqual(moved(CGPoint(x: 750, y: 150)), [0, 255, 0])
-    }
-
     func testSurfaceCreationAndFollowingLayoutCaptureOnlyTheFinalChildren() throws {
         let d = try deck("canvas-presentation-capture")
         defer { d.session.destroy() }

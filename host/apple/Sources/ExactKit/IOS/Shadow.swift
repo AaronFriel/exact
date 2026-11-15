@@ -31,43 +31,21 @@ package final class Shadow {
         }
     }
 
-    /// Only capture users keep damage state (LLP 1172.001 §4 step 3).
-    /// The batch and host repaint paths invalidate the changed branch and its ancestors.
-    func changed(_ view: UIView) {
-        changed(view.layer)
-    }
-
-    func changed(_ source: CALayer) {
-        var layer: CALayer? = source
-        while let current = layer {
-            let key = ObjectIdentifier(current)
-            handed?.branches[key]?.valid = false
-            readback?.branches[key]?.valid = false
-            layer = current.superlayer
-        }
-    }
-
-    /// Observes actual mirror updates without counting retained branches (tests).
-    var didMirror: ((CALayer) -> Void)?
-
     let device: MTLDevice
     let queue: MTLCommandQueue
 
-    private final class Branch {
-        weak var source: CALayer?
-        var valid = true
-        init(_ source: CALayer) { self.source = source }
-    }
-    /// Each renderer owns its retained tree: sharing a root between the
-    /// hand-over and readback renderers left the hand-over blank.
+    /// A renderer, the texture it draws, and the tree it draws: one root,
+    /// its sublayers the mirror of whatever this pass captured last
+    /// (rebuilt per capture; layers kept by the source layer's identity so
+    /// their state carries between frames). Each renderer has a root of
+    /// its own: with one root under both, the hand-over drew none of the
+    /// page once a deck's children had been read back through the other.
     private final class Pass {
         let texture: MTLTexture
         let renderer: CARenderer
         let root = CALayer()
         var mirrors: [ObjectIdentifier: CALayer] = [:]
         var used: Set<ObjectIdentifier> = []
-        var branches: [ObjectIdentifier: Branch] = [:]
-        var unstable = 0
         /// Its own pixels back (`render`); none for the hand-over.
         let readback: MTLBuffer?
         init(_ texture: MTLTexture, queue: MTLCommandQueue, readback: MTLBuffer?) {
@@ -170,7 +148,6 @@ package final class Shadow {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         pass.used.removeAll(keepingCapacity: true)
-        pass.unstable = 0
         // The renderer maps the root's bounds onto the texture one to one, so
         // the root is in pixels and the mirrored tree (points) is scaled by
         // its own transform, about its centre, to fill it.
@@ -188,7 +165,7 @@ package final class Shadow {
         if !CATransform3DEqualToTransform(top.transform, fill) { top.transform = fill }
         if root.sublayers?.first !== top || root.sublayers?.count != 1 { root.sublayers?.forEach { $0.removeFromSuperlayer() }; root.addSublayer(top) }
         // What was not seen this time is dropped from the cache.
-        for key in pass.mirrors.keys where !pass.used.contains(key) { pass.mirrors.removeValue(forKey: key); pass.branches.removeValue(forKey: key) }
+        for key in pass.mirrors.keys where !pass.used.contains(key) { pass.mirrors.removeValue(forKey: key) }
         CATransaction.commit()
         CATransaction.flush()
     }
@@ -230,14 +207,7 @@ package final class Shadow {
     /// at alpha 0 in the window; here it is painted.
     private func mirror(_ layer: CALayer, opaque: Bool = false) -> CALayer {
         let key = ObjectIdentifier(layer)
-        if !opaque, let branch = pass.branches[key], branch.source === layer, branch.valid,
-           let kept = pass.mirrors[key], retainUnchanged(layer) {
-            return kept
-        }
-        let unstable = pass.unstable
-        if layer.animationKeys()?.isEmpty == false { pass.unstable += 1 }
         pass.used.insert(key)
-        didMirror?(layer)
         // What is captured is what Core Animation has: a view the batch just
         // invalidated draws now rather than at the display pass, so the
         // capture is not one frame behind it (the logo, as it loaded).
@@ -275,7 +245,6 @@ package final class Shadow {
         let view = layer.delegate as? UIView
         var children: [CALayer] = []
         if let node = view as? NodeView, node.kind == "canvas" {
-            pass.unstable += 1
             // The canvas's own picture, read back from the module — the last
             // one while nothing on it changed.
             let picture = node.canvases?.picture(of: node)
@@ -287,7 +256,6 @@ package final class Shadow {
                 children.append(mirror(sub))
             }
         } else {
-            if view != nil, !(view is NodeView) { pass.unstable += 1 }
             for sub in layer.sublayers ?? [] where !(sub is CAMetalLayer) { children.append(mirror(sub)) }
         }
         // The sublayers, re-attached only when the list changed: during a
@@ -297,20 +265,7 @@ package final class Shadow {
             current.forEach { $0.removeFromSuperlayer() }
             children.forEach { shadow.addSublayer($0) }
         }
-        // UIKit controls and nested canvases can repaint independently of a
-        // batch. Keep walking those branches on every capture.
-        if !opaque, layer is NodeLayer, pass.unstable == unstable {
-            pass.branches[key] = Branch(layer)
-        } else { pass.branches[key] = nil }
         return shadow
-    }
-
-    private func retainUnchanged(_ layer: CALayer) -> Bool {
-        if layer.needsDisplay() || layer.animationKeys()?.isEmpty == false { return false }
-        if let mask = layer.boxMask, !retainUnchanged(mask) { return false }
-        if !(layer.sublayers ?? []).allSatisfy({ retainUnchanged($0) }) { return false }
-        pass.used.insert(ObjectIdentifier(layer))
-        return true
     }
 
     private func shadowClass(for layer: CALayer) -> CALayer.Type {

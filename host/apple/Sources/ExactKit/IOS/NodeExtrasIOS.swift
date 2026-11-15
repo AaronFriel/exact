@@ -391,14 +391,12 @@ extension NodeView {
     /// the capture that brings its next frame, as UIKit's own walk would see
     /// the change at once.
     func transparencyChanged() {
-        Shadow.active?.changed(self)
         guard let overlay = superview, let canvas = overlay.canvasOverlayOwner else { return }
         canvas.needsCapture = true
         canvases?.scheduleCapture()
     }
     /// Its filter's pixels or layer effect changed: its canvas captures again.
     func filterPublished() {
-        Shadow.active?.changed(self)
         guard let canvas = canvasAbove else { return }
         canvas.needsCapture = true
         canvases?.scheduleCapture()
