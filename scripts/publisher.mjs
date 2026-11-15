@@ -37,7 +37,8 @@ export function defaultRelease(commit, now = new Date(), nonce = randomBytes(8).
  * build receipts the caller may start streams from, that has no head yet (the one stream start, LLP 1030.007 D1). */
 export async function streams(origin, app, channel, { deploying = false, platforms = [], builds = [] } = {}) {
   const out = [];
-  const declared = app.manifest.deploy?.streams?.filter(s => s.channel === channel);
+  // A declared list names the base app's streams; a variant finds its own (LLP 1030.008 D7).
+  const declared = app.manifest.variant ? undefined : app.manifest.deploy?.streams?.filter(s => s.channel === channel);
   const names = deploying && declared ? declared.map(s => s.compatibilityId) : await origin.list(`.exact/${channel}`);
   for (const compatibilityId of names ?? []) {
     const stream = { channel, compatibilityId };

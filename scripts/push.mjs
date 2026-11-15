@@ -31,7 +31,7 @@ import { RustBaker } from './rust.mjs';
 import { channelOf, channelOrigin, openOrigin, validateChannel } from './origin.mjs';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
-const USAGE = 'usage: bun scripts/push.mjs <app> [--origin <dir|url>] [--channel <name>] [--keys <dir>] [--seq-above <n>] [--watch]';
+const USAGE = 'usage: bun scripts/push.mjs <app> [--origin <dir|url>] [--channel <name>] [--variant <name>] [--keys <dir>] [--seq-above <n>] [--watch]';
 
 function parseArgs(argv) {
   const opts = { _: [] };
@@ -39,7 +39,7 @@ function parseArgs(argv) {
     const a = argv[i];
     if (a === '--watch') opts.watch = true;
     else if (a === '--help' || a === '-h') opts.help = true;
-    else if (['--origin', '--channel', '--keys', '--seq-above'].includes(a)) {
+    else if (['--origin', '--channel', '--variant', '--keys', '--seq-above'].includes(a)) {
       const value = argv[++i];
       if (!value || value.startsWith('-')) refuse(`${a} needs a value\n${USAGE}`);
       if (a === '--seq-above') {
@@ -51,6 +51,8 @@ function parseArgs(argv) {
     else opts._.push(a);
   }
   if (opts._.length > 1) refuse(`unexpected argument ${opts._[1]}\n${USAGE}`);
+  // As EXACT_VARIANT, which the flag replaces; resolveApp scopes it to the app (LLP 1030.008 D3).
+  if (opts.variant) { process.env.EXACT_VARIANT = opts.variant; delete process.env.EXACT_VARIANT_APP; }
   return opts;
 }
 
