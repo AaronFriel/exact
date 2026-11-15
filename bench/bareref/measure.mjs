@@ -8,6 +8,7 @@ import { readFileSync, writeFileSync, existsSync, mkdtempSync, rmSync, mkdirSync
 import { resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { connect } from 'node:net';
+import { exactPush } from './push.mjs';
 
 const udid = process.env.EXACT_SIM;
 if (!udid) throw Error('EXACT_SIM must name a dedicated iOS 27 simulator');
@@ -161,14 +162,15 @@ try {
       });
       console.log('recording', name, round, load);
       for (let i = 0; i < count; i++) {
-        if (name === 'exact') await session.tap('change-station');
-        else await bareCommand('push');
-        await committed(app.path, offset + i + 1);
         if (name === 'exact') {
-          await session.clock('settle');
+          await exactPush(session, () => committed(app.path, offset + i + 1));
           await session.back();
           await session.clock('settle');
-        } else await bareCommand('back');
+        } else {
+          await bareCommand('push');
+          await committed(app.path, offset + i + 1);
+          await bareCommand('back');
+        }
       }
       recorder.kill('SIGINT');
       let timeout;

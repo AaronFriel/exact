@@ -54,7 +54,7 @@ final class PushProbe {
     @inline(never) func publish() {
         let url = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("bareref.json")
-        try! JSONSerialization.data(withJSONObject: records).write(to: url)
+        try! JSONSerialization.data(withJSONObject: records).write(to: url, options: .atomic)
         if serial == 1 {
             let windows = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap { $0.windows }
             try! JSONSerialization.data(withJSONObject: windows.map(Self.hierarchy)).write(
