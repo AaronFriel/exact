@@ -530,8 +530,10 @@ extension NodeView {
         let row = lands ? cells?.select(self) : nil
         pressed = overlayHoldsPress
         if lands {
-            presenter?.menus.activating(from: touched, pressing: self) {
-                presenter?.press(id, held: KeyCodes.held(event?.modifierFlags ?? []), at: touches.first?.location(in: nil), bubbled: contact.bubbled)
+            let held = KeyCodes.held(event?.modifierFlags ?? []), at = touches.first?.location(in: nil), bubbled = contact.bubbled
+            pressAfterDoubleTap(from: touched) { [weak self] in
+                guard let self, let presenter = self.presenter else { return }
+                presenter.menus.activating(from: touched, pressing: self) { presenter.press(self.id, held: held, at: at, bubbled: bubbled) }
             }
         }
         if let row { cells?.ran(row, on: screen) }

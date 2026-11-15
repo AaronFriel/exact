@@ -5079,9 +5079,8 @@
       "rare": true,
       "codec": "f32",
       "default": 1,
-      "_comment": "@ref LLP 1057.001.000 D1: `-exact-min-zoom`, with `max_zoom` the range a pinch scales a scroll container's one child through (`@viewport`'s `min-zoom`, on an element). A container zooms when `max_zoom` is greater; the child keeps its layout and the host draws it scaled (D3).",
+      "_comment": "@ref LLP 1057.001.000 D1: `-exact-min-zoom`, with `max_zoom` the range a pinch scales a scroll container's one child through (`@viewport`'s `min-zoom`, on an element). A container with either row written zooms; the child keeps its layout and the host draws it scaled (D3).",
       "hosts": [
-        { "host": "ios", "fidelity": "none", "why": "not built yet (LLP 1057.001.000 §8 step 2)" },
         { "host": "macos", "fidelity": "none", "why": "not built yet (LLP 1057.001.000 §8 step 3)" },
         { "host": "painted", "fidelity": "none", "why": "not built yet (LLP 1057.001.000 §8 step 5)" }
       ]
@@ -5094,7 +5093,6 @@
       "default": 1,
       "_comment": "@ref LLP 1057.001.000 D1: `-exact-max-zoom`, the top of the range `min_zoom` starts.",
       "hosts": [
-        { "host": "ios", "fidelity": "none", "why": "not built yet (LLP 1057.001.000 §8 step 2)" },
         { "host": "macos", "fidelity": "none", "why": "not built yet (LLP 1057.001.000 §8 step 3)" },
         { "host": "painted", "fidelity": "none", "why": "not built yet (LLP 1057.001.000 §8 step 5)" }
       ]
