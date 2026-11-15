@@ -35,6 +35,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.RemoteInput
 import android.content.Context
+import android.content.Intent
 import android.graphics.drawable.Icon
 import android.os.Build
 import dev.exact.canvas.Channels
@@ -65,8 +66,12 @@ class NotificationsModule(context: ExtensionContext) : ExactExtension(context) {
             app.resources.getIdentifier("exact_notification", "drawable", app.packageName).takeIf { it != 0 }
                 ?.let { Icon.createWithResource(app, it) } ?: Icon.createWithResource("android", android.R.drawable.ic_popup_reminder)
 
-        /** The request code of a tag's intents: one post's never stands in for another's. */
-        fun code(tag: String, slot: Int = 0): Int = 31 * tag.hashCode() + slot
+        /** [intent], made distinct for slot [slot] of the post [identifier]: `PendingIntent` matches intents by
+         * `Intent.filterEquals`, which ignores extras and request codes do not separate, so two tags whose intents
+         * matched would share one `PendingIntent` and `FLAG_UPDATE_CURRENT` would give one the other's extras. The
+         * identifier (API 29, the floor) is part of the match. Slot 0 is the body click, 1 the timed post's alarm,
+         * 2 and on the actions. */
+        fun distinct(intent: Intent, identifier: String, slot: Int): Intent = intent.setIdentifier("$identifier/$slot")
 
         /** The button of [action], a declared action's record: an activity start through the app's alias, as every
          * action is on Android (LLP 1133.004.000 D5), mutable only when it has a text field, whose reply the
@@ -76,7 +81,7 @@ class NotificationsModule(context: ExtensionContext) : ExactExtension(context) {
             val intent = ExtensionContext.action(app, "notifications", "notificationclick", args, 1, action, identifier, ID)
             val placeholder = if (action.isNull("placeholder")) null else action.optString("placeholder")
             val mutable = if (placeholder == null) PendingIntent.FLAG_IMMUTABLE else if (Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0
-            val pending = PendingIntent.getActivity(app, code(identifier, 2 + slot), intent, PendingIntent.FLAG_UPDATE_CURRENT or mutable)
+            val pending = PendingIntent.getActivity(app, 2 + slot, distinct(intent, identifier, 2 + slot), PendingIntent.FLAG_UPDATE_CURRENT or mutable)
             val button = Notification.Action.Builder(null as Icon?, action.optString("title").ifEmpty { name }, pending)
             if (placeholder != null) button.addRemoteInput(RemoteInput.Builder(ExtensionContext.REPLY).setLabel(placeholder).build())
             if (Build.VERSION.SDK_INT >= 31 && action.optBoolean("authenticationRequired")) button.setAuthenticationRequired(true)
@@ -94,7 +99,7 @@ class NotificationsModule(context: ExtensionContext) : ExactExtension(context) {
                 .put("title", record.optString("title")).put("body", body ?: JSONObject.NULL)
             val navigate = record.optString("navigate").takeIf { record.has("navigate") }
             val tap = ExtensionContext.activation(app, "notifications", "notificationclick", JSONArray().put(tag).put(event), navigate)
-            val open = PendingIntent.getActivity(app, code(identifier), tap, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+            val open = PendingIntent.getActivity(app, 0, distinct(tap, identifier, 0), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
             val channel = record.getString("channel")
             val builder = Notification.Builder(app, channel)
             builderHatch?.invoke(builder)
@@ -110,7 +115,11 @@ class NotificationsModule(context: ExtensionContext) : ExactExtension(context) {
             if (record.has("number")) builder.setNumber(record.getInt("number"))
             val actions = record.optJSONArray("actions") ?: JSONArray()
             for (i in 0 until actions.length()) builder.addAction(action(app, identifier, actions.getJSONObject(i), JSONArray().put(tag).put(event), i))
-            app.getSystemService(NotificationManager::class.java).notify(identifier, ID, builder.build())
+            val manager = app.getSystemService(NotificationManager::class.java)
+            // The first frame makes the channels on a thread of its own; a post can come first, and the platform
+            // drops a post whose channel does not exist.
+            if (manager.getNotificationChannel(channel) == null) Channels.ensure(app)
+            manager.notify(identifier, ID, builder.build())
         }
     }
 
