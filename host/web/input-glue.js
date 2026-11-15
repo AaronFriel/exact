@@ -104,6 +104,27 @@ function roveArrow(root, event) {
   if (next !== el) { if (!menu) rove(all, next); next.focus(); }
   return true;
 }
+/** A printable key in a menu moves the focus to the next of its items whose label starts with what was typed in the
+ * last half second, as the WAI-ARIA menu pattern's type-ahead and the platform's menus give it: the same letter again
+ * goes on to the next item it starts, wrapping, past disabled ones. The items are the menu's `menuitem`s, whether the
+ * author or the host (menu-rows.js) gave the role. Space starts no search (it presses), and a field in the menu keeps
+ * its keys. Whether it moved the focus. */
+let typed = "", typedAt = -Infinity;
+function typeAhead(root, event) {
+  const el = event.target, menu = el?.closest?.('[role="menu"]'), key = event.key;
+  if (!menu || !root.contains(menu) || [...key].length !== 1 || el.matches("input, textarea, select, [contenteditable]") || event.timeStamp - typedAt > 500 && key === " ") return false;
+  typed = (event.timeStamp - typedAt > 500 ? "" : typed) + key.toLocaleLowerCase();
+  typedAt = event.timeStamp;
+  const items = [...menu.querySelectorAll('[role^="menuitem"]')].filter(item => item.closest('[role="menu"]') === menu && (item === el || radioUsable(item)));
+  // One letter, or the same one again, steps on from the focused item; more letters refine the match from it.
+  const again = [...typed].every(c => c === typed[0]), prefix = again ? typed[0] : typed, at = items.indexOf(el) + (again ? 1 : 0);
+  const label = item => (item.getAttribute("aria-label") ?? item.textContent).trim().toLocaleLowerCase();
+  const next = [...items.slice(at), ...items.slice(0, at)].find(item => !(again && item === el) && label(item).startsWith(prefix));
+  if (!next) return false;
+  event.preventDefault();
+  next.focus();
+  return true;
+}
 export function createInputHandlers({ root, views, retiredViews, ready, inertAncestor, editMenu, dispatch, release: dispatchRelease = () => {}, velocity = {}, agentMode = false, log = () => {}, documents = null, pick = null }) {
   // A press stops bubbling at its nearest handler; otherwise the click reaches the root.
   // Append the default there so the handler's updates and showPicker run first.
@@ -215,7 +236,7 @@ export function createInputHandlers({ root, views, retiredViews, ready, inertAnc
   document.addEventListener("keydown", (event) => {
     const el = event.target;
     if (event.defaultPrevented || event.isComposing || event.keyCode === 229 || event.key === "Process" || event.metaKey || event.ctrlKey || event.altKey || !ready()) return;
-    if (radioArrow(root, event) || roveArrow(root, event) || event.repeat) return;
+    if (radioArrow(root, event) || roveArrow(root, event) || typeAhead(root, event) || event.repeat) return;
     // @ref LLP 1115.000 D4.14 — Space holds a `<button>` down until its keyup,
     // when the browser clicks it. Its press shows meanwhile, as under a pointer:
     // the unsaid dim, a native button's highlight, a `-exact-press-scale`, a pressed paint.
