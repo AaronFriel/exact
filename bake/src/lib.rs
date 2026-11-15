@@ -18,6 +18,7 @@ mod link;
 mod preload;
 mod reach;
 mod receipt;
+mod sandbox;
 mod widgets;
 
 pub use compat::{

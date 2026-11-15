@@ -390,6 +390,7 @@ pub fn compatibility_id_pinned(
         }
     }
     crate::reach::derive(app_dir, platform, plan.as_ref(), &mut compat)?;
+    crate::sandbox::derive(app_dir, platform, plan.as_ref(), &mut compat);
     if target.contains("android") {
         crate::channels::derive(app_dir, &manifest.json, &mut compat)?;
     }

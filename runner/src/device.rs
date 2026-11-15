@@ -15,6 +15,13 @@
 //!
 //! [`io_grants`]: crate::io_grants
 
+use crate::sandbox::{self, Sandbox};
+
+/// HealthKit on the Mac: its entitlement is restricted there, and Exact signs none (LLP 1030.005 D2).
+const HEALTH: Sandbox = Sandbox::Refused(
+    "HealthKit's entitlement is restricted on the Mac, and Exact signs none there",
+);
+
 /// One device a grant can name, and what each host calls it.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Device {
@@ -45,6 +52,10 @@ pub struct Device {
     /// the Mac build signs them under a profile that allows them, and
     /// without one signs none (`host/apple/presence.mjs`, `macProvisioning`).
     pub macos_profile: &'static [&'static str],
+    /// What the Mac App Store's sandbox asks for the row (LLP 1030.005 D2):
+    /// its entitlements, the profile's keys, or a refusal. Unset only in a
+    /// row that has not been audited, which a store build refuses.
+    pub sandbox: Option<Sandbox>,
     /// The web `Permissions-Policy` feature, where the feature is policy-controlled.
     pub web: Option<&'static str>,
     /// Further `Permissions-Policy` features the row turns on beside `web`:
@@ -97,7 +108,7 @@ pub struct Device {
 }
 
 /// What a row has unless it says otherwise.
-const ROW: Device = Device {
+pub(crate) const ROW: Device = Device {
     name: "",
     ios: &[],
     ios_flags: &[],
@@ -106,6 +117,7 @@ const ROW: Device = Device {
     macos: &[],
     hardened: None,
     macos_profile: &[],
+    sandbox: None,
     web: None,
     policy: &[],
     ios_entitlements: &[],
@@ -127,6 +139,7 @@ const ROW: Device = Device {
 pub const DEVICES: &[Device] = &[
     Device {
         name: "microphone",
+        sandbox: Some(Sandbox::Keys(&["device.audio-input"])),
         ios: &["NSMicrophoneUsageDescription"],
         macos: &["NSMicrophoneUsageDescription"],
         hardened: Some("com.apple.security.device.audio-input"),
@@ -142,6 +155,7 @@ pub const DEVICES: &[Device] = &[
     // and tvOS's recording cell is later.
     Device {
         name: "microphone-background",
+        sandbox: Some(sandbox::NONE),
         ios_flags: &["ExactCapturesInBackground"],
         ios_modes: &["audio"],
         android: &[
@@ -163,6 +177,7 @@ pub const DEVICES: &[Device] = &[
     // No call service on a Mac, the web or tvOS.
     Device {
         name: "calls",
+        sandbox: Some(sandbox::NONE),
         ios_modes: &["audio", "voip"],
         android: &[
             "android.permission.MANAGE_OWN_CALLS",
@@ -185,6 +200,7 @@ pub const DEVICES: &[Device] = &[
     // the permission is (app/build.gradle.kts).
     Device {
         name: "camera",
+        sandbox: Some(Sandbox::Keys(&["device.camera"])),
         ios: &["NSCameraUsageDescription"],
         macos: &["NSCameraUsageDescription"],
         hardened: Some("com.apple.security.device.camera"),
@@ -193,6 +209,7 @@ pub const DEVICES: &[Device] = &[
     },
     Device {
         name: "geolocation",
+        sandbox: Some(Sandbox::Keys(&["personal-information.location"])),
         ios: &["NSLocationWhenInUseUsageDescription"],
         macos: &[
             "NSLocationUsageDescription",
@@ -210,6 +227,7 @@ pub const DEVICES: &[Device] = &[
     // prompt opens with precise off (macOS has no such key).
     Device {
         name: "geolocation-approximate",
+        sandbox: Some(Sandbox::Keys(&["personal-information.location"])),
         ios: &["NSLocationWhenInUseUsageDescription"],
         ios_flags: &["NSLocationDefaultAccuracyReduced"],
         // Coarse alone: a ceiling on Android, where fine can then never be asked (D7).
@@ -230,6 +248,7 @@ pub const DEVICES: &[Device] = &[
     // watches a region under approximate location. No tvOS cell.
     Device {
         name: "geolocation-background",
+        sandbox: Some(Sandbox::Keys(&["personal-information.location"])),
         ios: &["NSLocationAlwaysAndWhenInUseUsageDescription"],
         macos: &[
             "NSLocationUsageDescription",
@@ -252,6 +271,7 @@ pub const DEVICES: &[Device] = &[
     // a normal one (LLP 1133.004.000 D5).
     Device {
         name: "notifications",
+        sandbox: Some(sandbox::NONE),
         ios: &[],
         macos: &[],
         hardened: None,
@@ -269,6 +289,7 @@ pub const DEVICES: &[Device] = &[
     // and takes it only under a provisioning profile.
     Device {
         name: "push",
+        sandbox: Some(Sandbox::Profile),
         purpose: false,
         needs: Some("notifications"),
         ios_entitlements: &["aps-environment"],
@@ -279,6 +300,7 @@ pub const DEVICES: &[Device] = &[
     // Deviation: the web has no name; its speech API is gated by `microphone`.
     Device {
         name: "speech-recognition",
+        sandbox: Some(Sandbox::Keys(&[sandbox::CLIENT])),
         ios: &["NSSpeechRecognitionUsageDescription"],
         macos: &["NSSpeechRecognitionUsageDescription"],
         hardened: None,
@@ -291,6 +313,7 @@ pub const DEVICES: &[Device] = &[
     // macOS writes both (LLP 1133.019 D4).
     Device {
         name: "photos-add",
+        sandbox: Some(Sandbox::Keys(&["personal-information.photos-library"])),
         ios: &["NSPhotoLibraryAddUsageDescription"],
         macos: &[
             "NSPhotoLibraryAddUsageDescription",
@@ -313,6 +336,7 @@ pub const DEVICES: &[Device] = &[
     // permission from API 29, the host's oldest.
     Device {
         name: "photos",
+        sandbox: Some(Sandbox::Keys(&["personal-information.photos-library"])),
         ios: &["NSPhotoLibraryUsageDescription"],
         ios_flags: &["PHPhotoLibraryPreventAutomaticLimitedAccessAlert"],
         android: &[
@@ -334,6 +358,7 @@ pub const DEVICES: &[Device] = &[
     // with no entitlement, which is restricted there (D5). Not on tvOS.
     Device {
         name: "health-read",
+        sandbox: Some(HEALTH),
         ios: &["NSHealthShareUsageDescription"],
         macos: &["NSHealthShareUsageDescription"],
         ios_entitlements: &["com.apple.developer.healthkit"],
@@ -344,6 +369,7 @@ pub const DEVICES: &[Device] = &[
     },
     Device {
         name: "health-write",
+        sandbox: Some(HEALTH),
         ios: &["NSHealthUpdateUsageDescription"],
         macos: &["NSHealthUpdateUsageDescription"],
         ios_entitlements: &["com.apple.developer.healthkit"],
@@ -357,6 +383,7 @@ pub const DEVICES: &[Device] = &[
     // An app reading it keeps no answers (D8).
     Device {
         name: "contacts",
+        sandbox: Some(Sandbox::Keys(&["personal-information.addressbook"])),
         ios: &["NSContactsUsageDescription"],
         macos: &["NSContactsUsageDescription"],
         hardened: Some("com.apple.security.personal-information.addressbook"),
@@ -371,6 +398,7 @@ pub const DEVICES: &[Device] = &[
     // an upgrade, so an app may write both.
     Device {
         name: "calendar",
+        sandbox: Some(Sandbox::Keys(&["personal-information.calendars"])),
         ios: &["NSCalendarsFullAccessUsageDescription"],
         macos: &["NSCalendarsFullAccessUsageDescription"],
         hardened: Some("com.apple.security.personal-information.calendars"),
@@ -385,6 +413,7 @@ pub const DEVICES: &[Device] = &[
     // so the line derives both permissions there (D11).
     Device {
         name: "calendar-write-only",
+        sandbox: Some(Sandbox::Keys(&["personal-information.calendars"])),
         ios: &["NSCalendarsWriteOnlyAccessUsageDescription"],
         macos: &["NSCalendarsWriteOnlyAccessUsageDescription"],
         hardened: Some("com.apple.security.personal-information.calendars"),
@@ -405,6 +434,7 @@ pub const DEVICES: &[Device] = &[
     // until the host targets API 37, so the row writes Apple keys only.
     Device {
         name: "local-network",
+        sandbox: Some(Sandbox::Keys(&[sandbox::CLIENT])),
         ios: &["NSLocalNetworkUsageDescription"],
         macos: &["NSLocalNetworkUsageDescription"],
         ..ROW
@@ -415,6 +445,7 @@ pub const DEVICES: &[Device] = &[
     // cell is `later`, over passkeys). Not on tvOS, which has no biometry.
     Device {
         name: "local-auth",
+        sandbox: Some(sandbox::NONE),
         ios: &["NSFaceIDUsageDescription"],
         android: &["android.permission.USE_BIOMETRIC"],
         tvos: false,
@@ -424,6 +455,7 @@ pub const DEVICES: &[Device] = &[
     // for nothing, so no usage key; tvOS has no CoreMIDI (`unavailable`).
     Device {
         name: "midi",
+        sandbox: Some(sandbox::NONE),
         web: Some("midi"),
         tvos: false,
         ..ROW
@@ -435,6 +467,7 @@ pub const DEVICES: &[Device] = &[
     // pedometer APIs'), and tvOS has none of Core Motion's streams.
     Device {
         name: "motion",
+        sandbox: Some(sandbox::NONE),
         web: Some("accelerometer"),
         policy: &["gyroscope", "magnetometer"],
         tvos: false,
@@ -448,6 +481,7 @@ pub const DEVICES: &[Device] = &[
     // its build writes none.
     Device {
         name: "background-sync",
+        sandbox: Some(sandbox::NONE),
         purpose: false,
         ios_modes: &["fetch", "processing"],
         ios_tasks: &["refresh", "processing.network", "processing.network-power"],
@@ -455,6 +489,7 @@ pub const DEVICES: &[Device] = &[
     },
     Device {
         name: "periodic-background-sync",
+        sandbox: Some(sandbox::NONE),
         purpose: false,
         ios_modes: &["fetch"],
         ios_tasks: &["refresh"],
@@ -462,6 +497,7 @@ pub const DEVICES: &[Device] = &[
     },
     Device {
         name: "background-fetch",
+        sandbox: Some(sandbox::NONE),
         purpose: false,
         ..ROW
     },
@@ -471,12 +507,14 @@ pub const DEVICES: &[Device] = &[
     // `desktop:StartupTask` derives from `login-item`. Desktop only.
     Device {
         name: "login-item",
+        sandbox: Some(sandbox::NONE),
         purpose: false,
         tvos: false,
         ..ROW
     },
     Device {
         name: "global-shortcuts",
+        sandbox: Some(sandbox::NONE),
         purpose: false,
         tvos: false,
         ..ROW
@@ -487,6 +525,7 @@ pub const DEVICES: &[Device] = &[
     // profile (D17).
     Device {
         name: "attestation",
+        sandbox: Some(Sandbox::Profile),
         purpose: false,
         ios_entitlements: &["com.apple.developer.devicecheck.appattest-environment"],
         macos_profile: &["com.apple.developer.devicecheck.appattest-environment"],
@@ -496,6 +535,7 @@ pub const DEVICES: &[Device] = &[
     // and neither platform has a usage string. Not on tvOS.
     Device {
         name: "age-range",
+        sandbox: Some(Sandbox::Profile),
         purpose: false,
         ios_entitlements: &["com.apple.developer.declared-age-range"],
         macos_profile: &["com.apple.developer.declared-age-range"],
@@ -508,6 +548,7 @@ pub const DEVICES: &[Device] = &[
     // Entitlement"); a Mac takes it only with a profile. Not on tvOS.
     Device {
         name: "shareplay",
+        sandbox: Some(Sandbox::Profile),
         purpose: false,
         ios_entitlements: &["com.apple.developer.group-session"],
         macos_profile: &["com.apple.developer.group-session"],
@@ -518,6 +559,7 @@ pub const DEVICES: &[Device] = &[
     // key for no Mac.
     Device {
         name: "tracking",
+        sandbox: Some(sandbox::NONE),
         ios: &["NSUserTrackingUsageDescription"],
         ..ROW
     },
@@ -528,6 +570,7 @@ pub const DEVICES: &[Device] = &[
     // boot and at the alarm's time; macOS, tvOS and the web have no alarm.
     Device {
         name: "alarms",
+        sandbox: Some(sandbox::NONE),
         ios: &["NSAlarmKitUsageDescription"],
         android: &[
             "android.permission.SCHEDULE_EXACT_ALARM",
@@ -548,6 +591,7 @@ pub const DEVICES: &[Device] = &[
     // nor the TV.
     Device {
         name: "nfc",
+        sandbox: Some(sandbox::NONE),
         ios: &["NFCReaderUsageDescription"],
         android: &["android.permission.NFC"],
         ios_entitlements: &["com.apple.developer.nfc.readersession.formats"],
@@ -563,6 +607,7 @@ pub const DEVICES: &[Device] = &[
     // for apps on iOS or tvOS (D21).
     Device {
         name: "serial",
+        sandbox: Some(Sandbox::Keys(&["device.serial"])),
         web: Some("serial"),
         purpose: false,
         tvos: false,
@@ -571,6 +616,7 @@ pub const DEVICES: &[Device] = &[
     },
     Device {
         name: "hid",
+        sandbox: Some(Sandbox::Keys(&["device.usb", "device.bluetooth"])),
         web: Some("hid"),
         purpose: false,
         tvos: false,
@@ -578,6 +624,7 @@ pub const DEVICES: &[Device] = &[
     },
     Device {
         name: "usb",
+        sandbox: Some(Sandbox::Keys(&["device.usb"])),
         web: Some("usb"),
         purpose: false,
         tvos: false,

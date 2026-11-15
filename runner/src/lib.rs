@@ -79,6 +79,7 @@ mod program;
 pub use program::Program;
 pub mod request;
 pub mod runner;
+pub mod sandbox;
 pub mod save_file;
 /// The picker's helpers a host shares (LLP 1069.002): types by name,
 /// `accept` matching, the HEIC rule, a `type @t` answer's paths.
