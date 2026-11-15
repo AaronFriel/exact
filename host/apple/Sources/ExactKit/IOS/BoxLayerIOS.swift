@@ -84,14 +84,6 @@ final class NodeLayer: CALayer {
         body()
         drawnElsewhere = true
     }
-    override func setNeedsDisplay() {
-        Shadow.active?.changed(self)
-        super.setNeedsDisplay()
-    }
-    override func setNeedsDisplay(_ rect: CGRect) {
-        Shadow.active?.changed(self)
-        super.setNeedsDisplay(rect)
-    }
     override func setNeedsLayout() {
         Shadow.active?.changed(self)
         super.setNeedsLayout()
