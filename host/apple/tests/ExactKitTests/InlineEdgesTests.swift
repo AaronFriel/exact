@@ -157,10 +157,10 @@ final class InlineEdgesTests: XCTestCase {
             s.direction = direction
             let p = engine.paragraph(s, width: 120)
             XCTAssertGreaterThan(p.lines.count, 1, "the box wraps")
-            // Each line's widest fragment: under `rtl` a line's hanging space paints a sliver too.
-            let fills = p.lines.map { TextLinePaint.backgrounds($0, at: .zero) }.filter { !$0.isEmpty }
-                .map { $0.max { $0.rect.width < $1.rect.width }! }
-            XCTAssertEqual(fills.count, p.lines.count, "a fragment a line: \(fills)")
+            // One fragment a line: a space that hangs past the line has none.
+            let lines = p.lines.map { TextLinePaint.backgrounds($0, at: .zero) }
+            XCTAssertEqual(lines.map(\.count), Array(repeating: 1, count: p.lines.count), "a fragment a line: \(lines)")
+            let fills = lines.compactMap(\.first)
             for (i, fill) in fills.enumerated() {
                 let border = try XCTUnwrap(fill.border)
                 let (first, last) = (i == 0, i == fills.count - 1)
@@ -281,7 +281,9 @@ final class InlineEdgesTests: XCTestCase {
             XCTAssertGreaterThan(mine.count, 1, "\(texts) wraps")
             for i in mine {
                 let line = p.lines[i]
-                let fill = try XCTUnwrap(TextLinePaint.backgrounds(line, at: .zero).max { $0.rect.width < $1.rect.width }, "\(texts) line \(i)")
+                let fills = TextLinePaint.backgrounds(line, at: .zero)
+                XCTAssertEqual(fills.count, 1, "\(texts) line \(i): \(fills)")
+                let fill = try XCTUnwrap(fills.first)
                 // The run's glyphs on this line, less the room kerned on them;
                 // a hanging space is left of the pen.
                 var lo = CGFloat.infinity, hi = -CGFloat.infinity
@@ -301,10 +303,7 @@ final class InlineEdgesTests: XCTestCase {
                 let (first, last) = (i == mine.first, i == mine.last)
                 let border = try XCTUnwrap(fill.border)
                 XCTAssertEqual(fill.rect.maxX, hi + (first ? 6 : 0), accuracy: 0.05, "\(texts) line \(i): right")
-                // A trailing space that hangs left of the pen still paints a sliver there.
-                if CTLineGetTrailingWhitespaceWidth(line) == 0 {
-                    XCTAssertEqual(fill.rect.minX, lo - (last ? 6 : 0), accuracy: 0.05, "\(texts) line \(i): left")
-                }
+                XCTAssertEqual(fill.rect.minX, lo - (last ? 6 : 0), accuracy: 0.05, "\(texts) line \(i): left")
                 XCTAssertEqual(border.widths, [3, first ? 3 : 0, 3, last ? 3 : 0], "\(texts) line \(i)")
             }
         }

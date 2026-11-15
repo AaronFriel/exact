@@ -425,13 +425,16 @@ enum TextLinePaint {
         // The boxes whose first and whose last character is on this line.
         var starts = Set<Int>(), ends = Set<Int>()
         let runs = CTLineGetGlyphRuns(line) as! [CTRun]
-        // CSS removes the collapsible spaces that end a line: a wrapped run's
-        // background stops at its last glyph, as the browser paints it. A
-        // left-to-right line ends on the right (LLP 1053 §0, the Linux parity).
-        var end = CGFloat.infinity
-        if !runs.contains(where: { CTRunGetStatus($0).contains(.rightToLeft) }) {
-            end = CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil)) - CGFloat(CTLineGetTrailingWhitespaceWidth(line))
-        }
+        // CSS removes the collapsible spaces that end a line (CSS Text 3
+        // §4.1.3): a wrapped run's background stops at its last glyph, as the
+        // browser paints it. They
+        // hang past the line's end edge: its width under an `ltr` base (LLP
+        // 1053 §0, the Linux parity), left of its pen under `rtl` (CoreText's).
+        let rtlBase = runs.first.flatMap { (CTRunGetAttributes($0) as NSDictionary)[NSAttributedString.Key.paragraphStyle] as? NSParagraphStyle }?
+            .baseWritingDirection == .rightToLeft
+        let trailing = CGFloat(CTLineGetTrailingWhitespaceWidth(line))
+        let start = rtlBase && trailing > 0 ? 0 : -CGFloat.infinity
+        let end = !rtlBase && trailing > 0 ? CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil)) - trailing : CGFloat.infinity
         // Each run's background, for the room beside it (`placedRooms`).
         var fills: [Int: InlineBackground] = [:]
         for run in runs {
@@ -462,7 +465,7 @@ enum TextLinePaint {
                     lo = min(lo, positions[i].x, positions[i].x + advances[i].width)
                     hi = max(hi, positions[i].x, positions[i].x + advances[i].width)
                 }
-                hi = min(hi, end)
+                (lo, hi) = (max(lo, start), min(hi, end))
                 if hi > lo { spans.append(Piece(lo: lo, hi: hi, box: nil, color: fill.color, fill: fill)) }
                 continue
             }
@@ -481,7 +484,7 @@ enum TextLinePaint {
             let backwards = CTRunGetStatus(run).contains(.rightToLeft)
             for i in 0..<count {
                 let from = indices[i], to = next[from]!, glyph = NSRange(location: from, length: to - from)
-                let lo = min(positions[i].x, positions[i].x + advances[i].width)
+                let lo = max(start, min(positions[i].x, positions[i].x + advances[i].width))
                 let hi = min(end, max(positions[i].x, positions[i].x + advances[i].width) - (i == reach ? room : 0))
                 for (b, box) in boxes.boxes.enumerated() {
                     let mine = NSIntersectionRange(box.extent, glyph)
