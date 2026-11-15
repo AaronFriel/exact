@@ -21,6 +21,17 @@ This list holds what the [agent guide](contract-for-agents.md)'s rules don't mak
 
 ## Layout
 
+- **A video placed with `inset=0` does not fill its box.** An absolutely
+  positioned `video` with `inset=0` and no `width` or `height` is 300×150 until
+  its metadata arrives, then the stream's natural size, and an adaptive stream's
+  picture grows and shrinks with each rendition. Cause: CSS sizes a replaced
+  element whose width and height are auto by its natural size, and opposing
+  insets do not stretch it (CSS 2.1 §10.3.8, §10.6.5; an `image` likewise).
+  Chrome and iOS agree. Fix: `width="100%" height="100%"` with `object-fit`.
+  **Candidate diagnostic** (an absolutely positioned `video` or `image` with
+  opposing insets and an auto size on that axis). (expo/exact#648, web and iOS
+  simulator, 2026-11-15.)
+
 - **Inline runs with nothing between them never wrap apart.** Chips written as
   adjacent runs (`text "one" padding="4px 8px" margin-right=6`, then `text
   "two" …`) stay on one line and run off the edge. Cause: CSS breaks a line

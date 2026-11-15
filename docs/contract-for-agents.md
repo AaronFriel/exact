@@ -2951,6 +2951,11 @@ A video is HTML's `video`, not a native view (LLP 1042):
 playsinline=true object-fit="cover"` is a looping hero, which Apple draws with an
 `AVPlayerLayer`. Give it a `poster` (a still of its first frame): AVPlayer takes 50 ms
 to a second to draw its first frame after launch, and the poster shows until it has.
+Its box is a replaced element's: with `width` and `height` auto it is the source's
+natural size (300×150 until the metadata arrives), even when it is absolutely
+positioned with `inset=0`, since opposing insets do not stretch a replaced element
+(CSS 2.1 §10.3.8, §10.6.5), and an adaptive stream's box changes with each
+rendition. To fill a box, write `width="100%" height="100%"` with `object-fit`.
 `audio` stays HTML's player for long media
 (a song, a podcast: `video`'s props and events with no picture, LLP 1042 §8).
 
