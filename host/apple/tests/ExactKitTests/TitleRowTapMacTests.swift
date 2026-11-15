@@ -156,16 +156,14 @@ final class TitleRowTapMacTests: XCTestCase {
         }
     }
 
+    /// Read from the two settings' values, not a defaults suite: a suite also reads the global domain, where this
+    /// Mac's own AppleMiniaturizeOnDoubleClick would win over the test's.
     func testTheTitleBarsDoubleClickFollowsTheSystemSetting() throws {
-        let suite = "exact.title-bar-action.\(UUID().uuidString)"
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
-        XCTAssertEqual(TitleBarAreaMac.action(defaults), .zoom, "unset: zoom")
-        defaults.set(true, forKey: "AppleMiniaturizeOnDoubleClick")
-        XCTAssertEqual(TitleBarAreaMac.action(defaults), .minimize, "the older setting")
-        for (value, action) in [("Maximize", TitleBarAreaMac.Action.zoom), ("Fill", .zoom), ("Minimize", .minimize), ("None", .none)] {
-            defaults.set(value, forKey: "AppleActionOnDoubleClick")
-            XCTAssertEqual(TitleBarAreaMac.action(defaults), action, value)
+        let action = TitleBarAreaMac.action(actionOnDoubleClick:miniaturizeOnDoubleClick:)
+        XCTAssertEqual(action(nil, false), .zoom, "unset: zoom")
+        XCTAssertEqual(action(nil, true), .minimize, "the older setting")
+        for (value, expected) in [("Maximize", TitleBarAreaMac.Action.zoom), ("Fill", .zoom), ("Minimize", .minimize), ("None", .none)] {
+            XCTAssertEqual(action(value, true), expected, value)
         }
     }
 }
