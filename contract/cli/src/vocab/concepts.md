@@ -847,7 +847,7 @@ component Tag
       text label
 ```
 
-- Resources, mutations and tasks are the root's: a child takes their results as props.
+- A child may own resources, asked while each instance lives; mutations and tasks are the root's.
 
 ## derive: a value computed from state
 names: computed, memo, useMemo, selector, getter

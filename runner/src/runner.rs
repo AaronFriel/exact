@@ -113,6 +113,7 @@ mod lists;
 mod media_session;
 pub mod outstanding;
 mod overrun;
+mod owned;
 mod page;
 mod parallel;
 mod perf;
@@ -126,6 +127,7 @@ mod history;
 pub mod router;
 pub use lists::{ListTextPolicy, ListTextPosition};
 mod settlement;
+pub(crate) use settlement::zero;
 mod sockets;
 pub use sockets::{SocketReader, SocketState};
 mod activities;
@@ -486,6 +488,11 @@ pub struct Runner<D: DataSource> {
     /// Resources an action asked to re-request; consumed by the next settle
     /// that can ask them (LLP 1054.000.000 D2).
     refresh_next: Vec<usize>,
+    /// The `late` slots are initialized: a `late` resource settles from now
+    /// on (LLP 1035.005.004 D2).
+    late_ready: bool,
+    /// The boot render's instances are making their requests (D8).
+    owned_launch: bool,
     /// Resources whose ask in the commit being made is the launch's own,
     /// replacing a stand-in: nobody asked for fresh data, so the request is
     /// not sent as a refresh, and a reply fetched for this launch may answer
@@ -922,6 +929,8 @@ impl<D: DataSource> Runner<D> {
             retry_reader: None,
             mutation_requests: 0,
             refresh_next: Vec::new(),
+            late_ready: false,
+            owned_launch: false,
             launch: Vec::new(),
             writes: writes::Writes::default(),
             reconciling: Vec::new(),
@@ -1045,28 +1054,8 @@ impl<D: DataSource> Runner<D> {
         };
         runner.journal_kept_seeds();
         runner.init_late_slots(carried)?;
-        let now = runner.now_ms;
-        // A gated task starts idle; the gate step arms the ones whose gate
-        // holds, over the settled state (LLP 1092 D8).
-        runner.timers = runner
-            .plan
-            .timers
-            .iter()
-            .map(|t| Timer {
-                next_ms: if t.gated || t.keyed {
-                    f64::INFINITY
-                } else if t.frame {
-                    virtual_frame(now, 1)
-                } else {
-                    now + t.interval_ms as f64
-                },
-                armed: !(t.gated || t.keyed),
-                generation: 0,
-                key: None,
-                base: now,
-                k: 1,
-            })
-            .collect();
+        runner.settle_late(carried.is_none())?;
+        runner.timers = runner.boot_timers();
         runner.gate_step()?;
         runner.launch.clear();
         // No commit's end follows the boot's settlement: what it did here.
@@ -1087,7 +1076,9 @@ impl<D: DataSource> Runner<D> {
         runner.shown = shown;
         runner.ids = ids;
         runner.tree = Some(tree);
-        let receipt = runner.apply(ops)?;
+        let mut receipt = runner.apply(ops)?;
+        // The instances the first frame made ask for what they own.
+        runner.boot_owned(&mut receipt)?;
         runner.samples_stood();
         runner.publish_surfaces(surfaces);
         runner.pin_canvas_captures();

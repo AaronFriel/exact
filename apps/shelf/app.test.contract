@@ -152,6 +152,24 @@ test "stats count the library and keep the goal"
   tap "tab-stats"
   expect text "goal" == "11 books"
 
+test "Discover asks for its works only while its tab shows"
+  // `works` is Discover's own (LLP 1035.005.004), gated on its tab.
+  perf
+    clock data
+  expect perf query works == 0
+  perf
+    tap "tab-discover"
+    clock data
+  expect perf query works == 1
+  perf
+    tap "tab-library"
+    clock data
+  expect perf query works == 0
+  perf
+    tap "tab-discover"
+    clock data
+  expect perf query works == 1
+
 test "discover shows an error, then tries again"
   fail fetch "https://openlibrary.org/subjects"
   tap "tab-discover"
@@ -186,5 +204,3 @@ always "draftStatus is one of 3 values"
 always "filter is one of 4 values"
   expect state filter in "all" "done" "reading" "want"
 
-always "subject is one of 3 values"
-  expect state subject in "fantasy" "mystery_and_detective_stories" "science_fiction"

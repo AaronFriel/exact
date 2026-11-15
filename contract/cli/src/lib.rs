@@ -55,6 +55,7 @@ mod rust;
 mod sources;
 mod strings;
 mod surface;
+use surface::fact_shape;
 mod symbols;
 pub use contract_analyze::SuggestionCheck;
 pub use properties::{check_properties_path, check_suggestions_path, properties, tests};
@@ -1193,6 +1194,8 @@ pub fn bake_with_warnings<D: DataSource>(
             );
         }
     }
+    // @ref LLP 1035.005.004 D8 — and the answers of the boot render's instances.
+    runner.bake_launch_answers(&mut b, &dated);
     b.finish()
         .map(|plan| (plan, runner.bake_warnings().to_vec()))
         .map_err(|e| BakeError::Runner(RunnerError::Plan(e)))
@@ -1301,50 +1304,6 @@ fn first_frame<D: DataSource>(
     }
     lint(&mut runner, answered)?;
     Ok(runner)
-}
-
-/// The runner's own sources (LLP 1030 D7 delivery; LLP 1039 D1 viewport;
-/// LLP 1069.000 D2 page) are answered by the runner, not by the data crate,
-/// so the fields each can fill are a closed set — a declared field it does
-/// not know would refuse every boot on every device, which is a build-time
-/// refusal here instead, naming the field.
-fn fact_shape(
-    plan: &Plan,
-    source: &str,
-    fields: &[&str],
-    id: &'static str,
-) -> Result<(), BakeError> {
-    for row in plan.resources.iter() {
-        if plan.str(row.source) != source {
-            continue;
-        }
-        let name = plan.str(row.name);
-        let ty = plan.type_(row.ty);
-        if ty.kind != exact_plan::TypeKind::Record {
-            return Err(BakeError::Lint {
-                site: None,
-                id,
-                message: format!(
-                    "`resource {name} = {source}()` must be `as shape` a record of {}",
-                    fields.join(", ")
-                ),
-            });
-        }
-        for f in ty.fields.iter() {
-            let field = plan.str(plan.field(f).name);
-            if !fields.contains(&field) {
-                return Err(BakeError::Lint {
-                    site: None,
-                    id,
-                    message: format!(
-                        "`{name}` declares `{field}`, which {source} does not answer; it answers {}",
-                        fields.join(", ")
-                    ),
-                });
-            }
-        }
-    }
-    Ok(())
 }
 
 /// The layout lint (LLP 1017 P1d): the compiler cannot see layout, bake can.

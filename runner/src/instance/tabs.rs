@@ -462,8 +462,8 @@ fn open_panel(
         region: Some(region.0),
         ..ArmFrame::default()
     };
-    if plan.slots.iter().any(|s| s.owner == Some(contents)) {
-        let slots: RowSlots = Rc::new(RefCell::new(BTreeMap::new()));
+    if super::region::owns_slots(plan, contents) {
+        let slots: RowSlots = crate::vm::Owned::shared();
         frame.region = Some(region.0);
         frame.row = Some(slots.clone());
         let inner = with_frame(frames, frame.scope());
@@ -486,8 +486,9 @@ fn open_panel(
             if !v.conforms(plan, s.ty) {
                 return Err(InstanceError::slot_type(plan, &v, s.ty, name));
             }
-            slots.borrow_mut().insert(i as u32, v);
+            slots.borrow_mut().slots.insert(i as u32, v);
         }
+        super::region::init_requests(u, contents, &slots);
     }
     let roots = realize(u, None, Some(contents), &with_frame(frames, frame.scope()))?;
     Ok(vec![Child::Region(RegionInst {
@@ -528,7 +529,7 @@ impl Tree {
                         } = &r.active
                         {
                             if sites.binary_search(&n.node).is_ok() {
-                                for (i, v) in slots.borrow().iter() {
+                                for (i, v) in slots.borrow().slots.iter() {
                                     let name = plan.str(plan.slots[*i as usize].name);
                                     out.push((id.to_owned(), name.to_owned(), v.clone()));
                                 }

@@ -138,7 +138,6 @@ component Shelf
   state draftPages = ""
   state draftStatus = "want"
   state submitted = false
-  state subject = "science_fiction"
   // The scan's camera track, and the ISBNs Try Again passed over.
   state scanTrack = ""
   state skipped: string[] = []
@@ -148,7 +147,6 @@ component Shelf
 
   resource time = exactTime() as shape Time
   resource lib = library() as shape Library else empty(ready=false, goal=12, avgText="—")
-  resource works = subjectWorks(subject) when nav.tab == "discover" as shape Subject else empty(ok=true)
   mutation changed as shape Ack queue refreshes lib then saved
   // The add sheet's own: the sheet closes only once the book is stored.
   mutation added as shape Ack queue refreshes lib then addEnded
@@ -402,11 +400,7 @@ component Shelf
   action tagSaidDone
     tagSaid = ""
 
-  // Discover
-  action chooseSubject(s: string)
-    subject = s
-  action reload
-    refresh works
+  // Discover's add: the library is the root's.
   action addWork(w: Work)
     send changed = addBook(w.title, w.author, w.pages, "want", w.coverUrl, w.key, time.epochAtZero + performanceNow())
 
@@ -698,56 +692,7 @@ component Shelf
                       button press=tryAgain buttonStyle="bordered" testId="scan-again"
                         text "Try Again"
               if e.name == "discover"
-                column navigationKey=`${e.id}`
-                  navigationScroll="discover-list"
-                  testId="route-discover"
-                  position="absolute"
-                  inset=0
-                  display="flex"
-                  flex-direction="column"
-                  header display="flex" align-items="center" padding="8px 16px"
-                    text "Discover" role="heading" aria-level=1
-                  row role="tablist" aria-label="Subject" testId="subjects" margin="8px 16px"
-                    button role="tab"
-                      aria-selected=(subject == "science_fiction")
-                      press=chooseSubject("science_fiction")
-                      testId="subject-science_fiction"
-                      flex=1
-                      text "Sci-Fi"
-                    button role="tab"
-                      aria-selected=(subject == "fantasy")
-                      press=chooseSubject("fantasy")
-                      testId="subject-fantasy"
-                      flex=1
-                      text "Fantasy"
-                    button role="tab"
-                      aria-selected=(subject == "mystery_and_detective_stories")
-                      press=chooseSubject("mystery_and_detective_stories")
-                      testId="subject-mystery_and_detective_stories"
-                      flex=1
-                      text "Mystery"
-                  // Pull to refresh: `refresh` on the list; `refreshing` holds the
-                  // spinner until the reload settles. What stands in for the rows
-                  // (the spinner, the error and its button) is one child, with no
-                  // separator at either edge.
-                  list id="discover-list"
-                    testId="discover-list"
-                    refresh=reload
-                    refreshing=(pending(works) and works.works.length > 0)
-                    flex=1
-                    min-height=0
-                    if pending(works) and works.works.length == 0
-                      row justify-content="center" padding=40 border-top="none" border-bottom="none"
-                        progress aria-label="Loading" testId="discover-loading"
-                    else if not works.ok
-                      column border-top="none" border-bottom="none"
-                        Empty(title="Couldn’t Load Books", message=works.error, tid="discover-error")
-                        row justify-content="center"
-                          button press=reload testId="retry"
-                            text "Try Again"
-                    else
-                      for w in works.works key = w.key
-                        WorkRow(work=w, added=owned.includes(w.key), add=addWork)
+                Discover(entry=e.id, shown=(nav.tab == t.name), owned=owned, add=addWork)
               if e.name == "stats"
                 column navigationKey=`${e.id}`
                   navigationScroll="stats-list"
@@ -834,6 +779,72 @@ component Shelf
 // tab, "Copy Link", the address in the status bar). `delete=` is its swipe to
 // delete: on iOS UIKit's own, which a full swipe performs, and the web scrolls
 // the row to its Delete.
+component Discover
+  // Discover's subject and works are its own (LLP 1035.005.004): `works` asks
+  // while its tab shows and keeps its answer while another tab does.
+  props
+    entry: number
+    shown: bool
+    owned: string[]
+    add: action
+  state subject = "science_fiction"
+  resource works = subjectWorks(subject) when shown as shape Subject else empty(ok=true)
+  action chooseSubject(s: string)
+    subject = s
+  action reload
+    refresh works
+  view
+    column navigationKey=`${entry}`
+      navigationScroll="discover-list"
+      testId="route-discover"
+      position="absolute"
+      inset=0
+      display="flex"
+      flex-direction="column"
+      header display="flex" align-items="center" padding="8px 16px"
+        text "Discover" role="heading" aria-level=1
+      row role="tablist" aria-label="Subject" testId="subjects" margin="8px 16px"
+        button role="tab"
+          aria-selected=(subject == "science_fiction")
+          press=chooseSubject("science_fiction")
+          testId="subject-science_fiction"
+          flex=1
+          text "Sci-Fi"
+        button role="tab"
+          aria-selected=(subject == "fantasy")
+          press=chooseSubject("fantasy")
+          testId="subject-fantasy"
+          flex=1
+          text "Fantasy"
+        button role="tab"
+          aria-selected=(subject == "mystery_and_detective_stories")
+          press=chooseSubject("mystery_and_detective_stories")
+          testId="subject-mystery_and_detective_stories"
+          flex=1
+          text "Mystery"
+      // Pull to refresh: `refresh` on the list; `refreshing` holds the
+      // spinner until the reload settles. What stands in for the rows
+      // (the spinner, the error and its button) is one child, with no
+      // separator at either edge.
+      list id="discover-list"
+        testId="discover-list"
+        refresh=reload
+        refreshing=(pending(works) and works.works.length > 0)
+        flex=1
+        min-height=0
+        if pending(works) and works.works.length == 0
+          row justify-content="center" padding=40 border-top="none" border-bottom="none"
+            progress aria-label="Loading" testId="discover-loading"
+        else if not works.ok
+          column border-top="none" border-bottom="none"
+            Empty(title="Couldn’t Load Books", message=works.error, tid="discover-error")
+            row justify-content="center"
+              button press=reload testId="retry"
+                text "Try Again"
+        else
+          for w in works.works key = w.key
+            WorkRow(work=w, added=owned.includes(w.key), add=add)
+
 component BookRow
   props
     book: Book

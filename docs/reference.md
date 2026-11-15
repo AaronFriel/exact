@@ -1855,6 +1855,12 @@ names. Each status's `resource` still identifies the declaration. The driver's
 source location names the declaration for every member. In `perf.resources`,
 each list member carries the same key as `member`, while `name` remains the
 declaration name. `expect perf query <resource>` sums its members' asks.
+A child's resources (LLP 1035.005.004) are not in `resources`: `owned` names
+them as their component declares them, and `instances` lists each live
+instance's under its instance path (`/2:0/5=3`, a region's arm or a row's key
+per step), by the declared name. In `perf.resources` a child's resource counts
+every instance's asks under the declared name, which `expect perf query`
+takes.
 
 ### What a data module can use
 

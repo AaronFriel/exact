@@ -716,7 +716,7 @@ fn lower_body(
         let code = l.expr_code(&d.expr, &scope, 0)?;
         l.b.set_derive_body(l.derives[i], code);
     }
-    l.resource_args(root, &scope)?;
+    l.resource_args(root, &ex.resource_owners, &scope)?;
     // @ref LLP 1048.003 D6 — a declared placeholder is a row of its own,
     // after every authored row; its arguments read no state.
     for (i, r) in root.resources.iter().enumerate() {
@@ -846,6 +846,7 @@ fn lower_body(
         // Row slots name regions a refused element may not have lowered.
         return Err(Vec::new());
     }
+    l.owned_resource_args(root, ex, &scope)?;
     // Child state (LLP 1017 P4c): each lifted state is initialized where its
     // instance is created — in its owning arm's scope, now that the arms
     // exist, or, for a use outside every region, at the boot render.

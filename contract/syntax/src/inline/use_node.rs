@@ -3,18 +3,13 @@
 use super::*;
 
 /// The component's names that a read takes as a value: its states, derives,
-/// device facts, and props and injects that are not actions.
+/// resources, and props and injects that are not actions.
 fn value_names(c: &Component) -> BTreeSet<String> {
     c.states
         .iter()
         .chain(&c.derives)
         .map(|b| b.name.clone())
-        .chain(
-            c.resources
-                .iter()
-                .filter(|r| super::reads_device(r))
-                .map(|r| r.name.clone()),
-        )
+        .chain(c.resources.iter().map(|r| r.name.clone()))
         .chain(
             c.props
                 .iter()
@@ -247,6 +242,26 @@ fn prepare_use(node: &Node, subst: &mut Subst<'_, Expr>, ctx: &mut Ctx<'_>) -> O
     for st in &c.states {
         child_subst.insert(st.name.clone(), Expr::Ident(names[&st.name].clone(), *span));
     }
+    // Its own requests (LLP 1035.005.004 D1), renamed apart as its state is:
+    // this use's instance owns them.
+    let owned: Vec<&ResourceDecl> = c
+        .resources
+        .iter()
+        .filter(|r| !super::reads_device(r))
+        .collect();
+    for r in &owned {
+        let lifted = lifted(&r.name, n);
+        child_subst.insert(r.name.clone(), Expr::Ident(lifted.clone(), *span));
+        names.insert(r.name.clone(), lifted);
+    }
+    if !owned.is_empty() {
+        ctx.owned_uses.push(OwnedUse {
+            component: name.clone(),
+            instance,
+            span: *span,
+            repeat: ctx.repeats.last().copied(),
+        });
+    }
     // Its device facts read the root's one resource for them.
     for r in c.resources.iter().filter(|r| super::reads_device(r)) {
         child_subst.insert(
@@ -367,6 +382,18 @@ fn prepare_use(node: &Node, subst: &mut Subst<'_, Expr>, ctx: &mut Ctx<'_>) -> O
         child_subst.insert(derive.name.clone(), expr);
     }
     let mut child = Subst::new(&child_subst, records).with_value_only(&value_names);
+    for r in &owned {
+        ctx.extra_resources.push((
+            ResourceDecl {
+                name: names[&r.name].clone(),
+                args: r.args.iter().map(|a| subst_expr(a, &mut child)).collect(),
+                gate: r.gate.as_ref().map(|g| subst_expr(g, &mut child)),
+                ..(*r).clone()
+            },
+            owner,
+            instance,
+        ));
+    }
     for st in &c.states {
         ctx.extra_states.push((
             Binding {
@@ -397,6 +424,9 @@ fn prepare_use(node: &Node, subst: &mut Subst<'_, Expr>, ctx: &mut Ctx<'_>) -> O
                 r.name.clone(),
                 Expr::Ident(super::hoisted(&c.name, &r.name), r.span),
             );
+        }
+        for r in &owned {
+            action_subst.insert(r.name.clone(), Expr::Ident(names[&r.name].clone(), r.span));
         }
         let resolved: Vec<Expr> = {
             let mut base = Subst::new(&action_subst, records).with_value_only(&value_names);

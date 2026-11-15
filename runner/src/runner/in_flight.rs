@@ -88,6 +88,11 @@ impl<D: DataSource> Runner<D> {
     /// A target's resource or mutation name.
     pub(super) fn target_name(&self, t: Target) -> String {
         match t {
+            // A child's resource by the name its component declares
+            // (LLP 1035.005.004 D8).
+            Target::Resource(i) if self.owned_row(i).is_some() => {
+                crate::agent::declared_name(self.plan.str(self.resource_row(i).name)).to_string()
+            }
             Target::Resource(i) => self.plan.str(self.resource_row(i).name).to_string(),
             Target::Mutation(m) | Target::Sent(m, _) => {
                 self.plan.str(self.plan.mutations[m].name).to_string()

@@ -368,13 +368,20 @@ calls (a shape, a `fn`, a component) comes from its own `use` lines or is
 declared in it, beside the block; another file, the root among them, names
 such a declaration on a `use` line. The
 component's rules hold for its members wherever they are written: a child's
-members file declares no resource.
+members file declares no mutation or task.
 
 There is one `props`, `inject`, `provide`, `slot`, and `view` section at most in
-a component. Only the root may own resources, mutations, and tasks, except that
-any component may read the device's facts, `exactViewport()` and `exactPage()`
-with no arguments (`EmptyState` reads `accessibilityTextSize`): they open no
-request, and every instance reads the root's one answer. A task's
+a component. Only the root may own mutations and tasks. Any component may own
+resources (LLP 1035.005.004): each instance of a child asks for its own, after
+the render that makes it, and lets go when the render destroys it. A child's
+resource is not a resource over a list, and a child that owns one is used where
+its instances are bounded: outside every region, under `if` and `match`, or in a
+row of `stack(nav)`, `t.stack` or `nav.tabs`, never under another `for` or in a
+virtualized list (`type-child-resource`). Its state initializers do not read its
+own resources (`type-state-reads-request`). The device's facts,
+`exactViewport()` and `exactPage()` with no arguments (`EmptyState` reads
+`accessibilityTextSize`), open no request: every instance reads the root's one
+answer. A task's
 body has exactly one schedule. A gated task (`when cond`, LLP 1092) has its
 timer only while `cond` holds, armed from the commit that made it true; `key=`
 re-arms it from the commit that changed the key (compared as a `for` key),

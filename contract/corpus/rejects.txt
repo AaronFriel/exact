@@ -184,13 +184,15 @@ component A
       text "a"
 ---
 == type-child-resource
-# A child may own state, derives, and actions (LLP 1017 P4c) — never a
-# resource, mutation, or task: a row must not open N requests.
+# A child owns its resource (LLP 1035.005.004 D1), but not where data sizes
+# its uses: a row must not open N requests no line states.
 shape S
   id: string
 component A
+  state ids = ["a"]
   view
-    Row()
+    for id in ids key=id
+      Row()
 component Row
   resource s = s() as shape S
   view

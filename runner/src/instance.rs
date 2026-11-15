@@ -20,6 +20,8 @@ mod find;
 mod foresee;
 mod keys;
 pub mod looks;
+mod owners;
+pub use owners::OwnerInst;
 mod rare;
 mod region;
 pub mod tabs;
@@ -402,6 +404,9 @@ pub struct Update<'a> {
     pub full: bool,
     /// Rows an action wrote since the last update.
     pub rows: RowWrites,
+    /// Resources a child declares whose request in some instance shows
+    /// something new since the last update (LLP 1035.005.004 D2).
+    pub owned: Vec<usize>,
     /// Inputs changed since the tree last updated; `None` outside
     /// [`Tree::update`], where everything is stale.
     changed: Option<Bits>,
@@ -474,6 +479,7 @@ impl<'a> Update<'a> {
             work: InstanceWork::default(),
             full: false,
             rows: RowWrites::default(),
+            owned: Vec::new(),
             changed: None,
             dirty_frames: 0,
             dirty_fields: 0,
@@ -1267,7 +1273,11 @@ impl Tree {
     pub fn update(&mut self, u: &mut Update<'_>) -> Result<(), InstanceError> {
         // New views cannot change the typography of already measured rows.
         let last_existing_view = u.ids.next;
-        u.changed = Some(u.sites.data.deps.changed(&self.seen, &u.env));
+        let mut changed = u.sites.data.deps.changed(&self.seen, &u.env);
+        for &i in &u.owned {
+            u.sites.data.deps.mark_resource(&mut changed, i);
+        }
+        u.changed = Some(changed);
         let roots = update_all(u, &mut self.children, &[]);
         u.changed = None;
         if roots? {

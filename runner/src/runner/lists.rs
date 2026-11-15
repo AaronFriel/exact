@@ -172,6 +172,15 @@ impl<D: DataSource> Runner<D> {
         settled: bool,
         update: impl FnOnce(&mut Tree, &mut Update<'_>) -> Result<(), crate::instance::InstanceError>,
     ) -> Result<CommitReceipt, RunnerError> {
+        self.render_owned(settled, update)
+    }
+
+    /// One render, applied.
+    pub(super) fn render_once(
+        &mut self,
+        settled: bool,
+        update: impl FnOnce(&mut Tree, &mut Update<'_>) -> Result<(), crate::instance::InstanceError>,
+    ) -> Result<CommitReceipt, RunnerError> {
         let (ops, surfaces, _) = self.update_ops(settled, update)?;
         match self.apply(ops) {
             Ok(receipt) => {
@@ -197,6 +206,7 @@ impl<D: DataSource> Runner<D> {
         settled: bool,
         update: impl FnOnce(&mut Tree, &mut Update<'_>) -> Result<(), crate::instance::InstanceError>,
     ) -> Result<UpdateOps, RunnerError> {
+        let owned = self.sync_owned();
         let mut tree = self.tree.take().expect("booted");
         let mut ids = std::mem::take(&mut self.ids);
         let rows = std::mem::take(&mut self.row_writes);
@@ -214,6 +224,7 @@ impl<D: DataSource> Runner<D> {
             u.full = self.full;
             u.discard = self.kernel.is_detached();
             u.rows = rows;
+            u.owned = owned;
             u.reuse = self.reuse;
             update(&mut tree, &mut u)
                 .map(|_| (u.ops, u.surfaces, u.notes, u.renewed, u.shown, u.work))

@@ -193,16 +193,43 @@ fn a_use_owns_its_state_and_a_row_owns_its_own_which_follows_its_key() {
 }
 
 #[test]
-fn a_child_may_not_own_a_resource() {
-    let src = "shape S\n  id: string\ncomponent A\n  view\n    Row()\ncomponent Row\n  resource s = s() as shape S\n  view\n    text s.id\n";
-    let e = contract::compile(src).unwrap_err();
+fn a_child_owns_its_resource_except_where_data_sizes_its_uses() {
+    // One use, outside every region: one instance and one request
+    // (LLP 1035.005.004 D1).
+    let one = "shape S\n  id: string\ncomponent A\n  view\n    Row()\ncomponent Row\n  resource s = s() as shape S\n  view\n    text s.id\n";
+    contract::compile(one).unwrap_or_else(|e| panic!("{e}"));
+    // Under a `for` over data, the rows would ask a count of requests no
+    // line states.
+    let rows = "shape S\n  id: string\ncomponent A\n  state ids = [\"a\"]\n  view\n    for id in ids key=id\n      Row()\ncomponent Row\n  resource s = s() as shape S\n  view\n    text s.id\n";
+    let e = contract::compile(rows).unwrap_err();
     assert_eq!(e.id, "type-child-resource");
-    // It states the rule and names the root (chess #3), then the repairs a
-    // feature needs: prefixed names in the root, and a gate on what shows it.
-    assert_eq!(e.message, "only the root, the root file's first component (`A`), may declare a `resource`, `mutation`, or `task`; `Row` is a child, which may own state, derives, and actions. Declare `Row`'s resources, mutations and tasks in `A`, named with the feature's prefix (`rowS`); a `members A` block in a file of their own, which `A` lists with `members \"./row.contract\"`, keeps them together. Pass `Row` their values and the actions that send them as props (docs/contract-for-agents.md, \"A feature's requests\"). Gate a resource that only one tab or screen reads on that tab or screen showing, and it asks nothing while hidden: `resource rowS = s(…) when nav.tab == \"…\"`. Or, if `Row` is the app, move it above `A`");
+    assert_eq!(e.span.line, 7);
+    assert_eq!(e.message, "`Row` declares `resource s`, and this use is under a `for` over data (line 6): each row would ask `s` on its own, with nothing here saying how many. A component that owns requests is used where its instances are tabs, screens or `if` arms. For one request per row, declare it in `A` over the list, `resource rowS = s(x) for x in … key=…`, and pass each row its answer as a prop (docs/contract-for-agents.md, \"A feature's requests\")");
     // The repair it names compiles.
-    let fixed = "routes nav\n  tab home \"/\"\n  tab rows \"/rows\"\nshape S\n  id: string\ncomponent A\n  resource rowS = s() when nav.tab == \"rows\" as shape S else empty(id=\"\")\n  view\n    Row(s=rowS)\ncomponent Row\n  props\n    s: S\n  view\n    text s.id\n";
+    let fixed = "shape S\n  id: string\ncomponent A\n  state ids = [\"a\"]\n  resource rowS = s(x) for x in ids key=x as shape S\n  view\n    column\n      for r in rowS key=r.id\n        Row(s=r)\ncomponent Row\n  props\n    s: S\n  view\n    text s.id\n";
     contract::compile(fixed).unwrap_or_else(|e| panic!("{e}"));
+    // A child's own resource over a list is refused at its declaration.
+    let listed = "shape S\n  id: string\ncomponent A\n  view\n    Row()\ncomponent Row\n  state ids = [\"a\"]\n  resource s = s(x) for x in ids key=x as shape S\n  view\n    text \"x\"\n";
+    let e = contract::compile(listed).unwrap_err();
+    assert_eq!(e.id, "type-child-resource");
+    assert!(
+        e.message.contains("may declare a resource over a list"),
+        "{}",
+        e.message
+    );
+}
+
+#[test]
+fn a_childs_state_may_not_start_from_its_own_request() {
+    let src = "shape S\n  id: string\ncomponent A\n  view\n    Row()\ncomponent Row\n  resource s = s() as shape S\n  derive id = s.id\n  state first = id\n  view\n    text first\n";
+    let e = contract::compile(src).unwrap_err();
+    assert_eq!(e.id, "type-state-reads-request");
+    assert!(
+        e.message
+            .starts_with("`state first` in `Row` reads `id`, which reads a resource"),
+        "{}",
+        e.message
+    );
 }
 
 #[test]

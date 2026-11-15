@@ -96,6 +96,15 @@ pub struct Expanded {
     pub state_instances: Vec<u32>,
     /// For each of `root.actions`, the same.
     pub action_instances: Vec<u32>,
+    /// For each of `root.resources`, what owns it (LLP 1035.005.004 D1):
+    /// `Root` for the root's own and the device facts hoisted to it; a
+    /// child's lifted `name#N`, the instance of its use, as a state's.
+    pub resource_owners: Vec<Owner>,
+    /// For each of `root.resources`, the instance whose component declared it.
+    pub resource_instances: Vec<u32>,
+    /// Every use of a component that declares a request, with the repetition
+    /// around it a request may not be under (D1): what the type check refuses.
+    pub owned_uses: Vec<OwnedUse>,
     /// Each region tag's declaring instance, for compile-time cost reports.
     pub region_instances: BTreeMap<u32, u32>,
 }
@@ -138,6 +147,30 @@ pub enum Owner {
         /// Which of its arms.
         arm: u8,
     },
+}
+
+/// A repetition around a use whose count the data sets, not the router
+/// (LLP 1035.005.004 D1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Repeat {
+    /// A `for` over data, written at this span.
+    Each(crate::Span),
+    /// A virtualized list, whose rows its window makes and retires.
+    List(crate::Span),
+}
+
+/// A use of a component that declares a request (LLP 1035.005.004 D1).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OwnedUse {
+    /// The component used.
+    pub component: String,
+    /// The instance the use makes.
+    pub instance: u32,
+    /// The use site.
+    pub span: crate::Span,
+    /// The innermost data-sized repetition around the use, through every
+    /// wrapper and slot fill; `None` where the use may own requests.
+    pub repeat: Option<Repeat>,
 }
 
 /// One component instantiation the inliner expanded (LLP 1035.005 D3):
@@ -330,6 +363,10 @@ fn expand_with_sites(
         thunks: Vec::new(),
         extra_states: Vec::new(),
         extra_actions: Vec::new(),
+        extra_resources: Vec::new(),
+        owned_uses: Vec::new(),
+        repeats: Vec::new(),
+        router_rows: Vec::new(),
         instance: 0,
         capture_sites: true,
         typed_props,
@@ -377,6 +414,13 @@ fn expand_with_sites(
         root.actions.push(a);
         action_instances.push(instance);
     }
+    let mut resource_owners = vec![Owner::Root; root.resources.len()];
+    let mut resource_instances = vec![0; root.resources.len()];
+    for (r, owner, instance) in ctx.extra_resources {
+        root.resources.push(r);
+        resource_owners.push(owner);
+        resource_instances.push(instance);
+    }
     calls::resolve(&mut root.actions, &records, &mut ctx.errors);
     let mut errors = called_errors;
     errors.append(&mut ctx.errors);
@@ -388,6 +432,9 @@ fn expand_with_sites(
         region_instances: ctx.region_instances,
         state_instances,
         action_instances,
+        resource_owners,
+        resource_instances,
+        owned_uses: ctx.owned_uses,
     };
     (expanded, errors)
 }
@@ -427,6 +474,15 @@ struct Ctx<'a> {
     thunks: Vec<Thunk>,
     /// The children's `action`s lifted into the root, with their instance.
     extra_actions: Vec<(Action, u32)>,
+    /// The children's requests lifted into the root, with their owners and
+    /// the instance that declared them (LLP 1035.005.004 D1).
+    extra_resources: Vec<(ResourceDecl, Owner, u32)>,
+    owned_uses: Vec<OwnedUse>,
+    /// The data-sized repetitions around the current site, outermost first.
+    repeats: Vec<Repeat>,
+    /// The binders of the `for`s over a router's tabs around the current
+    /// site: a `for` over one's `stack` is the router's too.
+    router_rows: Vec<String>,
     /// The instantiation whose view is being inlined: 0 at the root.
     instance: u32,
     capture_sites: bool,
@@ -573,6 +629,14 @@ fn inline_nodes(
                 if has("navigationKey") {
                     ctx.tabs = has("navigationBack");
                 }
+                // Its rows come and go with its window (LLP 1068): a
+                // repetition no request may be under.
+                let windowed = attrs.iter().any(|a| {
+                    a.name == "virtualized" && !matches!(literal(&a.value), Expr::Bool(false, _))
+                });
+                if windowed {
+                    ctx.repeats.push(Repeat::List(*span));
+                }
                 // @ref LLP 1075.003 §9.14 — a tab panel's contents are made
                 // when its tab is first selected: they are one arm, which
                 // owns the state of the children used in it, as an `if`'s
@@ -593,6 +657,9 @@ fn inline_nodes(
                     inline_nodes(children, subst, ctx)
                 };
                 ctx.tabs = tabs;
+                if windowed {
+                    ctx.repeats.pop();
+                }
                 out.push(Node::Element {
                     tag: tag.clone(),
                     positional: positional
@@ -633,12 +700,27 @@ fn inline_nodes(
                 ..
             } => {
                 let tag = ctx.tag();
+                let list = subst_expr(list, subst);
+                // A row of a router's tabs or stack is a tab or a screen
+                // someone opened; any other `for` repeats as its data does
+                // (LLP 1035.005.004 D1).
+                let routed = router_rows(&list, ctx);
+                match routed {
+                    Some(true) => ctx.router_rows.push(var.clone()),
+                    Some(false) => {}
+                    None => ctx.repeats.push(Repeat::Each(*span)),
+                }
                 let body = ctx.in_arm(tag, 0, |ctx| inline_nodes(body, subst, ctx));
+                match routed {
+                    Some(true) => drop(ctx.router_rows.pop()),
+                    Some(false) => {}
+                    None => drop(ctx.repeats.pop()),
+                }
                 out.push(Node::Each {
                     tag,
                     var: var.clone(),
                     index: index.clone(),
-                    list: subst_expr(list, subst),
+                    list,
                     key: subst_expr(key, subst),
                     body: body?,
                     span: *span,
@@ -666,6 +748,27 @@ fn inline_nodes(
         ctx.site_depth -= usize::from(is_site);
     }
     Ok(out)
+}
+
+/// Whether a `for` over `list` makes the router's rows: `Some(true)` for its
+/// tabs (`nav.tabs`), `Some(false)` for a stack (`stack(nav)`, or `t.stack`
+/// of a tab `t`), `None` for any other list.
+fn router_rows(list: &Expr, ctx: &Ctx<'_>) -> Option<bool> {
+    let slot = &ctx.file.routes.as_ref()?.slot;
+    match list {
+        Expr::Member(of, field, _) if field == "tabs" => {
+            matches!(&**of, Expr::Ident(name, _) if name == slot).then_some(true)
+        }
+        Expr::Member(of, field, _) if field == "stack" => matches!(
+            &**of,
+            Expr::Ident(name, _) if ctx.router_rows.contains(name)
+        )
+        .then_some(false),
+        Expr::Call(f, args, _) if f == "stack" => {
+            matches!(args.as_slice(), [Expr::Ident(name, _)] if name == slot).then_some(false)
+        }
+        _ => None,
+    }
 }
 
 // View binders must differ from lifted declarations as well as parent names:

@@ -1388,20 +1388,14 @@ fn check_with_sites(
 /// Children are views over their props, checked standalone before the
 /// root inlines them, so an error in a child is reported in its own terms.
 fn check_children(file: &File, types: &mut Types, sink: &mut Sink) {
-    // A child may own `state`, `derive`, and `action` (LLP 1017 P4c: its
-    // instances' own), never a `resource`, `mutation`, or `task` — a row
-    // must not open N requests, and only the root has a clock — but it may
-    // read the device's facts, which open none (`DEVICE_FACTS`).
+    // A child may own `state`, `derive`, `action` (LLP 1017 P4c: its
+    // instances' own) and `resource` (LLP 1035.005.004 D1: asked while its
+    // instance lives), never a `mutation` or `task`, nor a resource over a
+    // list, whose elements are its count of requests.
     for c in file.components.iter().skip(1) {
-        let data = c
-            .resources
-            .iter()
-            .any(|r| !contract_syntax::inline::reads_device(r));
-        if data || !c.mutations.is_empty() || !c.tasks.is_empty() {
-            let span = c
-                .resources
-                .iter()
-                .find(|r| !contract_syntax::inline::reads_device(r))
+        let listed = c.resources.iter().find(|r| r.each.is_some());
+        if listed.is_some() || !c.mutations.is_empty() || !c.tasks.is_empty() {
+            let span = listed
                 .map(|r| r.span)
                 .or(c.mutations.first().map(|m| m.span))
                 .or(c.tasks.first().map(|t| t.span))
@@ -1414,9 +1408,15 @@ fn check_children(file: &File, types: &mut Types, sink: &mut Sink) {
                 span,
             });
         }
+        if let Some(e) = tasks::reads_own_request(c) {
+            sink.push(e);
+        }
+        if let Some(e) = tasks::foreign_source(file, c) {
+            sink.push(e);
+        }
     }
     for c in file.components.iter().skip(1) {
-        let ct = component::check_component(c, types, None, sink);
+        let ct = component::check_component(c, types, None, &[], sink);
         types.components.push(ct);
     }
 }
@@ -1432,9 +1432,19 @@ fn check_root(
     for (c, ct) in file.components.iter().zip(&types.components).skip(1) {
         uses::check_uses(&c.view, &types.component_scope(c, ct), types, file, sink);
     }
+    for u in &expanded.owned_uses {
+        if let Some(repeat) = u.repeat {
+            sink.push(tasks::repeated_owner(file, u, repeat));
+        }
+    }
     let independent = sink.errors.len();
-    types.components[0] =
-        component::check_component(&expanded.root, types, Some(&expanded.owners), sink);
+    types.components[0] = component::check_component(
+        &expanded.root,
+        types,
+        Some(&expanded.owners),
+        &expanded.resource_owners,
+        sink,
+    );
     // @ref LLP 1048.000 D2 — each route's `pages=` source, in the root's seam.
     for row in file.routes.iter().flat_map(|r| &r.rows) {
         for field in row.fields.iter().filter(|f| f.name == "pages") {

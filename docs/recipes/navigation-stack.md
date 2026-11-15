@@ -144,4 +144,4 @@ test "add, open, delete after asking"
 ## A screen open twice
 
 A screen as a component, `Finder(entry=e)` (`props entry: Entry`), has `state` per
-entry, gone when it pops; resources, mutations and tasks are the root's.
+entry, gone when it pops, as are its resources; mutations and tasks are the root's.

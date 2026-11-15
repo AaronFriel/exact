@@ -481,6 +481,14 @@ impl Deps {
         })
     }
 
+    /// Mark resource `i`'s value, flags and failure changed in `bits`.
+    pub(crate) fn mark_resource(&self, bits: &mut Bits, i: usize) {
+        let layout = self.layout.expect("built from a plan");
+        bits.set(layout.resource(i));
+        bits.set(layout.pending_resource(i));
+        bits.set(layout.failed_resource(i));
+    }
+
     /// The inputs that differ between what the tree last showed and `env`.
     pub(crate) fn changed(&self, seen: &Seen, env: &Env<'_>) -> Bits {
         let layout = self.layout.expect("built from a plan");

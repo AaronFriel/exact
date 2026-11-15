@@ -1106,7 +1106,10 @@ export async function runTests({ host, browser, file, plan, app, size, env, webD
             break;
           }
           case 'expect-perf': {
-            const f = perfExpectation(measured, st, Object.keys((await s.state()).resources ?? {}));
+            // A child's resources are listed under each instance (LLP 1035.005.004 D8).
+            const state = await s.state();
+            const names = [...Object.keys(state.resources ?? {}), ...(state.owned ?? [])];
+            const f = perfExpectation(measured, st, [...new Set(names)]);
             if (f) failures.push(`${at}: ${f}`);
             break;
           }

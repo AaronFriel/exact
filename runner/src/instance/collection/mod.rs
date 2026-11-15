@@ -976,7 +976,7 @@ impl Collection {
         frames: &[Frame],
     ) -> Result<Row, InstanceError> {
         let plan = u.env.plan;
-        let slots: RowSlots = Rc::new(RefCell::new(BTreeMap::new()));
+        let slots: RowSlots = crate::vm::Owned::shared();
         let frame = Frame {
             item: Some(self.items[position].clone()),
             index: Some(position),
@@ -1011,7 +1011,7 @@ impl Collection {
                         plan.str(s.name),
                     ));
                 }
-                slots.borrow_mut().insert(i as u32, value);
+                slots.borrow_mut().slots.insert(i as u32, value);
             }
         }
         let around = std::mem::replace(&mut u.theme, self.around.clone());

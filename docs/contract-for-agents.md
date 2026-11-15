@@ -710,9 +710,9 @@ component Row
       archive(id)
 ```
 
-Children may hold state, derives, and actions. They cannot declare resources,
-mutations, or tasks. Lift shared data requests to the root and pass values and
-actions ([A feature's requests](#a-features-requests)). A child used under `for` owns row state keyed to that row's identity.
+Children may hold state, derives, actions and resources. They cannot declare
+mutations or tasks: the root passes the actions that send them
+([A feature's requests](#a-features-requests)). A child used under `for` owns row state keyed to that row's identity.
 Stable keys matter when content is inserted, removed, filtered, or reordered.
 A child's derive is compiled once per component use and evaluated at each read
 in that instance's frame. Non-atomic prop and inject arguments share that
@@ -821,13 +821,17 @@ roster. Compiler-owned router names exist only with a `routes` declaration.
 
 ### A feature's requests
 
-A feature written as a child (a canvas with its feed, a tab's screen) keeps its
-resources, mutations and tasks in the root, which passes it their values and the
-actions that send them as props. Name them with the feature's prefix
-(`historyDays`), since the root and its members files share one set of names; a
-members file per feature keeps a feature's declarations together. A root
-resource asks at launch unless it is gated, so gate one that only one tab or
-screen reads on that tab or screen showing.
+A feature written as a child (a tab's screen, a pushed screen) owns its
+resources as it owns its state: it declares them. Each instance asks for its
+own after the render that makes it, and lets go when the render destroys it, so
+an answer that arrives after a screen was popped changes nothing. A tab's root
+screen lives for the session, hidden while another tab shows; a pushed screen
+lives from the push to the pop.
+
+Permission to ask is `when`, not visibility: a hidden instance's ungated
+resource keeps its answer and asks again when its arguments change or it is
+refreshed. Gate a tab's resource on its tab showing, by a prop the parent
+passes:
 
 ```contract
 routes nav
@@ -835,29 +839,49 @@ routes nav
   tab history "/history"
 
 component App
-  resource historyDays = days() when nav.tab == "history" as shape string[] else empty()
   view
     main
       for t in nav.tabs key=t.name
         column role="tabpanel" display=(nav.tab == t.name ? "flex" : "none")
-          if t.name == "history"
-            History(days=historyDays)
-          else
-            text "Nothing logged yet."
+          for e in t.stack key=e.id
+            if e.name == "history"
+              History(shown=(nav.tab == t.name))
+            else
+              text "Nothing logged yet."
 
 component History
   props
-    days: string[]
+    shown: bool
+  state range = "week"
+  resource days = days(range) when shown as shape string[] else empty()
+  action reload
+    refresh days
   view
     column
+      button press=reload
+        text "Reload"
       for d in days key=d
         text d
 ```
 
-`historyDays` asks nothing until the History tab first shows. While the tab is
-hidden it is idle and keeps its last answer; when the tab shows again it is asked
-again, and that answer shows until the new one lands (`current(historyDays)` is
-false until then). A screen of a stack gates on `top(nav).name == "day"`.
+`days` asks nothing until the History tab first shows. While the tab is hidden it
+is idle and keeps its last answer; when the tab shows again it is asked again,
+and that answer shows until the new one lands (`current(days)` is false until
+then). `refresh days` reaches only the instance whose action ran: two instances
+ask, refresh and answer apart, even with equal arguments. A state initializer
+does not read its own component's resources (`type-state-reads-request`); a
+derive or the view does.
+
+A component that owns a resource is used where its instances are bounded:
+outside every region, under `if` and `match`, or in a row of `stack(nav)`,
+`t.stack` or `nav.tabs`. Under any other `for`, or in a virtualized `list`, it is
+refused (`type-child-resource`): declare the root's resource over the list
+(`resource feeds = load(id) for id in ids key=id`) and pass each row its answer.
+Mutations and tasks stay the root's: pass the child the actions that send them
+(`add=addWork`), and name what they refresh in the root. Data two features read
+belongs to the root, which passes it down; name its declarations with the
+feature's prefix (`historyDays`), since the root and its members files share one
+set of names.
 
 ### Tabular numbers
 

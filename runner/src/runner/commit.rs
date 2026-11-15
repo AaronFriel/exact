@@ -520,7 +520,7 @@ impl<D: DataSource> Runner<D> {
         // Row writes land in their rows now, remembered for a rollback.
         let mut row_undo: Vec<(RowSlots, u32, Option<Value>)> = Vec::new();
         for (slot, value, rows) in outcome.row_writes {
-            let old = rows.borrow_mut().insert(slot, value);
+            let old = rows.borrow_mut().slots.insert(slot, value);
             row_undo.push((rows, slot, old));
         }
         let first_command = self.commands.len();
@@ -602,7 +602,7 @@ impl<D: DataSource> Runner<D> {
         // (`fulfill`). A send still in flight asks nothing: its write shows
         // through the overlay.
         for r in outcome.refreshes.iter() {
-            self.force_refresh(*r as usize);
+            self.refresh_in(*r as usize, frames);
         }
         for m in &landed_now {
             for r in self.declared_refreshes(*m) {
@@ -646,8 +646,8 @@ impl<D: DataSource> Runner<D> {
             self.discard_later(&later);
             for (rows, slot, old) in row_undo.into_iter().rev() {
                 match old {
-                    Some(v) => rows.borrow_mut().insert(slot, v),
-                    None => rows.borrow_mut().remove(&slot),
+                    Some(v) => rows.borrow_mut().slots.insert(slot, v),
+                    None => rows.borrow_mut().slots.remove(&slot),
                 };
             }
             return Err(e);

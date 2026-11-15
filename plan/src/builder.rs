@@ -646,6 +646,8 @@ impl PlanBuilder {
             transient: false,
             keep: false,
             gate: ArgsRange { start: 0, len: 0 },
+            owner: None,
+            late: false,
         });
         ResourcesId(self.plan.resources.len() as u32 - 1)
     }
@@ -1176,6 +1178,18 @@ impl PlanBuilder {
     /// Keep only successful live publications of this surface reader.
     pub fn set_resource_keep(&mut self, id: ResourcesId) {
         self.plan.resources[id.0 as usize].keep = true;
+    }
+
+    /// Make a resource owned by an arm's instance (LLP 1035.005.004 D1): one
+    /// request per instance, asked after the render that makes it.
+    pub fn set_resource_owner(&mut self, id: ResourcesId, arm: ArmsId) {
+        self.plan.resources[id.0 as usize].owner = Some(arm);
+    }
+
+    /// Make a resource settled with the root's once the `late` slots of the
+    /// child that declares it are initialized (LLP 1035.005.004 D2).
+    pub fn set_resource_late(&mut self, id: ResourcesId) {
+        self.plan.resources[id.0 as usize].late = true;
     }
 
     /// A resource's `when` (LLP 1161.002 D1): the condition under which it is asked.

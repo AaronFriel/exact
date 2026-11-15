@@ -22,6 +22,8 @@ use std::fmt::Write as _;
 
 mod lineage;
 mod looks;
+mod owned;
+pub(crate) use owned::declared_name;
 mod pending;
 mod row;
 /// A row's value as `node` prints it: the JS target's inspect table (LLP 1122 T2b) writes the same words.
@@ -748,9 +750,9 @@ pub fn node<D: DataSource>(runner: &Runner<D>, id: u32) -> String {
 }
 
 /// The state: the clock and every slot, derive, and resource by the name the
-/// plan declares, as typed JSON (records carry their field names); the
-/// requests in flight; the names the store holds (LLP 1018); the active
-/// head's fields (LLP 1048.003 D1).
+/// plan declares, as typed JSON (records carry their field names); a child's
+/// resources by instance path; the requests in flight; the names the store
+/// holds (LLP 1018); the active head's fields (LLP 1048.003 D1).
 pub fn state<D: DataSource>(runner: &Runner<D>) -> String {
     state_with(runner, "{}")
 }
@@ -871,11 +873,14 @@ fn state_with<D: DataSource>(runner: &Runner<D>, request: &str) -> String {
     }
     s.push_str("},\"resources\":{");
     for (i, row) in runner.declared_resources().iter().enumerate() {
-        let name = plan.str(row.name);
-        if i > 0 {
+        if row.owner.is_some() {
+            // Each instance has its own, listed under it below.
+            continue;
+        }
+        if !s.ends_with('{') {
             s.push(',');
         }
-        quote(name, &mut s);
+        quote(plan.str(row.name), &mut s);
         s.push(':');
         match runner.shown_resource_at(i) {
             Some(v) => typed_json(plan, row.ty, v, &mut s),
@@ -883,6 +888,7 @@ fn state_with<D: DataSource>(runner: &Runner<D>, request: &str) -> String {
         }
     }
     s.push('}');
+    owned::state(runner, &mut s);
     // The writes shown over resources until they end or are answered.
     let writes = runner.writes();
     if !writes.is_empty() {
