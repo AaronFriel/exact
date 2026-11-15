@@ -866,9 +866,12 @@ export function androidIcons(manifest, dir, res) {
   const glyph = adaptive && pick({ purposes: ['monochrome'], px: LAYER, glyph: true, name: "Android's themed icon" });
   const banner = pick({ purposes: ['any'], shape: 16 / 9, px: 640, name: 'the Android TV banner' });
   if (problems.length) throw new Error(problems.join('\n'));
-  const refs = { icon: adaptive || legacy ? '@mipmap/exact_icon' : null, banner: banner ? '@drawable/exact_banner' : null };
+  const picked = [adaptive, legacy, glyph, banner], digests = picked.map((file) => file && createHash('sha256').update(readFileSync(file.path)).digest('hex'));
+  // `files`: each picked file and its digest, which the build record keeps for a drive's staleness check (`apkChanges`).
+  const refs = { icon: adaptive || legacy ? '@mipmap/exact_icon' : null, banner: banner ? '@drawable/exact_banner' : null,
+    files: picked.flatMap((file, i) => file ? [{ file: file.path, sha256: digests[i] }] : []) };
   // Made again only when a picked file or the background colour changes: the key of what was made is kept beside `res`.
-  const key = createHash('sha256').update(JSON.stringify([ANDROID_ICONS, [adaptive, legacy, glyph, banner].map((file) => file && [file.src, createHash('sha256').update(readFileSync(file.path)).digest('hex')]), manifest.background_color ?? null])).digest('hex');
+  const key = createHash('sha256').update(JSON.stringify([ANDROID_ICONS, picked.map((file, i) => file && [file.src, digests[i]]), manifest.background_color ?? null])).digest('hex');
   if (existsSync(res) && existsSync(`${res}.key`) && readFileSync(`${res}.key`, 'utf8') === key) return refs;
   rmSync(res, { recursive: true, force: true });
   const write = (path, bytes) => { mkdirSync(dirname(resolve(res, path)), { recursive: true }); writeFileSync(resolve(res, path), bytes); };
@@ -1081,7 +1084,7 @@ export function buildApk(app, env, profile, writeLocks = false, bundle = false) 
   const keptSound = keptLibrary(readFileSync(sound), zipEntry(readFileSync(apk), `${bundle ? 'base/' : ''}lib/arm64-v8a/libexact_sound.so`), [dirs.app], 'libexact_sound.so');
   if (keptSound) { console.error(`exact android sound: ${keptSound}`); return null; }
   writeFileSync(resolve(dirname(apk), 'exact-build.json'), JSON.stringify({ started, library: built(crate), workspace: app.workspace ?? app.dir,
-    sources: [...READER_SOURCES, ...[resolve(app.dir, 'modules/android')].filter(existsSync)] }) + '\n');
+    sources: [...READER_SOURCES, ...[resolve(app.dir, 'modules/android')].filter(existsSync), ...icons.files] }) + '\n');
   // What its bake inlined of each setting (LLP 1153 D4), bound to the APK, for a drive to compare with their sources.
   recordBuiltSettings(apk, app, out);
   return apk;

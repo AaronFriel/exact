@@ -1,5 +1,6 @@
 // Native desktop and phone carriers over the agent JSON-lines wire.
 import { spawn, spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, extname, resolve } from 'node:path';
@@ -8,7 +9,7 @@ import { appleRunBinary, appleArtifacts, assertAppleIdentity } from '../host/app
 import { phone, phoneBridge, phoneStartupFailure, forwardedEnv, crashReports } from '../host/apple/devices.mjs';
 import { resolveApp, executableName, linuxBinary, bakeOutput, bakeTarget } from './app.mjs';
 import { linuxRebuild, macSandboxed, nativeBuild, ownVerb, planOverride, rebuildCommand, refuseBuild } from './agent-build.mjs';
-import { refuseStale, refuseBackendOrigin, refuseBinaryBackend, proofProductChanges, unchecked, packagedBuildChanges, depInfoChanges, depInfoNewer, newerThan, bakedSettingChanges } from './agent-launch.mjs';
+import { refuseStale, refuseBackendOrigin, refuseBinaryBackend, proofProductChanges, unchecked, packagedBuildChanges, depInfoChanges, depInfoNewer, newerThan, shown, bakedSettingChanges } from './agent-launch.mjs';
 import { androidBinary, androidDeploy, apkRecord } from './agent-android.mjs';
 import { nativeKey, mouseContact } from './agent-keys.mjs';
 import { jsonLines, hangup, waitAtMost, bootRefusal, REPLY_MS } from './agent-wire.mjs';
@@ -18,12 +19,15 @@ const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 /** The command that builds what an Android drive runs: the APK (`reader`), else the Linux host for Android. */
 const androidRebuild = (a, reader) => ownVerb(a, reader ? 'android' : 'android --headless') ?? `bun scripts/agent-android.mjs build ${a.name}${reader ? ' --apk' : ''}`;
 /** What changed since the APK was built, by the record its build left (agent-android.mjs `apkRecord`): the library's
- * inputs by its Cargo dep-info (the Rust, and the plan's and the module's sources the bake watched), and the Kotlin. */
+ * inputs by its Cargo dep-info (the Rust, and the plan's and the module's sources the bake watched), the Kotlin by
+ * time, and the icons by digest, so a deleted icon is a change too. */
 export function apkChanges(a, apk) {
   const record = apkRecord(a, apk);
   if (!record) return [`${apk} (no build record beside it: built before drives checked one)`];
-  const since = Date.parse(record.started);
-  return [...depInfoNewer(since, record.library, record.library.replace(/\.so$/, '.d'), record.workspace), ...newerThan(since, record.sources)];
+  const since = Date.parse(record.started), digest = (file) => { try { return createHash('sha256').update(readFileSync(file)).digest('hex'); } catch { return null; } };
+  return [...depInfoNewer(since, record.library, record.library.replace(/\.so$/, '.d'), record.workspace),
+    ...newerThan(since, record.sources.filter((root) => !root.sha256)),
+    ...record.sources.filter((root) => root.sha256 && digest(root.file) !== root.sha256).map((root) => shown(root.file))];
 }
 
 /** One JSON-lines protocol over stdio on desktop hosts, or a phone's outbound socket. `reader`: on Android, the app

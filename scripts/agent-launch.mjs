@@ -782,7 +782,7 @@ export function launchEnvironment(facts) {
 // These detect staleness; passing them is not proof of freshness. A
 // binary the caller names (EXACT_LINUX_BIN, EXACT_MAC_BIN) is the caller's
 // own: the driver says it did not check. A served page (--url) is its server's.
-const shown = path => within(ROOT, path) ? relative(ROOT, path) : path;
+export const shown = path => within(ROOT, path) ? relative(ROOT, path) : path;
 const listed = changed => changed.slice(0, 3).join(', ') + (changed.length > 3 ? ` and ${changed.length - 3} more` : '');
 
 /** Throws when `changed` names anything: what, since which build, and the command that rebuilds it. */
@@ -978,7 +978,7 @@ export function newerThan(since, roots, skip = () => false) {
   for (const root of roots) {
     if (root.file) {
       const info = statSync(root.file, { throwIfNoEntry: false });
-      // A recorded file now gone is a change by its digest (webChanges), not by its time.
+      // A recorded file now gone is a change by its digest (webChanges, apkChanges), not by its time.
       if (info?.mtimeMs > since) out.push(shown(root.file));
     } else if (typeof root === 'string') walk(root, true);
     else walk(root.shallow, false);
