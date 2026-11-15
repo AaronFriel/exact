@@ -1033,13 +1033,18 @@ test('a crate beside app.json joins the generated workspace by naming it, and on
     assert.throws(() => resolveApp(), /data\/Cargo\.toml: a crate beside app\.json joins the app's generated workspace\. Add, under \[package\], workspace = "\.\.\/\.exact\/shells" \(a GPU crate: workspace = "\.\.\/\.exact\/gpu"\)/);
     assert.throws(() => ensureShells(dir), /a crate beside app\.json joins the app's generated workspace/);
     crate('data', 'field-log-data', '../.exact/shells');
+    // A host crate links an app's crate only as the data crate rust.data names (LLP 1153.003 D2), so a member with
+    // none named is refused with the line to add.
+    const manifest = JSON.parse(readFileSync(resolve(dir, 'app.json'), 'utf8'));
+    assert.throws(() => ensureShells(dir), /field-log-data beside app\.json joins the app's generated workspace, and app\.json names no rust\.data: [^]*\n  "rust": \{ "data": \{ "crate": "field-log-data", "type": "field_log_data::<Type>", "source": "field_log_data::<Type>::new\(…\)" \} \}\n/);
+    writeFileSync(resolve(dir, 'app.json'), JSON.stringify({ ...manifest, rust: { data: { crate: 'field-log-data', type: 'field_log_data::FieldLog' } } }));
     const { workspace } = ensureShells(dir);
     const shell = readFileSync(resolve(workspace, 'Cargo.toml'), 'utf8');
-    assert.match(shell, /^members = \["web", "apple", "\.\.\/\.\.\/data"\]$/m);
+    assert.match(shell, /^members = \["web", "apple", "module", "\.\.\/\.\.\/data"\]$/m);
     assert.match(shell, /^exact-runner = \{ path = "[^"]*\/runner" \}$/m);
     const loads = spawnSync('cargo', ['metadata', '--no-deps', '--offline', '--format-version', '1'], { cwd: workspace, encoding: 'utf8' });
     assert.equal(loads.status, 0, loads.stderr);
-    assert.deepEqual(JSON.parse(loads.stdout).packages.map(p => p.name).sort(), ['field-log-apple', 'field-log-data', 'field-log-web']);
+    assert.deepEqual(JSON.parse(loads.stdout).packages.map(p => p.name).sort(), ['field-log-apple', 'field-log-data', 'field-log-module', 'field-log-web']);
     const app = resolveApp();
     assert.deepEqual([app.generated, app.workspace, app.target], [true, workspace, resolve(dir, 'target')]);
     // Cargo run in the member finds exact2's toolchain and the app's target directory, written beside app.json (D1.5).
@@ -1055,6 +1060,7 @@ test('a crate beside app.json joins the generated workspace by naming it, and on
     rmSync(resolve(dir, 'helper'), { recursive: true });
     // A GPU crate alone joins the GPU workspace, and the host crates stay generated (D1.2).
     rmSync(resolve(dir, 'data'), { recursive: true });
+    writeFileSync(resolve(dir, 'app.json'), JSON.stringify(manifest));
     crate('gpu', 'field-log-gpu', '../.exact/gpu', 'exact-gpu');
     assert.deepEqual([resolveApp().generated, resolveApp().workspace], [true, workspace]);
     assert.match(readFileSync(resolve(ensureShells(dir).workspace, 'Cargo.toml'), 'utf8'), /^members = \["web", "apple"\]$/m);
@@ -1083,6 +1089,8 @@ test('a generated workspace captures no lock until a dependency leaves exact2\'s
   const data = (deps = '') => writeFileSync(resolve(dir, 'data/Cargo.toml'), `[package]\nname = "field-log-data"\nversion.workspace = true\nedition.workspace = true\nworkspace = "../.exact/shells"\npublish = false\n\n[dependencies]\nexact-runner.workspace = true\n${deps}`);
   try {
     createApp(dir);
+    const manifest = JSON.parse(readFileSync(resolve(dir, 'app.json'), 'utf8'));
+    writeFileSync(resolve(dir, 'app.json'), JSON.stringify({ ...manifest, rust: { data: { crate: 'field-log-data', type: 'field_log_data::FieldLog' } } }));
     mkdirSync(resolve(dir, 'data/src'), { recursive: true });
     writeFileSync(resolve(dir, 'data/src/lib.rs'), '');
     data();

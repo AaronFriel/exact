@@ -150,6 +150,20 @@ export function rustDataOf(manifest) {
   return { krate: data.crate, ty, lib: ty.split('::')[0], source };
 }
 
+/** The refusal of an app with a Rust data crate that app.json's `rust.data` does not name (LLP 1153.003 D2). `found`
+ * says how the build knows the app has one; `crates` are the crates that may be it, each `{ name, manifest }`. The
+ * line to add names the first, and keeps the manifest's other `rust` fields (its string form is the mode). */
+export function undeclaredDataCrate(found, consequence, crates, manifest) {
+  const [crate] = crates;
+  const lib = (() => { try { return Bun.TOML.parse(readFileSync(crate.manifest, 'utf8')).lib?.name; } catch { return undefined; } })() ?? crate.name.replaceAll('-', '_');
+  const mode = typeof manifest.rust === 'string' ? manifest.rust : manifest.rust?.mode;
+  const among = crates.length > 1 ? ` (the data crate: one of ${crates.map(c => c.name).join(', ')})` : '';
+  return `${found}, and app.json names no rust.data: ${consequence}. Name the data crate and the source it answers with in app.json${among}, as apps/forma-host/app.json does:\n`
+    + `  "rust": { ${mode ? `"mode": ${JSON.stringify(mode)}, ` : ''}"data": { "crate": "${crate.name}", "type": "${lib}::<Type>", "source": "${lib}::<Type>::new(…)" } }\n`
+    + `"source" is the type itself, its ::default() (when "source" is left out) or its ::new(…) with literal arguments; a source `
+    + `built from anything else is a module of its own, named in rust.module.package (LLP 1153.003 D2).`;
+}
+
 /** A Rust-data app's host crate (LLP 1153.003 D2): the data crate the manifest names, linked, and the shared bake
  * (`exact_bake::host::app`) as its build script's one line; no exact-js, so no Hermes. `data.dependency` is the data
  * crate's dependency from the crate's directory. */
@@ -534,6 +548,13 @@ export function ensureShells(dir, manifest = readManifest(dir), name = null) {
   const data = rustDataOf(manifest), typescript = existsSync(resolve(dir, 'app.ts'));
   const dataCrate = data && members.host.find(member => member.name === data.krate);
   if (data && !dataCrate) throw new Error(`app.json's rust.data.crate is ${data.krate}, which is not a crate beside app.json that joins the app's workspace (package.workspace = "${MEMBER_OF.host}")`);
+  // A crate the host links is the data crate or a helper of it (D1.1). Without rust.data no host crate links one, so
+  // unless a module of the app's own answers (rust.module.package), nothing answers the app's requests.
+  if (!data && !manifest.rust?.module?.package && members.host.length) {
+    const named = members.host.map(member => member.name).join(', ');
+    throw new Error(undeclaredDataCrate(`${dir}: ${named} beside app.json ${members.host.length > 1 ? 'join' : 'joins'} the app's generated workspace`,
+      'its host crates link a crate of the app\'s only as the data crate rust.data names, so they would answer none of the app\'s requests', members.host, manifest));
+  }
   const options = (kind, app, dep) => ({ name, title, native: native.length > 0, preload: Object.keys(manifest.preload ?? {}).length > 0, app, dep, typescript, updates,
     data: data && { ...data, dependency: `{ path = ${JSON.stringify(pathWithin(resolve(shells, kind), dataCrate.dir))} }` } });
   // The inputs whose change rewrites the workspace: the app's path, the checkout's and its commit, the templates (this

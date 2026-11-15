@@ -31,7 +31,7 @@ import { transformSync, parseSync, Visitor } from 'rolldown/utils';
 import { copyGpuCache } from './gpu-cache.mjs';
 import { analyze } from './page-style.mjs';
 import { bundleHostModule, gateAgent, localImports, stageHostGlue } from './glue.mjs';
-import { buildEditor, buildFlow, buildMarkdown, buildModule, buildMotion, moduleSourceDirs, fresh, leafTaken, moduleGrants, webCompiler, inspectHooked, withInspectHooks, withoutDev, withRuntimeStamp } from './module.mjs';
+import { buildEditor, buildFlow, buildMarkdown, buildModule, buildMotion, moduleSourceDirs, undeclaredRustData, fresh, leafTaken, moduleGrants, webCompiler, inspectHooked, withInspectHooks, withoutDev, withRuntimeStamp } from './module.mjs';
 import { appDigest, developmentStore } from '../../scripts/agent-launch.mjs';
 import { settingLines } from '../../js/bake/src/__exact_env.mjs';
 import { colorSchemeMeta, interfaceStyle, launchBackground, schemeHead, withInterfaceStyle, withLook } from '../web/look.mjs';
@@ -114,6 +114,8 @@ writeFileSync(resolve(out, 'manifest.json'), JSON.stringify(webManifest, null, 2
 // from the source app.json's `rust.data` names (host/web-js/module.mjs).
 const rustData = rustDataOf(manifest);
 const rust = !!manifest.rust?.module || !!rustData;
+const undeclared = !rust && undeclaredRustData(app, appDir, manifest);
+if (undeclared) { console.error(undeclared); process.exit(1); }
 // A TypeScript source (`app.ts`) runs in the page, bundled with it; beside a
 // Rust one (LLP 1027.002), the Rust module answers what it owns and the
 // TypeScript module the rest (ts-data.js, rust-data.js). A synthetic plan

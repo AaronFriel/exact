@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { brotliCompressSync, brotliDecompressSync, constants } from 'node:zlib';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { buildModule, moduleGrants, webCompiler } from './module.mjs';
+import { buildModule, moduleGrants, undeclaredRustData, webCompiler } from './module.mjs';
 import { rustDataOf } from '../../scripts/app-shells.mjs';
 import { spawnOwned } from '../../scripts/test-children.mjs';
 import { open } from '../../scripts/agent.mjs';
@@ -1354,6 +1354,30 @@ test('the web module exports the source app.json\'s rust.data names, in the gram
   try {
     writeFileSync(resolve(dir, 'app.json'), '{}');
     expect(() => buildModule('mail', resolve(dir, 'out'), false, dir)).toThrow('its web build bakes with no Rust data source');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+// LLP 1153.003 D2: the JS target runs only the Rust source app.json's rust.data names, so a web crate that links the
+// app's data crate without it is refused with the line to add, not built into a page that answers nothing.
+test('a web crate linking a data crate app.json does not name is refused with the rust.data line', () => {
+  const root = resolve(import.meta.dir, '../..'), dir = mkdtempSync(resolve(tmpdir(), 'exact-undeclared-')), out = resolve(dir, 'dist');
+  const write = (path, text) => { mkdirSync(dirname(resolve(dir, path)), { recursive: true }); writeFileSync(resolve(dir, path), text); };
+  try {
+    write('app.json', JSON.stringify({ name: 'Pins', app: { id: 'test.pins', name: 'Pins' }, rust: 'off' }));
+    write('app.contract', 'component App\n  resource message = message() as shape string\n  view\n    column\n      text message\n');
+    write('data/Cargo.toml', '[package]\nname = "pins-data"\nversion = "0.1.0"\nedition = "2021"\n');
+    write('web/Cargo.toml', '[package]\nname = "pins-web"\nversion = "0.1.0"\nedition = "2021"\n\n[dependencies]\npins-data = { path = "../data" }\n');
+    write('web/build.rs', 'fn main() { let _ = contract::bake(plan, pins_data::Pins::new(3)); }\n');
+    const built = spawnSync(process.execPath, ['host/web-js/build.mjs', dir, '--out', out, '--render', 'none'], { cwd: root, encoding: 'utf8', env: { ...process.env, EXACT_APP_DIR: dir } });
+    expect(built.status, built.stdout + built.stderr).toBe(1);
+    expect(built.stderr).toContain('web/Cargo.toml links pins-data, a crate beside app.json, and app.json names no rust.data: the web build runs only the Rust source rust.data names');
+    expect(built.stderr).toContain('\n  "rust": { "mode": "off", "data": { "crate": "pins-data", "type": "pins_data::<Type>", "source": "pins_data::<Type>::new(…)" } }\n');
+    const manifest = JSON.parse(readFileSync(resolve(dir, 'app.json'), 'utf8'));
+    expect(undeclaredRustData('pins', dir, manifest)).toContain('links pins-data');
+    // A module of the app's own answers instead, and a web crate that links none of the app's crates has no Rust source.
+    expect(undeclaredRustData('pins', dir, { ...manifest, rust: { module: { package: 'pins-logic' } } })).toBeNull();
+    write('web/Cargo.toml', '[package]\nname = "pins-web"\nversion = "0.1.0"\nedition = "2021"\n\n[dependencies]\ncontract = { path = "../../contract/cli" }\n');
+    expect(undeclaredRustData('pins', dir, manifest)).toBeNull();
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 

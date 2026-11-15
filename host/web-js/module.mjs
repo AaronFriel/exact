@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url';
 // Also for its PATH: the pinned binaryen (and Cargo) as every web build has
 // them, so a prebuild optimizes and keeps what an app's build would.
 import { WEB_STD, WEB_SIZE, WEB_TOOLCHAIN, injectedProfiles, resolveApp, wasmRemapFlags, webToolchainEnv } from '../../scripts/app.mjs';
-import { rustDataOf } from '../../scripts/app-shells.mjs';
+import { rustDataOf, undeclaredDataCrate } from '../../scripts/app-shells.mjs';
 import { appCrates } from '../../scripts/cargo-check.mjs';
 import { withHostDeployment } from '../../scripts/filesystem.mjs';
 import { replaceBuild } from '../web/serve.mjs';
@@ -232,6 +232,21 @@ ${patch}
   keep(resolve(crate, 'src/lib.rs'), lib);
   lockFrom(crate);
   return module(resolve(crate, 'Cargo.toml'), `exact_js_module_${app.replaceAll('-', '_')}`, out, `${app}: the module`);
+}
+
+/** The refusal of an app at `dir` whose web crate (`web/Cargo.toml`) links a crate beside app.json while `manifest`
+ * names neither `rust.data` nor `rust.module.package`, or null. Linking it means the web build script bakes a Rust
+ * source, but the JS target runs only the module the manifest names (LLP 1153.003 D2), so the page would ship none and
+ * no request of the app's would be answered. */
+export function undeclaredRustData(app, dir, manifest) {
+  if (manifest.rust?.module?.package || manifest.rust?.data !== undefined) return null;
+  let web;
+  try { web = Bun.TOML.parse(readFileSync(resolve(dir, 'web/Cargo.toml'), 'utf8')); } catch { return null; }
+  const tables = [web.dependencies, ...Object.values(web.target ?? {}).map(target => target?.dependencies)].filter(Boolean);
+  const linked = new Set(tables.flatMap(Object.values).map(dep => dep?.path).filter(path => typeof path === 'string').map(path => resolve(dir, 'web', path)));
+  const crate = appCrates(dir).find(crate => crate.name && linked.has(crate.dir));
+  return crate ? undeclaredDataCrate(`${app}: web/Cargo.toml links ${crate.name}, a crate beside app.json`,
+    'the web build runs only the Rust source rust.data names, so this page would answer none of the app\'s requests', [crate], manifest) : null;
 }
 
 /** The app's explicit logic module (`rust.module.package`, LLP 1029.000):
