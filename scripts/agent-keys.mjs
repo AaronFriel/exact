@@ -555,14 +555,14 @@ export function tapArguments(opts) {
 /** A `tap` form this carrier cannot deliver as a hand's (#107), or null.
  * Unsupported forms are refused before any input reaches the platform. */
 export function pointerGap(host, browser, opts) {
-  if (opts.touch && !['ios', 'host-ios'].includes(host) && !(host === 'web' && (browser ?? 'chrome') === 'chrome')) return `${host === 'web' ? browser ?? 'chrome' : host} does not carry a touch double tap (dblclick touch, LLP 1057.001.000 §6)`;
+  if (opts.touch && !['ios', 'host-ios', 'android', 'windows'].includes(host) && !(host === 'web' && (browser ?? 'chrome') === 'chrome')) return `${host === 'web' ? browser ?? 'chrome' : host} does not carry a touch double tap (dblclick touch, LLP 1057.001.000 §6)`;
   if (['macos', 'mac', 'host'].includes(host) || (host === 'web' && (browser ?? 'chrome') === 'chrome')) return null;
   const held = opts.modifiers ?? opts.drag?.modifiers;
   const gaps = [
     opts.auxclick && 'a middle-button click (auxclick)',
     opts.clicks !== undefined && host !== 'web' && `clicks ${opts.clicks}`, // the Playwright carrier clicks at a point (agent-playwright.mjs)
     opts.wheel && opts.at !== undefined && host !== 'web' && 'a wheel at a point',
-    opts.dblclick && opts.at !== undefined && !['ios', 'host-ios'].includes(host) && 'a double click at a point', // iOS: the double tap that selects a word there
+    opts.dblclick && opts.at !== undefined && !opts.touch && !['ios', 'host-ios'].includes(host) && 'a double click at a point', // iOS: the double tap that selects a word there
     host === 'web' && opts.mouse && 'a mouse click', // the Playwright carrier has none
     held && (opts.contextmenu || opts.dblclick || opts.mouse || opts.down || opts.drag || opts.phase) && 'modifiers held through a context menu, a double click, a mouse click, a contact or a drag',
   ].filter(Boolean);

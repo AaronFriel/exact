@@ -899,12 +899,13 @@ function snapbackNotes(dir, from) {
   const readme = pathWithin(from, resolve(ROOT, 'snapback4/README.md'));
   let wired = false, online = false;
   try { const mount = JSON.parse(readFileSync(resolve(dir, 'app.json'), 'utf8')).typescript?.sources?.snapback4; wired = Boolean(mount); online = onlineMount(mount); } catch {}
-  if (online) return `A backend: this app uses the server-only Snapback adapter; read ${readme} before changing data code.
+  if (online) return `A backend: this app uses the server-only Snapback adapter; its client comes with the guide at ${readme}.
+Read it before changing data code.
 \`app.json\` mounts \`snapback4/online\` as \`snapback4\`, and the generated operations as \`backend\`.
 Use \`new Snapback({origin, headers})\`, \`read(api.query, args)\` and \`send(api.mutation, args)\`.
 There is no wasm device, SQLite partition or offline outbox. Start the server with \`bun exact.mjs backend\`.
 \`snapback\` and \`update\` preserve this adapter selection. \`failure(x).code\` preserves a domain refusal code.`;
-  if (wired) return `A backend: this app's data is Snapback 4's (${readme}). The backend is above it:
+  if (wired) return `A backend: this app's data is Snapback 4's; its client comes with the guide at ${readme}. The backend is above it:
 \`../snapback/schema.q\`, with \`snapback4@${snapbackVersion()}\` installed. \`app.json\` mounts the driver and
 \`../snapback/generated\`; \`app.ts\` names and grants its origin. \`bun exact.mjs snapback --rebuild\` generates operations
 and rebuilds the device, including after exact2 moves; \`snapback --port <n>\` moves the origin. Start
@@ -913,7 +914,7 @@ and rebuilds the device, including after exact2 moves; \`snapback --port <n>\` m
 the write's fate. \`failure(x).reason\` carries a refusal's code. Read the guide before data code.`;
   // Offered only where it can be done: a checkout without the client refuses both commands.
   return snapbackDevice ? `Shared data: \`exact new <path> --snapback\`, or \`bun exact.mjs snapback\` here.
-Install \`snapback4@${snapbackVersion()}\` above; ${readme} has setup and server commands.` : '';
+Install \`snapback4@${snapbackVersion()}\` above; its client comes with ${readme} for setup and server commands.` : '';
 }
 
 /** What an agent in the app's directory can't discover (LLP 1086 D1): what

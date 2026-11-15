@@ -422,6 +422,9 @@ mod android {
 
     ${module(false).replace(/\n(?=.)/g, '\n    ')}    include!(concat!(env!("OUT_DIR"), "/logic.rs"));
     include!(concat!(env!("OUT_DIR"), "/hatches.rs"));
+    // The home-screen widgets' JNI, when app.json declares any (LLP 1126.003 D9).
+    include!(concat!(env!("OUT_DIR"), "/widgets.rs"));
+    exact_widgets!(app_data());
 
     exact_painted::canvas_jni!(super::AppData, hatches = crate::android::exact_hatches()${updates ? ', updates = exact_painted_update::open' : ''});
 }

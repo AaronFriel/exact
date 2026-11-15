@@ -764,7 +764,7 @@ known yet: the kept answer waits, `logs` says so, and it shows once the argument
 reach the ones it was kept for, also after the data module is ready, unless an
 answer for other arguments was kept in its place first. A known value that
 differs means the kept answer is not used; `logs` names the argument and the
-state or resource it reads.
+state or resource it reads, never an identifying value.
 An answer that must never reach the device's storage (a one-time code, a message
 shown once) ends its line with `transient`: `resource code = otp(request) as shape
 Code transient`. It is never kept, a launch starts from its placeholder, and an
@@ -1279,6 +1279,10 @@ On the web the page has no such budget, and a yield lets it paint mid-parse.
 
 ### A TypeScript package for the data module
 
+Source capture skips dot directories at every depth in the app and in
+`typescript.sources` mounts, including `backend/.elixir_ls/` and `server/.venv/`.
+Keep source code outside those directories. Source symlinks remain refused.
+
 A package whose runtime entry is TypeScript source must also provide declaration
 files for the type check. This applies to installed packages and linked `file:`
 or workspace dependencies, including packages outside the app folder. The checker
@@ -1569,7 +1573,37 @@ endpoint (OpenID Connect RP-Initiated Logout 1.0): send it from a press,
 register the callback as a post-logout redirect URI, and set
 `logoutRedirectParam` for a provider that does not call that parameter
 `post_logout_redirect_uri`. A browser step that does not finish still signs
-out, answered `ok` with code `end_session` and a sentence in `error`.
+out, answered `ok` with code `end_session` and a sentence in `error`. A later
+end-session press retries that provider logout. The web reserves a blank
+provider window synchronously at the press, then navigates it after sign-out
+takes the session under its store lease and constructs the logout URL. Its
+ID-token hint and revocation therefore always name the same login without
+losing the press's browser activation. Until the provider logout succeeds or
+a new sign-in replaces it, the store retains its endpoint and ID token under
+the same secret lease; the app remains signed out. Entra and Cognito may
+return from logout without `state`; that return is accepted only when it has
+neither `code` nor `error`. A returned `state`, when present, must match. A
+sign-in response therefore cannot complete a waiting logout.
+When the runner or Android must choose among several logouts at one callback, a
+return without `state` completes the oldest live one. On the web, a return from
+a popup whose opener remains completes that popup's logout. Before navigating,
+the glue puts a fresh random identity in the blank popup's own
+`sessionStorage`; the callback reads and removes it. After severance, only the
+live logout holding that identity completes. An unaddressed state-less return
+completes nothing, and no tab takes a shared lock or reads another tab's state.
+A request still held at the ten-minute bound answers 499 once, whether its
+timer or a late return arrives first.
+
+Revocation runs inside the same lease that removes the credential, before the
+provider browser opens. Each token request has a 60-second host deadline, so
+sign-in, refresh and another sign-out for the same key wait behind it. No reply,
+a timeout, 429 or 5xx leaves the token for the next sign-out in the same data
+module runtime; any other reply clears it. This is best effort: there is no
+background retry and the debt is not stored in the secret, so a reload, restart
+or runtime replacement ends those retries. Another browser tab may revoke the
+same token again; RFC 7009 treats that as success. Recovery from an interrupted
+secret update remains fail-closed and removes the whole secret, which can also
+discard a retained provider-logout hint.
 
 Every option, with what it does, is in `@exact/oauth`'s `index.d.ts`.
 
@@ -2236,8 +2270,8 @@ a `press` on content that is not a control waits for the second tap. `scrollZoom
 is the zoom as `scrollTop` is the offset: write it for Fit and 2× buttons (with
 `scroll-behavior="smooth"` it animates), and read it as `e.scrollZoom` on the
 `scroll` event's `ScrollEvent`; mirroring every `scroll` into the state you
-bind is safe. Not built yet on every host: `contract vocab -exact-max-zoom`
-says where.
+bind is safe. Linux has no touch pinch or double tap, and a pinch on Windows
+has no bounce: `contract vocab -exact-max-zoom` says what each host lacks.
 
 `reorderdrop` belongs only on a vertical `list virtualized=true`
 (each row's handle names it with `reorderFor`); the compiler refuses it on any
@@ -2717,8 +2751,9 @@ HDR and metadata where the host can and says what it wrote
 ([Exact developer reference](reference.md#save-an-edit-of-a-photo-storagefstransformimage));
 `compressImage` takes `rotate`, `flip` and `crop` too. Upload a file with `fetch(url, {method: "POST", headers:
 {"content-type": "image/jpeg"}, exactBodyFrom: path})`, not `readFile` then `body`: the host
-reads the file as it sends (under `fs.read`, at most 64 MiB), so a 2 MB photo never passes
-through the answer's 100 ms step; a missing or denied file rejects the fetch, naming why. To show an
+streams the file from disk as it sends (under `fs.read`, with no size bound except 64 MiB on the
+web for a file the app wrote itself), so a 2 MB photo never passes through the answer's 100 ms step
+and a long video costs no memory; a missing or denied file rejects the fetch, naming why. To show an
 upload's percentage while the person goes on, make it a resource's stream with `exactUploadProgress: true`:
 its mapper gets `progress` (`loaded` of `total` bytes sent), then `load` with the reply's `status`, and no
 answer waits for it. It is asked once for its arguments while the app runs, across a reload too, though not the
@@ -4684,6 +4719,15 @@ overrides out of a shipped binary, and an over-the-air update cannot change it.
 Gate a developer-only control on it, and gate what that control reads as well, so
 a production build never asks for it:
 `resource overrides = loadOverrides() when not build.production as shape Overrides`.
+
+A TypeScript-only update currently removes the plan's source-shape requirement
+when it pairs the plan with its module. If that update first reads a field of a
+reserved source that the installed binary predates, delivery can admit the plan
+although the binary cannot answer the field. Release a new native binary and
+cohort before pushing the first use of a new reserved-source field. This applies
+to every reserved source; a C ABI bump alone does not make the paired plan
+require that ABI.
+
 `exactViewport().displayMode` is a string: the current CSS display
 mode on the web, `fullscreen`, `window-controls-overlay` (the tall title row
 `display_override` asks for) or `standalone` on macOS, `standalone` on other
@@ -4782,12 +4826,14 @@ media preferences, page facts,
 and capability state rather than suffixing files by platform. Preference facts
 inform authored policy; the engine does not automatically remove all motion.
 
-`frozen: bool` means the host has backgrounded the app and will stop its ordinary
-work, until execution resumes. Gate a feed with `when not page.frozen`: the runner
-lets its resource or stream go in the commit that turns `frozen` true, without
-waiting for an authored cleanup handler. A sequence stops in that commit too
-(LLP 1125 D4). This is a dynamic execution fact, not a phone or desktop label:
-`visibilityState` can be hidden while `frozen` stays false.
+`frozen: bool` means the host has entered a lifecycle state in which ordinary
+work is subject to stopping until execution resumes. The runner immediately
+applies the transitions defined for that fact. Gate a feed with `when not
+page.frozen`: its resource or stream goes in the commit that turns `frozen`
+true, without waiting for an authored cleanup handler. A sequence stops in that
+commit too (LLP 1125 D4). The fact is not itself a process pause, and it is not a
+phone or desktop label: `visibilityState` can be hidden while `frozen` stays
+false.
 
 | Host | `frozen` producer |
 |---|---|
@@ -4803,8 +4849,11 @@ waiting for an authored cleanup handler. A sequence stops in that commit too
 A browser promises nothing after `hidden`: it may stop or discard a page without
 a `freeze` event. False does not promise continued execution. Persist data as it
 changes; do not depend on a final asynchronous cleanup. The bake and an agent
-launch answer false; `prefer frozen true` substitutes the transition, and
-`prefer frozen false` resumes it. See the [feed recipe](recipes/suspending-feed.md).
+launch answer false; `prefer frozen true` substitutes the fact and its defined
+transitions, and `prefer frozen false` resumes them. The drive's clock and host
+pump continue: timers, replies, hatch callbacks and native announcements can
+still run. Qualify process suspension on a real host, outside a drive. See the
+[feed recipe](recipes/suspending-feed.md).
 
 Leave navigation presentation to the host first: a root `tablist` becomes UIKit's
 tab bar on iOS and a sidebar on macOS, and `navigationPresentation` chooses a
@@ -5715,8 +5764,8 @@ This test goes with the complete example above. A test opens with its launch
 lines — `size 1200x800`, `epoch "2026-09-21T12:00:00Z"`, `time-zone
 "America/New_York"`, `locale "fr-FR"`, `seed 7`, the driver's flags of those
 names, and `fresh` (the Snapback dev server emptied first, `fresh
-"seed.json"` seeded from a file; snapback4/README.md) — written first in the
-test or, for every test, at the top of the file.
+"seed.json"` seeded from a file; [Snapback tests](recipes/snapback-tests.md)) —
+written first in the test or, for every test, at the top of the file.
 
 `prefer prefers-color-scheme dark` sets a media preference before the first
 observation. It can lead the test or the file, or appear later to change the

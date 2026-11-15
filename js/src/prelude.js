@@ -576,7 +576,7 @@
     cleanUp();
     return text;
   }
-  function settle(call, final) {
+  function settleResult(call, final) {
     var secret = call.secrets && call.secrets[0];
     if (secret && !secret.held) return JSON.stringify({ tag: 1, call: call.id, ticket: 0, secret: secret.name });
     // A fetch its continuation tried after it staged socket operations
@@ -667,8 +667,8 @@
         if (c !== background && !calls.has(c.id)) left = true;
       });
       if (left) return JSON.stringify({ tag: 1, call: call.id, ticket: 0 });
-      // Another answer's work may settle it before its timer: whichever comes first asks it again (not on a
-      // worker, which runs one turn to its end and so cannot wait on another's).
+      // Another answer's work may settle it before its timer: whichever comes
+      // first asks it again.
       if (
         !final &&
         (due === undefined || (moving && later)) &&
@@ -676,7 +676,8 @@
       )
         return JSON.stringify({ tag: 1, call: call.id, ticket: 0, waiting: true, timer: due });
     } else if (due === undefined && moving && !final && background.storage > 0) {
-      // The page's realm keeps its background-delivery rule (LLP 1097 D7).
+      // The page realm asks a waiter again after background storage lands
+      // (LLP 1097 D2, D7).
       return JSON.stringify({ tag: 1, call: call.id, ticket: 0, waiting: true });
     }
     // A later turn can clear even a timer that parked alone: keep its owner releasable (LLP 1162 D3).
@@ -696,12 +697,30 @@
     return fail(
       new Error(
         "the answer is pending on nothing: no host operation it started will resolve it. " +
-          "An answer that awaits a promise another answer started (a fetch shared between answers, or a queue chained through a " +
-          "fetch another answer is waiting on) waits on work it does not own in the web's module realm; make each answer's own " +
-          "fetch, or share the resolved value rather than the promise. Storage is different: an answer queued behind another's " +
-          "storage turn waits for it"
+          "An answer that awaits a promise another answer started waits on work it does not own; make each answer's own " +
+          "request, or share the resolved value rather than the promise"
       )
     );
+  }
+  function settle(call, final) {
+    var text = settleResult(call, final);
+    if (!call.secretCompleted) return text;
+    var result = JSON.parse(text);
+    // A next lease supersedes the completion. Results the realm consumes
+    // itself leave it sticky until one reaches the host.
+    if (result.secret !== undefined) {
+      call.secretCompleted = false;
+      return text;
+    }
+    if (
+      result.tag === 1 &&
+      result.ticket === 0 &&
+      (result.yielded || result.waiting || result.timer === undefined)
+    )
+      return text;
+    call.secretCompleted = false;
+    result.secretComplete = true;
+    return JSON.stringify(result);
   }
   var nativeCall = (global.__exact_module_sync = function (request) {
     // `native.call`, and a module binding's synchronous form (LLP 1133.002 D14)

@@ -246,9 +246,9 @@
       var bytes = extracted.bytes,
         body = extracted.text;
       // A body from an app file (LLP 1108 D6 R2): only the path goes to the
-      // host, which reads the file when it runs the request, under `fs.read`,
-      // at most 64 MiB. The bytes never enter JavaScript. A missing file, a
-      // denied path or one over the bound rejects the fetch before it is sent.
+      // host, which streams the file from disk when it runs the request, under
+      // `fs.read` (LLP 1133.008.000 D4). The bytes never enter JavaScript. A
+      // missing file or a denied path rejects the fetch before it is sent.
       // A body to an app file (`exactBodyTo`, 2026-10-26): the host writes a
       // 2xx body there as it arrives, under `fs.write`, at most the ceiling or
       // 1 GiB, and the file appears only whole; any other reply is read as usual.

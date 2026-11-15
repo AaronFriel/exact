@@ -233,7 +233,7 @@ impl Cursor {
     }
 }
 impl State {
-    fn scroll_event(&mut self, view: ViewId, key: NodeKey) {
+    pub(super) fn scroll_event(&mut self, view: ViewId, key: NodeKey) {
         if !self.scroll_events.contains(&(view, key)) {
             self.scroll_events.retain(|(id, _)| *id != view);
             self.scroll_events.push_back((view, key));
@@ -804,7 +804,7 @@ impl<D: DataSource> Presenter<D> {
             height: (port.1 + max.1) as f64,
             client_width: port.0 as f64,
             client_height: port.1 as f64,
-            zoom: 1.0,
+            zoom: self.reported_zoom(view),
         })
     }
 

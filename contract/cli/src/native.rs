@@ -17,6 +17,7 @@ use std::path::Path;
 
 mod packages;
 mod slot;
+pub mod widgets;
 pub(crate) use packages::implementation_imports;
 pub use packages::{bound, plan_packages, rust_packages, write_desktop_packages, Bound};
 pub use slot::{native_slot, NativeSelection, NativeSlot};
@@ -180,7 +181,7 @@ fn watched_rust_hatches(
 /// Rust hatches, `modules/android/*.rs` or `modules/linux/*.rs`, with the
 /// reader's Kotlin ones told beside them; the reader's alone when the app
 /// has no Rust ones; none when it gives `android` no word); and what
-/// [`android_reach`] writes.
+/// [`android_reach`] writes, and the widgets' `widgets.rs` ([`widgets`]).
 pub fn android_entry(
     app_root: &Path,
     manifest: &Manifest,
@@ -204,6 +205,7 @@ pub fn android_entry(
         }
     };
     std::fs::write(out_dir.join("hatches.rs"), text).map_err(|e| e.to_string())?;
+    widgets::write(app_root, manifest, out_dir)?;
     android_reach(app_root, plan, out_dir)
 }
 

@@ -128,6 +128,18 @@ impl<D: DataSource> Presenter<D> {
         for key in self.brush.media.asked.drain(..) {
             dirty.node(key);
         }
+        // @ref LLP 1042.001 D4 — the player whose controller exact2's
+        // focus is on takes the window's focus, and gives it back after.
+        let focused = (self.focus)
+            .and_then(|id| self.host.kernel().node(id))
+            .filter(|node| self.controller(node))
+            .map(|node| node.key);
+        if focused != self.brush.media.focused {
+            for key in [focused, self.brush.media.focused].into_iter().flatten() {
+                dirty.node(key);
+            }
+            self.brush.media.focused = focused;
+        }
         for id in self.images.posters_changed.drain(..) {
             if let Some(node) = self.host.kernel().node(id) {
                 dirty.node(node.key);
@@ -154,6 +166,16 @@ impl<D: DataSource> Presenter<D> {
             dirty.node(*key);
         }
         self.brush.media.timed = timed;
+    }
+
+    /// A media node whose player shows a controller (LLP 1042.001 D4): a
+    /// `video` or `audio` with `controls`, on a host with players. It takes
+    /// the focus, as a hand-built `PlayerView` does; without `controls` it
+    /// takes none, as on the web.
+    pub(crate) fn controller(&self, node: &exact_kernel::NodeRef<'_>) -> bool {
+        self.brush.media.players
+            && node.node_type == NodeType::Video
+            && node.props.bool(PropId::Controls) == Some(true)
     }
 
     /// @ref LLP 1042.001 §5, D9 — `fastSeek(id, seconds)`, `load(id)` or

@@ -106,7 +106,7 @@ mod height_drag_tests;
 mod hosted;
 mod images;
 mod links;
-mod palette;
+pub(crate) mod palette;
 pub mod preferences;
 pub(crate) mod remote;
 mod requests;
@@ -139,6 +139,7 @@ mod unload;
 mod window;
 #[cfg(windows)]
 mod word;
+mod zoom;
 
 #[cfg(test)]
 mod collection_tests;
@@ -379,6 +380,8 @@ pub struct Presenter<D: DataSource> {
     person_scrolls: u64,
     /// Smooth element reveals under way (`glide.rs`).
     glides: glide::Glides,
+    /// Zoomable scroll containers' zooms and the double tap (`zoom.rs`).
+    zooms: zoom::Zooms,
     /// HTML's sequential focus navigation starting point: where Tab starts
     /// from while nothing has the focus (a fragment's target).
     focus_start: Option<ViewId>,
@@ -668,6 +671,7 @@ impl<D: DataSource> Presenter<D> {
             fragment_anchor: None,
             person_scrolls: 0,
             glides: Default::default(),
+            zooms: Default::default(),
             focus_start: None,
             field_select_tasks: Vec::new(),
             field_change_tasks: Default::default(),
@@ -1052,6 +1056,7 @@ impl<D: DataSource> Presenter<D> {
         if focus_sent {
             return error;
         }
+        self.sync_zoom();
         self.sync_authored_scroll();
         self.dirty |= self.clamp_scroll();
         self.retire_pointer();
@@ -1385,6 +1390,7 @@ impl<D: DataSource> Presenter<D> {
         }
         self.tick_arrange(self.host.now());
         self.step_glides(now_ms);
+        self.step_zooms(now_ms);
         if let Some(error) = self.deliver_scroll_ends() {
             self.host.log(error);
         }

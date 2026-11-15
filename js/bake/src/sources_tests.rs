@@ -4,6 +4,43 @@ use std::path::PathBuf;
 
 #[test]
 #[cfg(unix)]
+fn source_capture_skips_nested_dot_directories_in_apps_and_mounts() {
+    let parent = Scratch::new(&std::env::temp_dir()).unwrap();
+    let app = parent.0.join("app");
+    let shared = parent.0.join("shared");
+    std::fs::create_dir_all(&app).unwrap();
+    std::fs::create_dir_all(&shared).unwrap();
+    std::fs::write(
+        app.join("app.json"),
+        r#"{"typescript":{"sources":{"shared":"../shared"}}}"#,
+    )
+    .unwrap();
+    for root in [&app, &shared] {
+        std::fs::create_dir_all(root.join("backend/priv")).unwrap();
+        std::fs::write(root.join("backend/.settings.json"), "{}").unwrap();
+    }
+    let before = sources(&app).unwrap();
+    assert!(before.contains_key(std::path::Path::new("backend/.settings.json")));
+    assert!(before.contains_key(std::path::Path::new("shared/backend/.settings.json")));
+    for root in [&app, &shared] {
+        for cache in ["backend/.elixir_ls/build/lib/app", "server/.venv/bin"] {
+            let dir = root.join(cache);
+            std::fs::create_dir_all(&dir).unwrap();
+            std::fs::write(dir.join("cache.json"), "{}").unwrap();
+            std::os::unix::fs::symlink(root.join("backend/priv"), dir.join("priv")).unwrap();
+            std::os::unix::fs::symlink("missing-python", dir.join("python")).unwrap();
+        }
+    }
+    assert_eq!(sources(&app).unwrap(), before);
+    for link in ["backend/helper.ts", "backend/.linked"] {
+        std::os::unix::fs::symlink(app.join("backend/priv"), app.join(link)).unwrap();
+        assert!(sources(&app).unwrap_err().contains("source links"));
+        std::fs::remove_file(app.join(link)).unwrap();
+    }
+}
+
+#[test]
+#[cfg(unix)]
 fn source_capture_skips_module_xcframeworks_with_versioned_slices() {
     let app = Scratch::new(&std::env::temp_dir()).unwrap();
     std::fs::write(app.0.join("app.ts"), "export const grants = '';\n").unwrap();

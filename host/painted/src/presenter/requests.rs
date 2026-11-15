@@ -34,7 +34,7 @@ pub enum Request {
     Open(String),
     /// Open an authorization URL with its callback endpoint and state. The reader acknowledges
     /// its wait, then answers on failure or cancellation.
-    Auth(String, String, String),
+    Auth(String, String, String, bool),
     /// Forget the reader's auth wait, by its request id. The browser owns its tab.
     AuthEnd(u32),
     /// Play this haptic.
@@ -304,10 +304,11 @@ fn encode(id: u32, request: &Request, out: &mut Vec<i32>) {
         | Request::Presence(text)
         | Request::Sound(text)
         | Request::Assets(text) => string(out, text),
-        Request::Auth(url, callback, state) => {
+        Request::Auth(url, callback, state, logout) => {
             string(out, url);
             string(out, callback);
             string(out, state);
+            out.push(i32::from(*logout));
         }
         Request::AuthEnd(id) => out.push(*id as i32),
         Request::Haptic(haptic) => out.push(*haptic as i32),
@@ -599,7 +600,12 @@ impl<D: DataSource> Presenter<D> {
             );
             return;
         }
-        let id = self.request(Request::Auth(session.url, session.callback, session.state));
+        let id = self.request(Request::Auth(
+            session.url,
+            session.callback,
+            session.state,
+            session.logout,
+        ));
         self.requests.waiting.insert(
             id,
             Waiting::Auth {

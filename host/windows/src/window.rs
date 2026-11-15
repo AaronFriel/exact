@@ -1137,7 +1137,7 @@ impl<D: DataSource + Default + 'static> ApplicationHandler<crate::accessibility:
                 p.surface_lifecycle(self.minimized || self.occluded || self.hidden, !focused);
                 if !focused {
                     self.buttons = 0;
-                    self.touches.forget();
+                    self.touches.forget(p);
                     let _ = p.pointer_lost(now);
                     p.set_window_active(false);
                     // Unfocused, the pads are not read: what they were is no longer known.

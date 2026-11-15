@@ -386,6 +386,9 @@ fn answer_line<D: DataSource>(p: &mut Presenter<D>, line: &str) -> String {
             if let Some(reply) = p.control_tap(&request) {
                 return reply.to_string();
             }
+            if let Some(reply) = p.zoom_tap(&request) {
+                return reply;
+            }
             if phased {
                 return contact::answer(p, &request);
             }

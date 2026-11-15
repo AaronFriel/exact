@@ -14,6 +14,9 @@ if (compose) apply(plugin = "org.jetbrains.kotlin.plugin.compose")
 // -Pvideo=1: the plan has a `video` or an `audio`, or the build is a development one, and Media3's player (`:video`) is
 // linked (LLP 1042.001 D2). Without it the APK carries none of Media3.
 val video = providers.gradleProperty("video").orNull == "1"
+// -Pwidgets=1: app.json declares a widget Android draws, one with a `system*` family (LLP 1126.003 D1, D9), and
+// `:widgets` is linked; the build below makes each kind's provider. Without it the APK has none of it.
+val widgets = providers.gradleProperty("widgets").orNull == "1"
 
 val app = providers.gradleProperty("app").get()
 val appDir = providers.gradleProperty("appDir").orNull?.let { file(it) } ?: rootDir.resolve("../../apps/$app")
@@ -111,10 +114,67 @@ android {
     // app's activity, scripts/share-target.mjs, LLP 1133.024 D5), merged into the shell's manifest from the release source set's: an app that grants no device asks
     // for none, and one that uses no such package runs nothing beyond the shell's activity.
     val fragment = providers.gradleProperty("manifestFragment").orNull?.let { file(it).readText() }?.takeIf { it.isNotBlank() }
+    // The app's widgets (LLP 1126.003 D9): per kind a provider subclass (Android names a provider by its class), its
+    // `appwidget-provider` XML with D4's sizes, its initial and preview layout, and its receiver in the `:widgets`
+    // process; and the rows `:widgets` reads (res/raw/exact_widgets.json). The receivers join the manifest below.
+    val widgetReceivers = StringBuilder()
+    if (widgets) {
+        val dir = layout.buildDirectory.dir("widgets").get().asFile
+        dir.deleteRecursively()
+        val res = dir.resolve("res")
+        listOf("xml", "layout", "values", "raw").forEach { res.resolve(it).mkdirs() }
+        val kotlin = dir.resolve("java/dev/exact/app").apply { mkdirs() }
+        val attr = { v: String -> v.replace("&", "&amp;").replace("<", "&lt;").replace("\"", "&quot;") }
+        val text = { v: String -> attr(v).replace("\\", "\\\\").replace("'", "\\'").replace(Regex("^([@?])"), "\\\\$1") }
+        // Apple's families as cell spans (D4); `systemExtraLarge` is iPad's, a 4×4 here as `systemLarge`.
+        val cells = mapOf("systemSmall" to (2 to 2), "systemMedium" to (4 to 2), "systemLarge" to (4 to 4), "systemExtraLarge" to (4 to 4))
+        val rows = (manifest["widgets"] as List<*>?).orEmpty().map { it as Map<*, *> }
+            .filter { row -> (row["families"] as List<*>?).orEmpty().any { (it as String).startsWith("system") } }
+        val strings = StringBuilder()
+        rows.forEachIndexed { i, row ->
+            val kind = row["kind"] as String
+            val title = (row["title"] as String?) ?: kind
+            val description = (row["description"] as String?) ?: title
+            val (w, h) = (row["families"] as List<*>).mapNotNull { cells[it as String] }.minBy { it.first * it.second }
+            val dp = { n: Int -> "${70 * n - 30}dp" }
+            val configured = row["configuration"] != null
+            strings.append("    <string name=\"exact_widget_${i}_title\">${text(title)}</string>\n")
+            strings.append("    <string name=\"exact_widget_${i}_description\">${text(description)}</string>\n")
+            res.resolve("xml/exact_widget_$i.xml").writeText("<appwidget-provider xmlns:android=\"http://schemas.android.com/apk/res/android\"\n" +
+                "    android:minWidth=\"${dp(w)}\" android:minHeight=\"${dp(h)}\" android:targetCellWidth=\"$w\" android:targetCellHeight=\"$h\"\n" +
+                "    android:minResizeWidth=\"${dp(w)}\" android:minResizeHeight=\"${dp(h)}\" android:resizeMode=\"horizontal|vertical\"\n" +
+                "    android:updatePeriodMillis=\"1800000\" android:widgetCategory=\"home_screen\"\n" +
+                "    android:description=\"@string/exact_widget_${i}_description\"\n" +
+                "    android:initialLayout=\"@layout/exact_widget_${i}_initial\" android:previewLayout=\"@layout/exact_widget_${i}_initial\"" +
+                (if (configured) "\n    android:configure=\"dev.exact.widgets.Configure\" android:widgetFeatures=\"reconfigurable|configuration_optional\"" else "") +
+                " />\n")
+            // Until the first render: the widget's background in the system's colours, with the row's title (D9).
+            res.resolve("layout/exact_widget_${i}_initial.xml").writeText("<FrameLayout xmlns:android=\"http://schemas.android.com/apk/res/android\"\n" +
+                "    android:id=\"@android:id/background\" android:layout_width=\"match_parent\" android:layout_height=\"match_parent\"\n" +
+                "    android:background=\"@drawable/exact_widget_background\" android:clipToOutline=\"true\" android:padding=\"16dp\">\n" +
+                "    <TextView android:layout_width=\"wrap_content\" android:layout_height=\"wrap_content\" android:text=\"@string/exact_widget_${i}_title\"\n" +
+                "        android:textAppearance=\"@android:style/TextAppearance.DeviceDefault.Medium\" android:textColor=\"@color/exact_widget_role_4\" />\n" +
+                "</FrameLayout>\n")
+            kotlin.resolve("ExactWidget$i.kt").writeText("package dev.exact.app\n\n/** The `$kind` widget's provider (LLP 1126.003 D9). */\nclass ExactWidget$i : dev.exact.widgets.Provider()\n")
+            widgetReceivers.append("        <receiver android:name=\"dev.exact.app.ExactWidget$i\" android:exported=\"false\" android:process=\":widgets\"\n" +
+                "            android:enabled=\"@bool/exact_widgets_enabled\" android:label=\"@string/exact_widget_${i}_title\">\n" +
+                "            <intent-filter>\n" +
+                listOf("android.appwidget.action.APPWIDGET_UPDATE", "android.intent.action.LOCALE_CHANGED", "android.intent.action.TIME_SET", "android.intent.action.TIMEZONE_CHANGED")
+                    .joinToString("") { "                <action android:name=\"$it\" />\n" } +
+                "            </intent-filter>\n" +
+                "            <meta-data android:name=\"android.appwidget.provider\" android:resource=\"@xml/exact_widget_$i\" />\n" +
+                "            <meta-data android:name=\"dev.exact.widget.kind\" android:value=\"${attr(kind)}\" />\n" +
+                "        </receiver>\n")
+        }
+        res.resolve("values/exact_widgets.xml").writeText("<resources>\n$strings</resources>\n")
+        res.resolve("raw/exact_widgets.json").writeText(groovy.json.JsonOutput.toJson(rows))
+        sourceSets["main"].res.directories.add(res.path)
+        sourceSets["main"].kotlin.directories.add(dir.resolve("java").path)
+    }
     // Hardware and software features from grant lines (`-PandroidFeatures`, LLP 1133.022 D18, LLP 1133.037 D17).
     val lineFeatures = providers.gradleProperty("androidFeatures").orNull?.split(',')?.filter { it.isNotBlank() }.orEmpty()
     (providers.gradleProperty("permissions").orNull?.split(',')?.filter { it.isNotEmpty() } ?: emptyList())
-        .takeIf { it.isNotEmpty() || fragment != null || lineFeatures.isNotEmpty() }?.let { names ->
+        .takeIf { it.isNotEmpty() || fragment != null || lineFeatures.isNotEmpty() || widgetReceivers.isNotEmpty() }?.let { names ->
         val permissions = layout.buildDirectory.file("permissions/AndroidManifest.xml").get().asFile
         permissions.parentFile.mkdirs()
         // CAMERA implies the back camera and autofocus as required features, which would filter the app from a
@@ -157,7 +217,7 @@ android {
                 require(parts.size == 1 || (parts.size == 2 && parts[1] == "required=false")) { "Invalid feature: $it" }
                 "    <uses-feature android:name=\"${parts[0]}\" android:required=\"${parts.size == 1}\" />\n"
             } +
-            manifestChildren(fragment, services.entries.joinToString("") { service(it.key, it.value) }) + "</manifest>\n")
+            manifestChildren(fragment, services.entries.joinToString("") { service(it.key, it.value) } + widgetReceivers) + "</manifest>\n")
         sourceSets["release"].manifest.srcFile(permissions)
     }
     // The manifest's `shortcuts` as the launcher activity's static shortcuts (LLP 1133.023 D3, D17), in order: each
@@ -270,6 +330,7 @@ dependencies {
     maven.forEach { implementation(it) }
     implementation(project(":canvas"))
     if (video) implementation(project(":video"))
+    if (widgets) implementation(project(":widgets"))
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)
     if (compose) {

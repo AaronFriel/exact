@@ -154,10 +154,10 @@ pub struct Request {
     /// [`Request::idle_timeout`].
     pub idle_timeout_ms: Option<u32>,
     /// The body is this app file's bytes (`app:/…`), read by the host when it
-    /// runs the request, under the `fs.read` grant, at most
-    /// [`MAX_BODY_FROM_BYTES`]: the bytes never cross the source. `body` is
+    /// runs the request, under the `fs.read` grant, streamed from disk with
+    /// no size bound of Exact's: the bytes never cross the source. `body` is
     /// then empty. Set by TypeScript's `fetch(url, {exactBodyFrom})` and
-    /// [`Request::body_from`] (LLP 1108 D6 R2).
+    /// [`Request::body_from`] (LLP 1108 D6 R2, LLP 1133.008.000 D4).
     pub body_from: Option<String>,
     /// A 2xx reply's body is written to this app file (`app:/…`) by the
     /// host as it arrives, under the `fs.write` grant, and never crosses the
@@ -261,9 +261,6 @@ pub struct Retrying {
 /// The host's live view of its long polls' waits (D8), by stream ticket;
 /// `None` for a ticket that is not waiting.
 pub type RetryReader = std::sync::Arc<dyn Fn(u64) -> Option<Retrying> + Send + Sync>;
-
-/// The largest file [`Request::body_from`] sends: 64 MiB.
-pub const MAX_BODY_FROM_BYTES: u64 = 64 << 20;
 
 /// The longest [`Request::body_from`] or [`Request::body_to`] path, in bytes.
 pub const MAX_BODY_FROM_PATH: usize = 4096;

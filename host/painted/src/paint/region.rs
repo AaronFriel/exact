@@ -197,6 +197,9 @@ impl Picture {
                     "content capture refuses input controls inside retained content".into(),
                 );
             }
+            if zoom::range(&node).is_some() {
+                return Err("content capture refuses a zoomable scroller".into());
+            }
             let axes = effective_overflow(&node);
             if axes.0 != Overflow::Visible || axes.1 != Overflow::Visible {
                 scroll.insert(
@@ -553,6 +556,9 @@ impl Painter {
                     max: (0., 0.),
                 };
             }
+        }
+        if let Some(bounds) = self.zoom_bounds(kernel, node) {
+            return bounds;
         }
         if node.node_type == NodeType::TextInput {
             if let Some(field) = self.field_text.get(&node.id) {

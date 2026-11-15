@@ -146,6 +146,14 @@ object Native {
     @JvmStatic external fun refresh(id: Int)
     /** The fling a drag of scroller [id] threw stopped: at rest, caught by a finger, or ended by the app's scroll. */
     @JvmStatic external fun flingEnded(id: Int)
+    /** A pinch of zoomable scroller [id] (LLP 1057.001.000 §5; [Zooming]): [phase] 0 it began, 1 it scaled by
+     * [factor] while its focal point moved from ([x0], [y0]) to ([x1], [y1]) px, 2 it ended. */
+    @JvmStatic external fun zoom(id: Int, phase: Int, factor: Float, x0: Float, y0: Float, x1: Float, y1: Float)
+    /** A double tap at ([x], [y]) px: [phase] 0 its second tap came down (the first tap's press, held for it, never
+     * comes), 1 it lifted, which zooms the scroller under it (D5). */
+    @JvmStatic external fun zoomTap(phase: Int, x: Float, y: Float)
+    /** A wheel turned [dy] points toward the end with `ctrl` held at ([x], [y]) px: a zoom about the pointer. */
+    @JvmStatic external fun zoomWheel(x: Float, y: Float, dy: Float)
     /** What exact2 tells the reader of the scrollers it knows, when that is not what this last returned (else
      * null): nine numbers each: its id, flags (as [under]'s, for any drag), its revision, then as float bits where
      * it is (x, y), the offset its rows were last painted at (x, y) and its farthest offset (x, y). The revision

@@ -984,6 +984,8 @@ function apply(batch) {
 const heldLinks = new WeakMap();
 const heldOutputs = new Map();
 export function applyBatch(batch) {
+  const freeze = batch.freeze === true;
+  if (freeze) delete batch.freeze;
   for (const line of batch.alerts?.splice(0) ?? []) {
     console.error("exact:", line);
   }
@@ -1079,6 +1081,27 @@ export function applyBatch(batch) {
         }
       }
     }
+  }
+  if (freeze) {
+    // A freeze settles everything awaiting presentation in its commit:
+    // physical-output starts are discarded and every other operation is
+    // applied in its original order. This marker is consumed on first apply;
+    // a replay or later resume neither settles newer output nor reconstructs it.
+    const pending = [...heldOutputs.values(), output].flat();
+    const starts = (row, op) => {
+      if (row.op === "command") return row.name === "haptic";
+      if (row.op === "sound") return op.op === "play" || op.op === "haptic";
+      if (row.op !== "midi" || op.op !== "send") return false;
+      const [status, , velocity] = op.data ?? [];
+      return status === 0xfa || status === 0xfb || status === 0xf8 || (status & 0xf0) === 0x90 && velocity > 0;
+    };
+    for (const held of new Set([...heldOutputs.keys(), batch])) {
+      held.ops = held.ops?.filter(op => !starts(op, op)) ?? [];
+    }
+    for (const row of pending) row.ops = row.ops.filter(op => !starts(row, op));
+    heldOutputs.clear();
+    outputNow(pending);
+    output = [];
   }
   // The runner has already released gated streams; presentation may wait past suspension.
   letGo();

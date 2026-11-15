@@ -50,6 +50,7 @@ const withCli = (sdk) => {
   }
   // A bare `test` lists the app's authored tests through scripts/app.mjs.
   link('scripts/app.mjs');
+  link('scripts/web-build.mjs');
   // The settings module an app's build imports for `import.meta.env` (LLP 1153 D4).
   mkdirSync(resolve(sdk, 'js/bake/src'), { recursive: true });
   copyFileSync(resolve(root, 'js/bake/src/__exact_env.mjs'), resolve(sdk, 'js/bake/src/__exact_env.mjs'));
@@ -1193,6 +1194,7 @@ test.skipIf(hasSnapback)('update of a Snapback app in a checkout without the cli
     assert.equal(after.$schema, pathWithin(dir, resolve(import.meta.dir, '../scripts/app.schema.json')));
     const notes = readFileSync(resolve(dir, 'AGENTS.md'), 'utf8');
     assert.ok(notes.includes(pathWithin(dir, resolve(import.meta.dir, '../snapback4/README.md'))));
+    assert.match(notes, /client comes with the guide at/);
     assert.equal(after.typescript.sources.snapback4, '../old/snapback4/ts');
   } finally { rmSync(parent, { recursive: true, force: true }); }
 });

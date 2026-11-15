@@ -265,6 +265,18 @@ class ExactView(context: Context, private val live: Boolean, private val onFirst
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(e: MotionEvent): Boolean = contacts.touch(e)
 
+    /** A mouse's wheel with `ctrl` held zooms the zoomable scroller under the pointer about it (LLP 1057.001.000 §5),
+     * as a desktop's does: a notch is the platform's scroll distance, in points. */
+    override fun onGenericMotionEvent(e: MotionEvent): Boolean {
+        if (e.actionMasked != MotionEvent.ACTION_SCROLL || e.metaState and android.view.KeyEvent.META_CTRL_ON == 0 ||
+            !e.isFromSource(android.view.InputDevice.SOURCE_CLASS_POINTER) || !started) return super.onGenericMotionEvent(e)
+        val notch = android.view.ViewConfiguration.get(context).scaledVerticalScrollFactor / Device.scale(context)
+        val (x, y, dy) = Triple(e.x, e.y, -e.getAxisValue(MotionEvent.AXIS_VSCROLL) * notch)
+        val o = owner
+        if (o != null) o.call { Native.zoomWheel(x, y, dy) } else { Native.zoomWheel(x, y, dy); pump() }
+        return true
+    }
+
     /** The hit reply follows the down on the engine's thread. */
     internal fun ask(x: Float, y: Float, then: (IntArray) -> Unit) {
         val o = owner

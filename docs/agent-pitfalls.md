@@ -358,6 +358,13 @@ This list holds what the [agent guide](contract-for-agents.md)'s rules don't mak
   its action: that misses a return which lands before the hide's timer has fired
   (`prefer visibility-state hidden` then `visible` with no clock step between).
   (Web and iOS simulator, 2026-10-06.)
+- **A hidden or frozen page fact under a drive is not a suspended process.**
+  `prefer visibility-state hidden` changes visibility and the background fact;
+  `prefer frozen true` applies the runner transitions defined for `frozen`, such
+  as stopping a transport sequence. A later `clock +N` still runs every due
+  timer and hatch callback, and replies and native announcements can land. Gate
+  authored work on the fact it follows. Test OS suspension and its coalescing or
+  wake behavior on a real host, outside the drive.
 - **A jump gated on the tab that shows runs again on every return to it.** A
   tab's panel and its list stay mounted while another tab shows, so the list
   keeps the reader's place, as a `UITabBarController`'s tabs and SwiftUI's
@@ -678,10 +685,10 @@ This list holds what the [agent guide](contract-for-agents.md)'s rules don't mak
   empty id meanwhile; if that answer lands before the id, it is kept in the entry's
   place and the id's arrival has nothing to show. An id from a resource that reads
   no device state, on a placeholder that is not empty (`"nobody"`), is a known
-  mismatch, which `logs` names with the resource it read. A resource whose `when`
-  stays false until the id is set asks nothing for the empty id, so its kept answer
-  still waits. (A React Native port's diaries, 2026-11-13;
-  `runner/src/runner/kept_identity_tests.rs`.)
+  mismatch, which `logs` names with the resource it read but never with either
+  identifying value. A resource whose `when` stays false until the id is set asks
+  nothing for the empty id, so its kept answer still waits. (A React Native port's
+  diaries, 2026-11-13; `runner/src/runner/kept_identity_tests.rs`.)
 - **A grouped-list row you lay out loses its side insets, or its content runs off the
   card.** Cause: the sheet gives a custom row (a `row` that is not a title/value row)
   its padding, and `padding="12px 0"` replaces all four sides, so the row's content
@@ -1982,6 +1989,13 @@ price: answers arrive `Later`, outside the action's transaction (LLP 1027.002 D1
 
 ## Working on Exact itself
 
+- **An Android regression test still runs the temporarily reverted code after
+  the source is restored.** A revert and restore close together can leave
+  Gradle reporting `compileDebugKotlin UP-TO-DATE` and reusing the class from
+  the reverted source. Run the restored test with `--rerun-tasks`; an ordinary
+  second test run does not prove the restored source was compiled. (OAuth
+  logout regression audit, 2026-11-14.)
+
 - **A CDP adapter re-sends known children and Styles stays empty.**
   `DOM.setChildNodes` replaces the frontend's node objects. Repeating it for
   children already introduced can leave the selected object different from
@@ -2292,9 +2306,10 @@ are in [Pitfalls when writing Exact games](game-pitfalls.md).
   Resources keep their previous value on failure. Gate account views while the
   account is pending or failed, and render rows only when their answer's principal
   matches the current principal. Throw `refused(page.denied)` on a query denial.
-  The complete online password example in `snapback4/README.md` demonstrates this
-  alongside reload, logout and sign-in tests; an empty successful list would hide
-  an authentication failure.
+  An empty successful list would hide an authentication failure. Where a checkout
+  has the Snapback client, its accompanying `snapback4/README.md` demonstrates this
+  in the complete online password example alongside reload, logout and sign-in
+  tests. That guide is not in this repository.
 
 
 - **A picker path can contain spaces.** Use `pick "attachment" "my photo.png"`

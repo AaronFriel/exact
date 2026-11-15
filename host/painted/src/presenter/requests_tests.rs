@@ -624,9 +624,10 @@ fn auth_reload_retires_old_reader_ids_before_reusing_a_runner_ticket() {
         );
         assert_eq!((requests[1].0, requests[1].1), (17, id));
         assert_eq!(
-            strings(&requests[1].2, 0),
+            strings(&requests[1].2[..requests[1].2.len() - 1], 0),
             ["https://as.test/a", "app.test:/cb", "s1"]
         );
+        assert_eq!(requests[1].2.last(), Some(&0), "a sign-in is not logout");
         assert!(p.answer_request(id, Some("cancelled")));
         let (_, exact_runner::Outcome::Response(response)) =
             p.host.runner_mut().take_request_refusal(true).unwrap()

@@ -25,6 +25,7 @@ impl<D: DataSource> Presenter<D> {
             wheel_free,
             snap_rested,
             glides,
+            zooms,
             page,
             focus_out,
             type_ahead,
@@ -168,6 +169,7 @@ impl<D: DataSource> Presenter<D> {
         wheel_free.clear();
         snap_rested.clear();
         *glides = Default::default();
+        *zooms = zoom::Zooms::kept(zooms);
         *page = (0.0, 0.0);
         focus_out.clear();
         *type_ahead = Default::default();

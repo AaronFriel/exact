@@ -643,8 +643,10 @@ impl<D: DataSource> Host<D> {
     /// The page's visibility, connectivity or share sheet (LLP 1069.000 D2):
     /// the `exactPage()` readers, in one batch.
     pub fn set_page(&mut self, page: exact_runner::Page) -> String {
+        let freeze = page.frozen && !self.runner.page().frozen;
         let answer = self.runner.set_page(page);
-        self.told(answer, "page")
+        let freeze = freeze && self.runner.page().frozen;
+        self.told_in(Batch::new().freeze(freeze), answer, "page")
     }
 
     /// The root font size `rem` follows (LLP 1069.000 D3): a relayout in one
@@ -678,6 +680,15 @@ impl<D: DataSource> Host<D> {
     /// A told fact's answer as one batch: its commit, nothing when the
     /// fact is unchanged, or the refusal named by `what`.
     fn told(&mut self, answer: Result<Option<CommitReceipt>, RunnerError>, what: &str) -> String {
+        self.told_in(Batch::new(), answer, what)
+    }
+
+    fn told_in(
+        &mut self,
+        batch: Batch,
+        answer: Result<Option<CommitReceipt>, RunnerError>,
+        what: &str,
+    ) -> String {
         let (receipts, error) = match answer {
             Ok(Some(receipt)) => (
                 vec![Timed {
@@ -689,7 +700,7 @@ impl<D: DataSource> Host<D> {
             Ok(None) => (vec![], None),
             Err(e) => (vec![], Some(format!("{what}: {e:?}"))),
         };
-        self.batch_for(&receipts, error.as_deref())
+        self.batch_from(batch, &receipts, error.as_deref())
     }
 
     /// Actual nested scrollport and mounted row geometry, in the shared LE wire

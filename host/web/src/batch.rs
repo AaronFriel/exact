@@ -16,6 +16,8 @@ pub struct Batch {
     /// A data module's timer continuation an advance released is still out
     /// (`Runner::data_timer_landing`): the agent's jump waits for its reply.
     landing: bool,
+    /// This batch is the page's transition into `frozen`.
+    freeze: bool,
 }
 
 /// Validate before token translation or storage/continuation serialization.
@@ -1057,6 +1059,12 @@ impl Batch {
         self
     }
 
+    /// With `"freeze":true` on the page's transition into `frozen`.
+    pub(crate) fn freeze(mut self, freeze: bool) -> Batch {
+        self.freeze = freeze;
+        self
+    }
+
     /// @ref LLP 1043.000 §3 D8 — carry the runner deadline, not a poll interval.
     /// The batch as one JSON document:
     /// `{"ops":[…],"timers":bool,"clock":ms,"error":null|"…"}` — `clock` is
@@ -1100,6 +1108,9 @@ impl Batch {
         }
         if self.landing {
             s.push_str(",\"landing\":true");
+        }
+        if self.freeze {
+            s.push_str(",\"freeze\":true");
         }
         if let Some((first, last)) = self.seq {
             push_text!(&mut s, ",\"seq\":[{},{}]", first, last);

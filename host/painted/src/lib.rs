@@ -92,6 +92,7 @@ pub mod presence_secrets;
 pub mod presenter;
 pub mod raster;
 mod scroll_anchor;
+pub mod snapshot;
 mod sound;
 mod surface_haptics;
 mod surfaces;

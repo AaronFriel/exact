@@ -1215,12 +1215,14 @@ shape ShelfWidgetProps
   count: number
   latest: string
 
+// A tap on the widget opens the Stats tab, where the count is.
 component ShelfWidget
   props
     count: number
     latest: string
   view
-    column gap=8
-      text "On your shelf" role="heading" aria-level=2
-      text `${count}` font-variant-numeric="tabular-nums"
-      text latest line-clamp=2
+    link href="/stats"
+      column gap=8
+        text "On your shelf" role="heading" aria-level=2
+        text `${count}` font-variant-numeric="tabular-nums"
+        text latest line-clamp=2

@@ -7,6 +7,7 @@ import android.graphics.Matrix
 import android.graphics.RenderNode
 import android.net.Uri
 import android.view.Choreographer
+import android.view.KeyEvent
 import android.view.SurfaceView
 import android.view.SurfaceHolder
 import android.view.TextureView
@@ -448,6 +449,44 @@ class Natives(
     /** The controller media node [id]'s player hosts, which stands at the node in the accessibility tree (LLP
      * 1042.001 D11). */
     fun controller(id: Int): View? = elements[id]?.takeIf { it.kind == 0 && !it.parked }?.let { players[it.view]?.controller }
+
+    /** The reader's own view, which takes the window's focus back from a media controller (LLP 1042.001 D4). */
+    var reader: View? = null
+
+    /**
+     * A key that the view holding the focus did not take and that would move the focus out of a media controller
+     * (Tab, Shift+Tab, an arrow at its edge) is exact2's: the reader's view takes the focus back and hears the key, so
+     * exact2 moves its own focus on from the video (LLP 1042.001 D4). A key the reader does not take either (a
+     * phone's arrows: only a TV's remote moves exact2's focus by them) leaves the focus in the controller.
+     */
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (super.dispatchKeyEvent(event)) return true
+        if (event.action != KeyEvent.ACTION_DOWN) return false
+        val direction = direction(event) ?: return false
+        val focused = findFocus() ?: return false
+        val e = place(focused)?.let { elements[it] }?.takeIf { it.kind == 0 } ?: return false
+        var next = focused.focusSearch(direction)
+        while (next != null && next !== e.view) next = next.parent as? View
+        if (next != null) return false
+        val reader = reader?.takeIf { it.requestFocus() } ?: return false
+        if (reader.dispatchKeyEvent(event)) return true
+        focused.requestFocus()
+        return true
+    }
+
+    /** The way [event] moves the focus, as the window's own navigation reads it, or null. */
+    private fun direction(event: KeyEvent): Int? = when (event.keyCode) {
+        KeyEvent.KEYCODE_TAB -> when {
+            event.isCtrlPressed || event.isAltPressed || event.isMetaPressed -> null
+            event.isShiftPressed -> View.FOCUS_BACKWARD
+            else -> View.FOCUS_FORWARD
+        }
+        KeyEvent.KEYCODE_DPAD_UP -> View.FOCUS_UP
+        KeyEvent.KEYCODE_DPAD_DOWN -> View.FOCUS_DOWN
+        KeyEvent.KEYCODE_DPAD_LEFT -> View.FOCUS_LEFT
+        KeyEvent.KEYCODE_DPAD_RIGHT -> View.FOCUS_RIGHT
+        else -> null
+    }
 
     /** A controller reports itself only where its node stands ([Access]), not again among the layer's views. */
     override fun onInitializeAccessibilityNodeInfo(info: android.view.accessibility.AccessibilityNodeInfo) {
@@ -905,6 +944,8 @@ class Natives(
                 }
                 p.update(json, e.w, e.h, from)
                 e.started = true
+                // exact2's focus left the controller: the reader's view takes the window's focus back (D4).
+                if (!json.optBoolean("focused") && view.hasFocus()) reader?.requestFocus()
                 // Until the reader says where its row is, a lazy video waits to be seen ([near] shows it).
                 val shown = e.inView || !lazyVideo || !lazy || e.rows.contains(0)
                 if (shown != e.playing) { e.playing = shown; p.shown(shown) }

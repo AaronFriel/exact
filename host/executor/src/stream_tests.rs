@@ -1199,9 +1199,10 @@ fn file_upload(ticket: u64, path: &str, name: &str) -> RequestOut {
 /// LLP 1016.000 D10: a file's room is the most a file body may be until it
 /// is read, then its length; a second file waits for room before it is read.
 #[test]
-fn an_uploads_file_is_read_once_it_has_room() {
+fn an_uploads_file_body_is_held_at_its_readers_bound() {
     let (core, script, woke) = setup_with("net.fetch https://example.test\nfs.read app:/tmp");
-    core.shared.uploads.limit(1 << 20);
+    // Room for one file body's reader, streamed (LLP 1133.008.000 D4).
+    core.shared.uploads.limit(crate::body::READ_BOUND);
     let files = AppFiles::new("a.bin", &[7; 4096]);
     core.set_app_roots(files.roots());
     core.run_owned(file_upload(1, "/upload", "a.bin"), None)
@@ -1209,8 +1210,8 @@ fn an_uploads_file_is_read_once_it_has_room() {
     let first = feed(&script, 0);
     assert_eq!(
         core.shared.uploads.waiting(),
-        (0, 4096 * super::COPIES),
-        "held at its length"
+        (0, crate::body::READ_BOUND),
+        "held at its reader's bound"
     );
     core.run_owned(file_upload(2, "/upload", "a.bin"), None)
         .unwrap();

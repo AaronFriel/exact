@@ -6,7 +6,8 @@ import { answering, files, ownSignal } from './ts-fetch.js';
 // `exactBodyFrom` (LLP 1108 D6 R2), with Hermes's checks and words
 // (js/src/binary.js `fileRefusal`): the app file at that path is the body, read from the
 // page's store as a Blob (a picked file is its own File; nothing becomes a
-// string), under `fs.read`, at most 64 MiB. A refusal is a FetchError before
+// string), under `fs.read`; a file the app wrote is read whole, at most 64 MiB
+// (LLP 1133.008.000 D4). A refusal is a FetchError before
 // anything is sent. `files.appId` is the module's, set by ts-data.js.
 export const methodOf = (input, init) => String(init.method ?? (typeof Request === 'function' && input instanceof Request ? input.method : 'GET')).toUpperCase();
 const pathRefusal = (name, path) => {

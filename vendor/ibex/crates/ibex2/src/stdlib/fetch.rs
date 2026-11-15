@@ -269,6 +269,9 @@ pub struct Request {
     pub url: String,
     pub headers: Headers,
     pub body: Option<Vec<u8>>,
+    /// A body read from a file as it is sent, in place of `body` (Exact
+    /// patch 46): never held whole, whatever its length.
+    pub body_file: Option<BodyFile>,
     /// An engine-free `FormData` request body. Prefer [`Request::set_body`]
     /// when constructing one; this field remains public to match the rest of
     /// the request value. It is encoded exactly once before the first hop.
@@ -304,8 +307,9 @@ pub struct Request {
 /// An upload's progress, XMLHttpRequest's `upload` events: the body's bytes
 /// sent so far and its length, `(loaded, total)`. A transport calls it on
 /// the thread that opened the request, as the platform reports bytes
-/// written, and with `(total, total)` by the time the response's headers
-/// have arrived. A redirect, or a resend on a new connection, that sends the
+/// written: `(total, total)` once the whole body has gone out, and no more
+/// than the bytes written when the response arrives before it has (Exact
+/// patch 46). A redirect, or a resend on a new connection, that sends the
 /// body again counts from zero.
 /// The second hook, if any, is the upload's start: told once, by the hop
 /// loop, when the first hop's grant and gate have admitted it and its
@@ -321,6 +325,26 @@ pub struct Sent(
 impl std::fmt::Debug for Sent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("Sent")
+    }
+}
+
+/// A request body read from a file as it goes out (Exact patch 46): its
+/// length, which the transport sends as `Content-Length`, and a reader from
+/// its first byte for each attempt, since a redirect that keeps the body
+/// (307, 308) and a resend on a new connection send it again whole. A reader
+/// gives at most `len` bytes, and fails rather than end early.
+pub trait FileBody: Send + Sync {
+    fn len(&self) -> u64;
+    fn reader(&self) -> std::io::Result<Box<dyn std::io::Read + Send>>;
+}
+
+/// A [`FileBody`] as a request holds it.
+#[derive(Clone)]
+pub struct BodyFile(pub std::sync::Arc<dyn FileBody>);
+
+impl std::fmt::Debug for BodyFile {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "BodyFile({} bytes)", self.0.len())
     }
 }
 
@@ -340,6 +364,7 @@ impl Request {
             url: url.into(),
             headers: Headers::new(),
             body: None,
+            body_file: None,
             form_data: None,
             redirect: RedirectMode::Follow,
             max_body: None,
@@ -537,6 +562,7 @@ pub fn fetch_stream_gated(
         step.apply(&mut current.method, &mut current.headers);
         if step.drops_body {
             current.body = None;
+            current.body_file = None;
         }
         current.url = step.url;
         redirected = true;
@@ -652,6 +678,11 @@ pub(crate) fn redirect_step(
 }
 
 pub(crate) fn prepare_body(mut request: Request) -> Result<Request, HostError> {
+    if request.body_file.is_some() && (request.body.is_some() || request.form_data.is_some()) {
+        return Err(HostError::InvalidArgument(
+            "request has both a file body and another".into(),
+        ));
+    }
     let Some(form) = request.form_data.take() else {
         return Ok(request);
     };
