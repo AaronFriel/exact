@@ -1491,12 +1491,17 @@ reading. Nothing that isn't HTML is added by it.
   a cursor the runner holds. Consumer: Pulse, a heart-rate strap's
   display. Unblocks reading a Bluetooth LE peripheral without app Swift or
   Kotlin. Take: none named; the ruling is its own waiver. Still out, each
-  until a consumer asks (LLP 1133.022 §20): Bluetooth in the background,
-  `bluetooth-central`, iOS state restoration and Android's companion
-  presence wakes; scanning for advertisements, the peripheral role and
-  Bluetooth Classic; `exclusionFilters` and filters with several
+  until a consumer asks (LLP 1133.022 §20): iOS state restoration and
+  Android's companion presence wakes; scanning for advertisements, the
+  peripheral role and Bluetooth Classic; `exclusionFilters` and filters with several
   services; an app's own scan list on Android; and the Linux, visionOS and
   watchOS cells.
+  **Expanded (maintainers' #603 implementation request, 2026-11-14):**
+  `device.bluetooth-background` derives iOS's `bluetooth-central` mode beside
+  `device.bluetooth` for an app's own native module (LLP 1067). This unblocks
+  a workout app receiving a strap's heart rate with the screen locked. Take:
+  waived by the scoped implementation request. State restoration, Android
+  companion presence wakes and the rest of LLP 1133.022 §20 remain out.
 - NFC was never on the doing list. **Expanded (Charlie, 2026-10-26,
   "Converged: build (Recommended)", waived; LLP 1133.035 §16 question
   8):** Web NFC's NDEF reading and writing (`nfcStatus`, `scan`,

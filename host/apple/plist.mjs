@@ -170,6 +170,7 @@ export const updateActivation = (app) => ({ ...(app.manifest.deploy?.activate ? 
  * manifest's modes alone, for tvOS, whose refresh is later (D17), and an App Clip, which has no background tasks. */
 export function backgroundKeys(ios, reach, id, only) {
   const declared = ios.backgroundModes ?? [];
+  if (declared.includes('bluetooth-central')) throw new Error('host.ios.backgroundModes: bluetooth-central comes from `device.bluetooth-background` beside `device.bluetooth purpose.<key>`, not the manifest');
   const derived = declared.filter((mode) => mode === 'fetch' || mode === 'processing');
   if (derived.length) throw new Error(`host.ios.backgroundModes: ${derived.join(' and ')} comes from a grant line (device.background-sync, device.periodic-background-sync; LLP 1133.017 D14), not the manifest`);
   const modes = [...new Set([...declared, ...(only ? [] : reach?.backgroundModes ?? [])])];

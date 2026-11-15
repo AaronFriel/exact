@@ -36,7 +36,8 @@ pub struct Device {
     /// asks for in one request (LLP 1133.002 D6), and the normal ones granted
     /// at install (a foreground service's, LLP 1133.033 D16). One the platform retired at an API level
     /// is written `<name> maxSdkVersion=<level>`, which the manifest
-    /// declares as `android:maxSdkVersion` (LLP 1133.019 D4).
+    /// declares as `android:maxSdkVersion` (LLP 1133.019 D4), omitting it
+    /// when the app's minimum API is newer.
     pub android: &'static [&'static str],
     /// Android permissions derived beside `android` only where the app uses
     /// a module name that writes under the line (`"writes": true` in its
@@ -100,10 +101,8 @@ pub struct Device {
     /// D2): a kind's `<service>` is declared with every type its rows give
     /// it, so a later row adds a type to a kind (LLP 1133.032 D11 item 3).
     pub android_services: &'static [&'static str],
-    /// Android hardware features the row declares, each written
-    /// `<uses-feature android:name="android.hardware.<name>"
-    /// android:required="false"/>` so a store still offers the app to a
-    /// device without it (LLP 1133.037 D17: `usb.host`).
+    /// Android features by full name, required unless `required=false`
+    /// follows the name (LLP 1133.022 D18; LLP 1133.037 D17).
     pub android_features: &'static [&'static str],
 }
 
@@ -137,6 +136,34 @@ pub(crate) const ROW: Device = Device {
 
 /// Every device grant. Adding a row is one entry here and no host code.
 pub const DEVICES: &[Device] = &[
+    // Permission metadata for an app's native module (LLP 1067). The
+    // platform keys, permissions and features follow LLP 1133.022 D18;
+    // the module owns the Bluetooth calls.
+    Device {
+        name: "bluetooth",
+        sandbox: Some(Sandbox::Keys(&["device.bluetooth"])),
+        ios: &["NSBluetoothAlwaysUsageDescription"],
+        macos: &["NSBluetoothAlwaysUsageDescription"],
+        web: Some("bluetooth"),
+        android: &[
+            "android.permission.BLUETOOTH maxSdkVersion=30",
+            "android.permission.BLUETOOTH_CONNECT",
+        ],
+        android_features: &[
+            "android.hardware.bluetooth_le required=false",
+            "android.software.companion_device_setup",
+        ],
+        ..ROW
+    },
+    Device {
+        name: "bluetooth-background",
+        sandbox: Some(sandbox::NONE),
+        purpose: false,
+        needs: Some("bluetooth"),
+        ios_modes: &["bluetooth-central"],
+        tvos: false,
+        ..ROW
+    },
     Device {
         name: "microphone",
         sandbox: Some(Sandbox::Keys(&["device.audio-input"])),
@@ -611,7 +638,7 @@ pub const DEVICES: &[Device] = &[
         web: Some("serial"),
         purpose: false,
         tvos: false,
-        android_features: &["usb.host"],
+        android_features: &["android.hardware.usb.host required=false"],
         ..ROW
     },
     Device {
@@ -628,7 +655,7 @@ pub const DEVICES: &[Device] = &[
         web: Some("usb"),
         purpose: false,
         tvos: false,
-        android_features: &["usb.host"],
+        android_features: &["android.hardware.usb.host required=false"],
         ..ROW
     },
 ];
@@ -770,6 +797,31 @@ pub fn permissions_policy(spec: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bluetooth_background_needs_bluetooth_and_has_no_purpose_of_its_own() {
+        let spec = "device.bluetooth purpose.strap\ndevice.bluetooth-background";
+        let grants = device_grants(spec).unwrap();
+        assert_eq!(grants[0].purpose, "purpose.strap");
+        assert_eq!(
+            sandbox::device(grants[0].device),
+            Sandbox::Keys(&["device.bluetooth"])
+        );
+        assert!(permissions_policy(spec).contains("bluetooth=(self)"));
+        assert_eq!(grants[1].device.ios_modes, ["bluetooth-central"]);
+        assert!(grants[1].purpose.is_empty());
+        for bad in [
+            "device.bluetooth",
+            "device.bluetooth purpose.strap extra",
+            "device.bluetooth-background purpose.strap",
+            "device.bluetooth-background",
+        ] {
+            assert!(device_grants(bad).is_err(), "{bad}");
+        }
+        assert!(
+            device_grants("device.bluetooth-background").unwrap_err()[0].contains("grant-needs")
+        );
+    }
 
     /// LLP 1133.002 D7: the approximate line is a row of its own, granting
     /// the same web feature; an app writes it or the precise one, not both.
@@ -934,11 +986,11 @@ mod tests {
     fn the_policy_allows_what_is_granted_and_denies_the_rest() {
         assert_eq!(
             permissions_policy("device.microphone p\ndevice.speech-recognition q"),
-            "microphone=(self), camera=(), geolocation=(), midi=(), accelerometer=(), gyroscope=(), magnetometer=(), serial=(), hid=(), usb=()"
+            "bluetooth=(), microphone=(self), camera=(), geolocation=(), midi=(), accelerometer=(), gyroscope=(), magnetometer=(), serial=(), hid=(), usb=()"
         );
         assert_eq!(
             permissions_policy(""),
-            "microphone=(), camera=(), geolocation=(), midi=(), accelerometer=(), gyroscope=(), magnetometer=(), serial=(), hid=(), usb=()"
+            "bluetooth=(), microphone=(), camera=(), geolocation=(), midi=(), accelerometer=(), gyroscope=(), magnetometer=(), serial=(), hid=(), usb=()"
         );
     }
 

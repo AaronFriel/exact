@@ -3225,6 +3225,31 @@ to see the refusal.
 `packages/child-process/test/` holds a fixture app, its script and a helper
 program that starts a grandchild.
 
+### Bluetooth in a native module
+
+An app's own native module can call CoreBluetooth on Apple or the Bluetooth
+APIs on Android. Declare `device.bluetooth purpose.<key>` in the data module's
+grants, with the purpose text in `strings/en.json` (and translations). The bake
+refuses a missing or blank purpose, as it does for other device grants.
+
+- iOS, tvOS and macOS get
+  [`NSBluetoothAlwaysUsageDescription`](https://developer.apple.com/documentation/bundleresources/information-property-list/nsbluetoothalwaysusagedescription).
+  A sandboxed Mac build also signs `com.apple.security.device.bluetooth`.
+- Android gets `BLUETOOTH_CONNECT`, the `android.software.companion_device_setup`
+  feature, and optional `android.hardware.bluetooth_le`. When `host.android.minimumOS`
+  is below Android 12 (API 31), it also gets `BLUETOOTH` capped at API 30.
+  The module uses CompanionDeviceManager for discovery and
+  [requests connection permission](https://developer.android.com/develop/connectivity/bluetooth/bt-permissions)
+  itself. This grant declares no scan or location permission.
+- The served web's `Permissions-Policy` allows `bluetooth` for the app's origin.
+  Linux and Windows get no host metadata.
+
+For an iOS central that must receive peripheral updates while the app is in the
+background, add `device.bluetooth-background` beside the Bluetooth line. It
+takes no purpose key and adds `bluetooth-central` to `UIBackgroundModes` on iOS
+only. Exact supplies no Bluetooth API, state restoration or Android background
+service; the native module owns the calls and their lifetime (LLP 1067).
+
 ### Apple Health
 
 Exact has no Health API: the app's own Swift module (LLP 1067) calls

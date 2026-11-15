@@ -22,6 +22,10 @@ use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::path::Path;
 
+#[cfg(test)]
+#[path = "reach_bluetooth_tests.rs"]
+mod bluetooth_tests;
+
 /// Fill `compat.reach` and, for an app with device grants, the
 /// `grantPurposes` input (moving the id). Refuses a malformed device line and
 /// a purpose key the base strings table lacks, each reported.

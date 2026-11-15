@@ -7,6 +7,19 @@ tag, attribute or function prints its entry first, then the concept. Every `cont
 compiles (`contract/cli/tests/it/vocab.rs`).
 -->
 
+## bluetooth: Bluetooth grants for an app's native module
+names: device.bluetooth, device.bluetooth-background
+
+Declare `device.bluetooth purpose.bluetooth` in the data module's grants and
+`"purpose.bluetooth": "Reads your heart rate from your strap."` in `strings/en.json`.
+Apple derives `NSBluetoothAlwaysUsageDescription`; a sandboxed Mac also gets its
+Bluetooth entitlement. Android derives connection permission and CompanionDeviceManager
+setup metadata; the module asks for runtime permission itself.
+For an iOS central receiving peripheral updates in the background, add
+`device.bluetooth-background` without a purpose key beside the Bluetooth line.
+It derives `bluetooth-central` in `UIBackgroundModes` on iOS only. The native
+module owns Bluetooth calls; see docs/reference.md#bluetooth-in-a-native-module.
+
 ## scroll: scrolling to the top, or to an item
 names: scrollTo, scrollToTop, scroll-to-top, scrollToIndex, scrollIntoView, scrollTop, scrollToEnd, scrollToBottom, scroll-to-bottom
 
