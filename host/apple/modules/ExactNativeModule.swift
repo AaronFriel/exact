@@ -1043,7 +1043,13 @@ private let moduleLater: @convention(c) (UnsafeMutableRawPointer?, UnsafePointer
 
 private let moduleCall: @convention(c) (UnsafeMutableRawPointer?, UnsafePointer<UInt8>?, Int, UnsafeMutableRawPointer?, ExactModuleReplyFn?) -> Void = { raw, body, length, slot, fn in
     guard let fn else { return }
+    let loaded = ExactExtensions.loadSeconds
     let answer = { (status: UInt32, text: String) in
+        let loading = ExactExtensions.loadSeconds - loaded
+        if loading > 0 {
+            let report = Array(String(loading).utf8)
+            report.withUnsafeBufferPointer { fn(slot, 102, $0.baseAddress, $0.count) }
+        }
         let bytes = Array(text.utf8)
         bytes.withUnsafeBufferPointer { fn(slot, status, $0.baseAddress, $0.count) }
     }

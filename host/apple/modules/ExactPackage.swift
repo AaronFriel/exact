@@ -1,10 +1,10 @@
 // What a package's Swift implementation of a module sees of exact2 (LLP
 // 1133.001 D5; LLP 1133.009 D10 items 1-3; LLP 1133.008 D8 item 9): the
 // `ExactPackage` module, compiled on its own before the packages, which
-// import it, and linked into the app's one module, whose adapter for each
-// package (`exactExtensions`, written by host/apple/build.mjs) holds one
-// instance per session. Nothing of ExactKit or of the app's own module is
-// reachable from here.
+// import it. The seam links into the app module; each package's implementation
+// links into its own library, loaded at first use (LLP 1067.000.001). Its
+// adapter keeps one instance per session. Nothing of ExactKit or of the
+// app's own module is reachable from here.
 //
 // Every entry is on the main thread (LLP 1067.000 D4).
 import AVFoundation
@@ -512,6 +512,17 @@ public protocol ExactPackage: AnyObject {
     /// The host ran the app for this implementation's due wake requests
     /// (`context.wakes`, LLP 1133.017 D8): raise their events, then `done`.
     func woke(_ wake: ExactWake)
+}
+
+/// The retained result of a package library's C factory. The shared seam owns
+/// this box so an existential's layout never crosses the C entry itself.
+public final class ExactPackageImplementation {
+    public let package: any ExactPackage
+    public let authenticator: (any ExactAuthenticator)?
+    public init(_ package: any ExactPackage, authenticator: (any ExactAuthenticator)? = nil) {
+        self.package = package
+        self.authenticator = authenticator
+    }
 }
 
 public extension ExactPackage {

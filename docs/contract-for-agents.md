@@ -4512,6 +4512,14 @@ the box and set no view props; write `object-fit` on the camera tag to configure
 viewfinder. A renamed spelling (`fontSize`) is refused whatever is declared. Do not
 turn a missing widget or canvas operation into invented Contract syntax.
 
+On Apple, each package's Swift library loads at its first call, view, picture,
+authentication or wake. Permission, preference and foreground updates are kept
+until then; they do not load an unused package. A package declaring `"start":
+"load"` starts after first pixel. An app's own Swift that imports a package's
+Swift module loads that library with the app module. Under the agent,
+`state.extensions.<name>.implementation.loaded` reports whether it is mapped
+(LLP 1067.000.001).
+
 Put vendor `.xcframework` bundles beside an Apple native module's Swift files
 (`modules/apple`, or its platform-local replacement). The Apple build selects
 by platform, device or simulator, and architecture from each bundle's `Info.plist`.

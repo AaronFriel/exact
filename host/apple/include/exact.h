@@ -502,7 +502,9 @@ void exact_set_fonts(ExactRuntime rt, ExactFontsFn fonts, void *ctx);
  * exactly once, from any thread, with exact_app_reply: status 200 carries
  * the JSON answer, any other status a refusal message. call(ctx, body, len,
  * slot) is a native.call on the source's thread: the host answers it on the
- * main thread with exact_app_answer before returning. exact_app_changed
+ * main thread with exact_app_answer before returning. An interim status 102
+ * reports library-load seconds as UTF-8 before the final answer (LLP 1067.000.001 D7).
+ * exact_app_changed
  * announces a device topic (LLP 1016.002), on the main thread. */
 typedef void (*ExactAppLaterFn)(void *ctx, const uint8_t *body, size_t len, void *reply);
 typedef void (*ExactAppCallFn)(void *ctx, const uint8_t *body, size_t len, void *slot);

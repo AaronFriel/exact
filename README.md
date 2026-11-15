@@ -304,10 +304,14 @@ asset catalog generation, App Intents metadata and ad-hoc signing run on Linux.
 Production builds with custom native views also validate the compiled factory roster.
 Linux can import a simulator qualification with `EXACT_NATIVE_ROSTERS=/path/to/qualification.json`.
 It contains `{ "version": 1, "probes": [{ "probeSha256": "…", "roster": "<JSON object>" }] }`.
-The build writes `native-probes.json` beside its link products to identify the probe to
-execute on an iOS simulator. Qualifications match the probe's SHA-256; changing its
-compiled bytes requires a new simulator run. Without a matching qualification, a
-production build refuses rather than accepting an absent factory or omitting its
+The build writes `native-probes.json` beside its link products to identify the retained
+probe directory. Copy that whole directory to the Mac and run its `ExactRosterProbe`
+with `xcrun simctl spawn <simulator> <directory>/ExactRosterProbe`. Use the printed JSON
+as the qualification's `roster` string and the listed `probeSha256` as its digest.
+The digest covers every file in the directory: the executable, module library, package
+libraries and declared frameworks. Changing any of them requires a new simulator run.
+Without a matching qualification, a production build refuses rather than accepting
+an absent factory or omitting its
 first-frame declaration. Development builds retain the existing manifest fallback.
 
 ### 2. Run Caltrain in the browser

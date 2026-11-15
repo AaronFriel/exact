@@ -694,10 +694,9 @@ final class NativeViews {
         return "the app's native module artifact did not load: \(failure.message)"
     }
 
-    /// After first pixel, before data activates: load the artifact and make
-    /// the session's instance, so the first `native.call` pays for neither.
-    /// A first load of a freshly built dylib took 164 ms inside a call's
-    /// 100 ms budget (the sample host, 2026-09-27).
+    /// After first pixel, before data activates: load the app library and
+    /// make the session's instance. Packages wait for their first use
+    /// (LLP 1067.000.001).
     func prepareAppModule() {
         activateHatches()
         defer { if !hatchesConnected, pendingHatches == nil { session?.presenter.elements.releaseFrames() } } // they never will

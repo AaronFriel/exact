@@ -93,7 +93,24 @@ pub type NativeCall = std::sync::Arc<dyn Fn(&[u8]) -> Result<Vec<u8>, String> + 
 /// JSON body and the reply to send when it is done.
 pub type NativeHandler = std::sync::Arc<dyn Fn(Vec<u8>, crate::Reply) + Send + Sync>;
 
+thread_local! {
+    static LIBRARY_LOAD_TIME: std::cell::Cell<std::time::Duration> = const {
+        std::cell::Cell::new(std::time::Duration::ZERO)
+    };
+}
+
 impl Native {
+    /// The host's library mapping inside this thread's synchronous calls
+    /// (LLP 1067.000.001 D7), excluded only from a turn's wall backstop.
+    pub fn record_library_load(time: std::time::Duration) {
+        LIBRARY_LOAD_TIME.with(|total| total.set(total.get().saturating_add(time)));
+    }
+
+    /// Cumulative mapping time on the calling thread, independent of its source.
+    pub fn library_load_time() -> std::time::Duration {
+        LIBRARY_LOAD_TIME.with(std::cell::Cell::get)
+    }
+
     /// Fill the slot (activation) or empty it (unload).
     pub fn set(&self, handler: Option<NativeHandler>) {
         *self.0.handler.lock().unwrap_or_else(|e| e.into_inner()) = handler;
