@@ -20,7 +20,7 @@ mod completion;
 mod control;
 mod errors;
 mod reply;
-pub use completion::{Completion, CompletionCapability, CompletionReply};
+pub use completion::{Completion, CompletionCapability, CompletionReply, CompletionSubscription};
 #[cfg(test)]
 mod request_set_tests;
 #[cfg(test)]

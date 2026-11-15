@@ -9,6 +9,9 @@ use exact_plan::{asm::Asm, builder::PlanBuilder, Plan, TypeKind};
 struct Source {
     parses: usize,
     stream: bool,
+    long_poll: bool,
+    yielding: bool,
+    messages: Vec<String>,
     race: bool,
     landed: Vec<(u64, Outcome)>,
 }
@@ -24,6 +27,9 @@ impl DataSource for Source {
         }
         let mut request = Request::get("https://example.test/answer");
         request.wake_ms = self.race.then_some(10);
+        if self.long_poll {
+            request = request.long_poll("since", "seq");
+        }
         Ok(if self.stream {
             Answer::stream(request)
         } else {
@@ -39,7 +45,13 @@ impl DataSource for Source {
         outcome: Outcome,
     ) -> Result<Answer, DataError> {
         self.parses += 1;
+        for message in outcome.messages() {
+            self.messages.push(message.data.clone());
+        }
         Ok(match outcome {
+            Outcome::Message(m) if self.yielding && m.data == "yield" => {
+                Answer::Later(Request::continuation(9))
+            }
             Outcome::Response(r) if r.body == b"more" => {
                 Answer::Later(Request::get("https://example.test/next"))
             }
@@ -311,31 +323,151 @@ fn carry_adds_no_cross_session_or_generation_refusal() {
 }
 
 #[test]
-fn subscription_requests_keep_their_integer_protocol() {
-    let mut r = Runner::boot(
+fn subscriptions_are_bound_only_at_handoff_and_keep_one_authority_for_ordered_deliveries() {
+    for long_poll in [false, true] {
+        let mut r = subscription_runner(long_poll, false);
+        assert!(r.completion_identity.get().is_none());
+        assert!(r.pending[0].completion.is_none());
+        let request = request(&mut r);
+        let copied = request.clone();
+        let slot = request.completion.as_ref().unwrap();
+        assert!(
+            slot.take().is_none(),
+            "a subscription cannot be consumed as a reply"
+        );
+        let subscription = slot.subscription().unwrap();
+        let again = copied.completion.unwrap().subscription().unwrap();
+        assert!(Arc::ptr_eq(&subscription.binding.0, &again.binding.0));
+        let cap: CompletionCapability = (&subscription).into();
+        assert_eq!(cap.ticket, request.ticket);
+        assert_eq!(cap.owner, Target::Resource(0));
+        assert!(matches!(cap.class, Class::UiOwned));
+        assert!(matches!(cap.protocol, Protocol::Subscription));
+        let identity = r.completion_identity.get().unwrap().clone();
+        assert!(Arc::ptr_eq(&cap.identity.session, &identity.session));
+        assert!(Arc::ptr_eq(&cap.identity.generation, &identity.generation));
+
+        if long_poll {
+            r.deliver(
+                &subscription,
+                subscription_completion(Outcome::Message(crate::Message {
+                    event: crate::LONG_POLL_REPLY.into(),
+                    ..Default::default()
+                })),
+            )
+            .unwrap();
+            assert_eq!(r.data().parses, 0);
+            assert_eq!(r.held_replies(), vec![("answer".into(), 1)]);
+        }
+        r.deliver(&subscription, subscription_completion(message("one")))
+            .unwrap()
+            .unwrap();
+        // Both entries share the binding without consuming it.
+        r.fulfill(request.ticket, message("two")).unwrap().unwrap();
+        r.deliver(
+            &again,
+            subscription_completion(Outcome::Messages(vec![
+                crate::Message {
+                    data: "three".into(),
+                    ..Default::default()
+                },
+                crate::Message {
+                    data: "four".into(),
+                    ..Default::default()
+                },
+            ])),
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(r.data().messages, ["one", "two", "three", "four"]);
+        assert!(r.holds(request.ticket));
+        let later: CompletionCapability = (&again).into();
+        assert!(Arc::ptr_eq(&cap.identity.session, &later.identity.session));
+        assert!(Arc::ptr_eq(
+            &cap.identity.generation,
+            &later.identity.generation
+        ));
+        assert!(slot.subscription().is_some());
+
+        r.deliver(&subscription, subscription_completion(response("end")))
+            .unwrap()
+            .unwrap();
+        assert!(!r.holds(request.ticket));
+        let parses = r.data().parses;
+        assert!(r
+            .deliver(&subscription, subscription_completion(message("late")))
+            .unwrap()
+            .is_none());
+        assert_eq!(r.data().parses, parses);
+    }
+}
+
+fn subscription_runner(long_poll: bool, yielding: bool) -> Runner<Source> {
+    Runner::boot(
         plan(),
         Source {
             stream: true,
+            long_poll,
+            yielding,
             ..Default::default()
         },
         Kernel::with_monospace(),
         Default::default(),
         "/",
     )
-    .unwrap();
-    let request = request(&mut r);
-    assert!(request.completion.is_none());
-    assert!(r.completion_identity.get().is_none());
-    for text in ["one", "two"] {
-        r.fulfill(
-            request.ticket,
-            Outcome::Message(crate::Message {
-                data: text.into(),
-                ..Default::default()
-            }),
-        )
-        .unwrap()
-        .unwrap();
+    .unwrap()
+}
+
+fn subscription_completion(outcome: Outcome) -> Completion {
+    Completion::Subscription {
+        outcome,
+        timing: None,
     }
-    assert_eq!(r.data().parses, 2);
+}
+
+fn message(text: &str) -> Outcome {
+    Outcome::Message(crate::Message {
+        data: text.into(),
+        ..Default::default()
+    })
+}
+
+#[test]
+fn subscription_deliveries_wait_behind_mapper_turns_in_arrival_order() {
+    let mut r = subscription_runner(false, true);
+    let stream = request(&mut r);
+    let subscription = stream.completion.unwrap().subscription().unwrap();
+    for text in ["yield", "two", "three"] {
+        r.deliver(&subscription, subscription_completion(message(text)))
+            .unwrap();
+    }
+    r.deliver(&subscription, subscription_completion(response("end")))
+        .unwrap();
+    assert_eq!(r.data().messages, ["yield"]);
+    let turn = request(&mut r);
+    assert_eq!(turn.request.continuation, Some(9));
+    r.fulfill(turn.ticket, response("resumed")).unwrap();
+    for expected in [vec!["yield", "two"], vec!["yield", "two", "three"]] {
+        let held = request(&mut r);
+        r.fulfill(held.ticket, Outcome::Storage(vec![])).unwrap();
+        assert_eq!(r.data().messages, expected);
+        assert!(r.holds(stream.ticket));
+    }
+    let end = request(&mut r);
+    r.fulfill(end.ticket, Outcome::Storage(vec![])).unwrap();
+    assert!(!r.holds(stream.ticket));
+}
+
+#[test]
+fn retiring_a_subscription_preserves_integer_drop_behavior() {
+    let mut r = subscription_runner(false, false);
+    let stream = request(&mut r);
+    let subscription = stream.completion.unwrap().subscription().unwrap();
+    r.act("wave", vec![Value::Number(0.)]).unwrap();
+    assert!(!r.holds(stream.ticket));
+    assert!(r
+        .deliver(&subscription, subscription_completion(message("late")))
+        .unwrap()
+        .is_none());
+    assert_eq!(r.data().parses, 0);
 }
