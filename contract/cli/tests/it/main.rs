@@ -265,6 +265,7 @@ mod stack_split;
 mod state_looks;
 mod state_parts;
 mod status_bar;
+mod store_update;
 mod strings;
 mod style_hosts;
 mod styles;

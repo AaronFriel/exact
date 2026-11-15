@@ -305,6 +305,10 @@
       "name": "@exact/store-review",
       "version": "1.0.0",
     },
+    "packages/store-update": {
+      "name": "@exact/store-update",
+      "version": "1.0.0",
+    },
     "packages/text-detection": {
       "name": "@exact/text-detection",
       "version": "1.0.0",
@@ -435,6 +439,8 @@
     "@exact/speech-synthesis": ["@exact/speech-synthesis@workspace:packages/speech-synthesis"],
 
     "@exact/store-review": ["@exact/store-review@workspace:packages/store-review"],
+
+    "@exact/store-update": ["@exact/store-update@workspace:packages/store-update"],
 
     "@exact/text-detection": ["@exact/text-detection@workspace:packages/text-detection"],
 
