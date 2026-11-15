@@ -53,19 +53,16 @@ impl<D: DataSource> Runner<D> {
         outcome: Outcome,
         timing: Option<crate::CompletionTiming>,
     ) -> Result<Option<CommitReceipt>, RunnerError> {
-        let pending = self.pending.iter().find(|p| p.ticket == ticket);
-        let completion = if pending.is_some_and(|p| p.stream.is_some()) {
-            Completion::Subscription { outcome, timing }
-        } else {
-            Completion::Reply { outcome, timing }
+        let binding = self.request_completion(ticket);
+        let completion = match &binding {
+            Some(binding) => binding.completion(outcome, timing),
+            None => Completion::Reply { outcome, timing },
         };
-        let capability = pending
-            .and_then(|p| p.completion.as_ref())
-            .and_then(CompletionReply::delivery);
+        let capability = binding.as_ref().and_then(CompletionReply::delivery);
         match capability {
             Some(capability) => self.deliver(capability, completion),
-            // Retained work and replies whose records are already gone
-            // keep their integer protocol during carry (LLP 1172.019 §2 item 1).
+            // Unissued, consumed or retired requests keep their integer
+            // protocol during carry (LLP 1172.019 §2 item 1).
             None => self.deliver_reply(ticket, completion),
         }
     }
@@ -75,8 +72,9 @@ impl<D: DataSource> Runner<D> {
         ticket: u64,
         completion: Completion,
     ) -> Result<Option<CommitReceipt>, RunnerError> {
-        let (Completion::Reply { outcome, timing } | Completion::Subscription { outcome, timing }) =
-            completion;
+        let (Completion::Reply { outcome, timing }
+        | Completion::Subscription { outcome, timing }
+        | Completion::DurableOperation { outcome, timing }) = completion;
         // A let-go request's reply: it has ended, and an abort names it no more.
         self.retired_fetches.retain(|r| r.1 != ticket);
         let answering = std::mem::replace(&mut self.churn.answering, true);

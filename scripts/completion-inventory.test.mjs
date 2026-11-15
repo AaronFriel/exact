@@ -38,6 +38,18 @@ test('every public Runner receipt entry is enumerated and classified', () => {
   assert.ok(entries.some(e => e.symbol === 'Runner::deliver'), listing);
   const door = entries.find(e => e.symbol === 'Runner::deliver');
   assert.ok(door.protocol.includes('subscription'), listing);
+  assert.ok(door.protocol.includes('durable operation'), listing);
+  for (const [symbol, protocol, kind] of [
+    ['Runner::send_turn#next_ticket:1', 'one-shot', 'UI-owned'],
+    ['Runner::send_background#next_ticket:1', 'durable operation', 'durable'],
+    ['Runner::take_reports#next_ticket:1', 'durable operation', 'durable'],
+    ['Runner::tool_step#next_ticket:1', 'durable operation', 'durable'],
+    ['Runner::module_work_landed#next_ticket:1', 'durable operation', 'durable'],
+  ]) {
+    const entry = result.entries.find(e => e.host === 'runner' && e.symbol === symbol);
+    assert.deepEqual(entry?.protocol, [protocol], symbol);
+    assert.equal(entry?.class, kind, symbol);
+  }
   const binding = result.entries.find(e => e.symbol === 'CompletionReply::subscription');
   assert.ok(binding?.protocol.includes('subscription'), listing);
   for (const entry of entries) {

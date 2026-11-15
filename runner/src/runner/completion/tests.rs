@@ -14,6 +14,11 @@ struct Source {
     messages: Vec<String>,
     race: bool,
     landed: Vec<(u64, Outcome)>,
+    retained: bool,
+    reports: Vec<crate::Report>,
+    module_yields: bool,
+    rounds: u64,
+    background_out: bool,
 }
 
 impl DataSource for Source {
@@ -25,7 +30,11 @@ impl DataSource for Source {
         if args == [Value::Number(0.)] {
             return Ok(Answer::Now(Value::Number(0.)));
         }
-        let mut request = Request::get("https://example.test/answer");
+        let mut request = if self.retained {
+            Request::post_json("https://example.test/answer", "{}")
+        } else {
+            Request::get("https://example.test/answer")
+        };
         request.wake_ms = self.race.then_some(10);
         if self.long_poll {
             request = request.long_poll("since", "seq");
@@ -68,6 +77,43 @@ impl DataSource for Source {
         self.race.then(|| (7, Request::continuation(8)))
     }
 
+    fn keep_sent(&mut self, _: &Store, flight: &[InFlight<'_>], _: bool) -> Vec<Option<u64>> {
+        flight.iter().map(|_| self.retained.then_some(7)).collect()
+    }
+
+    fn take_reports(&mut self) -> Vec<crate::Report> {
+        std::mem::take(&mut self.reports)
+    }
+
+    fn module_delivery(
+        &mut self,
+        store: &mut Store,
+        token: u64,
+        outcome: Outcome,
+    ) -> Result<Option<Request>, DataError> {
+        self.module_landed(store, token, outcome)?;
+        Ok(std::mem::take(&mut self.module_yields).then(|| Request::continuation(55)))
+    }
+
+    fn background(&mut self, _: &Store) -> Option<Request> {
+        if self.rounds == 0 || self.background_out {
+            return None;
+        }
+        self.background_out = true;
+        Some(Request::continuation(crate::BACKGROUND))
+    }
+
+    fn background_landed(
+        &mut self,
+        store: &Store,
+        outcome: Outcome,
+    ) -> Result<Option<Request>, DataError> {
+        self.landed.push((crate::BACKGROUND, outcome));
+        self.rounds -= 1;
+        self.background_out = false;
+        Ok(self.background(store))
+    }
+
     fn module_landed(
         &mut self,
         _: &mut Store,
@@ -80,9 +126,13 @@ impl DataSource for Source {
 }
 
 fn plan() -> Plan {
+    plan_at(1.)
+}
+
+fn plan_at(initial: f64) -> Plan {
     let mut b = PlanBuilder::new(exact_kernel::SCHEMA_DIGEST, 1);
     let number = b.primitive(TypeKind::Number);
-    let one = b.constant(&Value::Number(1.));
+    let one = b.constant(&Value::Number(initial));
     let wave = b.slot("wave", number, one);
     let mut arg = Asm::new();
     arg.load_slot(wave);
@@ -117,6 +167,11 @@ fn capability(request: &RequestOut) -> CompletionCapability {
     request.completion.as_ref().unwrap().take().unwrap()
 }
 
+fn metadata(cap: &CompletionCapability) -> (Identity, u64, Owner, Protocol) {
+    let b = cap.binding.0.lock().unwrap();
+    (b.identity.clone(), b.ticket, b.owner, b.protocol)
+}
+
 fn completion(outcome: Outcome) -> Completion {
     Completion::Reply {
         outcome,
@@ -142,12 +197,15 @@ fn authority_is_minted_only_when_work_is_handed_out_and_can_be_taken_once() {
     let request = request(&mut r);
     let copied = request.clone();
     let cap = capability(&request);
-    assert_eq!(cap.ticket, request.ticket);
-    assert_eq!(cap.owner, Target::Resource(0));
-    assert!(matches!(cap.class, Class::UiOwned));
+    assert_eq!(metadata(&cap).1, request.ticket);
+    assert_eq!(metadata(&cap).2, Owner::Ui(Target::Resource(0)));
+    assert!(matches!(metadata(&cap).2, Owner::Ui(_)));
     let identity = r.completion_identity.get().unwrap();
-    assert!(Arc::ptr_eq(&cap.identity.session, &identity.session));
-    assert!(Arc::ptr_eq(&cap.identity.generation, &identity.generation));
+    assert!(Arc::ptr_eq(&metadata(&cap).0.session, &identity.session));
+    assert!(Arc::ptr_eq(
+        &metadata(&cap).0.generation,
+        &identity.generation
+    ));
     assert!(copied.completion.unwrap().take().is_none());
     assert!(r.pending[0].completion.as_ref().unwrap().take().is_none());
     r.deliver(cap, completion(response("answer")))
@@ -213,16 +271,16 @@ fn each_continuation_gets_authority_for_its_new_request() {
     let mut r = boot();
     let first = request(&mut r);
     let cap = capability(&first);
-    let session = cap.identity.session.clone();
-    let generation = cap.identity.generation.clone();
+    let session = metadata(&cap).0.session.clone();
+    let generation = metadata(&cap).0.generation.clone();
     r.deliver(cap, completion(response("more")))
         .unwrap()
         .unwrap();
     let next = request(&mut r);
     let cap = capability(&next);
     assert_ne!(first.ticket, next.ticket);
-    assert!(Arc::ptr_eq(&session, &cap.identity.session));
-    assert!(Arc::ptr_eq(&generation, &cap.identity.generation));
+    assert!(Arc::ptr_eq(&session, &metadata(&cap).0.session));
+    assert!(Arc::ptr_eq(&generation, &metadata(&cap).0.generation));
     r.deliver(cap, completion(response("done")))
         .unwrap()
         .unwrap();
@@ -308,11 +366,14 @@ fn carry_adds_no_cross_session_or_generation_refusal() {
     let fresh = request(&mut other);
     let cap = capability(&old);
     let next = capability(&fresh);
-    assert_eq!(cap.ticket, next.ticket);
-    assert!(!Arc::ptr_eq(&cap.identity.session, &next.identity.session));
+    assert_eq!(metadata(&cap).1, metadata(&next).1);
     assert!(!Arc::ptr_eq(
-        &cap.identity.generation,
-        &next.identity.generation
+        &metadata(&cap).0.session,
+        &metadata(&next).0.session
+    ));
+    assert!(!Arc::ptr_eq(
+        &metadata(&cap).0.generation,
+        &metadata(&next).0.generation
     ));
     // Shadow and refusal are later steps: carry still uses today's ticket semantics.
     other
@@ -339,13 +400,16 @@ fn subscriptions_are_bound_only_at_handoff_and_keep_one_authority_for_ordered_de
         let again = copied.completion.unwrap().subscription().unwrap();
         assert!(Arc::ptr_eq(&subscription.binding.0, &again.binding.0));
         let cap: CompletionCapability = (&subscription).into();
-        assert_eq!(cap.ticket, request.ticket);
-        assert_eq!(cap.owner, Target::Resource(0));
-        assert!(matches!(cap.class, Class::UiOwned));
-        assert!(matches!(cap.protocol, Protocol::Subscription));
+        assert_eq!(metadata(&cap).1, request.ticket);
+        assert_eq!(metadata(&cap).2, Owner::Ui(Target::Resource(0)));
+        assert!(matches!(metadata(&cap).2, Owner::Ui(_)));
+        assert!(matches!(metadata(&cap).3, Protocol::Subscription));
         let identity = r.completion_identity.get().unwrap().clone();
-        assert!(Arc::ptr_eq(&cap.identity.session, &identity.session));
-        assert!(Arc::ptr_eq(&cap.identity.generation, &identity.generation));
+        assert!(Arc::ptr_eq(&metadata(&cap).0.session, &identity.session));
+        assert!(Arc::ptr_eq(
+            &metadata(&cap).0.generation,
+            &identity.generation
+        ));
 
         if long_poll {
             r.deliver(
@@ -382,10 +446,13 @@ fn subscriptions_are_bound_only_at_handoff_and_keep_one_authority_for_ordered_de
         assert_eq!(r.data().messages, ["one", "two", "three", "four"]);
         assert!(r.holds(request.ticket));
         let later: CompletionCapability = (&again).into();
-        assert!(Arc::ptr_eq(&cap.identity.session, &later.identity.session));
         assert!(Arc::ptr_eq(
-            &cap.identity.generation,
-            &later.identity.generation
+            &metadata(&cap).0.session,
+            &metadata(&later).0.session
+        ));
+        assert!(Arc::ptr_eq(
+            &metadata(&cap).0.generation,
+            &metadata(&later).0.generation
         ));
         assert!(slot.subscription().is_some());
 
@@ -444,17 +511,33 @@ fn subscription_deliveries_wait_behind_mapper_turns_in_arrival_order() {
     r.deliver(&subscription, subscription_completion(response("end")))
         .unwrap();
     assert_eq!(r.data().messages, ["yield"]);
+    let ticket = r.requests[0].ticket;
+    assert!(r.request_completion(ticket).is_none());
     let turn = request(&mut r);
     assert_eq!(turn.request.continuation, Some(9));
-    r.fulfill(turn.ticket, response("resumed")).unwrap();
+    let cap = capability(&turn);
+    assert_eq!(
+        metadata(&cap).2,
+        Owner::Mapper {
+            stream: stream.ticket,
+            target: Target::Resource(0)
+        }
+    );
+    assert!(turn.completion.as_ref().unwrap().take().is_none());
+    r.deliver(cap, completion(response("resumed"))).unwrap();
     for expected in [vec!["yield", "two"], vec!["yield", "two", "three"]] {
         let held = request(&mut r);
-        r.fulfill(held.ticket, Outcome::Storage(vec![])).unwrap();
+        let cap = capability(&held);
+        assert!(matches!(metadata(&cap).3, Protocol::Reply));
+        assert!(held.completion.as_ref().unwrap().take().is_none());
+        r.deliver(cap, completion(Outcome::Storage(vec![])))
+            .unwrap();
         assert_eq!(r.data().messages, expected);
         assert!(r.holds(stream.ticket));
     }
     let end = request(&mut r);
     r.fulfill(end.ticket, Outcome::Storage(vec![])).unwrap();
+    assert!(end.completion.as_ref().unwrap().take().is_none());
     assert!(!r.holds(stream.ticket));
 }
 
@@ -471,3 +554,6 @@ fn retiring_a_subscription_preserves_integer_drop_behavior() {
         .is_none());
     assert_eq!(r.data().parses, 0);
 }
+
+#[path = "retained_tests.rs"]
+mod retained_tests;

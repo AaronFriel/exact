@@ -8,9 +8,17 @@ function group(family, protocol, lifetime, kind, evidence, sites, durableWhen) {
 }
 
 export const classifications = [
-  group("replies", ["one-shot", "subscription"], "issued request or subscription and its existing pending target record", "UI-owned",
-    "runner/src/runner/completion.rs binds authority at take_requests. One-shot replies consume it; streams and long polls retain the original binding through ordered events, mapper turns and their terminal outcome. deliver preserves the existing reply handler; carry does not refuse identities.", [
+  group("replies", ["one-shot", "subscription", "durable operation"], "issued request and its existing pending, mapper, background, tool or module-work record", "UI-owned",
+    "runner/src/runner/completion.rs binds authority at take_requests. Replies and mapper/held turns consume it once; streams and long polls keep their ordered binding. Background/tool rounds, reports and retained effectful module work use process-local durable authority. UI retirement and timer-race adoption transfer the shared binding even after host extraction. deliver preserves the existing handler; carry refuses no identity.", [
     ["runner:runner/src/runner/completion.rs", "Runner::deliver CompletionReply::take CompletionReply::subscription"],
+  ], "durable for background/tool rounds, reports and retained effectful module work; completion.rs Owner and Class record process-local ownership, without crash recovery."),
+  group("mapper turns", ["one-shot"], "one mapper or held-outcome request under its live stream and target", "UI-owned",
+    "runner/src/runner/mapper_turns.rs send_turn gives each turn and held-outcome request a fresh ticket. completion.rs binds its one-shot authority at handoff; turn_landed retires it before arming the next held outcome. The stream subscription keeps arrival order.", [
+    ["runner:runner/src/runner/mapper_turns.rs", "Runner::send_turn#next_ticket:1"],
+  ]),
+  group("tool requests", ["durable operation"], "one handler request until its turn resumes or session shutdown; process-local today", "durable",
+    "runner/src/runner/modules/invoke.rs Running owns a handler's request independently of Contract slots. tool_step resets authority for each successor; handoff binds it and tool_landed consumes it. Running::drop aborts the callback when the session ends; there is no crash recovery.", [
+    ["runner:runner/src/runner/modules/invoke.rs", "Runner::tool_step#next_ticket:1"],
   ]),
   group("timer fires", ["one-shot"], "current Android reader/session and its timer deadlines or held tasks", "UI-owned",
     "host/painted/src/canvas/timers.rs CanvasHost::background calls reader_clock and admit_idle_timer on the current Presenter; canvas/jni_frames.rs forwards the reader callback to it. A stopped activity does not create an independent background round.", [
@@ -206,9 +214,9 @@ export const classifications = [
       "Presenter::turn_due_ms Presenter::update_fd"],
     ["runner:runner/src/runner/delivery.rs", "Runner::delivery Runner::set_delivery Runner::set_delivery_from_compat"],
   ]),
-  group("durable module work", ["durable operation"], "retained effectful request until its source turn ends; process-local today", "durable",
-    "runner/src/runner/module_work.rs:1-10 retains effectful requests after the answer is let go; its writes stand independently of settlement. This does not prove crash persistence.", [
-    ["runner:runner/src/runner/module_work.rs", "Runner::module_work_landed#next_ticket:1"],
+  group("durable module work", ["durable operation"], "retained request or report until its source turn ends; process-local today", "durable",
+    "runner/src/runner/module_work.rs retains effectful requests after their UI answer is let go, and take_reports starts independent source reports, including reads. Their writes stand independently of settlement; their issued authority survives UI retirement. This does not provide crash persistence.", [
+    ["runner:runner/src/runner/module_work.rs", "Runner::module_work_landed#next_ticket:1 Runner::take_reports#next_ticket:1"],
   ]),
   group("fills", ["one-shot"], "collection/view generation, window and fill token", "UI-owned",
     "runner/src/runner/collection.rs validates feedback/fill against the current collection; instance/collection/index.rs versions rows and into_view.rs versions reveal requests. Collection.swift fixedMeasurements reads exact_collection_fixed_size through Bridge.swift for the current fixed-region view/epoch measurements.", [
@@ -479,7 +487,7 @@ export const classifications = [
     ["painted:host/painted/src/presenter/top/invoke.rs", "Presenter::invoke"],
     ["runner:runner/src/runner/modules.rs", "Runner::hold_module#next:1 Runner::module_call#next:1 Runner::module_call#next:2"],
     ["runner:runner/src/runner/modules/devices.rs", "Runner::opened#next:1"],
-    ["runner:runner/src/runner/modules/invoke.rs", "Runner::invoke_module Runner::tool_step#next_ticket:1"],
+    ["runner:runner/src/runner/modules/invoke.rs", "Runner::invoke_module"],
   ]),
   group("navigation", ["subscription"], "current router, visit, tab or navigation operation", "UI-owned",
     "runner/src/runner/router.rs validates visits against the live router; replacement/retirement changes that owner.", [
@@ -570,7 +578,6 @@ export const classifications = [
     ["painted:host/painted/src/presenter/requests.rs", "Presenter::answer_request"],
     ["render:host/render/src/requests.rs", "settle settle_aborts settle_with_clock"],
     ["runner:runner/src/runner/commit.rs", "Runner::append_request#next_ticket:1"],
-    ["runner:runner/src/runner/mapper_turns.rs", "Runner::send_turn#next_ticket:1"],
     ["runner:runner/src/runner/reply.rs", "Runner::fulfill Runner::fulfill_measured"],
     ["web:host/web/src/abi.rs", "exact_fulfill"],
     ["painted:host/painted/src/presenter/pump.rs", "Presenter::pump Presenter::pump_with_clock"],
