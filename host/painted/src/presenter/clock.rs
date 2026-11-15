@@ -90,8 +90,10 @@ impl<D: DataSource> Presenter<D> {
         self.dirty |= paint;
         let after = self.finish_commit();
         self.hatch_timers(now_ms);
+        let held = self.release_held_tap(false);
         let ends = self.deliver_scroll_ends();
         e.or(after)
+            .or(held)
             .or(ends)
             .or(self.admit_timer_waits(now_ms, false))
     }
@@ -320,8 +322,9 @@ impl<D: DataSource> Presenter<D> {
         // transition), and `after_commit` repaints only for a new epoch.
         self.dirty = true;
         let after = self.after_commit();
+        let held = self.release_held_tap(false);
         let ends = self.deliver_scroll_ends();
-        (landed, e.or(after).or(ends))
+        (landed, e.or(after).or(held).or(ends))
     }
 }
 

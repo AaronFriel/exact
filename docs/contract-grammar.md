@@ -1033,12 +1033,15 @@ receives it as a real pinch arrives there: two touch contacts on the web and iOS
 a Control-held wheel on macOS. A zoomable scroll (`-exact-max-zoom`, LLP
 1057.001.000) is left zoomed as the platform's pinch leaves it at rest, its
 `scrollZoom` times `scale` within its range; the iOS agent's `--touch platform`
-plays it as two real fingers, which UIKit's own recognizer reads. The agent's
-`tap <t> dblclick touch` is a finger's double tap rather than a mouse's: on iOS
-and the web it zooms a zoomable scroll where no `dblclick` handler takes it (two
-real taps under `--touch platform`, two touch points in Chrome), and the other
-carriers answer it unsupported. On the web, `tap <t> wheel 0 <dy> modifiers
-Control` is a trackpad's pinch, as Chrome delivers one.
+plays it as two real fingers, which UIKit's own recognizer reads. On Android and
+Windows it is the pinch the reader's recognizer or the second contact tells the
+presenter, in steps about the point; Linux answers it unsupported. The agent's
+`tap <t> dblclick touch` is a finger's double tap rather than a mouse's: on iOS,
+the web, Android and Windows it zooms a zoomable scroll where no `dblclick`
+handler takes it (two real taps under `--touch platform`, two touch points in
+Chrome, two touch contacts on Android and Windows), and macOS and Linux answer it
+unsupported. On the web, Android, Windows and Linux, `tap <t> wheel 0 <dy>
+modifiers Control` is a trackpad's pinch, as the platform delivers one.
 `tap "id" wheel <dx> <dy>` is the driver's wheel (the agent's `tap <t> wheel
 dx dy`) at the node's middle, in points (CSS pixels on the web): a positive `dy`
 scrolls on toward the content's end, so its offset grows, and a negative one back

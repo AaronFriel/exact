@@ -85,6 +85,8 @@ impl<D: DataSource + Default> CanvasHost<D> {
         // A frame recorded here may still crash the reader's Kotlin: the
         // boot is good once the reader drew it (LLP 1030.006 D5).
         p.set_reader_blesses();
+        // The reader's `GestureDetector` recognizes the double tap (LLP 1057.001.000 §5).
+        p.set_shell_taps();
         crate::surfaces::acquire_fd();
         // What the reader read of the device, before the first frame (D3.1).
         if let Some(e) = device::configured().and_then(|d| p.set_device(&d)) {

@@ -512,6 +512,7 @@ impl<D: DataSource> Presenter<D> {
             return Ok(false);
         }
         let mark = self.hatch_pointer_mark(crate::hatches::Phase::Down, x, y);
+        self.zoom_contact_down((x, y), now_ms);
         let result = match self.contact_down(x, y, now_ms) {
             Ok(taken) => {
                 // Keep the down target's identity before its handler can remove it.
@@ -1238,7 +1239,30 @@ impl<D: DataSource> Presenter<D> {
                 self.press_hit_after_down(id, (x, y), now_ms, focus, true);
             }
             Ok(false)
-        } else if let Some(key) = contact.feedback.filter(|_| contact.press_activates) {
+        } else if self.zoom_contact_lifted((x, y)) {
+            Ok(false)
+        } else if let Some(container) = self.tap_waits(contact.hit) {
+            // A double tap could zoom here: the press waits for it (§3 rule 5).
+            self.hold_press(container, contact, (x, y), now_ms);
+            Ok(false)
+        } else {
+            self.press_lifted(contact, x, y, now_ms)
+        };
+        if !arranged {
+            self.set_collection_interaction(None);
+        }
+        result
+    }
+    /// A touch's or a pen's press at its lift at (`x`, `y`): the control its
+    /// feedback showed, the activation chosen at its down, or what it hit.
+    pub(super) fn press_lifted(
+        &mut self,
+        contact: Contact,
+        x: f32,
+        y: f32,
+        now_ms: f64,
+    ) -> Result<bool, String> {
+        if let Some(key) = contact.feedback.filter(|_| contact.press_activates) {
             let hit = contact
                 .hit
                 .and_then(|hit| self.host.kernel().node_by_key(hit).map(|n| n.id));
@@ -1322,12 +1346,9 @@ impl<D: DataSource> Presenter<D> {
                 }
             }
             Ok(false)
-        };
-        if !arranged {
-            self.set_collection_interaction(None);
         }
-        result
     }
+
     fn mouse_click_target(&mut self, x: f32, y: f32) -> Option<NodeKey> {
         if self
             .field_drag

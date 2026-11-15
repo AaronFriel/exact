@@ -5088,7 +5088,8 @@
       "default": 1,
       "_comment": "@ref LLP 1057.001.000 D1: `-exact-min-zoom`, with `max_zoom` the range a pinch scales a scroll container's one child through (`@viewport`'s `min-zoom`, on an element). A container with either row written zooms; the child keeps its layout and the host draws it scaled (D3).",
       "hosts": [
-        { "host": "painted", "fidelity": "none", "why": "not built yet (LLP 1057.001.000 §8 step 5)" }
+        { "host": "linux", "fidelity": "best-effort", "why": "no touch pinch or double tap, as the host reads no multitouch: `ctrl`+wheel zooms about the pointer and `scrollZoom` is honoured (LLP 1057.001.000 §5)" },
+        { "host": "windows", "fidelity": "best-effort", "why": "no touch pinch: a second contact is not followed; `ctrl`+wheel (a touchpad's pinch) and a touch double tap zoom (LLP 1057.001.000 §5)" }
       ]
     },
     {
@@ -5099,7 +5100,8 @@
       "default": 1,
       "_comment": "@ref LLP 1057.001.000 D1: `-exact-max-zoom`, the top of the range `min_zoom` starts.",
       "hosts": [
-        { "host": "painted", "fidelity": "none", "why": "not built yet (LLP 1057.001.000 §8 step 5)" }
+        { "host": "linux", "fidelity": "best-effort", "why": "no touch pinch or double tap, as the host reads no multitouch: `ctrl`+wheel zooms about the pointer and `scrollZoom` is honoured (LLP 1057.001.000 §5)" },
+        { "host": "windows", "fidelity": "best-effort", "why": "no touch pinch: a second contact is not followed; `ctrl`+wheel (a touchpad's pinch) and a touch double tap zoom (LLP 1057.001.000 §5)" }
       ]
     },
     {

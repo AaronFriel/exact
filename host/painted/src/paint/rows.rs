@@ -372,10 +372,17 @@ impl Painter {
                     .copied()
                     .unwrap_or((0.0, 0.0));
                 c.scrolls.push((node.id, at));
+                // Its zoom moves without a commit or an offset.
+                c.refused |= zoom::range(node).is_some();
             }
             return false;
         }
-        self.rows.active && self.backend.rows() && (scrolls(y) || self.rows_wrapper(node.key))
+        // A zoomable container's child is drawn at the zoom, which a row
+        // replayed at another offset would not follow.
+        self.rows.active
+            && self.backend.rows()
+            && (scrolls(y) || self.rows_wrapper(node.key))
+            && zoom::range(node).is_none()
     }
 
     /// Whether `key` is the container walked for its scroller's rows.

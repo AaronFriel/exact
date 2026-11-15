@@ -214,7 +214,7 @@ export function sessionInput(s, { carrier, host, timing, touch, app }) {
           mode: timing,
         });
       if (
-        (opts.contextmenu || opts.dblclick) &&
+        (opts.contextmenu || (opts.dblclick && !opts.touch)) &&
         !['web', 'ios', 'macos', 'mac', ...(opts.dblclick ? [] : ['linux', 'android', 'windows'])].includes(host)
       )
         throw new Error(`${host} does not carry contextmenu/dblclick input`);
@@ -259,7 +259,7 @@ export function sessionInput(s, { carrier, host, timing, touch, app }) {
         const { box: b } = await targetLayout(), [x, y] = opts.at;
         if (!b || x < 0 || y < 0 || x >= b.w || y >= b.h) throw new Error(`${form} at must be inside the target box`);
       }
-      if (opts.pinch !== undefined && !['web', 'ios', 'macos', 'mac'].includes(host))
+      if (opts.pinch !== undefined && !['web', 'ios', 'macos', 'mac', 'android', 'windows'].includes(host))
         return s.tagged({
           tapped: node.id,
           target,

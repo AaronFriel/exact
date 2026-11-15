@@ -291,7 +291,7 @@ export async function main(argv, injected = {}) {
             'history <n>',
             '{"history":n}',
             'mouse',
-            "dblclick [touch: a finger's double tap, iOS]",
+            "dblclick [touch: a finger's double tap: iOS, Chrome, Android, Windows]",
             'contextmenu',
             'auxclick (the middle button)',
             'clicks <1-3> (each [at <x> <y>: from its top left] [modifiers <Shift+Meta…>])',
