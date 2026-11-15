@@ -55,6 +55,8 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
     private val texture = TextureView(context).apply { isOpaque = false }
     private val subtitles = SubtitleView(context).apply { setUserDefaultStyle(); setUserDefaultTextSize() }
     private var controls: PlayerView? = null
+    /** The element is an `audio`: no picture, and a controller that stays shown (D12). */
+    private var audio = false
     private val main = Handler(Looper.getMainLooper())
     private val projection = Projection { name, payload -> sink?.event(name, payload) }
 
@@ -125,7 +127,7 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
     override fun update(props: JSONObject, width: Int, height: Int, from: MediaRecord.Resume?) {
         val before = if (from != null) runCatching { JSONObject(from.applied) }.getOrNull() else applied
         generation = props.optInt("generation")
-        presenter(props.optBoolean("controls"))
+        presenter(props.optBoolean("controls"), props.optBoolean("audio"))
         fit = props.optString("fit", "contain")
         if (width != boxW || height != boxH || before?.optString("fit") != fit) { boxW = width; boxH = height; layoutPicture() }
 
@@ -141,12 +143,18 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
 
         val source = props.optString("src")
         var since = before
-        if (source != src || applied == null) {
-            val restoring = from != null && from.src == source
+        // `load()` and `fastSeek()` are numbered in the props, so a player made again from the record repeats neither.
+        // A load starts the source again at 0 with the error cleared, as a changed `src` does (LLP 1042 §3).
+        val reload = before != null && changed(before, props, "load")
+        if (source != src || applied == null || reload) {
+            val restoring = from != null && from.src == source && !reload
             load(props, source, props.optString("uri"), from.takeIf { restoring })
             if (!restoring) since = null
         } else if (changed(before!!, props, "volume") || changed(before, props, "muted")) projection.event("volumechange")
         assigned(since, props)
+        // `fastSeek` seeks exactly, as on every host (LLP 1042 §3).
+        val fast = props.optString("seek")
+        if (fast.isNotEmpty() && (before == null || changed(before, props, "seek"))) fast.substringAfter(' ').toDoubleOrNull()?.takeIf { it.isFinite() }?.let { seek(it.coerceAtLeast(0.0)) }
         // Unmuted while playing: it claims focus now, and a refusal pauses it (D8).
         if (!muted && volume > 0f && !projection.paused && claim == null && !claimFocus()) {
             pause(author = false)
@@ -284,12 +292,17 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
 
     // The presenter (D4).
 
-    private fun presenter(wanted: Boolean) {
+    private fun presenter(wanted: Boolean, audio: Boolean) {
+        if (controls != null && audio != this.audio) presenter(false, this.audio)
+        this.audio = audio
         if (wanted == (controls != null)) return
         if (wanted) {
             val themed = ContextThemeWrapper(context, android.R.style.Theme_DeviceDefault)
-            val made = LayoutInflater.from(themed).inflate(R.layout.exact_video_controls, frame, false) as PlayerView
+            val layout = if (audio) R.layout.exact_audio_controls else R.layout.exact_video_controls
+            val made = LayoutInflater.from(themed).inflate(layout, frame, false) as PlayerView
             made.setShowNextButton(false); made.setShowPreviousButton(false)
+            // An `audio` shows no picture, so no captions either (LLP 1042 §8).
+            if (audio) made.subtitleView?.visibility = View.GONE
             exo.clearVideoTextureView(texture)
             frame.removeView(texture); frame.removeView(subtitles)
             frame.addView(made, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
@@ -308,13 +321,14 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
         layoutPicture()
     }
 
-    /** Media3 hides the controller after a while and on a tap; while touch exploration is on it stays (D11). */
+    /** Media3 hides the controller after a while and on a tap; while touch exploration is on it stays (D11), and an
+     * `audio`'s always does (D12). */
     private fun explore() {
         val view = controls ?: return
-        val on = access?.isTouchExplorationEnabled == true
-        view.controllerShowTimeoutMs = if (on) 0 else PlayerControlView.DEFAULT_SHOW_TIMEOUT_MS
-        view.controllerHideOnTouch = !on
-        if (on) view.showController()
+        val stays = audio || access?.isTouchExplorationEnabled == true
+        view.controllerShowTimeoutMs = if (stays) 0 else PlayerControlView.DEFAULT_SHOW_TIMEOUT_MS
+        view.controllerHideOnTouch = !stays
+        if (stays) view.showController()
     }
 
     /** One rect, the picture `object-fit` makes (D5): the texture's transform, the captions' place, D6's cap. */

@@ -135,4 +135,21 @@ class MediaPlayerTest {
         p.update(props().put("src", "").put("uri", ""), 640, 360, null)
         assertEquals(listOf("error(src-not-supported)"), events.names)
     }
+
+    @Test fun aLoadStartsTheSourceAgainOnceAndARebuiltPlayerDoesNotRepeatIt() {
+        val p = player(); val events = Events()
+        p.bind(events)
+        p.update(props("paused" to false), 640, 360, null)
+        p.update(props("paused" to false, "load" to 1), 640, 360, null)
+        // Loaded again, the bound `paused=false` plays it again, as a changed `src` would.
+        assertEquals(listOf("play", "play"), events.names.filter { it == "play" })
+        p.stop()
+        val record = p.snapshot()!!
+        p.release(); made.remove(p)
+
+        val again = player(); val later = Events()
+        again.bind(later)
+        again.update(props("paused" to false, "load" to 1), 640, 360, record)
+        assertEquals(emptyList<String>(), later.names.filter { it == "play" })
+    }
 }

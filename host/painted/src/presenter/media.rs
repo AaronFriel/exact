@@ -113,12 +113,16 @@ impl<D: DataSource> Presenter<D> {
     /// again when the tree changed; the rows of those that changed paint
     /// again, so their players hear it.
     pub(crate) fn sync_media(&mut self, dirty: &mut crate::paint::rows::Dirty) {
+        for key in self.brush.media.asked.drain(..) {
+            dirty.node(key);
+        }
         let kernel = self.host.kernel();
         let epoch = kernel.epoch();
         if self.brush.media.epoch == Some(epoch) {
             return;
         }
         self.brush.media.epoch = Some(epoch);
+        (self.brush.media.commands).retain(|key, _| kernel.node_by_key(*key).is_some());
         let timed: std::collections::BTreeSet<_> = if kernel.has_type(NodeType::Video) {
             (kernel.preorder_where(&self.host.roots(), |t, _| t == NodeType::Video))
                 .into_iter()
@@ -132,6 +136,41 @@ impl<D: DataSource> Presenter<D> {
             dirty.node(*key);
         }
         self.brush.media.timed = timed;
+    }
+
+    /// @ref LLP 1042.001 §5 — `fastSeek(id, seconds)` or `load(id)` on the
+    /// media node with that HTML `id`, as `focus(id)` names one: counted in
+    /// its props, which its player compares with those it last applied.
+    pub(crate) fn media_command(&mut self, name: &str, args: &[exact_plan::Value]) {
+        let id = args
+            .first()
+            .and_then(exact_plan::Value::as_str)
+            .unwrap_or_default();
+        let kernel = self.host.kernel();
+        let node = (kernel.find_by_id(id).into_iter()).find_map(|key| kernel.node_by_key(key));
+        let key = match node {
+            Some(node) if node.node_type == NodeType::Video => node.key,
+            found => {
+                let why = match found {
+                    Some(_) => "not a video or audio",
+                    None => "no live node with that id",
+                };
+                self.host.log(format!("{name} \"{id}\" refused: {why}"));
+                return;
+            }
+        };
+        let asked = self.brush.media.commands.entry(key).or_default();
+        if name == "fastSeek" {
+            asked.seeks += 1;
+            asked.seconds = args
+                .get(1)
+                .and_then(exact_plan::Value::as_number)
+                .unwrap_or(f64::NAN);
+        } else {
+            asked.loads += 1;
+        }
+        self.brush.media.asked.push(key);
+        self.dirty = true;
     }
 
     /// `state.media`: each mounted media node's row, as its player last

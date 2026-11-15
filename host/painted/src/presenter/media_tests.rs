@@ -87,3 +87,45 @@ fn the_painter_names_the_videos_that_handle_timeupdate() {
     assert!(p.brush.media.timed.contains(&key(&p, "timed")));
     assert!(!p.brush.media.timed.contains(&key(&p, "quiet")));
 }
+
+/// `fastSeek` and `load` are counted in the node's props (LLP 1042.001 §5):
+/// a node that is no media element, or no node, refuses them.
+#[test]
+fn fast_seek_and_load_are_numbered_for_the_player() {
+    let source = r#"component App
+  view
+    column width=400 height=400
+      video src="a.mp4" id="clip" testId="video"
+      text "Clip" id="label"
+"#;
+    let (mut p, error) = Presenter::boot_with(
+        &crate::test_plan(source),
+        (),
+        (400., 400.),
+        1.,
+        PathBuf::new(),
+        PainterChoice::Cpu,
+    )
+    .unwrap();
+    assert!(error.is_none(), "{error:?}");
+    let key = p.host.kernel().find_by_test_id("video")[0];
+    let id = |s: &str| exact_plan::Value::str(s);
+    p.media_command("fastSeek", &[id("clip"), exact_plan::Value::Number(4.5)]);
+    p.media_command("fastSeek", &[id("clip"), exact_plan::Value::Number(7.0)]);
+    p.media_command("load", &[id("clip")]);
+    let asked = p.brush.media.commands[&key];
+    assert_eq!((asked.seeks, asked.seconds, asked.loads), (2, 7.0, 1));
+    assert_eq!(p.brush.media.asked, [key, key, key]);
+    p.media_command("load", &[id("label")]);
+    p.media_command("load", &[id("gone")]);
+    assert_eq!(p.brush.media.commands.len(), 1);
+    let journal = crate::agent::handle(&mut p, r#"{"op":"logs"}"#);
+    assert!(
+        journal.contains(r#"load \"label\" refused: not a video or audio"#),
+        "{journal}"
+    );
+    assert!(
+        journal.contains(r#"load \"gone\" refused: no live node with that id"#),
+        "{journal}"
+    );
+}
