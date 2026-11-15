@@ -76,7 +76,27 @@ package final class RasterInput: @unchecked Sendable {
     private static let launchSource = Bundle.main.object(forInfoDictionaryKey: "ExactLaunchImageSource") as? String
     private static let launchDigest = Bundle.main.object(forInfoDictionaryKey: "ExactLaunchImageSHA256") as? String
     private static let launchImage = (Bundle.main.object(forInfoDictionaryKey: "UILaunchScreen") as? [String: Any])?["UIImageName"] as? String
-    deinit { if temporary { try? FileManager.default.removeItem(at: url) } }
+    private static let removals = DispatchQueue(label: "exact.raster.removals", qos: .utility)
+    #if DEBUG
+    private static let removalLock = NSLock()
+    nonisolated(unsafe) private static var removalObserver: ((URL) -> Void)?
+    /// Tests observe completed removal on the thread that performed it.
+    static var testDidRemove: ((URL) -> Void)? {
+        get { removalLock.lock(); defer { removalLock.unlock() }; return removalObserver }
+        set { removalLock.lock(); defer { removalLock.unlock() }; removalObserver = newValue }
+    }
+    #endif
+    deinit {
+        guard temporary else { return }
+        // Each spool has a fresh UUID path. Readers retain the input while
+        // opening it; ImageIO's lazy reads own a duplicated file descriptor.
+        Self.removals.async { [url] in
+            try? FileManager.default.removeItem(at: url)
+            #if DEBUG
+            Self.testDidRemove?(url)
+            #endif
+        }
+    }
     /// CommonCrypto's, not CryptoKit's: launching an app that touches no
     /// other CryptoKit then dirties none of its pages (40 KB in euxy on iOS).
     private static func sha256(_ data: Data) -> String {
