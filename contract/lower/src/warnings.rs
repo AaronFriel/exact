@@ -170,7 +170,7 @@ pub(crate) fn with_text_styles(
     launch::launch_identity(root, &checked.file.fns, &mut out);
     width::width_padding(&root.view, &checked.file.styles, &mut out);
     scroll_bound::scroll_grows(&root.view, &checked.file.styles, &mut out);
-    container::flex_on_block(&root.view, &checked.file.styles, &mut out);
+    container::flex_on_block(&checked_view, &checked.file.styles, &mut out);
     width::text_px_width(&root.view, &checked.file.styles, lowered, &mut out);
     svg::use_foreign_object(&root.view, &mut out);
     out.extend(
@@ -196,7 +196,7 @@ pub(crate) fn with_text_styles(
     }
     crate::warning_rank::keep_first(&mut out);
     out.extend(platform);
-    crate::control_roles::unreachable(&root.view, &checked.file.styles, &mut out);
+    crate::control_roles::unreachable(&checked_view, &checked.file.styles, &mut out);
     crate::style_hosts::undrawn(&checked_view, &checked.file.styles, &mut out);
     one_scheme(
         root,

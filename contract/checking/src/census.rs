@@ -218,9 +218,9 @@ fn recursive_view_walks_do_not_grow() {
     let measured = std::env::var_os("CHECKING_CENSUS_ROOT");
     let root = measured.as_deref().map(Path::new).unwrap_or(here);
     let walks = census(root);
-    // Including cross-file edges, 939dd84f2 had 315 sites and the first batch moved five;
-    // main added three before the census landed. The ceiling only falls from here.
-    const CEILING: usize = 313;
+    // Conservative candidates include transformations and same-name call edges.
+    // LLP 1172.019 §2 item 4 requires this ceiling to fall as checks migrate.
+    const CEILING: usize = 308;
     eprintln!(
         "{} compiler hand walks (ceiling {CEILING}):\n{}",
         walks.len(),

@@ -395,7 +395,10 @@ pub fn lower_all(
     }
     let (mut asset_errors, asset_warnings) = asset_root
         .filter(|_| !theme::retained::stops_at_retention())
-        .map(|root| bundled::check(&checked.expanded.root.view, root))
+        .map(|root| {
+            let checking = contract_checking::Checking::new(checked);
+            bundled::check(&checking.expanded(), root)
+        })
         .unwrap_or_default();
     let mut text_styles = warnings::TextStyles::new();
     let result = lower_with_sites(
