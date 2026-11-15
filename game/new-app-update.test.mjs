@@ -5,7 +5,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, r
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { applyPattern, createApp } from './new.mjs';
-import { dependencyTables, updateManifests, updateScaffold } from './update-manifests.mjs';
+import { dependencyTables, editManifest, updateManifests, updateScaffold } from './update-manifests.mjs';
 import { ensureShells } from '../scripts/app-shells.mjs';
 import { pathWithin } from '../scripts/paths.mjs';
 import { pathFrom, resolveApp } from '../scripts/app.mjs';
@@ -226,14 +226,32 @@ test('update adds the SQLite provider to existing authored native shells and fol
     for (const kind of generated) {
       const file = resolve(dir, kind, 'Cargo.toml');
       const prefix = pathFrom(resolve(dir, kind), root);
-      writeFileSync(file, readFileSync(file, 'utf8').replaceAll(prefix + '/host/', '/nowhere/old-sdk/host/').replaceAll(prefix + '/vendor/', '/nowhere/old-sdk/vendor/').replaceAll(prefix + '/logic', '/nowhere/old-sdk/logic'));
+      writeFileSync(file, readFileSync(file, 'utf8').replaceAll(prefix + '/host/', '/nowhere/old-sdk/host/').replaceAll(prefix + '/vendor/', '/nowhere/old-sdk/vendor/').replaceAll(prefix + '/logic', '/nowhere/old-sdk/logic')
+        // The build script's compiler too, a [build-dependencies] path that is no exact- crate.
+        .replaceAll(prefix + '/contract/', '/nowhere/old-sdk/contract/'));
     }
     createApp(dir, { update: true });
     const manifests = crates.map(kind => readFileSync(resolve(dir, kind, 'Cargo.toml'), 'utf8'));
-    for (const text of manifests) assert.ok(!text.includes('/nowhere'));
+    for (const text of manifests) assert.ok(!text.includes('/nowhere'), text);
     createApp(dir, { update: true });
     assert.deepEqual(crates.map(kind => readFileSync(resolve(dir, kind, 'Cargo.toml'), 'utf8')), manifests);
   } finally { rmSync(parent, { recursive: true, force: true }); }
+});
+
+// An app's own crate that shares a name with one of the checkout's (here `contract`) is not moved into the checkout,
+// even at the same place under the app: only a path into a checkout (gone, or one with scripts/app-cli.mjs) is.
+test('update leaves an app-local crate named like a checkout crate where it is', () => {
+  const app = mkdtempSync(resolve(tmpdir(), 'exact-app-local-')), from = resolve(app, 'apple');
+  try {
+    for (const dir of ['apple', 'contract/cli']) mkdirSync(resolve(app, dir), { recursive: true });
+    const crates = new Map([['contract', resolve(root, 'contract/cli')]]);
+    for (const own of ['../contract', '../contract/cli']) {
+      const local = `[package]\nname = "x"\n\n[build-dependencies]\ncontract = { path = "${own}" }\n`;
+      assert.equal(editManifest(local, from, crates).text, local, own);
+    }
+    const moved = editManifest('[build-dependencies]\ncontract = { path = "/nowhere/old-sdk/contract/cli" }\n', from, crates).text;
+    assert.equal(Bun.TOML.parse(moved)['build-dependencies'].contract.path, pathFrom(from, resolve(root, 'contract/cli')));
+  } finally { rmSync(app, { recursive: true, force: true }); }
 });
 
 test('update adds the SQLite provider only after checking the complete root manifest', () => {
