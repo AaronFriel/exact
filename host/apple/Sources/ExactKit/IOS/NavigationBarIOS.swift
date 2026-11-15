@@ -753,7 +753,12 @@ extension NavigationHost {
         // says otherwise (LLP 1116.020 D2).
         let large: UINavigationItem.LargeTitleDisplayMode = shape?.level == 1 ? .always : .never
         let opens = item.largeTitleDisplayMode == .never && large == .always
+        let closes = item.largeTitleDisplayMode != .never && large == .never
         item.largeTitleDisplayMode = large
+        // UIKit lays the bar out for the new mode only at its next layout,
+        // which nothing asks for at rest: the expanded title, its inset and
+        // its covers stayed until the reader scrolled.
+        if closes, let nav = c.navigationController { nav.navigationBar.setNeedsLayout(); nav.view.setNeedsLayout() }
         // A title that turns large again in place (a selection's count back
         // to its heading) opens over a scroller at its start, as UIKit's
         // opens over a table at its top; one scrolled into its content stays
