@@ -194,7 +194,7 @@ class AuthTest {
         assertTrue(Host.answers.isEmpty())
     }
 
-    private fun authRequest(id: Int, state: String = "s1"): IntArray {
+    private fun authRequest(id: Int, state: String = "s1", logout: Boolean = false): IntArray {
         val body = ArrayList<Int>()
         for (text in listOf("https://login.test/authorize", "app.test:/cb", state)) {
             val bytes = text.toByteArray(Charsets.UTF_8)
@@ -203,6 +203,7 @@ class AuthTest {
                 body += chunk.foldIndexed(0) { i, word, byte -> word or ((byte.toInt() and 255) shl (i * 8)) }
             }
         }
+        body += if (logout) 1 else 0
         return intArrayOf(17, id, body.size) + body.toIntArray()
     }
 
@@ -450,6 +451,22 @@ class AuthTest {
         // A later ordinary return still cancels: callback suppression lasts one resume.
         controller.pause().stop().start().resume()
         assertEquals(listOf(1 to "cancelled"), Host.answers)
+    }
+
+    @Test fun stateLessLogoutReturnsAndCannotTakeASignInResponse() {
+        browser(true)
+        val requests = Requests(activity)
+        requests.perform(authRequest(1, "sign-in"))
+        requests.perform(authRequest(2, "logout", logout = true))
+        controller.pause().stop()
+        controller.newIntent(intent("app.test:/cb?code=sign-in-code&state=logout")).start().resume()
+        assertTrue(Host.urls.isEmpty())
+        val signIn = "app.test:/cb?code=sign-in-code&state=sign-in"
+        controller.newIntent(intent(signIn))
+        assertEquals(listOf(signIn), Host.urls)
+        val returned = "app.test:/cb"
+        controller.newIntent(intent(returned))
+        assertEquals(listOf(signIn, returned), Host.urls)
     }
 
     @Test fun defaultBrowserWaitsUntilTheBoundAndForgettingCancelsOnlyTheWait() {

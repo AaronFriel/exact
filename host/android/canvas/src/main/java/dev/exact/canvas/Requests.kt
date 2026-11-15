@@ -94,7 +94,8 @@ internal class Requests(private val activity: ExactActivity) {
                     AUTH -> {
                         val (url, next) = string(words, body)
                         val (callback, after) = string(words, next)
-                        Auth.open(activity, id, url, callback, string(words, after).first)
+                        val (state, end) = string(words, after)
+                        Auth.open(activity, id, url, callback, state, end < i && words[end] != 0)
                     }
                     AUTH_END -> Auth.end(words[body])
                     HAPTIC -> haptic(words[body])

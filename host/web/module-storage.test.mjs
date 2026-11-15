@@ -303,11 +303,11 @@ export { refuseCodeFromStrings } from ${JSON.stringify(resolve(ROOT, 'host/web/s
 
 // The real prelude and host turns, with storage backends that land at once.
 // `done` closes either placement even when an answer is still parked.
-async function moduleRealm(script, { placement = 'worker', key = 'k', top = '', secrets = false, stored = [] } = {}) {
+async function moduleRealm(script, { placement = 'worker', key = 'k', top = '', secrets = false, stored = [], controlWorkerMessages = false } = {}) {
   const declaration = 'net.fetch https://api.castle.test' + (secrets ? '\nsecret.keep token' : '');
   const normalized = secrets ? { version: 1, entries: [...GRANTS.entries, [2, 'secret.keep token', ['secret-keep', 'token'], null]], error: null, seal: '7c439325539248a1' } : GRANTS;
   const dir = mkdtempSync(resolve(tmpdir(), 'exact-worker-storage-')), captured = {};
-  const saved = Object.fromEntries(['fetch', 'document', 'location', 'exact'].map(name => [name, Object.getOwnPropertyDescriptor(globalThis, name)]));
+  const saved = Object.fromEntries(['fetch', 'document', 'location', 'exact', 'Worker'].map(name => [name, Object.getOwnPropertyDescriptor(globalThis, name)]));
   let realm;
   const done = () => {
     realm?.dispose();
@@ -322,7 +322,10 @@ export const agentStream = () => null; export const keyStore = () => ({}); expor
 export { refuseCodeFromStrings } from ${JSON.stringify(resolve(ROOT, 'host/web/storage-environment.js'))};`);
     writeFileSync(resolve(dir, 'storage-fs.js'), `export const createFileSystem = () => {
   const files = new Map();
-  return { readFile: async path => files.get(path) ?? new TextEncoder().encode(path), readdir: async () => [],
+  return { readFile: async path => {
+    if (path.endsWith('/held')) await new Promise(resolve => { globalThis.__exact_test_release_held_storage = resolve; });
+    return files.get(path) ?? new TextEncoder().encode(path);
+  }, readdir: async () => [],
     writeFile: async (path, bytes) => { files.set(path, bytes); }, dispose() {} };
 };`);
     writeFileSync(resolve(dir, 'storage-sqlite.js'), `export const createSqlite = () => ({
@@ -339,6 +342,26 @@ ${top}`);
     globalThis.fetch = async url => { const r = new Response(String(url).endsWith('module-prelude.js') ? prelude : String(url).endsWith('module-binary.js') ? binary : 'never'); Object.defineProperty(r, 'url', { value: 'http://127.0.0.1/x' }); return r; };
     globalThis.location = { href: 'http://127.0.0.1/', origin: 'http://127.0.0.1' };
     globalThis.exact = {};
+    if (placement === 'worker' && controlWorkerMessages) {
+      const NativeWorker = globalThis.Worker;
+      const messages = { held: false, queue: [], barriers: [] };
+      captured.messages = messages;
+      globalThis.Worker = class {
+        constructor(...args) {
+          this.worker = new NativeWorker(...args);
+          messages.dispatch = event => this.onmessage?.(event);
+          this.worker.onmessage = event => {
+            if (!messages.held) { messages.dispatch(event); return; }
+            messages.queue.push(event);
+            for (const [count, done] of messages.barriers) if (messages.queue.length >= count) done();
+          };
+          this.worker.onerror = event => this.onerror?.(event);
+          this.worker.onmessageerror = event => this.onmessageerror?.(event);
+        }
+        postMessage(...args) { return this.worker.postMessage(...args); }
+        terminate() { return this.worker.terminate(); }
+      };
+    }
     if (placement === 'main') {
       const win = vm.createContext({ console: { log() {}, info() {}, warn() {}, error() {}, debug() {} }, TextEncoder, TextDecoder, structuredClone, setTimeout, clearTimeout,
         queueMicrotask, URL, Headers, DOMException, crypto, indexedDB: null, MessageChannel, Uint8Array, ArrayBuffer, AbortController, AbortSignal, addEventListener() {} });
@@ -361,11 +384,25 @@ ${top}`);
     return {
       done, door: () => captured.door, aborted: () => glue.call({ op: 'aborted', id: realm.id }).tickets,
       ask: source => glue.run(glue.call(request('answer', source)).continuation),
+      askWithDeliver: (source, deliver) => glue.run(glue.call(request('answer', source)).continuation, deliver),
       resume: (source, response = { status: 200, headers: [], body: 'fresh' }) => glue.run(glue.call(request('resume', source, { outcome: { response } })).continuation),
       background: () => glue.call({ op: 'background', id: realm.id }),
       drain: () => glue.run(glue.call({ op: 'background-round', id: realm.id }).token),
       forget: inFlight => glue.call({ op: 'forget', id: realm.id, inFlight: inFlight.map(s => request('answer', s)) }),
       overlay: source => glue.call({ op: 'overlay', id: realm.id, source, args: [], answer: [], writes: [] }),
+      holdWorkerMessagesAfter: count => {
+        const dispatch = captured.messages.dispatch;
+        captured.messages.dispatch = event => {
+          dispatch(event);
+          if (--count === 0) captured.messages.held = true;
+        };
+      },
+      workerMessages: count => captured.messages.queue.length >= count ? Promise.resolve() : new Promise(done => captured.messages.barriers.push([count, done])),
+      workerMessage: index => captured.messages.queue[index]?.data,
+      releaseWorkerMessages: () => {
+        captured.messages.held = false;
+        for (const event of captured.messages.queue.splice(0)) captured.messages.dispatch(event);
+      },
     };
   } catch (error) { done(); throw error; }
 }
@@ -536,6 +573,31 @@ test('outside an answer the realm newly answers only the load-time listen ask', 
   } finally { w.done(); }
 }, 20000);
 
+test('main: an auth window is prepared at the press before auth glue loads', async () => {
+  const priorWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const priorNavigator = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+  const opened = [];
+  Object.defineProperties(globalThis, {
+    window: { configurable: true, value: { open: url => {
+      const popup = { closed: false, url, close() { this.closed = true; } };
+      opened.push(popup);
+      return popup;
+    } } },
+    navigator: { configurable: true, value: { userActivation: { isActive: true } } },
+  });
+  let w;
+  try {
+    w = await moduleRealm(`return prepareAuthSession();`, { placement: 'main' });
+    const prepared = (await race(w.ask('prepare'))).value;
+    expect(typeof prepared).toBe('string');
+    expect(opened.map(popup => popup.url)).toEqual(['about:blank']);
+  } finally {
+    w?.done();
+    if (priorWindow) Object.defineProperty(globalThis, 'window', priorWindow); else delete globalThis.window;
+    if (priorNavigator) Object.defineProperty(globalThis, 'navigator', priorNavigator); else delete globalThis.navigator;
+  }
+}, 20000);
+
 // A fetch the app aborts (the abort runtime gap): another answer's turn aborts an awaited POST, and that
 // turn's result names its ticket (door 23) for the runner to answer aborted and the page to cancel; the
 // awaiting answer, resumed, has the rejection. A fetch aborted before it is awaited is withdrawn (16).
@@ -586,25 +648,97 @@ Object.defineProperty(exact, 'overlay', { get() {
 
 function secretEnvironment(kept) {
   const saved = Object.fromEntries(['navigator', 'localStorage'].map(name => [name, Object.getOwnPropertyDescriptor(globalThis, name)]));
-  const disk = new Map([['exact.secret.token', kept]]), queues = new Map();
-  let writesFail = false, requested = 0; const barriers = [];
+  const disk = new Map([['exact.secret.token', kept]]), queues = new Map(), held = new Set();
+  let writesFail = false, requested = 0, granted = 0, entered = 0;
+  const requestBarriers = [], grantBarriers = [], enterBarriers = [];
+  const grant = () => { granted++; for (const [count, done] of grantBarriers) if (granted >= count) done(); };
+  const enter = () => { entered++; for (const [count, done] of enterBarriers) if (entered >= count) done(); };
+  const later = () => new Promise(resolve => {
+    const channel = new MessageChannel();
+    channel.port1.onmessage = () => { channel.port1.close(); channel.port2.close(); resolve(); };
+    channel.port2.postMessage(null);
+  });
+  const pump = name => {
+    const queue = queues.get(name);
+    if (held.has(name) || !queue?.length) return;
+    const next = queue.shift();
+    held.add(name);
+    void (async () => {
+      await later();
+      await later();
+      if (next.cancelled) { held.delete(name); pump(name); return; }
+      next.lockGranted = true;
+      grant();
+      try {
+        const running = next.work({ name, mode: 'exclusive' });
+        enter();
+        next.resolve(await running);
+      }
+      catch (error) { next.reject(error); }
+      finally { held.delete(name); pump(name); }
+    })();
+  };
   const locks = { request(name, options, work) {
     if (typeof options === 'function') { work = options; options = {}; }
-    requested++; for (const [count, done] of barriers) if (requested >= count) done();
-    let granted = false, abort;
-    const cancelled = new Promise((_, reject) => { abort = () => { if (!granted) reject(new Error('aborted')); }; options.signal?.addEventListener('abort', abort, { once: true }); });
-    const run = (queues.get(name) ?? Promise.resolve()).then(() => {
-      if (options.signal?.aborted) throw new Error('aborted');
-      granted = true; return work();
-    }).finally(() => options.signal?.removeEventListener('abort', abort));
-    queues.set(name, run.catch(() => {})); return Promise.race([run, cancelled]);
+    requested++;
+    for (const [count, done] of requestBarriers) if (requested >= count) done();
+    if (options.ifAvailable && held.has(name)) return (async () => { await later(); await later(); return work(null); })();
+    return new Promise((resolve, reject) => {
+      const next = { work, resolve, reject, lockGranted: false, cancelled: false };
+      const abort = () => {
+        if (next.lockGranted || next.cancelled) return;
+        next.cancelled = true;
+        reject(new Error('aborted'));
+      };
+      options.signal?.addEventListener('abort', abort, { once: true });
+      const finish = next.resolve;
+      next.resolve = value => { options.signal?.removeEventListener('abort', abort); finish(value); };
+      (queues.get(name) ?? queues.set(name, []).get(name)).push(next);
+      pump(name);
+    });
   } };
   Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { locks } });
   Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: { getItem: key => disk.get(key) ?? null, setItem: (key, value) => { if (writesFail) throw new Error('quota'); disk.set(key, value); }, removeItem: key => disk.delete(key) } });
-  return { disk, requested(count) { return requested >= count ? Promise.resolve() : new Promise(done => barriers.push([count, done])); }, failWrites() { writesFail = true; }, restore() {
+  return { disk, requested(count) { return requested >= count ? Promise.resolve() : new Promise(done => requestBarriers.push([count, done])); },
+    granted(count) { return granted >= count ? Promise.resolve() : new Promise(done => grantBarriers.push([count, done])); },
+    entered(count) { return entered >= count ? Promise.resolve() : new Promise(done => enterBarriers.push([count, done])); },
+    checkpoint: later, requestCount: () => requested, grantCount: () => granted, failWrites() { writesFail = true; }, restore() {
     for (const [name, descriptor] of Object.entries(saved)) { if (descriptor) Object.defineProperty(globalThis, name, descriptor); else delete globalThis[name]; }
   } };
 }
+
+const TASK_DELAYED_LOCKS = `{
+  const queues = new Map(), held = new Set();
+  const later = () => new Promise(resolve => {
+    const channel = new MessageChannel();
+    channel.port1.onmessage = () => { channel.port1.close(); channel.port2.close(); resolve(); };
+    channel.port2.postMessage(null);
+  });
+  const pump = name => {
+    const queue = queues.get(name);
+    if (held.has(name) || !queue?.length) return;
+    const next = queue.shift();
+    held.add(name);
+    void (async () => {
+      await later();
+      await later();
+      try { next.resolve(await next.work({name, mode:'exclusive'})); }
+      catch (error) { next.reject(error); }
+      finally { held.delete(name); pump(name); }
+    })();
+  };
+  const locks = { request(name, options, work) {
+    if (typeof options === 'function') { work = options; options = {}; }
+    if (options.ifAvailable && held.has(name)) return (async () => { await later(); await later(); return work(null); })();
+    return new Promise((resolve, reject) => {
+      (queues.get(name) ?? queues.set(name, []).get(name)).push({work, resolve, reject});
+      pump(name);
+    });
+  } };
+  const moduleNavigator = typeof navigator === 'object' ? navigator : {};
+  if (typeof navigator !== 'object') Object.defineProperty(globalThis, 'navigator', {configurable:true, value:moduleNavigator});
+  Object.defineProperty(moduleNavigator, 'locks', {configurable:true, value:locks});
+}`;
 
 for (const placement of ['main', 'worker']) test(`${placement}: module read flags remain boolean across secret waits`, async () => {
   const environment = secretEnvironment('old');
@@ -664,6 +798,73 @@ const provider = oauth({clientId:'fixture',scopes:[],key:'token',endpoints:{auth
   }, 20000);
 }
 
+for (const placement of ['main', 'worker']) test(`${placement}: OAuth sign-out tolerates task-delayed Web Locks`, async () => {
+  const kept = JSON.stringify({ accessToken: 'access-alice', refreshToken: 'refresh-alice', login: 'alice', revocationEndpoint: 'https://api.castle.test/revoke' });
+  const environment = secretEnvironment(kept);
+  const code = new Bun.Transpiler({ loader: 'ts' }).transformSync(readFileSync(resolve(ROOT, 'packages/oauth/index.ts'), 'utf8')).replace(/^export /gm, '');
+  const top = `${TASK_DELAYED_LOCKS}
+${code}
+const provider = oauth({clientId:'fixture',scopes:[],key:'token',endpoints:{authorization:'https://api.castle.test/authorize',token:'https://api.castle.test/token',revocation:'https://api.castle.test/revoke'},apis:[]});`;
+  const w = await moduleRealm(`if (source === 'probe') return store.exclusive('token', async () => store.get('token'));
+return provider.signOut(store);`, { placement, secrets: true, stored: [['token', kept]], top });
+  try {
+    const first = await race(w.ask('logout'));
+    expect(first.request.url).toBe('https://api.castle.test/revoke');
+    expect(first.request.method).toBe('POST');
+    expect(first.request.body).toContain('refresh-alice');
+    expect(environment.disk.get('exact.secret.token') ?? '').not.toContain('access-alice');
+    const competing = w.ask('probe');
+    await environment.requested(2);
+    expect(environment.grantCount()).toBe(1);
+    expect((await w.resume('logout')).value).toMatchObject({ ok: true });
+    await environment.granted(2);
+    expect((await competing).value).toBeNull();
+  } finally { w.done(); environment.restore(); }
+}, 20000);
+
+for (const placement of ['main', 'worker']) test(`${placement}: OAuth revocation retries only in the same runtime`, async () => {
+  const kept = JSON.stringify({ accessToken: 'access-alice', refreshToken: 'refresh-alice', login: 'alice', revocationEndpoint: 'https://api.castle.test/revoke' });
+  const environment = secretEnvironment(kept);
+  const code = new Bun.Transpiler({ loader: 'ts' }).transformSync(readFileSync(resolve(ROOT, 'packages/oauth/index.ts'), 'utf8')).replace(/^export /gm, '');
+  const top = `${code}
+const provider = oauth({clientId:'fixture',scopes:[],key:'token',endpoints:{authorization:'https://api.castle.test/authorize',token:'https://api.castle.test/token',revocation:'https://api.castle.test/revoke'},apis:[]});`;
+  let w = await moduleRealm(`return provider.signOut(store);`, { placement, secrets: true, stored: [['token', kept]], top });
+  try {
+    const first = await w.ask('first');
+    expect(first.request.body).toContain('refresh-alice');
+    expect(environment.disk.has('exact.secret.token')).toBe(false);
+    expect((await w.resume('first', { status: 503, headers: [], body: '' })).value).toMatchObject({ ok: true });
+    const retry = await w.ask('retry');
+    expect(retry.request.body).toContain('refresh-alice');
+    expect((await w.resume('retry')).value).toMatchObject({ ok: true });
+
+    environment.disk.set('exact.secret.token', JSON.stringify({ accessToken: 'access-bob', refreshToken: 'refresh-bob', login: 'bob', revocationEndpoint: 'https://api.castle.test/revoke' }));
+    const departing = await w.ask('departing');
+    expect(departing.request.body).toContain('refresh-bob');
+    expect((await w.resume('departing', { status: 503, headers: [], body: '' })).value).toMatchObject({ ok: true });
+    expect(environment.disk.has('exact.secret.token')).toBe(false);
+    w.done();
+    w = await moduleRealm(`return provider.signOut(store);`, { placement, secrets: true, stored: [['token', kept]], top });
+    const afterCrash = await w.ask('after-crash');
+    expect(afterCrash.request).toBeUndefined();
+    expect(afterCrash.value).toMatchObject({ ok: true });
+  } finally { w.done(); environment.restore(); }
+}, 20000);
+
+for (const placement of ['main', 'worker']) test(`${placement}: an answer cannot wait on another answer's fetch`, async () => {
+  const w = await moduleRealm(`if (source === 'owner') {
+    globalThis.shared = fetch('https://api.castle.test/first').then(response => response.text());
+    return globalThis.shared;
+  }
+  return globalThis.shared.then(() => fetch('https://api.castle.test/second')).then(response => response.text());`, { placement });
+  try {
+    expect((await w.ask('owner')).request.url).toBe('https://api.castle.test/first');
+    const refused = await w.ask('waiter');
+    expect(refused.tag).toBe(2);
+    expect(refused.message).toContain('awaits a promise another answer started');
+  } finally { w.done(); }
+}, 20000);
+
 for (const placement of ['main', 'worker']) test(`${placement}: secret locks retire and failed writes cannot retain a spent token`, async () => {
   const environment = secretEnvironment('old');
   const w = await moduleRealm(`return store.exclusive(source === 'denied' ? 'other' : 'token', async () => {
@@ -690,6 +891,238 @@ for (const placement of ['main', 'worker']) test(`${placement}: secret locks ret
     expect((await w.ask('hold')).tag).toBe(1);
     w.forget([]);
     expect((await race(w.ask('read'))).value).toBe(null);
+  } finally { w.done(); environment.restore(); }
+}, 20000);
+
+for (const placement of ['main', 'worker']) test(`${placement}: a second lease stays held through its request and writes`, async () => {
+  const environment = secretEnvironment('old');
+  const w = await moduleRealm(`if (source === 'chain') return store.exclusive('token', async () => {
+    store.set('token', 'first');
+  }).then(() => store.exclusive('token', async () => {
+    const response = await fetch('https://api.castle.test/token', {method:'POST', body:'first'});
+    store.set('token', await response.text());
+    return store.get('token');
+  }));
+  return store.exclusive('token', async () => store.get('token'));`, { placement, secrets: true, stored: [['token', 'stale']] });
+  try {
+    const second = await w.ask('chain');
+    expect(second.request.method).toBe('POST');
+    const competing = w.ask('competing');
+    await environment.requested(2);
+    const grantsWhilePending = environment.grantCount();
+    expect((await w.resume('chain', { status: 200, headers: [], body: 'second' })).value).toBe('second');
+    await environment.granted(2);
+    const observed = await competing;
+    expect(grantsWhilePending).toBe(1);
+    expect(observed.value).toBe('second');
+  } finally { w.done(); environment.restore(); }
+}, 20000);
+
+for (const placement of ['main', 'worker']) test(`${placement}: a completed lease survives yield and ends before later browser work`, async () => {
+  const environment = secretEnvironment('login');
+  const w = await moduleRealm(`if (source === 'logout') return store.exclusive('token', async () => {
+    store.forget('token');
+    await scheduler.yield();
+  }).then(async () => {
+    await scheduler.yield();
+    return fetch('https://api.castle.test/logout');
+  });
+  return store.exclusive('token', async () => store.get('token'));`, { placement, secrets: true, stored: [['token', 'stale']] });
+  try {
+    expect((await w.ask('logout')).request.url).toBe('https://api.castle.test/logout');
+    const competing = w.ask('competing');
+    await environment.requested(2);
+    await environment.granted(2);
+    const grantsWhilePending = environment.grantCount();
+    await w.resume('logout');
+    const observed = await competing;
+    expect(grantsWhilePending).toBe(2);
+    expect(observed.value).toBeNull();
+  } finally { w.done(); environment.restore(); }
+}, 20000);
+
+for (const placement of ['main', 'worker']) test(`${placement}: a timer resumed during lease publication starts outside the completed turn`, async () => {
+  const environment = secretEnvironment('login');
+  const w = await moduleRealm(`if (source === 'timer') return (async () => {
+    await store.exclusive('token', async () => store.set('token', 'published'));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    return 'timer-finished';
+  })();
+  return store.exclusive('token', async () => store.get('token'));`, { placement, secrets: true, stored: [['token', 'stale']] });
+  try {
+    let resumed;
+    const timer = await w.askWithDeliver('timer', result => {
+      resumed = Promise.resolve().then(() => w.resume('timer'));
+    });
+    expect(timer.secretComplete).toBe(true);
+    expect(timer.timer).toBeDefined();
+    expect(await race(resumed)).toEqual({ tag: 0, value: 'timer-finished', reads: [], writes: [], externalRead: false, entropy: false, topics: [] });
+    const following = w.ask('following');
+    await environment.requested(2);
+    await environment.granted(2);
+    expect((await following).value).toBe('published');
+  } finally { w.done(); environment.restore(); }
+}, 20000);
+
+for (const placement of ['main', 'worker']) test(`${placement}: a lease completed before a wait behind another answer's storage ends before later browser work`, async () => {
+  const environment = secretEnvironment('login');
+  const w = await moduleRealm(`if (source === 'holder') {
+    const file = read('app:/data/holder');
+    return fetch('https://api.castle.test/holder').then(async response => (await file, response.text()));
+  }
+  if (source === 'parked') return store.exclusive('token', async () => {
+    store.set('token', 'parked-complete');
+  }).then(() => read('app:/data/parked')).then(() => fetch('https://api.castle.test/later')).then(response => response.text());
+  if (source === 'following') return store.exclusive('token', async () => store.get('token'));
+  return 'ready';`, { placement, secrets: true, stored: [['token', 'stale']] });
+  try {
+    expect((await w.ask('holder')).request.url).toBe('https://api.castle.test/holder');
+    const parked = w.ask('parked');
+    await environment.granted(1);
+    expect((await w.ask('barrier')).value).toBe('ready');
+    const holder = w.resume('holder');
+    const later = await parked;
+    expect(later.request.url).toBe('https://api.castle.test/later');
+    expect((await holder).value).toBe('fresh');
+    expect(environment.disk.get('exact.secret.token')).toBe('parked-complete');
+    const following = w.ask('following');
+    await environment.requested(2);
+    expect(await race(environment.granted(2))).toBeUndefined();
+    const grantsWhileLaterWorkWaits = environment.grantCount();
+    expect((await following).value).toBe('parked-complete');
+    expect(grantsWhileLaterWorkWaits).toBe(2);
+    expect((await w.resume('parked')).value).toBe('fresh');
+  } finally { w.done(); environment.restore(); }
+}, 20000);
+
+test(`worker: forgetting a parked answer after a completed lease releases the lock and publishes nothing`, async () => {
+  const placement = 'worker';
+  const environment = secretEnvironment('login');
+  const w = await moduleRealm(`if (source === 'holder') {
+    const file = read('app:/data/held');
+    return fetch('https://api.castle.test/holder').then(async response => (await file, response.text()));
+  }
+  if (source === 'forgotten') return store.exclusive('token', async () => {
+    store.set('token', 'forgotten-complete');
+  }).then(() => read('app:/data/forgotten'));
+  if (source === 'following') return store.exclusive('token', async () => store.get('token'));
+  if (source === 'release') { globalThis.__exact_test_release_held_storage(); return 'released'; }
+  return source === 'barrier' ? 'ready' : read('app:/data/' + source);`, { placement, secrets: true, stored: [['token', 'stale']] });
+  try {
+    expect((await w.ask('holder')).request.url).toBe('https://api.castle.test/holder');
+    const forgotten = w.ask('forgotten');
+    await environment.entered(1);
+    expect((await w.ask('barrier')).value).toBe('ready');
+    w.forget(['holder']);
+    expect(await race(forgotten)).not.toBe('STILL WAITING');
+    expect(environment.disk.get('exact.secret.token')).toBe('login');
+    const following = w.ask('following');
+    await environment.requested(2);
+    expect(await race(environment.granted(2))).toBeUndefined();
+    expect((await following).value).toBe('login');
+    expect((await w.ask('release')).value).toBe('released');
+    expect((await w.resume('holder')).value).toBe('fresh');
+    expect((await race(w.ask('after'))).value).toBe('app:/data/after');
+  } finally { w.done(); environment.restore(); }
+}, 20000);
+
+for (const placement of ['main', 'worker']) test(`${placement}: a lease after a park is forgotten with its request out`, async () => {
+  const environment = secretEnvironment('login');
+  const w = await moduleRealm(`if (source === 'holder') {
+    const file = read('app:/data/holder');
+    return fetch('https://api.castle.test/holder').then(async response => (await file, response.text()));
+  }
+  if (source === 'chain') return store.exclusive('token', async () => {
+    store.set('token', 'first-complete');
+  }).then(() => read('app:/data/chain')).then(() => store.exclusive('token', async () => {
+    await fetch('https://api.castle.test/token', { method: 'POST', body: 'first-complete' });
+    store.set('token', 'second-complete');
+  }));
+  return store.exclusive('token', async () => store.get('token'));`, { placement, secrets: true, stored: [['token', 'stale']] });
+  try {
+    expect((await w.ask('holder')).request.url).toBe('https://api.castle.test/holder');
+    const chain = w.ask('chain');
+    await environment.granted(1);
+    await environment.checkpoint();
+    await environment.checkpoint();
+    const holder = w.resume('holder');
+    expect((await chain).request.method).toBe('POST');
+    expect((await holder).value).toBe('fresh');
+    expect(environment.disk.get('exact.exclusive.exact.secret.token')).toBe('1');
+    w.forget([]);
+    const competing = w.ask('competing');
+    await environment.requested(2);
+    expect(await race(environment.granted(2))).toBeUndefined();
+    expect((await competing).value).toBeNull();
+    expect(environment.disk.has('exact.secret.token')).toBe(false);
+  } finally { w.done(); environment.restore(); }
+}, 20000);
+
+test(`worker: a successful result forgotten before delivery cannot write after its lock is released`, async () => {
+  const environment = secretEnvironment('login');
+  const w = await moduleRealm(`return store.exclusive('token', async () => {
+    store.set('token', 'forgotten-complete');
+    return 'worker-complete';
+  });`, { placement: 'worker', secrets: true, stored: [['token', 'stale']], controlWorkerMessages: true });
+  try {
+    w.holdWorkerMessagesAfter(1);
+    const forgotten = w.askWithDeliver('forgotten', result => {
+      for (const [name, value, durable] of result.writes ?? []) if (!durable) {
+        if (value == null) localStorage.removeItem(`exact.secret.${name}`);
+        else localStorage.setItem(`exact.secret.${name}`, value);
+      }
+    });
+    await environment.granted(1);
+    await w.workerMessages(1);
+    expect(w.workerMessage(0)).toMatchObject({ result: { tag: 0, value: 'worker-complete', writes: [['token', 'forgotten-complete']] } });
+    w.forget([]);
+    const replacement = navigator.locks.request('exact.secret.token', () => localStorage.setItem('exact.secret.token', 'replacement'));
+    expect(await race(replacement)).toBeUndefined();
+    expect(environment.disk.get('exact.secret.token')).toBe('replacement');
+    w.releaseWorkerMessages();
+    const forgottenResult = await race(forgotten);
+    expect(environment.disk.get('exact.secret.token')).toBe('replacement');
+    expect(String(forgottenResult)).toContain('rejected');
+  } finally { w.done(); environment.restore(); }
+}, 20000);
+
+for (const placement of ['main', 'worker']) test(`${placement}: a lease ends before later browser work and a forgotten call stays settled`, async () => {
+  const environment = secretEnvironment('login');
+  const w = await moduleRealm(`if (source === 'logout') return store.exclusive('token', async () => {
+    store.forget('token');
+  }).then(() => fetch('https://api.castle.test/logout'));
+  return store.exclusive('token', async () => store.get('token'));`, { placement, secrets: true, stored: [['token', 'stale']] });
+  try {
+    expect((await w.ask('logout')).request.url).toBe('https://api.castle.test/logout');
+    expect(environment.disk.has('exact.secret.token')).toBe(false);
+    const firstRequests = environment.requestCount(), firstGrants = environment.grantCount();
+    const read = w.ask('read');
+    await environment.requested(firstRequests + 1);
+    await environment.granted(firstGrants + 1);
+    const grantsWhileBrowserWaits = environment.grantCount();
+    await w.resume('logout');
+    const readResult = await read;
+    expect(grantsWhileBrowserWaits).toBe(firstGrants + 1);
+    expect(readResult.value).toBeNull();
+    environment.disk.set('exact.secret.token', 'next-login');
+    let delivered, release;
+    const delivering = new Promise(resolve => { delivered = resolve; });
+    const paused = new Promise(resolve => { release = resolve; });
+    const forgotten = w.askWithDeliver('logout', async () => { delivered(); await paused; });
+    await delivering;
+    w.forget([]);
+    const requestsBefore = environment.requestCount();
+    const grantsBefore = environment.grantCount();
+    const after = w.ask('after-forget');
+    let settled = false;
+    after.finally(() => { settled = true; });
+    await environment.requested(requestsBefore + 1);
+    expect(environment.grantCount()).toBe(grantsBefore);
+    expect(settled).toBe(false);
+    release();
+    await forgotten;
+    await environment.granted(grantsBefore + 1);
+    expect((await race(after)).value).toBeNull();
   } finally { w.done(); environment.restore(); }
 }, 20000);
 

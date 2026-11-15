@@ -1989,6 +1989,13 @@ price: answers arrive `Later`, outside the action's transaction (LLP 1027.002 D1
 
 ## Working on Exact itself
 
+- **An Android regression test still runs the temporarily reverted code after
+  the source is restored.** A revert and restore close together can leave
+  Gradle reporting `compileDebugKotlin UP-TO-DATE` and reusing the class from
+  the reverted source. Run the restored test with `--rerun-tasks`; an ordinary
+  second test run does not prove the restored source was compiled. (OAuth
+  logout regression audit, 2026-11-14.)
+
 - **A CDP adapter re-sends known children and Styles stays empty.**
   `DOM.setChildNodes` replaces the frontend's node objects. Repeating it for
   children already introduced can leave the selected object different from

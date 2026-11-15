@@ -1569,7 +1569,37 @@ endpoint (OpenID Connect RP-Initiated Logout 1.0): send it from a press,
 register the callback as a post-logout redirect URI, and set
 `logoutRedirectParam` for a provider that does not call that parameter
 `post_logout_redirect_uri`. A browser step that does not finish still signs
-out, answered `ok` with code `end_session` and a sentence in `error`.
+out, answered `ok` with code `end_session` and a sentence in `error`. A later
+end-session press retries that provider logout. The web reserves a blank
+provider window synchronously at the press, then navigates it after sign-out
+takes the session under its store lease and constructs the logout URL. Its
+ID-token hint and revocation therefore always name the same login without
+losing the press's browser activation. Until the provider logout succeeds or
+a new sign-in replaces it, the store retains its endpoint and ID token under
+the same secret lease; the app remains signed out. Entra and Cognito may
+return from logout without `state`; that return is accepted only when it has
+neither `code` nor `error`. A returned `state`, when present, must match. A
+sign-in response therefore cannot complete a waiting logout.
+When the runner or Android must choose among several logouts at one callback, a
+return without `state` completes the oldest live one. On the web, a return from
+a popup whose opener remains completes that popup's logout. Before navigating,
+the glue puts a fresh random identity in the blank popup's own
+`sessionStorage`; the callback reads and removes it. After severance, only the
+live logout holding that identity completes. An unaddressed state-less return
+completes nothing, and no tab takes a shared lock or reads another tab's state.
+A request still held at the ten-minute bound answers 499 once, whether its
+timer or a late return arrives first.
+
+Revocation runs inside the same lease that removes the credential, before the
+provider browser opens. Each token request has a 60-second host deadline, so
+sign-in, refresh and another sign-out for the same key wait behind it. No reply,
+a timeout, 429 or 5xx leaves the token for the next sign-out in the same data
+module runtime; any other reply clears it. This is best effort: there is no
+background retry and the debt is not stored in the secret, so a reload, restart
+or runtime replacement ends those retries. Another browser tab may revoke the
+same token again; RFC 7009 treats that as success. Recovery from an interrupted
+secret update remains fail-closed and removes the whole secret, which can also
+discard a retained provider-logout hint.
 
 Every option, with what it does, is in `@exact/oauth`'s `index.d.ts`.
 

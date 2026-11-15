@@ -591,7 +591,10 @@ impl Batch {
             s.push_str("},\"state\":");
             quote(&session.state, &mut s);
         }
-        s.push_str(&format!(",\"ephemeral\":{}}}", session.ephemeral));
+        s.push_str(&format!(
+            ",\"logout\":{},\"ephemeral\":{}}}",
+            session.logout, session.ephemeral
+        ));
         self.ops.push(s);
     }
 
