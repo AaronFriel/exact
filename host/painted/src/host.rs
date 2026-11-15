@@ -97,7 +97,7 @@ pub struct Host<D: DataSource> {
     secret_session: system::SecretSession,
     doc_watch: Option<crate::doc_watch::DocWatch>,
     font_sync: Option<(crate::text::Shared, usize)>,
-    engine: Engine,
+    pub(crate) engine: Engine,
     keys: BTreeMap<NodeKey, ViewId>,
     presented: BTreeMap<ViewId, Presented>,
     /// Paint motion's owners and the appearance they resolve by (LLP 1062).
@@ -123,7 +123,7 @@ pub struct Host<D: DataSource> {
     data_activated: bool,
     pub(crate) sound: crate::sound::Pending,
     /// Reader-owned [`lower::LOWERED`] animations and their change count.
-    lowering: bool,
+    pub(crate) lowering: bool,
     lowered: std::collections::HashMap<u64, u8>,
     /// Whether colour transitions are lowered too (`lower.rs`).
     lower_colors: bool,

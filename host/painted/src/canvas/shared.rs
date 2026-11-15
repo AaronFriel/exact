@@ -196,6 +196,7 @@ mod tests {
                     out.extend(sets(&ops[parents + 1 + ops[parents] as usize * 2..end]));
                 }
                 ROW_BEGIN => out.extend(sets(&ops[at + 6..end - 1])),
+                layer::LAYER_SET => out.extend(sets(&ops[at + 19..end])),
                 _ => (),
             }
             at = end;
@@ -357,6 +358,64 @@ mod tests {
                 (w - size.0).abs() < 0.01 && (h - size.1).abs() < 0.01,
                 "{parent} {own}: {w}x{h}"
             );
+        }
+    }
+
+    #[test]
+    fn a_lowered_rotation_keeps_the_live_subtree() {
+        // A lowered transform animates on the reader, absent from the paint
+        // walk's transform: a shared element whose ancestor turns stays live,
+        // so the reader's layer carries the rotation. A lowered translate
+        // stays a raster — it moves with the box. The engine presents the
+        // played transition's target (rotate=45 here).
+        let png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+        for (style, lowered, fit) in [
+            ("rotate=`${angle}deg`", exact_motion::Property::Rotate, 0),
+            (
+                "translate=`${x}px 0px`",
+                exact_motion::Property::Translate,
+                3,
+            ),
+        ] {
+            let app = format!(
+                r#"component App
+  state angle = 0
+  state x = 0
+  action spin
+    angle = 45
+    x = 60
+  view
+    box padding=50
+      box {style} transition="1s linear" width=200 height=200 testId="spinner"
+        image "{png}" sharedElement="photo" testId="photo" object-fit="cover" width=80 height=60
+      button "Spin" press=spin testId="spin"
+"#
+            );
+            let (mut p, error) = Presenter::boot_with(
+                &crate::test_plan(&app),
+                (),
+                (400., 800.),
+                1.,
+                std::path::PathBuf::new(),
+                PainterChoice::Canvas,
+            )
+            .unwrap();
+            assert!(error.is_none(), "{error:?}");
+            p.host_mut().lowering = true;
+            p.host_mut().engine.set_lowered_properties(&[lowered]);
+            assert!(p.wait_images(std::time::Duration::from_secs(30)));
+            p.frame();
+            take();
+            let spin = p.host().kernel().find_by_test_id("spin")[0];
+            let spin = p.host().kernel().node_by_key(spin).unwrap().id;
+            p.host_mut()
+                .dispatch_at(spin, exact_runner::Event::Press, 100.0);
+            p.after_commit();
+            p.frame();
+            let ops = take();
+            let defs = sets(&ops);
+            assert_eq!(defs.len(), 1, "{style}");
+            assert_eq!(defs[0][17], fit, "a lowered {lowered:?} on {style}");
         }
     }
 
