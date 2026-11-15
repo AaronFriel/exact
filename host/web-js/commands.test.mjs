@@ -351,9 +351,10 @@ component App
       await page.evaluate(key => localStorage.setItem('exact.state.#scheme', localStorage.getItem(key)), key);
       key = 'exact.state.#scheme';
     } else if (wasm) {
-      // Use the retained target's document composer, with its own origin-scoped runner key.
-      const rendered = spawnSync(resolve(root, 'target/debug/caltrain-render'), ['--plan', resolve(dist, 'app.plan'),
-        '--shell', resolve(root, 'host/web/index.html'), '--build'], { encoding: 'utf8' });
+      // The retained target's document composer, with its own origin-scoped runner key, built from this checkout and run
+      // as host/web/build.mjs runs it.
+      const rendered = spawnSync('cargo', ['run', '-q', '-p', 'caltrain-linux', '--bin', 'caltrain-render', '--', '--plan', resolve(dist, 'app.plan'),
+        '--shell', resolve(root, 'host/web/index.html'), '--build'], { cwd: root, env: { ...process.env, BUN: process.execPath, EXACT_UPDATE_TRUST: 'development' }, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
       expect(rendered.status, rendered.stdout + rendered.stderr).toBe(0);
       const document = JSON.parse(rendered.stdout.trim());
       expect(document.error).toBeUndefined();
