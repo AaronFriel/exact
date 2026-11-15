@@ -319,8 +319,10 @@ export async function streamCandidates(app, origin, found, env, { baker = null, 
       const graph = planGraph(tools.graph, app, built.plan, compat, env, built.entries);
       const inputs = cohort.compat.inputs;
       // Plans check their required raster renditions. Native packaging owns
-      // module pins, linked composition and texture thinning.
-      const packaged = new Set(['typescriptModule', 'linked', 'textureFamily', 'appleRasterIcons']);
+      // module pins, linked composition and texture thinning; an Android
+      // cohort's composition and Hermes bytecode version are compared with
+      // what the generation requires (LLP 1030.006 D4, D4a).
+      const packaged = new Set(['typescriptModule', 'linked', 'textureFamily', 'appleRasterIcons', 'androidLinked', 'hermesBytecode']);
       const keys = new Set([...Object.keys(compat.inputs), ...Object.keys(inputs)]);
       const pendingInputs = [...keys].filter(key => !packaged.has(key) && canonicalJson(compat.inputs[key] ?? null) !== canonicalJson(inputs[key] ?? null));
       // A cohort signed before binary input evidence existed has none to compare with.

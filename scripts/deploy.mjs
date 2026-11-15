@@ -979,7 +979,7 @@ export async function classify({ app, opts, origin, channel, snapshot, release, 
     const android=rows.filter(r=>r.kind==='stream'&&r.platform==='android');
     if(app.manifest.deploy?.store?.android!=='A') binary.set('android',{compatibilityId:null,reason:`deploy.store.android is "0": the APK links no update store; deliver changes in ${apk}`});
     else if(!android.length) binary.set('android',{compatibilityId:null,reason:`no Android stream on ${channel} yet: build ${apk} (production trust), then bun scripts/push.mjs starts its stream`});
-    else for(const row of android.filter(r=>r.action==='binary')) binary.set('android',{compatibilityId:row.compatibilityId,reason:apk});
+    else for(const row of android.filter(r=>r.action==='binary')) row.reason=`${row.reason}; ${apk}`;
   }
   for(const [platform,card] of binary) rows.push({kind:'binary',platform,action:'binary',...card});
 
