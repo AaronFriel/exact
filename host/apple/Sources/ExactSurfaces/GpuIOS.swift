@@ -474,7 +474,11 @@ final class CanvasesHost {
     func scheduleCapture() {
         guard !captureScheduled else { return }
         captureScheduled = true
-        DispatchQueue.main.async { self.captureScheduled = false; self.captureIfNeeded() }
+        DispatchQueue.main.async {
+            self.captureScheduled = false
+            self.captureIfNeeded()
+            if self.wantsFrames { self.session?.frames.requestCanvas() }
+        }
     }
 
     /// Whether the input being edited is under the overlay (D4 d): carets
