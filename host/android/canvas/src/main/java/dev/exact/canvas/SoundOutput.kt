@@ -58,6 +58,8 @@ private object NativeSoundBackend : SoundBackend {
 /** Main-thread owner of Contract effects. Native code alone runs on AAudio's callback thread. */
 internal class SoundOutput(
     private val context: Context,
+    /** Where a sound's path is a file ([AssetRoot]), asked at each open. */
+    private val root: () -> File,
     private val policy: SoundPolicy,
     private val backend: SoundBackend = NativeSoundBackend,
     private val report: ((String) -> Unit)? = null,
@@ -132,7 +134,7 @@ internal class SoundOutput(
                     }
                 } ?: throw IllegalStateException("audio focus refused")
             }
-            val root = AssetRoot.of(context).canonicalFile
+            val root = root().canonicalFile
             val paths = files.map { name ->
                 File(root, name).canonicalFile.also { require(it.path.startsWith(root.path + File.separator)) { "sound path leaves app assets" } }.path
             }.toTypedArray()

@@ -67,7 +67,7 @@ internal class Requests(private val activity: ExactActivity) {
         if (sound == null && (0 until ops.length()).any { ops.getJSONObject(it).getInt("kind") == 1 }) {
             val info = activity.packageManager.getApplicationInfo(activity.packageName, android.content.pm.PackageManager.GET_META_DATA)
             val policy = SoundPolicy.of(info.metaData?.getString("dev.exact.audioSession") ?: "ambient")
-            sound = SoundOutput(activity, policy).also { if (!foreground) it.foreground(false) }
+            sound = SoundOutput(activity, { AssetRoot.of(activity) }, policy).also { if (!foreground) it.foreground(false) }
         }
         sound?.apply(body)
     }
