@@ -62,6 +62,37 @@ impl<'a> Checking<'a> {
         &self.checked.types.shapes
     }
 
+    /// Authored record names, excluding generated routing shapes.
+    pub fn declared_shapes(&self) -> impl Iterator<Item = &'a str> {
+        self.checked
+            .file
+            .shapes
+            .iter()
+            .map(|shape| shape.name.as_str())
+    }
+
+    /// Regions that own lifted component state.
+    pub fn state_regions(&self) -> impl Iterator<Item = u32> + '_ {
+        self.checked
+            .expanded
+            .owners
+            .iter()
+            .filter_map(|owner| match owner {
+                contract_syntax::Owner::Arm { tag, .. } => Some(*tag),
+                _ => None,
+            })
+    }
+
+    /// Function declarations, which contain expressions but no view tree.
+    pub fn functions(&self) -> &'a [contract_syntax::FnDecl] {
+        &self.checked.file.fns
+    }
+
+    /// Authored class declarations in their precedence order.
+    pub fn styles(&self) -> &'a [contract_syntax::StyleDecl] {
+        &self.checked.file.styles
+    }
+
     /// Root actions include the lifted declarations checked by inference.
     pub fn actions(&self, component: usize) -> &'a [contract_syntax::Action] {
         if component == 0 {
@@ -147,6 +178,56 @@ impl<'a> View<'a> {
         .map(|(node, context)| (Visit { node, declarations }, context))
     }
 
+    /// Preorder with roots, siblings and arms in reverse source order.
+    pub fn walk_reverse(&self) -> impl Iterator<Item = Visit<'a>> {
+        Node::walk_reverse(self.nodes).map(|node| Visit {
+            node,
+            declarations: self.declarations,
+        })
+    }
+
+    /// Enter and leave each node, with inherited facts and optional pruning.
+    /// The boolean is true on entry. Leave retains the incoming facts.
+    pub fn events<C: Clone>(
+        &self,
+        context: C,
+        mut descend: impl FnMut(Visit<'a>, &C) -> Option<C>,
+    ) -> impl Iterator<Item = (Visit<'a>, C, bool)> {
+        let declarations = self.declarations;
+        Node::walk_events_with(self.nodes, context, move |node, context| {
+            let child = descend(Visit { node, declarations }, context);
+            [child.clone(), child]
+        })
+        .map(|(node, context, entering)| (Visit { node, declarations }, context, entering))
+    }
+
+    /// Scoped descent with one fact per arm; inference stays in the shared
+    /// region primitive. The callback sees the incoming scope and arm binders.
+    pub fn scoped_with<C: Clone>(
+        &self,
+        context: C,
+        mut descend: impl FnMut(Visit<'a>, &Scope, &C, contract_syntax::Binds<'a>) -> C,
+    ) -> impl Iterator<Item = (Visit<'a>, Arc<Scope>, C)> {
+        let declarations = self.declarations;
+        let shapes = self.shapes;
+        Node::walk_with(
+            self.nodes,
+            (Arc::new(self.scope.clone()), context),
+            move |node, (scope, context)| {
+                let visit = Visit { node, declarations };
+                let frames = contract_types::view_frames(node, scope, shapes);
+                let lists = node.scoped_child_lists();
+                let mut i = 0;
+                frames.map(|frame| {
+                    let binds = lists[i].1;
+                    i += 1;
+                    frame.map(|frame| (frame, descend(visit, scope, context, binds)))
+                })
+            },
+        )
+        .map(|(node, (scope, context))| (Visit { node, declarations }, scope, context))
+    }
+
     /// Names resolved under the plan's region frames. Subjects are inferred
     /// once per region; siblings share immutable scope frames. Work includes
     /// subject inference, and storage is O(view depth × scope depth).
@@ -186,6 +267,60 @@ impl<'a> Visit<'a> {
             } => Some((tag, positional, attrs)),
             _ => None,
         }
+    }
+
+    /// Expansion identity used by per-instance lowering facts.
+    pub fn instance(self) -> Option<u32> {
+        match self.node {
+            Node::Element { instance, .. } => Some(*instance),
+            _ => None,
+        }
+    }
+
+    /// A repetition's region identity, binders, subject and key.
+    pub fn repetition(self) -> Option<(u32, &'a str, Option<&'a str>, &'a Expr, &'a Expr)> {
+        match self.node {
+            Node::Each {
+                tag,
+                var,
+                index,
+                list,
+                key,
+                ..
+            } => Some((*tag, var, index.as_deref(), list, key)),
+            _ => None,
+        }
+    }
+
+    /// A conditional or repetition's state-owner region identity.
+    pub fn region(self) -> Option<u32> {
+        match self.node {
+            Node::When { tag, .. } | Node::Each { tag, .. } | Node::Match { tag, .. } => Some(*tag),
+            _ => None,
+        }
+    }
+
+    /// Whether this is an unresolved children slot.
+    pub fn is_slot(self) -> bool {
+        matches!(self.node, Node::Children { .. })
+    }
+
+    /// Expressions held by this node, before entering its regions.
+    pub fn expressions(self) -> impl Iterator<Item = &'a Expr> {
+        self.node.exprs()
+    }
+
+    /// Structural descent through a repetition's body, empty for other nodes.
+    /// Scoped expression checks use `View::scoped_with` instead.
+    pub fn repetition_body(self) -> impl Iterator<Item = Visit<'a>> {
+        let nodes = match self.node {
+            Node::Each { body, .. } => body.as_slice(),
+            _ => &[],
+        };
+        Node::walk(nodes).map(move |node| Visit {
+            node,
+            declarations: self.declarations,
+        })
     }
 
     /// A component invocation's declaration identity, authored name and arguments.

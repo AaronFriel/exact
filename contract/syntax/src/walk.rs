@@ -162,9 +162,33 @@ impl Node {
         descend: F,
     ) -> WalkWith<'a, C, F> {
         WalkWith {
-            stack: vec![(nodes.iter(), context)],
-            descend,
+            events: WalkEvents {
+                stack: vec![Frame::List(nodes.iter(), context)],
+                descend,
+                reverse: false,
+            },
         }
+    }
+
+    /// Enter and leave each node in source order. A skipped list has no events.
+    /// Leave carries the same inherited context as enter.
+    pub fn walk_events_with<'a, C: Clone, F: FnMut(&'a Node, &C) -> [Option<C>; 2]>(
+        nodes: &'a [Node],
+        context: C,
+        descend: F,
+    ) -> WalkEvents<'a, C, F> {
+        WalkEvents {
+            stack: vec![Frame::List(nodes.iter(), context)],
+            descend,
+            reverse: false,
+        }
+    }
+
+    /// Preorder with roots, siblings and arms in reverse source order.
+    pub fn walk_reverse(nodes: &[Node]) -> impl Iterator<Item = &Node> {
+        let mut events = Self::walk_with(nodes, (), |_, _| [Some(()), Some(())]).events;
+        events.reverse = true;
+        events.filter_map(|(node, (), entering)| entering.then_some(node))
     }
 }
 
@@ -186,27 +210,66 @@ impl<'a> Iterator for Walk<'a> {
 /// The iterator [`Node::walk_with`] returns. Each node carries the context
 /// supplied for the list containing it.
 pub struct WalkWith<'a, C, F> {
-    stack: Vec<(std::slice::Iter<'a, Node>, C)>,
-    descend: F,
+    events: WalkEvents<'a, C, F, false>,
 }
 
 impl<'a, C: Clone, F: FnMut(&'a Node, &C) -> [Option<C>; 2]> Iterator for WalkWith<'a, C, F> {
     type Item = (&'a Node, C);
 
     fn next(&mut self) -> Option<Self::Item> {
-        while let Some((top, context)) = self.stack.last_mut() {
-            if let Some(node) = top.next() {
+        self.events
+            .find_map(|(node, context, entering)| entering.then_some((node, context)))
+    }
+}
+
+enum Frame<'a, C> {
+    List(std::slice::Iter<'a, Node>, C),
+    Leave(&'a Node, C),
+}
+
+/// The iterator returned by [`Node::walk_events_with`]. The boolean is true
+/// on entry and false on exit. Storage is O(depth), including wide lists.
+pub struct WalkEvents<'a, C, F, const LEAVES: bool = true> {
+    stack: Vec<Frame<'a, C>>,
+    descend: F,
+    reverse: bool,
+}
+
+impl<'a, C: Clone, F: FnMut(&'a Node, &C) -> [Option<C>; 2], const LEAVES: bool> Iterator
+    for WalkEvents<'a, C, F, LEAVES>
+{
+    type Item = (&'a Node, C, bool);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while let Some(frame) = self.stack.last_mut() {
+            let Frame::List(list, context) = frame else {
+                let Some(Frame::Leave(node, context)) = self.stack.pop() else {
+                    unreachable!()
+                };
+                return Some((node, context, false));
+            };
+            let node = if self.reverse {
+                list.next_back()
+            } else {
+                list.next()
+            };
+            if let Some(node) = node {
                 let context = context.clone();
-                let children = node
-                    .child_lists()
-                    .into_iter()
-                    .zip((self.descend)(node, &context));
-                for (list, child) in children.rev() {
+                let [first, second] = node.child_lists();
+                let [a, b] = (self.descend)(node, &context);
+                let mut children = [(first, a), (second, b)];
+                if !self.reverse {
+                    children.reverse();
+                }
+                if LEAVES {
+                    self.stack.push(Frame::Leave(node, context.clone()));
+                }
+                for (list, child) in children {
                     if let Some(child) = child.filter(|_| !list.is_empty()) {
-                        self.stack.push((list.iter(), child));
+                        self.stack.push(Frame::List(list.iter(), child));
                     }
                 }
-                return Some((node, context));
+                return Some((node, context, true));
             }
             self.stack.pop();
         }
