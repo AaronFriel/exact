@@ -44,17 +44,22 @@ function refuseTrackedEdits(root) {
   if (dirty) throw new Error(`${root} has tracked edits; refusing to switch commits. Review them first:\n${dirty}`);
 }
 export function checkout(sha, root = WT) {
+  restoreLaneEdits(root);
   refuseTrackedEdits(root);
   git(['checkout', '--detach', sha], root);
 }
 
-/** Restore the tracked inputs lane commands edit, including when a killed child cannot run its finally. */
-export async function withLaneEdits(root, action) {
-  refuseTrackedEdits(root);
+function restoreLaneEdits(root) {
   const paths = git(['ls-files', '-z', '--', 'game/app/shells.lock', 'apps/caltrain/app.contract',
     'apps/realworld/app.contract', 'apps/realworld/app.ts'], root).split('\0').filter(Boolean);
+  if (paths.length) git(['restore', '--source=HEAD', '--staged', '--worktree', '--', ...paths], root);
+}
+
+/** Restore lane-owned inputs after a check; checkout also repairs an interrupted parent. */
+export async function withLaneEdits(root, action) {
+  refuseTrackedEdits(root);
   try { return await action(); }
-  finally { if (paths.length) git(['restore', '--source=HEAD', '--staged', '--worktree', '--', ...paths], root); }
+  finally { restoreLaneEdits(root); }
 }
 
 /** Test names marked for this lane; libtest ORs several filters. */
@@ -146,8 +151,8 @@ export function laneSelection(changed, { root = WT, full = false, repo, graphs =
 const WEB_AX = ['./host/web/tests/accessibility-tree.test.mjs', './host/web/tests/presence-preload.test.mjs', './host/web/tests/zero-viewport.test.mjs'];
 /** Suites outside the established steps still run: other Bun files, macOS XCTests and authored app tests. */
 export function extraChecks(hits, glue, repo) {
-  const covered = new Set([...glue, ...WEB_AX, './host/web/tests/document.test.mjs']);
-  const bun = hits.filter(({ suite: s }) => s.kind === 'bun' && !covered.has(`./${s.file}`) && !s.file.startsWith('game/'));
+  const covered = new Set([...glue, ...WEB_AX, './host/web/tests/document.test.mjs', './game/vocab.test.mjs']);
+  const bun = hits.filter(({ suite: s }) => s.kind === 'bun' && !covered.has(`./${s.file}`));
   const out = [], fixture = bun.some(({ suite }) => LEFT_OUT.test(suite.file));
   const realworld = resolve(STATE_DIR, 'fixtures/realworld-production');
   if (fixture) out.push(['bundle-fixture', 'bun', ['host/web-js/build.mjs', 'realworld', '--production', '--out', realworld]]);
@@ -404,10 +409,7 @@ export function retainSkippedFailures(previous, result, owners = {}, steps = TIE
     if (found.has(f) || !(steps.has(name) || name === 'other-glue' || name === 'bundle-fixture' || name === 'macos' || name.startsWith('app:') || name.startsWith('build-app:'))) continue;
     // What ran it again: its check whole, or the part of it that holds its suites (one it cannot name: any part).
     const ran = check && !check.skipped && check.complete !== false && (!check.covers || (owner?.length && owner.every(o => check.covers.includes(o))));
-    const defaults = result.checks['default-test'];
-    const defaultPass = name === 'test' && defaults && !defaults.skipped && defaults.complete && defaults.status === 0
-      && owner?.length && owner.every(o => defaults.covers?.includes(o));
-    if (ran || defaultPass) continue;
+    if (ran) continue;
     result.failures.push(f);
     found.add(f);
     if (owner) (result.owners ??= {})[f] = owner;
@@ -507,8 +509,9 @@ const HANG_MS = 2 * 60 * 60 * 1000;
 const FULL_EVERY_MS = 24 * 60 * 60 * 1000;
 export function run(command, args, env, fd, { platform } = {}) {
   if (platform && platform !== process.platform) {
-    writeSync(fd, `UNAVAILABLE: requires a ${platform} worker; this worker is ${process.platform}\n`);
-    return Promise.resolve({ status: 77, hung: false });
+    const notRun = `needs a ${platform === 'win32' ? 'Windows' : platform} worker`;
+    writeSync(fd, `not run: ${notRun}\n`);
+    return Promise.resolve({ status: 77, hung: false, notRun });
   }
   return new Promise((done) => {
     const child = spawn(command, args, { cwd: WT, env, stdio: ['ignore', fd, fd], detached: true });
@@ -584,7 +587,8 @@ async function checkAt(sha, since, { base, full, selection: given, only, probe, 
     closeSync(fd);
     const seconds = (performance.now() - start) / 1000, log = readFileSync(logPath, 'utf8');
     const part = covers(name, selection);
-    result.checks[name] = { ...ran, status: r.status, seconds, load, ...(r.hung ? { hung: true } : {}), ...(part ? { covers: part } : {}) };
+    result.checks[name] = { ...ran, status: r.status, seconds, load, ...(r.hung ? { hung: true } : {}), ...(r.notRun ? { notRun: r.notRun } : {}), ...(part ? { covers: part } : {}) };
+    if (r.notRun) console.log(`${sha.slice(0, 8)} ${name}: not run: ${r.notRun}`);
     const outcome = outcomeOf(r.status, r.hung);
     if (gated?.fp) store.record(name, gated.fp, outcome, { sha });
     // A check that could not run here found nothing.
@@ -603,12 +607,15 @@ async function checkAt(sha, since, { base, full, selection: given, only, probe, 
   return result;
 }
 
+/** Unavailable steps cannot qualify the daily full run (LLP 1172.010 E13). */
+export const fullCoverage = result => result.full && !Object.values(result.checks).some(c => c.status === 77);
+
 function file(result, fresh, since, lastFull) {
   const short = result.sha.slice(0, 8);
-  const timing = Object.entries(result.checks).map(([n, c]) => c.skipped ? `${n} skipped (${c.skipped})` : `${n} ${c.seconds.toFixed(0)} s (exit ${c.status}, load ${c.load.toFixed(0)})`).join(' · ');
+  const timing = Object.entries(result.checks).map(([n, c]) => c.notRun ? `${n} not run: ${c.notRun}` : c.skipped ? `${n} skipped (${c.skipped})` : `${n} ${c.seconds.toFixed(0)} s (exit ${c.status}, load ${c.load.toFixed(0)})`).join(' · ');
   const what = since ? `while checking ${since.slice(0, 8)}..${short}` : `at baseline ${short}`;
   // A suite left out since the last full run may have broken in any commit since.
-  const full = result.full && lastFull ? [`This run checked every suite, as the lane does at least daily: one the selection had left out (scripts/affected.mjs) may have failed since ${lastFull.slice(0, 8)}, the last such run.`, ''] : [];
+  const full = fullCoverage(result) && lastFull ? [`This run checked every suite, as the lane does at least daily: one the selection had left out (scripts/affected.mjs) may have failed since ${lastFull.slice(0, 8)}, the last such run.`, ''] : [];
   const body = [`The tier ${TIER} async lane found ${fresh.length} failure(s) ${what}:`, '',
     ...fresh.map(f => {
       const a = result.attribution?.[f];
@@ -642,11 +649,13 @@ export function failureSelection(selection, wanted, owners) {
   return out;
 }
 
-export function probeSteps(wanted) {
+export function probeSteps(wanted, selection) {
   const names = new Set(wanted.map(f => f.split(': ', 1)[0]));
   if (['test', 'default-test', 'lane', 'glue', 'web-ax-test'].some(n => names.has(n))) names.add('prepare');
   if (names.has('conform-browsers')) names.add('conform');
   if (names.has('other-glue')) names.add('bundle-fixture');
+  if ([...names].some(name => name === 'game' || name.startsWith('game-'))
+    || names.has('other-glue') && selection?.extra?.some(([name, , args]) => name === 'other-glue' && args.some(a => a.startsWith('./game/')))) names.add('game-lock');
   for (const name of [...names]) if (name.startsWith('app:')) names.add(`build-${name.slice(0, name.lastIndexOf(':'))}`);
   return names;
 }
@@ -677,7 +686,7 @@ async function attribute(result, fresh, base, pending) {
   const eligible = fresh.filter(f => candidates.get(f).length);
   const selection = repo ? laneSelection(changes, { full: result.full, repo, graphs }) : undefined;
   const selected = selection && failureSelection(selection, eligible, result.owners);
-  const only = probeSteps(eligible);
+  const only = probeSteps(eligible, selected);
   const overrides = eligible.some(f => f.startsWith('difftest-quick: '))
     ? { 'difftest-quick': quickProbe(readFileSync(resolve(STATE_DIR, result.sha.slice(0, 12), 'difftest-quick.log'), 'utf8')) } : {};
   return bisectAffected(base, result.sha, fresh, candidates, async (sha, wanted) => {
@@ -711,7 +720,7 @@ async function once(state) {
   const unpublished = publish(noteOf(result, TIER));
   if (unpublished) console.log(`${tip.slice(0, 8)}: the note was not published: ${unpublished}`);
   Object.assign(state, { last: tip, failures: result.failures, owners: result.owners },
-    result.full ? { fullAt: new Date().toISOString(), fullSha: tip } : {});
+    fullCoverage(result) ? { fullAt: new Date().toISOString(), fullSha: tip } : {});
   writeFileSync(STATE, JSON.stringify(state, null, 2));
 }
 

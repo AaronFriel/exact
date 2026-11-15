@@ -31,7 +31,7 @@ test('only a finished probe can clear a failure; a failure it found still counts
   expect(probeOutcomes({ failures: [], checks: { test: { complete: true, status: 1 } } }, ['test: absent'])).toEqual({ 'test: absent': 'pass' });
 });
 
-import { checkout, withLaneEdits, run as runCheck, failureSelection, nothing, probeSteps, extraChecks, covers, failureAffected, retainSkippedFailures } from './async.mjs';
+import { checkout, withLaneEdits, run as runCheck, failureSelection, nothing, probeSteps, extraChecks, checks, fullCoverage, covers, failureAffected, retainSkippedFailures } from './async.mjs';
 
 test('completed tests can pass at a probe while another test in the same check fails', async () => {
   const result = await bisectFailures(['0', '1', '2', '3', '4'], ['test: a', 'test: b'], async sha => {
@@ -48,11 +48,11 @@ test('attribution finds the failure at the tip after an earlier failure was repa
   expect(result.x).toEqual({ commit: '4', parent: '3' });
 });
 
-test('default-member passes clear earlier test failures without clearing unrun packages', () => {
+test('default-member passes keep workspace test failures even for the same owner', () => {
   const a = 'test: -p one --lib a', b = 'test: -p other --lib b';
   const result = { checks: { 'default-test': { status: 0, complete: true, covers: ['cargo:one'] } }, failures: [], owners: {} };
   retainSkippedFailures([a, b], result, { [a]: ['cargo:one'], [b]: ['cargo:other'] });
-  expect(result.failures).toEqual([b]);
+  expect(result.failures).toEqual([a, b]);
 });
 
 test('Android and Windows app tests use their platform builders', () => {
@@ -69,8 +69,14 @@ test('a Windows drive on another host is unavailable, never a native build or a 
   const fd = openSync(log, 'w');
   try {
     const r = await runCheck('/must/not/execute', [], process.env, fd, { platform: process.platform === 'win32' ? 'darwin' : 'win32' });
-    expect(r).toEqual({ status: 77, hung: false });
-    expect(readFileSync(log, 'utf8')).toContain('UNAVAILABLE: requires a');
+    expect(r.status).toBe(77);
+    expect(r.hung).toBe(false);
+    const result = { full: true, checks: { windows: { ...r, complete: false } } };
+    expect(fullCoverage(result)).toBe(false);
+    expect(fullCoverage({ full: true, checks: { test: { status: 0 }, semantics: { skipped: 'cached pass' } } })).toBe(true);
+    expect(fullCoverage({ full: false, checks: { test: { status: 0 } } })).toBe(false);
+    expect(r.notRun).toBe(`needs a ${process.platform === 'win32' ? 'darwin' : 'Windows'} worker`);
+    expect(readFileSync(log, 'utf8')).toContain(`not run: ${r.notRun}`);
     const failure = 'app:shelf:windows:0: failed';
     expect(probeOutcomes({ failures: [], checks: { 'app:shelf:windows:0': { status: r.status, complete: false } } }, [failure])[failure]).toBe('unknown');
   } finally { closeSync(fd); rmSync(root, { recursive: true, force: true }); }
@@ -113,8 +119,21 @@ test('lane edits are restored after success, an error and a child killed before 
     expect(called).toBe(false);
     expect(readFileSync(join(root, paths[0]), 'utf8')).toBe('preexisting');
     git('restore', '--', paths[0]);
+    const killed = spawnSync(process.execPath, ['-e', `
+      const fs = require('node:fs');
+      for (const path of ${JSON.stringify(paths)}) fs.writeFileSync(path, 'interrupted lane');
+      require('node:child_process').execFileSync('git', ['add', ${JSON.stringify(paths[0])}]);
+      process.kill(process.pid, 'SIGKILL');
+    `], { cwd: root });
+    expect(killed.signal).toBe('SIGKILL');
+    checkout(tip, root);
+    expect(git('status', '--porcelain')).toBe('');
+    for (const path of paths) expect(readFileSync(join(root, path), 'utf8')).toBe('original');
     await withLaneEdits(root, () => { write(paths[0], 'lane'); write('unrelated', 'keep'); });
+    write(paths[0], 'interrupted lane');
+    git('add', paths[0], 'unrelated');
     expect(() => checkout(tip, root)).toThrow('has tracked edits');
+    expect(readFileSync(join(root, paths[0]), 'utf8')).toBe('original');
     expect(readFileSync(join(root, 'unrelated'), 'utf8')).toBe('keep');
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
@@ -188,4 +207,39 @@ test('a pruned range confirms the real parent, and refuses a missed input or an 
   expect(result.missed.unresolved).toContain('actual parent');
   expect(result.unrelated.commit).toBeUndefined();
   expect(new Set(calls).size).toBe(calls.length);
+});
+
+test('game probes refresh the shell lock before lock-consuming steps', () => {
+  for (const name of ['game', 'game-recipes', 'game-pins', 'game-scaffold', 'game-assets-scaffold']) {
+    const steps = probeSteps([`${name}: failed`]);
+    expect(steps.has('game-lock')).toBe(true);
+    const ordered = checks('', null, { ...nothing(), game: true }).filter(([n]) => steps.has(n)).map(([n]) => n);
+    expect(ordered[0]).toBe('game-lock');
+    expect(ordered).toContain(name);
+  }
+});
+
+test('remaining game Bun suites run hourly, including partially covered scaffold files', () => {
+  const files = ['game/proof-inputs.test.mjs', 'game/proof-game.test.mjs', 'game/new.test.mjs', 'game/vocab.test.mjs'];
+  const hits = files.map(file => ({ suite: { kind: 'bun', file } }));
+  const steps = extraChecks(hits, []);
+  const args = steps.filter(([name]) => name === 'other-glue').flatMap(step => step[2]);
+  for (const file of files.slice(0, -1)) expect(args).toContain(`./${file}`);
+  expect(args).not.toContain('./game/vocab.test.mjs');
+});
+
+test('probes of remaining game Bun suites refresh the lock without adding game work to unrelated probes', () => {
+  const extra = extraChecks([{ suite: { kind: 'bun', file: 'game/proof-inputs.test.mjs' } }], []);
+  expect(probeSteps(['other-glue: failed'], { extra }).has('game-lock')).toBe(true);
+  expect(probeSteps(['other-glue: failed'], { extra: [] }).has('game-lock')).toBe(false);
+  expect(probeSteps(['test: failed']).has('game-lock')).toBe(false);
+});
+
+test('only a workspace test check covering the owner clears its earlier failure', () => {
+  const failure = 'test: -p one --lib a';
+  for (const owner of ['one', 'other']) {
+    const result = { checks: { test: { status: 0, complete: true, covers: [`cargo:${owner}`] } }, failures: [] };
+    retainSkippedFailures([failure], result, { [failure]: ['cargo:one'] });
+    expect(result.failures).toEqual(owner === 'one' ? [] : [failure]);
+  }
 });
