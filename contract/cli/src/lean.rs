@@ -17,7 +17,7 @@ use std::fmt::Write as _;
 use std::path::Path;
 
 mod sharing;
-pub use sharing::shared_expressions;
+pub use sharing::{sharing_context, SharedExpression, SharedRegion, SharingContext};
 
 mod components;
 pub use components::{lean_components, lean_components_path};

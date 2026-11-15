@@ -1357,11 +1357,12 @@ sits on that list carries the trade it would take.
   first-launch keychain wipe; the data-protection keychain on macOS (a bundle and a
   profile); the Linux file store when that host links ibex2.
 - **Executable instance rows: lowering proof** (LLP 1017.000 P4c):
-  `VmRows` models calls and `LowerCheck` validates root-owned bodies against
-  checked substitution. Prove the sharing correspondence, including the
-  matcher's binder and owner conditions and transitive calls; validate arm-owned
-  bodies and view readers in instance environments, supplying their instance
-  stores; add roster/extent accounting to the model and prove its runner refinement.
+  `VmRows` models calls and `LowerCheck` validates root- and arm-owned bodies
+  against checked substitution in live instance frames and stores, including
+  descendant readers. Add roster list steps, string bounds, value-node, byte
+  and depth accounting, with exact counter transfer on success and failure;
+  prove the sharing correspondence, including the matcher's binder and owner
+  conditions and transitive calls; then prove the model's runner refinement.
 
 - **Plan / runner** (LLP 1005 §8): cached per-instance derives or resources inside `each`. At-read instance
   expressions share executable rows without caching their values.

@@ -26,7 +26,7 @@ tested against it, differentially and at random.
 | `Contract/Vm.lean` | A model of the expression VM (`runner/src/vm.rs`) for the opcodes expressions and action bodies use, over instructions with symbolic operands, and a decoder from the plan's bytes (`plan/tables/format.json`, `opcodes`). |
 | `Contract/Lower.lean` | A compiler from the semantics' expressions and statements to VM code, mirroring `contract/lower` (`expr.rs`, `stmts.rs`) instruction for instruction. |
 | `Contract/VmFacts.lean`, `Lower{Types,Sim,Spec,Proof,Lists,Calls,Correct,Stmt}.lean` | Its correctness proof (below). |
-| `Contract/VmRows.lean` | Executable derive calls over the VM: fresh callee machines, owner-frame and owned-slot selection, shared call and callback-work counters, and caller restoration. |
+| `Contract/VmRows.lean` | Executable derive calls over the VM: fresh callee machines, owner-frame, owned-slot and owned-resource selection, shared call and callback-work counters, and caller restoration. |
 | `Contract/LowerCheck.lean` | The Lean half of `difftest lowering`. |
 | `vm-extract/` | The shipped VM machine (`runner/src/machine.rs`) extracted to Lean by Charon and Aeneas, and proved to refine `Contract/Vm.lean` step by step and run by run (`vm-extract/README.md`). |
 | `Contract/ValTy.lean` | Types as sets of values (`ValTy`, `conforms` without finiteness), the order and join the checker's `?` induces (`Ty.le`, `Ty.unify`), and that `conforms` at a complete type gives `ValTy`. |
@@ -1313,20 +1313,50 @@ Instance frames carry owned-slot stores. A call reselects slots from the
 retained frames, taking only the nearest instance of each owning region;
 return restores the caller's slots and frames. Checked examples cover a
 retained owner, an inaccessible inner slot, a root call and a missing slot
-in the nearest instance. These stores are modeled but are not yet supplied
-by `LowerCheck`'s contextual validation.
+in the nearest instance.
 
 `LowerCheck` receives row bytecode, owner regions and the checked substituted
-expressions that lowering shares. It decodes every body and compares root-owned
-rows with source evaluation, including transitive row calls. A mutation test
-changes an executable body and requires a divergence. Arm-owned rows are
-reported as needing an instance environment and counted as refused by this
-check; they are not claimed as validated.
+expressions that lowering shares. Lowering records the source tag at the same
+point that it emits each plan region, and the exporter checks the complete
+region identity before joining each source owner tag and arm to its plan region
+and arm. A source region removed by lowering has no plan entry; a changed or
+reordered roster is a divergence, not an abort; owner projections use checked
+indices and offsets only after that roster matches. For every reached
+configuration, the checker enumerates the live row store. An instance's row
+identity records its source tag, chosen arm or key, and duplicate ordinal;
+render-owned marker rows record its item, position and match binding. The
+checker recovers binder names from the source region and rebuilds plan frames
+without evaluating a condition, match subject, list, key or navigation
+property. A closed panel has no recorded instances; a prerendered panel has
+the instances its render built. The item, key and arm are therefore the
+render's even when an idle clock advance retains the view and store. The
+executable row and its checked substituted expression are both evaluated at
+the reached configuration's current clock. The checker runs the row from
+every live descendant reader context and evaluates the substituted expression
+in the corresponding owner context.
+The checker runs the row call and every item, position and match binding as
+separate probes, so it does not charge a synthetic aggregate the application
+never builds. Caller restoration is the VM invariant
+`resume_restores_environment`; a lowered plan cannot alter it. This covers
+root and arm owners, transitive row calls and recreation after events. The
+focused mutation test changes an arm-owned row's sibling arm, makes its binder
+depth return a different enclosing value, and changes its body in turn; each
+change produces a divergence. Its unmodified case includes
+nested keyed and conditional owners, a stateful child, shadowing and a derive
+reached only through other derives. Focused mutations also cover an opened
+panel, a prerendered panel inside a virtualized row and a reordered first-region
+owner. Idle-clock cases retain a row whose key would become nonfinite if
+reevaluated, and detect a wrong body in a retained row whose finite key would
+change. Instance-owned resource probes read the recorded answer and
+currentness. They resolve the resource through the retained frame for its
+owning region and arm, so a cut-out owner or a sibling-arm owner is a
+divergence. The seeded 500-case run and the current 642-case lowering corpus
+report no divergence and no instance-environment refusal.
 
 Still owed: the general correspondence between shared loads and substitution,
-including the matcher's scope and binder conditions; contextual validation of
-arm-owned bodies and their view readers; and refinement of `VmRows` to the
-runner's row-call implementation. The model does not yet carry the roster's
-list-step, string and extent accounting. The existing
-lowering theorems cover `Vm` without this sharing transformation. The call
-model and its local invariants do not extend those theorems.
+including the matcher's scope and binder conditions, and refinement of
+`VmRows` to the runner's row-call implementation. The model does not yet carry
+the roster's list-step, string-bound, value-node, byte or depth accounting, or
+exact counter transfer on success and failure. The existing lowering theorems
+cover `Vm` without this sharing transformation. The call model and its local
+invariants do not extend those theorems.

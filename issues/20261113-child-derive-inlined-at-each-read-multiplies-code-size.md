@@ -30,8 +30,8 @@ Lowering emits executable rows per component use for child derives and
 non-atomic prop or inject arguments. Reads call those bodies on the reader's
 budget without storing results. Action bodies stay substituted on purpose,
 so their reads keep the action's sequential state semantics. Web builds report
-expanded code by component. The proof work and strict browser comparison
-listed under "Work still owed" remain open.
+expanded code by component. The proof work listed under "Work still owed"
+remains open.
 
 ## Size report
 
@@ -73,26 +73,66 @@ The executable-call model and translation validation are described in
 
 ## Work still owed
 
-Equivalent substituted expressions now register one sharing candidate per
-instance and owner. All 65 sibling aliases render on the runner and JS.
-Registration includes derives reached only through other derives, so their
-bodies stay shared without a direct view read. Static readers stop after
-64 alias peels.
-Compiled-source regressions cover both alias shapes; a plan test retains
-the 64/65 boundary independently of equivalent-expression deduplication.
+`LowerCheck` now validates root- and arm-owned rows against their substituted
+expressions in every live owner instance of every reached configuration.
+Lowering records the source tag of each emitted plan region; validation checks
+the complete region identity before joining owners, so a folded group label is
+absent without shifting the regions that follow it and a changed or reordered
+roster is a reported divergence. Owner projections use checked indices and
+offsets only after that roster matches. The render records each live
+instance's source tag, chosen arm or key, and duplicate ordinal in its row
+identity; render-owned marker rows record the item, position and match
+binding. The check enumerates those records, recovers binder names from the
+source region, and reconstructs plan frames and owned-slot stores without
+evaluating a condition, subject, list, key or navigation property. The item,
+key and arm are the render's; the row body and its substituted source are
+judged at the reached configuration's current clock. A closed panel has no
+recorded instances, while a prerendered panel has the instances its render
+built. The reader checks the row call and every item, position and match
+binding as separate VM runs. The row call covers the callee frame cut; the
+binding probes cover the reader context reconstructed from the render. Caller
+restoration is the VM invariant `resume_restores_environment`; a lowered plan
+cannot alter `resume`. The separate probes charge no synthetic aggregate that
+the application never builds.
 
-Keep this issue open for the general lowering-sharing correspondence.
-`VmRows` models fresh callee machines, owner-frame selection, shared call
-and callback-work counters, and restoration of the reader. `LowerCheck`
-validates root-owned bodies against their checked substituted expressions
-and detects a mutated row. Arm-owned bodies still need contextual validation
-in instance environments, including their view readers. The model now carries
-per-instance owned-slot stores and reselects them after a callee's frame cut,
-restoring the reader's environment on return. These stores still need to be
-supplied by contextual translation validation. The model still needs roster
-list-step, string and extent accounting, and a
-refinement proof against the runner. Its local invariants do not prove
-the transformation's scope, binder or transitive-dependency conditions.
+The focused case covers nested owners, shadowing, stateful instances,
+transitive-only dependencies and recreation. Mutating its owner arm, making
+its binder depth return a different enclosing value, or changing its body
+produces a divergence. Folded headers, folded footers, opened and closed
+panels, a prerendered panel inside a virtualized row, a reordered first-region
+owner and idle clocks with nonfinite or changing keys have focused coverage.
+The owned-answer case makes both sides read an instance-owned request's
+recorded value and currentness. Its focused mutations return the root idle
+placeholder's result; the corpus covers the runner path. The exporter records
+each resource's plan owner, including its arm, and `VmRows` resolves a read
+through that retained instance frame. Moving the request's owner outside the
+frame cut or to the unselected sibling arm produces a divergence. The seeded
+500-case run and the current 642-case corpus have no divergence and no
+instance-environment refusal.
+
+The checker has a deliberate limit. For a request an instance owns, its
+focused mutations detect a wrong executable body, a wrong owner frame, an
+owner cut out of the retained frames, and an owner moved to the wrong arm.
+They do not establish arbitrary plan mutations beyond those four, operations
+outside `Contract.Vm`, or a general proof that every admitted shared load
+equals substitution. They also cannot see an instance that production creates
+under an owned request's placeholder and destroys after the synchronous answer
+within one commit. The request-settlement order inherited from main is
+unchanged; this branch adds render-owned frame markers.
+
+Further coverage is owed for a request moved to a retained ancestor whose
+arguments read an inner slot, repeated-region frames where the nearest
+instance lacks the request but an enclosing instance has it, and successful
+in-scope `pending`, `failed` and `failure` reads whose instance status differs
+from the root columns. These are coverage gaps, not reproduced results.
+
+Keep this issue open for stages 3 to 5. `VmRows` still needs the roster's
+list-step, string, value-node, byte and depth accounting, with exact counter
+transfer on success and failure. The general correspondence must prove the
+sharing admission conditions and the value of an admitted load, stating
+resource-limit outcomes separately. Finally, the shipped row-call path must
+move into extractable production code and be proved to refine `VmRows` after
+the other owner-model lanes are integrated.
 
 The strict browser comparison before and after sharing found no new failure.
 `conform.mjs` over every web app with `--synthetic --build --strict`, on Linux

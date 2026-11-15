@@ -11,6 +11,7 @@ open Vm
 
 structure InstanceFrame where
   region : Option Nat := none
+  arm : Option Nat := none
   frame : Vm.Frame := {}
   slots : List (Nat × Value) := []
   deriving Inhabited
@@ -31,11 +32,11 @@ def ownerFrames (frames : List InstanceFrame) (owner : Option Nat) :
     if rest.isEmpty then none else some rest
 
 /-- Cutting selects the nearest owner and retains every enclosing frame. -/
-theorem owner_frames_cut (r : Nat) (frame : Frame) (slots) (rest)
+theorem owner_frames_cut (r : Nat) (arm : Option Nat) (frame : Frame) (slots) (rest)
     (innerFrames : List InstanceFrame)
     (outside : ∀ f ∈ innerFrames, f.region ≠ some r) :
-    ownerFrames (innerFrames ++ { region := some r, frame, slots } :: rest) (some r) =
-      some ({ region := some r, frame, slots } :: rest) := by
+    ownerFrames (innerFrames ++ { region := some r, arm, frame, slots } :: rest) (some r) =
+      some ({ region := some r, arm, frame, slots } :: rest) := by
   induction innerFrames with
   | nil => simp [ownerFrames]
   | cons f fs ih =>
@@ -66,9 +67,9 @@ def slotsAt (env : Vm.Env) (owners : List (Option Nat)) (frames : List InstanceF
 theorem root_slot_unchanged (root : Option Value) (slot : Nat) (frames) :
     slotValue root none slot frames = root := rfl
 
-theorem owned_slot_nearest (root : Option Value) (r slot : Nat) (frame : Frame)
-    (slots : List (Nat × Value)) (rest : List InstanceFrame) :
-    slotValue root (some r) slot ({ region := some r, frame, slots } :: rest) =
+theorem owned_slot_nearest (root : Option Value) (r slot : Nat) (arm : Option Nat)
+    (frame : Frame) (slots : List (Nat × Value)) (rest : List InstanceFrame) :
+    slotValue root (some r) slot ({ region := some r, arm, frame, slots } :: rest) =
       (slots.find? (·.1 == slot)).map (·.2) := by
   simp [slotValue]
 
@@ -84,6 +85,7 @@ structure State extends Caller where
   calls : Nat := 0
   listSteps : Nat := 0
   slotOwners : List (Option Nat) := []
+  resourceOwners : List (Option (Nat × Nat)) := []
   deriving Inhabited
 
 def enter (s : State) (row : Row) (frames : List InstanceFrame) : State :=
@@ -97,7 +99,8 @@ def enter (s : State) (row : Row) (frames : List InstanceFrame) : State :=
     callers := s.toCaller :: s.callers
     calls := s.calls + 1
     listSteps := s.listSteps
-    slotOwners := s.slotOwners }
+    slotOwners := s.slotOwners
+    resourceOwners := s.resourceOwners }
 
 def resume (s : State) (v : Value) (caller : Caller) (rest : List Caller) : State :=
   { toCaller := { caller with machine := { caller.machine with
@@ -106,7 +109,21 @@ def resume (s : State) (v : Value) (caller : Caller) (rest : List Caller) : Stat
     callers := rest
     calls := s.calls
     listSteps := s.listSteps
-    slotOwners := s.slotOwners }
+    slotOwners := s.slotOwners
+    resourceOwners := s.resourceOwners }
+
+def resourceRead : Instr → Option Nat
+  | .loadResource r | .pendingResource r | .failedResource r
+  | .failureResource r | .currentResource r => some r
+  | _ => none
+
+/-- Production resolves an owned request through its arm's frame retained by
+the row call. A root resource has no owner and is always in scope. -/
+def resourceInScope (s : State) (resource : Nat) : Bool :=
+  match s.resourceOwners[resource]? with
+  | some (some (region, arm)) =>
+    s.regions.any fun frame => frame.region == some region && frame.arm == some arm
+  | _ => true
 
 inductive Result where
   | next (s : State)
@@ -139,6 +156,11 @@ def advance (rows : List (Option Row)) (s : State) : Except Trap Result := do
   let steps := s.listSteps + work
   if steps > 65536 then throw (.unsupported "IterationLimit: list steps")
   let s := { s with listSteps := steps }
+  match s.code[s.machine.pc]? with
+  | some i => match resourceRead i with
+    | some resource => if !resourceInScope s resource then throw Trap.badScope
+    | none => pure ()
+  | none => pure ()
   match ← Vm.step s.code s.env s.machine with
   | .run m => return .next { s with machine := m }
   | .done v fx =>
@@ -155,12 +177,13 @@ def runFrom (rows : List (Option Row)) : Nat → State → Except Trap (Value ×
 
 def run (rows : List (Option Row)) (code : Code) (env : Vm.Env)
     (regions : List (Option Nat) := []) (fuel : Nat := 1 <<< 22)
-    (stores : List (List (Nat × Value)) := []) (slotOwners : List (Option Nat) := []) :
+    (stores : List (List (Nat × Value)) := []) (slotOwners : List (Option Nat) := [])
+    (resourceOwners : List (Option (Nat × Nat)) := []) (arms : List (Option Nat) := []) :
     Except Trap (Value × Vm.Effects) :=
   let frames := (regions.zip env.frames).zipIdx.map fun ((region, frame), i) =>
-    { region, frame, slots := stores[i]?.getD [] : InstanceFrame }
+    { region, arm := arms[i]?.join, frame, slots := stores[i]?.getD [] : InstanceFrame }
   let env := { env with slots := slotsAt env slotOwners frames }
-  runFrom rows fuel { code, env, regions := frames, machine := .init, slotOwners }
+  runFrom rows fuel { code, env, regions := frames, machine := .init, slotOwners, resourceOwners }
 
 theorem enter_fresh (s : State) (r : Row) (fs) :
     (enter s r fs).machine = Machine.init ∧
