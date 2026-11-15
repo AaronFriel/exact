@@ -1,14 +1,16 @@
-//! The update store on Linux (LLP 1026 D9/D11/D12; LLP 1030 D7; LLP
-//! 1030.000 §4 stage 4, the client half): `exact_update::Client` behind a
+//! The update store on the painted hosts (LLP 1026 D9/D11/D12; LLP 1030 D7;
+//! LLP 1030.000 §4 stage 4, the client half; LLP 1030.006 D3):
+//! `exact_update::Client` behind a
 //! lock the check's thread shares with the presenter, the check over
 //! ibex2's transport — rustls off Apple, the platform's on a Mac, the
 //! executor's own (`executor.rs`) — and its outcome delivered like a reply:
 //! one byte on a socketpair the display loop polls beside the executor's,
 //! the line on a channel the presenter drains (`Presenter::poll_update`).
 //!
-//! Where the store lives: `<data home>/exact/<app id>/update`, the data home
-//! as the app's own directories take it (`exact_painted::picker::xdg_base`),
-//! and no store without one; `EXACT_UPDATE_DIR` and
+//! Where the store lives: `<base>/exact/<app id>/update`, the base the host
+//! names (Linux: the data home as the app's own directories take it,
+//! `exact_painted::picker::xdg_base`; Android: the reader's no-backup
+//! directory), and no store without one; `EXACT_UPDATE_DIR` and
 //! `EXACT_UPDATE_ORIGIN` as `exact_update::client` documents, and under
 //! `EXACT_AGENT=1` a fresh temporary directory. The store is opened before
 //! the boot, since the boot is what it selects (`app.rs`); first pixel is
@@ -60,12 +62,18 @@ impl Updates {
     }
 
     /// Open the store for the binary whose `compat.json` and baked plan are
-    /// given, with `assets` as what it embeds by name. Refused when the
-    /// binary links no store, the directory cannot be made, or there is no
-    /// data directory to put it in and no override names one.
-    pub fn open(compat: &str, plan: &[u8], assets: &Path) -> Result<Updates, String> {
-        let base = exact_painted::picker::xdg_base("XDG_DATA_HOME", ".local/share");
-        let client = Client::open(base.as_deref(), assets, compat, plan)?;
+    /// given, with `assets` as what it embeds by name, at
+    /// `<base>/exact/<app id>/update`: the Linux host's data home, the
+    /// Android reader's no-backup directory. Refused when the binary links
+    /// no store, the directory cannot be made, or there is no `base` and no
+    /// override names one.
+    pub fn open(
+        compat: &str,
+        plan: &[u8],
+        assets: &Path,
+        base: Option<&Path>,
+    ) -> Result<Updates, String> {
+        let client = Client::open(base, assets, compat, plan)?;
         ibex2::process::wait_at_exit(exact_update::client::remove_agent_store);
         Updates::from_client(client)
     }
@@ -73,7 +81,7 @@ impl Updates {
     /// Wrap an already-open client in the host's status and wake plumbing.
     /// Kept separate from [`open`](Self::open) so launch precedence can be
     /// exercised against a real selected store without process environment.
-    pub(crate) fn from_client(client: Client) -> Result<Updates, String> {
+    pub fn from_client(client: Client) -> Result<Updates, String> {
         let status = client.status();
         let generation = client.generation();
         let (tx, lines) = channel();

@@ -5,6 +5,7 @@ use exact_runner::{DataError, Value};
 use exact_update::{sha256_hex, Client, Outcome};
 use std::path::Path;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 
 const UPDATE_COMPAT: &str = r#"{"id":"fixture00000000","inputs":{"app":"com.exact.fixture","keys":null,"trust":"development","store":{"L":"A"},"rustMode":"wasm"},"delivery":{"channel":"prod","origin":"https://updates.example"}}"#;

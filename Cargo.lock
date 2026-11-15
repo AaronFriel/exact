@@ -1852,18 +1852,15 @@ dependencies = [
 name = "exact-linux-update"
 version = "0.1.0"
 dependencies = [
- "caltrain",
- "caltrain-data",
  "contract",
  "exact-js",
  "exact-js-bake",
- "exact-kernel",
  "exact-linux",
  "exact-logic",
  "exact-painted",
+ "exact-painted-update",
  "exact-runner",
  "exact-update",
- "ibex2",
  "serde_json",
 ]
 
@@ -2047,6 +2044,20 @@ dependencies = [
  "wgpu 29.0.4",
  "windows",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "exact-painted-update"
+version = "0.1.0"
+dependencies = [
+ "caltrain",
+ "caltrain-data",
+ "exact-kernel",
+ "exact-painted",
+ "exact-runner",
+ "exact-update",
+ "ibex2",
+ "serde_json",
 ]
 
 [[package]]
