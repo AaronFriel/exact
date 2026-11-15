@@ -8,6 +8,7 @@ const grants = "fs.read app:/data\nfs.write app:/data\nfs.write app:/cache/widge
 let tail: Promise<unknown> = Promise.resolve();
 let saves: Promise<unknown> = Promise.resolve(), saveError = "";
 let shared: Promise<{text:string}>;
+let nativeLeaseBody = "";
 
 // Background work (LLP 1097): the last save started and not awaited, and
 // the last failure a background step reported to the app.
@@ -40,6 +41,18 @@ function answer(source:string, args:unknown[], store:Store, storage:Storage, nat
       const leaked = raw && await raw;
       await db.close();
       return {text: leaked ? "raw database exposed" : "private"};
+    });
+  }
+  if (op === "read-before-exclusive") {
+    const pending = storage.fs.readFile(storage.fs.directories.data + "/native-order");
+    return store.exclusive("session", () => { nativeLeaseBody = value; })
+      .then(() => pending)
+      .then(bytes => ({text: new TextDecoder().decode(bytes) + " " + nativeLeaseBody}));
+  }
+  if (op === "exclusive-only") {
+    return store.exclusive("session", () => {
+      store.set("session", value);
+      return {text: "entered " + value};
     });
   }
   if (op === "worker-retirement") {
