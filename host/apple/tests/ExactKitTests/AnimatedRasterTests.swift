@@ -128,9 +128,16 @@ final class AnimatedRasterTests: XCTestCase {
             let context = try XCTUnwrap(CGContext(data: nil, width: 16, height: 16, bitsPerComponent: 8, bytesPerRow: 64,
                 space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue))
             node.layer.render(in: context)
-            return try pixel(XCTUnwrap(context.makeImage()), 8, 8)
+            let shown = try pixel(XCTUnwrap(context.makeImage()), 8, 8)
+            let bitmap = try XCTUnwrap(Bitmap.blank(width: 32, height: 32))
+            let shadow = try XCTUnwrap(Shadow.shared)
+            XCTAssertTrue(shadow.render(p.viewport, scale: 1, into: bitmap))
+            XCTAssertEqual(try pixel(XCTUnwrap(bitmap.image?.cgImage), 8, 8), shown, "the retained mirror follows the image's player")
+            return shown
         }
+        window.layoutIfNeeded(); CATransaction.flush()
         XCTAssertEqual(try displayed(), [255, 0, 0, 255])
+        _ = try displayed()
         s.clock = 150; AnimatedRasters.shared.evaluate()
         XCTAssertNotNil(AnimatedRasters.shared.frame(for: node), "the second frame decoded")
         XCTAssertEqual(try displayed(), [0, 0, 255, 255], "the displayed child bitmap advances with its player")

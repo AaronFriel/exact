@@ -158,6 +158,9 @@ final class AnimatedRasters {
 
     private func present(_ p: Player) {
         guard let view = p.view else { return }
+        #if os(iOS) || os(tvOS)
+        Shadow.active?.changed(view)
+        #endif
         if view.style["image_rendering"]?.string == "pixelated" { view.applyImageLayer(); return }
         #if os(iOS) || os(tvOS)
         if let layer = view.imageLayer {

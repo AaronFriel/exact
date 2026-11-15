@@ -40,6 +40,7 @@ final class NodeLayer: CALayer {
     var drawnElsewhere = false {
         didSet {
             guard drawnElsewhere != oldValue else { return }
+            Shadow.active?.changed(self)
             super.mask = drawnElsewhere ? CALayer() : keptMask
             super.opacity = drawnElsewhere ? 1 : keptOpacity
         }
@@ -52,11 +53,12 @@ final class NodeLayer: CALayer {
     var ownOpacity: Float { drawnElsewhere ? keptOpacity : super.opacity }
     override var mask: CALayer? {
         get { super.mask }
-        set { keptMask = newValue; if !drawnElsewhere { super.mask = newValue } }
+        set { Shadow.active?.changed(self); keptMask = newValue; if !drawnElsewhere { super.mask = newValue } }
     }
     override var opacity: Float {
         get { super.opacity }
         set {
+            if !passingWrites { Shadow.active?.changed(self) }
             let was = keptOpacity
             keptOpacity = newValue
             if !drawnElsewhere { super.opacity = newValue }
@@ -81,6 +83,18 @@ final class NodeLayer: CALayer {
         drawnElsewhere = false
         body()
         drawnElsewhere = true
+    }
+    override func setNeedsDisplay() {
+        Shadow.active?.changed(self)
+        super.setNeedsDisplay()
+    }
+    override func setNeedsDisplay(_ rect: CGRect) {
+        Shadow.active?.changed(self)
+        super.setNeedsDisplay(rect)
+    }
+    override func setNeedsLayout() {
+        Shadow.active?.changed(self)
+        super.setNeedsLayout()
     }
     override func display() {
         guard let node = delegate as? NodeView else { super.display(); return }

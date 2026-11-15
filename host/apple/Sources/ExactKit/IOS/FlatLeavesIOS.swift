@@ -379,6 +379,7 @@ final class FlatLeaves {
     /// a view's change (LLP 1014).
     private func changed(_ leaf: FlatLeaf) {
         guard let host = host(of: leaf.id), let c = host.canvasAbove else { return }
+        Shadow.active?.changed(host)
         c.needsCapture = true
         host.canvases?.scheduleCapture()
     }
@@ -578,7 +579,7 @@ final class FlatLeaves {
             }
             if !made.isEmpty { runs[parentID] = made }
             parent?.overflowClipGeometryChanged()
-            if let host = drawing(parentID), let c = host.canvasAbove { c.needsCapture = true; host.canvases?.scheduleCapture() }
+            if let host = drawing(parentID), let c = host.canvasAbove { Shadow.active?.changed(host); c.needsCapture = true; host.canvases?.scheduleCapture() }
         }
     }
 
