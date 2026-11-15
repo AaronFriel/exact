@@ -359,6 +359,7 @@ export let Writes = null,
   Refused = null,
   Why = '',
   Sched = null;
+const HeldOutput = new Set(), SettledOutput = new WeakSet(), OutputInvocations = new WeakMap();
 // Cut by code point; a write's value or a source's error may be long, or private.
 const why = (step, m, c = [...m]) =>
     `while ${step}: ${c.length > WHY_MAX ? `${c.slice(0, WHY_MAX).join('')}… (${c.length - WHY_MAX} more characters in the journal)` : m}`,
@@ -439,6 +440,7 @@ export function commit(f, what = 'commit', finished) {
   Why = '';
   time();
   const was = Now.v,
+    wasFrozen = Sounds.frozen === true,
     undo = [],
     saved = Resources.map(r => r.save()),
     // by mutation: an instance's come and go with it (each.js `ownMut`)
@@ -513,6 +515,7 @@ export function commit(f, what = 'commit', finished) {
   }
   const [out, cmds, landed, finishes] = [Out, Commands, Landed, Finishes],
     changed = Sched?.changed(queued), invocation = Invocation.id, origin = Origin.now();
+  if (hasOutput(cmds)) OutputInvocations.set(cmds, invocation);
   // A key handler's preventDefault/stopPropagation act on its event before the dispatch ends, a tree update a view
   // transition defers too (review C3).
   if (KeyEvent || Propagating)
@@ -525,17 +528,27 @@ export function commit(f, what = 'commit', finished) {
   // Freeze releases streams and stops sequences even when the tree waits for a view transition.
   if (ok) {
     if (Sounds.frozen && Open.size) closeLetGo(inflight, say);
-    Sounds.committed?.(sound);
+    if (Sounds.frozen === true && !wasFrozen) {
+      Sounds.settling = true;
+      try {
+        for (const commands of new Set([...HeldOutput, cmds])) settleOutput(commands);
+        Sounds.committed?.(sound);
+      } finally {
+        Sounds.settling = false;
+      }
+    } else Sounds.committed?.(sound);
   }
   // What the commit would have sent and did not is refused, whatever stopped its tree update (a hook that threw, a
   // poisoned tree, a tail a view transition never ran): an answer's batches that wait for it too (ts-stream.js).
   let sent = 0;
   const unrun = why => {
+    HeldOutput.delete(cmds);
     for (const go of out.splice(sent)) go.refused?.(why);
   };
   const link = Nav?.holdLink();
   const tail = Object.assign(
     () => {
+      HeldOutput.delete(cmds);
       try {
         return Invocation.run(invocation, () => link ? Nav.withLink(link, update) : update());
       } finally {
@@ -571,8 +584,10 @@ export function commit(f, what = 'commit', finished) {
     while (sent < out.length) out[sent++]();
     if (Open.size) closeLetGo(inflight, say);
     for (const c of cmds) command(...c);
-    Sounds.apply?.(cmds);
-    Sounds.midiApply?.(cmds);
+    if (!SettledOutput.delete(cmds)) {
+      Sounds.apply?.(cmds);
+      Sounds.midiApply?.(cmds);
+    }
     Sounds.stood?.(sound);
     // after its focus commands, as the wasm host (focus.js); then the focus follows the route (input-glue.js;
     // LLP 1115.000 D4.2)
@@ -593,7 +608,9 @@ export function commit(f, what = 'commit', finished) {
     return true;
   };
   // a Back or Forward is mirrored to the history first, and one the browser animated cuts (router.js `traversal`)
-  return Sh && ok && !Traversal?.() ? Sh.commit(tail, Queue, inflight, After) : tail();
+  const deferred = Sh && ok && !Traversal?.();
+  if (deferred && hasOutput(cmds)) HeldOutput.add(cmds);
+  return deferred ? Sh.commit(tail, Queue, inflight, After) : tail();
 }
 /** A commit made again after a write ended or the source became ready (the runner's `commit_again`). Refused while
  * reads are owed (a reconciling ask), they fail, keeping what they show, before a commit publishes it; a refusal of
@@ -733,8 +750,26 @@ export const Sounds = {
   seq: null,
   midi: null,
   midiApply: null,
+  settling: false,
   beatAt: null,
 };
+const physicalOutput = name => name === 'haptic' || Sounds.own.has(name);
+const hasOutput = commands => commands.some(([name]) => name === 'reload' || physicalOutput(name));
+function settleOutput(commands) {
+  if (!hasOutput(commands) || SettledOutput.has(commands)) return;
+  for (let i = 0; i < commands.length;) {
+    const [name, , origin] = commands[i];
+    if (!physicalOutput(name)) { i++; continue; }
+    say(`command ${name}`);
+    const refused = Invocation.run(OutputInvocations.get(commands) ?? 0, () => Origin.refused?.(name, origin));
+    if (refused) commands.splice(i, 1); else i++;
+  }
+  Sounds.apply?.(commands);
+  Sounds.midiApply?.(commands);
+  for (let i = commands.length - 1; i >= 0; i--) if (physicalOutput(commands[i][0])) commands.splice(i, 1);
+  SettledOutput.add(commands);
+  HeldOutput.delete(commands);
+}
 function command(name, args, origin) {
   const f = Hosts[name];
   say(`command ${name}`);

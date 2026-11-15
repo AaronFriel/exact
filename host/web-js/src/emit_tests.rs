@@ -141,6 +141,20 @@ fn iframes_link_only_where_a_plan_has_an_iframe() {
     assert!(!js.contains("iframes.js"), "{js}");
 }
 
+#[test]
+fn a_haptic_links_the_page_freeze_watcher() {
+    let plan = contract::compile(
+        "component App\n  action buzz()\n    haptic(\"success\")\n  view\n    button \"Buzz\" press=buzz()\n",
+    )
+    .unwrap();
+    let js = crate::emit::emit(&plan, false, false).unwrap().js;
+    assert!(
+        js.contains("import{watchPage as $watchPage}from\"./facts.js\";")
+            && js.contains("$watchPage(true);"),
+        "{js}"
+    );
+}
+
 /// LLP 1055 D4: the SVG namespace follows the node type, so a module's custom
 /// element named `felt-…` is HTML and the glue attaches its factory.
 #[test]

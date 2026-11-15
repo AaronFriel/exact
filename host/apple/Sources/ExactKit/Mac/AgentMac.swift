@@ -1232,8 +1232,8 @@ extension Agent {
         return pictures.isEmpty ? image : drawingWindows(pictures, over: image, in: window.frame)
     }
 
-    /// Whether the window server's picture holds nothing. A display that is
-    /// asleep, or a locked screen, still answers, with a transparent picture
+    /// Whether the window server's picture holds nothing. A locked screen or
+    /// sleeping display still answers with a transparent picture
     /// a pixel or two short of the window: no picture, not a wrong one. It
     /// is read at sixteen places across it, not one: a sheet's corners are
     /// transparent, and scaled to a single pixel a 460 by 226 sheet read as
@@ -1290,7 +1290,21 @@ extension Agent {
         }
         // As a capture: every canvas paints its picture, read back from the
         // module, and every iframe paints its arm snapshot at its node.
-        var picture = Capture.withGuests(of: [session]) { Capture.picture(of: v) }
+        var picture: NSBitmapImageRep?, captureNote: String?
+        if Capture.hasGlass(in: v), let window = v.window {
+            let readbacks = Self.canvasReadbacks(in: window)
+            let serverPicture = Capture.windowServerPictureResult(of: v)
+            readbacks.restore()
+            switch serverPicture {
+            case let .success(capture):
+                picture = capture
+            case let .failure(error):
+                picture = Capture.withGuests(of: [session]) { Capture.picture(of: v) }
+                captureNote = "glass was not composited: \(error.message); the viewport layer tree was used"
+            }
+        } else {
+            picture = Capture.withGuests(of: [session]) { Capture.picture(of: v) }
+        }
         let area = presenter.navigation.split.agentCaptureArea
         if presenter.navigation.split.active, let full = picture, let image = full.cgImage {
             let scale = CGFloat(full.pixelsWide) / v.bounds.width
@@ -1304,6 +1318,7 @@ extension Agent {
         // as it was taken, which the measure requires of each picture.
         if Self.activated { r["active"] = NSApp.isActive && (v.window?.isKeyWindow ?? false) }
         if loading > 0 { r["imagesPending"] = loading }
+        if let captureNote { r["note"] = captureNote }
         // This is the viewport's own drawing: a dialog's sheet and AppKit's popover are other windows (LLP 1115.002 D7).
         let apart = presenter.sheets(on: v.window).map { String(describing: Swift.type(of: $0)) } + presenter.menus.windowed.map { _ in "NSPopover" }
         if !apart.isEmpty { r["notShown"] = ["windows": apart, "see": "screenshot <png> window"] as [String: Any] }

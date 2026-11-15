@@ -3,6 +3,20 @@
 #if os(macOS)
 import AppKit
 
+package enum CapturePresentationError: Error, Equatable {
+    case windowServerUnavailable(Int)
+    case viewportOutsidePicture
+
+    var message: String {
+        switch self {
+        case let .windowServerUnavailable(number):
+            return "the window server gave no picture of window \(number); the screen is locked or the display is asleep"
+        case .viewportOutsidePicture:
+            return "the window server picture does not contain the viewport"
+        }
+    }
+}
+
 /// A view's subtree as pixels (LLP 1014 D3).
 package enum Capture {
     /// A capture is drawing: its draws are not repaints (D4 b).
@@ -12,7 +26,6 @@ package enum Capture {
     /// sessions' ids can be the same); the remote platform views are hidden
     /// while their owning nodes draw these (@ref LLP 1020 D4/D6, `withGuests`).
     nonisolated(unsafe) static var web: [ObjectIdentifier: ExactWebImage] = [:]
-
     /// The subtree painted at `scale`: premultiplied RGBA, rows top-down,
     /// `pixelsWide * 4` bytes per row, transparent where nothing painted.
     package static func bitmap(of view: NSView, scale: CGFloat, prepared: Bool = false) -> NSBitmapImageRep? {
@@ -41,6 +54,54 @@ package enum Capture {
 }
 
 extension Capture {
+    static func hasGlass(in view: NSView) -> Bool {
+        guard #available(macOS 26.0, *) else { return false }
+        guard !view.isHiddenOrHasHiddenAncestor else { return false }
+        func containsGlass(_ candidate: NSView) -> Bool {
+            guard !candidate.isHidden else { return false }
+            if candidate is NSGlassEffectView { return true }
+            return candidate.subviews.contains(where: containsGlass)
+        }
+        return containsGlass(view)
+    }
+
+    nonisolated(unsafe) static var windowImageOverride: ((Int) -> CGImage?)?
+
+    private static func serverImage(_ number: Int) -> CGImage? {
+        if let windowImageOverride { return windowImageOverride(number) }
+        return Agent.ownWindowImage(number)
+    }
+
+    /// AppKit's glass has no CPU representation. Use the compositor's exact
+    /// pixels for a subtree containing it, without changing the live views.
+    static func windowServerPictureResult(of view: NSView) -> Result<NSBitmapImageRep, CapturePresentationError> {
+        guard let window = view.window else { return .failure(.windowServerUnavailable(0)) }
+        window.layoutIfNeeded()
+        window.displayIfNeeded()
+        CATransaction.flush()
+        let refresh = 1 / Double(max(30, window.screen?.maximumFramesPerSecond ?? 60))
+        RunLoop.main.run(until: Date(timeIntervalSinceNow: 2 * refresh + 0.004))
+        guard let image = serverImage(window.windowNumber) else {
+            return .failure(.windowServerUnavailable(window.windowNumber))
+        }
+        let frame = view.convert(view.bounds, to: nil)
+        let x = CGFloat(image.width) / window.frame.width
+        let y = CGFloat(image.height) / window.frame.height
+        let pixels = CGRect(x: frame.minX * x, y: (window.frame.height - frame.maxY) * y,
+                            width: frame.width * x, height: frame.height * y).integral
+        guard let crop = image.cropping(to: pixels),
+              let rep = NSBitmapImageRep(cgImage: crop).converting(to: .sRGB, renderingIntent: .default) else {
+            return .failure(.viewportOutsidePicture)
+        }
+        rep.size = view.bounds.size
+        return .success(rep)
+    }
+
+    static func windowServerPicture(of view: NSView) -> NSBitmapImageRep? {
+        guard case let .success(picture) = windowServerPictureResult(of: view) else { return nil }
+        return picture
+    }
+
     /// AppKit attaches new backing layers at the window display boundary.
     /// Do this once per upload, before Capture.bitmap changes visibility.
     package static func prepareBackingLayers(of view: NSView) {
@@ -94,7 +155,8 @@ extension Capture {
               let ctx = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8,
                                   bytesPerRow: width * 4, space: CGColorSpace(name: CGColorSpace.sRGB)!,
                                   bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
-        // CA renders the root in bottom-up Quartz space.
+        // CA renders the root in bottom-up Quartz space; the bitmap's first
+        // row follows AppKit's top-down view coordinates.
         ctx.translateBy(x: 0, y: CGFloat(height))
         ctx.scaleBy(x: scale, y: -scale)
         tree.render(in: ctx)

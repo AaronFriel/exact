@@ -197,6 +197,26 @@ enum ExactExtensions {
         return AppFileWalk.destination(root, Array(parts.dropFirst()))
     }
 
+    /// An `app:/` directory in the session's roots, including one the package
+    /// will create, reached through no symbolic link.
+    static func directory(_ path: String, _ module: ExactModuleContext) -> URL? {
+        guard path.hasPrefix("app:/") else { return nil }
+        let parts = path.dropFirst(5).split(separator: "/", omittingEmptySubsequences: false).map(String.init)
+        let roots = ["data": module.data, "cache": module.cache, "tmp": module.temporary]
+        guard let root = roots[parts[0]] else { return nil }
+        return AppFileWalk.directory(root, Array(parts.dropFirst()))
+    }
+
+    /// Empty and recreate an admitted `app:/` directory through checked
+    /// descriptors, retaining the new directory for the package's writes.
+    static func replaceDirectory(_ path: String, _ module: ExactModuleContext) -> FileHandle? {
+        guard path.hasPrefix("app:/") else { return nil }
+        let parts = path.dropFirst(5).split(separator: "/", omittingEmptySubsequences: false).map(String.init)
+        let roots = ["data": module.data, "cache": module.cache, "tmp": module.temporary]
+        guard let name = parts.first, let root = roots[name] else { return nil }
+        return AppFileWalk.replaceDirectory(root, Array(parts.dropFirst()))
+    }
+
     /// A request of the runner's; `false` for one that names no extension.
     static func later(_ m: ExactModule, _ request: [String: Any], reply: ExactReply) -> Bool {
         guard let extensionName = request["extension"] as? String else { return false }
@@ -445,6 +465,8 @@ extension ExactExtensions {
             now: { [weak module] in module?.now() ?? 0 },
             tracks: tracks,
             file: { [weak module] path in module.flatMap { file(path, $0) } },
+            directory: { [weak module] path in module.flatMap { directory(path, $0) } },
+            replaceDirectory: { [weak module] path in module.flatMap { replaceDirectory(path, $0) } },
             audioSession: ExactAudioSession { [weak m] mode, options, background, events in
                 m?.hatches.flatMap { AudioClaims.claim($0, mode: mode, options: options, background: background, events: events) }
             },

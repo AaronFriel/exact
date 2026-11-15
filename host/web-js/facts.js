@@ -63,9 +63,9 @@ const AGENT_ADMITTED = true;
 // One reporter per session for both sources (`exactViewport().gpuTier` is a
 // page fact), and the agent's `prefer` page group (LLP 1069.000 D6) sets it,
 // whichever of them the plan reads.
-let pageFacts, pageReaders = {}, pageSequences = false, pageWatching = false, viewportChanged = () => {}, pageChanged = () => {};
-const reporter = () => pageFacts !== undefined ? pageFacts : (pageFacts = typeof document === "object" && document.createElement
-  ? pageReporter(AGENT_ADMITTED && typeof location === "object" && new URLSearchParams(location.search).has("agent")) : null);
+let pageFacts, pageReaders = {}, pageFreezes = false, pageWatching = false, viewportChanged = () => {}, pageChanged = () => {};
+const reporter = () => pageFacts !== undefined ? pageFacts : typeof document === "object" && document.createElement
+  ? (pageFacts = pageReporter(AGENT_ADMITTED && typeof location === "object" && new URLSearchParams(location.search).has("agent"))) : null;
 function shareReporter() {
   const facts = reporter();
   if (!facts) return;
@@ -87,9 +87,9 @@ export function page(readers) {
   watchPage();
 }
 
-// A sequence needs the freeze edge even if the plan reads no page fields.
-export function watchPage(sequences = false) {
-  pageSequences ||= sequences;
+// Physical output and a sequence need the freeze edge even if the plan reads no page fields.
+export function watchPage(freezes = false) {
+  pageFreezes ||= freezes;
   const facts = reporter();
   if (!facts || pageWatching) return;
   pageWatching = true;
@@ -99,7 +99,7 @@ export function watchPage(sequences = false) {
     const next = facts.read();
     const before = pageFields(previous), after = pageFields(next);
     const readers = Resources.filter(r => r.source === "exactPage" && pageReaders[r.name]?.[0].some(k => before[k] !== after[k]));
-    if (!readers.length && !(pageSequences && previous.frozen !== next.frozen)) { previous = next; return; }
+    if (!readers.length && !(pageFreezes && previous.frozen !== next.frozen)) { previous = next; return; }
     // Transport consumes the edge in the readers' commit (LLP 1125 D4).
     if (commit(() => {
       Sounds.frozen = next.frozen;
