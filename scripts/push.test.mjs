@@ -1,4 +1,4 @@
-import { validateChannel, channelOrigin, sha256, blobPath } from './origin.mjs';
+import { validateChannel, channelOf, channelOrigin, sha256, blobPath } from './origin.mjs';
 import { EXE } from './paths.mjs';
 import {expect, mock, test} from 'bun:test';
 import * as fs from 'node:fs';
@@ -7,13 +7,13 @@ import {resolve, relative} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {bakedEntryAssets, classifyArtifacts, nativeManifestMetadata} from './app.mjs';
 import {spawnSync as realSpawnSync} from 'node:child_process';
-import {channelOf, canonicalBytes, classify, inspectHead, publishStream, streamHead} from './deploy.mjs';
+import {canonicalBytes, classify, inspectHead} from './deploy.mjs';
+import {publishedModule, publishStream, streamHead} from './publisher.mjs';
 import {admitHead, latestRecord} from './deploy-heads.mjs';
 import {DirectoryOrigin, streamPath} from './origin.mjs';
 import {generateKeyPairSync, sign} from 'node:crypto';
 import {filesystem, filesystemRead, filesystemTree} from './filesystem.mjs';
 import {streamBundle, unbundledTextures} from './texture-families.mjs';
-import {publishedModule} from './deploy.mjs';
 import {rustAbi, rustBundle, tieredBytes, tieredNative} from './rust.mjs';
 import {canonicalJson} from './deploy-signing.mjs';
 import {binaryInputFile, cohortReceipt} from './deploy-heads.mjs';
@@ -84,9 +84,12 @@ function harness(classify=()=>({bundle:true}), runtime=4, {bake, graphTool, coho
       return {status:0,stdout:JSON.stringify(graph)};
     },
   };
+  // The publisher's candidates (publisher.mjs, before its publishing section, which the bindings stand in for) and push.
   const source=fs.readFileSync(new URL('./push.mjs',import.meta.url),'utf8');
-  const functions=source.slice(source.indexOf('function parseArgs('),source.indexOf('\nif (process.argv[1]'))
-    .replaceAll('export async function ', 'async function ');
+  const publisher=fs.readFileSync(new URL('./publisher.mjs',import.meta.url),'utf8');
+  const functions=(publisher.slice(publisher.indexOf('/** The streams of `channel`'),publisher.indexOf('// ---------------------------------------------------------------- publishing'))
+    +source.slice(source.indexOf('function parseArgs('),source.indexOf('\nif (process.argv[1]')))
+    .replaceAll('export async function ', 'async function ').replaceAll('export function ', 'function ');
   const pusher=new Function(...Object.keys(bindings),functions+'\nreturn { pusher, streams, streamCandidates };')(...Object.values(bindings));
   return {root,app,build,cohort,calls,published,bundles,bundled,destinations,rows,bindings,...pusher};
 }
@@ -266,9 +269,9 @@ test('push inventories current app files and carries only head-owned artifacts',
     fs.writeFileSync(resolve(root, 'deck/nested/.config'), 'config');
     for (const folder of ['assets', 'deck', 'deck/nested']) fs.writeFileSync(resolve(root, folder, '.DS_Store'), 'Bud1');
     const shader = Buffer.from('shader');
-    const source = fs.readFileSync(new URL('./push.mjs', import.meta.url), 'utf8');
+    const source = fs.readFileSync(new URL('./publisher.mjs', import.meta.url), 'utf8');
     const named = source.indexOf('const namedEntry');
-    const fn = `${source.slice(named, source.indexOf('\n', named))}\n${source.slice(source.indexOf('async function carriedAssets('), source.indexOf('\nfunction gitHead('))}`;
+    const fn = `${source.slice(named, source.indexOf('\n', named))}\n${source.slice(source.indexOf('async function carriedAssets('), source.indexOf('\n/** Candidates for signed cohorts'))}`;
     const carried = new Function('filesystem', 'filesystemRead', 'unbundledTextures', 'resolve', 'sha256', 'blobPath', 'refuse', fn + ';return carriedAssets;')(filesystem, filesystemRead, unbundledTextures, resolve, sha256, blobPath, (message) => { throw Error(message); });
     const asked = [];
     const assets = await carried({ get: async (path) => { asked.push(path); return shader; } }, { dir: root }, { assets: [
@@ -301,9 +304,9 @@ test.each([
     const bytes = Buffer.alloc(mib * 1024 * 1024, 97), digest = sha256(bytes);
     const names = Array.from({ length: count }, (_, i) => `assets/${i}.bin`);
     for (const name of names) fs.writeFileSync(resolve(root, name), bytes);
-    const source = fs.readFileSync(new URL('./push.mjs', import.meta.url), 'utf8');
+    const source = fs.readFileSync(new URL('./publisher.mjs', import.meta.url), 'utf8');
     const named = source.indexOf('const namedEntry');
-    const fn = `${source.slice(named, source.indexOf('\n', named))}\n${source.slice(source.indexOf('async function carriedAssets('), source.indexOf('\nfunction gitHead('))}`;
+    const fn = `${source.slice(named, source.indexOf('\n', named))}\n${source.slice(source.indexOf('async function carriedAssets('), source.indexOf('\n/** Candidates for signed cohorts'))}`;
     const carried = new Function('filesystem', 'filesystemRead', 'unbundledTextures', 'resolve', 'sha256', 'blobPath', 'refuse', fn + ';return carriedAssets;')(filesystem, filesystemRead, unbundledTextures, resolve, sha256, blobPath, (message) => { throw Error(message); });
     const assets = await carried({}, { dir: root }, {});
     expect(assets.map(asset => asset.name)).toEqual(names);
@@ -350,7 +353,7 @@ test.each([false, true])('bundle candidates publish to signed iOS cohorts and le
     initial.cohort = cohort; initial.signature = signer.sign(initial);
     await origin.putHead(stream, Buffer.from(JSON.stringify(initial)), { previousDigest: null });
     const env = { EXACT_UPDATE_TRUST: 'production', EXACT_GAME_PROOF_PROFILE: 'release' };
-    const found = await streams(origin, app, 'prod', env, { deploying: true, platforms: ['ios'] });
+    const found = await streams(origin, app, 'prod', { deploying: true, platforms: ['ios'] });
     expect(found.map(s => s.platform)).toEqual(['ios']);
     const updates = await streamCandidates(app, origin, found, env);
     const candidates = new Map(updates.map(update => [update.row.compatibilityId, update]));
@@ -417,13 +420,13 @@ test.each(['missing', 'tampered'])('deploy and push reject a %s cohort receipt',
     if (kind === 'tampered') head.cohort.compat.inputs.typescriptRuntime = 100;
     const origin = new DirectoryOrigin(resolve(root, 'origin'));
     await origin.putHead(stream, Buffer.from(JSON.stringify(head)), { previousDigest: null });
-    const found = await streams(origin, app, 'prod', {}, { deploying: true, platforms: ['ios'] });
+    const found = await streams(origin, app, 'prod', { deploying: true, platforms: ['ios'] });
     expect(found).toHaveLength(1);
     expect(found[0].cohort).toBeUndefined();
     const table = await classify({ app, origin, opts: {}, channel: 'prod', snapshot: { dirty: false, changes: [] }, release: 'refused', bundle,
       compat: {}, builds: {}, platforms: ['ios'], wantOrigin: false, knownStreams: found });
     expect(table.rows.map(row => row.action)).toEqual(['binary']);
-    await expect(streams(origin, app, 'prod', {})).rejects.toThrow(kind === 'missing' ? 'no cohort receipt' : 'does not verify');
+    await expect(streams(origin, app, 'prod')).rejects.toThrow(kind === 'missing' ? 'no cohort receipt' : 'does not verify');
     expect((await origin.head(stream)).bytes).toEqual(Buffer.from(JSON.stringify(head)));
     expect((await origin.list(`${streamPath(stream)}/releases`)) ?? []).toEqual([]);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
@@ -435,9 +438,9 @@ test('a declared stream with no head or history remains new, while invalid histo
     const stream = { channel: 'prod', compatibilityId: 'b'.repeat(32) };
     app.manifest.deploy.streams = [stream];
     const origin = new DirectoryOrigin(resolve(root, 'origin'));
-    expect(await streams(origin, app, 'prod', {}, { deploying: true, platforms: ['ios'] })).toEqual([]);
+    expect(await streams(origin, app, 'prod', { deploying: true, platforms: ['ios'] })).toEqual([]);
     await origin.put(`${streamPath(stream)}/releases/invalid.json`, Buffer.from('{}'));
-    const found = await streams(origin, app, 'prod', {}, { deploying: true, platforms: ['ios'] });
+    const found = await streams(origin, app, 'prod', { deploying: true, platforms: ['ios'] });
     expect(found).toHaveLength(1);
     expect(found[0].cohort).toBeUndefined();
     expect(found[0].problem).toContain('not admissible');
@@ -626,7 +629,7 @@ test('signed binary source evidence detects changed inputs and refuses damaged r
     await publishStream({ origin, app, signer, row: { ...stream, platform: 'ios' }, bundle, compat: cohort.compat, build, release: 'initial', snapshot: {}, opts: {}, log() {} });
     expect(await origin.get(blobPath(cohort.binaryInputs.sha256))).toEqual(file.bytes);
     const head = (await origin.head(stream)).bytes;
-    const found = await streams(origin, app, 'prod', {}, { deploying: true, platforms: ['ios'] });
+    const found = await streams(origin, app, 'prod', { deploying: true, platforms: ['ios'] });
     expect(found[0].cohort.binaryInputs).toEqual(cohort.binaryInputs);
     const env = { EXACT_UPDATE_TRUST: 'production', EXACT_GAME_PROOF_PROFILE: 'release' };
     const snapshot = { bundle, compat: cohort.compat, graph: { artifacts: [] } };
@@ -670,7 +673,7 @@ test('signed binary source evidence detects changed inputs and refuses damaged r
 });
 
 test('a first push from a production build publishes the evidence its cohort names, and a deploy then reads it', async () => {
-  const { root, app, build, cohort, streams, streamCandidates } = harness(classifyArtifacts, 4, { rustModule: false });
+  const { root, app, build, cohort, bindings, streams, streamCandidates } = harness(classifyArtifacts, 4, { rustModule: false });
   try {
     app.manifest.app = { id: 'fixture', name: 'Fixture' };
     const code = resolve(root, 'native/code.rs');
@@ -688,10 +691,10 @@ test('a first push from a production build publishes the evidence its cohort nam
     const origin = new DirectoryOrigin(resolve(root, 'origin'));
     const env = { EXACT_UPDATE_TRUST: 'production', EXACT_GAME_PROOF_PROFILE: 'release' };
     const signer = { keyId: 'test', sign: head => ({ keyId: 'test', ed25519: sign(null, canonicalBytes(head), privateKey).toString('base64') }) };
-    const [first] = await streamCandidates(app, origin, await streams(origin, app, 'prod', env), env);
+    const [first] = await streamCandidates(app, origin, await streams(origin, app, 'prod', { builds: bindings.readBuilds() }), env);
     expect((await publishStream({ ...first, origin, app, signer, release: 'first', snapshot: {}, opts: {}, log() {} })).action).toBe('published');
     expect(await origin.get(blobPath(cohort.binaryInputs.sha256))).toEqual(binaryInputFile(build).bytes);
-    const found = await streams(origin, app, 'prod', env, { deploying: true, platforms: ['ios'] });
+    const found = await streams(origin, app, 'prod', { deploying: true, platforms: ['ios'] });
     const snapshot = { bundle: first.bundle, compat: cohort.compat, graph: { artifacts: [] } };
     const [update] = await streamCandidates(app, origin, found, env, { snapshot });
     expect(update.reason).toBeUndefined();

@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { streams, streamCandidates } from './push.mjs';
+import { changesAgainst, defaultRelease, publishedModule, publishStream, streamCandidates, streams, sunsetFor } from './publisher.mjs';
 import { requireReleasePins } from '../game/inputs.mjs';
 // `exact deploy` — the publisher (LLP 1030.000 D3 the verb, D4 the policies,
 // D5 one library in its own process, D7 where things live; LLP 1030 D3 the
@@ -42,20 +42,19 @@ import { requireReleasePins } from '../game/inputs.mjs';
 // the repository. `update/tests/it/publisher.rs` reads a head this script
 // produced and proves the client verifies it.
 import { spawnSync } from 'node:child_process';
-import { randomBytes } from 'node:crypto';
-import { Refusal, refuse, assetIndex, canonicalBytes, canonicalJson, envelopeBytes, portableAssetNames, loadSigner, keygen, readAssetIndex, envelopeReport } from './deploy-signing.mjs';
+import { Refusal, refuse, canonicalBytes, canonicalJson, loadSigner, keygen, readAssetIndex, envelopeReport } from './deploy-signing.mjs';
 export { canonicalBytes, portableAssetNames, publicKeyFromRaw, loadSigner, readAssetIndex, sealEnvelope } from './deploy-signing.mjs';
 import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, statSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
-import { homedir, hostname, tmpdir, userInfo } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { basename, delimiter, dirname, isAbsolute, parse, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buildRust, publishedSignature, rustBundle, rustPackage, tieredNative } from './rust.mjs';
+import { buildRust, publishedSignature, rustBundle, rustPackage } from './rust.mjs';
 import { appleProduction } from '../host/apple/link.mjs';
 import { assertOwnTarget, bakedEntryAssets, bakeOutput, cargoReproducibilityFlags, readManifest, buildBake, bakeTarget, readBake, readBuilds, classifyArtifacts, resolveApp, shaderWatchRoots } from './app.mjs';
 import { gameShells } from "../game/app/shells.mjs";
 import { streamBundle, unbundledTextures } from './texture-families.mjs';
-import { blobPath, channelOrigin, openOrigin, OriginUnavailable, sha256, streamPath, parseWebRoot, webRootPath, webRootStream, webReleasePath, validateChannel } from './origin.mjs';
-import { admitHead, binaryInputFile, cohortReceipt, keepRecord, latestRecord, nextSeq } from './deploy-heads.mjs';
+import { channelOf, channelOrigin, openOrigin, OriginUnavailable, sha256, streamPath, parseWebRoot, webRootPath, webRootStream, webReleasePath, validateChannel } from './origin.mjs';
+import { admitHead, cohortReceipt, latestRecord, nextSeq } from './deploy-heads.mjs';
 export { admitHead, cohortReceipt, inspectHead } from './deploy-heads.mjs';
 import { filesystemLock, removePrivateTree } from './filesystem.mjs';
 import { listBuildFiles, listPublicFiles, readStaticCandidate } from '../host/web/serve.mjs';
@@ -638,13 +637,6 @@ export function disposeSnapshot(snapshot) {
   snapshotCaptures.delete(snapshot);
 }
 
-/** A human correlation id with millisecond UTC time, snapshot prefix, and a
- * random run nonce. Two publishers of the same commit in one clock tick do
- * not share the receipt namespace. */
-export function defaultRelease(commit, now = new Date(), nonce = randomBytes(8).toString('hex')) {
-  return `r-${now.toISOString().replace(/[-:]/g, '')}-${commit.slice(0, 7)}-${nonce}`;
-}
-
 /** A private bake directory independent of the correlation id. Explicitly
  * reusing `--release` can never make one process remove another's stage. */
 export function deployRun(target, release) {
@@ -786,14 +778,6 @@ export { classifyArtifacts } from './app.mjs';
 
 // --------------------------------------------------------------- classifying
 
-/** The channel the manifest bakes in: `deploy.channel`, else the only key of `deploy.channels`, else `prod` — the same rule as `Manifest::channel` in contract/cli. */
-export function channelOf(manifest) {
-  const deploy = manifest.deploy ?? {};
-  if (deploy.channel != null) return deploy.channel;
-  const names = Object.keys(deploy.channels ?? {});
-  return names.length === 1 ? names[0] : 'prod';
-}
-
 /** Native deployment targets, including binary-only L=0: what `deploy.store` and `deploy.binaries` name, else what `host` names (LLP 1153 D1.1). An explicit selection omits unselected targets before validation. */
 export function nativePlatforms(manifest, selection = []) {
   const deploy = manifest.deploy ?? {};
@@ -806,76 +790,6 @@ export function nativePlatforms(manifest, selection = []) {
 }
 /** Whether the manifest names a native platform, under `host` or `deploy`; one that names none ships the web root alone, with no stream and no envelope, and its deploy bakes nothing (LLP 1153 D1.5, D3.6). */
 export const namesNative = (manifest) => [manifest.host, manifest.deploy?.store, manifest.deploy?.binaries].some((table) => Object.keys(table ?? {}).some((p) => p !== 'web'));
-
-function sunsetFor(app, stream) {
-  const cards = app.manifest.deploy?.sunset;
-  const key = `${stream.channel}/${stream.compatibilityId}`;
-  return cards && Object.hasOwn(cards, key) ? cards[key] : cards?.[stream.compatibilityId] ?? null;
-}
-
-/** Plan and asset changes by digest, plus the stream's advisory card. */
-function changesAgainst(bundle, head, sunset = null) {
-  const changes = [];
-  const card = (value) => value ? [value.message, value.store || null] : null;
-  if (JSON.stringify(card(sunset)) !== JSON.stringify(card(head?.sunset))) changes.push({ name: 'sunset', change: !sunset ? 'removed' : !head?.sunset ? 'new' : 'changed' });
-  if (!head) {
-    changes.push({ name: 'app.plan', change: 'new' });
-    for (const a of bundle.assets) changes.push({ name: a.name, change: 'new' });
-    return changes;
-  }
-  const plan = head.plan;
-  if (plan?.sha256 !== bundle.plan.sha256 || plan?.bytes !== bundle.plan.bytes.length
-    || plan?.url !== `../../blobs/${bundle.plan.sha256}` || plan?.formatVersion !== bundle.plan.formatVersion
-    || plan?.kernelSchema !== bundle.plan.kernelSchema) changes.push({ name: 'app.plan', change: 'changed' });
-  const before = new Map((head.assets ?? []).map((a) => [a.name, a]));
-  for (const a of bundle.assets) {
-    const had = before.get(a.name);
-    if (had === undefined) changes.push({ name: a.name, change: 'new' });
-    else if (had.sha256 !== a.sha256 || had.bytes !== a.bytes.length || had.url !== `./${a.sha256}`) {
-      changes.push({ name: a.name, change: 'changed', note: a.name.endsWith('.wgsl') ? 'interface unchanged: asset' : undefined });
-    }
-    before.delete(a.name);
-  }
-  for (const name of before.keys()) changes.push({ name, change: 'removed' });
-  return changes;
-}
-
-/** A stream's asset index, a blob beside the ones it names: its cards
- * resolve against its own URL, so each is `./<sha256>`. Null for no assets. */
-export function streamIndex(bundle) {
-  portableAssetNames(bundle.assets.map((asset) => asset.name));
-  return assetIndex(bundle.assets.map((asset) => ({ name: asset.name, url: `./${asset.sha256}`, sha256: asset.sha256, bytes: asset.bytes.length })),
-    (sha) => `../../blobs/${sha}`);
-}
-
-/** The unsigned stream head. One producer keeps its identity/name and blob
- * pointers identical across classification fixtures and publication. */
-export function streamHead({ app, bundle, stream, seq, release, sunset = null }) {
-  const index = streamIndex(bundle);
-  const head = {
-    exact: 1,
-    app: { id: app.id, name: app.displayName },
-    plan: { url: `../../blobs/${bundle.plan.sha256}`, sha256: bundle.plan.sha256, bytes: bundle.plan.bytes.length,
-      formatVersion: bundle.plan.formatVersion, kernelSchema: bundle.plan.kernelSchema },
-    ...(index ? { assets: index.card } : {}),
-    stream: { app: app.id, channel: stream.channel, compatibilityId: stream.compatibilityId, seq },
-    release,
-  };
-  if (sunset) head.sunset = sunset.store ? { message: sunset.message, store: sunset.store } : { message: sunset.message };
-  return head;
-}
-
-/** The signed native Rust module of the stream's last published release: its
- * head authenticated, its blob the one the head names. Else null. */
-export async function publishedModule(origin, app, stream) {
-  try {
-    const admission = await admitHead(origin, await origin.head(stream), app, stream);
-    const card = admission.usable && admission.authenticated ? admission.head.assets?.find((a) => /^rust\/app\.module\.(dylib|bin)$/.test(a.name)) : null;
-    const bytes = card ? await origin.get(blobPath(card.sha256)) : null;
-    if (!bytes || sha256(bytes) !== card.sha256) return null;
-    return card.name.endsWith('.bin') ? tieredNative(bytes) : bytes;
-  } catch { return null; }
-}
 
 /** The table (LLP 1030 D3; 1030.000 D3 item 3): the origin row, a row per stream, a binary row per stream whose cohort this snapshot is not. Nothing is written. */
 export async function classify({ app, opts, origin, channel, snapshot, release, web, bundle, compat, builds, platforms, wantOrigin, candidates = new Map(), knownStreams = [] }) {
@@ -1041,81 +955,6 @@ export function renderTable(table) {
 
 // ---------------------------------------------------------------- publishing
 
-/** Publish one stream (LLP 1030.000 D3 item 5): under its lock, refuse a
- * reused immutable receipt, read the head and allocate seq, put and verify
- * content-addressed blobs, prepare the immutable release record, then swap
- * the signed head conditionally. A failure before that last operation leaves
- * every URL in the prior head untouched and its bytes still retrievable. */
-export async function publishStream({ origin, row, bundle, compat, app, signer, release, snapshot, opts, log, build }) {
-  const stream = { channel: row.channel, compatibilityId: row.compatibilityId };
-  const base = streamPath(stream);
-  const recordPath = `${base}/releases/${release}.json`;
-  const index = streamIndex(bundle);
-  const files = [{ name: 'app.plan', sha256: bundle.plan.sha256, bytes: bundle.plan.bytes }, ...(index ? [{ name: 'assets.json', sha256: index.card.sha256, bytes: index.bytes }] : []), ...bundle.assets];
-  if (await origin.get(recordPath)) refuse(`release ${release} already has an immutable record at ${origin.describe()}/${recordPath}; choose another --release`);
-  return origin.withLock(stream, async () => {
-    if (await origin.get(recordPath)) refuse(`release ${release} already has an immutable record at ${origin.describe()}/${recordPath}; choose another --release`);
-    const current = await origin.head(stream);
-    const previousDigest = current?.sha256 ?? null;
-    const admission = current ? await admitHead(origin, current, app, stream) : null;
-    let installed = null;
-    if (build) {
-      const frozen = admission?.usable && admission.authenticated ? admission.head.cohort : row.receipt;
-      installed = frozen ?? (!current ? cohortReceipt(build) : null);
-      const checked = classifyArtifacts(build, installed, {id:signer.keyId,public:app.manifest.deploy?.signing?.keys?.[signer.keyId]});
-      if (!checked.bundle || installed.compat.id !== stream.compatibilityId) refuse(`the locked cohort rejects the candidate: ${checked.missing.join('; ')}`);
-      const evidence = binaryInputFile(build);
-      if (evidence && evidence.sha256 === installed.binaryInputs?.sha256) files.push(evidence);
-    }
-    const changes = admission?.usable
-      ? changesAgainst(bundle, admission.head, sunsetFor(app, stream))
-      : current ? [{ name: 'exact.json', change: 'repair', note: admission.problem }] : changesAgainst(bundle, null, sunsetFor(app, stream));
-    if (admission?.usable && !changes.length && admission.seq > (opts.seqAbove ?? 0)) return { ...row, action: 'current', seq: admission.seq, note: 'the head is admissible and already names this bundle (published meanwhile)' };
-    // `seqAbove`: a stream moving to a new origin starts above every seq its clients accepted from the old one.
-    const seq = await nextSeq(origin, app, stream, admission, `the locked head at ${origin.describe()}/${base}/exact.json`, opts.seqAbove ?? 0);
-    let written = 0;
-    for (const file of files) {
-      if (await origin.put(blobPath(file.sha256), file.bytes, { immutable: true }) === 'written') written++;
-      const back = await origin.get(blobPath(file.sha256));
-      if (!back || sha256(back) !== file.sha256) refuse(`the blob ${file.sha256} (${file.name}) read back from ${origin.describe()} is not what was written`);
-    }
-    log(`  ${row.platform} ${row.compatibilityId.slice(0, 8)}: ${files.length} blobs on the origin (${written} written, ${files.length - written} present), each read back and checked`);
-    const sunset = sunsetFor(app, stream);
-    const head = streamHead({ app, bundle, stream, seq, release, sunset });
-    if (installed) head.cohort = installed;
-    head.signature = signer.sign(head);
-    const bytes = envelopeBytes(head);
-    const originDigest = sha256(bytes);
-    const entryDigest = sha256(canonicalBytes(head));
-    const record = {
-      release, at: new Date().toISOString(), by: userInfo().username, host: hostname(),
-      platform: row.platform, stream: head.stream, seq, snapshot,
-      head: { entryDigest, originDigest, bytes: bytes.length, keyId: signer.keyId }, previous: previousDigest,
-      compat: { id: compat.id, inputs: compat.inputs }, row: { action: row.action, changes },
-      // The asset index as JSON: its blob is this value's canonical bytes,
-      // which a release bake checks against the head (bake/src/receipt.rs).
-      envelope: head, ...(index ? { assets: JSON.parse(index.bytes.toString('utf8')) } : {}),
-    };
-    await origin.put(recordPath, Buffer.from(JSON.stringify(record, null, 2) + '\n', 'utf8'), { immutable: true });
-    keepRecord(origin, stream, `${release}.json`, seq);
-    try {
-      await origin.putHead(stream, bytes, { previousDigest });
-    } catch (error) {
-      let observed;
-      try {
-        observed = await origin.head(stream);
-      } catch (readError) {
-        const unknown = new Error(`the head write failed (${error.message}) and its outcome could not be read back (${readError.message})`);
-        unknown.headOutcomeUnknown = true;
-        throw unknown;
-      }
-      if (!observed?.bytes.equals(bytes)) throw error;
-      log(`  ${row.platform} ${row.compatibilityId.slice(0, 8)}: the head write response failed, but readback confirms seq ${seq}`);
-    }
-    return { ...row, action: 'published', seq, changes, head: { seq, sha256: originDigest, entryDigest, release }, previous: previousDigest };
-  });
-}
-
 /** A web root's public files: the wasm build's allowlist, and a JS-target
  * root's whole tree besides (its content-named chunks and rendered pages;
  * no dot path but the allowlist's, so never its `.gen`). */
@@ -1280,7 +1119,7 @@ async function deployCaptured(opts, capsule) {
   if (signer) origin.useSigner?.(signer);
 
   const env = sealedSourceEnv(sourceRoot, { CARGO_TARGET_DIR: app.target, EXACT_UPDATE_TRUST: 'production' });
-  const knownStreams = platforms.length ? await streams(origin, app, channel, env, { deploying: true, platforms }) : [];
+  const knownStreams = platforms.length ? await streams(origin, app, channel, { deploying: true, platforms }) : [];
   // Android has no binary lane here: its cohort is the production APK's build receipt, whose first `push` starts
   // the stream (LLP 1030.006 D6); `classify` names the APK's command instead.
   const nativeBakes = platforms.filter(platform => platform !== 'android' && !knownStreams.some(s => s.platform === platform && s.cohort));

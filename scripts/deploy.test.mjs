@@ -19,7 +19,8 @@ import { fileURLToPath } from 'node:url';
 import { captureAssets, assetCards, copyStaticTreeIfPresent, webEnvelope, publicFileCards, listAssets, readStaticFile, readDevGeneration, retainDevGeneration } from '../host/web/serve.mjs';
 import { resolveApp, webGpuArtifacts, withAppFixture } from './app.mjs';
 import { streamBundle } from './texture-families.mjs';
-import { bake, sealEnvelope, canonicalBytes, classify, classifyArtifacts, cohortReceipt, defaultRelease, deployRun, holdBundles, inspectHead, disposeSnapshot, materializeSnapshot, readAssetIndex, streamIndex, portableAssetNames, publishRoot, publishStream, renderTable, snapshotOf as capturedSnapshotOf, streamHead } from './deploy.mjs';
+import { bake, sealEnvelope, canonicalBytes, classify, classifyArtifacts, cohortReceipt, deployRun, holdBundles, inspectHead, disposeSnapshot, materializeSnapshot, readAssetIndex, portableAssetNames, publishRoot, renderTable, snapshotOf as capturedSnapshotOf } from './deploy.mjs';
+import { defaultRelease, publishStream, streamHead, streamIndex } from './publisher.mjs';
 import { blobPath, DirectoryOrigin, HttpsOrigin, OriginUnavailable, sha256, webReleasePath, webRootPath } from './origin.mjs';
 // Minimal compiler receipts for origin protocol fixtures below; capability
 // behavior is tested independently with declared requirements.
