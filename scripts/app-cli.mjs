@@ -256,6 +256,13 @@ async function verbRun({ dir, name, game = false, exact2, args }, reply) {
     if (staged) { dir = staged.dir; args = [args[0], ...staged.args]; }
   }
   const [verb, ...rest] = args;
+  // `--variant <name>` selects one of app.json's variants for every process below (LLP 1030.008 D3): taken out here,
+  // the one place every verb passes, so no child sees the flag.
+  if (rest.includes('--variant')) {
+    const { takeVariant } = await import(resolve(exact2, 'scripts/help.mjs'));
+    try { takeVariant(rest); } catch (error) { console.error(`exact ${verb}: ${error.message}`); return 2; }
+  }
+  if (process.env.EXACT_VARIANT) process.env.EXACT_VARIANT_APP ??= realpathSync(dir); // variants.mjs `claimVariant`
   // The app's own verbs (paint, minesweeper, ledger: a regenerated file dropped the ones added to it): app.json's
   // `commands`, each a command as argv (`"seed": ["bun", "seed.mjs"]`), run in the app's directory with the
   // arguments after the verb. A game's app.json is optional.

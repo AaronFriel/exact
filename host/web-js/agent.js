@@ -65,6 +65,8 @@ import { faultOp, faultsJson, setFaultLog } from '../web/faults.js';
 import { inertAncestor, displayMode, environment, navigation, routeFlags, foldEnv, preferFold, typedControl, settleValue, animationClock, pageReporter } from './navigation.js';
 import { backButton } from './input-glue.js';
 import { guestOutline, guestTap, guestType, viewBox, reveal, selectAll, scrollRange, typeControl, watchGlides, glidesSettled, scrollsSeen } from './agent-input.js';
+// A zoomable scroller's zoom and range (zoom.js, LLP 1057.001.000 §6).
+const zoomOf = e => (e.$zoomRange ? { scrollZoom: e.$zoom, minZoom: e.$zoomRange[0], maxZoom: e.$zoomRange[1] } : {});
 watchGlides();
 // How long `clock settle` waits for a scroller gliding on its own, as a native host waits (agent.mjs reason `scroll`).
 const GLIDE_BOUND_MS = 4000;
@@ -260,7 +262,7 @@ export function install(exact) {
       if (aid == null) continue;
       parent ??= aid;
       const ac = getComputedStyle(a);
-      if (a.dataset.scroll === 'true') scroll.unshift({ id: aid, sx: r2(a.scrollLeft), sy: r2(a.scrollTop), ...scrollRange(a) });
+      if (a.dataset.scroll === 'true') scroll.unshift({ id: aid, sx: r2(a.scrollLeft), sy: r2(a.scrollTop), ...scrollRange(a), ...zoomOf(a) });
       for (const kind of (ac.overflowX !== 'visible' || ac.overflowY !== 'visible' ? ['overflow'] : []).concat(ac.clipPath !== 'none' ? ['clip-path'] : [])) {
         clip.unshift({ id: aid, kind });
         const c = a.getBoundingClientRect();
@@ -370,7 +372,7 @@ export function install(exact) {
           const el = views.get(n.id), b = viewBox(el);
           // An iframe says whether its centre hits it (glue.js).
           const hit = el instanceof HTMLIFrameElement ? { hit: document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2) === el } : {};
-          return { id: n.id, x: b.x, y: b.y, w: b.width, h: b.height, ...hit, ...(el.dataset.scroll === 'true' ? { sx: r2(el.scrollLeft), sy: r2(el.scrollTop), ...scrollRange(el) } : {}) };
+          return { id: n.id, x: b.x, y: b.y, w: b.width, h: b.height, ...hit, ...(el.dataset.scroll === 'true' ? { sx: r2(el.scrollLeft), sy: r2(el.scrollTop), ...scrollRange(el), ...zoomOf(el) } : {}) };
         });
         const reply = { viewport: { w: innerWidth, h: innerHeight }, env: environment(), nodes, ...tags() };
         if (req.id != null) { const node = nodeDetail(req.id); if (node.error) return node; if (req.plan && exact.plan) node.planDigest = exact.plan; reply.node = node; }

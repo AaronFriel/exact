@@ -7,7 +7,7 @@ import { requireReleasePins } from '../game/inputs.mjs';
 // The repo has no `exact` binary; this script is the verb:
 //
 //   bun scripts/deploy.mjs <app> [--origin <dir|url>] [--channel <name>]
-//       [--only bundle|origin] [--platform <p>]… [--snapshot <sha>] [--dirty]
+//       [--only bundle|origin] [--platform <p>]… [--variant <name>] [--snapshot <sha>] [--dirty]
 //       [--release <id>] [--keys <dir>] [--json] [--yes]
 //   bun scripts/deploy.mjs keygen <id> [--keys <dir>] [--json]
 //
@@ -61,11 +61,11 @@ import { listBuildFiles, listPublicFiles, readStaticCandidate } from '../host/we
 import { BESIDE, STAGE } from '../host/web/beside.mjs';
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const PLATFORMS = ['web', 'ios', 'macos', 'linux', 'android'];
-const USAGE = 'usage: bun scripts/deploy.mjs <app> [--origin <dir|url>] [--channel <name>] [--only bundle|origin] [--platform <web|ios|macos|linux|android>]... [--snapshot <sha>] [--dirty] [--release <id>] [--keys <dir>] [--json] [--yes]\n       bun scripts/deploy.mjs keygen <id> [--keys <dir>] [--json]';
+const USAGE = 'usage: bun scripts/deploy.mjs <app> [--origin <dir|url>] [--channel <name>] [--only bundle|origin] [--platform <web|ios|macos|linux|android>]... [--variant <name>] [--snapshot <sha>] [--dirty] [--release <id>] [--keys <dir>] [--json] [--yes]\n       bun scripts/deploy.mjs keygen <id> [--keys <dir>] [--json]';
 // ------------------------------------------------------------------ arguments
 function parseArgs(argv) {
   const opts = { platform: [], _: [] };
-  const valued = new Set(['--origin', '--channel', '--only', '--platform', '--snapshot', '--release', '--keys']);
+  const valued = new Set(['--origin', '--channel', '--only', '--platform', '--variant', '--snapshot', '--release', '--keys']);
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--json') opts.json = true;
@@ -82,6 +82,8 @@ function parseArgs(argv) {
   }
   for (const p of opts.platform) if (!PLATFORMS.includes(p)) refuse(`--platform ${p}: one of ${PLATFORMS.join(', ')}`);
   if (opts.only && opts.only !== 'bundle' && opts.only !== 'origin') refuse(`--only ${opts.only}: bundle or origin`);
+  // As EXACT_VARIANT, which the flag replaces; resolveApp scopes it to the app (LLP 1030.008 D3).
+  if (opts.variant) { process.env.EXACT_VARIANT = opts.variant; delete process.env.EXACT_VARIANT_APP; }
   if (opts.release && !/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(opts.release)) refuse(`--release ${opts.release}: start with a letter or digit, then use letters, digits, . _ - only (it names a directory and a file)`);
   opts.keys = resolve(opts.keys ?? process.env.EXACT_SIGNING_KEY_DIR ?? resolve(homedir(), '.config/exact/keys'));
   return opts;
@@ -537,6 +539,8 @@ function keepLiveMtimes(repo, staged) {
  * shipping bakes ignore a proof profile inherited from the caller's shell. */
 function sealedSourceEnv(sourceRoot, extra = {}) {
   const env = { ...process.env, ...extra, EXACT_GAME_PROOF_PROFILE: 'release', EXACT_SOURCE_ROOT: sourceRoot };
+  // A selected variant names the live app's directory; the captured process resolves the captured one.
+  delete env.EXACT_VARIANT_APP;
   for (const name of ['GIT_DIR', 'GIT_WORK_TREE', 'GIT_COMMON_DIR', 'GIT_INDEX_FILE',
     'GIT_OBJECT_DIRECTORY', 'GIT_ALTERNATE_OBJECT_DIRECTORIES']) delete env[name];
   env.GIT_CEILING_DIRECTORIES = sourceRoot;
@@ -1121,7 +1125,10 @@ async function deployCaptured(opts, capsule) {
   const origin = openOrigin(originSpec);
   // An origin that holds only update streams (AppDrop) publishes no web root.
   if (origin.servesWeb === false && (opts.only === 'origin' || opts.platform.includes('web'))) refuse(`${origin.describe()} holds update streams, not a web app: publish the web root to another origin`);
-  const wantOrigin = origin.servesWeb !== false && opts.only !== 'bundle' && (!opts.platform.length || opts.platform.includes('web'));
+  // Nor does a variant, on any origin: it would replace the site with the variant's build (LLP 1030.008 D7).
+  const variant = app.manifest.variant?.name;
+  if (variant && (opts.only === 'origin' || opts.platform.includes('web'))) refuse(`variant ${variant} publishes no web root or association files (LLP 1030.008 D7): deploy its native streams, or the app without --variant`);
+  const wantOrigin = !variant && origin.servesWeb !== false && opts.only !== 'bundle' && (!opts.platform.length || opts.platform.includes('web'));
   const platforms = opts.only === 'origin' ? [] : nativePlatforms(app.manifest, opts.platform);
   if (!wantOrigin && !platforms.length) refuse(`nothing to classify: ${opts.only ? `--only ${opts.only}` : ''} ${opts.platform.length ? `--platform ${opts.platform.join(',')}` : ''} leaves no row`);
   const log = (text) => process.stderr.write(`${text}\n`);

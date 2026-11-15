@@ -199,5 +199,7 @@ test('dblclick touch is a finger\'s double tap, carried on iOS alone (LLP 1057.0
   expect(tapWords(['port', 'dblclick', 'touch', 'at', '4', '5'])).toEqual(['port', { dblclick: true, touch: true, at: [4, 5] }]);
   expect(() => tapWords(['port', 'contextmenu', 'touch'])).toThrow(MalformedOperation);
   expect(pointerGap('ios', undefined, { dblclick: true, touch: true })).toBeNull();
-  for (const host of ['web', 'macos', 'android']) expect(pointerGap(host, undefined, { dblclick: true, touch: true })).toContain('touch double tap');
+  expect(pointerGap('web', undefined, { dblclick: true, touch: true })).toBeNull();
+  expect(pointerGap('web', 'firefox', { dblclick: true, touch: true })).toContain('touch double tap');
+  for (const host of ['macos', 'android']) expect(pointerGap(host, undefined, { dblclick: true, touch: true })).toContain('touch double tap');
 });

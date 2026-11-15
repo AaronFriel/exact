@@ -800,6 +800,11 @@ fn compatibility_with_trust(
         "store": { "L": store, "acceptedKinds": if binary_only { vec![] } else { kinds } },
         "app": manifest.id,
     });
+    // A variant's base identity, which a Rust source naming its own id names
+    // (LLP 1030.008 D2); absent otherwise, so no other app's id moves.
+    if let Some(variant) = manifest.json.get("variant") {
+        inputs["variant"] = variant.clone();
+    }
     if matches!(platform, "macos" | "ios") {
         if let Some(handlers) = manifest.json.get("protocol_handlers") {
             if !handlers.as_array().is_some_and(Vec::is_empty) {

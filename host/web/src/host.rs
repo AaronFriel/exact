@@ -340,6 +340,10 @@ impl<D: DataSource> Host<D> {
             canvas2d: Default::default(),
             layers: Default::default(),
         };
+        // LLP 1057.001.000 §5: the JS target zooms; this host does not.
+        if exact_runner::uses::zooms(host.runner.plan()) {
+            host.runner.log("this host has no zoomable scroller: each draws at zoom 1, reports 1 and drops a `scrollZoom` write (LLP 1057.001.000 §5)");
+        }
         // Everything live is new to the page.
         let roots = host.runner.roots();
         let mut stack: Vec<ViewId> = roots.iter().rev().copied().collect();

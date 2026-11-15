@@ -76,7 +76,7 @@ export function documentTypes(app) {
     const system = accept.filter(([mime]) => Object.hasOwn(DOCUMENT_UTIS, mime));
     const own = accept.filter(([mime]) => !Object.hasOwn(DOCUMENT_UTIS, mime));
     return [
-      ...(own.length ? [entry(own, own.map(([mime]) => ownDocumentType(app.id, mime).identifier), 'Editor', 'Owner')] : []),
+      ...(own.length ? [entry(own, own.map(([mime]) => ownDocumentType(app.manifest.variant?.base ?? app.id, mime).identifier), 'Editor', 'Owner')] : []),
       ...(system.length ? [entry(system, system.map(([mime]) => DOCUMENT_UTIS[mime]), 'Viewer', 'Alternate')] : []),
     ];
   });
@@ -92,7 +92,7 @@ export function exportedTypes(app) {
   return (app.manifest.file_handlers ?? []).flatMap((handler) => Object.entries(handler.accept)
     .filter(([mime]) => !Object.hasOwn(DOCUMENT_UTIS, mime))
     .map(([mime, extensions]) => {
-      const own = ownDocumentType(app.id, mime);
+      const own = ownDocumentType(app.manifest.variant?.base ?? app.id, mime);
       return {
         UTTypeIdentifier: own.identifier,
         UTTypeDescription: handler.name ?? mime,

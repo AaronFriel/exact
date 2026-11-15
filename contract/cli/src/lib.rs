@@ -1144,7 +1144,17 @@ pub fn bake_with_warnings<D: DataSource>(
     if plan.app_id.is_empty() {
         plan.app_id = data.app_id().to_string();
     }
+    // A source naming its product boots the plan of the selected variant
+    // (LLP 1030.008 D2); the plan keeps the variant's id.
+    let variant = (plan.app_id != data.app_id())
+        .then(|| manifest::selected_base(&plan.app_id))
+        .flatten()
+        .filter(|base| base == data.app_id())
+        .map(|base| std::mem::replace(&mut plan.app_id, base));
     let runner = first_frame(&plan, data, true)?;
+    if let Some(id) = variant {
+        plan.app_id = id;
+    }
     let mut b = PlanBuilder::from_plan(plan);
     let pending: Vec<String> = runner.pending().into_iter().map(|(n, _)| n).collect();
     let dated = runner.resources_reading_clock();

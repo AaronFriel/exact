@@ -805,6 +805,13 @@ async function openWebUnlocked({
           // Chrome's own drag (agent-drag.mjs)
           dragged = await fileDrag({ kind, opts, id, x, y, dragged, call, evaluate });
         else if (kind === 'hover') await call('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
+        else if (kind === 'dblclick' && opts.touch)
+          // a finger's double tap (LLP 1057.001.000 §6): two touches 80 ms apart
+          for (const k of [0, 1]) {
+            await call('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+            await call('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+            await (k ? frame() : sleep(80));
+          }
         else if (['contextmenu', 'dblclick', 'mouse', 'auxclick', 'clicks'].includes(kind)) {
           await call('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y, modifiers });
           // The right button, the middle (`auxclick`), or the left n times, each press counting the run so far.

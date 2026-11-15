@@ -6,7 +6,7 @@ import { once } from 'node:events';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { pollUntil } from './agent-launch.mjs';
 import { androidJavaEnv, androidSdk, androidSdkPackages, androidScreenState, reverseRoot } from './agent-android.mjs';
 
@@ -228,14 +228,21 @@ if (cmd[0] === 'shell' && cmd[1] === '-T') {
   driveFixtures.push(fixture);
   return fixture;
 }
-test('the Android reader uses its declared package and suffix for lookup, launch and drive storage', async () => {
+test('the Android reader uses a variant\'s package for lookup, launch and drive storage, and refuses another package\'s APK', async () => {
   const { androidDeploy } = await import('./agent-android.mjs');
+  const { resolveVariant } = await import('./variants.mjs');
   const fixture = androidDriveFixture(true);
-  fixture.app.manifest = { app: { id: fixture.app.id }, host: { android: { id: 'com.example.android_app' } } };
-  fixture.env.ORG_GRADLE_PROJECT_idSuffix = '.dev';
+  fixture.app.manifest = resolveVariant({ app: { id: fixture.app.id }, host: { android: { id: 'com.example.android_app' } },
+    variants: { dev: { idSuffix: '.dev', name: 'Dev' } } }, 'dev');
   const id = 'com.example.android_app.dev';
   let child;
   try {
+    // The deleted knob is refused by name, and an APK built as the plain package is not launched as the variant.
+    expect(() => androidDeploy(fixture.app, fixture.bin, { ...fixture.env, ORG_GRADLE_PROJECT_idSuffix: '.dev' })).toThrow(/ORG_GRADLE_PROJECT_idSuffix is deleted/);
+    const record = resolve(dirname(fixture.bin), 'exact-build.json');
+    writeFileSync(record, JSON.stringify({ package: 'com.example.android_app' }));
+    expect(() => androidDeploy(fixture.app, fixture.bin, fixture.env)).toThrow(`installs as com.example.android_app, not ${id}: build it again (bun exact.mjs android --variant dev)`);
+    writeFileSync(record, JSON.stringify({ package: id }));
     const deployed = androidDeploy(fixture.app, fixture.bin, fixture.env);
     expect(deployed.dir).toBe(`/data/local/tmp/exact/${id}`);
     child = deployed.spawn();
@@ -918,7 +925,7 @@ for (const [id, minimumOS] of [[undefined, '12'], ['com.example.android_app', '1
       }
     }`);
     const result = spawnSync(resolve(import.meta.dir, '../host/android/gradlew'), ['--no-daemon', '--console=plain', '-I', init,
-      ':app:processReleaseMainManifest', ':app:inspectRelease', '-PidSuffix=.dev', '-Papp=ci', `-Ppermissions=${permissions.join(',')}`,
+      ':app:processReleaseMainManifest', ':app:inspectRelease', `-PapplicationId=${packageId}.dev`, '-PappName=CI Dev', '-Papp=ci', `-Ppermissions=${permissions.join(',')}`,
       ...(id ? ['-PandroidFeatures=android.hardware.bluetooth_le required=false,android.software.companion_device_setup'] : []), `-PappDir=${dir}`, `-PappBuildDir=${dir}/app`, `-PcanvasBuildDir=${dir}/canvas`, '--project-cache-dir', `${dir}/cache`],
     { cwd: resolve(import.meta.dir, '../host/android'), encoding: 'utf8', timeout: 180000,
       env: { ...releaseJavaEnv, ANDROID_HOME: releaseSdk,
@@ -926,13 +933,14 @@ for (const [id, minimumOS] of [[undefined, '12'], ['com.example.android_app', '1
         EXACT_KEYSTORE_PASSWORD: 'store-secret', EXACT_KEY_ALIAS: 'upload', EXACT_KEY_PASSWORD: 'key-secret' } });
     expect(result.status, result.stdout + result.stderr).toBe(0);
     const line = result.stdout.split('\n').find(line => line.startsWith('EXACT_RELEASE='));
-    expect(JSON.parse(line.slice('EXACT_RELEASE='.length))).toEqual({ id: packageId, suffix: '.dev', code: 42, version: '2.3.4', signing: 'upload', store: 'upload.jks', passwords: true, alias: 'upload' });
+    expect(JSON.parse(line.slice('EXACT_RELEASE='.length))).toEqual({ id: `${packageId}.dev`, suffix: null, code: 42, version: '2.3.4', signing: 'upload', store: 'upload.jks', passwords: true, alias: 'upload' });
     const { readdirSync } = await import('node:fs');
     const manifests = readdirSync(resolve(dir, 'app/intermediates'), { recursive: true })
       .filter(path => /merged_manifest.*AndroidManifest.xml$/.test(path));
     expect(manifests.length).toBeGreaterThan(0);
     const merged = readFileSync(resolve(dir, 'app/intermediates', manifests[0]), 'utf8');
     expect(merged).toContain(`package="${packageId}.dev"`);
+    expect(merged).toContain('android:label="CI Dev"');
     expect(merged).toContain(`android:authorities="${packageId}.dev.exact.files"`);
     if (id) {
       if (minimumOS === '11') expect(merged).toMatch(/android:name="android.permission.BLUETOOTH"\s+android:maxSdkVersion="30"/);

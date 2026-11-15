@@ -423,7 +423,7 @@ export function resolveApp(nameOrCrate) {
   if (PINNED_BUN) installedModules();
   installedFileDependencies(dir); // every package reader reads node_modules, where a `file:` package is as of the last install
   // Materialize defaults before Cargo inspects workspace members on a clean checkout.
-  const manifest = readManifest(dir, name);
+  const manifest = claimVariant(dir, () => readManifest(dir, name));
   if (manifest.game === undefined) name = appCrateName(dir, name);
   if (dirname(dir) === resolve(ROOT, 'game/games') && manifest.game === undefined) {
     throw new Error(`${dir}/app.json: game is required for an app under game/games/`);
@@ -561,7 +561,7 @@ export function readManifest(dir, name) {
   const path = resolve(dir, 'app.json');
   const fallback = { name: name[0].toUpperCase() + name.slice(1), app: { id: `com.exact.${name}`, name: name[0].toUpperCase() + name.slice(1) }, host: {}, deploy: {} };
   const game = gameDefaults(dir);
-  if (!existsSync(path) && !game) return fallback;
+  if (!existsSync(path) && !game) return resolveVariant(fallback, selectedVariant(dir));
   let parsed;
   try { parsed = game ?? parseManifest(readFileSync(path, 'utf8')); } catch (e) { throw new Error(`${path}: ${e.message}`); }
   // LLP 1069.008 D4: a device's usage text is derived from its grant, never hand-written.
@@ -575,15 +575,16 @@ export function readManifest(dir, name) {
       // Expo's splash keys and a host's own launch colour: the launch is the manifest's one colour on every host.
       : /^((host\.\w+\.)?(splash\w*|windowBackground|backgroundColor|launchColor)): not a known key$/i.test(p) ? `${p.split(':')[0]}: not a known key; what shows before the first frame is background_color, and color_scheme_dark.background_color in a dark scheme, on every host (host.ios.launchImage adds a picture on iOS)`
       : appleMetadataProblem(p)).filter((p) => !/^host\.web\.(head(\[|: )|csp|cspReportOnly)/.test(p)).concat(webHeadProblems(parsed), webCspProblems(parsed));
-  if (!problems.length) problems.push(...installProblems(parsed), ...gpuModuleProblems(parsed), ...documentTypeProblems(parsed), ...shareTargetProblems(parsed), ...protocolHandlerProblems(parsed), ...appIconProblems(parsed, dir), ...launchImageProblems(parsed, dir));
+  if (!problems.length) problems.push(...installProblems(parsed), ...gpuModuleProblems(parsed), ...documentTypeProblems(parsed), ...shareTargetProblems(parsed), ...protocolHandlerProblems(parsed), ...appIconProblems(parsed, dir), ...launchImageProblems(parsed, dir), ...variantProblems(parsed, dir));
   if (problems.length) throw new Error(`${path} does not conform to scripts/app.schema.json:\n  ${problems.join('\n  ')}`);
   nativeResourceMappings(parsed); nativeResourceMappings(parsed, 'ios');
-  return { host: {}, deploy: {}, ...parsed };
+  return resolveVariant({ host: {}, deploy: {}, ...parsed }, selectedVariant(dir)); // the selected variant's identity (LLP 1030.008 D2)
 }
 
 import { DOCUMENT_UTIS } from './document-utis.mjs';
 import { webCspProblems, webHeadProblems } from './web-head.mjs';
 import { appIconProblems, publishedIcons } from './app-icons.mjs';
+import { claimVariant, resolveVariant, selectedVariant, variantProblems } from './variants.mjs';
 export { DOCUMENT_UTIS };
 ;
 
@@ -597,7 +598,7 @@ function launchImageProblems(manifest, dir) {
 /** An app's own document format (studio diary R13): a MIME type in IANA's
  * vendor or unregistered trees (`application/vnd.studio.board+json`,
  * `application/x-studio-board`), which no system type names. The Apple
- * bake exports it as the app's: `<app id>.<subtype>`, conforming to what
+ * bake exports it as the app's: `<app id>.<subtype>`, the base app's under a variant (LLP 1030.008 D9), conforming to what
  * its structured-syntax suffix says (`+json` is JSON) and to data; the app
  * is its editor and owner. `null` for any other type. */
 export function ownDocumentType(appId, mime) {

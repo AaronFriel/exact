@@ -1033,8 +1033,10 @@ a Control-held wheel on macOS. A zoomable scroll (`-exact-max-zoom`, LLP
 `scrollZoom` times `scale` within its range; the iOS agent's `--touch platform`
 plays it as two real fingers, which UIKit's own recognizer reads. The agent's
 `tap <t> dblclick touch` is a finger's double tap rather than a mouse's: on iOS
-it zooms a zoomable scroll where no `dblclick` handler takes it (two real taps
-under `--touch platform`), and the other carriers answer it unsupported.
+and the web it zooms a zoomable scroll where no `dblclick` handler takes it (two
+real taps under `--touch platform`, two touch points in Chrome), and the other
+carriers answer it unsupported. On the web, `tap <t> wheel 0 <dy> modifiers
+Control` is a trackpad's pinch, as Chrome delivers one.
 `tap "id" wheel <dx> <dy>` is the driver's wheel (the agent's `tap <t> wheel
 dx dy`) at the node's middle, in points (CSS pixels on the web): a positive `dy`
 scrolls on toward the content's end, so its offset grows, and a negative one back

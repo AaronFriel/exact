@@ -1400,11 +1400,12 @@ export function rebuildOnChange(dist, build = null) {
 }
 
 /** The directory of the app whose sources made the build in `dist` (its marker's app `id`), when they are beside it:
- * an `app.json` of that id above it, or the app whose own build directory it is (an app of this checkout builds into
- * host/web/dist); else null. */
+ * an `app.json` of that id, or of a variant with it (LLP 1030.008), above it, or the app whose own build directory it
+ * is (an app of this checkout builds into host/web/dist); else null. */
 function sourcesOf(dist, id) {
+  const names = ({ app, variants }) => [app?.id, ...Object.values(variants ?? {}).map((v) => app?.id + v.idSuffix)];
   for (let dir = dirname(dist); ; dir = dirname(dir)) {
-    try { if (JSON.parse(readFileSync(resolve(dir, 'app.json'), 'utf8')).app?.id === id) return dir; } catch { /* none here */ }
+    try { if (names(JSON.parse(readFileSync(resolve(dir, 'app.json'), 'utf8'))).includes(id)) return dir; } catch { /* none here */ }
     if (dirname(dir) === dir) break;
   }
   try { const app = resolveApp(); if (app.id === id && webDist() === dist) return app.dir; } catch { /* no app resolves */ }

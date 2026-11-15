@@ -1,5 +1,6 @@
 // The app shell: one activity over the reader, packaging the app `-Papp=<name>` names (apps/<name>, or the directory
-// `-PappDir=` gives). The package id and the label are the app's own manifest's (app.json `host.android.id`, default `app.id`; `app.name`).
+// `-PappDir=` gives). The package id and the label are `-PapplicationId` and `-PappName`, which agent-android.mjs resolves
+// from the manifest (app.json `host.android.id`, default `app.id`; `app.name`), as a selected variant has them (LLP 1030.008).
 // `bun scripts/agent-android.mjs build <name> --apk` builds the app's library (apps/<name>/android), puts it and the
 // app's assets under this module's build directory, and runs `:app:assembleRelease`.
 import groovy.json.JsonSlurper
@@ -17,9 +18,8 @@ val video = providers.gradleProperty("video").orNull == "1"
 val app = providers.gradleProperty("app").get()
 val appDir = providers.gradleProperty("appDir").orNull?.let { file(it) } ?: rootDir.resolve("../../apps/$app")
 val manifest = JsonSlurper().parse(appDir.resolve("app.json")) as Map<*, *>
-val identity = manifest["app"] as Map<*, *>
 val androidHost = (manifest["host"] as Map<*, *>?)?.get("android") as Map<*, *>?
-val packageId = ((androidHost?.get("id") ?: identity["id"]) as String).replace('-', '_')
+val packageId = providers.gradleProperty("applicationId").get()
 // The manifest's `orientation` as Chromium maps an installed web app's: `-primary` is the device's own way up, a
 // bare `portrait` or `landscape` either way up by the sensor. `natural` is resolved in MainActivity.
 val screenOrientation = mapOf(
@@ -49,7 +49,6 @@ android {
     compileSdk { version = release(37) { minorApiLevel = 2 } }
     buildToolsVersion = "37.0.0"
     defaultConfig {
-        // An Android package name's segments are Java identifiers: a manifest id's `-` becomes `_`.
         applicationId = packageId
         minSdk = minimumApi
         targetSdk = 36
@@ -57,12 +56,10 @@ android {
         versionCode = providers.environmentVariable("EXACT_BUILD_NUMBER").orElse("1").get().toInt().also {
             require(it in 1..2100000000) { "EXACT_BUILD_NUMBER must be an integer from 1 to 2100000000" }
         }
-        // -PidSuffix=.dev: a side-by-side build (another package) that leaves the installed one alone.
-        (project.findProperty("idSuffix") as String?)?.let { applicationIdSuffix = it }
         versionName = providers.environmentVariable("EXACT_VERSION").orElse("0.1.0").get()
         ndk { abiFilters += "arm64-v8a" }
         manifestPlaceholders["audioSession"] = manifest["audio_session"] as String? ?: "ambient"
-        manifestPlaceholders["appName"] = identity["name"] as String
+        manifestPlaceholders["appName"] = providers.gradleProperty("appName").get()
         manifestPlaceholders["screenOrientation"] = screenOrientation
         manifestPlaceholders["exactDevelopment"] = providers.gradleProperty("exactDevelopment").orNull == "1"
         // The launcher icon (`android:icon` and `android:roundIcon`) and the TV banner among the resources below, as
@@ -169,7 +166,6 @@ android {
     run {
         val res = layout.buildDirectory.dir("shortcuts/res").get().asFile
         val items = (manifest["shortcuts"] as List<*>?).orEmpty().map { it as Map<*, *> }
-        val pkg = packageId + ((project.findProperty("idSuffix") as String?) ?: "")
         val attr = { v: String -> v.replace("&", "&amp;").replace("<", "&lt;").replace("\"", "&quot;") }
         // A string resource's own escapes: a backslash, an apostrophe, and `@` or `?` leading.
         val text = { v: String -> attr(v).replace("\\", "\\\\").replace("'", "\\'").replace(Regex("^([@?])"), "\\\\$1") }
@@ -223,7 +219,7 @@ android {
                 "        android:shortcutShortLabel=\"@string/exact_shortcut_${i}_short\" android:shortcutLongLabel=\"@string/exact_shortcut_${i}_long\"" +
                 (icon?.let { "\n        android:icon=\"$it\"" } ?: "") +
                 (disabled?.let { "\n        android:shortcutDisabledMessage=\"@string/exact_shortcut_${i}_disabled\"" } ?: "") + ">\n" +
-                "        <intent android:action=\"android.intent.action.VIEW\" android:targetPackage=\"$pkg\"\n" +
+                "        <intent android:action=\"android.intent.action.VIEW\" android:targetPackage=\"$packageId\"\n" +
                 "            android:targetClass=\"dev.exact.app.MainActivity\" android:data=\"${attr(item["url"] as String)}\" />\n" +
                 "    </shortcut>\n")
         }

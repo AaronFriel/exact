@@ -112,7 +112,13 @@ fn entry(
         }
         _ => String::new(),
     };
-    let named = app.map(|app| format!(".named({app})")).unwrap_or_default();
+    // Under a variant a source naming the base app's id takes the variant's
+    // (LLP 1030.008 D2); `inputs` carries the base beside the id.
+    let named = match (app, inputs["variant"]["base"].as_str()) {
+        (Some(app), Some(base)) => format!(".named_variant({app}, {base:?})"),
+        (Some(app), None) => format!(".named({app})"),
+        (None, _) => String::new(),
+    };
     let mut supplemental = if let Some(directory) = std::env::var_os("EXACT_RUST_BUNDLE") {
         let receipt: serde_json::Value = serde_json::from_slice(
             &std::fs::read(std::path::Path::new(&directory).join("app.module.json"))
@@ -809,6 +815,13 @@ mod tests {
             let unnamed = super::rust_entry_naming("Data", "data()", mode, &inputs, None).unwrap();
             assert!(!unnamed.contains(".named("), "{unnamed}");
         }
+        // Under a variant (LLP 1030.008 D2) a source naming the base app takes the variant's id.
+        let variant = serde_json::json!({"app": "com.example.notes.dev", "linked": [], "variant": {"name": "dev", "base": "com.example.notes"}});
+        let entry = super::rust_entry("Data", "data()", "off", &variant).unwrap();
+        assert!(
+            entry.contains(".named_variant(\"com.example.notes.dev\", \"com.example.notes\")"),
+            "{entry}"
+        );
     }
 
     /// LLP 1047.001 D3: the entry names its set and invokes the export

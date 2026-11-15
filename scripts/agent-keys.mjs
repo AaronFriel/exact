@@ -555,7 +555,7 @@ export function tapArguments(opts) {
 /** A `tap` form this carrier cannot deliver as a hand's (#107), or null.
  * Unsupported forms are refused before any input reaches the platform. */
 export function pointerGap(host, browser, opts) {
-  if (opts.touch && !['ios', 'host-ios'].includes(host)) return `${host === 'web' ? browser ?? 'chrome' : host} does not carry a touch double tap (dblclick touch, LLP 1057.001.000 §6)`;
+  if (opts.touch && !['ios', 'host-ios'].includes(host) && !(host === 'web' && (browser ?? 'chrome') === 'chrome')) return `${host === 'web' ? browser ?? 'chrome' : host} does not carry a touch double tap (dblclick touch, LLP 1057.001.000 §6)`;
   if (['macos', 'mac', 'host'].includes(host) || (host === 'web' && (browser ?? 'chrome') === 'chrome')) return null;
   const held = opts.modifiers ?? opts.drag?.modifiers;
   const gaps = [

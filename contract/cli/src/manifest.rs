@@ -11,6 +11,13 @@ mod activities;
 pub use activities::Activity;
 mod watch;
 pub use watch::{WatchEntry, WATCH_KIND};
+mod variant;
+
+/// The unsuffixed id of the selected variant whose id is `id` (LLP 1030.008
+/// D2), for a check that admits a data source naming its product.
+pub fn selected_base(id: &str) -> Option<String> {
+    variant::base_of(id)
+}
 
 /// The app manifest (`app.json`, LLP 1030 D2; 1030.000 D7) as the bake
 /// reads it — the JSON, and the identity every platform derives from it.
@@ -28,6 +35,12 @@ pub struct Manifest {
 }
 
 impl Manifest {
+    /// The unsuffixed `app.id` when a variant is selected (LLP 1030.008 D2).
+    pub fn variant_base(&self) -> Option<&str> {
+        self.json
+            .pointer("/variant/base")
+            .and_then(serde_json::Value::as_str)
+    }
     /// Resolve the replacement executor baked into a platform/environment.
     /// Matches `scripts/app.mjs::rustPolicy` (LLP 1029.000 §2): global,
     /// environment, platform, then platform environment; true means auto.
@@ -151,6 +164,9 @@ impl Manifest {
             app_dir.join("app.json")
         };
         if !path.exists() {
+            if let Some(name) = variant::selected(app_dir)? {
+                variant::resolve(&mut serde_json::json!({}), &name)?;
+            }
             return Ok(Manifest {
                 json: serde_json::json!({}),
                 id: format!("com.exact.{name}"),
@@ -160,8 +176,11 @@ impl Manifest {
         }
         let text =
             std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-        let json: serde_json::Value =
+        let mut json: serde_json::Value =
             serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
+        if let Some(name) = variant::selected(app_dir)? {
+            variant::resolve(&mut json, &name).map_err(|e| format!("{}: {e}", path.display()))?;
+        }
         let app = json.get("app").and_then(|a| a.as_object());
         let id = app
             .and_then(|a| a.get("id"))
