@@ -79,39 +79,12 @@ mod text_clip;
 mod text_decoration;
 mod text_shadow;
 mod text_stroke;
+mod tint;
 use inline::{presented_color, presented_text_colors, text_backgrounds, text_palette};
 pub use presented::{PaintValues, Presented};
 pub(crate) use region::{ActionNode, ActionSlot, RegionActions, ScrollBounds};
 pub use svg::{resolve_with, Ink, SvgPaint};
-
-// Only an explicit row makes a raster a template; motion may supply its ink.
-// `currentcolor` is the node's `color` (feed F1).
-fn image_tint(node: &NodeRef<'_>, presented: &Presented, dark: bool) -> Option<[u8; 4]> {
-    // Icon lowering supplies a currentcolor tint for symbol sources. A
-    // non-template icon keeps the file's paint, as on the web.
-    if node
-        .props
-        .str(PropId::ImageSource)
-        .and_then(crate::image::file_icon)
-        .is_some()
-    {
-        return None;
-    }
-    let style = node.style;
-    style.mask.has(StyleId::TintColor).then(|| {
-        presented
-            .colors
-            .color(exact_motion::Property::TintColor)
-            .unwrap_or_else(|| {
-                rgba(
-                    style
-                        .tint_color
-                        .unwrap_or_else(|| node.text_color())
-                        .resolve(dark),
-                )
-            })
-    })
-}
+use tint::image_tint;
 
 /// A rectangle as (x, y, w, h).
 pub type Rect4 = (f32, f32, f32, f32);
