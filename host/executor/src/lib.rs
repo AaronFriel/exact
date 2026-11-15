@@ -49,6 +49,8 @@ const MAX_HEADERS: usize = 64 << 10;
 
 type Work = Box<dyn FnOnce() -> Outcome + Send>;
 type Wake = Box<dyn Fn() + Send + Sync>;
+#[cfg(test)]
+type ScheduledRetry = (u32, u64, String);
 struct Job {
     ticket: u64,
     request: Request,
@@ -231,6 +233,9 @@ struct Shared {
     /// Long polls waiting to ask again, by stream ticket (LLP 1016.000 D8;
     /// `longpoll.rs`): the attempt, when it asks, and what failed.
     retrying: Mutex<std::collections::HashMap<u64, (u32, std::time::Instant, String)>>,
+    fetch_fault: Mutex<Option<exact_runner::runner::faults::FetchFault>>,
+    #[cfg(test)]
+    retry_scheduled: Mutex<Option<std::sync::mpsc::Sender<ScheduledRetry>>>,
     /// What upload streams hold in memory (LLP 1016.000 D10; `stream.rs`).
     uploads: stream::Uploads,
     /// This, for a path that frees room uploads wait for holding only a
@@ -436,6 +441,9 @@ impl Core {
             before_stream_release: Mutex::default(),
             sockets: Mutex::default(),
             retrying: Mutex::default(),
+            fetch_fault: Mutex::default(),
+            #[cfg(test)]
+            retry_scheduled: Mutex::default(),
             uploads: stream::Uploads::default(),
             me: me.clone(),
             processes: process::Processes::new(),

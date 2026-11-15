@@ -1067,6 +1067,7 @@ impl<D: DataSource> Runner<D> {
     /// The module's background round goes out here when it has one (LLP
     /// 1097 D5), and its journal lines come in.
     pub fn take_requests(&mut self) -> Vec<RequestOut> {
+        self.take_fault_logs();
         self.take_data_logs();
         self.arm_background();
         let mut requests = std::mem::take(&mut self.requests);

@@ -843,6 +843,7 @@ impl<D: DataSource> Host<D> {
         self.listen(io.waker());
         self.runner.set_socket_reader(io.socket_reader());
         self.runner.set_retry_reader(io.retry_reader());
+        io.set_fetch_fault(self.runner.fetch_fault());
         self.runner.set_listen_reader(io.listen_reader());
         self.runner.set_work_clock(io.work_clock());
     }

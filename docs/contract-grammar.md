@@ -959,8 +959,10 @@ be armed; the longest matching prefix decides, and arming a prefix again
 replaces it. A file's line applies to every test that does not arm the same
 prefix itself. A counted fault that matched no fetch by the test's end (or
 before it is armed again) fails the test at the line that armed it, and
-`reload` relaunches with the table as it is then. A stream (`exactStream`, a
-WebSocket) is not matched. `request POST "/polls/1/votes" {"option": 2} as bob`
+`reload` relaunches with the table as it is then. Each HTTP attempt of a long
+poll (`exactStream` with `exactLongPoll`) takes a matching fault and retries as
+a network failure. Event streams, byte streams and WebSockets are not matched.
+`request POST "/polls/1/votes" {"option": 2} as bob`
 (LLP 1116.006 D8) is the driver, not the app, writing through the app's server as
 another person: a method, a path in quotes under the server URL app.ts calls (its
 first local one, `http://127.0.0.1:8787`; or a whole `http://` URL), an optional JSON

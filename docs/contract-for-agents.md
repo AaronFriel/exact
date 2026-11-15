@@ -5613,6 +5613,11 @@ retry run, so this checks the real error handling (LLP 1103). A drive takes
 `--fail-fetch <prefix>` at open and the ops `"fail fetch <prefix> [times N]"`
 and `"pass fetch <prefix>"`; `state.faults` shows each prefix's hits.
 
+Each HTTP attempt of a long poll can take a matching fault, including an
+attempt with its updated cursor. It retries as after a network failure;
+`state.streams` shows the backoff in `retrying`. A successful reply resets
+the backoff. Other stream types do not take fetch faults.
+
 ```contract-test
 test "the list shows an error, then retries and loads"
   fail fetch "https://api.example.com/recipes"

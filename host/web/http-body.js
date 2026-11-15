@@ -294,6 +294,7 @@ export async function readLongPoll(op, init, limit, message, controller, admits)
     const signal = deadline ? AbortSignal.any([controller.signal, deadline]) : controller.signal;
     let wait, error = null;
     try {
+      if (takeFault(url.href)) throw new TypeError(faultMessage(url.href));
       const response = await fetch(url.href, { ...init, signal });
       const drop = () => response.body?.cancel().catch(() => {});
       if (!response.url && response.type !== 'opaqueredirect') {

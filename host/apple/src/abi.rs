@@ -872,6 +872,12 @@ impl<D: DataSource> Bridge<D> {
             return self.prepare_error("no prepared plan");
         };
         candidate.host.commit_boot();
+        if let Some(live) = &self.host {
+            candidate
+                .host
+                .runner_mut()
+                .share_faults(live.runner().faults());
+        }
         // The old executor lets go of everything, then says which uploads had
         // begun to go out; the rest never left (LLP 1016.000 D10).
         if let Some(old) = self.executor.as_deref() {
@@ -1364,6 +1370,9 @@ impl<D: DataSource> Bridge<D> {
     /// An agent request (the input buffer's first `len` bytes, JSON); the
     /// output is the reply, not a batch.
     pub fn agent(&mut self, len: usize) -> u32 {
+        if let Some(host) = self.host.as_mut() {
+            host.runner_mut().take_fault_logs();
+        }
         let request =
             String::from_utf8_lossy(&self.input[..len.min(self.input.len())]).into_owned();
         // `tap @t` / `type @t` answer a held device request (LLP 1069.007

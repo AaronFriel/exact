@@ -740,7 +740,9 @@ impl<D: DataSource> Presenter<D> {
         self.surfaces
             .commit_shaders(shaders)
             .map_err(HostError::Asset)?;
+        let faults = self.host.runner().faults().clone();
         self.host = host;
+        self.host.runner_mut().share_faults(&faults);
         // The old executor lets go of everything, then says which uploads had
         // begun to go out; the rest never left (LLP 1016.000 D10).
         self.executor.forget(|_| false);
