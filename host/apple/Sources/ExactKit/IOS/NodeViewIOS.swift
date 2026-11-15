@@ -1357,6 +1357,7 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
         if let presenter { presenter.moveOrPlace(self, layOutParts) } else { layOutParts() }
     }
     private func layOutParts() {
+        refreshPressTranslation()
         if focusRing != nil { showFocusRing(true) }
         if let s = presenter?.session, s.firstLayoutMs == nil { s.firstLayoutMs = ExactEnv.wall() }
         super.layoutSubviews()

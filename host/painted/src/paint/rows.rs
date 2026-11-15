@@ -442,7 +442,7 @@ impl Painter {
                 frame: f,
                 padding: kernel.resolved_padding(key).unwrap_or_default(),
             });
-            c.refused |= shown.press != 1.0;
+            c.refused |= shown.press != 1.0 || shown.press_translate != [0.; 4];
         }
     }
 
@@ -595,7 +595,7 @@ impl Painter {
         clip_rect: Option<Rect4>,
     ) {
         // A transparent ancestor can replace the backend after rows_begin enabled reuse.
-        if !self.backend.rows() {
+        if !self.backend.rows() || walk.hit_space.is_some() {
             return self.node(walk, id, ts, offset, clip_rect);
         }
         let Some(node) = walk.scene.kernel.node(id) else {
@@ -701,6 +701,22 @@ impl Painter {
         if local {
             for b in &mut walk.boxes[start..] {
                 b.translate_clips(origin.0, origin.1);
+                if let Some(hit) = b.hit.as_mut() {
+                    for clip in &mut hit.shape_clips {
+                        clip.translate(origin.0, origin.1);
+                    }
+                    hit.rect.0 += origin.0;
+                    hit.rect.1 += origin.1;
+                    hit.clip = hit.clip.map(|c| (c.0 + origin.0, c.1 + origin.1, c.2, c.3));
+                    if let Some((inv, ..)) = &mut hit.projective {
+                        *inv =
+                            space::mul3(inv, &[1., 0., -origin.0, 0., 1., -origin.1, 0., 0., 1.]);
+                    } else {
+                        hit.affine = hit
+                            .affine
+                            .map(|(t, r)| (t.post_translate(origin.0, origin.1), r));
+                    }
+                }
                 b.rect.0 += origin.0;
                 b.rect.1 += origin.1;
                 b.clip = b.clip.map(|c| (c.0 + origin.0, c.1 + origin.1, c.2, c.3));
@@ -726,6 +742,9 @@ impl Painter {
         let boxes: Vec<PaintedBox> = walk.boxes[start..].to_vec();
         for b in &mut walk.boxes[start..] {
             b.clip = within(b.clip, clip_rect);
+            if let Some(hit) = b.hit.as_mut() {
+                hit.clip = within(hit.clip, clip_rect);
+            }
         }
         // What the row can draw: each box within its clip (a scroller's
         // content box is its whole extent, a horizontal list's thousands of

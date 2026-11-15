@@ -1371,7 +1371,10 @@ impl<'a> Lowerer<'a> {
                     .or_else(|| values::grid_tokens(a, rows).map(|g| vec![g]));
                 let a = written.as_ref().map_or(a, |m| &m[0]);
                 let (code, ty) = self.typed_code(&a.value, scope, locals)?;
-                self.check_style(a, rows, &ty, font, scope)?;
+                let pressed = rows
+                    .contains(&StyleId::PressTranslate)
+                    .then(|| crate::lint::press_translation_arms(a, self.root, scope));
+                self.check_style(pressed.as_ref().unwrap_or(a), rows, &ty, font, scope)?;
                 for &row in rows {
                     bindings.push(style_row(row, code, a.written));
                 }

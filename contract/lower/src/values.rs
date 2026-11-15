@@ -389,7 +389,6 @@ pub(crate) fn check_paragraph_dirs(tag: &str, attrs: &[Attr]) -> Result<(), Lowe
     )
 }
 impl crate::Lowerer<'_> {
-    /// `check_style_value` with this lowering's shapes.
     pub(crate) fn check_style(
         &self,
         a: &Attr,
@@ -409,6 +408,14 @@ pub(crate) fn check_style_value(
     scope: &Scope,
     shapes: &Shapes,
 ) -> Result<(), LowerError> {
+    if rows.contains(&StyleId::PressTranslate) {
+        let leaves = contract_checking::value_leaves(&a.value);
+        for leaf in leaves.filter(|v| matches!(v, Expr::Str(..))) {
+            let mut literal = a.clone();
+            literal.value = leaf.clone();
+            style_value(&literal, rows, ty, fonts, scope, shapes)?;
+        }
+    }
     // A pin names the design's axes, which the runner resolves (LLP 1121 D5).
     if rows == [StyleId::Mode] {
         return crate::theme::mode_pins(a);

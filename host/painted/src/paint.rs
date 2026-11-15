@@ -337,36 +337,18 @@ pub struct PaintedBox {
     shape_clips: Vec<shape::HitClip>,
     projective: Option<ProjectiveHit>,
     affine: Option<(Transform, Rect4)>,
-    press: f32,
+    unpress: Transform,
+    hit: Option<HitGeometry>,
 }
 
-impl PaintedBox {
-    /// Placed by a perspective (`space.rs`), so no rectangle bounds it.
-    pub(crate) fn projected(&self) -> bool {
-        self.projective.is_some()
-    }
-
-    /// The surface's box through the same transform the painter used.
-    /// Projective canvas placements have no affine surface observation.
-    pub fn surface(&self, shown: Presented) -> Option<Rect4> {
-        if self.projective.is_some() {
-            return None;
-        }
-        self.affine.map(|(ts, rect)| bbox(ts, shown.surface(rect)))
-    }
-
-    /// Project the local center, which need not be the projected AABB center.
-    pub fn center(&self) -> (f32, f32) {
-        if let Some((inv, rect, _, _)) = self.projective {
-            if let Some(h) = crate::placement::inverse(inv) {
-                return crate::placement::map(&h, rect.0 + rect.2 / 2., rect.1 + rect.3 / 2.);
-            }
-        }
-        (
-            self.rect.0 + self.rect.2 / 2.,
-            self.rect.1 + self.rect.3 / 2.,
-        )
-    }
+/// Hit geometry follows the same walk with press translation excluded.
+#[derive(Debug, Clone)]
+struct HitGeometry {
+    shape_clips: Vec<shape::HitClip>,
+    rect: Rect4,
+    clip: Option<Rect4>,
+    affine: Option<(Transform, Rect4)>,
+    projective: Option<ProjectiveHit>,
 }
 
 /// What a frame is painted from.
@@ -510,6 +492,7 @@ pub struct Painter {
 
 struct Walk<'a, 'b> {
     scene: &'b Scene<'a>,
+    hit_space: Option<(Transform, Option<Rect4>)>,
     boxes: Vec<PaintedBox>,
     text: BTreeMap<exact_kernel::NodeKey, Rc<Paragraph>>,
     fields: HashMap<ViewId, Rc<field::PaintedField>>,
@@ -836,6 +819,7 @@ impl Painter {
         self.backend.shared_frame(&self.shared);
         let mut walk = Walk {
             scene,
+            hit_space: None,
             boxes: Vec::with_capacity(self.boxes_hint),
             text: BTreeMap::new(),
             fields: HashMap::new(),
@@ -969,6 +953,9 @@ impl Painter {
             || self.material_note(&node)
             || !p.colors.is_empty();
         let origin = node.style.transform_origin.resolve(w, h);
+        let (hit_parent, hit_clip) = walk.hit_space.unwrap_or((ts, clip_rect));
+        let mut hit_p = p;
+        hit_p.press_translate = [0.; 4];
         let layer = match self.flatten == Some(id) {
             true => layer::Opened { lowered: 0 },
             false => self.box_layer(node.key, &p, (x, y, w, h), origin, ts),
@@ -983,6 +970,14 @@ impl Painter {
         } else {
             ts
         };
+        let hit_ts = if self.flatten == Some(id) {
+            hit_parent
+        } else if layer.transform() {
+            hit_parent.pre_translate(p.layout[0], p.layout[1])
+        } else {
+            hit_parent.pre_concat(hit_p.transform((x, y, w, h), origin))
+        };
+        walk.hit_space = (hit_ts != ts || hit_clip != clip_rect).then_some((hit_ts, hit_clip));
         let scrolls = {
             let (ox, oy) = effective_overflow(&node);
             ox != Overflow::Visible || oy != Overflow::Visible
@@ -1004,7 +999,26 @@ impl Painter {
                 && visible,
             projective: None,
             affine: Some((ts, (x, y, w, h))),
-            press: p.press,
+            hit: walk.hit_space.map(|_| HitGeometry {
+                shape_clips: Vec::new(),
+                rect: bbox(hit_ts, (x, y, w, h)),
+                clip: hit_clip,
+                affine: Some((hit_ts, (x, y, w, h))),
+                projective: None,
+            }),
+            unpress: if p.press == 1. {
+                Transform::identity()
+            } else {
+                let rect = (x, y, w, h);
+                let mut base = hit_p;
+                base.press = 1.;
+                base.press_translate = [0.; 4];
+                hit_p
+                    .transform(rect, origin)
+                    .invert()
+                    .map(|inverse| inverse.pre_concat(base.transform(rect, origin)))
+                    .unwrap_or_default()
+            },
             rect: bbox(ts, (x, y, w, h)),
             clip: clip_rect,
             scroll: scrolls.then(|| walk.scene.scroll.get(&id).copied().unwrap_or((0.0, 0.0))),
@@ -1037,7 +1051,12 @@ impl Painter {
         let clip_ts = ts.pre_translate(sx, sy);
         let path_clip = css.has_path() && self.backend.push_css_clip(&css, clip_ts);
         self.box_content(walk, &node, (x, y, w, h), ts, offset, clip_rect);
-        shape::clip_hits(&mut walk.boxes[hit_start..], &css, clip_ts);
+        shape::clip_hits(
+            &mut walk.boxes[hit_start..],
+            &css,
+            clip_ts,
+            hit_ts.pre_translate(sx, sy),
+        );
         self.dark = previous;
         if path_clip {
             self.backend.pop_clip();
@@ -1238,6 +1257,12 @@ impl Painter {
             _ => {}
         }
         // Children, moved by this box's scroll offset when it scrolls.
+        if let Some((hit_ts, hit_clip)) = walk.hit_space.as_mut() {
+            if let Some(clip) = &clip {
+                let own = bbox(*hit_ts, clip.rect);
+                *hit_clip = Some(hit_clip.map_or(own, |c| intersect(c, own)));
+            }
+        }
         let clips = clip.is_some();
         let mut child_rect = clip_rect;
         if let Some(clip) = clip {

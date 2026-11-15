@@ -592,17 +592,30 @@ export function createInputHandlers({ root, views, retiredViews, ready, inertAnc
     // is the token's (LLP 1121 D7).
     const press = el.style.getPropertyValue("--exact-press");
     const to = down ? Number((press.includes("var(") ? getComputedStyle(el).getPropertyValue("--exact-press") : press) || 1) : 1;
-    const old = feedback.get(el);
-    if (old?.to === to || !old && to === 1) return;
+    const old = feedback.get(el), shift = !!el.style.getPropertyValue("--exact-press-translate");
+    const pressed = down && shift ? 1 : 0;
+    if (old?.to === to && old.pressed === pressed) { old.release = false; return; }
+    if (!old && to === 1 && !pressed) return;
     const progress = old?.animation.effect.getComputedTiming().progress ?? 0;
+    // A translating quick tap shows its ease-in before returning, on the same curve as scale.
+    if (!down && old?.pressed && progress < 1 && !now && pressDuration(el, EASE.duration)) {
+      old.release = true;
+      return;
+    }
     const from = old ? old.from + (old.to - old.from) * progress : 1;
+    const offset = old ? old.offset + (old.pressed - old.offset) * progress : 0;
     old?.animation.cancel();
     const ms = pressDuration(el, EASE.duration);
-    const animation = el.animate([{ "--exact-press-factor": from }, { "--exact-press-factor": to }], { ...EASE, duration: ms });
-    const state = { animation, from, to };
+    const animation = el.animate([
+      { "--exact-press-factor": from, "--exact-pressed": offset },
+      { "--exact-press-factor": to, "--exact-pressed": pressed },
+    ], { ...EASE, duration: ms });
+    const state = { animation, from, to, offset, pressed };
     feedback.set(el, state);
     animation.onfinish = () => {
-      if (to === 1 && feedback.get(el) === state) { animation.cancel(); feedback.delete(el); }
+      if (feedback.get(el) !== state) return;
+      if (state.release) showScale(el, false);
+      else if (to === 1 && !pressed) { animation.cancel(); feedback.delete(el); }
     };
     if (ms === 0 || now) animation.finish();
   };
@@ -635,7 +648,7 @@ export function createInputHandlers({ root, views, retiredViews, ready, inertAnc
   const unpressedBox = el => {
     const effect = feedback.get(el)?.animation.effect;
     const frames = effect?.getKeyframes();
-    effect?.setKeyframes([{ "--exact-press-factor": 1 }]);
+    effect?.setKeyframes(frames.map(frame => ({ ...frame, "--exact-press-factor": 1 })));
     const box = el.getBoundingClientRect();
     if (effect) effect.setKeyframes(frames);
     return box;
@@ -689,7 +702,7 @@ export function createInputHandlers({ root, views, retiredViews, ready, inertAnc
   // state and the rows that state shows, by their
   // wire names: a press's paint rows (`:active` lowered to them), else the state look's rows in the looks sheet
   // (its `[data-exact-held~=…]` rule). The rows' places are the server's to join, from the source map.
-  const WIRE = { "--exact-press": "press_scale", "--exact-press-background-color": "press_background_color", "--exact-press-color": "press_color", "--exact-press-opacity": "press_opacity", "--exact-press-opacity-to": "press_opacity_to" };
+  const WIRE = { "--exact-press-translate": "press_translate", "--exact-press": "press_scale", "--exact-press-background-color": "press_background_color", "--exact-press-color": "press_color", "--exact-press-opacity": "press_opacity", "--exact-press-opacity-to": "press_opacity_to" };
   // `ask`: the runner's agent (the wasm page): the rows as `layout` says the press's own (its D7 rows, `:active`
   // lowered to them) or its look's, each with the token it read (LLP 1121 D8, stage 9 E). Without one (the JS
   // target) they are the CSS the page holds, a varying token named where modes.js knows it. Either names the node

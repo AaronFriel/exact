@@ -835,7 +835,8 @@ impl<'a> Replay<'a> {
                             pointer_hit: n.pointer_hit,
                             projective: None,
                             affine: Some((parent, g.outer.rect)),
-                            press: 1.,
+                            unpress: Transform::identity(),
+                            hit: None,
                             id: n.id,
                             rect: bbox(parent, g.outer.rect),
                             clip,
@@ -929,6 +930,7 @@ impl<'a> Replay<'a> {
                         &mut walk.boxes[hit_starts.pop().unwrap()..],
                         &n.css_clip.resolved(w, h),
                         r.transform.pre_translate(x, y),
+                        r.transform.pre_translate(x, y),
                     );
                     if n.opacity <= 0. {
                         continue;
@@ -966,13 +968,19 @@ mod hit_tests {
                 scroll: None,
                 projective: None,
                 affine: Some((ts, rect)),
-                press: 1.,
+                unpress: Transform::identity(),
+                hit: None,
             };
             assert!(b.contains(50.0, 50.0));
             assert!(!b.contains(200.0, 200.0));
             assert_eq!(b.contains(b.rect.0 + 1.0, b.rect.1 + 1.0), degrees == 0.0);
             let css = exact_kernel::clip::ClipPath::parse("inset(25%)").unwrap();
-            shape::clip_hits(std::slice::from_mut(&mut b), &css.resolved(100., 100.), ts);
+            shape::clip_hits(
+                std::slice::from_mut(&mut b),
+                &css.resolved(100., 100.),
+                ts,
+                ts,
+            );
             for (x, y, hit) in [(5., 5., false), (50., 50., true), (95., 95., false)] {
                 let mut point = Point::from_xy(x, y);
                 ts.map_point(&mut point);

@@ -238,6 +238,7 @@ impl Painter {
 /// Whether a point (viewport points) inside a painted box hits it: a box
 /// with fragments only inside one, never in its union's gap (D8).
 pub(crate) fn hits(kernel: &Kernel, b: &PaintedBox, x: f32, y: f32) -> bool {
+    let b = b.for_hit();
     let Some(node) = kernel.node(b.id) else {
         return true;
     };
@@ -251,6 +252,7 @@ pub(crate) fn hits(kernel: &Kernel, b: &PaintedBox, x: f32, y: f32) -> bool {
 /// grown in its own space, under the clips it was painted with. A box placed
 /// by a perspective takes none.
 pub(crate) fn slop_hits(kernel: &Kernel, b: &PaintedBox, x: f32, y: f32) -> bool {
+    let b = b.for_hit();
     let Some(node) = kernel.node(b.id) else {
         return false;
     };

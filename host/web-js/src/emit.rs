@@ -840,19 +840,8 @@ pub fn emit(plan: &Plan, site_attrs: bool, dev_reload: bool) -> Result<Output, S
             let _ = write!(css, "@keyframes {}{{{text}}}", plan.str(row.name));
             // A pressable node plays the copy that also animates
             // `--exact-scale` (exact_web::css::keyframes_name).
-            if text.contains("scale:") {
-                let mut press = String::new();
-                let mut rest = text.as_str();
-                while let Some(at) = rest.find("scale:") {
-                    let Some(end) = rest[at..].find(';').map(|e| at + e) else {
-                        break;
-                    };
-                    press.push_str(&rest[..=end]);
-                    press.push_str("--exact-");
-                    press.push_str(&rest[at..=end]);
-                    rest = &rest[end + 1..];
-                }
-                press.push_str(rest);
+            if text.contains("scale:") || text.contains("translate:") {
+                let press = exact_web::css::press_keyframes_css(&text);
                 let _ = write!(
                     css,
                     "@keyframes {}-exact-press{{{press}}}",
@@ -980,6 +969,7 @@ impl Em<'_> {
         }
         if presence.contains("--exact-press:")
             || presence.contains("--exact-press-haptic:")
+            || presence.contains("--exact-press-translate:")
             || presence.contains("--exact-press-opacity:")
             || presence.contains("--exact-press-opacity-to:")
             || presence.contains("--exact-press-background-color:")

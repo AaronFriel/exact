@@ -6325,11 +6325,17 @@ component App
 under `:disabled`, and `:disabled` is your own disabled look (no default dim).
 `:active` is the host's own press of the innermost node with a `press` or a link's
 `href` (`link href=`, `button href=`, as CSS's `a:active`): it takes
-`background-color`, `color`, `opacity` and `-exact-press-scale`, which become the
+`background-color`, `color`, `opacity`, `translate` and `-exact-press-scale`, which become the
 node's pressed paint (LLP 1061 D7). Custom nodes ease on the press curve (under
 Reduce Motion too) and replace the host's unsaid press. Native controls keep
 their native state beneath each authored override. Its `opacity` is the opacity
-it shows pressed, not a share.
+it shows pressed, not a share. Its `translate` is an offset added to the node’s
+own translation: `translate="4px 4px"` moves a button onto an offset shadow
+plate. It takes x and optional y, in pixel lengths or percentages of the
+current border box by default. A third value is refused: a press is
+a 2D offset; use transitions for 3D motion. Layout stays unchanged. On the web the hit area moves with the paint, as CSS
+does, and the browser’s click rules apply. Native hosts keep the unpressed
+hit area and use their press timing. Release or cancellation removes the offset.
 Its targets may compute during ordinary commits, including a conditional class
 and `none` to clear a target. Pressing needs no runner round trip.
 Absolute active opacity and `-exact-press-opacity` are mutually exclusive

@@ -196,7 +196,7 @@ enum HeldState {
             return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
         }
         let own = state == "active" ? node?["style"] as? [String: Any] : (node?["looks"] as? [String: Any])?[state == "hover" ? "hover" : "focus_visible"] as? [String: Any]
-        let names = state == "active" ? ["press_scale", "press_opacity", "press_opacity_to", "press_background_color", "press_color"] : (own ?? [:]).keys.sorted()
+        let names = state == "active" ? ["press_translate", "press_translate_percent", "press_scale", "press_opacity", "press_opacity_to", "press_background_color", "press_color"] : (own ?? [:]).keys.sorted()
         var rows: [[String: Any]] = []
         for name in names {
             if let row = own?[name] as? [String: Any], let value = row["value"] {

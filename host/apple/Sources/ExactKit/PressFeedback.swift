@@ -296,6 +296,7 @@ extension NodeView {
 
     #if os(iOS) || os(tvOS)
     package func applyTransform() {
+        defer { refreshPressTranslation() }
         defer { overflowClipGeometryChanged() }
         let before = layer.transform
         defer { if !CATransform3DEqualToTransform(before, layer.transform) { refreshPixelatedImages() } }
@@ -361,6 +362,7 @@ extension NodeView {
     }
     #else
     package func applyTransform() {
+        defer { refreshPressTranslation() }
         defer { overflowClipGeometryChanged() }
         let before = layer?.transform ?? CATransform3DIdentity
         defer { if !CATransform3DEqualToTransform(before, layer?.transform ?? CATransform3DIdentity) { refreshPixelatedImages() } }

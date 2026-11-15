@@ -360,6 +360,8 @@ impl StyleValue<'_> {
         let t = metrics::text(t).unwrap_or(t).trim();
         t.is_empty()
             || t.eq_ignore_ascii_case("unset")
+            || (t.eq_ignore_ascii_case("none")
+                && matches!(style, StyleId::PressTranslate | StyleId::PressTranslatePercent))
             || (t.eq_ignore_ascii_case("inherit") && StyleMask::INHERITED.has(style))
             || (t.eq_ignore_ascii_case("currentcolor") && style == StyleId::TextColor)
             // @ref LLP 1034 §8: a bound `normal` follows the surrounding
@@ -612,37 +614,6 @@ impl StyleValue<'_> {
             _ => Err(StyleValueError::WrongKind {
                 style,
                 expected: "color",
-            }),
-        }
-    }
-
-    pub(crate) fn vec2(&self, style: StyleId) -> Result<Vec2, StyleValueError> {
-        match self {
-            StyleValue::Vec2(x, y) if x.is_finite() && y.is_finite() => Ok(Vec2 { x: *x, y: *y }),
-            StyleValue::Text(t) if style == StyleId::TranslateVelocity => space::velocity(t),
-            // @ref LLP 1077 D8 — each row sets its part of translate (lengths, percentages, z).
-            StyleValue::Text(t)
-                if style == StyleId::Translate || style == StyleId::TranslatePercent =>
-            {
-                space::translate(t)
-                    .map(|(px, pct)| if style == StyleId::Translate { px } else { pct })
-                    .ok_or(StyleValueError::WrongKind {
-                        style,
-                        expected: "one or two lengths, each px (unitless zero allowed), a percentage of the box, or a calc() of px and a percentage such as calc(50% - 12px), then an optional z length in px",
-                    })
-            }
-            // `translate: -50%`: one percentage, the x's, which the
-            // compiler and the runner pass as a percentage.
-            StyleValue::Percent(p)
-                if p.is_finite()
-                    && (style == StyleId::Translate || style == StyleId::TranslatePercent) =>
-            {
-                let x = if style == StyleId::Translate { 0.0 } else { *p as f32 };
-                Ok(Vec2 { x, y: 0.0 })
-            }
-            _ => Err(StyleValueError::WrongKind {
-                style,
-                expected: "vec2",
             }),
         }
     }

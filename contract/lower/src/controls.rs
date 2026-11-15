@@ -669,6 +669,8 @@ const NATIVE_ROWS: &[StyleId] = &[
     StyleId::Animation,
     StyleId::ExitAnimation,
     StyleId::PressScale,
+    StyleId::PressTranslate,
+    StyleId::PressTranslatePercent,
     StyleId::PressOpacity,
     StyleId::PressOpacityTo,
     StyleId::PressBackgroundColor,
