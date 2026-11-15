@@ -1328,3 +1328,102 @@ fn a_shadow_follows_aligned_glyphs_past_the_widest_advance() {
         assert!(covered > 20, "text-align={align}: the glyph is drawn");
     }
 }
+
+/// An inline box's border paints on each of its fragments, over its
+/// background, around its padding box (CSS 2 §8.6, Appendix E). Sliced, as
+/// `box-decoration-break: slice` is, the start border and corners are on the
+/// first line alone and the end ones on the last: left then right under
+/// `ltr`, the other way about under `rtl`. A dashed or dotted side leaves gaps.
+#[test]
+fn an_inline_border_paints_on_each_fragment_sliced() {
+    const RED: [u8; 4] = [255, 0, 0, 255];
+    const BLUE: [u8; 4] = [0, 0, 255, 255];
+    for (direction, style) in [
+        ("ltr", "solid"),
+        ("rtl", "solid"),
+        ("ltr", "dashed"),
+        ("rtl", "dotted"),
+    ] {
+        let mut p = fixture(&format!(
+            "      text width=110 font-size=20 line-height=\"44px\" color=\"transparent\" direction=\"{direction}\"\n        text \"aaaaaa bbbbbb\" border-width=4 border-style=\"{style}\" border-color=\"#ff0000\" background-color=\"#0000ff\" padding=2 border-radius=10\n"
+        ));
+        let frame = p.frame().clone();
+        let width = frame.width() as usize;
+        let px = |x: usize, y: usize| {
+            let c = frame.pixels()[y * width + x];
+            [c.red(), c.green(), c.blue(), c.alpha()]
+        };
+        let painted = |y: usize| (0..width).filter(move |&x| matches!(px(x, y), RED | BLUE));
+        // Each fragment's rows, top to bottom.
+        let mut bands: Vec<(usize, usize)> = Vec::new();
+        for y in 0..frame.height() as usize {
+            if painted(y).next().is_none() {
+                continue;
+            }
+            match bands.last_mut() {
+                Some(band) if band.1 + 1 == y => band.1 = y,
+                _ => bands.push((y, y)),
+            }
+        }
+        let case = format!("{direction} {style}");
+        assert_eq!(bands.len(), 2, "{case}: one fragment a line: {bands:?}");
+        for (line, &(top, bottom)) in bands.iter().enumerate() {
+            let middle = (top + bottom) / 2;
+            let (left, right) = (
+                painted(middle).next().unwrap(),
+                painted(middle).next_back().unwrap(),
+            );
+            let starts_left = (direction == "ltr") == (line == 0);
+            let (bordered, open) = if starts_left {
+                (left, right)
+            } else {
+                (right, left)
+            };
+            if style == "solid" {
+                assert_eq!(
+                    px(bordered, middle),
+                    RED,
+                    "{case} line {line}: its own side's border"
+                );
+                let across = (left + right) / 2;
+                assert_eq!(
+                    px(across, top + 1),
+                    RED,
+                    "{case} line {line}: the top border"
+                );
+                assert_eq!(
+                    px(across, bottom - 1),
+                    RED,
+                    "{case} line {line}: the bottom border"
+                );
+                assert_eq!(
+                    px(across, middle),
+                    BLUE,
+                    "{case} line {line}: the background inside"
+                );
+                // The rounded corner is on the bordered side; the sliced one is square.
+                assert_eq!(
+                    px(open, top + 1),
+                    RED,
+                    "{case} line {line}: a square sliced corner"
+                );
+                assert_ne!(
+                    px(bordered, top),
+                    RED,
+                    "{case} line {line}: a rounded corner"
+                );
+            } else {
+                let top_row: Vec<_> = (left + 12..right - 12).map(|x| px(x, top + 1)).collect();
+                assert!(
+                    top_row.contains(&RED) && top_row.iter().any(|c| *c != RED),
+                    "{case} line {line}: gaps"
+                );
+            }
+            assert_eq!(
+                px(open, middle),
+                BLUE,
+                "{case} line {line}: no border where it is sliced"
+            );
+        }
+    }
+}

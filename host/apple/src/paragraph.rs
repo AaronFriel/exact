@@ -296,6 +296,12 @@ impl<D: DataSource> Host<D> {
                         ),
                     );
                 }
+                // Its border's widths as its line counts them ("top right
+                // bottom left"); its style rows carry the colours and styles.
+                let border = run.inline_border_widths();
+                if border.iter().any(|w| *w > 0.0) {
+                    props.insert("inlineBorder", border.map(style::num).join(" "));
+                }
                 // A run painting an inherited `color` that moves (LLP 1062 D5).
                 let mut shown = style::Shown::default();
                 shown.set(Property::Color, self.paint.runs.get(&id).copied());
