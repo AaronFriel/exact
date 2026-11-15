@@ -319,8 +319,8 @@ export function apkDirs(app) {
   // A variant (LLP 1030.008 D5) builds beside the app, so switching does not rebuild the other's APK.
   const variant = app.manifest?.variant?.name, name = variant ? `${app.name}.${variant}` : app.name;
   const own = !within(resolve(READER, '../..'), app.dir), root = resolve(app.target, variant ? `android.${variant}` : 'android');
-  return own ? { app: resolve(root, 'app'), canvas: resolve(root, 'canvas'), video: resolve(root, 'video'), cache: resolve(root, 'gradle'), kotlin: resolve(root, 'kotlin') }
-    : { app: resolve(READER, 'app/build', name), canvas: resolve(READER, 'canvas/build', name), video: resolve(READER, 'video/build', name), cache: resolve(READER, '.gradle/apps', name), kotlin: resolve(READER, '.kotlin/apps', name) };
+  return own ? { app: resolve(root, 'app'), canvas: resolve(root, 'canvas'), video: resolve(root, 'video'), widgets: resolve(root, 'widgets'), cache: resolve(root, 'gradle'), kotlin: resolve(root, 'kotlin') }
+    : { app: resolve(READER, 'app/build', name), canvas: resolve(READER, 'canvas/build', name), video: resolve(READER, 'video/build', name), widgets: resolve(READER, 'widgets/build', name), cache: resolve(READER, '.gradle/apps', name), kotlin: resolve(READER, '.kotlin/apps', name) };
 }
 /** Refuses the deleted ORG_GRADLE_PROJECT_idSuffix by name: Gradle would read it as an unknown property and build the
  * plain package, which would look as if it worked. */
@@ -339,7 +339,7 @@ export function apkRecord(app, apk = readerApk(app)) {
   try { return JSON.parse(readFileSync(resolve(dirname(apk), 'exact-build.json'), 'utf8')); } catch { return null; }
 }
 /** The reader's own sources, which every APK compiles. */
-export const READER_SOURCES = ['canvas/src', 'video/src', 'app/src', 'soundarm', '../apple/soundarm'].map((d) => resolve(READER, d));
+export const READER_SOURCES = ['canvas/src', 'video/src', 'widgets/src', 'app/src', 'soundarm', '../apple/soundarm'].map((d) => resolve(READER, d));
 
 // A reader failure whose cleanup succeeded.
 const RELAY_CLEANED_ERROR = 70;
@@ -1014,7 +1014,10 @@ export function buildApk(app, env, profile, writeLocks = false, bundle = false) 
   try { icons = androidIcons(app.manifest, app.dir, resolve(dirs.app, 'icons/res')); }
   catch (error) { for (const line of error.message.split('\n')) console.error(`${app.name}: ${line}`); return null; }
   const launch = androidLaunch(app.manifest, resolve(dirs.app, 'launch/res'));
-  if (app.manifest.widgets?.length) console.warn(`${app.name}: app.json's widgets are Apple-only (WidgetKit), so this APK has none; Android home-screen widgets made from the same rows are planned in an RFC, and the rows need no change`);
+  // Home-screen widgets for the rows with a `system*` family (LLP 1126.003 D1); accessory-only rows are Apple's alone.
+  const androidWidgets = (app.manifest.widgets ?? []).filter((row) => (row.families ?? []).some((family) => family.startsWith('system')));
+  if (app.manifest.widgets?.length && !androidWidgets.length) console.warn(`${app.name}: app.json's widgets declare only accessory families, which Android has no counterpart for, so this APK has no widget`);
+  const widgetArgs = androidWidgets.length ? ['-Pwidgets=1', `-PwidgetsBuildDir=${dirs.widgets}`] : [];
   const built = (name) => resolve(app.target, ANDROID_TARGET, profile, `lib${name.replaceAll('-', '_')}.so`);
   // Every library is baked (`buildBake`), which writes the build's receipt (android-aarch64-linux-android.build.json):
   // a first `push` starts a stream from exactly this APK's cohort (LLP 1030.006 D6).
@@ -1082,7 +1085,7 @@ export function buildApk(app, env, profile, writeLocks = false, bundle = false) 
     assembled = runGradle(['--no-watch-fs', ...(env.CI || graph.env.GRADLE_USER_HOME ? ['--no-daemon'] : []), bundle ? ':app:bundleRelease' : ':app:assembleRelease', `-Papp=${app.name}`, `-PappDir=${app.manifest.game ? app.workspace : app.dir}`,
       `-PexactDevelopment=${development ? '1' : '0'}`, `-PapplicationId=${androidPackageId(app.manifest)}`, `-PappName=${app.displayName}`,
       `-PappBuildDir=${dirs.app}`, `-PcanvasBuildDir=${dirs.canvas}`, `-PvideoBuildDir=${dirs.video}`, `-PndkPath=${env.ANDROID_NDK_HOME}`, '--project-cache-dir', dirs.cache, `-Pkotlin.project.persistent.dir=${dirs.kotlin}`,
-      ...gpuArgs, ...(icons.icon ? [`-PappIcon=${icons.icon}`] : []), ...(icons.banner ? [`-PappBanner=${icons.banner}`] : []), ...(launch ? [`-PappTheme=${launch}`] : []), ...compose, ...video, ...extensionArgs(app, out, config, bound, firebase), ...graph.args], { env: { ...env, ANDROID_HOME: androidSdk(env), ...graph.env } }, process.platform, { lockAdvice: maven.length && !writeLocks ? `${app.name}: Gradle locks or verification metadata do not match its dependencies; for an intended graph change, run ${androidLockCommand(app)}, then review and commit gradle.lockfile and gradle-verification.xml` : null });
+      ...gpuArgs, ...(icons.icon ? [`-PappIcon=${icons.icon}`] : []), ...(icons.banner ? [`-PappBanner=${icons.banner}`] : []), ...(launch ? [`-PappTheme=${launch}`] : []), ...compose, ...video, ...widgetArgs, ...extensionArgs(app, out, config, bound, firebase), ...graph.args], { env: { ...env, ANDROID_HOME: androidSdk(env), ...graph.env } }, process.platform, { lockAdvice: maven.length && !writeLocks ? `${app.name}: Gradle locks or verification metadata do not match its dependencies; for an intended graph change, run ${androidLockCommand(app)}, then review and commit gradle.lockfile and gradle-verification.xml` : null });
     if (assembled) graph.kept();
   } finally {
     graph.done();
