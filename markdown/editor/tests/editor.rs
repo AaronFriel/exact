@@ -1003,3 +1003,13 @@ fn undo_steps_keep_the_hosts_words() {
         ("A\nB\nC".into(), Some(String::new()))
     );
 }
+
+#[test]
+fn empty_quote_retains_its_bar_and_hides_the_marker() {
+    let mut e = Editor::new();
+    e.load(&u("> "));
+    let lines = e.lines();
+    assert_eq!(lines[0].quote, 1);
+    assert_eq!(lines[0].segments, vec![(0, 2, HIDDEN)]);
+    assert_eq!(e.source(), u("> "));
+}

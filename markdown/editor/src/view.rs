@@ -179,6 +179,13 @@ impl Editor {
                         .map(|k| proj.decorations[k].1);
                 }
             }
+            // An empty quote has no paragraph in the Markdown block model,
+            // but it is still an editable quoted line. Keep its bar and hide
+            // its marker while the caret is in the empty quoted paragraph.
+            if para[i].is_none() && &src[a as usize..b as usize] == [b'>' as u16, b' ' as u16] {
+                line.quote = 1;
+                line.segments = vec![(a, b, HIDDEN)];
+            }
             if proj.collapsed.iter().any(|&(s, e)| s <= a && b < e) {
                 line.flags |= flags::COLLAPSED;
             }
