@@ -3,6 +3,10 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const codecs = {
+  inlineStyle: ['InlineStyle', 'InlineStyle()', 'inlineStyle()'],
+  adapterRank: ['Int64?', 'nil', 'value().adapterRank'],
+  adapterString: ['String?', 'nil', 'value().adapterString'],
+  adapterBool: ['Bool?', 'nil', 'value().adapterBool'],
   string: ['String', '""', 'string()'],
   number: ['Double', '0', 'number()'],
   optionalNumber: ['Double?', 'nil', 'number()'],
@@ -73,6 +77,83 @@ function nativeTimerReader(record) {
   return lines.join('\n');
 }
 
+function inlineReaders(record, rows) {
+  const fields = Object.entries(record.fields);
+  const lines = ['extension BatchReader {', '    package mutating func inline() throws -> InlineText {'];
+  for (const [, field] of fields) {
+    const [type, empty] = codecs[field.codec];
+    lines.push(`        var ${field.member}: ${type}${field.required ? '?' : ''} = ${field.required ? 'nil' : field.default ?? empty}`);
+  }
+  lines.push('        try object { r, key in', '            switch key {');
+  for (const [key, field] of fields.filter(([, f]) => f.required)) lines.push(`            case ${quoted(key)}: ${field.member} = try r.${codecs[field.codec][2]}`);
+  lines.push('            default:', '                if try r.null() { return }', '                switch key {');
+  for (const [key, field] of fields.filter(([, f]) => !f.required)) lines.push(`                case ${quoted(key)}: ${field.member} = ${field.codec === 'handlers' ? 'Set(try r.array { try $0.string() })' : 'try r.' + codecs[field.codec][2]}`);
+  lines.push('                default: try r.skip()', '                }', '            }', '        }',
+    `        guard ${fields.filter(([, f]) => f.required).map(([, f]) => 'let ' + f.member).join(', ')} else { throw Invalid.wire }`,
+    `        return InlineText(${fields.map(([, f]) => `${f.member}: ${f.member}`).join(', ')})`, '    }');
+  const height = rows.find(r => r.appleInline?.read === 'height').field;
+  lines.push('    package mutating func inlineStyle() throws -> InlineStyle {',
+    '        var style = InlineStyle(), height: BatchValue?', '        try object { r, key in',
+    `            if key == ${quoted(height)} { height = try r.value() }`,
+    '            else { try style.set(key, r.value(), colorChannels: r.colorChannels) }',
+    '        }', '        try style.height(height)', '        return style', '    }', '}', '',
+    'extension BatchFields {',
+    '    package func inline(colorChannels: ((BatchValue, Bool) -> [Double]?)? = nil) throws -> InlineText {',
+    `        guard ${fields.filter(([, f]) => f.required).map(([k, f]) => `let ${f.member} = try self.id(${quoted(k)})`).join(', ')} else { throw BatchReader.Invalid.wire }`,
+    '        var style = InlineStyle()', '        let rows = try object("style")',
+    `        for (key, value) in rows where key != ${quoted(height)} { try style.set(key, value, colorChannels: colorChannels) }`,
+    `        try style.height(rows[${quoted(height)}])`, '        return InlineText(');
+  const reads = { props: 'strings', handlers: 'handlers', bool: 'bool', number: 'number' };
+  lines.push('            ' + fields.map(([key, f]) => {
+    if (f.required || f.codec === 'inlineStyle') return `${f.member}: ${f.member}`;
+    const q = quoted(key);
+    const read = f.codec === 'handlers' ? `Set(try array(${q}, Self.string))` : `try ${reads[f.codec]}(${q})${['bool', 'number'].includes(f.codec) ? ' ?? ' + (f.default ?? codecs[f.codec][1]) : ''}`;
+    return `${f.member}: ${read}`;
+  }).join(', ') + ')', '    }', '}', '');
+  return lines.join('\n');
+}
+
+function inlineStyleDispatch(rows) {
+  const lines = ['extension InlineStyle {',
+    '    package mutating func set(_ key: String, _ value: BatchValue, colorChannels: ((BatchValue, Bool) -> [Double]?)? = nil) throws {',
+    '        if value == .null { return }', '        switch key {'];
+  for (const row of rows.filter(r => r.appleInline && r.appleInline.read !== 'height')) {
+    const { read, member, word, negated, foreground, index } = row.appleInline;
+    const expressions = {
+      float: `${member} = CGFloat(Float(try BatchFields.number(value)))`,
+      integer: `let n = try BatchFields.number(value)\n            guard n >= Double(Int.min), n < Double(Int.max) else { throw BatchReader.Invalid.wire }\n            ${member} = Int(n)`,
+      byte: `${member} = Int(try BatchFields.number(value)) & 0xff`,
+      string: `${member} = try BatchFields.string(value)`,
+      keyword: `${member} = try BatchFields.string(value) ${negated ? '!=' : '=='} ${quoted(word)}`,
+      variations: 'run.variations = FontAxis.settings(value, keeping: run.variations)',
+      opticalSizing: 'run.variations = FontAxis.opticalSizing(try BatchFields.string(value), run.variations)',
+      features: 'run.features = FontFeature.of(value)',
+      color: `try color(value, foreground: ${foreground}, channels: colorChannels ?? { $0.fallbackChannels(dark: $1) })`,
+      borderColor: `borderColors[${index}] = value\n            if value.isSchemeColor { paired = true }`,
+      borderStyle: `borderStyles[${index}] = try BatchFields.string(value)`,
+      radius: `if run.backgroundRadii.isEmpty { run.backgroundRadii = Array(repeating: InlineRadius(), count: 4) }\n            run.backgroundRadii[${index}] = InlineRadius(value)`,
+    };
+    if (!expressions[read]) throw new Error(`unknown inline style reader: ${read}`);
+    lines.push(`        case ${quoted(row.field)}: ${expressions[read]}`);
+  }
+  lines.push('        default: paint.set(key, value)', '        }', '    }', '}', '');
+  return lines.join('\n');
+}
+
+function runPaintDispatch(rows) {
+  const paint = rows.filter(r => r.appleRunPaint);
+  const lines = ['extension RunPaintRows {', '    package init(_ style: NodeStyle) {', '        self.init()'];
+  for (const row of paint) lines.push(`        if let value = style[${quoted(row.field)}] { set(${quoted(row.field)}, value) }`);
+  lines.push('    }', '    @discardableResult', '    package mutating func set(_ key: String, _ value: BatchValue) -> Bool {', '        switch key {');
+  const expressions = { shadow: 'readShadow(value)', strokeWidth: 'strokeWidth = value.number ?? 0', strokeColor: 'strokeColor = value.string == nil ? value : nil' };
+  for (const row of paint) {
+    if (!expressions[row.appleRunPaint]) throw new Error(`unknown run paint reader: ${row.appleRunPaint}`);
+    lines.push(`        case ${quoted(row.field)}: ${expressions[row.appleRunPaint]}`);
+  }
+  lines.push('        default: return false', '        }', '        return true', '    }', '}', '');
+  return lines.join('\n');
+}
+
 export function appleBatchReader(schema) {
   const records = schema.appleBatch.records;
   const members = new Map();
@@ -98,18 +179,22 @@ export function appleBatchReader(schema) {
     '    /// Prepared paint belongs to the owner, outside the wire.',
     '    package var flat: FlatPaint?',
     '    package init(op: Kind, nodeID: UInt32? = nil) { self.op = op; self.nodeID = nodeID }',
+    '    package var isTypedPayload: Bool {', '        switch op {',
+    `        case ${records.filter(r => r.typedPayload).map(r => '.' + identifier(r.name)).join(', ')}: return true`,
+    '        default: return false', '        }', '    }',
     '    package var isAdapter: Bool {', '        switch op {',
     `        case ${records.filter(r => r.fields).map(r => '.' + identifier(r.name)).join(', ')}: return false`,
     '        default: return true', '        }', '    }', '}', '',
     'extension BatchReader {',
     '    package mutating func recordField(_ op: inout BatchOp, key: String) throws {',
     '        switch (op.op, key) {',
+    `        case ${records.filter(r => r.typedPayload).map(r => `(.${identifier(r.name)}, \"id\")`).join(', ')}: op.nodeID = try null() ? nil : id()`,
     '        case (_, "id"): op.nodeID = try id()',
   ];
   for (const record of records) for (const [key, field] of Object.entries(record.fields ?? {})) {
     lines.push(`        case (.${identifier(record.name)}, ${quoted(key)}): op.${field.member} = ${field.codec === 'handlers' ? '' : 'try '}${codecs[field.codec][2]}`);
   }
-  lines.push('        default: try skip()', '        }', '    }', '}', '',
+  lines.push('        default: if op.isTypedPayload { _ = try value() } else { try skip() }', '        }', '    }', '}', '',
     'extension BatchFields {',
     '    package func op(colorChannels: ((BatchValue, Bool) -> [Double]?)? = nil) throws -> BatchOp {',
     '        guard let name = try string("op") else { throw BatchReader.Invalid.wire }',
@@ -125,14 +210,15 @@ export function appleBatchReader(schema) {
         number: `number(${q}) ?? ${quoted(field.default ?? 0)}`, optionalNumber: `number(${q})`,
         props: `strings(${q})`, style: `CalculatedLength.decode(object(${q}))`, values: `object(${q})`,
         strings: `array(${q}, Self.string)`, handlers: `Set(try array(${q}, Self.string))`,
+        adapterRank: `value(${q})?.adapterRank`, adapterString: `value(${q})?.adapterString`, adapterBool: `value(${q})?.adapterBool`,
         ids: `array(${q}, Self.id)`, inline: `array(${q}) { try Self(Self.object($0)).inline(colorChannels: colorChannels) }`,
       };
-      lines.push(`            op.${field.member} = ${field.codec === 'handlers' ? '' : 'try '}${reads[field.codec]}`);
+      lines.push(`            op.${field.member} = ${field.codec === 'handlers' || field.codec.startsWith('adapter') ? '' : 'try '}${reads[field.codec]}`);
     }
   }
   lines.push('        default: op.payload = fields.mapValues(\\.any)',
     '        }', '        return op', '    }', '}', '');
-  return lines.join('\n') + '\n' + envelopeReader(schema.appleBatch.envelope) + '\n' + nativeTimerReader(schema.appleBatch.nativeTimer);
+  return lines.join('\n') + '\n' + envelopeReader(schema.appleBatch.envelope) + '\n' + nativeTimerReader(schema.appleBatch.nativeTimer) + '\n' + inlineReaders(schema.appleBatch.inline, schema.styles) + '\n' + inlineStyleDispatch(schema.styles) + '\n' + runPaintDispatch(schema.styles);
 }
 
 export function writeAppleBatchReader() {

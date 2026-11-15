@@ -92,7 +92,16 @@ final class BatchDecodeTests: XCTestCase {
             // memory, which the reader copies out (still valid here).
             var expected = b.payload
             if a.op == .canvas2d { expected["lists"] = BatchReader.canvasLists(expected["lists"]) }
-            XCTAssertTrue(NSDictionary(dictionary: a.payload).isEqual(to: expected), file: file, line: line)
+            if a.op == .rank {
+                XCTAssertEqual(a.rank, (expected["rank"] as? NSNumber)?.int64Value, file: file, line: line)
+                XCTAssertTrue(a.payload.isEmpty, file: file, line: line)
+            } else if a.op == .title {
+                XCTAssertEqual(a.title, expected["title"] as? String, file: file, line: line)
+                XCTAssertEqual(a.edited, expected["edited"] as? Bool, file: file, line: line)
+                XCTAssertTrue(a.payload.isEmpty, file: file, line: line)
+            } else {
+                XCTAssertTrue(NSDictionary(dictionary: a.payload).isEqual(to: expected), file: file, line: line)
+            }
             XCTAssertEqual(a.runs.count, b.runs.count, file: file, line: line)
             for (x, y) in zip(a.runs, b.runs) {
                 XCTAssertEqual(x.id, y.id, file: file, line: line)
@@ -380,8 +389,51 @@ final class BatchDecodeTests: XCTestCase {
         for value in [Int64(-4_294_967_290), 0, 1, 4_294_967_290] {
             for op in ["{\"op\":\"rank\",\"id\":7,\"rank\":\(value)}", "{\"rank\":\(value),\"id\":7,\"op\":\"rank\"}"] {
                 let batch = try compare("{\"ops\":[\(op)]}")
-                XCTAssertEqual((batch.ops.first?.payload["rank"] as? NSNumber)?.int64Value, value)
+                XCTAssertEqual(batch.ops.first?.rank, value)
             }
+        }
+    }
+
+    func testTypedAdapterDefaultsAndDuplicateFields() throws {
+        for row in [#"{"op":"title","title":"A","edited":true}"#,
+                    #"{"op":"title","title":null,"edited":null}"#,
+                    #"{"op":"title","title":false,"edited":"ignored","future":[1,true]}"#,
+                    #"{"op":"rank","rank":null}"#, #"{"op":"rank","rank":"ignored"}"#,
+                    #"{"op":"rank","rank":true}"#, #"{"op":"rank","rank":-1.75}"#] {
+            _ = try compare("{\"ops\":[\(row)]}")
+            var object = try JSONSerialization.jsonObject(with: Data(row.utf8)) as! [String: Any]
+            let kind = object.removeValue(forKey: "op") as! String
+            let body = String(decoding: try JSONSerialization.data(withJSONObject: object, options: .sortedKeys), as: UTF8.self)
+            _ = try compare("{\"ops\":[\(body.dropLast()),\"op\":\"\(kind)\"}]}")
+        }
+        let duplicate = Batch.decode(Data(#"{"ops":[{"op":"rank","id":1,"id":null,"rank":3,"rank":null},{"op":"title","title":"A","title":null,"edited":true,"edited":null}]}"#.utf8))
+        XCTAssertNil(duplicate.error)
+        XCTAssertNil(duplicate.ops[0].nodeID)
+        XCTAssertNil(duplicate.ops[0].rank)
+        XCTAssertNil(duplicate.ops[1].title)
+        XCTAssertNil(duplicate.ops[1].edited)
+    }
+
+    func testGeneratedInlineStyleDispatchAndDeferredHeight() throws {
+        let style = #"{"line_height":1.5,"font_size":20,"font_weight":650,"font_family":2,"font_stretch":1.25,"font_style":"italic","letter_spacing":0.5,"font_variant_numeric":3,"font_variant_ligatures":2,"font_optical_sizing":"none","font_variation_settings":[],"font_feature_settings":[],"visibility":"hidden","user_select":"all","outline_style":"none","text_decoration_line":"underline","text_color":[1,2,3,4],"background_color":[[5,6,7,8],[9,10,11,12]],"border_color_left":[1,2,3,4],"border_style_right":"dashed","border_radius_bottom_right":5,"text_shadow":{"o":[1,2],"b":3},"text_stroke_width":2,"text_stroke_color":[3,4,5,6],"future":{"ignored":true}}"#
+        for op in ["{\"op\":\"paragraph\",\"runs\":[{\"id\":2,\"parent\":1,\"opacity\":0.4,\"style\":\(style)}]}",
+                   "{\"runs\":[{\"style\":\(style),\"opacity\":0.4,\"parent\":1,\"id\":2}],\"op\":\"paragraph\"}"] {
+            let batch = Batch.decode(Data("{\"ops\":[\(op)]}".utf8))
+            XCTAssertNil(batch.error)
+            let row = try XCTUnwrap(batch.ops.first?.runs.first)
+            let run = row.lightRun
+            XCTAssertEqual(run.size, 20); XCTAssertEqual(run.lineHeight, 30)
+            XCTAssertEqual(run.weight, 650); XCTAssertEqual(run.family, 2)
+            XCTAssertEqual(run.stretch, 1.25); XCTAssertEqual(run.letterSpacing, 0.5)
+            XCTAssertEqual(run.numeric, 3); XCTAssertEqual(run.ligatures, 2)
+            XCTAssertTrue(run.italic); XCTAssertTrue(run.hidden)
+            XCTAssertTrue(row.selectsAll); XCTAssertTrue(row.outlineNone)
+            XCTAssertEqual(row.opacity, 0.4)
+            XCTAssertEqual(run.decoration, "underline"); XCTAssertTrue(row.fixedInk)
+            XCTAssertEqual(row.darkBackground, [9,10,11,12])
+            XCTAssertEqual(row.borderColors[3], [1,2,3,4])
+            XCTAssertEqual(row.paint.shadow, [1,2,3]); XCTAssertEqual(row.paint.strokeWidth, 2)
+            XCTAssertEqual(row.paint.strokeColor, [3,4,5,6])
         }
     }
 

@@ -991,7 +991,7 @@ package final class Presenter {
             case .land:
                 if let f = flights[id] { landFlight(f) }
             case .rank:
-                if let rank = op.payload["rank"] as? NSNumber { flats.rank(id, rank.int64Value) }
+                if let rank = op.rank { flats.rank(id, rank) }
             case .layoutHits:
                 if flats.isFlat(id) { flats.promote(id) }
                 if let owner = views[id] {

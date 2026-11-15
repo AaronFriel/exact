@@ -35,7 +35,7 @@ extension BatchReader {
         try enter(123)
         // Rust writes the discriminator first. JSON object order is not part of
         // the contract: other writers take the typed-value path below, also in
-        // one pass. Only the rare adapters finally bridge their payload to Any.
+        // one pass. Only unconverted adapters bridge their payload to Any.
         let first = try string(); try expect(58)
         if first != "op" {
             var fields = [first: try value()]
@@ -63,48 +63,15 @@ extension BatchReader {
             if op.op == .canvas2d { op.payload["lists"] = BatchReader.canvasLists(op.payload["lists"]) }
             return op
         }
+        let skipsNull = !op.isTypedPayload
         while !take(125) {
             try expect(44)
             let key = try string(); try expect(58)
-            if try null() { continue }
+            if skipsNull, try null() { continue }
             try recordField(&op, key: key)
         }
         depth -= 1
         return op
-    }
-
-    package mutating func inline() throws -> InlineText {
-        var id: UInt32?, parent: UInt32?, props: [String: String] = [:]
-        var style = InlineStyle(), handlers: Set<String> = [], paints = false, opacity = 1.0
-        try object { r, key in
-            switch key {
-            case "id": id = try r.id()
-            case "parent": parent = try r.id()
-            default:
-                if try r.null() { return }
-                switch key {
-                case "props": props = try r.strings()
-                case "style": style = try r.inlineStyle()
-                case "handlers": handlers = Set(try r.array { try $0.string() })
-                case "paint": paints = try r.bool()
-                case "opacity": opacity = try r.number()
-                default: try r.skip()
-                }
-            }
-        }
-        guard let id, let parent else { throw Invalid.wire }
-        return InlineText(id: id, parent: parent, props: props, style: style, handlers: handlers, paints: paints, opacity: opacity)
-    }
-    package mutating func inlineStyle() throws -> InlineStyle {
-        var style = InlineStyle(), height: BatchValue?
-        try object { r, key in
-            switch key {
-            case "line_height": height = try r.value()
-            default: try style.set(key, r.value(), colorChannels: r.colorChannels)
-            }
-        }
-        try style.height(height)
-        return style
     }
 }
 
@@ -144,54 +111,24 @@ package struct BatchFields {
     package func array<T>(_ key: String, _ element: (BatchValue) throws -> T) throws -> [T] {
         try value(key).map { try Self.array($0, element) } ?? []
     }
-    package func inline(colorChannels: ((BatchValue, Bool) -> [Double]?)? = nil) throws -> InlineText {
-        guard let id = try id("id"), let parent = try self.id("parent") else { throw BatchReader.Invalid.wire }
-        var style = InlineStyle()
-        let rows = try object("style")
-        for (key, value) in rows where key != "line_height" { try style.set(key, value, colorChannels: colorChannels) }
-        try style.height(rows["line_height"])
-        return InlineText(id: id, parent: parent, props: try strings("props"), style: style,
-                          handlers: Set(try array("handlers", Self.string)), paints: try bool("paint") ?? false,
-                          opacity: try number("opacity") ?? 1)
-    }
 }
 
 extension InlineStyle {
-    package mutating func set(_ key: String, _ value: BatchValue, colorChannels: ((BatchValue, Bool) -> [Double]?)? = nil) throws {
-        if value == .null { return }
-        let channels = colorChannels ?? { $0.fallbackChannels(dark: $1) }
-        if key == "text_color" { fixedInk = value.fixesInk }
-        switch key {
-        case "font_size": run.size = CGFloat(Float(try BatchFields.number(value)))
-        case "font_weight", "font_family":
-            let n = try BatchFields.number(value)
-            guard n >= Double(Int.min), n < Double(Int.max) else { throw BatchReader.Invalid.wire }
-            if key == "font_weight" { run.weight = Int(n) } else { run.family = Int(n) }
-        case "font_style": run.italic = try BatchFields.string(value) == "italic"
-        case "font_stretch": run.stretch = CGFloat(Float(try BatchFields.number(value)))
-        case "font_variation_settings": run.variations = FontAxis.settings(value, keeping: run.variations)
-        case "font_optical_sizing": run.variations = FontAxis.opticalSizing(try BatchFields.string(value), run.variations)
-        case "letter_spacing": run.letterSpacing = CGFloat(Float(try BatchFields.number(value)))
-        case "font_variant_numeric": run.numeric = Int(try BatchFields.number(value)) & 0xff
-        case "font_variant_ligatures": run.ligatures = Int(try BatchFields.number(value)) & 0xff
-        case "font_feature_settings": run.features = FontFeature.of(value)
-        case "visibility": run.hidden = try BatchFields.string(value) != "visible"
-        case "user_select": selectsAll = try BatchFields.string(value) == "all"
-        case "outline_style": outlineNone = try BatchFields.string(value) == "none"
-        case "text_decoration_line": run.decoration = try BatchFields.string(value)
-        case "text_color" where value.isWideColor, "background_color" where value.isWideColor:
+    package mutating func color(_ value: BatchValue, foreground: Bool, channels: (BatchValue, Bool) -> [Double]?) throws {
+        if foreground { fixedInk = value.fixesInk }
+        if value.isWideColor {
             // @ref LLP 1100 D2
             guard let light = channels(value, false), let dark = channels(value, true) else { throw BatchReader.Invalid.wire }
             paired = value.isSchemeColor
-            if key == "text_color" { run.color = light; darkColor = dark } else { run.background = light; darkBackground = dark }
-        case "text_color" where value.isSystemColor, "background_color" where value.isSystemColor:
+            if foreground { run.color = light; darkColor = dark } else { run.background = light; darkBackground = dark }
+        } else if value.isSystemColor {
             // @ref LLP 1095 D5 — a platform colour, kept by name and resolved
             // as the run is read, in its paragraph owner's traits (an inline
             // run has no view), so a contrast or level change reaches it.
             guard channels(value, false) != nil, channels(value, true) != nil else { throw BatchReader.Invalid.wire }
             paired = true
-            if key == "text_color" { colorRef = value } else { backgroundRef = value }
-        case "text_color":
+            if foreground { colorRef = value } else { backgroundRef = value }
+        } else if foreground {
             guard case .array(let a) = value else { throw BatchReader.Invalid.wire }
             if a.count == 2 {
                 paired = true
@@ -201,7 +138,7 @@ extension InlineStyle {
                 run.color = try a.map(BatchFields.number); darkColor = run.color
             }
             guard run.color?.count == 4, darkColor?.count == 4 else { throw BatchReader.Invalid.wire }
-        case "background_color":
+        } else {
             guard case .array(let a) = value else { throw BatchReader.Invalid.wire }
             if a.count == 2 {
                 paired = true
@@ -211,19 +148,6 @@ extension InlineStyle {
                 run.background = try a.map(BatchFields.number); darkBackground = run.background
             }
             guard run.background?.count == 4, darkBackground?.count == 4 else { throw BatchReader.Invalid.wire }
-        case "border_color_top", "border_color_right", "border_color_bottom", "border_color_left":
-            let i = ["border_color_top", "border_color_right", "border_color_bottom", "border_color_left"].firstIndex(of: key)!
-            borderColors[i] = value
-            if value.isSchemeColor { paired = true }
-        case "border_style_top", "border_style_right", "border_style_bottom", "border_style_left":
-            let i = ["border_style_top", "border_style_right", "border_style_bottom", "border_style_left"].firstIndex(of: key)!
-            borderStyles[i] = try BatchFields.string(value)
-        case "border_radius_top_left", "border_radius_top_right", "border_radius_bottom_right", "border_radius_bottom_left":
-            let corners = ["border_radius_top_left", "border_radius_top_right", "border_radius_bottom_right", "border_radius_bottom_left"]
-            if run.backgroundRadii.isEmpty { run.backgroundRadii = Array(repeating: InlineRadius(), count: 4) }
-            let i = corners.firstIndex(of: key)!
-            run.backgroundRadii[i] = InlineRadius(value)
-        default: paint.set(key, value)
         }
     }
     package mutating func height(_ value: BatchValue?) throws {
@@ -235,4 +159,10 @@ extension InlineStyle {
         default: throw BatchReader.Invalid.wire
         }
     }
+}
+
+extension BatchValue {
+    package var adapterRank: Int64? { (any as? NSNumber)?.int64Value }
+    package var adapterString: String? { any as? String }
+    package var adapterBool: Bool? { any as? Bool }
 }
