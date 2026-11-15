@@ -1087,3 +1087,20 @@ confirms receipt of the peer's closing frame through its delegate; the portable
 pump confirms that the close frame reached TCP. The native executor waits across
 this boundary before a suspending host returns, with a bounded deadline. Ordinary
 resource releases wait on a worker. Replay on a refresh.
+
+## Session-free file transfers
+
+`Fetch::admit` checks the binding's grants and hop gate without sending a
+request; a later `stream` checks them again at every hop. HTTP admission
+refuses userinfo and non-HTTP schemes. Redirects rewrite POST on 301/302,
+rewrite non-GET/HEAD on 303, and drop body headers when dropping the body,
+as [Fetch's redirect algorithm](https://fetch.spec.whatwg.org/#http-redirect-fetch)
+requires. Authorization remains removed after any origin change.
+
+`Request::idle_timeout` lets a portable file transfer outlive the ordinary
+total deadline while bounding DNS (including the wait for a lookup helper)
+and each socket wait. An explicit total timeout
+wins; a reused connection restores the next request's own timeouts. TLS,
+trust selection and HTTP framing are unchanged. The Android carrier uses
+this through the same endowed fetch binding as ordinary requests (LLP
+1133.017). Replay on a refresh.

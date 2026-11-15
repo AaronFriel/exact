@@ -1476,3 +1476,6 @@ mod idle_tests;
 mod scope_tests;
 #[cfg(test)]
 mod tests;
+
+/// Session-free file transfers for a native package carrier.
+pub mod transfer;

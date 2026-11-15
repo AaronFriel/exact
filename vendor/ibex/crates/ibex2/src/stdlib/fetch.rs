@@ -292,6 +292,9 @@ pub struct Request {
     /// The platform transport's own request timeout. A caller that needs the
     /// whole exchange bounded also aborts its signal (LLP 0068.000 §4).
     pub timeout: Option<std::time::Duration>,
+    /// Portable file transfers may outlive the ordinary total deadline while
+    /// still bounding each socket wait. An explicit `timeout` takes precedence.
+    pub idle_timeout: Option<std::time::Duration>,
     /// Told the body's bytes as they are sent (Exact patch 23).
     pub sent: Option<Sent>,
     /// Each hop's response head, before redirects or body reads (LLP 1162 D4).
@@ -369,6 +372,7 @@ impl Request {
             redirect: RedirectMode::Follow,
             max_body: None,
             timeout: None,
+            idle_timeout: None,
             sent: None,
             received: None,
             response_body: None,
@@ -582,6 +586,14 @@ pub(crate) fn admit_hop(
 }
 
 fn admit_hop_grant(grants: &GrantSet, url: &str, redirected: bool) -> Result<(), HostError> {
+    let parsed =
+        url::Url::parse(url).map_err(|_| HostError::Failed("TypeError: invalid URL".into()))?;
+    if !matches!(parsed.scheme(), "http" | "https")
+        || !parsed.username().is_empty()
+        || parsed.password().is_some()
+    {
+        return Err(HostError::Failed("TypeError: invalid HTTP URL".into()));
+    }
     let origin = origin_of(url)?;
     // Through boundary::admit, not an inline permits() check: the
     // capability name and the shape of a denial belong in one place, or
@@ -604,7 +616,7 @@ fn admit_hop_grant(grants: &GrantSet, url: &str, redirected: bool) -> Result<(),
 pub(crate) struct RedirectStep {
     /// The next hop's URL, resolved against the one just used.
     pub(crate) url: String,
-    /// 303, and 301/302 of a non-GET/HEAD: the next hop is a GET with no body.
+    /// 303 of a non-GET/HEAD, and 301/302 of POST: GET with no body.
     pub(crate) drops_body: bool,
     /// The next hop is another origin: credentials are dropped.
     drops_credentials: bool,
@@ -615,6 +627,14 @@ impl RedirectStep {
     pub(crate) fn apply(&self, method: &mut String, headers: &mut Headers) {
         if self.drops_body {
             *method = "GET".into();
+            for name in [
+                "content-encoding",
+                "content-language",
+                "content-location",
+                "content-type",
+            ] {
+                headers.delete(name);
+            }
         }
         if self.drops_credentials {
             for name in ["authorization", "cookie", "proxy-authorization"] {
@@ -664,8 +684,8 @@ pub(crate) fn redirect_step(
     // 303, and 301/302 on POST, become GET and drop the body — the web's
     // long-standing behaviour, which surprises people who expect the
     // method to be preserved.
-    let drops_body = status == 303
-        || (matches!(status, 301 | 302) && current.method != "GET" && current.method != "HEAD");
+    let drops_body = (status == 303 && current.method != "GET" && current.method != "HEAD")
+        || (matches!(status, 301 | 302) && current.method == "POST");
     // A redirect to another origin drops the credentials this request
     // carried, as the Fetch standard does for `Authorization`.
     // @ref LLP 0059.000#35-fetch--delegating-capability-bearing — a subdomain grant admits sibling hosts, which must not receive a token meant for the first

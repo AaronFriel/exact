@@ -35,6 +35,7 @@ struct Current {
     /// each write may wait [`IDLE_SEND`], with no limit on the whole
     /// exchange (Exact patch 46).
     file_body: bool,
+    idle_timeout: Option<Duration>,
     /// The upload whose bytes written the response's transport tells.
     written: Option<Written>,
     /// The lease's request went out on a pooled connection and none of its
@@ -119,6 +120,7 @@ impl RustlsHttpTransport {
             current.signal = Some(signal.clone());
             current.event_stream = false;
             current.file_body = false;
+            current.idle_timeout = None;
             current.written = None;
             current.resendable = true;
         }
@@ -392,9 +394,14 @@ impl<T: WireTransport> WireTransport for Observed<T> {
         mut timeout: NextTimeout,
     ) -> Result<(), ureq::Error> {
         use ureq::unversioned::transport::time::Duration as Wait;
-        if self.context.lock().unwrap().file_body && timeout.after > Wait::Exact(IDLE_SEND) {
-            timeout.after = Wait::Exact(IDLE_SEND);
+        let current = self.context.lock().unwrap();
+        let idle = current
+            .idle_timeout
+            .or(current.file_body.then_some(IDLE_SEND));
+        if let Some(idle) = idle {
+            timeout.after = timeout.after.min(Wait::Exact(idle));
         }
+        drop(current);
         self.inner.transmit_output(amount, timeout)?;
         if self.response {
             let told = {
@@ -416,9 +423,15 @@ impl<T: WireTransport> WireTransport for Observed<T> {
     fn await_input(&mut self, mut timeout: NextTimeout) -> Result<bool, ureq::Error> {
         // ureq retains the request's deadlines in its body reader. An event
         // stream without an explicit timeout must also outlive its global limit.
-        if self.response && self.context.lock().unwrap().event_stream {
+        let current = self.context.lock().unwrap();
+        if let Some(idle) = current.idle_timeout {
+            timeout.after = timeout
+                .after
+                .min(ureq::unversioned::transport::time::Duration::Exact(idle));
+        } else if self.response && current.event_stream {
             timeout.after = ureq::unversioned::transport::time::Duration::NotHappening;
         }
+        drop(current);
         let progress = self.inner.await_input(timeout)?;
         if progress && self.response {
             self.context.lock().unwrap().resendable = false;
@@ -589,7 +602,16 @@ fn run<S: ureq::AsSendBody>(
 ) -> Result<ureq::http::Response<ureq::Body>, ureq::Error> {
     let agent = &lease.slot.as_ref().unwrap().agent;
     let limit = left;
-    let req = agent.configure_request(req).timeout_global(limit);
+    let dns = {
+        let current = lease.slot.as_ref().unwrap().context.lock().unwrap();
+        current
+            .idle_timeout
+            .or(current.file_body.then_some(IDLE_SEND))
+    };
+    let req = agent
+        .configure_request(req)
+        .timeout_global(limit)
+        .timeout_resolve(timeout.and(limit).or(dns));
     let req = match timeout {
         Some(_) => req
             .timeout_connect(limit)
@@ -598,6 +620,22 @@ fn run<S: ureq::AsSendBody>(
             .timeout_await_100(limit)
             .timeout_recv_response(limit)
             .timeout_recv_body(limit),
+        None if lease
+            .slot
+            .as_ref()
+            .unwrap()
+            .context
+            .lock()
+            .unwrap()
+            .idle_timeout
+            .is_some() =>
+        {
+            req.timeout_send_request(None)
+                .timeout_send_body(None)
+                .timeout_await_100(None)
+                .timeout_recv_response(None)
+                .timeout_recv_body(None)
+        }
         None => req,
     };
     agent.run(req.build())
@@ -763,12 +801,13 @@ impl Transport for RustlsHttpTransport {
         let started = Instant::now();
         // The request's whole time, its own timeout or the agent's global
         // limit, which a file body without a timeout does not have.
-        let idle = file.is_some() && request.timeout.is_none();
+        let idle = (file.is_some() || request.idle_timeout.is_some()) && request.timeout.is_none();
         let limit = (!idle).then(|| request.timeout.unwrap_or(GLOBAL_TIMEOUT));
         let read = sent.map(|_| Arc::new(std::sync::atomic::AtomicU64::new(0)));
         let watch = |lease: &Lease| {
             let mut current = lease.slot.as_ref().unwrap().context.lock().unwrap();
             current.file_body = idle;
+            current.idle_timeout = request.idle_timeout.filter(|_| request.timeout.is_none());
             current.written = sent.zip(read.as_ref()).map(|(sent, read)| Written {
                 sent: sent.clone(),
                 read: read.clone(),

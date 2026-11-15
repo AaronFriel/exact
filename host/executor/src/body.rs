@@ -248,11 +248,11 @@ fn pump(
 }
 
 #[cfg(unix)]
-fn read_at(file: &std::fs::File, out: &mut [u8], at: u64) -> std::io::Result<usize> {
+pub(super) fn read_at(file: &std::fs::File, out: &mut [u8], at: u64) -> std::io::Result<usize> {
     std::os::unix::fs::FileExt::read_at(file, out, at)
 }
 #[cfg(windows)]
-fn read_at(file: &std::fs::File, out: &mut [u8], at: u64) -> std::io::Result<usize> {
+pub(super) fn read_at(file: &std::fs::File, out: &mut [u8], at: u64) -> std::io::Result<usize> {
     std::os::windows::fs::FileExt::seek_read(file, out, at)
 }
 
