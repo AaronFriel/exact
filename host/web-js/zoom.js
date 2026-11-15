@@ -13,7 +13,11 @@
 // the module fires `scroll` and `scrollend` itself.
 import { After, Clocked, PropHooks, Adopt, at, clock } from './rt.js';
 
+let Sheet = null;
+
 const Zoomed = new Set(),
+  // The `touch-action` values the containers' rules give; `Sheet` holds the rules.
+  Owned = new Set(),
   DOUBLE_TAP_MS = 300,
   DOUBLE_TAP_SLOP = 30,
   CONTROL = 'a[href],button,input,select,textarea,summary,[contenteditable=""],[contenteditable="true"],[role="button"],[role="link"],[role="checkbox"],[role="switch"],[role="slider"],[role="tab"]';
@@ -37,10 +41,12 @@ export function zoom(e) {
     sizer.setAttribute('data-exact-zoom', '');
     extent.setAttribute('data-exact-zoom-extent', '');
     layer.setAttribute('data-exact-zoom-layer', '');
-    sizer.style.cssText = 'flex:none;max-width:100%;max-height:100%;margin:0;padding:0;border:0;visibility:hidden;pointer-events:none';
-    extent.style.cssText = 'position:absolute;left:0;top:0;overflow:clip;margin:0;padding:0;border:0';
+    // Until the first draw the sizer is out and the extent and layer generate no box, so a page rendered ahead of
+    // time, which lays nothing out, shows the child in flow as the container's own at zoom 1.
+    sizer.style.cssText = 'display:none;flex:none;max-width:100%;max-height:100%;margin:0;padding:0;border:0;visibility:hidden;pointer-events:none';
+    extent.style.cssText = 'display:contents;position:absolute;left:0;top:0;overflow:clip;margin:0;padding:0;border:0';
     // The child's range rows are its container's, not inherited.
-    layer.style.cssText = 'position:absolute;left:0;top:0;box-sizing:content-box;margin:0;padding:0;border:0;transform-origin:0 0;--exact-min-zoom:initial;--exact-max-zoom:initial';
+    layer.style.cssText = 'display:contents;position:absolute;left:0;top:0;box-sizing:content-box;margin:0;padding:0;border:0;transform-origin:0 0;--exact-min-zoom:initial;--exact-max-zoom:initial';
     extent.append(layer);
     e.append(sizer, extent);
   }
@@ -62,8 +68,9 @@ PropHooks.scrollZoom = (e, v) => {
 };
 
 After.push(() => {
-  // A page rendered ahead of time lays nothing out: its layers stand at zoom 1 until it boots.
-  if (typeof getComputedStyle !== 'function') return;
+  // A page rendered ahead of time (render.mjs, main-server.js) lays nothing out and has no ResizeObserver: the child
+  // stands in flow at zoom 1 until the page boots.
+  if (typeof ResizeObserver === 'undefined') return;
   for (const e of Zoomed) {
     if (e.isConnected) settle(e);
     else Zoomed.delete(e);
@@ -116,14 +123,23 @@ function place(m, z) {
 function draw(e, z) {
   const { sizer, extent, layer } = e.$zoomLayers,
     s = getComputedStyle(e);
-  if (s.position === 'static') e.style.position = 'relative';
+  // The container is the extent's containing block: the compiler makes every scroller `position: relative` unless it
+  // names a position (LLP 1074 T1).
   if (e.$zoomTouch === undefined) {
-    // The browser keeps the author's pans; the pinch is the module's (§5).
+    // The browser keeps the author's pans; the pinch is the module's (§5). The value is a rule on an attribute, as the
+    // inspector reports the container's own style as the author's.
     e.$zoomTouch = s.touchAction;
     const pans = e.$zoomTouch.split(/\s+/).filter(t => t.startsWith('pan-'));
     const own = e.$zoomTouch === 'auto' || e.$zoomTouch === 'manipulation' ? 'pan-x pan-y' : pans.join(' ') || 'none';
-    e.style.touchAction = own;
+    e.setAttribute('data-exact-zoom-touch', own);
+    if (!Owned.has(own)) {
+      Owned.add(own);
+      Sheet ??= document.head.appendChild(document.createElement('style')).sheet;
+      Sheet.insertRule(`[data-exact-zoom-touch="${own}"]{touch-action:${own} !important}`, Sheet.cssRules.length);
+    }
     listen(e);
+    sizer.style.display = '';
+    extent.style.display = '';
   }
   const display = { 'inline-flex': 'flex', 'inline-grid': 'grid', 'inline-block': 'block', inline: 'block', contents: 'block' }[s.display] ?? s.display;
   const ls = layer.style;
@@ -163,9 +179,11 @@ function settle(e) {
   if (!held && e.$zoomPending != null) {
     const asked = e.$zoomPending;
     e.$zoomPending = null;
-    // A zoom the scroll reported since the gesture began is the app mirroring it back (D2).
-    if (!(e.$zoomReported ?? []).includes(asked)) {
-      e.$zoomReported = [];
+    // A zoom the scroll reported since the gesture began is the app mirroring it back (D2). Only a write the gesture
+    // held can echo it: a later one is the app's, whatever its value.
+    const echo = (e.$zoomReported ?? []).includes(asked);
+    e.$zoomReported = [];
+    if (!echo) {
       animate = !clock.agent && getComputedStyle(e).scrollBehavior === 'smooth';
       const to = Math.min(Math.max(asked, low), high);
       if (to !== e.$zoom) return void move(e, to, [e.clientWidth / 2, e.clientHeight / 2], animate, true);
