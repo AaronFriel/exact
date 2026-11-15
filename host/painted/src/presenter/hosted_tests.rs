@@ -826,6 +826,26 @@ fn a_finger_on_a_hosted_field_puts_android_back_in_touch_mode() {
     );
 }
 
+/// A person's input to the focused field is later than a `focus()` still
+/// waiting for its node to land, and supersedes it.
+#[test]
+fn input_to_a_hosted_field_supersedes_a_focus_waiting_for_landing() {
+    let (_shell, _hosting) = shell();
+    let mut p = boot(FORM);
+    p.serve_requests();
+    p.reader_fields(1.0);
+    let field = id(&p, "name");
+    p.reader_field_focused(field, 0, true, 1.0);
+    assert_eq!(p.focus(), Some(field));
+    let email = id(&p, "email");
+    let waiting = p.host().kernel().node(email).map(|n| n.key);
+    p.host_mut().flights.focus = waiting;
+    p.reader_field_input(field, 1, 1);
+    assert_eq!(p.host().flights.focus, waiting, "stale field input");
+    p.reader_field_input(field, 0, 1);
+    assert_eq!(p.host().flights.focus, None);
+}
+
 /// A hosted edit is told after the platform's field made it: its
 /// `beforeinput` runs first, and one it prevents never reaches the app, so
 /// the next statement answers the edit with the text from before, which

@@ -525,6 +525,9 @@ impl<D: DataSource> Presenter<D> {
     /// key that counts as keyboard modality. A hold of the field lets go.
     pub fn reader_field_input(&mut self, id: ViewId, generation: u32, kind: i32) {
         if self.hosted_live(id, generation) {
+            // A person's input is later than a `focus()` waiting for its
+            // node to land, and supersedes it as a later `focus()` would.
+            self.host.flights.focus = None;
             self.hold_input(Some(id));
             match kind {
                 1 => self.touched(),

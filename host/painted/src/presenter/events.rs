@@ -263,17 +263,21 @@ impl<D: DataSource> Presenter<D> {
     }
 
     /// `blur()` drops the focus; `blur(id)` only when that node holds it.
+    /// A node a `focus()` waits to focus once it lands (`flights.focus`)
+    /// holds it, as on the web, where the `focus()` has already moved it
+    /// there: a blur that applies drops the wait too.
     pub(crate) fn blur_command(&mut self, args: &[exact_plan::Value]) {
-        let holds = |name: &str| {
-            self.focus
-                .and_then(|id| self.host.kernel().node(id))
-                .is_some_and(|n| n.props.str(PropId::Id) == Some(name))
+        let kernel = self.host.kernel();
+        let holder = match self.host.flights.focus {
+            Some(key) => kernel.node_by_key(key),
+            None => self.focus.and_then(|id| kernel.node(id)),
         };
-        if args
+        let applies = args
             .first()
             .and_then(exact_plan::Value::as_str)
-            .is_none_or(holds)
-        {
+            .is_none_or(|name| holder.is_some_and(|n| n.props.str(PropId::Id) == Some(name)));
+        if applies {
+            self.host.flights.focus = None;
             self.blur();
         }
     }

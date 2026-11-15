@@ -761,6 +761,50 @@ component App
     }
 
     #[test]
+    fn a_blur_supersedes_a_focus_waiting_for_landing() {
+        let app = APP
+            .replace(
+                "            button \"Inside\" press=toggle testId=\"inside\"\n",
+                "            input id=\"field\" testId=\"inside\"\n",
+            )
+            .replace(
+                "    open = not open\n",
+                "    open = not open\n    focus(\"field\")\n",
+            )
+            .replace(
+                "      if not gone\n",
+                "      input id=\"other\" testId=\"other\"\n      if not gone\n",
+            );
+        // On the web the `focus()` has already moved the focus to the field,
+        // so blurring the field (or the focus) leaves none, and blurring the
+        // node the focus left, or any other, changes nothing.
+        for (blurred, landed) in [
+            (None, false),
+            (Some("field"), false),
+            (Some("other"), true),
+            (Some("nobody"), true),
+        ] {
+            let mut p = presenter(&app);
+            let other = id(p.host(), "other");
+            assert!(p.set_focus(Some(other), 50.0).is_none());
+            let toggle = id(p.host(), "toggle");
+            p.host_mut().dispatch_at(toggle, Event::Press, 100.0);
+            p.after_commit();
+            p.run_commands(|| ());
+            p.frame();
+            let field = id(p.host(), "inside");
+            assert!(p.host().flying(field));
+            let args: Vec<_> = blurred.into_iter().map(exact_plan::Value::str).collect();
+            p.blur_command(&args);
+            p.tick(1301.0);
+            p.reader_clock(1301.0, false);
+            assert!(!p.host().flying(field));
+            let expected = if landed { Some(field) } else { None };
+            assert_eq!(p.focus(), expected, "blur({blurred:?})");
+        }
+    }
+
+    #[test]
     fn android_spring_lands_at_the_apple_hosts_threshold() {
         let source = APP.replace("1s linear", "-exact-spring(270, 33, 1)");
         let mut p = presenter(&source);
