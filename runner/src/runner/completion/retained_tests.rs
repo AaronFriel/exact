@@ -123,17 +123,23 @@ fn reports_and_their_local_continuations_get_fresh_durable_authority() {
 
 #[test]
 fn background_rounds_have_process_local_authority_independent_of_ui_retirement() {
-    let mut r = runner(Source::default(), 0.);
+    let mut r = runner(Source::default(), 1.);
+    assert_eq!(r.pending.len(), 1, "the fixture must start with UI work");
+    assert!(r.completion_identity.get().is_none());
+    let ui = request(&mut r);
+    assert!(r.holds(ui.ticket));
     r.data().rounds = 2;
     r.arm_background();
     let ticket = r.background_ticket().unwrap();
     assert!(r.request_completion(ticket).is_none());
-    assert!(r.completion_identity.get().is_none());
     let out = request(&mut r);
+    assert_ne!(out.ticket, ui.ticket);
     let cap = capability(&out);
     assert_durable(&cap, Owner::Background);
     assert!(out.clone().completion.unwrap().take().is_none());
     r.act("wave", vec![Value::Number(0.)]).unwrap();
+    assert!(!r.holds(ui.ticket));
+    assert!(r.pending.is_empty());
     assert!(r.holds(out.ticket));
     let batch = r.batch;
     assert!(r
