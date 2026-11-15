@@ -465,8 +465,20 @@ final class CanvasesHost {
     /// the end of every batch, and once per run-loop turn for changes that
     /// arrive outside one (D4 b, c).
     func captureIfNeeded() {
-        for e in Array(entries.values) where live(e.view.id) === e && e.presentable && e.through && e.view.needsCapture {
-            if let m = e.module { capture(m, e) }
+        guard entries.values.contains(where: { $0.through && $0.view.needsCapture }) else { return }
+        if session?.isApplyingPresentation == true { scheduleCapture(); return }
+        // An ancestor reads its nested canvases while its bitmap is open.
+        // Upload their children first, outside that bitmap (LLP 1014 D3).
+        let ordered = entries.values.filter { $0.presentable && $0.through }.map { e in
+            var depth = 0, above = e.view.canvasAbove
+            while let canvas = above { depth += 1; above = canvas.canvasAbove }
+            return (e, depth)
+        }.sorted { $0.1 > $1.1 }
+        for (e, _) in ordered where live(e.view.id) === e && e.view.needsCapture {
+            if let m = e.module {
+                capture(m, e)
+                if let outer = e.view.canvasAbove { outer.needsCapture = true }
+            }
         }
     }
 
@@ -683,23 +695,26 @@ final class CanvasesHost {
         frameNow = now
         defer { frameNow = previous }
         drainSensors()
-        var more = false
-        for e in Array(entries.values) where live(e.view.id) === e && e.presentable {
+        let current = Array(entries.values)
+        for e in current where live(e.view.id) === e && e.presentable {
             guard let m = e.module else { continue }
             refreshChildren(m, e)
-            if e.through && e.view.needsCapture { capture(m, e) }
+            if let outer = e.view.canvasAbove, entries[outer.id]?.through == true,
+               m.dirty(e.id) != 0 || (e.wants && now != e.readAt) { outer.needsCapture = true }
+            if e.through, !e.view.paintedThisTurn, let overlay = e.view.overlay, editing(under: overlay) { e.view.needsCapture = true }
+        }
+        captureIfNeeded()
+        var more = false
+        for e in current where live(e.view.id) === e && e.presentable {
+            guard let m = e.module else { continue }
             // Nested under a canvas painted through its surface (LLP 1014):
             // its Metal layer is never composited, so presenting to it would
             // block on a drawable nobody takes. It is only ever read back into
             // the ancestor's capture — which a change asks for here — and it
             // never wants frames of its own.
             if let outer = e.view.canvasAbove, outer.overlay != nil, entries[outer.id]?.through == true {
-                if m.dirty(e.id) != 0 || (e.wants && now != e.readAt) { outer.needsCapture = true }
                 continue
             }
-            // D4 (d): every frame while editing under the overlay — but not
-            // twice on the turn a batch already captured.
-            if e.through, !e.view.paintedThisTurn, let overlay = e.view.overlay, editing(under: overlay) { capture(m, e) }
             m.syncDynamicRange(e.id, view: e.view, layer: e.view.canvasMetal?.metalLayer)
             guard live(e.view.id) === e, let metal = e.view.canvasMetal, e.wants || m.dirty(e.id) != 0 || e.resized(box(metal)) else { continue }
             // D4: a canvas renders when the host judges it on screen. A
