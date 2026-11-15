@@ -6,8 +6,9 @@ use super::Kernel;
 use crate::id::ViewId;
 use crate::layout::LayoutMirror;
 
-/// Where a table's row or cell stands, as HTML's table model counts it
-/// (HTML §4.9.12).
+/// Where a table's row or cell stands, counted in the order the table is
+/// drawn (CSS 2.2 §17.2): the first `thead` first and the first `tfoot`
+/// last, any other row group where it is written.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TablePlace {
     /// The table that placed it: a `table`, or the box holding the

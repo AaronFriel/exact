@@ -114,3 +114,21 @@ fn a_block_tables_rows_count_on_across_its_anonymous_tables() {
     assert_eq!(at(&k, 9), Some([2, 1, 1, 0, 2]));
     assert_eq!(at(&k, 10), Some([2, 1, 1, 0, 1]));
 }
+
+/// Rows are counted in the order the table draws them (CSS 2.2 §17.2),
+/// which is not HTML's table model where the two differ: of two `tfoot`s,
+/// only the first is the footer, drawn last, and the second is a row group
+/// where it stands. So `tfoot, tbody, tfoot` is drawn body, second foot,
+/// first foot, and its rows count in that order.
+#[test]
+fn rows_count_in_the_order_they_are_drawn_so_only_the_first_tfoot_is_last() {
+    // 2 table; then each group, its row, its cell and its box: 3 tfoot,
+    // 7 tbody, 11 tfoot (the rows 4, 8, 12, the cells 5, 9, 13).
+    let group = |name: &'static str| tag(name, vec![tag("tr", vec![cell(&[], 20.0, 10.0)])]);
+    let k = lay_out(tag("table", ["tfoot", "tbody", "tfoot"].map(group).into()));
+    let y = |id| frame(&k, id)[1];
+    assert_eq!([8, 12, 4].map(y), [2.0, 16.0, 30.0], "body, foot 2, foot 1");
+    let row = |id| at(&k, id).map(|[_, row, ..]| row);
+    assert_eq!([8, 12, 4].map(row), [0, 1, 2].map(Some), "rows");
+    assert_eq!([9, 13, 5].map(row), [0, 1, 2].map(Some), "cells");
+}
