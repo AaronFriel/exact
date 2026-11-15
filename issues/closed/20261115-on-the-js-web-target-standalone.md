@@ -1,6 +1,7 @@
 # On the JS web target standalone output held for presentation survives a freeze
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Fixed by f30a8a551: every JS-target sound, MIDI, sequence or haptic plan watches the page's freeze, and the rising edge settles each presentation-held command list once, discarding starts and delivering ends and cleanup in order.
 **Systems:** host/web-js/facts.js, host/web-js/rt.js, host/web-js/transport.js, host/web-js/sounds.js, host/web-js/midi.js
 **Severity:** P3
 **Author:** Claude Fable 5.2

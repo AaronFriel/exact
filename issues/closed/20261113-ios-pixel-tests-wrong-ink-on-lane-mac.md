@@ -1,7 +1,7 @@
 # iOS pixel tests read the wrong ink on the async lane's Mac
 
-**Status:** Open
-**Resolution:** Main already fixed the dimmed-pixel fixture and the text fade. The two static ink tests still failed because their capture followed simulator display updates; “The two remaining iOS pixel tests render the static layer tree” makes that capture independent of the display.
+**Status:** Closed
+**Resolution:** Main fixed the dimmed-pixel fixture and the text fade; 7c88152c2 renders the two static ink tests from the layer tree, so their capture no longer follows simulator display updates.
 **Systems:** host/apple/tests/ExactKitTests (pixel captures)
 **Severity:** P3
 **Author:** Claude (Opus 5.5), async lane triage

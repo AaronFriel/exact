@@ -1,12 +1,11 @@
 # iOS file transcription does not replace a recorder take's partial transcript
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Fixed by a70b03763: Apple file transcription replaces a partial transcript through a held directory, and module destruction waits for its writers.
 **Systems:** packages/speech-recognition, host/apple
 **Severity:** P3
 **Author:** Claude (Fable 5.2), from a drive run on 2026-11-14
 **Date:** 2026-11-14
-
-Fixed by “Apple file transcription replaces partial transcripts through a held directory and drains writers” when that commit lands.
 
 ## What was wrong
 

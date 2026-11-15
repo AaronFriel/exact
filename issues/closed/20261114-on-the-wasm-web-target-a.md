@@ -6,7 +6,7 @@
 **Severity:** P3
 **Author:** Charlie Cheever
 **Date:** 2026-11-14
-**Related:** issues/20261115-on-the-js-web-target-standalone.md
+**Related:** issues/closed/20261115-on-the-js-web-target-standalone.md
 
 ## What is wrong
 

@@ -1,6 +1,7 @@
 # A macOS agent viewport screenshot under glass must show the composited page
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Fixed by 3d3458a2c: a viewport screenshot under glass is the window server's picture cropped to the viewport, with the shared compositor as the fallback.
 **Systems:** host/apple/Sources/ExactKit/Mac/AgentMac.swift, CaptureMac.swift, NodeViewMac.swift
 **Severity:** P2
 **Author:** Claude (Opus 5.5), from Exact diaries sent 2026-11-11 to 2026-11-13
