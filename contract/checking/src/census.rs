@@ -3,7 +3,7 @@
 //! @ref LLP 1172.013 E1; LLP 1172.019 §2 item 4.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use syn::visit::{self, Visit};
 
 #[derive(Default)]
@@ -75,30 +75,51 @@ impl<'ast> Visit<'ast> for Body {
     fn visit_item_fn(&mut self, _: &'ast syn::ItemFn) {}
 }
 
+struct Function {
+    file: PathBuf,
+    name: String,
+    body: Body,
+}
+
 #[derive(Default)]
-struct Functions(Vec<(String, Body)>);
+struct Functions {
+    file: PathBuf,
+    entries: Vec<Function>,
+}
 
 impl Functions {
+    fn source(&mut self, path: &Path, source: &str) {
+        self.file = path.to_path_buf();
+        self.visit_file(
+            &syn::parse_file(source).unwrap_or_else(|e| panic!("{}: {e}", path.display())),
+        );
+    }
+
     fn add(&mut self, sig: &syn::Signature, block: &syn::Block) {
         let mut body = Body::default();
         body.visit_signature(sig);
         body.visit_block(block);
-        self.0.push((sig.ident.to_string(), body));
+        self.entries.push(Function {
+            file: self.file.clone(),
+            name: sig.ident.to_string(),
+            body,
+        });
     }
 
-    fn walks(&self) -> Vec<&str> {
+    fn walks(&self) -> Vec<&Function> {
         let by_name: BTreeMap<_, Vec<_>> =
-            self.0
+            self.entries
                 .iter()
                 .enumerate()
-                .fold(BTreeMap::new(), |mut map, (i, (name, _))| {
-                    map.entry(name.as_str()).or_default().push(i);
+                .fold(BTreeMap::new(), |mut map, (i, function)| {
+                    map.entry(function.name.as_str()).or_default().push(i);
                     map
                 });
-        self.0
+        self.entries
             .iter()
             .enumerate()
-            .filter_map(|(start, (name, body))| {
+            .filter_map(|(start, function)| {
+                let body = &function.body;
                 if !body.view {
                     return None;
                 }
@@ -112,12 +133,14 @@ impl Functions {
                                 recursive = true;
                             }
                             if seen.insert(index) {
-                                pending.extend(self.0[index].1.calls.iter().map(String::as_str));
+                                pending.extend(
+                                    self.entries[index].body.calls.iter().map(String::as_str),
+                                );
                             }
                         }
                     }
                 }
-                (recursive || body.looped).then_some(name.as_str())
+                (recursive || body.looped).then_some(function)
             })
             .collect()
     }
@@ -145,9 +168,10 @@ impl<'ast> Visit<'ast> for Functions {
 }
 
 fn census(root: &Path) -> Vec<String> {
-    let mut files = vec![root.to_path_buf()];
+    let mut files = vec![(root.to_path_buf(), root.to_path_buf())];
+    let mut crates = BTreeMap::<PathBuf, Functions>::new();
     let mut walks = Vec::new();
-    while let Some(path) = files.pop() {
+    while let Some((path, mut crate_root)) = files.pop() {
         if path.is_dir() {
             // Test fixtures and the shared traversal aren't compiler hand walks.
             if matches!(
@@ -156,21 +180,33 @@ fn census(root: &Path) -> Vec<String> {
             ) {
                 continue;
             }
-            files.extend(std::fs::read_dir(&path).unwrap().map(|e| e.unwrap().path()));
+            if path.join("Cargo.toml").is_file() {
+                crate_root = path.clone();
+            }
+            files.extend(
+                std::fs::read_dir(&path)
+                    .unwrap()
+                    .map(|e| (e.unwrap().path(), crate_root.clone())),
+            );
         } else if path.extension().is_some_and(|e| e == "rs") {
             let source = std::fs::read_to_string(&path).unwrap();
-            let mut functions = Functions::default();
-            functions.visit_file(
-                &syn::parse_file(&source).unwrap_or_else(|e| panic!("{}: {e}", path.display())),
-            );
-            walks.extend(
-                functions
-                    .walks()
-                    .into_iter()
-                    .filter(|_| !path.ends_with("syntax/src/walk.rs"))
-                    .map(|name| format!("{}::{name}", path.strip_prefix(root).unwrap().display())),
-            );
+            crates.entry(crate_root).or_default().source(&path, &source);
         }
+    }
+    for functions in crates.values() {
+        walks.extend(
+            functions
+                .walks()
+                .into_iter()
+                .filter(|f| !f.file.ends_with("syntax/src/walk.rs"))
+                .map(|f| {
+                    format!(
+                        "{}::{}",
+                        f.file.strip_prefix(root).unwrap().display(),
+                        f.name
+                    )
+                }),
+        );
     }
     walks.sort();
     walks
@@ -182,8 +218,8 @@ fn recursive_view_walks_do_not_grow() {
     let measured = std::env::var_os("CHECKING_CENSUS_ROOT");
     let root = measured.as_deref().map(Path::new).unwrap_or(here);
     let walks = census(root);
-    // Including callback edges, 939dd84f2 had 185 sites; this batch removes three.
-    const CEILING: usize = 182;
+    // Including cross-file edges, 939dd84f2 had 315 sites; this batch has five fewer.
+    const CEILING: usize = 310;
     eprintln!(
         "{} compiler hand walks (ceiling {CEILING}):\n{}",
         walks.len(),
@@ -192,6 +228,42 @@ fn recursive_view_walks_do_not_grow() {
     assert!(
         walks.len() <= CEILING,
         "new view descent must use contract-checking's traversal"
+    );
+}
+
+#[test]
+fn census_finds_cross_file_recursion_within_each_crate() {
+    let unique = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let root =
+        std::env::temp_dir().join(format!("checking-census-{}-{unique}", std::process::id()));
+    for (path, source) in [
+        ("lower/Cargo.toml", ""),
+        (
+            "lower/src/sharing.rs",
+            "impl Lowerer { fn nodes(&mut self, nodes: &[Node]) { for n in nodes { self.node(n); } } }",
+        ),
+        (
+            "lower/src/lib.rs",
+            "impl Lowerer { fn node(&mut self, n: &Node) { self.nodes(n.children()); } }",
+        ),
+        ("other/Cargo.toml", ""),
+        (
+            "other/src/lib.rs",
+            "impl Lowerer { fn node(&mut self, n: &Node) { self.nodes(n.children()); } }",
+        ),
+    ] {
+        let path = root.join(path);
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, source).unwrap();
+    }
+    let walks = census(&root);
+    std::fs::remove_dir_all(root).unwrap();
+    assert_eq!(
+        walks,
+        ["lower/src/lib.rs::node", "lower/src/sharing.rs::nodes"]
     );
 }
 
@@ -208,7 +280,14 @@ fn census_finds_direct_mutual_and_iterative_walks_but_not_shared_traversal() {
     "#).unwrap();
     let mut functions = Functions::default();
     functions.visit_file(&file);
-    assert_eq!(functions.walks(), ["direct", "first", "second", "stacked"]);
+    assert_eq!(
+        functions
+            .walks()
+            .iter()
+            .map(|f| f.name.as_str())
+            .collect::<Vec<_>>(),
+        ["direct", "first", "second", "stacked"]
+    );
 }
 
 #[test]
@@ -236,7 +315,11 @@ fn census_finds_callback_recursion_but_not_shared_traversal() {
     let mut functions = Functions::default();
     functions.visit_file(&file);
     assert_eq!(
-        functions.walks(),
+        functions
+            .walks()
+            .iter()
+            .map(|f| f.name.as_str())
+            .collect::<Vec<_>>(),
         [
             "pointed",
             "every",
