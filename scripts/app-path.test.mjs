@@ -1,7 +1,7 @@
 // A path names an app by its directory, keeping generated artifacts in its target.
 import { afterEach, expect, test } from 'bun:test';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, relative, resolve } from 'node:path';
 import { authoredTests, resolveApp, webDist } from './app.mjs';
@@ -144,6 +144,30 @@ test('metrics passes its path-selected app to web rebuilds and Apple builds', ()
     expect(r.status, r.stdout + r.stderr + (r.error ?? '')).toBe(0);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 }, 30_000);
+
+test('a failed balanced iOS build blocks the symbol proof and fails JSON metrics', () => {
+  const source = readFileSync(resolve(ROOT, 'scripts/metrics.mjs'), 'utf8');
+  const builds = [], out = { ios_floor_bytes: 0 };
+  const buildStart = source.indexOf("    for (const optimize of ['speed', 'size', 'balanced'])");
+  const buildEnd = source.indexOf('    const development =', buildStart);
+  const runBuilds = new Function('spawnSync', 'process', 'resolve', 'ROOT', 'hello', 'env', 'appleArtifacts', 'existsSync', 'out', 'strippedSize', 'writeFileSync', 'failure', 'failureSummary', 'console', source.slice(buildStart, buildEnd));
+  runBuilds((_, args) => {
+    const optimize = args[args.indexOf('--optimize') + 1];
+    builds.push(optimize);
+    return { status: optimize === 'balanced' ? 1 : 0, stdout: '', stderr: optimize === 'balanced' ? 'balanced failed' : '' };
+  }, { execPath: 'bun', env: {} }, resolve, ROOT, { crate: () => 'hello-apple' }, {}, (_, { optimize }) => ({ binary: optimize }), () => true,
+  out, () => 1, () => {}, () => 'balanced failed', () => 'balanced failed', { error() {} });
+  const failuresStart = source.indexOf('const APPLE_AGENT_FAILURES =');
+  const failuresEnd = source.indexOf('\nconst rules =', failuresStart);
+  const failures = new Function(`${source.slice(failuresStart, failuresEnd)}; return APPLE_AGENT_FAILURES;`)();
+  const prerequisitesStart = source.indexOf('    const prerequisites = [');
+  const prerequisitesEnd = source.indexOf('\n    ];', prerequisitesStart) + '\n    ];'.length;
+  const prerequisites = new Function('out', `${source.slice(prerequisitesStart, prerequisitesEnd)} return prerequisites;`)(out);
+  expect(builds).toEqual(['speed', 'size', 'balanced']);
+  expect(out.ios_balanced_failed).toContain('exit 1');
+  expect(failures).toContain('ios_balanced_failed');
+  expect(prerequisites).toEqual(['production iOS balanced build failed']);
+});
 
 test('an app\'s selector selects it again by name and directory, when its name is not its directory\'s', () => {
   const root = mkdtempSync(join(tmpdir(), 'exact-app-selector-')), dir = join(root, 'copy'), link = join(root, 'link');

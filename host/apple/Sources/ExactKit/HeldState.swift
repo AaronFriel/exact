@@ -298,6 +298,7 @@ extension ExactApp {
     }
 }
 
+#if EXACT_AGENT
 extension Agent {
     /// The agent's `{"op":"tap","id":V,"holdState":…}` (LLP 1012, LLP 1122
     /// D8): the state held on the node as the real one, or let go (null).
@@ -314,3 +315,4 @@ extension Agent {
         return ["tapped": id, "holdState": r.held ?? NSNull(), "delivery": "recognized"]
     }
 }
+#endif

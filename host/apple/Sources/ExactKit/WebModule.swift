@@ -299,7 +299,10 @@ final class WebViews {
     /// driven level. Exact's own windows and sheets stay behind without lifting.
     private func keepGuestsSeen() {
         #if os(macOS)
-        guard Agent.windowsBehind, let window = session?.presenter.viewport.window, !(window is ExactAgentWindow) else { return }
+        guard AgentLink.windowsBehind, let window = session?.presenter.viewport.window else { return }
+        #if EXACT_AGENT
+        guard !(window is ExactDrivenWindow) else { return }
+        #endif
         let guests = entries.values.contains { $0.handle != nil }
         if guests, !lifted, window.level == .agentBehind {
             lifted = true

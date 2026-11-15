@@ -799,6 +799,7 @@ final class FrameObservation {
 }
 
 // @ref LLP 1142 §13 D8 — independent real-time observation, never a clock loan.
+#if EXACT_AGENT
 extension Agent {
     func liveFrames(_ request: [String: Any], completed: @escaping ([String: Any]) -> Void) {
         guard let ms = Agent.integer(request["live"]), (1...120_000).contains(ms) else {
@@ -860,3 +861,4 @@ extension Agent {
         sampler.observationStopped = { observation.finish($0) }
     }
 }
+#endif

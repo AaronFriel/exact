@@ -68,19 +68,6 @@ struct FingerReach {
     }
 }
 
-/// A node as a contact found it: its id and incarnation, so a view the pool
-/// reuses for another node (`NodePool`) is never taken for it.
-struct HeldNode {
-    weak var node: NodeView?
-    let id: UInt32, incarnation: UInt64
-    init(_ node: NodeView) { self.node = node; id = node.id; incarnation = node.incarnation }
-    /// Still that node of `presenter`'s tree.
-    func live(in presenter: Presenter) -> NodeView? {
-        guard let node, presenter.views[id] === node, node.id == id, node.incarnation == incarnation else { return nil }
-        return node
-    }
-}
-
 extension Agent {
     /// What a held contact on `view` would reach.
     enum HeldReach {

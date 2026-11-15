@@ -551,13 +551,13 @@ extension NodeView {
 /// words), where a web area served as a child was a stop VoiceOver's
 /// cursor did not move on from. A dialog in a sheet or in AppKit's popover
 /// has none: VoiceOver reads it by its window ("In dialog", "In popover").
-final class DialogWebArea: NSAccessibilityElement, AgentOwned {
+final class DialogWebArea: NSAccessibilityElement, InspectionOwned {
     weak var dialog: NodeView?
     init(_ dialog: NodeView) {
         self.dialog = dialog
         super.init()
     }
-    var agentViewId: UInt32? { dialog?.id }
+    var inspectionViewId: UInt32? { dialog?.id }
     override func accessibilityRole() -> NSAccessibility.Role? { .init(rawValue: "AXWebArea") }
     override func accessibilityParent() -> Any? { dialog?.pageAccessibilityParent }
     override func accessibilityChildren() -> [Any]? { dialog.map { [$0] } }
@@ -1228,6 +1228,73 @@ extension Presenter {
     }
 }
 
+#if os(macOS)
+extension Presenter {
+    /// AppKit's answers. A view and an element answer through their typed
+    /// accessors; any other participant (a control's cell, AppKit's own
+    /// parts) through the attribute protocol every AX client is served by.
+    /// `enabled` is the attribute a client is sent: a view that is not a
+    /// control has none, and its accessor's default `false` is not a state.
+    struct AxFacts {
+        var role: String?, subrole: String?, label: String?, title: String?, help: String?, value: Any?
+        var enabled = true, focused = false, selected = false, element = false, expanded = false
+        var frame: NSRect = .zero, identifier: String?, children: [Any] = []
+        /// `aria-required`, `aria-invalid` and `aria-haspopup` as browsers serve them.
+        var required = false, invalid: String?, popup: String?
+        mutating func aria(_ a: (String) -> Any?) {
+            invalid = a("AXInvalid").map { "\($0)" }
+            popup = (a("AXHasPopup") as? Bool) == true ? (a("AXPopupValue") as? String ?? "true") : nil
+        }
+    }
+    /// AppKit's navigation order, read untyped: it is declared as elements
+    /// of the `NSAccessibilityElement` protocol, which the class of that name
+    /// (a paragraph's links and words) does not formally adopt, and an
+    /// unoptimized build traps on a typed read holding one.
+    static func navigationOrder(_ o: NSObject) -> [Any]? {
+        let read = NSSelectorFromString("accessibilityChildrenInNavigationOrder")
+        return o.responds(to: read) ? o.perform(read)?.takeUnretainedValue() as? [Any] : nil
+    }
+    static func axFacts(_ obj: AnyObject) -> AxFacts? {
+        if let v = obj as? NSView {
+            var f = AxFacts(role: v.accessibilityRole()?.rawValue, subrole: v.accessibilitySubrole()?.rawValue, label: v.accessibilityLabel(), title: v.accessibilityTitle(),
+                           help: v.accessibilityHelp(), value: v.accessibilityValue(), enabled: v.accessibilityAttributeValue(.enabled) as? Bool ?? true, focused: v.isAccessibilityFocused(),
+                           selected: v.isAccessibilitySelected(), element: v.isAccessibilityElement(), expanded: v.isAccessibilityExpanded(), frame: v.accessibilityFrame(), identifier: v.accessibilityIdentifier(),
+                           children: navigationOrder(v) ?? v.accessibilityChildren() ?? [], required: v.isAccessibilityRequired())
+            f.aria { v.accessibilityAttributeValue(NSAccessibility.Attribute(rawValue: $0)) }
+            return f
+        }
+        if let e = obj as? NSAccessibilityElement {
+            return AxFacts(role: e.accessibilityRole()?.rawValue, subrole: e.accessibilitySubrole()?.rawValue, label: e.accessibilityLabel(), title: e.accessibilityTitle(),
+                           help: e.accessibilityHelp(), value: e.accessibilityValue(), enabled: e.accessibilityAttributeValue(.enabled) as? Bool ?? true, focused: e.isAccessibilityFocused(),
+                           selected: e.isAccessibilitySelected(), element: e.isAccessibilityElement(), expanded: e.isAccessibilityExpanded(), frame: e.accessibilityFrame(), identifier: e.accessibilityIdentifier(),
+                           children: navigationOrder(e) ?? e.accessibilityChildren() ?? [])
+        }
+        guard let o = obj as? NSObject else { return nil }
+        func a(_ name: String) -> Any? { o.accessibilityAttributeValue(NSAccessibility.Attribute(rawValue: name)) }
+        // AXPosition is the top-left corner in global display points, y down from the primary screen's top.
+        // A cell fills its control: the control's frame is the cell's.
+        var frame = (obj as? NSCell)?.controlView?.accessibilityFrame() ?? .zero
+        if frame.isEmpty, let p = (a("AXPosition") as? NSValue)?.pointValue, let s = (a("AXSize") as? NSValue)?.sizeValue {
+            let top = NSScreen.screens.first?.frame.maxY ?? 0
+            frame = NSRect(x: p.x, y: top - p.y - s.height, width: s.width, height: s.height)
+        }
+        // A cell is served its control's typed label, help and required
+        // (AppKit's dispatcher prefers them); the cell's own attributes
+        // answer "" or nothing (onboarding F16: every named pop-up,
+        // checkbox, slider and date read unnamed here).
+        let control = (obj as? NSCell)?.controlView
+        let nonEmpty = { (s: String?) in s.flatMap { $0.isEmpty ? nil : $0 } }
+        var f = AxFacts(role: a("AXRole") as? String, subrole: a("AXSubrole") as? String, label: nonEmpty(control?.accessibilityLabel()) ?? a("AXDescription") as? String, title: a("AXTitle") as? String,
+                        help: nonEmpty(control?.accessibilityHelp()) ?? a("AXHelp") as? String, value: a("AXValue"), enabled: a("AXEnabled") as? Bool ?? true, focused: a("AXFocused") as? Bool ?? false,
+                        selected: a("AXSelected") as? Bool ?? false, element: !o.accessibilityIsIgnored(), expanded: a("AXExpanded") as? Bool ?? false, frame: frame, identifier: a("AXIdentifier") as? String,
+                        children: a("AXChildren") as? [Any] ?? [], required: control?.isAccessibilityRequired() == true || a("AXRequired") as? Bool == true)
+        f.aria(a)
+        return f
+    }
+}
+#endif
+
+#if EXACT_AGENT
 extension Agent {
     /// Host facts and pending requests accompanying a normal tree read.
     func decorateTree(_ reply: [String: Any]) -> [String: Any] {
@@ -1258,6 +1325,7 @@ extension Agent {
         return reply
     }
 }
+#endif
 
 #if os(macOS)
 /// What `Presenter.tellLanding` tells VoiceOver on the turn after a commit.

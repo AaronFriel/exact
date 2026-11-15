@@ -30,7 +30,7 @@ export function sessionInput(s, { carrier, host, timing, touch, app }) {
      * and how each form is delivered — `platform` (a real input event through the platform's own path),
      * `recognized` (an already-recognized event injected), `activation` (a hit-test and a direct call),
      * `presenter` (seekable native recognition without OS input injection), or `unsupported`. iOS activates and
-     * injects; it synthesizes no touch (LLP 1008 §9), so its held contact is recognized (AgentPanIOS.swift), a real
+     * injects; it synthesizes no touch (LLP 1008 §9), so the iOS agent's held contact is recognized, a real
      * one under --touch platform. */
     input:
       host === 'ios' || host === 'host-ios'

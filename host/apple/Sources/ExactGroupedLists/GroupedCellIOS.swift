@@ -191,8 +191,8 @@ extension UICollectionViewListCell {
 #if os(iOS)
 extension GroupedCell: GroupedMenuSurface {}
 
-extension GroupedCell: AgentOwned {
+extension GroupedCell: InspectionOwned {
     /// A toggle row's element is its switch's: `tree --ax` joins it to the control.
-    package var agentViewId: UInt32? { accessibleToggle == nil ? nil : target }
+    package var inspectionViewId: UInt32? { accessibleToggle == nil ? nil : target }
 }
 #endif

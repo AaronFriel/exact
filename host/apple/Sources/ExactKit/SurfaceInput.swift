@@ -94,6 +94,7 @@ extension NodeView {
     }
 }
 
+#if EXACT_AGENT
 extension Agent {
     package static func worldRequest(_ request: [String: Any]) -> Bool { request["entity"] != nil || request["world"] as? Bool == true }
 
@@ -108,6 +109,7 @@ extension Agent {
 
     func canvasType(_ view: NodeView, _ request: [String: Any]) -> [String: Any] { session.canvases.type(self, view, request) }
 }
+#endif
 
 #if os(iOS) || os(tvOS)
 /// Whether a hit view's touches are a surface's (a scroll or a modal lets them go).
@@ -132,6 +134,7 @@ extension NodeView {
     }
 }
 
+#if EXACT_AGENT
 extension Agent {
     /// UIKit exposes no touch constructor. This is the raw seam, labelled recognized.
     func canvasTap(_ request: [String: Any]) -> [String: Any]? {
@@ -161,7 +164,7 @@ extension Agent {
             guard let hit = window.hitTest(inWindow, with: nil), hit === node || (node.isSurfaceControl && hit.isDescendant(of: node)) else { return ["error":"control or canvas is covered"] }
         }
         let p = node.local(inWindow)
-        let at = [Agent.r2(point.x), Agent.r2(point.y)]
+        let at = [InspectionValue.r2(point.x), InspectionValue.r2(point.y)]
         // A sample stamped `time`, the contact's (a set agent clock still wins,
         // LLP 1133.013 D7). Its point and time become the contact's only once
         // the surface takes it, so a refused one leaves the last delivered.
@@ -216,7 +219,7 @@ extension Agent {
                 let time = (canvasTime ?? CACurrentMediaTime()) + ms / 1000 / Double(steps)
                 guard send("move", at: node.local(vp.convert(CGPoint(x: q.x + vp.pageOrigin.x, y: q.y + vp.pageOrigin.y), to: nil)), time: time) else {
                     // The samples before it were delivered: the contact is where they left it.
-                    return ["error": "surface refused pointer", "at": [Agent.r2(contact?.x ?? from.x), Agent.r2(contact?.y ?? from.y)]]
+                    return ["error": "surface refused pointer", "at": [InspectionValue.r2(contact?.x ?? from.x), InspectionValue.r2(contact?.y ?? from.y)]]
                 }
                 contact = q
                 if ms > 0, session.clock == nil { RunLoop.main.run(until: Date(timeIntervalSinceNow: ms / 1000 / Double(steps))) }
@@ -258,7 +261,7 @@ extension Agent {
             [-1.0, 1.0].map { vp.convert(CGPoint(x: focal.x + $0 * d * k / 2 + vp.pageOrigin.x, y: focal.y + vp.pageOrigin.y), to: nil) }
         }
         for (q, page) in zip(fingers(1), [-1.0, 1.0].map { CGPoint(x: focal.x + $0 * d / 2, y: focal.y) }) where window.hitTest(q, with: nil) !== node {
-            return ["error": "pinch: a finger at (\(Agent.r2(page.x)), \(Agent.r2(page.y))) lands beside the canvas or on what covers it"]
+            return ["error": "pinch: a finger at (\(InspectionValue.r2(page.x)), \(InspectionValue.r2(page.y))) lands beside the canvas or on what covers it"]
         }
         guard node.focusSurfacePointer() else { return ["error": "surface refused pointer"] }
         var last = fingers(1).map(node.local), time = CACurrentMediaTime()
@@ -286,9 +289,10 @@ extension Agent {
             _ = send("cancel", last)
             return ["error": "surface refused pointer"]
         }
-        return ["tapped": node.id, "pinch": scale, "at": [Agent.r2(focal.x), Agent.r2(focal.y)], "delivery": "recognized"]
+        return ["tapped": node.id, "pinch": scale, "at": [InspectionValue.r2(focal.x), InspectionValue.r2(focal.y)], "delivery": "recognized"]
     }
 }
+#endif
 #endif
 
 #if os(iOS) || os(tvOS)

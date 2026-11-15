@@ -212,7 +212,7 @@ final class NavigationBasicsIOSTests: XCTestCase {
         let observation = try XCTUnwrap(Agent(session: session).layout(["id": Int(field.id)])["node"] as? [String: Any])
         let scrolls = try XCTUnwrap(observation["scroll"] as? [[String: Any]])
         let routeScroll = try XCTUnwrap(scrolls.first { $0["route"] as? Int == Int(route.node.id) })
-        XCTAssertEqual(routeScroll["sy"] as? Double, Agent.r2(content.contentOffset.y))
+        XCTAssertEqual(routeScroll["sy"] as? Double, InspectionValue.r2(content.contentOffset.y))
         let clips = try XCTUnwrap(observation["clip"] as? [[String: Any]])
         XCTAssertTrue(clips.contains { $0["id"] as? Int == Int(route.node.id) && $0["kind"] as? String == "viewport" })
         XCTAssertTrue(FocusSearch.items(p.documentMount, in: p.documentMount.bounds).contains { ($0 as? UIView) === field.field },

@@ -624,7 +624,7 @@ final class AccessibilityTreeIOSTests: XCTestCase {
         _ = box
         // A projected element (a swipe cell, here a declared owner) lives
         // outside its view's subtree; the scope is the joined ids, so it stays.
-        final class Projected: UIAccessibilityElement, AgentOwned { var agentViewId: UInt32? { 5 } }
+        final class Projected: UIAccessibilityElement, InspectionOwned { var inspectionViewId: UInt32? { 5 } }
         let projected = Projected(accessibilityContainer: try XCTUnwrap(p.views[2]))
         projected.isAccessibilityElement = true
         projected.accessibilityLabel = "Projected"
@@ -663,7 +663,7 @@ final class AccessibilityTreeIOSTests: XCTestCase {
     func testAnOwnedElementJoinsItsDeclaredViewAndASecureValueIsOmitted() throws {
         let p = try fixture()
         let box = try XCTUnwrap(p.views[4])
-        final class Owned: UIAccessibilityElement, AgentOwned { var agentViewId: UInt32? { 5 } }
+        final class Owned: UIAccessibilityElement, InspectionOwned { var inspectionViewId: UInt32? { 5 } }
         let owned = Owned(accessibilityContainer: box)
         owned.accessibilityLabel = "Declared"
         owned.isAccessibilityElement = true

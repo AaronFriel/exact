@@ -1,3 +1,4 @@
+#if EXACT_AGENT
 // The agent API's presenter half, the part both presenters share (LLP
 // 1012). Requests arrive as JSON lines on a stream the platform opened —
 // stdin on macOS, a Unix socket on iOS (a simulator app has no stdin) —
@@ -18,6 +19,39 @@ import AppKit
 #endif
 
 public final class Agent {
+    package static func installLink() {
+        guard AgentLink.hooks == nil else { return }
+        AgentLink.hooks = .init(
+            prepareStdio: {
+                #if os(macOS)
+                prepareStdio()
+                #endif
+            },
+            startStdio: { sessions in
+                #if os(macOS)
+                startStdio(sessions: sessions)
+                #endif
+            },
+            startSocket: { ready, sessions in
+                #if os(iOS) || os(tvOS)
+                startSocket(ready: ready, sessions: sessions)
+                #endif
+            },
+            reply: reply,
+            route: route,
+            windowsBehind: {
+                #if os(macOS)
+                windowsBehind
+                #else
+                false
+                #endif
+            },
+            setHostState: { hostState = $0 },
+            layout: { $0.agentInstance.layout() }
+        )
+        if let hostState = AgentLink.hostState { self.hostState = hostState }
+    }
+
     #if os(iOS) || os(tvOS)
     // An agent-issued edit awaits its actual editor's native caret reveal.
     weak var pendingTextReveal: TextArea?
@@ -1273,64 +1307,4 @@ extension ExactSession {
     }
 }
 
-public extension ExactEnv {
-    /// `EXACT_AGENT_CHROME=platform` (opt-in; splitter rough 4, 11): under
-    /// the agent, the native navigation bar and tab bar show as a person
-    /// sees them, their items pressing the authored controls they stand for.
-    /// The default paints the authored header and tablist in their place.
-    static let agentChrome = environment["EXACT_AGENT_CHROME"] ?? "agent"
-    /// Whether a driver can reach this launch. On iOS it is named by
-    /// `EXACT_AGENT_SOCKET` or `EXACT_AGENT_CONNECT` (`Agent.startSocket`);
-    /// the Mac's driver owns stdio. An iOS launch with `EXACT_AGENT=1` and
-    /// neither, as a grader's `simctl launch` arming only the fault table
-    /// (`EXACT_AGENT_FAIL_FETCH`) is, has no driver to read painted chrome:
-    /// it shows what a person sees.
-    #if os(iOS) || os(tvOS)
-    static let agentDriven = agentMode && (environment["EXACT_AGENT_SOCKET"] != nil || environment["EXACT_AGENT_CONNECT"] != nil)
-    #else
-    static let agentDriven = agentMode
-    #endif
-    /// Whether the authored header and tablist paint instead of UIKit's
-    /// bars: the agent's default chrome.
-    static let authoredChrome = agentDriven && agentChrome != "platform"
-    /// Whether the agent paints the popovers a person sees as UIKit's
-    /// menus (LLP 1021 D4). `EXACT_AGENT_PRESENTATION=native`, which
-    /// `--touch platform` launches with (LLP 1080.000 D7), shows UIKit's:
-    /// a real touch opens one and picks its item.
-    static let agentPaints = agentDriven && environment["EXACT_AGENT_PRESENTATION"] != "native"
-}
-
-extension ExactSession {
-    /// The agent API's runner half (LLP 1012): `tree`, `state`, `logs`, `settle`.
-    public func agent(_ request: String) -> String { runtime.agent(request) }
-    /// A line for the runner's journal (LLP 1012 §3; LLP 1035.001 D6): a
-    /// refused intent and its reason, read back through `logs`.
-    public func log(_ line: String) { runtime.log(line) }
-    /// The number of live views the presenter holds (the smoke reads it).
-    public var viewCount: Int { presenter.views.count }
-    /// The first root's frame size (the smoke reads it).
-    public var rootSize: CGSize { presenter.rootSize }
-    /// The viewport's size in points: what the kernel lays out under.
-    public var viewportSize: CGSize { presenter.viewportSize }
-    /// The text engine's counters since this session started (the smoke reads them).
-    public var measureCount: Int { Owner.shared.sync { text.measuring.measureCount } }
-    public var measureHits: Int { Owner.shared.sync { text.measuring.measureHits } }
-    public var measureSeconds: Double { Owner.shared.sync { text.measuring.measureSeconds } }
-    /// The GPU module's and the web arm's status lines (the smoke reads them).
-    public var gpuStatus: String { canvases.status }
-    public var webStatus: String { webviews.status }
-    /// The window's occlusion changed (macOS): the canvases follow.
-    public func occlusionChanged() {
-        #if os(macOS)
-        canvases.occlusionChanged()
-        #endif
-        frames.run(frames.hasWork)
-    }
-    #if os(iOS) || os(tvOS)
-    /// A hardware keyboard's Tab (or Shift-Tab) when no node of this session
-    /// holds the focus: an app's last responder forwards it here, as macOS's
-    /// window starts its key-view loop at the view.
-    public func moveFocus(backward: Bool) { presenter.moveFocus(backward: backward) }
-    #endif
-
-}
+#endif
