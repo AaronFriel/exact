@@ -134,3 +134,51 @@ fn fast_seek_and_load_are_numbered_for_the_player() {
         "{journal}"
     );
 }
+
+/// A `controls` video is a Tab stop where its player draws the controller,
+/// as a hand-built `PlayerView` is, and its props name it focused, so the
+/// player takes the window's focus (LLP 1042.001 D4). Without `controls`, or
+/// on a host with no player, it takes none.
+#[test]
+fn tab_stops_at_a_controls_video_where_a_player_draws_its_controller() {
+    let source = r#"component App
+  view
+    column width=400 height=600
+      button "Before" testId="before" height=30
+      video src="a.mp4" controls=true testId="controls" height=100
+      video src="b.mp4" testId="bare" height=100
+      button "After" testId="after" height=30
+"#;
+    let boot = |players: bool| {
+        let (mut p, error) = Presenter::boot_with(
+            &crate::test_plan(source),
+            (),
+            (400., 600.),
+            1.,
+            PathBuf::new(),
+            PainterChoice::Cpu,
+        )
+        .unwrap();
+        assert!(error.is_none(), "{error:?}");
+        p.brush.media.players = players;
+        p
+    };
+    let key = |p: &Presenter<()>, id| p.host.kernel().find_by_test_id(id)[0];
+    let id = |p: &Presenter<()>, name| p.host.kernel().node_by_key(key(p, name)).unwrap().id;
+    let tab = |p: &mut Presenter<()>, at: f64| {
+        assert_eq!(p.move_focus(false, at), None);
+        p.sync_media(&mut Default::default());
+        p.focus
+    };
+
+    let mut p = boot(true);
+    assert_eq!(tab(&mut p, 1.), Some(id(&p, "before")));
+    assert_eq!(tab(&mut p, 2.), Some(id(&p, "controls")));
+    assert_eq!(p.brush.media.focused, Some(key(&p, "controls")));
+    assert_eq!(tab(&mut p, 3.), Some(id(&p, "after")));
+    assert_eq!(p.brush.media.focused, None);
+
+    let mut p = boot(false);
+    assert_eq!(tab(&mut p, 1.), Some(id(&p, "before")));
+    assert_eq!(tab(&mut p, 2.), Some(id(&p, "after")));
+}

@@ -1,6 +1,10 @@
 package dev.exact.video
 
+import android.app.Activity
 import android.os.Looper
+import android.view.View
+import android.widget.FrameLayout
+import androidx.media3.ui.PlayerView
 import dev.exact.canvas.MediaSink
 import org.json.JSONObject
 import org.junit.After
@@ -9,10 +13,12 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import java.time.Duration
 
 /** The record's rules (LLP 1042.001 D1, D3, D5, D8) as a player follows them, with no media loaded. */
 @RunWith(RobolectricTestRunner::class)
@@ -152,4 +158,30 @@ class MediaPlayerTest {
         again.update(props("paused" to false, "load" to 1), 640, 360, record)
         assertEquals(emptyList<String>(), later.names.filter { it == "play" })
     }
+
+    @Test fun aFocusedControllerHoldsTheWindowsFocusAtItsPlayButton() {
+        val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
+        val reader = View(activity).apply { isFocusable = true; isFocusableInTouchMode = true }
+        val p = player(); p.bind(Events())
+        activity.setContentView(FrameLayout(activity).apply { addView(reader, 100, 100); addView(p.view, 640, 360) })
+        p.update(props("controls" to true), 640, 360, null)
+        val view = p.controller as PlayerView
+        view.hideController()
+        reader.requestFocus()
+        idle()
+        p.update(props("controls" to true, "focused" to true), 640, 360, null)
+        idle()
+        assertTrue(view.findViewById<View>(androidx.media3.ui.R.id.exo_play_pause).isFocused)
+        // Its controller hidden, the player keeps the focus, so the next key shows it again.
+        view.hideController()
+        idle()
+        assertTrue(view.isFocused)
+        // Not focused, it lets the focus go where the reader puts it.
+        p.update(props("controls" to true, "focused" to false), 640, 360, null)
+        reader.requestFocus()
+        view.showController(); idle(); view.hideController(); idle()
+        assertTrue(reader.isFocused)
+    }
+
+    private fun idle() = shadowOf(Looper.getMainLooper()).idleFor(Duration.ofSeconds(1))
 }

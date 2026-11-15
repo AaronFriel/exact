@@ -97,6 +97,8 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
     private var claim: AudioClaim? = null
     private val focusType: String? = audioSession(context).takeIf { it == "playback" }
     private val access = context.getSystemService(AccessibilityManager::class.java)
+    /** exact2's focus is on this controller: it holds the window's focus, so keys reach Media3's own handling (D4). */
+    private var held = false
     /** While a finger explores the screen (TalkBack), the controller stays shown, so its buttons can be reached (D11). */
     private val exploring = AccessibilityManager.TouchExplorationStateChangeListener { explore() }
 
@@ -126,6 +128,7 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
         exo.setPlaybackParameters(PlaybackParameters.DEFAULT)
         applied = null; src = ""; prepared = false; rendered = false; begun = false; error = null; unavailable = null
         pendingSeek = null; seekLanded = false; resumes = false; overridden = false; speed = 1f; inView = false; timed = false
+        held = false
         videoW = 0; videoH = 0
         this.sink = sink
     }
@@ -143,6 +146,8 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
         controls?.setFullscreenButtonClickListener(if (button) PlayerView.FullscreenButtonClickListener { if (it) fullscreen() } else null)
         poster = props.optBoolean("poster")
         unveil()
+        val focused = props.optBoolean("focused")
+        if (focused != held) { held = focused; if (focused) focus() }
         if (width != boxW || height != boxH || before?.optString("fit") != fit) { boxW = width; boxH = height; layoutPicture() }
 
         muted = props.optBoolean("muted")
@@ -324,6 +329,16 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
             val layout = if (audio) R.layout.exact_audio_controls else R.layout.exact_video_controls
             val made = LayoutInflater.from(themed).inflate(layout, frame, false) as PlayerView
             made.setShowNextButton(false); made.setShowPreviousButton(false)
+            // Focusable itself, so it keeps the focus while its controller is hidden and the next key shows it. Media3
+            // marks the focus on the controller's buttons; the platform's grey wash over the whole view is not its.
+            made.isFocusable = true
+            made.defaultFocusHighlightEnabled = false
+            made.setControllerVisibilityListener(PlayerView.ControllerVisibilityListener { shown ->
+                // Shown again by a key, its play button takes the focus, as Media3 means it to ([focusPlay]). Hidden, its
+                // button gives up the focus to the window's first view: the player takes it back.
+                if (shown == View.VISIBLE) { if (held && made.hasFocus()) focusPlay(made) }
+                else if (held && !made.hasFocus()) made.requestFocus()
+            })
             // An `audio` shows no picture, so no captions either (LLP 1042 §8).
             if (audio) made.subtitleView?.visibility = View.GONE
             exo.clearVideoTextureView(texture)
@@ -361,6 +376,28 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
         layoutPicture()
         projection.event("fullscreenchange", "false")
         pushState()
+    }
+
+    /** exact2's focus reached the controller (D4): it shows, and its play button takes the window's focus ([focusPlay]). */
+    private fun focus() {
+        val view = controls ?: return
+        view.showController()
+        focusPlay(view)
+    }
+
+    /** The play button of [view]'s controller takes the focus, where Media3 means to put it when the controller shows.
+     * A hidden controller's buttons become visible only as its fade starts, a frame later, so Media3's own request
+     * finds none: the player holds the focus until then, and the button takes it before that frame is drawn. */
+    private fun focusPlay(view: PlayerView) {
+        val play = view.findViewById<View>(androidx.media3.ui.R.id.exo_play_pause)
+        if (play == null) { if (!view.hasFocus()) view.requestFocus(); return }
+        if (play.isFocused || play.requestFocus() || !view.requestFocus()) return
+        view.viewTreeObserver.addOnPreDrawListener(object : android.view.ViewTreeObserver.OnPreDrawListener {
+            override fun onPreDraw(): Boolean {
+                if (!held || !view.hasFocus() || play.isFocused || play.requestFocus()) view.viewTreeObserver.removeOnPreDrawListener(this)
+                return true
+            }
+        })
     }
 
     /** Media3 hides the controller after a while and on a tap; while touch exploration is on it stays (D11), and an

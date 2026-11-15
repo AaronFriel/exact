@@ -354,6 +354,7 @@ open class ExactActivity : Activity() {
         if (nativeResumed) elements.lifecycle.event(ViewLifecycle.RESUME)
         elements.hatched = { node, context -> hatchReader?.made(node, context) }
         view.natives = elements
+        elements.reader = view
         // The app's text fields (LLP 1115.001 D8) outlive a reader made again: a field keeps its view, and with it
         // its selection and its undo, while its node lives. Under the view, which takes every touch and hands a
         // field its own ([Fields.touch]).

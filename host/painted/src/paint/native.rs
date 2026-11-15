@@ -37,8 +37,13 @@ pub enum NativeKind {
 
 /// What a media node's props carry beside its own: what the presenter knows
 /// of it from the runner (LLP 1042.001 D3).
-#[derive(Default)]
 pub(crate) struct Media {
+    /// Each media node has a platform player, which draws its controller
+    /// and takes the window's focus: only Android's reader has one.
+    pub(crate) players: bool,
+    /// The `controls` video exact2's focus is on: its player takes the
+    /// window's focus (D4).
+    pub(crate) focused: Option<exact_kernel::NodeKey>,
     /// The tree these were found in.
     pub(crate) epoch: Option<u64>,
     /// The media nodes that handle `timeupdate`: only their players run its
@@ -52,6 +57,20 @@ pub(crate) struct Media {
     /// The media nodes whose player has shown their source's first frame
     /// (`frameReady`): their poster is gone.
     pub(crate) framed: std::collections::BTreeSet<exact_kernel::NodeKey>,
+}
+
+impl Default for Media {
+    fn default() -> Self {
+        Self {
+            players: cfg!(target_os = "android"),
+            focused: None,
+            epoch: None,
+            timed: Default::default(),
+            commands: Default::default(),
+            asked: Vec::new(),
+            framed: Default::default(),
+        }
+    }
 }
 
 /// A media node's commands so far.
@@ -128,6 +147,7 @@ impl Painter {
                         "audio": p.str(PropId::SemanticTag) == Some("audio"),
                         "label": p.str(PropId::AccessibilityLabel),
                         "timeupdate": self.media.timed.contains(&node.key),
+                        "focused": self.media.focused == Some(node.key),
                         "fit": match node.style.object_fit {
                             ObjectFit::Contain => "contain",
                             ObjectFit::Cover => "cover",
