@@ -687,11 +687,12 @@ open class ExactActivity : Activity() {
         // GPU modules (LLP 1009) come from this APK. Exported intents never select executable content.
         android.system.Os.setenv("EXACT_NATIVE_LIBS", applicationInfo.nativeLibraryDir, true)
         android.system.Os.setenv("EXACT_MOVE_TRACKS", "1", true)
+        // The logcat tag of the app's `console` lines, in every build (`host/painted/src/android.rs`, `console`): the
+        // package name, as Apple's subsystem is the bundle identifier. A label can be localized and hold spaces.
+        android.system.Os.setenv("EXACT_PACKAGE", packageName, true)
         val development = packageManager.getApplicationInfo(packageName, android.content.pm.PackageManager.GET_META_DATA)
             .metaData?.getBoolean("dev.exact.development", false) == true
         if (!development) return
-        // The data module's `console` lines to logcat under `exact-app` (`host/painted/src/android.rs`, `console`).
-        android.system.Os.setenv("EXACT_LOG_CONSOLE", "1", true)
         // rows=0: no kept rows, every frame walks every row (exact2's EXACT_ROWS), to compare.
         if (intent.getStringExtra("rows") == "0") android.system.Os.setenv("EXACT_ROWS", "0", true)
         // imgvp=N: keep N viewports of decoded pictures (exact2's EXACT_IMAGE_VIEWPORTS; 12 by default).
