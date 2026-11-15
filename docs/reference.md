@@ -678,6 +678,9 @@ Widget entries are top-level `app.json` `widgets` rows. For example:
 Optional `title` and `description` strings supply the widget gallery's labels;
 each defaults to the humanised `kind` when omitted.
 
+Widgets are WidgetKit's, so only Apple builds make them: an Android build says
+so and packages none.
+
 On iOS and macOS, an optional `configuration` lets the person choose in Edit Widget
 (LLP 1126; LLP 1133.023). The
 entry becomes WidgetKit's

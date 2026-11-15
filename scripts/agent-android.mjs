@@ -1013,6 +1013,7 @@ export function buildApk(app, env, profile, writeLocks = false, bundle = false) 
   try { icons = androidIcons(app.manifest, app.dir, resolve(dirs.app, 'icons/res')); }
   catch (error) { for (const line of error.message.split('\n')) console.error(`${app.name}: ${line}`); return null; }
   const launch = androidLaunch(app.manifest, resolve(dirs.app, 'launch/res'));
+  if (app.manifest.widgets?.length) console.warn(`${app.name}: app.json's widgets are Apple-only (WidgetKit), so this APK has none; Android home-screen widgets made from the same rows are planned in an RFC, and the rows need no change`);
   const built = (name) => resolve(app.target, ANDROID_TARGET, profile, `lib${name.replaceAll('-', '_')}.so`);
   // Every library is baked (`buildBake`), which writes the build's receipt (android-aarch64-linux-android.build.json):
   // a first `push` starts a stream from exactly this APK's cohort (LLP 1030.006 D6).
