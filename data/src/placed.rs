@@ -1335,6 +1335,15 @@ impl<D: DataSource + 'static> exact_runner::DataSourceWrapper for Placed<D> {
         self.here()?.module_landed(store, token, outcome)
     }
 
+    /// A worker's module makes none: its listener's fetch is refused (LLP
+    /// 1175 D6).
+    fn take_reports(&mut self) -> Vec<exact_runner::Report> {
+        match (&self.owner, &mut self.inner) {
+            (None, Some(source)) => DataSource::take_reports(source),
+            _ => Vec::new(),
+        }
+    }
+
     fn background_state(&self) -> Option<exact_runner::BackgroundState> {
         match self.inner.as_ref() {
             Some(inner) if self.owner.is_none() => inner.background_state(),

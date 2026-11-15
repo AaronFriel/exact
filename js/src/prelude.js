@@ -199,6 +199,10 @@
   var pending = new Map(),
     // the answer a fetch belongs to
     currentCall = null,
+    // the id of the answer whose turn the engine runs (an id, so that no ended call's value is kept alive by it), and
+    // whether the turn is a module turn delivering a report's reply (LLP 1175 D3)
+    turnId = 0,
+    reportTurn = false,
     // a socket's mapper answering a frame (D7)
     mapping = null,
     // any mapper call
@@ -396,8 +400,23 @@
     Response: Response,
     FetchError: FetchError,
     conflict: SOCKET_AND_FETCH,
+    errors: errors,
     current: function () {
       return currentCall;
+    },
+    // Whether `call` is the answer whose turn the engine runs now (`__exact_call`, `__exact_turn`).
+    inTurn: function (call) {
+      return call !== null && call.id === turnId && turnId !== 0;
+    },
+    moving: function () {
+      return moving;
+    },
+    initializing: function () {
+      return initializing;
+    },
+    // A module turn that delivers a report's reply (LLP 1175 D3).
+    afterReport: function () {
+      return reportTurn;
     },
     mapping: function () {
       return mapping;
@@ -738,6 +757,7 @@
     };
     var result;
     currentCall = call;
+    turnId = call.id;
     work.setTurn(call);
     calls.set(call.id, call);
     try {
@@ -1296,6 +1316,8 @@
   global.__exact_turn = function (id) {
     var t = id === "module" ? work.MODULE : id ? calls.get(Number(id)) || null : null;
     currentCall = t === work.MODULE ? null : t;
+    turnId = currentCall ? currentCall.id : 0;
+    reportTurn = false;
     work.setTurn(t);
   };
   global.__exact_module_discarded = function () {
@@ -1339,11 +1361,19 @@
     currentCall = p.module ? null : p.call;
     // an adopted fetch's: its let-go call's steps run as it (the async helper), a plain reaction as no answer
     if (p.module) work.landed();
+    // A report's: its listener's continuation reads the reply, and its failure is quiet (LLP 1175 D4).
+    if (p.report) {
+      fetches.reportLanded();
+      reportTurn = true;
+    }
     // Its `AbortSignal.timeout`'s deadline passed on the host: the signal aborts.
     if (o.failed && o.failed.kind === "Timeout" && p.timed) timers.expire(p.signal);
     // A reply delivered after the signal aborts still rejects with that signal's reason.
     if (p.signal && p.signal.aborted) p.reject(p.signal.reason);
-    else if (o.failed) p.reject(new FetchError(launchRefusal(o.failed, p.url)));
+    else if (o.failed) {
+      var failure = new FetchError(launchRefusal(o.failed, p.url));
+      p.reject(p.report ? errors.quietReason(failure) : failure);
+    }
     else p.resolve(hostReply(o.response, p.bodyTo, p.head));
   };
 })(globalThis);

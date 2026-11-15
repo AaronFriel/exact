@@ -2315,11 +2315,11 @@ A data module hears its errors as a page does: `addEventListener("error", …)`,
 `addEventListener("unhandledrejection", …)`, `onerror`, `onunhandledrejection`
 and `reportError` exist on every host. A listener runs when a page's would. A
 failed answer is not an `error` event; call `reportError(e)` in the answer's
-`catch` to send it there. A listener runs with no answer in flight, so natively
-its `fetch` is refused and logged, as any such call is: to send a report to a
-service, send it from the answer's `catch` while the answer is still in flight.
-Every unhandled rejection still reaches `logs` (`data: unhandled rejection:
-…`), whatever a listener does. What the answer does not catch fails it
+`catch` to send it there. Natively, a listener may `fetch` a plain HTTP URL
+while it runs, and no answer waits for that request. Fetch in the listener
+itself, not after an `await`, and catch the request's failure. Every unhandled
+rejection still reaches `logs` (`data: unhandled rejection: …`), whatever a
+listener does. What the answer does not catch fails it
 (`failure(x).code`, above) and reaches `logs`.
 
 A newer send may replace a mutation's reply. An operation already issued still

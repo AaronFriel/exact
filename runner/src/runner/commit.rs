@@ -195,8 +195,13 @@ impl<D: DataSource> Runner<D> {
                     self.derives = p.derives;
                     self.derive_store_dependent = p.derive_store_dependent;
                     // A resource request the settlement handed out goes
-                    // with it: never taken, its continuation is let go.
-                    let dropped: Vec<RequestOut> = self.requests.drain(p.requests..).collect();
+                    // with it: never taken, its continuation is let go. A
+                    // report (module work) is sent whatever the commit does.
+                    let after: Vec<RequestOut> = self.requests.drain(p.requests..).collect();
+                    let (sent, dropped): (Vec<_>, Vec<_>) = after
+                        .into_iter()
+                        .partition(|r| self.is_module_work(r.ticket));
+                    self.requests.extend(sent);
                     for r in &dropped {
                         self.discard_request(&r.request);
                     }
@@ -783,6 +788,13 @@ impl<D: DataSource> Runner<D> {
         self.poisoned = true;
         self.notes.clear();
         self.commands.clear();
+        // Module work never handed out (a report, a delivery's continuation) is dropped with it.
+        let unsent: Vec<u64> = (self.requests.iter().map(|r| r.ticket))
+            .filter(|t| self.is_module_work(*t))
+            .collect();
+        for ticket in unsent {
+            self.drop_module_work(ticket);
+        }
         self.requests.clear();
         self.drop_background();
         self.forgot |= !self.pending.is_empty();

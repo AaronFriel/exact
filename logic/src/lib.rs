@@ -491,6 +491,11 @@ impl<D: DataSource> exact_runner::DataSourceWrapper for Swappable<D> {
             None => Ok(()),
         }
     }
+    fn take_reports(&mut self) -> Vec<exact_runner::Report> {
+        self.embedded
+            .as_mut()
+            .map_or_else(Vec::new, |embedded| embedded.take_reports())
+    }
     fn module_delivery(
         &mut self,
         store: &mut Store,

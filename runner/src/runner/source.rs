@@ -277,6 +277,32 @@ pub struct Overlaid {
     pub keep: Vec<u64>,
 }
 
+/// A data module's report (LLP 1175 D3): a plain HTTP request a listener for
+/// its global's error events made while it was dispatched. No answer waits
+/// for it. The runner runs it as module work ([`DataSource::take_reports`]),
+/// with the authority its own records give `by`.
+#[derive(Debug)]
+pub struct Report {
+    /// The source's token for the reply ([`DataSource::module_delivery`]).
+    pub token: u64,
+    /// The request, with no reach yet: the runner stamps it.
+    pub request: crate::request::Request,
+    /// Whose turn the listener interrupted.
+    pub by: Reporter,
+}
+
+/// Whose turn a report was made in, as the source knows it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Reporter {
+    /// The answer for this target was running when the event was dispatched.
+    Answer(Target),
+    /// A tool's handler was running.
+    Tool,
+    /// No answer was: a background round, a module turn, or a step of an
+    /// answer outside its own turn.
+    None,
+}
+
 /// What a request answers: a runtime resource row, a plan mutation, or one
 /// send of a `parallel` mutation. The runner keeps one answer
 /// in flight per target, with a set of requests for a resource (LLP 1162 D2).
@@ -646,6 +672,15 @@ data_source! {
     ) -> Result<(), DataError> {
         let _ = (store, token, outcome);
         Ok(())
+    }
+
+    /// The reports the module made since the last take (LLP 1175 D3). The
+    /// runner takes them after every call into the source and runs each as
+    /// module work, its reply delivered under its token
+    /// ([`DataSource::module_delivery`]). A source that forwards
+    /// `module_landed` forwards this.
+    fn take_reports(&mut self) -> Vec<Report> {
+        Vec::new()
     }
 
     /// The module's background storage now, or `None` for a source that

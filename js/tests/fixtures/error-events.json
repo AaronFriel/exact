@@ -78,6 +78,13 @@
         "web": ["data: unhandled rejection: rethrown"]
       }
     },
+    {
+      "run": "send",
+      "url": true,
+      "heard": [["error", "Error: send", true, true], ["onerror", "Error: send", "string"], ["after", false], ["reply", 204]],
+      "journal": { "native": ["console: Uncaught Error: send"], "web": [] },
+      "reports": ["Error: send"]
+    },
     { "run": "answer-throws", "fails": true, "heard": [], "journal": { "native": [], "web": [] } },
     { "run": "answer-rejects", "fails": true, "heard": [], "journal": { "native": [], "web": [] } }
   ]

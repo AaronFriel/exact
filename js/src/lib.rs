@@ -247,6 +247,11 @@ struct HostState {
     secrets: secrets::Shared,
     store: Option<*mut Store>,
     requests: Vec<(u64, Request)>,
+    /// Reports (LLP 1175 D3, op 29): requests an error event's listener
+    /// made, moved out of `requests`, with whose turn it interrupted.
+    reports: Vec<(u64, Request, exact_runner::Reporter)>,
+    /// Whose turn the call into the engine now runs, for a report made in it.
+    turn: Option<exact_runner::Reporter>,
     /// The fetch tickets the app aborted after their requests were handed
     /// out (op 23), until `take_aborted` names their answers to the runner.
     aborted: Vec<u64>,
@@ -848,6 +853,7 @@ impl Module {
         self.parked.clear();
         self.work = Default::default();
         self.host.requests.clear();
+        self.host.reports.clear();
         self.host.aborted.clear();
         self.background = Default::default();
         // Module work ends with the engine (LLP 1146 D2).
@@ -932,6 +938,15 @@ impl Module {
         count.ok()?.parse().ok()
     }
 
+    /// Whose turn a call for `target` runs, for a report made in it (LLP 1175 D3).
+    fn reporter(target: Option<Target>, source: &str) -> exact_runner::Reporter {
+        match target {
+            Some(target) => exact_runner::Reporter::Answer(target),
+            None if source.starts_with(TOOL) => exact_runner::Reporter::Tool,
+            None => exact_runner::Reporter::None,
+        }
+    }
+
     fn take_request(&mut self, ticket: u64) -> Option<Request> {
         let pos = self.host.requests.iter().position(|(t, _)| *t == ticket)?;
         Some(self.host.requests.remove(pos).1)
@@ -998,6 +1013,7 @@ impl Module {
             None if session && source.starts_with(TOOL) => "tool",
             _ => "",
         };
+        self.host.turn = Some(Module::reporter(target, source));
         let started = Instant::now();
         let budget_ms = self.turn_budget_ms(started);
         // (its own time on this thread's CPU clock, a wall backstop beside it: turn.rs)
@@ -1028,6 +1044,7 @@ impl Module {
             Ok(Module::step(sig, engine, source, reply, self.host.baking))
         })();
         self.host.store = None;
+        self.host.turn = None;
         if let Some(error) = self.retire_oom() {
             return Err(error);
         }

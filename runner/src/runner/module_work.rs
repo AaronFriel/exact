@@ -8,8 +8,10 @@
 //! and the commit after it reaches the host as any reply's does, presented
 //! and persisted.
 use super::modules::{CallOrigin, Causes};
-use super::{CommitReceipt, DataSource, InFlight, PendingReq, Runner, RunnerError, Target};
-use crate::request::{Outcome, RequestOut};
+use super::{
+    CommitReceipt, DataSource, InFlight, PendingReq, Reporter, Runner, RunnerError, Target,
+};
+use crate::request::{Outcome, RequestClass, RequestOut};
 use crate::store::StoreCheckpoint;
 use std::collections::BTreeMap;
 
@@ -131,6 +133,90 @@ impl<D: DataSource> Runner<D> {
             self.module_work.fetches.insert(fetch, ticket);
         }
         self.keep_send(ticket);
+    }
+
+    /// The source's reports (LLP 1175 D3), each sent now as module work: no
+    /// answer waits for it, and its reply reaches the listener's continuation
+    /// in a module turn. Taken after every call into the source and before an
+    /// origin's commit ends, so that `by`'s records are still the runner's.
+    pub(super) fn take_reports(&mut self) {
+        let reports = self.data.take_reports();
+        // A poisoned runner sends nothing more.
+        if self.poisoned {
+            return;
+        }
+        for report in reports {
+            let (origin, invocation, causes) = self.report_authority(report.by);
+            let mut request = report.request;
+            let ticket = self.next_ticket;
+            self.next_ticket += 1;
+            request.reach = self.reach_of(origin);
+            self.log(super::lines::enqueued(ticket, NAME, &request));
+            let authority = Authority {
+                module: request.module.clone(),
+                origin,
+                invocation,
+                causes,
+            };
+            self.module_work
+                .tickets
+                .insert(ticket, (report.token, authority));
+            if let Some(fetch) = request.fetch {
+                self.module_work.fetches.insert(fetch, ticket);
+            }
+            self.requests.push(RequestOut {
+                class: RequestClass::Ordered,
+                ticket,
+                target: NAME.into(),
+                request,
+                forced: false,
+            });
+        }
+        // An abort the module heard before the report was taken waited for
+        // its request; it is named now, so the report is never handed out.
+        if !self.heard_aborts.is_empty() {
+            self.match_aborts();
+        }
+    }
+
+    /// A report's origin, invocation and causes, from the runner's records,
+    /// never the module's word. An answer's are those of its requests in
+    /// flight and, when none is, of the commit asking it now; where the two
+    /// differ the least privileged origin wins and the causes join. A tool's
+    /// handler's are its invocation's. With no answer running, a report gets
+    /// what any data-code call in the commit being made gets
+    /// ([`Self::data_origin`]), a fresh invocation and no causes.
+    fn report_authority(&mut self, by: Reporter) -> (CallOrigin, u64, Causes) {
+        match by {
+            Reporter::Answer(target) => {
+                let mut origin = self.origin_for(Some(target));
+                let mut invocation = self.invocation_id();
+                let mut causes = self.causes_for(target);
+                let tickets: Vec<u64> = (self.pending.iter())
+                    .filter(|p| p.target == target && p.reask_at.is_none())
+                    .map(|p| p.ticket)
+                    .collect();
+                for ticket in tickets {
+                    let theirs = self.ticket_origin(ticket);
+                    if theirs <= origin {
+                        origin = theirs;
+                        invocation = self.ticket_id(ticket);
+                    }
+                    causes = causes.union(self.ticket_causes(ticket));
+                }
+                (origin, invocation, causes)
+            }
+            Reporter::Tool => {
+                let now = self.call_origin();
+                let origin = self.tool_origin().map_or(now, |tool| tool.min(now));
+                (origin, self.invocation_id(), self.commit_causes())
+            }
+            Reporter::None => (
+                self.data_origin(),
+                self.next_invocation(),
+                Causes::default(),
+            ),
+        }
     }
 
     /// Request `p` is let go by the commit being made: one with effects is
@@ -342,3 +428,7 @@ impl<D: DataSource> Runner<D> {
         self.commit_again(now, NAME)
     }
 }
+
+#[cfg(test)]
+#[path = "report_tests.rs"]
+mod report_tests;

@@ -127,6 +127,7 @@ impl Module {
             .as_deref()
             .map_or(String::new(), |s| s.clock_ms().to_string());
         self.host.store = store.as_mut().map(|s| &mut **s as *mut Store);
+        self.host.turn = Some(Module::reporter(key.0, source));
         self.host.answer_ops.clear();
         if let Some(store) = store.as_deref() {
             self.host.socket_buffered = socket::snapshot(&self.streams, store);
@@ -187,6 +188,7 @@ impl Module {
             Ok(Module::step(sig, engine, source, reply, self.host.baking))
         })();
         self.host.store = None;
+        self.host.turn = None;
         if let Some(error) = self.retire_oom() {
             return Err(error);
         }

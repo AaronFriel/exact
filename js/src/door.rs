@@ -306,6 +306,25 @@ pub(crate) unsafe extern "C" fn host_door(
         // A setting a launch may give (LLP 1153.002 D2): the launch's value
         // for the name `a`, which the bundle's launch module asks for.
         28 => Ok(super::launch::value(state, &a)),
+        // A fetch an error event's listener made (LLP 1175 D3): its request
+        // goes out as a report, not with an answer. `b` is "1" when the
+        // listener interrupted the turn the engine runs now, whose reporter
+        // it then takes; else no answer's.
+        29 => {
+            let ticket = a.parse::<u64>().ok();
+            match state.requests.iter().position(|(t, _)| Some(*t) == ticket) {
+                Some(at) => {
+                    let (ticket, request) = state.requests.remove(at);
+                    let by = match (&*b, state.turn) {
+                        ("1", Some(by)) => by,
+                        _ => exact_runner::Reporter::None,
+                    };
+                    state.reports.push((ticket, request, by));
+                    Ok(None)
+                }
+                None => Err("report: no such request".into()),
+            }
+        }
         other => Err(format!("__exact_host: no op {other}")),
     };
     *out = std::ptr::null_mut();

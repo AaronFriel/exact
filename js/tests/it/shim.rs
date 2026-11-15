@@ -276,7 +276,7 @@ fn a_refused_fetch_is_the_runtimes_line() {
         said.journal,
         [
             "console: the app at load",
-            "console: fetch() called outside an answer: it was never run. Start a fetch inside an answer",
+            "console: fetch() called outside an answer: it was never run. Start a fetch inside an answer, or in an error event's listener itself",
             "console: the app's handoffs",
         ]
     );
