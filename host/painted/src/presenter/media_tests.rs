@@ -88,7 +88,8 @@ fn the_painter_names_the_videos_that_handle_timeupdate() {
     assert!(!p.brush.media.timed.contains(&key(&p, "quiet")));
 }
 
-/// `fastSeek` and `load` are counted in the node's props (LLP 1042.001 §5):
+/// `fastSeek`, `load` and `requestFullscreen` are counted in the node's
+/// props (LLP 1042.001 §5):
 /// a node that is no media element, or no node, refuses them.
 #[test]
 fn fast_seek_and_load_are_numbered_for_the_player() {
@@ -113,9 +114,13 @@ fn fast_seek_and_load_are_numbered_for_the_player() {
     p.media_command("fastSeek", &[id("clip"), exact_plan::Value::Number(4.5)]);
     p.media_command("fastSeek", &[id("clip"), exact_plan::Value::Number(7.0)]);
     p.media_command("load", &[id("clip")]);
+    p.media_command("requestFullscreen", &[id("clip")]);
     let asked = p.brush.media.commands[&key];
-    assert_eq!((asked.seeks, asked.seconds, asked.loads), (2, 7.0, 1));
-    assert_eq!(p.brush.media.asked, [key, key, key]);
+    assert_eq!(
+        (asked.seeks, asked.seconds, asked.loads, asked.fullscreens),
+        (2, 7.0, 1, 1)
+    );
+    assert_eq!(p.brush.media.asked, [key, key, key, key]);
     p.media_command("load", &[id("label")]);
     p.media_command("load", &[id("gone")]);
     assert_eq!(p.brush.media.commands.len(), 1);

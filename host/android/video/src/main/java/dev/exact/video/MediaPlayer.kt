@@ -59,6 +59,7 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
     private var audio = false
     private val main = Handler(Looper.getMainLooper())
     private val projection = Projection { name, payload -> sink?.event(name, payload) }
+    private val full = FullScreen(context, exo) { left(it) }
 
     private var sink: MediaSink? = null
     /** The props last applied, as the painter sent them (D1). */
@@ -132,8 +133,14 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
     override fun update(props: JSONObject, width: Int, height: Int, from: MediaRecord.Resume?) {
         val before = if (from != null) runCatching { JSONObject(from.applied) }.getOrNull() else applied
         generation = props.optInt("generation")
+        // Full screen holds the player on the controller it was entered with.
+        if (full.on && (controls != null) != props.optBoolean("controls")) full.leave()
         presenter(props.optBoolean("controls"), props.optBoolean("audio"))
         fit = props.optString("fit", "contain")
+        full.fit(fit)
+        // The controller's full-screen button, unless `controlslist` says `nofullscreen` (D5, D9).
+        val button = !audio && "nofullscreen" !in props.optString("controlslist").split(' ')
+        controls?.setFullscreenButtonClickListener(if (button) PlayerView.FullscreenButtonClickListener { if (it) fullscreen() } else null)
         poster = props.optBoolean("poster")
         unveil()
         if (width != boxW || height != boxH || before?.optString("fit") != fit) { boxW = width; boxH = height; layoutPicture() }
@@ -162,6 +169,8 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
         // `fastSeek` seeks exactly, as on every host (LLP 1042 §3).
         val fast = props.optString("seek")
         if (fast.isNotEmpty() && (before == null || changed(before, props, "seek"))) fast.substringAfter(' ').toDoubleOrNull()?.takeIf { it.isFinite() }?.let { seek(it.coerceAtLeast(0.0)) }
+        // `requestFullscreen` (D9), numbered as they are.
+        if (props.has("fullscreen") && before != null && changed(before, props, "fullscreen")) fullscreen()
         // Unmuted while playing: it claims focus now, and a refusal pauses it (D8).
         if (!muted && volume > 0f && !projection.paused && claim == null && !claimFocus()) {
             pause(author = false)
@@ -288,6 +297,7 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
     }
 
     override fun stop() {
+        full.leave()
         if (!projection.paused) { val rule = eligible(); projection.pause(); if (rule) resumes = true }
         exo.playWhenReady = false
         releaseFocus()
@@ -297,6 +307,7 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
     override fun release() {
         access?.removeTouchExplorationStateChangeListener(exploring)
         sink = null
+        full.leave()
         tick(false)
         releaseFocus()
         exo.release()
@@ -332,6 +343,24 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
             exo.setVideoTextureView(texture)
         }
         layoutPicture()
+    }
+
+    /** Full screen (D9): the player goes to a full-screen controller, and comes back when it is left ([left]). */
+    private fun fullscreen() {
+        if (full.on || audio) return
+        val from = controls
+        if (from == null) exo.clearVideoTextureView(texture)
+        full.enter(from, fit)
+        projection.event("fullscreenchange", "true")
+        pushState()
+    }
+
+    private fun left(view: PlayerView) {
+        val inline = controls
+        if (inline != null) PlayerView.switchTargetView(exo, view, inline) else { view.player = null; exo.setVideoTextureView(texture) }
+        layoutPicture()
+        projection.event("fullscreenchange", "false")
+        pushState()
     }
 
     /** Media3 hides the controller after a while and on a tap; while touch exploration is on it stays (D11), and an
@@ -528,6 +557,7 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
             .put("renderer", if (unavailable != null) "none" else if (controls != null) "PlayerView" else "TextureView")
             .put("generation", generation)
             .put("frameReady", frameReady)
+            .put("fullscreen", full.on)
             .put("error", error ?: JSONObject.NULL)
             .put("rendition", format?.let { JSONObject().put("width", it.width).put("height", it.height).put("bitrate", it.bitrate) } ?: JSONObject.NULL)
         unavailable?.let { state.put("unavailable", it) }

@@ -44,7 +44,7 @@ pub(crate) struct Media {
     /// The media nodes that handle `timeupdate`: only their players run its
     /// 4 Hz clock.
     pub(crate) timed: std::collections::BTreeSet<exact_kernel::NodeKey>,
-    /// `fastSeek` and `load` asked of each node, numbered as the Apple arm
+    /// `fastSeek`, `load` and `requestFullscreen` asked of each node, numbered as the Apple arm
     /// numbers them, so a player made again from its record repeats none.
     pub(crate) commands: std::collections::BTreeMap<exact_kernel::NodeKey, Commands>,
     /// The nodes asked since the last paint: their rows paint again.
@@ -62,6 +62,8 @@ pub(crate) struct Commands {
     pub(crate) seconds: f64,
     /// How many `load`s.
     pub(crate) loads: u32,
+    /// How many `requestFullscreen`s.
+    pub(crate) fullscreens: u32,
 }
 
 impl Painter {
@@ -143,6 +145,9 @@ impl Painter {
                     }
                     if c.loads > 0 {
                         props["load"] = c.loads.into();
+                    }
+                    if c.fullscreens > 0 {
+                        props["fullscreen"] = c.fullscreens.into();
                     }
                 }
                 (NativeKind::Video, props)

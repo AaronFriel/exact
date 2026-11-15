@@ -156,7 +156,8 @@ impl<D: DataSource> Presenter<D> {
         self.brush.media.timed = timed;
     }
 
-    /// @ref LLP 1042.001 §5 — `fastSeek(id, seconds)` or `load(id)` on the
+    /// @ref LLP 1042.001 §5, D9 — `fastSeek(id, seconds)`, `load(id)` or
+    /// `requestFullscreen(id)` on the
     /// media node with that HTML `id`, as `focus(id)` names one: counted in
     /// its props, which its player compares with those it last applied.
     pub(crate) fn media_command(&mut self, name: &str, args: &[exact_plan::Value]) {
@@ -178,14 +179,16 @@ impl<D: DataSource> Presenter<D> {
             }
         };
         let asked = self.brush.media.commands.entry(key).or_default();
-        if name == "fastSeek" {
-            asked.seeks += 1;
-            asked.seconds = args
-                .get(1)
-                .and_then(exact_plan::Value::as_number)
-                .unwrap_or(f64::NAN);
-        } else {
-            asked.loads += 1;
+        match name {
+            "fastSeek" => {
+                asked.seeks += 1;
+                asked.seconds = args
+                    .get(1)
+                    .and_then(exact_plan::Value::as_number)
+                    .unwrap_or(f64::NAN);
+            }
+            "requestFullscreen" => asked.fullscreens += 1,
+            _ => asked.loads += 1,
         }
         self.brush.media.asked.push(key);
         self.dirty = true;
