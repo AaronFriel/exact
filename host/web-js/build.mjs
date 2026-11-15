@@ -297,6 +297,10 @@ if (Object.keys(moduleFlag.extensions).length) {
 }
 // A source a data module answers: not one the runtime reserves (`exact…`), nor a native module's.
 const asks = Object.keys(sources).some(name => !/^exact[A-Z]/.test(name) && !moduleFlag.sources.includes(name));
+// A Rust data module is called only for a source the plan asks or a canvas it draws (rust-data.js `install`), so a
+// production page whose plan does neither does not link it, nor the grant parser it would bring (LLP 1047.002 D3).
+// A development page links it (LLP 1047 D7).
+const rustLinked = rust && (!production || asks || canvas2d);
 // A file input, `saveFile` or `share` (files.js), registered before any press.
 const files = existsSync(resolve(gen, 'files.flag'));
 // A declared sound or a sound command (sounds.js, LLP 1096 D5): the flag is the plan's table.
@@ -508,7 +512,7 @@ if (ts) {
 }
 const tsGrantSet = normalizeGrants(ts ? 'app.ts' : 'TypeScript', grants, 'typescript');
 let moduleStorage = false, rustGrants = '', rustGrantSet = normalizeGrants('Rust module', '', 'rust');
-if (rust) {
+if (rustLinked) {
   mkdirSync(resolve(out, 'rust/wasm'), { recursive: true });
   const from = opt('--data') ?? (opt('--plan') && dirname(resolve(opt('--plan'))));
   const built = from && existsSync(resolve(from, 'rust/wasm/app.module.wasm')) ? resolve(from, 'rust/wasm/app.module.wasm') : buildModule(app, undefined, canvas2d, appDir);
@@ -539,8 +543,8 @@ if (launchWeb.length) cpSync(resolve(here, 'marks.js'), resolve(gen, 'marks.js')
 // Held fetches and fetches tied to no answer (LLP 1016.000 D9): ts-fetch.js counts them through held.js, which it
 // does not import. Each entry imports this first, so a fetch an app module makes as it loads is counted too.
 if (ts) writeFileSync(resolve(gen, 'held-hooks.js'), "import { answering } from './ts-fetch.js'; import { heldReply, looseFetch } from './held.js'; Object.assign(answering, { loose: looseFetch, heldReply });\n");
-const rustAdmissionImports = rust ? ["import { setAppGrantSet } from './admission.js'; import { tsGrantSet, rustGrantSet } from './admission-data.js';"] : [];
-const rustAdmission = rust ? [
+const rustAdmissionImports = rustLinked ? ["import { setAppGrantSet } from './admission.js'; import { tsGrantSet, rustGrantSet } from './admission-data.js';"] : [];
+const rustAdmission = rustLinked ? [
   `data.appId ??= ${JSON.stringify((await import('../../scripts/app.mjs')).readManifest(appDir, app).app.id)};`,
   'data.grants = setAppGrantSet(tsGrantSet, rustGrantSet);',
 ] : [];
@@ -635,7 +639,7 @@ writeFileSync(resolve(gen, 'main.js'), [
   // (its `register`): never left on the browser's clock, nor turned on the compositor first (LLP 1069.001: a spinner
   // follows the agent's clock), as the wasm host holds each commit's at once.
   ...(production ? [] : ["if (agentMode()) { const early = (globalThis.exact ??= {}).early = new WeakMap(); After.push(globalThis.exact.holdEarly = () => { for (const a of document.getAnimations()) if (!early.has(a) && a.playState === 'running' && (!a.timeline || a.timeline instanceof DocumentTimeline)) { early.set(a, clock.now); a.pause(); a.currentTime = 0; } }); }"]),
-  ...(rust ? [
+  ...(rustLinked ? [
     // Rust data: loaded after first pixel, asked synchronously once ready;
     // a plan with a resource that has no compiled value waits for it.
     // Counted in flight, so `clock settle` waits for the source to be ready.
@@ -670,7 +674,7 @@ writeFileSync(resolve(gen, 'grant-network.js'), await bundleHostModule(root, 'na
 // page ships without it. Development pages keep the parser (LLP 1047 D7).
 // A source declared in Contract carries its origin as its grant (fetches.js, LLP 1162.001 D3).
 const declared = readFileSync(resolve(gen, 'app.js'), 'utf8').includes('from"./fetches.js"');
-const admitsNothing = production && !tsGrantSet.error && tsGrantSet.entries.length === 0 && !rust && !Object.keys(moduleFlag.extensions).length && !pageModules && !declared;
+const admitsNothing = production && !tsGrantSet.error && tsGrantSet.entries.length === 0 && !rustLinked && !Object.keys(moduleFlag.extensions).length && !pageModules && !declared;
 // Whether any source holds a network grant (the kinds grant-admission.js's `networkGrants`, `schemeGrants` and `localGrants` name).
 const netGranted = [tsGrantSet, rustGrantSet].some(set => (set.entries ?? []).some(([, , grant]) => /^(fetch|websocket)(-|$)/.test(grant?.[0] ?? '')));
 const fetchRefused = production && ts && !netGranted;
@@ -756,7 +760,7 @@ cpSync(resolve(here, 'midi.js'), resolve(gen, 'midi.js'));
 // The server bundle a JavaScript render runs (render.mjs), one script per VM context.
 writeFileSync(resolve(gen, 'main-server.js'), [
   ...(ts ? ["import './held-hooks.js';"] : []),
-  `import app${rust || declared ? `, { ${[rust && 'sources', declared && 'prepareSources'].filter(Boolean).join(', ')} }` : ''} from './app.js';`,
+  `import app${rustLinked || declared ? `, { ${[rustLinked && 'sources', declared && 'prepareSources'].filter(Boolean).join(', ')} }` : ''} from './app.js';`,
   ...(soundTable ? [`import { install as sounds } from './sounds.js'; sounds(${soundTable});`] : []),
   "import { data, clock, inflight, Resources, Mutations, routeAt, Head, canSetStatus, resolvedLanguage, res, commit, refused } from './rt.js'; import { answersAtWork, looseOut } from './held.js';",
   "import { types, sourceTypes, pages, viewportMedia, activation, markdownPaths } from './names.js';",
@@ -767,7 +771,7 @@ writeFileSync(resolve(gen, 'main-server.js'), [
   "import { markBars, routeTitle } from './navigation.js';",
   "import { markRoutes, markDocument } from './document.js';",
   ...(ts ? ["import { install as ts } from './ts-data.js';", "import { unfinishedIO } from './ts-fetch.js';"] : []),
-  ...(rust ? ["import { install } from './rust-data.js';"] : []),
+  ...(rustLinked ? ["import { install } from './rust-data.js';"] : []),
   ...rustAdmissionImports,
   // `exactTime` is a fact of the reader's device, which a render has not got: it answers as the runner does before a
   // host says the date (runner/src/time.rs, as the Rust renderer does), the unknown date in UTC, never the app's
@@ -782,7 +786,7 @@ writeFileSync(resolve(gen, 'main-server.js'), [
   'const prepare = async () => {',
   ...(ts ? [`  ts(data, ${mixed});`] : []),
   ...rustAdmission,
-  ...(rust ? ['  await install(data, sources, async p => __files(p));'] : []),
+  ...(rustLinked ? ['  await install(data, sources, async p => __files(p));'] : []),
   ...(declared ? ['  prepareSources();'] : []),
   '};',
   // Enumeration asks only its source, through the resource executor, with no app boot (LLP 1048.000 D2).
@@ -844,7 +848,7 @@ writeFileSync(resolve(gen, 'main-server.js'), [
   // What an inferred activation reads (LLP 1048.007 D1): what is still due, the sources read, the viewport's comparisons as the render saw them.
   '    due: clock.timers.length > 0 || Mutations.some(m => m.due < Infinity || m.next < Infinity), activation, zoned: !!globalThis.__exactZone,',
   // Only a TypeScript source is held to no clock and no Math.random (ts-fetch.js): a Rust module's page is never kept.
-  `    rust: ${!!rust},`,
+  `    rust: ${rustLinked},`,
   '    wake: viewportMedia.map(([query, holds]) => [query, holds(viewportFacts())]) };',
   '};',
 ].join('\n'));

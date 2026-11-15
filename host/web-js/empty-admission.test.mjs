@@ -175,3 +175,36 @@ export const answer = async (name: string, args: unknown[], store: unknown, stor
     rmSync(dir, { recursive: true, force: true });
   }
 }, 180000);
+
+// A Rust data module is called only for a source the plan asks or a canvas it draws (build.mjs `rustLinked`):
+// `apps/hello`'s plan does neither, so its production page links neither the module nor the grant parser.
+test('a production page whose plan asks no Rust source links neither the module nor the grant parser', async () => {
+  if (webCompiler().cmd === 'cargo') throw new Error('build the compiler first: cargo build -p exact-web-js');
+  mkdirSync(resolve(root, 'target'), { recursive: true });
+  const dir = mkdtempSync(resolve(root, 'target/web-js-unasked-rust-'));
+  let browser, server;
+  try {
+    const out = resolve(dir, 'production');
+    const result = spawnSync(process.execPath, ['host/web-js/build.mjs', 'hello', '--out', out, '--render', 'none', '--production'], { cwd: root, encoding: 'utf8' });
+    expect(result.status, result.stdout + result.stderr).toBe(0);
+    const entry = readFileSync(resolve(out, 'app.js'), 'utf8');
+    expect(readFileSync(resolve(out, '.gen/grant-admission.js'), 'utf8').startsWith('// Generated: the grant admission of a page that admits nothing')).toBe(true);
+    expect(entry).not.toContain(PARSER);
+    expect(entry).not.toContain('rust-data');
+    server = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch(req) {
+      const path = new URL(req.url).pathname;
+      return new Response(Bun.file(resolve(out, path === '/' ? 'index.html' : path.slice(1))));
+    } });
+    browser = await suiteBrowser();
+    const page = await browser.newPage(), errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    await page.goto(server.url.href);
+    await page.waitForFunction(() => document.getElementById('exact-root')?.textContent.includes('Hello world'));
+    expect(await page.evaluate(() => globalThis.exact.journal.filter(line => /Rust module/.test(line)))).toEqual([]);
+    expect(errors).toEqual([]);
+  } finally {
+    await browser?.close();
+    server?.stop(true);
+    rmSync(dir, { recursive: true, force: true });
+  }
+}, 120000);
