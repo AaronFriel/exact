@@ -1,5 +1,6 @@
 // Mounting the view: its regions (`when`, `match`, `each`), the adoption of a rendered page, in slices once its budget
 // runs out, the boot, and the page's checkpoint.
+import { checkpointFaults } from '../web/faults.js';
 import { inOrder, rowKey } from './rows.js';
 import { reloadOnGone } from './generation-reload.js';
 import { viewChildren, listRow, listOwner, unwrapListItem, sheetLeaves } from './navigation.js';
@@ -556,6 +557,13 @@ export function checkpoint() {
   const cp = JSON.parse(el.textContent),
     open = new Set(cp.open),
     readers = new Set(cp.readers);
+  // A drive starts at zero even when its document was rendered on a wall clock.
+  const driven =
+    AGENT_ADMITTED &&
+    typeof location !== 'undefined' &&
+    new URLSearchParams(location.search).has('agent') &&
+    !globalThis.__exactRender;
+  if (driven) for (const k of checkpointFaults(cp)) open.add(k);
   Checkpoint.revalidate = !!cp.revalidate;
   Checkpoint.kept = new Map();
   cp.answers.forEach(([name, source, args, value], k) => {
@@ -564,12 +572,6 @@ export function checkpoint() {
     }
     Checkpoint.kept.get(name).answers.push([value_(args), value_(value), open.has(k), readers.has(k)]);
   });
-  // A drive starts at zero even when its document was rendered on a wall clock.
-  const driven =
-    AGENT_ADMITTED &&
-    typeof location !== 'undefined' &&
-    new URLSearchParams(location.search).has('agent') &&
-    !globalThis.__exactRender;
   Checkpoint.time = clock.now = driven ? 0 : cp.time || 0;
   return Checkpoint;
 }

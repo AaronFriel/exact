@@ -269,6 +269,7 @@ impl Machine {
             abort,
             retiring,
             fetch,
+            fixture,
             ..
         } = state.book.files.remove(&run).expect("a file job");
         state.book.trash.push(Box::new((abort, retiring, fetch)));
@@ -285,7 +286,7 @@ impl Machine {
                 cache_store_withheld: false,
                 request,
                 forced,
-                work: None,
+                work: fixture.map(OwnedWork::HttpResponse),
                 waiting_charge: r.charge,
                 waited_for_preload: false,
                 charge: r.charge,
@@ -361,6 +362,7 @@ impl Machine {
                 file.fetch,
                 None,
                 destination,
+                file.fixture,
             )
         });
         let origin = origin(&url);

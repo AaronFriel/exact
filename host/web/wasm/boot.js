@@ -243,7 +243,10 @@ async function bootNow(bytes, assets = host.devAssets, current = () => true, mod
     len = host.wasm.exact_boot_plan(bytes.length, innerWidth, innerHeight, launch.length, preferences() | foldBits());
   } else {
     if (host.page?.checkpoint) {
-      host.wasm.exact_checkpoint(writeIn(agentMode ? host.page.checkpoint.replace("\n", " driven\n") : host.page.checkpoint));
+      const checkpoint = agentMode
+        ? (await loadAfterPaint("./faults.js", "drivenCheckpoint"))(host.page.checkpoint)
+        : host.page.checkpoint;
+      host.wasm.exact_checkpoint(writeIn(checkpoint));
     }
     ptr = host.wasm.exact_in(launch.length);
     // a drive's clock starts at zero (page.rs)

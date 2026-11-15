@@ -48,6 +48,7 @@ const MAX_BODY: usize = 64 << 20;
 const MAX_HEADERS: usize = 64 << 10;
 
 type Work = Box<dyn FnOnce() -> Outcome + Send>;
+type ResponseWork = Arc<dyn Fn() -> Outcome + Send + Sync>;
 type Wake = Box<dyn Fn() + Send + Sync>;
 #[cfg(test)]
 type ScheduledRetry = (u32, u64, String);
@@ -877,7 +878,7 @@ fn settle_again(state: &mut State, ticket: u64) -> bool {
 }
 
 /// An ordered request that may wait among the 128: a plain read with no
-/// work beside it (RFC 9110 §9.2.1's safe methods; not auth, a surface, or
+/// opaque work beside it (RFC 9110 §9.2.1's safe methods; not auth, a surface, or
 /// a native call).
 fn read(request: &Request, work: bool) -> bool {
     !work
@@ -1168,7 +1169,7 @@ fn worker(
                 continue;
             }
         }
-        let work = match work {
+        let (work, fixture) = match work {
             Some(OwnedWork::Later(hand)) if handoff(&request) => {
                 let owner = shared.clone();
                 let reply = Reply::new(move |outcome| complete(&owner, ticket, outcome));
@@ -1182,8 +1183,9 @@ fn worker(
                 rouse(&shared, &state);
                 continue;
             }
-            Some(OwnedWork::Now(work)) => Some(work),
-            _ => None,
+            Some(OwnedWork::Now(work)) => (Some(work), None),
+            Some(OwnedWork::HttpResponse(work)) => (None, Some(work)),
+            _ => (None, None),
         };
         // Retirement aborts every job; forgetting aborts a safe read.
         let _retiring = {
@@ -1191,17 +1193,17 @@ fn worker(
             shared.abort.signal().register(move || abort.abort())
         };
         let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            // A source's narrower scope runs on this worker's own transport,
-            // so it reuses the connections that transport keeps.
+            let fixture = fixture.map(|work| outcome::fixture_fetch(&grants, work));
+            let fetch = fixture
+                .as_ref()
+                .or_else(|| bindings.as_ref().map(|b| &b.fetch));
+            // A source's narrower scope uses the selected transport.
             let scoped = match scoped_grants(&grants, request.grants.as_deref()) {
                 Some(Err(message)) => return failed(FailureKind::Refused, message),
-                Some(Ok(scope)) => Some(bindings.as_ref().map(|b| b.fetch.with_grants(scope))),
+                Some(Ok(scope)) => fetch.map(|f| f.with_grants(scope)),
                 None => None,
             };
-            let fetch = match &scoped {
-                Some(scoped) => scoped.as_ref(),
-                None => bindings.as_ref().map(|b| &b.fetch),
-            };
+            let fetch = scoped.as_ref().or(fetch);
             execute(
                 fetch.ok_or(unbound.as_str()),
                 request,
@@ -1270,8 +1272,7 @@ fn execute(
             |work| work(),
         );
     }
-    // Work beside a plain request is a driver fault's failure (LLP 1103 D1):
-    // it runs instead of the transport, so the request never goes out.
+    // A connection fault replaces transport without preparing a response.
     if let Some(work) = work {
         return work();
     }

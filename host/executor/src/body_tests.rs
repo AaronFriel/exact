@@ -685,3 +685,325 @@ fn initialization_is_bounded_by_the_requests_deadline_and_abort() {
         }
     }
 }
+
+fn request_for_invalid_case(case: &str) -> Request {
+    let mut request = Request::get("https://example.test/read");
+    if case == "header" {
+        request = request.header("x-test", "a\0b");
+    } else {
+        request.method = "G\0ET".into();
+    }
+    request
+}
+
+fn check_response_fixture(case: &str) {
+    let _turn = one_at_a_time();
+    struct Source;
+    impl exact_runner::DataSource for Source {
+        fn grants(&self) -> &str {
+            GRANTS
+        }
+        fn query(
+            &mut self,
+            _: &str,
+            _: &[exact_runner::Value],
+        ) -> Result<exact_runner::Value, exact_runner::DataError> {
+            unreachable!()
+        }
+    }
+    let mut builder = exact_plan::builder::PlanBuilder::new(exact_kernel::SCHEMA_DIGEST, 1);
+    builder.node(
+        exact_kernel::NodeType::View as u8,
+        None,
+        None,
+        0,
+        &[],
+        &[],
+        None,
+    );
+    let mut runner = exact_runner::Runner::boot(
+        builder.finish().unwrap(),
+        Source,
+        exact_kernel::Kernel::with_monospace(),
+        Default::default(),
+        "/",
+    )
+    .unwrap();
+    let files = Files::new();
+    std::fs::write(files.0.join("tmp/present"), b"upload").unwrap();
+    let (core, sent, woke) = recording(GRANTS);
+    core.set_app_roots(files.roots());
+    let prefix = "https://example.test/";
+    {
+        runner
+            .faults()
+            .answer(
+                prefix,
+                &serde_json::json!({"status": 200, "headers": {}, "body": "fixture"}),
+            )
+            .unwrap();
+        let mut request = upload(if case == "missing" {
+            "app:/tmp/missing"
+        } else {
+            "app:/tmp/present"
+        });
+        if case == "header" {
+            request = request.header("x-test", "a\0b");
+        }
+        if case == "method" {
+            request.method = "G\0ET".into();
+        }
+        if case == "denied" {
+            request.grants = Some("net.fetch https://example.test".into());
+        }
+        if case == "destination" {
+            request.body_to = Some("app:/tmp/result".into());
+        }
+        if case == "ceiling" {
+            request = request.independent_http(1);
+        }
+        if case == "deadline" {
+            request = request.timeout(60_000);
+            if core.machine.is_none() {
+                let (armed, deadline) = channel();
+                *core.shared.deadline_armed.lock().unwrap() = Some(armed);
+                let deadline = Mutex::new(deadline);
+                *core.shared.roots_checked.lock().unwrap() = Some(Arc::new(move || {
+                    deadline
+                        .lock()
+                        .unwrap()
+                        .recv_timeout(Duration::from_secs(5))
+                        .unwrap()
+                        .expire();
+                }));
+            }
+        }
+        let held = if case == "abort" || (case == "deadline" && core.machine.is_some()) {
+            let (held, hook) = Gate::new();
+            *core.shared.roots_checked.lock().unwrap() = Some(hook);
+            Some(held)
+        } else {
+            None
+        };
+        let out = job(1, request);
+        let Some(exact_runner::Dispatch::Run(work)) = runner.fault_dispatch(&out) else {
+            panic!("fixture dispatch");
+        };
+        let admitted = core.run_owned(out, Some(work));
+        if matches!(case, "header" | "method") {
+            assert!(admitted.is_err(), "invalid request was admitted");
+            let (real, _, _) = recording(GRANTS);
+            assert!(
+                real.run_owned(job(2, request_for_invalid_case(case)), None)
+                    .is_err(),
+                "real transport must reject the same syntax"
+            );
+        } else {
+            admitted.unwrap();
+        }
+        if matches!(case, "header" | "method") {
+            assert!(core.drain().is_empty());
+        } else if let Some(held) = &held {
+            held.wait();
+            if case == "deadline" {
+                let run = {
+                    let state = core.shared.state.lock().unwrap();
+                    let running = state.running.iter().find(|r| r.ticket == 1).unwrap();
+                    (running.ticket, running.generation)
+                };
+                core.machine.as_ref().unwrap().timer.expire(run);
+                let outcome = collect(&core, &woke, 1).remove(0).1;
+                held.release();
+                assert!(
+                    matches!(
+                        outcome,
+                        Outcome::Failed {
+                            kind: FailureKind::Timeout,
+                            ..
+                        }
+                    ),
+                    "{outcome:?}"
+                );
+            } else {
+                core.cancel(&[1]);
+                let cancelled = core
+                    .shared
+                    .state
+                    .lock()
+                    .unwrap()
+                    .running
+                    .iter()
+                    .all(|r| r.exchange.as_ref().is_some_and(|a| a.signal().aborted()));
+                held.release();
+                super::body_to::physically_ended(&core);
+                assert!(cancelled, "Core::cancel did not signal fixture preparation");
+                assert!(core.drain().is_empty());
+            }
+        } else {
+            let outcome = collect(&core, &woke, 1).remove(0).1;
+            if case == "valid" {
+                assert!(
+                    matches!(outcome, Outcome::Response(ref r) if r.body == b"fixture"),
+                    "{outcome:?}"
+                );
+            } else {
+                let expected = match case {
+                    "deadline" => FailureKind::Timeout,
+                    "abort" => FailureKind::Aborted,
+                    _ => FailureKind::Refused,
+                };
+                assert!(
+                    matches!(outcome, Outcome::Failed { kind, .. } if kind == expected),
+                    "{case}: {outcome:?}"
+                );
+            }
+        }
+        let entries: serde_json::Value = serde_json::from_str(&runner.faults().json()).unwrap();
+        assert_eq!(entries[0]["hits"], u32::from(case == "valid"), "{case}");
+        runner.take_fault_logs();
+        assert_eq!(
+            runner
+                .journal()
+                .filter(|line| line.contains("fetch answered (driver fixture)"))
+                .count(),
+            usize::from(case == "valid"),
+            "{case}"
+        );
+    }
+    assert!(
+        sent.lock().unwrap().is_empty(),
+        "a fixture reached the network"
+    );
+}
+
+#[test]
+fn response_fixture_invalid_header_is_refused() {
+    check_response_fixture("header");
+}
+#[test]
+fn response_fixture_invalid_method_is_refused() {
+    check_response_fixture("method");
+}
+
+#[test]
+fn response_fixture_missing_file_is_refused() {
+    check_response_fixture("missing");
+}
+#[test]
+fn response_fixture_denied_file_is_refused() {
+    check_response_fixture("denied");
+}
+#[test]
+fn response_fixture_destination_refusal_has_no_hit() {
+    check_response_fixture("destination");
+}
+#[test]
+fn response_fixture_ceiling_refusal_has_no_hit() {
+    check_response_fixture("ceiling");
+}
+#[test]
+fn response_fixture_valid_file_is_prepared_without_transport() {
+    check_response_fixture("valid");
+}
+
+#[test]
+fn response_fixture_expired_during_file_preparation_has_no_hit() {
+    check_response_fixture("deadline");
+}
+#[test]
+fn response_fixture_aborted_during_file_preparation_has_no_hit() {
+    check_response_fixture("abort");
+}
+
+#[test]
+fn response_fixture_reads_keep_the_128_request_admission_limit() {
+    let (core, sent, woke) = recording(GRANTS);
+    for ticket in 1..=128 {
+        let mut out = job(ticket, Request::get("https://example.test/read"));
+        out.class = RequestClass::Read;
+        core.run_owned(
+            out,
+            Some(OwnedWork::HttpResponse(Arc::new(|| {
+                Outcome::Response(Response {
+                    status: 200,
+                    headers: vec![],
+                    body: b"fixture".to_vec(),
+                })
+            }))),
+        )
+        .unwrap_or_else(|why| panic!("read {ticket}: {why}"));
+    }
+    let mut out = job(129, Request::get("https://example.test/read"));
+    out.class = RequestClass::Read;
+    let refusal = core.run_owned(
+        out,
+        Some(OwnedWork::HttpResponse(Arc::new(|| {
+            Outcome::Response(Response {
+                status: 200,
+                headers: vec![],
+                body: vec![],
+            })
+        }))),
+    );
+    assert_eq!(refusal, Err("native executor admission limit reached"));
+    let outcomes = collect(&core, &woke, 128);
+    assert!(outcomes
+        .iter()
+        .all(|(_, out)| matches!(out, Outcome::Response(_))));
+    assert!(sent.lock().unwrap().is_empty());
+}
+
+#[test]
+fn response_fixture_and_transport_normalize_headers_before_validation() {
+    for fixture in [false, true] {
+        let (core, sent, woke) = recording(GRANTS);
+        let request = Request::get("https://example.test/read").header("X-Token", " \r\ntoken\t\n");
+        let work = fixture.then(|| {
+            OwnedWork::HttpResponse(Arc::new(|| {
+                Outcome::Response(exact_runner::Response {
+                    status: 200,
+                    headers: vec![],
+                    body: b"fixture".to_vec(),
+                })
+            }) as ResponseWork)
+        });
+        core.run_owned(job(1, request), work).unwrap();
+        assert!(matches!(
+            collect(&core, &woke, 1)[0].1,
+            Outcome::Response(_)
+        ));
+        if !fixture {
+            assert!(sent.lock().unwrap()[0]
+                .1
+                .contains(&("x-token".into(), "token".into())));
+        }
+        let request = Request::get("https://example.test/read").header("X-Token", "a\nb");
+        assert!(core.run_owned(job(2, request), None).is_err());
+    }
+}
+
+#[test]
+fn response_fixture_uses_the_normal_http_cache() {
+    let (core, sent, woke) = recording(GRANTS);
+    core.enable_http_cache();
+    for ticket in 1..=2 {
+        let mut out = job(ticket, Request::get("https://example.test/read"));
+        out.class = RequestClass::Read;
+        let work = (ticket == 1).then(|| {
+            OwnedWork::HttpResponse(Arc::new(|| {
+                Outcome::Response(Response {
+                    status: 200,
+                    headers: vec![("cache-control".into(), "max-age=60".into())],
+                    body: b"fixture".to_vec(),
+                })
+            }))
+        });
+        core.run_owned(out, work).unwrap();
+        let outcome = collect(&core, &woke, 1).remove(0).1;
+        assert!(
+            matches!(&outcome, Outcome::Response(r) if r.body == b"fixture"),
+            "{outcome:?}"
+        );
+    }
+    assert!(sent.lock().unwrap().is_empty());
+}

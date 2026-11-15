@@ -169,7 +169,7 @@ Runs     to completion; nothing is left running; a test past 30 s says its line 
 Backend  start snapback4 dev on app.ts’s selected origin’s port first; checked before launch.
          A server this run did not start stays shared. EXACT_PORT is the page’s.
 Lines    tap, type, expect text|tree|state|disabled|refusal, clock data|settle|+<ms>|until state …, reload, back, fail|pass
-         fetch, request <METHOD> "/path" [json] [as <persona>] [expect <status>]: docs/recipes/tests.md;
+         fetch, answer fetch "<prefix>" with <status> [json], request: docs/recipes/tests.md;
          all: docs/contract-grammar.md "Authored tests".`,
     bodyAll: `A phone's build is ios --device's.
 Ports    --port <n> or EXACT_PORT chooses the page’s port; otherwise web: headless Chrome over a pipe; the page on 127.0.0.1, each test at a

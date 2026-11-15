@@ -40,6 +40,8 @@ pub(crate) struct ResourceRow {
     /// row, and only a list's row during a boot holds them.
     pub(super) page_answers: Option<Box<each::PageAnswers>>,
     pub(super) inspection: crate::perf::ResourceWork,
+    /// HTTP inputs recorded only by a document renderer, for selective test revalidation.
+    pub(super) render_urls: Vec<String>,
 }
 
 impl<D: DataSource> Runner<D> {

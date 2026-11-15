@@ -338,6 +338,16 @@ fn a_fetch_runs_through_the_native_executor() {
         Ok(line)
     });
     let r = at(Post::Local(port), bound);
+    let checkpoint = exact_web::document::read_checkpoint(&r.checkpoint).unwrap();
+    let post = checkpoint
+        .answers
+        .iter()
+        .position(|a| a.0 == "post")
+        .unwrap();
+    assert_eq!(
+        checkpoint.urls[post],
+        [format!("http://127.0.0.1:{port}/post/7")]
+    );
     let request = server.join().expect("the test server panicked");
     assert_eq!(request.as_deref(), Ok("GET /post/7 HTTP/1.1"));
     assert_eq!(r.settled, Settled::Complete);
@@ -351,6 +361,16 @@ fn a_fetch_runs_through_the_native_executor() {
     let port = closed.local_addr().unwrap().port();
     drop(closed);
     let r = at(Post::Local(port), bound);
+    let checkpoint = exact_web::document::read_checkpoint(&r.checkpoint).unwrap();
+    let post = checkpoint
+        .answers
+        .iter()
+        .position(|a| a.0 == "post")
+        .unwrap();
+    assert_eq!(
+        checkpoint.urls[post],
+        [format!("http://127.0.0.1:{port}/post/7")]
+    );
     assert_eq!(r.settled, Settled::Complete);
     assert!(r.document.root.contains(">failed: "), "{}", r.document.root);
 }
@@ -395,6 +415,16 @@ fn a_keep_alive_answer_ends_at_its_framing_not_at_the_close() {
             let _ = hold.recv_timeout(Duration::from_secs(30));
         });
         let r = at(Post::Local(port), bound);
+        let checkpoint = exact_web::document::read_checkpoint(&r.checkpoint).unwrap();
+        let post = checkpoint
+            .answers
+            .iter()
+            .position(|a| a.0 == "post")
+            .unwrap();
+        assert_eq!(
+            checkpoint.urls[post],
+            [format!("http://127.0.0.1:{port}/post/7")]
+        );
         let done = Instant::now();
         let sent = when.recv_timeout(bound).expect("the server never answered");
         release.send(()).unwrap();

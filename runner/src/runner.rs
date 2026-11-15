@@ -985,7 +985,7 @@ impl<D: DataSource> Runner<D> {
             derive_store_dependent: Vec::new(),
             journal: std::collections::VecDeque::new(),
             console: Default::default(),
-            faults: faults::Faults::from_env(),
+            faults: faults::Faults::from_env().map_err(RunnerError::InvalidFaults)?,
             device_holds: Vec::new(),
             held_replies: Vec::new(),
             auth: Default::default(),

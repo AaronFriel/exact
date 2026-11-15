@@ -601,20 +601,30 @@ fn a_file_body_over_64_mib_is_refused_unsent_naming_the_executor() {
         "net.fetch https://*.example.test\nfs.read app:/tmp",
     );
     core.set_app_roots(files.roots());
-    core.run(
-        job(
-            1,
-            upload("https://a.example.test/", "app:/tmp/big.mov", 1 << 20),
-        ),
-        None,
-    )
-    .unwrap();
-    let outcomes = collect(&core, &woke, 1);
-    assert!(
-        matches!(&outcomes[0], (1, Outcome::Failed { kind: FailureKind::Unsupported, message })
+    for fixture in [false, true] {
+        core.run_owned(
+            job(
+                1,
+                upload("https://a.example.test/", "app:/tmp/big.mov", 1 << 20),
+            ),
+            fixture.then(|| {
+                OwnedWork::HttpResponse(Arc::new(|| {
+                    Outcome::Response(Response {
+                        status: 200,
+                        headers: vec![],
+                        body: vec![],
+                    })
+                }))
+            }),
+        )
+        .unwrap();
+        let outcomes = collect(&core, &woke, 1);
+        assert!(
+            matches!(&outcomes[0], (1, Outcome::Failed { kind: FailureKind::Unsupported, message })
             if message.contains("the asynchronous executor reads a file body whole, at most 67108864 bytes")),
-        "{outcomes:?}"
-    );
+            "{outcomes:?}"
+        );
+    }
     eventually(|| bytes(&core) == [0, 0]);
 }
 

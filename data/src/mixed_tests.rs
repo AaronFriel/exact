@@ -526,6 +526,7 @@ fn run(dispatch: Dispatch) -> Outcome {
                 .expect("a reply")
         }
         Dispatch::Again => Dispatch::again_outcome(),
+        Dispatch::Run(Work::HttpResponse(_)) => panic!("HTTP fixtures require the HTTP executor"),
         Dispatch::Held => panic!("held"),
         Dispatch::Host(_) => panic!("host"),
         Dispatch::Missing => panic!("missing"),

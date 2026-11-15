@@ -94,7 +94,7 @@ export async function fromFile(input, init, redirect, started, origin = 'app', a
     const spent = clock.now() - started;
     if (ms !== undefined && spent >= ms) throw new FetchError('Timeout', `the request timed out after ${ms} ms`);
     const left = ms === undefined ? undefined : Math.max(1, Math.ceil(ms - spent));
-    const sent = { ...rest, signal, ...(from ? { body } : {}), ...(left === undefined ? {} : { exactTimeout: left }) }, expires = ms === undefined ? null : { at: started + ms, ms };
+    const sent = { ...rest, signal, ...(to ? { exactBodyTo: init.exactBodyTo } : {}), ...(from ? { body } : {}), ...(left === undefined ? {} : { exactTimeout: left }) }, expires = ms === undefined ? null : { at: started + ms, ms };
     if (!to) return await fetchWith(tsGrantSet, input, sent, expires, redirect, undefined, origin, true, forced);
     // A 2xx body goes to the file, counted as it arrives, within the deadline;
     // any other reply is read as usual, at most 1 MiB, and the file is untouched.

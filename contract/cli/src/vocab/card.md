@@ -86,7 +86,7 @@ component App
 
 ## how
 ### a second screen, a sheet
-A screen is a route, not an `if`; a sheet's root has `navigationPresentation="modal"`, its Cancel the `id` `navigationBack` names (`pattern list-detail`).
+Use a route for a screen. A sheet has `navigationPresentation="modal"`; Cancel has the `navigationBack` id (`pattern list-detail`).
 ```contract
 routes nav
   home "/"
@@ -115,7 +115,7 @@ main navigationKey=`${top(nav).id}` navigationBack="back"
             image "symbol:checkmark"
 ```
 ### a confirmation
-What can't be undone asks first. `aria-label` is the question; actions run their `press` and close (`command="close"`); Cancel has no `press`. Open it: `command="show-modal"` or `showModal(id)`.
+Confirm irreversible actions: `aria-label` asks; `press` acts; `command="close"` closes. Cancel has no `press`. Open: `command="show-modal"` or `showModal(id)`.
 ```contract
 state n = 1
 action remove

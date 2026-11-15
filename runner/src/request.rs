@@ -1256,6 +1256,10 @@ impl Drop for Reply {
 pub enum Work {
     /// Runs on the host's I/O worker; what it returns is the outcome.
     Now(Box<dyn FnOnce() -> Outcome + Send>),
+    /// A driver response, returned only after the HTTP executor prepares the
+    /// request's file body and checks its abort and deadline. Prefetch and its
+    /// foreground fallback can each ask the same response provider.
+    HttpResponse(std::sync::Arc<dyn Fn() -> Outcome + Send + Sync>),
     /// Hands the reply to another owner and returns at once; the outcome
     /// arrives when that owner sends it. The I/O worker is never held
     /// while a module computes (LLP 1027.002 D4).

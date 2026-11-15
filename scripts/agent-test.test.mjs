@@ -7,7 +7,7 @@ import { createServer } from 'node:http';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { backendFetchPrefixes, churnLines, disabledExpectation, focusedExpectation, nativeFetchOrigins, NO_FAILURES, perfExpectation, pickHint, propertyHolds, testMutationClock, refusalExpectation, refuseDisabled, runTests, stateHolds, serverRequest, testScope, textExpectation, treeExpectation, unarranged } from './agent-test.mjs';
+import { failureMark, backendFetchPrefixes, churnLines, disabledExpectation, focusedExpectation, nativeFetchOrigins, NO_FAILURES, perfExpectation, pickHint, propertyHolds, testMutationClock, refusalExpectation, refuseDisabled, runTests, stateHolds, serverRequest, testScope, textExpectation, treeExpectation, unarranged } from './agent-test.mjs';
 import { axFindings } from './agent-ax.mjs';
 import { withEpoch } from './agent-launch.mjs';
 import { serveBuildTree } from '../host/web/serve.mjs';
@@ -180,6 +180,144 @@ test('the fetch-loading-error recipe passes its own test', async () => {
     rmSync(dir, { recursive: true, force: true });
   }
 }, 180_000);
+
+test('authored HTTP fixtures precede the first resource load, survive reload and reset between tests', async () => {
+  const root = fileURLToPath(new URL('..', import.meta.url)), dir = scratch('exact-http-fixture-');
+  const dist = join(dir, 'dist'), file = join(dir, 'app.test.contract');
+  let requests = 0;
+  const server = createServer((req, res) => {
+    if (req.url === '/greeting') { requests++; res.writeHead(200, {'content-type': 'application/json', 'cache-control': 'no-store'}); res.end('{"text":"Live greeting"}'); }
+    else serveBuildTree(dist, req, res);
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const origin = `http://127.0.0.1:${server.address().port}`, prefix = `${origin}/greeting`;
+  try {
+    writeFileSync(join(dir, 'app.json'), JSON.stringify({ name: 'HTTP Fixture', app: {id: 'test.http-fixture', name: 'HTTP Fixture'}, host: {web: {}}, rust: false }));
+    writeFileSync(join(dir, 'app.contract'), `routes nav
+  home "/" render=build
+shape Greeting
+  text: string
+component Rest
+  resource greeting = greeting() as shape Greeting
+  action retry
+    refresh greeting
+  view
+    column
+      if failed(greeting)
+        text "Offline" testId="greeting"
+      else
+        text greeting.text testId="greeting"
+      button "Retry" testId="retry" press=retry
+`);
+    writeFileSync(join(dir, 'app.ts'), `export const grants = 'net.fetch ${origin}';
+export async function answer() {
+  const response = await fetch('${prefix}');
+  if (!response.ok) return {text: 'HTTP ' + response.status + ': ' + await response.text()};
+  return await response.json();
+}`);
+    writeFileSync(file, `test "fixture before boot and after reload"
+  answer fetch "${prefix}" with 200 header "x-fixture" "yes" {"text":"Stubbed greeting"}
+  expect text "greeting" == "Stubbed greeting"
+  reload
+  expect text "greeting" == "Stubbed greeting"
+  fail fetch "${prefix}"
+  tap "retry"
+  clock data
+  expect text "greeting" == "Offline"
+  reload
+  expect text "greeting" == "Offline"
+  answer fetch "${prefix}" with 503 "unavailable"
+  tap "retry"
+  clock data
+  expect text "greeting" == "HTTP 503: unavailable"
+  expect no failures
+  reload
+  expect text "greeting" == "HTTP 503: unavailable"
+  pass fetch "${prefix}"
+  reload
+  expect text "greeting" == "Live greeting"
+test "fresh fixture"
+  answer fetch "${prefix}" with 200 {"text":"Second fixture"}
+  expect text "greeting" == "Second fixture"
+test "no fixture leaks"
+  expect text "greeting" == "Live greeting"
+test "unrelated fault preserves the rendered answer"
+  fail fetch "${origin}/unrelated"
+  expect text "greeting" == "Live greeting"
+  reload
+  expect text "greeting" == "Live greeting"
+`);
+    const build = Bun.spawn([process.execPath, 'host/web-js/build.mjs', 'http-fixture', '--out', dist, '--render', 'js'], {cwd: root, env: {...process.env, EXACT_APP_DIR: dir}, stdout: 'pipe', stderr: 'pipe'});
+    const [status, stdout, stderr] = await Promise.all([build.exited, new Response(build.stdout).text(), new Response(build.stderr).text()]);
+    expect(status, stdout + stderr).toBe(0);
+    const html = readFileSync(join(dist, 'index.html'), 'utf8');
+    expect(html).toContain('Live greeting');
+    expect(html).toContain('application/vnd.exact.checkpoint');
+    expect(requests).toBe(1);
+    const result = await runTests({host: 'web', app: dir, file, webDist: dist, url: `${origin}/`, env: {XDG_CACHE_HOME: join(dir, 'cache')}});
+    expect(result.results.map(t => t.failures)).toEqual([[], [], [], []]);
+    expect([result.passed, result.failed, requests]).toEqual([4, 0, 2]);
+    writeFileSync(file, `test "successful transport with an invalid source answer"
+  answer fetch "${prefix}" with 200 {"wrong":true}
+  expect no failures
+`);
+    const refused = await runTests({host: 'web', app: dir, file, webDist: dist, url: `${origin}/`, env: {XDG_CACHE_HOME: join(dir, 'cache')}});
+    expect(refused.failed).toBe(1);
+    expect(refused.results[0].failures.join(' ')).toContain('greeting');
+  } finally { await new Promise(resolve => server.close(resolve)); }
+}, 180_000);
+
+test.each(['declared', 'promise'])('%s rendered sources use HTTP fixtures at launch and reload', async kind => {
+  const root = fileURLToPath(new URL('..', import.meta.url)), dir = scratch('exact-rendered-fixture-');
+  const dist = join(dir, 'dist'), file = join(dir, 'app.test.contract');
+  let requests = 0;
+  const server = createServer((req, res) => {
+    if (req.url === '/greeting/hello%20world') { requests++; res.writeHead(200, {'content-type': 'application/json', 'cache-control': 'no-store'}); res.end('{"text":"Live greeting"}'); }
+    else serveBuildTree(dist, req, res);
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const origin = `http://127.0.0.1:${server.address().port}`, url = `${origin}/greeting/hello%20world`;
+  try {
+    writeFileSync(join(dir, 'app.json'), JSON.stringify({ name: 'Rendered Fixture', app: {id: 'test.rendered-fixture', name: 'Rendered Fixture'}, host: {web: {}}, rust: false }));
+    writeFileSync(join(dir, 'app.contract'), `routes nav
+  home "/" render=build
+shape Greeting
+  text: string
+${kind === 'declared' ? `source greeting(name: string) as shape Greeting
+  url "${origin}/greeting/{name}"
+` : ''}component Rest
+  resource greeting = greeting("hello world") as shape Greeting
+  view
+    text greeting.text testId="greeting"
+`);
+    if (kind === 'promise') writeFileSync(join(dir, 'app.ts'), `export const grants = 'net.fetch ${origin}';
+export function answer() { return Promise.resolve().then(() => fetch('${url}')).then(r => r.json()); }
+`);
+    writeFileSync(file, `test "fixture at launch and reload"
+  answer fetch "${url}" with 200 {"text":"Stubbed greeting"}
+  expect text "greeting" == "Stubbed greeting"
+  reload
+  expect text "greeting" == "Stubbed greeting"
+`);
+    const build = Bun.spawn([process.execPath, 'host/web-js/build.mjs', 'rendered-fixture', '--out', dist, '--render', 'js'], {cwd: root, env: {...process.env, EXACT_APP_DIR: dir}, stdout: 'pipe', stderr: 'pipe'});
+    const [status, stdout, stderr] = await Promise.all([build.exited, new Response(build.stdout).text(), new Response(build.stderr).text()]);
+    expect(status, stdout + stderr).toBe(0);
+    expect(readFileSync(join(dist, 'index.html'), 'utf8')).toContain('Live greeting');
+    expect(requests).toBe(1);
+    const result = await runTests({host: 'web', app: dir, file, webDist: dist, url: `${origin}/`, env: {XDG_CACHE_HOME: join(dir, 'cache')}});
+    expect(result.results.map(t => t.failures)).toEqual([[]]);
+    expect([result.passed, result.failed, requests]).toEqual([1, 0, 1]);
+  } finally { await new Promise(resolve => server.close(resolve)); }
+}, 180_000);
+
+test('successful HTTP fixtures do not arrange resource failures', async () => {
+  const mark = await failureMark({
+    state: async () => ({ faults: [{prefix: 'https://api.test/', hits: 1, response: {status: 200}}],
+      failures: { greeting: {count: 1} }, failed: {greeting: 'Invalid greeting'} }),
+    op: async () => ({next: 0}),
+  });
+  expect(unarranged(NO_FAILURES, mark)).toEqual(['resource greeting was refused once (Invalid greeting)']);
+});
 
 test('a pick with no picker held names the step that holds one on its host', () => {
   expect(pickHint('web')).toContain('tap the visible file input or a button');

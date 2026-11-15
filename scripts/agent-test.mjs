@@ -313,7 +313,7 @@ export function sweepTestStores(base, storage) {
 export function backendFetchPrefixes(tests, origins) {
   const unique = [...new Set(origins.map(o => o.replace(/\/+$/, '')))];
   for (const t of tests) for (const step of t.steps) {
-    if (!['fail-fetch', 'pass-fetch'].includes(step.op)) continue;
+    if (!['fail-fetch', 'answer-fetch', 'pass-fetch'].includes(step.op)) continue;
     step.prefix = resolveFaultPrefix(step.prefix, unique);
   }
   return tests;
@@ -362,7 +362,7 @@ export async function failureMark(s) {
   return {
     failures: Object.fromEntries(Object.entries(state.failures ?? {}).map(([name, f]) => [name, f.count])),
     failed: state.failed ?? {}, mutations: state.mutationFailures ?? {},
-    faults: Object.fromEntries((state.faults ?? []).map((f) => [f.prefix, f.hits])), journal,
+    faults: Object.fromEntries((state.faults ?? []).map((f) => [f.prefix, f.failureHits ?? (f.response ? 0 : f.hits)])), journal,
   };
 }
 
@@ -717,6 +717,7 @@ export async function runTests({ host, browser, file, plan, app, size, env, webD
       if (st.op === 'before-data') beforeData = true;
       else if (st.op === 'fresh') reset = st;
       else if (st.op === 'fail-fetch') { early(st); facts.failFetch = [facts.failFetch, st.times == null ? st.prefix : `${st.prefix}\t${st.times}`].filter(Boolean).join('\n'); if (st.times != null) armed.set(st.prefix, st.line); }
+      else if (st.op === 'answer-fetch') facts.failFetch = [facts.failFetch, faultSpecOf([{prefix: st.prefix, hits: 0, armed: true, response: st.response}])].filter(Boolean).join('\n');
       else if (st.op === 'size') facts.size = [st.width, st.height];
       else if (st.op === 'at') opensAt = st.value;
       else if (st.op === 'prefer') preferences.push(st);
@@ -910,6 +911,13 @@ export async function runTests({ host, browser, file, plan, app, size, env, webD
             const r = await s.op({ op: 'prefer', faults: { fail: st.prefix, ...(st.times != null ? { times: st.times } : {}) } });
             if (r?.error) throw new Error(r.error);
             if (st.times != null) armed.set(st.prefix, st.line);
+            break;
+          }
+          case 'answer-fetch': {
+            if (n < leading) break;
+            await unfired(st.prefix);
+            const r = await s.op({ op: 'prefer', faults: { answer: st.prefix, response: st.response } });
+            if (r?.error) throw new Error(r.error);
             break;
           }
           case 'pass-fetch': { const r = await s.op({ op: 'prefer', faults: { pass: st.prefix } }); if (r?.error) throw new Error(r.error); break; }

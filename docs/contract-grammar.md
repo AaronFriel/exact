@@ -991,6 +991,34 @@ before it is armed again) fails the test at the line that armed it, and
 `reload` relaunches with the table as it is then. Each HTTP attempt of a long
 poll (`exactStream` with `exactLongPoll`) takes a matching fault and retries as
 a network failure. Event streams, byte streams and WebSockets are not matched.
+`answer fetch "<prefix>" with <status> [header "<name>" "<value>"]… [<body>]`
+supplies an immediate HTTP response, with no request to the service. It may lead
+a test or the file, like `fail fetch`, so the first resource load receives it.
+A later line replaces the current answer or failure at that prefix. A test's
+leading answer or failure overrides the file's entry for the same prefix.
+JSON bodies are sent as `application/json`; a quoted string is sent as
+`text/plain; charset=utf-8`, and an omitted body is empty. An explicit
+`content-type` header overrides that default. The status is 200 through 599,
+excluding redirects 301, 302, 303, 307 and 308. Statuses 204, 205 and 304
+require an empty body. A body is at most 64 KiB; the complete encoded fixture
+table must also fit 64 KiB, including headers and URL prefixes. An answer that exceeds either
+limit is refused before arming. `set-cookie` and `set-cookie2` headers are
+refused because browsers hide them. Request validation, grants, file-body
+preparation, aborts, deadlines and response-size limits still apply. A refused fixture records no hit
+or answered journal line.
+
+Answers use the same longest-live-prefix rule as failures. `fail fetch` replaces
+an answer, and `pass fetch` clears either at that prefix; a shorter live prefix
+may then match. Long polls ignore answer entries when choosing a failure, so
+a longer answer prefix does not hide a shorter failure. Otherwise the request
+goes to the network. Each test starts with its own table; `reload` keeps the
+current answers and cleared entries. A web launch carrying this table revalidates
+rendered checkpoint answers through the real source.
+The real source parses the response, so an HTTP error status is a response,
+where `fail fetch` is a rejected connection. These fixtures cover buffered HTTP
+requests, including a worker's; streams, long polls, redirects, `exactBodyTo`,
+delays and response files are not supported.
+
 `request POST "/polls/1/votes" {"option": 2} as bob`
 (LLP 1116.006 D8) is the driver, not the app, writing through the app's server as
 another person: a method, a path in quotes under the server URL app.ts calls (its

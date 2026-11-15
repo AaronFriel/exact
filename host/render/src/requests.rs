@@ -14,6 +14,7 @@ pub(super) fn hand_out<D: DataSource>(
     runner.uploads_started(&started);
     lift(executor, held);
     for r in runner.take_requests() {
+        runner.record_render_request(&r);
         // Device capabilities: the environment has none; nor may a long poll run on other work (LLP 1016.000 D8).
         if r.request.surface.is_some()
             || r.request.storage.is_some()

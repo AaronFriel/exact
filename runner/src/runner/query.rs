@@ -55,6 +55,7 @@ impl<D: DataSource> Runner<D> {
     }
 
     pub(super) fn query(&mut self, i: usize, args: &[Value]) -> Result<Answer, RunnerError> {
+        self.resources[i].render_urls.clear();
         let row = self.resource_row(i);
         let source = self.plan.str(row.source).to_string();
         let resource = self.plan.str(row.name).to_string();

@@ -1530,9 +1530,10 @@ price: answers arrive `Later`, outside the action's transaction (LLP 1027.002 D1
   data source's `fetch` is captured when the data module loads, so a stub
   installed later (a browser script's `page.evaluate`, a console patch) never
   sees its requests. Fix: to test a failure, `fail fetch "<url prefix>"` (the
-  guide's testing section); a fixture that must stand in for the network
-  installs its stub before the document loads (`addInitScript`) or serves a
-  stand-in server. (Authoring bench, LLP 1087, t8-library, codex, 2026-10-08.)
+  guide's testing section). For a response, lead the authored test with
+  `answer fetch "<url prefix>" with 200 {"text":"Hello"}`. The driver installs
+  it before the first resource load. (Authoring bench, LLP 1087, t8-library,
+  codex, 2026-10-08; response fixtures, #699.)
 
 - **`xcrun simctl io booted screenshot` can capture the wrong simulator.** With
   several simulators booted, `booted` names any one of them, not the one the

@@ -4,6 +4,31 @@
 use contract_syntax::{Expr, Step, TapForm};
 
 #[test]
+fn authored_http_responses_are_launch_facts_and_steps() {
+    let tests = contract::tests(
+        r#"answer fetch "https://api.example.com/" with 200 {"text":"Stubbed greeting"}
+test "inherited"
+  expect text "greeting" == "Stubbed greeting"
+test "overridden"
+  fail fetch "https://api.example.com/"
+  clock data
+  answer fetch "https://api.example.com/" with 503 "unavailable"
+  reload
+"#,
+    )
+    .unwrap();
+    let json: serde_json::Value = serde_json::from_str(&contract::tests_json(&tests)).unwrap();
+    assert_eq!(json[0]["steps"][0]["op"], "answer-fetch");
+    assert_eq!(json[0]["steps"][0]["response"]["status"], 200);
+    assert_eq!(json[1]["steps"][0]["op"], "fail-fetch");
+    assert_eq!(json[1]["steps"][2]["op"], "answer-fetch");
+    assert!(contract::tests(
+        "answer fetch \"x\" with 200\nfail fetch \"x\"\ntest \"t\"\n  clock data\n"
+    )
+    .is_err());
+}
+
+#[test]
 fn a_test_block_parses_to_the_eight_operations_and_expects() {
     let src = "test \"login\"\n  tap \"title\"\n  type \"who\" \"alice\"\n  type \"password\" key \"Enter\"\n  clock settle\n  clock +500\n  clock +250 real\n  screenshot \"after.png\"\n  expect tree has \"login-error\"\n  expect tree missing \"signed-in\"\n  expect text \"login-error\" == \"Wrong password\"\n  expect state password == \"\"\n  expect state attempt == 1\n  expect state ok == false\n  expect state picked == none\n  expect state tags == []\n";
     let tests = contract::tests(src).unwrap();
@@ -1196,6 +1221,23 @@ fn state_steps_compare_numeric_bounds_and_literal_membership() {
         assert!(
             contract::tests(&format!("test \"bad\"\n  expect state {line}\n")).is_err(),
             "{line}"
+        );
+    }
+}
+
+#[test]
+fn authored_http_fixtures_refuse_large_bodies_and_cookie_headers() {
+    for step in [
+        format!(
+            "answer fetch \"https://api.test/\" with 200 \"{}\"",
+            "a".repeat(70 * 1024)
+        ),
+        "answer fetch \"https://api.test/\" with 200 header \"Set-Cookie\" \"sid=1\" {}".into(),
+        "answer fetch \"https://api.test/\" with 200 header \"set-cookie2\" \"sid=1\" {}".into(),
+    ] {
+        assert!(
+            contract::tests(&format!("test \"fixture\"\n  clock data\n  {step}\n")).is_err(),
+            "invalid answer accepted"
         );
     }
 }

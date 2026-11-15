@@ -1,3 +1,5 @@
+import { fixtureResponse, parseFaults } from '../host/web/faults.js';
+export { faultSpecOf } from '../host/web/faults.js';
 import {gameNonInput, proofInputFiles, executionInputFiles} from '../game/inputs.mjs';
 export {gameNonInput} from '../game/inputs.mjs';
 import {readStatus, formatStatus} from '../game/status.mjs';
@@ -26,7 +28,6 @@ import { webSourceRoots } from '../host/web/build.mjs';
 import { changedContractReads } from './web-build.mjs';
 import { CONFIG_JSON, DECLARATIONS, MODULE_FILE, moduleGraph } from './module-graph.mjs';
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
-
 /** Poll host I/O until ready; a bound only ends a hung load. Return its last observation for diagnostics. */
 export async function pollUntil(read, ready, { bound = 60_000, interval = 50, now = Date.now, pause = ms => new Promise(r => setTimeout(r, ms)) } = {}) {
   const until = now() + bound;
@@ -711,12 +712,12 @@ export function parityScript({ mediaClock = 'wall', lineHeight = null } = {}) {
 export function faultSpec(spec) {
   const lines = String(spec ?? '').split('\n').filter(l => l.trim());
   for (const line of lines) {
-    const [prefix, ...counts] = line.split('\t');
+    const [prefix, ...fields] = line.split('\t'), counts = fields.slice(0, 4); if (fields[4]) fixtureResponse(JSON.parse(fields[4]));
     if (!prefix) throw new Error('fail fetch: each fault names a non-empty URL prefix');
-    if (counts.length > 4 || counts.some((c, i) => !(c === '-' || /^\d+$/.test(c)) && !(i === 3 && /^[01]$/.test(c)))) throw new Error(`fail fetch: an unreadable fault line: ${JSON.stringify(line)}`);
+    if (fields.length > 6 || (fields[5] !== undefined && !/^\d+$/.test(fields[5])) || counts.some((c, i) => !(c === '-' || /^\d+$/.test(c)) && !(i === 3 && /^[01]$/.test(c)))) throw new Error(`fail fetch: an unreadable fault line: ${JSON.stringify(line)}`);
     if (counts[0] === '0') throw new Error('fail fetch: `times` is a positive integer');
   }
-  return lines.join('\n');
+  const out = lines.join('\n'); if (lines.some(l => l.split('\t')[5]) && new TextEncoder().encode(out).length > 65536) throw new Error('answer fetch: launch fixtures exceed 64 KiB'); parseFaults(out); return out;
 }
 
 /** `address` as every browser carrier opens it: under the agent, with the launch facts, the drive's auth fixture,
@@ -734,6 +735,7 @@ export function agentPage(address, { facts, storage, env }) {
 /** The page address with the fault table a reload carries (LLP 1103 D3); `undefined` leaves the launch's. */
 export function withFaults(href, failFetch) {
   if (failFetch === undefined) return href;
+  failFetch = faultSpec(failFetch);
   const url = new URL(href);
   if (failFetch) url.searchParams.set('failFetch', failFetch); else url.searchParams.delete('failFetch');
   return url.href;
@@ -747,8 +749,6 @@ export function withEpoch(href, epoch) {
   return url.href;
 }
 
-/** Launch lines from `state.faults` (LLP 1103 D3): a reload relaunches with the table as it is now. */
-export const faultSpecOf = faults => (faults ?? []).map(f => [f.prefix, f.times ?? '-', f.left ?? '-', f.hits, f.armed ? 1 : 0].join('\t')).join('\n');
 
 export function launchFacts({seed, locale, formatLocale, timeZone, epoch, failFetch, env = {}}) {
   seed = Number(seed ?? env.EXACT_AGENT_SEED ?? 1);

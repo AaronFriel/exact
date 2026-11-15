@@ -1345,8 +1345,17 @@ fn ids(ids: &[u32], out: &mut String) {
 /// neither, the reply is the session's table as `state.faults` shows it.
 fn faults<D: DataSource>(runner: &Runner<D>, request: &str) -> String {
     let table = runner.faults();
+    let full_request = request;
     let request = after_key(request, "faults").unwrap_or("{}");
-    if let Some(prefix) = field_str(request, "fail") {
+    if let Some(prefix) = field_str(request, "answer") {
+        let value: serde_json::Value = match serde_json::from_str(full_request) {
+            Ok(v) => v,
+            Err(e) => return error(&e.to_string()),
+        };
+        if let Err(e) = table.answer(&prefix, &value["faults"]["response"]) {
+            return error(&e);
+        }
+    } else if let Some(prefix) = field_str(request, "fail") {
         let times = match after_key(request, "times") {
             None => None,
             Some(_) => match field_num(request, "times") {

@@ -233,12 +233,13 @@ export function helperClassifications(group) {
     ["web:host/web/src/abi.rs", "exact_chooses_scheme"],
   ]),
   group("runner helpers", ["one-shot"], "synchronous query, request value or caller-owned evaluator state", "UI-owned",
-    "The named APIs inspect current owners/resources or build request values. sandbox.rs and request_preload.rs decide admission; no helper delivers a completion.", [
+    "The named APIs inspect current owners/resources, record render dependencies or build request values. sandbox.rs and request_preload.rs decide admission; no helper delivers a completion.", [
     ["runner:runner/src/canvas_capture.rs", "Encoding::lossy_quality Encoding::new media_type_of Request::capture_canvas_as"],
     ["runner:runner/src/desktop.rs", "image_node label"],
     ["runner:runner/src/instance/owners.rs", "Tree::owners"],
     ["runner:runner/src/request_preload.rs", "secret_in_origin"],
     ["runner:runner/src/runner.rs", "Runner::plan_site_of"],
+    ["runner:runner/src/runner/checkpoint.rs", "Runner::record_render_request"],
     ["runner:runner/src/runner/owned.rs", "Runner::bake_launch_answers Runner::instance_resources"],
     ["runner:runner/src/runner/source.rs", "Native::library_load_time Native::record_library_load"],
     ["runner:runner/src/sandbox.rs", "device line"],

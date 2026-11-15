@@ -28,6 +28,13 @@ export function responseFor(response) {
   return response;
 }
 function fetchInCall(input, options) {
+  if (globalThis.__exactRender && !globalThis.__exactProduction) {
+    const call = currentContext();
+    if (call && call !== backgroundCall && !call.mutation) {
+      try { (call.urls ??= new Set()).add(new URL(input instanceof Request ? input.url : String(input)).href); }
+      catch { /* Invalid URLs still reach the executor's ordinary refusal. */ }
+    }
+  }
   // Checked before any path, a mutation's captured fetch included (LLP 1016.000 D8).
   if (options?.exactLongPoll !== undefined && options.exactStream === undefined)
     return Promise.reject(new TypeError('exactLongPoll asks again for an answer that keeps coming: give exactStream too'));

@@ -5902,10 +5902,27 @@ test "the list shows an error, then retries and loads"
   expect tree has "recipes"
 ```
 
-`fail fetch` tests a rejected request; it cannot supply an HTTP status or body.
-To test malformed successful responses or a specific HTTP error, make the app's
-test server return that fixture and drive the real source against it. Do not
-invent a response-body override in Contract test syntax.
+`answer fetch "https://api.example.com/greeting" with 200 {"text":"Hello"}`
+supplies a response without contacting that service. Leading a test or the file,
+it is installed before the first resource load; later it is a step. The real
+source reads its status, headers and body. A quoted string supplies plain text;
+JSON supplies `application/json`. Optional `header "name" "value"` pairs before
+the body set response headers. Use a text body to test malformed JSON.
+An answer replaces a failure or answer at the same prefix; `fail fetch` replaces
+it with a connection failure, and `pass fetch` clears it. The longest live prefix
+decides. Reload carries the current table, and tests start with independent tables.
+On a rendered web page, only answers that fetched a URL matching a table prefix
+are asked again, including a prefix cleared by `pass fetch`. Other rendered
+answers stay settled. A delivered response does not excuse a resource failure
+from `expect no failures`. An injected connection failure remains arranged after
+its prefix is replaced or carried through reload.
+Fixtures keep request validation, file-read grants and upload limits, deadlines,
+response limits and native HTTP caching. Native prefetch and its foreground
+fallback use the same fixture. A web response and its clones keep the request URL
+and read-only headers.
+Unmatched URLs still go to the network. These are immediate, buffered responses;
+streams, redirects and `exactBodyTo` are not supported. See the
+[authored-test grammar](contract-grammar.md#authored-tests) for limits.
 
 To write through the app's own server as another person, `request POST "/items"
 {"title": "Bread"} as grace` is the driver calling it (`Authorization: Bearer grace`,

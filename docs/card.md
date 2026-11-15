@@ -99,6 +99,7 @@ test steps (app.test.contract; every other form: docs/contract-grammar.md)
   clock data · clock settle · clock +5000 · reload
   back
   fail fetch "<prefix>", pass fetch …
+  answer fetch "<prefix>" with 200 {"text":"Hello"}
   request POST "/items" {…} as grace expect 409
   size 390x844, at "/item/7#moves", epoch, time-zone, locale, seed, before data
 
@@ -112,7 +113,7 @@ ops: a target is a testId, else a view's exact text or label
   screenshot <png> compare <ref> · prefer <feature> <value> · fail|pass fetch <prefix>
 
 how (snippets compile)
-a second screen, a sheet: A screen is a route, not an `if`; a sheet's root has `navigationPresentation="modal"`, its Cancel the `id` `navigationBack` names (`pattern list-detail`).
+a second screen, a sheet: Use a route for a screen. A sheet has `navigationPresentation="modal"`; Cancel has the `navigationBack` id (`pattern list-detail`).
   routes nav
     home "/"
       edit "/edit"
@@ -138,7 +139,7 @@ a second screen, a sheet: A screen is a route, not an `if`; a sheet's root has `
             text "New" role="heading"
             button press=save buttonStyle="bordered-prominent" aria-label="Save"
               image "symbol:checkmark"
-a confirmation: What can't be undone asks first. `aria-label` is the question; actions run their `press` and close (`command="close"`); Cancel has no `press`. Open it: `command="show-modal"` or `showModal(id)`.
+a confirmation: Confirm irreversible actions: `aria-label` asks; `press` acts; `command="close"` closes. Cancel has no `press`. Open: `command="show-modal"` or `showModal(id)`.
   state n = 1
   action remove
     n = 0

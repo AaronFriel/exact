@@ -25,6 +25,8 @@ pub struct Checkpoint {
     pub answers: Vec<(String, String, Vec<Value>, Value)>,
     /// What was still pending then, and rendered its placeholder.
     pub pending: Vec<String>,
+    /// Development-only HTTP URLs fetched for each answer, in `answers` order.
+    pub urls: Vec<Vec<String>>,
     /// The indices in `answers` of those whose stream was still open (LLP
     /// 1016.000 D5): the runtime shows each and asks it again, which
     /// subscribes the runtime to it.
@@ -38,6 +40,27 @@ pub struct Checkpoint {
 }
 
 impl<D: DataSource> Runner<D> {
+    /// Record a render's HTTP dependency against the resource owning this request.
+    pub fn record_render_request(&mut self, request: &crate::RequestOut) {
+        if self.delivery.production
+            || (!request.request.url.starts_with("http://")
+                && !request.request.url.starts_with("https://"))
+        {
+            return;
+        }
+        if let Some(Target::Resource(i)) = self
+            .pending
+            .iter()
+            .find(|p| p.ticket == request.ticket)
+            .map(|p| p.target)
+        {
+            let urls = &mut self.resources[i].render_urls;
+            if !urls.contains(&request.request.url) {
+                urls.push(request.request.url.clone());
+            }
+        }
+    }
+
     /// Boot from a rendered document's checkpoint (LLP 1048.000 D6). Each
     /// answer seeds its resource — the same name and source, answered by
     /// the same logic, a value that still fits — as an answer this runner
@@ -123,6 +146,7 @@ impl<D: DataSource> Runner<D> {
                 open_rows[i] = true;
             }
         }
+        let mut urls = Vec::new();
         let (mut answers, mut open, mut readers) = (Vec::new(), Vec::new(), Vec::new());
         // Write each row's answer but a list's own, which no request gave: a
         // list's answers are its elements', whose rows follow the declared
@@ -146,6 +170,9 @@ impl<D: DataSource> Runner<D> {
             if let Some(state) =
                 (resource.state.as_ref()).filter(|state| !resource.pending && !state.placeholder)
             {
+                if !self.delivery.production {
+                    urls.push(resource.render_urls.clone());
+                }
                 answers.push((
                     name.to_string(),
                     source.to_string(),
@@ -165,6 +192,7 @@ impl<D: DataSource> Runner<D> {
             now_ms: self.now_ms,
             logic: self.data.revision().map(str::to_owned),
             answers,
+            urls,
             pending,
             open,
             readers,

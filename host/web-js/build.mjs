@@ -684,6 +684,11 @@ writeFileSync(resolve(gen, 'main.js'), [
 ].join('\n'));
 for (const f of ['agent.js', 'check.js', 'perf.js', 'seam.js', 'rust-data.js', 'canvas-capture.js', 'list.js', 'list-text.js', 'facts.js', 'fetches.js', 'modules.js', 'permissions.js', 'sheets.js', 'samples.js', 'wakes.js', 'reach.js', 'devices.js', 'members.js', 'arrival.js', 'calls.js', 'update.js', 'spans.js', 'views.js', 'pictures.js', 'markdown.js', 'symbols.js', 'motion.js', 'drag-target.js', 'transform.js', 'svg-transform.js', 'dataset.js', 'format.js', 'format-locale.js', 'hatches.js', 'arrange.js', 'reorder.js', 'flow.js', 'native.js', 'shared.js', 'store-reader.js', 'iframes.js', 'list-items.js', 'button-fill.js']) cpSync(resolve(here, f), resolve(gen, f));
 writeFileSync(resolve(gen, 'modules.js'), localImports(readFileSync(resolve(here, 'modules.js'), 'utf8')));
+const mountSource = readFileSync(resolve(here, 'mount.js'), 'utf8');
+const checkpointFaultImport = "import { checkpointFaults } from '../web/faults.js';";
+if (!mountSource.includes(checkpointFaultImport)) throw new Error('mount.js no longer imports checkpointFaults');
+writeFileSync(resolve(gen, 'mount.js'), localImports(production
+  ? mountSource.replace(checkpointFaultImport, 'const checkpointFaults = () => [];') : mountSource));
 // The web host's own pieces the runtime loads (glue.mjs).
 stageHostGlue(root, gen);
 // Keep navigation one runtime module and admission a separate lazy module on the JS target.
@@ -754,7 +759,7 @@ writeFileSync(resolve(gen, 'grant-admission.js'), admitsNothing ? emptyGrantAdmi
 // wake's or the device's request and pass the app's: with no module there is no origin but the app.
 const admission = readFileSync(resolve(here, 'admission.js'), 'utf8');
 const stubbed = [
-  ["import { faultMessage, takeFault } from '../web/faults.js';", "const takeFault = () => false, faultMessage = () => '';"],
+  ["import { answeredFetch, countFault, faultMessage, matchFault } from '../web/faults.js';", "const matchFault = () => false, countFault = () => {}, faultMessage = () => '', answeredFetch = () => null;"],
   ["import { redirectFor, reachRefusal, UNATTRIBUTED } from '../web/address-space.js';", "const redirectFor = (origin, redirect) => redirect, reachRefusal = () => null, UNATTRIBUTED = 'unattributed';"],
 ].reduce((text, [line, stub]) => {
   if (!admission.includes(line)) throw new Error(`host/web-js/admission.js: build.mjs replaces a line it no longer has: ${line}`);
