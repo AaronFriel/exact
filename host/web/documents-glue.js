@@ -507,8 +507,8 @@ function types() {
 // content for the session, as on a Mac.
 async function declaredFile(handle) {
   if (handle?.kind !== 'file') return false;
-  const ext = /\.[^.]+$/.exec(handle.name)?.[0].toLowerCase();
-  return !!ext && (await types()).some((t) => Object.values(t.accept ?? {}).flat().some((e) => e.toLowerCase() === ext));
+  const name = handle.name.toLowerCase();
+  return (await types()).some((t) => Object.values(t.accept ?? {}).flat().some((suffix) => name.endsWith(suffix)));
 }
 
 globalThis.exact.documents = {

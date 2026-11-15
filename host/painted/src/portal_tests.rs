@@ -16,6 +16,179 @@ fn picker(kind: Kind, multiple: bool, suggested_name: &str) -> Picker {
     }
 }
 
+fn declared_filters() -> Vec<Filter> {
+    filters(
+        r#"{"inputs":{"fileHandlers":[
+          {"action":"/","name":"Markdown","accept":{"text/markdown":[".md",".markdown"]}},
+          {"action":"/","name":"Board","accept":{"application/vnd.studio.board+json":[".board"]}},
+          {"action":"/","name":"Archive","accept":{"application/octet-stream":[".tar.gz",".c++"]}},
+          {"action":"/","name":"Text","accept":{"text/plain":[".txt"]}},
+          {"action":"/","name":"JSON","accept":{"application/json":[]}},
+          {"action":"/","name":"Folder","accept":{"inode/directory":[]}}
+        ]}}"#,
+    )
+    .unwrap()
+}
+
+fn filter_rule(kind: u32, value: &str) -> Value {
+    Value::Struct(vec![Value::U32(kind), Value::str(value)])
+}
+
+fn markdown_filter_value() -> Value {
+    Value::Struct(vec![
+        Value::str("Markdown"),
+        Value::Array(
+            "(us)".into(),
+            vec![
+                filter_rule(0, "*.[mM][dD]"),
+                filter_rule(0, "*.[mM][aA][rR][kK][dD][oO][wW][nN]"),
+            ],
+        ),
+    ])
+}
+
+fn offered_filters() -> Value {
+    Value::Array(
+        "(sa(us))".into(),
+        vec![
+            markdown_filter_value(),
+            Value::Struct(vec![
+                Value::str("Board"),
+                Value::Array(
+                    "(us)".into(),
+                    vec![filter_rule(0, "*.[bB][oO][aA][rR][dD]")],
+                ),
+            ]),
+            Value::Struct(vec![
+                Value::str("Archive"),
+                Value::Array(
+                    "(us)".into(),
+                    vec![
+                        filter_rule(0, "*.[tT][aA][rR].[gG][zZ]"),
+                        filter_rule(0, "*.[cC]++"),
+                    ],
+                ),
+            ]),
+            Value::Struct(vec![
+                Value::str("Text"),
+                Value::Array("(us)".into(), vec![filter_rule(0, "*.[tT][xX][tT]")]),
+            ]),
+            Value::Struct(vec![
+                Value::str("JSON"),
+                Value::Array("(us)".into(), vec![filter_rule(1, "application/json")]),
+            ]),
+        ],
+    )
+}
+
+#[test]
+fn declared_extensions_are_literal_portal_rules() {
+    assert_eq!(
+        declared_filters(),
+        vec![
+            Filter {
+                name: "Markdown".into(),
+                rules: vec![
+                    (0, "*.[mM][dD]".into()),
+                    (0, "*.[mM][aA][rR][kK][dD][oO][wW][nN]".into()),
+                ],
+            },
+            Filter {
+                name: "Board".into(),
+                rules: vec![(0, "*.[bB][oO][aA][rR][dD]".into())],
+            },
+            Filter {
+                name: "Archive".into(),
+                rules: vec![
+                    (0, "*.[tT][aA][rR].[gG][zZ]".into()),
+                    (0, "*.[cC]++".into()),
+                ],
+            },
+            Filter {
+                name: "Text".into(),
+                rules: vec![(0, "*.[tT][xX][tT]".into())],
+            },
+            Filter {
+                name: "JSON".into(),
+                rules: vec![(1, "application/json".into())],
+            },
+        ],
+        "a directory handler is not a file filter"
+    );
+
+    for extension in ["", ".", ".MD", "board", ".md.", ".m_d", ".m-d", ".mé"] {
+        let compat = serde_json::json!({"inputs":{"fileHandlers":[{
+            "action":"/", "accept":{"text/markdown":[extension]}
+        }]}})
+        .to_string();
+        assert!(filters(&compat).is_err(), "{extension:?}");
+    }
+    for name in ["", "Markdown\0files", "Markdown\nfiles"] {
+        let compat = serde_json::json!({"inputs":{"fileHandlers":[{
+            "action":"/", "name":name, "accept":{"text/markdown":[".md"]}
+        }]}})
+        .to_string();
+        assert_eq!(
+            filters(&compat).unwrap_err(),
+            "file handler 0's name is not a valid label",
+            "{name:?}"
+        );
+    }
+    let error = filters("not json").unwrap_err();
+    assert!(
+        error.contains("not JSON: expected ident at line 1 column 2"),
+        "{error}"
+    );
+    assert_eq!(filters(r#"{"inputs":{}}"#).unwrap(), []);
+}
+
+#[test]
+fn manifest_compatibility_metadata_becomes_portal_filters() {
+    let dir = std::env::temp_dir().join(format!(
+        "exact-portal-manifest-compatibility-{}",
+        std::process::id()
+    ));
+    std::fs::create_dir_all(&dir).unwrap();
+    let result = std::panic::catch_unwind(|| {
+        std::fs::write(
+            dir.join("app.json"),
+            r#"{"name":"Documents","app":{"id":"test.documents","name":"Documents"},"file_handlers":[{"action":"/","name":"Board","accept":{"application/x-studio-board+json":["board"]}},{"action":"/","name":"Markdown","accept":{"text/markdown":[".MD"]}}]}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            dir.join("app.contract"),
+            "component App\n  view\n    text \"Documents\"\n",
+        )
+        .unwrap();
+        let manifest = contract::Manifest::read(&dir).unwrap();
+        let compat = exact_bake::compatibility_id(
+            &dir,
+            "linux",
+            "x86_64-unknown-linux-gnu",
+            &manifest,
+            Some(""),
+        )
+        .unwrap();
+        assert_eq!(
+            filters(&compat.to_json()).unwrap(),
+            vec![
+                Filter {
+                    name: "Board".into(),
+                    rules: vec![(0, "*.[bB][oO][aA][rR][dD]".into())],
+                },
+                Filter {
+                    name: "Markdown".into(),
+                    rules: vec![(0, "*.[mM][dD]".into())],
+                },
+            ]
+        );
+    });
+    std::fs::remove_dir_all(&dir).unwrap();
+    if let Err(error) = result {
+        std::panic::resume_unwind(error);
+    }
+}
+
 #[test]
 fn a_message_reads_back_as_it_was_written() {
     let filters = Value::Array(
@@ -75,26 +248,42 @@ fn a_message_reads_back_as_it_was_written() {
 
 #[test]
 fn each_picker_asks_its_own_method_and_options() {
-    let (member, options) = request(&picker(Kind::Open, true, ""), "tok");
+    let filters = declared_filters();
+    let offered = offered_filters();
+    let (member, options) = request(&picker(Kind::Open, true, ""), "tok", &filters);
     assert_eq!(member, "OpenFile");
     assert_eq!(options.signature(), "a{sv}");
     assert_eq!(options.get("handle_token"), Some(&Value::str("tok")));
     assert_eq!(options.get("multiple"), Some(&Value::Bool(true)));
     assert_eq!(options.get("directory"), None);
-    let (member, options) = request(&picker(Kind::Directory, false, ""), "tok");
+    assert_eq!(options.get("filters"), Some(&offered));
+    assert_eq!(
+        options.get("current_filter"),
+        Some(&markdown_filter_value())
+    );
+    let (member, options) = request(&picker(Kind::Directory, false, ""), "tok", &filters);
     assert_eq!(
         (member, options.get("directory")),
         ("OpenFile", Some(&Value::Bool(true)))
     );
-    let (member, options) = request(&picker(Kind::Save, false, "notes.md"), "tok");
+    assert_eq!(options.get("filters"), None);
+    assert_eq!(options.get("current_filter"), None);
+    let (member, options) = request(&picker(Kind::Save, false, "notes.md"), "tok", &filters);
     assert_eq!(
         (member, options.get("current_name")),
         ("SaveFile", Some(&Value::str("notes.md")))
     );
+    assert_eq!(options.get("filters"), Some(&offered));
+    assert_eq!(
+        options.get("current_filter"),
+        Some(&markdown_filter_value())
+    );
+
+    let (_, options) = request(&picker(Kind::Open, false, ""), "tok", &[]);
     assert_eq!(
         options.get("filters"),
         None,
-        "a Linux binary has no file_handlers"
+        "an app that declares no file_handlers offers every file"
     );
     assert_eq!(
         request_path(":1.42", "tok"),
@@ -160,17 +349,18 @@ fn a_bus_address_names_its_unix_socket() {
 #[test]
 fn with_no_session_bus_a_pick_is_refused_at_once() {
     let ask = picker(Kind::Open, false, "");
-    let none = choose(&ask, None, Duration::from_secs(1));
+    let none = choose(&ask, &[], None, Duration::from_secs(1));
     assert!(
         matches!(&none, Outcome::Refused(r) if r.contains("no session bus")),
         "{none:?}"
     );
     assert!(matches!(
-        choose(&ask, Some(""), Duration::from_secs(1)),
+        choose(&ask, &[], Some(""), Duration::from_secs(1)),
         Outcome::Refused(_)
     ));
     let gone = choose(
         &ask,
+        &[],
         Some("unix:path=/nonexistent/exact-bus"),
         Duration::from_secs(1),
     );
@@ -376,12 +566,14 @@ fn bus(name: &str, portal: Portal) -> (String, std::thread::JoinHandle<Vec<Messa
 
 #[test]
 fn a_pick_is_asked_of_the_portal_and_its_answer_heard() {
+    let filters = declared_filters();
     let (address, served) = bus(
         "open",
         Portal::Answers(0, &["file:///home/a/one.md", "file:///home/a/two%23.md"]),
     );
     let got = choose(
         &picker(Kind::Open, true, ""),
+        &filters,
         Some(&address),
         Duration::from_secs(5),
     );
@@ -406,6 +598,11 @@ fn a_pick_is_asked_of_the_portal_and_its_answer_heard() {
     );
     assert_eq!(open.body[..2], [Value::str(""), Value::str("Open File")]);
     assert_eq!(open.body[2].get("multiple"), Some(&Value::Bool(true)));
+    assert_eq!(open.body[2].get("filters"), Some(&offered_filters()));
+    assert_eq!(
+        open.body[2].get("current_filter"),
+        Some(&markdown_filter_value())
+    );
     let Value::Str(rule) = &asked[2].body[0] else {
         panic!()
     };
@@ -414,15 +611,44 @@ fn a_pick_is_asked_of_the_portal_and_its_answer_heard() {
         "{rule}"
     );
 
-    let (address, _) = bus("save", Portal::Answers(1, &[]));
+    let (address, served) = bus("save", Portal::Answers(1, &[]));
     assert_eq!(
         choose(
             &picker(Kind::Save, false, "a.md"),
+            &filters,
             Some(&address),
             Duration::from_secs(5)
         ),
         Outcome::Cancelled
     );
+    let asked = served.join().unwrap();
+    let save = asked
+        .iter()
+        .find(|message| message.member == "SaveFile")
+        .unwrap();
+    assert_eq!(save.body[2].get("filters"), Some(&offered_filters()));
+    assert_eq!(
+        save.body[2].get("current_filter"),
+        Some(&markdown_filter_value())
+    );
+
+    let (address, served) = bus("unfiltered", Portal::Answers(1, &[]));
+    assert_eq!(
+        choose(
+            &picker(Kind::Open, false, ""),
+            &[],
+            Some(&address),
+            Duration::from_secs(5)
+        ),
+        Outcome::Cancelled
+    );
+    let asked = served.join().unwrap();
+    let open = asked
+        .iter()
+        .find(|message| message.member == "OpenFile")
+        .unwrap();
+    assert_eq!(open.body[2].get("filters"), None);
+    assert_eq!(open.body[2].get("current_filter"), None);
 }
 
 #[test]
@@ -431,6 +657,7 @@ fn a_missing_old_quitting_or_silent_portal_refuses_and_never_waits_on() {
         let (address, _) = bus(name, portal);
         match choose(
             &picker(kind, false, "a.md"),
+            &[],
             Some(&address),
             Duration::from_millis(300),
         ) {
@@ -453,6 +680,7 @@ fn a_missing_old_quitting_or_silent_portal_refuses_and_never_waits_on() {
     let open = std::thread::spawn(move || {
         choose(
             &picker(Kind::Open, false, ""),
+            &[],
             Some(&address),
             Duration::from_millis(300),
         )
@@ -502,6 +730,7 @@ fn the_element_hears_what_the_portal_answered() {
         PainterChoice::Cpu,
     )
     .unwrap();
+    p.compat = "{}".into();
     let k = p.host().kernel();
     let view = k.node_by_key(k.find_by_id("opened")[0]).unwrap().id;
     let text = |p: &Presenter<Nothing>, id: &str| {
@@ -541,18 +770,64 @@ fn the_element_hears_what_the_portal_answered() {
         journal(&p)
     );
 
+    p.compat = "not json".into();
+    p.ask_portal(
+        picker(Kind::Open, false, ""),
+        view,
+        None,
+        Duration::from_secs(1),
+    );
+    assert_eq!(until(&mut p, "cancels", "1"), "2");
+    assert!(
+        journal(&p)
+            .iter()
+            .any(|line| line
+                .contains("showOpenFilePicker: refused: compatibility metadata is not JSON: expected ident at line 1 column 2")),
+        "{:?}",
+        journal(&p)
+    );
+    let before = text(&p, "opened-value");
+    let folder =
+        std::env::temp_dir().join(format!("exact-portal-directory-{}", std::process::id()));
+    std::fs::create_dir_all(&folder).unwrap();
+    let uri: &'static str = Box::leak(format!("file://{}", folder.display()).into_boxed_str());
+    let uris: &'static [&'static str] = Box::leak(vec![uri].into_boxed_slice());
+    let (address, _) = bus("directory-invalid-handlers", Portal::Answers(0, uris));
+    p.ask_portal(
+        picker(Kind::Directory, false, ""),
+        view,
+        Some(address),
+        Duration::from_secs(5),
+    );
+    let opened = until(&mut p, "opened-value", &before);
+    assert!(
+        opened.starts_with("doc:/")
+            && opened.ends_with(folder.file_name().unwrap().to_str().unwrap()),
+        "{opened}"
+    );
+    assert!(
+        journal(&p)
+            .iter()
+            .any(|line| line.ends_with("showDirectoryPicker: chosen")),
+        "{:?}",
+        journal(&p)
+    );
+    std::fs::remove_dir_all(folder).unwrap();
+    p.compat = "{}".into();
+
     let file = std::env::temp_dir().join(format!("exact-portal-chosen-{}.md", std::process::id()));
     std::fs::write(&file, "# chosen").unwrap();
     let uri: &'static str = Box::leak(format!("file://{}", file.display()).into_boxed_str());
     let uris: &'static [&'static str] = Box::leak(vec![uri].into_boxed_slice());
     let (address, _) = bus("presenter", Portal::Answers(0, uris));
+    let before = text(&p, "opened-value");
     p.ask_portal(
         picker(Kind::Open, false, ""),
         view,
         Some(address),
         Duration::from_secs(5),
     );
-    let opened = until(&mut p, "opened-value", "none");
+    let opened = until(&mut p, "opened-value", &before);
     let name = file.file_name().unwrap().to_str().unwrap();
     assert!(
         opened.starts_with("doc:/") && opened.ends_with(name),
@@ -589,7 +864,7 @@ fn the_element_hears_what_the_portal_answered() {
             p.pump(p.host().now());
             std::thread::sleep(Duration::from_millis(5));
         }
-        assert_eq!(text(&p, "cancels"), "1", "renewed first: {renew_first}");
+        assert_eq!(text(&p, "cancels"), "2", "renewed first: {renew_first}");
     }
     assert!(
         journal(&p)

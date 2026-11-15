@@ -85,7 +85,7 @@ test('a relocated warm proof refreshes roots and digests together', async () => 
 test.each(['rust', 'markdown', 'markdown-taken', 'motion', 'editor', 'flow', 'plain', 'gpu', 'gpu-ready', 'gpu-broken'])('JS prerequisites follow the %s artifacts', mode => {
   const dir = mkdtempSync(resolve(root, 'target/web-prerequisites-'));
   try {
-    write(dir, 'app.json', JSON.stringify({ name: 'fixture', rust: mode === 'rust' ? { module: { package: 'fixture-data' } } : false }));
+    write(dir, 'app.json', JSON.stringify({ app: { id: 'com.exact.fixture', name: 'Fixture' }, name: 'fixture', rust: mode === 'rust' ? { module: { package: 'fixture-data' } } : false }));
     write(dir, 'app.contract', 'component App\n  text "ready"\n');
     if (mode.startsWith('gpu')) write(dir, 'gpu/src/lib.rs', '');
     const script = `

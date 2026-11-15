@@ -55,7 +55,7 @@ import { grantAdvice } from './grant-advice.mjs';
 import { installIn } from './package-manager.mjs';
 import { builtContract, contractTool, launch, toolEnv } from './tools.mjs';
 export { grantAdvice, grantLines } from './grant-advice.mjs';
-const { cargoEnvironment, appleExecutableName, HERMES_INSTALLER, hermesBundle, hermesTarget, pathFrom, resolveApp, WEB_TOOLCHAIN, webToolchainEnv } = await import('./app.mjs');
+const { cargoEnvironment, appleExecutableName, HERMES_INSTALLER, hermesBundle, hermesTarget, pathFrom, readManifest, resolveApp, WEB_TOOLCHAIN, webToolchainEnv } = await import('./app.mjs');
 const { applyPattern, createApp, createGame, patternList, rustApp, UNCACHED_CRATES, wireSnapback } = await import('../game/new.mjs');
 const { gameDefaults, sdkFetch } = await import('../game/app/shells.mjs');
 const { HOST_SDKS, appleSdkName, developerDir, xcodeRefusal } = await import('../host/apple/devices.mjs');
@@ -772,7 +772,7 @@ async function newApp(path, {update = false, without = null, with: platforms = [
   if (update) {
     console.log(createApp(path, {update, without, with: platforms}));
     const manifest = resolve(path, 'app.json');
-    if (existsSync(manifest) && Object.values(JSON.parse(readFileSync(manifest, 'utf8')).typescript?.sources ?? {}).some(p => /(?:^|\/)snapback4\/ts\/?$/.test(p)))
+    if (existsSync(manifest) && Object.values(readManifest(resolve(path), basename(resolve(path))).typescript?.sources ?? {}).some(p => /(?:^|\/)snapback4\/ts\/?$/.test(p)))
       console.log(wireSnapback(path, {artifactOnly:true}));
     // A file names what it uses (LLP 1091 D1): an app written before module
     // scope gets the `use` lines its files lack, as `contract fmt --uses` writes them.
@@ -919,7 +919,7 @@ export function hatch(args, say = console.log) {
   const names = args.filter(a => !a.startsWith('--')), word = scope === 'element' ? names.shift() : null;
   if (scope === 'element' && !/^[a-z][a-z0-9]*(-[a-z][a-z0-9]*)*$/.test(word ?? '')) throw new Error('hatch: name a word, lowercase letters and digits joined by "-" (exact hatch avatar), or --app, or --window');
   const app = resolveApp(names[0]), dir = app.dir, manifestPath = resolve(dir, 'app.json');
-  const manifest = existsSync(manifestPath) ? JSON.parse(readFileSync(manifestPath, 'utf8')) : {};
+  const manifest = existsSync(manifestPath) ? app.manifest : {};
   const title = manifest.app?.name ?? manifest.name ?? app.name;
   const camel = (word ?? scope).replace(/-([a-z0-9])/g, (_, c) => c.toUpperCase()), Camel = camel[0].toUpperCase() + camel.slice(1);
   const wrote = [], todo = [];
@@ -1450,10 +1450,10 @@ async function main(argv) {
     if (!name) { console.error('exact snapback: name the app\'s directory (its exact.mjs passes it: bun exact.mjs snapback)'); process.exit(2); }
     if (argv.includes('--artifact-only') && !argv.includes('--rebuild')) throw new Error('exact snapback: --artifact-only requires --rebuild');
     const args = guardFlags('snapback', argv.slice(1)), port = args.indexOf('--port');
-    const dir = resolve(args[0]), app = { dir, manifest: JSON.parse(readFileSync(resolve(dir, 'app.json'), 'utf8')) };
+    const dir = resolve(args[0]), app = { dir, manifest: readManifest(dir, basename(dir)) };
     // Always ask Cargo to validate its inputs; cached or unstamped bytes never block repair.
     console.log(wireSnapback(dir, { port: port < 0 ? null : args[port + 1] ?? '', online: args.includes('--online') ? true : null, artifactOnly: args.includes('--artifact-only'), rebuild: args.includes('--rebuild') }));
-    app.manifest = JSON.parse(readFileSync(resolve(dir, 'app.json'), 'utf8'));
+    app.manifest = readManifest(dir, basename(dir));
     const updated = readFileSync(resolve(dir, 'app.ts'), 'utf8');
     const nextOrigin = backendOrigin(dir) ?? literalBackendOrigin(updated, (await import('rolldown/utils')).parseSync);
     await snapbackDevice.devicePreflight(app, nextOrigin ? [nextOrigin] : []);
@@ -1465,7 +1465,7 @@ async function main(argv) {
   // its web loop, on any OS; otherwise the Mac is named the first time (LLP 1153 D1.2).
   const outsideDir = process.env.EXACT_APP_DIR ? resolve(process.env.EXACT_APP_DIR) : /[\\/]|^\.\.?$/.test(name) ? resolve(name) : null;
   const outsideApp = verb !== 'uninstall' && outsideDir && existsSync(resolve(outsideDir, 'app.contract')) && !gameDefaults(outsideDir);
-  const outsideManifest = outsideApp && existsSync(resolve(outsideDir, 'app.json')) ? JSON.parse(readFileSync(resolve(outsideDir, 'app.json'), 'utf8')) : {};
+  const outsideManifest = outsideApp && existsSync(resolve(outsideDir, 'app.json')) ? readManifest(outsideDir, basename(outsideDir)) : {};
   if (outsideApp && verb === 'run' && !Object.keys(outsideManifest.host ?? {}).some(p => ['ios', 'macos', 'tvos', 'linux', 'android', 'windows'].includes(p))) {
     console.error(`${basename(outsideDir)} names no native platform (app.json host): running its web loop; bun exact.mjs mac --run names the Mac and builds it`);
     const web = spawnSync(process.execPath, [resolve(ROOT, 'host/web/dev.mjs'), '--app', outsideDir, ...rest], { stdio: 'inherit', env: { ...process.env, EXACT_APP_DIR: outsideDir } });

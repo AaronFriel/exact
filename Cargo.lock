@@ -2008,6 +2008,7 @@ dependencies = [
  "chrono",
  "chrono-tz",
  "contract",
+ "exact-bake",
  "exact-canvas",
  "exact-color",
  "exact-data",

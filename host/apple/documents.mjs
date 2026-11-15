@@ -61,7 +61,7 @@ const IMPORTED = new Set(['net.daringfireball.markdown']);
 export function documentTypes(app) {
   return (app.manifest.file_handlers ?? []).flatMap((handler) => {
     const accept = Object.entries(handler.accept);
-    const extensionsOf = (entries) => [...new Set(entries.flatMap(([, e]) => [e].flat()).map((e) => e.replace(/^\./, '')).filter(Boolean))];
+    const extensionsOf = (entries) => [...new Set(entries.flatMap(([, e]) => [e].flat()).map((e) => e.slice(1)))];
     const entry = (entries, types, role, rank) => {
       const extensions = extensionsOf(entries);
       return {
@@ -97,7 +97,7 @@ export function exportedTypes(app) {
         UTTypeIdentifier: own.identifier,
         UTTypeDescription: handler.name ?? mime,
         UTTypeConformsTo: own.conformsTo,
-        UTTypeTagSpecification: { 'public.filename-extension': [extensions].flat().map((e) => e.replace(/^\./, '')), 'public.mime-type': [mime] },
+        UTTypeTagSpecification: { 'public.filename-extension': [extensions].flat().map((e) => e.slice(1)), 'public.mime-type': [mime] },
       };
     }));
 }
@@ -112,6 +112,6 @@ export function importedTypes(app) {
       UTTypeIdentifier: DOCUMENT_UTIS[mime],
       UTTypeDescription: handler.name ?? mime,
       UTTypeConformsTo: ['public.plain-text'],
-      UTTypeTagSpecification: { 'public.filename-extension': extensions.map((e) => e.replace(/^\./, '')), 'public.mime-type': [mime] },
+      UTTypeTagSpecification: { 'public.filename-extension': extensions.map((e) => e.slice(1)), 'public.mime-type': [mime] },
     })));
 }

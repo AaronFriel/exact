@@ -579,14 +579,16 @@ export function readManifest(dir, name) {
   if (!problems.length) problems.push(...installProblems(parsed), ...gpuModuleProblems(parsed), ...documentTypeProblems(parsed), ...shareTargetProblems(parsed), ...protocolHandlerProblems(parsed), ...appIconProblems(parsed, dir), ...launchImageProblems(parsed, dir), ...variantProblems(parsed, dir));
   if (problems.length) throw new Error(`${path} does not conform to scripts/app.schema.json:\n  ${problems.join('\n  ')}`);
   nativeResourceMappings(parsed); nativeResourceMappings(parsed, 'ios');
-  return resolveVariant({ host: {}, deploy: {}, ...parsed }, selectedVariant(dir)); // the selected variant's identity (LLP 1030.008 D2)
+  const manifest = resolveVariant({ host: {}, deploy: {}, ...parsed }, selectedVariant(dir)); // the selected variant's identity (LLP 1030.008 D2)
+  canonicalizeDocumentExtensions(manifest);
+  return manifest;
 }
 
-import { DOCUMENT_UTIS } from './document-utis.mjs';
+import { DOCUMENT_UTIS, ownDocumentType, documentTypeProblems, canonicalizeDocumentExtensions } from './document-utis.mjs';
 import { webCspProblems, webHeadProblems } from './web-head.mjs';
 import { appIconProblems, publishedIcons } from './app-icons.mjs';
 import { claimVariant, resolveVariant, selectedVariant, variantProblems } from './variants.mjs';
-export { DOCUMENT_UTIS };
+export { DOCUMENT_UTIS, ownDocumentType };
 ;
 
 // The iOS launch screen's picture (`launchScreen`) must be there; refused when any build reads
@@ -596,29 +598,6 @@ function launchImageProblems(manifest, dir) {
   return launch && !existsSync(resolve(dir, launch)) ? [`host.ios.launchImage: ${launch}, the launch screen's picture, does not exist`] : [];
 }
 
-/** An app's own document format (studio diary R13): a MIME type in IANA's
- * vendor or unregistered trees (`application/vnd.studio.board+json`,
- * `application/x-studio-board`), which no system type names. The Apple
- * bake exports it as the app's: `<app id>.<subtype>`, the base app's under a variant (LLP 1030.008 D9), conforming to what
- * its structured-syntax suffix says (`+json` is JSON) and to data; the app
- * is its editor and owner. `null` for any other type. */
-export function ownDocumentType(appId, mime) {
-  const m = /^[a-z]+\/(?:x-|vnd\.|prs\.)([a-z0-9][a-z0-9.+-]*)$/i.exec(mime);
-  if (!m || Object.hasOwn(DOCUMENT_UTIS, mime)) return null;
-  const [subtype, suffix] = m[1].toLowerCase().split('+');
-  const base = { json: 'public.json', xml: 'public.xml', zip: 'public.zip-archive' }[suffix];
-  return {
-    identifier: `${appId}.${subtype.replace(/[^a-z0-9.-]/g, '-')}`,
-    conformsTo: [...(base ? [base] : mime.startsWith('text/') ? ['public.plain-text'] : ['public.data']), 'public.content'],
-  };
-}
-function documentTypeProblems(manifest) {
-  return (manifest.file_handlers ?? []).flatMap((handler, i) => Object.entries(handler.accept)
-    .flatMap(([mime, extensions]) => Object.hasOwn(DOCUMENT_UTIS, mime) ? []
-      : !ownDocumentType('app', mime) ? [`file_handlers[${i}].accept: ${mime} names no type the Apple hosts map (they map ${Object.keys(DOCUMENT_UTIS).join(', ')}), nor an app's own (application/vnd.<app>.<format> or application/x-<format>, +json for JSON)`]
-      : ![extensions].flat().some((e) => /^\.[^./]+$/.test(e)) ? [`file_handlers[${i}].accept: ${mime}, the app's own type, names no extension (".board")`]
-      : []));
-}
 /** Whether a `protocol_handlers` scheme is the web's own: `http` and
  * `https` make a native app a web browser (LLP 1030 D2, 2026-10-20), and
  * no browser registers them (WHATWG HTML's protocol handler safelist). */

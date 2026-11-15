@@ -611,10 +611,12 @@ override func destroy() {
 
 An app says what it opens with `file_handlers` in `app.json` — the W3C Web App
 Manifest's own key — and the macOS bake derives `CFBundleDocumentTypes` from
-it. Each MIME type it accepts must be one the Apple hosts map to a system type
-(`DOCUMENT_UTIS` in `scripts/app.mjs`; `application/octet-stream` is
-`public.data`), which the app views (`Viewer`, rank `Alternate`), or the app's
-own format: a vendor or unregistered type (`application/vnd.studio.board+json`,
+it. A Linux binary carries the same declarations into the desktop portal's
+Open and Save filters; a directory pick remains a directory pick rather than a
+file-type filter. Each MIME type it accepts must be one the Apple hosts map to
+a system type (`DOCUMENT_UTIS` in `scripts/app.mjs`; `application/octet-stream`
+is `public.data`), which the app views (`Viewer`, rank `Alternate`), or the
+app's own format: a vendor or unregistered type (`application/vnd.studio.board+json`,
 `application/x-studio-board+json`) with its extensions (`[".board"]`), which the
 bake exports as `<app id>.<subtype>` (`UTExportedTypeDeclarations`, conforming to
 JSON for `+json`, XML for `+xml`, else data) with the app as its `Editor` and
@@ -4105,10 +4107,39 @@ valid Unicode is refused rather than addressing a lossy spelling. A document nee
 it, though a `copyFile` into an `app:/` path needs app storage as any app file does. On the web the paths are the `FileSystemHandle`s the page's picker
 returned (Chromium; Safari and Firefox refuse the pickers), and a module placed
 on a worker on the wasm web host cannot reach them (`'unsupported'`); on macOS
-and iOS they are security-scoped URLs held for the session; Linux opens no
-picker panel (a drive's held pickers still answer), so outside a drive only
-`open-file` delivers one there. The handles end with the
-session, unless the app keeps what the person chose (below).
+and iOS they are security-scoped URLs held for the session; in a Linux desktop
+session the XDG desktop portal opens the document pickers, with Open and Save
+bounded by `file_handlers`. An extension follows the File System Access
+specification's [suffix rule](https://wicg.github.io/file-system-access/#validate-a-suffix),
+with the leading dot optional in `app.json`: after adding it, the suffix has at
+most 16 ASCII alphanumeric, `+` or `.` code points, and does not end in a dot.
+The JavaScript reader (`scripts/app.mjs` `readManifest`) and the Rust reader
+(`contract/cli/src/manifest.rs` `Manifest::read`) each lowercase that canonical
+spelling once, so `"board"` becomes `".board"` for every host and `.tar.gz`
+remains a compound suffix. Their Bun and Rust tests read the same cases from
+`scripts/fixtures/document-suffixes.json`. An invalid suffix or an empty or
+control-bearing handler name makes the build fail.
+
+The web passes those suffixes to its picker and matches a drop by the whole
+filename suffix. Apple registers each without its leading dot; its picker offers
+the handler's content types and the complete extension tokens the system resolves,
+and Exact's own drop and route check matches a compound suffix against the whole
+filename, without case. Linux sends only glob rules when a handler declares any
+extension (`.md` becomes `*.[mM][dD]`, `.tar.gz` becomes
+`*.[tT][aA][rR].[gG][zZ]`); a handler with MIME types and no extensions sends
+only those MIME rules. These are the rules the portal receives. The portal may
+still allow another file, as the
+[FileChooser specification](https://flatpak.github.io/xdg-desktop-portal/docs/doc-org.freedesktop.portal.FileChooser.html)
+permits. Their behaviour has been checked against the current
+[GTK portal](https://github.com/flatpak/xdg-desktop-portal-gtk/blob/main/src/filechooser.c),
+[KDE portal](https://github.com/KDE/xdg-desktop-portal-kde/blob/master/src/filechooser.cpp)
+and [KIO](https://github.com/KDE/kio/blob/master/src/filewidgets/kfilewidget.cpp)
+sources, not in a real GNOME or KDE session. A headless Linux host opens no panel
+(a drive's held pickers still answer). Directory sends no filters and does not
+parse the handler metadata. Open and Save refuse a non-canonical embedded suffix
+rather than normalizing it; current builds cannot embed one, and older binaries
+embed no handlers. The handles end with the session, unless
+the app keeps what the person chose (below).
 
 **A change on disk asks the answer again** (LLP 1069.010.000 D1). An answer
 that calls `storage.fs.watch(path)` is asked again when the file, a folder's

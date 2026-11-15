@@ -816,6 +816,16 @@ fn compatibility_with_trust(
             }
         }
     }
+    // Linux has no bundle beside the executable. Its portal picker reads the
+    // same declared file types from the compatibility metadata the binary
+    // already carries (LLP 1030 D2; LLP 1069.010 D2).
+    if platform == "linux" && !target.contains("android") {
+        if let Some(handlers) = manifest.json.get("file_handlers") {
+            if !handlers.as_array().is_some_and(Vec::is_empty) {
+                inputs["fileHandlers"] = handlers.clone();
+            }
+        }
+    }
     // The icon's menu each native binary carries (LLP 1133.023 D3): iOS's
     // Info.plist, Android's `shortcuts.xml`, the Mac's Dock menu, Windows'
     // jump list and Linux's desktop entry read it from the build.
@@ -1459,3 +1469,7 @@ mod tests;
 #[cfg(test)]
 #[path = "compat_notification_service_tests.rs"]
 mod notification_service_tests;
+
+#[cfg(test)]
+#[path = "compat_file_handlers_tests.rs"]
+mod file_handlers_tests;
