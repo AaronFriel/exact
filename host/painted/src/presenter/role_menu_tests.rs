@@ -243,3 +243,50 @@ fn enter_follows_a_focused_link() {
         "{journal:?}"
     );
 }
+
+const BOTS: &str = r#"component App
+  state n = 0
+  action bump()
+    n = n + 1
+  view
+    column role="menu" width=480 height=400
+      button "Ada" role="menuitem" press=bump() testId="Ada"
+      button "Bishop" role="menuitem" press=bump() testId="Bishop"
+      button "Cortana" role="menuitem" press=bump() testId="Cortana"
+      button "Dax" role="menuitem" disabled=true press=bump() testId="Dax"
+      button "Data" role="menuitem" press=bump() testId="Data"
+      button "Dora" role="menuitem" press=bump() testId="Dora"
+      button "Eve" role="menuitem" press=bump() testId="Eve"
+"#;
+
+/// #550 on the painted hosts, as `host/web/tests/role-keys.test.mjs` has the web's: a letter moves
+/// the focus to the next item it starts, the same letter again to the one after, wrapping, past a
+/// disabled item; more letters refine the match. A letter no item starts is left to the page, and
+/// Space with no search under way presses.
+#[test]
+fn a_letter_in_a_page_menu_moves_the_focus_to_the_item_it_starts() {
+    let mut p = boot(BOTS);
+    assert!(p.set_focus(Some(id(&p, "Cortana")), 0.).is_none());
+    for (name, at, next) in [
+        ("d", 0., "Data"),
+        ("d", 100., "Dora"),
+        ("d", 200., "Data"),
+        ("a", 800., "Ada"),
+        ("D", 1400., "Data"),
+        ("o", 1500., "Dora"),
+        ("z", 2100., "Dora"),
+    ] {
+        p.key_down(name, at);
+        p.run_commands(|| ());
+        assert_eq!(p.focus, Some(id(&p, next)), "{name} at {at}");
+    }
+    assert_eq!(p.host.runner().slot("n"), Some(&Value::Number(0.)));
+    p.key_down(" ", 2700.);
+    p.key_up(" ", "", 2700.);
+    p.run_commands(|| ());
+    assert_eq!(
+        p.host.runner().slot("n"),
+        Some(&Value::Number(1.)),
+        "Space presses"
+    );
+}

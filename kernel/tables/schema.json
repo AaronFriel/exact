@@ -7012,7 +7012,7 @@
     ["radius.lg", "=grouped-card-radius", "=grouped-card-radius", "=surface-radius", {"px": 12, "guideline": "m3-shape"}, 0],
     ["radius.full", "full", "full", "full", "full", 0]
   ],
-  "_roles": "@ref LLP 1166.000 D1: keys for painted composite roles. Each row: role; memberRoles (a trailing * matches a role prefix) and memberTags (HTML elements); scope (child elements, or descendants belonging to their nearest tablist or menu, as the web's ROVES selector does); axis (both, horizontal, vertical; horizontal arrows mirror the group's computed direction); orientation (aria-orientation=vertical or a host sidebar override makes it vertical); wraps; press (an arrow presses its destination when it moves); ends (Home and End); tabEntry (the checked or selected eligible member, else the first, or null for no stop). Eligibility excludes disabled, aria-disabled=true, inert and unshown members and requires host focusability; the focused member remains the move's origin. Tab entry excludes authored negative tabindex; while a member is focused only it may be the stop, and a focused negative tabindex leaves none.",
+  "_roles": "@ref LLP 1166.000 D1: keys for painted composite roles. Each row: role; memberRoles (a trailing * matches a role prefix) and memberTags (HTML elements); scope (child elements, or descendants belonging to their nearest tablist or menu, as the web's ROVES selector does); axis (both, horizontal, vertical; horizontal arrows mirror the group's computed direction); orientation (aria-orientation=vertical or a host sidebar override makes it vertical); wraps; press (an arrow presses its destination when it moves); ends (Home and End); tabEntry (the checked or selected eligible member, else the first, or null for no stop); typeAhead (a printable key moves the focus to the next member whose label starts with what was typed in the last half second, as the WAI-ARIA menu pattern's type-ahead: the same letter again goes on to the next, wrapping; Space starts no search, it presses). Eligibility excludes disabled, aria-disabled=true, inert and unshown members and requires host focusability; the focused member remains the move's origin. Tab entry excludes authored negative tabindex; while a member is focused only it may be the stop, and a focused negative tabindex leaves none.",
   "roles": [
     {
       "role": "radiogroup",
@@ -7026,7 +7026,8 @@
       "wraps": true,
       "press": true,
       "ends": false,
-      "tabEntry": "aria-checked"
+      "tabEntry": "aria-checked",
+      "typeAhead": false
     },
     {
       "role": "tablist",
@@ -7040,7 +7041,8 @@
       "wraps": true,
       "press": false,
       "ends": true,
-      "tabEntry": "aria-selected"
+      "tabEntry": "aria-selected",
+      "typeAhead": false
     },
     {
       "role": "menu",
@@ -7057,7 +7059,8 @@
       "wraps": true,
       "press": false,
       "ends": true,
-      "tabEntry": null
+      "tabEntry": null,
+      "typeAhead": true
     }
   ],
   "_controls": "LLP 1121 D9 (stage 8 C): each native control's parameters a design can set (accent-color, or a colour role it reads) and how each host Exact ships honours one: [control (a `:state` after it: that state's), parameter, ios, macos, web, linux, windows, terminal, android], each host `exact`, `best-effort` (the platform alters it) or `none` (the platform's own stands), `: why` after it saying so. Measured by scripts/measure-controls.mjs, recorded with provenance in docs/control-roles-measured.md, which a test holds this table to; the compiler's forma-unreachable lint reads it. A new parameter is a role first (LLP 1095 §3).",

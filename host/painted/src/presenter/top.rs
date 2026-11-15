@@ -811,6 +811,9 @@ impl<D: DataSource> Presenter<D> {
         if let Some(taken) = self.select_surface_key(name, now_ms) {
             return taken;
         }
+        if self.surface_type_ahead(name, now_ms) {
+            return true;
+        }
         match name {
             "Escape" => {
                 self.dismiss_surface(now_ms);
@@ -914,6 +917,52 @@ impl<D: DataSource> Presenter<D> {
             open.revision += 1;
             self.executor.notify();
         }
+    }
+
+    /// A printable key in a menu focuses the row it starts, by the kernel's
+    /// type-ahead (`Kernel::role_type_ahead`), from the focused row or, with
+    /// none, from the first. Whether a row took it: one that starts none, or
+    /// Space with no search under way, goes on to the menu's other keys.
+    fn surface_type_ahead(&mut self, name: &str, now_ms: f64) -> bool {
+        let held = self.modifiers();
+        let Some(open) = self
+            .top
+            .open
+            .as_ref()
+            .filter(|open| open.kind == SurfaceKind::Menu)
+        else {
+            return false;
+        };
+        if held.ctrl || held.alt || held.meta {
+            return false;
+        }
+        let from = open
+            .focused
+            .map_or(open.node, |i| open.layout.targets[i].node);
+        let mut typed = std::mem::take(&mut self.type_ahead);
+        let step = self
+            .host
+            .kernel()
+            .role_type_ahead(from, name, now_ms, &mut typed);
+        self.type_ahead = typed;
+        let (Some(step), Some(open)) = (step, self.top.open.as_mut()) else {
+            return false;
+        };
+        let targets = &open.layout.targets;
+        let Some(next) = step.order.iter().find_map(|id| {
+            targets
+                .iter()
+                .position(|row| row.node == *id && row.enabled)
+        }) else {
+            return false;
+        };
+        let revealed = open.layout.reveal_menu_target(next);
+        if open.focused != Some(next) || revealed {
+            open.focused = Some(next);
+            open.revision += 1;
+            self.executor.notify();
+        }
+        true
     }
 
     fn surface_edge(&mut self, last: bool) {

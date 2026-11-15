@@ -26,6 +26,7 @@ impl<D: DataSource> Presenter<D> {
             glides,
             page,
             focus_out,
+            type_ahead,
             autofocus_from,
             disabled_blur,
             edited,
@@ -163,6 +164,7 @@ impl<D: DataSource> Presenter<D> {
         *glides = Default::default();
         *page = (0.0, 0.0);
         focus_out.clear();
+        *type_ahead = Default::default();
         *autofocus_from = None;
         disabled_blur.clear();
         // An unbound control's own state, a choice or typed text (LLP

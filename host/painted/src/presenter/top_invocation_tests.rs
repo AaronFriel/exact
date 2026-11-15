@@ -968,3 +968,32 @@ fn a_menu_rows_press_point_is_in_points_at_any_scale() {
         "{said} want {want:?}"
     );
 }
+
+/// #550 in a menu the desktop draws in its window: a letter focuses the row it starts, from the
+/// first row while none is focused, the same letter again the next, wrapping; Space with no search
+/// under way still chooses. (A menu in a popup window of its own hears only the keys `event` names.)
+#[test]
+fn a_letter_in_an_open_menu_focuses_the_row_it_starts() {
+    let mut p = windowed();
+    p.serve_overlays();
+    let focused = |p: &Presenter<()>| {
+        let open = p.top.open.as_ref().unwrap();
+        open.focused.map(|i| open.layout.targets[i].node)
+    };
+    let typed = |p: &mut Presenter<()>, key: &str, at: f64| {
+        assert!(p.surface_key(key, at));
+        p.run_commands(|| ());
+    };
+    invoke(&mut p, "native-cmd");
+    typed(&mut p, "e", 0.);
+    assert_eq!(focused(&p), Some(id(&p, "to-retargeted")));
+    typed(&mut p, "a", 600.);
+    assert_eq!(focused(&p), Some(id(&p, "to-confirm")));
+    typed(&mut p, "r", 1200.);
+    assert_eq!(focused(&p), Some(id(&p, "menu-rename")));
+    typed(&mut p, "z", 1800.);
+    assert_eq!(focused(&p), Some(id(&p, "menu-rename")));
+    typed(&mut p, " ", 2400.);
+    assert!(p.surface().is_none());
+    assert_eq!(p.host().runner().slot("said"), Some(&Value::str("renamed")));
+}

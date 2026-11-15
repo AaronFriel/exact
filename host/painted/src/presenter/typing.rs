@@ -807,6 +807,10 @@ impl<D: DataSource> Presenter<D> {
         if self.key_click(id, name, now_ms) {
             return;
         }
+        // Before Space presses: during a menu's type-ahead it is one more letter.
+        if self.type_ahead_key(id, name, now_ms) {
+            return;
+        }
         let Some(node) = self.host.kernel().node(id) else {
             return;
         };
