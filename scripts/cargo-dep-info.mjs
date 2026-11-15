@@ -25,9 +25,11 @@ function watchedPackage(path) {
   return existsSync(resolve(root, 'package.json')) ? root : null;
 }
 
+/** Resolve output aliases once for a collection of compiler inputs. */
+export const outputRoots = (outputs = []) => [...new Set(outputs.filter(Boolean).map(path => outputPath(resolve(path))))];
+
 /** Explicit package watches keep installed sources; incidental tool trees and actual outputs stay excluded. */
-export function watchOutput(outputs = [], inputs = []) {
-  const roots = [...new Set(outputs.filter(Boolean).map(path => outputPath(resolve(path))))];
+export function watchOutput(outputs = [], inputs = [], roots = outputRoots(outputs)) {
   const packages = [...new Set(inputs.map(watchedPackage).filter(Boolean))]
     .map(path => ({path, real:outputPath(path)})).sort((a, b) => b.path.length - a.path.length);
   const toolDirectory = name => /^(target|node_modules|\.git|\.exact|\.gradle|\.build)$/.test(name);
@@ -89,7 +91,7 @@ export function directoryInputSnapshot(path, skip = () => false) {
 }
 
 /** The receipt and drive walk the same filtered entries and record links before stopping cycles. */
-export function* watchedTree(paths, {outputs = [], skip = () => false} = {}) {
+export function* watchedTree(paths, {outputs = [], skip = () => false, roots = outputRoots(outputs)} = {}) {
   const ancestors = new Set();
   function* visit(path, excluded, top = false) {
     let info, link;
@@ -108,7 +110,7 @@ export function* watchedTree(paths, {outputs = [], skip = () => false} = {}) {
     finally { ancestors.delete(real); }
   }
   for (const path of paths) {
-    const output = watchOutput(outputs, [path]);
+    const output = watchOutput(outputs, [path], roots);
     yield* visit(resolve(path), (path, directory) => output(path, directory) || skip(path, directory), true);
   }
 }
@@ -128,8 +130,9 @@ export function packageDirectories(paths, outputs = []) {
 /** Capture compiler inputs by bytes, directory membership and the targets written in links. */
 export function buildInputCollector({outputs, nameOf, hashes, replaced}) {
   const inputs = new Map(), absent = new Map(), directories = new Map(), links = new Map();
+  let roots;
   const add = (path, optional = false, declarer = null) => {
-    for (const node of watchedTree([path], {outputs})) {
+    for (const node of watchedTree([path], {outputs, roots: roots ??= outputRoots(outputs)})) {
       const {path:input, info, link, snapshot, error} = node;
       if (replaced.has(input)) continue;
       const name = nameOf(input, declarer);

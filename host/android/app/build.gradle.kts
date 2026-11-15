@@ -7,6 +7,8 @@ import groovy.json.JsonSlurper
 
 plugins { id("com.android.application") }
 
+val developmentApk = providers.gradleProperty("developmentApk").orNull == "1"
+
 // -Pcompose=1: the app's plan has a date or time control, and its picker is Compose Material 3's (LLP 1115.001.000
 // D1-D2; `agent-android.mjs` reads the plan's uses). Without it the framework's dialogs show, and Compose is not linked.
 val compose = providers.gradleProperty("compose").orNull == "1"
@@ -82,9 +84,11 @@ android {
             keyPassword = providers.environmentVariable("EXACT_KEY_PASSWORD").get()
         }
     }
+    lint { checkReleaseBuilds = !developmentApk }
     buildTypes {
         release {
             isMinifyEnabled = true
+            if (developmentApk) proguardFiles("proguard-development.pro")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             if (minimumApi < 31) proguardFiles("proguard-legacy.pro")
             signingConfig = upload ?: signingConfigs.getByName("debug")

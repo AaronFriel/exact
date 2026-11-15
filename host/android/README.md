@@ -111,7 +111,13 @@ The build:
    uses name `dates` (a date or time control), which links Compose Material 3 for its pickers; and with the Kotlin
    in the app's `modules/android`, its hatches and module roster, compiled in,
 
-and prints the APK's path. Each build has its own Gradle output and locks: the
+and prints the APK's path, `outputs/apk/release/app-release.apk` under the shell's build directory.
+A development-trust APK at `host-dev` passes `-PdevelopmentApk=1`: R8 shrinks with the existing keep rules,
+without optimization or obfuscation, and lint vital is omitted. It keeps the release build type and its
+upload-or-debug signing configuration, with debugging disabled. `--release`, production trust and bundles
+retain full R8 and release lint.
+
+Each build has its own Gradle output and locks: the
 shell's build directory (`-PappBuildDir`), the reader's (`-PcanvasBuildDir`), Gradle's project cache
 (`--project-cache-dir`) and Kotlin's session files, under `app/build/<app>`, `canvas/build/<app>`, `.gradle/apps/<app>`
 and `.kotlin/apps/<app>` for an app of this repository and under the app's own `target/android/` for one outside it, so

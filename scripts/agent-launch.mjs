@@ -20,7 +20,7 @@ import { besidePattern } from '../host/web/beside.mjs';
 import { chooseSimulator, phone, simulatorLaunch } from '../host/apple/devices.mjs';
 import { androidDevice } from './agent-android.mjs';
 import { bakeOutput, gpuModules, linuxBinary, moduleDirectory, pendingBuildInputs, readBuilds, resolveApp, windowsFile, shaderWatchRoots, webDist } from './app.mjs';
-import { directoryInputSnapshot, packageTests, watchedTree, watchOutput } from './cargo-dep-info.mjs';
+import { directoryInputSnapshot, outputRoots, packageTests, watchedTree, watchOutput } from './cargo-dep-info.mjs';
 import { HOST_CRATES } from './cargo-check.mjs';
 import { webSourceRoots } from '../host/web/build.mjs';
 import { changedContractReads } from './web-build.mjs';
@@ -846,9 +846,9 @@ export function watchedNewer(since, paths, directories = [], products = new Map(
     }
     return skips.get(app);
   };
-  const changed = [];
+  const changed = [], roots = outputRoots(outputs);
   for (const root of paths) {
-    const output = watchOutput(outputs, [root]);
+    const output = watchOutput(outputs, [root], roots);
     const ignored = skipFor(root), skip = (path, directory) => products.has(path) || ignored(path, directory);
     const filtered = snapshot => ({...snapshot,
       entries:snapshot.entries?.filter(({name, directory}) => !skip(resolve(snapshot.path, name), directory)) ?? null});
@@ -857,7 +857,7 @@ export function watchedNewer(since, paths, directories = [], products = new Map(
     const previousRoot = inventory.get(root);
     let rootLink; try { rootLink = readlinkSync(root); } catch { /* not a link */ }
     if (previousRoot && previousRoot.link !== rootLink) changed.push(shown(root));
-    for (const node of watchedTree([root], {outputs, skip})) {
+    for (const node of watchedTree([root], {outputs, skip, roots})) {
       const {path, info, link, snapshot, error, cycle} = node;
       if (error) {
         const previous = inventory.get(dirname(path))?.entries?.find(entry => entry.name === basename(path));

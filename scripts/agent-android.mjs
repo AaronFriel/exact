@@ -332,6 +332,8 @@ function refuseIdSuffix(env) {
 export const apkBuildDir = (app) => apkDirs(resolveApp(app)).app;
 /** The APK `build <app> --apk` makes. */
 const readerApk = (app) => resolve(apkDirs(app).app, 'outputs/apk/release/app-release.apk');
+/** Distribution builds keep full R8 and release lint; development APKs only shrink. */
+export const developmentApkArgs = (development, profile, bundle) => development && profile !== 'release' && !bundle ? ['-PdevelopmentApk=1'] : [];
 /** What `build --apk` records beside the APK, for a drive to tell whether it is older than its sources: when the build
  * began, the library it packaged (whose Cargo dep-info names the Rust, the plan's and the module's sources), and the
  * app's Kotlin. Null without one. */
@@ -1151,7 +1153,7 @@ export function buildApk(app, env, profile, writeLocks = false, bundle = false) 
     assembled = runGradle(['--no-watch-fs', ...(env.CI || graph.env.GRADLE_USER_HOME ? ['--no-daemon'] : []), bundle ? ':app:bundleRelease' : ':app:assembleRelease', `-Papp=${app.name}`, `-PappDir=${app.manifest.game ? app.workspace : app.dir}`,
       `-PexactDevelopment=${development ? '1' : '0'}`, `-PapplicationId=${androidPackageId(app.manifest)}`, `-PappName=${app.displayName}`,
       `-PappBuildDir=${dirs.app}`, `-PcanvasBuildDir=${dirs.canvas}`, `-PvideoBuildDir=${dirs.video}`, `-PndkPath=${env.ANDROID_NDK_HOME}`, '--project-cache-dir', dirs.cache, `-Pkotlin.project.persistent.dir=${dirs.kotlin}`,
-      ...gpuArgs, ...(icons.icon ? [`-PappIcon=${icons.icon}`] : []), ...(icons.banner ? [`-PappBanner=${icons.banner}`] : []), ...(launch ? [`-PappTheme=${launch}`] : []), ...compose, ...video, ...widgetArgs, ...extensionArgs(app, out, config, bound, firebase), ...graph.args], { env: { ...env, ANDROID_HOME: androidSdk(env), ...graph.env } }, process.platform, { lockAdvice: maven.length && !writeLocks ? `${app.name}: Gradle locks or verification metadata do not match its dependencies; for an intended graph change, run ${androidLockCommand(app)}, then review and commit gradle.lockfile and gradle-verification.xml` : null });
+      ...developmentApkArgs(development, profile, bundle), ...gpuArgs, ...(icons.icon ? [`-PappIcon=${icons.icon}`] : []), ...(icons.banner ? [`-PappBanner=${icons.banner}`] : []), ...(launch ? [`-PappTheme=${launch}`] : []), ...compose, ...video, ...widgetArgs, ...extensionArgs(app, out, config, bound, firebase), ...graph.args], { env: { ...env, ANDROID_HOME: androidSdk(env), ...graph.env } }, process.platform, { lockAdvice: maven.length && !writeLocks ? `${app.name}: Gradle locks or verification metadata do not match its dependencies; for an intended graph change, run ${androidLockCommand(app)}, then review and commit gradle.lockfile and gradle-verification.xml` : null });
     if (assembled) graph.kept();
   } finally {
     graph.done();
