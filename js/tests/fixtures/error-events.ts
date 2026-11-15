@@ -8,7 +8,8 @@ type Heard = (string | number | boolean)[];
 let heard: Heard[] = [];
 let held: Promise<unknown>[] = [];
 // What the next report does: `cancel` cancels an `error` event in `onerror`,
-// `rethrow` throws from the `unhandledrejection` listener, `async` makes the
+// `rethrow` throws from the `unhandledrejection` listener and `quiet` cancels
+// it, `async` makes the
 // first `error` listener return a promise that rejects. `send`, `cap`,
 // `continuation`, `deferred`, `again`, `process` and `flip` make the `error`
 // listener fetch (LLP 1175 D3).
@@ -67,6 +68,7 @@ addEventListener("unhandledrejection", (e: Event) => {
   const event = e as PromiseRejectionEvent;
   heard.push(["unhandledrejection", text(event.reason), which(event.promise), event.cancelable]);
   if (mode === "rethrow") throw new Error("the listener threw");
+  if (mode === "quiet") event.preventDefault();
 });
 onunhandledrejection = (e: PromiseRejectionEvent) => {
   heard.push(["onunhandledrejection", text(e.reason)]);
@@ -149,6 +151,10 @@ function answer(_source: string, args: unknown[]): unknown {
       return kind;
     case "handle":
       held[0].catch(() => {});
+      return kind;
+    case "quiet":
+      mode = "quiet";
+      held = [Promise.reject(new Error("quieted"))];
       return kind;
     case "rethrow":
       mode = "rethrow";

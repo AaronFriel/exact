@@ -379,7 +379,7 @@ impl Module {
         let staged = self.stage_sockets(store, ops);
         if let Err(why) = &staged {
             (self.logs).push((
-                None,
+                crate::Writer::Runtime,
                 format!("mapper `{source}` failed: {why}; socket frames were refused"),
             ));
         }

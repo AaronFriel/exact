@@ -43,6 +43,10 @@
     function (line) {
       if (global.console) global.console.error(line);
     };
+  // An uncancelled error event's line for the platform's log alone (console.js, LLP 1175 D5); a browser realm's
+  // console prints its own.
+  var uncaught = global.__exact_uncaught;
+  delete global.__exact_uncaught;
   // The runtime's own journal line (LLP 1097 D8): a failed storage
   // operation, an unhandled rejection. Natively it is the runner's journal
   // (`logs`) as it is; a realm without that door writes it to its console.
@@ -87,6 +91,7 @@
     tracker: tracker,
     journal: journal,
     runtimeLine: runtimeLine,
+    uncaught: uncaught,
     errorText: errorText,
     leftOpen: function () {
       leftOpen();

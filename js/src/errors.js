@@ -8,8 +8,9 @@
 (function (global) {
   "use strict";
   // `my`: the prelude's `hooks` (Ibex's, natively), Hermes's `tracker`,
-  // `journal`, `runtimeLine`, `errorText`, `leftOpen`, and `swap(call)`, which
-  // makes `call` the current answer and returns the one before.
+  // `journal`, `runtimeLine`, `uncaught(prefix, value)` (natively),
+  // `errorText`, `leftOpen`, and `swap(call)`, which makes `call` the current
+  // answer and returns the one before.
   global.__exact_errors = function (my) {
     var hooks = my.hooks,
       tracker = my.tracker,
@@ -33,9 +34,14 @@
       // whether the tracker's report is told by the rejection hook it arms it from (`report`)
       hooked = false,
       armed = 0;
+    // What a browser's console prints for a report no listener cancelled, to the platform's log (D5).
+    function uncaught(prefix, value) {
+      if (my.uncaught) my.uncaught(prefix, value);
+    }
     if (hooks)
       hooks.configure({
-        report: function (type, value, text) {
+        report: function (type, value, text, cancelled) {
+          if (!cancelled) uncaught(type === "error" ? "Uncaught " : "Uncaught (in promise) ", value);
           if (type !== "error") return my.journal("data: unhandled rejection: " + my.errorText(value));
           if (written && written.value === value) {
             my.journal(written.line);
@@ -84,7 +90,11 @@
         onUnhandled: function (id, error) {
           var promise = reported;
           if (hooks && !(promise && quiet.has(promise)) && !quietReason(error)) hooks.onUnhandled(id, error, promise);
-          else my.journal("data: unhandled rejection: " + my.errorText(error));
+          else {
+            // Never dispatched, so no listener cancels it: a page's console would print it.
+            uncaught("Uncaught (in promise) ", error);
+            my.journal("data: unhandled rejection: " + my.errorText(error));
+          }
           my.leftOpen();
         },
         onHandled: function (id, error) {

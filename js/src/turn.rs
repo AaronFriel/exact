@@ -131,7 +131,7 @@ impl TurnClock {
         let over = took.over(budget_ms, deadline);
         if over.is_none() {
             let held = took.held(main_thread, deadline, source, budget_ms);
-            journal.extend(held.map(|line| (None, line)));
+            journal.extend(held.map(|line| (crate::Writer::Runtime, line)));
         }
         over
     }

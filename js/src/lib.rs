@@ -110,10 +110,20 @@ use wire::outcome_to_json;
 
 type NativeFactory = fn(&str) -> Box<dyn NativeModule>;
 
-/// The module's journal lines since the last take: the runtime's own
-/// (`None`), those it wrote through the console among them, and the app's
-/// `console` lines, each with the method that wrote it.
-pub(crate) type Logs = Vec<(Option<exact_runner::Console>, String)>;
+/// Who wrote a line of the module's journal.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Writer {
+    /// The runtime itself, through the console among other ways.
+    Runtime,
+    /// The app's `console`, with the method that wrote it (LLP 1027.009 D1).
+    App(exact_runner::Console),
+    /// The runtime, for the platform's log alone: an error event no listener
+    /// cancelled, which a line of the runtime's own journals (LLP 1175 D5).
+    Uncaught,
+}
+
+/// The module's journal lines since the last take, each with who wrote it.
+pub(crate) type Logs = Vec<(Writer, String)>;
 
 /// The seam ABI this executor speaks. ABI 2 adds Canvas 2D's `draw` and
 /// `surfaces` (LLP 1056 D1); a module without them still reports 1, and
@@ -639,7 +649,7 @@ impl Module {
         self.install(engine)?;
         let took_ms = started.elapsed().as_secs_f64() * 1e3;
         if took_ms > SLOW_LOAD_MS {
-            self.logs.push((None, format!(
+            self.logs.push((Writer::Runtime, format!(
                 "the module's top level took {took_ms:.0} ms to evaluate, and every answer waits for it after first pixel: compute what a source needs in that source, or once on its first call"
             )));
         }
@@ -900,6 +910,7 @@ impl Module {
     pub fn take_logs(&mut self) -> Vec<String> {
         self.take_lines()
             .into_iter()
+            .filter(|(by, _)| *by != Writer::Uncaught)
             .map(|(_, line)| line)
             .collect()
     }

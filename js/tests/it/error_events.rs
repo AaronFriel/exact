@@ -1,7 +1,8 @@
 //! LLP 1175: a data module hears its global's error events natively, as a
 //! page does. The shared fixture (`tests/fixtures/error-events.ts`) runs here
 //! against what `error-events.json` expects of every host, and of this one's
-//! journal; host/web-js/error-events.test.mjs runs it on the web JS target.
+//! journal and platform log (`system`); host/web-js/error-events.test.mjs
+//! runs it on the web JS target.
 #![cfg(exact_js_engine)]
 
 use exact_js::Module;
@@ -106,13 +107,28 @@ fn journal_since<D: DataSource>(r: &Runner<D>, from: usize) -> Vec<String> {
         .collect()
 }
 
+/// A sink for the host's platform log that keeps the first line of each
+/// `console.error` line handed to it, not the stack frames under it.
+fn system_log<D: DataSource>(r: &mut Runner<D>) -> std::rc::Rc<std::cell::RefCell<Vec<String>>> {
+    let written = std::rc::Rc::<std::cell::RefCell<Vec<String>>>::default();
+    let into = written.clone();
+    r.set_console(move |method, line| {
+        if method == exact_runner::Console::Error && !line.starts_with(char::is_whitespace) {
+            into.borrow_mut().push(line.to_string());
+        }
+    });
+    written
+}
+
 #[test]
 fn the_shared_fixture_hears_what_a_page_hears() {
     let expected: serde_json::Value = serde_json::from_str(EXPECTED).unwrap();
     let mut r = runner();
+    let system = system_log(&mut r);
     for scenario in expected["scenarios"].as_array().unwrap() {
         let kind = scenario["run"].as_str().unwrap();
         let from = r.journal().count();
+        system.borrow_mut().clear();
         let run = match scenario["url"].as_bool() {
             Some(true) => format!("{kind} {URL}"),
             _ => kind.to_owned(),
@@ -134,6 +150,14 @@ fn the_shared_fixture_hears_what_a_page_hears() {
             assert_eq!(answered.as_deref(), Some(kind), "{kind} answers");
         }
         let journal = journal_since(&r, from);
+        let logged = system.take();
+        assert_eq!(
+            logged,
+            (scenario["system"].as_array().unwrap().iter())
+                .map(|l| l.as_str().unwrap())
+                .collect::<Vec<_>>(),
+            "{kind}: the platform's log"
+        );
         let heard: serde_json::Value =
             serde_json::from_str(&go(&mut r, "log").expect("the log answers")).unwrap();
         let expected = &scenario["heard"];
@@ -161,6 +185,24 @@ fn the_shared_fixture_hears_what_a_page_hears() {
             "{kind}: one journal line per report: {journal:#?}"
         );
     }
+}
+
+/// D5: a rejection whose listener cancels it is journaled, and the
+/// platform's log has nothing, as a page's console then prints nothing.
+#[test]
+fn a_cancelled_rejection_reaches_only_the_journal() {
+    let mut r = runner();
+    let system = system_log(&mut r);
+    let from = r.journal().count();
+    assert_eq!(go(&mut r, "quiet").as_deref(), Some("quiet"));
+    let journal = journal_since(&r, from);
+    assert!(
+        journal
+            .iter()
+            .any(|l| l == "data: unhandled rejection: quieted"),
+        "{journal:#?}"
+    );
+    assert_eq!(system.take(), Vec::<String>::new());
 }
 
 /// D1: what else the events binding gives a data module, and what it does
