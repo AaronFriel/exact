@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import { writePrivacyManifest } from './privacy.mjs';
+import { writeAppleBatchReader } from '../../kernel/build/apple-batch.mjs';
 // Build the macOS app — or, with --ios, the iOS app: the app's static
 // library (cargo), then the presenter (swift build) linked against
 // it. Usage:
@@ -567,6 +568,7 @@ export function prepareGpuProduct(product, { gpuArtifacts, sha1, app, privacyMan
 }
 
 async function main(args, lockHeld = false) {
+  writeAppleBatchReader();
   const refusal = appleBuildRefusal(args);
   if (process.platform === 'linux' && !args.includes('--no-install')) args = [...args, '--no-install']; // nothing to install to
   if (refusal) { console.error(refusal); process.exitCode = 1; return; }
@@ -1382,6 +1384,7 @@ async function main(args, lockHeld = false) {
  *  Swift availability guards decide which shared methods run on iOS. `--only`
  *  runs the test classes it names (`onlyClasses`). */
 async function test(args) {
+  writeAppleBatchReader();
   const ios = args.includes('--ios');
   if (ios && !hasStd('--ios', iosTarget)) return;
   const app = resolveApp(args.find((a, i) => !a.startsWith('--') && args[i - 1] !== '--sim' && args[i - 1] !== '--only'));

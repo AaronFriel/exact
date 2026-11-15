@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "_about": "The single declaration authority for the kernel's node types, props, style rows, enum vocabularies, and opcodes. build.rs generates the Rust types, the wire codec, the style mask, and the schema digest from this file. Nothing here is hand-mirrored anywhere else; a second copy of any table is a defect. Prop 253 (fieldStyle) was retired by LLP 1104 r8, and prop 18 (hitSlop, which nothing read) for the `hit_slop_*` style rows; never reuse either number.",
+  "_about": "The single declaration authority for the kernel's node types, props, style rows, enum vocabularies, and opcodes. build.rs generates the Rust types, the wire codec, the style mask, and the schema digest from this file; kernel/build/apple-batch.mjs generates the Apple JSON operation reader. Nothing here is hand-mirrored anywhere else; a second copy of any table is a defect. Prop 253 (fieldStyle) was retired by LLP 1104 r8, and prop 18 (hitSlop, which nothing read) for the `hit_slop_*` style rows; never reuse either number.",
   "_ariaRoles": "Concrete roles from WAI-ARIA 1.3 (https://www.w3.org/TR/wai-aria-1.3/#role_definitions), DPUB-ARIA 1.1 (https://www.w3.org/TR/dpub-aria-1.1/) and Graphics-ARIA 1.0 (https://www.w3.org/TR/graphics-aria-1.0/). The compiler and web document host read the generated ARIA_ROLES; a web test holds navigation/lists.js to this vocabulary (LLP 1166.002 D3).",
   "ariaRoles": [
     "alert",
@@ -5099,6 +5099,274 @@
       "_comment": "@ref LLP 1121 D8 (stage 8 B): a node's `:hover` and `:focus-visible` looks, resolved by the producer as a static row is: payload a u8 count (at most 2), then per look its state (1 :hover, 2 :focus-visible; ascending, each once; 0, once `:active`, is retired: `:active` lowers to the press paint) and a style patch of the look rows only (background-color, color, a side's border colour, opacity, box-shadow, scale), set or cleared. A look's color reaches the subtree as the node's own does; the web and Apple show it, and Linux's looks paint the box alone. A look's scale stands in for the node's and moves on the node's own transition for scale. Replaces the node's looks whole; a count of 0 clears them. A host composes them over the base on its own tracking, under the press paint."
     }
   ],
+  "appleBatch": {
+    "_comment": "LLP 1172.001 E4, §4 step 4: the existing Apple JSON operation records. A missing fields object retains the heterogeneous adapter payload. Unknown keys are ignored by typed records; unknown operation names retain their payload. Props remain string maps and styles retain their open value dictionaries. The wire formats are unchanged; adding these declarations rotates the schema digest.",
+    "records": [
+      {
+        "name": "create",
+        "fields": {
+          "kind": {
+            "member": "kind",
+            "codec": "string",
+            "default": "view"
+          },
+          "props": {
+            "member": "props",
+            "codec": "props"
+          },
+          "style": {
+            "member": "style",
+            "codec": "style"
+          },
+          "handlers": {
+            "member": "handlers",
+            "codec": "handlers"
+          }
+        }
+      },
+      {
+        "name": "props",
+        "fields": {
+          "set": {
+            "member": "props",
+            "codec": "props"
+          },
+          "clear": {
+            "member": "clear",
+            "codec": "strings"
+          }
+        }
+      },
+      {
+        "name": "style",
+        "fields": {
+          "style": {
+            "member": "style",
+            "codec": "style"
+          }
+        }
+      },
+      {
+        "name": "children",
+        "fields": {
+          "ids": {
+            "member": "ids",
+            "codec": "ids"
+          }
+        }
+      },
+      {
+        "name": "paragraph",
+        "fields": {
+          "runs": {
+            "member": "runs",
+            "codec": "inline"
+          }
+        }
+      },
+      {
+        "name": "frame",
+        "fields": {
+          "x": {
+            "member": "x",
+            "codec": "number"
+          },
+          "y": {
+            "member": "y",
+            "codec": "number"
+          },
+          "w": {
+            "member": "w",
+            "codec": "number"
+          },
+          "h": {
+            "member": "h",
+            "codec": "number"
+          },
+          "property": {
+            "member": "property",
+            "codec": "string"
+          }
+        }
+      },
+      {
+        "name": "content",
+        "fields": {
+          "x": {
+            "member": "x",
+            "codec": "number"
+          },
+          "y": {
+            "member": "y",
+            "codec": "number"
+          },
+          "w": {
+            "member": "w",
+            "codec": "number"
+          },
+          "h": {
+            "member": "h",
+            "codec": "number"
+          },
+          "property": {
+            "member": "property",
+            "codec": "string"
+          },
+          "fitHeight": {
+            "member": "fitHeight",
+            "codec": "optionalNumber"
+          }
+        }
+      },
+      {
+        "name": "present",
+        "fields": {
+          "x": {
+            "member": "x",
+            "codec": "number"
+          },
+          "y": {
+            "member": "y",
+            "codec": "number"
+          },
+          "w": {
+            "member": "w",
+            "codec": "number"
+          },
+          "h": {
+            "member": "h",
+            "codec": "number"
+          },
+          "property": {
+            "member": "property",
+            "codec": "string"
+          }
+        }
+      },
+      {
+        "name": "roots",
+        "fields": {
+          "ids": {
+            "member": "ids",
+            "codec": "ids"
+          }
+        }
+      },
+      {
+        "name": "destroy",
+        "fields": {}
+      },
+      {
+        "name": "renew",
+        "fields": {}
+      },
+      {
+        "name": "roles",
+        "fields": {
+          "roles": {
+            "member": "style",
+            "codec": "values"
+          }
+        }
+      },
+      {
+        "name": "fieldContent"
+      },
+      {
+        "name": "flow"
+      },
+      {
+        "name": "surface"
+      },
+      {
+        "name": "surfaceWork"
+      },
+      {
+        "name": "command"
+      },
+      {
+        "name": "hold"
+      },
+      {
+        "name": "collections"
+      },
+      {
+        "name": "region"
+      },
+      {
+        "name": "router"
+      },
+      {
+        "name": "title"
+      },
+      {
+        "name": "language"
+      },
+      {
+        "name": "activity"
+      },
+      {
+        "name": "auth"
+      },
+      {
+        "name": "presence"
+      },
+      {
+        "name": "svg"
+      },
+      {
+        "name": "animations"
+      },
+      {
+        "name": "canvas2d"
+      },
+      {
+        "name": "height-drag"
+      },
+      {
+        "name": "transform-drag"
+      },
+      {
+        "name": "retire-motion"
+      },
+      {
+        "name": "reorder"
+      },
+      {
+        "name": "exit"
+      },
+      {
+        "name": "flight"
+      },
+      {
+        "name": "land"
+      },
+      {
+        "name": "rank"
+      },
+      {
+        "name": "layoutHits"
+      },
+      {
+        "name": "layoutHitsWithdrawn"
+      },
+      {
+        "name": "layoutPromote"
+      },
+      {
+        "name": "sticky"
+      },
+      {
+        "name": "fragments"
+      },
+      {
+        "name": "sound"
+      },
+      {
+        "name": "midi"
+      }
+    ]
+  },
   "symbols": [
     [
       "back",
