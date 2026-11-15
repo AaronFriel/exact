@@ -140,6 +140,8 @@ struct Em<'a> {
     list: bool,
     /// Whether an ordinary scroller takes `scrollFollowEnd` (`follow.js` is imported).
     follow: bool,
+    /// Whether a scroller is zoomable (`zoom.js` is imported, LLP 1057.001.000 §5).
+    zoom: bool,
     /// Whether a `video` or `audio` is in the plan (`media.js` is installed).
     media: bool,
     /// Whether a route declares its own entrance or exit (shared.js plays it).
@@ -244,6 +246,7 @@ pub fn emit(plan: &Plan, site_attrs: bool, dev_reload: bool) -> Result<Output, S
         flow: false,
         list: false,
         follow: false,
+        zoom: false,
         media: false,
         route_parts: false,
         symbols: (false, false),
@@ -769,6 +772,7 @@ pub fn emit(plan: &Plan, site_attrs: bool, dev_reload: bool) -> Result<Output, S
             (em.list, "import{vl as $vl}from\"./list.js\";"),
             (each::readers(plan), "import{reader as $reader}from\"./store-reader.js\";"),
             (em.follow, "import\"./follow.js\";"),
+            (em.zoom, "import{zoom as $zoom}from\"./zoom.js\";"),
             (em.media, "import{mediaUse as $media}from\"./media.js\";"),
             (links, "import{linkUse as $links}from\"./links.js\";"),
             (iframes, "import\"./iframes.js\";"),
@@ -1101,6 +1105,15 @@ impl Em<'_> {
             self.out,
             "const {e}={h}({parent},\"{element}\",{class},{attrs_js},{text});"
         );
+        // Its children go in the zoom's layer.
+        let zoomable = exact_runner::uses::zoomable(plan, NodesId(i));
+        let parent_of_children = if zoomable {
+            self.zoom = true;
+            let _ = write!(self.out, "const z{i}=$zoom({e});");
+            format!("z{i}")
+        } else {
+            e.clone()
+        };
         if let Some(register) = self.presence_registration(i, !presence.is_empty()) {
             self.route_parts |=
                 presence.contains("--exact-view-transition-") || self.binds_route_part(i);
@@ -1151,6 +1164,17 @@ impl Em<'_> {
             }
             // Nor have the system bars (LLP 1105 D7), interactive glass,
             // a menu's order or a tip (LLP 1035.006.000 D4).
+            // A zoomable scroller's zoom is zoom.js's; no other scroller has one.
+            if b.kind == BindingKind::Prop && b.id == PropId::ScrollZoom as u16 {
+                if zoomable {
+                    let f = self
+                        .bound(i, &e, &b, scope)
+                        .map_err(|x| format!("node {i}: {x}"))?;
+                    let p = self.uses.rt("P");
+                    let _ = write!(self.out, "{p}({e},\"scrollZoom\",{f});");
+                }
+                continue;
+            }
             if b.kind == BindingKind::Prop
                 && (b.id == PropId::StatusBarStyle as u16
                     || b.id == PropId::StatusBarAnimation as u16
@@ -1160,9 +1184,7 @@ impl Em<'_> {
                     || b.id == PropId::Tip as u16
                     || b.id == PropId::TipMessage as u16
                     || b.id == PropId::TipImage as u16
-                    || b.id == PropId::TipDone as u16
-                    // The web draws no zoom yet (LLP 1057.001.000 §8 step 4).
-                    || b.id == PropId::ScrollZoom as u16)
+                    || b.id == PropId::TipDone as u16)
             {
                 continue;
             }
@@ -1436,7 +1458,7 @@ impl Em<'_> {
             self.list = true;
             self.each(r, &e, scope, Some(opts))?;
         } else {
-            self.children(self.sites.of_node(i), &e, scope)?;
+            self.children(self.sites.of_node(i), &parent_of_children, scope)?;
         }
         self.live_time(i, element, &e, scope)?;
         if panel {

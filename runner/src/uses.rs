@@ -572,6 +572,28 @@ fn shows_media_picker(plan: &Plan) -> bool {
     })
 }
 
+/// Whether node `node` is a zoomable scroller (LLP 1057.001.000 D1): either
+/// range row written, literal or bound. The web loads its zoom module, and the
+/// wasm host names its absence, only for a plan with one.
+pub fn zoomable(plan: &Plan, node: exact_plan::NodesId) -> bool {
+    plan.node(node)
+        .bindings
+        .iter()
+        .map(|b| plan.binding(b))
+        .any(|b| {
+            b.kind == BindingKind::Style
+                && matches!(
+                    StyleId::from_bit(b.id as u32),
+                    Some(StyleId::MinZoom | StyleId::MaxZoom)
+                )
+        })
+}
+
+/// Whether `plan` has a zoomable scroller.
+pub fn zooms(plan: &Plan) -> bool {
+    (0..plan.nodes.len()).any(|i| zoomable(plan, exact_plan::NodesId(i as u32)))
+}
+
 /// Whether `plan` can show an SVG island (LLP 1055.000 D10, D14): a `mask`
 /// or `filter` element, or `filter` bound on an SVG element (its functions
 /// need no element). A host whose island module is loaded on demand (LLP

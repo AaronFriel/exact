@@ -878,7 +878,8 @@ pub fn props_of(node: &NodeFacts<'_>) -> SortedMap<String, String> {
             PropId::Value => "value",
             PropId::ScrollTop => "scrollTop",
             PropId::ScrollLeft => "scrollLeft",
-            // The web draws no zoom yet (LLP 1057.001.000 §8 step 4).
+            // This host draws a zoomable scroller at zoom 1 and drops a
+            // write; it says so once (`Host::open`, LLP 1057.001.000 §5).
             PropId::ScrollZoom => continue,
             PropId::ScrollFollowEnd => "scrollFollowEnd",
             PropId::ViewportFit => "viewportFit",
