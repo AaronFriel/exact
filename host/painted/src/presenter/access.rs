@@ -233,6 +233,10 @@ pub struct Node {
     /// Its place among its kind, from 1, and how many they are (a tab, a
     /// list's row); for a `tablist`, 0 and how many tabs. 0 and 0: none.
     pub set: (i32, i32),
+    /// Where a table's row or cell stands in it (LLP 1153 D7.3), from 1:
+    /// its first row, the rows it covers, its first column, the columns it
+    /// covers; for a table, 0, its rows, 0 and its columns. 0s: none.
+    pub grid: [i32; 4],
     /// Its accessible name.
     pub name: String,
     /// Its value: a range's text, a `select`'s choice, a painted field's
@@ -633,6 +637,7 @@ impl<D: DataSource> Presenter<D> {
             rect: [shows.0 + b.origin.0, shows.1 + b.origin.1, shows.2, shows.3],
             range,
             set: std::mem::take(&mut b.item),
+            grid: [0; 4],
             name,
             value,
             hint: self.access_hint(node),
@@ -801,6 +806,7 @@ impl<D: DataSource> Presenter<D> {
             rect: [frame[0] + rect.0, frame[1] + rect.1, rect.2, rect.3],
             range: [0.0; 3],
             set: (0, 0),
+            grid: [0; 4],
             name,
             value: String::new(),
             hint: node.map(|n| self.access_hint(&n)).unwrap_or_default(),
@@ -901,24 +907,60 @@ impl<D: DataSource> Presenter<D> {
         }
     }
 
-    /// Each `tablist`'s tabs are counted and placed among themselves.
-    fn access_sets(nodes: &mut [Node]) {
-        let lists: Vec<i32> = (nodes.iter())
-            .filter(|n| n.role == role::TABLIST)
-            .map(|n| n.id)
+    /// Each `tablist`'s tabs and each description list's terms are counted
+    /// and placed among themselves; each table's rows and cells are placed
+    /// where the kernel's table placed them, when that table is the one
+    /// above them here.
+    fn access_sets(&self, nodes: &mut [Node]) {
+        let lists: Vec<(i32, i32)> = (nodes.iter())
+            .filter_map(|n| match n.role {
+                role::TABLIST => Some((n.id, role::TAB)),
+                role::DESCRIPTION_LIST => Some((n.id, role::TERM)),
+                _ => None,
+            })
             .collect();
-        for list in lists {
+        for (list, item) in lists {
             let count = (nodes.iter())
-                .filter(|n| n.parent == list && n.role == role::TAB)
+                .filter(|n| n.parent == list && n.role == item)
                 .count() as i32;
             let mut at = 0;
             for node in nodes.iter_mut() {
                 if node.id == list {
                     node.set = (0, count);
-                } else if node.parent == list && node.role == role::TAB {
+                } else if node.parent == list && node.role == item {
                     at += 1;
                     node.set = (at, count);
                 }
+            }
+        }
+        self.access_tables(nodes);
+    }
+
+    /// Each table's size, and each of its rows' and cells' place.
+    fn access_tables(&self, nodes: &mut [Node]) {
+        let kernel = self.host.kernel();
+        let index: BTreeMap<i32, usize> =
+            (nodes.iter().enumerate()).map(|(i, n)| (n.id, i)).collect();
+        for i in 0..nodes.len() {
+            let n = &nodes[i];
+            let grid = match n.role {
+                role::TABLE => kernel
+                    .table_size(n.view)
+                    .map(|(rows, columns)| [0, rows as i32, 0, columns as i32]),
+                role::ROW | role::CELL | role::COLUMN_HEADER | role::ROW_HEADER => {
+                    let mut above = index.get(&n.parent).map(|i| &nodes[*i]);
+                    while let Some(a) = above.filter(|a| a.role != role::TABLE) {
+                        above = index.get(&a.parent).map(|i| &nodes[*i]);
+                    }
+                    kernel
+                        .table_place(n.view)
+                        .filter(|p| above.is_some_and(|t| t.view == p.table))
+                        .map(|p| [p.row + 1, p.rows, p.column + 1, p.columns].map(|v| v as i32))
+                }
+                _ => None,
+            };
+            if let Some(grid) = grid {
+                nodes[i].grid = grid;
             }
         }
     }
@@ -973,7 +1015,7 @@ impl<D: DataSource> Presenter<D> {
                 },
             );
             self.access_menu(&mut b);
-            Self::access_sets(&mut b.out);
+            self.access_sets(&mut b.out);
             return (b.out, 0, (0, String::new()));
         }
         if self.page_inert() {
@@ -1004,6 +1046,7 @@ impl<D: DataSource> Presenter<D> {
                 rect: [frame[0], frame[1], page.port[2], page.port[3]],
                 range,
                 set: (0, 0),
+                grid: [0; 4],
                 name: String::new(),
                 value: String::new(),
                 hint: String::new(),
@@ -1022,7 +1065,7 @@ impl<D: DataSource> Presenter<D> {
         }
         self.access_bottom(&mut b);
         self.access_menu(&mut b);
-        Self::access_sets(&mut b.out);
+        self.access_sets(&mut b.out);
         (b.out, 0, pane)
     }
 
@@ -1073,7 +1116,11 @@ impl<D: DataSource> Presenter<D> {
             if was.name != node.name || was.value != node.value || was.hint != node.hint {
                 what |= change::TEXT;
             }
-            if was.flags != node.flags || was.set != node.set || was.role != node.role {
+            if was.flags != node.flags
+                || was.set != node.set
+                || was.grid != node.grid
+                || was.role != node.role
+            {
                 what |= change::STATE;
             }
             if was.range != node.range {
@@ -1160,8 +1207,9 @@ impl<D: DataSource> Presenter<D> {
     ///   ([`role`]), its flags ([`flag`]), its box (x, y, width, height),
     ///   as float bits its range's least, greatest and present value (a
     ///   scroller's offset along its axis and its farthest, in points),
-    ///   its place in its set and the set's size, and three strings: its
-    ///   name, its value and its description.
+    ///   its place in its set and the set's size, its place in its table
+    ///   ([`Node::grid`]: four words), and three strings: its name, its
+    ///   value and its description.
     pub fn reader_access(&mut self, scale: f32, again: bool) -> Option<Vec<i32>> {
         let key = self.access_key();
         if !again && self.access.told && self.access.key.as_ref() == Some(&key) {
@@ -1225,6 +1273,7 @@ impl<D: DataSource> Presenter<D> {
             out.extend(node.rect.map(px));
             out.extend(node.range.map(|v| v.to_bits() as i32));
             out.extend([node.set.0, node.set.1]);
+            out.extend(node.grid);
             for text in [&node.name, &node.value, &node.hint] {
                 string(&mut out, text);
             }

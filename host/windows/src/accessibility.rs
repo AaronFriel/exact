@@ -522,6 +522,7 @@ mod tests {
             rect: [10., 20., 100., 40.],
             range: [0.; 3],
             set: (0, 0),
+            grid: [0; 4],
             name: "Message".into(),
             value: "a🦀e\u{301}".into(),
             hint: "Draft".into(),

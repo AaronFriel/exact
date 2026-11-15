@@ -34,6 +34,7 @@ pub(crate) mod owner;
 pub(crate) use intrinsic::apply_projection;
 mod row_memo;
 mod sticky;
+mod table;
 mod trim;
 mod wide;
 
@@ -46,6 +47,7 @@ pub(crate) use cover::{
 };
 pub use cover::{credited_edges, HostCover};
 pub use sticky::StickyConstraint;
+pub use table::TablePlace;
 
 /// How many receipts the kernel retains for late readers.
 pub const RECEIPT_RING: usize = 64;

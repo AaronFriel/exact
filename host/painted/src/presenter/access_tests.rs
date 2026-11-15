@@ -311,8 +311,8 @@ fn told(words: &[i32]) -> Told {
     at += 1;
     let mut nodes = Vec::new();
     for _ in 0..count {
-        let w = &words[at..at + 14];
-        let (name, next) = string(words, at + 14);
+        let w = &words[at..at + 18];
+        let (name, next) = string(words, at + 18);
         let (value, next) = string(words, next);
         let (hint, next) = string(words, next);
         nodes.push(Node {
@@ -324,6 +324,7 @@ fn told(words: &[i32]) -> Told {
             rect: [w[5] as f32, w[6] as f32, w[7] as f32, w[8] as f32],
             range: [float(at + 9), float(at + 10), float(at + 11)],
             set: (w[12], w[13]),
+            grid: [w[14], w[15], w[16], w[17]],
             name,
             value,
             hint,
@@ -1084,6 +1085,88 @@ fn a_table_and_a_description_list_are_their_roles() {
     assert_eq!(parent("Tackle").map(|n| n.role), Some(role::ROW_HEADER));
     assert_eq!(parent("40").map(|n| n.role), Some(role::CELL));
     assert_eq!(parent("Electric").map(|n| n.role), Some(role::DEFINITION));
+}
+
+/// A table says its rows and columns, and each row and cell where the
+/// kernel's table placed it, from 1: a caption is no row, and a `colspan`
+/// and a `rowspan` move the cells after them. A description list counts its
+/// terms; a definition has no place.
+#[test]
+fn a_tables_cells_stand_where_their_spans_put_them() {
+    let source = r#"component App
+  view
+    column
+      table
+        caption
+          text "Moves"
+        thead
+          tr
+            th colspan=2
+              text "Move"
+            th
+              text "Power"
+        tbody
+          tr
+            th scope="row" rowspan=2
+              text "Tackle"
+            td
+              text "Normal"
+            td
+              text "40"
+          tr
+            td
+              text "Physical"
+            td
+              text "35"
+      dl
+        dt
+          text "Type"
+        dt
+          text "Kind"
+        dd
+          text "Electric"
+        dt
+          text "Weight"
+        dd
+          text "6 kg"
+"#;
+    let mut p = boot(source, (320., 600.), 0);
+    let told = statement(&mut p);
+    let nodes = &told.nodes;
+    let holder = |name: &str| {
+        let parent = named(nodes, name).parent;
+        nodes.iter().find(|n| n.id == parent).unwrap()
+    };
+    let table = nodes.iter().find(|n| n.role == role::TABLE).unwrap();
+    assert_eq!(table.grid, [0, 3, 0, 3]);
+    let rows: Vec<_> = (nodes.iter())
+        .filter(|n| n.role == role::ROW)
+        .map(|n| n.grid)
+        .collect();
+    assert_eq!(rows, [[1, 1, 1, 3], [2, 1, 1, 3], [3, 1, 1, 3]]);
+    let cells = ["Move", "Power", "Tackle", "Normal", "40", "Physical", "35"];
+    let placed = cells.map(|name| holder(name).grid);
+    assert_eq!(
+        placed,
+        [
+            [1, 1, 1, 2],
+            [1, 1, 3, 1],
+            [2, 2, 1, 1],
+            [2, 1, 2, 1],
+            [2, 1, 3, 1],
+            [3, 1, 2, 1],
+            [3, 1, 3, 1],
+        ]
+    );
+    assert_eq!(holder("Moves").grid, [0; 4], "a caption has no place");
+    let list = nodes
+        .iter()
+        .find(|n| n.role == role::DESCRIPTION_LIST)
+        .unwrap();
+    assert_eq!((list.set, list.grid), ((0, 3), [0; 4]));
+    let terms = ["Type", "Kind", "Weight"].map(|name| holder(name).set);
+    assert_eq!(terms, [(1, 3), (2, 3), (3, 3)]);
+    assert_eq!(holder("Electric").set, (0, 0), "a definition has no place");
 }
 
 /// HTML's `title` describes what something else names, and names what
