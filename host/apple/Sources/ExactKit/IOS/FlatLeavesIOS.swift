@@ -161,7 +161,7 @@ final class FlatLeaves {
         var parentOf: [UInt32: UInt32] = [:], kids: [UInt32: [UInt32]] = [:], ranks: [UInt32: Int64] = [:]
         for op in batch.ops {
             if op.op == .children { kids[op.id] = op.ids; for child in op.ids { parentOf[child] = op.id } }
-            if op.op == .rank { ranks[op.id] = (op.payload["rank"] as? NSNumber)?.int64Value ?? 0 }
+            if op.op == .rank { ranks[op.id] = op.rank ?? 0 }
             if !own.contains(op.op) { candidates.remove(op.id) }
             if op.op == .transformDrag || op.op == .heightDrag {
                 for key in ["target", "clip"] { if let v = (op.payload[key] as? Int).flatMap(UInt32.init(exactly:)) { candidates.remove(v) } }

@@ -1173,9 +1173,9 @@ public final class ExactSession {
         for op in batch.ops where op.op == .router { routerOp = op.payload; presenter.armFragment(op.payload["activation"]); NavigationMarks.shared.routerChanged(self, payload: op.payload) } // a scroll to its fragment, which the runner's `scrollToFragment` makes (LLP 1153 D5)
         // @ref LLP 1048.003 D1 — the head's title, for the app that owns the chrome.
         for op in batch.ops where op.op == .title {
-            presenter.headTitle(op.payload["title"] as? String)
+            presenter.headTitle(op.title)
             #if os(macOS)
-            presenter.headEdited(op.payload["edited"] as? Bool ?? false)
+            presenter.headEdited(op.edited ?? false)
             #endif
         }
         #if os(macOS)

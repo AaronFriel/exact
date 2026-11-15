@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "_about": "The single declaration authority for the kernel's node types, props, style rows, enum vocabularies, and opcodes. build.rs generates the Rust types, the wire codec, the style mask, and the schema digest from this file; kernel/build/apple-batch.mjs generates the Apple JSON operation reader. Nothing here is hand-mirrored anywhere else; a second copy of any table is a defect. Prop 253 (fieldStyle) was retired by LLP 1104 r8, and prop 18 (hitSlop, which nothing read) for the `hit_slop_*` style rows; never reuse either number.",
+  "_about": "The single declaration authority for the kernel's node types, props, style rows, enum vocabularies, and opcodes. build.rs generates the Rust types, the wire codec, the style mask, and the schema digest from this file; kernel/build/apple-batch.mjs generates the Apple JSON record and inline style readers. Nothing here is hand-mirrored anywhere else; a second copy of any table is a defect. Prop 253 (fieldStyle) was retired by LLP 1104 r8, and prop 18 (hitSlop, which nothing read) for the `hit_slop_*` style rows; never reuse either number.",
   "_ariaRoles": "Concrete roles from WAI-ARIA 1.3 (https://www.w3.org/TR/wai-aria-1.3/#role_definitions), DPUB-ARIA 1.1 (https://www.w3.org/TR/dpub-aria-1.1/) and Graphics-ARIA 1.0 (https://www.w3.org/TR/graphics-aria-1.0/). The compiler and web document host read the generated ARIA_ROLES; a web test holds navigation/lists.js to this vocabulary (LLP 1166.002 D3).",
   "ariaRoles": [
     "alert",
@@ -3422,7 +3422,11 @@
       "watch": "admit",
       "terminal": "quantize",
       "codec": "current-color",
-      "default": 0
+      "default": 0,
+      "appleInline": {
+        "read": "color",
+        "foreground": false
+      }
     },
     {
       "bit": 48,
@@ -3439,7 +3443,11 @@
       "watch": "admit",
       "terminal": "quantize",
       "codec": "dimension",
-      "default": 0
+      "default": 0,
+      "appleInline": {
+        "read": "radius",
+        "index": 0
+      }
     },
     {
       "bit": 50,
@@ -3448,7 +3456,11 @@
       "watch": "admit",
       "terminal": "quantize",
       "codec": "dimension",
-      "default": 0
+      "default": 0,
+      "appleInline": {
+        "read": "radius",
+        "index": 1
+      }
     },
     {
       "bit": 51,
@@ -3457,7 +3469,11 @@
       "watch": "admit",
       "terminal": "quantize",
       "codec": "dimension",
-      "default": 0
+      "default": 0,
+      "appleInline": {
+        "read": "radius",
+        "index": 2
+      }
     },
     {
       "bit": 52,
@@ -3466,7 +3482,11 @@
       "watch": "admit",
       "terminal": "quantize",
       "codec": "dimension",
-      "default": 0
+      "default": 0,
+      "appleInline": {
+        "read": "radius",
+        "index": 3
+      }
     },
     {
       "bit": 53,
@@ -3476,7 +3496,11 @@
       "terminal": "quantize",
       "codec": "current-color",
       "default": "currentcolor",
-      "cold": true
+      "cold": true,
+      "appleInline": {
+        "read": "borderColor",
+        "index": 0
+      }
     },
     {
       "bit": 54,
@@ -3486,7 +3510,11 @@
       "terminal": "quantize",
       "codec": "current-color",
       "default": "currentcolor",
-      "cold": true
+      "cold": true,
+      "appleInline": {
+        "read": "borderColor",
+        "index": 1
+      }
     },
     {
       "bit": 55,
@@ -3496,7 +3524,11 @@
       "terminal": "quantize",
       "codec": "current-color",
       "default": "currentcolor",
-      "cold": true
+      "cold": true,
+      "appleInline": {
+        "read": "borderColor",
+        "index": 2
+      }
     },
     {
       "bit": 56,
@@ -3506,7 +3538,11 @@
       "terminal": "quantize",
       "codec": "current-color",
       "default": "currentcolor",
-      "cold": true
+      "cold": true,
+      "appleInline": {
+        "read": "borderColor",
+        "index": 3
+      }
     },
     {
       "bit": 57,
@@ -3575,7 +3611,11 @@
       "inherited": true,
       "text": true,
       "layout": true,
-      "default": 16
+      "default": 16,
+      "appleInline": {
+        "read": "float",
+        "member": "run.size"
+      }
     },
     {
       "bit": 65,
@@ -3587,7 +3627,11 @@
       "inherited": true,
       "text": true,
       "layout": true,
-      "default": 400
+      "default": 400,
+      "appleInline": {
+        "read": "integer",
+        "member": "run.weight"
+      }
     },
     {
       "bit": 66,
@@ -3598,7 +3642,13 @@
       "codec": "enum:FontStyle",
       "inherited": true,
       "text": true,
-      "layout": true
+      "layout": true,
+      "appleInline": {
+        "read": "keyword",
+        "member": "run.italic",
+        "word": "italic",
+        "negated": false
+      }
     },
     {
       "bit": 67,
@@ -3609,7 +3659,11 @@
       "inherited": true,
       "text": true,
       "layout": true,
-      "default": 0
+      "default": 0,
+      "appleInline": {
+        "read": "integer",
+        "member": "run.family"
+      }
     },
     {
       "bit": 68,
@@ -3630,7 +3684,10 @@
       "inherited": true,
       "text": true,
       "layout": true,
-      "default": "normal"
+      "default": "normal",
+      "appleInline": {
+        "read": "height"
+      }
     },
     {
       "bit": 70,
@@ -3641,7 +3698,11 @@
       "inherited": true,
       "text": true,
       "layout": true,
-      "default": 0
+      "default": 0,
+      "appleInline": {
+        "read": "float",
+        "member": "run.letterSpacing"
+      }
     },
     {
       "bit": 71,
@@ -3649,7 +3710,11 @@
       "snapshot": "admit",
       "watch": "admit",
       "terminal": "admit",
-      "codec": "enum:TextDecorationLine"
+      "codec": "enum:TextDecorationLine",
+      "appleInline": {
+        "read": "string",
+        "member": "run.decoration"
+      }
     },
     {
       "bit": 72,
@@ -3661,7 +3726,11 @@
       "inherited": true,
       "text": true,
       "layout": true,
-      "default": 0
+      "default": 0,
+      "appleInline": {
+        "read": "byte",
+        "member": "run.numeric"
+      }
     },
     {
       "bit": 73,
@@ -3693,7 +3762,11 @@
       "codec": "color",
       "inherited": true,
       "default": "CanvasText",
-      "_comment": "@ref LLP 1095 stage 2: CSS `color`, initially CSS's `CanvasText` (a browser's own initial): `labelColor` on iOS, `textColor` on macOS, resolved by the platform for appearance and contrast; its fallback pair everywhere else."
+      "_comment": "@ref LLP 1095 stage 2: CSS `color`, initially CSS's `CanvasText` (a browser's own initial): `labelColor` on iOS, `textColor` on macOS, resolved by the platform for appearance and contrast; its fallback pair everywhere else.",
+      "appleInline": {
+        "read": "color",
+        "foreground": true
+      }
     },
     {
       "bit": 76,
@@ -3791,7 +3864,11 @@
       "watch": "admit",
       "terminal": "admit",
       "codec": "enum:BorderStyle",
-      "layout": true
+      "layout": true,
+      "appleInline": {
+        "read": "borderStyle",
+        "index": 0
+      }
     },
     {
       "bit": 89,
@@ -3800,7 +3877,11 @@
       "watch": "admit",
       "terminal": "admit",
       "codec": "enum:BorderStyle",
-      "layout": true
+      "layout": true,
+      "appleInline": {
+        "read": "borderStyle",
+        "index": 1
+      }
     },
     {
       "bit": 90,
@@ -3809,7 +3890,11 @@
       "watch": "admit",
       "terminal": "admit",
       "codec": "enum:BorderStyle",
-      "layout": true
+      "layout": true,
+      "appleInline": {
+        "read": "borderStyle",
+        "index": 2
+      }
     },
     {
       "bit": 91,
@@ -3818,7 +3903,11 @@
       "watch": "admit",
       "terminal": "admit",
       "codec": "enum:BorderStyle",
-      "layout": true
+      "layout": true,
+      "appleInline": {
+        "read": "borderStyle",
+        "index": 3
+      }
     },
     {
       "bit": 92,
@@ -4023,7 +4112,13 @@
       "terminal": "admit",
       "codec": "enum:Visibility",
       "inherited": true,
-      "_comment": "CSS `visibility`, honoured by SVG elements (LLP 1055.000 D19)."
+      "_comment": "CSS `visibility`, honoured by SVG elements (LLP 1055.000 D19).",
+      "appleInline": {
+        "read": "keyword",
+        "member": "run.hidden",
+        "word": "visible",
+        "negated": true
+      }
     },
     {
       "bit": 121,
@@ -4258,7 +4353,8 @@
       "capability": "shadows",
       "codec": "text-shadow",
       "inherited": true,
-      "_comment": "@ref LLP 1077 D3: CSS `text-shadow`, `none` or one shadow (no list, no spread), under the glyphs and decorations; a missing colour is currentcolor. Inherited, as in CSS."
+      "_comment": "@ref LLP 1077 D3: CSS `text-shadow`, `none` or one shadow (no list, no spread), under the glyphs and decorations; a missing colour is currentcolor. Inherited, as in CSS.",
+      "appleRunPaint": "shadow"
     },
     {
       "bit": 152,
@@ -4283,7 +4379,8 @@
       "codec": "f32",
       "default": 0,
       "inherited": true,
-      "_comment": "@ref LLP 1077 D7: the Compat Standard's `-webkit-text-stroke-width`, a width in px centred on the glyphs' outlines and painted over their fill; 0 is none. Inherited, as in Compat."
+      "_comment": "@ref LLP 1077 D7: the Compat Standard's `-webkit-text-stroke-width`, a width in px centred on the glyphs' outlines and painted over their fill; 0 is none. Inherited, as in Compat.",
+      "appleRunPaint": "strokeWidth"
     },
     {
       "bit": 155,
@@ -4292,7 +4389,8 @@
       "codec": "current-color",
       "default": "currentcolor",
       "inherited": true,
-      "_comment": "@ref LLP 1077 D7: `-webkit-text-stroke-color`, initial currentcolor. Inherited."
+      "_comment": "@ref LLP 1077 D7: `-webkit-text-stroke-color`, initial currentcolor. Inherited.",
+      "appleRunPaint": "strokeColor"
     },
     {
       "bit": 156,
@@ -4428,7 +4526,13 @@
       "bit": 174,
       "field": "user_select",
       "codec": "enum:UserSelect",
-      "cold": true
+      "cold": true,
+      "appleInline": {
+        "read": "keyword",
+        "member": "selectsAll",
+        "word": "all",
+        "negated": false
+      }
     },
     {
       "bit": 175,
@@ -4665,7 +4769,13 @@
       "field": "outline_style",
       "terminal": "admit",
       "codec": "enum:OutlineStyle",
-      "_comment": "@ref LLP 1104 D6: CSS `outline-style` on any element that takes the focus (amended 2026-11-05: a field, a button, a link, a pressable or `tabindex` box, a native control). An unset mask is the platform's focus ring, as the UA sheet's `:focus-visible` outline is the browser's: the ring the OS draws for a native control, the one Exact draws for a bare one. `none` takes it off on every host but tvOS, whose focus effect is how a remote moves, and Tab order and accessibility stay. A terminal draws no ring. Not inherited, as in CSS."
+      "_comment": "@ref LLP 1104 D6: CSS `outline-style` on any element that takes the focus (amended 2026-11-05: a field, a button, a link, a pressable or `tabindex` box, a native control). An unset mask is the platform's focus ring, as the UA sheet's `:focus-visible` outline is the browser's: the ring the OS draws for a native control, the one Exact draws for a bare one. `none` takes it off on every host but tvOS, whose focus effect is how a remote moves, and Tab order and accessibility stay. A terminal draws no ring. Not inherited, as in CSS.",
+      "appleInline": {
+        "read": "keyword",
+        "member": "outlineNone",
+        "word": "none",
+        "negated": false
+      }
     },
     {
       "bit": 204,
@@ -4777,7 +4887,11 @@
       "text": true,
       "layout": true,
       "default": 100,
-      "_comment": "@ref LLP 1019 D8: CSS `font-stretch` (Fonts 4's `font-width`), a percentage of the face's normal width, 100 normal; `<percentage>` or a keyword (`condensed` 75, …). It selects among a family's faces before style and weight (CSS Fonts 4 §5.2), and a face declared over a `wdth` range draws at it on that axis. Inherited, as in CSS."
+      "_comment": "@ref LLP 1019 D8: CSS `font-stretch` (Fonts 4's `font-width`), a percentage of the face's normal width, 100 normal; `<percentage>` or a keyword (`condensed` 75, …). It selects among a family's faces before style and weight (CSS Fonts 4 §5.2), and a face declared over a `wdth` range draws at it on that axis. Inherited, as in CSS.",
+      "appleInline": {
+        "read": "float",
+        "member": "run.stretch"
+      }
     },
     {
       "bit": 217,
@@ -4788,7 +4902,10 @@
       "inherited": true,
       "text": true,
       "layout": true,
-      "_comment": "@ref LLP 1019 D9: CSS `font-variation-settings`, `normal` or up to eight `\"tag\" <number>` axes, applied after font-weight, font-stretch and optical sizing and winning for the same axis (CSS Fonts 4 §7.2). Inherited, as in CSS."
+      "_comment": "@ref LLP 1019 D9: CSS `font-variation-settings`, `normal` or up to eight `\"tag\" <number>` axes, applied after font-weight, font-stretch and optical sizing and winning for the same axis (CSS Fonts 4 §7.2). Inherited, as in CSS.",
+      "appleInline": {
+        "read": "variations"
+      }
     },
     {
       "bit": 218,
@@ -4798,7 +4915,10 @@
       "inherited": true,
       "text": true,
       "layout": true,
-      "_comment": "@ref LLP 1019 §13: CSS `font-optical-sizing` (CSS Fonts 4 §2.7). `auto` sets a face's `opsz` axis to the font size in px; `none` leaves the face's own optical size. Inherited, as in CSS."
+      "_comment": "@ref LLP 1019 §13: CSS `font-optical-sizing` (CSS Fonts 4 §2.7). `auto` sets a face's `opsz` axis to the font size in px; `none` leaves the face's own optical size. Inherited, as in CSS.",
+      "appleInline": {
+        "read": "opticalSizing"
+      }
     },
     {
       "bit": 219,
@@ -4862,7 +4982,11 @@
       "text": true,
       "layout": true,
       "default": 0,
-      "_comment": "CSS Fonts 4 `font-variant-ligatures` as FontVariantLigatures' bits. Apple sets the chosen face's OpenType features through Core Text's feature settings, and Linux, Windows and Android through Parley's HarfRust, in text and text fields alike; Android's native fields, UIKit's grouped list cells and content regions keep the face's own, and widgets and the watch refuse it. The web writes it. A terminal admits it and draws as before: its cells join no letters. Inherited, as in CSS; it changes advances, so it measures."
+      "_comment": "CSS Fonts 4 `font-variant-ligatures` as FontVariantLigatures' bits. Apple sets the chosen face's OpenType features through Core Text's feature settings, and Linux, Windows and Android through Parley's HarfRust, in text and text fields alike; Android's native fields, UIKit's grouped list cells and content regions keep the face's own, and widgets and the watch refuse it. The web writes it. A terminal admits it and draws as before: its cells join no letters. Inherited, as in CSS; it changes advances, so it measures.",
+      "appleInline": {
+        "read": "byte",
+        "member": "run.ligatures"
+      }
     },
     {
       "bit": 225,
@@ -4939,7 +5063,10 @@
       "inherited": true,
       "text": true,
       "layout": true,
-      "_comment": "CSS Fonts 4 §6.12 `font-feature-settings`: `normal` or up to sixteen `\"tag\" [<integer> | on | off]` OpenType features of the chosen face, applied after `font-variant-numeric` and `font-variant-ligatures` and winning for the same feature (§7.2). A tag the face lacks does nothing. The web writes it; Apple sets it through Core Text's feature settings, and Linux, Windows and Android through Parley's HarfRust, in text and text fields alike, where `font-variant-ligatures` reaches (that row's comment names where it does not). Widgets and the watch refuse it; a terminal admits it and draws as before. Inherited, as in CSS; it changes advances, so it measures."
+      "_comment": "CSS Fonts 4 §6.12 `font-feature-settings`: `normal` or up to sixteen `\"tag\" [<integer> | on | off]` OpenType features of the chosen face, applied after `font-variant-numeric` and `font-variant-ligatures` and winning for the same feature (§7.2). A tag the face lacks does nothing. The web writes it; Apple sets it through Core Text's feature settings, and Linux, Windows and Android through Parley's HarfRust, in text and text fields alike, where `font-variant-ligatures` reaches (that row's comment names where it does not). Widgets and the watch refuse it; a terminal admits it and draws as before. Inherited, as in CSS; it changes advances, so it measures.",
+      "appleInline": {
+        "read": "features"
+      }
     },
     {
       "bit": 234,
@@ -5169,7 +5296,7 @@
     }
   ],
   "appleBatch": {
-    "_comment": "LLP 1172.001 E4, §4 step 4: the existing Apple JSON records. A missing fields object retains the heterogeneous adapter payload. Unknown keys are ignored by typed records; unknown operation names retain their payload. Props remain string maps and styles retain their open value dictionaries. The wire formats are unchanged; adding these declarations rotates the schema digest.",
+    "_comment": "LLP 1172.001 E4, §4 step 4: the existing Apple JSON records. A missing fields object retains the heterogeneous adapter payload. Unknown keys are ignored by typed records; unknown operation names retain their payload. typedPayload keeps the adapter's permissive field casts and nulls. Props remain string maps and styles retain their open value dictionaries. The wire formats are unchanged; adding these declarations rotates the schema digest.",
     "records": [
       {
         "name": "create",
@@ -5366,7 +5493,18 @@
         "name": "router"
       },
       {
-        "name": "title"
+        "name": "title",
+        "typedPayload": true,
+        "fields": {
+          "title": {
+            "member": "title",
+            "codec": "adapterString"
+          },
+          "edited": {
+            "member": "edited",
+            "codec": "adapterBool"
+          }
+        }
       },
       {
         "name": "language"
@@ -5411,7 +5549,14 @@
         "name": "land"
       },
       {
-        "name": "rank"
+        "name": "rank",
+        "typedPayload": true,
+        "fields": {
+          "rank": {
+            "member": "rank",
+            "codec": "adapterRank"
+          }
+        }
       },
       {
         "name": "layoutHits"
@@ -5619,6 +5764,41 @@
         },
         "once": {
           "codec": "bool"
+        }
+      }
+    },
+    "inline": {
+      "fields": {
+        "id": {
+          "member": "id",
+          "codec": "id",
+          "required": true
+        },
+        "parent": {
+          "member": "parent",
+          "codec": "id",
+          "required": true
+        },
+        "props": {
+          "member": "props",
+          "codec": "props"
+        },
+        "style": {
+          "member": "style",
+          "codec": "inlineStyle"
+        },
+        "handlers": {
+          "member": "handlers",
+          "codec": "handlers"
+        },
+        "paint": {
+          "member": "paints",
+          "codec": "bool"
+        },
+        "opacity": {
+          "member": "opacity",
+          "codec": "number",
+          "default": 1
         }
       }
     }
