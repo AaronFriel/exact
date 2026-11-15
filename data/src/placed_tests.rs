@@ -959,3 +959,78 @@ fn repeated_successful_worker_timers_and_discards_leave_no_bookkeeping() {
         }
     }
 }
+
+/// A read-modify-write turn: `bump` reads the kept `count` and keeps one more.
+struct Bump;
+impl DataSource for Bump {
+    fn query(&mut self, _: &str, _: &[Value]) -> Result<Value, DataError> {
+        Ok(Value::Number(0.0))
+    }
+    fn app_id(&self) -> &str {
+        "com.exact.test"
+    }
+    fn grants(&self) -> &str {
+        "secret.keep count"
+    }
+    fn answer(&mut self, store: &mut Store, _: &str, _: &[Value]) -> Result<Answer, DataError> {
+        let count: u32 = store.get("count").unwrap_or("0").parse().unwrap();
+        store.set("count", &(count + 1).to_string())?;
+        Ok(Answer::Now(Value::Number(f64::from(count + 1))))
+    }
+}
+
+/// Two `bump` turns through a worker, the second dispatched before the
+/// first's reply is parsed (the Apple pump hands out every request before
+/// their replies commit), or after it. Returns the kept count.
+fn two_bumps(second_after_first_reply: bool) -> String {
+    let mut placed = Placed::new(Bump, Placement::Worker);
+    placed.activate().unwrap();
+    let mut store = Store::new("secret.keep count", []);
+    let turn = |placed: &mut Placed<Bump>, store: &mut Store, target| {
+        let Answer::Later(request) = placed.answer_for(target, store, "bump", &[]).unwrap() else {
+            panic!("an owner turn")
+        };
+        request.continuation.unwrap()
+    };
+    let parse = |placed: &mut Placed<Bump>,
+                 store: &mut Store,
+                 target,
+                 rx: std::sync::mpsc::Receiver<Outcome>| {
+        let outcome = rx.recv_timeout(Duration::from_secs(5)).unwrap();
+        placed
+            .parse_for(target, store, "bump", &[], outcome)
+            .unwrap();
+    };
+    let (first, second) = (Target::Mutation(0), Target::Mutation(1));
+    let a = turn(&mut placed, &mut store, first);
+    let first_reply = send(placed.dispatch(a, &store));
+    if second_after_first_reply {
+        parse(&mut placed, &mut store, first, first_reply);
+        let b = turn(&mut placed, &mut store, second);
+        let second_reply = send(placed.dispatch(b, &store));
+        parse(&mut placed, &mut store, second, second_reply);
+    } else {
+        let b = turn(&mut placed, &mut store, second);
+        let second_reply = send(placed.dispatch(b, &store));
+        parse(&mut placed, &mut store, first, first_reply);
+        parse(&mut placed, &mut store, second, second_reply);
+    }
+    store.get("count").unwrap_or("").to_string()
+}
+
+/// QUEUE (179b9d387): a lone `Placed` worker's turns each read the Store as it
+/// was at their dispatch, so a second read-modify-write dispatched before the
+/// first's reply commits reads the old value and one update is lost.
+#[test]
+fn two_read_modify_write_turns_through_a_worker_keep_both_updates() {
+    assert_eq!(
+        two_bumps(true),
+        "2",
+        "the second dispatched after the first's reply"
+    );
+    assert_eq!(
+        two_bumps(false),
+        "2",
+        "the second dispatched before the first's reply"
+    );
+}
