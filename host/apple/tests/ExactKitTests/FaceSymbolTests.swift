@@ -201,9 +201,12 @@ final class FaceSymbolTests: XCTestCase {
     /// name by its release year and maps a year to the OS versions that ship it.
     func testEveryPortableRoleIsAnSFSymbolAtTheDeploymentFloor() throws {
         let package = try String(contentsOf: Self.repository.appendingPathComponent("host/apple/Package.swift"), encoding: .utf8)
+        // A floor is `.macOS(.v14)`, or (iOS, since a13513dac) `.iOS(iosFloor)`, whose closure starts at `let floor = [17, 0]`.
         func floor(_ platform: String) throws -> [Int] {
+            let range = NSRange(package.startIndex..., in: package)
             let pattern = try NSRegularExpression(pattern: "\\.\(platform)\\(\\.v(\\d+)(?:_(\\d+))?\\)")
-            let match = try XCTUnwrap(pattern.firstMatch(in: package, range: NSRange(package.startIndex..., in: package)), "Package.swift names no \(platform) floor")
+            let computed = try NSRegularExpression(pattern: "let \(platform.lowercased())Floor: String = \\{\\s*let floor = \\[(\\d+), (\\d+)\\]")
+            let match = try XCTUnwrap(pattern.firstMatch(in: package, range: range) ?? computed.firstMatch(in: package, range: range), "Package.swift names no \(platform) floor")
             return (1..<match.numberOfRanges).compactMap { Range(match.range(at: $0), in: package).flatMap { Int(package[$0]) } }
         }
         let floors = ["iOS": try floor("iOS"), "macOS": try floor("macOS")]
