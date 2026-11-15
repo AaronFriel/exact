@@ -588,8 +588,23 @@ open class ExactActivity : Activity() {
         // Behind the hide, the pads' release and the stop of the turns (none queued after it), what they and anything
         // since the pause committed is on disk before Android may kill it.
         if (!Exact.drainStore()) android.util.Log.w("exact", "the store's writes did not finish before the stop")
+        if (reads() && !isChangingConfigurations) updateWidgets()
         contentResolver.unregisterContentObserver(settings)
         super.onStop()
+    }
+
+    /** Ask the app's own home-screen widgets to refresh, now that what it wrote is on disk (LLP 1126.003 D5): an
+     * explicit update to each provider of this package, by name, so the reader links nothing of the widgets module. An
+     * app without widgets has no providers. */
+    private fun updateWidgets() {
+        if (Build.VERSION.SDK_INT < 31) return
+        val manager = getSystemService(android.appwidget.AppWidgetManager::class.java) ?: return
+        for (info in manager.getInstalledProvidersForPackage(packageName, null)) {
+            val ids = manager.getAppWidgetIds(info.provider)
+            if (ids.isEmpty()) continue
+            sendBroadcast(android.content.Intent(android.appwidget.AppWidgetManager.ACTION_APPWIDGET_UPDATE).setComponent(info.provider)
+                .putExtra(android.appwidget.AppWidgetManager.EXTRA_APPWIDGET_IDS, ids))
+        }
     }
 
     /** In front again: a share sheet that was up and chose nothing was dismissed ([Requests.resumed]); an extension

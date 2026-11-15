@@ -681,8 +681,16 @@ Widget entries are top-level `app.json` `widgets` rows. For example:
 Optional `title` and `description` strings supply the widget gallery's labels;
 each defaults to the humanised `kind` when omitted.
 
-Widgets are WidgetKit's, so only Apple builds make them: an Android build says
-so and packages none.
+On Android 12 and later a row with a `system*` family is a home-screen widget
+(LLP 1126.003): `systemSmall` is two cells square, `systemMedium` four by two,
+`systemLarge` and `systemExtraLarge` four square, and it resizes from there. The
+same component is laid out at the launcher's size in the system's colours, and
+the same `refresh` keeps its timeline. Accessory families have no Android
+counterpart. What the launcher's views cannot draw yet (a gradient, a rounded or
+styled border, `clip-path`, an `image`, a bundled font, letter spacing) fails
+the widget's render, which then shows its last good entry. A tap follows the
+entry's `link` (one at the root takes the whole widget), else opens the app, and
+the app asks its widgets to refresh whenever it leaves the foreground.
 
 On iOS and macOS, an optional `configuration` lets the person choose in Edit Widget
 (LLP 1126; LLP 1133.023). The
@@ -697,6 +705,10 @@ App Intents metadata, through which the sheet shows them:
   "parameters":[{"name":"rows","type":"enum","title":"Rows","default":"automatic",
     "values":[{"value":"automatic","title":"Automatic"},{"value":"one","title":"1"},{"value":"three","title":"3"}]}]}
 ```
+
+On Android the same parameters are the widget's settings, one list of choices
+each: a placed widget starts with the defaults, and the launcher's long-press
+menu opens the settings.
 
 On watchOS, the complication picker offers
 [`recommendations`](https://developer.apple.com/documentation/widgetkit/appintentrecommendation)

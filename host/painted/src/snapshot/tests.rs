@@ -70,6 +70,7 @@ fn shelf_entry_renders_its_props_as_kernel_lines_at_the_given_size() {
         texts.iter().any(|t| t.contains("Dispossessed")),
         "{texts:?}"
     );
+    assert!(root.to_string().contains(r#""href":"/stats""#), "{root}");
     for (text, x, baseline, _) in &found {
         assert!((0.0..158.0).contains(x), "{text} at x {x}");
         assert!(
