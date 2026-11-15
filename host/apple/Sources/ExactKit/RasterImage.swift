@@ -59,6 +59,13 @@ enum RasterVariant {
 /// to ImageIO here; its later internal decoder allocations are not measurable by
 /// our ledger and are not claimed to fit the Exact-owned storage budget.
 package struct RasterMetadata: Equatable, Sendable {
+    #if DEBUG
+    private static let testReadLock = NSLock()
+    nonisolated(unsafe) private static var testReads = 0
+    static var testHeaderReads: Int {
+        testReadLock.lock(); defer { testReadLock.unlock() }; return testReads
+    }
+    #endif
     static let encodedLimit = 64 * 1024 * 1024
     static let headerLimit = 256 * 1024
     package static let pixelLimit = 64 * 1024 * 1024
@@ -95,6 +102,9 @@ package struct RasterMetadata: Equatable, Sendable {
     }
 
     static func read(prefix: Data, encodedBytes: Int) throws -> Self {
+        #if DEBUG
+        testReadLock.lock(); testReads += 1; testReadLock.unlock()
+        #endif
         guard encodedBytes > 0, encodedBytes <= encodedLimit else { throw RasterFailure.encodedLimit }
         guard !prefix.isEmpty, prefix.count <= headerLimit, prefix.count <= encodedBytes else { throw RasterFailure.headerLimit }
         // An SVG, by its bytes (LLP 1011.001 D4): its root tag's size is the
@@ -118,12 +128,13 @@ package struct RasterMetadata: Equatable, Sendable {
         }
         let source = CGImageSourceCreateIncremental([kCGImageSourceShouldCache: false] as CFDictionary)
         CGImageSourceUpdateData(source, prefix as CFData, prefix.count == encodedBytes)
+        let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any]
         // ImageIO answers nothing from a partial JPEG that carries a gain map
         // (an iPhone HDR export, an Android Ultra HDR photo), where it does for
         // a plain one, nor from any partial HEIF (an iPhone photo); the JPEG's
         // frame header or the HEIF's `meta` box says what the plan needs.
         if prefix.count < encodedBytes,
-           (CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any])?[kCGImagePropertyPixelWidth] == nil {
+           properties?[kCGImagePropertyPixelWidth] == nil {
             if let jpeg = jpegHeader(prefix) {
                 return try validated(width: jpeg.width, height: jpeg.height, orientation: jpeg.orientation,
                                      encodedBytes: encodedBytes, headerBytes: prefix.count, deep: jpeg.depth > 8,
@@ -135,7 +146,7 @@ package struct RasterMetadata: Equatable, Sendable {
                                      hdr: heif.hdr || hasGainMap(source, prefix: prefix))
             }
         }
-        guard let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
+        guard let properties,
               let width = properties[kCGImagePropertyPixelWidth] as? NSNumber,
               let height = properties[kCGImagePropertyPixelHeight] as? NSNumber else {
             // The whole file and still no size: no decoder here reads it.
@@ -490,12 +501,13 @@ final class RasterImage: @unchecked Sendable {
 
     static func decode(_ bytes: Data, metadata: RasterMetadata, plan: RasterDecodePlan,
                        charge: any RasterBackingCharge, sourceOwner: (any RasterSourceOwner)? = nil,
-                       file: FileHandle? = nil) throws -> RasterImage {
+                       file: FileHandle? = nil, recheckMetadata: Bool = true) throws -> RasterImage {
         guard bytes.count == metadata.encodedBytes, bytes.count <= RasterMetadata.encodedLimit else { throw RasterFailure.encodedLimit }
-        // A file can change between metadata inspection and worker admission.
-        // Recheck the actual bytes before asking ImageIO for any pixel buffer.
-        let actual = try RasterMetadata.read(prefix: bytes.prefix(RasterMetadata.headerLimit), encodedBytes: bytes.count)
-        guard actual == metadata else { throw RasterFailure.reservation }
+        // App and resolver files can change after inspection; private spools cannot.
+        if recheckMetadata {
+            let actual = try RasterMetadata.read(prefix: bytes.prefix(RasterMetadata.headerLimit), encodedBytes: bytes.count)
+            guard actual == metadata else { throw RasterFailure.reservation }
+        }
         let owner = RasterOwner(charge: charge, sourceOwner: sourceOwner)
         if metadata.svg { return try decodeSVG(bytes, metadata: metadata, plan: plan, owner: owner) }
         // This pool ends before the caller publishes the payload/completes its

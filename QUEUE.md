@@ -1708,3 +1708,4 @@ and the Linux headless CPU renderer without claiming display frame timing.
 
 - SVG basic-shape clips on native hosts: SVG 2 fill boxes including glyph cells and cubic extrema, nested SVG local coordinates, and animated reference boxes (#610).
 - WebKit: the auth fixture stops in preparation, before sign-in: storing its DPoP `CryptoKey` throws "The object can not be cloned" (`host/web/auth-fixture.test.mjs` runs the app in Chromium only for this reason; found with #690).
+- `RasterSpoolTests.testAHeldNamespaceIsNotWaitedFor` can fail at 0.000 s when the iOS raster classes run in parallel processes: it takes the shared `exact-raster/.namespace.lock`, which another class's spool may hold. Give the test its own root.
