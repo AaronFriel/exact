@@ -145,6 +145,25 @@ struct OracleBatch: Decodable {
 
 }
 
+struct OracleBatchMetadata: Decodable {
+    let canvas, waitContinue, frames, canvasOwed, controls, layoutProvisional: Bool?
+    let unchanged, storeReadPending, storeActivationPending, busy, requests, spatial: Bool?
+    let landing, stored, unsupported, facts, wakelock, mustFinish: Bool?
+    let waits: [Double]?
+    let canvasImages, alerts, journal, announced: [String]?
+    let live: String?
+    let design, modes: OracleBatchValue?
+    let seq: [Double]?
+    let nativeTimers: [Timer]?
+
+    struct Timer: Decodable {
+        let index, interval, tolerance: UInt32
+        let generation: String
+        let due: Double
+        let once: Bool
+    }
+}
+
 // @ref LLP 1044.000 §6 S1 — textual descendants are paragraph values.
 
 struct OracleInlineText: Decodable {

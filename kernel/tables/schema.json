@@ -5112,7 +5112,7 @@
     }
   ],
   "appleBatch": {
-    "_comment": "LLP 1172.001 E4, §4 step 4: the existing Apple JSON operation records. A missing fields object retains the heterogeneous adapter payload. Unknown keys are ignored by typed records; unknown operation names retain their payload. Props remain string maps and styles retain their open value dictionaries. The wire formats are unchanged; adding these declarations rotates the schema digest.",
+    "_comment": "LLP 1172.001 E4, §4 step 4: the existing Apple JSON records. A missing fields object retains the heterogeneous adapter payload. Unknown keys are ignored by typed records; unknown operation names retain their payload. Props remain string maps and styles retain their open value dictionaries. The wire formats are unchanged; adding these declarations rotates the schema digest.",
     "records": [
       {
         "name": "create",
@@ -5377,7 +5377,191 @@
       {
         "name": "midi"
       }
-    ]
+    ],
+    "envelope": {
+      "_comment": "Absent or null fields keep their defaults. The first occurrence wins, including null. Unknown fields are validated and skipped. The initializer names Batch constructor arguments in order; other members are assigned after construction.",
+      "fields": {
+        "ops": {
+          "member": "ops",
+          "codec": "ops"
+        },
+        "timers": {
+          "member": "timers",
+          "codec": "bool"
+        },
+        "motion": {
+          "member": "motion",
+          "codec": "bool"
+        },
+        "canvas": {
+          "member": "canvas",
+          "codec": "bool"
+        },
+        "nativeTimers": {
+          "member": "nativeTimers",
+          "codec": "nativeTimers"
+        },
+        "waits": {
+          "member": "timerWaits",
+          "codec": "numbers"
+        },
+        "waitContinue": {
+          "member": "waitContinue",
+          "codec": "bool"
+        },
+        "frames": {
+          "member": "frames",
+          "codec": "bool"
+        },
+        "canvasOwed": {
+          "member": "canvasOwed",
+          "codec": "bool"
+        },
+        "controls": {
+          "member": "controls",
+          "codec": "bool"
+        },
+        "layoutProvisional": {
+          "member": "layoutProvisional",
+          "codec": "bool"
+        },
+        "canvasImages": {
+          "member": "canvasImages",
+          "codec": "strings"
+        },
+        "unchanged": {
+          "member": "unchanged",
+          "codec": "bool"
+        },
+        "storeReadPending": {
+          "member": "storeReadPending",
+          "codec": "bool"
+        },
+        "storeActivationPending": {
+          "member": "storeActivationPending",
+          "codec": "bool"
+        },
+        "pending": {
+          "member": "pending",
+          "codec": "bool"
+        },
+        "busy": {
+          "member": "busy",
+          "codec": "bool"
+        },
+        "requests": {
+          "member": "requests",
+          "codec": "bool"
+        },
+        "spatial": {
+          "member": "spatial",
+          "codec": "bool"
+        },
+        "clock": {
+          "member": "clock",
+          "codec": "optionalNumber"
+        },
+        "timer_due_ms": {
+          "member": "timerDueMs",
+          "codec": "optionalNumber"
+        },
+        "landing": {
+          "member": "landing",
+          "codec": "bool"
+        },
+        "stored": {
+          "member": "stored",
+          "codec": "bool"
+        },
+        "error": {
+          "member": "error",
+          "codec": "optionalString"
+        },
+        "modes": {
+          "member": "modes",
+          "codec": "modes"
+        },
+        "live": {
+          "member": "live",
+          "codec": "optionalString"
+        },
+        "unsupported": {
+          "member": "unsupported",
+          "codec": "bool"
+        },
+        "design": {
+          "member": "design",
+          "codec": "stringValue"
+        },
+        "facts": {
+          "member": "facts",
+          "codec": "bool"
+        },
+        "wakelock": {
+          "member": "wakelock",
+          "codec": "optionalBool"
+        },
+        "mustFinish": {
+          "member": "mustFinish",
+          "codec": "optionalBool"
+        },
+        "orientationlock": {
+          "member": "orientation",
+          "codec": "orientation"
+        },
+        "alerts": {
+          "member": "alerts",
+          "codec": "strings"
+        },
+        "journal": {
+          "member": "journal",
+          "codec": "strings"
+        },
+        "announced": {
+          "member": "announced",
+          "codec": "strings"
+        },
+        "seq": {
+          "member": "seq",
+          "codec": "sequence"
+        }
+      },
+      "initializer": [
+        "ops",
+        "timers",
+        "motion",
+        "clock",
+        "error",
+        "timerDueMs",
+        "pending",
+        "busy"
+      ]
+    },
+    "nativeTimer": {
+      "_comment": "All fields are required and non-null. The last occurrence wins. Generation is a decimal UInt64 string; index, interval and tolerance are UInt32 numbers. Unknown fields are validated and skipped.",
+      "fields": {
+        "index": {
+          "codec": "id"
+        },
+        "generation": {
+          "codec": "uint64String"
+        },
+        "due": {
+          "codec": "number",
+          "minimum": 0
+        },
+        "interval": {
+          "codec": "id",
+          "exclusiveMinimum": 0
+        },
+        "tolerance": {
+          "codec": "id"
+        },
+        "once": {
+          "codec": "bool"
+        }
+      }
+    }
   },
   "symbols": [
     [

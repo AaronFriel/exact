@@ -1,20 +1,6 @@
-// The envelope and inline values on the Apple JSON wire. Operation records
-// come from kernel/tables/schema.json (LLP 1172.001 E4, §4 step 4).
+// Inline values and compound envelope values on the Apple JSON wire. Record
+// readers come from kernel/tables/schema.json (LLP 1172.001 E4, §4 step 4).
 import Foundation
-
-/// One ordinary task's native timer; generations reject delivery after cancellation.
-public struct NativeTimerWake: Equatable, Sendable {
-    public let index: UInt32
-    public let generation: UInt64
-    public let due: Double
-    public let interval: UInt32
-    public let tolerance: UInt32
-    public let once: Bool
-    public init(index: UInt32, generation: UInt64, due: Double, interval: UInt32, tolerance: UInt32, once: Bool) {
-        self.index = index; self.generation = generation; self.due = due
-        self.interval = interval; self.tolerance = tolerance; self.once = once
-    }
-}
 
 extension BatchReader {
     /// A `canvas2d` op's lists, `[address, length]` pairs in the runtime's
@@ -29,113 +15,20 @@ extension BatchReader {
         }
     }
 
-    package mutating func batch() throws -> Batch {
-        var ops: [BatchOp] = [], timers = false, motion = false, pending = false, spatial = false, canvas = false, frames = false, canvasOwed = false, controls = false
-        var layoutProvisional = false, busy = false, requests = false
-        var clock: Double?, due: Double?, error: String?
-        var waits: [Double] = [], waitContinue = false
-        var nativeTimers: [NativeTimerWake]?
-        var images: [String] = []
-        var seq: (UInt64, UInt64)?
-        var alerts: [String] = []
-        var journal: [String] = []
-        var announced: [String] = []
-        var modes: [String: String]?
-        var live: String?, unsupported = false, design: String?, facts = false, wakelock: Bool?, orientation: OrientationRequest?, mustFinish: Bool?
-        var unchanged = false, storeReadPending = false, storeActivationPending = false, landing = false, stored = false
-        var seen: Set<String> = []
-        try object { r, key in
-            guard seen.insert(key).inserted else { try r.skip(); return }
-            if try r.null() { return }
-            switch key {
-            case "ops": ops = try r.array { try $0.batchOp() }
-            case "timers": timers = try r.bool()
-            case "motion": motion = try r.bool()
-            case "canvas": canvas = try r.bool()
-            case "nativeTimers": nativeTimers = try r.array { try $0.nativeTimer() }
-            case "waits": waits = try r.array { try $0.number() }
-            case "waitContinue": waitContinue = try r.bool()
-            case "frames": frames = try r.bool()
-            case "canvasOwed": canvasOwed = try r.bool()
-            case "controls": controls = try r.bool()
-            case "layoutProvisional": layoutProvisional = try r.bool()
-            case "canvasImages": images = try r.array { try $0.string() }
-            case "unchanged": unchanged = try r.bool()
-            case "storeReadPending": storeReadPending = try r.bool()
-            case "storeActivationPending": storeActivationPending = try r.bool()
-            case "pending": pending = try r.bool()
-            case "requests": requests = try r.bool()
-            case "busy": busy = try r.bool()
-            case "spatial": spatial = try r.bool()
-            case "clock": clock = try r.number()
-            case "timer_due_ms": due = try r.number()
-            case "landing": landing = try r.bool()
-            case "stored": stored = try r.bool()
-            case "error": error = try r.string()
-            case "modes": if case .object(let object) = try r.value() { modes = object.compactMapValues { $0.string } }
-            case "live": live = try r.string()
-            case "unsupported": unsupported = try r.bool()
-            case "design": design = try r.value().string
-            case "facts": facts = try r.bool()
-            case "wakelock": wakelock = try r.bool()
-            case "mustFinish": mustFinish = try r.bool()
-            case "orientationlock": if case .object(let o) = try r.value() { orientation = OrientationRequest(o) }
-            case "alerts": alerts = try r.array { try $0.string() }
-            case "journal": journal = try r.array { try $0.string() }
-            case "announced": announced = try r.array { try $0.string() }
-            case "seq":
-                let range = try r.array { try $0.number() }
-                if range.count == 2, range.allSatisfy({ $0 >= 0 && $0 == $0.rounded() }) { seq = (UInt64(range[0]), UInt64(range[1])) }
-            default: try r.skip()
-            }
-        }
-        var batch = Batch(ops: ops, timers: timers, motion: motion, clock: clock, error: error, timerDueMs: due, pending: pending, busy: busy)
-        batch.unchanged = unchanged
-        batch.landing = landing
-        batch.stored = stored
-        batch.announced = announced
-        batch.storeReadPending = storeReadPending
-        batch.storeActivationPending = storeActivationPending
-        batch.spatial = spatial
-        batch.requests = requests
-        batch.canvas = canvas
-        batch.frames = frames
-        batch.timerWaits = waits
-        batch.nativeTimers = nativeTimers
-        batch.waitContinue = waitContinue
-        batch.canvasOwed = canvasOwed
-        batch.controls = controls
-        batch.layoutProvisional = layoutProvisional
-        batch.canvasImages = images
-        batch.seq = seq
-        batch.alerts = alerts
-        batch.journal = journal
-        batch.modes = modes
-        batch.live = live
-        batch.unsupported = unsupported
-        batch.design = design
-        batch.facts = facts
-        batch.wakelock = wakelock
-        batch.orientation = orientation
-        batch.mustFinish = mustFinish
-        return batch
+    package mutating func batchModes() throws -> [String: String]? {
+        if case .object(let object) = try value() { return object.compactMapValues { $0.string } }
+        return nil
     }
 
-    private mutating func nativeTimer() throws -> NativeTimerWake {
-        var index: UInt32?, generation: UInt64?, due: Double?, interval: UInt32?, tolerance: UInt32?, once: Bool?
-        try object { r, key in
-            switch key {
-            case "index": index = try r.id()
-            case "generation": generation = UInt64(try r.string())
-            case "due": due = try r.number()
-            case "interval": interval = try r.id()
-            case "tolerance": tolerance = try r.id()
-            case "once": once = try r.bool()
-            default: try r.skip()
-            }
-        }
-        guard let index, let generation, let due, due >= 0, let interval, interval > 0, let tolerance, let once else { throw Invalid.wire }
-        return NativeTimerWake(index: index, generation: generation, due: due, interval: interval, tolerance: tolerance, once: once)
+    package mutating func batchOrientation() throws -> OrientationRequest? {
+        if case .object(let object) = try value() { return OrientationRequest(object) }
+        return nil
+    }
+
+    package mutating func batchSequence() throws -> (UInt64, UInt64)? {
+        let range = try array { try $0.number() }
+        if range.count == 2, range.allSatisfy({ $0 >= 0 && $0 == $0.rounded() }) { return (UInt64(range[0]), UInt64(range[1])) }
+        return nil
     }
 
     package mutating func batchOp() throws -> BatchOp {
