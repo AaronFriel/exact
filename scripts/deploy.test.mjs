@@ -317,6 +317,21 @@ async function rejects(action, matches) {
   JSON.stringify(table));
   rmSync(dir, { recursive: true, force: true });
 }
+// Android has no binary lane in deploy (LLP 1030.006 D6): with no stream, the table names the APK's command.
+{
+  const dir = mkdtempSync(join(tmpdir(), 'exact-android-binary-'));
+  const origin = { kind: 'directory', describe: () => dir, get: async () => null, head: async () => null, list: async () => [] };
+  const table = async (store) => classify({ app: { id: 'com.exact.test', displayName: 'Test', dir, manifest: { deploy: { store: { android: store } } } },
+    opts: { platform: [] }, origin, channel: 'prod', snapshot: { commit: '0'.repeat(40), dirty: false, changes: [], repo: dir },
+    release: 'test', web: dir, bundle: { plan: { sha256: '0'.repeat(64) }, assets: [] }, builds: {}, compat: {}, platforms: ['android'], wantOrigin: false });
+  const updating = await table('A'), fixed = await table('0');
+  const rendered = renderTable(updating);
+  result('an Android deploy with no stream names the production APK command', updating.rows.length === 1
+    && updating.rows[0].kind === 'binary' && updating.rows[0].reason.includes('bun exact.mjs android --bundle')
+    && updating.rows[0].reason.includes('push.mjs') && fixed.rows[0].reason.startsWith('deploy.store.android is "0"')
+    && rendered.includes('binary needed: android —'), rendered);
+  rmSync(dir, { recursive: true, force: true });
+}
 // A dry-run renders network availability per row, including declared retired
 // streams. A corrupt response remains a hard refusal rather than masquerading
 // as a transient network problem.

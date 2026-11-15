@@ -61,8 +61,8 @@ import { filesystemLock, removePrivateTree } from './filesystem.mjs';
 import { listBuildFiles, listPublicFiles, readStaticCandidate } from '../host/web/serve.mjs';
 import { BESIDE, STAGE } from '../host/web/beside.mjs';
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
-const PLATFORMS = ['web', 'ios', 'macos', 'linux'];
-const USAGE = 'usage: bun scripts/deploy.mjs <app> [--origin <dir|url>] [--channel <name>] [--only bundle|origin] [--platform <web|ios|macos|linux>]... [--snapshot <sha>] [--dirty] [--release <id>] [--keys <dir>] [--json] [--yes]\n       bun scripts/deploy.mjs keygen <id> [--keys <dir>] [--json]';
+const PLATFORMS = ['web', 'ios', 'macos', 'linux', 'android'];
+const USAGE = 'usage: bun scripts/deploy.mjs <app> [--origin <dir|url>] [--channel <name>] [--only bundle|origin] [--platform <web|ios|macos|linux|android>]... [--snapshot <sha>] [--dirty] [--release <id>] [--keys <dir>] [--json] [--yes]\n       bun scripts/deploy.mjs keygen <id> [--keys <dir>] [--json]';
 // ------------------------------------------------------------------ arguments
 function parseArgs(argv) {
   const opts = { platform: [], _: [] };
@@ -974,6 +974,13 @@ export async function classify({ app, opts, origin, channel, snapshot, release, 
     if (candidate?.pendingInputs?.length) binary.set(platform, { compatibilityId, reason: `binary inputs changed: ${candidate.pendingInputs.join(', ')}; a native bake determines the new compatibility id` });
     else if(candidate&&compat[platform]&&(check.binary||!head&&!record)) binary.set(platform,{compatibilityId:compat[platform].id,reason:`binary inputs ${installed?.binary===candidate.binary.sha256?'have no previous release':'changed'}; compatibility id ${installed?.compat.id===candidate.compat.id?'unchanged':`moves to ${candidate.compat.id}`}`});
   }
+  if(platforms.includes('android')) {
+    const apk='a new APK: bun exact.mjs android --bundle';
+    const android=rows.filter(r=>r.kind==='stream'&&r.platform==='android');
+    if(app.manifest.deploy?.store?.android!=='A') binary.set('android',{compatibilityId:null,reason:`deploy.store.android is "0": the APK links no update store; deliver changes in ${apk}`});
+    else if(!android.length) binary.set('android',{compatibilityId:null,reason:`no Android stream on ${channel} yet: build ${apk} (production trust), then bun scripts/push.mjs starts its stream`});
+    else for(const row of android.filter(r=>r.action==='binary')) binary.set('android',{compatibilityId:row.compatibilityId,reason:apk});
+  }
   for(const [platform,card] of binary) rows.push({kind:'binary',platform,action:'binary',...card});
 
   return { release, snapshot: { id: snapshot.id ?? snapshot.commit, commit: snapshot.commit, dirty: snapshot.dirty, changes: snapshot.changes,
@@ -1027,7 +1034,7 @@ export function renderTable(table) {
     out.push(line('', detail, `bundle seq ${row.seq}`));
   }
   const binaries = table.rows.filter((r) => r.action === 'binary');
-  if (binaries.length) out.push(`binary needed: ${binaries.map((r) => `${r.platform ?? '?'} ${r.compatibilityId.slice(0, 8)}`).join(', ')} — a later verb (LLP 1030.000 §6); independently safe bundle rows still publish`);
+  if (binaries.length) out.push(`binary needed: ${binaries.map((r) => [r.platform ?? '?', r.compatibilityId?.slice(0, 8)].filter(Boolean).join(' ')).join(', ')} — a later verb (LLP 1030.000 §6); independently safe bundle rows still publish`);
   out.push(...renderReach(table.reach));
   return out.join('\n');
 }
@@ -1274,7 +1281,9 @@ async function deployCaptured(opts, capsule) {
 
   const env = sealedSourceEnv(sourceRoot, { CARGO_TARGET_DIR: app.target, EXACT_UPDATE_TRUST: 'production' });
   const knownStreams = platforms.length ? await streams(origin, app, channel, env, { deploying: true, platforms }) : [];
-  const nativeBakes = platforms.filter(platform => !knownStreams.some(s => s.platform === platform && s.cohort));
+  // Android has no binary lane here: its cohort is the production APK's build receipt, whose first `push` starts
+  // the stream (LLP 1030.006 D6); `classify` names the APK's command instead.
+  const nativeBakes = platforms.filter(platform => platform !== 'android' && !knownStreams.some(s => s.platform === platform && s.cohort));
   const webOnly = app.manifest.game === undefined && !namesNative(app.manifest);
   log(`snapshot ${snapshot.id}${snapshot.sources.length > 1 ? ` (${snapshot.sources.map((source) => `${source.roles.join('+')} ${source.commit.slice(0, 7)}`).join(', ')})` : ''}${snapshot.dirty ? ' + uncommitted changes (--dirty)' : ''}; ${webOnly ? 'building the web root, no stream named,' : 'baking'} into ${run}`);
   const web = webOnly ? null : bake(app, run, exactRoot, sourceRoot);
@@ -1330,7 +1339,7 @@ async function deployCaptured(opts, capsule) {
       try { published.push(await publishRoot({ origin, row, web: webRoot, log })); } catch (e) { failed.push({ kind: 'origin', error: e.message }); log(`  origin: failed — ${e.message}`); }
       continue;
     }
-    const name = `${row.platform ?? '?'} ${row.kind} ${row.compatibilityId.slice(0, 8)}`;
+    const name = [row.platform ?? '?', row.kind, row.compatibilityId?.slice(0, 8)].filter(Boolean).join(' ');
     if (row.action === 'unavailable') { failed.push({ platform: row.platform, compatibilityId: row.compatibilityId, error: row.reason }); log(`  ${name}: unavailable — ${row.reason}`); continue; }
     if (row.action === 'binary') { refused.push({ platform: row.platform, compatibilityId: row.compatibilityId, reason: row.reason }); log(`  ${name}: refused — ${row.reason}`); continue; }
     try {

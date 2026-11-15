@@ -104,9 +104,10 @@ test('a failed Gradle run names a matching JVM crash log, including one left by 
 
 test('the Android reader variable filter and activity allowlist include the auth fixture; loopback URLs select ports', async () => {
   const { readerVariables, reversedPorts } = await import('./agent-android.mjs');
-  const vars = readerVariables({ EXACT_AGENT: '1', EXACT_AGENT_STORAGE: 's', EXACT_AUTH_FIXTURE: 'http://127.0.0.1:4791', EXACT_APP_DIR: '/a', HOME: '/h' });
-  expect(vars).toEqual({ EXACT_AGENT: '1', EXACT_AGENT_STORAGE: 's', EXACT_AUTH_FIXTURE: 'http://127.0.0.1:4791' });
-  expect(reversedPorts(vars)).toEqual(['4791']);
+  const vars = readerVariables({ EXACT_AGENT: '1', EXACT_AGENT_STORAGE: 's', EXACT_AUTH_FIXTURE: 'http://127.0.0.1:4791', EXACT_APP_DIR: '/a', HOME: '/h',
+    EXACT_UPDATE_ORIGIN: 'http://127.0.0.1:8790/', EXACT_UPDATE_DIR: '/u' });
+  expect(vars).toEqual({ EXACT_AGENT: '1', EXACT_AGENT_STORAGE: 's', EXACT_AUTH_FIXTURE: 'http://127.0.0.1:4791', EXACT_UPDATE_ORIGIN: 'http://127.0.0.1:8790/', EXACT_UPDATE_DIR: '/u' });
+  expect(reversedPorts(vars)).toEqual(['4791', '8790']);
   expect(reversedPorts({ EXACT_AUTH_FIXTURE: 'http://[::1]:4791' })).toEqual(['4791']);
   expect(reversedPorts({ EXACT_DEV_PLAN: 'http://localhost:8080/', EXACT_AUTH_FIXTURE: 'http://127.0.0.1:8080' })).toEqual(['8080']);
   expect(reversedPorts({ EXACT_DEV_PLAN: 'https://example.com/plan' })).toEqual([]);
@@ -993,14 +994,10 @@ test('Android bundles and unattended APKs have explicit command flags', async ()
 });
 
 test('an APK carries each GPU library the bake built, by the name Cargo gave it, unstripped (#306)', async () => {
-  const { bakeGpuLibraries, carriesGpu, stageGpuLibraries } = await import('./agent-android.mjs');
+  const { bakeGpuLibraries, stageGpuLibraries } = await import('./agent-android.mjs');
   const dir = mkdtempSync(resolve(tmpdir(), 'exact-apk-gpu-'));
   try {
     const app = { hasGpu: true, manifest: { gpu: { modules: { extra: ['extra'] } } } };
-    expect(carriesGpu(app)).toBe(true);
-    // An app whose surfaces are all in named modules has no primary, and still bakes them.
-    expect(carriesGpu({ ...app, hasGpu: false })).toBe(true);
-    expect(carriesGpu({ hasGpu: false, manifest: {} })).toBe(false);
     // The named module's crate sets `[lib] name = "extra"`: Cargo builds libextra.so, not libfiddl_gpu_extra.so.
     const products = ['libfiddl_gpu.so', 'libextra.so'].map((file) => resolve(dir, file));
     let asked;

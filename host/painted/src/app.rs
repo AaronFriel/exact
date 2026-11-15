@@ -742,6 +742,8 @@ fn development_variable(name: &str) -> bool {
             | "EXACT_SMOKE"
             | "EXACT_SHOT"
             | "EXACT_DISPLAY"
+            | "EXACT_UPDATE_ORIGIN"
+            | "EXACT_UPDATE_DIR"
     ) || name.starts_with("EXACT_AGENT_")
 }
 
@@ -951,6 +953,8 @@ mod scale_tests {
                 .env("EXACT_VNC", "1")
                 .env("EXACT_AGENT", "1")
                 .env("EXACT_AGENT_SHARE", "untrusted")
+                .env("EXACT_UPDATE_ORIGIN", "https://127.0.0.1/must-not-check")
+                .env("EXACT_UPDATE_DIR", "/must-not-open")
                 .output()
                 .unwrap();
             assert!(
@@ -969,6 +973,8 @@ mod scale_tests {
             "EXACT_VNC",
             "EXACT_AGENT",
             "EXACT_AGENT_SHARE",
+            "EXACT_UPDATE_ORIGIN",
+            "EXACT_UPDATE_DIR",
         ] {
             assert!(std::env::var_os(name).is_none(), "{name}");
         }

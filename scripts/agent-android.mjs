@@ -38,7 +38,7 @@ import { createConnection } from 'node:net';
 import { homedir, tmpdir, userInfo } from 'node:os';
 import { basename, dirname, resolve } from 'node:path';
 import { within } from './paths.mjs';
-import { HOST_DEV, PINNED_RUST, androidPackageId, bakeWatchEnv, buildBake, claimLive, hermesBundle, cargoEnvironment, copyShaders, gpuModules, injectedProfiles, linuxBuild, mavenProblems, resolveApp, wholeProgram } from './app.mjs';
+import { HOST_DEV, PINNED_RUST, androidPackageId, bakeWatchEnv, buildBake, claimLive, hermesBundle, cargoEnvironment, copyShaders, linuxBuild, mavenProblems, resolveApp } from './app.mjs';
 import { ANDROID_MIN_API, hermesAndroidBundle } from './hermes-android.mjs';
 import { ANDROID_PAGE_SIZE, androidCargo } from './cargo-check.mjs';
 import { guardFlags, reportBuilt } from './help.mjs';
@@ -393,13 +393,15 @@ function readerDeploy(app, apk, env) {
 /** What the reader reads of a drive's `env`, which reaches it as its `x_<name>` launch extras (`ExactActivity`'s
  * `environment`): EXACT_AGENT and every EXACT_AGENT_* (the store, the epoch, the locale, the seed, the fetch faults),
  * EXACT_STORE (`real`: the platform's stores, a conformance suite's), the auth fixture a test declares
- * (EXACT_AUTH_FIXTURE, LLP 1146 D4), a pushed plan and a dev loop's URL. */
+ * (EXACT_AUTH_FIXTURE, LLP 1146 D4), a pushed plan, a dev loop's URL, and the update store's origin and directory
+ * (LLP 1030.006 D7). */
 export const readerVariables = (env) => Object.fromEntries(Object.entries(env).filter(([k]) =>
-  k === 'EXACT_AGENT' || k.startsWith('EXACT_AGENT_') || ['EXACT_STORE', 'EXACT_AUTH_FIXTURE', 'EXACT_DEV_PLAN', 'EXACT_PLAN'].includes(k)));
+  k === 'EXACT_AGENT' || k.startsWith('EXACT_AGENT_') || ['EXACT_STORE', 'EXACT_AUTH_FIXTURE', 'EXACT_DEV_PLAN', 'EXACT_PLAN', 'EXACT_UPDATE_ORIGIN', 'EXACT_UPDATE_DIR'].includes(k)));
 
 /** The ports of this Mac's loopback the reader is to reach through `adb reverse`, for the drive: a dev loop's
- * (`--url`) and the app's server that a test declares its auth fixture (`test android` starts it here). */
-export const reversedPorts = (vars) => [...new Set([vars.EXACT_DEV_PLAN, vars.EXACT_AUTH_FIXTURE].map((v) => URL.parse(v ?? ''))
+ * (`--url`), the app's server that a test declares its auth fixture (`test android` starts it here) and an update
+ * origin `serve.mjs` serves. */
+export const reversedPorts = (vars) => [...new Set([vars.EXACT_DEV_PLAN, vars.EXACT_AUTH_FIXTURE, vars.EXACT_UPDATE_ORIGIN].map((v) => URL.parse(v ?? ''))
   .filter((url) => url && ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname))
   .map((url) => url.port || (url.protocol === 'https:' ? '443' : '80')))];
 
@@ -689,17 +691,6 @@ async function relay([serial, id, vars, encodedLease]) {
   finally { cleanup(); }
 }
 
-/** The build script's output directory of `crate`, where it wrote its plan, `compat.json` and `uses.txt`
- * (`contract::native::android_entry`), found by Cargo's JSON messages. */
-function planOut(messages, crate) {
-  for (const line of messages.split('\n')) {
-    if (!line.startsWith('{')) continue;
-    const m = JSON.parse(line);
-    if (m.reason === 'build-script-executed' && (m.package_id.includes(`#${crate}@`) || m.package_id.startsWith(`${crate} `))) return m.out_dir;
-  }
-  return null;
-}
-
 /** The SHA-256 of what an ELF64 file loads: its PT_LOAD segments' bytes, past the ELF header. AGP strips a
  * packaged library's debug symbols, which rewrites the header and nothing a segment holds, so this is the same
  * for the library a build staged and the one its APK holds, and differs for another build's (LLP 1159.002 D2). */
@@ -963,9 +954,6 @@ export function androidReleaseEnvironment(env = process.env, bundle = false) {
     ...(env.EXACT_KEYSTORE ? { EXACT_KEYSTORE: resolve(env.EXACT_KEYSTORE) } : {}) };
 }
 
-/** Whether an APK carries GPU libraries beside the app's (LLP 1009 D6): the primary module or a `gpu.modules` entry. */
-export const carriesGpu = (app) => app.hasGpu || gpuModules(app.manifest).length > 0;
-
 /** The app baked for the phone (`buildBake`), the GPU modules first, and each GPU library the bake built, at the
  * path Cargo gave it: a crate's `[lib] name` names the file, and the bake records that name for the host to open. */
 export function bakeGpuLibraries(app, options, bake = buildBake) {
@@ -1004,9 +992,10 @@ export function stageSoundLibrary(jniLibs, env) {
 
 /** The app on the Canvas reader, as an APK: its `android/` crate (a cdylib over `exact_painted::canvas_jni!`; a game's
  * is generated under `.shells/`) built for the phone's ABI and put, with the app's assets and its icon and banner
- * (`androidIcons`), where the Gradle shell packages them (host/android/app), then `:app:assembleRelease`. An app with
- * GPU modules (LLP 1009) is built as a Linux bake is (`buildBake`): the modules first, then the library with their
- * digests baked in, so each ships beside it and must reach the device byte for byte (`stageGpuLibraries`).
+ * (`androidIcons`), where the Gradle shell packages them (host/android/app), then `:app:assembleRelease`. The library
+ * is built as a Linux bake is (`buildBake`), which writes the build's receipt; an app with GPU modules (LLP 1009) has
+ * the modules built first and their digests baked in, so each ships beside it and must reach the device byte for byte
+ * (`stageGpuLibraries`).
  * Gradle wants a JDK (17 or newer) and the SDK's platform. The APK's path, or null. */
 export function buildApk(app, env, profile, writeLocks = false, bundle = false) {
   env = androidReleaseEnvironment(env, bundle);
@@ -1022,17 +1011,12 @@ export function buildApk(app, env, profile, writeLocks = false, bundle = false) 
   catch (error) { for (const line of error.message.split('\n')) console.error(`${app.name}: ${line}`); return null; }
   const launch = androidLaunch(app.manifest, resolve(dirs.app, 'launch/res'));
   const built = (name) => resolve(app.target, ANDROID_TARGET, profile, `lib${name.replaceAll('-', '_')}.so`);
-  let gpu = [], out = null;
-  if (carriesGpu(app)) {
-    try { gpu = bakeGpuLibraries(app, { profile, env }); }
-    catch (error) { console.error(error.message); return null; }
-    out = bakedOut(resolve(app.target, ANDROID_TARGET, profile, 'build'), crate);
-  } else {
-    // JSON on stdout, for the crate's build-script output directory; the compiler's own messages still on stderr.
-    const cargo = spawnSync(...androidCargo('cargo', ['build', ...injectedProfiles(app), ...wholeProgram('android', profile), '--profile', profile, '-p', crate, '--target', ANDROID_TARGET, '--message-format=json-render-diagnostics'], { cwd: app.workspace ?? app.dir, env, stdio: ['inherit', 'pipe', 'inherit'], maxBuffer: 1 << 28 }));
-    if (cargo.status !== 0) return null;
-    out = planOut(cargo.stdout.toString(), crate);
-  }
+  // Every library is baked (`buildBake`), which writes the build's receipt (android-aarch64-linux-android.build.json):
+  // a first `push` starts a stream from exactly this APK's cohort (LLP 1030.006 D6).
+  let gpu;
+  try { gpu = bakeGpuLibraries(app, { profile, env }); }
+  catch (error) { console.error(error.message); return null; }
+  const out = bakedOut(resolve(app.target, ANDROID_TARGET, profile, 'build'), crate);
   const extensions = JSON.parse(readFileSync(resolve(out, 'artifacts.json'), 'utf8')).extensions;
   const bound = androidImplementations(app.dir, extensions);
   const maven = mavenCoordinates(app, bound);

@@ -709,7 +709,9 @@ open class ExactActivity : Activity() {
             "x_agent_fail_fetch", "x_agent_process", "x_agent_home", "x_agent_login_env",
             "x_agent_share", "x_agent_bind", "x_agent_pads", "x_agent_timing", "x_agent_presentation", "x_agent_chrome",
             "x_rows", "x_moves", "x_idle_frames", "x_slots", "x_lower", "x_row_reuse",
-            "x_image_viewports", "x_defer_collections", "x_log_journal").forEach { k ->
+            "x_image_viewports", "x_defer_collections", "x_log_journal",
+            // The update store's origin and directory (LLP 1030.006 D7); a production bake ignores both.
+            "x_update_origin", "x_update_dir").forEach { k ->
             intent.getStringExtra(k)?.let { android.system.Os.setenv("EXACT_" + k.removePrefix("x_").uppercase(), it, true) }
         }
         // A move may carry layers' tracks ([applyMove]), so a row coming into view starts its animations without a
