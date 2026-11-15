@@ -998,6 +998,22 @@ since `LIBSQLITE3_FLAGS` also reaches an iOS build's host dependencies.
 Recheck every filesystem probe when updating the amalgamation. Replay the
 bundled dependency, C replacement and build driver together on a refresh.
 
+## Local patch 44, the events binding's engine hooks for an embedder
+
+`InstallOptions::events_hooks` names a global through which the installer
+publishes the events binding's engine hooks (`reportException`, `onUnhandled`,
+`onHandled`, `configure`), frozen, as it publishes the other bootstrap outputs.
+Exact's data module reads them before its code runs (exact2 LLP 1175).
+Installed so, the binding reads no clock, since that realm refuses one to its
+code: `Event.timeStamp` is 0. `configure({ report, result, during })`, allowed
+once, makes the embedder hear every report with whether a listener cancelled
+it, in place of `nativeReport`; hear each listener's and `on…` handler's
+return value; and run the host's own dispatches of `error`,
+`unhandledrejection` and `rejectionhandled` inside `during`. `reportException`
+and `onUnhandled` return whether a listener cancelled. Without the option the
+binding behaves as upstream's. `js/tests/it/error_events.rs` covers it. Offer
+upstream; replay on a refresh until it lands.
+
 ## Terminal heap exhaustion
 
 The borrowed adapter propagates native engine exceptions through installation,

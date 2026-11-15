@@ -15,6 +15,7 @@ mod context;
 mod doc_copy;
 mod ecdsa;
 mod entropy;
+mod error_events;
 mod forget;
 mod heap;
 mod inputs;

@@ -781,11 +781,15 @@ impl Module {
         engine
             .harden()
             .map_err(|e| format!("exact-js: hardening failed: {e}"))?;
-        match &self.bytecode {
+        let loaded = match &self.bytecode {
             Bytecode::Linked(bytes) => engine.load_static(bytes),
             Bytecode::Owned(bytes) => engine.load_shared(bytes.clone()),
+        };
+        if let Err(e) = loaded {
+            // What it said before it threw, its `error` listeners included (LLP 1175 D2), is kept for the journal.
+            self.logs.extend(engine.take_log());
+            return Err(format!("exact-js: the module did not load: {e}"));
         }
-        .map_err(|e| format!("exact-js: the module did not load: {e}"))?;
         let abi = engine.string("abi")?;
         if !abi_supported(&abi) {
             return Err(format!(

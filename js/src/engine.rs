@@ -159,7 +159,7 @@ mod real {
         ) -> Result<Engine, String> {
             hermes_lean_sys::ensure_linked();
             use ibex2::bindings::Groups;
-            let groups = Groups::PURE | Groups::CRYPTO | Groups::ABORT;
+            let groups = Groups::PURE | Groups::CRYPTO | Groups::EVENTS | Groups::ABORT;
             #[cfg(exact_js_intl)]
             let groups = groups | Groups::INTL;
             let compiled =

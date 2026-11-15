@@ -2302,16 +2302,15 @@ then `expect` reads the state before it; on the web build an answer given at
 once is there already), and on a device it lands a few milliseconds after the
 input.
 
-Natively, a data module has no global error hook: its global has no `onerror`,
-`onunhandledrejection`, `addEventListener` or `reportError`, and the rejection
-tracker that journals an unhandled rejection is Exact's, installed before the
-built-ins are frozen, so the module cannot replace it. On the web the module's
-realm is the browser's and has them, so a listener registered there does
-nothing natively: a feature-detected one is skipped, and an unguarded
-`addEventListener` throws. To report errors to a service, catch them where the
-answer runs: wrap each source's function (or `answer`) in `try`/`catch`, await
-what it starts, and send the report from the `catch` while the answer is still
-in flight, as `fetch` requires. What the answer does not catch fails it
+A data module hears its errors as a page does: `addEventListener("error", …)`,
+`addEventListener("unhandledrejection", …)`, `onerror`, `onunhandledrejection`
+and `reportError` exist on every host. A listener runs when a page's would. A
+failed answer is not an `error` event; call `reportError(e)` in the answer's
+`catch` to send it there. A listener runs with no answer in flight, so natively
+its `fetch` is refused and logged, as any such call is: to send a report to a
+service, send it from the answer's `catch` while the answer is still in flight.
+Every unhandled rejection still reaches `logs` (`data: unhandled rejection:
+…`), whatever a listener does. What the answer does not catch fails it
 (`failure(x).code`, above) and reaches `logs`.
 
 A newer send may replace a mutation's reply. An operation already issued still

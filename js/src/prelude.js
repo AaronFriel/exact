@@ -79,23 +79,37 @@
       return "(an error that cannot be read)";
     }
   }
-  // An answer's own timers, on the runner's clock (op 21), and the timer
-  // Hermes's rejection tracker asks for (time.js `timers`). Every
-  // unhandled rejection in the module reaches the journal, as a page's
-  // `unhandledrejection` reaches its console (LLP 1097 D8).
-  // The tracker's report is the timer it arms from inside its rejection
-  // hook (Hermes's `Promise._C`), told by that place, not by its name alone.
-  var reporting = 0,
-    hooked = false;
+  // The global's error events (errors.js, LLP 1175), natively from Ibex's events binding, and Hermes's rejection
+  // tracker: every unhandled rejection in the module reaches the journal, as a page's reaches its console (LLP 1097
+  // D8). A browser realm has its own events.
+  var errors = global.__exact_errors({
+    hooks: global.__exact_ibex2_events_hooks,
+    tracker: tracker,
+    journal: journal,
+    runtimeLine: runtimeLine,
+    errorText: errorText,
+    leftOpen: function () {
+      leftOpen();
+    },
+    swap: function (call) {
+      var before = currentCall;
+      currentCall = call;
+      return before;
+    },
+  });
+  delete global.__exact_errors;
+  delete global.__exact_ibex2_events_hooks;
+  // The shim takes it at hardening (shim.cc): what the module's evaluation threw is reported before the load fails.
+  if (tracker) global.__exact_evaluation_threw = errors.evaluationThrew;
+  // An answer's own timers, on the runner's clock (op 21), and the timer the tracker's report asks for (time.js
+  // `timers`, `errors.report`).
   var timers = time.timers(
     timerOwner,
     function () {
       return host(21, "", "");
     },
-    journal,
-    function (callback) {
-      return (reporting > 0 || !hooked) && callback.name === "bound onUnhandled";
-    },
+    errors.report,
+    errors.raise,
     function (signal) {
       try {
         return abortHooks ? abortHooks.own(signal).sources : null;
@@ -104,27 +118,10 @@
       }
     }
   );
-  if (tracker && typeof tracker.enablePromiseRejectionTracker === "function") {
-    tracker.enablePromiseRejectionTracker({
-      allRejections: true,
-      onUnhandled: function (id, error) {
-        journal("data: unhandled rejection: " + errorText(error));
-        leftOpen();
-      },
-      onHandled: function () {},
-    });
-    var reject = global.Promise._C;
-    if (typeof reject === "function") {
-      hooked = true;
-      global.Promise._C = function (promise, error) {
-        reporting++;
-        try {
-          return reject.call(this, promise, error);
-        } finally {
-          reporting--;
-        }
-      };
-    }
+  // The checkpoint after a turn's microtasks: the tracker's reports, then the rejections handled since (D2).
+  function checkpoint() {
+    var ran = timers.checkpoint();
+    return errors.checkpoint() || ran;
   }
   // A browser realm (the wasm host's module realm) reports its own rejections (module-glue.js).
   if (!tracker && typeof global.addEventListener === "function")
@@ -896,7 +893,7 @@
   global.__exact_ready = global.__exact_waiting_answers(calls, pending, work, headOwner);
   delete global.__exact_waiting_answers;
   global.__exact_settle = function (id, final) {
-    timers.checkpoint();
+    checkpoint();
     currentCall = null;
     var call = calls.get(Number(id));
     if (call) call.ran = false;
@@ -1132,7 +1129,7 @@
   // background's, and what landed and failed.
   global.__exact_background = function () {
     // Reporting can read an app's error getters after the last drain (LLP 1162 D3).
-    if (timers.checkpoint()) readyAll();
+    if (checkpoint()) readyAll();
     currentCall = null;
     return JSON.stringify({
       head: headOwner() === background,

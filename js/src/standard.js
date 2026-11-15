@@ -101,14 +101,15 @@
     return clone(value, new NativeMap());
   });
 
-  // A microtask: a callback's throw is reported, as the web reports it, and
-  // never rejects anything the module awaits. The report is the runtime's
-  // line (js/src/console.js), not the app's.
-  var runtimeLine = global.__exact_runtime_line;
+  // A microtask: a callback's throw is reported as the web reports it, an
+  // `error` event on the global (Ibex's `reportError`, taken before the app
+  // can replace it; LLP 1175 D2), and never rejects anything the module
+  // awaits. Its journal line is the runtime's (js/src/errors.js), not the app's.
+  var report = global.reportError;
   method(global, 'queueMicrotask', function queueMicrotask(callback) {
     if (typeof callback !== 'function') throw new TypeError('queueMicrotask requires a function');
     Promise.resolve().then(function () {
-      try { callback(); } catch (e) { runtimeLine('Uncaught ' + (e && e.stack ? e.stack : String(e))); }
+      try { callback(); } catch (e) { report(e); }
     });
   });
 
