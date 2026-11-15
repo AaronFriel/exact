@@ -14,7 +14,7 @@ import { writePrivacyManifest } from './privacy.mjs';
 //   bun host/apple/build.mjs --device [crate] --archive <out.ipa>            iOS, an .ipa to distribute
 //   bun host/apple/build.mjs --device [crate] --archive <out.ipa> --unsigned an .ipa a service re-signs
 //   bun host/apple/build.mjs --device [crate] --archive <out.ipa> --unsigned --development  the same, of the development build
-//   bun host/apple/build.mjs [crate] --bundle --distribution                 macOS, the bundle `exact release` signs
+//   bun host/apple/build.mjs [crate] --bundle --distribution | --appstore [--ad-hoc]  macOS, what `exact release` or `exact appstore` signs
 // Add --url <http(s) app URL> to connect any of these clients to the same
 // address as the browser (LLP 1030.000 §7): with --run it is the launch
 // locator, and a development client (--bundle, --ios, --device) registers
@@ -159,7 +159,7 @@ export const moduleTripleFor = (app, ios, device = false, tv = false, targets = 
 export function appleArtifacts(app, { destination = 'macos', composition, trust = process.env.EXACT_UPDATE_TRUST ?? 'development', host = false, optimize } = {}) {
   if (!['macos', 'ios-simulator', 'ios', 'tvos-simulator', 'tvos'].includes(destination)) throw new Error(`unknown Apple destination ${destination}`);
   const platform = destination === 'macos' ? 'macos' : 'ios';
-  composition ??= app.manifest.deploy?.store?.[platform] === '0' ? 'embedded' : 'updating';
+  composition ??= app.manifest.deploy?.store?.[platform] === '0' || (platform === 'macos' && process.env.EXACT_APPSTORE === '1') ? 'embedded' : 'updating';
   if (!['embedded', 'updating'].includes(composition) || !['development', 'production'].includes(trust)) throw new Error('invalid Apple composition or trust policy');
   const target = destination === 'macos' ? bakeTarget('macos') : destination === 'ios' ? 'aarch64-apple-ios' : destination === 'tvos-simulator' ? tvosTarget : destination === 'tvos' ? tvosDeviceTarget : iosTarget;
   const owner = resolve(app.target, 'clients', appSourceKey(app), app.id);
@@ -588,7 +588,7 @@ async function main(args, lockHeld = false) {
   // `--development` packages the development build `--run` installs (host-dev, development trust): an
   // agent's own iteration build that a service re-signs, not an artifact to distribute.
   const developmentArchive = args.includes('--development');
-  const distribution = (!!ipa && !developmentArchive) || args.includes('--distribution');
+  const appstore = !ios && args.includes('--appstore'), distribution = appstore || (!!ipa && !developmentArchive) || args.includes('--distribution');
   // What is stamped `release` or `archive` (buildinfo.mjs) bakes production trust, as --release does, so the stamp and
   // the trust every production policy reads (compat.json's `embedded.trust`) cannot disagree.
   if (distribution && process.env.EXACT_UPDATE_TRUST !== 'production') {
@@ -605,9 +605,9 @@ async function main(args, lockHeld = false) {
   if (packaged.size < EXTENSION_KINDS.length) { app.manifest = withoutExtensions(app.manifest, packaged); console.log(`host/apple: extensions ${[...packaged].join(',') || 'none'} (--extensions)`); }
   if (args.includes('--watchos')) return buildWatch(app, args, { runApple, appleArtifacts, appleBuildLock, receipt, buildParent: args => main(args, true) });
   const { optimize, profile: productionProfile } = appleProduction(app, ios ? 'ios' : 'macos', args);
-  // What the manifest and the app's files refuse is said before Cargo: an app with an update store ships into a stream,
-  // so the bake refuses a production build without its receipt; packaging refuses a missing icon (assets.mjs).
-  const store = `deploy.store.${ios ? 'ios' : 'macos'}`, streamed = app.manifest.deploy?.store?.[ios ? 'ios' : 'macos'] !== '0';
+  // What the manifest and the app's files refuse is said before Cargo: an app with an update store ships into a stream, so the bake refuses a production
+  // build without its receipt; packaging refuses a missing icon (assets.mjs). A Mac App Store build has no store (LLP 1030.005 D3; the bake reads EXACT_APPSTORE).
+  const store = `deploy.store.${ios ? 'ios' : 'macos'}`, streamed = !appstore && app.manifest.deploy?.store?.[ios ? 'ios' : 'macos'] !== '0'; if (appstore) process.env.EXACT_APPSTORE = '1'; else delete process.env.EXACT_APPSTORE;
   const refused = [...(distribution && streamed && !process.env.EXACT_UPDATE_RECEIPT && process.env.EXACT_UPDATE_GENESIS !== '1' ? [`${app.name}: what is distributed bakes production trust, and with an update store (${store} is not "0") it belongs to a stream: set EXACT_UPDATE_RECEIPT to its authenticated publisher receipt (scripts/deploy.mjs), or EXACT_UPDATE_GENESIS=1 to start a new stream`] : []), ...appleRefusals(app, tv ? 'tvos' : ios ? 'ios' : 'macos', { archive: distribution })];
   const sdkName = appleSdkName(tv ? 'tvos' : ios ? 'ios' : 'macos', device); // the SDK this build compiles with
   if (process.platform === 'darwin' && compilesSwiftHost(args)) refused.push(...[xcodeRefusal(sdkName)].filter(Boolean));
@@ -642,7 +642,7 @@ async function main(args, lockHeld = false) {
     const pair = widgets ? entryProfiles({ app, udid: ph?.udid, phoneName: ph?.name, required }) : null;
     prof = pair?.app ?? profile(ph?.udid, app.id, required, { phoneName: ph?.name });
     return identity(prof.team, { profiles: [prof, pair?.extension, ...(!tv && packaged.has('watch') ? watchProfiles({ app, udid: ph?.udid, like: prof }) : [])].filter(Boolean) });
-  })() : ios ? '-' : (distribution ? process.env.EXACT_DEVELOPER_ID ?? null : macIdentity());
+  })() : ios ? '-' : appstore ? (args.includes('--ad-hoc') ? '-' : process.env.EXACT_APPSTORE_ID ?? null) : (distribution ? process.env.EXACT_DEVELOPER_ID ?? null : macIdentity());
   if (!ios && sha1 === '-') widgets = false;
   let macWidgets = null;
   const dylib = `lib${gpuCrate.replace(/-/g, '_')}.dylib`;
@@ -909,7 +909,7 @@ async function main(args, lockHeld = false) {
   const bakedCompat = buildReceipt.compat;
   // What only a macOS provisioning profile authorizes (LLP 1133.010 D7), resolved with the widgets' signing: one
   // profile, one team, the identity of that team.
-  const signing = ios ? null : macSigning(app, bakedCompat, { current: sha1, widgets: macWidgets, release: production || distribution, distribution });
+  const signing = ios ? null : macSigning(app, bakedCompat, { current: sha1, widgets: macWidgets, release: production || distribution, distribution, store: appstore ? 'appstore' : null });
   const provisioning = signing?.provisioning ?? null;
   if (signing) { sha1 = signing.sha1; macWidgets = signing.widgets; widgets = !!macWidgets; }
   // What this Apple destination derives from the grants: the bake's, less what tvOS has not, and the host events its signed grants let packages take (LLP 1133.001.000 D2).
@@ -1337,7 +1337,7 @@ async function main(args, lockHeld = false) {
 
   const bundleTools = {runApple,appleArtifacts, macInfoPlist, copyAppleStaticTrees, writeUsageStrings, receipt, shippedReceipt, assertAppleIdentity, placeAppleArtifact, infoPlist, distributionKeys, copyAppleGpuProducts, entitlements, appClip};
   if (!ios) {
-    const bundlePath = assembleMac({intents, shared, library, moduleLibraries, serviceDylibs, macWidgets, shareTeam: signing.shareTeam, provisioning, triple: moduleTripleFor(app, ios, device, tv), appleReach, hasWeb, webLoadName, args, app, paths, binDir, libDir, bin, loadName, hasGpu, dylib, moduleDylibs, looseArms, hasSvg, svgLoadName, modulesLoadName, modulesBuilt, svgBuilt, canvasGpuLoadName, canvasGpuBuilt, sha1, linkRoot, swiftc, buildReceipt, development, bakedCompat, rosterKeys, production, distribution, stampSdk, products, composition, sdk, bakedPlan, cleanup}, bundleTools);
+    const bundlePath = assembleMac({intents, shared, library, moduleLibraries, serviceDylibs, macWidgets, shareTeam: signing.shareTeam, shareProfile: signing.shareProfile, provisioning, triple: moduleTripleFor(app, ios, device, tv), appleReach, hasWeb, webLoadName, args, app, paths, binDir, libDir, bin, loadName, hasGpu, dylib, moduleDylibs, looseArms, hasSvg, svgLoadName, modulesLoadName, modulesBuilt, svgBuilt, canvasGpuLoadName, canvasGpuBuilt, sha1, linkRoot, swiftc, buildReceipt, development, bakedCompat, rosterKeys, production, distribution, stampSdk, products, composition, sdk, bakedPlan, cleanup}, bundleTools);
     publishProducts();
     release();
     rmSync(webBuildDir, { recursive: true, force: true });

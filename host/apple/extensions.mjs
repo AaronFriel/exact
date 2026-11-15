@@ -91,5 +91,7 @@ export function packageShareExtension({ app, bundle, directory, sdk, triple, dev
   return extension;
 }
 
-/** The Mac extension's entitlements: sandboxed, as every Mac app extension is, with the app's group. */
-export const macShareEntitlements = group => plistFile({ 'com.apple.security.app-sandbox': true, 'com.apple.security.application-groups': [group] });
+/** The Mac extension's entitlements: sandboxed, as every Mac app extension is, with the app's group, and its App ID
+ * and team under the App Store profile a store build embeds (`profile`, for the extension's `id`; LLP 1030.005 D1). */
+export const macShareEntitlements = (group, profile = null, id = null) => plistFile({ 'com.apple.security.app-sandbox': true, 'com.apple.security.application-groups': [group],
+  ...(profile ? { 'com.apple.application-identifier': `${profile.prefix}.${id}`, 'com.apple.developer.team-identifier': profile.team } : {}) });

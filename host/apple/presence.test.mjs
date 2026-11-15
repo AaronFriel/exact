@@ -305,10 +305,12 @@ test('the Mac signs Sign in with Apple and Apple Pay from its profile, Developer
     expect(signed.entitlements[pay]).toEqual(['merchant.com.example.lock']);
     expect(macProfile(app, [signIn, pay], { method, installed: [lacking], named: null, team: undefined })).toBeNull();
   }
-  // Without a profile neither is signed, and a release still ships, saying what the app reports.
+  // Without a profile neither is signed, and a Developer ID release still ships, saying what the app reports; a store
+  // release is refused, since TestFlight requires the profile.
   const said = [];
-  expect(macProvisioning(app, compat, { release: true, method: 'appstore', find: none, log: (l) => said.push(l) })).toBeNull();
-  expect(said).toEqual([expect.stringMatching(/^auth\.apple com\.example\.web: this build signs no com\.apple\.developer\.applesignin, since no App Store macOS/),
+  expect(macProvisioning(app, compat, { release: true, method: 'developerid', find: none, log: (l) => said.push(l) })).toBeNull();
+  expect(() => macProvisioning(app, compat, { release: true, method: 'appstore', find: none, log: () => {} })).toThrow(/^appstore-needs-profile: no App Store macOS/);
+  expect(said).toEqual([expect.stringMatching(/^auth\.apple com\.example\.web: this build signs no com\.apple\.developer\.applesignin, since no Developer ID macOS/),
     expect.stringMatching(/^payment\.apple-pay merchant\.com\.example\.lock: this build signs no com\.apple\.developer\.in-app-payments/)]);
   expect(macProfileEntitlements(app, { prefix: 'P', team: 'T', dev: false }, needs, compat)).toEqual({ 'com.apple.application-identifier': 'P.com.example.lock',
     'com.apple.developer.team-identifier': 'T', [signIn]: ['Default'], [pay]: ['merchant.com.example.lock'] });

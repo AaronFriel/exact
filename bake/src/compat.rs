@@ -294,6 +294,23 @@ pub fn compatibility_id_sources_with_entries(
     )
 }
 
+/// `deploy.store.<platform>`, but `"0"` for a Mac App Store build (`EXACT_APPSTORE`,
+/// which `host/apple/build.mjs --appstore` sets): App Review Guideline 2.4.5(vii)
+/// allows updates only through the store, so it links no update store and app.json
+/// keeps its value for the Developer ID build (LLP 1030.005 D3).
+fn store_level(manifest: &Manifest, platform: &str) -> String {
+    let appstore = std::env::var_os("EXACT_APPSTORE").is_some_and(|v| v == "1");
+    store_level_of(manifest, platform, appstore)
+}
+
+/// [`store_level`] with the Mac App Store build's switch given.
+pub(crate) fn store_level_of(manifest: &Manifest, platform: &str, appstore: bool) -> String {
+    if appstore && platform == "macos" {
+        return "0".into();
+    }
+    manifest.store(platform)
+}
+
 /// As [`compatibility_id_sources_with_entries`], with the TypeScript module's
 /// receipt and its `env` settings. With a store, the compiled module's sha256
 /// (`module.sha256`) enters the id as `typescriptModule`, so changing it
@@ -321,6 +338,7 @@ pub fn compatibility_id_pinned(
     // External apps call this same entrypoint from their own build scripts.
     if std::env::var_os("OUT_DIR").is_some() {
         println!("cargo:rerun-if-env-changed=EXACT_UPDATE_TRUST");
+        println!("cargo:rerun-if-env-changed=EXACT_APPSTORE");
         println!("cargo:rerun-if-env-changed=EXACT_VERSION");
         println!("cargo:rerun-if-env-changed=EXACT_BUILD_NUMBER");
         println!("cargo:rerun-if-env-changed=EXACT_TYPESCRIPT_PLACEMENT");
@@ -605,7 +623,7 @@ fn compatibility_with_trust(
             Some(value) => value.as_str().unwrap_or("").to_string(),
         }
     } else {
-        manifest.store(platform)
+        store_level(manifest, platform)
     };
     if !matches!(store.as_str(), "0" | "A") {
         return Err(format!("deploy.store.{platform} must be \"0\" or \"A\""));

@@ -631,39 +631,62 @@ export function helperEntitlements(bundle, manifest, compat, order) {
   return signed;
 }
 
-/** The release's signature walk: every path `signingOrder` names, innermost
- *  first, with `identity`, the hardened runtime and `timestamp`. The app
- *  carries `macReleaseEntitlements`, each helper a runtime grant names its
- *  own (`helperEntitlements`), and a widget extension keeps its signing entitlements. The plists
- *  are written into `scratch`. */
-export function signRelease(bundle, { compat, manifest, identity, id, scratch, timestamp = ['--timestamp'] }) {
+/** The release's signature walk: every path `signingOrder` names, innermost first, with `identity`, the hardened
+ *  runtime (unless `hardened` is false: an ad hoc store build's, LLP 1030.005 D4) and `timestamp`. The app carries
+ *  `macReleaseEntitlements`, a helper a runtime grant names its own (`helperEntitlements`), and an app extension
+ *  (widgets, share) the entitlements its build signed. A Mac App Store build (`store`, LLP 1030.005 D1) signs the app
+ *  with the bake's sandbox entitlements too, and every other executable with `app-sandbox` and `inherit` alone (Apple,
+ *  "Embedding a helper tool in a sandboxed app"). The plists are written into `scratch`. Returns the signing order. */
+export function signRelease(bundle, { compat, manifest, identity, id, scratch, timestamp = ['--timestamp'], store = false, hardened = true }) {
   const order = signingOrder(bundle, compat, identity);
   const plists = helperEntitlements(bundle, manifest, compat, order);
   const info = JSON.parse(run('plutil', ['-convert', 'json', '-o', '-', resolve(bundle, 'Contents/Info.plist')], { encoding: 'utf8', stdio: 'pipe' }).stdout);
-  const widgets = info.ExactAppGroup ? { 'com.apple.security.application-groups': [info.ExactAppGroup] } : {};
+  // The widgets' group, or a share-only app's: the app reads the extension's inbox there (LLP 1133.024 D4).
+  const group = info.ExactAppGroup ?? info.ExactShareGroup;
+  const widgets = group ? { 'com.apple.security.application-groups': [group] } : {};
   if (info.ExactAppGroup && existsSync(resolve(bundle, 'Contents/embedded.provisionprofile'))) {
     if (!info.ExactKeychainAccessGroup) throw new Error('Mac widget profile has no restricted Keychain group in the app plist');
     Object.assign(widgets, { 'keychain-access-groups': [info.ExactKeychainAccessGroup],
       'com.apple.application-identifier': info.ExactKeychainAccessGroup,
       'com.apple.developer.team-identifier': info.ExactAppGroup.split('.')[0] });
   }
-  const extension = resolve(bundle, 'Contents/PlugIns/ExactWidgets.appex');
-  if (info.ExactAppGroup && existsSync(extension)) {
+  for (const name of ['ExactWidgets', 'ExactShare']) {
+    const extension = resolve(bundle, `Contents/PlugIns/${name}.appex`);
+    if (!existsSync(extension)) continue;
     const signed = run('codesign', ['-d', '--entitlements', '-', '--xml', extension], { encoding: 'utf8', stdio: 'pipe' }).stdout;
-    if (!signed?.includes('<plist')) throw new Error('Mac widget extension has no entitlements to preserve');
+    if (!signed?.includes('<plist')) throw new Error(`Mac ${name} extension has no entitlements to preserve`);
     plists.set(extension, signed);
   }
   // What the build signed under its embedded macOS profile (LLP 1133.010 D7), kept as the build chose it.
   if (existsSync(resolve(bundle, 'Contents/embedded.provisionprofile'))) Object.assign(widgets, profileEntitlements(bundle));
+  if (store) {
+    Object.assign(widgets, Object.fromEntries((compat?.reach?.sandboxEntitlements ?? []).map((key) => [key, true])));
+    const helper = plistFile({ 'com.apple.security.app-sandbox': true, 'com.apple.security.inherit': true });
+    for (const path of order) {
+      if (path === bundle || plists.has(path) || /\.appex\//.test(path)) continue;
+      if (path.endsWith('.app') || (!NESTED_BUNDLE.test(path) && machOType(path) === 2)) plists.set(path, helper);
+    }
+  }
   const own = macReleaseEntitlements(compat, widgets);
   if (own) plists.set(bundle, own);
   let n = 0;
   for (const path of order) {
     const plist = plists.get(path), file = plist && resolve(scratch, `entitlements-${n++}.plist`);
     if (plist) writeFileSync(file, plist);
-    run('codesign', ['--force', '--sign', identity, '--options', 'runtime', ...timestamp,
+    run('codesign', ['--force', '--sign', identity, ...(hardened ? ['--options', 'runtime'] : []), ...timestamp,
       ...(path === bundle ? ['--identifier', id] : []), ...(plist ? ['--entitlements', file] : []), path]);
   }
+  return order;
+}
+
+/** Each signature in `order` (a bundle's `signingOrder`) as `{ path, entitlements }`, the entitlements as JSON;
+ *  `read(path)` gives a signature's entitlements plist (a test's). */
+export function signedEntitlements(order, read = (path) => run('codesign', ['-d', '--entitlements', '-', '--xml', path], { encoding: 'utf8', stdio: 'pipe' }).stdout) {
+  return order.map((path) => {
+    const signed = read(path);
+    const entitlements = signed?.includes('<plist') ? JSON.parse(run('plutil', ['-convert', 'json', '-o', '-', '-'], { input: signed, encoding: 'utf8', stdio: 'pipe' }).stdout) : {};
+    return { path, entitlements };
+  });
 }
 
 /** The folder of an iOS or tvOS bundle that holds the trees `host.ios.resources`

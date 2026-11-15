@@ -7,6 +7,7 @@
 //   exact install <app>          a real .app in ~/Applications, plus a shim
 //   exact uninstall <app>        take both away again
 //   exact release <app>          sign for distribution, notarise, staple, package
+//   exact appstore <app>         the Mac App Store's .pkg (--ad-hoc: its configuration, to open here)
 //   exact list                   the apps this repo has, and what is installed
 //   exact new <path> [--update]  an app outside this repo, ready to run
 //   exact new <path> --game      a game outside this repo, ready to run
@@ -153,12 +154,12 @@ function refuseForeignBundle(app, bundle) {
   assertAppleIdentity(app, executableIn(bundle, app));
 }
 /** Build the app's macOS bundle. Cargo and SwiftPM decide what is stale; this always asks them. */
-function build(app, { quiet = false, distribution = false, identity = null } = {}) {
-  const r = spawnSync(process.execPath, [resolve(ROOT, 'host/apple/build.mjs'), app.crate('apple'), '--bundle', ...(distribution ? ['--distribution'] : [])], {
+function build(app, { quiet = false, distribution = false, identity = null, appstore = null } = {}) {
+  const r = spawnSync(process.execPath, [resolve(ROOT, 'host/apple/build.mjs'), app.crate('apple'), '--bundle', ...(appstore ? ['--appstore', ...(appstore.adHoc ? ['--ad-hoc'] : [])] : distribution ? ['--distribution'] : [])], {
     cwd: ROOT,
     stdio: quiet ? ['inherit', 'ignore', 'inherit'] : 'inherit',
     // What is distributed bakes production trust (host/apple/build.mjs); a local build, development.
-    env: { ...(distribution ? {} : { EXACT_UPDATE_TRUST: 'development' }), ...process.env, ...(identity ? { EXACT_DEVELOPER_ID: identity, EXACT_RUST_SIGN_IDENTITY: identity } : {}) },
+    env: { ...(distribution || appstore ? {} : { EXACT_UPDATE_TRUST: 'development' }), ...process.env, ...(identity ? { [appstore ? 'EXACT_APPSTORE_ID' : 'EXACT_DEVELOPER_ID']: identity, EXACT_RUST_SIGN_IDENTITY: identity } : {}) },
   });
   if (r.status !== 0) process.exit(r.status ?? 1);
   const bundle = bundleOf(app);
@@ -253,13 +254,10 @@ function release(app) {
   const symbols = resolve(out, `${app.displayName}.dSYM`);
   sh('/usr/bin/ditto', [`${appleArtifacts(app, { trust: 'production' }).binary}.dSYM`, symbols]);
   console.log(`symbols: ${symbols}`);
-
-  // Sign inside out, with the hardened runtime and a timestamp. Both are
-  // notarisation's requirements, not preferences: a build without them is
-  // rejected at submission rather than at launch. The entitlements come from
-  // the bake receipt inside the bundle: the app carries those its `device.*`
-  // and `runtime.* app` grants derive (LLP 1069.008 D4, D9), a helper a
-  // `runtime.* <path>` grant names carries its own, and other nested code none.
+  // Sign inside out, with the hardened runtime and a timestamp, which notarisation
+  // requires: a build without them is rejected at submission rather than at launch.
+  // The entitlements come from the bake receipt inside the bundle (`signRelease`:
+  // the app's grants derive its own, LLP 1069.008 D4, D9; an extension keeps its own).
   const built = JSON.parse(readFileSync(resolve(bundle, 'Contents/Resources/receipt.json'), 'utf8'));
   signRelease(staged, { compat: built.build?.compat, manifest: app.manifest, identity, id: app.id, scratch: out });
   sh('codesign', ['--verify', '--deep', '--strict', '--verbose=1', staged]);
@@ -834,6 +832,7 @@ const USAGE = `exact — run an Exact app from the command line (macOS)
   exact run <app> [file …]     build and launch it here; ^C ends it
   exact install <app>          put it in ~/Applications and its name on PATH
   exact release <app>          sign with a Developer ID, notarise, staple, package
+  exact appstore <app>         the Mac App Store's .pkg; --ad-hoc: signed ad hoc, to open here
   exact uninstall <app>        take both away
   exact setup [--check [--platform <host> [--device]]]
                               install pinned Rust, wasm-bindgen, Binaryen and
@@ -1464,7 +1463,7 @@ async function main(argv) {
     await snapbackDevice.devicePreflight(app, nextOrigin ? [nextOrigin] : []);
     return;
   }
-  if (!['run', 'install', 'uninstall', 'release'].includes(verb)) { console.error(`exact: no verb ${verb}\n\n${USAGE}`); process.exit(2); }
+  if (!['run', 'install', 'uninstall', 'release', 'appstore'].includes(verb)) { console.error(`exact: no verb ${verb}\n\n${USAGE}`); process.exit(2); }
   if (!name) { console.error(`exact ${verb}: name an app (exact list)`); process.exit(2); }
   // An app outside the repository (EXACT_APP_DIR, or a path): a bare `run` of one that names no native platform runs
   // its web loop, on any OS; otherwise the Mac is named the first time (LLP 1153 D1.2).
@@ -1490,6 +1489,7 @@ async function main(argv) {
   if (verb === 'run') return run(app, rest);
   // `--release` on `install` is the same path, since that is what it is for.
   if (verb === 'release' || (verb === 'install' && rest.includes('--release'))) return release(app);
+  if (verb === 'appstore') return (await import('../host/apple/appstore.mjs')).appstore(app, { adHoc: rest.includes('--ad-hoc'), out: resolve(app.target, 'dist', `${app.name}-appstore`), build: (app, { adHoc, identity }) => build(app, { appstore: { adHoc }, identity }) });
   if (verb === 'install') return install(app, build(app));
   return uninstall(app);
 }

@@ -1343,3 +1343,17 @@ fn the_closure_leaves_out_exact2s_own_crates() {
     );
     assert!(names("caltrain").is_empty());
 }
+
+/// LLP 1030.005 D3: a Mac App Store build links no update store, whatever
+/// app.json says for the Developer ID build, and nothing else changes.
+#[test]
+fn a_mac_app_store_build_links_no_update_store() {
+    let dir = app("appstore-level");
+    let mut manifest = Manifest::read(&dir).unwrap();
+    manifest.json["deploy"]["store"] = serde_json::json!({"macos": "A", "ios": "A"});
+    use crate::compat::store_level_of;
+    assert_eq!(store_level_of(&manifest, "macos", true), "0");
+    assert_eq!(store_level_of(&manifest, "macos", false), "A");
+    assert_eq!(store_level_of(&manifest, "ios", true), "A");
+    let _ = std::fs::remove_dir_all(dir);
+}
