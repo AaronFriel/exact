@@ -551,26 +551,11 @@ fn style_value(
             {
                 return err("lower-css-position-area", format!("`position-area=\"{v}\"`: exact2 places an invoker's popover in a subset of CSS `position-area`: {}. Logical areas and other spellings are not implemented by the native top layers", StyleId::PositionArea.enum_names().join(", ")), span);
             }
-            if rows.contains(&StyleId::FlexBasis)
-                && matches!(
-                    v.trim(),
-                    "content" | "min-content" | "max-content" | "fit-content"
-                )
+            if let Some(why) = rows
+                .iter()
+                .find_map(|row| sizing::refusal(*row, &a.name, v.trim()))
             {
-                return err("lower-flex-basis", format!("CSS flex-basis `{v}` requires intrinsic basis sizing; exact2 dimension rows represent auto, lengths and percentages, and do not implement that intrinsic sizing mode. Use auto for a basis taken from the main-size property"), span);
-            }
-            const SIZES: [StyleId; 6] = [
-                StyleId::Width,
-                StyleId::Height,
-                StyleId::MinWidth,
-                StyleId::MaxWidth,
-                StyleId::MinHeight,
-                StyleId::MaxHeight,
-            ];
-            if rows.iter().any(|row| SIZES.contains(row))
-                && matches!(v.trim(), "min-content" | "max-content" | "fit-content")
-            {
-                return err("lower-attr-value", format!("`{}=\"{v}\"` is an intrinsic size, which exact2 dimension rows (auto, lengths and percentages) do not represent. An `auto` size that nothing stretches is the content's: a child of a flex row, or of a flex column with `align-self=\"flex-start\"`", a.name), span);
+                return err("lower-attr-value", why, span);
             }
             if rows.contains(&StyleId::Transition) {
                 if let Err(reason) = exact_motion::Transitions::parse(v) {
@@ -1491,5 +1476,6 @@ fn multicol_value(rows: &[StyleId], v: &str) -> Option<&'static str> {
     }
     None
 }
+mod sizing;
 #[cfg(test)]
 mod tests;

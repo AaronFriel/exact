@@ -1360,8 +1360,8 @@ fn lint<D: DataSource>(runner: &mut Runner<D>, answered: bool) -> Result<(), Bak
                 if matches!(s.overflow_y, exact_kernel::Overflow::Hidden) {
                     continue;
                 }
-                let unbounded = matches!(s.height, Dimension::Auto)
-                    && matches!(s.max_height, Dimension::Auto)
+                let unbounded = s.height.is_content_sized()
+                    && s.max_height.is_content_sized()
                     && s.flex_grow == 0.0;
                 if !unbounded {
                     continue;

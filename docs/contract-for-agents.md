@@ -6967,10 +6967,18 @@ components retain the supported defaults. Color/style/thickness extensions are
 refused by name. Linux paints solid lines with UA metrics and diagnoses its
 missing underline skip-ink behavior in the driver log.
 
-A flex shorthand's grow/shrink factors must be adjacent. Intrinsic flex-basis
-keywords (content/min-content/max-content/fit-content) are CSS values, but the
-current dimension representation cannot size that mode; the diagnostic names
-this limit. `auto` takes the basis from the authored main-size property.
+A flex shorthand's grow/shrink factors must be adjacent. `width`, `height`,
+their minimums and maximums take `min-content`, `max-content` and
+`fit-content`, and `flex-basis` (and `flex`'s basis: `flex="max-content"` is
+`1 1 max-content`) takes those and `content`, laid out as Chrome lays them out
+on every host (LLP 1001.001). `width="fit-content"` is as wide as the content,
+up to the space the box has and no narrower than its longest word: a badge or a
+card that hugs its text without a flex row around it. `max-content` is the
+content on one line, `min-content` as narrow as its longest word, and
+`max-width="max-content"` caps a stretched box at its content. A keyword height
+is the content's height, but a flex or grid item with one no longer stretches.
+`fit-content(<length>)` (Chrome takes it only in a grid track), `stretch`, the
+`-webkit-` aliases and `calc-size()` are refused by name.
 
 Font lists distinguish quoted local names from unquoted CSS generics. The eight
 mapped generics are system-ui, ui-sans-serif, sans-serif, ui-serif, serif,

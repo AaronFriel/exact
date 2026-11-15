@@ -74,20 +74,20 @@ pub fn folds(
 /// flex button becomes one only where its height is its content's: none of
 /// its own, nothing to grow into, and not stretched across a row by `outer`.
 fn content_tall(b: &NodeFacts<'_>, outer: Option<&NodeFacts<'_>>) -> bool {
-    use exact_kernel::{AlignItems, AlignSelf, Dimension, Display, FlexDirection, PositionType};
+    use exact_kernel::{AlignItems, AlignSelf, Display, FlexDirection, PositionType};
     let s = b.style;
     let Some(o) = outer.map(|o| o.style) else {
         return false;
     };
-    let sized = s.height != Dimension::Auto
-        || s.min_height != Dimension::Auto
+    let sized = !s.height.is_content_sized()
+        || !s.min_height.is_content_sized()
         || s.rare.aspect_ratio != Default::default()
         || s.position_type == PositionType::Absolute;
     !sized
         && match (o.display, o.flex_direction) {
             (Display::Block, _) => true,
             (Display::Flex, FlexDirection::Column | FlexDirection::ColumnReverse) => {
-                s.flex_grow == 0.0 && s.flex_basis == Dimension::Auto
+                s.flex_grow == 0.0 && s.flex_basis.is_content_sized()
             }
             (Display::Flex, _) => match s.align_self {
                 AlignSelf::Auto => {
