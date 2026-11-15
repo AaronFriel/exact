@@ -24,6 +24,9 @@ private final class ModalController: UIViewController, UIGestureRecognizerDelega
     private(set) var pixels: UIView?
     /// What the presentation's navigation is mounted in.
     let mount = PresentationMount()
+    /// A full-screen route's own presentation and dismissal
+    /// (RouteTransitionIOS), kept here: UIKit holds the delegate weakly.
+    var routeTransitions: RoutePresenting? { didSet { transitioningDelegate = routeTransitions } }
     init(host: ModalHost, route: NodeView, fullscreen: Bool, detent: String?, grabber: String?) {
         self.host = host
         routeID = route.id
@@ -687,6 +690,12 @@ final class ModalHost: NSObject, UIAdaptivePresentationControllerDelegate {
             // presenting screen again, then the zoom).
             controller.view.alpha = 0
             zoomGuard = controller
+        }
+        // A full-screen route that declares its own entrance or exit plays it (LLP 1013.001 D2).
+        if layer.kind == "fullscreen", let runtime = presenter.session?.runtime {
+            let size = owner.view.bounds.size
+            controller.routeTransitions = RoutePresenting(entrance: runtime.routePart(route.id, exit: false, size: size),
+                                                          exit: runtime.routePart(route.id, exit: true, size: size))
         }
         layers.append(layer)
         controller.isModalInPresentation = refusesDismissal(of: route)

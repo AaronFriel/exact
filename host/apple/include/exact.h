@@ -787,6 +787,12 @@ uint32_t exact_header_shape(const uint32_t *words, size_t count, uint32_t flags,
  * navigationBar="none", 2 its header is the bar's, 4 it is pushed, 8 the
  * platform's bar has a Back button. */
 uint32_t exact_route_bar(uint32_t facts);
+/* LLP 1013.001 D1: the ::view-transition-new (exit 0) or ::view-transition-old
+ * (exit 1) part route `view` declares, posed for a box width by height points,
+ * as JSON in exact_out: {"seconds", "poses": [[opacity, x, y, scale, degrees],
+ * ...]} at even steps, each about the box's centre, no pose for `none`; `null`
+ * where it declares none or may play none (a sheet, a zoom). Returns its length. */
+uint32_t exact_route_part(ExactRuntime rt, uint32_t view, uint32_t exit, double width, double height);
 /* The pan contact's release velocity where the platform measures none (AppKit,
  * the iOS agent's recognized contact; LLP 1057 §10.6, 1057.001 §3): the engine's
  * tracker, one per runtime. A sample is the pointer in viewport CSS px at t

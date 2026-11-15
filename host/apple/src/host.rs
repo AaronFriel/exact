@@ -88,6 +88,8 @@ mod presence;
 mod renew;
 #[path = "route_overflow.rs"]
 mod route_overflow;
+#[path = "route_parts.rs"]
+mod route_parts;
 #[cfg(test)]
 #[path = "transform_drag_tests.rs"]
 mod transform_drag_tests;

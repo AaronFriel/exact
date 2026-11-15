@@ -65,6 +65,14 @@ final class NavigationDelegateProxy: NSObject, UINavigationControllerDelegate {
         app?.navigationController?(nav, didShow: controller, animated: animated)
     }
 
+    /// The app's animator first (LLP 1075.003 §3.5), then the one the
+    /// route's own part asks for (LLP 1013.001), else UIKit's.
+    func navigationController(_ nav: UINavigationController, animationControllerFor operation: UINavigationController.Operation,
+                              from: UIViewController, to: UIViewController) -> UIViewControllerAnimatedTransitioning? {
+        app?.navigationController?(nav, animationControllerFor: operation, from: from, to: to)
+            ?? host?.routeTransition(nav, operation: operation, from: from, to: to)
+    }
+
     override func responds(to selector: Selector!) -> Bool {
         super.responds(to: selector) || (app?.responds(to: selector) ?? false)
     }
@@ -623,6 +631,7 @@ extension NavigationHost {
             c.ownedScroll = scroller
         }
         coverLifted(routes)
+        keepExit(routes, in: nav)
         // A route's header shown or hidden in place; a push or pop sets the
         // bar in `willShow` instead, with UIKit's transition.
         if let nav, nav.transitionCoordinator == nil, let top = nav.topViewController as? RouteController, routes.contains(top) {

@@ -1,8 +1,11 @@
-surfaces: web, linux, android
+surfaces: web, linux, android, ios
 agent: Claude Code (Claude Opus 5.5)
 task: a route's own entrance and exit, the reporter's fade, slide and cut (LLP 1013.001)
 
 ### Rough
+
+- On iOS the agent's default timing freezes UIKit's transitions, so a film there shows
+  none; `--timing platform` and a simulator recording showed them.
 
 - Moving the existing route into the last arm of an `if` chain left its body one level too
   shallow: the route compiled empty and its children became the root's, with no warning. The
@@ -31,3 +34,6 @@ task: a route's own entrance and exit, the reporter's fade, slide and cut (LLP 1
 - Android (emulator, the reader): the same on the agent's clock, stepped. A held Back
   gesture on Detail seeks its exit, full size and square, with Home beneath; cancelled it
   returns, released it pops. Plain keeps Material's shrinking preview.
+- iOS (simulator, `--timing platform`, recorded): Detail slides in and out over Home in place
+  of UIKit's push; Camera fades over the page in place of the presentation; Plain keeps
+  UIKit's push, and an edge swipe on Detail runs UIKit's interactive pop.

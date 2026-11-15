@@ -385,6 +385,12 @@ macro_rules! host {
             $crate::abi::with_runtime(&EXACT_RUNTIMES, rt, false, |b, _| b.host_go(len, now_ms), |n| n)
         }
 
+        /// A route's entrance or exit, posed for its box, JSON. @ref LLP 1013.001 D1
+        #[no_mangle]
+        pub extern "C" fn exact_route_part(rt: u32, view: u32, exit: u32, width: f64, height: f64) -> u32 {
+            $crate::abi::with_runtime(&EXACT_RUNTIMES, rt, false, |b, _| b.route_part(view, exit, width, height), |n| n)
+        }
+
         /// Deliver native Forward at the navigation root, a batch.
         #[no_mangle]
         pub extern "C" fn exact_host_forward(rt: u32, root: u32, now_ms: f64) -> u32 {
