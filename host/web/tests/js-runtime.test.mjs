@@ -713,16 +713,21 @@ test('toFixed and formatDecimal are the runner\'s', async () => {
 });
 
 // LLP 1116 D8: format.js's `decimal`, `currency` and `percent` are Intl.NumberFormat("en-US")'s, swept against Bun's own
-// Intl: halves at each style's cut, magnitudes from 1e-12 to 1e28, random doubles, every code the roster lists
-// (runner/tests/it/format.rs pins the runner's to rows from the same Intl). Non-finite is "", as every format's is.
+// Intl: halves at each style's cut, magnitudes from 1e-12 to 1e28, random doubles, every code the roster lists and
+// `decimal` at the ends and a spread of its digit-count range (runner/tests/it/format.rs pins the runner's to rows
+// from the same Intl). Non-finite is "", as every format's is.
 test('decimal, currency and percent numbers are Intl\'s', async () => {
   const { x_formatNumber } = await import(webJs('format.js'));
   const roster = JSON.parse(readFileSync(new URL('../../../plan/tables/format.json', import.meta.url), 'utf8')).stdlib
     .find(f => f.name === 'formatNumber');
-  const codes = roster.params[2].split(' | ').map(c => JSON.parse(c));
+  const alternatives = roster.params[2].split(' | ');
+  const codes = alternatives.filter(c => c.startsWith('"')).map(c => JSON.parse(c));
+  const [lo, hi] = alternatives.find(c => /^\d+\.\.=\d+$/.test(c)).split('..=').map(Number);
+  const digits = [...new Set([lo, 1, 2, 3, 7, 20, hi])];
   const nf = options => new Intl.NumberFormat('en-US', options);
   const styles = [['decimal', '', nf({})], ['percent', '', nf({ style: 'percent' })],
-    ...codes.map(c => ['currency', c, nf({ style: 'currency', currency: c })])];
+    ...codes.map(c => ['currency', c, nf({ style: 'currency', currency: c })]),
+    ...digits.map(d => ['decimal', d, nf({ minimumFractionDigits: d, maximumFractionDigits: d })])];
   const wrong = [];
   const check = x => { for (const [style, code, f] of styles) if (x_formatNumber(x, style, code) !== f.format(x)) wrong.push([x, style, code]); };
   [0, -0, 1, -1, 1.005, 2.675, 1.0005, 999.9995, 0.9995, -0.0001, 1e21, 5e-324, Number.MAX_VALUE, -Number.MAX_VALUE,
