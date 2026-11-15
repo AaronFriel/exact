@@ -91,13 +91,14 @@ export function runCaps(root = process.cwd()) {
   }
 
   // ---- blocking checks ----------------------------------------------------
-  const maxChecks = budget(rules, 'budget:checks', /([\d,]+)\s*blocking checks/i, 'blocking checks');
-  const checksHeading = rules.match(/##[^\n]*checks\s*\n+([^\n]+)/i);
+  const maxChecks = budget(rules, 'budget:checks', /([\d,]+)\s*blocking checks?/i, 'blocking checks');
+  const checksHeading = rules.match(/^## The gate[^\n]*\n+([^\n]+)/im);
   if (!checksHeading) {
-    fail('checks:undeclared', `${RULES_PATH} has no section naming the blocking checks.`,
+    fail('checks:undeclared', `${RULES_PATH} has no section naming the blocking gate.`,
       'caps counts the backticked names under that heading. Without it the cap is unenforced.');
   } else {
     const names = [...checksHeading[1].matchAll(/`([^`]+)`/g)].map((m) => m[1]);
+    if (!names.length) fail('checks:undeclared', 'The gate section names no blocking command.');
     counted.push(`blocking checks: ${names.length} (${names.join(', ') || 'none named'})`);
     if (maxChecks !== null && names.length > maxChecks) {
       fail('cap:checks', `${names.length} blocking checks declared, over the cap of ${maxChecks}.`,
@@ -207,7 +208,6 @@ export function runCaps(root = process.cwd()) {
   windowsNames(files);
   harnesses(root, files);
   helps(root);
-  wasm(root);
 
   return { problems, counted };
 }
@@ -313,22 +313,6 @@ function helps(root) {
   }
   for (const p of found) fail(p.code, p.message, p.detail);
   counted.push(`helps: each verb's flags against its script's, its rows and lengths, ${found.length} problems`);
-}
-
-/**
- * The crates a web app links, compiled for wasm32 when a change touches Rust, where a checkout has the check
- * (exact2's scripts/wasm-check.mjs): a native build never compiles them for that target.
- */
-function wasm(root) {
-  const check = resolve(root, 'scripts/wasm-check.mjs');
-  if (!existsSync(check)) return;
-  let found;
-  try { found = require(check).wasmCheck(root); } catch (e) {
-    fail('wasm:check', `scripts/wasm-check.mjs could not run, so no crate was checked for wasm32: ${e.message}`);
-    return;
-  }
-  for (const p of found.problems) fail(p.code, p.message, p.detail);
-  counted.push(found.counted);
 }
 
 function main() {

@@ -31,7 +31,7 @@ const CAPS = join(dirname(fileURLToPath(import.meta.url)), 'caps.mjs');
 const BOOT = join(dirname(fileURLToPath(import.meta.url)), 'boot.mjs');
 const DEPLOY = join(dirname(fileURLToPath(import.meta.url)), 'deploy.mjs');
 const GOOD_RULES = `# Rules
-- **6 blocking checks, 65s total.** **[check]**
+- **1 blocking check, 30s warm.** **[check]**
 - **15 documents in the working set.** **[check]**
 - **10 documents in the foundation.** **[check]**
 - **This file: 700 words.** **[check]**
@@ -40,8 +40,8 @@ const GOOD_RULES = `# Rules
 | | |
 |---|---|
 | Cold start to interactive | 100ms |
-## The six checks
-\`build\` · \`test\` · \`lint\` · \`caps\` · \`boot\` · \`workspace\`
+## The gate (30 s)
+\`bun scripts/gate.mjs\`
 `;
 
 function repo(files) {
@@ -75,7 +75,7 @@ const cases = [
   ['over the word cap fails',
     { 'rules/RULES.md': GOOD_RULES.replace('This file: 700 words', 'This file: 10 words') }, 'cap:words'],
   ['too many blocking checks fails',
-    { 'rules/RULES.md': GOOD_RULES.replace('**6 blocking checks', '**3 blocking checks') }, 'cap:checks'],
+    { 'rules/RULES.md': GOOD_RULES.replace('**1 blocking check', '**0 blocking checks') }, 'cap:checks'],
   ['unfilled product-latency row fails',
     { 'rules/RULES.md': GOOD_RULES.replace('| Cold start to interactive | 100ms |', '| **<the product latency that actually matters>** | |') },
     'cap:product-latency'],

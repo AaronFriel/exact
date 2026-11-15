@@ -80,3 +80,8 @@ test("the tests a crashed XCTest process took down are one failure, and a test t
     'ios: a test process crashed',
   ]);
 });
+
+test('a gate budget failure in the hourly metrics is attributed as a violation', () => {
+  expect(failures('metrics', '  blocking gate (warm)                 31.0 s   VIOLATION: gate; budget 30s\n', 0))
+    .toEqual(['metrics: blocking gate (warm) VIOLATION']);
+});

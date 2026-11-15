@@ -352,9 +352,9 @@ test('async names the suites of each failure its log attributes', () => {
   });
 });
 
-test('async runs a check only for the suites selected, its Rust tests built as a full run builds them', () => {
+test('hourly runs the full checks and selects the remaining suites, sharing workspace test builds', () => {
   const none = asyncLane.nothing();
-  expect(asyncLane.checks('new', 'old', none).map(([name]) => name)).toEqual(['build', 'clippy', 'fmt', 'caps', 'boot', 'web-bytes', 'lean', 'vm-extract', 'difftest', 'difftest-js', 'metrics']);
+  expect(asyncLane.checks('new', 'old', none).map(([name]) => name)).toEqual(['build', 'workspace-build', 'workspace', 'prepare', 'default-test', 'clippy', 'workspace-clippy', 'fmt', 'caps', 'boot', 'wasm', 'web-bytes', 'tvos-install', 'linux', 'windows', 'windows-arm64', 'android', 'difftest-quick', 'lean', 'vm-extract', 'difftest', 'difftest-js', 'metrics']);
   const selection = {...none, cargo:['exact-painted'], conform:['caltrain'], ios:true, glue:['./host/web/a.test.mjs'], lane:['a_lane_test']};
   const some = asyncLane.checks('new', 'old', selection);
   const step = name => some.find(([n]) => n === name);
@@ -386,7 +386,7 @@ test('async runs a check only for the suites selected, its Rust tests built as a
   // A parity leg builds its gallery's Linux host, then drives the smoke on a fresh web build
   expect(full.find(([n]) => n === 'parity-svg').slice(1)).toEqual(['sh', ['-c', 'cargo build --profile host-dev -p svg-gallery-linux && EXACT_PARITY_REBUILD=1 bun scripts/smoke.mjs svg --hosts linux']]);
   // What a selection can leave out is what a full run has and an empty selection has not.
-  expect([...asyncLane.gated()].sort()).toEqual(['conform', 'conform-browsers', 'game', 'game-apple', 'game-assets-scaffold', 'game-lock', 'game-pins', 'game-recipes', 'game-scaffold', 'game-vocab', 'glue', 'ios', 'ios-touch', 'lane', 'module-seams', 'notifications-web', 'parity-motion', 'parity-svg', 'prepare', 'test', 'tvos', 'watchos', 'web-ax-test', 'web-build-test']);
+  expect([...asyncLane.gated()].sort()).toEqual(['conform', 'conform-browsers', 'game', 'game-apple', 'game-assets-scaffold', 'game-lock', 'game-pins', 'game-recipes', 'game-scaffold', 'game-vocab', 'glue', 'ios', 'ios-touch', 'lane', 'module-seams', 'notifications-web', 'parity-motion', 'parity-svg', 'test', 'tvos', 'watchos', 'web-ax-test', 'web-build-test']);
 });
 
 test('async runs each module drive whole and keeps its failure until it runs again', () => {

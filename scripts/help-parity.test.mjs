@@ -22,7 +22,7 @@ function over(edit) {
 
 test('the helps agree with their scripts here, and caps says it checked them', () => {
   expect(helpParity(ROOT)).toEqual([]);
-  const caps = spawnSync(process.execPath, [resolve(ROOT, 'scripts/caps.mjs')], { cwd: ROOT, encoding: 'utf8', env: { ...process.env, EXACT_CAPS_WASM: '0' } }); // the wasm32 check is wasm-check.test's
+  const caps = spawnSync(process.execPath, [resolve(ROOT, 'scripts/caps.mjs')], { cwd: ROOT, encoding: 'utf8' });
   expect(caps.status).toBe(0);
   expect(caps.stdout).toContain("helps: each verb's flags against its script's, its rows and lengths, 0 problems");
 }, 300_000); // Bound only a hang: caps reads every file, which takes minutes on a loaded machine
@@ -47,7 +47,7 @@ test('a flag with no help row, and a row whose flag no script parses, are each s
 });
 
 const RULES = `# Rules
-- **6 blocking checks, 65s total.** **[check]**
+- **1 blocking check, 30s warm.** **[check]**
 - **15 documents in the working set.** **[check]**
 - **10 documents in the foundation.** **[check]**
 - **This file: 700 words.** **[check]**
@@ -56,8 +56,8 @@ const RULES = `# Rules
 | | |
 |---|---|
 | Cold start to interactive | 100ms |
-## The six checks
-\`build\` · \`test\` · \`lint\` · \`caps\` · \`boot\` · \`workspace\`
+## The gate (30 s)
+\`bun scripts/gate.mjs\`
 `;
 
 /** caps.mjs's exit and output in a throwaway repository whose scripts/help-parity.mjs is `parity`. */

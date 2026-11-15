@@ -1,9 +1,5 @@
-# What a push or pull request waits for: fmt, caps, boot, the workspace check and
-# clippy on Linux, and the workspace check on macOS, where host/apple's Rust
-# only builds. No test runs here. rules/RULES.md blocks on nothing slower than
-# 60 seconds, and a hosted runner takes over an hour for the tests, so they are
-# tests.yml's. Apple app builds, XCTests, simulator drives, Android and Windows
-# builds are not part of CI.
+# The only blocking command is scripts/gate.mjs. Cold hosted setup is outside
+# its warm 30 s budget; full verification belongs to the hourly fleet lane.
 name: ci
 
 on:
@@ -21,7 +17,7 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
-  CARGO_INCREMENTAL: "0"
+  CARGO_INCREMENTAL: "1"
 
 jobs:
   linux:
@@ -59,34 +55,12 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Cargo dependencies
-        # caps's wasm check lists and checks the web crates offline, so the registry
-        # must already hold every crate, and nothing before this step fetches them.
+        # caps inspects workspace metadata offline.
         id: deps
         run: cargo fetch --locked
 
-      # Each check runs once the setup above succeeded, whether or not a check before
-      # it failed, so one run reports every failing check (rules/RULES.md bans
-      # fail-fast), and the job fails if any did. A step's default condition,
-      # `success()`, would skip it after any failure.
-      - name: fmt
-        if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
-        run: cargo fmt --all -- --check
-
-      - name: caps
-        if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
-        run: bun scripts/caps.mjs
-
-      - name: boot
-        if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
-        run: bun scripts/boot.mjs
-
-      - name: workspace check
-        if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
-        run: cargo check --workspace --all-targets --keep-going
-
-      - name: clippy
-        if: ${{ !cancelled() && steps.deps.outcome == 'success' }}
-        run: cargo clippy --all-targets --keep-going -- -D warnings
+      - name: gate
+        run: bun scripts/gate.mjs
 
   macos:
     runs-on: macos-26
@@ -111,5 +85,8 @@ jobs:
       - name: Bun dependencies
         run: bun install --frozen-lockfile
 
-      - name: workspace check
-        run: cargo check --workspace --all-targets --keep-going
+      - name: Cargo dependencies
+        run: cargo fetch --locked
+
+      - name: gate
+        run: bun scripts/gate.mjs

@@ -153,3 +153,14 @@ test('the existing glue step runs Mac widget packaging, signing, migration and f
     expect(step[2].at(-1)).toContain('./' + file);
   }
 });
+
+test('hourly quick uses the complete commit range, and probes replay its cases rather than a no-op', async () => {
+  const { quickProbe } = await import('./async.mjs');
+  const quick = checks('tip', 'last-hour', { lane: [], glue: [] }).find(([name]) => name === 'difftest-quick');
+  expect(quick[2].slice(-3)).toEqual(['quick', '--base', 'last-hour']);
+  const probe = quickProbe('quick: random --seed 18446744073709551615 --count 40');
+  expect(probe[2][1]).toContain('corpus');
+  expect(probe[2][1]).toContain('random --seed 18446744073709551615 --count 40');
+  expect(probe[2][1]).toContain('lowering --seed 18446744073709551615 --count 8 --batch 2');
+  expect(probe[2][1]).not.toContain('-- quick');
+});

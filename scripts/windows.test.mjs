@@ -812,10 +812,9 @@ test('SDK CLI entrypoint executes', () => {
 
 test('caps command reports the checkout budgets', () => {
   const root=resolve(import.meta.dir,'..');
-  const result=spawnSync(process.execPath,[resolve(import.meta.dir,'caps.mjs')],{cwd:root,encoding:'utf8',env:{...process.env,EXACT_CAPS_WASM:'0'}}); // the wasm32 check is wasm-check.test's
+  const result=spawnSync(process.execPath,[resolve(import.meta.dir,'caps.mjs')],{cwd:root,encoding:'utf8'});
   expect(result.stdout).toContain('caps — budgets declared');
-  const kept=process.env.EXACT_CAPS_WASM; process.env.EXACT_CAPS_WASM='0';
-  try { expect(result.status).toBe(runCaps(root).problems.length ? 1 : 0); } finally { if (kept===undefined) delete process.env.EXACT_CAPS_WASM; else process.env.EXACT_CAPS_WASM=kept; }
+  expect(result.status).toBe(runCaps(root).problems.length ? 1 : 0);
 });
 
 test('a checkout with spaces builds a web app and drives its authored interaction', () => {

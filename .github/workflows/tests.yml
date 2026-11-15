@@ -1,21 +1,15 @@
-# The Cargo tests on Linux and macOS and the script tests on Linux, for pushes
-# to main, and the Linux jobs for pull requests too. Nothing waits for this
-# workflow (ci.yml is what a push waits for): a hosted runner takes over an hour
-# for these.
+# Hosted tests are hourly and do not block landing. scripts/async.mjs owns
+# affected-suite selection and commit attribution on the provisioned fleet.
 name: tests
 
 on:
-  push:
-    branches: [main]
-  pull_request:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
 
-# A run on main is never stopped by a newer push. While one runs, the newest
-# push waits and takes the place of any push that was waiting before it, so the
-# tip is always tested and runs do not pile up. A pull request's newer push
-# replaces the run of the one before it.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
 
 env:
   CARGO_INCREMENTAL: "0"
@@ -94,12 +88,9 @@ jobs:
         if: ${{ !cancelled() }}
         env:
           CHROME: ${{ steps.chrome.outputs.chrome-path }}
-        run: bun test scripts
+        run: bun test ./scripts
 
   macos:
-    # Only for pushes to main: the job holds a macOS runner for over two hours,
-    # and the org shares a few of them across its repositories.
-    if: ${{ github.event_name == 'push' }}
     runs-on: macos-26
     timeout-minutes: 150
     env:

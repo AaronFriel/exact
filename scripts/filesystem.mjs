@@ -34,7 +34,7 @@ export function freeSpace(path, places = [resolve(homedir(), '.cache/exact')]) {
 // write a dylib that dyld on macOS 27.0.1 refuses: "mis-aligned LINKEDIT string pool". rustc then fails
 // on the proc macro it cannot load, with that message or as "can't find crate for `zerofrom_derive`".
 // A deployment target is not in a proc macro's fingerprint, so a plain cargo call sharing the target
-// directory (caps' wasm check, a release build) takes such a dylib too. So the scripts' cargo calls run
+// directory (the hourly wasm check, a release build) takes such a dylib too. So the scripts' cargo calls run
 // rustc through `scripts/rustc/exact-rustc`, which links proc macros with `-no_fixup_chains`. Cargo
 // leaves RUSTC_WRAPPER out of its fingerprints, so plain and scripted calls still share every unit; it
 // is a name found on PATH so that kept modules' groups, which read it (scripts/kept.mjs), are the same

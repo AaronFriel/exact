@@ -122,7 +122,7 @@ bun scripts/agent.mjs web tree "tap change-station" "type station-search Palo" \
 ### 2. Speed is king
 
 Speed of the app and speed of the loop. Each budget in `rules/RULES.md` is tracked on
-every commit, and a regression is a P0 with a name on it.
+each hour, and a regression is a P0 with a name on it.
 
 | Budget | Target |
 |---|---|
@@ -130,7 +130,7 @@ every commit, and a regression is a P0 with a name on it.
 | Dev restart, edit to present | 100 ms p50 |
 | App JavaScript executed before first pixel | none |
 | Touch one line, rebuild that crate | 30 s |
-| The whole blocking check suite | 65 s |
+| The blocking gate, warm after a one-crate edit | 30 s |
 
 How the design keeps those numbers:
 
@@ -818,24 +818,13 @@ Start with [`rules/RULES.md`](rules/RULES.md), one page on how work happens here
 [`rules/DEFERRED.md`](rules/DEFERRED.md), what v1 deliberately leaves out. Agents should
 also read [`AGENTS.md`](AGENTS.md). In short:
 
-- **Six blocking checks, 65 seconds in total.** Anything slower runs asynchronously,
-  per commit.
-
-  ```sh
-  cargo build --all-targets --keep-going
-  cargo test --tests --no-fail-fast
-  cargo clippy --all-targets --keep-going -- -D warnings && cargo fmt --all -- --check
-  bun scripts/caps.mjs     # budgets: 1,500 lines per source file, document caps
-  bun scripts/boot.mjs     # counts the module graph before first pixel
-  cargo check --workspace --all-targets --keep-going   # every crate compiles
-  ```
-
-  The first three build and test Cargo's `default-members`. The last compiles every
-  other crate too, so a host or an app outside them cannot stop compiling unseen. It
-  needs the pinned Bun (`package.json`) first on `PATH`: app crates' build scripts run it.
-
-- **Verify by running, not by reading.** Build the app a change touches and drive it:
-  `bun scripts/smoke.mjs <web|macos|ios|linux>` drives the whole app on that host.
+- **One blocking gate, 30 seconds warm:** `bun scripts/gate.mjs`.
+  Stage your files, run it, push, and fix what the hourly lane attributes to you.
+  It reports every failure and each part's time. Full checks, affected tests,
+  semantic difftests, app drives, XCTests and platform builds run hourly through
+  `bun scripts/async.mjs`; new failures are bisected through the hour's commits.
+- **Verify by running.** The hourly lane builds and drives affected apps.
+  To investigate, `bun scripts/smoke.mjs <web|macos|ios|linux>` drives the app.
 - **Delete; don't deprecate.** Before 1.0 there are no compatibility shims. Generated
   files are built, never committed.
 - **Agents remove apparatus freely and add none** (checks, scripts, registries, design

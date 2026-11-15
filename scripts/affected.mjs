@@ -241,6 +241,7 @@ export class Repo {
     /** name → { name, dir, manifest, targets, deps: [{ name, kinds }] } for every package with a path here;
      * `manifest` is its workspace's when it is a member of one */
     this.packages = new Map();
+    this.defaultMembers = [];
     for (const manifest of WORKSPACES) {
       if (!listed.has(manifest)) continue;
       // Resolved metadata includes path dependencies outside either workspace, including patched crates.
@@ -270,6 +271,7 @@ export class Repo {
       this.packages.set(p.name, pkg);
       byId.set(p.id, pkg);
     }
+    if (manifest === 'Cargo.toml') this.defaultMembers = (data.workspace_default_members ?? []).map(id => byId.get(id)?.name).filter(Boolean);
     for (const node of data.resolve?.nodes ?? []) {
       const pkg = byId.get(node.id);
       for (const d of pkg ? node.deps : []) {
