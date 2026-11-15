@@ -1046,6 +1046,15 @@ function completeBuild(app, platform, target, graph, messages, roots, env, prepa
     units.push({package:graph.packages.get(m.package_id).name,role,target:m.target.name,kind:m.target.kind,features:m.features,profile:m.profile,environment});
   }
   const builders = [];
+  // The script's stdout: `output` beside `out`, or `run/stdout` in Cargo's new build-dir layout (the web toolchain's).
+  const scriptOutput = (m) => readFileSync([resolve(m.out_dir,'../output'), resolve(m.out_dir,'../run/stdout')].find(existsSync) ?? resolve(m.out_dir,'../output'),'utf8');
+  // A Contract file the root crate's bake reads is a plan input. The `rust.data` crate's build script reads the same
+  // Contract files to write the view's records as Rust structs: only their source signatures cross into its behaviour,
+  // and the plan's `requires.sources` compares those with the cohort's, so the Contract files are not its binary's
+  // evidence. Anything else it watches is, though the root reads it too (LLP 1030.007 D3).
+  const watched = (m, pkg) => scriptOutput(m).split('\n').flatMap(line => { const w = /^cargo::?(?:rerun-if-changed|metadata=exact-optional-input)=(.*)$/.exec(line); return w ? [resolve(dirname(pkg.manifest_path), w[1])] : []; });
+  const contractInputs = new Set(scripts.filter(m => m.package_id === graph.root.id).flatMap(m => watched(m, graph.root)).filter(path => path.endsWith('.contract')));
+  const dataCrate = app.manifest?.rust?.data?.crate;
   for (const m of scripts) {
     if(!usedPackages.has(m.package_id))continue;
     const role = roleOf(m.out_dir); if (!graph.roles.get(m.package_id).has(role)) continue;
@@ -1056,8 +1065,7 @@ function completeBuild(app, platform, target, graph, messages, roots, env, prepa
       const dep = readFileSync(unitDepInfo(compiler,graph.metadata.workspace_root,graph.metadata), 'utf8');
       for (const path of compilerPaths(dep,graph.metadata.workspace_root)) add(path, false, pkg);
     }
-    // The script's stdout: `output` beside `out`, or `run/stdout` in Cargo's new build-dir layout (the web toolchain's).
-    const output = readFileSync([resolve(m.out_dir,'../output'), resolve(m.out_dir,'../run/stdout')].find(existsSync) ?? resolve(m.out_dir,'../output'),'utf8'); const environment = [];
+    const output = scriptOutput(m); const environment = [];
     for (const line of output.split('\n')) {
       const changed = /^cargo::?(rerun-if-changed|metadata=exact-optional-input)=(.*)$/.exec(line);
       if (changed) sourceInputs.add(resolve(dirname(pkg.manifest_path), changed[2]));
@@ -1068,7 +1076,7 @@ function completeBuild(app, platform, target, graph, messages, roots, env, prepa
       // does not watch it) is a replaceable input too, kept for its existence.
       const path = changed && resolve(dirname(pkg.manifest_path), changed[2]);
       if (changed && pkg.id === graph.root.id && platform !== 'windows' && changed[1] === 'metadata=exact-optional-input') optionalInputs.add(path);
-      else if (changed && pkg.id !== graph.root.id && !shaderRoots(app).some(root => under(root, path))) add(path, true, pkg);
+      else if (changed && pkg.id !== graph.root.id && !shaderRoots(app).some(root => under(root, path)) && !(pkg.name === dataCrate && contractInputs.has(path))) add(path, true, pkg);
       const variable = /^cargo::?rerun-if-env-changed=(.*)$/.exec(line)?.[1];
       if (variable && !variable.startsWith('EXACT_') && !['OUT_DIR','CARGO_MANIFEST_DIR'].includes(variable)) environment.push(normalizeEnv([variable,env[variable]??null]));
     }

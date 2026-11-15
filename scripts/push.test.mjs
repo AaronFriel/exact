@@ -25,7 +25,7 @@ import {appleAssetCatalogInventory, launchImageInventory, nativeResourceInventor
 // needs `runtime` (its receipt's). Bun's native subprocess import bypasses
 // module mocks; explicit bindings also isolate deployment tests.
 // `entries`: the named entries (name to text) the Rust or TypeScript bake makes beside the plan.
-function harness(classify=()=>({bundle:true}), runtime=4, {bake, graphTool, cohortRuntime=4, grants='', watch=fs.watch, targets, entries={}, planRequires={}, moduleGrants='', rustModule=true, produced, reuseSignature, graphs}={}) {
+function harness(classify=()=>({bundle:true}), runtime=4, {appBake, bake, graphTool, cohortRuntime=4, grants='', watch=fs.watch, targets, entries={}, planRequires={}, moduleGrants='', rustModule=true, produced, reuseSignature, graphs, computed=c=>c, bytecodeVersion}={}) {
   const root=fs.mkdtempSync(resolve(tmpdir(),'exact-push-profile-'));
   const app={id:'fixture',name:'fixture',displayName:'Fixture',dir:root,target:root,manifest:{app:{origin:root},deploy:{signing:{keys:{test:'public'}}}}};
   const compat={id:'a'.repeat(32),target:'fixture',inputs:{app:'fixture',platform:'linux',store:{L:'A'},rustMode:'native',grantCeiling:grants,keys:{test:'public'},typescriptRuntime:cohortRuntime}};
@@ -42,14 +42,16 @@ function harness(classify=()=>({bundle:true}), runtime=4, {bake, graphTool, coho
     expect(env?.EXACT_UPDATE_TRUST,`${name} production trust`).toBe('production');
   };
   const bindings={
-    ...Object.fromEntries(['existsSync','readFileSync','readlinkSync','writeFileSync','mkdtempSync','rmSync'].map(name=>[name,fs[name]])), watch,
+    ...Object.fromEntries(['existsSync','mkdirSync','readFileSync','readlinkSync','writeFileSync','mkdtempSync','rmSync'].map(name=>[name,fs[name]])), watch,
     filesystem, filesystemRead, filesystemTree, unbundledTextures, streamBundle,
     nativeManifestMetadata, directoryInputNames, watchOutput, appleAssetCatalogInventory, launchImageInventory, nativeResourceInventory,
     channelOf,validateChannel,resolve,relative,homedir,ROOT:fileURLToPath(new URL('..',import.meta.url)),
     process:{env:{EXACT_GAME_PROOF_PROFILE:'gpu-dev',EXACT_UPDATE_TRUST:'development'}},
     console:{log(){}},Refusal:Error,refuse(message){throw Error(message)},
     loadSigner:()=>({keyId:'test'}),resolveApp:()=>app,readBuilds:()=>builds,
-    bakedEntryAssets,bakeOutput:()=>resolve(root,'bake'),
+    bakedEntryAssets,bakeOutput:()=>resolve(root,'bake'),binaryInputFile,
+    // The app's own bake (web, without its wasm): its plan, as the bake output names it.
+    buildBake:appBake ?? ((app,platform,target,opts)=>{sealed('app',opts.env);fs.writeFileSync(resolve(opts.output,`${platform}-${target}.plan`),'plan');return {compat:{target,inputs:{platform}},graph:{artifacts:[]}}}),
     cohortReceipt:b=>b===build?cohort:{version:1,compat:b.compat,binary:'binary',sources:{}},classifyArtifacts:classify,
     openOrigin:mock(spec=>({writable:true,list:async path=>{destinations.push({origin:spec,path});return []},describe:()=>spec})),
     channelOrigin,sha256,blobPath,streamPath,latestRecord,canonicalJson,
@@ -71,14 +73,15 @@ function harness(classify=()=>({bundle:true}), runtime=4, {bake, graphTool, coho
       // `bake` runs the real one (its receipt's runtime is the bake's own).
       if(['graph','compat'].includes(name)&&graphTool)return realSpawnSync(graphTool,args,{...opts,env:{...process.env,...opts.env}});
       if(name==='graph'&&graphs)return {status:0,stdout:JSON.stringify({...graph,...graphs[fs.readFileSync(args[1],'utf8')]})};
-      if(name==='compat')return {status:0,stdout:JSON.stringify(compat)};
+      // Unchanged sources compute each cohort's own inputs for its target.
+      if(name==='compat'){const target=args[args.indexOf('--target')+1];return {status:0,stdout:JSON.stringify(computed(builds.find(b=>b.compat.target===target)?.compat??compat))};}
       if(name==='typescript'&&bake)return realSpawnSync(bake,args,{...opts,env:{...process.env,...opts.env}});
       if(name==='typescript'){
         const out=args[args.indexOf('--out')+1];fs.mkdirSync(out,{recursive:true});
         fs.writeFileSync(resolve(out,'app.plan'),'plan');
         fs.writeFileSync(resolve(out,'app.hbc'),'bytecode');
         // The runtime the bake found the module uses (`typescript_runtime_of`).
-        fs.writeFileSync(resolve(out,'app.module.json'),JSON.stringify({appId:'fixture',grants:moduleGrants,typescriptRuntime:runtime}));
+        fs.writeFileSync(resolve(out,'app.module.json'),JSON.stringify({appId:'fixture',grants:moduleGrants,typescriptRuntime:runtime,...(bytecodeVersion?{bytecodeVersion}:{})}));
         for(const [name,text] of Object.entries(entries)){fs.mkdirSync(resolve(out,name,'..'),{recursive:true});fs.writeFileSync(resolve(out,name),text);}
       }
       return {status:0,stdout:JSON.stringify(graph)};
@@ -89,7 +92,7 @@ function harness(classify=()=>({bundle:true}), runtime=4, {bake, graphTool, coho
   const publisher=fs.readFileSync(new URL('./publisher.mjs',import.meta.url),'utf8');
   const functions=(publisher.slice(publisher.indexOf('/** The streams of `channel`'),publisher.indexOf('// ---------------------------------------------------------------- publishing'))
     +source.slice(source.indexOf('function parseArgs('),source.indexOf('\nif (process.argv[1]')))
-    .replaceAll('export async function ', 'async function ').replaceAll('export function ', 'function ');
+    .replaceAll('export async function ', 'async function ').replaceAll('export function ', 'function ').replaceAll('export const ', 'const ');
   const pusher=new Function(...Object.keys(bindings),functions+'\nreturn { pusher, streams, streamCandidates };')(...Object.values(bindings));
   return {root,app,build,cohort,calls,published,bundles,bundled,destinations,rows,bindings,...pusher};
 }
@@ -131,7 +134,7 @@ test('push seals every Rust, TypeScript and graph bake against an inherited proo
       if(typescript)fs.writeFileSync(resolve(root,'app.ts'),'');
       calls.length=0;published.length=0;
       expect(await pusher({_:[root],origin:root,keys:root})).toBe(0);
-      expect(calls).toEqual(['tools','resident',typescript?'typescript':'rust','graph','publish','close']);
+      expect(calls).toEqual(['tools','resident',typescript?'typescript':'rust','compat','graph','publish','close']);
       expect(bindings.process.env).toEqual({EXACT_GAME_PROOF_PROFILE:'gpu-dev',EXACT_UPDATE_TRUST:'development'});
       // A module needs the runtime its receipt names, not the cohort's (LLP 1016.000 D10).
       if(typescript)for(const artifact of published[0].graph.artifacts)expect(artifact.requires.typescriptRuntime).toBe(4);
@@ -271,7 +274,7 @@ test('push inventories current app files and carries only head-owned artifacts',
     const shader = Buffer.from('shader');
     const source = fs.readFileSync(new URL('./publisher.mjs', import.meta.url), 'utf8');
     const named = source.indexOf('const namedEntry');
-    const fn = `${source.slice(named, source.indexOf('\n', named))}\n${source.slice(source.indexOf('async function carriedAssets('), source.indexOf('\n/** Candidates for signed cohorts'))}`;
+    const fn = `${source.slice(named, source.indexOf('\n', named))}\n${source.slice(source.indexOf('async function carriedAssets('), source.indexOf('\n/** The command that builds an APK'))}`;
     const carried = new Function('filesystem', 'filesystemRead', 'unbundledTextures', 'resolve', 'sha256', 'blobPath', 'refuse', fn + ';return carriedAssets;')(filesystem, filesystemRead, unbundledTextures, resolve, sha256, blobPath, (message) => { throw Error(message); });
     const asked = [];
     const assets = await carried({ get: async (path) => { asked.push(path); return shader; } }, { dir: root }, { assets: [
@@ -306,7 +309,7 @@ test.each([
     for (const name of names) fs.writeFileSync(resolve(root, name), bytes);
     const source = fs.readFileSync(new URL('./publisher.mjs', import.meta.url), 'utf8');
     const named = source.indexOf('const namedEntry');
-    const fn = `${source.slice(named, source.indexOf('\n', named))}\n${source.slice(source.indexOf('async function carriedAssets('), source.indexOf('\n/** Candidates for signed cohorts'))}`;
+    const fn = `${source.slice(named, source.indexOf('\n', named))}\n${source.slice(source.indexOf('async function carriedAssets('), source.indexOf('\n/** The command that builds an APK'))}`;
     const carried = new Function('filesystem', 'filesystemRead', 'unbundledTextures', 'resolve', 'sha256', 'blobPath', 'refuse', fn + ';return carriedAssets;')(filesystem, filesystemRead, unbundledTextures, resolve, sha256, blobPath, (message) => { throw Error(message); });
     const assets = await carried({}, { dir: root }, {});
     expect(assets.map(asset => asset.name)).toEqual(names);
@@ -345,6 +348,13 @@ test.each([false, true])('bundle candidates publish to signed iOS cohorts and le
     app.displayName = 'Fixture';
     app.manifest.deploy.signing = { key: 'test', keys: { test: raw } };
     Object.assign(cohort.compat.inputs, { platform: 'ios', rustMode: 'off', keys: { test: raw }, formatVersion: cohort.compat.inputs.formatVersion ?? 4, kernelSchema: cohort.compat.inputs.kernelSchema ?? '0'.repeat(16), executors: [] });
+    if (real) {
+      // The installed binary was built from these sources: its cohort's inputs are the ones they compute.
+      fs.writeFileSync(resolve(root, 'app.json'), JSON.stringify({ name: 'fixture', app: { id: 'fixture', name: 'Fixture' }, deploy: { signing: { key: 'test', keys: { test: raw } } } }));
+      const computed = realSpawnSync(graphTool, ['compat', root, '--platform', 'ios', '--target', cohort.compat.target, '--json', '--grants', ''], { env: { ...process.env, EXACT_UPDATE_TRUST: 'production' }, encoding: 'utf8' });
+      expect(computed.status, computed.stderr).toBe(0);
+      cohort.compat.inputs = JSON.parse(computed.stdout).inputs;
+    }
     const signer = { keyId: 'test', sign: head => ({ keyId: 'test', ed25519: sign(null, canonicalBytes(head), privateKey).toString('base64') }) };
     const stream = { channel: 'prod', compatibilityId: cohort.compat.id };
     const origin = new DirectoryOrigin(resolve(root, 'origin'));
@@ -360,7 +370,7 @@ test.each([false, true])('bundle candidates publish to signed iOS cohorts and le
     const args = { app, origin, opts: { platform: ['ios'] }, channel: 'prod', snapshot: { commit: 'a'.repeat(40), dirty: false, changes: [] },
       release: 'update', bundle: initialBundle, compat: {}, builds: {}, platforms: ['ios'], wantOrigin: false, candidates, knownStreams: found };
     const table = await classify(args);
-    expect(table.rows.map(row => row.action)).toEqual(['bundle']);
+    expect(table.rows.map(row => row.action), JSON.stringify(table.rows)).toEqual(['bundle']);
     const update = updates[0], row = table.rows[0];
     const result = await publishStream({ ...update, origin, app, signer, row, release: 'update', snapshot: table.snapshot, opts: {}, log() {} });
     expect(result.seq).toBe(8);
@@ -460,7 +470,7 @@ test('a Contract-only deploy checks new source shapes against the installed nati
     expect(classifyArtifacts(update.build, cohort, key).missing).toContain('app.plan: sources.added (missing source or different parameter/result shape)');
     cohort.sources.added = shape;
     expect(classifyArtifacts(update.build, cohort, key).bundle).toBe(true);
-    expect(calls).toEqual(['tools', 'graph']);
+    expect(calls).toEqual(['tools', 'compat', 'graph']);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -702,6 +712,50 @@ test('a first push from a production build publishes the evidence its cohort nam
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
+// An app with neither app.ts nor a Rust module: its own bake makes the plan (LLP 1030.007 D2), and no module pair.
+test('push bakes an app with neither a TypeScript nor a Rust module through its own bake', async () => {
+  const {root,calls,bundles,pusher}=harness(classifyArtifacts,4,{rustModule:false});
+  try {
+    expect(await pusher({_:[root],origin:root,keys:root})).toBe(0);
+    expect(calls).toEqual(['tools','resident','app','compat','graph','publish','close']);
+    expect(bundles[0].plan.bytes.toString()).toBe('plan');
+    expect(bundles[0].assets.filter(a=>/^(rust|typescript)\//.test(a.name))).toEqual([]);
+  } finally {fs.rmSync(root,{recursive:true,force:true})}
+});
+
+// A stream whose compatibility inputs this source no longer computes is frozen: push publishes to the current streams,
+// and refuses when none is current, naming the verb that starts one (LLP 1030.007 D3).
+test('push leaves a stream whose binary predates the sources, and refuses when no stream is current', async () => {
+  const x86='x86_64-unknown-linux-gnu', arm='aarch64-unknown-linux-gnu';
+  const moved=(targets)=>c=>targets.includes(c.target)?{...c,inputs:{...c.inputs,dataCrate:{tree:'edited'}}}:c;
+  const one=harness(classifyArtifacts,4,{targets:[[x86,'native'],[arm,'native']],computed:moved([arm])});
+  try {
+    expect(await one.pusher({_:[one.root],origin:one.root,keys:one.root})).toBe(0);
+    expect(one.published.map(b=>b.compat.target)).toEqual([x86]);
+  } finally {fs.rmSync(one.root,{recursive:true,force:true})}
+  const none=harness(classifyArtifacts,4,{targets:[[x86,'native'],[arm,'native']],computed:moved([x86,arm])});
+  try {
+    await expect(none.pusher({_:[none.root],origin:none.root,keys:none.root})).rejects.toThrow(/no stream on the channel prod can take this as an update: linux 00000000: its binary predates these sources \(dataCrate\); a new binary: .*; linux 11111111/);
+    expect(none.published).toEqual([]);
+  } finally {fs.rmSync(none.root,{recursive:true,force:true})}
+});
+
+// A module of another Hermes bytecode version is for a newer APK: the older cohort is frozen, not a refusal that would
+// keep the newer stream from its update (LLP 1030.006 D4).
+test('push freezes a cohort whose Hermes bytecode version the module does not match', async () => {
+  const x86='x86_64-unknown-linux-gnu', arm='aarch64-unknown-linux-gnu';
+  const {root,bindings,published,pusher}=harness(classifyArtifacts,4,{targets:[[x86,'native'],[arm,'native']],bytecodeVersion:98});
+  try {
+    fs.writeFileSync(resolve(root,'app.ts'),'');
+    const [older,newer]=bindings.readBuilds();
+    older.compat.inputs.hermesBytecode=96;
+    newer.compat.inputs.hermesBytecode=98;
+    expect(await pusher({_:[root],origin:root,keys:root})).toBe(0);
+    expect(published.map(b=>b.compat.target)).toEqual([arm]);
+    expect(published[0].graph.artifacts.find(a=>a.name==='typescript/app.hbc').requires.hermesBytecode).toBe(98);
+  } finally {fs.rmSync(root,{recursive:true,force:true})}
+});
+
 test('a cohort signed before binary input evidence takes a bundle and says its native sources are unchecked', async () => {
   const { root, app, cohort, streamCandidates } = harness(classifyArtifacts, 4, { rustModule: false });
   try {
@@ -728,7 +782,7 @@ test('a cohort signed before binary input evidence takes a bundle and says its n
     expect(update.note).toContain('records no binary input evidence');
     const table = await classify({ app, origin, opts: {}, channel: 'prod', snapshot: { dirty: false, changes: [] }, release: 'next', bundle,
       compat: {}, builds: {}, platforms: ['ios'], wantOrigin: false, candidates: new Map([[stream.compatibilityId, update]]) });
-    expect(table.rows.map(row => row.action)).toEqual(['bundle']);
+    expect(table.rows.map(row => row.action), JSON.stringify(table.rows)).toEqual(['bundle']);
     expect(table.notes.some(note => note.includes('records no binary input evidence'))).toBe(true);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });

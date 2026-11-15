@@ -739,7 +739,12 @@ fn compatibility_with_trust(
         // A binary that replaces its Rust module binds the module's ABI,
         // target and grants above, never the source it was first built
         // from: an edit there is an update, not a new cohort (LLP 1029.000 §7).
-        "dataCrate": if rust_mode == "off" { data_crate(app_dir)? } else { Value::Null },
+        "dataCrate": if rust_mode == "off" {
+            let named = manifest.rust_data()?.map(|data| data.krate);
+            data_crate(app_dir, named.as_deref())?
+        } else {
+            Value::Null
+        },
         // Each shader's reflected interface digest (LLP 1030 D8) — entry
         // points, bindings, layouts, inputs, outputs, overrides, never the
         // text — so a colour edit does not move the id and a binding edit
@@ -904,11 +909,14 @@ fn executors(app_dir: &Path, platform: &str) -> Vec<String> {
 /// toolchain — never its compiled output, which a `wasm32` build can keep
 /// while the native build moved. It reads every arm of a `cfg(target_*)`
 /// branch, so the bake need not refuse one (LLP 1030 D3a, amended
-/// 2026-11-12). A `data/` without a `Cargo.toml` is no
-/// crate: TypeScript modules there are the bundle's, and an edit to them is
+/// 2026-11-12). The crate is the one beside app.json that `rust.data`
+/// names, else `data/` (LLP 1030.007 D3). A `data/` without a `Cargo.toml` is
+/// no crate: TypeScript modules there are the bundle's, and an edit to them is
 /// an update, not a new cohort.
-fn data_crate(app_dir: &Path) -> Result<serde_json::Value, String> {
-    let dir = app_dir.join("data");
+fn data_crate(app_dir: &Path, named: Option<&str>) -> Result<serde_json::Value, String> {
+    let dir = named
+        .and_then(|name| crate_beside(app_dir, name))
+        .unwrap_or_else(|| app_dir.join("data"));
     if !dir.join("Cargo.toml").is_file() {
         return Ok(serde_json::Value::Null);
     }
@@ -1102,8 +1110,52 @@ fn walk(root: &Path, dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
     Ok(())
 }
 
-/// The nearest `Cargo.lock` at or above `app_dir` (the workspace's).
+/// The directory beside app.json whose `Cargo.toml` names the package `name`
+/// (the app's own crates, LLP 1153.003 D1.1).
+fn crate_beside(app_dir: &Path, name: &str) -> Option<PathBuf> {
+    let mut dirs: Vec<PathBuf> = std::fs::read_dir(app_dir)
+        .ok()?
+        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+        .filter(|path| path.is_dir())
+        .collect();
+    dirs.sort();
+    dirs.into_iter().find(|dir| {
+        std::fs::read_to_string(dir.join("Cargo.toml"))
+            .is_ok_and(|text| package_name(&text).as_deref() == Some(name))
+    })
+}
+
+/// `[package] name` of a Cargo manifest, read without a TOML parser.
+fn package_name(manifest: &str) -> Option<String> {
+    let mut in_package = false;
+    for line in manifest.lines().map(str::trim) {
+        if line.starts_with('[') {
+            in_package = line == "[package]";
+        } else if in_package {
+            let value = line
+                .strip_prefix("name")
+                .and_then(|rest| rest.trim_start().strip_prefix('='));
+            if let Some(value) = value {
+                return Some(
+                    value
+                        .trim()
+                        .trim_matches(|c| c == '"' || c == '\'')
+                        .to_string(),
+                );
+            }
+        }
+    }
+    None
+}
+
+/// The lock the data crate is built against: the app's own workspace's,
+/// else the generated workspace's (`.exact/shells/Cargo.lock`, which an app
+/// outside exact2 builds against), else the nearest one above the app.
 fn lockfile(app_dir: &Path) -> Option<PathBuf> {
+    let generated = app_dir.join(".exact/shells/Cargo.lock");
+    if !app_dir.join("Cargo.lock").is_file() && generated.is_file() {
+        return Some(generated);
+    }
     let mut dir = app_dir.canonicalize().ok()?;
     loop {
         let candidate = dir.join("Cargo.lock");

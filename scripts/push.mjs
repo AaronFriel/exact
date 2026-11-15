@@ -25,7 +25,7 @@ import { homedir } from 'node:os';
 import { resolve, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Refusal, refuse, loadSigner } from './deploy-signing.mjs';
-import { defaultRelease, publishStream, publishTools, streamCandidates, streams } from './publisher.mjs';
+import { binaryCommand, defaultRelease, publishStream, publishTools, streamCandidates, streams } from './publisher.mjs';
 import { classifyArtifacts, readBuilds, resolveApp } from './app.mjs';
 import { RustBaker } from './rust.mjs';
 import { channelOf, channelOrigin, openOrigin, validateChannel } from './origin.mjs';
@@ -92,13 +92,27 @@ export async function pusher(opts) {
     const bakedIn = seconds(started);
     const release = defaultRelease(gitHead()).replace(/^r-/, 'p-');
     const snapshot = { id: gitHead(), commit: gitHead(), dirty: true };
-    // Every stream is checked before any is published.
-    for (const update of updates) {
+    const name = (row) => `${row.platform} ${row.compatibilityId.slice(0, 8)}`;
+    const listed = (items) => items.length > 6 ? `${items.slice(0, 6).join(', ')} and ${items.length - 6} more` : items.join(', ');
+    // A stream whose compatibility inputs this source no longer computes has a binary that predates it: this edit
+    // cannot reach it, and it stays as it is (LLP 1030.007 D3).
+    const frozen = updates.filter((update) => update.superseded?.length);
+    const current = updates.filter((update) => !update.superseded?.length);
+    const why = (update) => `its binary predates these sources (${listed(update.superseded)}); ${binaryCommand(app, update.row.platform)} starts a new stream`;
+    if (!current.length) refuse(`no stream on the channel ${channel} can take this as an update: ${frozen.map((update) => `${name(update.row)}: ${why(update)}`).join('; ')}`);
+    for (const update of frozen) console.log(`  ${name(update.row)} — frozen: ${why(update)}`);
+    // Every current stream is checked before any is published.
+    for (const update of current) {
       const checked = classifyArtifacts(update.build, update.row.receipt, signingKey);
-      if (update.reason || !checked.bundle) refuse(`${update.row.platform} ${update.row.compatibilityId.slice(0, 8)} cannot take this as an update — ${update.reason ?? checked.missing.join('; ')}. It needs a new binary: bun scripts/deploy.mjs ${app.name}`);
+      if (update.reason || !checked.bundle) refuse(`${name(update.row)} cannot take this as an update — ${update.reason ?? checked.missing.join('; ')}. It needs ${binaryCommand(app, update.row.platform)}`);
+    }
+    for (const update of current) {
+      const native = update.build.pendingInputs ?? [];
+      if (native.length) console.log(`  ${name(update.row)} — note: native sources differ from its binary's, and only a new binary carries them: ${listed(native)}`);
+      if (update.note) console.log(`  note: ${update.note}`);
     }
     const results = [];
-    for (const update of updates) results.push(await publishStream({ origin, ...update, app, signer, release, snapshot, opts: { seqAbove: opts.seqAbove }, log: () => {} }));
+    for (const update of current) results.push(await publishStream({ origin, ...update, app, signer, release, snapshot, opts: { seqAbove: opts.seqAbove }, log: () => {} }));
     for (const r of results) {
       const what = r.action === 'current' ? 'already current' : `seq ${r.seq}: ${r.changes.map((c) => c.name).join(', ')}`;
       console.log(`  ${r.platform} ${r.compatibilityId.slice(0, 8)} — ${what}`);

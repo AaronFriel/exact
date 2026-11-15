@@ -1297,6 +1297,55 @@ fn the_data_crates_path_dependencies_are_identity() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// The data crate is the one `rust.data` names, wherever it sits beside
+/// app.json, and a generated workspace's lock is its lockfile: an edit to
+/// either moves the id (LLP 1030.007 D3).
+#[test]
+fn the_named_data_crate_and_the_generated_lock_are_identity() {
+    let dir = app("named-data");
+    std::fs::remove_dir_all(dir.join("data")).unwrap();
+    let json = std::fs::read_to_string(dir.join("app.json")).unwrap();
+    let named = json.replacen(
+        '{',
+        r#"{"rust":{"data":{"crate":"records","type":"records::Records"}},"#,
+        1,
+    );
+    std::fs::write(dir.join("app.json"), named).unwrap();
+    krate(&dir.join("records"), "records", "[workspace]\n");
+    let data = || {
+        let m = Manifest::read(&dir).unwrap();
+        compatibility_with_trust(
+            &dir,
+            "ios",
+            "aarch64-apple-ios",
+            &m,
+            Some(""),
+            "development",
+        )
+        .unwrap()
+        .inputs["dataCrate"]
+            .clone()
+    };
+    assert_eq!(data()["files"], 2, "the named crate, not data/");
+    let first = id(&dir, "ios");
+    std::fs::write(dir.join("records/src/lib.rs"), "pub const A: u8 = 2;\n").unwrap();
+    let edited = id(&dir, "ios");
+    assert_ne!(first, edited, "an edit to the named crate moves it");
+    std::fs::create_dir_all(dir.join(".exact/shells")).unwrap();
+    std::fs::write(dir.join(".exact/shells/Cargo.lock"), "version = 4\n").unwrap();
+    let locked = id(&dir, "ios");
+    assert_ne!(
+        edited, locked,
+        "the generated workspace's lock is the lockfile"
+    );
+    std::fs::write(
+        dir.join(".exact/shells/Cargo.lock"),
+        "version = 4\n# moved\n",
+    )
+    .unwrap();
+    assert_ne!(locked, id(&dir, "ios"), "and its edit moves it");
+}
+
 /// A path crate outside the app's workspace is no member of it, so the
 /// closure is read from Cargo's full graph.
 #[test]

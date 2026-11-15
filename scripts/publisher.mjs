@@ -10,13 +10,13 @@
 //   immutable release record (LLP 1026 D11).
 import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { existsSync, mkdtempSync, readFileSync, readlinkSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, writeFileSync } from 'node:fs';
 import { hostname, userInfo } from 'node:os';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Refusal, refuse, assetIndex, canonicalBytes, canonicalJson, envelopeBytes, portableAssetNames } from './deploy-signing.mjs';
 import { admitHead, binaryInputFile, cohortReceipt, keepRecord, latestRecord, nextSeq } from './deploy-heads.mjs';
-import { classifyArtifacts, nativeManifestMetadata } from './app.mjs';
+import { bakedEntryAssets, buildBake, classifyArtifacts, nativeManifestMetadata } from './app.mjs';
 import { directoryInputNames, watchOutput } from './cargo-dep-info.mjs';
 import { appleAssetCatalogInventory, launchImageInventory, nativeResourceInventory } from '../host/apple/assets.mjs';
 import { buildRust, publishedSignature, rustBundle, rustPackage, tieredNative } from './rust.mjs';
@@ -68,7 +68,10 @@ export async function streams(origin, app, channel, { deploying = false, platfor
     const inputs = build.compat.inputs;
     if (build.trust !== 'production' || inputs.platform === 'web' || inputs.store?.L === '0') continue;
     if (platforms.length && !platforms.includes(inputs.platform)) continue;
-    if (out.some((s) => s.stream.compatibilityId === build.compat.id)) continue;
+    // A stream that has a head keeps its frozen cohort; the receipt of its id is the binary just built, whose
+    // evidence its candidate is compared with (LLP 1030.007 D3).
+    const known = out.find((s) => s.stream.compatibilityId === build.compat.id);
+    if (known) { if (known.cohort) known.build = build; continue; }
     out.push({ stream: { channel, compatibilityId: build.compat.id }, head: null, cohort: cohortReceipt(build), platform: inputs.platform, build });
   }
   if (!out.length && !deploying) refuse(`no stream on the channel ${channel} at ${origin.describe()} has a head; a first deploy publishes them (bun scripts/deploy.mjs ${app.name} --channel ${channel} --origin ${origin.describe()} --yes)`);
@@ -95,6 +98,20 @@ function bakeTypescript(tool, app, env) {
     if (r.status !== 0) refuse(r.stderr.trim().split('\n').slice(-6).join('\n'));
     return { plan: readFileSync(resolve(dir, 'app.plan')), receipt: readFileSync(resolve(dir, 'app.module.json')), bytecode: readFileSync(resolve(dir, 'app.hbc')), entries: bakedEntries(dir) };
   } finally { rmSync(dir, { recursive: true, force: true }); }
+}
+
+/** The plan and named entries of an app with neither module, from its own web crate's bake without the wasm, as
+ * deploy's snapshot bake makes them (`host/web/build.mjs --bake`): the Contract compiled and, for a `rust.data` app,
+ * the first frame baked through its data source (LLP 1153.003 D2), as each native host's bake runs it (LLP 1030.007
+ * D2). */
+function bakeApp(app, env) {
+  mkdirSync(app.target, { recursive: true });
+  const output = mkdtempSync(resolve(app.target, 'push-bake-'));
+  try {
+    const build = buildBake(app, 'web', 'wasm32-unknown-unknown', { env, check: true, output });
+    const plan = readFileSync(resolve(output, `web-${build.compat.target}.plan`));
+    return { plan, entries: new Map(bakedEntryAssets(output, build, namedEntry).map((a) => [a.name, a.bytes])) };
+  } finally { rmSync(output, { recursive: true, force: true }); }
 }
 
 /** Whether an update's file is one of the named entries a bake makes beside the app's plan: its widgets' and Live
@@ -160,10 +177,10 @@ function planGraph(tool, app, plan, compat, env, entries) {
   } finally { rmSync(dir, { recursive: true, force: true }); }
 }
 
-/** Derive target-specific requirements from captured source, with the fresh
- * web bake supplying the source grants. This computes no native artifact. */
-function snapshotCompat(tool, app, cohort, snapshot, built, env) {
-  const inputs = snapshot.compat.inputs;
+/** The compatibility inputs this source computes for the cohort's platform and target, with `base.compat`'s grants
+ * (a snapshot's fresh web bake, or the cohort's own). This computes no native artifact. */
+function snapshotCompat(tool, app, cohort, base, built, env) {
+  const inputs = base.compat.inputs;
   const args = ['compat', app.dir, '--platform', cohort.compat.inputs.platform, '--target', cohort.compat.target, '--json'];
   const grants = inputs.javascriptGrants ?? inputs.rustGrants ?? inputs.grantCeiling;
   if (typeof grants === 'string') args.push('--grants', grants);
@@ -175,13 +192,22 @@ function snapshotCompat(tool, app, cohort, snapshot, built, env) {
   return JSON.parse(r.stdout);
 }
 
-/** Compare the native build's authenticated source evidence, which the
- * cohort names, with this snapshot. Native SDKs and generated products are
- * not needed to read it. */
-async function binaryInputChanges(origin, app, cohort, compat, appleIcons) {
+/** The native source evidence to compare a stream's candidate with: the signed blob the cohort names, which is what
+ * its installed binaries were built from; for a stream with no head yet, that of `build`, the production receipt it
+ * starts from; else null, for a cohort signed before evidence existed. A receipt rebuilt later under the same id
+ * describes a binary not every device has, so it never stands in for the head's. */
+async function evidenceOf(origin, cohort, build, head) {
   const card = cohort.binaryInputs;
+  if (!head) return build?.binary?.sha256 === cohort.binary ? binaryInputFile(build)?.bytes ?? null : null;
+  if (!card) return null;
   const bytes = await origin.get(blobPath(card.sha256));
   if (!bytes || bytes.length !== card.bytes || sha256(bytes) !== card.sha256) refuse('the cohort binary input receipt is missing or does not match its signed digest');
+  return bytes;
+}
+
+/** Compare a native build's source evidence with this source. Native SDKs and generated products are not needed to
+ * read it. */
+function binaryInputChanges(bytes, app, compat, appleIcons) {
   const evidence = JSON.parse(bytes);
   if (evidence.version !== 1) refuse('the cohort binary input receipt has an unsupported version');
   const platform = compat.inputs.platform, apple = ['ios', 'macos'].includes(platform);
@@ -249,6 +275,15 @@ async function carriedAssets(origin, app, head, inputs) {
   return out;
 }
 
+/** The command that builds an APK with a production receipt (LLP 1030.006 D6); `--bundle` is the store's form. */
+export const APK_COMMAND = 'EXACT_UPDATE_TRUST=production bun exact.mjs android --release (--bundle for the store)';
+
+/** What a stream needs when an update cannot carry a change: Android's APK is built by its own verb, every other
+ * platform's binary by deploy. */
+export function binaryCommand(app, platform) {
+  return platform === 'android' ? `a new APK: ${APK_COMMAND}` : `a new binary: bun scripts/deploy.mjs ${app.name}`;
+}
+
 /** Candidates for signed cohorts, without building their hosts. Deploy calls
  * this from its immutable source snapshot; push supplies its resident baker. */
 export async function streamCandidates(app, origin, found, env, { baker = null, snapshot = null, tools = null } = {}) {
@@ -259,15 +294,20 @@ export async function streamCandidates(app, origin, found, env, { baker = null, 
   // any of them, whose wasm variant is the same.
   const nativeTargets = [...new Set(found.filter((s) => ['native', 'tiered'].includes(s.cohort.compat.inputs.rustMode)).map((s) => s.cohort.compat.target))];
   const variants = new Map();
+  // The three kinds of bake (LLP 1030.007 D2): the TypeScript module, the Rust module, or the app's own bake, which a
+  // snapshot has already made.
   if (typescript) variants.set(null, bakeTypescript(tools.typescript, app, env));
-  else if (snapshot && !rustPackage(app)) variants.set(null, { plan: snapshot.bundle.plan.bytes, entries: new Map(snapshot.bundle.assets.filter(a => namedEntry(a.name)).map(a => [a.name, a.bytes])) });
-  else for (const target of nativeTargets.length ? nativeTargets : [null]) variants.set(target, await buildRust(app, { compat: found[0].cohort.compat, env, nativeTarget: target, profile: 'release', baker }));
-  if (!variants.values().next().value) refuse(`${app.name} has neither a TypeScript module (app.ts) nor a rust.module.package; push carries a plan baked with its module`);
+  else if (rustPackage(app)) for (const target of nativeTargets.length ? nativeTargets : [null]) variants.set(target, await buildRust(app, { compat: found[0].cohort.compat, env, nativeTarget: target, profile: 'release', baker }));
+  else variants.set(null, snapshot ? { plan: snapshot.bundle.plan.bytes, entries: new Map(snapshot.bundle.assets.filter(a => namedEntry(a.name)).map(a => [a.name, a.bytes])) } : bakeApp(app, env));
   const updates = [];
   for (const { stream, head, cohort, platform, build: binary } of found) {
+    // The compatibility inputs this source computes and the cohort's do not match: its binary predates the source.
+    let superseded = [], nativeData = [];
     try {
       let built = variants.get(cohort.compat.target) ?? variants.values().next().value;
-      const compat = snapshot?.compat ? snapshotCompat(tools.graph, app, cohort, snapshot, built, env) : cohort.compat;
+      // Without a snapshot's bake the grants are the cohort's: a module's are checked by its own receipt, and a data
+      // crate's are its native code, which `dataCrate` covers.
+      const compat = snapshotCompat(tools.graph, app, cohort, snapshot?.compat ? snapshot : { compat: cohort.compat }, built, env);
       const graph = planGraph(tools.graph, app, built.plan, compat, env, built.entries);
       const inputs = cohort.compat.inputs;
       // Plans check their required raster renditions. Native packaging owns
@@ -276,10 +316,16 @@ export async function streamCandidates(app, origin, found, env, { baker = null, 
       // what the generation requires (LLP 1030.006 D4, D4a).
       const packaged = new Set(['typescriptModule', 'linked', 'textureFamily', 'appleRasterIcons', 'androidLinked', 'hermesBytecode']);
       const keys = new Set([...Object.keys(compat.inputs), ...Object.keys(inputs)]);
-      const pendingInputs = [...keys].filter(key => !packaged.has(key) && canonicalJson(compat.inputs[key] ?? null) !== canonicalJson(inputs[key] ?? null));
-      // A cohort signed before binary input evidence existed has none to compare with.
-      const unchecked = snapshot?.compat && !cohort.binaryInputs;
-      if (snapshot?.compat && !unchecked) pendingInputs.push(...await binaryInputChanges(origin, app, cohort, compat, graph.appleIcons));
+      superseded = [...keys].filter(key => !packaged.has(key) && canonicalJson(compat.inputs[key] ?? null) !== canonicalJson(inputs[key] ?? null));
+      // A module of another Hermes bytecode version than the APK's engine runs is for a newer APK (LLP 1030.006 D4).
+      const bytecode = typescript && inputs.hermesBytecode !== undefined ? JSON.parse(built.receipt).bytecodeVersion ?? null : undefined;
+      if (bytecode !== undefined && canonicalJson(bytecode) !== canonicalJson(inputs.hermesBytecode ?? null)) superseded.push('hermesBytecode');
+      // Without a module, the data crate runs in the binary and baked the plan's first frame (LLP 1030.007 D5).
+      nativeData = superseded.filter(key => key === 'dataCrate');
+      // The native files and manifest metadata the binary's evidence names, which the compatibility id does not all encode.
+      const evidence = await evidenceOf(origin, cohort, binary, head);
+      const unchecked = evidence === null;
+      const pendingInputs = [...superseded, ...(unchecked ? [] : binaryInputChanges(evidence, app, compat, graph.appleIcons))];
       // The named entries are this bake's, in place of the last generation's whole.
       const entries = [...built.entries].map(([name, bytes]) => ({ name, bytes, sha256: sha256(bytes) }));
       const staticAssets = snapshot
@@ -288,8 +334,8 @@ export async function streamCandidates(app, origin, found, env, { baker = null, 
       const assets = [...staticAssets, ...entries];
       let bundle = { plan: { bytes: built.plan, sha256: sha256(built.plan), formatVersion: inputs.formatVersion, kernelSchema: inputs.kernelSchema }, assets };
       // A new stream's head names the production build's evidence, which publication uploads.
-      const evidence = binary?.binary?.sourceInputs ? { sourceInputs: binary.binary.sourceInputs } : {};
-      let build = { version: 1, trust: 'production', compat, binary: { sha256: cohort.binary, ...evidence }, pendingInputs,
+      const sourceInputs = binary?.binary?.sourceInputs ? { sourceInputs: binary.binary.sourceInputs } : {};
+      let build = { version: 1, trust: 'production', compat, binary: { sha256: cohort.binary, ...sourceInputs }, pendingInputs,
         graph: { ...graph, artifacts: [graph.artifacts[0], ...assets.map((a) => ({ name: a.name, sha256: a.sha256, bytes: a.bytes.length, kind: 'bundle', requires: graph.artifacts.find(card => card.name === a.name)?.requires ?? snapshot?.graph?.artifacts.find(card => card.name === a.name)?.requires ?? {} }))] } };
       if (built.variants?.native && ['native', 'tiered'].includes(inputs.rustMode) && cohort.compat.target.includes('apple')) {
         const reused = publishedSignature(built.variants.native.bytes, await publishedModule(origin, app, stream), env);
@@ -298,10 +344,10 @@ export async function streamCandidates(app, origin, found, env, { baker = null, 
       ({ bundle, build } = typescript ? typescriptBundle(bundle, build, built, cohort) : rustBundle(app, bundle, build, built));
       const row = { kind: 'stream', platform, channel: stream.channel, compatibilityId: stream.compatibilityId, action: 'bundle', receipt: cohort };
       const note = unchecked ? { note: `${platform} ${stream.compatibilityId.slice(0, 8)}: the signed cohort records no binary input evidence, so a change to native sources goes undetected until a new binary records it` } : {};
-      updates.push({ row, bundle, compat: cohort.compat, build, ...note });
+      updates.push({ row, bundle, compat: cohort.compat, build, superseded, nativeData, ...note });
     } catch (error) {
       if (!(error instanceof Refusal)) throw error;
-      updates.push({ row: { kind: 'stream', platform, ...stream }, reason: error.message });
+      updates.push({ row: { kind: 'stream', platform, ...stream }, reason: error.message, superseded, nativeData });
     }
   }
   return updates;
