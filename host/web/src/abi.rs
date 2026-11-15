@@ -493,11 +493,13 @@ impl<D: DataSource> Bridge<D> {
         let last = String::from_utf8_lossy(&bytes[first_len..]);
         let range = (first_len != 0).then_some((
             exact_runner::ListTextPosition {
+                fixed: None,
                 key: &first,
                 paragraph: first_paragraph,
                 offset: first_offset,
             },
             exact_runner::ListTextPosition {
+                fixed: None,
                 key: &last,
                 paragraph: last_paragraph,
                 offset: last_offset,

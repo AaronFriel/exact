@@ -513,3 +513,49 @@ fn scroll_snap_emits_both_axes_and_center() {
         );
     }
 }
+
+#[test]
+fn press_translate_is_a_host_offset_beside_the_authored_translation() {
+    let mut s = StyleProps::default();
+    for row in [StyleId::PressTranslate, StyleId::PressTranslatePercent] {
+        s.set_dynamic(row, &exact_kernel::StyleValue::Text("10% 4px".into()))
+            .unwrap();
+    }
+    s.set_dynamic(
+        StyleId::Translate,
+        &exact_kernel::StyleValue::Text("10px 20px".into()),
+    )
+    .unwrap();
+    let (text, skipped) = super::css_text(&s, &[]);
+    assert!(skipped.is_empty(), "{skipped:?}");
+    assert!(
+        text.contains("--exact-translate-x:10px;--exact-translate-y:20px;"),
+        "{text}"
+    );
+    assert!(
+        text.contains("--exact-press-x:10%;--exact-press-y:4px;"),
+        "{text}"
+    );
+    assert!(text.contains("--exact-press-translate:10% 4px;"), "{text}");
+}
+
+#[test]
+fn cleared_press_translation_does_not_create_a_containing_block() {
+    let mut style = StyleProps::default();
+    style.written.set(StyleId::PressTranslate);
+    let (text, skipped) = super::css_text(&style, &[]);
+    assert!(skipped.is_empty());
+    assert!(
+        !text.split(';').any(|d| d.starts_with("translate:")),
+        "{text}"
+    );
+    assert!(super::press_animations(&style));
+}
+
+#[test]
+fn press_keyframes_copy_all_translation_axes() {
+    assert_eq!(
+        press_keyframes_css("0%{translate:0px 0px 40px;}100%{translate:10% 20px;}"),
+        "0%{translate:0px 0px 40px;--exact-translate-x:0px;--exact-translate-y:0px;--exact-translate-z:40px;}100%{translate:10% 20px;--exact-translate-x:10%;--exact-translate-y:20px;--exact-translate-z:0px;}"
+    );
+}

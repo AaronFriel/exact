@@ -33,6 +33,8 @@ package final class RasterInput: @unchecked Sendable {
     let url: URL
     let encodedBytes: Int
     private let temporary: Bool
+    /// Completed private spools keep the bytes their metadata described.
+    var rechecksMetadata: Bool { !temporary }
     /// The asset catalog's name for this file, when it is the launch image
     /// the catalog was built from (`ExactLaunchImageSource` and its bytes'
     /// `ExactLaunchImageSHA256`, host/apple/assets.mjs) and a plain PNG:

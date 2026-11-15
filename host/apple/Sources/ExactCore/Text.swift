@@ -909,7 +909,7 @@ package final class TextEngine {
             presentation?.attributes(block, color: spec.color, scale: lineScale, attributes: &a)
             s.addAttribute(.exactClampStyle, value: a, range: NSRange(location: 0, length: s.length))
         }
-        TextEngine.kernInlineEdges(s, runs: spec.runs)
+        TextEngine.kernInlineEdges(s, runs: spec.runs, rtl: spec.direction == 1)
         TextEngine.setBaseDirection(s, direction: spec.direction, natural: spec.natural)
         presentation?.finish(s, empties: empties)
         if spec.preserves, s.string.contains("\t"), let first = spec.strut ?? spec.runs.first {
@@ -1139,7 +1139,10 @@ package final class TextEngine {
             // A justified one also depends on the width, so it is made again.
             if spec.align != 3, let oldLine, CTLineGetStringRange(oldLine).location == start, CTLineGetStringRange(oldLine).length == count {
                 line = oldLine
-            } else { line = TextEngine.inkedSoftHyphen(CTTypesetterCreateLine(typesetter, range), source: shape.attributed, range: range) }
+            } else {
+                line = TextEngine.placingRooms(TextEngine.inkedSoftHyphen(CTTypesetterCreateLine(typesetter, range), source: shape.attributed, range: range),
+                                               source: shape.attributed, range: range)
+            }
             var clamps = false
             // A word too long for its line keeps its width in layout, as CSS
             // measures it; only what is drawn ends in "…".

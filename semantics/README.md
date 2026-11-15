@@ -1284,10 +1284,11 @@ An attribute whose expression is refused (other than for fuel) has no
 value and the render goes on (`unsetRefused`), as the runner unsets a prop
 or style binding that traps (LLP 1017.003 D3); a refused subject, key or
 row initializer still fails the render. Only a `text`'s text and an
-element's `testId` are observed, and nothing inside a virtualized `list`:
-the runner builds only the rows its window lays out, which is layout, so
-both sides leave a virtualized list's descendants out of the observation
-(the list's own line stays). The runner's evaluation bounds (list steps,
+element's `testId` are observed. Inside a virtualized `list`, both sides
+omit the direct data `for`'s rows, whose membership is layout, and observe
+the always-mounted lead and trail children. The semantics puts the data
+region in a synthetic observation group; it does not change row scopes or
+lifetime. The runner's evaluation bounds (list steps,
 derive calls and call depth, string length, value size and depth) are a refinement the semantics
 doesn't model (LLP 1090 D8): a step the runner refuses for one
 (`IterationLimit`, `CallLimit`, `CallDepth`, `StringTooLong` as a trap or an

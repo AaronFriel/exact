@@ -702,3 +702,40 @@ fn an_over_long_source_given_again_after_a_symbol_errs_again() {
     press(&mut p, "back");
     until(&mut p, |s| s["errors"].as_f64() == Some(2.));
 }
+
+/// A video's poster loads as an image's picture does and paints in its box,
+/// placed by `object-fit` (`contain`: 150×150 in the middle here), until the player shows its source's first frame; the video's natural
+/// size stays its video's (LLP 1042.001 D5).
+#[test]
+fn a_poster_paints_until_the_first_frame_and_sizes_nothing() {
+    let origin = picture_server(Arc::new(AtomicUsize::new(0)));
+    let source = format!(
+        "component App\n  view\n    video src=\"a.mp4\" poster=\"{origin}/poster.png\" testId=\"video\"\n"
+    );
+    let (mut p, error) = Presenter::boot_with_fixture_fonts(
+        &crate::test_plan(&source),
+        (),
+        (400., 400.),
+        1.,
+        PathBuf::new(),
+        PainterChoice::Cpu,
+    )
+    .unwrap();
+    assert!(error.is_none(), "{error:?}");
+    p.frame();
+    assert!(p.wait_images(Duration::from_secs(30)));
+    let pixels = p.frame();
+    assert_eq!(pixels.pixel(150, 75).unwrap().blue(), 200, "the poster");
+    let key = p.host.kernel().find_by_test_id("video")[0];
+    let node = p.host.kernel().node_by_key(key).unwrap();
+    // HTML's 150 high before metadata, not the poster's 400.
+    assert_eq!(node.frame.height, 150.);
+    let (id, session) = (node.id, p.brush.native_session);
+    assert!(p.reader_media(id, key, session, "", "", r#"{"frameReady":true}"#, 1.));
+    let pixels = p.frame();
+    assert_ne!(
+        pixels.pixel(10, 10).unwrap().blue(),
+        200,
+        "gone at the first frame"
+    );
+}

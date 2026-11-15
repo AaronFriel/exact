@@ -314,9 +314,8 @@ final class ScrollPump: NSObject, UIScrollViewDelegate {
         FrameClock.shared.want(self, .scroll, rate: FrameClock.full(on: presenter?.viewport.window?.screen)) { [weak self] in self?.tick($0) }
     }
     /// Once scrolling has been still for `restDelay` after a scroll or a
-    /// batch, the session trims its caches to what shows, as a browser
-    /// discards the decoded images of content it scrolled past; what comes
-    /// back into view is made again.
+    /// batch, the session trims its caches. Cold pictures survive within a
+    /// byte cap so returning to a page can reuse them; memory pressure drops them.
     private func armRest(after delay: TimeInterval) {
         guard restTimer == nil else { return }
         restTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in

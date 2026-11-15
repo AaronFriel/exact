@@ -521,6 +521,7 @@ impl<D: DataSource> Host<D> {
         self.emit_sticky(batch);
         self.place_timelines(batch);
         self.emit_fragments(batch);
+        self.emit_tables(batch);
         // A withheld batch held the scenes it placed: sent again
         if self.layout_withheld {
             self.svg.resend();

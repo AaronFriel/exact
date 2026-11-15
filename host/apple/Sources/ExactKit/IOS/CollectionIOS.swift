@@ -378,19 +378,21 @@ extension CollectionHost {
     /// Whether the mounted rows cover the scrollport: no spacer (unbuilt
     /// rows) shows. Padding before the first item or after the last counts.
     func covers(_ id: UInt32) -> Bool {
-        guard let entry = entries[id], let node = presenter?.views[id], let scroll = node.scroll,
-              let first = entry.snapshot.rows.first, let last = entry.snapshot.rows.last else { return false }
+        guard let entry = entries[id], let node = presenter?.views[id], let scroll = node.scroll else { return false }
         let horizontal = entry.snapshot.horizontal
         let port = horizontal ? scroll.bounds.minX...scroll.bounds.maxX : scroll.bounds.minY...scroll.bounds.maxY
-        func box(_ row: CollectionSnapshot.Row) -> ClosedRange<CGFloat>? {
-            presenter?.views[row.view].map { span($0, in: scroll, horizontal: horizontal) }
+        var frames = entry.snapshot.rows.compactMap { row -> (first: Bool, last: Bool, range: ClosedRange<CGFloat>)? in
+            guard let view = presenter?.views[row.view] else { return nil }
+            return (row.index == 0, row.index == entry.snapshot.count - 1, span(view, in: scroll, horizontal: horizontal))
         }
-        guard let head = box(first), let tail = box(last) else { return false }
-        var reached = first.index == 0 ? max(port.lowerBound, head.lowerBound) : port.lowerBound
-        let end = last.index == entry.snapshot.count - 1 ? min(port.upperBound, tail.upperBound) : port.upperBound
+        let origin = node.contentBox().minY
+        frames += fixedSpans(id).map { (first: $0.first, last: $0.last, range: (origin + CGFloat($0.start))...(origin + CGFloat($0.end))) }
+        frames.sort { $0.range.lowerBound < $1.range.lowerBound }
+        guard let head = frames.first, let tail = frames.last else { return false }
+        var reached = head.first ? max(port.lowerBound, head.range.lowerBound) : port.lowerBound
+        let end = tail.last ? min(port.upperBound, tail.range.upperBound) : port.upperBound
         if reached >= end { return true }
-        for row in entry.snapshot.rows {
-            guard let frame = box(row) else { return false }
+        for frame in frames.map(\.range) {
             if frame.upperBound <= reached { continue }
             if frame.lowerBound > reached + 0.5 { return false }
             reached = frame.upperBound

@@ -366,6 +366,7 @@ fn map_node(
         // UI Automation's Spinner, with RangeValue below.
         role::SPIN_BUTTON => Role::SpinButton,
         role::IMAGE => Role::Image,
+        role::MEDIA => Role::Video,
         role::TAB => Role::Tab,
         role::SCROLLER => Role::ScrollView,
         role::PROGRESS => Role::ProgressIndicator,

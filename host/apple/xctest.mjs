@@ -32,6 +32,7 @@ export function compileFixtures(root, run, env, dir, prefix, appId) {
     { platform: prefix === 'EXACT' ? 'macos' : 'ios', icons: [{ svg: 'two.svg', viewBox: '0 0 24 24' }] });
 
   contract([resolve(root, 'host/apple/tests/fixtures/fragment.contract'), '-o', env[`${prefix}_FRAGMENT_PLAN`] = resolve(dir, 'fragment.plan')]);
+  contract([resolve(root, 'host/apple/tests/fixtures/table-access.contract'), '-o', env[`${prefix}_TABLE_ACCESS_PLAN`] = resolve(dir, 'table-access.plan')]);
   if (prefix === 'TEST_RUNNER_EXACT') {
     // LaunchColorIOSTests reads the build's XML and compiled catalogue as an app bundle.
     const fixtures = env[`${prefix}_LAUNCH_COLOR_FIXTURES`] = resolve(dir, 'launch-colors');
@@ -50,6 +51,11 @@ export function compileFixtures(root, run, env, dir, prefix, appId) {
   contract([resolve(root, 'host/apple/tests/fixtures/overflowing-tabs.contract'), '-o', env[`${prefix}_OVERFLOWING_TABS_PLAN`] = resolve(dir, 'overflowing-tabs.plan')]);
   contract([resolve(root, 'host/apple/tests/fixtures/scroll-snap.contract'), '-o', env[`${prefix}_SCROLL_SNAP_PLAN`] = resolve(dir, 'scroll-snap.plan')]);
   contract([resolve(root, 'host/apple/tests/fixtures/fixed-page.contract'), '-o', env[`${prefix}_FIXED_PAGE_PLAN`] = resolve(dir, 'fixed-page.plan')]);
+  contract([resolve(root, 'scripts/fixtures/collection-fixed-chat.contract'), '-o', env[`${prefix}_COLLECTION_FIXED_PLAN`] = resolve(dir, 'collection-fixed.plan')]);
+  const eagerList = resolve(dir, 'collection-fixed-eager.contract');
+  writeFileSync(eagerList, readFileSync(resolve(root, 'scripts/fixtures/collection-fixed-chat.contract'), 'utf8')
+    .replace('virtualized=true', 'virtualized=false').replace(' estimated-item-height=40', '').replace(' scrollFollowEnd=true', ''));
+  contract([eagerList, '-o', env[`${prefix}_COLLECTION_FIXED_EAGER_PLAN`] = resolve(dir, 'collection-fixed-eager.plan')]);
   contract([resolve(root, 'host/apple/tests/fixtures/arrangement-sizing.contract'), '-o', env[`${prefix}_ARRANGEMENT_SIZING_PLAN`] = resolve(dir, 'arrangement-sizing.plan')]);
   contract([resolve(root, 'host/apple/tests/fixtures/canvas-capture.contract'), '-o', env[`${prefix}_CANVAS_CAPTURE_PLAN`] = resolve(dir, 'canvas-capture.plan')]);
   contract([resolve(root, 'host/apple/tests/fixtures/range-adjust.contract'), '-o', env[`${prefix}_RANGE_ADJUST_PLAN`] = resolve(dir, 'range-adjust.plan')]);

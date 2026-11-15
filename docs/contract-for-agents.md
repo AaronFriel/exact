@@ -2150,8 +2150,20 @@ any drawn gradient does there.
 
 For scrolling, provide a bound and inspect measured layout. For virtualized
 lists, use `list virtualized=true` (no other tag takes it), one direct keyed
-`for`, and one flow root per row. Its `reachstart` and `reachend` fire when the
-first or last row comes within `reach-margin` of the port (one port by default),
+`for`, and one flow root per row. A vertical list with `appearance="none"`
+may also hold fixed content before and after that `for`; a second direct `for`
+needs an element around it (all its rows mount). Fixed content cannot hold a
+virtualized list. Fixed roots require nonnegative margin lengths, including percentages and
+font-relative units, and static or relative positioning without vertical offsets
+(`lower-collection-fixed-flow`).
+Fixed content keeps its authored sibling layout and stays mounted even when the `for` is empty. It has no data-row key, cell styling,
+`keep-mounted` entry or place in `aria-setsize`; give it an `id` for element
+`scrollIntoView(id)`. Authored padding stays before the lead and after the trail.
+A `for` inside a fixed element is eager and still receives
+the development `long-list` notice at 200 rows.
+The list's `reachstart` and `reachend` fire when its content edges (the lead's
+start and the trail's end, when present) come within `reach-margin` of the port
+(one port by default),
 and further ahead while a fling travels toward it; page from them rather than from
 `scroll` (`docs/reference.md`, "Intersection visibility"). A vertical list needs `height`, `max-height`
 or a growing `flex`, which may be computed (`max-height=(narrow ? "320px" : "640px")`).
@@ -6313,11 +6325,17 @@ component App
 under `:disabled`, and `:disabled` is your own disabled look (no default dim).
 `:active` is the host's own press of the innermost node with a `press` or a link's
 `href` (`link href=`, `button href=`, as CSS's `a:active`): it takes
-`background-color`, `color`, `opacity` and `-exact-press-scale`, which become the
+`background-color`, `color`, `opacity`, `translate` and `-exact-press-scale`, which become the
 node's pressed paint (LLP 1061 D7). Custom nodes ease on the press curve (under
 Reduce Motion too) and replace the host's unsaid press. Native controls keep
 their native state beneath each authored override. Its `opacity` is the opacity
-it shows pressed, not a share.
+it shows pressed, not a share. Its `translate` is an offset added to the node’s
+own translation: `translate="4px 4px"` moves a button onto an offset shadow
+plate. It takes x and optional y, in pixel lengths or percentages of the
+current border box by default. A third value is refused: a press is
+a 2D offset; use transitions for 3D motion. Layout stays unchanged. On the web the hit area moves with the paint, as CSS
+does, and the browser’s click rules apply. Native hosts keep the unpressed
+hit area and use their press timing. Release or cancellation removes the offset.
 Its targets may compute during ordinary commits, including a conditional class
 and `none` to clear a target. Pressing needs no runner round trip.
 Absolute active opacity and `-exact-press-opacity` are mutually exclusive

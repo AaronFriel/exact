@@ -11,7 +11,7 @@
 use crate::code::{self, Scope, Uses};
 use crate::style;
 use exact_kernel::{NodeType, PropId};
-use exact_plan::{BindingKind, EventKind, NodesId, Plan, RegionKind, Value};
+use exact_plan::{BindingKind, EventKind, NodesId, Plan, Value};
 use exact_web::host::template::Parts;
 use std::collections::HashMap;
 use std::fmt::Write as _;
@@ -24,6 +24,8 @@ mod commands;
 mod each;
 #[path = "list_options.rs"]
 mod list_options;
+#[path = "list_text.rs"]
+mod list_text;
 #[path = "lower.rs"]
 pub(crate) mod lower;
 #[path = "markdown.rs"]
@@ -838,19 +840,8 @@ pub fn emit(plan: &Plan, site_attrs: bool, dev_reload: bool) -> Result<Output, S
             let _ = write!(css, "@keyframes {}{{{text}}}", plan.str(row.name));
             // A pressable node plays the copy that also animates
             // `--exact-scale` (exact_web::css::keyframes_name).
-            if text.contains("scale:") {
-                let mut press = String::new();
-                let mut rest = text.as_str();
-                while let Some(at) = rest.find("scale:") {
-                    let Some(end) = rest[at..].find(';').map(|e| at + e) else {
-                        break;
-                    };
-                    press.push_str(&rest[..=end]);
-                    press.push_str("--exact-");
-                    press.push_str(&rest[at..=end]);
-                    rest = &rest[end + 1..];
-                }
-                press.push_str(rest);
+            if text.contains("scale:") || text.contains("translate:") {
+                let press = exact_web::css::press_keyframes_css(&text);
                 let _ = write!(
                     css,
                     "@keyframes {}-exact-press{{{press}}}",
@@ -978,6 +969,7 @@ impl Em<'_> {
         }
         if presence.contains("--exact-press:")
             || presence.contains("--exact-press-haptic:")
+            || presence.contains("--exact-press-translate:")
             || presence.contains("--exact-press-opacity:")
             || presence.contains("--exact-press-opacity-to:")
             || presence.contains("--exact-press-background-color:")
@@ -1444,19 +1436,7 @@ impl Em<'_> {
             let _ = write!(self.out, "{tp}({e},()=>{{");
         }
         if virtualized {
-            let opts = self.list_options(i, scope, &edges)?;
-            let &[Site::Region(r)] = self.sites.of_node(i) else {
-                return Err(format!(
-                    "node {i}: a virtualized list needs one direct `for`"
-                ));
-            };
-            if plan.regions[r as usize].kind != RegionKind::Each {
-                return Err(format!(
-                    "node {i}: a virtualized list needs one direct `for`"
-                ));
-            }
-            self.list = true;
-            self.each(r, &e, scope, Some(opts))?;
+            self.collection_children(i, &e, scope, &edges)?;
         } else {
             self.children(self.sites.of_node(i), &parent_of_children, scope)?;
         }

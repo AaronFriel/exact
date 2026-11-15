@@ -35,6 +35,37 @@ pub enum NativeKind {
     Hatch = 5,
 }
 
+/// What a media node's props carry beside its own: what the presenter knows
+/// of it from the runner (LLP 1042.001 D3).
+#[derive(Default)]
+pub(crate) struct Media {
+    /// The tree these were found in.
+    pub(crate) epoch: Option<u64>,
+    /// The media nodes that handle `timeupdate`: only their players run its
+    /// 4 Hz clock.
+    pub(crate) timed: std::collections::BTreeSet<exact_kernel::NodeKey>,
+    /// `fastSeek`, `load` and `requestFullscreen` asked of each node, numbered as the Apple arm
+    /// numbers them, so a player made again from its record repeats none.
+    pub(crate) commands: std::collections::BTreeMap<exact_kernel::NodeKey, Commands>,
+    /// The nodes asked since the last paint: their rows paint again.
+    pub(crate) asked: Vec<exact_kernel::NodeKey>,
+    /// The media nodes whose player has shown their source's first frame
+    /// (`frameReady`): their poster is gone.
+    pub(crate) framed: std::collections::BTreeSet<exact_kernel::NodeKey>,
+}
+
+/// A media node's commands so far.
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct Commands {
+    /// How many `fastSeek`s, and the last one's time.
+    pub(crate) seeks: u32,
+    pub(crate) seconds: f64,
+    /// How many `load`s.
+    pub(crate) loads: u32,
+    /// How many `requestFullscreen`s.
+    pub(crate) fullscreens: u32,
+}
+
 impl Painter {
     /// @ref LLP 1115.001.000 D4 — a view a Kotlin hatch hosts at `node`:
     /// over its paint, in its border box `rect`, where the node is. A node
@@ -77,15 +108,14 @@ impl Painter {
                     p.get(id)
                         .and_then(|v| v.as_float().or(v.as_int().map(|i| i as f64)))
                 };
-                (
-                    NativeKind::Video,
-                    serde_json::json!({
+                let mut props = serde_json::json!({
                         "src": p.str(PropId::Src),
                         "autoplay": flag(PropId::Autoplay),
                         "loop": flag(PropId::Loop),
                         "muted": flag(PropId::Muted),
                         "paused": p.bool(PropId::Paused),
                         "controls": flag(PropId::Controls),
+                        "poster": p.str(PropId::Poster).is_some_and(|s| !s.is_empty()),
                         "preload": p.str(PropId::Preload),
                         "controlslist": p.str(PropId::Controlslist),
                         "volume": number(PropId::Volume),
@@ -97,6 +127,7 @@ impl Painter {
                         "preventsDisplaySleepDuringVideoPlayback": p.bool(PropId::PreventsDisplaySleepDuringVideoPlayback),
                         "audio": p.str(PropId::SemanticTag) == Some("audio"),
                         "label": p.str(PropId::AccessibilityLabel),
+                        "timeupdate": self.media.timed.contains(&node.key),
                         "fit": match node.style.object_fit {
                             ObjectFit::Contain => "contain",
                             ObjectFit::Cover => "cover",
@@ -107,8 +138,19 @@ impl Painter {
                         "generation": node.key.generation,
                         "slot": node.key.index,
                         "session": self.native_session,
-                    }),
-                )
+                });
+                if let Some(c) = self.media.commands.get(&node.key) {
+                    if c.seeks > 0 {
+                        props["seek"] = format!("{} {}", c.seeks, c.seconds).into();
+                    }
+                    if c.loads > 0 {
+                        props["load"] = c.loads.into();
+                    }
+                    if c.fullscreens > 0 {
+                        props["fullscreen"] = c.fullscreens.into();
+                    }
+                }
+                (NativeKind::Video, props)
             }
             NodeType::WebView => (
                 NativeKind::WebView,

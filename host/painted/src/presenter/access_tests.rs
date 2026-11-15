@@ -521,6 +521,27 @@ fn a_control_is_its_kind_with_its_state_and_what_is_hidden_is_no_node() {
     assert_eq!(nodes.last().unwrap().id, field.id, "last, as it is written");
 }
 
+/// A video is one node named by its author (LLP 1042.001 D11): what its
+/// controller holds is the controller's to report, from the view the reader
+/// stands there.
+#[test]
+fn a_video_is_one_media_node_named_by_its_label() {
+    const VIDEO: &str = r#"component App
+  view
+    column width=320 height=600
+      text "Clips"
+      video src="assets/a.mp4" controls=true aria-label="A color study" width=320 height=180 testId="video"
+"#;
+    let mut p = boot(VIDEO, (320., 600.), 0);
+    let nodes = read(&mut p);
+    let said: Vec<_> = nodes.iter().map(|n| (n.role, n.name.as_str())).collect();
+    assert_eq!(
+        said,
+        [(role::TEXT, "Clips"), (role::MEDIA, "A color study")]
+    );
+    assert_eq!(named(&nodes, "A color study").view, id(&p, "video"));
+}
+
 /// A grouped list's toggle row is one stop, as Material's list item with a
 /// trailing switch is to TalkBack ("Dark mode, switch, off"), and a press
 /// on it flips the switch.

@@ -56,6 +56,18 @@ impl Kernel {
         tree.table_order(&self.arena, self.arena.slot_of(view)?)
     }
 
+    /// The views table formation laid out at the last layout, in no order:
+    /// each table and each caption, row group, row and cell it placed. The
+    /// three answers above say nothing of any other view.
+    pub fn table_views(&self) -> Vec<ViewId> {
+        let Some(tree) = self.layout.as_deref().and_then(LayoutMirror::tree_ref) else {
+            return Vec::new();
+        };
+        (tree.table_slots())
+            .map(|slot| self.arena.local_id(slot))
+            .collect()
+    }
+
     /// How many rows and columns `view`, a table, has as of the last
     /// layout, its captions aside; `None` for a node no table formation
     /// lays out as one (a `table` whose author made it flex or grid).

@@ -1315,6 +1315,21 @@ impl<D: DataSource> Presenter<D> {
                                 } as f64,
                             })
                     })
+                    .chain(snapshot.fixed.iter().enumerate().map(|(side, fixed)| {
+                        RowMeasurement {
+                            view: fixed.view,
+                            epoch: 1,
+                            size: self
+                                .host
+                                .kernel()
+                                .collection_fixed_sizes(
+                                    snapshot.view,
+                                    &snapshot.fixed[0].roots,
+                                    &snapshot.fixed[1].roots,
+                                )
+                                .expect("fixed collection layout")[side],
+                        }
+                    }))
                     .collect(),
                 focus_view: self.focus.filter(|_| {
                     let snapshots = all.get_or_init(|| self.host.collections());

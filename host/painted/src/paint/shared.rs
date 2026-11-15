@@ -109,6 +109,19 @@ impl Painter {
         offset: (f32, f32),
         clip: Option<Rect4>,
     ) {
+        let hit_space = walk.hit_space;
+        self.node_at_inner(walk, id, ts, offset, clip);
+        walk.hit_space = hit_space;
+    }
+
+    fn node_at_inner(
+        &mut self,
+        walk: &mut Walk<'_, '_>,
+        id: ViewId,
+        ts: Transform,
+        offset: (f32, f32),
+        clip: Option<Rect4>,
+    ) {
         let named = self.backend.name() == "canvas"
             && self.shared.epoch.is_some()
             && walk.dialog.is_none()

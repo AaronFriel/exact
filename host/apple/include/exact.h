@@ -144,6 +144,12 @@ typedef struct ExactRasterStats {
 uint64_t exact_raster_session_create(uint64_t budget);
 /* Update capacity without releasing displayed or in-flight backings. */
 void exact_raster_session_budget(uint64_t session, uint64_t budget);
+/* Retain the most recently used cold pictures within `bytes`. */
+void exact_raster_session_trim(uint64_t session, uint64_t bytes);
+/* Drop a source generation's cold pictures, preserving live requests and leases. */
+void exact_raster_session_trim_generation(uint64_t session, uint64_t generation);
+/* Forget a source's decoded entries, preserving surviving backing charges. */
+void exact_raster_session_retire_generation(uint64_t session, uint64_t generation);
 /* 0 reset, 1 pause, 2 resume, 3 shutdown, 4 trim, 5 wake a worker (a source to read). */
 void exact_raster_session_control(uint64_t session, uint32_t op);
 uint64_t exact_raster_request(uint64_t session, ExactRasterDemand demand);
@@ -708,6 +714,9 @@ const uint8_t *exact_field_decorations(const uint8_t *input, size_t len, size_t 
 void exact_top_layer(ExactRuntime rt, const uint32_t *views, const double *rects, const double *clips, uint32_t count, uint32_t modal, uint32_t backdrop_view, const double *backdrop);
 /* Versioned LE collection feedback in exact_in; returns the ordinary batch. */
 uint32_t exact_collection_feedback(ExactRuntime rt, size_t len, double now_ms);
+/* Laid-out fixed sibling extent, side 0 (lead) or 1 (trail). Counts come
+ * from the snapshot's fixed roots. NaN when the geometry is unavailable. */
+double exact_collection_fixed_size(ExactRuntime rt, uint32_t view, uint32_t lead, uint32_t trail, uint32_t side);
 /* Read a local row-root snap without mounting views; NaN when absent.
  * Positions are the snapport start along the list axis, in its border box;
  * minimum and maximum bound them. distance is the nearest mounted target's distance, infinity when absent. */
@@ -980,11 +989,13 @@ uint32_t exact_resize(ExactRuntime rt, float width, float height);
 uint32_t exact_placement_box(ExactRuntime rt, uint32_t view);
 /* Opaque row key in the input buffer; UINT32_MAX means absent. */
 uint32_t exact_list_index(ExactRuntime rt, uint32_t view, uint32_t len);
-/* Two concatenated UTF-8 keys in input; empty first key selects all text.
+/* Two concatenated UTF-8 keys in input. Fixed side: 0 lead, 1 trail, UINT32_MAX row.
+   Empty first key with no fixed side selects all text.
    Returns raw UTF-8 bytes, not a batch. Positions use UTF-16 offsets. */
 uint32_t exact_list_text(ExactRuntime rt, uint32_t view, uint32_t first_len,
                         uint32_t len, uint32_t first_paragraph, uint32_t first_offset,
-                        uint32_t last_paragraph, uint32_t last_offset);
+                        uint32_t last_paragraph, uint32_t last_offset,
+                        uint32_t first_fixed, uint32_t last_fixed);
 /* The safe-area insets (points) under viewport-fit=cover — what
  * env(safe-area-inset-*) resolves to; zero when the layout viewport is the
  * safe area itself. A change re-sends the style of every node that reads

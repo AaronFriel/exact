@@ -353,6 +353,15 @@ impl Kernel {
         Some((left, top, right, bottom))
     }
 
+    /// Used margins from the last layout, including percentages resolved
+    /// against the containing block's content width (CSS 2.1 §8.3).
+    pub(crate) fn resolved_margins(&self, key: NodeKey) -> Option<[f32; 4]> {
+        let slot = self.arena.resolve(key)?;
+        let tree = self.layout.as_deref().and_then(LayoutMirror::tree_ref)?;
+        let margin = tree.layout(self.arena.taffy(slot)?).margin;
+        Some([margin.top, margin.right, margin.bottom, margin.left])
+    }
+
     /// A node's margins as its layout reads them under the kernel's
     /// environment, top/right/bottom/left in points: whole cells under a
     /// terminal's space rule (LLP 1121 stage 11 (c)), a percentage none.

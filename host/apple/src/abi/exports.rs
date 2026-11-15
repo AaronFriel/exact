@@ -1087,6 +1087,12 @@ macro_rules! host {
             $crate::abi::with_runtime(&EXACT_RUNTIMES, rt, false, |b, _| b.list_index(view, len as usize), |_| u32::MAX)
         }
 
+        /// Fixed sibling extents in layout coordinates; NaN when absent.
+        #[no_mangle]
+        pub extern "C" fn exact_collection_fixed_size(rt: u32, view: u32, lead: u32, trail: u32, side: u32) -> f64 {
+            $crate::abi::with_runtime(&EXACT_RUNTIMES, rt, false, |b, _| b.collection_fixed_size(view, lead, trail, side), |_| f64::NAN)
+        }
+
         /// Nearest logical collection snap position, or NaN when absent.
         #[no_mangle]
         pub extern "C" fn exact_collection_snap(rt: u32, view: u32, proposed: f64, port: f64, minimum: f64, maximum: f64, distance: f64) -> f64 {
@@ -1101,10 +1107,10 @@ macro_rules! host {
         }
 
         /// Copy logical text without materializing native views. Input is
-        /// two concatenated UTF-8 row keys; first_len == 0 means all text.
+        /// two concatenated UTF-8 row keys, or fixed lead/trail endpoints.
         #[no_mangle]
-        pub extern "C" fn exact_list_text(rt: u32, view: u32, first_len: u32, len: u32, first_paragraph: u32, first_offset: u32, last_paragraph: u32, last_offset: u32) -> u32 {
-            $crate::abi::with_runtime(&EXACT_RUNTIMES, rt, false, |b, _| b.list_text(view, first_len as usize, len as usize, first_paragraph as usize, first_offset as usize, last_paragraph as usize, last_offset as usize), |_| 0)
+        pub extern "C" fn exact_list_text(rt: u32, view: u32, first_len: u32, len: u32, first_paragraph: u32, first_offset: u32, last_paragraph: u32, last_offset: u32, first_fixed: u32, last_fixed: u32) -> u32 {
+            $crate::abi::with_runtime(&EXACT_RUNTIMES, rt, false, |b, _| b.list_text(view, first_len as usize, len as usize, first_paragraph as usize, first_offset as usize, last_paragraph as usize, last_offset as usize, first_fixed, last_fixed), |_| 0)
         }
 
         /// The safe-area insets changed; returns the batch's length.

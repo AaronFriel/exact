@@ -267,7 +267,11 @@ pub fn own_from(f: Facts<'_>) -> Own {
     // Structural (D2, D3): a paragraph beside an exclusion; the parent of a
     // child with a layout transition.
     let flowing = kind == NodeType::Text && f.beside_exclusion;
-    let policy = host || motion_stacks(s) || flowing || f.holds_layout_transition;
+    let policy = host
+        || m.has(StyleId::PressTranslate)
+        || motion_stacks(s)
+        || flowing
+        || f.holds_layout_transition;
     Own {
         positioned,
         stacks: authored || policy,

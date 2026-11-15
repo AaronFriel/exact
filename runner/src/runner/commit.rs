@@ -1093,6 +1093,17 @@ impl<D: DataSource> Runner<D> {
                 "a mutation's answer hands over one request at a time".into(),
             ));
         }
+        // Watch a data-code module read before it leaves: binding can announce
+        // while it is in flight, and a failed reply rolls back its parse's topics.
+        if let Target::Resource(i) = target {
+            for request in requests.iter().filter(|r| r.is_native()) {
+                if let Some(topic) = self.module_topic(&request.body) {
+                    if !self.resources[i].watching.contains(&topic) {
+                        self.resources[i].watching.push(topic);
+                    }
+                }
+            }
+        }
         Ok(requests)
     }
 

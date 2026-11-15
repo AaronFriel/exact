@@ -64,7 +64,7 @@ impl<D: DataSource> Presenter<D> {
         let kernel = self.host.kernel();
         let node = kernel.node(id)?;
         let paragraph = self.paragraph(id)?;
-        let b = self.boxes.iter().find(|b| b.id == id)?;
+        let b = self.boxes.iter().find(|b| b.id == id)?.for_hit();
         let content = exact_kernel::svg::scene::content_box(kernel, &node);
         let down = kernel.text_line_offset(&node);
         let (mut px, mut py) = (x - b.rect.0, y - b.rect.1);

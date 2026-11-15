@@ -70,6 +70,9 @@ interface VideoPlayer {
     val lendable: Boolean
     /** Playing on its own account, not under Chrome's off-screen rule: it keeps its player out of view (D1). */
     val engaged: Boolean
+    /** The controller's view with `controls` (Media3's `PlayerView`), which reports itself to accessibility services
+     * at the node (D11); null without. */
+    val controller: View?
     /** A loan begins: this player reports to [sink] until [release] or the next bind. */
     fun bind(sink: MediaSink)
     /** Every prop of the element as the painter names it, with `uri` (the resolved source) or `refused` (why it
@@ -440,6 +443,16 @@ class Natives(
             v = v.parent as? View
         }
         return null
+    }
+
+    /** The controller media node [id]'s player hosts, which stands at the node in the accessibility tree (LLP
+     * 1042.001 D11). */
+    fun controller(id: Int): View? = elements[id]?.takeIf { it.kind == 0 && !it.parked }?.let { players[it.view]?.controller }
+
+    /** A controller reports itself only where its node stands ([Access]), not again among the layer's views. */
+    override fun onInitializeAccessibilityNodeInfo(info: android.view.accessibility.AccessibilityNodeInfo) {
+        super.onInitializeAccessibilityNodeInfo(info)
+        for (p in players.values) p.controller?.let { info.removeChild(it) }
     }
 
     /** The node op 28 draws for [id] (main thread). */

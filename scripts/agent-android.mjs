@@ -1066,8 +1066,10 @@ export function buildApk(app, env, profile, writeLocks = false, bundle = false) 
   // (LLP 1030.008 D2): the JavaScript and the Rust readers resolved the same variant.
   if (compat.inputs?.app !== app.id) { console.error(`${app.name}: the library's baked app id is ${compat.inputs?.app}, not ${app.id}: build it again`); return null; }
   // A `video` or `audio` plays on Media3, linked for a plan that makes one, and for every development build, whose
-  // plan may gain one and has no fallback (LLP 1042.001 D2).
-  const video = uses.includes('video') || development ? ['-Pvideo=1'] : [];
+  // plan may gain one and has no fallback (LLP 1042.001 D2). An app whose Maven graph is locked (LLP 1133.008 D8 item
+  // 5) is the exception: its lock is the graph each of its APKs resolves, development or production, so Media3 joins
+  // it only with a plan's video, and the app writes its locks again then.
+  const video = uses.includes('video') || (development && !maven.length) ? ['-Pvideo=1'] : [];
   // The token names its hatches read (LLP 1121 D12), beside them in the build.
   if (existsSync(resolve(app.dir, 'modules/android'))) writeFormaNames(app, 'kotlin');
   const graph = mavenGraph(app, writeLocks, maven, env);

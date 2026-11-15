@@ -1817,3 +1817,31 @@ agent's `state` shows the page's as `language {"lang":"ur","dir":"rtl"}`.
 phone number in Arabic text.
 
 More: docs/contract-for-agents.md (`t`, `setLocale`)
+
+## :active: Press feedback without app state
+names: active, pressed, press-translate
+
+`:active` takes `background-color`, `color`, `opacity`, `translate` and
+`-exact-press-scale`. The host shows them on the innermost pressable node,
+without a runner round trip. Translate adds to the node's own translation.
+Percentages use the border box by default. Only x and y are accepted; use
+transitions for 3D motion. A computed target changes with ordinary app
+commits; `none` clears the offset. The node remains the containing block of
+its absolute descendants while unpressed and when a computed target is `none`
+(LLP 1074).
+
+Layout stays unchanged. On the web, the hit area moves with the paint, as
+CSS does, and the browser's click rules apply. Native hosts keep the unpressed
+hit area and use their press timing. Release or cancellation removes the offset.
+
+```contract
+component App
+  state n = 0
+  action count
+    n = n + 1
+  view
+    button press=count appearance="none"
+      :active
+        translate = "4px 4px"
+      text `Pressed ${n}`
+```

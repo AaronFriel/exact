@@ -701,3 +701,161 @@ fn every_action_ending_survives_a_single_turn_until_the_host_drains_it() {
         assert_eq!(ended[id]["outcome"], "completed");
     }
 }
+
+#[derive(Default)]
+struct DeferredModuleReader {
+    ready: bool,
+}
+
+impl DataSource for DeferredModuleReader {
+    fn query(&mut self, _: &str, _: &[Value]) -> Result<Value, DataError> {
+        unreachable!("the fixture implements answer")
+    }
+
+    fn ready(&self) -> bool {
+        self.ready
+    }
+
+    fn answer(&mut self, _: &mut Store, _: &str, _: &[Value]) -> Result<Answer, DataError> {
+        Ok(Answer::Later(crate::Request::native(
+            br#"{"extension":"camera","source":"devices"}"#.to_vec(),
+        )))
+    }
+
+    fn parse(
+        &mut self,
+        _: &mut Store,
+        _: &str,
+        _: &[Value],
+        outcome: Outcome,
+    ) -> Result<Answer, DataError> {
+        let Outcome::Response(response) = outcome else {
+            panic!("a module response")
+        };
+        let value: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+        if value["error"] == "NotSupportedError" {
+            return Err(DataError::Failed(
+                crate::failure::FailureCode::Error,
+                "camera.devices is not bound".into(),
+                String::new(),
+            ));
+        }
+        Ok(Answer::Now(Value::str(value.as_str().unwrap())))
+    }
+}
+
+fn deferred_module_reader(data_code: bool) -> Runner<DeferredModuleReader> {
+    let mut b = PlanBuilder::new(exact_kernel::SCHEMA_DIGEST, 1);
+    let string = b.primitive(TypeKind::String);
+    let source = b.source("devices", &[], string);
+    b.module(
+        source,
+        ("camera", "@fixture/camera"),
+        "devices",
+        false,
+        false,
+        "never",
+        "",
+        "{}",
+    );
+    b.resource(
+        "devices",
+        if data_code { "readDevices" } else { "devices" },
+        &[],
+        string,
+        Some(&Value::str("no cameras")),
+    );
+    b.node(NodeType::View as u8, None, None, 0, &[], &[], None);
+    let mut r = Runner::boot(
+        b.finish().unwrap(),
+        DeferredModuleReader::default(),
+        Kernel::with_monospace(),
+        Default::default(),
+        "/",
+    )
+    .unwrap();
+    assert!(r.take_requests().is_empty());
+    r.data.ready = true;
+    r.data_ready().unwrap();
+    r
+}
+
+fn run_module_request(r: &mut Runner<DeferredModuleReader>, request: &crate::Request) -> Outcome {
+    use crate::{Dispatch, Reply, Work};
+    match r.native_work(request) {
+        Dispatch::Run(Work::Now(work)) => work(),
+        Dispatch::Run(Work::Later(work)) => {
+            let answer = std::sync::Arc::new(std::sync::Mutex::new(None));
+            let out = answer.clone();
+            work(Reply::new(move |v| *out.lock().unwrap() = Some(v)));
+            let outcome = answer
+                .lock()
+                .unwrap()
+                .take()
+                .expect("the fixture answers immediately");
+            outcome
+        }
+        _ => panic!("the module request runs"),
+    }
+}
+
+fn bind_camera(r: &mut Runner<DeferredModuleReader>) {
+    r.native_slot()
+        .host(Some(std::sync::Arc::new(|body, reply| {
+            let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+            assert_eq!(body["extension"], "camera");
+            assert_eq!(body["source"], "devices");
+            reply.send(super::response(&serde_json::json!("back camera")));
+        })));
+    r.bind_extensions(&["camera"], &[]);
+    assert!(r.apply_announced().1.is_none());
+}
+
+#[test]
+fn binding_recovers_a_failed_contract_module_reader_after_data_activation() {
+    let mut r = deferred_module_reader(false);
+    assert_eq!(r.failed_resources().len(), 1);
+    bind_camera(&mut r);
+    let requests = r.take_requests();
+    assert_eq!(requests.len(), 1);
+    let answer = run_module_request(&mut r, &requests[0].request);
+    r.fulfill(requests[0].ticket, answer).unwrap();
+    assert_eq!(r.resource("devices"), Some(&Value::str("back camera")));
+    assert!(r.failed_resources().is_empty());
+}
+
+#[test]
+fn binding_recovers_a_failed_data_module_reader_after_its_reply() {
+    let mut r = deferred_module_reader(true);
+    let requests = r.take_requests();
+    assert_eq!(requests.len(), 1);
+    let answer = run_module_request(&mut r, &requests[0].request);
+    r.fulfill(requests[0].ticket, answer).unwrap();
+    assert_eq!(r.failed_resources().len(), 1);
+    bind_camera(&mut r);
+    let requests = r.take_requests();
+    assert_eq!(requests.len(), 1);
+    let answer = run_module_request(&mut r, &requests[0].request);
+    r.fulfill(requests[0].ticket, answer).unwrap();
+    assert_eq!(r.resource("devices"), Some(&Value::str("back camera")));
+}
+
+#[test]
+fn binding_recovers_a_data_module_reader_before_its_failed_reply_lands() {
+    let mut r = deferred_module_reader(true);
+    let requests = r.take_requests();
+    assert_eq!(requests.len(), 1);
+    let answer = run_module_request(&mut r, &requests[0].request);
+    bind_camera(&mut r);
+    assert!(
+        r.take_requests().is_empty(),
+        "the outstanding reply lands first"
+    );
+    r.fulfill(requests[0].ticket, answer).unwrap();
+    let requests = r.take_requests();
+    assert_eq!(requests.len(), 1, "binding asks the failed reader again");
+    let answer = run_module_request(&mut r, &requests[0].request);
+    r.fulfill(requests[0].ticket, answer).unwrap();
+    assert_eq!(r.resource("devices"), Some(&Value::str("back camera")));
+    assert!(r.failed_resources().is_empty());
+}

@@ -1,6 +1,6 @@
 // The `video` element's player (LLP 1042.001): Media3's ExoPlayer behind the reader's `VideoPlayer` seam. The reader
-// names no Media3 type; an APK links this module only when its plan has a `video` or an `audio`, and in every
-// development build (`-Pvideo=1`, app/build.gradle.kts).
+// names no Media3 type; an APK links this module only when its plan has a `video` or an `audio`, and in a
+// development build of an app with no locked Maven graph (`-Pvideo=1`, `scripts/agent-android.mjs`).
 plugins { id("com.android.library") }
 providers.gradleProperty("videoBuildDir").orNull?.let { layout.buildDirectory = file(it) }
 android {

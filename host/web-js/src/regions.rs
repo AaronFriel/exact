@@ -165,7 +165,7 @@ impl Em<'_> {
     /// later slot can read an earlier one through `name`; empty when it
     /// owns none. `carry`, the dev loop's for a tab panel's arm: an
     /// expression naming the panel, by which each is carried across a reload.
-    fn owned(
+    pub(super) fn owned(
         &mut self,
         arm: u32,
         name: &str,
@@ -346,9 +346,10 @@ impl Em<'_> {
         match list {
             Some(opts) => {
                 let inputs = self.row_inputs(r, scope)?;
+                let text = self.logical_children(self.sites.of_arm(arms[0]), &inner)?;
                 let _ = write!(
                     self.out,
-                    "$vl({parent},{subject},({item},{index})=>{key},(p,{item},{index})=>{{{built}}},{{...{opts},{inputs}}});"
+                    "$vl({parent},{subject},({item},{index})=>{key},(p,{item},{index})=>{{{built}}},{{...{opts},{inputs},text:({item},{index})=>{{{rows_decl}return {text};}}}});"
                 );
             }
             None => {

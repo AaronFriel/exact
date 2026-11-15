@@ -864,6 +864,14 @@ impl LayoutTree {
         self.tables.size(slot)
     }
 
+    /// Every slot table formation has a record of, from the last layout:
+    /// each owner of a grid and each part placed in one, in no order.
+    pub(crate) fn table_slots(&self) -> impl Iterator<Item = u32> + '_ {
+        (self.tables.formed.keys())
+            .chain(self.tables.placed.keys())
+            .copied()
+    }
+
     /// Whether table formation has a record of `slot`: a grid it owns or
     /// one it is placed in.
     pub(crate) fn in_table(&self, slot: u32) -> bool {

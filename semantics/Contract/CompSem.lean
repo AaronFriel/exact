@@ -594,12 +594,16 @@ def crender : Nat → RCx → Locals → List CNode → Store → Result (List C
           pure (name, ← unsetRefused (ceval fuel cx.env cx.frame ls e))
         let literals := props.map fun (name, e) => (name, cliteral fuel cx.env.prog cx.frame ls e)
         let navigation := cx.tabs.element literals (values.filterMap fun (n, v) => v.map (n, ·))
+        let windowed := tag == "list" && (lookupField "virtualized" literals matches .some (.bool true))
+        let kids := if windowed then kids.map (fun child => match child with
+          | .each .. => .element "#window" [] [] [] [child]
+          | _ => child) else kids
         let (kids, live) ← (if navigation.opened then
           crender fuel { cx with tabs := cx.tabs.children props } ls kids live
           else pure ([], live))
         pure ([{ tag, testId, text, handlers,
                  control := elementControl tag props,
-                 windowed := tag == "list" && (lookupField "virtualized" literals matches .some (.bool true)),
+                 windowed := tag == "#window",
                  navigation, children := kids : CVNode }], live)
       | .when id c thn els => do
         match ← ceval fuel cx.env cx.frame ls c with

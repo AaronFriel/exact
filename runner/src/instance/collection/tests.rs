@@ -611,8 +611,7 @@ fn binary_feedback_roundtrips_and_rejects_malformed_reports() {
     for length in 0..bytes.len() {
         assert!(CollectionFeedback::decode(&bytes[..length]).is_err());
     }
-    let mut trailing = bytes.clone();
-    trailing.push(0);
+    let trailing = [&bytes[..], &[0]].concat();
     assert!(CollectionFeedback::decode(&trailing).is_err());
     let mut bad = bytes.clone();
     bad[92..96].copy_from_slice(&u32::MAX.to_le_bytes());
@@ -628,6 +627,7 @@ fn binary_feedback_roundtrips_and_rejects_malformed_reports() {
 #[test]
 fn snapshot_json_preserves_u64_metadata_as_decimal_strings() {
     let snapshot = CollectionSnapshot {
+        fixed: Vec::new(),
         view: 1,
         axis: ListAxis::Vertical,
         parent: None,

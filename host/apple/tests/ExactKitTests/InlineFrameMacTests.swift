@@ -38,6 +38,7 @@ final class InlineFrameMacTests: XCTestCase {
     func testPaddedRunAnswersItsBorderBox() throws { try checkEdgeCase("padded") }
     func testBoxAroundBoxesAnswersItsBorderBox() throws { try checkEdgeCase("nested") }
     func testEmptyPaddedRunAnswersItsBorderBox() throws { try checkEdgeCase("padded-empty") }
+    func testRightToLeftWrappedRunAnswersItsBorderBox() throws { try checkEdgeCase("rtl-wrap") }
 
     private func checkEdgeCase(_ name: String) throws {
         _ = NSApplication.shared
@@ -155,10 +156,12 @@ enum InlineFrameFixture {
             "nested": CGRect(x: 19.5625, y: -5, width: 55.703125, height: 29),
             // An empty run's padding and border take room after "Hi".
             "padded-empty": CGRect(x: 15.109375, y: -4, width: 14, height: 27),
+            // Two lines: its start on the first's right, its end on the second's left.
+            "rtl-wrap": CGRect(x: 20.609375, y: -4, width: 159.390625, height: 47),
         ]
         let want = try XCTUnwrap(expected[name])
         let fragments = host.inlineRects(run)
-        XCTAssertEqual(fragments.count, 1, name)
+        XCTAssertEqual(fragments.count, name == "rtl-wrap" ? 2 : 1, name)
         let detail = agent.layout(["id": Int(run.id)])
         XCTAssertTrue(JSONSerialization.isValidJSONObject(detail), "every coordinate must be finite: \(name)")
         let node = try XCTUnwrap(detail["node"] as? [String: Any])

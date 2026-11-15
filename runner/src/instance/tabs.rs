@@ -188,10 +188,7 @@ impl Index {
                             }
                         }
                     }
-                    let kids = match n.collection() {
-                        Some(_) => Vec::new(),
-                        None => roots_of(&n.children),
-                    };
+                    let kids = roots_of(&n.children);
                     let node_type = NodeType::from_wire(row.node_type).unwrap_or(NodeType::View);
                     self.nodes.insert(n.view, (node_type, props, kids));
                     if let Some(p) = parent {
@@ -571,7 +568,7 @@ fn open_in(
                     // A virtualized list that is a panel makes its window's
                     // rows now, as it would have when made.
                     match u.env.lists {
-                        Some(lists) => (lists.create)(u, n.node, n.view, frames)
+                        Some(lists) => (lists.create)(u, n.node, n.view, frames, &mut n.children)
                             .map(|made| n.set_collection(made)),
                         None => Ok(()),
                     }
@@ -582,10 +579,8 @@ fn open_in(
                             n.emit_children(u);
                         }),
                     })
-                } else if n.collection().is_none() {
-                    open_in(u, &mut n.children, frames, open, left)
                 } else {
-                    Ok(())
+                    open_in(u, &mut n.children, frames, open, left)
                 };
                 u.theme = saved;
                 done.map_err(|e| e.at_view(n.view, n.node))?;

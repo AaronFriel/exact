@@ -95,6 +95,22 @@ fn css_text_in(
     let mut skipped = Vec::new();
     // @ref LLP 1061: row scale and host feedback multiply independently.
     let press = press_composes(style);
+    let shift = style.mask.union(style.written).has(StyleId::PressTranslate);
+    if shift {
+        out.push_str("--exact-translate-composes:1;");
+        if style.mask.has(StyleId::Translate) {
+            out.push_str("--exact-base-translated:1;");
+        }
+        for (axis, px, pct) in [
+            ("x", style.translate.x, style.translate_percent.x),
+            ("y", style.translate.y, style.translate_percent.y),
+            ("z", style.translate_z, 0.0),
+        ] {
+            push_text!(&mut out, "--exact-translate-{}:", axis);
+            translate_axis(&mut out, px, pct);
+            out.push(';');
+        }
+    }
     for id in style.mask.union(style.written).iter() {
         if !style.mask.has(id) && clears::push(&mut out, id, press) {
             continue;
@@ -111,21 +127,41 @@ fn css_text_in(
             }
             (StyleId::Transition, RowValue::Transitions(t)) => {
                 let (mut text, spring_skipped) = transition_css(t);
-                if press {
-                    // CSS transitions sit outside the additive animation stack.
-                    // Transition the row's typed number so a press multiplies
-                    // its current value, not the transition's final target.
-                    text = text.replace("scale ", "--exact-scale ");
-                    if let Some(tr) = t.matching(Property::Scale) {
+                // Transition the authored base below the press's animation stack.
+                for (compose, property, name, bases) in [
+                    (press, Property::Scale, "scale", &["--exact-scale"][..]),
+                    (
+                        shift,
+                        Property::Translate,
+                        "translate",
+                        &[
+                            "--exact-translate-x",
+                            "--exact-translate-y",
+                            "--exact-translate-z",
+                        ][..],
+                    ),
+                ] {
+                    if !compose {
+                        continue;
+                    }
+                    text = text.replace(&format!("{name} "), &format!("{} ", bases[0]));
+                    if let Some(tr) = t.matching(property) {
                         let mut tr = tr.clone();
-                        tr.property = TransitionProperty::Property(Property::Scale);
-                        let (scale, _) = transition_css(&Transitions(vec![tr]));
-                        if !scale.is_empty() {
+                        tr.property = TransitionProperty::Property(property);
+                        let (own, _) = transition_css(&Transitions(vec![tr]));
+                        if !own.is_empty() {
                             if !text.is_empty() {
                                 text.push(',');
                             }
-                            text.push_str("scale 0s,");
-                            text.push_str(&scale.replace("scale ", "--exact-scale "));
+                            push_text!(&mut text, "{} 0s,", name);
+                            for (i, base) in bases.iter().enumerate() {
+                                if i > 0 {
+                                    text.push(',');
+                                }
+                                text.push_str(
+                                    &own.replace(&format!("{name} "), &format!("{base} ")),
+                                );
+                            }
                         }
                     }
                 }
@@ -143,7 +179,7 @@ fn css_text_in(
             // is in the page's stylesheet (`Batch::keyframes`).
             (StyleId::Animation, RowValue::Animations(a)) => {
                 if let Some(link) = crate::link::linked().animations.filter(|_| !a.0.is_empty()) {
-                    push_text!(&mut out, "animation:{};", (link.list)(a, press));
+                    push_text!(&mut out, "animation:{};", (link.list)(a, press || shift));
                 }
             }
             // @ref LLP 1063 — not CSS properties: custom properties the page's
@@ -158,7 +194,7 @@ fn css_text_in(
                     push_text!(
                         &mut out,
                         "--exact-exit-animation:{};",
-                        (link.list)(a, press)
+                        (link.list)(a, press || shift)
                     );
                 }
             }
@@ -357,6 +393,20 @@ fn css_text_in(
                 num_into(&mut out, *n as f32);
                 out.push(';');
             }
+            (StyleId::PressTranslate, RowValue::Vec2(v)) => {
+                out.push_str("--exact-press-translate:");
+                let pct = style.press_translate_percent;
+                translate_axis(&mut out, v.x, pct.x);
+                out.push(' ');
+                translate_axis(&mut out, v.y, pct.y);
+                out.push(';');
+                for (axis, px, pct) in [("x", v.x, pct.x), ("y", v.y, pct.y)] {
+                    push_text!(&mut out, "--exact-press-{}:", axis);
+                    translate_axis(&mut out, px, pct);
+                    out.push(';');
+                }
+            }
+            (StyleId::PressTranslatePercent, _) => {}
             (StyleId::PressScale, RowValue::Number(n)) => {
                 if press {
                     out.push_str("scale:calc(var(--exact-scale,1) * var(--exact-press-factor,1))!important;--exact-press:");
@@ -547,26 +597,29 @@ fn css_text_in(
     (out, skipped)
 }
 
-/// Whether a node's press feedback composes through `--exact-scale`
-/// (LLP 1061): its `scale` is the important product of the row's number and
-/// the feedback's factor, so an animation of `scale` reaches it only through
-/// `--exact-scale`.
+/// Whether animations need the authored bases used by press feedback.
+pub(crate) fn press_animations(style: &StyleProps) -> bool {
+    press_composes(style) || style.mask.union(style.written).has(StyleId::PressTranslate)
+}
+
+/// Whether scale is the product of its authored base and the press factor.
 pub(crate) fn press_composes(style: &StyleProps) -> bool {
     style.mask.has(StyleId::PressScale) && style.press_scale != 1.0
 }
 
-/// Whether `a` needs the pressable node's rule: its keyframes animate `scale`.
+/// Whether keyframes need authored bases beneath press feedback.
 fn press_rule(a: &exact_motion::animation::Animation, press: bool) -> bool {
     press
-        && a.keyframes
-            .0
-            .iter()
-            .any(|f| f.values.iter().any(|(p, _)| *p == Property::Scale))
+        && a.keyframes.0.iter().any(|f| {
+            f.values
+                .iter()
+                .any(|(p, _)| matches!(p, Property::Scale | Property::Translate))
+        })
 }
 
 /// The `@keyframes` rule's name an animation plays on a node: its own, or, on
-/// a pressable node whose keyframes animate `scale`, the rule that also
-/// animates `--exact-scale`. An animated custom property keeps Chrome from
+/// a pressable node whose keyframes animate scale or translate, the rule that
+/// also animates their base properties. An animated custom property keeps Chrome from
 /// compositing the whole animation, so only the nodes that read one get it.
 pub fn keyframes_name(a: &exact_motion::animation::Animation, press: bool) -> String {
     let mut name = a.name.clone();
@@ -577,23 +630,47 @@ pub fn keyframes_name(a: &exact_motion::animation::Animation, press: bool) -> St
 }
 
 /// The body of the rule [`keyframes_name`] names. The pressable node's copies
-/// each `scale` keyframe into `--exact-scale`: its important `scale`
-/// composition wins over the animation's own.
+/// scale and translation into their base properties; the composed CSS
+/// properties win over the animation's own.
 pub fn keyframes_css(a: &exact_motion::animation::Animation, press: bool) -> String {
     let text = rotation_keyframes_css(&a.keyframes);
     if !press_rule(a, press) {
         return text;
     }
+    press_keyframes_css(&text)
+}
+
+/// Base properties for keyframes beneath host press feedback.
+pub fn press_keyframes_css(text: &str) -> String {
     let mut out = String::new();
-    let mut rest = text.as_str();
-    while let Some(at) = rest.find("scale:") {
-        let end = at + rest[at..].find(';').expect("a keyframe declaration ends");
-        out.push_str(&rest[..=end]);
-        out.push_str("--exact-");
-        out.push_str(&rest[at..=end]);
-        rest = &rest[end + 1..];
+    for part in text.split_inclusive(';') {
+        out.push_str(part);
+        let declaration = part.rsplit_once('{').map_or(part, |(_, d)| d);
+        if let Some(value) = declaration.strip_prefix("scale:") {
+            out.push_str("--exact-scale:");
+            out.push_str(value);
+        } else if let Some(value) = declaration.strip_prefix("translate:") {
+            let Some((px, pct)) =
+                exact_kernel::style::space::translate(value.trim_end_matches(';'))
+            else {
+                continue;
+            };
+            for (name, px, pct) in [
+                ("x", px.x, pct.x),
+                ("y", px.y, pct.y),
+                (
+                    "z",
+                    exact_kernel::style::space::translate_z(value.trim_end_matches(';'))
+                        .unwrap_or(0.0),
+                    0.0,
+                ),
+            ] {
+                push_text!(&mut out, "--exact-translate-{}:", name);
+                translate_axis(&mut out, px, pct);
+                out.push(';');
+            }
+        }
     }
-    out.push_str(rest);
     out
 }
 
@@ -619,7 +696,7 @@ pub(crate) fn send_keyframes(
     let Some(link) = crate::link::linked().animations else {
         return;
     };
-    let press = press_composes(style);
+    let press = press_animations(style);
     for a in style.animation.0.iter().chain(&style.rare.exit_animation.0) {
         let name = (link.name)(a, press);
         if !sent.contains(&name) {

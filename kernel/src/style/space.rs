@@ -2,7 +2,56 @@
 //! `translate`'s z, and `perspective`. The `rotate` attribute sets angle
 //! and axis rows together; the motion seam joins them into one rotation.
 
-use super::{parse_pixel_length, Dimension, StyleId, StyleValueError, Vec2};
+use super::{parse_pixel_length, Dimension, StyleId, StyleValue, StyleValueError, Vec2};
+
+impl StyleValue<'_> {
+    pub(crate) fn vec2(&self, style: StyleId) -> Result<Vec2, StyleValueError> {
+        if matches!(
+            style,
+            StyleId::PressTranslate | StyleId::PressTranslatePercent
+        ) && matches!(self, StyleValue::Text(t) if t.split_ascii_whitespace().count() > 2)
+        {
+            return Err(StyleValueError::WrongKind {
+                style,
+                expected:
+                    "x and optional y only: a press is a 2D offset; use transitions for 3D motion",
+            });
+        }
+        let style = match style {
+            StyleId::PressTranslate => StyleId::Translate,
+            StyleId::PressTranslatePercent => StyleId::TranslatePercent,
+            other => other,
+        };
+        match self {
+            StyleValue::Vec2(x, y) if x.is_finite() && y.is_finite() => Ok(Vec2 { x: *x, y: *y }),
+            StyleValue::Text(t) if style == StyleId::TranslateVelocity => velocity(t),
+            // @ref LLP 1077 D8 — each row sets its part of translate (lengths, percentages, z).
+            StyleValue::Text(t)
+                if style == StyleId::Translate || style == StyleId::TranslatePercent =>
+            {
+                translate(t)
+                    .map(|(px, pct)| if style == StyleId::Translate { px } else { pct })
+                    .ok_or(StyleValueError::WrongKind {
+                        style,
+                        expected: "one or two lengths, each px (unitless zero allowed), a percentage of the box, or a calc() of px and a percentage such as calc(50% - 12px), then an optional z length in px",
+                    })
+            }
+            // `translate: -50%`: one percentage, the x's, which the
+            // compiler and the runner pass as a percentage.
+            StyleValue::Percent(p)
+                if p.is_finite()
+                    && (style == StyleId::Translate || style == StyleId::TranslatePercent) =>
+            {
+                let x = if style == StyleId::Translate { 0.0 } else { *p as f32 };
+                Ok(Vec2 { x, y: 0.0 })
+            }
+            _ => Err(StyleValueError::WrongKind {
+                style,
+                expected: "vec2",
+            }),
+        }
+    }
+}
 
 #[cfg(target_arch = "wasm32")]
 type Parsers = (

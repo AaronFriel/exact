@@ -1,8 +1,5 @@
 //! Inline background fragments use character ownership, independent of shaping.
-use super::{
-    inline::{Ownership, Piece},
-    Paragraph,
-};
+use super::{inline::Ownership, Paragraph, RoomKind};
 use crate::paint::{border::resolve_radii, Shape};
 use exact_kernel::{BorderStyle, Dimension, Direction, Env, ViewId};
 use std::collections::BTreeMap;
@@ -109,10 +106,10 @@ fn endpoints_in(
 
 impl Paragraph {
     /// CSS 2 §8.6 and `box-decoration-break: slice`: a box's first and last
-    /// characters select lines; the paragraph direction selects each line's
-    /// outermost piece for the start and end corners and borders. Breaks
-    /// stay open. Each box paints its background, then its border, outer
-    /// boxes first (CSS 2 Appendix E).
+    /// characters select lines; the paragraph direction, which is each
+    /// inline box's, selects each line's outermost piece for the start and
+    /// end corners and borders. Breaks stay open. Each box paints its
+    /// background, then its border, outer boxes first (CSS 2 Appendix E).
     pub(crate) fn inline_backgrounds(
         &self,
         backgrounds: &[Option<InlineBackground>],
@@ -209,13 +206,13 @@ impl Paragraph {
             let mut spans = Vec::new();
             // A box with no characters is its reach either side of its place,
             // starting and ending there.
-            for &(run, (_, x, glyph_rtl)) in empties.iter().filter(|(_, p)| p.0 == index) {
+            for &(run, (_, x, _)) in empties.iter().filter(|(_, p)| p.0 == index) {
                 let background = backgrounds[run].as_ref().expect("filtered");
                 for (depth, layer) in background.layers().enumerate() {
                     if boxes.contains_key(&layer.id) {
                         continue;
                     }
-                    let (before, after) = if glyph_rtl {
+                    let (before, after) = if rtl {
                         (layer.reach.end, layer.reach.start)
                     } else {
                         (layer.reach.start, layer.reach.end)
@@ -286,50 +283,72 @@ impl Paragraph {
                     let Some(own) = backgrounds.get(piece.run).and_then(Option::as_ref) else {
                         continue;
                     };
-                    for (depth, background) in own.layers().enumerate() {
-                        let Piece {
-                            mut lo,
-                            mut hi,
-                            run,
-                        } = piece;
-                        // Its padding past its first and last characters: from its
-                        // first glyph back, and from its last glyph's own end, less
-                        // the room after it (`Run::edges`), on (the line's) start
-                        // and end sides. Inside it, the room before a later run's
-                        // first glyph is its own too.
-                        if let Some(extent) = boxes.get(&background.id) {
-                            let rtl = g.level % 2 == 1;
-                            let first = runs.get(run).map(|r| r.0.start);
-                            let before = if range.contains(&extent.start) {
-                                background.reach.start
-                            } else if first.is_some_and(|f| range.contains(&f)) {
-                                self.source.spec.runs[run].edges.start
-                            } else {
-                                0.0
-                            };
-                            if rtl {
-                                hi += before;
-                            } else {
-                                lo -= before;
-                            }
-                            if range.contains(&(extent.end - 1)) {
-                                let room = self.source.spec.runs[run].edges.end;
-                                let past = background.reach.end - room;
-                                if rtl {
-                                    lo -= past;
-                                } else {
-                                    hi += past;
-                                }
-                            }
-                        }
+                    for (depth, layer) in own.layers().enumerate() {
+                        let (lo, hi) = match (flow, boxes.get(&layer.id)) {
+                            (Some(_), Some(extent)) => self.flowed_reach(
+                                g,
+                                range.clone(),
+                                (piece.lo, piece.hi),
+                                piece.run,
+                                layer,
+                                extent,
+                                runs,
+                            ),
+                            _ => (piece.lo, piece.hi),
+                        };
                         spans.push(Span {
                             lo,
                             hi,
-                            run,
-                            layer: background,
+                            run: piece.run,
+                            layer,
                             depth,
                         });
                     }
+                }
+            }
+            // The room beside a run (`Run::edges`), where the line draws it:
+            // a box covers the room of each run inside it, and at its own
+            // start and end only its reach, beside its text.
+            for room in line.rooms {
+                let run = room.run as usize;
+                if matches!(room.kind, RoomKind::Before | RoomKind::After) {
+                    continue;
+                }
+                let (Some(own), Some((chars, _))) =
+                    (backgrounds.get(run).and_then(Option::as_ref), runs.get(run))
+                else {
+                    continue;
+                };
+                let start = room.kind == RoomKind::Start;
+                // A start is right of its text under `rtl`, an end left of it.
+                let text_left = start == rtl;
+                for (depth, layer) in own.layers().enumerate() {
+                    let Some(extent) = boxes.get(&layer.id) else {
+                        continue;
+                    };
+                    let w = if start && extent.start == chars.start {
+                        layer.reach.start
+                    } else if !start && extent.end == chars.end {
+                        layer.reach.end
+                    } else {
+                        room.w
+                    }
+                    .min(room.w);
+                    if w <= 0.0 {
+                        continue;
+                    }
+                    let lo = if text_left {
+                        room.x
+                    } else {
+                        room.x + room.w - w
+                    };
+                    spans.push(Span {
+                        lo,
+                        hi: lo + w,
+                        run,
+                        layer,
+                        depth,
+                    });
                 }
             }
             // Outer boxes first, so that a box inside another paints over it.
@@ -393,5 +412,46 @@ impl Paragraph {
             }
         }
         out
+    }
+
+    /// A box's piece of glyph `g` in text flowed around shapes, which draws
+    /// a run's room only before its first glyph: its padding past its first
+    /// and last characters, from its first glyph back and from its last
+    /// glyph's own end, less the room after it, on the glyph's start and
+    /// end sides.
+    #[allow(clippy::too_many_arguments)]
+    fn flowed_reach(
+        &self,
+        g: &super::LayoutGlyph,
+        range: Range<usize>,
+        (mut lo, mut hi): (f32, f32),
+        run: usize,
+        layer: &InlineBackground,
+        extent: &Range<usize>,
+        runs: &[(Range<usize>, usize)],
+    ) -> (f32, f32) {
+        let rtl = g.level % 2 == 1;
+        let first = runs.get(run).map(|r| r.0.start);
+        let before = if range.contains(&extent.start) {
+            layer.reach.start
+        } else if first.is_some_and(|f| range.contains(&f)) {
+            self.source.spec.runs[run].edges.start
+        } else {
+            0.0
+        };
+        if rtl {
+            hi += before;
+        } else {
+            lo -= before;
+        }
+        if range.contains(&(extent.end - 1)) {
+            let past = layer.reach.end - self.source.spec.runs[run].edges.end;
+            if rtl {
+                lo -= past;
+            } else {
+                hi += past;
+            }
+        }
+        (lo, hi)
     }
 }

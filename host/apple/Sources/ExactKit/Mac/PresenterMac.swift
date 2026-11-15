@@ -91,6 +91,7 @@ package final class Presenter {
     var videoVisibility: VideoVisibilityHost?
     lazy package var collections = CollectionHost(self)
     lazy var stickies = StickyHost(self)
+    let tableGrid = TableGrid()
     /// Heavy leaves held while their rows are far or flying (LLP 1068 §5.1).
     lazy var leaves = HeavyLeaves(self)
     lazy package var selection = TextSelection(self)
@@ -792,7 +793,7 @@ package final class Presenter {
     /// boxes where the viewer sees them (LLP 1051.000 D1).
     var onScrolled: ((UInt32?, Double, Double) -> Void)?
     var onListIndex: ((UInt32, String) -> Int?)?
-    var onListText: ((UInt32, (String, Int, Int)?, (String, Int, Int)?) -> String)?
+    var onListText: ((UInt32, (String, Int, Int, Bool?)?, (String, Int, Int, Bool?)?) -> String)?
     private(set) var listViews: [UInt32: NodeView] = [:]
     /// Views this batch renewed for another list item (RenewMac.swift), and the accessibility watch that allows it.
     var renewing = Set<UInt32>(), rowReuseWatch: [NSKeyValueObservation] = []
@@ -1232,12 +1233,14 @@ package final class Presenter {
             case .layoutHits, .layoutHitsWithdrawn: break
             case .sticky: stickies.apply(id, op.payload)
             case .fragments: views[id]?.applyColumns(op.payload)
+            case .table: tableGrid.apply(id, op.payload)
             case .unknown: blocks.applied(op)
             case .renew: renew(id)
             case .destroy:
                 elements.destroyed(id)
                 blocks.destroyed(id)
                 stickies.forget(id)
+                tableGrid.forget(id)
                 forgetFlight(id)
                 views[id]?.holdGone()
                 if endExit(id) { continue }

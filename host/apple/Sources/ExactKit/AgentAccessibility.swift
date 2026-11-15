@@ -510,6 +510,13 @@ extension Presenter {
         if let actions = o.accessibilityCustomActions, !actions.isEmpty { e["actions"] = actions.prefix(16).compactMap { cut($0.name) } }
         native["role"] = names
         if let ident = (o as? UIAccessibilityIdentification)?.accessibilityIdentifier, ident != axTestId(id) { native["identifier"] = cut(ident) }
+        // A data table's rows and columns, and a cell's first row, rows, first column and columns, as Android's reader says them.
+        if o.accessibilityContainerType == .dataTable, let table = obj as? UIAccessibilityContainerDataTable {
+            native["collection"] = [table.accessibilityRowCount(), table.accessibilityColumnCount()]
+        }
+        if let cell = obj as? UIAccessibilityContainerDataTableCell, case let (r, c) = (cell.accessibilityRowRange(), cell.accessibilityColumnRange()), r.location != NSNotFound {
+            native["item"] = [r.location, r.length, c.location, c.length]
+        }
         let frame = o.accessibilityFrame
         if !frame.isEmpty {
             let vp = viewport
@@ -559,6 +566,10 @@ extension Presenter {
         e["interactive"] = ["AXButton", "AXLink", "AXTextField", "AXTextArea", "AXCheckBox", "AXRadioButton", "AXSlider", "AXPopUpButton", "AXMenuItem", "AXComboBox"].contains(r)
         native["role"] = r
         if let subrole = f.subrole { native["subrole"] = subrole }
+        if r == NSAccessibility.Role.table.rawValue, let table = obj as? NSView { native["collection"] = [table.accessibilityRowCount(), table.accessibilityColumnCount()] }
+        if r == NSAccessibility.Role.cell.rawValue, let cell = obj as? NSView, case let (rows, columns) = (cell.accessibilityRowIndexRange(), cell.accessibilityColumnIndexRange()), rows.length > 0 {
+            native["item"] = [rows.location, rows.length, columns.location, columns.length]
+        }
         if let ident = f.identifier, !ident.isEmpty, ident != axTestId(id) { native["identifier"] = cut(ident) }
         if !f.frame.isEmpty, let window = viewport.window {
             // Screen points, y up, into the viewport's: the clip view's, less its scroll.

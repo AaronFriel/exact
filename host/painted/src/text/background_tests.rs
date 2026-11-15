@@ -639,3 +639,126 @@ fn a_boxs_room_breaks_a_ligature_across_it() {
     let (f, i) = (advancing[0], advancing[1]);
     assert!((i.x - (f.x + f.w) - 3.0).abs() < 0.05, "{f:?} {i:?}");
 }
+
+/// A paragraph of `texts` in `direction`, its second run with `room` (its
+/// start, its end) beside its text.
+fn boxed(
+    e: &mut TextEngine,
+    texts: &[&str],
+    direction: Direction,
+    width: Option<f32>,
+    room: (f32, f32),
+) -> std::rc::Rc<Paragraph> {
+    let mut s = spec(texts);
+    s.direction = direction;
+    s.runs[1].edges = exact_kernel::InlineEdges {
+        start: room.0,
+        end: room.1,
+    };
+    e.paragraph(&s, width)
+}
+
+/// An inline box's start and end follow its own direction, its
+/// paragraph's, whatever the direction of its text, and its first and last
+/// fragments are in visual order (CSS 2 §8.6, §9.10; CSS Writing Modes 3
+/// §2.1): in a right-to-left paragraph its start room is right of its text
+/// and its end room left of it, as Chrome draws `<p dir=rtl>אב <span
+/// style="padding:0 3px 0 7px">גדה</span> וז</p>` and the same span
+/// holding "abc"; in a left-to-right one the other way about, a Hebrew
+/// span's start left of its last letter, its leftmost.
+#[test]
+fn a_boxs_rooms_are_on_its_own_sides_whatever_its_texts_direction() {
+    let mut e = engine();
+    // Each case: its texts, its direction, and the run's glyphs (by byte in
+    // the line) that have its start room and its end room beside them.
+    for (texts, direction, start_at, end_at) in [
+        (["אב ", "גדה", " וז"], Direction::Rtl, 5, 9),
+        (["אב ", "abc", " גד"], Direction::Rtl, 7, 5),
+        (["ab ", "אבג", " cd"], Direction::Ltr, 7, 3),
+        (["ab ", "abc", " cd"], Direction::Ltr, 3, 5),
+    ] {
+        let p = boxed(&mut e, &texts, direction, None, (3.0, 7.0));
+        let line = p.layout_runs().next().unwrap();
+        let glyphs: Vec<_> = line.glyphs.iter().filter(|g| g.w > 0.0).collect();
+        let at = |byte: u32| glyphs.iter().position(|g| g.start == byte).unwrap();
+        let gap = |left: usize| glyphs[left + 1].x - (glyphs[left].x + glyphs[left].w);
+        let rtl = direction == Direction::Rtl;
+        let (s, n) = (at(start_at), at(end_at));
+        let (start_gap, end_gap) = if rtl {
+            (gap(s), gap(n - 1))
+        } else {
+            (gap(s - 1), gap(n))
+        };
+        let case = format!("{texts:?} {direction:?}: {glyphs:?}");
+        assert!((start_gap - 3.0).abs() < 0.05, "{case}: start {start_gap}");
+        assert!((end_gap - 7.0).abs() < 0.05, "{case}: end {end_gap}");
+        // And nowhere else.
+        let inside: f32 = (0..glyphs.len() - 1).map(gap).sum();
+        assert!((inside - 10.0).abs() < 0.05, "{case}: {inside}");
+    }
+}
+
+/// Each fragment of a wrapped box holds its glyphs, its padding past them
+/// on its own start and end sides: a right-to-left paragraph's Hebrew,
+/// Arabic and Latin boxes keep their last letters inside them.
+#[test]
+fn a_wrapped_boxs_fragments_hold_its_glyphs_in_a_right_to_left_paragraph() {
+    let mut e = engine();
+    let reach = exact_kernel::InlineEdges {
+        start: 6.0,
+        end: 6.0,
+    };
+    for texts in [
+        ["מילה ", "טקסט ארוך שעובר בין שורות", " סוף"],
+        ["كلمة ", "نص طويل يمتد عبر السطور", " نهاية"],
+        ["Wrap ", "a run that wraps across lines", " end"],
+    ] {
+        let p = boxed(&mut e, &texts, Direction::Rtl, Some(180.0), (9.0, 9.0));
+        let box_ = background(1).map(|b| InlineBackground {
+            reach,
+            radii: [const { Dimension::Points(0.0) }; 4],
+            ..b
+        });
+        let rects: Vec<_> = fills(&p, &[None, box_, None])
+            .into_iter()
+            .map(|s| s.rect)
+            .collect();
+        let lines: Vec<_> = p.layout_runs().collect();
+        let first = lines
+            .iter()
+            .position(|l| l.glyphs.iter().any(|g| g.run() == 1));
+        let last = lines
+            .iter()
+            .rposition(|l| l.glyphs.iter().any(|g| g.run() == 1));
+        let (first, last) = (first.unwrap(), last.unwrap());
+        assert!(last > first, "{texts:?} wraps");
+        for (i, line) in lines
+            .iter()
+            .enumerate()
+            .filter(|(_, l)| l.glyphs.iter().any(|g| g.run() == 1))
+        {
+            let ink: Vec<_> = line
+                .glyphs
+                .iter()
+                .filter(|g| g.run() == 1 && g.w > 0.0 && !line.text[g.range()].trim().is_empty())
+                .collect();
+            let lo = ink.iter().map(|g| g.x).fold(f32::INFINITY, f32::min);
+            let hi = ink
+                .iter()
+                .map(|g| g.x + g.w)
+                .fold(f32::NEG_INFINITY, f32::max);
+            let mine: Vec<_> = rects
+                .iter()
+                .filter(|r| r.1 < line.line_y && line.line_y < r.1 + r.3)
+                .collect();
+            let case = format!("{texts:?} line {i}: {lo}..{hi} in {mine:?}");
+            assert_eq!(mine.len(), 1, "{case}");
+            let r = mine[0];
+            // Its start on its first line's right, its end on its last's left.
+            let right = if i == first { hi + 6.0 } else { hi };
+            let left = if i == last { lo - 6.0 } else { lo };
+            assert!((r.0 - left).abs() < 0.05, "{case}: left");
+            assert!((r.0 + r.2 - right).abs() < 0.05, "{case}: right");
+        }
+    }
+}

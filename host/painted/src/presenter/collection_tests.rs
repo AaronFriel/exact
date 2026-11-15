@@ -1410,3 +1410,6 @@ fn the_readers_drag_after_a_keyed_requests_jump_ends_it_where_the_reader_is() {
     );
     assert_eq!(p.scroll_of(feed).1, at + 50.);
 }
+
+#[path = "collection/fixed_tests.rs"]
+mod fixed;

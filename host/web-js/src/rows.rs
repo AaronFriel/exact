@@ -1,11 +1,8 @@
-//! A node's dynamic style rows as the compiler writes them (rt.js `S`,
-//! `Sm`), where a node's static rows must be inline too, and its bound
-//! `data-*` words.
+//! Dynamic style rows (rt.js `S`, `Sm`), their inline static rows, and bound `data-*` words.
 
 use super::Em;
 use crate::style;
-use exact_kernel::PropId;
-use exact_kernel::{NodeType, StyleId};
+use exact_kernel::{NodeType, PropId, StyleId};
 use exact_plan::{BindingKind, BindingsRow, NodesId};
 use exact_web::host::template::Parts;
 use std::fmt::Write as _;
@@ -152,7 +149,6 @@ impl Em<'_> {
         format!("p{i}_{k}")
     }
 
-    /// One dynamic style binding `b` of node `i` (element `e`, value `f`).
     pub(super) fn style_row(
         &mut self,
         i: u32,
@@ -165,6 +161,7 @@ impl Em<'_> {
         let plan = self.plan;
         let row = &plan.node(NodesId(i));
         let press = parts.css.contains("--exact-press:");
+        let shift = parts.css.contains("--exact-translate-composes:1");
         let binding = |id: StyleId| {
             row.bindings
                 .iter()
@@ -317,14 +314,17 @@ impl Em<'_> {
                     ("user-select".into(), String::new(), unsaid()),
                 ]
             }
-            // @ref LLP 1077 D8 — the `rotate` and `translate` attributes bind
-            // these with the same value: the angle's and xy's declaration
-            // writes the author's whole text.
+            StyleId::PressTranslate => {
+                let press = self.uses.rt("pressFeedback");
+                let _ = write!(self.out, "{press}();");
+                style::press_translation_writes()
+            }
+            // @ref LLP 1077 D8 — rotation keeps its axis beside the angle;
+            // each translation's parts share the author's whole text.
             StyleId::RotateAxis => one("--exact-rotate-axis", Some("v=>{const w=String(v??'').trim().split(/\\s+/);if(w.length===2)return w.find(x=>/^[xyz]$/i.test(x))||'z';return w.length===4?w.slice(0,3).join(' '):'z'}".into())),
-            StyleId::TranslateZ | StyleId::TranslatePercent => {
-                if binding(StyleId::Translate).is_some_and(|o| plan.code(o.expr) == plan.code(b.expr)) {
-                    return Ok(());
-                }
+            StyleId::TranslateZ | StyleId::TranslatePercent | StyleId::PressTranslatePercent => {
+                let pair = if id == StyleId::PressTranslatePercent { StyleId::PressTranslate } else { StyleId::Translate };
+                if binding(pair).is_some_and(|o| plan.code(o.expr) == plan.code(b.expr)) { return Ok(()); }
                 return refuse("a dynamic 3D part without its `rotate` or `translate`");
             }
             // @ref LLP 1077 D7 — the shorthand binds both rows with the
@@ -469,8 +469,13 @@ impl Em<'_> {
             // On a pressed node an animation of `scale` plays its rule's
             // `-exact-press` copy, and `scale` transitions as `--exact-scale`
             // (css.rs `keyframes_name`, `css_text`).
+            StyleId::Translate if shift => ["x", "y", "z"].iter().enumerate().map(|(i, axis)| (
+                format!("--exact-translate-{axis}"), String::new(), Some(format!(
+                    r#"v=>{{const text=String(v??'').trim();if(!CSS.supports('translate',text))return '0px';const p=text.match(/calc\([^)]*\)|[^\s]+/g)??[];return !p.length||/^(none|unset|initial)$/i.test(p[0])?'0px':p[{i}]??'0px'}}"#
+                ))
+            )).chain(one("translate", None)).chain(one("--exact-base-translated", Some("v=>CSS.supports('translate',String(v))&&!/^(none|unset|initial|revert|revert-layer)$/i.test(String(v).trim())?'1':null".into()))).collect(),
             StyleId::Scale if press => one("--exact-scale", None),
-            StyleId::Animation if press => {
+            StyleId::Animation if press || shift => {
                 let names: Vec<String> = self.press_keyframes.clone();
                 let names = serde_json::to_string(&names).unwrap();
                 let mut w = vec![(
@@ -483,9 +488,9 @@ impl Em<'_> {
                 }
                 w
             }
-            StyleId::Transition if press => one(
+            StyleId::Transition if press || shift => one(
                 "transition",
-                Some(pressed_transition_map()),
+                Some(style::composed_transition_map(press, shift)),
             ),
             StyleId::LayoutTransition => {
                 let parser = self.uses.share('t', crate::paint::transitions());
@@ -493,7 +498,7 @@ impl Em<'_> {
                 one("--exact-layout-transition", Some(crate::presence::layout_transition_map(&parser, &format!("{view}({e})"), &say)))
             }
             StyleId::ExitAnimation => {
-                let values = crate::presence::exit_animations(plan, plan.code(b.expr), press);
+                let values = crate::presence::exit_animations(plan, plan.code(b.expr), press || shift);
                 let (say, view) = (self.uses.rt("say"), self.uses.rt("viewId"));
                 one("--exact-exit-animation", Some(crate::presence::declaration_map(&values, &format!("{view}({e})"), &say, "exit-animation")))
             }
@@ -818,7 +823,7 @@ pub(super) fn press_keyframes(plan: &exact_plan::Plan) -> Vec<String> {
         .iter()
         .filter(|k| {
             exact_motion::Keyframes::parse(plan.str(k.css))
-                .is_ok_and(|f| f.css().contains("scale:"))
+                .is_ok_and(|f| f.css().contains("scale:") || f.css().contains("translate:"))
         })
         .map(|k| plan.str(k.name).to_string())
         .collect()
@@ -862,6 +867,10 @@ pub(super) fn presence_decls(css: &mut String) -> String {
             "--exact-press:",
             "--exact-press-haptic:",
             // The pressed paint (LLP 1061 D7), read the same way.
+            "--exact-press-translate:",
+            "--exact-press-x:",
+            "--exact-press-y:",
+            "--exact-base-translated:",
             "--exact-press-opacity:",
             "--exact-press-opacity-to:",
             "--exact-press-background-color:",
@@ -884,12 +893,8 @@ pub(super) fn presence_decls(css: &mut String) -> String {
 }
 
 impl Em<'_> {
-    /// What an element needs once made: a canvas's surface, a native
-    /// module's mount (LLP 1024 D3), a hatched node's page-module hatch (LLP
-    /// 1075.003.000, `data-hatch` among its static attributes), and the
-    /// constant values settled once its tree is in place, as bound ones are
-    /// (rt.js `drain`): a select's, which its options carry (calendar diary
-    /// F6), and a scroller's offsets (F8).
+    /// Mount surfaces and extensions (LLP 1024, 1075.003.000), then settle
+    /// constant values after mounting, as rt.js `drain` does for bindings.
     pub(crate) fn element_extras(
         &mut self,
         tag: &str,
@@ -1081,15 +1086,6 @@ fn sandboxed_source<'a>(
     })
 }
 
-/// A pressed node's computed `transition`: an author's entries
-/// ([`crate::style::TRANSITION_ENTRIES`]), with `scale` moved to the
-/// `--exact-scale` the press composes with.
-pub(crate) fn pressed_transition_map() -> String {
-    format!(
-                    "v=>{{if(v==null)return v;{}const o=p.map(t=>t.replace(/^scale(?=\\s)/,\"--exact-scale\")),m=p.filter(t=>/^(scale|all)(\\s|$)/.test(t)).pop();if(m)o.push(\"scale 0s\",m.replace(/^(scale|all)/,\"--exact-scale\"));return o.join(\",\")||\"none\"}}",
-                    crate::style::TRANSITION_ENTRIES.as_str()
-                )
-}
 #[cfg(test)]
 mod tests {
     #[test]
@@ -1191,7 +1187,7 @@ mod tests {
         // `--exact-scale`.
         assert_eq!(
             crate::style::tests::run(
-                &super::pressed_transition_map(),
+                &crate::style::composed_transition_map(true, false),
                 &[
                     "-exact-tint-color 1s",
                     "tint-color 1s, opacity 1s",
@@ -1210,7 +1206,10 @@ mod tests {
                 "none"
             ])
         );
-        crate::style::tests::assert_spring_transitions(&super::pressed_transition_map(), true);
+        crate::style::tests::assert_spring_transitions(
+            &crate::style::composed_transition_map(true, false),
+            true,
+        );
     }
 
     use crate::style::{

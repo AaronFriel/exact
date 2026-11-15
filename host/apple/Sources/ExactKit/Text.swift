@@ -410,8 +410,8 @@ enum TextLinePaint {
     /// or bidi split are joined again where they touch, within one box; two
     /// boxes side by side stay two, and a box inside another paints over it
     /// (CSS 2 Appendix E: each inline box's background in tree order). The
-    /// room kerned after a glyph for the boxes beside it (`exactEdgeRoom`)
-    /// is no glyph's: a box covers it only inside its own last character.
+    /// room kerned on a glyph for the boxes beside it (`exactEdgeRoom`) is
+    /// no glyph's: a box covers it where the line draws it (`placedRooms`).
     /// A box's `border-radius` rounds only its own start and end (`slice`),
     /// in visual order as CSS 2's §8.6 places them: under `ltr` the start on
     /// the leftmost piece of the line that holds its first character and
@@ -425,14 +425,18 @@ enum TextLinePaint {
         // The boxes whose first and whose last character is on this line.
         var starts = Set<Int>(), ends = Set<Int>()
         let runs = CTLineGetGlyphRuns(line) as! [CTRun]
-        let lineEnd = CTLineGetStringRange(line).location + CTLineGetStringRange(line).length
-        // CSS removes the collapsible spaces that end a line: a wrapped run's
-        // background stops at its last glyph, as the browser paints it. A
-        // left-to-right line ends on the right (LLP 1053 §0, the Linux parity).
-        var end = CGFloat.infinity
-        if !runs.contains(where: { CTRunGetStatus($0).contains(.rightToLeft) }) {
-            end = CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil)) - CGFloat(CTLineGetTrailingWhitespaceWidth(line))
-        }
+        // CSS removes the collapsible spaces that end a line (CSS Text 3
+        // §4.1.3): a wrapped run's background stops at its last glyph, as the
+        // browser paints it. They
+        // hang past the line's end edge: its width under an `ltr` base (LLP
+        // 1053 §0, the Linux parity), left of its pen under `rtl` (CoreText's).
+        let rtlBase = runs.first.flatMap { (CTRunGetAttributes($0) as NSDictionary)[NSAttributedString.Key.paragraphStyle] as? NSParagraphStyle }?
+            .baseWritingDirection == .rightToLeft
+        let trailing = CGFloat(CTLineGetTrailingWhitespaceWidth(line))
+        let start = rtlBase && trailing > 0 ? 0 : -CGFloat.infinity
+        let end = !rtlBase && trailing > 0 ? CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil)) - trailing : CGFloat.infinity
+        // Each run's background, for the room beside it (`placedRooms`).
+        var fills: [Int: InlineBackground] = [:]
         for run in runs {
             let attributes = CTRunGetAttributes(run) as NSDictionary
             // The boxes of runs with no text after this one's last character:
@@ -448,6 +452,7 @@ enum TextLinePaint {
                 }
             }
             guard let fill = attributes[NSAttributedString.Key.exactBackground] as? InlineBackground else { continue }
+            if let room = attributes[NSAttributedString.Key.exactRoomRun] as? InlineRoomRun { fills[room.index] = fill }
             let count = CTRunGetGlyphCount(run)
             guard count > 0 else { continue }
             var positions = [CGPoint](repeating: .zero, count: count)
@@ -460,7 +465,7 @@ enum TextLinePaint {
                     lo = min(lo, positions[i].x, positions[i].x + advances[i].width)
                     hi = max(hi, positions[i].x, positions[i].x + advances[i].width)
                 }
-                hi = min(hi, end)
+                (lo, hi) = (max(lo, start), min(hi, end))
                 if hi > lo { spans.append(Piece(lo: lo, hi: hi, box: nil, color: fill.color, fill: fill)) }
                 continue
             }
@@ -472,15 +477,15 @@ enum TextLinePaint {
             let next = Dictionary(uniqueKeysWithValues: zip(stops.dropLast(), stops.dropFirst()))
             // The ellipsis stands for what was cut, not for the box's end.
             let token = attributes[NSAttributedString.Key.exactTruncation] != nil
+            // The room kerned on a glyph is no glyph's ink (`exactEdgeRoom`):
+            // it is right of the glyph that reaches furthest.
             let room = attributes[NSAttributedString.Key.exactEdgeRoom] as? CGFloat ?? 0
+            let reach = (0..<count).max { positions[$0].x + advances[$0].width < positions[$1].x + advances[$1].width }
             let backwards = CTRunGetStatus(run).contains(.rightToLeft)
-            // A start room kerned on the line's last glyph is the next line's.
-            let leaves = attributes[NSAttributedString.Key.exactBreakRoom] as? CGFloat ?? 0
             for i in 0..<count {
                 let from = indices[i], to = next[from]!, glyph = NSRange(location: from, length: to - from)
-                let last = to == lineEnd ? leaves : 0
-                let lo = min(positions[i].x, positions[i].x + advances[i].width) + (backwards ? last : 0)
-                let hi = min(end, max(positions[i].x, positions[i].x + advances[i].width) - (backwards ? 0 : last))
+                let lo = max(start, min(positions[i].x, positions[i].x + advances[i].width))
+                let hi = min(end, max(positions[i].x, positions[i].x + advances[i].width) - (i == reach ? room : 0))
                 for (b, box) in boxes.boxes.enumerated() {
                     let mine = NSIntersectionRange(box.extent, glyph)
                     guard mine.length > 0 else { continue }
@@ -494,18 +499,22 @@ enum TextLinePaint {
                     // run's direction, as a caret divides a ligature.
                     let share = (hi - lo) / CGFloat(to - from)
                     let near = CGFloat(mine.location - from) * share, far = CGFloat(NSMaxRange(mine) - from) * share
-                    var (a, z) = backwards ? (hi - far, hi - near) : (lo + near, lo + far)
-                    // Its padding past its first and last characters: from its
-                    // first glyph back, and from its last glyph's own end, less
-                    // the room kerned after it.
-                    if box.before != 0, NSLocationInRange(box.extent.location, glyph) {
-                        if backwards { z += box.before } else { a -= box.before }
-                    }
-                    if NSLocationInRange(NSMaxRange(box.extent) - 1, glyph) {
-                        if backwards { a += room - last - box.after } else { z += box.after - room + last }
-                    }
+                    let (a, z) = backwards ? (hi - far, hi - near) : (lo + near, lo + far)
                     if z > a { spans.append(Piece(lo: a, hi: z, box: b, color: box.color, fill: fill)) }
                 }
+            }
+        }
+        // The room beside a run, where the line draws it: a box covers the
+        // room of each run inside it, and at its own start and end only its
+        // padding and border (its reach), beside its text.
+        for room in TextEngine.placedRooms(line) {
+            guard let fill = fills[room.run.index], let table = fill.boxes else { continue }
+            for (b, box) in table.boxes.enumerated() where NSIntersectionRange(box.extent, room.run.range).length > 0 {
+                let w = min(room.width, room.start && box.extent.location == room.run.range.location ? box.before
+                            : !room.start && NSMaxRange(box.extent) == NSMaxRange(room.run.range) ? box.after : room.width)
+                guard w > 0 else { continue }
+                let lo = room.textLeft ? room.x : room.x + room.width - w
+                spans.append(Piece(lo: lo, hi: lo + w, box: b, color: box.color, fill: fill))
             }
         }
         // Outer boxes first, so that a box inside another paints over it.

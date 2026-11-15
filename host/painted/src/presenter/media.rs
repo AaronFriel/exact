@@ -80,6 +80,18 @@ impl<D: DataSource> Presenter<D> {
         let Ok(state) = serde_json::from_str::<serde_json::Value>(state) else {
             return false;
         };
+        // Its poster shows until this source's first frame (LLP 1042.001 D5).
+        let framed = state["frameReady"].as_bool() == Some(true);
+        let poster_changed = framed != self.brush.media.framed.contains(&key);
+        if poster_changed {
+            if framed {
+                self.brush.media.framed.insert(key);
+            } else {
+                self.brush.media.framed.remove(&key);
+            }
+            self.brush.media.asked.push(key);
+            self.dirty = true;
+        }
         let size = match (state["videoWidth"].as_f64(), state["videoHeight"].as_f64()) {
             (Some(w), Some(h)) if w > 0.0 && h > 0.0 => Some((w as f32, h as f32)),
             _ => None,
@@ -100,13 +112,86 @@ impl<D: DataSource> Presenter<D> {
             },
         );
         if size.is_none() || size == before {
-            return false;
+            return poster_changed;
         }
         if let Some(error) = self.host.set_intrinsic(id, size) {
             eprintln!("exact: video {id}: {error}");
         }
         self.dirty = true;
         true
+    }
+
+    /// @ref LLP 1042.001 D3 — which media nodes handle `timeupdate`, found
+    /// again when the tree changed; the rows of those that changed paint
+    /// again, so their players hear it.
+    pub(crate) fn sync_media(&mut self, dirty: &mut crate::paint::rows::Dirty) {
+        for key in self.brush.media.asked.drain(..) {
+            dirty.node(key);
+        }
+        for id in self.images.posters_changed.drain(..) {
+            if let Some(node) = self.host.kernel().node(id) {
+                dirty.node(node.key);
+            }
+        }
+        let kernel = self.host.kernel();
+        let epoch = kernel.epoch();
+        if self.brush.media.epoch == Some(epoch) {
+            return;
+        }
+        self.brush.media.epoch = Some(epoch);
+        (self.brush.media.commands).retain(|key, _| kernel.node_by_key(*key).is_some());
+        (self.brush.media.framed).retain(|key| kernel.node_by_key(*key).is_some());
+        let timed: std::collections::BTreeSet<_> = if kernel.has_type(NodeType::Video) {
+            (kernel.preorder_where(&self.host.roots(), |t, _| t == NodeType::Video))
+                .into_iter()
+                .filter(|id| (self.host.runner().handlers_of(*id)).contains(&EventKind::Timeupdate))
+                .filter_map(|id| kernel.node(id).map(|n| n.key))
+                .collect()
+        } else {
+            Default::default()
+        };
+        for key in timed.symmetric_difference(&self.brush.media.timed) {
+            dirty.node(*key);
+        }
+        self.brush.media.timed = timed;
+    }
+
+    /// @ref LLP 1042.001 §5, D9 — `fastSeek(id, seconds)`, `load(id)` or
+    /// `requestFullscreen(id)` on the
+    /// media node with that HTML `id`, as `focus(id)` names one: counted in
+    /// its props, which its player compares with those it last applied.
+    pub(crate) fn media_command(&mut self, name: &str, args: &[exact_plan::Value]) {
+        let id = args
+            .first()
+            .and_then(exact_plan::Value::as_str)
+            .unwrap_or_default();
+        let kernel = self.host.kernel();
+        let node = (kernel.find_by_id(id).into_iter()).find_map(|key| kernel.node_by_key(key));
+        let key = match node {
+            Some(node) if node.node_type == NodeType::Video => node.key,
+            found => {
+                let why = match found {
+                    Some(_) => "not a video or audio",
+                    None => "no live node with that id",
+                };
+                self.host.log(format!("{name} \"{id}\" refused: {why}"));
+                return;
+            }
+        };
+        let asked = self.brush.media.commands.entry(key).or_default();
+        match name {
+            "fastSeek" => {
+                asked.seeks += 1;
+                asked.seconds = args
+                    .get(1)
+                    .and_then(exact_plan::Value::as_number)
+                    .unwrap_or(f64::NAN);
+            }
+            "requestFullscreen" => asked.fullscreens += 1,
+            _ => asked.loads += 1,
+        }
+        self.brush.media.asked.push(key);
+        self.dirty = true;
     }
 
     /// `state.media`: each mounted media node's row, as its player last

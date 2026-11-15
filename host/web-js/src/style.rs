@@ -206,6 +206,9 @@ pub fn static_tree(
             }
         }
         if styled {
+            let keyframes = bridge::keyframes(plan);
+            let _ = keyframes.resolve(&mut patch.animation);
+            let _ = keyframes.resolve(&mut patch.rare.exit_animation);
             ops.push(Op::SetStyle {
                 id: view(i),
                 patch: Box::new(patch),
@@ -315,8 +318,20 @@ pub fn project(
             continue;
         }
         let child_may_fold = matches!(tree[i].as_slice(), [c] if may_fold[*c as usize]);
-        let mut parts = template::parts_with(&kernel, plan, view(i), may_fold[i], child_may_fold)
-            .ok_or("a view the kernel lost")?;
+        let press_translate = node.bindings.iter().map(|b| plan.binding(b)).any(|b| {
+            b.kind == BindingKind::Style
+                && b.id == StyleId::PressTranslate as u16
+                && literal(plan, plan.code(b.expr)).is_none()
+        });
+        let mut parts = template::parts_with(
+            &kernel,
+            plan,
+            view(i),
+            may_fold[i],
+            child_may_fold,
+            press_translate,
+        )
+        .ok_or("a view the kernel lost")?;
         if kernel
             .node(view(i))
             .is_some_and(|n| n.style.rare.animation_trigger == exact_kernel::AnimationTrigger::None)
@@ -1408,3 +1423,36 @@ pub(crate) fn unset_mirrors(
 
 #[cfg(test)]
 pub(crate) mod tests;
+
+/// Transition authored bases independently of host press feedback.
+pub(crate) fn composed_transition_map(press: bool, shift: bool) -> String {
+    let names: Vec<_> = [(press, "scale"), (shift, "translate")]
+        .into_iter()
+        .filter_map(|(yes, name)| yes.then_some(name))
+        .collect();
+    format!(
+        r#"v=>{{if(v==null)return v;{}let o=[...p];for(const n of {}){{const bases=n==='scale'?['--exact-scale']:['--exact-translate-x','--exact-translate-y','--exact-translate-z'],m=p.filter(t=>new RegExp('^('+n+'|all)(\\s|$)').test(t)).pop();o=o.map(t=>t.replace(new RegExp('^'+n+'(?=\\s)'),bases[0]));if(m)o.push(n+' 0s',...bases.map(base=>m.replace(new RegExp('^('+n+'|all)'),base)));}}return o.join(',')||'none'}}"#,
+        crate::style::TRANSITION_ENTRIES.as_str(),
+        serde_json::to_string(&names).unwrap()
+    )
+}
+
+/// The live offset and its CSS axes; `none` removes the composition selector.
+pub(crate) fn press_translation_writes() -> Vec<(String, String, Option<String>)> {
+    let valid = r#"v=>{const t=String(v??'').trim();return /^(?:[+-]?(?:\d*\.\d+|\d+\.?\d*)(?:e[+-]?\d+)?(?:px|%)?|none)(?:\s+[+-]?(?:\d*\.\d+|\d+\.?\d*)(?:e[+-]?\d+)?(?:px|%)?)?$/i.test(t)&&CSS.supports('translate',t)&&!/^none$/i.test(t)?t:null}"#;
+    let mut writes = vec![(
+        "--exact-press-translate".into(),
+        String::new(),
+        Some(valid.into()),
+    )];
+    for (i, axis) in ["x", "y"].iter().enumerate() {
+        writes.push((
+            format!("--exact-press-{axis}"),
+            String::new(),
+            Some(format!(
+                "v=>{{const t=({valid})(v);return t?.split(/\\s+/)[{i}]??'0px'}}"
+            )),
+        ));
+    }
+    writes
+}

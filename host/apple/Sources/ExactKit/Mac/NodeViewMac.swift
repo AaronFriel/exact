@@ -410,7 +410,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
     package override func accessibilityChildren() -> [Any]? {
         if props["accessibilityElementsHidden"] == "true" || accessibilityHiddenWritten { return [] }
         if actsAsButton { return withAtoms(controlAccessibilityChildren()) }
-        return props["accessibilityRole"] == "img" || rangeRole != nil ? nil : withAtoms(textAccessibilityChildren() ?? exposed(super.accessibilityChildren()))
+        return props["accessibilityRole"] == "img" || rangeRole != nil ? nil : withAtoms(textAccessibilityChildren() ?? inDrawnOrder(exposed(super.accessibilityChildren())))
     }
     /// The viewport's projected children must point back to it. Otherwise
     /// moving to a modal's authored container exposes the page behind it.
@@ -434,7 +434,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
         return own.isEmpty ? nil : own
     }
     package override func accessibilityAttributeNames() -> [NSAccessibility.Attribute] {
-        super.accessibilityAttributeNames() + (["AXLanguage"] + Self.ariaAttributes.filter { ariaAttribute($0) != nil }).map { .init(rawValue: $0) }
+        withTableAttributes(super.accessibilityAttributeNames()) + (["AXLanguage"] + Self.ariaAttributes.filter { ariaAttribute($0) != nil }).map { .init(rawValue: $0) }
     }
     package override func accessibilityAttributeValue(_ attribute: NSAccessibility.Attribute) -> Any? {
         if attribute == .parent, let parent = dialogWebArea ?? modalAccessibilityParent { return parent }
@@ -442,7 +442,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
             let language = presenter?.documentLanguage ?? ""
             return language.isEmpty ? nil : language
         }
-        return ariaAttribute(attribute.rawValue) ?? super.accessibilityAttributeValue(attribute)
+        return ariaAttribute(attribute.rawValue) ?? tableAttribute(attribute) ?? super.accessibilityAttributeValue(attribute)
     }
     /// `aria-hidden` takes the node and its subtree off the tree, as the
     /// web's does (onboarding F16: a checkbox's visible label stayed exposed).

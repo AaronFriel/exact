@@ -11,10 +11,12 @@ extension NodeView {
     /// A button with no name that shows only a symbol is named by it, as a
     /// `UIButton` whose image is an SF Symbol is: UIKit's own name for the
     /// symbol ("Share", "add"), which its accessibility runtime gives the
-    /// image. Read when asked, since the runtime loads with VoiceOver.
+    /// image. Read when asked, since the runtime loads with VoiceOver. A
+    /// table cell that is one element is named by its words.
     package override var accessibilityLabel: String? {
         get {
             let said = super.accessibilityLabel
+            if said?.isEmpty ?? true, isTableCellElement { return accessibleText }
             guard said?.isEmpty ?? true, actsAsButton, !isNativeButton, authoredLabel == nil else { return said }
             return onlySymbol?.image?.accessibilityLabel ?? said
         }

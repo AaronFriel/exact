@@ -943,6 +943,20 @@ impl Batch {
             .push(format!("{{\"op\":\"fragments\",\"id\":{id}{record}}}"));
     }
 
+    /// Where a table's rows and cells stand (LLP 1153 D7.3), for the
+    /// platform's table accessibility:
+    /// `{"op":"table","id":…,"size":[rows,columns],"order":[…]}` for a
+    /// table, its captions aside, with its children's ids in the order it
+    /// draws them when that is not the order written;
+    /// `{"op":"table","id":…,"table":…,"place":[row,rows,column,columns]}`
+    /// for a row or cell, the table that placed it, and its first row and
+    /// column from 0 and how many of each it covers; `{"op":"table","id":…}`
+    /// when it is neither any more.
+    pub fn table(&mut self, id: u32, record: &str) {
+        self.ops
+            .push(format!("{{\"op\":\"table\",\"id\":{id}{record}}}"));
+    }
+
     /// `{"op":"sticky","id":…,"scroller":…,"natural":[…],"limit":[…],
     /// "port":[…],"insets":[…]}` — a sticky box's constraint (LLP 1083 D3),
     /// or `{"op":"sticky","id":…}` when it is no longer sticky.

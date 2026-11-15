@@ -70,13 +70,22 @@ impl Shape {
 pub(super) struct HitClip {
     path: std::rc::Rc<exact_kernel::svg::Path>,
     even_odd: bool,
-    inverse: Option<[f32; 9]>,
+    pub(super) inverse: Option<[f32; 9]>,
+}
+
+impl HitClip {
+    pub(super) fn translate(&mut self, x: f32, y: f32) {
+        self.inverse = self
+            .inverse
+            .map(|m| super::space::mul3(&m, &[1., 0., -x, 0., 1., -y, 0., 0., 1.]));
+    }
 }
 
 pub(super) fn clip_hits(
     boxes: &mut [super::PaintedBox],
     css: &exact_kernel::clip::ClipPath,
     ts: tiny_skia::Transform,
+    hit_ts: tiny_skia::Transform,
 ) {
     if !css.has_path() {
         return;
@@ -88,7 +97,14 @@ pub(super) fn clip_hits(
             .invert()
             .map(|t| [t.sx, t.kx, t.tx, t.ky, t.sy, t.ty, 0., 0., 1.]),
     };
+    let mut hit_clip = clip.clone();
+    hit_clip.inverse = hit_ts
+        .invert()
+        .map(|t| [t.sx, t.kx, t.tx, t.ky, t.sy, t.ty, 0., 0., 1.]);
     for b in boxes {
+        if let Some(hit) = &mut b.hit {
+            hit.shape_clips.push(hit_clip.clone());
+        }
         b.shape_clips.push(clip.clone());
     }
 }
@@ -96,6 +112,9 @@ pub(super) fn clip_hits(
 impl super::PaintedBox {
     /// Whether a point (viewport points) is inside the box and its clip.
     pub fn contains(&self, x: f32, y: f32) -> bool {
+        if self.hit.is_some() {
+            return self.for_hit().contains(x, y);
+        }
         let inside = |r: Rect4| x >= r.0 && x < r.0 + r.2 && y >= r.1 && y < r.1 + r.3;
         let (local_x, local_y) = self
             .projective

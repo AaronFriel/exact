@@ -10,6 +10,7 @@ import android.view.ContextThemeWrapper
 import android.view.LayoutInflater
 import android.view.TextureView
 import android.view.View
+import android.view.accessibility.AccessibilityManager
 import android.widget.FrameLayout
 import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
@@ -25,6 +26,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.ui.PlayerControlView
 import androidx.media3.ui.PlayerView
 import androidx.media3.ui.SubtitleView
 import dev.exact.canvas.AudioClaim
@@ -53,8 +55,11 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
     private val texture = TextureView(context).apply { isOpaque = false }
     private val subtitles = SubtitleView(context).apply { setUserDefaultStyle(); setUserDefaultTextSize() }
     private var controls: PlayerView? = null
+    /** The element is an `audio`: no picture, and a controller that stays shown (D12). */
+    private var audio = false
     private val main = Handler(Looper.getMainLooper())
     private val projection = Projection { name, payload -> sink?.event(name, payload) }
+    private val full = FullScreen(context, exo) { left(it) }
 
     private var sink: MediaSink? = null
     /** The props last applied, as the painter sent them (D1). */
@@ -72,22 +77,33 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
     private var speed = 1f
     private var pitchPreserved = true
     private var keepAwake = true
+    /** The node handles `timeupdate`: only then does the 4 Hz clock run (D3). */
+    private var timed = false
     private var inView = true
     /** Chrome's off-screen rule paused it, so it plays again once seen (LLP 1042 §7 B). */
     private var resumes = false
     /** A play or pause the off-screen rule did not ask for ended the rule for this node. */
     private var overridden = false
-    private var frameReady = false
+    /** This source's first frame is in the view. */
+    private var rendered = false
+    /** Playback or a seek has begun for this source: with a frame, the poster is gone (D5, LLP 1042 §3). */
+    private var begun = false
+    private var poster = false
+    private val frameReady get() = rendered && begun
     private var error: String? = null
     private var unavailable: String? = null
     private var pendingSeek: Double? = null
     private var seekLanded = false
     private var claim: AudioClaim? = null
     private val focusType: String? = audioSession(context).takeIf { it == "playback" }
+    private val access = context.getSystemService(AccessibilityManager::class.java)
+    /** While a finger explores the screen (TalkBack), the controller stays shown, so its buttons can be reached (D11). */
+    private val exploring = AccessibilityManager.TouchExplorationStateChangeListener { explore() }
 
     override val view: View get() = frame
     override val lendable: Boolean get() = controls == null
     override val engaged: Boolean get() = !projection.paused && !eligible()
+    override val controller: View? get() = controls
 
     init {
         frame.addView(texture, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
@@ -95,6 +111,7 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
         exo.setVideoTextureView(texture)
         exo.addListener(listener())
         exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon().setPreferredTextLanguageAndRoleFlagsToCaptioningManagerSettings(context).build()
+        access?.addTouchExplorationStateChangeListener(exploring)
     }
 
     override fun bind(sink: MediaSink) {
@@ -107,8 +124,8 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
         exo.stop()
         exo.clearMediaItems()
         exo.setPlaybackParameters(PlaybackParameters.DEFAULT)
-        applied = null; src = ""; prepared = false; frameReady = false; error = null; unavailable = null
-        pendingSeek = null; seekLanded = false; resumes = false; overridden = false; speed = 1f; inView = false
+        applied = null; src = ""; prepared = false; rendered = false; begun = false; error = null; unavailable = null
+        pendingSeek = null; seekLanded = false; resumes = false; overridden = false; speed = 1f; inView = false; timed = false
         videoW = 0; videoH = 0
         this.sink = sink
     }
@@ -116,8 +133,16 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
     override fun update(props: JSONObject, width: Int, height: Int, from: MediaRecord.Resume?) {
         val before = if (from != null) runCatching { JSONObject(from.applied) }.getOrNull() else applied
         generation = props.optInt("generation")
-        presenter(props.optBoolean("controls"))
+        // Full screen holds the player on the controller it was entered with.
+        if (full.on && (controls != null) != props.optBoolean("controls")) full.leave()
+        presenter(props.optBoolean("controls"), props.optBoolean("audio"))
         fit = props.optString("fit", "contain")
+        full.fit(fit)
+        // The controller's full-screen button, unless `controlslist` says `nofullscreen` (D5, D9).
+        val button = !audio && "nofullscreen" !in props.optString("controlslist").split(' ')
+        controls?.setFullscreenButtonClickListener(if (button) PlayerView.FullscreenButtonClickListener { if (it) fullscreen() } else null)
+        poster = props.optBoolean("poster")
+        unveil()
         if (width != boxW || height != boxH || before?.optString("fit") != fit) { boxW = width; boxH = height; layoutPicture() }
 
         muted = props.optBoolean("muted")
@@ -126,16 +151,26 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
         exo.repeatMode = if (props.optBoolean("loop")) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
         keepAwake = props.optBoolean("preventsDisplaySleepDuringVideoPlayback", true)
         frame.keepScreenOn = keepAwake && projection.playing
+        timed = props.optBoolean("timeupdate")
+        tick(exo.isPlaying)
         tracks(props)
 
         val source = props.optString("src")
         var since = before
-        if (source != src || applied == null) {
-            val restoring = from != null && from.src == source
+        // `load()` and `fastSeek()` are numbered in the props, so a player made again from the record repeats neither.
+        // A load starts the source again at 0 with the error cleared, as a changed `src` does (LLP 1042 §3).
+        val reload = before != null && changed(before, props, "load")
+        if (source != src || applied == null || reload) {
+            val restoring = from != null && from.src == source && !reload
             load(props, source, props.optString("uri"), from.takeIf { restoring })
             if (!restoring) since = null
         } else if (changed(before!!, props, "volume") || changed(before, props, "muted")) projection.event("volumechange")
         assigned(since, props)
+        // `fastSeek` seeks exactly, as on every host (LLP 1042 §3).
+        val fast = props.optString("seek")
+        if (fast.isNotEmpty() && (before == null || changed(before, props, "seek"))) fast.substringAfter(' ').toDoubleOrNull()?.takeIf { it.isFinite() }?.let { seek(it.coerceAtLeast(0.0)) }
+        // `requestFullscreen` (D9), numbered as they are.
+        if (props.has("fullscreen") && before != null && changed(before, props, "fullscreen")) fullscreen()
         // Unmuted while playing: it claims focus now, and a refusal pauses it (D8).
         if (!muted && volume > 0f && !projection.paused && claim == null && !claimFocus()) {
             pause(author = false)
@@ -149,8 +184,11 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
     private fun load(props: JSONObject, source: String, uri: String, from: MediaRecord.Resume?) {
         src = source
         val restoring = from != null && from.src == source
-        prepared = false; frameReady = false; error = null; unavailable = null; pendingSeek = null; seekLanded = false
+        prepared = false; rendered = false; error = null; unavailable = null; pendingSeek = null; seekLanded = false
         videoW = 0; videoH = 0
+        // A node that had played or moved comes back without its poster.
+        begun = restoring && (!from.paused || from.positionMs > 0)
+        unveil()
         projection.load(restoring, paused = if (restoring) from.paused else true)
         exo.playWhenReady = false
         if (restoring) {
@@ -214,6 +252,7 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
         if (!muted && volume > 0f && !claimFocus()) { projection.event("error", "not-allowed"); return }
         if (projection.ended) { projection.seek(0.0); exo.seekTo(0) }
         projection.play(autoplay = ask != Ask.AUTHOR)
+        begin()
         start()
     }
 
@@ -232,6 +271,7 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
     private fun prepare() { prepared = true; exo.prepare() }
 
     private fun seek(seconds: Double) {
+        begin()
         if (projection.readyState < 1) { pendingSeek = seconds; return }
         projection.seek(seconds)
         exo.seekTo((seconds * 1000).roundToLong().coerceAtLeast(0))
@@ -257,6 +297,7 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
     }
 
     override fun stop() {
+        full.leave()
         if (!projection.paused) { val rule = eligible(); projection.pause(); if (rule) resumes = true }
         exo.playWhenReady = false
         releaseFocus()
@@ -264,7 +305,9 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
     }
 
     override fun release() {
+        access?.removeTouchExplorationStateChangeListener(exploring)
         sink = null
+        full.leave()
         tick(false)
         releaseFocus()
         exo.release()
@@ -272,17 +315,24 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
 
     // The presenter (D4).
 
-    private fun presenter(wanted: Boolean) {
+    private fun presenter(wanted: Boolean, audio: Boolean) {
+        if (controls != null && audio != this.audio) presenter(false, this.audio)
+        this.audio = audio
         if (wanted == (controls != null)) return
         if (wanted) {
             val themed = ContextThemeWrapper(context, android.R.style.Theme_DeviceDefault)
-            val made = LayoutInflater.from(themed).inflate(R.layout.exact_video_controls, frame, false) as PlayerView
+            val layout = if (audio) R.layout.exact_audio_controls else R.layout.exact_video_controls
+            val made = LayoutInflater.from(themed).inflate(layout, frame, false) as PlayerView
             made.setShowNextButton(false); made.setShowPreviousButton(false)
+            // An `audio` shows no picture, so no captions either (LLP 1042 §8).
+            if (audio) made.subtitleView?.visibility = View.GONE
             exo.clearVideoTextureView(texture)
             frame.removeView(texture); frame.removeView(subtitles)
             frame.addView(made, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
             made.player = exo
             controls = made
+            unveil()
+            explore()
         } else {
             val view = controls ?: return
             view.player = null
@@ -293,6 +343,44 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
             exo.setVideoTextureView(texture)
         }
         layoutPicture()
+    }
+
+    /** Full screen (D9): the player goes to a full-screen controller, and comes back when it is left ([left]). */
+    private fun fullscreen() {
+        if (full.on || audio) return
+        val from = controls
+        if (from == null) exo.clearVideoTextureView(texture)
+        full.enter(from, fit)
+        projection.event("fullscreenchange", "true")
+        pushState()
+    }
+
+    private fun left(view: PlayerView) {
+        val inline = controls
+        if (inline != null) PlayerView.switchTargetView(exo, view, inline) else { view.player = null; exo.setVideoTextureView(texture) }
+        layoutPicture()
+        projection.event("fullscreenchange", "false")
+        pushState()
+    }
+
+    /** Media3 hides the controller after a while and on a tap; while touch exploration is on it stays (D11), and an
+     * `audio`'s always does (D12). */
+    private fun explore() {
+        val view = controls ?: return
+        val stays = audio || access?.isTouchExplorationEnabled == true
+        view.controllerShowTimeoutMs = if (stays) 0 else PlayerControlView.DEFAULT_SHOW_TIMEOUT_MS
+        view.controllerHideOnTouch = !stays
+        if (stays) view.showController()
+    }
+
+    private fun begin() { if (!begun) { begun = true; unveil(); pushState() } }
+
+    /** Under a poster the picture stays unseen until this source's first frame after playback or a seek began, so
+     * the poster the painter draws beneath shows through (D5); with none, the first frame shows as it comes. */
+    private fun unveil() {
+        val hidden = poster && !frameReady
+        texture.alpha = if (hidden) 0f else 1f
+        controls?.videoSurfaceView?.alpha = if (hidden) 0f else 1f
     }
 
     /** One rect, the picture `object-fit` makes (D5): the texture's transform, the captions' place, D6's cap. */
@@ -391,7 +479,8 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
         }
 
         override fun onRenderedFirstFrame() {
-            frameReady = true
+            rendered = true
+            unveil()
             sink?.firstFrame()
         }
 
@@ -440,7 +529,8 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
     }
     private var ticking = false
 
-    private fun tick(on: Boolean) {
+    private fun tick(playing: Boolean) {
+        val on = playing && timed
         if (on == ticking) return
         ticking = on
         if (on) main.postDelayed(ticker, 250) else main.removeCallbacks(ticker)
@@ -467,6 +557,7 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
             .put("renderer", if (unavailable != null) "none" else if (controls != null) "PlayerView" else "TextureView")
             .put("generation", generation)
             .put("frameReady", frameReady)
+            .put("fullscreen", full.on)
             .put("error", error ?: JSONObject.NULL)
             .put("rendition", format?.let { JSONObject().put("width", it.width).put("height", it.height).put("bitrate", it.bitrate) } ?: JSONObject.NULL)
         unavailable?.let { state.put("unavailable", it) }

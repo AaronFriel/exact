@@ -1264,6 +1264,7 @@ impl<D: DataSource> Presenter<D> {
     pub(super) fn painted_hit(&self, x: f32, y: f32, current: bool) -> Option<ViewId> {
         self.boxes
             .iter()
+            .map(PaintedBox::for_hit)
             .rev()
             .filter(|b| {
                 self.alert_allows(b.id)

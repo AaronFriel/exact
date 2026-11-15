@@ -24,7 +24,10 @@ impl Collection {
     /// Before any host report: the window is the last rows, and the host is
     /// told to start at the end (it clamps the offset to its extent).
     pub(super) fn start_at_end(&mut self) {
-        if !self.at_end || self.geometry.is_some() || self.index.len() == 0 {
+        if !self.at_end
+            || self.geometry.is_some()
+            || (self.index.len() == 0 && self.fixed.is_none())
+        {
             return;
         }
         let offset = self.index.scroll_extent();
@@ -155,7 +158,7 @@ impl Collection {
         let total = self.index.total_height();
         // An empty list has not opened: its rows are yet to come.
         if self.at_end
-            && self.index.len() > 0
+            && (self.index.len() > 0 || self.fixed.is_some())
             && !self.pending
             && self.correction.is_none()
             && (total - extent).abs() < 0.01

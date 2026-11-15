@@ -113,7 +113,7 @@ impl Tree {
         // pixel's, and is not counted either.
         let half = 0.5 / f64::from(kernel.display_scale());
         let unit = |v: f64| (v * 64.0).round() / 64.0;
-        let mut position = c.index.row_at(offset.max(0.0)).ok()??;
+        let mut position = c.index.row_at(offset.max(c.index.fixed_size(0))).ok()??;
         // Past each row drawn before the port: `row_at` passes rows of no
         // height, and this, rows too short to reach it.
         while let Some(end) = c.index.prefix(position + 1) {
@@ -247,7 +247,7 @@ impl Tree {
         roots
             .try_reserve_exact(max_traversal)
             .map_err(|_| "collection root stack allocation")?;
-        let mut counts = (0usize, 0usize);
+        let mut counts = (0usize, 0usize, 0usize);
         // First pass is borrowed only, including each wrapper's first authored root.
         self.visit_collections_bounded(&mut stack, max_traversal, |c| {
             counts.0 = counts.0.checked_add(1).ok_or("collection count overflow")?;
@@ -258,6 +258,14 @@ impl Tree {
             if counts.0 > max_collections || counts.1 > max_rows {
                 return Err("collection projection capacity");
             }
+            if let Some(fixed) = &c.fixed {
+                for roots in &fixed.roots {
+                    counts.2 = counts
+                        .2
+                        .checked_add(roots.len())
+                        .ok_or("collection fixed roots overflow")?;
+                }
+            }
             for row in &c.mounted {
                 first_root_bounded(&row.row.roots, &mut roots, max_traversal)?;
             }
@@ -265,12 +273,19 @@ impl Tree {
         })?;
         // JSON has no source strings. 1024 per row includes two worst-case
         // finite f64 decimal spellings, integer identities, names and punctuation;
-        // 1024 per collection includes extent and correction. No snapshot clone
-        // precedes this conservative wire admission.
+        // 1024 per collection includes fixed metadata, extent and correction.
+        // Each fixed root adds a u32 and its separator (at most 12 bytes).
+        // No snapshot clone precedes this conservative wire admission.
         let wire = counts
             .0
             .checked_add(counts.1)
             .and_then(|n| n.checked_mul(1024))
+            .and_then(|n| {
+                counts
+                    .2
+                    .checked_mul(12)
+                    .and_then(|roots| n.checked_add(roots))
+            })
             .and_then(|n| n.checked_add(2))
             .ok_or("collection wire overflow")?;
         if wire > max_json_bytes {
@@ -305,6 +320,7 @@ impl Tree {
                 revision: c.revision,
                 scroll_sequence: c.geometry.as_ref().map_or(0, |g| g.scroll_sequence),
                 count: c.index.len(),
+                fixed: c.fixed_snapshot(),
                 total_extent: c.index.total_height(),
                 rows,
                 correction: c.correction,

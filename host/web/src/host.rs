@@ -780,7 +780,7 @@ impl<D: DataSource> Host<D> {
                         .runner
                         .kernel()
                         .node(*id)
-                        .is_some_and(|n| crate::css::press_composes(n.style));
+                        .is_some_and(|n| crate::css::press_animations(n.style));
                     batch.exit(*id, &(link.list)(&exit.animations, press));
                 }
             }

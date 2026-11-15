@@ -716,7 +716,9 @@ test.skipIf(!!chromium().unavailable)('verify on a new app: clean, a failing tes
     assert.deepEqual([warned(quiet.stderr), warned(quiet.stdout)], [[], []]);
     const clean = verify('--shots', 'out/shots');
     assert.equal(clean.status, 0, clean.stdout + clean.stderr);
-    assert.ok(clean.lines.length <= 10, clean.stdout);
+    // Verify builds into a publication of its own, so its report starts with that build.
+    assert.match(clean.lines[0], /^built web \(/, clean.stdout);
+    assert.ok(clean.lines.length <= 11, clean.stdout);
     assert.ok(clean.lines.includes("largest text size (root font size 53 px at 390x844, iOS's body at its largest), 5 screens: nothing spills"), clean.stdout); // 4, and 1 the tests pass through
     assert.ok(!clean.lines.some((l) => l.startsWith('compiler:')), clean.stdout);
     assert.ok(clean.lines.includes('tests: 2 passed, 0 failed'), clean.stdout);
@@ -782,8 +784,8 @@ test.skipIf(!!chromium().unavailable)('verify on a new app: clean, a failing tes
     assert.deepEqual(warned(tested.stdout), []);
     const found = verify();
     assert.equal(found.status, 0, found.stdout + found.stderr);
-    assert.equal(found.lines[0], 'compiler: 1 warning', found.stdout);
-    assert.match(found.lines[1].trim(), warning);
+    assert.deepEqual([found.lines[0].replace(/\(.*\)$/, '(…)'), found.lines[1]], ['built web (…)', 'compiler: 1 warning'], found.stdout);
+    assert.match(found.lines[2].trim(), warning);
     assert.match(found.stdout, /^ {2}\(light only\) contrast Text "Faint"#\d+ \[.*\]: 1\.\d:1 \(#dddddd on #ffffff(?:, [^)]*)?\), needs 4\.5:1/m);
     assert.match(found.lines.at(-1), /^verify: 2 problems \(2 findings; the tests passed\) in /);
 
@@ -800,7 +802,7 @@ test.skipIf(!!chromium().unavailable)('verify on a new app: clean, a failing tes
     const r = JSON.parse(json.stdout);
     assert.equal(r.semantics.exit, 0);
     assert.match(r.semantics.output, /^verify receipt — reproduce:/m);
-    assert.deepEqual([r.host, r.built, r.tests.passed, r.tests.failed, r.problems, r.exit, r.screenshots.length, r.compiler.length], ['web', null, 2, 0, 2, 0, 7, 1]);
+    assert.deepEqual([r.host, r.built.warnings, r.tests.passed, r.tests.failed, r.problems, r.exit, r.screenshots.length, r.compiler.length], ['web', [], 2, 0, 2, 0, 7, 1]);
     // Each screen at each width and scheme: the first screen, the two test ends (in their own sessions), the relaunch.
     const onScreen = (screen) => r.checks.filter((c) => c.screen === screen).map((c) => `${c.size.join('x')} ${c.scheme} ${c.findings.map((f) => f.kind).join(',')}`);
     for (const screen of ['first screen', 'the greeting loads', "the header's button likes it", 'relaunch']) assert.deepEqual(onScreen(screen), ['390x844 light contrast', '390x844 dark ', '1280x900 light contrast', '1280x900 dark '], screen);
@@ -1300,7 +1302,8 @@ test.each(['moved clock', 'resource date', 'pinned date', 'duplicate names', 'ex
       startServer:async()=>({fresh:reset,beforeTest:async()=>{if(used)await reset();used=true;},check(){},stop:async()=>{},exited:()=>${scenario === 'signal exit' ? 143 : 'died'},exits:()=>${scenario === 'signal exit' ? "['server.ts exited (signal SIGTERM) during the run']" : "died == null ? [] : ['server.ts exited (code 23) during the run']"},tail:()=>''})}));
     mock.module(at('evidence.mjs'),()=>({recordRun(){}}));
     const captures = {};
-    mock.module(at('agent-check.mjs'),()=>({checkOp:async(s,args,{shots})=>{
+    const check = await real('agent-check.mjs');
+    mock.module(at('agent-check.mjs'),()=>({...check,checkOp:async(s,args,{shots})=>{
       const vp = {w:s.width,h:844}, path=shots?.(vp,'light');
       if(path){captures[path]=(captures[path]??0)+1;writeFileSync(path,String(captures[path]));writeFileSync(dir+'/captures.json',JSON.stringify(captures));}
       if(${scenario === 'first screen crash'} && path?.endsWith('390x844-light.png'))died=23;
@@ -1377,6 +1380,9 @@ test.each(['ios', 'windows'])('verify %s captures a fresh server after replay', 
     const cp=await import('node:child_process'), spawn=cp.spawn;
     mock.module('node:child_process',()=>({...cp,spawn:()=>spawn(process.execPath,['-e','console.log("[]")'])}));
     mock.module(at('agent-build.mjs'),()=>({...build,buildFirst:async()=>0,windowsBuildFirst:async()=>0,windowsBuild:()=>({bin:'unused'})}));
+    // Seeding a native build takes an OS file lock, which under the win32 this preload claims is Win32's LockFileEx.
+    const webBuild=await real('web-build.mjs');
+    mock.module(at('web-build.mjs'),()=>({...webBuild,privateNativeBuild:(...args)=>({...webBuild.privateNativeBuild(...args),seed:async()=>{}})}));
     let rows=[],used=false,passes=0;
     const reset=async()=>{rows=[];used=false;};
     mock.module(at('app-server.mjs'),()=>({...server,appServer:()=>({entry:'server.ts',args:[],url:'http://127.0.0.1:1',port:1,database:false}),answering:async()=>false,

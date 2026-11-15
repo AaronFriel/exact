@@ -197,7 +197,7 @@ final class RegionTextSource: Sendable {
             value.append(NSAttributedString(string: run.text, attributes: attributes))
         }
         let rooms = runs.map { (text: $0.text, start: $0.inlineStart, end: $0.inlineEnd) }
-        TextEngine.kernInlineEdges(value, runs: rooms)
+        TextEngine.kernInlineEdges(value, runs: rooms, rtl: direction == 1)
         TextEngine.setBaseDirection(value, bases: bases.isEmpty ? [(start: 0, rtl: direction == 1)] : bases)
         let empties = runs.indices.compactMap { i -> EmptyRun? in
             guard runs[i].text.isEmpty, let background = runs[i].background else { return nil }
