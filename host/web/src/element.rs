@@ -969,6 +969,8 @@ pub fn props_of(node: &NodeFacts<'_>) -> SortedMap<String, String> {
             PropId::RequiresLinearPlayback => "requiresLinearPlayback",
             PropId::PreferredPeakBitRate => "preferredPeakBitRate",
             PropId::PreferredForwardBufferDuration => "preferredForwardBufferDuration",
+            PropId::PreferredMaximumResolution => "preferredMaximumResolution",
+            PropId::StartsOnFirstEligibleVariant => "startsOnFirstEligibleVariant",
             PropId::AutomaticallyWaitsToMinimizeStalling => "automaticallyWaitsToMinimizeStalling",
             PropId::PreventsDisplaySleepDuringVideoPlayback => {
                 "preventsDisplaySleepDuringVideoPlayback"

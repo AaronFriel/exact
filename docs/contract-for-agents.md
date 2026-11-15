@@ -1680,6 +1680,15 @@ are in the generated `app.d.ts`. A callback must carry exactly one `state`,
 equal to the nonempty value supplied to `openAuthSession`. Keep callback URLs
 in data code: they can contain credentials.
 
+On the web, closing the sign-in popup is not reported as cancellation:
+a provider's Cross-Origin-Opener-Policy can make an open popup appear closed.
+The session waits for its callback, supersession, or a ten-minute bound (499
+`cancelled`). Returning focus to the app does not end it. A new sign-in on the
+same request target supersedes the previous one. Offer an enabled Cancel while
+sign-in is pending: assigning `signed = none` to the mutation holding the
+sign-in releases its request and clears `pending(signed)`, so the person can
+retry at once. See `apps/auth-fixture/app.contract`.
+
 **An app's own sign-in screens.** A provider that lets an app sign the person
 in with its own screens (ForgeRock's authentication trees) still issues an
 authorization code. The app sends the authorization request as the provider
@@ -2430,7 +2439,7 @@ lists any literal colour, font size or weight an app's `.contract` files still w
 | `input type="checkbox" switch` | `UISwitch`; in a grouped list's row, the row and its switch are one VoiceOver element, as a Settings row is, named by the row's `aria-label`, else the switch's, else the row's text |
 | `input type="radio"` (the radios of one `name` are a group) | the SF Symbols circle, filled at its centre when checked, at body size; in a grouped list's row no circle but the row's checkmark, which a tap on the row moves (LLP 1115.000 D13.2) |
 | `input type="range"` (as wide as what holds it; in a `row`, `flex=1 min-width=0` beside its label) | `UISlider` |
-| a box you draw with `role="slider"` or `"spinbutton"`, `aria-valuenow` (and `aria-valuemin`, `aria-valuemax`, `aria-valuetext`), `tabindex=0` and a `key` handler for the arrows | one adjustable element. VoiceOver's swipe up and down (and TalkBack's and Windows' adjust) are a keydown and keyup at it, as Safari sends them to an ARIA slider: ArrowUp and ArrowDown for a spin button or an `aria-orientation="vertical"` slider, else ArrowRight and ArrowLeft (swapped right to left). The handler changes the value, so a screen reader needs no − and + buttons |
+| a box you draw with `role="slider"` or `"spinbutton"`, `aria-valuenow` (and `aria-valuemin`, `aria-valuemax`, `aria-valuetext`), `tabindex=0` and a `key` handler for the arrows | one adjustable element. VoiceOver's swipe up and down (and TalkBack's and Windows' adjust) are a keydown and keyup at it, as Safari sends them to an ARIA slider: ArrowUp and ArrowDown for a spin button or an `aria-orientation="vertical"` slider, else ArrowRight and ArrowLeft (swapped where the slider's `direction` is `rtl`). The handler changes the value, so a screen reader needs no − and + buttons |
 | `input type="date"`, `"time"`, `"datetime-local"` | `UIDatePicker`; with an empty `value` its pill shows your `placeholder` (`placeholder="Add a date"`) or, with none, no words (LLP 1115.000 D13.1). Opening it accepts the current local date or time within `min`/`max`. On macOS, typing, an arrow or Return accepts the field's displayed value; focus alone leaves it empty. The web shows the browser's own empty field. Android shows Material's filled field, the value as the phone writes dates and `placeholder` its floating label, and Material 3's picker, in the control's `accent-color` where it has one (LLP 1115.001.000) |
 | `select` of `option`s (no wider than what holds it, however long its options) | a pop-up button with its menu |
 | `progress value=done max=goal` (a goal, an upload; as wide as what holds it) | `UIProgressView`, tinted by `accent-color` (LLP 1116 D8); never a drawn track and fill |
@@ -6094,11 +6103,13 @@ routes or not. Elsewhere the area is undefined, so give it a fallback (`contract
 (write `0px`, not `0`), a `var()` naming neither a design token nor one of those four, more than 32 values or 32 levels (LLP 1001 §2,
 "Comparisons").
 
-`translate` takes one or two lengths, each in px or a percentage of the box's own
-border box, as CSS's does: `left="50%" top="50%" translate="-50% -50%"` on an
-absolute box centres it, a percentage follows the box's size, and transitions and
-keyframes interpolate the two parts as CSS does a `calc()`. `calc()` itself is
-refused.
+`translate` takes one or two lengths, each in px, a percentage of the box's own
+border box, or a `calc()` of the two, as CSS's does: `left="50%" top="50%"
+translate="-50% -50%"` on an absolute box centres it, a percentage follows the box's
+size, and `translate="calc(50% - 12px) 0"` adds a px offset to it. Transitions and
+keyframes interpolate the px and the percentage separately, as CSS interpolates a
+`calc()`, so any two values interpolate. A `rem`, viewport or `env()` length, or a
+`min()`/`max()` that does not simplify to px plus a percentage, is refused.
 
 Transitions animate translate/scale/rotate/opacity, box paint (color,
 background-color, border colors, -exact-tint-color, box-shadow), SVG paint/geometry

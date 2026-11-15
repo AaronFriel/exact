@@ -235,6 +235,12 @@ size_t exact_material_platform(const uint8_t *name, size_t len, uint8_t platform
 size_t exact_gradient(const uint8_t *css, size_t len, float width, float height,
                       uint8_t dark, const float *tint, uint8_t *out, size_t cap);
 
+/* #661. One period of a repeating linear gradient, as exact_gradient answers a gradient:
+ * its stops over the period and `line`, the period's first stop to its last, in the box.
+ * Returns 0 for any other gradient or a box with no extent along the line. */
+size_t exact_gradient_cycle(const uint8_t *css, size_t len, float width, float height,
+                            uint8_t dark, const float *tint, uint8_t *out, size_t cap);
+
 /* LLP 1077 D1. A box outline with shaped corners as one closed polygon: `shape` 4 K values
  * (NaN is -exact-continuous), `radii` 8 (top-left first, horizontal then vertical, reduced).
  * Writes x,y pairs into `out` when `cap` holds them all; returns the point count. */

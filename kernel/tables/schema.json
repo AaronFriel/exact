@@ -944,6 +944,18 @@
       "kind": "bool"
     },
     {
+      "id": 310,
+      "name": "preferredMaximumResolution",
+      "kind": "str",
+      "_comment": "@ref LLP 1042.000 D2: an HLS video's upper bound on its rendition, `<width>x<height>` in video pixels (AVPlayerItem.preferredMaximumResolution); under the cap the platform's player applies by the view."
+    },
+    {
+      "id": 311,
+      "name": "startsOnFirstEligibleVariant",
+      "kind": "bool",
+      "_comment": "@ref LLP 1042.000 D3: AVPlayerItem's own, read before the item's first variant choice."
+    },
+    {
       "id": 110,
       "name": "playbackVisibilityThreshold",
       "kind": "float"

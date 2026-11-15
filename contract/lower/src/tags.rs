@@ -598,6 +598,9 @@ pub fn attr(name: &str) -> Option<AttrTarget> {
         "requiresLinearPlayback" => AttrTarget::Prop(p("requiresLinearPlayback")),
         "preferredPeakBitRate" => AttrTarget::Prop(p("preferredPeakBitRate")),
         "preferredForwardBufferDuration" => AttrTarget::Prop(p("preferredForwardBufferDuration")),
+        // @ref LLP 1042.000 D2, D3 — which rendition an HLS stream plays.
+        "preferredMaximumResolution" => AttrTarget::Prop(p("preferredMaximumResolution")),
+        "startsOnFirstEligibleVariant" => AttrTarget::Prop(p("startsOnFirstEligibleVariant")),
         "automaticallyWaitsToMinimizeStalling" => {
             AttrTarget::Prop(p("automaticallyWaitsToMinimizeStalling"))
         }

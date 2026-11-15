@@ -176,10 +176,10 @@ impl<D: DataSource> Presenter<D> {
             let said_min = number(node.props.str(PropId::AccessibilityValueMin));
             let said_max = number(node.props.str(PropId::AccessibilityValueMax));
             let (min, max) = (said_min.unwrap_or(0.0), said_max.unwrap_or(100.0));
-            let role = if aria == Some("slider") {
-                role::SLIDER
-            } else {
-                role::PROGRESS
+            let role = match aria {
+                Some("slider") => role::SLIDER,
+                Some("spinbutton") => role::SPIN_BUTTON,
+                _ => role::PROGRESS,
             };
             // A slider or spin button steps by its author's keys
             // (`access_step_range`) while it is short of a bound: ARIA's 0

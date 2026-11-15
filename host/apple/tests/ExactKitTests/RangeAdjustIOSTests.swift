@@ -55,5 +55,17 @@ final class RangeAdjustIOSTests: XCTestCase {
         floor.accessibilityDecrement()
         waitFor("the spin button's ArrowDown") { floor.accessibilityValue == "3" }
     }
+
+    /// A horizontal slider's increment follows its own computed `direction`:
+    /// ArrowLeft for one that inherits `rtl` in a left-to-right document, and
+    /// ArrowRight for one that says `ltr` under it.
+    func testASlidersIncrementFollowsItsOwnDirection() throws {
+        _ = try booted()
+        let back = try node("back"), ahead = try node("ahead")
+        back.accessibilityIncrement()
+        waitFor("the inherited rtl slider's ArrowLeft") { back.props["accessibilityValueNow"] == "60" }
+        ahead.accessibilityIncrement()
+        waitFor("the ltr slider's ArrowRight") { ahead.props["accessibilityValueNow"] == "60" }
+    }
 }
 #endif

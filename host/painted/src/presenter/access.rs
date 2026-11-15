@@ -51,7 +51,7 @@ use super::requests::string;
 use super::scrollers::Scroller;
 use super::top::shape::{Entry, Plan};
 use super::*;
-use exact_kernel::{ControlKind, Display, Kernel, NodeRef};
+use exact_kernel::{ControlKind, Direction, Display, Kernel, NodeRef, StyleId};
 use std::collections::BTreeSet;
 
 /// What a node is, as the reader maps it to a class TalkBack knows.
@@ -116,6 +116,8 @@ pub mod role {
     pub const LIST_BOX: i32 = 28;
     /// A row of an open `select`'s menu: ARIA's `option`.
     pub const OPTION: i32 = 29;
+    /// A drawn `spinbutton`: a number a person steps up and down.
+    pub const SPIN_BUTTON: i32 = 30;
 }
 
 /// A table's or a description list's element as its role (HTML-AAM): a
@@ -1387,8 +1389,8 @@ impl<D: DataSource> Presenter<D> {
     /// (`AccessibilityNodeObject::postKeyboardKeysForValueChange`): ArrowUp or
     /// ArrowDown for a spin button (ARIA's keys for one) or an
     /// `aria-orientation="vertical"` slider, else ArrowRight or ArrowLeft,
-    /// swapped in a right-to-left document. No default action follows.
-    /// Whether it was such a node.
+    /// swapped where the node's computed `direction` is `rtl`. No default
+    /// action follows. Whether it was such a node.
     pub(crate) fn access_step_range(&mut self, view: ViewId, up: bool, now_ms: f64) -> bool {
         let Some(node) = self.host.kernel().node(view) else {
             return false;
@@ -1399,7 +1401,8 @@ impl<D: DataSource> Presenter<D> {
         }
         let vertical = aria == Some("spinbutton")
             || node.props.str(PropId::AccessibilityOrientation) == Some("vertical");
-        let forward = up == (self.host.runner().direction() != "rtl");
+        let forward =
+            up == (node.computed_row(StyleId::Direction, |s| s.direction) != Direction::Rtl);
         let key = match (vertical, up, forward) {
             (true, true, _) => "ArrowUp",
             (true, false, _) => "ArrowDown",

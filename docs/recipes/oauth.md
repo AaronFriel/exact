@@ -8,9 +8,7 @@ Provider settings and fake-provider tests: `bun exact.mjs docs sign-in providers
 
 ```ts
 import { oauth } from '@exact/oauth';
-// Literal lines. `net.fetch` and `auth.session` take an origin, no path:
-// the issuer's, its token endpoint's when it differs, each API's; the
-// sign-in page's. Then your registered callback and the session's key.
+// Grant each endpoint origin (no path), the callback and the session key.
 export const grants = ['net.fetch https://login.example.com', 'net.fetch https://api.example.com',
   'auth.session https://login.example.com', 'auth.callback com.example.app:/oauth',
   'secret.keep example.session'].join('\n');
@@ -49,6 +47,8 @@ component Account
     refresh me
 ```
 
+- On web, COOP makes popup closure unknowable; it is not reported as cancelled.
+  Offer Cancel while pending: `signedIn = none` releases sign-in for retry.
 - Show the person's data only while `session.signedIn`. `problem` says why the
   last sign-in failed or the provider ended the session: show it when not `""`.
   `auth_session` (502) keeps the host’s reason; it is not retryable by default.

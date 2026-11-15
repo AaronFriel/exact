@@ -151,10 +151,11 @@ impl Tables {
         self.stale.extend(tables);
     }
 
-    /// Where `slot`, a row or a cell, stands in its table as HTML's table
-    /// model counts it (HTML §4.9.12): the table, and the part's area among
-    /// the table's rows, a caption's row not one. The rows of a block
-    /// table's later anonymous tables follow its earlier ones'.
+    /// Where `slot`, a row or a cell, stands in its table, counted in the
+    /// order the table is drawn (CSS 2.2 §17.2, [`form`]): the table, and
+    /// the part's area among the table's rows, a caption's row not one. The
+    /// rows of a block table's later anonymous tables follow its earlier
+    /// ones'.
     fn place(&self, arena: &NodeArena, slot: u32) -> Option<(u32, Area)> {
         if !matches!(Part::of(arena, slot), Some(Part::Row | Part::Cell)) {
             return None;

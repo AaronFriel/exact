@@ -5,11 +5,10 @@
 // `BroadcastChannel`, the one that survives a provider's
 // Cross-Origin-Opener-Policy. The runner rules (grants, one session,
 // supersession) and checks the callback (`exact_runner::auth::accept`); this
-// only opens, listens and reports. A closed popup alone is not a
-// cancellation: 499 only after `closed` held for a grace period with no
-// message, or at the bound. No redirect fallback: a blocked popup is 428.
+// only opens, listens and reports. COOP can leave `closed` true throughout
+// sign-in; even returning focus to the app does not prove cancellation.
+// Wait for a callback, supersession or the bound. A blocked popup is 428.
 // Loaded after first paint when the app grants `auth.session`.
-const GRACE_MS = 3000;           // `closed` true this long, and no message: cancelled
 const BOUND_MS = 10 * 60 * 1000; // no callback within this: cancelled (D4 item 4)
 const POLL_MS = 250;
 let live = null; // { ticket, popup, done, timers }
@@ -77,15 +76,9 @@ export function arm(op, env) {
     channel.onmessage = event => { if (event.data?.type === 'exact-auth' && ours(String(event.data.url))) accept(String(event.data.url), 'channel'); };
   } catch {}
   addEventListener('message', onMessage);
-  let closedSince = null;
   const poll = setInterval(() => {
     if (!live) return;
     if (!env.active(op.ticket)) { finish(env, null); return; } // superseded or forgotten (D3)
-    let closed = false;
-    try { closed = popup.closed; } catch {}
-    if (!closed) { closedSince = null; return; }
-    closedSince ??= Date.now();
-    if (Date.now() - closedSince >= GRACE_MS) finish(env, { status: 499, message: 'cancelled' });
   }, POLL_MS);
   const bound = setTimeout(() => finish(env, { status: 499, message: 'cancelled' }), BOUND_MS);
   live = { ticket: op.ticket, popup, channel, onMessage, poll, bound };

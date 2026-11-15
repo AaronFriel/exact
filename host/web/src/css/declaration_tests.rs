@@ -302,6 +302,20 @@ fn a_3d_rotate_and_translate_are_one_declaration_each() {
     );
     assert!(text.contains("translate:-50% 4px;"), "{text}");
     assert_eq!(text.matches("translate").count(), 1, "{text}");
+    // A `calc()` of px and a percentage is the two rows, written as one again.
+    let calc = "calc(50% - 12px) calc(-100% + 4px)";
+    let text = css(
+        &[
+            (StyleId::Translate, t(calc)),
+            (StyleId::TranslatePercent, t(calc)),
+            (StyleId::TranslateZ, t(calc)),
+        ],
+        &[],
+    );
+    assert!(
+        text.contains("translate:calc(-12px + 50%) calc(4px + -100%);"),
+        "{text}"
+    );
 }
 
 #[test]

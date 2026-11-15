@@ -325,9 +325,10 @@ final class AccessibilityTests: XCTestCase {
     }
     /// A drawn `slider` or `spinbutton` offers increment and decrement, which
     /// are the keys WebKit sends an ARIA range: down and up at the node,
-    /// ArrowRight and ArrowLeft for a slider (swapped right to left), ArrowUp
-    /// and ArrowDown for a vertical one and a spin button. A `progressbar`
-    /// offers neither.
+    /// ArrowRight and ArrowLeft for a slider (swapped where its `direction`
+    /// is `rtl`, which the document's sets unless the node says its own),
+    /// ArrowUp and ArrowDown for a vertical one and a spin button. A
+    /// `progressbar` offers neither.
     func testADrawnSliderOrSpinbuttonStepsByItsKeys() {
         let (p, w, _, _) = fixture()
         let node = NodeView(id: 20, kind: "view", presenter: p)
@@ -348,6 +349,12 @@ final class AccessibilityTests: XCTestCase {
             return heard.filter { $0.contains(":down:") }.map { String($0.split(separator: ":")[2]) }
         }
         p.apply(wireBatch([["op": "language", "lang": "ar", "dir": "rtl"]]))
+        XCTAssertEqual(keys { _ = node.accessibilityPerformIncrement(); _ = node.accessibilityPerformDecrement() }, ["ArrowLeft", "ArrowRight"])
+        // The node's own computed `direction` wins over the document's.
+        node.applyStyle(["direction": "ltr"])
+        XCTAssertEqual(keys { _ = node.accessibilityPerformIncrement(); _ = node.accessibilityPerformDecrement() }, ["ArrowRight", "ArrowLeft"])
+        p.apply(wireBatch([["op": "language", "lang": "en", "dir": "ltr"]]))
+        node.applyStyle(["direction": "rtl"])
         XCTAssertEqual(keys { _ = node.accessibilityPerformIncrement(); _ = node.accessibilityPerformDecrement() }, ["ArrowLeft", "ArrowRight"])
         node.applyProps(set: ["accessibilityOrientation": "vertical"], clear: [])
         XCTAssertEqual(keys { _ = node.accessibilityPerformIncrement(); _ = node.accessibilityPerformDecrement() }, ["ArrowUp", "ArrowDown"])

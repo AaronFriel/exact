@@ -2778,6 +2778,13 @@ are `bigint`: convert them to a Contract-compatible value before returning.
 
 ### Sign in through the system browser (`openAuthSession`)
 
+On the web, a closed popup is not reported as cancelled: a provider's
+Cross-Origin-Opener-Policy can make an open popup appear closed too. The wait
+ends at the callback or the ten-minute bound (499), or when the app releases
+or supersedes its request. Offer Cancel while pending: in Contract, assign
+`none` to the mutation holding sign-in (`signed = none`) to release it and
+allow an immediate retry. Returning focus to the app does not end the wait.
+
 `openAuthSession` answers 501 on the headless Linux host and Windows, and on Android
 when no system browser resolves or `ephemeral: true` is requested (this build has no
 ephemeral browser API). Android supports custom-scheme callbacks from
