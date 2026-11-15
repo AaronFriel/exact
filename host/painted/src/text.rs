@@ -47,6 +47,7 @@ mod windows_audit;
 use shaping::ShapedSource;
 mod ink;
 mod inline;
+pub(crate) use inline::BoxReach;
 pub(crate) mod markup;
 pub use cache::{HandoffResidency, Residency, RetiringResidency};
 pub(crate) use catalog::scaler_id;

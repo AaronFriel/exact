@@ -95,6 +95,16 @@ impl Ownership {
     }
 }
 
+/// How far an inline box's border box stands out from its text: past its
+/// first and last characters (`NodeRef::inline_background_reach`), and above
+/// and below its content area (`NodeRef::inline_background_block_reach`).
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct BoxReach {
+    pub sides: exact_kernel::InlineEdges,
+    pub above: f32,
+    pub below: f32,
+}
+
 impl Paragraph {
     pub(crate) fn inline_metrics(&self, style: exact_kernel::TextStyle) -> (f32, f32) {
         let (ascent, descent, _) = self
@@ -105,12 +115,16 @@ impl Paragraph {
         (ascent, descent)
     }
 
-    /// Each contiguous fragment has the addressed inline's own ascent and
-    /// descent. Line height places its baseline; it does not size the box.
+    /// Each contiguous fragment of the addressed inline's border box: its
+    /// own ascent and descent and `reach.above` and `reach.below` down, its
+    /// glyphs across, and `reach.sides` past its first and last characters
+    /// (CSS 2 §10.6.1, §8.6), as Chrome's `getClientRects` answers. Line
+    /// height places its baseline; it does not size the box.
     pub(crate) fn inline_rects(
         &self,
         runs: Range<usize>,
         metrics: (f32, f32),
+        reach: BoxReach,
     ) -> Vec<(usize, Rect4)> {
         let ownership = Ownership::new(self);
         let start = ownership
@@ -122,7 +136,16 @@ impl Paragraph {
             .last()
             .and_then(|i| ownership.runs.get(i))
             .map_or(start, |r| r.0.end);
-        let (ascent, descent) = metrics;
+        // The room after its last glyph (`TextRun::edges`), which that
+        // glyph's advance includes: its own end reach, its margin, and the
+        // room of the boxes that end with it.
+        let end_room = runs
+            .clone()
+            .rev()
+            .find(|i| ownership.runs.get(*i).is_some_and(|r| !r.0.is_empty()))
+            .and_then(|i| self.source.spec.runs.get(i))
+            .map_or(0., |r| r.edges.end);
+        let (ascent, descent) = (metrics.0 + reach.above, metrics.1 + reach.below);
         let rect = |x, y, width| (x, y - ascent, width, ascent + descent);
         let mut out = Vec::new();
         let mut insertion = None;
@@ -167,10 +190,30 @@ impl Paragraph {
                 if g.w <= 0. || local.start >= trim {
                     continue;
                 }
-                for piece in ownership.cluster_pieces(g, range) {
-                    if runs.contains(&piece.run) {
-                        spans.push((piece.lo, piece.hi));
+                let rtl = g.level % 2 == 1;
+                let first = range.contains(&start);
+                let last = end > start && range.contains(&(end - 1));
+                for piece in ownership.cluster_pieces(g, range.clone()) {
+                    if !runs.contains(&piece.run) {
+                        continue;
                     }
+                    let (mut lo, mut hi) = (piece.lo, piece.hi);
+                    if first {
+                        if rtl {
+                            hi += reach.sides.start;
+                        } else {
+                            lo -= reach.sides.start;
+                        }
+                    }
+                    if last {
+                        let past = reach.sides.end - end_room;
+                        if rtl {
+                            lo -= past;
+                        } else {
+                            hi += past;
+                        }
+                    }
+                    spans.push((lo, hi));
                 }
             }
             spans.sort_by(|a, b| a.0.total_cmp(&b.0));
