@@ -440,6 +440,15 @@ impl<D: DataSource> Presenter<D> {
         self.dirty = true;
     }
 
+    /// Whether a finger moves the stage: a sheet dragged past the slop, or
+    /// Back's preview. Each move changes what a paint shows, so the frames
+    /// after it paint rather than move the last paint (`Presenter::still`).
+    #[cfg(any(target_os = "android", test))]
+    pub(in crate::presenter) fn stage_follows_finger(&self) -> bool {
+        matches!(self.stage.gesture, Some(Gesture::Drag { moving: true, .. }))
+            || self.stage.preview.is_some()
+    }
+
     /// The person dismissed the sheet `modal` opened (a press on its scrim,
     /// a drag out of the window): it closes whole, with what was pushed
     /// inside it, as a sheet swiped down on iOS does. A root that hears

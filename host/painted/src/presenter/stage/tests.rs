@@ -236,6 +236,36 @@ fn a_sheet_drags_to_its_tallest_detent_and_down_out_of_the_window() {
     assert!(p.top_sheet().is_none());
 }
 
+/// Android moves the last paint instead of painting while
+/// `Presenter::still` is unchanged (`canvas.rs`'s `shift`); a finger moving
+/// the stage leaves it `None`, so each move paints. Without that a dragged
+/// sheet stood still for 30 frames at a time (#656).
+#[test]
+fn a_sheets_drag_and_a_back_preview_follow_the_finger() {
+    let mut p = phone();
+    tap(&mut p, "open-info");
+    after(&mut p, 1000.0);
+    let (_, frame) = p.top_sheet().unwrap();
+    assert!(!p.stage_follows_finger(), "a resting sheet");
+    let t = p.host().now();
+    let y = frame.1 + 10.0;
+    p.pointer_down(200., y, t).unwrap();
+    p.pointer_move(200., y + 4., t + 8.).unwrap();
+    assert!(!p.stage_follows_finger(), "inside the slop");
+    p.pointer_move(200., y + 30., t + 16.).unwrap();
+    assert!(
+        p.stage_follows_finger(),
+        "past the slop the sheet is dragged"
+    );
+    p.pointer_up(200., y + 30., t + 24.).unwrap();
+    assert!(!p.stage_follows_finger(), "let go, it glides on its own");
+    after(&mut p, 1000.0);
+    let t = p.host().now();
+    assert!(p.back_progress(0, 0.0, 1, t));
+    assert!(p.back_progress(1, 0.2, 1, t + 8.));
+    assert!(p.stage_follows_finger(), "Back's preview");
+}
+
 #[test]
 fn a_press_cancelled_inside_the_slop_drags_nothing_after() {
     let mut p = phone();
