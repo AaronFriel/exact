@@ -2266,8 +2266,8 @@ a `press` on content that is not a control waits for the second tap. `scrollZoom
 is the zoom as `scrollTop` is the offset: write it for Fit and 2× buttons (with
 `scroll-behavior="smooth"` it animates), and read it as `e.scrollZoom` on the
 `scroll` event's `ScrollEvent`; mirroring every `scroll` into the state you
-bind is safe. Not built yet on every host: `contract vocab -exact-max-zoom`
-says where.
+bind is safe. Linux has no touch pinch or double tap, and a pinch on Windows
+has no bounce: `contract vocab -exact-max-zoom` says what each host lacks.
 
 `reorderdrop` belongs only on a vertical `list virtualized=true`
 (each row's handle names it with `reorderFor`); the compiler refuses it on any
