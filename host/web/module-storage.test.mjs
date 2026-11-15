@@ -987,6 +987,40 @@ for (const placement of ['main', 'worker']) test(`${placement}: a completed leas
   } finally { w.done(); environment.restore(); }
 }, 20000);
 
+for (const placement of ['main', 'worker']) for (const caught of [false, true]) test(`${placement}: today's rejected lease with queued storage ${caught ? 'publishes its partial credential after an outer catch' : 'recovers by deleting the credential'}`, async () => {
+  const environment = secretEnvironment('old');
+  const w = await moduleRealm(`if (source === 'head') {
+    const file = read('app:/data/head');
+    return fetch('https://api.castle.test/head').then(async () => (await file, 'head-finished')); }
+  if (source === 'failed') {
+    const failed = store.exclusive('token', async () => {
+      await fetch('https://api.castle.test/token', { method: 'POST', body: 'old' });
+      store.set('token', 'partial');
+      void read('app:/data/queued').catch(() => {});
+      throw new Error('lease body failed');
+    });
+    return ${caught ? "failed.catch(error => 'caught: ' + error.message)" : 'failed'};
+  }
+  return store.exclusive('token', async () => store.get('token'));`, { placement, secrets: true, stored: [['token', 'old']], taskDelayedStorage: true });
+  try {
+    expect((await w.ask('head')).request.url).toBe('https://api.castle.test/head');
+    expect((await w.ask('failed')).request.url).toBe('https://api.castle.test/token');
+    expect(environment.disk.get('exact.exclusive.exact.secret.token')).toBe('1');
+    const failed = w.resumeWithDeliver('failed', undefined, result => { if (result.tag === 0) w.commit(result); });
+    const head = w.resume('head');
+    expect((await race(head)).value).toBe('head-finished');
+    if (placement === 'main' && w.background().head) await w.drain();
+    const failedResult = await race(failed);
+    if (caught) expect(failedResult.value).toBe('caught: lease body failed');
+    else expect(failedResult.tag).toBe(2);
+    expect(failedResult.writes.at(-1)).toEqual(['token', 'partial', true]);
+    const following = await w.askWithDeliver('following', w.commit);
+    expect(following.value).toBe(caught ? 'partial' : null);
+    expect(environment.disk.get('exact.secret.token') ?? null).toBe(caught ? 'partial' : null);
+    expect(environment.disk.has('exact.exclusive.exact.secret.token')).toBe(false);
+    expect(w.runnerValue('token')).toBe(caught ? 'partial' : null);
+  } finally { w.done(); environment.restore(); }
+}, 20000);
 
 for (const placement of ['main', 'worker']) test(`${placement}: a timer resumed during lease publication starts outside the completed turn`, async () => {
   const environment = secretEnvironment('login');
@@ -1218,3 +1252,23 @@ for (const placement of ['main', 'worker']) test(`${placement}: an interrupted s
   } finally { w.done(); environment.restore(); }
 }, 20000);
 
+for (const placement of ['main', 'worker']) for (const wait of ['GET', 'timer']) test(`${placement}: an interrupted secret lease after a ${wait} exposes today's half-written credential`, async () => {
+  const environment = secretEnvironment('old');
+  const body = wait === 'GET' ? "await fetch('https://api.castle.test/token');" : 'await new Promise(resolve => setTimeout(resolve, 0));';
+  const w = await moduleRealm(`if (source === 'interrupted') return store.exclusive('token', async () => {
+    store.set('token', 'half-written');
+    ${body}
+    store.set('token', 'complete');
+  });
+  return store.exclusive('token', async () => store.get('token'));`, { placement, secrets: true, stored: [['token', 'old']] });
+  try {
+    const interrupted = await w.ask('interrupted');
+    if (wait === 'GET') expect(interrupted.request.method).toBe('GET');
+    else expect(interrupted.timer).toBeDefined();
+    expect(environment.disk.get('exact.secret.token')).toBe('half-written');
+    expect(environment.disk.has('exact.exclusive.exact.secret.token')).toBe(false);
+    w.forget([]);
+    expect((await w.ask('successor')).value).toBe('half-written');
+    expect(environment.disk.get('exact.secret.token')).toBe('half-written');
+  } finally { w.done(); environment.restore(); }
+}, 20000);
