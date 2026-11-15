@@ -4835,6 +4835,12 @@ commit too (LLP 1125 D4). The fact is not itself a process pause, and it is not 
 phone or desktop label: `visibilityState` can be hidden while `frozen` stays
 false.
 
+On both web targets, the transition into `frozen` also settles physical output
+still waiting for presentation, whether it came from a sequence or a standalone
+command. Sound plays, haptics, note-ons, MIDI Start, Continue and Timing Clock
+are discarded. Sound stops, note-offs, all-notes-off and MIDI Stop are delivered
+in order before suspension. Returning does not restore a discarded start.
+
 | Host | `frozen` producer |
 |---|---|
 | Web (both targets) | Page Lifecycle `freeze`/`resume` on `document`, where fired; false elsewhere |

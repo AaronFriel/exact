@@ -40,6 +40,28 @@ tree that waits in a view transition and issue standalone `playSound`,
 transition's update, then release it. The sound plays, MIDI is sent and the
 haptic runs after the freeze.
 
+## Resolution
+
+Every JS-target sound, MIDI, sequence or haptic plan installs the page freeze
+watcher, whether or not it reads `exactPage`. On the rising edge, `rt.js`
+settles each deferred command list once and consumes its output commands before
+their presentation tails can replay them. The ordinary sound and MIDI
+validation and queueing paths still run, so invalid commands keep their
+diagnostics and a grouped sound start still produces the earlier voice's stop.
+
+While settlement runs, the sound and MIDI outputs discard only physical starts.
+They deliver ends, retractions and cleanup immediately. The same settlement
+window covers the sequence stop, so a newly enabled deferred sequence cannot
+flush its beat-zero starts before it stops. A resume neither restores discarded
+starts nor marks output created after the resume for settlement.
+
+`host/web-js/output-freeze.test.mjs` records decoded sound, MIDI and vibration
+output behind a controlled view transition. It covers every case below and
+derives the expressible `short`, `clock`, `sound` and `standalone` classifications
+from `host/web/tests/fixtures/output-freeze.json`. The JS conformance runner has
+no case for the browser lifecycle/presentation edge; its transport and MIDI
+cases cover the ordinary non-freeze paths.
+
 ## Required behavior
 
 - Observe the transition into frozen whatever the plan declares. Two places
