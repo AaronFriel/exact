@@ -197,9 +197,35 @@ test "Scan Barcode opens the scan screen inside the add sheet, and Cancel goes b
   expect state current.name == "add"
   expect state scanTrack == ""
 
-test "the web reads no text from a photo, so a book offers no Add Quote from Photo"
+test "the web reads no text from a photo, so a book offers no Add Quote from Photo" on web, linux, windows
   tap "book-seed-2"
   expect tree missing "add-quote"
+
+// The book screen owns the photo's read (LLP 1035.005.004 D6). The first read
+// in a new build waits while the platform compiles its recognizer.
+test "a photo's lines open the quote sheet, and leaving the book before they come opens none" on macos, ios
+  tap "book-seed-2"
+  clock settle
+  tap "add-quote"
+  pick "quote-photo" "../../packages/text-detection/fixture/quote.png"
+  clock data
+  clock data
+  clock data
+  clock settle
+  expect state current.name == "quote"
+  expect text "quote-line-0" == "It is a truth universally acknowledged,"
+  back
+  clock settle
+  tap "add-quote"
+  pick "quote-photo" "../../packages/text-detection/fixture/quote.png"
+  back
+  clock settle
+  clock data
+  clock +1000
+  clock data
+  clock settle
+  expect state current.name == "library"
+  expect tree missing "route-quote"
 
 after "askRemoveAimed" "askRemoveAimed writes only none"
   writes none

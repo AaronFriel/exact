@@ -140,8 +140,10 @@ component Shelf
   state submitted = false
   // The scan's camera track.
   state scanTrack = ""
-  // The book a quote is for, and the lines turned off in the quote sheet.
+  // The book a quote is for, the lines its photo read, and the lines turned
+  // off in the quote sheet.
   state quoteBook = ""
+  state quoteLines: string[] = []
   state quoteOff: number[] = []
 
   resource time = exactTime() as shape Time
@@ -158,7 +160,6 @@ component Shelf
   resource reader = textDetectorAvailability(languages=quoteLanguages) as shape TextDetectorAvailability else empty()
   mutation opened as shape MediaStream then arm
   mutation stopped as shape MediaStreamTrack
-  mutation quoted as shape DetectedTextList then showQuote
   // NFC: the line the panel adds (a tag that can't be read), the link of a
   // tag for a book not on the shelf, and what the alert after tagging says.
   state nfcLine = ""
@@ -195,7 +196,6 @@ component Shelf
   // The person's language and English; the platform's default where it reads neither.
   derive quoteLanguages = [time.locale, "en"]
   derive canQuote = readerAny.availability == "available"
-  derive quoteLines = match quoted { case some(q) => q.texts.map(t => t.rawValue), case none => [] }
   derive quoteChosen = range(quoteLines.length).filter(i => not quoteOff.includes(i)).map(i => lineAt(quoteLines, i))
   // The app draws the wait only where the platform draws none, and never
   // under the browser's permission prompt.
@@ -321,22 +321,13 @@ component Shelf
   action keepNotes(id: string, text: string)
     send changed = setNotes(id, text)
 
-  // Add Quote from Photo: a picked image's lines, in a sheet, into the notes.
-  action chooseQuote(id: string)
-    quoteBook = id
-    showPicker("quote-photo")
-  action quotePicked(files: Picked[])
-    match files.at(0)
-      case some(f)
-        if reader.availability == "available"
-          send quoted = detectText(image=f.path, languages=quoteLanguages)
-        else
-          send quoted = detectText(image=f.path)
-      case none
-        quoteBook = quoteBook
-  action showQuote
+  // Add Quote from Photo: the lines a book's screen read from a photo, in a
+  // sheet, into the notes.
+  action showQuote(book: string, lines: string[])
+    quoteBook = book
+    quoteLines = lines
     quoteOff = []
-    nav = push(nav, path("quote", quoteBook))
+    nav = push(nav, path("quote", book))
   action toggleLine(i: number, on: bool)
     quoteOff = on ? quoteOff.filter(x => x != i) : quoteOff.concat([i])
   action addQuote
@@ -504,37 +495,23 @@ component Shelf
                       image "symbol:delete"
                       text "Remove…"
               if e.name == "book"
-                column navigationKey=`${e.id}`
-                  navigationScroll="book-list"
-                  testId="route-book"
-                  position="absolute"
-                  inset=0
-                  display="flex"
-                  flex-direction="column"
-                  header display="flex" align-items="center" padding="8px 16px"
-                    text (match first(lib.books.filter(b => b.id == e.params.id)) { case some(b) => b.title, case none => "" }) role="heading"
-                      aria-level=2
-                  list id="book-list"
-                    appearance="auto"
-                    listStyle="inset-grouped"
-                    testId="book-detail"
-                    flex=1
-                    min-height=0
-                    for b in lib.books.filter(x => x.id == e.params.id) key = b.id
-                      BookSections(
-                        book=b,
-                        setStatus=setStatus,
-                        turnTo=turnTo,
-                        rate=rate,
-                        keepNotes=keepNotes,
-                        askRemove=askRemove,
-                        canQuote=canQuote,
-                        chooseQuote=chooseQuote,
-                        canTag=nfc.available,
-                        nfcOff=nfcOff,
-                        tagThis=tagThis,
-                        turnOnNfc=turnOnNfc
-                      )
+                BookScreen(
+                  entry=e.id,
+                  id=e.params.id,
+                  books=lib.books,
+                  setStatus=setStatus,
+                  turnTo=turnTo,
+                  rate=rate,
+                  keepNotes=keepNotes,
+                  askRemove=askRemove,
+                  canQuote=canQuote,
+                  languages=(reader.availability == "available" ? quoteLanguages : []),
+                  showQuote=showQuote(e.params.id),
+                  canTag=nfc.available,
+                  nfcOff=nfcOff,
+                  tagThis=tagThis,
+                  turnOnNfc=turnOnNfc
+                )
               if e.name == "quote"
                 column navigationKey=`${e.id}`
                   navigationPresentation="modal"
@@ -728,8 +705,82 @@ component Shelf
       dialog id="tag-said" role="alertdialog" aria-label=tagSaid testId="tag-said"
         button press=tagSaidDone commandfor="tag-said" command="close" testId="tag-said-ok"
           text "OK"
+
+// A book's screen. It reads Add Quote from Photo's photo itself (LLP
+// 1035.005.004 D6): the read is this screen's, its `then` hands the lines to
+// the root's quote sheet, and leaving the screen before the read answers
+// forgets it, so no sheet opens over another screen.
+component BookScreen
+  props
+    // The stack entry's id, which also names this screen's picker.
+    entry: number
+    id: string
+    books: Book[]
+    setStatus: action
+    turnTo: action
+    rate: action
+    keepNotes: action
+    askRemove: action
+    canQuote: bool
+    // The languages to read in, or none for the platform's default.
+    languages: string[]
+    showQuote: action
+    canTag: bool
+    nfcOff: bool
+    tagThis: action
+    turnOnNfc: action
+  mutation quoted as shape DetectedTextList then detected
+  action chooseQuote
+    showPicker(`quote-photo-${entry}`)
+  action quotePicked(files: Picked[])
+    match files.at(0)
+      case some(f)
+        if languages.length > 0
+          send quoted = detectText(image=f.path, languages=languages)
+        else
+          send quoted = detectText(image=f.path)
+      case none
+        quoted = quoted
+  action detected
+    match quoted
+      case some(q)
+        showQuote(q.texts.map(t => t.rawValue))
+      case none
+        showQuote([])
+  view
+    column navigationKey=`${entry}`
+      navigationScroll="book-list"
+      testId="route-book"
+      position="absolute"
+      inset=0
+      display="flex"
+      flex-direction="column"
+      header display="flex" align-items="center" padding="8px 16px"
+        text (match first(books.filter(b => b.id == id)) { case some(b) => b.title, case none => "" }) role="heading"
+          aria-level=2
+      list id="book-list"
+        appearance="auto"
+        listStyle="inset-grouped"
+        testId="book-detail"
+        flex=1
+        min-height=0
+        for b in books.filter(x => x.id == id) key = b.id
+          BookSections(
+            book=b,
+            setStatus=setStatus,
+            turnTo=turnTo,
+            rate=rate,
+            keepNotes=keepNotes,
+            askRemove=askRemove,
+            canQuote=canQuote,
+            chooseQuote=chooseQuote,
+            canTag=canTag,
+            nfcOff=nfcOff,
+            tagThis=tagThis,
+            turnOnNfc=turnOnNfc
+          )
       // Add Quote from Photo's picker: the platform's, for an image.
-      input type="file" accept="image/*" id="quote-photo" display="none" change=quotePicked testId="quote-photo"
+      input type="file" accept="image/*" id=`quote-photo-${entry}` display="none" change=quotePicked testId="quote-photo"
 
 // A row of the library: tap to open, long-press for the menu, swipe to delete.
 // The row only navigates, so it is a `link` to the book's route: the root's
@@ -973,7 +1024,7 @@ component BookSections
       for k in [`${book.id}-${book.quotes}`] key = k
         Notes(bookId=book.id, initial=book.notes, keep=keepNotes)
       if canQuote
-        button press=chooseQuote(book.id) testId="add-quote"
+        button press=chooseQuote testId="add-quote"
           image "symbol:camera"
           text "Add Quote from Photo"
     if canTag
