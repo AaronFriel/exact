@@ -252,8 +252,16 @@ include!(concat!(env!("OUT_DIR"), "/hatches.rs"));"#
             )
         }
         "macos" | "ios" => apple_host("PLAN", "COMPAT"),
-        // canvas_jni! embeds OUT_DIR's plan and compat itself.
-        "android" if shape.composed => "include!(concat!(env!(\"OUT_DIR\"), \"/hatches.rs\"));\nexact_painted::canvas_jni!(crate::AppData, hatches = crate::exact_hatches());".into(),
+        // canvas_jni! embeds OUT_DIR's plan and compat itself. An app's library with a store takes the update
+        // store's opener, which its crate links at deploy.store.android "A" (LLP 1030.006 D3).
+        "android" if shape.composed => {
+            let updates = if compat.inputs["store"]["L"] == "0" {
+                ""
+            } else {
+                ", updates = exact_painted_update::open"
+            };
+            format!("include!(concat!(env!(\"OUT_DIR\"), \"/hatches.rs\"));\nexact_painted::canvas_jni!(crate::AppData, hatches = crate::exact_hatches(){updates});")
+        }
         "android" => "exact_painted::canvas_jni!(crate::AppData);".into(),
         _ => panic!("unsupported host platform: {platform}"),
     };

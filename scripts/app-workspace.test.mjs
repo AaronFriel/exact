@@ -1144,7 +1144,15 @@ test('rust.data generates host crates over the data crate, composed with app.ts 
     // The web's module exports the same source; the dev driver bakes with `default()`, so a source given is none.
     assert.match(read('module/src/lib.rs'), /^exact_logic_abi::export!\(pins_data::Pins, pins_data::Pins::new\(3\)\);$/m);
     assert.equal(existsSync(resolve(workspace, 'web/src/bin/pins-dev.rs')), false);
-    const loads = spawnSync('cargo', ['metadata', '--no-deps', '--offline', '--format-version', '1'], { cwd: workspace, encoding: 'utf8' });
+    // The Android library links the update store only at deploy.store.android "A" (LLP 1030.006 D3).
+    assert.doesNotMatch(read('android/Cargo.toml'), /exact-painted-update/);
+    writeFileSync(resolve(dir, 'app.json'), JSON.stringify({ ...JSON.parse(readFileSync(resolve(dir, 'app.json'), 'utf8')), deploy: { ...manifest.deploy, store: { ...manifest.deploy?.store, android: 'A' } } }, null, 2));
+    ensureShells(dir);
+    assert.match(read('android/Cargo.toml'), /^exact-painted-update = \{ path = "[^"]*host\/painted-update" \}$/m);
+    assert.doesNotMatch(read('linux/Cargo.toml'), /exact-painted-update/);
+    declare({ crate: 'pins-data', type: 'pins_data::Pins', source: 'pins_data::Pins::new(3)' });
+    ensureShells(dir);
+    const loads =spawnSync('cargo', ['metadata', '--no-deps', '--offline', '--format-version', '1'], { cwd: workspace, encoding: 'utf8' });
     assert.equal(loads.status, 0, loads.stderr);
     // With app.ts beside it, the crates compose the two: Rust answers its RUST_SOURCES, app.ts the rest.
     writeFileSync(resolve(dir, 'app.ts'), 'export const grants = "";\n');

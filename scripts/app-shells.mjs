@@ -167,14 +167,14 @@ export function undeclaredDataCrate(found, consequence, crates, manifest) {
 
 /** A Rust-data app's host crate (LLP 1153.003 D2): the data crate the manifest names, linked, and the shared bake
  * (`exact_bake::host::app`) as its build script's one line; no exact-js, so no Hermes. `data.dependency` is the data
- * crate's dependency from the crate's directory. */
-function rustCrateFiles(kind, { name, title, dep, app, data }) {
+ * crate's dependency from the crate's directory; `updates` links the Android library's update store, as for app.ts. */
+function rustCrateFiles(kind, { name, title, dep, app, data, updates = false }) {
   const target = { web: `[lib]\ncrate-type = ["cdylib", "rlib"]`, apple: '[lib]\ncrate-type = ["rlib"]', android: '[lib]\ncrate-type = ["cdylib"]\ntest = false\nbench = false' }[kind]
     ?? `[[bin]]\nname = "${name}-${kind}"\npath = "src/main.rs"${kind === 'windows' ? '\ntest = false\nbench = false' : ''}`;
   // The web dev loop's resident driver bakes with the source's `default()` (`exact_web::dev::main`).
   const dev = kind === 'web' && data.source === `${data.ty}::default()`;
   const sdk = { web: ['logic', 'host/web', 'host/web-capabilities'], apple: ['vendor/ibex/crates/ibex2-sqlite', 'logic', 'host/apple', 'host/apple-update'],
-    linux: ['vendor/ibex/crates/ibex2-sqlite', 'logic', 'host/linux', 'host/painted'], android: ['vendor/ibex/crates/ibex2-sqlite', 'logic', 'host/painted'],
+    linux: ['vendor/ibex/crates/ibex2-sqlite', 'logic', 'host/linux', 'host/painted'], android: ['vendor/ibex/crates/ibex2-sqlite', 'logic', 'host/painted', ...updates ? ['host/painted-update'] : []],
     windows: ['vendor/ibex/crates/ibex2-sqlite', 'logic', 'host/windows', 'host/painted'] }[kind];
   const crateOf = path => ({ 'vendor/ibex/crates/ibex2-sqlite': 'ibex2-sqlite', logic: 'exact-logic', 'host/web-capabilities': 'exact-web-capabilities', 'host/apple-update': 'exact-apple-update' })[path] ?? `exact-${path.split('/').pop()}`;
   const dependencies = [...sdk.map(path => `${crateOf(path)} = ${dep(path)}`), `exact-data-host = ${dep('data/host')}`, `${data.krate} = ${data.dependency}`].join('\n');
