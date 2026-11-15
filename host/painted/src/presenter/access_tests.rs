@@ -493,7 +493,7 @@ fn a_control_is_its_kind_with_its_state_and_what_is_hidden_is_no_node() {
             (
                 role::SLIDER,
                 "Volume",
-                flag::RANGE | flag::FORWARD | flag::BACKWARD
+                flag::RANGE | flag::SETTABLE | flag::FORWARD | flag::BACKWARD
             ),
             (role::TOGGLE, "Bold", check),
             (role::BUTTON, "Save", flag::CLICK),
@@ -924,7 +924,7 @@ fn an_action_is_the_presenters_own_press_scroll_and_step() {
     assert_eq!(volume.range[2], 100.0);
     assert_eq!(
         volume.flags,
-        flag::RANGE | flag::BACKWARD,
+        flag::RANGE | flag::SETTABLE | flag::BACKWARD,
         "nothing above its greatest"
     );
     assert!(!p.access_act(of("Volume"), act::FORWARD, 0.0, 0.0));
@@ -1495,3 +1495,6 @@ fn a_grouped_rows_image_that_presses_keeps_its_own_node() {
         assert_eq!(helped, Some(&Value::Number(1.0)), "{source}");
     }
 }
+
+#[path = "access_range_tests.rs"]
+mod range;

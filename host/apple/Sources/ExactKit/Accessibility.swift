@@ -32,6 +32,10 @@ extension NodeView {
         walk(self)
         return !other && symbols.count == 1 ? symbols[0] : nil
     }
+    /// VoiceOver's swipe up and down on a drawn `slider` or `spinbutton`,
+    /// which has the adjustable trait (`stepRange`).
+    package override func accessibilityIncrement() { stepRange(up: true) }
+    package override func accessibilityDecrement() { stepRange(up: false) }
 }
 #endif
 
@@ -287,6 +291,29 @@ extension NodeView {
         }
         let fraction = high > low ? (Swift.min(Swift.max(n.now, low), high) - low) / (high - low) : 0
         return NumberFormatter.localizedString(from: NSNumber(value: fraction), number: .percent)
+    }
+    /// A drawn `slider` or `spinbutton`: one an assistive app may step, which
+    /// the author's key handler does (`stepRange`).
+    var adjustsRange: Bool { rangeRole == "slider" || rangeRole == "spinbutton" }
+    /// An assistive app's increment (`up`) or decrement of a drawn `slider` or
+    /// `spinbutton`: a keydown and a keyup at this node for the author's `key`
+    /// and `keyup` handlers to answer, as WebKit adjusts an ARIA range
+    /// (`AccessibilityNodeObject::postKeyboardKeysForValueChange`): ArrowUp or
+    /// ArrowDown for a spin button (ARIA's keys for one) or an
+    /// `aria-orientation="vertical"` slider, else ArrowRight or ArrowLeft,
+    /// swapped in a right-to-left document. No default action follows. False
+    /// where there is nothing to step.
+    @discardableResult
+    func stepRange(up: Bool) -> Bool {
+        guard adjustsRange, !inert, let presenter, presenter.views[id] === self else { return false }
+        let key = if rangeRole == "spinbutton" || props["accessibilityOrientation"] == "vertical" {
+            up ? "ArrowUp" : "ArrowDown"
+        } else {
+            up == (presenter.documentDirection != "rtl") ? "ArrowRight" : "ArrowLeft"
+        }
+        _ = presenter.keyDown(at: self, key, code: key)
+        presenter.keyUp(at: self, key, code: key)
+        return true
     }
     var accessibilityVisible: Bool {
         guard paragraphOwner.window != nil, !inert, accessibilityExposed else { return false }
@@ -598,11 +625,17 @@ extension NodeView {
     /// show menu there all the same when another process asks (measured on
     /// macOS 27.2: `AXUIElementPerformAction` succeeds on an element that
     /// does not list it), though an assistive app reading the element's
-    /// actions does not see it there.
+    /// actions does not see it there. Increment and decrement only on a
+    /// drawn `slider` or `spinbutton` (`stepRange`).
     package override func isAccessibilitySelectorAllowed(_ selector: Selector) -> Bool {
-        guard selector == #selector(accessibilityPerformShowMenu) else { return super.isAccessibilitySelectorAllowed(selector) }
-        return showMenuTarget != nil || offersUnansweredMenu
+        switch selector {
+        case #selector(accessibilityPerformShowMenu): return showMenuTarget != nil || offersUnansweredMenu
+        case #selector(accessibilityPerformIncrement), #selector(accessibilityPerformDecrement): return adjustsRange
+        default: return super.isAccessibilitySelectorAllowed(selector)
+        }
     }
+    package override func accessibilityPerformIncrement() -> Bool { stepRange(up: true) }
+    package override func accessibilityPerformDecrement() -> Bool { stepRange(up: false) }
     package override func accessibilityChildrenInNavigationOrder() -> [any NSAccessibilityElementProtocol]? { treeNavigationOrder }
     /// A menu's selected child is the row that holds the focus, and that row
     /// is selected, as AppKit's menu serves its highlighted item (measured:

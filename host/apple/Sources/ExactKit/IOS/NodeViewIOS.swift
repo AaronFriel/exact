@@ -1135,6 +1135,8 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
         } else if kind == "image" || props["accessibilityRole"] == "img" {
             updateImageAccessibility()
         }
+        // A drawn `slider` or `spinbutton` steps by VoiceOver's swipe up and down (`stepRange`).
+        if accessibilityTraits.contains(.adjustable) != (adjustsRange && !actsAsButton) { accessibilityTraits.formSymmetricDifference(.adjustable) }
         if kind == "image", let src = props["imageSource"], src != imageSource { loadImage(src) }
         if kind == "image", props["imageSource"] == nil, imageSource != nil {
             loadGeneration += 1

@@ -242,7 +242,7 @@ internal class Access(private val host: View) {
                     n.has(BACKWARD) && Exact.accessAct(id, BACK, 0f)
                 android.R.id.accessibilityActionSetProgress -> {
                     val to = args?.takeIf { it.containsKey(AccessibilityNodeInfo.ACTION_ARGUMENT_PROGRESS_VALUE) } ?: return false
-                    n.role == SLIDER && Exact.accessAct(id, SET, to.getFloat(AccessibilityNodeInfo.ACTION_ARGUMENT_PROGRESS_VALUE))
+                    n.has(SETTABLE) && Exact.accessAct(id, SET, to.getFloat(AccessibilityNodeInfo.ACTION_ARGUMENT_PROGRESS_VALUE))
                 }
                 else -> false
             }
@@ -352,17 +352,18 @@ internal class Access(private val host: View) {
         if (n.has(CLICK) && !(n.role == TAB && n.has(SELECTED))) { info.isClickable = true; info.addAction(AccessibilityAction.ACTION_CLICK) }
         if (n.has(LONG_CLICK)) { info.isLongClickable = true; info.addAction(AccessibilityAction.ACTION_LONG_CLICK) }
         if (n.has(EXPANDABLE) && n.has(CLICK)) info.addAction(if (n.has(EXPANDED)) AccessibilityAction.ACTION_COLLAPSE else AccessibilityAction.ACTION_EXPAND)
-        if (n.role == SCROLLER || n.role == SLIDER || n.role == LIST_BOX) {
+        // A range steps forward and back, as a SeekBar does; only a native one is set to a value (a drawn one steps by its author's keys).
+        if (n.role == SCROLLER || n.role == LIST_BOX || n.has(RANGE)) {
             val sideways = n.has(SIDEWAYS)
             if (n.has(FORWARD)) {
                 info.addAction(AccessibilityAction.ACTION_SCROLL_FORWARD)
-                if (n.role != SLIDER) info.addAction(if (sideways) AccessibilityAction.ACTION_SCROLL_RIGHT else AccessibilityAction.ACTION_SCROLL_DOWN)
+                if (!n.has(RANGE)) info.addAction(if (sideways) AccessibilityAction.ACTION_SCROLL_RIGHT else AccessibilityAction.ACTION_SCROLL_DOWN)
             }
             if (n.has(BACKWARD)) {
                 info.addAction(AccessibilityAction.ACTION_SCROLL_BACKWARD)
-                if (n.role != SLIDER) info.addAction(if (sideways) AccessibilityAction.ACTION_SCROLL_LEFT else AccessibilityAction.ACTION_SCROLL_UP)
+                if (!n.has(RANGE)) info.addAction(if (sideways) AccessibilityAction.ACTION_SCROLL_LEFT else AccessibilityAction.ACTION_SCROLL_UP)
             }
-            if (n.role == SLIDER) info.addAction(AccessibilityAction.ACTION_SET_PROGRESS)
+            if (n.has(SETTABLE)) info.addAction(AccessibilityAction.ACTION_SET_PROGRESS)
         }
         under(info, n.children)
         return info
@@ -580,6 +581,7 @@ internal class Access(private val host: View) {
         const val POLITE = 1 shl 11
         const val ASSERTIVE = 1 shl 12
         const val RANGE = 1 shl 13
+        const val SETTABLE = 1 shl 14
 
         /** What changed of a node (`presenter::access::change`). */
         private const val SUBTREE = 1

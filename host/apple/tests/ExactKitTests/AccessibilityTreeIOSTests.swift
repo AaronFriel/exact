@@ -98,6 +98,45 @@ final class AccessibilityTreeIOSTests: XCTestCase {
         XCTAssertEqual(bounded.accessibilityValue, "3 tickets", "`aria-valuetext` first")
     }
 
+    /// A drawn `slider` or `spinbutton` is adjustable, and VoiceOver's
+    /// increment and decrement are the keys WebKit sends an ARIA range: down
+    /// and up at the node, ArrowRight and ArrowLeft for a slider (swapped right
+    /// to left), ArrowUp and ArrowDown for a vertical one and a spin button.
+    /// A `progressbar` is not adjustable, nor a node whose role goes.
+    func testADrawnSliderOrSpinbuttonStepsByItsKeys() throws {
+        let p = try fixture()
+        let node = NodeView(id: 40, kind: "view", presenter: p)
+        p.views[node.id] = node
+        p.root.addSubview(node)
+        node.frame = CGRect(x: 0, y: 300, width: 200, height: 30)
+        node.handlers = ["key", "keyup"]
+        var heard: [String] = []
+        p.onKey = { id, press in heard.append("\(id):\(press.up ? "up" : "down"):\(press.chord):\(press.code)") }
+        node.applyProps(set: ["accessibilityRole": "slider", "accessibilityValueNow": "30"], clear: [])
+        XCTAssertTrue(node.accessibilityTraits.contains(.adjustable))
+        node.accessibilityIncrement()
+        node.accessibilityDecrement()
+        XCTAssertEqual(heard, ["40:down:ArrowRight:ArrowRight", "40:up:ArrowRight:ArrowRight", "40:down:ArrowLeft:ArrowLeft", "40:up:ArrowLeft:ArrowLeft"])
+        func keys(_ step: () -> Void) -> [String] {
+            heard = []
+            step()
+            return heard.filter { $0.contains(":down:") }.map { String($0.split(separator: ":")[2]) }
+        }
+        p.apply(wireBatch([["op": "language", "lang": "ar", "dir": "rtl"]]))
+        XCTAssertEqual(keys { node.accessibilityIncrement(); node.accessibilityDecrement() }, ["ArrowLeft", "ArrowRight"])
+        node.applyProps(set: ["accessibilityOrientation": "vertical"], clear: [])
+        XCTAssertEqual(keys { node.accessibilityIncrement(); node.accessibilityDecrement() }, ["ArrowUp", "ArrowDown"])
+        node.applyProps(set: ["accessibilityRole": "spinbutton"], clear: ["accessibilityOrientation"])
+        XCTAssertTrue(node.accessibilityTraits.contains(.adjustable))
+        XCTAssertEqual(keys { node.accessibilityIncrement(); node.accessibilityDecrement() }, ["ArrowUp", "ArrowDown"])
+        node.applyProps(set: ["accessibilityRole": "progressbar"], clear: [])
+        XCTAssertFalse(node.accessibilityTraits.contains(.adjustable))
+        XCTAssertEqual(keys { node.accessibilityIncrement() }, [])
+        node.applyProps(set: ["accessibilityRole": "slider"], clear: [])
+        node.applyProps(set: [:], clear: ["accessibilityRole"])
+        XCTAssertFalse(node.accessibilityTraits.contains(.adjustable))
+    }
+
     /// A native control is named by `aria-labelledby` as by `aria-label`
     /// (accname), and follows the text it names.
     func testANativeCheckboxIsNamedByTheTextItsLabelledbyNames() throws {

@@ -168,6 +168,9 @@ pub mod flag {
     pub const ASSERTIVE: i32 = 1 << 12;
     /// Its range's three numbers mean something.
     pub const RANGE: i32 = 1 << 13;
+    /// A range takes a value set to it ([`act::SET`]): a native range. A
+    /// drawn one only steps, by its author's keys.
+    pub const SETTABLE: i32 = 1 << 14;
 }
 
 /// What changed of a node since the last statement.
@@ -671,7 +674,7 @@ impl<D: DataSource> Presenter<D> {
                 let range = exact_kernel::Range::of(node.props);
                 let now = (choice.and_then(|c| number(Some(c))).map(f64::from))
                     .map_or_else(|| range.shown(node.props), |v| range.sanitize(v));
-                let mut flags = flag::RANGE;
+                let mut flags = flag::RANGE | flag::SETTABLE;
                 if now < range.max {
                     flags |= flag::FORWARD;
                 }
@@ -1298,8 +1301,10 @@ impl<D: DataSource> Presenter<D> {
     /// node's middle, as the agent's `tap` is; a held press opens the
     /// node's context menu, as a finger held on it does; a scroller scrolls
     /// by what it shows, less a little kept in view; a range steps, or is
-    /// set to `value`. A press on a select opens or closes its menu, and on
-    /// one of the menu's options chooses it, as a press on its row does.
+    /// set to `value`, and a drawn slider or spin button steps by its
+    /// author's keys ([`Self::access_step_range`]). A press on a select
+    /// opens or closes its menu, and on one of the menu's options chooses
+    /// it, as a press on its row does.
     pub fn access_act(&mut self, id: i32, action: i32, value: f32, now_ms: f64) -> bool {
         let Some(node) = self.access.nodes.iter().find(|n| n.id == id).cloned() else {
             return false;
@@ -1350,6 +1355,13 @@ impl<D: DataSource> Presenter<D> {
                 };
                 self.scroll_to(view, to).is_some_and(|at| at != s.offset)
             }
+            (act::FORWARD | act::BACKWARD, _)
+                if node.flags & flag::RANGE != 0 && node.flags & flag::SETTABLE == 0 =>
+            {
+                let up = action == act::FORWARD;
+                let offered = node.flags & if up { flag::FORWARD } else { flag::BACKWARD } != 0;
+                offered && live(self) && self.access_step_range(node.view, up, now_ms)
+            }
             (act::FORWARD | act::BACKWARD | act::SET, role::SLIDER) if live(self) => {
                 let range = (self.host.kernel().node(node.view))
                     .filter(|n| n.node_type == NodeType::Control)
@@ -1367,6 +1379,39 @@ impl<D: DataSource> Presenter<D> {
             }
             _ => false,
         }
+    }
+
+    /// A service's step up (`up`) or down of a drawn `slider` or
+    /// `spinbutton`: a keydown and a keyup at it for the author's `key` and
+    /// `keyup` handlers to answer, as WebKit adjusts an ARIA range
+    /// (`AccessibilityNodeObject::postKeyboardKeysForValueChange`): ArrowUp or
+    /// ArrowDown for a spin button (ARIA's keys for one) or an
+    /// `aria-orientation="vertical"` slider, else ArrowRight or ArrowLeft,
+    /// swapped in a right-to-left document. No default action follows.
+    /// Whether it was such a node.
+    pub(crate) fn access_step_range(&mut self, view: ViewId, up: bool, now_ms: f64) -> bool {
+        let Some(node) = self.host.kernel().node(view) else {
+            return false;
+        };
+        let aria = node.props.str(PropId::AccessibilityRole);
+        if node.node_type == NodeType::Control || !matches!(aria, Some("slider" | "spinbutton")) {
+            return false;
+        }
+        let vertical = aria == Some("spinbutton")
+            || node.props.str(PropId::AccessibilityOrientation) == Some("vertical");
+        let forward = up == (self.host.runner().direction() != "rtl");
+        let key = match (vertical, up, forward) {
+            (true, true, _) => "ArrowUp",
+            (true, false, _) => "ArrowDown",
+            (false, _, true) => "ArrowRight",
+            (false, _, false) => "ArrowLeft",
+        };
+        for kind in [EventKind::Key, EventKind::Keyup] {
+            if let (Some(e), _) = self.key_event_at(Some(view), kind, key, key, false, now_ms) {
+                self.host.log(format!("accessibility: step: {e}"));
+            }
+        }
+        true
     }
 }
 

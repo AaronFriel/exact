@@ -1107,8 +1107,14 @@ and 100 where a bound is unsaid, and none for a `spinbutton`) and
 `aria-valuetext`: it is one element, its children unread, and its value is the
 platform's (UIKit's `accessibilityValue` as a percentage, "30%", a
 `spinbutton`'s as its number, "3", or the text; AppKit's value, minimum and
-maximum, the text its description). A `progress` or `input type="range"` says
-its own value.
+maximum, the text its description). A `slider` or `spinbutton` is adjusted
+by its own keys: give it `tabindex=0` and a `key` handler for the arrows.
+A screen reader's increment and decrement (VoiceOver's swipe up and down,
+TalkBack's and Windows' adjust) are then a keydown and a keyup at it, as
+Safari sends them to an ARIA slider: ArrowUp and ArrowDown for a spin
+button or an `aria-orientation="vertical"` slider, else ArrowRight and
+ArrowLeft, swapped in a right-to-left document. A `progress` or
+`input type="range"` says its own value.
 Leave font sizes, colours and control metrics unsaid and the platform supplies them;
 what you set on a node wins.
 

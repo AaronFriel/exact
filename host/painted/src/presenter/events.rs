@@ -613,6 +613,19 @@ impl<D: DataSource> Presenter<D> {
             .focus
             .or_else(|| self.alert_root().filter(|_| self.alert_inert()))
             .or_else(|| self.host.roots().first().copied());
+        self.key_event_at(target, kind, name, code, repeat, now_ms)
+    }
+
+    /// [`Self::key_event`] at `target` rather than the focus.
+    pub(crate) fn key_event_at(
+        &mut self,
+        target: Option<ViewId>,
+        kind: EventKind,
+        name: &str,
+        code: &str,
+        repeat: bool,
+        now_ms: f64,
+    ) -> (Option<String>, bool) {
         let mut path = Vec::new();
         let mut at = target.and_then(|id| self.handler_target(id, kind));
         while let Some(id) = at {

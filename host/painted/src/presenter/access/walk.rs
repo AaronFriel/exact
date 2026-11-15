@@ -173,13 +173,32 @@ impl<D: DataSource> Presenter<D> {
             })
         {
             // A range role is one element, its children presentational.
-            let min = number(node.props.str(PropId::AccessibilityValueMin)).unwrap_or(0.0);
-            let max = number(node.props.str(PropId::AccessibilityValueMax)).unwrap_or(100.0);
+            let said_min = number(node.props.str(PropId::AccessibilityValueMin));
+            let said_max = number(node.props.str(PropId::AccessibilityValueMax));
+            let (min, max) = (said_min.unwrap_or(0.0), said_max.unwrap_or(100.0));
             let role = if aria == Some("slider") {
                 role::SLIDER
             } else {
                 role::PROGRESS
             };
+            // A slider or spin button steps by its author's keys
+            // (`access_step_range`) while it is short of a bound: ARIA's 0
+            // and 100 for a slider, and only the bounds a spin button says.
+            let (low, high) = match aria {
+                Some("slider") => (min, max),
+                Some("spinbutton") => (
+                    said_min.unwrap_or(f32::NEG_INFINITY),
+                    said_max.unwrap_or(f32::INFINITY),
+                ),
+                _ => (f32::INFINITY, f32::NEG_INFINITY),
+            };
+            let mut flags = flag::RANGE;
+            if now < high {
+                flags |= flag::FORWARD;
+            }
+            if now > low {
+                flags |= flag::BACKWARD;
+            }
             let text = node
                 .props
                 .str(PropId::AccessibilityValueText)
@@ -188,7 +207,7 @@ impl<D: DataSource> Presenter<D> {
                 self.access_label(&node).unwrap_or_default(),
                 text.to_string(),
             );
-            self.access_emit(b, &scope, &node, role, flag::RANGE, [min, max, now], || {
+            self.access_emit(b, &scope, &node, role, flags, [min, max, now], || {
                 Some(words)
             });
             return;
