@@ -81,8 +81,8 @@ test('a reload\'s launch has the visits Back returns to without loading a page, 
 });
 
 // #527: after a reload on a deep route, the browser's Back pops to the visit beneath, as before the reload, through the
-// root's `navigate` (`go`), and does not push it over the route Back leaves.
-test('after a reload, the browser\'s Back pops to the visit beneath', () => renderedPages(`routes nav
+// root's `navigate` (`go`), and does not push it over the route Back leaves; the app bar's Back steps back to that entry.
+test('after a reload, the browser\'s Back and the app bar\'s pop to the visit beneath', () => renderedPages(`routes nav
   home "/"
     settings "/settings"
     preview "/preview"
@@ -98,6 +98,9 @@ component Visits
     main navigationKey=\`\${top(nav).id}\` navigationBack="back" navigate=follow width="100%" height="100%"
       for e in stack(nav) key=e.id
         column navigationKey=\`\${e.id}\` position="absolute" inset=0 testId=\`route-\${e.name}\`
+          header
+            h1
+              text e.name
           if e.name == "home"
             button press=open("/settings") testId="open-settings"
               text "Settings"
@@ -121,6 +124,20 @@ component Visits
     await page.click('[data-testid="open-settings"]');
     await stack('/settings');
     await page.click('[data-testid="open-preview"]');
+    expect(await stack('/preview')).toEqual(['home', 'settings', 'preview']);
+    await page.reload();
+    expect(await stack('/preview')).toEqual(['home', 'settings', 'preview']);
+    // The app bar's Back steps back to the entry beneath, as the browser's does, and pushes none.
+    const entries = () => page.evaluate(() => [navigation.currentEntry.index, navigation.entries().length]);
+    const [at, count] = await entries();
+    await page.evaluate(() => document.querySelector('[data-testid="route-preview"] > header').shadowRoot.querySelector('button').click());
+    expect(await stack('/settings')).toEqual(['home', 'settings']);
+    expect(await entries()).toEqual([at - 1, count]);
+    await page.evaluate(() => history.back());
+    expect(await stack('/')).toEqual(['home']);
+    await page.evaluate(() => history.forward());
+    expect(await stack('/settings')).toEqual(['home', 'settings']);
+    await page.evaluate(() => history.forward());
     expect(await stack('/preview')).toEqual(['home', 'settings', 'preview']);
     await page.reload();
     expect(await stack('/preview')).toEqual(['home', 'settings', 'preview']);

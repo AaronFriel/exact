@@ -1,5 +1,5 @@
 import { viewChildren, unwrapListItem, viewParent } from "./lists.js";
-import { fold, launched, onFold, launchLocation } from "./environment.js";
+import { fold, launched, onFold, launchLocation, launchVisits } from "./environment.js";
 import { inertAncestor } from "./layers.js";
 import { popoverObservation } from "./popover.js";
 // @ref LLP 1038 D6/D7/D11 — host projection and the last committed URL.
@@ -764,6 +764,17 @@ function commit(op) {
     originIndex = browserIndex();
     written[0] = stamp(0, op);
     history.replaceState(written[0], "", historyURL(op.url));
+    // After a reload, this document's entries before the current one (`launchVisits`) are the page's too, newest first,
+    // as far as each is at the URL of the visit beneath the one after it: Back, the app bar's as well as the browser's,
+    // then steps back to it rather than pushing it (#527). The JS target's launch builds the stack from those entries.
+    const before = launchVisits(), beneath = op.visits ?? [];
+    for (let k = 1, at = beneath.findIndex(([id]) => id === op.top) - 1; k <= before.length && at >= 0; k++, at--) {
+      if (canonicalOf(before[before.length - k].split("#")[0]) !== beneath[at][1]) {
+        break;
+      }
+      written[-k] = { exact: -k, id: beneath[at][0], url: before[before.length - k] };
+      first = -k;
+    }
   } else if (written[cursor]?.id === op.top && !(pop === null && written[cursor].url !== op.url && written[cursor].url.split("#")[0] === op.url.split("#")[0])) {
     // another fragment on the visit shown, or none, is one more browser entry of it, as a same-document link's is (LLP 1153 D5)
     if (written[cursor].url !== op.url) {
@@ -778,7 +789,8 @@ function commit(op) {
         const from = cursor;
         cursor = j;
         // The entry gone back to takes the top's url when that changed in the same commit (`replace(back(r), u)`).
-        return go(j, from, () => written[j].url === op.url || history.replaceState(written[j] = stamp(j, op), "", historyURL(op.url)));
+        // An entry a reload left holds the state of the page before it, which is stamped again.
+        return go(j, from, () => written[j].url === op.url && history.state?.exact === j && history.state.id === written[j].id || history.replaceState(written[j] = stamp(j, op), "", historyURL(op.url)));
       }
     }
     for (const index of Object.keys(written)) {
