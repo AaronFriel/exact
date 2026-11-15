@@ -124,3 +124,35 @@ fn scoped_facts_shadow_only_the_binding_arm_and_keep_the_repetition_body_private
         .unwrap();
     assert_eq!(repetition.repetition_body().count(), 4);
 }
+
+#[test]
+fn structural_regions_keep_source_order_and_distinguish_copied_sites() {
+    let mut file = contract_syntax::parse("component App\n  view\n    column\n      if true\n        text \"yes\"\n      else\n        text \"no\"\n      for x in [1] key=x\n        text `${x}`\n").unwrap();
+    let copy = file.components[0].view[0].clone();
+    file.components[0].view.push(copy);
+    let checked = contract_types::check(&file, |_| false).unwrap();
+    let checking = Checking::new(&checked);
+    let view = checking.authored(0);
+    let roots: Vec<_> = view.structure().roots().collect();
+    assert_eq!(roots.len(), 2);
+    assert_eq!(roots[0].span(), roots[1].span());
+    assert_eq!(roots[0].instance(), roots[1].instance());
+    assert!(roots[0].site() != roots[1].site());
+    assert!(roots[0].site() == roots[0].subtree().walk().next().unwrap().site());
+    let children: Vec<_> = roots[0].children().collect();
+    assert_eq!(children.len(), 2);
+    assert!(children[0].is_choice());
+    assert!(children[1].repetition().is_some());
+    let [yes, no] = children[0].regions();
+    assert_eq!(yes.roots().next().unwrap().span().line, 5);
+    assert_eq!(no.roots().next().unwrap().span().line, 7);
+    assert_eq!(children[1].regions()[1].walk().count(), 0);
+    assert_eq!(roots[0].subtree().walk().count(), 6);
+    let pruned: Vec<_> = roots[0]
+        .subtree()
+        .events((), |node, _| (!node.is_choice()).then_some(()))
+        .filter(|(_, _, entering)| *entering)
+        .map(|(node, _, _)| node.span().line)
+        .collect();
+    assert_eq!(pruned, [3, 4, 8, 9]);
+}

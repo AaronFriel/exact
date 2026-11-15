@@ -1732,6 +1732,1155 @@
           "severity": "warning"
         }
       ]
+    },
+    {
+      "name": "checking4-svg-postorder",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column\n      svg\n        defs\n          g id=\"outer\"\n            g id=\"inner\"\n              foreignObject\n                svg\n                  foreignObject\n        use href=\"#inner\"\n        use href=\"#outer\"\n        use href=\"#outer\"\n"
+      },
+      "baseline": "586475cc254fdfcaa1509e8596f165cedf352f14",
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 9,
+          "end_col": 12,
+          "file": "$APP/app.contract",
+          "id": "lower-svg-use-foreign-object",
+          "line": 17,
+          "message": "the `foreignObject` in `#inner` draws nothing through SVG `use`. Place it directly in the SVG for the web; for content on every host, position an ordinary box over the SVG",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 9,
+          "end_col": 12,
+          "file": "$APP/app.contract",
+          "id": "lower-svg-use-foreign-object",
+          "line": 18,
+          "message": "the `foreignObject` in `#outer` draws nothing through SVG `use`. Place it directly in the SVG for the web; for content on every host, position an ordinary box over the SVG",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 9,
+          "end_col": 12,
+          "file": "$APP/app.contract",
+          "id": "lower-svg-use-foreign-object",
+          "line": 19,
+          "message": "the `foreignObject` in `#outer` draws nothing through SVG `use`. Place it directly in the SVG for the web; for content on every host, position an ordinary box over the SVG",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking4-svg-uncertain",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column\n      svg\n        if on\n          foreignObject id=\"label\"\n        else\n          g id=\"label\"\n        use href=\"#label\"\n        g id=(on ? \"dynamic\" : \"other\")\n"
+      },
+      "baseline": "586475cc254fdfcaa1509e8596f165cedf352f14",
+      "status": 0,
+      "diagnostics": []
+    },
+    {
+      "name": "checking4-svg-collisions",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column\n      svg\n        foreignObject id=\"label\"\n        g id=\"label\"\n        use href=\"#label\"\n"
+      },
+      "baseline": "586475cc254fdfcaa1509e8596f165cedf352f14",
+      "status": 0,
+      "diagnostics": []
+    },
+    {
+      "name": "checking4-svg-imported",
+      "files": {
+        "app.contract": "use Icon from \"./icon.contract\"\ncomponent App\n  view\n    column\n      Icon()\n      Icon()\n",
+        "icon.contract": "component Icon\n  view\n    svg\n      foreignObject id=\"label\"\n      use href=\"#label\"\n"
+      },
+      "baseline": "586475cc254fdfcaa1509e8596f165cedf352f14",
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 7,
+          "end_col": 10,
+          "file": "$APP/icon.contract",
+          "id": "lower-svg-use-foreign-object",
+          "line": 5,
+          "message": "the `foreignObject` in `#label` draws nothing through SVG `use`. Place it directly in the SVG for the web; for content on every host, position an ordinary box over the SVG",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking4-sounds-reverse",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column\n      text \"assets/first.wav\"\n      if on\n        text `assets/${q}.wav`\n      else\n        text \"assets/else.wav\"\n      match maybe\n        case some(x)\n          text `assets/${x}.wav`\n        case none\n          text \"assets/none.wav\"\n      for x in xs key=x\n        text \"assets/last.wav\"\n"
+      },
+      "baseline": "586475cc254fdfcaa1509e8596f165cedf352f14",
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 14,
+          "end_col": 31,
+          "file": "$APP/app.contract",
+          "id": "lower-sound-undeclared",
+          "line": 21,
+          "message": "\"assets/last.wav\" is not a declared sound, so each step or `playSound` that plays it is dropped at run time and nothing sounds (the journal says `\"assets/last.wav\" is not a declared sound`); declare it at the top level: `sound \"assets/last.wav\"`",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 16,
+          "end_col": 33,
+          "file": "$APP/app.contract",
+          "id": "lower-sound-undeclared",
+          "line": 19,
+          "message": "\"assets/none.wav\" is not a declared sound, so each step or `playSound` that plays it is dropped at run time and nothing sounds (the journal says `\"assets/none.wav\" is not a declared sound`); declare it at the top level: `sound \"assets/none.wav\"`",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 16,
+          "end_col": 33,
+          "file": "$APP/app.contract",
+          "id": "lower-sound-undeclared",
+          "line": 17,
+          "message": "`assets/${\u2026}.wav` builds a sound's path, and the app declares no `sound`: each step or `playSound` that plays one is dropped at run time and nothing sounds (the journal says `\u2026 is not a declared sound`); declare every file it can name at the top level, a `sound \"\u2026\"` line each",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 14,
+          "end_col": 31,
+          "file": "$APP/app.contract",
+          "id": "lower-sound-undeclared",
+          "line": 14,
+          "message": "\"assets/else.wav\" is not a declared sound, so each step or `playSound` that plays it is dropped at run time and nothing sounds (the journal says `\"assets/else.wav\" is not a declared sound`); declare it at the top level: `sound \"assets/else.wav\"`",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 14,
+          "end_col": 31,
+          "file": "$APP/app.contract",
+          "id": "lower-sound-undeclared",
+          "line": 12,
+          "message": "`assets/${\u2026}.wav` builds a sound's path, and the app declares no `sound`: each step or `playSound` that plays one is dropped at run time and nothing sounds (the journal says `\u2026 is not a declared sound`); declare every file it can name at the top level, a `sound \"\u2026\"` line each",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 12,
+          "end_col": 30,
+          "file": "$APP/app.contract",
+          "id": "lower-sound-undeclared",
+          "line": 10,
+          "message": "\"assets/first.wav\" is not a declared sound, so each step or `playSound` that plays it is dropped at run time and nothing sounds (the journal says `\"assets/first.wav\" is not a declared sound`); declare it at the top level: `sound \"assets/first.wav\"`",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking4-sounds-media",
+      "files": {
+        "app.contract": "fn song(kit: string): string = `assets/audio/${kit}.wav`\nfn sample(kit: string): string = `assets/samples/${kit}.wav`\ncomponent App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  derive clip = \"assets/clip.wav\"\n  action keys(k: string)\n    q = k\n  view\n    column\n      audio song(\"kit\")\n      video src=clip\n      text sample(\"kit\")\n"
+      },
+      "baseline": "586475cc254fdfcaa1509e8596f165cedf352f14",
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 34,
+          "end_col": 61,
+          "file": "$APP/app.contract",
+          "id": "lower-sound-undeclared",
+          "line": 2,
+          "message": "`assets/samples/${\u2026}.wav` builds a sound's path, and the app declares no `sound`: each step or `playSound` that plays one is dropped at run time and nothing sounds (the journal says `\u2026 is not a declared sound`); declare every file it can name at the top level, a `sound \"\u2026\"` line each",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking4-back-test-id",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column navigationKey=\"root\" navigationBack=\"close\"\n      column navigationKey=\"home\"\n        button testId=\"close\"\n          text \"Close\"\n"
+      },
+      "baseline": "586475cc254fdfcaa1509e8596f165cedf352f14",
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 33,
+          "end_col": 47,
+          "file": "$APP/app.contract",
+          "id": "lower-navigation-back-id",
+          "line": 9,
+          "message": "`navigationBack=\"close\"` names a control's `id`, not an action, but no element in the view has that id. Back falls back to the root's `navigate` handler, or to the router's Back when there is no handler; `testId=\"close\"` names a control for tests and the agent; give it `id=\"close\"` as well. The control must be in the active route or outside every route, and enabled, for Back to press it (docs/recipes/navigation-stack.md)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking4-back-dynamic",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column navigationKey=\"root\" navigationBack=\"close\"\n      column id=(on ? \"close\" : \"other\")\n"
+      },
+      "baseline": "586475cc254fdfcaa1509e8596f165cedf352f14",
+      "status": 0,
+      "diagnostics": []
+    },
+    {
+      "name": "checking4-back-imported",
+      "files": {
+        "app.contract": "use Body from \"./body.contract\"\ncomponent App\n  view\n    column navigationKey=\"root\" navigationBack=\"clsoe\"\n      Body()\n",
+        "body.contract": "component Body\n  view\n    button id=\"close\"\n      text \"Close\"\n"
+      },
+      "baseline": "586475cc254fdfcaa1509e8596f165cedf352f14",
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 33,
+          "end_col": 47,
+          "file": "$APP/app.contract",
+          "id": "lower-navigation-back-id",
+          "line": 4,
+          "message": "`navigationBack=\"clsoe\"` names a control's `id`, not an action, but no element in the view has that id. Back falls back to the root's `navigate` handler, or to the router's Back when there is no handler; did you mean `navigationBack=\"close\"`? Otherwise give the intended control `id=\"clsoe\"` and a `press` handler. The control must be in the active route or outside every route, and enabled, for Back to press it (docs/recipes/navigation-stack.md)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking4-roles-buttons",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column\n      button\n        column\n          if on\n            image \"symbol:add\"\n          else\n            text \"\"\n      button\n        svg\n          path d=\"M0 0 L1 1\"\n      button\n        button\n          text \"Inner\"\n      button aria-hidden=true\n      button\n        text \"Named\"\n      column role=\"dialog\"\n      text \"Level\" aria-level=2\n"
+      },
+      "baseline": "586475cc254fdfcaa1509e8596f165cedf352f14",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 7,
+          "end_col": 13,
+          "file": "$APP/app.contract",
+          "id": "lower-zero-size",
+          "line": 22,
+          "message": "`button` has no children and no size, so it has zero area and nothing to press: give it children or a size",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 7,
+          "end_col": 13,
+          "file": "$APP/app.contract",
+          "id": "lower-button-unlabelled",
+          "line": 10,
+          "message": "this `button` shows only an image with no name: a screen reader on the web reads it as just \"button\", and VoiceOver on iOS by the symbol's generic name (\"add\", \"love\"). Name it: `aria-label=\"Add\"` on the button, beside its `image \"symbol:\u2026\"` (docs/recipes/symbols.md)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 7,
+          "end_col": 13,
+          "file": "$APP/app.contract",
+          "id": "lower-button-unlabelled",
+          "line": 16,
+          "message": "this `button` shows only an image with no name: a screen reader on the web reads it as just \"button\", and VoiceOver on iOS by the symbol's generic name (\"add\", \"love\"). Name it: `aria-label=\"Add\"` on the button, beside its `image \"symbol:\u2026\"` (docs/recipes/symbols.md)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 9,
+          "end_col": 15,
+          "file": "$APP/app.contract",
+          "id": "lower-nested-button",
+          "line": 20,
+          "message": "this `button` is inside another `button`. A press on it is its own (the outer one does not hear it, on every host), but the outer button's accessible name reads this one's words with its own, and HTML allows no button in a button. Put the two side by side: a `row` holding the outer's content as one `button` (`flex=1`) and this one after it, as a table cell holds its accessory button",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 7,
+          "end_col": 13,
+          "file": "$APP/app.contract",
+          "id": "lower-dialog-role",
+          "line": 25,
+          "message": "`role=\"dialog\"` on a `column` names a dialog without making one: the box is drawn as written, with no Escape, no focus kept inside it (Tab reaches the page behind) and no iOS sheet. A modal you lay out (a form, an editor) is a sheet, a route with `navigationPresentation=\"modal\"`: UIKit's sheet on iOS, closed by Escape on the web, the page under it inert. A confirmation of text and buttons is `dialog role=\"alertdialog\"`, opened with `showModal(id)` (docs/recipes/navigation-stack.md)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 7,
+          "end_col": 11,
+          "file": "$APP/app.contract",
+          "id": "lower-level-without-heading",
+          "line": 26,
+          "message": "`aria-level` on a `text` with no `role=\"heading\"` does not make a heading: a screen reader is not told it is one on any platform, it gets no heading style, and the iOS navigation bar does not take it for the screen's title. Write the role beside it: `text \"Results\" role=\"heading\" aria-level=2`",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking4-roles-key-arms",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column\n      column role=\"listbox\"\n        if on\n          button key=keys\n        else\n          button\n      column role=\"tree\"\n        match maybe\n          case some(x)\n            text x\n          case none\n            button\n      column role=\"grid\"\n        for x in xs key=x\n          button keycapture=keys\n"
+      },
+      "baseline": "586475cc254fdfcaa1509e8596f165cedf352f14",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 11,
+          "end_col": 17,
+          "file": "$APP/app.contract",
+          "id": "lower-zero-size",
+          "line": 12,
+          "message": "`button` has no children and no size, so it has zero area and nothing to press: give it children or a size",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 11,
+          "end_col": 17,
+          "file": "$APP/app.contract",
+          "id": "lower-zero-size",
+          "line": 14,
+          "message": "`button` has no children and no size, so it has zero area and nothing to press: give it children or a size",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 13,
+          "end_col": 19,
+          "file": "$APP/app.contract",
+          "id": "lower-zero-size",
+          "line": 20,
+          "message": "`button` has no children and no size, so it has zero area and nothing to press: give it children or a size",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 11,
+          "end_col": 17,
+          "file": "$APP/app.contract",
+          "id": "lower-zero-size",
+          "line": 23,
+          "message": "`button` has no children and no size, so it has zero area and nothing to press: give it children or a size",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 11,
+          "end_col": 17,
+          "file": "$APP/app.contract",
+          "id": "lower-button-unlabelled",
+          "line": 12,
+          "message": "this `button` holds no text and no `aria-label`, so it is blank: an empty button to a person, just \"button\" to VoiceOver. Put its words in it (a `text \"Add 500 ml\"` child), or name a symbol-only button with `aria-label` beside its `image \"symbol:\u2026\"` (docs/recipes/symbols.md)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 11,
+          "end_col": 17,
+          "file": "$APP/app.contract",
+          "id": "lower-button-unlabelled",
+          "line": 14,
+          "message": "this `button` holds no text and no `aria-label`, so it is blank: an empty button to a person, just \"button\" to VoiceOver. Put its words in it (a `text \"Add 500 ml\"` child), or name a symbol-only button with `aria-label` beside its `image \"symbol:\u2026\"` (docs/recipes/symbols.md)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 7,
+          "end_col": 13,
+          "file": "$APP/app.contract",
+          "id": "lower-role-keys",
+          "line": 15,
+          "message": "Exact supplies no keys for `role=\"tree\"`: each member is its own Tab stop and the arrows do nothing. Write the keys in a `key` action on the group or its members",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 13,
+          "end_col": 19,
+          "file": "$APP/app.contract",
+          "id": "lower-button-unlabelled",
+          "line": 20,
+          "message": "this `button` holds no text and no `aria-label`, so it is blank: an empty button to a person, just \"button\" to VoiceOver. Put its words in it (a `text \"Add 500 ml\"` child), or name a symbol-only button with `aria-label` beside its `image \"symbol:\u2026\"` (docs/recipes/symbols.md)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 11,
+          "end_col": 17,
+          "file": "$APP/app.contract",
+          "id": "lower-button-unlabelled",
+          "line": 23,
+          "message": "this `button` holds no text and no `aria-label`, so it is blank: an empty button to a person, just \"button\" to VoiceOver. Put its words in it (a `text \"Add 500 ml\"` child), or name a symbol-only button with `aria-label` beside its `image \"symbol:\u2026\"` (docs/recipes/symbols.md)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking4-roles-controlled",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column\n      input aria-controls=(on ? \"first second\" : \"third\")\n      column id=\"first\" role=\"listbox\"\n      column id=\"second\" role=\"tree\"\n      column id=\"third\" role=\"grid\"\n      column id=\"self\" role=\"tree\" aria-controls=\"self\"\n      column id=(on ? \"computed\" : \"other\") role=\"grid\"\n      input aria-controls=(on ? \"computed\" : \"other\")\n"
+      },
+      "baseline": "586475cc254fdfcaa1509e8596f165cedf352f14",
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 7,
+          "end_col": 13,
+          "file": "$APP/app.contract",
+          "id": "lower-role-keys",
+          "line": 14,
+          "message": "Exact supplies no keys for `role=\"tree\"`: each member is its own Tab stop and the arrows do nothing. Write the keys in a `key` action on the group or its members",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking4-roles-imported",
+      "files": {
+        "app.contract": "use Body from \"./body.contract\"\ncomponent App\n  view\n    column\n      Body()\n      Body()\n",
+        "body.contract": "component Body\n  view\n    button\n      column\n        image \"symbol:add\"\n"
+      },
+      "baseline": "586475cc254fdfcaa1509e8596f165cedf352f14",
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 5,
+          "end_col": 11,
+          "file": "$APP/body.contract",
+          "id": "lower-button-unlabelled",
+          "line": 3,
+          "message": "this `button` shows only an image with no name: a screen reader on the web reads it as just \"button\", and VoiceOver on iOS by the symbol's generic name (\"add\", \"love\"). Name it: `aria-label=\"Add\"` on the button, beside its `image \"symbol:\u2026\"` (docs/recipes/symbols.md)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking4-fixed-neighbours",
+      "files": {
+        "app.contract": "routes nav\n  home \"/\"\ncomponent App\n  state shown = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  view\n    main navigationKey=`${top(nav).id}`\n      for e in stack(nav) key=e.id\n        column navigationKey=`${e.id}`\n          header\n            text \"Inbox\" role=\"heading\"\n          row background-color=\"-exact-background\"\n            button \"All\"\n          column flex=1\n            list flex=1\n              text \"Row\"\n            text \"Inner footer\"\n          text \"Outer footer\"\n"
+      },
+      "baseline": "586475cc254fdfcaa1509e8596f165cedf352f14",
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 11,
+          "end_col": 14,
+          "file": "$APP/app.contract",
+          "id": "lower-list-beside-fixed",
+          "line": 13,
+          "message": "this box stays put above the list that scrolls this route, and holds more than controls (a text, an image or a fill), so on iOS the rows stop at it in a hard line where a hand-built screen's list scrolls under what is pinned over it, blurred by the scroll edge effect. Put what it says in the list (a section's `header` or `footer`, or the first row), or keep only buttons, fields and a tablist in it, unfilled: those the list runs under, faded and blurred where it passes as iOS does under a hand-built composer, so a field's text over it stays legible (docs/recipes/list-rows.md)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 11,
+          "end_col": 15,
+          "file": "$APP/app.contract",
+          "id": "lower-list-beside-fixed",
+          "line": 19,
+          "message": "this box stays put below the list that scrolls this route, and holds more than controls (a text, an image or a fill), so on iOS the rows stop at it in a hard line where a hand-built screen's list scrolls under what is pinned over it, blurred by the scroll edge effect. Put what it says in the list (a section's `header` or `footer`, or the first row), or keep only buttons, fields and a tablist in it, unfilled: those the list runs under, faded and blurred where it passes as iOS does under a hand-built composer, so a field's text over it stays legible (docs/recipes/list-rows.md)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 13,
+          "end_col": 17,
+          "file": "$APP/app.contract",
+          "id": "lower-list-beside-fixed",
+          "line": 18,
+          "message": "this box stays put below the list that scrolls this route, and holds more than controls (a text, an image or a fill), so on iOS the rows stop at it in a hard line where a hand-built screen's list scrolls under what is pinned over it, blurred by the scroll edge effect. Put what it says in the list (a section's `header` or `footer`, or the first row), or keep only buttons, fields and a tablist in it, unfilled: those the list runs under, faded and blurred where it passes as iOS does under a hand-built composer, so a field's text over it stays legible (docs/recipes/list-rows.md)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking4-fixed-arms",
+      "files": {
+        "app.contract": "routes nav\n  home \"/\"\ncomponent App\n  state shown = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  view\n    main navigationKey=`${top(nav).id}`\n      for e in stack(nav) key=e.id\n        column navigationKey=`${e.id}`\n          header\n            text \"Inbox\" role=\"heading\"\n          if shown\n            list flex=1\n              text \"Then\"\n            text \"Then footer\"\n          else\n            list flex=1\n              text \"Else\"\n            text \"Else footer\"\n          text \"Outer footer\"\n"
+      },
+      "baseline": "586475cc254fdfcaa1509e8596f165cedf352f14",
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 11,
+          "end_col": 15,
+          "file": "$APP/app.contract",
+          "id": "lower-list-beside-fixed",
+          "line": 21,
+          "message": "this box stays put below the list that scrolls this route, and holds more than controls (a text, an image or a fill), so on iOS the rows stop at it in a hard line where a hand-built screen's list scrolls under what is pinned over it, blurred by the scroll edge effect. Put what it says in the list (a section's `header` or `footer`, or the first row), or keep only buttons, fields and a tablist in it, unfilled: those the list runs under, faded and blurred where it passes as iOS does under a hand-built composer, so a field's text over it stays legible (docs/recipes/list-rows.md)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 13,
+          "end_col": 17,
+          "file": "$APP/app.contract",
+          "id": "lower-list-beside-fixed",
+          "line": 16,
+          "message": "this box stays put below the list that scrolls this route, and holds more than controls (a text, an image or a fill), so on iOS the rows stop at it in a hard line where a hand-built screen's list scrolls under what is pinned over it, blurred by the scroll edge effect. Put what it says in the list (a section's `header` or `footer`, or the first row), or keep only buttons, fields and a tablist in it, unfilled: those the list runs under, faded and blurred where it passes as iOS does under a hand-built composer, so a field's text over it stays legible (docs/recipes/list-rows.md)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 13,
+          "end_col": 17,
+          "file": "$APP/app.contract",
+          "id": "lower-list-beside-fixed",
+          "line": 20,
+          "message": "this box stays put below the list that scrolls this route, and holds more than controls (a text, an image or a fill), so on iOS the rows stop at it in a hard line where a hand-built screen's list scrolls under what is pinned over it, blurred by the scroll edge effect. Put what it says in the list (a section's `header` or `footer`, or the first row), or keep only buttons, fields and a tablist in it, unfilled: those the list runs under, faded and blurred where it passes as iOS does under a hand-built composer, so a field's text over it stays legible (docs/recipes/list-rows.md)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking4-fixed-side",
+      "files": {
+        "app.contract": "routes nav\n  home \"/\"\ncomponent App\n  state shown = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  view\n    main navigationKey=`${top(nav).id}`\n      for e in stack(nav) key=e.id\n        column navigationKey=`${e.id}`\n          header\n            text \"Inbox\" role=\"heading\"\n          row flex=1\n            list flex=1\n              text \"Row\"\n            if shown\n              text \"A-Z\" width=24\n            else\n              text \"Pane\" width=280\n"
+      },
+      "baseline": "586475cc254fdfcaa1509e8596f165cedf352f14",
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 11,
+          "end_col": 14,
+          "file": "$APP/app.contract",
+          "id": "lower-list-beside-fixed",
+          "line": 13,
+          "message": "the list that scrolls this route sits in a row beside another box, so on iOS it is not the route's own: its large title never collapses, and its rows stop above the bottom bar (a search field there) where a hand-built screen's list collapses the title and runs under the bar. Make the list the route's child after its `header`, and leave what stands beside it to the platform: a list whose sections are each headed by one letter has UIKit's A\u2013Z index, and sections above the letters (Favorites) are left out of it",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 15,
+          "end_col": 19,
+          "file": "$APP/app.contract",
+          "id": "lower-text-px-width",
+          "line": 17,
+          "message": "this box's absolute `width` keeps its width bounded while its text can grow at accessibility sizes and may overrun it: express the width and its bounds in `rem` (for example, `width=\"3rem\"`) so they follow the root font, or let the content determine the width. Native Apple controls use the Apple control font, which can scale with Dynamic Type; web controls inherit, and Linux control defaults are fixed",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 15,
+          "end_col": 19,
+          "file": "$APP/app.contract",
+          "id": "lower-text-px-width",
+          "line": 19,
+          "message": "this box's absolute `width` keeps its width bounded while its text can grow at accessibility sizes and may overrun it: express the width and its bounds in `rem` (for example, `width=\"3rem\"`) so they follow the root font, or let the content determine the width. Native Apple controls use the Apple control font, which can scale with Dynamic Type; web controls inherit, and Linux control defaults are fixed",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking4-fixed-controls",
+      "files": {
+        "app.contract": "routes nav\n  home \"/\"\ncomponent App\n  state shown = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  view\n    main navigationKey=`${top(nav).id}`\n      for e in stack(nav) key=e.id\n        column navigationKey=`${e.id}`\n          header\n            text \"Inbox\" role=\"heading\"\n          list flex=1\n            text \"Row\"\n          column\n            if shown\n              button \"Control\"\n            else\n              input\n          for n in xs key=n\n            text \"Repeated footer\"\n"
+      },
+      "baseline": "586475cc254fdfcaa1509e8596f165cedf352f14",
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 13,
+          "end_col": 17,
+          "file": "$APP/app.contract",
+          "id": "lower-list-beside-fixed",
+          "line": 21,
+          "message": "this box stays put below the list that scrolls this route, and holds more than controls (a text, an image or a fill), so on iOS the rows stop at it in a hard line where a hand-built screen's list scrolls under what is pinned over it, blurred by the scroll edge effect. Put what it says in the list (a section's `header` or `footer`, or the first row), or keep only buttons, fields and a tablist in it, unfilled: those the list runs under, faded and blurred where it passes as iOS does under a hand-built composer, so a field's text over it stays legible (docs/recipes/list-rows.md)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking4-fixed-uncertain",
+      "files": {
+        "app.contract": "routes nav\n  home \"/\"\ncomponent App\n  state shown = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  view\n    main navigationKey=`${top(nav).id}`\n      for e in stack(nav) key=e.id\n        column navigationKey=`${e.id}`\n          header\n            text \"Inbox\" role=\"heading\"\n          list flex=1\n            text \"Row\"\n          column\n            match maybe\n              case some(x)\n                text x\n              case none\n                button \"Control\"\n          column position=(shown ? \"relative\" : \"absolute\")\n            text \"Unknown\"\n"
+      },
+      "baseline": "586475cc254fdfcaa1509e8596f165cedf352f14",
+      "status": 0,
+      "diagnostics": []
+    },
+    {
+      "name": "checking4-parts-round",
+      "files": {
+        "app.contract": "use RoundButton from \"exact:content\"\ncomponent App\n  state n = 0\n  action go\n    n = n + 1\n  view\n    column\n      RoundButton(label=\"Start the quiz\", tint=none, press=go, disabled=false, testId=\"a\")\n      if true\n        RoundButton(label=\"Next question\", tint=none, press=go, disabled=false, testId=\"b\")\n"
+      },
+      "baseline": "586475cc254fdfcaa1509e8596f165cedf352f14",
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 25,
+          "end_col": 41,
+          "file": "$APP/app.contract",
+          "id": "lower-round-button-label",
+          "line": 8,
+          "message": "`RoundButton` is the Clock's circle for a word (Start, Stop, Lap): \"Start the quiz\" is 14 characters and the 80-point circle holds about 7, so it is cut short. A screen's main action of more words is a `button` with `buttonStyle=\"filled\"` (docs/recipes/content-design.md)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 27,
+          "end_col": 42,
+          "file": "$APP/app.contract",
+          "id": "lower-round-button-label",
+          "line": 10,
+          "message": "`RoundButton` is the Clock's circle for a word (Start, Stop, Lap): \"Next question\" is 13 characters and the 80-point circle holds about 7, so it is cut short. A screen's main action of more words is a `button` with `buttonStyle=\"filled\"` (docs/recipes/content-design.md)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking4-parts-empty",
+      "files": {
+        "app.contract": "use EmptyState from \"exact:content\"\ncomponent App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column\n      list\n        if on\n          EmptyState(symbol=\"symbol:add\", title=\"Empty\", message=\"Add one\")\n        else\n          text \"Row\"\n"
+      },
+      "baseline": "586475cc254fdfcaa1509e8596f165cedf352f14",
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 11,
+          "end_col": 21,
+          "file": "$APP/app.contract",
+          "id": "lower-empty-state-in-list",
+          "line": 13,
+          "message": "`EmptyState` inside a `list` is drawn as one of its rows; it centres in the screen in place of the list: `if items.length == 0 and not pending(items)`, the `EmptyState`, `else` the `list` (pattern list-detail)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking4-parts-summary",
+      "files": {
+        "app.contract": "use SummaryCard from \"exact:content\"\ncomponent App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column\n      list appearance=\"auto\"\n        section\n          SummaryCard(label=\"Total\", value=\"1\", detail=\"\", progress=none, symbol=none)\n        section background-color=\"transparent\"\n          SummaryCard(label=\"Total\", value=\"1\", detail=\"\", progress=none, symbol=none)\n"
+      },
+      "baseline": "586475cc254fdfcaa1509e8596f165cedf352f14",
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 11,
+          "end_col": 22,
+          "file": "$APP/app.contract",
+          "id": "lower-summary-card-in-list",
+          "line": 13,
+          "message": "`SummaryCard` in a grouped list's section is a grey card inside its white cell: put it above the `list`, or in a first `section background-color=\"transparent\"`, which has no card (pattern one-screen)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking4-invalid-svg-postorder",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column definitelyUnknown=1\n      svg\n        defs\n          g id=\"outer\"\n            g id=\"inner\"\n              foreignObject\n                svg\n                  foreignObject\n        use href=\"#inner\"\n        use href=\"#outer\"\n        use href=\"#outer\"\n"
+      },
+      "baseline": "586475cc254fdfcaa1509e8596f165cedf352f14",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 12,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-unknown-attr",
+          "line": 9,
+          "message": "`column` has no attribute `definitelyUnknown`",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 9,
+          "end_col": 12,
+          "file": "$APP/app.contract",
+          "id": "lower-svg-use-foreign-object",
+          "line": 17,
+          "message": "the `foreignObject` in `#inner` draws nothing through SVG `use`. Place it directly in the SVG for the web; for content on every host, position an ordinary box over the SVG",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 9,
+          "end_col": 12,
+          "file": "$APP/app.contract",
+          "id": "lower-svg-use-foreign-object",
+          "line": 18,
+          "message": "the `foreignObject` in `#outer` draws nothing through SVG `use`. Place it directly in the SVG for the web; for content on every host, position an ordinary box over the SVG",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 9,
+          "end_col": 12,
+          "file": "$APP/app.contract",
+          "id": "lower-svg-use-foreign-object",
+          "line": 19,
+          "message": "the `foreignObject` in `#outer` draws nothing through SVG `use`. Place it directly in the SVG for the web; for content on every host, position an ordinary box over the SVG",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking4-invalid-sounds-reverse",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column definitelyUnknown=1\n      text \"assets/first.wav\"\n      if on\n        text `assets/${q}.wav`\n      else\n        text \"assets/else.wav\"\n      match maybe\n        case some(x)\n          text `assets/${x}.wav`\n        case none\n          text \"assets/none.wav\"\n      for x in xs key=x\n        text \"assets/last.wav\"\n"
+      },
+      "baseline": "586475cc254fdfcaa1509e8596f165cedf352f14",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 12,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-unknown-attr",
+          "line": 9,
+          "message": "`column` has no attribute `definitelyUnknown`",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 14,
+          "end_col": 31,
+          "file": "$APP/app.contract",
+          "id": "lower-sound-undeclared",
+          "line": 21,
+          "message": "\"assets/last.wav\" is not a declared sound, so each step or `playSound` that plays it is dropped at run time and nothing sounds (the journal says `\"assets/last.wav\" is not a declared sound`); declare it at the top level: `sound \"assets/last.wav\"`",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 16,
+          "end_col": 33,
+          "file": "$APP/app.contract",
+          "id": "lower-sound-undeclared",
+          "line": 19,
+          "message": "\"assets/none.wav\" is not a declared sound, so each step or `playSound` that plays it is dropped at run time and nothing sounds (the journal says `\"assets/none.wav\" is not a declared sound`); declare it at the top level: `sound \"assets/none.wav\"`",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 16,
+          "end_col": 33,
+          "file": "$APP/app.contract",
+          "id": "lower-sound-undeclared",
+          "line": 17,
+          "message": "`assets/${\u2026}.wav` builds a sound's path, and the app declares no `sound`: each step or `playSound` that plays one is dropped at run time and nothing sounds (the journal says `\u2026 is not a declared sound`); declare every file it can name at the top level, a `sound \"\u2026\"` line each",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 14,
+          "end_col": 31,
+          "file": "$APP/app.contract",
+          "id": "lower-sound-undeclared",
+          "line": 14,
+          "message": "\"assets/else.wav\" is not a declared sound, so each step or `playSound` that plays it is dropped at run time and nothing sounds (the journal says `\"assets/else.wav\" is not a declared sound`); declare it at the top level: `sound \"assets/else.wav\"`",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 14,
+          "end_col": 31,
+          "file": "$APP/app.contract",
+          "id": "lower-sound-undeclared",
+          "line": 12,
+          "message": "`assets/${\u2026}.wav` builds a sound's path, and the app declares no `sound`: each step or `playSound` that plays one is dropped at run time and nothing sounds (the journal says `\u2026 is not a declared sound`); declare every file it can name at the top level, a `sound \"\u2026\"` line each",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 12,
+          "end_col": 30,
+          "file": "$APP/app.contract",
+          "id": "lower-sound-undeclared",
+          "line": 10,
+          "message": "\"assets/first.wav\" is not a declared sound, so each step or `playSound` that plays it is dropped at run time and nothing sounds (the journal says `\"assets/first.wav\" is not a declared sound`); declare it at the top level: `sound \"assets/first.wav\"`",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking4-invalid-back-test-id",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column definitelyUnknown=1 navigationKey=\"root\" navigationBack=\"close\"\n      column navigationKey=\"home\"\n        button testId=\"close\"\n          text \"Close\"\n"
+      },
+      "baseline": "586475cc254fdfcaa1509e8596f165cedf352f14",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 12,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-unknown-attr",
+          "line": 9,
+          "message": "`column` has no attribute `definitelyUnknown`",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 53,
+          "end_col": 67,
+          "file": "$APP/app.contract",
+          "id": "lower-navigation-back-id",
+          "line": 9,
+          "message": "`navigationBack=\"close\"` names a control's `id`, not an action, but no element in the view has that id. Back falls back to the root's `navigate` handler, or to the router's Back when there is no handler; `testId=\"close\"` names a control for tests and the agent; give it `id=\"close\"` as well. The control must be in the active route or outside every route, and enabled, for Back to press it (docs/recipes/navigation-stack.md)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking4-invalid-roles-buttons",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column definitelyUnknown=1\n      button\n        column\n          if on\n            image \"symbol:add\"\n          else\n            text \"\"\n      button\n        svg\n          path d=\"M0 0 L1 1\"\n      button\n        button\n          text \"Inner\"\n      button aria-hidden=true\n      button\n        text \"Named\"\n      column role=\"dialog\"\n      text \"Level\" aria-level=2\n"
+      },
+      "baseline": "586475cc254fdfcaa1509e8596f165cedf352f14",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 12,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-unknown-attr",
+          "line": 9,
+          "message": "`column` has no attribute `definitelyUnknown`",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 7,
+          "end_col": 13,
+          "file": "$APP/app.contract",
+          "id": "lower-zero-size",
+          "line": 22,
+          "message": "`button` has no children and no size, so it has zero area and nothing to press: give it children or a size",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 7,
+          "end_col": 13,
+          "file": "$APP/app.contract",
+          "id": "lower-button-unlabelled",
+          "line": 10,
+          "message": "this `button` shows only an image with no name: a screen reader on the web reads it as just \"button\", and VoiceOver on iOS by the symbol's generic name (\"add\", \"love\"). Name it: `aria-label=\"Add\"` on the button, beside its `image \"symbol:\u2026\"` (docs/recipes/symbols.md)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 7,
+          "end_col": 13,
+          "file": "$APP/app.contract",
+          "id": "lower-button-unlabelled",
+          "line": 16,
+          "message": "this `button` shows only an image with no name: a screen reader on the web reads it as just \"button\", and VoiceOver on iOS by the symbol's generic name (\"add\", \"love\"). Name it: `aria-label=\"Add\"` on the button, beside its `image \"symbol:\u2026\"` (docs/recipes/symbols.md)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 9,
+          "end_col": 15,
+          "file": "$APP/app.contract",
+          "id": "lower-nested-button",
+          "line": 20,
+          "message": "this `button` is inside another `button`. A press on it is its own (the outer one does not hear it, on every host), but the outer button's accessible name reads this one's words with its own, and HTML allows no button in a button. Put the two side by side: a `row` holding the outer's content as one `button` (`flex=1`) and this one after it, as a table cell holds its accessory button",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 7,
+          "end_col": 13,
+          "file": "$APP/app.contract",
+          "id": "lower-dialog-role",
+          "line": 25,
+          "message": "`role=\"dialog\"` on a `column` names a dialog without making one: the box is drawn as written, with no Escape, no focus kept inside it (Tab reaches the page behind) and no iOS sheet. A modal you lay out (a form, an editor) is a sheet, a route with `navigationPresentation=\"modal\"`: UIKit's sheet on iOS, closed by Escape on the web, the page under it inert. A confirmation of text and buttons is `dialog role=\"alertdialog\"`, opened with `showModal(id)` (docs/recipes/navigation-stack.md)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 7,
+          "end_col": 11,
+          "file": "$APP/app.contract",
+          "id": "lower-level-without-heading",
+          "line": 26,
+          "message": "`aria-level` on a `text` with no `role=\"heading\"` does not make a heading: a screen reader is not told it is one on any platform, it gets no heading style, and the iOS navigation bar does not take it for the screen's title. Write the role beside it: `text \"Results\" role=\"heading\" aria-level=2`",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking4-invalid-roles-key-arms",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column definitelyUnknown=1\n      column role=\"listbox\"\n        if on\n          button key=keys\n        else\n          button\n      column role=\"tree\"\n        match maybe\n          case some(x)\n            text x\n          case none\n            button\n      column role=\"grid\"\n        for x in xs key=x\n          button keycapture=keys\n"
+      },
+      "baseline": "586475cc254fdfcaa1509e8596f165cedf352f14",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 12,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-unknown-attr",
+          "line": 9,
+          "message": "`column` has no attribute `definitelyUnknown`",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 11,
+          "end_col": 17,
+          "file": "$APP/app.contract",
+          "id": "lower-zero-size",
+          "line": 12,
+          "message": "`button` has no children and no size, so it has zero area and nothing to press: give it children or a size",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 11,
+          "end_col": 17,
+          "file": "$APP/app.contract",
+          "id": "lower-zero-size",
+          "line": 14,
+          "message": "`button` has no children and no size, so it has zero area and nothing to press: give it children or a size",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 13,
+          "end_col": 19,
+          "file": "$APP/app.contract",
+          "id": "lower-zero-size",
+          "line": 20,
+          "message": "`button` has no children and no size, so it has zero area and nothing to press: give it children or a size",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 11,
+          "end_col": 17,
+          "file": "$APP/app.contract",
+          "id": "lower-zero-size",
+          "line": 23,
+          "message": "`button` has no children and no size, so it has zero area and nothing to press: give it children or a size",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 11,
+          "end_col": 17,
+          "file": "$APP/app.contract",
+          "id": "lower-button-unlabelled",
+          "line": 12,
+          "message": "this `button` holds no text and no `aria-label`, so it is blank: an empty button to a person, just \"button\" to VoiceOver. Put its words in it (a `text \"Add 500 ml\"` child), or name a symbol-only button with `aria-label` beside its `image \"symbol:\u2026\"` (docs/recipes/symbols.md)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 11,
+          "end_col": 17,
+          "file": "$APP/app.contract",
+          "id": "lower-button-unlabelled",
+          "line": 14,
+          "message": "this `button` holds no text and no `aria-label`, so it is blank: an empty button to a person, just \"button\" to VoiceOver. Put its words in it (a `text \"Add 500 ml\"` child), or name a symbol-only button with `aria-label` beside its `image \"symbol:\u2026\"` (docs/recipes/symbols.md)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 7,
+          "end_col": 13,
+          "file": "$APP/app.contract",
+          "id": "lower-role-keys",
+          "line": 15,
+          "message": "Exact supplies no keys for `role=\"tree\"`: each member is its own Tab stop and the arrows do nothing. Write the keys in a `key` action on the group or its members",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 13,
+          "end_col": 19,
+          "file": "$APP/app.contract",
+          "id": "lower-button-unlabelled",
+          "line": 20,
+          "message": "this `button` holds no text and no `aria-label`, so it is blank: an empty button to a person, just \"button\" to VoiceOver. Put its words in it (a `text \"Add 500 ml\"` child), or name a symbol-only button with `aria-label` beside its `image \"symbol:\u2026\"` (docs/recipes/symbols.md)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 11,
+          "end_col": 17,
+          "file": "$APP/app.contract",
+          "id": "lower-button-unlabelled",
+          "line": 23,
+          "message": "this `button` holds no text and no `aria-label`, so it is blank: an empty button to a person, just \"button\" to VoiceOver. Put its words in it (a `text \"Add 500 ml\"` child), or name a symbol-only button with `aria-label` beside its `image \"symbol:\u2026\"` (docs/recipes/symbols.md)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking4-invalid-fixed-neighbours",
+      "files": {
+        "app.contract": "routes nav\n  home \"/\"\ncomponent App\n  state shown = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  view\n    main navigationKey=`${top(nav).id}`\n      for e in stack(nav) key=e.id\n        column definitelyUnknown=1 navigationKey=`${e.id}`\n          header\n            text \"Inbox\" role=\"heading\"\n          row background-color=\"-exact-background\"\n            button \"All\"\n          column flex=1\n            list flex=1\n              text \"Row\"\n            text \"Inner footer\"\n          text \"Outer footer\"\n"
+      },
+      "baseline": "586475cc254fdfcaa1509e8596f165cedf352f14",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 16,
+          "end_col": 33,
+          "file": "$APP/app.contract",
+          "id": "lower-unknown-attr",
+          "line": 10,
+          "message": "`column` has no attribute `definitelyUnknown`",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 11,
+          "end_col": 14,
+          "file": "$APP/app.contract",
+          "id": "lower-list-beside-fixed",
+          "line": 13,
+          "message": "this box stays put above the list that scrolls this route, and holds more than controls (a text, an image or a fill), so on iOS the rows stop at it in a hard line where a hand-built screen's list scrolls under what is pinned over it, blurred by the scroll edge effect. Put what it says in the list (a section's `header` or `footer`, or the first row), or keep only buttons, fields and a tablist in it, unfilled: those the list runs under, faded and blurred where it passes as iOS does under a hand-built composer, so a field's text over it stays legible (docs/recipes/list-rows.md)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 11,
+          "end_col": 15,
+          "file": "$APP/app.contract",
+          "id": "lower-list-beside-fixed",
+          "line": 19,
+          "message": "this box stays put below the list that scrolls this route, and holds more than controls (a text, an image or a fill), so on iOS the rows stop at it in a hard line where a hand-built screen's list scrolls under what is pinned over it, blurred by the scroll edge effect. Put what it says in the list (a section's `header` or `footer`, or the first row), or keep only buttons, fields and a tablist in it, unfilled: those the list runs under, faded and blurred where it passes as iOS does under a hand-built composer, so a field's text over it stays legible (docs/recipes/list-rows.md)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 13,
+          "end_col": 17,
+          "file": "$APP/app.contract",
+          "id": "lower-list-beside-fixed",
+          "line": 18,
+          "message": "this box stays put below the list that scrolls this route, and holds more than controls (a text, an image or a fill), so on iOS the rows stop at it in a hard line where a hand-built screen's list scrolls under what is pinned over it, blurred by the scroll edge effect. Put what it says in the list (a section's `header` or `footer`, or the first row), or keep only buttons, fields and a tablist in it, unfilled: those the list runs under, faded and blurred where it passes as iOS does under a hand-built composer, so a field's text over it stays legible (docs/recipes/list-rows.md)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking4-invalid-parts-round",
+      "files": {
+        "app.contract": "use RoundButton from \"exact:content\"\ncomponent App\n  state n = 0\n  action go\n    n = n + 1\n  view\n    column definitelyUnknown=1\n      RoundButton(label=\"Start the quiz\", tint=none, press=go, disabled=false, testId=\"a\")\n      if true\n        RoundButton(label=\"Next question\", tint=none, press=go, disabled=false, testId=\"b\")\n"
+      },
+      "baseline": "586475cc254fdfcaa1509e8596f165cedf352f14",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 12,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-unknown-attr",
+          "line": 7,
+          "message": "`column` has no attribute `definitelyUnknown`",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 25,
+          "end_col": 41,
+          "file": "$APP/app.contract",
+          "id": "lower-round-button-label",
+          "line": 8,
+          "message": "`RoundButton` is the Clock's circle for a word (Start, Stop, Lap): \"Start the quiz\" is 14 characters and the 80-point circle holds about 7, so it is cut short. A screen's main action of more words is a `button` with `buttonStyle=\"filled\"` (docs/recipes/content-design.md)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 27,
+          "end_col": 42,
+          "file": "$APP/app.contract",
+          "id": "lower-round-button-label",
+          "line": 10,
+          "message": "`RoundButton` is the Clock's circle for a word (Start, Stop, Lap): \"Next question\" is 13 characters and the 80-point circle holds about 7, so it is cut short. A screen's main action of more words is a `button` with `buttonStyle=\"filled\"` (docs/recipes/content-design.md)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking4-invalid-parts-empty",
+      "files": {
+        "app.contract": "use EmptyState from \"exact:content\"\ncomponent App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column definitelyUnknown=1\n      list\n        if on\n          EmptyState(symbol=\"symbol:add\", title=\"Empty\", message=\"Add one\")\n        else\n          text \"Row\"\n"
+      },
+      "baseline": "586475cc254fdfcaa1509e8596f165cedf352f14",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 12,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-unknown-attr",
+          "line": 10,
+          "message": "`column` has no attribute `definitelyUnknown`",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 11,
+          "end_col": 21,
+          "file": "$APP/app.contract",
+          "id": "lower-empty-state-in-list",
+          "line": 13,
+          "message": "`EmptyState` inside a `list` is drawn as one of its rows; it centres in the screen in place of the list: `if items.length == 0 and not pending(items)`, the `EmptyState`, `else` the `list` (pattern list-detail)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking4-invalid-parts-summary",
+      "files": {
+        "app.contract": "use SummaryCard from \"exact:content\"\ncomponent App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column definitelyUnknown=1\n      list appearance=\"auto\"\n        section\n          SummaryCard(label=\"Total\", value=\"1\", detail=\"\", progress=none, symbol=none)\n        section background-color=\"transparent\"\n          SummaryCard(label=\"Total\", value=\"1\", detail=\"\", progress=none, symbol=none)\n"
+      },
+      "baseline": "586475cc254fdfcaa1509e8596f165cedf352f14",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 12,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-unknown-attr",
+          "line": 10,
+          "message": "`column` has no attribute `definitelyUnknown`",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 11,
+          "end_col": 22,
+          "file": "$APP/app.contract",
+          "id": "lower-summary-card-in-list",
+          "line": 13,
+          "message": "`SummaryCard` in a grouped list's section is a grey card inside its white cell: put it above the `list`, or in a first `section background-color=\"transparent\"`, which has no card (pattern one-screen)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
     }
   ],
   "batches": [

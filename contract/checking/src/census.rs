@@ -224,7 +224,7 @@ fn recursive_view_walks_do_not_grow() {
     let walks = census(root);
     // Conservative candidates include transformations and same-name call edges.
     // LLP 1172.019 §2 item 4 requires this ceiling to fall as checks migrate.
-    const CEILING: usize = 293;
+    const CEILING: usize = 271;
     eprintln!(
         "{} compiler hand walks (ceiling {CEILING}):\n{}",
         walks.len(),
