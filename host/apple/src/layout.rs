@@ -115,6 +115,9 @@ impl<D: DataSource> Host<D> {
         // These geometry rows will be withheld. Force a settled retry to
         // publish them even if the kernel's last guessed boxes compare equal.
         self.layout_withheld = true;
+        for (_, published) in self.flat.hits.values_mut() {
+            *published = false;
+        }
         for m in self.mirror.values_mut() {
             m.frame = None;
         }
@@ -288,7 +291,15 @@ impl<D: DataSource> Host<D> {
 
     /// LLP 1083.000 D4: publish ranks independently of geometry, including zero.
     pub(super) fn emit_ranks(&mut self, batch: &mut Batch) {
-        for (id, placed) in self.runner.kernel().paint_order() {
+        let order = self
+            .flat
+            .order
+            .take()
+            .unwrap_or_else(|| self.runner.kernel().paint_order());
+        for (id, placed) in order {
+            if self.flat.nodes.contains(&id) {
+                continue;
+            }
             if self.ranks.insert(id, placed.rank) != Some(placed.rank) {
                 batch.rank(id, placed.rank);
             }
@@ -298,8 +309,10 @@ impl<D: DataSource> Host<D> {
     /// The parent-relative frames and scroll content sizes that changed since
     /// the presenter last heard them.
     fn emit_layout(&mut self, batch: &mut Batch) -> Result<(), String> {
+        self.emit_flat_hits(batch);
         self.judge_list_moves();
         // Preserve publication order without a tree insertion for each touch.
+        self.queue_flat_descendants();
         let mut pending: Vec<_> = std::mem::take(&mut self.pending_layout)
             .into_iter()
             .collect();
@@ -318,9 +331,14 @@ impl<D: DataSource> Host<D> {
             let Some(node) = kernel.node(id) else {
                 continue;
             };
-            if node.is_inline_run() {
+            if node.is_inline_run() || self.flat.nodes.contains(&id) {
                 continue;
             }
+            let parent_id = if self.flat.nodes.is_empty() {
+                node.parent
+            } else {
+                self.presented_parent(id)
+            };
             let m = self.mirror.entry(id).or_default();
             // Silent list settling already updated kernel flow. Compare final
             // shapes with what the presenter saw, just like frames; destroyed
@@ -339,7 +357,7 @@ impl<D: DataSource> Host<D> {
             // D8.2): its root's frame as published, sent again when it
             // takes or loses the block, with the block's used size.
             let block = kernel.host_block_size(id);
-            let parent = node.parent.filter(|_| block.is_none());
+            let parent = parent_id.filter(|_| block.is_none());
             let parent = parent.and_then(|p| kernel.node(p)).map(|p| p.frame);
             let rel = relative(node.frame, parent);
             // The detent measures the route alone, independently of the

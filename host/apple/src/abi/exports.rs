@@ -798,6 +798,12 @@ macro_rules! host {
             $crate::abi::with_runtime(&EXACT_RUNTIMES, rt, false, |b, _| { b.set_row_reuse(on != 0); 0 }, |n| n)
         }
 
+        /// Nonzero: subsequent boots omit layout-only boxes inside quiet collection rows (LLP 1171 D4).
+        #[no_mangle]
+        pub extern "C" fn exact_flat_nodes(rt: u32, on: u32) -> u32 {
+            $crate::abi::with_runtime(&EXACT_RUNTIMES, rt, false, |b, _| { b.set_flat_nodes(on != 0); 0 }, |n| n)
+        }
+
         /// Deliver one native timer instance without draining other native timers.
         #[no_mangle]
         pub extern "C" fn exact_fire_native_timer(rt: u32, index: u32, generation: u64, now: f64) -> u32 {

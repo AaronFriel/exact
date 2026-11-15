@@ -11,6 +11,11 @@ use super::{not_booted, Bridge};
 use exact_runner::DataSource;
 
 impl<D: DataSource> Bridge<D> {
+    /// Omit layout-only boxes inside quiet collection rows of subsequent boots (LLP 1171 D4).
+    pub fn set_flat_nodes(&mut self, on: bool) {
+        self.launch_layout.flat_nodes = on;
+    }
+
     /// Frame tasks at their presentation target after timer admission.
     pub fn admitted_frame(&mut self, target_ms: f64, wall_ms: f64) -> u32 {
         let out = self

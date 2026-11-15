@@ -274,6 +274,9 @@ package final class Runtime {
     package func useRowReuse(_ on: Bool) {
         self.on { () -> Void in _ = exact_row_reuse(rt, on ? 1 : 0) }
     }
+    package func useFlatNodes(_ enabled: Bool) {
+        on { () -> Void in _ = exact_flat_nodes(rt, enabled ? 1 : 0) }
+    }
     /// The wake for a request's reply (LLP 1016 D2), on the executor's thread.
     package func setWake(_ wake: ExactWakeFn?, ctx: UnsafeMutableRawPointer?) {
         let ctx = UInt(bitPattern: ctx)

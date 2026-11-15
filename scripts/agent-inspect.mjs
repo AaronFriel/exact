@@ -1377,3 +1377,12 @@ export async function lookPicture(s, path, target, view = {}) {
   // `bounds`: the scene's centre and radius an orbit or plan view was drawn within.
   return { screenshot: resolve(path), w, h, tick, hash, canvas: at.id, look, ...(bounds ? { bounds } : {}), ...(Object.keys(from).length ? { view: from } : {}) };
 }
+
+/** A presented box, including a layout-only node read from its logical layout. */
+export async function layoutBox(s, id, layout) {
+  const box = layout.nodes.find(n => n.id === id);
+  if (box) return box;
+  if (!['ios', 'host-ios'].includes(s.host)) return undefined;
+  const node = (await s.layout(id)).node;
+  return node?.native?.layoutOnly === true ? node.space?.viewport : undefined;
+}

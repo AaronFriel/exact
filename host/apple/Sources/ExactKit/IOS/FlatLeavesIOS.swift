@@ -207,6 +207,10 @@ final class FlatLeaves {
         return true
     }
     func isFlat(_ id: UInt32) -> Bool { leaves[id] != nil }
+
+    /// `parent`'s leaves drawn again at the next flush: the omitted boxes
+    /// that bound its runs changed.
+    func boundsChanged(_ parent: UInt32) { if order[parent] != nil { dirty.insert(parent) } }
     /// The node a flat leaf's children op placed it in.
     func parent(of id: UInt32) -> UInt32? { leaves[id]?.parent }
     /// `id`'s children moved to another container view (a material or a
@@ -283,7 +287,7 @@ final class FlatLeaves {
         // A view's CSS animations are its layer's: one holding any stays a view.
         guard let view = presenter.views[id], view.kind == "view", view.paintRank == 0,
               view.handlers.isEmpty, view.props.isEmpty, view.subviews.isEmpty, !holdsLeaves(id),
-              view.surface == nil, view.boxFilter == nil, !presenter.svg.animatesBox(id),
+              view.layoutHits == nil, view.surface == nil, view.boxFilter == nil, !presenter.svg.animatesBox(id),
               let flat = FlatPaint(view.style), !flat.positioned else { return }
         var ancestor = view.superview
         while let v = ancestor, !(v is NodeView) { ancestor = v.superview }
@@ -531,6 +535,7 @@ final class FlatLeaves {
             for id in ids { leaves[id]?.layer.removeFromSuperlayer() }
             var made: [CAShapeLayer] = []
             var previous: CALayer?
+            let bounds = parent?.layoutHits?.bounds ?? []
             func put(_ layer: CALayer, at i: Int, frames: [CGRect]) {
                 layer.flatHit = parent.map { FlatHit(owner: $0, frames: frames) }
                 if let previous {
@@ -551,7 +556,7 @@ final class FlatLeaves {
                 }
                 var j = i + 1
                 if let key = runKey(leaf) {
-                    while j < ids.count, let next = leaves[ids[j]], runKey(next) == key { j += 1 }
+                    while j < ids.count, !bounds.contains(ids[j]), let next = leaves[ids[j]], runKey(next) == key { j += 1 }
                 }
                 if j - i >= 2 {
                     let run = CAShapeLayer()

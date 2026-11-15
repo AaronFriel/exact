@@ -807,6 +807,8 @@ uint32_t exact_native_timers(ExactRuntime rt, uint32_t enabled);
  * Each of its views is said `renew` before its props and style: the
  * presenter drops what it keeps by view, as a new view has none of it. */
 uint32_t exact_row_reuse(ExactRuntime rt, uint32_t on);
+/* Subsequent boots omit layout-only boxes inside quiet collection rows (LLP 1171 D4). */
+uint32_t exact_flat_nodes(ExactRuntime rt, uint32_t on);
 /* Deliver only this timer instance. A cancelled generation cannot fire a replacement. */
 uint32_t exact_fire_native_timer(ExactRuntime rt, uint32_t index, uint64_t generation, double now_ms);
 uint32_t exact_advance(ExactRuntime rt, double now_ms, uint32_t mode);

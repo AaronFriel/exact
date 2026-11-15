@@ -14,6 +14,8 @@ const read = (cmd, args, opts = {}) => spawnSync(cmd, args, { encoding: 'utf8', 
  * Plans embed the current schema digest. App entries need the test app's `appId` to boot. */
 export function compileFixtures(root, run, env, dir, prefix, appId) {
   const contract = args => run(env.EXACT_CONTRACT, ['build', ...args], { env });
+  contract([resolve(root, 'host/apple/tests/fixtures/layout-only-row.contract'), '-o', env[`${prefix}_LAYOUT_ONLY_ROW_PLAN`] = resolve(dir, 'layout-only-row.plan')]);
+  contract([resolve(root, 'host/apple/tests/fixtures/layout-only-paint.contract'), '-o', env[`${prefix}_LAYOUT_ONLY_PAINT_PLAN`] = resolve(dir, 'layout-only-paint.plan')]);
   // Made afresh: a target from before the tamber->forma rename keeps an app.tamber here, which contract refuses.
   const iconApp = resolve(dir, 'entries/raster-icons');
   rmSync(iconApp, { recursive: true, force: true });

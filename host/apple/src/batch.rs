@@ -131,6 +131,10 @@ fn string_list(items: &[&str], out: &mut String) {
     out.push(']');
 }
 
+/// An omitted box's hit region: the presented child its descendants start
+/// before, its frame, its id, and the presented child after its descendants.
+pub(crate) type HitRegion = (Option<u32>, [f32; 4], u32, Option<u32>);
+
 fn id_list(ids: &[u32], out: &mut String) {
     out.push('[');
     for (i, c) in ids.iter().enumerate() {
@@ -143,6 +147,38 @@ fn id_list(ids: &[u32], out: &mut String) {
 }
 
 impl Batch {
+    pub(crate) fn layout_promote(
+        &mut self,
+        id: u32,
+        parent: u32,
+        frame: [f32; 4],
+        children: &[(u32, [f32; 4])],
+        keep: &[u32],
+    ) {
+        self.ops.push(format!(
+            "{{\"op\":\"layoutPromote\",\"id\":{id},\"parent\":{parent},\"frame\":{},\"children\":{},\"keep\":{}}}",
+            serde_json::to_string(&frame).expect("layout rectangle"),
+            serde_json::to_string(children).expect("child ids"),
+            serde_json::to_string(keep).expect("retained ids")
+        ));
+    }
+
+    /// Omitted boxes destroyed: their hit regions leave `id`'s, and a contact
+    /// one holds ends. Not geometry, so a withheld layout keeps it.
+    pub(crate) fn layout_hits_withdrawn(&mut self, id: u32, ids: &[u32]) {
+        let mut s = format!("{{\"op\":\"layoutHitsWithdrawn\",\"id\":{id},\"ids\":");
+        id_list(ids, &mut s);
+        s.push('}');
+        self.ops.push(s);
+    }
+
+    pub(crate) fn layout_hits(&mut self, id: u32, boxes: &[HitRegion]) {
+        self.ops.push(format!(
+            "{{\"op\":\"layoutHits\",\"id\":{id},\"boxes\":{}}}",
+            serde_json::to_string(boxes).expect("layout rectangles")
+        ));
+    }
+
     /// @ref LLP 1095 D4 — the roles the app's theme replaces, by the
     /// schema's name, each with the colour that replaces it as a style row
     /// sends one; sent at boot, an empty table clearing the last plan's. A
@@ -1160,7 +1196,7 @@ fn layout_geometry(op: &str) -> bool {
     match kind {
         Some(
             "frame" | "content" | "fieldContent" | "flow" | "sticky" | "fragments" | "region"
-            | "native-region" | "svg",
+            | "native-region" | "svg" | "layoutHits",
         ) => true,
         Some("present") => ["translate", "scale", "rotate", "layout", "height"]
             .iter()

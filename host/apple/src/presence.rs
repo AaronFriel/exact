@@ -486,9 +486,12 @@ impl<D: DataSource> Host<D> {
         if identity && (boot || batch.at_identity(view, property.name())) {
             return;
         }
-        // A run has no box of its own to move, and transforms do not apply
-        // to a non-replaced inline box (CSS Transforms 1 §3).
-        if self.inline_runs.contains_key(&view) || self.svg.presented(view) {
+        // A layout-only box has no layer. A run has no box of its own to
+        // move: transforms do not apply to non-replaced inline boxes (CSS Transforms 1 §3).
+        if self.flat.nodes.contains(&view)
+            || self.inline_runs.contains_key(&view)
+            || self.svg.presented(view)
+        {
             return;
         }
         if self.native_protected_id(view) && !self.native_current() {

@@ -1229,6 +1229,7 @@ package final class Presenter {
             case .land: if let f = flights[id] { landFlight(f) }
             case .rank:
                 if let rank = op.payload["rank"] as? NSNumber { views[id]?.setRank(rank.int64Value) }
+            case .layoutHits, .layoutHitsWithdrawn: break
             case .sticky: stickies.apply(id, op.payload)
             case .fragments: views[id]?.applyColumns(op.payload)
             case .unknown: blocks.applied(op)

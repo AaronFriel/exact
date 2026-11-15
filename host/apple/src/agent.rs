@@ -51,6 +51,11 @@ impl<D: DataSource> Host<D> {
             });
         }
         let mut reply = exact_runner::agent::handle(&self.runner, request);
+        if exact_runner::agent::field_str(request, "op").as_deref() == Some("node") {
+            if let Some(id) = exact_runner::agent::field_num(request, "id").map(|v| v as ViewId) {
+                self.flat_agent(id, &mut reply);
+            }
+        }
         if exact_runner::agent::field_str(request, "op").as_deref() == Some("state")
             && reply.ends_with('}')
         {

@@ -1,5 +1,5 @@
 // The UIKit presenter (LLP 1008 §9): a viewport scroll view over a content-sized
-// document, one `NodeView` per kernel node, host batches, keyboard insets and
+// document, with eligible list-row wrappers omitted, host batches, keyboard insets and
 // field reveal, owned by one session (LLP 1031 D1).
 #if os(iOS) || os(tvOS)
 import UIKit
@@ -991,6 +991,21 @@ package final class Presenter {
                 if let f = flights[id] { landFlight(f) }
             case .rank:
                 if let rank = op.payload["rank"] as? NSNumber { flats.rank(id, rank.int64Value) }
+            case .layoutHits:
+                if flats.isFlat(id) { flats.promote(id) }
+                if let owner = views[id] {
+                    let before = owner.layoutHits?.bounds ?? []
+                    owner.layoutHits = LayoutHits(owner, op.payload)
+                    if owner.layoutHits?.bounds ?? [] != before { flats.boundsChanged(id) }
+                }
+            case .layoutHitsWithdrawn:
+                if let owner = views[id], let ids = op.payload["ids"] as? [NSNumber] {
+                    let before = owner.layoutHits?.bounds ?? []
+                    owner.layoutHits = owner.layoutHits?.without(Set(ids.map(\.uint32Value)))
+                    if owner.layoutHits?.bounds ?? [] != before { flats.boundsChanged(id) }
+                }
+            case .layoutPromote:
+                placedAnew.append(contentsOf: promoteLayoutBox(id, op.payload))
             case .sticky:
                 if flats.isFlat(id) { flats.promote(id) }
                 stickies.apply(id, op.payload)
@@ -1072,6 +1087,7 @@ package final class Presenter {
             }
             if animating { moveOrPlace(kind == .create ? nil : views[id] ?? leaving[id]?.view) { applyOp(op, kind, id) } } else { applyOp(op, kind, id) }
         }
+        for id in placedAnew[anewFrom...] { views[id]?.promotedLayoutHit?.finishTransfers() }
         schemes.end(); regridMoved() // every override and move made: the traits before anything reads them
         #if os(iOS)
         // A reference changes default corners and shadow even when the material stays the same.

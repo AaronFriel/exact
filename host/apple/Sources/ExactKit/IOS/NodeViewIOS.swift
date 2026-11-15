@@ -580,6 +580,7 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
 
     /// The view is gone: no load in flight may report for it.
     func forget() {
+        layoutHits = nil
         holdGone() // out of the map: a hold on it is let go (HeldState.swift)
         cancelPressContact()
         let previousTransform = transformHold; transformHold = nil
@@ -844,7 +845,7 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
     package override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         // A true leaf cannot hit beyond its bounds; flat children can overflow.
         if !bounds.contains(point), subviews.isEmpty,
-           presenter?.flats.holdsLeaves(id) != true, !hitBounds.contains(point) { return nil }
+           presenter?.flats.holdsLeaves(id) != true, layoutHits == nil, !hitBounds.contains(point) { return nil }
         // UIKit's conversion already carries a box in space through its
         // plane (LLP 1077 D8); a hidden back face is the host's to refuse.
         if placedAncestor?.placementHidden == true || hidesBack() { return nil }

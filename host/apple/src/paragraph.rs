@@ -396,6 +396,10 @@ impl<D: DataSource> Host<D> {
             return;
         }
         let node = self.runner.kernel().node(id).expect("live");
+        if self.flat.nodes.contains(&id) {
+            self.keys.insert(node.key, id);
+            return;
+        }
         let key = node.key;
         // @ref LLP 1056 D10 — a 2D canvas is a plain view: its bitmap is a
         // layer's contents under ordinary children, with no Metal or overlay.
@@ -447,6 +451,9 @@ impl<D: DataSource> Host<D> {
             return;
         }
         self.queue_layout(id);
+        if self.flat.nodes.contains(&id) {
+            return;
+        }
         if self.reconcile_projection(id, batch) {
             return;
         }
@@ -506,6 +513,12 @@ impl<D: DataSource> Host<D> {
     }
 
     pub(super) fn emit_children(&mut self, id: ViewId, batch: &mut Batch) {
+        if self.flat.nodes.contains(&id) {
+            if let Some(parent) = self.presented_parent(id) {
+                self.emit_children(parent, batch);
+            }
+            return;
+        }
         // An `svg`'s and a `g`'s children are its scene's (LLP 1055 D4).
         let node_type = self.runner.kernel().node(id).expect("live").node_type;
         if node_type == NodeType::Svg || node_type.is_svg_element() {
@@ -567,6 +580,7 @@ impl<D: DataSource> Host<D> {
                 !self.native_protected_id(*child) || self.native_selected_id(*child)
             });
         }
+        let children = self.flat_children(children);
         let m = self.mirror.entry(id).or_default();
         if *children != *m.children {
             batch.children(id, &children);

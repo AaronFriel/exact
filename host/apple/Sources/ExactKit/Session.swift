@@ -529,6 +529,9 @@ public final class ExactSession {
         webviews = WebViews()
         frames = Frames()
         presenter.session = self; RowReuse.adopt(self)
+        #if os(iOS)
+        runtime.useFlatNodes(ProcessInfo.processInfo.environment["EXACT_FLAT_NODES"] != "0")
+        #endif
         canvases.session = self
         webviews.session = self
         natives.session = self

@@ -1290,14 +1290,14 @@ impl<D: DataSource> Runner<D> {
         self.now_ms
     }
 
-    /// The plan site a view was instantiated from and the instance path to
-    /// it — the `for` keys and active arms crossed — for `layout <node>`
-    /// (LLP 1035.002 D6). `None` for a view the instance tree does not own.
+    /// The plan site a view was instantiated from and its instance path (the `for` keys and
+    /// active arms crossed) for `layout <node>` (LLP 1035.002 D6); `None` outside the tree.
     pub fn site_of(&self, view: ViewId) -> Option<(NodesId, Vec<InstanceStep>)> {
         self.tree.as_ref().and_then(|t| t.site(view))
     }
 
-    pub(crate) fn plan_site_of(&self, view: ViewId) -> Option<NodesId> {
+    /// The plan site a view was instantiated from, without its instance path.
+    pub fn plan_site_of(&self, view: ViewId) -> Option<NodesId> {
         self.ids.site(view)
     }
 

@@ -117,6 +117,9 @@ public struct BatchOp {
         case heightDrag = "height-drag", transformDrag = "transform-drag", retireMotion = "retire-motion", reorder, exit
         case flight, land // LLP 1013.000 D4: a shared element's flight, and its end
         case rank // LLP 1083.000: twice the sibling paint rank
+        case layoutHits // LLP 1171 D4: omitted list-row boxes' input regions
+        case layoutHitsWithdrawn // Destroyed omitted boxes, sent even when geometry is withheld
+        case layoutPromote // Restore a row box without ending its descendants' contacts.
         case sticky // LLP 1083: a sticky box's constraint, or none
         case fragments // LLP 1093 D7: a box's column fragments or a container's columns
         case sound // LLP 1096 D8: the voice table's ops, and a boot's files
