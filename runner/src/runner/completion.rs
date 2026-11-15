@@ -1,4 +1,4 @@
-//! Runner-issued request completions (LLP 1172.019 §2 item 1, Carry).
+//! Runner-issued request and callback completions (LLP 1172.019 §2 item 1, Carry).
 
 use super::{CommitReceipt, DataSource, Outcome, RequestOut, Runner, RunnerError, Target};
 use std::fmt;
@@ -17,6 +17,8 @@ pub(super) enum Owner {
     ModuleWork,
     Background,
     Tool,
+    NativeTimer { index: u32, generation: u64 },
+    Canvas { lifetime: u64, generation: u32 },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -75,10 +77,10 @@ pub struct CompletionCapability {
     binding: CompletionReply,
 }
 
-/// Authority held for a stream or long poll's life, including its terminal
-/// outcome. Clones share the runner's original binding; they do not reauthorize
-/// a subscription. Deliveries are ordered by calls to [`Runner::deliver`],
-/// including messages held behind a yielding mapper.
+/// Authority for a subscription: a stream, long poll, native timer arming
+/// or canvas generation. Clones share the runner's original binding.
+/// Deliveries follow calls to [`Runner::deliver`]; each family's existing
+/// sequence, generation and mapper rules still apply.
 ///
 /// ```compile_fail
 /// use exact_runner::CompletionSubscription;
@@ -110,6 +112,17 @@ impl From<&CompletionSubscription> for CompletionCapability {
 pub struct CompletionReply(Arc<Mutex<Binding>>);
 
 impl CompletionReply {
+    pub(super) fn callback(identity: Identity, ticket: u64, owner: Owner) -> Self {
+        Self(Arc::new(Mutex::new(Binding {
+            identity,
+            ticket,
+            owner,
+            class: Class::UiOwned,
+            protocol: Protocol::Subscription,
+            taken: false,
+        })))
+    }
+
     /// Take the runner's authority once, for [`Runner::deliver`].
     /// A subscription has no one-shot authority; use [`Self::subscription`].
     pub fn take(&self) -> Option<CompletionCapability> {
@@ -123,7 +136,7 @@ impl CompletionReply {
         })
     }
 
-    /// The runner's reusable stream/long-poll binding, for [`Runner::deliver`].
+    /// The runner's reusable subscription binding, for [`Runner::deliver`].
     /// Borrow it on each delivery; neither an event nor its commit consumes it.
     pub fn subscription(&self) -> Option<CompletionSubscription> {
         let binding = self.0.lock().unwrap_or_else(|e| e.into_inner());
@@ -172,6 +185,27 @@ impl CompletionReply {
 /// land (LLP 1172.019 §2 item 1).
 #[derive(Debug)]
 pub enum Completion {
+    /// An ordinary native timer firing under its arming subscription.
+    NativeTimer {
+        /// The plan timer row.
+        index: u32,
+        /// The arming generation supplied to the platform.
+        generation: u64,
+        /// Delivery time in the runner's clock domain.
+        cutoff: f64,
+    },
+    /// A draw under a canvas generation's subscription. Existing stamp and
+    /// structural checks still decide whether its lists apply.
+    CanvasDraw {
+        /// The process-local canvas lifetime.
+        lifetime: u64,
+        /// The backing-store generation.
+        generation: u32,
+        /// The in-flight draw within that generation.
+        seq: u64,
+        /// Recorded lists and the source's next-frame request.
+        reply: super::DrawReply,
+    },
     /// A one-shot request outcome, with optional executor clock measurements.
     Reply {
         /// HTTP, storage, surface, module or failure outcome of the issued work.
@@ -238,7 +272,10 @@ impl<D: DataSource> Runner<D> {
                     ticket: request.ticket,
                     owner,
                     class: match owner {
-                        Owner::Ui(_) | Owner::Mapper { .. } => Class::UiOwned,
+                        Owner::Ui(_)
+                        | Owner::Mapper { .. }
+                        | Owner::NativeTimer { .. }
+                        | Owner::Canvas { .. } => Class::UiOwned,
                         _ => Class::DurableProcessLocal,
                     },
                     protocol: match owner {
@@ -258,6 +295,8 @@ impl<D: DataSource> Runner<D> {
     /// Deliver one issued completion: move a one-shot capability or borrow a
     /// [`CompletionSubscription`] for each ordered delivery. Carry preserves
     /// today's ticket semantics and host guards; it adds no identity refusal.
+    /// A timer returns its commit. A canvas draw returns no commit, or its
+    /// existing validation error as [`RunnerError::CanvasDraw`].
     pub fn deliver(
         &mut self,
         capability: impl Into<CompletionCapability>,
@@ -271,9 +310,34 @@ impl<D: DataSource> Runner<D> {
             .unwrap_or_else(|e| e.into_inner());
         let ticket = binding.ticket;
         drop(binding);
-        self.deliver_reply(ticket, completion)
+        match completion {
+            Completion::NativeTimer {
+                index,
+                generation,
+                cutoff,
+            } => {
+                let mut result = self.fire_native_timer_now(index, generation, cutoff);
+                match result.error {
+                    Some(error) => Err(error),
+                    None => Ok(result.receipts.pop().map(|timed| timed.receipt)),
+                }
+            }
+            Completion::CanvasDraw {
+                lifetime,
+                generation,
+                seq,
+                reply,
+            } => self
+                .canvas_reply_now(lifetime, generation, seq, reply)
+                .map(|()| None)
+                .map_err(RunnerError::CanvasDraw),
+            reply => self.deliver_reply(ticket, reply),
+        }
     }
 }
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod callback_tests;

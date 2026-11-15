@@ -41,6 +41,9 @@ test('every public Runner receipt entry is enumerated and classified', () => {
   assert.ok(door.protocol.includes('durable operation'), listing);
   for (const [symbol, protocol, kind] of [
     ['Runner::send_turn#next_ticket:1', 'one-shot', 'UI-owned'],
+    ['Runner::native_timer_completion', 'subscription', 'UI-owned'],
+    ['Runner::canvas_draw_completion', 'subscription', 'UI-owned'],
+    ['Runner::canvas_reply', 'subscription', 'UI-owned'],
     ['Runner::send_background#next_ticket:1', 'durable operation', 'durable'],
     ['Runner::take_reports#next_ticket:1', 'durable operation', 'durable'],
     ['Runner::tool_step#next_ticket:1', 'durable operation', 'durable'],

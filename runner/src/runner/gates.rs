@@ -57,6 +57,7 @@ impl<D: DataSource> Runner<D> {
             } else if !t.armed || t.key != key {
                 t.armed = true;
                 t.generation = t.generation.wrapping_add(1);
+                t.completion = Default::default();
                 t.key = key;
                 let row = &self.plan.timers[i];
                 if row.frame {
