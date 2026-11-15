@@ -1427,3 +1427,47 @@ fn an_inline_border_paints_on_each_fragment_sliced() {
         }
     }
 }
+
+#[test]
+fn an_empty_padded_run_paints_its_box_between_its_neighbours() {
+    // Chrome paints `text ""` with padding 3px 5px and a 2px border as a 14 px
+    // wide box between the words, its background inside its border.
+    const RED: [u8; 4] = [255, 0, 0, 255];
+    const BLUE: [u8; 4] = [0, 0, 255, 255];
+    let mut p = fixture(
+        "      text font-size=20 line-height=\"44px\" color=\"transparent\"\n        text \"Hi\"\n        text \"\" padding=\"3px 5px\" border-width=2 border-style=\"solid\" border-color=\"#ff0000\" background-color=\"#0000ff\"\n        text \" there\"\n",
+    );
+    let frame = p.frame().clone();
+    let width = frame.width() as usize;
+    let px = |x: usize, y: usize| {
+        let c = frame.pixels()[y * width + x];
+        [c.red(), c.green(), c.blue(), c.alpha()]
+    };
+    let rows: Vec<usize> = (0..frame.height() as usize)
+        .filter(|&y| (0..width).any(|x| px(x, y) == RED))
+        .collect();
+    let (top, bottom) = (rows[0], *rows.last().unwrap());
+    let middle = (top + bottom) / 2;
+    // The box may start between pixels; a column it touches is not white.
+    let columns: Vec<usize> = (0..width).filter(|&x| px(x, middle)[1] < 255).collect();
+    let (left, right) = (columns[0], *columns.last().unwrap());
+    assert!(left > 10, "the box follows \"Hi\": {left}");
+    assert_eq!(columns.len(), right + 1 - left, "one box: {columns:?}");
+    assert!(
+        (14..=15).contains(&columns.len()),
+        "its border box is 2 + 5 + 5 + 2 wide: {columns:?}"
+    );
+    assert!(
+        px(left, middle) == RED || px(left + 1, middle) == RED,
+        "its start border"
+    );
+    assert!(
+        px(right, middle) == RED || px(right - 1, middle) == RED,
+        "its end border"
+    );
+    assert_eq!(
+        px((left + right) / 2, middle),
+        BLUE,
+        "its background inside"
+    );
+}

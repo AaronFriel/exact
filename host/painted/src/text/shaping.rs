@@ -244,22 +244,29 @@ pub(super) struct ShapeData {
 type Pieces = Vec<(Range<usize>, usize)>;
 /// A hard line's inline boxes: (byte offset in the line, run index).
 type Boxes = Vec<(usize, usize)>;
+/// A hard line's runs with no text: (byte offset in the line, run index).
+type Empties = Vec<(usize, usize)>;
 
 /// The paragraph's text split into hard lines as cosmic-text split it: at
 /// each paragraph separator (`\r\n` one), the last empty piece dropped,
 /// and one empty line for no text. Each line keeps its byte offset and
 /// pieces: (range in the line, run index). An inline box's run has no text,
-/// only its place in the line (LLP 1011.002).
-fn hard_lines(spec: &Spec) -> Vec<(usize, String, Pieces, Boxes)> {
-    let mut out: Vec<(usize, String, Pieces, Boxes)> =
-        vec![(0, String::new(), Vec::new(), Vec::new())];
+/// only its place in the line (LLP 1011.002), and so has a run with no text.
+fn hard_lines(spec: &Spec) -> Vec<(usize, String, Pieces, Boxes, Empties)> {
+    let mut out: Vec<(usize, String, Pieces, Boxes, Empties)> =
+        vec![(0, String::new(), Vec::new(), Vec::new(), Vec::new())];
     let mut offset = 0;
     let mut after_cr = false;
     for (index, run) in spec.runs.iter().enumerate() {
         if run.inline.is_some() {
             after_cr = false;
-            let (_, text, _, boxes) = out.last_mut().expect("one line");
+            let (_, text, _, boxes, _) = out.last_mut().expect("one line");
             boxes.push((text.len(), index));
+            continue;
+        }
+        if run.text.is_empty() {
+            let (_, text, _, _, empties) = out.last_mut().expect("one line");
+            empties.push((text.len(), index));
             continue;
         }
         let mut rest = run.text.as_str();
@@ -277,7 +284,7 @@ fn hard_lines(spec: &Spec) -> Vec<(usize, String, Pieces, Boxes)> {
             let consumed = sep.map_or(rest.len(), |(at, ch)| at + ch.len_utf8());
             if !piece.is_empty() {
                 after_cr = false;
-                let (_, text, pieces, _) = out.last_mut().expect("one line");
+                let (_, text, pieces, _, _) = out.last_mut().expect("one line");
                 let start = text.len();
                 text.push_str(piece);
                 pieces.push((start..text.len(), index));
@@ -289,7 +296,7 @@ fn hard_lines(spec: &Spec) -> Vec<(usize, String, Pieces, Boxes)> {
                     if ch == '\n' && after_cr && piece.is_empty() {
                         out.last_mut().expect("one line").0 = next;
                     } else {
-                        out.push((next, String::new(), Vec::new(), Vec::new()));
+                        out.push((next, String::new(), Vec::new(), Vec::new(), Vec::new()));
                     }
                     after_cr = ch == '\r';
                     rest = &rest[at + ch.len_utf8()..];
@@ -299,7 +306,11 @@ fn hard_lines(spec: &Spec) -> Vec<(usize, String, Pieces, Boxes)> {
             offset += consumed;
         }
     }
-    if out.len() > 1 && out.last().is_some_and(|l| l.1.is_empty() && l.3.is_empty()) {
+    if out.len() > 1
+        && out
+            .last()
+            .is_some_and(|l| l.1.is_empty() && l.3.is_empty() && l.4.is_empty())
+    {
         out.pop();
     }
     out
@@ -309,7 +320,8 @@ fn hard_lines(spec: &Spec) -> Vec<(usize, String, Pieces, Boxes)> {
 /// holding a run's last character (its end), and before the cluster
 /// holding its first (its start), kept with that cluster where a line
 /// breaks, as Chrome keeps a `<span>`'s padding with its text; and for an
-/// image, its start before its box, by run.
+/// image, its start before its box, by run. A run with no text takes all its
+/// room before the character after it, else after the one before it.
 #[derive(Default)]
 struct Edges {
     after: Vec<(usize, f32)>,
@@ -317,7 +329,7 @@ struct Edges {
     box_leads: Vec<(u32, f32)>,
 }
 
-fn run_edges(spec: &Spec, pieces: &[(usize, String, Pieces, Boxes)]) -> Vec<Edges> {
+fn run_edges(spec: &Spec, pieces: &[(usize, String, Pieces, Boxes, Empties)]) -> Vec<Edges> {
     let mut out: Vec<Edges> = (0..pieces.len()).map(|_| Edges::default()).collect();
     if spec.runs.iter().all(|r| r.edges.is_empty()) {
         return out;
@@ -325,10 +337,13 @@ fn run_edges(spec: &Spec, pieces: &[(usize, String, Pieces, Boxes)]) -> Vec<Edge
     // Each run's first and last place: its hard line and its byte range there.
     let mut first: Vec<Option<(usize, usize)>> = vec![None; spec.runs.len()];
     let mut last: Vec<Option<(usize, usize)>> = vec![None; spec.runs.len()];
-    for (h, (_, _, runs, _)) in pieces.iter().enumerate() {
+    for (h, (_, _, runs, _, empties)) in pieces.iter().enumerate() {
         for (range, index) in runs {
             first[*index].get_or_insert((h, range.start));
             last[*index] = Some((h, range.end));
+        }
+        for &(at, index) in empties {
+            first[index] = Some((h, at));
         }
     }
     for (index, run) in spec.runs.iter().enumerate() {
@@ -336,6 +351,18 @@ fn run_edges(spec: &Spec, pieces: &[(usize, String, Pieces, Boxes)]) -> Vec<Edge
             if run.edges.start != 0.0 {
                 if let Some(h) = pieces.iter().position(|p| p.3.iter().any(|b| b.1 == index)) {
                     out[h].box_leads.push((index as u32, run.edges.start));
+                }
+            }
+            continue;
+        }
+        if run.text.is_empty() {
+            let room = run.edges.start + run.edges.end;
+            if let Some((h, at)) = first[index].filter(|_| room != 0.0) {
+                let text = &pieces[h].1;
+                if at < text.len() {
+                    out[h].leads.push((at, room));
+                } else if let Some((before, _)) = text[..at].char_indices().last() {
+                    out[h].after.push((before, room));
                 }
             }
             continue;
@@ -414,7 +441,7 @@ impl ShapedSource {
         let pieces = hard_lines(&spec);
         let mut edges = run_edges(&spec, &pieces);
         let mut lines = Vec::with_capacity(pieces.len());
-        for (h, (start, text, runs, boxes)) in pieces.into_iter().enumerate() {
+        for (h, (start, text, runs, boxes, _)) in pieces.into_iter().enumerate() {
             #[cfg(test)]
             SHAPE_LINES.with(|n| n.set(n.get() + 1));
             text_bytes += text.len();

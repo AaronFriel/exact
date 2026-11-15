@@ -520,7 +520,7 @@ struct TextRasterJob {
             let ink = Self.paintColor(attributes[NSAttributedString.Key.foregroundColor])
             guard let ink, color == nil || color == ink,
                   attributes[NSAttributedString.Key.exactBackground] == nil, attributes[NSAttributedString.Key.exactShadow] == nil,
-                  attributes[NSAttributedString.Key.exactAtomIcon] == nil,
+                  attributes[NSAttributedString.Key.exactEmptyBoxes] == nil, attributes[NSAttributedString.Key.exactAtomIcon] == nil,
                   attributes[NSAttributedString.Key.shadow] == nil, attributes[NSAttributedString.Key.strokeColor] == nil,
                   ((attributes[NSAttributedString.Key.strokeWidth] as? NSNumber)?.doubleValue ?? 0) == 0,
                   [NSAttributedString.Key.underlineColor, .strikethroughColor].allSatisfy({ key in

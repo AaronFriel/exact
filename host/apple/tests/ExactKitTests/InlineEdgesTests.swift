@@ -172,6 +172,27 @@ final class InlineEdgesTests: XCTestCase {
         }
     }
 
+    /// A run with no text and padding is a box in its line, as Chrome lays
+    /// `Hi<span style="padding:0 5px;border:2px solid;background:#ddd"></span> there`
+    /// out: its padding and border take room after "Hi", where its background
+    /// and its border paint, 14 wide, starting and ending there.
+    func testAnEmptyRunPaintsItsBox() throws {
+        var empty = run("", start: 7, end: 7)
+        empty.background = [242, 242, 247, 255]; empty.backgroundBox = 9
+        (empty.backgroundBefore, empty.backgroundAfter) = (7, 7)
+        empty.border = InlineBorder(widths: [2, 2, 2, 2], colors: Array(repeating: [255, 0, 0, 255], count: 4),
+                                    styles: Array(repeating: "solid", count: 4))
+        let plain = engine.paragraph(spec([run("Hi"), run(" there")]), width: .infinity)
+        let boxed = engine.paragraph(spec([run("Hi"), empty, run(" there")]), width: .infinity)
+        XCTAssertEqual(boxed.width, plain.width + 14, accuracy: 0.05)
+        let fills = TextLinePaint.backgrounds(boxed.lines[0], at: .zero)
+        XCTAssertEqual(fills.count, 1, "\(fills)")
+        let fill = try XCTUnwrap(fills.first)
+        XCTAssertEqual(fill.rect.minX, x(plain, 2), accuracy: 0.05)
+        XCTAssertEqual(fill.rect.width, 14, accuracy: 0.05)
+        XCTAssertEqual(fill.border?.widths, [2, 2, 2, 2], "both its ends")
+    }
+
     /// Boxes inside one another each paint their own background into their
     /// own padding, the inner over the outer (CSS 2 Appendix E), as Chrome
     /// paints `<span style="padding:0 2px;background:A;border-radius:4px">p

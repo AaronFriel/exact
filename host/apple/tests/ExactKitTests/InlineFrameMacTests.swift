@@ -37,6 +37,7 @@ final class InlineFrameMacTests: XCTestCase {
     func testHangingSpaceDoesNotAddAClientRect() throws { try checkEdgeCase("wrap") }
     func testPaddedRunAnswersItsBorderBox() throws { try checkEdgeCase("padded") }
     func testBoxAroundBoxesAnswersItsBorderBox() throws { try checkEdgeCase("nested") }
+    func testEmptyPaddedRunAnswersItsBorderBox() throws { try checkEdgeCase("padded-empty") }
 
     private func checkEdgeCase(_ name: String) throws {
         _ = NSApplication.shared
@@ -152,6 +153,8 @@ enum InlineFrameFixture {
             // Border boxes: padding and border around the glyphs, no margin.
             "padded": CGRect(x: 29.5625, y: -6.5, width: 43.015625, height: 32),
             "nested": CGRect(x: 19.5625, y: -5, width: 55.703125, height: 29),
+            // An empty run's padding and border take room after "Hi".
+            "padded-empty": CGRect(x: 15.109375, y: -4, width: 14, height: 27),
         ]
         let want = try XCTUnwrap(expected[name])
         let fragments = host.inlineRects(run)

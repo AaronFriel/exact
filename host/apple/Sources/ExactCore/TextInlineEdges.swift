@@ -76,7 +76,38 @@ extension TextEngine {
     }
 }
 
+/// A run with no text, at UTF-16 `offset`: its attributes, which no
+/// character carries, and the room kerned after its content edge on the
+/// character before it (`Spec.roomPast`).
+package struct EmptyRun {
+    package let offset: Int
+    package let attributes: [NSAttributedString.Key: Any]
+    package let past: CGFloat
+    package init(offset: Int, attributes: [NSAttributedString.Key: Any], past: CGFloat) {
+        self.offset = offset; self.attributes = attributes; self.past = past
+    }
+}
+
 extension Spec {
+    /// For the run `index`, which has no text: the room kerned after its
+    /// place on the character before it (`TextEngine.kernInlineEdges`), past
+    /// its own start: its end, the room of the runs with no text after it,
+    /// and the start of the run that follows them.
+    package func roomPast(_ index: Int) -> CGFloat {
+        Self.roomPast(runs.map { (text: $0.text, start: $0.inlineStart, end: $0.inlineEnd) }, index)
+    }
+
+    /// `roomPast` over each run's text and its start and end room, for a caller without a `Spec`.
+    package static func roomPast(_ runs: [(text: String, start: CGFloat, end: CGFloat)], _ index: Int) -> CGFloat {
+        var past = runs[index].end
+        for r in runs.dropFirst(index + 1) {
+            past += r.start
+            guard r.text.isEmpty else { break }
+            past += r.end
+        }
+        return past
+    }
+
     /// Where the first line starts: `text-indent`, and the start edge of
     /// the inline boxes the first run is in, which nothing precedes to kern
     /// (`TextEngine.kernInlineEdges`).

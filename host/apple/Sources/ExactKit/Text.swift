@@ -96,8 +96,10 @@ final class PresentedText: TextPresentation {
     /// where any box is rounded, reaches past its text, stands in another or
     /// beside an inline box's room: one table that all of its backgrounds
     /// share, so runs of one colour and font stay one CTRun, as they were
-    /// measured, and the painter tells boxes apart by character.
-    func finish(_ string: NSMutableAttributedString) {
+    /// measured, and the painter tells boxes apart by character. A box
+    /// with no characters (a run with no text, `EmptyRun`) is an empty
+    /// extent where it stands, on the character before it (`EmptyBoxes`).
+    func finish(_ string: NSMutableAttributedString, empties: [EmptyRun]) {
         let all = NSRange(location: 0, length: string.length)
         var boxes: [InlineBoxes.Box] = [], at: [UInt32: Int] = [:]
         // The room kerned beside a box is no glyph's: its own boxes' reach
@@ -106,20 +108,32 @@ final class PresentedText: TextPresentation {
         string.enumerateAttribute(.exactEdgeRoom, in: all) { value, _, stop in
             if value != nil { tabled = true; stop.pointee = true }
         }
-        string.enumerateAttribute(.exactBackground, in: all) { value, range, _ in
-            guard let inner = value as? InlineBackground, inner.box != 0 else { return }
-            // Its boxes, outermost first, each as deep as the boxes around it.
+        // Its boxes, outermost first, each as deep as the boxes around it;
+        // the indices of those it adds.
+        @discardableResult func add(_ inner: InlineBackground, _ range: NSRange) -> [Int] {
+            var added: [Int] = []
             for (depth, fill) in ([inner] + inner.outer).reversed().enumerated() {
                 tabled = tabled || !fill.radii.isEmpty || fill.reach != (0, 0, 0, 0) || fill.border != nil || !inner.outer.isEmpty
                 if let i = at[fill.box] {
-                    boxes[i].extent = NSUnionRange(boxes[i].extent, range)
+                    if range.length > 0 { boxes[i].extent = NSUnionRange(boxes[i].extent, range) }
                 } else {
                     at[fill.box] = boxes.count
+                    added.append(boxes.count)
                     boxes.append(InlineBoxes.Box(extent: range, radii: fill.radii, color: fill.color, depth: depth,
                                                  before: fill.reach.before, after: fill.reach.after,
                                                  above: fill.reach.above, below: fill.reach.below, border: fill.border, opacity: fill.opacity))
                 }
             }
+            return added
+        }
+        string.enumerateAttribute(.exactBackground, in: all) { value, range, _ in
+            guard let inner = value as? InlineBackground, inner.box != 0 else { return }
+            add(inner, range)
+        }
+        // A run with no text after a character: the boxes no character is in.
+        let anchored = empties.compactMap { empty -> (EmptyRun, InlineBackground, [Int])? in
+            guard empty.offset > 0, let inner = empty.attributes[.exactBackground] as? InlineBackground, inner.box != 0 else { return nil }
+            return (empty, inner, add(inner, NSRange(location: empty.offset, length: 0)))
         }
         guard !boxes.isEmpty else { return }
         let rtl = (string.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle)?.baseWritingDirection == .rightToLeft
@@ -127,6 +141,12 @@ final class PresentedText: TextPresentation {
         string.enumerateAttribute(.exactBackground, in: all) { value, range, _ in
             guard let fill = value as? InlineBackground, fill.box != 0 else { return }
             string.addAttribute(.exactBackground, value: fill.sharing(table), range: range)
+        }
+        guard let table else { return }
+        for (offset, group) in Dictionary(grouping: anchored, by: { $0.0.offset }) {
+            let range = (string.string as NSString).rangeOfComposedCharacterSequence(at: offset - 1)
+            string.addAttribute(.exactEmptyBoxes, value: group.map { EmptyBoxes(fill: $0.1.sharing(table), boxes: $0.2, past: $0.0.past) },
+                                range: range)
         }
     }
 }
@@ -313,9 +333,19 @@ final class InlineBoxes: NSObject {
     override var hash: Int { boxes.count }
 }
 
+/// The boxes of a run with no text (`EmptyRun`), carried by the character
+/// before it: its own background, for its content area and the table, the
+/// boxes no character is in, outermost first, and the room kerned after
+/// its place (`Spec.roomPast`).
+final class EmptyBoxes: NSObject, @unchecked Sendable {
+    let fill: InlineBackground, boxes: [Int], past: CGFloat
+    init(fill: InlineBackground, boxes: [Int], past: CGFloat) { self.fill = fill; self.boxes = boxes; self.past = past }
+}
+
 extension NSAttributedString.Key {
     static let exactOpacity = NSAttributedString.Key("ExactInlineOpacity")
     static let exactBackground = NSAttributedString.Key("ExactInlineBackground")
+    static let exactEmptyBoxes = NSAttributedString.Key("ExactInlineEmptyBoxes")
 }
 
 /// One line's paint into a y-down context, shared by every Apple painter.
@@ -343,6 +373,18 @@ enum TextLinePaint {
         }
         ctx.textMatrix = matrix
         ctx.restoreGState()
+    }
+
+    /// A glyph run's left and right, its advances included, and whether it
+    /// runs right to left.
+    static func glyphSpan(_ run: CTRun) -> (CGFloat, CGFloat, Bool)? {
+        let count = CTRunGetGlyphCount(run)
+        guard count > 0 else { return nil }
+        var positions = [CGPoint](repeating: .zero, count: count), advances = [CGSize](repeating: .zero, count: count)
+        CTRunGetPositions(run, CFRange(), &positions)
+        CTRunGetAdvances(run, CFRange(), &advances)
+        let xs = zip(positions, advances).flatMap { [$0.x, $0.x + $1.width] }
+        return (xs.min()!, xs.max()!, CTRunGetStatus(run).contains(.rightToLeft))
     }
 
     /// One box's fragment: its border box, its outline where a corner is
@@ -393,6 +435,18 @@ enum TextLinePaint {
         }
         for run in runs {
             let attributes = CTRunGetAttributes(run) as NSDictionary
+            // The boxes of runs with no text after this one's last character:
+            // each its reach either side of its place, starting and ending there.
+            for empty in attributes[NSAttributedString.Key.exactEmptyBoxes] as? [EmptyBoxes] ?? [] {
+                guard let (lo, hi, backwards) = Self.glyphSpan(run), let table = empty.fill.boxes else { continue }
+                let place = backwards ? lo + empty.past : hi - empty.past
+                for b in empty.boxes {
+                    let box = table.boxes[b]
+                    let (before, after) = backwards ? (box.after, box.before) : (box.before, box.after)
+                    spans.append(Piece(lo: place - before, hi: place + after, box: b, color: box.color, fill: empty.fill))
+                    starts.insert(b); ends.insert(b)
+                }
+            }
             guard let fill = attributes[NSAttributedString.Key.exactBackground] as? InlineBackground else { continue }
             let count = CTRunGetGlyphCount(run)
             guard count > 0 else { continue }

@@ -193,10 +193,44 @@ impl Paragraph {
         endpoints.sort_unstable();
         let metrics = &self.source.data.run_metrics;
         let rtl = self.source.spec.direction == Direction::Rtl;
+        // The runs with no text, where they stand (`empty_run_place`).
+        let empties: Vec<_> = runs
+            .iter()
+            .filter(|(range, run)| {
+                range.is_empty()
+                    && self.source.spec.runs[*run].inline.is_none()
+                    && backgrounds.get(*run).is_some_and(Option::is_some)
+            })
+            .filter_map(|&(_, run)| Some((run, self.empty_run_place(&ownership, run)?)))
+            .collect();
         let mut out = Vec::new();
         for (index, line) in self.layout_runs().enumerate() {
             let mut edges = BTreeMap::<ViewId, Edges>::new();
             let mut spans = Vec::new();
+            // A box with no characters is its reach either side of its place,
+            // starting and ending there.
+            for &(run, (_, x, glyph_rtl)) in empties.iter().filter(|(_, p)| p.0 == index) {
+                let background = backgrounds[run].as_ref().expect("filtered");
+                for (depth, layer) in background.layers().enumerate() {
+                    if boxes.contains_key(&layer.id) {
+                        continue;
+                    }
+                    let (before, after) = if glyph_rtl {
+                        (layer.reach.end, layer.reach.start)
+                    } else {
+                        (layer.reach.start, layer.reach.end)
+                    };
+                    let edge = edges.entry(layer.id).or_default();
+                    (edge.start, edge.end) = (true, true);
+                    spans.push(Span {
+                        lo: x - before,
+                        hi: x + after,
+                        run,
+                        layer,
+                        depth,
+                    });
+                }
+            }
             let base = if flow.is_some() {
                 0
             } else {

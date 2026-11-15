@@ -92,6 +92,38 @@ fn inline_frame_matches_chromes_font_boxes_and_wrap_union() {
     }
 }
 
+/// A run with no text and padding is a box in its line, as Chrome lays
+/// `Hi<span style="padding:3px 5px;border:2px solid"></span> there` out:
+/// its padding and border take room after "Hi", and its frame is its border
+/// box, 14 wide and as tall as its font's content area and block reach.
+#[test]
+fn an_empty_padded_run_is_a_box_in_its_line() {
+    let ids = ["empty", "after"];
+    let text = |attrs: &str| {
+        format!("text \"Hi\"\ntext \"\" id=\"empty\" {attrs}\ntext \" there\" id=\"after\"")
+    };
+    let mut plain = boot(&app(&text(""), "", "", &ids));
+    let mut boxed = boot(&app(
+        &text("padding=\"3px 5px\" margin-left=4 border-width=2 border-style=\"solid\""),
+        "",
+        "",
+        &ids,
+    ));
+    let [insertion, after] = [0, 1].map(|i| relative(&mut plain, i));
+    close(
+        relative(&mut boxed, 0),
+        [
+            insertion[0] + 4.,
+            insertion[1] - 5.,
+            14.,
+            insertion[3] + 10.,
+        ],
+        0.01,
+    );
+    let moved = relative(&mut boxed, 1);
+    close(moved, [after[0] + 18., after[1], after[2], after[3]], 0.01);
+}
+
 /// A run's frame is its border box, as Chrome's `getBoundingClientRect`
 /// answers: its padding and border stand out from its glyphs on every side
 /// (CSS 2 §10.6.1, §8.6), and neither its margin nor its neighbours' room is
