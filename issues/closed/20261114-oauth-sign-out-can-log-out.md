@@ -1,8 +1,7 @@
 # OAuth sign-out can log out the wrong account and drops state-less logout returns
 
-**Status:** Open
-**Branch state:** Fixed on this branch, to be closed when the commits land.
-**Resolution:** “An OAuth sign-out revokes inside its lease, logs out the account it read there, and takes a logout return that carries no state” makes signOut revoke inside the store's lease and open the provider's logout only afterward, from the leased session. “A state-less web logout return is addressed, never chosen” writes a random identity into the blank popup's own `sessionStorage`, returns it from the callback, and lets only that live logout complete after COOP severs the opener. A logout return needs no state and never completes a sign-in. On the wasm web host, a completed lease is released when its result reaches the host, before later browser work.
+**Status:** Closed
+**Resolution:** Sign-out revokes inside the store's lease and logs out the account it read there; a logout return needs no state and never completes a sign-in; on the web a state-less logout return is addressed by an identity in the popup's own sessionStorage; the wait ends on an elapsed bound.
 **Systems:** packages/oauth/index.ts, runner/src/auth.rs, host/listen/src/loopback.rs, host/web/auth-glue.js, host/web/auth-callback.js, host/web/module-glue.js, host/web/module-worker.js, js/src/prelude.js, host/android/canvas/src/main/java/dev/exact/canvas/Auth.kt
 **Author:** Charlie Cheever
 **Date:** 2026-11-14

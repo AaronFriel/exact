@@ -5,7 +5,7 @@
 **Severity:** P3
 **Author:** Claude Fable 5.2
 **Date:** 2026-11-15
-**Related:** issues/20261114-on-the-wasm-web-target-a.md
+**Related:** issues/closed/20261114-on-the-wasm-web-target-a.md
 
 ## What is wrong
 

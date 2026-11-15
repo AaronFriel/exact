@@ -1,6 +1,7 @@
 # On the wasm web target a held MIDI note-on can sound after a freeze
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** The wasm host marks the batch that commits the page's transition into frozen, and the presentation hold settles the output it still owns once on that batch: starts are discarded, and ends and cleanup are delivered in their original order.
 **Systems:** host/web/src/batch.rs, host/web/src/host.rs, host/web/wasm/commit.js, host/web/midi-glue.js, host/web/sound-glue.js
 **Severity:** P3
 **Author:** Charlie Cheever
