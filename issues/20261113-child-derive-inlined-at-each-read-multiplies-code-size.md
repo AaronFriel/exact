@@ -88,12 +88,13 @@ evaluating a condition, subject, list, key or navigation property. The item,
 key and arm are the render's; the row body and its substituted source are
 judged at the reached configuration's current clock. A closed panel has no
 recorded instances, while a prerendered panel has the instances its render
-built. The reader checks the row call and every item, position and match
-binding as separate VM runs. The row call covers the callee frame cut; the
-binding probes cover the reader context reconstructed from the render. Caller
-restoration is the VM invariant `resume_restores_environment`; a lowered plan
-cannot alter `resume`. The separate probes charge no synthetic aggregate that
-the application never builds.
+built. The reader checks the row call and every item, position and match binding
+as separate VM runs. The row call covers the callee frame cut; the binding
+probes cover the reader context reconstructed from the render. Caller
+restoration is the VM invariant `resume_restores_environment`, and accounting
+case `row-restores-reader-frame` compares it with the runner in one run. A
+lowered plan cannot alter `resume`. The separate probes charge no synthetic
+aggregate that the application never builds.
 
 The focused case covers nested owners, shadowing, stateful instances,
 transitive-only dependencies and recreation. Mutating its owner arm, making
@@ -101,38 +102,78 @@ its binder depth return a different enclosing value, or changing its body
 produces a divergence. Folded headers, folded footers, opened and closed
 panels, a prerendered panel inside a virtualized row, a reordered first-region
 owner and idle clocks with nonfinite or changing keys have focused coverage.
-The owned-answer case makes both sides read an instance-owned request's
-recorded value and currentness. Its focused mutations return the root idle
-placeholder's result; the corpus covers the runner path. The exporter records
-each resource's plan owner, including its arm, and `VmRows` resolves a read
-through that retained instance frame. Moving the request's owner outside the
-frame cut or to the unselected sibling arm produces a divergence. The seeded
-500-case run and the current 642-case corpus have no divergence and no
-instance-environment refusal.
+"Executable row validation reads live owned answers without synthetic bounds"
+also makes both sides read an instance-owned request's recorded answer and
+currentness. Its focused mutation returns the root idle placeholder's result;
+the new corpus case covers the runner path. "Executable row validation resolves
+owned requests through retained frames" records each resource's plan owner;
+"Executable row validation resolves owned requests through the owning arm"
+retains both its region and arm. `VmRows` then resolves the read through that
+arm's retained instance frame, as the runner does. Moving the request's owner
+outside the frame cut or to the unselected sibling arm is a divergence. The
+69 accounting cases compare `BadScope` for the cut and for all five resource
+reads from the wrong arm. The restoration case also compares the returned
+reader item, `2`, not only the outcome and counters. The seeded 500-case run
+and the current 642-case corpus have no divergence and no instance-environment
+refusal.
 
 The checker has a deliberate limit. For a request an instance owns, its
 focused mutations detect a wrong executable body, a wrong owner frame, an
 owner cut out of the retained frames, and an owner moved to the wrong arm.
 They do not establish arbitrary plan mutations beyond those four, operations
-outside `Contract.Vm`, or a general proof that every admitted shared load
-equals substitution. They also cannot see an instance that production creates
-under an owned request's placeholder and destroys after the synchronous answer
-within one commit. The request-settlement order inherited from main is
-unchanged; this branch adds render-owned frame markers.
+outside `Contract.Vm` such as `NativeProps` and linked Unicode case conversion,
+or a general proof that every admitted shared load equals substitution. They
+also cannot see an instance that production creates under an owned request's
+placeholder and destroys after the synchronous answer within one commit. A
+focused `false`-placeholder, `true`-answer case built `Temp` in the runner, but
+the semantics settled the parent's request before traversing its children, so
+the final `RowStore` held no `Temp` identity and both bodies received zero
+contextual comparisons. Repair needs the semantics to expose that intermediate
+render or record its instances. The request-settlement order inherited from
+main is unchanged; this branch adds render-owned frame markers.
 
 Further coverage is owed for a request moved to a retained ancestor whose
-arguments read an inner slot, repeated-region frames where the nearest
-instance lacks the request but an enclosing instance has it, and successful
-in-scope `pending`, `failed` and `failure` reads whose instance status differs
-from the root columns. These are coverage gaps, not reproduced results.
+arguments read an inner slot: `LowerCheck.vmEnvAt` keeps the source instance's
+answer while `VmRows.resourceInScope` checks only the mutated owner's retained
+region and arm, whereas production evaluates the arguments in the owner frames
+in `runner/src/runner/owned.rs`. It is also owed for repeated-region frames
+where the nearest instance lacks the request but an enclosing instance has it:
+`VmRows.resourceInScope` accepts any retained matching frame, while
+`Frame::row_of` in `runner/src/vm.rs` selects the innermost frame of the region.
+Finally, it is owed for successful in-scope `pending`, `failed` and `failure`
+reads whose instance status differs from the root columns: `LowerCheck.vmEnvAt`
+overwrites only value and currentness, and the present accounting cases reach
+those reads only after wrong-arm scope has already failed. These are coverage
+gaps, not reproduced results. They, the transient-instance case above and any
+further undetected plan mutation are owed work rather than fixes on this
+branch.
 
-Keep this issue open for stages 3 to 5. `VmRows` still needs the roster's
-list-step, string, value-node, byte and depth accounting, with exact counter
-transfer on success and failure. The general correspondence must prove the
-sharing admission conditions and the value of an admitted load, stating
-resource-limit outcomes separately. Finally, the shipped row-call path must
-move into extractable production code and be proved to refine `VmRows` after
-the other owner-model lanes are integrated.
+Keep this issue open for stages 4 and 5. Stage 3 is done: `VmRows` charges
+callback and roster list work, string outputs, value nodes, string bytes and
+value depth at production's points and in production's refusal order. It
+transfers call and list counters and the extent memo into a row and back on
+success or refusal, and unwinds active call depth. `difftest accounting` runs
+69 fixed runner-against-model cases: pairs at and one past every resource and
+executable-call bound, plus owned-request scope and caller restoration. Each
+compares the trap, by name, and all three counters; restoration also compares
+the returned value.
+A roster result's size is decided from its arguments before it is built, so a
+`replaceAll` whose result would be 4 GiB is refused without constructing it.
+`NativeProps` and linked Unicode case conversion are outside the model and the
+comparison. No production accounting defect was found.
+
+One limit: no pair exercises `replaceAll` with a substitution template or with
+an empty pattern across an astral character, because a result at the bound
+exhausts the Lean interpreter. Two reviews checked that arithmetic by reading
+it against `runner/src/strings.rs`, and `QUEUE.md` names the cases past the
+bound that would cover it.
+
+Stage 4 must prove the general sharing admission conditions and the value of
+an admitted load, including the matcher's binder and owner conditions and
+transitive calls, with resource-limit outcomes stated separately. A stage that
+states a resource outcome as a theorem must first make the walk it names total.
+Stage 5 must move the shipped row-call path into extractable production code
+and prove it refines `VmRows` after the other owner-model lanes are integrated.
 
 The strict browser comparison before and after sharing found no new failure.
 `conform.mjs` over every web app with `--synthetic --build --strict`, on Linux

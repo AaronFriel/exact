@@ -380,6 +380,18 @@ pub struct Outcome {
     pub store_dependent: bool,
 }
 
+/// The counters one evaluation consumed. Differential semantics checks use
+/// this receipt; ordinary callers continue to use [`eval`].
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Accounting {
+    /// Executable derive rows entered, including a refused entry.
+    pub calls: u32,
+    /// Callback and roster list steps, including a refused step.
+    pub list_steps: u32,
+    /// The active executable-row depth after the evaluation returns.
+    pub call_depth: u16,
+}
+
 /// The plan's strings as values (`Env::strings`), each made when first read:
 /// a plan has a thousand strings and a screen's bindings read a hundred of
 /// them. A string read twice is the same object, inline text or one shared
@@ -535,6 +547,30 @@ pub fn eval(code: &[u8], env: &Env<'_>, allowed_writes: &[u32]) -> Result<Outcom
     eval_reusing(code, env, allowed_writes, &mut Scratch::default())
 }
 
+/// Evaluate as [`eval`] does and retain the shared counters after success or
+/// refusal. This is the runner side of the formal-semantics comparison.
+pub fn eval_accounted(
+    code: &[u8],
+    env: &Env<'_>,
+    allowed_writes: &[u32],
+) -> (Result<Outcome, Trap>, Accounting) {
+    let mut scratch = Scratch::default();
+    match prepare_projection(code, env, &mut scratch) {
+        Ok(Some(value)) => {
+            return (
+                Ok(Outcome {
+                    value,
+                    ..Outcome::default()
+                }),
+                Accounting::default(),
+            );
+        }
+        Err(error) => return (Err(error), Accounting::default()),
+        Ok(None) => {}
+    }
+    eval_machine_accounted(code, env, allowed_writes, &mut scratch)
+}
+
 /// Allocation storage shared by evaluations in one tree update. Values
 /// never survive an evaluation, including one that traps inside a callback.
 pub(crate) struct Scratch {
@@ -632,6 +668,31 @@ fn eval_machine(
     allowed_writes: &[u32],
     scratch: &mut Scratch,
 ) -> Result<Outcome, Trap> {
+    eval_machine_main(code, env, allowed_writes, scratch, |_| ()).0
+}
+
+fn eval_machine_accounted(
+    code: &[u8],
+    env: &Env<'_>,
+    allowed_writes: &[u32],
+    scratch: &mut Scratch,
+) -> (Result<Outcome, Trap>, Accounting) {
+    eval_machine_main(code, env, allowed_writes, scratch, |run| Accounting {
+        calls: run.calls,
+        list_steps: run.steps,
+        call_depth: run.depth,
+    })
+}
+
+// The generic capture is unit on the ordinary path, so that instantiation
+// neither constructs an Accounting nor reads the counters after evaluation.
+fn eval_machine_main<R>(
+    code: &[u8],
+    env: &Env<'_>,
+    allowed_writes: &[u32],
+    scratch: &mut Scratch,
+    capture: impl FnOnce(&Run<'_, '_>) -> R,
+) -> (Result<Outcome, Trap>, R) {
     let mut run = Run {
         env,
         code,
@@ -652,6 +713,7 @@ fn eval_machine(
         depth: 0,
     };
     let value = machine::run(&mut run, &mut scratch.machine);
+    let captured = capture(&run);
     scratch.machine.pos = 0;
     scratch.machine.stack.clear();
     scratch.machine.locals.clear();
@@ -660,8 +722,11 @@ fn eval_machine(
     scratch.extents = run.extents;
     run.decoded.clear();
     scratch.decoded = run.decoded;
-    run.out.value = value?;
-    Ok(run.out)
+    let outcome = value.map(|value| {
+        run.out.value = value;
+        run.out
+    });
+    (outcome, captured)
 }
 
 /// Read an initial row field without cloning its enclosing record. The rest

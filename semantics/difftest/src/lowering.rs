@@ -355,6 +355,7 @@ fn category(line: &str) -> String {
 
 /// Run the cases; print divergences and categories; whether all agreed.
 pub fn run(cases: Vec<Case>, batch: usize, tag: &str) -> Result<bool, String> {
+    let accounting = crate::accounting::run()?;
     leanrun::build()?;
     let mut prepared: Vec<Entry> = Vec::new();
     for (i, case) in cases.into_iter().enumerate() {
@@ -482,7 +483,7 @@ pub fn run(cases: Vec<Case>, batch: usize, tag: &str) -> Result<bool, String> {
     println!(
         "difftest lowering: {checked} cases checked ({skipped} not compiled, {boot_refused} boot refused): runs {agree} agree, {both} both fail, {diverge} diverge; bodies {same} identical to Contract.Lower, {differ} differ, {refused} refused by it, {undecoded} undecoded"
     );
-    Ok(!failed)
+    Ok(accounting && !failed)
 }
 
 #[cfg(test)]

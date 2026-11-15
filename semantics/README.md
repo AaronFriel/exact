@@ -26,7 +26,7 @@ tested against it, differentially and at random.
 | `Contract/Vm.lean` | A model of the expression VM (`runner/src/vm.rs`) for the opcodes expressions and action bodies use, over instructions with symbolic operands, and a decoder from the plan's bytes (`plan/tables/format.json`, `opcodes`). |
 | `Contract/Lower.lean` | A compiler from the semantics' expressions and statements to VM code, mirroring `contract/lower` (`expr.rs`, `stmts.rs`) instruction for instruction. |
 | `Contract/VmFacts.lean`, `Lower{Types,Sim,Spec,Proof,Lists,Calls,Correct,Stmt}.lean` | Its correctness proof (below). |
-| `Contract/VmRows.lean` | Executable derive calls over the VM: fresh callee machines, owner-frame, owned-slot and owned-resource selection, shared call and callback-work counters, and caller restoration. |
+| `Contract/VmRows.lean` | Executable derive calls over the VM: fresh callee machines, owner-frame, owned-slot and owned-resource scope, production resource accounting, and caller restoration. |
 | `Contract/LowerCheck.lean` | The Lean half of `difftest lowering`. |
 | `vm-extract/` | The shipped VM machine (`runner/src/machine.rs`) extracted to Lean by Charon and Aeneas, and proved to refine `Contract/Vm.lean` step by step and run by run (`vm-extract/README.md`). |
 | `Contract/ValTy.lean` | Types as sets of values (`ValTy`, `conforms` without finiteness), the order and join the checker's `?` induces (`Ty.le`, `Ty.unify`), and that `conforms` at a complete type gives `ValTy`. |
@@ -681,6 +681,9 @@ arguments, inside a row instance), and compares the result with `eval`'s (or
 instruction for instruction. A divergence or an undecodable body fails the
 run and keeps the program under `target/difftest/failures/`; a structural
 difference or a body `Contract.Lower` refuses is reported by category.
+Before either lowering sweep, it also runs the 69 fixed executable-row
+accounting cases described below. A resource outcome or a returned counter
+that differs fails the command.
 
 ```
 cargo run -p contract-difftest -- lowering --seed 7 --count 500
@@ -903,6 +906,17 @@ All without `sorry` or axioms beyond Lean's own (`propext`,
   or traps correspondingly. The trusted base (the translation, a few standard
   functions, the runner's `Val` and `Host` instances against the model's) is
   in `vm-extract/README.md`.
+- `VmRows.extent_nodes_at_bound`, `extent_bytes_at_bound`,
+  `extent_depth_at_bound` and their one-past counterparts prove where
+  `Extent.check` refuses an extent record, at each bound and one past it;
+  `take_steps_exact` proves that an admitted or refused list charge retains the
+  saturated counter; and
+  `unwind_trap_counters`/`unwind_trap_depth` prove that a nested refusal
+  returns the shared counters to a caller with no active row call. The
+  executable-row wrapper charges these bounds around the unchanged `Vm.step`.
+  The walks measuring a value's extent and a roster result's size are
+  `partial def`s that Lean's kernel cannot unfold. No theorem describes what
+  they compute; the 69 accounting cases compare them with the runner.
 - `EnvGood.envOK` (`EnvSound.lean`): an environment whose root slots are
   present and of their types, whose row slots in force are of theirs and
   whose settled derives and resources are declared ones of theirs
@@ -1288,10 +1302,9 @@ element's `testId` are observed. Inside a virtualized `list`, both sides
 omit the direct data `for`'s rows, whose membership is layout, and observe
 the always-mounted lead and trail children. The semantics puts the data
 region in a synthetic observation group; it does not change row scopes or
-lifetime. The runner's evaluation bounds (list steps,
-derive calls and call depth, string length, value size and depth) are a refinement the semantics
-doesn't model (LLP 1090 D8): a step the runner refuses for one
-(`IterationLimit`, `CallLimit`, `CallDepth`, `StringTooLong` as a trap or an
+lifetime. `Contract.Eval`, `Contract.Runtime` and the bare `Contract.Vm`
+remain unbounded (LLP 1090 D8). A step the runner refuses for one of their
+bounds (`IterationLimit`, `CallLimit`, `CallDepth`, `StringTooLong` as a trap or an
 argument's or write's refusal, `ValueTooLarge`, `ValueTooDeep`) is `UNSUPPORTED`, outside the
 semantics, not a divergence, and so is a step after the runner unset a
 binding for one (its journal line is a `#` note in the runner's
@@ -1299,29 +1312,62 @@ observation). The web's JS target refuses the same steps
 (`host/web-js/conform.mjs`). The checker's two type refusals that bound a value
 (`type-option-option`, `type-too-deep`) are in `Contract.check` too
 (`checkBounds`, and where `infer` grows a type: `some`, `map`, the roster).
+`Contract.VmRows` is the narrower exception: it accounts for the production
+bounds while an executable row and its caller run.
 
 Executable instance expressions share plan rows during lowering. Source
 expansion and `instance_iff` still use substitution. `VmRows` runs these
 calls over `Vm.step`: a fresh callee machine, empty parameters and writable
 slots, frames cut to the owner, and the caller restored with the returned
-value. Calls share a 65,536-call counter and a depth bound of 64. Callback
-work shares a 65,536-step counter. `owner_frames_cut` proves selection of
-the nearest owner; `frame_read_rebase` relates item, index and bound reads
+value. Its accounting matches `runner/src/vm.rs` and the generic machine at
+these points:
+
+| Resource | Production charge and refusal | After success or refusal |
+|---|---|---|
+| Machine instructions | The runner has no instruction-fuel counter. Lean's `runFrom` fuel makes the partial interpreter executable and is not transferred to production. | No production state exists to transfer. |
+| Executable-row calls | `LoadDerive` increments `calls` before the 65,536-call check, the 64-level depth check and owner-frame selection. Thus `CallLimit`, `CallDepth` and `BadScope` retain the attempted call. | The callee starts with the incremented count. Its final count is copied to the caller on return and before a trap propagates. |
+| Active row depth | The callee receives `outer.depth + 1`; an attempt from depth 64 refuses before entering. | Depth belongs to the nested `Run`, not a consumable counter. Returning or propagating a trap restores the outer depth; a completed top-level evaluation reports zero. |
+| `Map`/`Filter` list work | `begin` charges one step before binding every callback item, including the first. At body end, `Filter` validates its boolean before keeping a value or charging the next item; `Map` and a true filter measure the kept value before that next charge. A refused step leaves the saturating-add `u32` total above 65,536. | Every admitted or refused charge is copied back through all executable-row callers. A callback's own trap precedes the next item's charge. |
+| Roster list work | `join` charges its input length once the first argument is a list, before validating its separator. `range`, `split`, `concat`, `slice` and `sum` charge output/input items as implemented; `flat` charges outer plus retained inner items; `includes`/`indexOf` charge through the match or the full list. `sortBy` adds no roster charge because its key `Map` already charged each item. Other type/domain checks that precede a charge consume none; failures after a charge retain it. The wrapper derives `split`'s count and `flat`'s length without building their results, and checks every list result's extent from its arguments before evaluating the unbounded roster. | The same shared `steps` counter is returned on success and on every later trap. |
+| Built strings | `Concat`, `join`, localization, replacement/case conversion and URI encoders refuse an output past 67,108,864 UTF-8 bytes. `join` checks after each printable item, before inspecting the next; a one-string list returns the already-admitted string. `VmRows` counts concatenation, interpolation, replacement and URI encoding before it evaluates the unbounded roster, stopping a refused `replaceAll` without constructing its expansion. Unicode case conversion and `NativeProps` have production bounds but remain outside `Contract.Vm`, which reports them as unsupported. | String length is a per-result bound, not a budget. It changes no counter; list work performed before a refused `join` remains charged. |
+| Value nodes, bytes and depth | `Some`, `FailureResource` and `FailureMutation` measure the value they wrap; `List` and `Record` add children left to right; callback results and roster-built lists use the same check. `Extents::of` walks a supplied value in preorder, checking depth before a deeper value can pass the node or byte bound. At most 16,777,216 nodes, 67,108,864 string bytes and depth 64 are admitted. A refusal occurs before the value is kept. | Extent is a bound, not a consumable total. The allocation-keyed extent memo moves into the callee and back even when it traps; it only avoids a repeated walk. `VmRows` uses structural keys, which are equivalent because equal values have equal extents. |
+| Owned resource scope | Production finds an owned request through the retained frame for its owning plan arm. `VmRows` receives that region and arm and refuses `BadScope` when the cut removed the frame or the retained frame belongs to another arm, for value, pending, failed, failure and currentness reads. | A refused read retains the call count already charged at `LoadDerive`; it changes no other counter. Returning restores the caller's full environment. |
+| Sharing margin | Lowering's chain margin is 48, not a runtime refusal. The 48- and 49-call cases both return with those call counts; runtime depth first refuses an attempted 65th nested call. | No special transfer occurs at 48 or 49. |
+
+The nested runner moves its extent memo into the callee and initializes the
+callee with the caller's list and call counters. After `machine::run`, it
+copies the list counter, call counter and memo back before inspecting the
+result, so an ordinary trap and a resource refusal transfer identically.
+`eval_accounted` exposes those already-existing values to the differential
+test. The interpreter's shared generic finish captures `()` for ordinary
+`eval`, so that instantiation neither constructs an accounting receipt nor
+reads the counters; only the accounted entry captures them.
+
+The 69 accounting cases compare one explicit correspondence for every runner
+and model trap. A pending read, type mismatch, bad scope or malformed machine
+therefore cannot agree with another refusal that happens to keep the same
+counters. Model-only `unsupported`, call and fuel failures have distinct names,
+so an unrecognised trap is a disagreement.
+
+`owner_frames_cut` proves selection of the nearest owner;
+`frame_read_rebase` relates item, index and bound reads
 across the cut. Its checked examples exercise owner
 selection, local isolation, depth, sibling calls and caller-spent callback work.
-Instance frames carry owned-slot stores. A call reselects slots from the
-retained frames, taking only the nearest instance of each owning region;
-return restores the caller's slots and frames. Checked examples cover a
-retained owner, an inaccessible inner slot, a root call and a missing slot
-in the nearest instance.
+Instance frames carry their selected arm and owned-slot stores. A call
+reselects slots from the retained frames, taking only the nearest instance of
+each owning region. An owned-resource read likewise requires the retained
+frame for its owning arm.
+Return restores the caller's slots, resources and frames. Checked examples
+cover a retained owner, an inaccessible inner slot, a root call and a missing
+slot in the nearest instance.
 
-`LowerCheck` receives row bytecode, owner regions and the checked substituted
-expressions that lowering shares. Lowering records the source tag at the same
-point that it emits each plan region, and the exporter checks the complete
-region identity before joining each source owner tag and arm to its plan region
-and arm. A source region removed by lowering has no plan entry; a changed or
-reordered roster is a divergence, not an abort; owner projections use checked
-indices and offsets only after that roster matches. For every reached
+`LowerCheck` receives row bytecode, owner regions and arms, and the checked
+substituted expressions that lowering shares. Lowering records the source tag
+at the same point that it emits each plan region. The exporter checks the
+complete region identity before joining each source owner tag and arm to its
+plan region and arm. A source region removed by lowering has no plan entry. A
+changed or reordered roster is a divergence, not an abort; owner projections
+use checked indices and offsets only after that roster matches. For every reached
 configuration, the checker enumerates the live row store. An instance's row
 identity records its source tag, chosen arm or key, and duplicate ordinal;
 render-owned marker rows record its item, position and match binding. The
@@ -1331,32 +1377,58 @@ property. A closed panel has no recorded instances; a prerendered panel has
 the instances its render built. The item, key and arm are therefore the
 render's even when an idle clock advance retains the view and store. The
 executable row and its checked substituted expression are both evaluated at
-the reached configuration's current clock. The checker runs the row from
-every live descendant reader context and evaluates the substituted expression
-in the corresponding owner context.
-The checker runs the row call and every item, position and match binding as
-separate probes, so it does not charge a synthetic aggregate the application
-never builds. Caller restoration is the VM invariant
-`resume_restores_environment`; a lowered plan cannot alter it. This covers
-root and arm owners, transitive row calls and recreation after events. The
-focused mutation test changes an arm-owned row's sibling arm, makes its binder
-depth return a different enclosing value, and changes its body in turn; each
-change produces a divergence. Its unmodified case includes
-nested keyed and conditional owners, a stateful child, shadowing and a derive
-reached only through other derives. Focused mutations also cover an opened
-panel, a prerendered panel inside a virtualized row and a reordered first-region
-owner. Idle-clock cases retain a row whose key would become nonfinite if
+the reached configuration's current clock. An instance-owned request is read
+from the recorded instance on both sides, including its currentness. The plan
+export also records its owner region and arm, so a row call whose cut removes
+that frame, or retains the same region's other arm, refuses the read as
+production does. The checker runs the row from every live descendant reader
+context and evaluates the substituted expression in the
+corresponding owner context. It checks the row call and every item, position
+and match binding as separate VM runs, so validation adds no aggregate value
+for production to charge. This exercises root and arm owners, transitive row
+calls and recreation after events. The focused mutation test changes an
+arm-owned row's sibling arm, makes its binder depth
+return a different enclosing value, changes its body, returns a root idle
+placeholder in place of a live owned answer, moves that request's plan owner
+into a descendant the row cut removes, and moves it to the unselected sibling
+arm of its retained region; each change produces a divergence. Its unmodified
+case includes nested keyed and conditional owners,
+a stateful child, shadowing and a derive reached only through other derives.
+Focused mutations also cover an opened panel, a prerendered panel inside a
+virtualized row and a reordered first-region owner. Idle-clock cases retain a
+row whose key would become nonfinite if
 reevaluated, and detect a wrong body in a retained row whose finite key would
-change. Instance-owned resource probes read the recorded answer and
-currentness. They resolve the resource through the retained frame for its
-owning region and arm, so a cut-out owner or a sibling-arm owner is a
-divergence. The seeded 500-case run and the current 642-case lowering corpus
+change. The accounting corpus holds 69 cases. Compact runner and Lean programs
+run at and one past the list-step, string-byte, value-node, value-byte,
+value-depth, call-count and active-call-depth bounds. The exponential node pair
+runs through `runReport`; no fabricated extent stands in for the model. A
+simultaneous call-count/depth refusal checks `CallLimit` precedence, the
+consumed attempt and depth after unwind. Further pairs cover `join` before an
+invalid separator and before a later invalid item, a non-boolean `Filter`
+result, both failure-reading instructions at the byte bound and one past it, a
+pending failure read, and a supplied value that is both too deep and too large.
+The 48- and 49-call cases
+remain because that sharing margin is not a runtime bound. Every case compares
+the outcome, calls, list steps and final call depth. Two cases compare owned
+value and currentness reads after their owner is cut away; five compare every
+owned read when the retained frame belongs to the wrong arm. A final case calls
+a row, discards its result and compares the caller's returned inner item in the
+same run. The seeded 500-case run and the current 642-case lowering corpus
 report no divergence and no instance-environment refusal.
 
-Still owed: the general correspondence between shared loads and substitution,
-including the matcher's scope and binder conditions, and refinement of
-`VmRows` to the runner's row-call implementation. The model does not yet carry
-the roster's list-step, string-bound, value-node, byte or depth accounting, or
-exact counter transfer on success and failure. The existing lowering theorems
-cover `Vm` without this sharing transformation. The call model and its local
-invariants do not extend those theorems.
+The checker's limit is deliberate. For a request an instance owns, focused
+mutations detect a wrong executable body, a wrong owner frame, an owner cut out
+of the retained frames and an owner moved to the wrong arm. They do not
+establish arbitrary plan mutations beyond those four, operations outside
+`Contract.Vm` such as `NativeProps` and linked Unicode case conversion, or the
+general correspondence between every admitted shared load and substitution.
+The existing lowering theorems cover `Vm` without this sharing transformation;
+stage 4 must extend them with the matcher's scope and binder conditions and
+state resource-limit outcomes separately. Validation also cannot see an
+instance that production creates under an owned request's placeholder and
+destroys after its synchronous answer within the same commit: the semantics
+settles that request before traversing the child, so its final row store has no
+such identity. That gap and any further undetected plan mutation are owed work,
+not fixes on this branch. Stage 5 must move the shipped row-call path into
+extractable production code and prove that it refines `VmRows`; it waits for
+the other owner-model lanes.
