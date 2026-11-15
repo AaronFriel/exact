@@ -168,12 +168,57 @@ exhausts the Lean interpreter. Two reviews checked that arithmetic by reading
 it against `runner/src/strings.rs`, and `QUEUE.md` names the cases past the
 bound that would cover it.
 
-Stage 4 must prove the general sharing admission conditions and the value of
-an admitted load, including the matcher's binder and owner conditions and
-transitive calls, with resource-limit outcomes stated separately. A stage that
-states a resource outcome as a theorem must first make the walk it names total.
-Stage 5 must move the shipped row-call path into extractable production code
-and prove it refines `VmRows` after the other owner-model lanes are integrated.
+Stage 4 has proved the local source and row rules, but not their general
+composition. `Contract.LowerSharing` states the matcher's active-depth,
+instance-chain, owner-frame, region-cut, binder/free-read and cached-chain
+conditions. Given valid reader and owner lowering contexts, `FrameCutCtx` and
+`ScopeResolves`, `localsRespectCut_of_ctx` derives free-read value agreement.
+Closed nested-owner examples discharge those structural hypotheses using
+distinct local lists and item, index and match bindings, and reject a wrong
+cut. No theorem yet derives them from an admitted site's real scope stack and
+`ownerFrames`. `admitted_site_value_iff` proves that such a reader and owner
+give the substituted expression the same source value when `Small` and
+`LocalsRespectCut` hold, and `admitted_expr_correct` transports the existing
+lowering theorem to the read site.
+
+`Contract.VmRowsProof` gives successful bounded runs an inductive call tree.
+`admitted_shared_load_value_iff` and
+`successful_shared_load_has_inlined_run` compose the exact load rule with the
+source theorem, but both still take the callee correspondence as a premise.
+`LiteralGraph.returns` discharges that premise by smaller-index induction for
+a finite load-only graph ending in one string literal, including transitive
+loads. It does not cover arbitrary expressions emitted by lowering. The Rust
+matcher test runs its exact conjunction through admitted nested-owner and
+unequal arm/scope-cut cases, plus refused chain, active, frame-cut,
+scope-underflow, free-read, expression and cached-margin cases. A focused
+lowering test checks child derives shared between text and distinct `for` keys,
+including one read only as a key; each key loads the emitted row and contains
+no copied `join` body. The lowering differential uses callback and outer
+values 2 and 10; replacing the callback-local read with the outer slot is a
+reported value divergence.
+
+Resource outcomes remain separate. A refusal has no value conclusion. One
+finite production-ordered graph with fully inlined body `[unit, ret]` checks
+that 64 shared calls return and the attempted 65th refuses `CallDepth`; a
+separate example checks that both 48- and 49-call lowering-margin chains
+return. An inlined body can also succeed while the shared form refuses its
+call count. A stage that states a resource outcome as a theorem must first
+make the walk it names total.
+
+Stage 4 still owes a theorem for every graph emitted by the Rust sharing
+transformation, with no semantic callee premise. The missing proof needs a
+syntactic relation between recursive `shared_expression` interception and
+`Lower.compile`, then a resource-aware trace simulation that replaces each
+successful shared call with its ordinary inlined derive read. It must state
+the graph's call-count and depth capacity for the source-to-shared direction;
+the successful-shared-to-source direction needs no budget premise. Before
+that composition can use the local source theorem, stage 4 also owes a lemma
+that obtains `FrameCutCtx` and `ScopeResolves` from an admitted site's actual
+scope stack and `ownerFrames`, and a generalization from `Lower.Ctx`'s empty
+VM local stack and local count zero to admitted reads beneath existing
+callback or `let` locals. Stage 5 must then move the shipped row-call path into
+extractable production code and prove it refines `VmRows` after the other
+owner-model lanes are integrated.
 
 The strict browser comparison before and after sharing found no new failure.
 `conform.mjs` over every web app with `--synthetic --build --strict`, on Linux

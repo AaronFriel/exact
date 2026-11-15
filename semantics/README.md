@@ -1361,6 +1361,77 @@ Return restores the caller's slots, resources and frames. Checked examples
 cover a retained owner, an inaccessible inner slot, a root call and a missing
 slot in the nearest instance.
 
+Stage 4 is not complete. `LowerSharing.AdmissionAt` formalizes the lowerer's
+admission predicate after source-span candidate and owner-scope selection.
+Those selections are inputs because semantic `Expr` values do not retain
+spans and `Candidate` already carries its owner scope. Every matcher refusal
+after selection is represented:
+
+| Rust matcher | Lean clause | Correspondence |
+|---|---|---|
+| `sharing.rs:33-34` | `depthAvailable`, `inactive` | Fewer than 48 shared bodies are active, and the candidate is not one of them. |
+| `sharing.rs:36-41` | `instanceOnChain`, `sameExpression` | The candidate is on the reader instance's parent chain and is the same expanded source term. |
+| `sharing.rs:45`; `plan/src/unsettled.rs:74-87` | `ownerReachable` | `frame_cut` can reach the candidate's owner by walking outward from the reader. Its numeric frame distance is not the lexical rebase cut. Root and instance owners arrive as `none`; an arm owner arrives with its selected scope. |
+| `sharing.rs:46-58` | `scopeCut`, `sameFreeReads` | The reader has at least the owner's region depth. That independent depth difference is the lexical rebase cut, and every free value read rebases to the same reference. A `for` key has already pushed its item scope before its row arm exists, so its scope and arm cuts can differ. |
+| `sharing.rs:248-304` | `rebaseRef`, `sameReads`; `ExpandSubst.fv` | `Item`, `Index` and `Bound` lose the cut; an expression local cannot escape. `let`, arrow and `match` binders are removed from `fv`; call heads, record shapes and inferred types are not value reads. |
+| `sharing.rs:59-60`, `190-214` | `cachedDepthFits`, `admission_transitive_margin` | A cached row is refused when its recorded call-chain depth plus the active depth exceeds 48. A newly compiled row passes `cachedDepth = none`; lowering records its depth after recursively compiling its body but does not check that sum on this path. |
+
+Rust's `admitted_cut` is the conjunction used by `shared_expression` for both
+new and cached rows. Its focused test admits a nested owner at active depth 1
+with cached depth 47, then independently refuses an off-chain or active
+candidate, a different expression, a scope-depth underflow, different free
+reads, cached depth 48, active depth 48 and a sibling owner that `frame_cut`
+cannot reach. Matching Rust and Lean cases admit slot-only reads when the arm
+and scope cuts differ in either direction. A lowering regression checks a
+child derive read in text, two template keys and a key-only site: every key
+loads the emitted row and contains no copy of its `join` body. The cases beside
+`same_reads` and the closed Lean examples additionally cover hidden `let`
+names, depth underflow and inferred-type differences.
+
+`FvWeakening.wkFv_iff` proves that an expression's value depends only on its
+free value reads. `LowerSharing.admitted_site_value_iff` applies it to an
+admitted reader and owner in the same source environment. The theorem takes
+`LocalsRespectCut`; `localsRespectCut_of_ctx` derives that property from valid
+reader and owner `Lower.Ctx` values, resolvable free names and `FrameCutCtx`,
+the actual suffix relation between their selected VM frames.
+`LowerSharing.admitted_expr_correct` transports `Lower.expr_correct` to the
+read site. `VmRowsProof.Runs` records a whole successful bounded execution;
+`shared_load_runs_iff` proves that a `LoadDerive` has exactly its fresh
+callee's outcomes. `shared_load_returns_iff` stops at the exact resumed-caller
+state, before its continuation. `LowerSharing.admitted_shared_load_value_iff`
+composes the source theorem with that local operational rule, but takes the
+callee correspondence as a premise. `successful_shared_load_has_inlined_run`
+takes the same premise. Neither theorem discharges it for an emitted row graph.
+`VmRowsProof.LiteralGraph.returns` does discharge every callee premise by
+smaller-index induction for a finite load-only graph ending in one string
+literal. It covers nested and transitive loads in that fragment only.
+
+Resource outcomes remain separate. `runReportFrom_ok_runs` gives a call-tree
+witness only for a value outcome. `refused_report_has_no_value` states that a
+refusal has no value conclusion. An inlined bare-VM body can succeed while a
+shared evaluation refuses either the call counter or active depth. Three
+unnamed `native_decide` examples at the end of `VmRowsProof.lean` run those
+cases; they are runs, not theorems. One refuses a shared call at the call
+limit where the inlined body succeeds. One uses a finite acyclic graph whose
+fully inlined body is `[unit, ret]`: 64 shared calls return and the attempted
+65th refuses `CallDepth`. One runs the lowering-margin chains, which return
+charged as 48 and 49 calls. For the proved local rule,
+`admitted_expr_correct` supplies sufficiently large bare-VM fuel after the
+callee-correspondence premise establishes the source value.
+
+The missing general theorem is a simulation for every row graph emitted by
+the Rust sharing transformation, with no semantic callee premise. It needs a
+syntactic relation between Rust's recursive `shared_expression` interception
+and `Lower.compile`, followed by a resource-aware trace proof that replaces
+each successful `VmRows` call with its ordinary inlined derive read. The
+forward direction must assume explicit room for the graph's call count and
+depth; the successful-shared-to-source direction needs no budget premise, and
+a resource refusal makes no value claim. This obligation remains open.
+
+Stage 5 still owes the production refinement: move the shipped row-call path
+into extractable code and prove that code refines `VmRows`. It requires Charon
+and Aeneas and does not start until stage 4 is complete.
+
 `LowerCheck` receives row bytecode, owner regions and arms, and the checked
 substituted expressions that lowering shares. Lowering records the source tag
 at the same point that it emits each plan region. The exporter checks the

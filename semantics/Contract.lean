@@ -46,6 +46,9 @@ import Contract.ExpandCheck
 import Contract.CompSemFacts
 import Contract.ExpandSubst
 import Contract.ExpandSubstRev
+import Contract.FvWeakening
+import Contract.VmRowsProof
+import Contract.LowerSharing
 import Contract.ExpandFrame
 import Contract.ExpandInstance
 import Contract.ExpandMap

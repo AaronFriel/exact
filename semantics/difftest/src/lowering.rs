@@ -492,23 +492,48 @@ mod tests {
     use crate::script::{self, Event};
     use exact_plan::{
         asm::Asm, builder::PlanBuilder, ArmsId, DerivesId, RegionKind, RegionsId, ResourcesId,
-        Value,
+        SlotsId, Value,
     };
 
     #[test]
     #[ignore = "async lane: needs the Lean toolchain"]
     fn executable_rows_are_checked_against_their_substituted_source() {
         leanrun::build().unwrap();
-        let source = "component App\n  state n = 1\n  view\n    Child(n=n)\ncomponent Child\n  props\n    n: number\n  derive expensive = n + 1\n  derive value = expensive + expensive\n  view\n    text `${value}`\ntest \"row\"\n  expect state n == 1\n";
+        let source = "component App\n  state n = 10\n  view\n    Child(n=n)\ncomponent Child\n  props\n    n: number\n  derive expensive = [n - 8].map(n => n + 1).join(\",\")\n  derive value = expensive + \":\" + expensive\n  view\n    text value\ntest \"row\"\n  expect tree has \"3:3\"\n";
         let case = script::scripted("lowering-shared", source, None)
             .unwrap()
             .remove(0)
             .case;
         let plan = compile(&case).unwrap();
         let shared = contract::lean::sharing_context(source, None).unwrap();
-        let row = plan.derives.iter().position(|d| d.unsettled).unwrap();
+        let row = plan
+            .derives
+            .iter()
+            .position(|d| d.unsettled && plan.str(d.name).contains("expensive"))
+            .unwrap();
         let mut broken = PlanBuilder::from_plan(plan.clone());
-        let wrong = broken.constant(&Value::Number(7.0));
+        let outer = plan
+            .slots
+            .iter()
+            .position(|s| plan.str(s.name) == "n")
+            .map(|i| SlotsId(i as u32))
+            .unwrap();
+        let mut wrong = Asm::new();
+        wrong
+            .load_slot(outer)
+            .number(8.0)
+            .simple(Opcode::Sub)
+            .list(1);
+        let end = wrong.label();
+        wrong.each_item(Opcode::Map, end);
+        // Corrupt only the callback read: use the outer `n` (10) where the
+        // callback's shadowing `n` is the list item (2).
+        wrong.load_slot(outer).number(1.0).simple(Opcode::Add);
+        wrong
+            .place(end)
+            .str(broken.str(","))
+            .call(exact_plan::Stdlib::Join);
+        let wrong = broken.code(wrong);
         broken.set_derive_body(DerivesId(row as u32), wrong);
         let broken = broken.finish().unwrap();
         let cases = [&plan, &broken]
