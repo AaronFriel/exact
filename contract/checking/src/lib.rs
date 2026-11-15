@@ -75,6 +75,21 @@ impl<'a> Checking<'a> {
             .chain(&root.provides)
     }
 
+    /// Expanded root state initializers, in declaration order.
+    pub fn states(&self) -> &'a [contract_syntax::Binding] {
+        &self.checked.expanded.root.states
+    }
+
+    /// Expanded root derives, in declaration order.
+    pub fn derives(&self) -> &'a [contract_syntax::Binding] {
+        &self.checked.expanded.root.derives
+    }
+
+    /// Inferred root action parameter types, in declaration order.
+    pub fn action_types(&self) -> &'a [Vec<contract_types::Ty>] {
+        &self.checked.types.components[0].actions
+    }
+
     /// Expanded root resource declarations, which contain no view tree.
     pub fn resources(&self) -> &'a [contract_syntax::ResourceDecl] {
         &self.checked.expanded.root.resources
@@ -297,10 +312,22 @@ impl<'a> Structure<'a> {
         context: C,
         mut descend: impl FnMut(Visit<'a>, &C) -> C,
     ) -> impl Iterator<Item = (Visit<'a>, C)> {
+        self.walk_regions_with(context, move |node, context| {
+            let child = descend(node, context);
+            [Some(child.clone()), Some(child)]
+        })
+    }
+
+    /// Inherited facts and pruning selected separately for each direct region.
+    /// Siblings retain their region's context; choices can isolate mutable facts.
+    pub fn walk_regions_with<C: Clone>(
+        self,
+        context: C,
+        mut descend: impl FnMut(Visit<'a>, &C) -> [Option<C>; 2],
+    ) -> impl Iterator<Item = (Visit<'a>, C)> {
         let declarations = self.declarations;
         Node::walk_with(self.nodes, context, move |node, context| {
-            let child = descend(Visit { node, declarations }, context);
-            [Some(child.clone()), Some(child)]
+            descend(Visit { node, declarations }, context)
         })
         .map(|(node, context)| (Visit { node, declarations }, context))
     }
@@ -372,6 +399,11 @@ impl<'a> Visit<'a> {
     /// Whether this node chooses between two conditional regions.
     pub fn is_choice(self) -> bool {
         matches!(self.node, Node::When { .. } | Node::Match { .. })
+    }
+
+    /// Names bound over each direct region, in the same order as `regions`.
+    pub fn bindings(self) -> [contract_syntax::Binds<'a>; 2] {
+        self.node.scoped_child_lists().map(|(_, binds)| binds)
     }
 
     /// Authored source identity and token range.

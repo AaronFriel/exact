@@ -2881,6 +2881,2003 @@
           "severity": "warning"
         }
       ]
+    },
+    {
+      "name": "checking5-header-empty",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column navigationKey=\"root\"\n      column navigationKey=\"home\"\n        header\n          text \"No heading\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 9,
+          "end_col": 15,
+          "file": "$APP/app.contract",
+          "id": "lower-header-no-bar",
+          "line": 11,
+          "message": "this route's `header` holds no heading, so on iOS it is not the navigation bar: the header is drawn in the page as written, and the bar has no title: a pushed route's holds the system Back button alone, above the header, and a stack's first route has no bar. Give it one `text role=\"heading\"` (`aria-level=1` for a large title) \u2014 its buttons become the bar's items; or, for a site's header, say `appearance=\"none\"` on it; or, if this screen draws its own chrome, say `navigationBar=\"none\"` on the route's element (the one with `navigationKey`, not its line under `routes`) (docs/recipes/navigation-stack.md)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking5-invalid-header-empty",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column definitelyUnknown=1 navigationKey=\"root\"\n      column navigationKey=\"home\"\n        header\n          text \"No heading\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 12,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-unknown-attr",
+          "line": 9,
+          "message": "`column` has no attribute `definitelyUnknown`",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 9,
+          "end_col": 15,
+          "file": "$APP/app.contract",
+          "id": "lower-header-no-bar",
+          "line": 11,
+          "message": "this route's `header` holds no heading, so on iOS it is not the navigation bar: the header is drawn in the page as written, and the bar has no title: a pushed route's holds the system Back button alone, above the header, and a stack's first route has no bar. Give it one `text role=\"heading\"` (`aria-level=1` for a large title) \u2014 its buttons become the bar's items; or, for a site's header, say `appearance=\"none\"` on it; or, if this screen draws its own chrome, say `navigationBar=\"none\"` on the route's element (the one with `navigationKey`, not its line under `routes`) (docs/recipes/navigation-stack.md)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking5-header-duplicate",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column navigationKey=\"root\"\n      column navigationKey=\"home\"\n        header\n          text \"One\" role=\"heading\"\n          text \"Two\" role=\"heading\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 9,
+          "end_col": 15,
+          "file": "$APP/app.contract",
+          "id": "lower-header-no-bar",
+          "line": 11,
+          "message": "this route's `header` holds 2 headings, so on iOS it is not the navigation bar: the header is drawn in the page as written, and the bar has no title: a pushed route's holds the system Back button alone, above the header, and a stack's first route has no bar. Keep one `text role=\"heading\"` and make the others plain `text` (the first text after the heading is the bar's subtitle), or move them below the `header`; or, for a site's header, say `appearance=\"none\"` on it; or, if this screen draws its own chrome, say `navigationBar=\"none\"` on the route's element (the one with `navigationKey`, not its line under `routes`) (docs/recipes/navigation-stack.md)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking5-invalid-header-duplicate",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column definitelyUnknown=1 navigationKey=\"root\"\n      column navigationKey=\"home\"\n        header\n          text \"One\" role=\"heading\"\n          text \"Two\" role=\"heading\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 12,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-unknown-attr",
+          "line": 9,
+          "message": "`column` has no attribute `definitelyUnknown`",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 9,
+          "end_col": 15,
+          "file": "$APP/app.contract",
+          "id": "lower-header-no-bar",
+          "line": 11,
+          "message": "this route's `header` holds 2 headings, so on iOS it is not the navigation bar: the header is drawn in the page as written, and the bar has no title: a pushed route's holds the system Back button alone, above the header, and a stack's first route has no bar. Keep one `text role=\"heading\"` and make the others plain `text` (the first text after the heading is the bar's subtitle), or move them below the `header`; or, for a site's header, say `appearance=\"none\"` on it; or, if this screen draws its own chrome, say `navigationBar=\"none\"` on the route's element (the one with `navigationKey`, not its line under `routes`) (docs/recipes/navigation-stack.md)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking5-header-placed",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column navigationKey=\"root\"\n      column navigationKey=\"home\"\n        header\n          row\n            text \"Before\"\n            text \"Title\" role=\"heading\"\n            text \"Subtitle\"\n            text \"Extra\"\n            input type=\"search\" value=q input=keys\n            input type=\"search\" value=q input=keys\n            button\n              text \"Inert\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 13,
+          "end_col": 17,
+          "file": "$APP/app.contract",
+          "id": "lower-header-unplaced",
+          "line": 13,
+          "message": "this text, before the heading, in this route's `header` is not shown on iOS: the navigation bar there takes one heading as its title (with the symbol images beside it in its own row), the first text after it as the subtitle, one `input type=\"search\"`, one `role=\"tablist\"`, the buttons that press or are disabled and the readouts (`role=\"status\"`), and hides the rest of the header. Move it below the `header`, into the route's content (the scroller's first row), make it a button that presses, or, if it is a status that nothing presses (a \"\u25cf Live\" beside the title), give it `role=\"status\"`; or, for a header the bar cannot hold (a chat's avatar beside the name), say `navigationBar=\"none\"` on the route's element and draw the row yourself (docs/recipes/chat-header.md; docs/contract-for-agents.md, \"Tabs and stacks\")",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 13,
+          "end_col": 17,
+          "file": "$APP/app.contract",
+          "id": "lower-header-unplaced",
+          "line": 16,
+          "message": "this text, after the subtitle, in this route's `header` is not shown on iOS: the navigation bar there takes one heading as its title (with the symbol images beside it in its own row), the first text after it as the subtitle, one `input type=\"search\"`, one `role=\"tablist\"`, the buttons that press or are disabled and the readouts (`role=\"status\"`), and hides the rest of the header. Move it below the `header`, into the route's content (the scroller's first row), make it a button that presses, or, if it is a status that nothing presses (a \"\u25cf Live\" beside the title), give it `role=\"status\"`; or, for a header the bar cannot hold (a chat's avatar beside the name), say `navigationBar=\"none\"` on the route's element and draw the row yourself (docs/recipes/chat-header.md; docs/contract-for-agents.md, \"Tabs and stacks\")",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 13,
+          "end_col": 18,
+          "file": "$APP/app.contract",
+          "id": "lower-header-unplaced",
+          "line": 18,
+          "message": "a second `input type=\"search\"` in this route's `header` is not shown on iOS: the navigation bar there takes one heading as its title (with the symbol images beside it in its own row), the first text after it as the subtitle, one `input type=\"search\"`, one `role=\"tablist\"`, the buttons that press or are disabled and the readouts (`role=\"status\"`), and hides the rest of the header. Move it below the `header`, into the route's content (the scroller's first row), make it a button that presses, or, if it is a status that nothing presses (a \"\u25cf Live\" beside the title), give it `role=\"status\"`; or, for a header the bar cannot hold (a chat's avatar beside the name), say `navigationBar=\"none\"` on the route's element and draw the row yourself (docs/recipes/chat-header.md; docs/contract-for-agents.md, \"Tabs and stacks\")",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 13,
+          "end_col": 19,
+          "file": "$APP/app.contract",
+          "id": "lower-header-unplaced",
+          "line": 19,
+          "message": "a `button` that presses nothing in this route's `header` is not shown on iOS: the navigation bar there takes one heading as its title (with the symbol images beside it in its own row), the first text after it as the subtitle, one `input type=\"search\"`, one `role=\"tablist\"`, the buttons that press or are disabled and the readouts (`role=\"status\"`), and hides the rest of the header. Move it below the `header`, into the route's content (the scroller's first row), make it a button that presses, or, if it is a status that nothing presses (a \"\u25cf Live\" beside the title), give it `role=\"status\"`; or, for a header the bar cannot hold (a chat's avatar beside the name), say `navigationBar=\"none\"` on the route's element and draw the row yourself (docs/recipes/chat-header.md; docs/contract-for-agents.md, \"Tabs and stacks\")",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking5-invalid-header-placed",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column definitelyUnknown=1 navigationKey=\"root\"\n      column navigationKey=\"home\"\n        header\n          row\n            text \"Before\"\n            text \"Title\" role=\"heading\"\n            text \"Subtitle\"\n            text \"Extra\"\n            input type=\"search\" value=q input=keys\n            input type=\"search\" value=q input=keys\n            button\n              text \"Inert\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 12,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-unknown-attr",
+          "line": 9,
+          "message": "`column` has no attribute `definitelyUnknown`",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 13,
+          "end_col": 17,
+          "file": "$APP/app.contract",
+          "id": "lower-header-unplaced",
+          "line": 13,
+          "message": "this text, before the heading, in this route's `header` is not shown on iOS: the navigation bar there takes one heading as its title (with the symbol images beside it in its own row), the first text after it as the subtitle, one `input type=\"search\"`, one `role=\"tablist\"`, the buttons that press or are disabled and the readouts (`role=\"status\"`), and hides the rest of the header. Move it below the `header`, into the route's content (the scroller's first row), make it a button that presses, or, if it is a status that nothing presses (a \"\u25cf Live\" beside the title), give it `role=\"status\"`; or, for a header the bar cannot hold (a chat's avatar beside the name), say `navigationBar=\"none\"` on the route's element and draw the row yourself (docs/recipes/chat-header.md; docs/contract-for-agents.md, \"Tabs and stacks\")",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 13,
+          "end_col": 17,
+          "file": "$APP/app.contract",
+          "id": "lower-header-unplaced",
+          "line": 16,
+          "message": "this text, after the subtitle, in this route's `header` is not shown on iOS: the navigation bar there takes one heading as its title (with the symbol images beside it in its own row), the first text after it as the subtitle, one `input type=\"search\"`, one `role=\"tablist\"`, the buttons that press or are disabled and the readouts (`role=\"status\"`), and hides the rest of the header. Move it below the `header`, into the route's content (the scroller's first row), make it a button that presses, or, if it is a status that nothing presses (a \"\u25cf Live\" beside the title), give it `role=\"status\"`; or, for a header the bar cannot hold (a chat's avatar beside the name), say `navigationBar=\"none\"` on the route's element and draw the row yourself (docs/recipes/chat-header.md; docs/contract-for-agents.md, \"Tabs and stacks\")",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 13,
+          "end_col": 18,
+          "file": "$APP/app.contract",
+          "id": "lower-header-unplaced",
+          "line": 18,
+          "message": "a second `input type=\"search\"` in this route's `header` is not shown on iOS: the navigation bar there takes one heading as its title (with the symbol images beside it in its own row), the first text after it as the subtitle, one `input type=\"search\"`, one `role=\"tablist\"`, the buttons that press or are disabled and the readouts (`role=\"status\"`), and hides the rest of the header. Move it below the `header`, into the route's content (the scroller's first row), make it a button that presses, or, if it is a status that nothing presses (a \"\u25cf Live\" beside the title), give it `role=\"status\"`; or, for a header the bar cannot hold (a chat's avatar beside the name), say `navigationBar=\"none\"` on the route's element and draw the row yourself (docs/recipes/chat-header.md; docs/contract-for-agents.md, \"Tabs and stacks\")",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 13,
+          "end_col": 19,
+          "file": "$APP/app.contract",
+          "id": "lower-header-unplaced",
+          "line": 19,
+          "message": "a `button` that presses nothing in this route's `header` is not shown on iOS: the navigation bar there takes one heading as its title (with the symbol images beside it in its own row), the first text after it as the subtitle, one `input type=\"search\"`, one `role=\"tablist\"`, the buttons that press or are disabled and the readouts (`role=\"status\"`), and hides the rest of the header. Move it below the `header`, into the route's content (the scroller's first row), make it a button that presses, or, if it is a status that nothing presses (a \"\u25cf Live\" beside the title), give it `role=\"status\"`; or, for a header the bar cannot hold (a chat's avatar beside the name), say `navigationBar=\"none\"` on the route's element and draw the row yourself (docs/recipes/chat-header.md; docs/contract-for-agents.md, \"Tabs and stacks\")",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking5-header-title-row",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column navigationKey=\"root\"\n      column navigationKey=\"home\"\n        header\n          row\n            image \"symbol:star\"\n            text \"Title\" role=\"heading\"\n          row\n            image \"symbol:clock\"\n            text \"Muted\"\n          column background-color=\"red\"\n            text \"Avatar\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 19,
+          "end_col": 33,
+          "file": "$APP/app.contract",
+          "id": "lower-attr-value",
+          "line": 16,
+          "message": "symbol `clock` is not a role; did you mean `symbol:lock`? `contract vocab symbol` lists the roles; or name any SF Symbol as `symbol:sf/<name>` (`symbol:sf/clock`), drawn on Apple and blank elsewhere, so a tab or button that must show everywhere takes a role or an icon token (`icons` in app.forma)",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 11,
+          "end_col": 17,
+          "file": "$APP/app.contract",
+          "id": "lower-header-unplaced",
+          "line": 18,
+          "message": "this box in this route's `header` is not shown on iOS: the navigation bar there takes one heading as its title (with the symbol images beside it in its own row), the first text after it as the subtitle, one `input type=\"search\"`, one `role=\"tablist\"`, the buttons that press or are disabled and the readouts (`role=\"status\"`), and hides the rest of the header. Move it below the `header`, into the route's content (the scroller's first row), make it a button that presses, or, if it is a status that nothing presses (a \"\u25cf Live\" beside the title), give it `role=\"status\"`; or, for a header the bar cannot hold (a chat's avatar beside the name), say `navigationBar=\"none\"` on the route's element and draw the row yourself (docs/recipes/chat-header.md; docs/contract-for-agents.md, \"Tabs and stacks\")",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 18,
+          "end_col": 34,
+          "file": "$APP/app.contract",
+          "id": "lower-colour-one-scheme",
+          "line": 18,
+          "message": "`red` on `background-color` stays the same in dark mode while the platform's text and controls change: name a role (`-exact-secondary-grouped-background`, `-exact-fill`, `AccentColor`) or leave it unsaid. Leave the accent unsaid (the platform's; a brand is an `app.forma`), or write it as a role or one `light-dark(light, dark)` pair on `accent-color`. A forced `color-scheme` is no repair: the app then has no dark mode (docs/contract-for-agents.md, \"Colours: say a role, not a value\")",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking5-invalid-header-title-row",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column definitelyUnknown=1 navigationKey=\"root\"\n      column navigationKey=\"home\"\n        header\n          row\n            image \"symbol:star\"\n            text \"Title\" role=\"heading\"\n          row\n            image \"symbol:clock\"\n            text \"Muted\"\n          column background-color=\"red\"\n            text \"Avatar\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 12,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-unknown-attr",
+          "line": 9,
+          "message": "`column` has no attribute `definitelyUnknown`",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 19,
+          "end_col": 33,
+          "file": "$APP/app.contract",
+          "id": "lower-attr-value",
+          "line": 16,
+          "message": "symbol `clock` is not a role; did you mean `symbol:lock`? `contract vocab symbol` lists the roles; or name any SF Symbol as `symbol:sf/<name>` (`symbol:sf/clock`), drawn on Apple and blank elsewhere, so a tab or button that must show everywhere takes a role or an icon token (`icons` in app.forma)",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 11,
+          "end_col": 17,
+          "file": "$APP/app.contract",
+          "id": "lower-header-unplaced",
+          "line": 18,
+          "message": "this box in this route's `header` is not shown on iOS: the navigation bar there takes one heading as its title (with the symbol images beside it in its own row), the first text after it as the subtitle, one `input type=\"search\"`, one `role=\"tablist\"`, the buttons that press or are disabled and the readouts (`role=\"status\"`), and hides the rest of the header. Move it below the `header`, into the route's content (the scroller's first row), make it a button that presses, or, if it is a status that nothing presses (a \"\u25cf Live\" beside the title), give it `role=\"status\"`; or, for a header the bar cannot hold (a chat's avatar beside the name), say `navigationBar=\"none\"` on the route's element and draw the row yourself (docs/recipes/chat-header.md; docs/contract-for-agents.md, \"Tabs and stacks\")",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 18,
+          "end_col": 34,
+          "file": "$APP/app.contract",
+          "id": "lower-colour-one-scheme",
+          "line": 18,
+          "message": "`red` on `background-color` stays the same in dark mode while the platform's text and controls change: name a role (`-exact-secondary-grouped-background`, `-exact-fill`, `AccentColor`) or leave it unsaid. Leave the accent unsaid (the platform's; a brand is an `app.forma`), or write it as a role or one `light-dark(light, dark)` pair on `accent-color`. A forced `color-scheme` is no repair: the app then has no dark mode (docs/contract-for-agents.md, \"Colours: say a role, not a value\")",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking5-header-pressable",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column navigationKey=\"root\"\n      column navigationKey=\"home\"\n        header\n          button press=keys(\"title\")\n            text \"Title\" role=\"heading\"\n          column role=\"status\"\n            text \"Readout\"\n          text \"Subtitle\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 0,
+      "diagnostics": []
+    },
+    {
+      "name": "checking5-invalid-header-pressable",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column definitelyUnknown=1 navigationKey=\"root\"\n      column navigationKey=\"home\"\n        header\n          button press=keys(\"title\")\n            text \"Title\" role=\"heading\"\n          column role=\"status\"\n            text \"Readout\"\n          text \"Subtitle\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 12,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-unknown-attr",
+          "line": 9,
+          "message": "`column` has no attribute `definitelyUnknown`",
+          "related": [],
+          "severity": "error"
+        }
+      ]
+    },
+    {
+      "name": "checking5-header-conditional-first",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column navigationKey=\"root\"\n      column navigationKey=\"home\"\n        if on\n          if on\n            header\n              text \"Title\" role=\"heading\"\n          else\n            header\n              text \"Title\" role=\"heading\"\n        else\n          header\n            text \"Other\"\n        text \"Title\" role=\"heading\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 11,
+          "end_col": 17,
+          "file": "$APP/app.contract",
+          "id": "lower-header-no-bar",
+          "line": 19,
+          "message": "this route's `header` holds no heading, so on iOS it is not the navigation bar: the header is drawn in the page as written, and the bar has no title: a pushed route's holds the system Back button alone, above the header, and a stack's first route has no bar. Give it one `text role=\"heading\"` (`aria-level=1` for a large title) \u2014 its buttons become the bar's items; or, for a site's header, say `appearance=\"none\"` on it; or, if this screen draws its own chrome, say `navigationBar=\"none\"` on the route's element (the one with `navigationKey`, not its line under `routes`) (docs/recipes/navigation-stack.md)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 9,
+          "end_col": 13,
+          "file": "$APP/app.contract",
+          "id": "lower-title-twice",
+          "line": 21,
+          "message": "this heading says \"Title\", as the route's `header` heading does, so the title shows twice: on iOS once in the navigation bar and once in the page, and on the web just under the header that says it. Drop this heading, or make it say something else (a section's own name, \"Results\") \u2014 the bar's title already names the screen (docs/recipes/navigation-stack.md)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 9,
+          "end_col": 13,
+          "file": "$APP/app.contract",
+          "id": "lower-title-twice",
+          "line": 21,
+          "message": "this heading says \"Title\", as the route's `header` heading does, so the title shows twice: on iOS once in the navigation bar and once in the page, and on the web just under the header that says it. Drop this heading, or make it say something else (a section's own name, \"Results\") \u2014 the bar's title already names the screen (docs/recipes/navigation-stack.md)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking5-invalid-header-conditional-first",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column definitelyUnknown=1 navigationKey=\"root\"\n      column navigationKey=\"home\"\n        if on\n          if on\n            header\n              text \"Title\" role=\"heading\"\n          else\n            header\n              text \"Title\" role=\"heading\"\n        else\n          header\n            text \"Other\"\n        text \"Title\" role=\"heading\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 12,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-unknown-attr",
+          "line": 9,
+          "message": "`column` has no attribute `definitelyUnknown`",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 11,
+          "end_col": 17,
+          "file": "$APP/app.contract",
+          "id": "lower-header-no-bar",
+          "line": 19,
+          "message": "this route's `header` holds no heading, so on iOS it is not the navigation bar: the header is drawn in the page as written, and the bar has no title: a pushed route's holds the system Back button alone, above the header, and a stack's first route has no bar. Give it one `text role=\"heading\"` (`aria-level=1` for a large title) \u2014 its buttons become the bar's items; or, for a site's header, say `appearance=\"none\"` on it; or, if this screen draws its own chrome, say `navigationBar=\"none\"` on the route's element (the one with `navigationKey`, not its line under `routes`) (docs/recipes/navigation-stack.md)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 9,
+          "end_col": 13,
+          "file": "$APP/app.contract",
+          "id": "lower-title-twice",
+          "line": 21,
+          "message": "this heading says \"Title\", as the route's `header` heading does, so the title shows twice: on iOS once in the navigation bar and once in the page, and on the web just under the header that says it. Drop this heading, or make it say something else (a section's own name, \"Results\") \u2014 the bar's title already names the screen (docs/recipes/navigation-stack.md)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 9,
+          "end_col": 13,
+          "file": "$APP/app.contract",
+          "id": "lower-title-twice",
+          "line": 21,
+          "message": "this heading says \"Title\", as the route's `header` heading does, so the title shows twice: on iOS once in the navigation bar and once in the page, and on the web just under the header that says it. Drop this heading, or make it say something else (a section's own name, \"Results\") \u2014 the bar's title already names the screen (docs/recipes/navigation-stack.md)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking5-header-unknown",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column navigationKey=\"root\"\n      column navigationKey=\"home\"\n        header\n          if on\n            text \"Title\" role=\"heading\"\n          text \"Unplaced\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 0,
+      "diagnostics": []
+    },
+    {
+      "name": "checking5-invalid-header-unknown",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column definitelyUnknown=1 navigationKey=\"root\"\n      column navigationKey=\"home\"\n        header\n          if on\n            text \"Title\" role=\"heading\"\n          text \"Unplaced\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 12,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-unknown-attr",
+          "line": 9,
+          "message": "`column` has no attribute `definitelyUnknown`",
+          "related": [],
+          "severity": "error"
+        }
+      ]
+    },
+    {
+      "name": "checking5-header-nested",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column navigationKey=\"root\"\n      column navigationKey=\"home\"\n        column\n          row\n            header\n              text \"Title\" role=\"heading\"\n          header\n            text \"Later\" role=\"heading\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 13,
+          "end_col": 19,
+          "file": "$APP/app.contract",
+          "id": "lower-header-nested",
+          "line": 13,
+          "message": "this `header` is not its route's first child (it is inside the `column` that is), so on iOS it is not the navigation bar: the header is drawn in the page as written, and the bar has no title: a pushed route's holds the system Back button alone, above the header, and a stack's first route has no bar. Make it the route's first child: move the route's `navigationKey`, with its `navigationPresentation`, `navigationScroll` and the rest, onto the box that holds the header (a screen component's root), or move the header up; or, for a site's header, say `appearance=\"none\"` on it; or, if this screen draws its own chrome, say `navigationBar=\"none\"` on the route's element (the one with `navigationKey`, not its line under `routes`) (docs/recipes/navigation-stack.md)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking5-invalid-header-nested",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column definitelyUnknown=1 navigationKey=\"root\"\n      column navigationKey=\"home\"\n        column\n          row\n            header\n              text \"Title\" role=\"heading\"\n          header\n            text \"Later\" role=\"heading\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 12,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-unknown-attr",
+          "line": 9,
+          "message": "`column` has no attribute `definitelyUnknown`",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 13,
+          "end_col": 19,
+          "file": "$APP/app.contract",
+          "id": "lower-header-nested",
+          "line": 13,
+          "message": "this `header` is not its route's first child (it is inside the `column` that is), so on iOS it is not the navigation bar: the header is drawn in the page as written, and the bar has no title: a pushed route's holds the system Back button alone, above the header, and a stack's first route has no bar. Make it the route's first child: move the route's `navigationKey`, with its `navigationPresentation`, `navigationScroll` and the rest, onto the box that holds the header (a screen component's root), or move the header up; or, for a site's header, say `appearance=\"none\"` on it; or, if this screen draws its own chrome, say `navigationBar=\"none\"` on the route's element (the one with `navigationKey`, not its line under `routes`) (docs/recipes/navigation-stack.md)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking5-header-nested-hidden",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column navigationKey=\"root\"\n      column navigationKey=\"home\"\n        column\n          row display=(on ? \"none\" : \"block\")\n            header\n              text \"Title\" role=\"heading\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 0,
+      "diagnostics": []
+    },
+    {
+      "name": "checking5-invalid-header-nested-hidden",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column definitelyUnknown=1 navigationKey=\"root\"\n      column navigationKey=\"home\"\n        column\n          row display=(on ? \"none\" : \"block\")\n            header\n              text \"Title\" role=\"heading\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 12,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-unknown-attr",
+          "line": 9,
+          "message": "`column` has no attribute `definitelyUnknown`",
+          "related": [],
+          "severity": "error"
+        }
+      ]
+    },
+    {
+      "name": "checking5-title-siblings",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column navigationKey=\"root\"\n      column navigationKey=\"home\"\n        header\n          text \"Title\" role=\"heading\" aria-level=1\n        column\n          text \"Title\" role=\"heading\"\n        text \"Title\" role=\"heading\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 11,
+          "end_col": 15,
+          "file": "$APP/app.contract",
+          "id": "lower-title-twice",
+          "line": 14,
+          "message": "this heading says \"Title\", as the route's `header` heading does, so the title shows twice: on iOS once large in the navigation bar and once in the page, and on the web just under the header that says it. Drop this heading, or make it say something else (a section's own name, \"Results\") \u2014 the bar's title already names the screen (docs/recipes/navigation-stack.md)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking5-invalid-title-siblings",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column definitelyUnknown=1 navigationKey=\"root\"\n      column navigationKey=\"home\"\n        header\n          text \"Title\" role=\"heading\" aria-level=1\n        column\n          text \"Title\" role=\"heading\"\n        text \"Title\" role=\"heading\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 12,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-unknown-attr",
+          "line": 9,
+          "message": "`column` has no attribute `definitelyUnknown`",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 11,
+          "end_col": 15,
+          "file": "$APP/app.contract",
+          "id": "lower-title-twice",
+          "line": 14,
+          "message": "this heading says \"Title\", as the route's `header` heading does, so the title shows twice: on iOS once large in the navigation bar and once in the page, and on the web just under the header that says it. Drop this heading, or make it say something else (a section's own name, \"Results\") \u2014 the bar's title already names the screen (docs/recipes/navigation-stack.md)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking5-title-branch-local",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column navigationKey=\"root\"\n      column navigationKey=\"home\"\n        header\n          text \"Title\" role=\"heading\"\n        if on\n          text \"Other\" role=\"heading\"\n          text \"Title\" role=\"heading\"\n        else\n          text \"Title\" role=\"heading\"\n        text \"Title\" role=\"heading\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 11,
+          "end_col": 15,
+          "file": "$APP/app.contract",
+          "id": "lower-title-twice",
+          "line": 17,
+          "message": "this heading says \"Title\", as the route's `header` heading does, so the title shows twice: on iOS once in the navigation bar and once in the page, and on the web just under the header that says it. Drop this heading, or make it say something else (a section's own name, \"Results\") \u2014 the bar's title already names the screen (docs/recipes/navigation-stack.md)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 9,
+          "end_col": 13,
+          "file": "$APP/app.contract",
+          "id": "lower-title-twice",
+          "line": 18,
+          "message": "this heading says \"Title\", as the route's `header` heading does, so the title shows twice: on iOS once in the navigation bar and once in the page, and on the web just under the header that says it. Drop this heading, or make it say something else (a section's own name, \"Results\") \u2014 the bar's title already names the screen (docs/recipes/navigation-stack.md)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking5-invalid-title-branch-local",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column definitelyUnknown=1 navigationKey=\"root\"\n      column navigationKey=\"home\"\n        header\n          text \"Title\" role=\"heading\"\n        if on\n          text \"Other\" role=\"heading\"\n          text \"Title\" role=\"heading\"\n        else\n          text \"Title\" role=\"heading\"\n        text \"Title\" role=\"heading\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 12,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-unknown-attr",
+          "line": 9,
+          "message": "`column` has no attribute `definitelyUnknown`",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 11,
+          "end_col": 15,
+          "file": "$APP/app.contract",
+          "id": "lower-title-twice",
+          "line": 17,
+          "message": "this heading says \"Title\", as the route's `header` heading does, so the title shows twice: on iOS once in the navigation bar and once in the page, and on the web just under the header that says it. Drop this heading, or make it say something else (a section's own name, \"Results\") \u2014 the bar's title already names the screen (docs/recipes/navigation-stack.md)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 9,
+          "end_col": 13,
+          "file": "$APP/app.contract",
+          "id": "lower-title-twice",
+          "line": 18,
+          "message": "this heading says \"Title\", as the route's `header` heading does, so the title shows twice: on iOS once in the navigation bar and once in the page, and on the web just under the header that says it. Drop this heading, or make it say something else (a section's own name, \"Results\") \u2014 the bar's title already names the screen (docs/recipes/navigation-stack.md)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking5-title-bound",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column navigationKey=\"root\"\n      column navigationKey=\"home\"\n        header\n          text q role=\"heading\"\n        match maybe\n          case some(q)\n            text q role=\"heading\"\n          case none\n            text q role=\"heading\"\n        text q role=\"heading\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 9,
+          "end_col": 13,
+          "file": "$APP/app.contract",
+          "id": "lower-title-twice",
+          "line": 18,
+          "message": "this heading says the same value, as the route's `header` heading does, so the title shows twice: on iOS once in the navigation bar and once in the page, and on the web just under the header that says it. Drop this heading, or make it say something else (a section's own name, \"Results\") \u2014 the bar's title already names the screen (docs/recipes/navigation-stack.md)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking5-invalid-title-bound",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column definitelyUnknown=1 navigationKey=\"root\"\n      column navigationKey=\"home\"\n        header\n          text q role=\"heading\"\n        match maybe\n          case some(q)\n            text q role=\"heading\"\n          case none\n            text q role=\"heading\"\n        text q role=\"heading\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 12,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-unknown-attr",
+          "line": 9,
+          "message": "`column` has no attribute `definitelyUnknown`",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 9,
+          "end_col": 13,
+          "file": "$APP/app.contract",
+          "id": "lower-title-twice",
+          "line": 18,
+          "message": "this heading says the same value, as the route's `header` heading does, so the title shows twice: on iOS once in the navigation bar and once in the page, and on the web just under the header that says it. Drop this heading, or make it say something else (a section's own name, \"Results\") \u2014 the bar's title already names the screen (docs/recipes/navigation-stack.md)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking5-title-section-hidden",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column navigationKey=\"root\"\n      column navigationKey=\"home\"\n        header\n          text \"Title\" role=\"heading\"\n        column display=\"none\"\n          text \"Other\" role=\"heading\"\n        section\n          text \"Title\" role=\"heading\"\n        text \"Title\" role=\"heading\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 0,
+      "diagnostics": []
+    },
+    {
+      "name": "checking5-invalid-title-section-hidden",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column definitelyUnknown=1 navigationKey=\"root\"\n      column navigationKey=\"home\"\n        header\n          text \"Title\" role=\"heading\"\n        column display=\"none\"\n          text \"Other\" role=\"heading\"\n        section\n          text \"Title\" role=\"heading\"\n        text \"Title\" role=\"heading\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 12,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-unknown-attr",
+          "line": 9,
+          "message": "`column` has no attribute `definitelyUnknown`",
+          "related": [],
+          "severity": "error"
+        }
+      ]
+    },
+    {
+      "name": "checking5-tabs-single",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column\n      column role=\"tablist\"\n        column\n          button role=\"tab\" aria-controls=\"home\"\n            text \"Home\"\n      column role=\"tabpanel\" id=\"home\"\n        text \"Page\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 7,
+          "end_col": 13,
+          "file": "$APP/app.contract",
+          "id": "lower-single-tab",
+          "line": 10,
+          "message": "this tab bar has 1 tab: a tab bar is for moving between two or more sections, and one tab is a bar that does nothing. For a single screen, drop the `role=\"tablist\"` and the `tabpanel` around the routes, so the routes are the navigation root's children (one stack); add the other tabs if the app has them (docs/contract-for-agents.md, \"Tabs and stacks\")",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking5-invalid-tabs-single",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column definitelyUnknown=1\n      column role=\"tablist\"\n        column\n          button role=\"tab\" aria-controls=\"home\"\n            text \"Home\"\n      column role=\"tabpanel\" id=\"home\"\n        text \"Page\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 12,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-unknown-attr",
+          "line": 9,
+          "message": "`column` has no attribute `definitelyUnknown`",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 7,
+          "end_col": 13,
+          "file": "$APP/app.contract",
+          "id": "lower-single-tab",
+          "line": 10,
+          "message": "this tab bar has 1 tab: a tab bar is for moving between two or more sections, and one tab is a bar that does nothing. For a single screen, drop the `role=\"tablist\"` and the `tabpanel` around the routes, so the routes are the navigation root's children (one stack); add the other tabs if the app has them (docs/contract-for-agents.md, \"Tabs and stacks\")",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking5-tabs-search",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column\n      column role=\"tablist\"\n        button role=\"tab\" rel=\"search\" aria-controls=\"home\"\n          text \"Search\"\n        column\n          button role=\"tab\" rel=\"search\" aria-controls=\"other\"\n            text \"Again\"\n      column role=\"tabpanel\" id=\"home\"\n        text \"Home\"\n      column role=\"tabpanel\" id=\"other\"\n        text \"Other\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 11,
+          "end_col": 17,
+          "file": "$APP/app.contract",
+          "id": "lower-search-tab-second",
+          "line": 14,
+          "message": "this tablist already has a search tab (the first tab with `rel=\"search\"`); this one is an ordinary tab on every host. Drop its `rel`, or move the word to the tab that is the app's search",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 9,
+          "end_col": 15,
+          "file": "$APP/app.contract",
+          "id": "lower-search-tab-last",
+          "line": 11,
+          "message": "write the search tab last: iOS 26 draws it at the trailing end of the tab bar, and the hosts that keep the written order (the web, the Mac's sidebar, Android) then agree with it",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking5-invalid-tabs-search",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column definitelyUnknown=1\n      column role=\"tablist\"\n        button role=\"tab\" rel=\"search\" aria-controls=\"home\"\n          text \"Search\"\n        column\n          button role=\"tab\" rel=\"search\" aria-controls=\"other\"\n            text \"Again\"\n      column role=\"tabpanel\" id=\"home\"\n        text \"Home\"\n      column role=\"tabpanel\" id=\"other\"\n        text \"Other\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 12,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-unknown-attr",
+          "line": 9,
+          "message": "`column` has no attribute `definitelyUnknown`",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 11,
+          "end_col": 17,
+          "file": "$APP/app.contract",
+          "id": "lower-search-tab-second",
+          "line": 14,
+          "message": "this tablist already has a search tab (the first tab with `rel=\"search\"`); this one is an ordinary tab on every host. Drop its `rel`, or move the word to the tab that is the app's search",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 9,
+          "end_col": 15,
+          "file": "$APP/app.contract",
+          "id": "lower-search-tab-last",
+          "line": 11,
+          "message": "write the search tab last: iOS 26 draws it at the trailing end of the tab bar, and the hosts that keep the written order (the web, the Mac's sidebar, Android) then agree with it",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking5-tabs-conditional",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column role=\"tablist\"\n      if on\n        button role=\"tab\" aria-controls=\"home\"\n          text \"Home\"\n      button role=\"tab\" rel=\"search\"\n        text \"Search\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 0,
+      "diagnostics": []
+    },
+    {
+      "name": "checking5-invalid-tabs-conditional",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column definitelyUnknown=1 role=\"tablist\"\n      if on\n        button role=\"tab\" aria-controls=\"home\"\n          text \"Home\"\n      button role=\"tab\" rel=\"search\"\n        text \"Search\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 12,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-unknown-attr",
+          "line": 9,
+          "message": "`column` has no attribute `definitelyUnknown`",
+          "related": [],
+          "severity": "error"
+        }
+      ]
+    },
+    {
+      "name": "checking5-swipe-missing",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column\n      scroll swipeContent=\"row\" swipeTrailing=\"delete\"\n        column id=\"other\"\n          text \"Row\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 7,
+          "end_col": 13,
+          "file": "$APP/app.contract",
+          "id": "lower-scroll-unbounded",
+          "line": 10,
+          "message": "`scroll` has no `height`, `max-height`, or `flex`, and its parent stacks it top to bottom, so it will grow with its content and never scroll",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 14,
+          "end_col": 26,
+          "file": "$APP/app.contract",
+          "id": "lower-swipe-wiring",
+          "line": 10,
+          "message": "`swipeContent` names \"row\", but no element inside this `scroll` has that `id`: iOS refuses the row (`logs`: `swipeContent \u2026 names no one descendant of it`) and the web shows it as a plain row. Give the box that holds what the row shows `id=\u2026` to match, inside this `scroll` (docs/recipes/list-rows.md)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 33,
+          "end_col": 46,
+          "file": "$APP/app.contract",
+          "id": "lower-swipe-wiring",
+          "line": 10,
+          "message": "`swipeTrailing` names \"delete\", but no element inside this `scroll` has that `id`: iOS refuses the row (`logs`: `swipeContent on #N is refused: \u2026 names no one descendant of it`) and the web leaves the button where it sits, outside the row (a full-width second line under each item). Put the button inside this `scroll`, after the content, with `id=\u2026` to match (docs/recipes/list-rows.md)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking5-invalid-swipe-missing",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column definitelyUnknown=1\n      scroll swipeContent=\"row\" swipeTrailing=\"delete\"\n        column id=\"other\"\n          text \"Row\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 12,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-unknown-attr",
+          "line": 9,
+          "message": "`column` has no attribute `definitelyUnknown`",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 7,
+          "end_col": 13,
+          "file": "$APP/app.contract",
+          "id": "lower-scroll-unbounded",
+          "line": 10,
+          "message": "`scroll` has no `height`, `max-height`, or `flex`, and its parent stacks it top to bottom, so it will grow with its content and never scroll",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 14,
+          "end_col": 26,
+          "file": "$APP/app.contract",
+          "id": "lower-swipe-wiring",
+          "line": 10,
+          "message": "`swipeContent` names \"row\", but no element inside this `scroll` has that `id`: iOS refuses the row (`logs`: `swipeContent \u2026 names no one descendant of it`) and the web shows it as a plain row. Give the box that holds what the row shows `id=\u2026` to match, inside this `scroll` (docs/recipes/list-rows.md)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 33,
+          "end_col": 46,
+          "file": "$APP/app.contract",
+          "id": "lower-swipe-wiring",
+          "line": 10,
+          "message": "`swipeTrailing` names \"delete\", but no element inside this `scroll` has that `id`: iOS refuses the row (`logs`: `swipeContent on #N is refused: \u2026 names no one descendant of it`) and the web leaves the button where it sits, outside the row (a full-width second line under each item). Put the button inside this `scroll`, after the content, with `id=\u2026` to match (docs/recipes/list-rows.md)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking5-swipe-inside",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column\n      scroll swipeContent=\"row\" swipeTrailing=\"delete\"\n        column id=\"row\"\n          button id=\"delete\" press=keys(\"delete\")\n            text \"Delete\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 7,
+          "end_col": 13,
+          "file": "$APP/app.contract",
+          "id": "lower-scroll-unbounded",
+          "line": 10,
+          "message": "`scroll` has no `height`, `max-height`, or `flex`, and its parent stacks it top to bottom, so it will grow with its content and never scroll",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 33,
+          "end_col": 46,
+          "file": "$APP/app.contract",
+          "id": "lower-swipe-wiring",
+          "line": 10,
+          "message": "`swipeTrailing` names \"delete\", which sits inside the `swipeContent` element: iOS refuses the row (`\u2026 is inside swipeContent`). Move the button out of the content box, to be its sibling inside this `scroll` (docs/recipes/list-rows.md)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking5-invalid-swipe-inside",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column definitelyUnknown=1\n      scroll swipeContent=\"row\" swipeTrailing=\"delete\"\n        column id=\"row\"\n          button id=\"delete\" press=keys(\"delete\")\n            text \"Delete\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 12,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-unknown-attr",
+          "line": 9,
+          "message": "`column` has no attribute `definitelyUnknown`",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 7,
+          "end_col": 13,
+          "file": "$APP/app.contract",
+          "id": "lower-scroll-unbounded",
+          "line": 10,
+          "message": "`scroll` has no `height`, `max-height`, or `flex`, and its parent stacks it top to bottom, so it will grow with its content and never scroll",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 33,
+          "end_col": 46,
+          "file": "$APP/app.contract",
+          "id": "lower-swipe-wiring",
+          "line": 10,
+          "message": "`swipeTrailing` names \"delete\", which sits inside the `swipeContent` element: iOS refuses the row (`\u2026 is inside swipeContent`). Move the button out of the content box, to be its sibling inside this `scroll` (docs/recipes/list-rows.md)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking5-swipe-template",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column\n      for x in xs key=x\n        scroll swipeContent=`row-${x}` swipeTrailing=`delete-${x}`\n          text \"Row\" id=`row-${x}`\n          button id=`other-${x}` press=keys(\"delete\")\n            text \"Delete\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 9,
+          "end_col": 15,
+          "file": "$APP/app.contract",
+          "id": "lower-scroll-unbounded",
+          "line": 11,
+          "message": "`scroll` has no `height`, `max-height`, or `flex`, and its parent stacks it top to bottom, so it will grow with its content and never scroll",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 40,
+          "end_col": 53,
+          "file": "$APP/app.contract",
+          "id": "lower-swipe-wiring",
+          "line": 11,
+          "message": "`swipeTrailing` names `delete-${x}`, but no element inside this `scroll` has that `id`: iOS refuses the row (`logs`: `swipeContent on #N is refused: \u2026 names no one descendant of it`) and the web leaves the button where it sits, outside the row (a full-width second line under each item). Put the button inside this `scroll`, after the content, with `id=\u2026` to match (docs/recipes/list-rows.md)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking5-invalid-swipe-template",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column definitelyUnknown=1\n      for x in xs key=x\n        scroll swipeContent=`row-${x}` swipeTrailing=`delete-${x}`\n          text \"Row\" id=`row-${x}`\n          button id=`other-${x}` press=keys(\"delete\")\n            text \"Delete\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 12,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-unknown-attr",
+          "line": 9,
+          "message": "`column` has no attribute `definitelyUnknown`",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 9,
+          "end_col": 15,
+          "file": "$APP/app.contract",
+          "id": "lower-scroll-unbounded",
+          "line": 11,
+          "message": "`scroll` has no `height`, `max-height`, or `flex`, and its parent stacks it top to bottom, so it will grow with its content and never scroll",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 40,
+          "end_col": 53,
+          "file": "$APP/app.contract",
+          "id": "lower-swipe-wiring",
+          "line": 11,
+          "message": "`swipeTrailing` names `delete-${x}`, but no element inside this `scroll` has that `id`: iOS refuses the row (`logs`: `swipeContent on #N is refused: \u2026 names no one descendant of it`) and the web leaves the button where it sits, outside the row (a full-width second line under each item). Put the button inside this `scroll`, after the content, with `id=\u2026` to match (docs/recipes/list-rows.md)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking5-swipe-computed",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column\n      scroll swipeContent=\"row\" swipeTrailing=\"delete\"\n        column id=(on ? \"row\" : \"other\")\n          text \"Row\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 7,
+          "end_col": 13,
+          "file": "$APP/app.contract",
+          "id": "lower-scroll-unbounded",
+          "line": 10,
+          "message": "`scroll` has no `height`, `max-height`, or `flex`, and its parent stacks it top to bottom, so it will grow with its content and never scroll",
+          "related": [],
+          "severity": "error"
+        }
+      ]
+    },
+    {
+      "name": "checking5-invalid-swipe-computed",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column definitelyUnknown=1\n      scroll swipeContent=\"row\" swipeTrailing=\"delete\"\n        column id=(on ? \"row\" : \"other\")\n          text \"Row\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 12,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-unknown-attr",
+          "line": 9,
+          "message": "`column` has no attribute `definitelyUnknown`",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 7,
+          "end_col": 13,
+          "file": "$APP/app.contract",
+          "id": "lower-scroll-unbounded",
+          "line": 10,
+          "message": "`scroll` has no `height`, `max-height`, or `flex`, and its parent stacks it top to bottom, so it will grow with its content and never scroll",
+          "related": [],
+          "severity": "error"
+        }
+      ]
+    },
+    {
+      "name": "checking5-keys-literal-root",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column navigationKey=\"root\"\n      for e in [{ id: \"1\" }] key=e.id\n        column navigationKey=`${e.id}`\n          text \"Page\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 17,
+          "end_col": 18,
+          "file": "$APP/app.contract",
+          "id": "syntax-expected-expression",
+          "line": 10,
+          "message": "expected an expression, found `{`; Contract has no `{\u2026}`: a handler names an action (`press=add`, `press=add(item)`) and a value is written directly (`width=10`)",
+          "related": [],
+          "severity": "error"
+        }
+      ]
+    },
+    {
+      "name": "checking5-invalid-keys-literal-root",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column definitelyUnknown=1 navigationKey=\"root\"\n      for e in [{ id: \"1\" }] key=e.id\n        column navigationKey=`${e.id}`\n          text \"Page\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 17,
+          "end_col": 18,
+          "file": "$APP/app.contract",
+          "id": "syntax-expected-expression",
+          "line": 10,
+          "message": "expected an expression, found `{`; Contract has no `{\u2026}`: a handler names an action (`press=add`, `press=add(item)`) and a value is written directly (`width=10`)",
+          "related": [],
+          "severity": "error"
+        }
+      ]
+    },
+    {
+      "name": "checking5-keys-top-root",
+      "files": {
+        "app.contract": "routes nav\n  home \"/\"\ncomponent App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column navigationKey=`${top(nav).id}`\n      column navigationKey=\"home\"\n        column navigationKey=\"nested\"\n          text \"Page\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 9,
+          "end_col": 15,
+          "file": "$APP/app.contract",
+          "id": "lower-route-place",
+          "line": 13,
+          "message": "this `column` has a `navigationKey` inside another route; a route is a child of the navigation root or of a linked `role=\"tabpanel\"` in it, never of a route, so no host would show it",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 14,
+          "end_col": 27,
+          "file": "$APP/app.contract",
+          "id": "lower-navigation-key",
+          "line": 12,
+          "message": "this route's `navigationKey` is the literal \"home\", but the navigation root's is `${top(nav).id}`, the id of the visit on top (\"0\" at the stack's root): the root never names this route, so it is never the selected one (on iOS the screen has no native bar, and `logs` says `navigationKey \"0\" matches no route`). Key every route `navigationKey=`${e.id}``, or give the root an expression that names this key while the route is on top (the `rest` pattern's) (docs/agent-pitfalls.md)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking5-invalid-keys-top-root",
+      "files": {
+        "app.contract": "routes nav\n  home \"/\"\ncomponent App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column definitelyUnknown=1 navigationKey=`${top(nav).id}`\n      column navigationKey=\"home\"\n        column navigationKey=\"nested\"\n          text \"Page\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 12,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-unknown-attr",
+          "line": 11,
+          "message": "`column` has no attribute `definitelyUnknown`",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 9,
+          "end_col": 15,
+          "file": "$APP/app.contract",
+          "id": "lower-route-place",
+          "line": 13,
+          "message": "this `column` has a `navigationKey` inside another route; a route is a child of the navigation root or of a linked `role=\"tabpanel\"` in it, never of a route, so no host would show it",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 14,
+          "end_col": 27,
+          "file": "$APP/app.contract",
+          "id": "lower-navigation-key",
+          "line": 12,
+          "message": "this route's `navigationKey` is the literal \"home\", but the navigation root's is `${top(nav).id}`, the id of the visit on top (\"0\" at the stack's root): the root never names this route, so it is never the selected one (on iOS the screen has no native bar, and `logs` says `navigationKey \"0\" matches no route`). Key every route `navigationKey=`${e.id}``, or give the root an expression that names this key while the route is on top (the `rest` pattern's) (docs/agent-pitfalls.md)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking5-back-headers",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column navigationKey=\"root\" navigationBack=\"back\"\n      column navigationKey=\"home\"\n        if on\n          header\n            button id=\"back\" press=keys(\"back\")\n              text \"Back\"\n            text \"Title\" role=\"heading\"\n        header\n          button id=\"back\" press=keys(\"back\")\n            text \"Back\"\n        button id=\"back\" press=keys(\"back\")\n          text \"Back\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 9,
+          "end_col": 15,
+          "file": "$APP/app.contract",
+          "id": "lower-back-twice",
+          "line": 19,
+          "message": "this is the route's Back control (`id=\"back\"`, which the root's `navigationBack` names), drawn in the page: on iOS a pushed route's navigation bar has the system Back button, which presses this one, so the screen shows two. Delete it, and the platform's Back still goes back (the bar's button, the edge swipe, the browser's Back), through the root's `navigate` or the router's own back; or move it into the route's `header` beside one `text role=\"heading\"`, where it is the bar's Back button; or, for a full-bleed screen that draws its own chrome, say `navigationBar=\"none\"` on the route (docs/recipes/navigation-stack.md)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking5-invalid-back-headers",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column definitelyUnknown=1 navigationKey=\"root\" navigationBack=\"back\"\n      column navigationKey=\"home\"\n        if on\n          header\n            button id=\"back\" press=keys(\"back\")\n              text \"Back\"\n            text \"Title\" role=\"heading\"\n        header\n          button id=\"back\" press=keys(\"back\")\n            text \"Back\"\n        button id=\"back\" press=keys(\"back\")\n          text \"Back\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 12,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-unknown-attr",
+          "line": 9,
+          "message": "`column` has no attribute `definitelyUnknown`",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 9,
+          "end_col": 15,
+          "file": "$APP/app.contract",
+          "id": "lower-back-twice",
+          "line": 19,
+          "message": "this is the route's Back control (`id=\"back\"`, which the root's `navigationBack` names), drawn in the page: on iOS a pushed route's navigation bar has the system Back button, which presses this one, so the screen shows two. Delete it, and the platform's Back still goes back (the bar's button, the edge swipe, the browser's Back), through the root's `navigate` or the router's own back; or move it into the route's `header` beside one `text role=\"heading\"`, where it is the bar's Back button; or, for a full-bleed screen that draws its own chrome, say `navigationBar=\"none\"` on the route (docs/recipes/navigation-stack.md)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking5-back-hidden",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column navigationKey=\"root\" navigationBack=\"back\"\n      column navigationKey=\"home\"\n        column display=\"none\"\n          button id=\"back\" press=keys(\"back\")\n            text \"Back\"\n        button id=\"back\" press=keys(\"back\")\n          text \"Back\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 9,
+          "end_col": 15,
+          "file": "$APP/app.contract",
+          "id": "lower-back-twice",
+          "line": 14,
+          "message": "this is the route's Back control (`id=\"back\"`, which the root's `navigationBack` names), drawn in the page: on iOS a pushed route's navigation bar has the system Back button, which presses this one, so the screen shows two. Delete it, and the platform's Back still goes back (the bar's button, the edge swipe, the browser's Back), through the root's `navigate` or the router's own back; or move it into the route's `header` beside one `text role=\"heading\"`, where it is the bar's Back button; or, for a full-bleed screen that draws its own chrome, say `navigationBar=\"none\"` on the route (docs/recipes/navigation-stack.md)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking5-invalid-back-hidden",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column definitelyUnknown=1 navigationKey=\"root\" navigationBack=\"back\"\n      column navigationKey=\"home\"\n        column display=\"none\"\n          button id=\"back\" press=keys(\"back\")\n            text \"Back\"\n        button id=\"back\" press=keys(\"back\")\n          text \"Back\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 12,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-unknown-attr",
+          "line": 9,
+          "message": "`column` has no attribute `definitelyUnknown`",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 9,
+          "end_col": 15,
+          "file": "$APP/app.contract",
+          "id": "lower-back-twice",
+          "line": 14,
+          "message": "this is the route's Back control (`id=\"back\"`, which the root's `navigationBack` names), drawn in the page: on iOS a pushed route's navigation bar has the system Back button, which presses this one, so the screen shows two. Delete it, and the platform's Back still goes back (the bar's button, the edge swipe, the browser's Back), through the root's `navigate` or the router's own back; or move it into the route's `header` beside one `text role=\"heading\"`, where it is the bar's Back button; or, for a full-bleed screen that draws its own chrome, say `navigationBar=\"none\"` on the route (docs/recipes/navigation-stack.md)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking5-count-scopes",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column\n      text `${len(xs)} cards`\n      if len(xs) == 1\n        text `${len(xs)} cards`\n      for n in xs key=n\n        text `${n} people`\n      match maybe\n        case some(s)\n          text `${len(s)} cards`\n        case none\n          text `${len(xs)} votes`\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 15,
+          "end_col": 18,
+          "file": "$APP/app.contract",
+          "id": "type-refused-idiom",
+          "line": 10,
+          "message": "`len` is not in Contract: write `x.length`, of text or of a list",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 10,
+          "end_col": 13,
+          "file": "$APP/app.contract",
+          "id": "type-refused-idiom",
+          "line": 11,
+          "message": "`len` is not in Contract: write `x.length`, of text or of a list",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 17,
+          "end_col": 20,
+          "file": "$APP/app.contract",
+          "id": "type-refused-idiom",
+          "line": 12,
+          "message": "`len` is not in Contract: write `x.length`, of text or of a list",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 19,
+          "end_col": 22,
+          "file": "$APP/app.contract",
+          "id": "type-refused-idiom",
+          "line": 17,
+          "message": "`len` is not in Contract: write `x.length`, of text or of a list",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 19,
+          "end_col": 22,
+          "file": "$APP/app.contract",
+          "id": "type-refused-idiom",
+          "line": 19,
+          "message": "`len` is not in Contract: write `x.length`, of text or of a list",
+          "related": [],
+          "severity": "error"
+        }
+      ]
+    },
+    {
+      "name": "checking5-invalid-count-scopes",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column definitelyUnknown=1\n      text `${len(xs)} cards`\n      if len(xs) == 1\n        text `${len(xs)} cards`\n      for n in xs key=n\n        text `${n} people`\n      match maybe\n        case some(s)\n          text `${len(s)} cards`\n        case none\n          text `${len(xs)} votes`\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 15,
+          "end_col": 18,
+          "file": "$APP/app.contract",
+          "id": "type-refused-idiom",
+          "line": 10,
+          "message": "`len` is not in Contract: write `x.length`, of text or of a list",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 10,
+          "end_col": 13,
+          "file": "$APP/app.contract",
+          "id": "type-refused-idiom",
+          "line": 11,
+          "message": "`len` is not in Contract: write `x.length`, of text or of a list",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 17,
+          "end_col": 20,
+          "file": "$APP/app.contract",
+          "id": "type-refused-idiom",
+          "line": 12,
+          "message": "`len` is not in Contract: write `x.length`, of text or of a list",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 19,
+          "end_col": 22,
+          "file": "$APP/app.contract",
+          "id": "type-refused-idiom",
+          "line": 17,
+          "message": "`len` is not in Contract: write `x.length`, of text or of a list",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 19,
+          "end_col": 22,
+          "file": "$APP/app.contract",
+          "id": "type-refused-idiom",
+          "line": 19,
+          "message": "`len` is not in Contract: write `x.length`, of text or of a list",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 12,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-unknown-attr",
+          "line": 9,
+          "message": "`column` has no attribute `definitelyUnknown`",
+          "related": [],
+          "severity": "error"
+        }
+      ]
+    },
+    {
+      "name": "checking5-colours-shadow",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column background-color=\"AccentColor\"\n      text \"White\" color=\"#fff\"\n      column background-color=\"#fff\"\n        text \"Dark\" color=\"#000\"\n      for q in xs key=q\n        text \"Local\" color=(q == 1 ? \"red\" : \"blue\")\n      match maybe\n        case some(q)\n          text \"Some\" color=q\n        case none\n          text \"None\" color=q\n      svg\n        text \"SVG\" color=\"red\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 14,
+          "end_col": 30,
+          "file": "$APP/app.contract",
+          "id": "lower-colour-one-scheme",
+          "line": 11,
+          "message": "`#fff` on `background-color` stays the same in dark mode: name a role (`-exact-secondary-grouped-background`, `-exact-fill`, `AccentColor`) or leave it unsaid",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 21,
+          "end_col": 26,
+          "file": "$APP/app.contract",
+          "id": "lower-colour-one-scheme",
+          "line": 12,
+          "message": "`#000` on `color` stays the same in dark mode: name a role (`-exact-label`, `-exact-secondary-label`, `AccentColor`) or leave it unsaid",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 22,
+          "end_col": 27,
+          "file": "$APP/app.contract",
+          "id": "lower-colour-one-scheme",
+          "line": 14,
+          "message": "`red`, `blue` on `color` stay the same in dark mode: name a role (`-exact-label`, `-exact-secondary-label`, `AccentColor`) or leave it unsaid",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 14,
+          "end_col": 30,
+          "file": "$APP/app.contract",
+          "id": "lower-colour-one-scheme",
+          "line": 11,
+          "message": "these 3 literal colours stay the same in dark mode while the platform's text and controls change, so a light card keeps its colour under the platform's white text: name a role for each or leave it unsaid. Leave the accent unsaid (the platform's; a brand is an `app.forma`), or write it as a role or one `light-dark(light, dark)` pair on `accent-color`. A forced `color-scheme` is no repair: the app then has no dark mode (docs/contract-for-agents.md, \"Colours: say a role, not a value\")",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking5-invalid-colours-shadow",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state maybe: option<string> = some(\"x\")\n  state xs = [1, 2]\n  state q = \"\"\n  action keys(k: string)\n    q = k\n  view\n    column definitelyUnknown=1 background-color=\"AccentColor\"\n      text \"White\" color=\"#fff\"\n      column background-color=\"#fff\"\n        text \"Dark\" color=\"#000\"\n      for q in xs key=q\n        text \"Local\" color=(q == 1 ? \"red\" : \"blue\")\n      match maybe\n        case some(q)\n          text \"Some\" color=q\n        case none\n          text \"None\" color=q\n      svg\n        text \"SVG\" color=\"red\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 12,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-unknown-attr",
+          "line": 9,
+          "message": "`column` has no attribute `definitelyUnknown`",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 14,
+          "end_col": 30,
+          "file": "$APP/app.contract",
+          "id": "lower-colour-one-scheme",
+          "line": 11,
+          "message": "`#fff` on `background-color` stays the same in dark mode: name a role (`-exact-secondary-grouped-background`, `-exact-fill`, `AccentColor`) or leave it unsaid",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 21,
+          "end_col": 26,
+          "file": "$APP/app.contract",
+          "id": "lower-colour-one-scheme",
+          "line": 12,
+          "message": "`#000` on `color` stays the same in dark mode: name a role (`-exact-label`, `-exact-secondary-label`, `AccentColor`) or leave it unsaid",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 22,
+          "end_col": 27,
+          "file": "$APP/app.contract",
+          "id": "lower-colour-one-scheme",
+          "line": 14,
+          "message": "`red`, `blue` on `color` stay the same in dark mode: name a role (`-exact-label`, `-exact-secondary-label`, `AccentColor`) or leave it unsaid",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 14,
+          "end_col": 30,
+          "file": "$APP/app.contract",
+          "id": "lower-colour-one-scheme",
+          "line": 11,
+          "message": "these 3 literal colours stay the same in dark mode while the platform's text and controls change, so a light card keeps its colour under the platform's white text: name a role for each or leave it unsaid. Leave the accent unsaid (the platform's; a brand is an `app.forma`), or write it as a role or one `light-dark(light, dark)` pair on `accent-color`. A forced `color-scheme` is no repair: the app then has no dark mode (docs/contract-for-agents.md, \"Colours: say a role, not a value\")",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking5-imported-header",
+      "files": {
+        "app.contract": "use Screen from \"./screen.contract\"\ncomponent App\n  view\n    column navigationKey=\"root\"\n      Screen()\n      Screen()\n",
+        "screen.contract": "component Screen\n  view\n    column navigationKey=\"home\"\n      header\n        text \"Title\" role=\"heading\"\n        text \"Subtitle\"\n        text \"Extra\"\n      text \"Title\" role=\"heading\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 9,
+          "end_col": 13,
+          "file": "$APP/screen.contract",
+          "id": "lower-header-unplaced",
+          "line": 7,
+          "message": "this text, after the subtitle, in this route's `header` is not shown on iOS: the navigation bar there takes one heading as its title (with the symbol images beside it in its own row), the first text after it as the subtitle, one `input type=\"search\"`, one `role=\"tablist\"`, the buttons that press or are disabled and the readouts (`role=\"status\"`), and hides the rest of the header. Move it below the `header`, into the route's content (the scroller's first row), make it a button that presses, or, if it is a status that nothing presses (a \"\u25cf Live\" beside the title), give it `role=\"status\"`; or, for a header the bar cannot hold (a chat's avatar beside the name), say `navigationBar=\"none\"` on the route's element and draw the row yourself (docs/recipes/chat-header.md; docs/contract-for-agents.md, \"Tabs and stacks\")",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 9,
+          "end_col": 13,
+          "file": "$APP/screen.contract",
+          "id": "lower-header-unplaced",
+          "line": 7,
+          "message": "this text, after the subtitle, in this route's `header` is not shown on iOS: the navigation bar there takes one heading as its title (with the symbol images beside it in its own row), the first text after it as the subtitle, one `input type=\"search\"`, one `role=\"tablist\"`, the buttons that press or are disabled and the readouts (`role=\"status\"`), and hides the rest of the header. Move it below the `header`, into the route's content (the scroller's first row), make it a button that presses, or, if it is a status that nothing presses (a \"\u25cf Live\" beside the title), give it `role=\"status\"`; or, for a header the bar cannot hold (a chat's avatar beside the name), say `navigationBar=\"none\"` on the route's element and draw the row yourself (docs/recipes/chat-header.md; docs/contract-for-agents.md, \"Tabs and stacks\")",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 7,
+          "end_col": 11,
+          "file": "$APP/screen.contract",
+          "id": "lower-title-twice",
+          "line": 8,
+          "message": "this heading says \"Title\", as the route's `header` heading does, so the title shows twice: on iOS once in the navigation bar and once in the page, and on the web just under the header that says it. Drop this heading, or make it say something else (a section's own name, \"Results\") \u2014 the bar's title already names the screen (docs/recipes/navigation-stack.md)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 7,
+          "end_col": 11,
+          "file": "$APP/screen.contract",
+          "id": "lower-title-twice",
+          "line": 8,
+          "message": "this heading says \"Title\", as the route's `header` heading does, so the title shows twice: on iOS once in the navigation bar and once in the page, and on the web just under the header that says it. Drop this heading, or make it say something else (a section's own name, \"Results\") \u2014 the bar's title already names the screen (docs/recipes/navigation-stack.md)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking5-invalid-imported-header",
+      "files": {
+        "app.contract": "use Screen from \"./screen.contract\"\ncomponent App\n  view\n    column definitelyUnknown=1 navigationKey=\"root\"\n      Screen()\n      Screen()\n",
+        "screen.contract": "component Screen\n  view\n    column navigationKey=\"home\"\n      header\n        text \"Title\" role=\"heading\"\n        text \"Subtitle\"\n        text \"Extra\"\n      text \"Title\" role=\"heading\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 12,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-unknown-attr",
+          "line": 4,
+          "message": "`column` has no attribute `definitelyUnknown`",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 9,
+          "end_col": 13,
+          "file": "$APP/screen.contract",
+          "id": "lower-header-unplaced",
+          "line": 7,
+          "message": "this text, after the subtitle, in this route's `header` is not shown on iOS: the navigation bar there takes one heading as its title (with the symbol images beside it in its own row), the first text after it as the subtitle, one `input type=\"search\"`, one `role=\"tablist\"`, the buttons that press or are disabled and the readouts (`role=\"status\"`), and hides the rest of the header. Move it below the `header`, into the route's content (the scroller's first row), make it a button that presses, or, if it is a status that nothing presses (a \"\u25cf Live\" beside the title), give it `role=\"status\"`; or, for a header the bar cannot hold (a chat's avatar beside the name), say `navigationBar=\"none\"` on the route's element and draw the row yourself (docs/recipes/chat-header.md; docs/contract-for-agents.md, \"Tabs and stacks\")",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 9,
+          "end_col": 13,
+          "file": "$APP/screen.contract",
+          "id": "lower-header-unplaced",
+          "line": 7,
+          "message": "this text, after the subtitle, in this route's `header` is not shown on iOS: the navigation bar there takes one heading as its title (with the symbol images beside it in its own row), the first text after it as the subtitle, one `input type=\"search\"`, one `role=\"tablist\"`, the buttons that press or are disabled and the readouts (`role=\"status\"`), and hides the rest of the header. Move it below the `header`, into the route's content (the scroller's first row), make it a button that presses, or, if it is a status that nothing presses (a \"\u25cf Live\" beside the title), give it `role=\"status\"`; or, for a header the bar cannot hold (a chat's avatar beside the name), say `navigationBar=\"none\"` on the route's element and draw the row yourself (docs/recipes/chat-header.md; docs/contract-for-agents.md, \"Tabs and stacks\")",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 7,
+          "end_col": 11,
+          "file": "$APP/screen.contract",
+          "id": "lower-title-twice",
+          "line": 8,
+          "message": "this heading says \"Title\", as the route's `header` heading does, so the title shows twice: on iOS once in the navigation bar and once in the page, and on the web just under the header that says it. Drop this heading, or make it say something else (a section's own name, \"Results\") \u2014 the bar's title already names the screen (docs/recipes/navigation-stack.md)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 7,
+          "end_col": 11,
+          "file": "$APP/screen.contract",
+          "id": "lower-title-twice",
+          "line": 8,
+          "message": "this heading says \"Title\", as the route's `header` heading does, so the title shows twice: on iOS once in the navigation bar and once in the page, and on the web just under the header that says it. Drop this heading, or make it say something else (a section's own name, \"Results\") \u2014 the bar's title already names the screen (docs/recipes/navigation-stack.md)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking5-count-number-scopes",
+      "files": {
+        "app.contract": "component App\n  state xs = [1, 2]\n  state maybe: option<number> = some(1)\n  view\n    column\n      text `${xs.length} cards`\n      if xs.length == 1\n        text `${xs.length} cards`\n      for n in xs key=n\n        text `${n} people`\n      match maybe\n        case some(n)\n          text `${n} cards`\n        case none\n          text `${xs.length} votes`\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 18,
+          "end_col": 24,
+          "file": "$APP/app.contract",
+          "id": "lower-count-plural",
+          "line": 6,
+          "message": "this count reads \"1 cards\" when it is 1: choose the noun by the number, `${n} ${n == 1 ? \"card\" : \"cards\"}` with the count as `n`, or a `fn` that words every count (`contract vocab plural`)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 17,
+          "end_col": 18,
+          "file": "$APP/app.contract",
+          "id": "lower-count-plural",
+          "line": 10,
+          "message": "this count reads \"1 people\" when it is 1: choose the noun by the number, `${n} ${n == 1 ? \"person\" : \"people\"}` with the count as `n`, or a `fn` that words every count (`contract vocab plural`)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 19,
+          "end_col": 20,
+          "file": "$APP/app.contract",
+          "id": "lower-count-plural",
+          "line": 13,
+          "message": "this count reads \"1 cards\" when it is 1: choose the noun by the number, `${n} ${n == 1 ? \"card\" : \"cards\"}` with the count as `n`, or a `fn` that words every count (`contract vocab plural`)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 22,
+          "end_col": 28,
+          "file": "$APP/app.contract",
+          "id": "lower-count-plural",
+          "line": 15,
+          "message": "this count reads \"1 votes\" when it is 1: choose the noun by the number, `${n} ${n == 1 ? \"vote\" : \"votes\"}` with the count as `n`, or a `fn` that words every count (`contract vocab plural`)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking5-invalid-count-number-scopes",
+      "files": {
+        "app.contract": "component App\n  state xs = [1, 2]\n  state maybe: option<number> = some(1)\n  view\n    column definitelyUnknown=1\n      text `${xs.length} cards`\n      if xs.length == 1\n        text `${xs.length} cards`\n      for n in xs key=n\n        text `${n} people`\n      match maybe\n        case some(n)\n          text `${n} cards`\n        case none\n          text `${xs.length} votes`\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 12,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-unknown-attr",
+          "line": 5,
+          "message": "`column` has no attribute `definitelyUnknown`",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 18,
+          "end_col": 24,
+          "file": "$APP/app.contract",
+          "id": "lower-count-plural",
+          "line": 6,
+          "message": "this count reads \"1 cards\" when it is 1: choose the noun by the number, `${n} ${n == 1 ? \"card\" : \"cards\"}` with the count as `n`, or a `fn` that words every count (`contract vocab plural`)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 17,
+          "end_col": 18,
+          "file": "$APP/app.contract",
+          "id": "lower-count-plural",
+          "line": 10,
+          "message": "this count reads \"1 people\" when it is 1: choose the noun by the number, `${n} ${n == 1 ? \"person\" : \"people\"}` with the count as `n`, or a `fn` that words every count (`contract vocab plural`)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 19,
+          "end_col": 20,
+          "file": "$APP/app.contract",
+          "id": "lower-count-plural",
+          "line": 13,
+          "message": "this count reads \"1 cards\" when it is 1: choose the noun by the number, `${n} ${n == 1 ? \"card\" : \"cards\"}` with the count as `n`, or a `fn` that words every count (`contract vocab plural`)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 22,
+          "end_col": 28,
+          "file": "$APP/app.contract",
+          "id": "lower-count-plural",
+          "line": 15,
+          "message": "this count reads \"1 votes\" when it is 1: choose the noun by the number, `${n} ${n == 1 ? \"vote\" : \"votes\"}` with the count as `n`, or a `fn` that words every count (`contract vocab plural`)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking5-keys-entry-id",
+      "files": {
+        "app.contract": "routes nav\n  home \"/\"\ncomponent App\n  view\n    column navigationKey=\"root\"\n      for e in stack(nav) key=e.id\n        column navigationKey=`${e.id}`\n          text \"Page\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 12,
+          "end_col": 25,
+          "file": "$APP/app.contract",
+          "id": "lower-navigation-key",
+          "line": 5,
+          "message": "the navigation root's `navigationKey` is the literal \"root\", but its routes are keyed by their entry's id (`${e.id}`): the root names the route to show, so a key that never changes never names a pushed one, and a push shows nothing. Key the root by the visit on top, `navigationKey=`${top(nav).id}``, and every route `navigationKey=`${e.id}`` (docs/recipes/navigation-stack.md)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking5-invalid-keys-entry-id",
+      "files": {
+        "app.contract": "routes nav\n  home \"/\"\ncomponent App\n  view\n    column definitelyUnknown=1 navigationKey=\"root\"\n      for e in stack(nav) key=e.id\n        column navigationKey=`${e.id}`\n          text \"Page\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 12,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-unknown-attr",
+          "line": 5,
+          "message": "`column` has no attribute `definitelyUnknown`",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 32,
+          "end_col": 45,
+          "file": "$APP/app.contract",
+          "id": "lower-navigation-key",
+          "line": 5,
+          "message": "the navigation root's `navigationKey` is the literal \"root\", but its routes are keyed by their entry's id (`${e.id}`): the root names the route to show, so a key that never changes never names a pushed one, and a push shows nothing. Key the root by the visit on top, `navigationKey=`${top(nav).id}``, and every route `navigationKey=`${e.id}`` (docs/recipes/navigation-stack.md)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking5-keys-literal-route",
+      "files": {
+        "app.contract": "routes nav\n  home \"/\"\ncomponent App\n  view\n    column navigationKey=`${top(nav).id}`\n      for e in stack(nav) key=e.id\n        column navigationKey=\"home\"\n          text \"Page\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 16,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-navigation-key",
+          "line": 7,
+          "message": "this route's `navigationKey` is the literal \"home\", but the navigation root's is `${top(nav).id}`, the id of the visit on top (\"0\" at the stack's root): the root never names this route, so it is never the selected one (on iOS the screen has no native bar, and `logs` says `navigationKey \"0\" matches no route`). Key every route `navigationKey=`${e.id}``, or give the root an expression that names this key while the route is on top (the `rest` pattern's) (docs/agent-pitfalls.md)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking5-invalid-keys-literal-route",
+      "files": {
+        "app.contract": "routes nav\n  home \"/\"\ncomponent App\n  view\n    column definitelyUnknown=1 navigationKey=`${top(nav).id}`\n      for e in stack(nav) key=e.id\n        column navigationKey=\"home\"\n          text \"Page\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 12,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-unknown-attr",
+          "line": 5,
+          "message": "`column` has no attribute `definitelyUnknown`",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 16,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-navigation-key",
+          "line": 7,
+          "message": "this route's `navigationKey` is the literal \"home\", but the navigation root's is `${top(nav).id}`, the id of the visit on top (\"0\" at the stack's root): the root never names this route, so it is never the selected one (on iOS the screen has no native bar, and `logs` says `navigationKey \"0\" matches no route`). Key every route `navigationKey=`${e.id}``, or give the root an expression that names this key while the route is on top (the `rest` pattern's) (docs/agent-pitfalls.md)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking5-header-match-suffix",
+      "files": {
+        "app.contract": "component App\n  state o: option<string> = some(\"Title\")\n  view\n    column navigationKey=\"root\"\n      column navigationKey=\"home\"\n        match o\n          case some(t)\n            header\n              text t role=\"heading\"\n            text t role=\"heading\"\n          case none\n            header\n              text \"Title\" role=\"heading\"\n        text \"Title\" role=\"heading\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 13,
+          "end_col": 17,
+          "file": "$APP/app.contract",
+          "id": "lower-title-twice",
+          "line": 10,
+          "message": "this heading says the same value, as the route's `header` heading does, so the title shows twice: on iOS once in the navigation bar and once in the page, and on the web just under the header that says it. Drop this heading, or make it say something else (a section's own name, \"Results\") \u2014 the bar's title already names the screen (docs/recipes/navigation-stack.md)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 9,
+          "end_col": 13,
+          "file": "$APP/app.contract",
+          "id": "lower-title-twice",
+          "line": 14,
+          "message": "this heading says \"Title\", as the route's `header` heading does, so the title shows twice: on iOS once in the navigation bar and once in the page, and on the web just under the header that says it. Drop this heading, or make it say something else (a section's own name, \"Results\") \u2014 the bar's title already names the screen (docs/recipes/navigation-stack.md)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking5-invalid-header-match-suffix",
+      "files": {
+        "app.contract": "component App\n  state o: option<string> = some(\"Title\")\n  view\n    column definitelyUnknown=1 navigationKey=\"root\"\n      column navigationKey=\"home\"\n        match o\n          case some(t)\n            header\n              text t role=\"heading\"\n            text t role=\"heading\"\n          case none\n            header\n              text \"Title\" role=\"heading\"\n        text \"Title\" role=\"heading\"\n"
+      },
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 12,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-unknown-attr",
+          "line": 4,
+          "message": "`column` has no attribute `definitelyUnknown`",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 13,
+          "end_col": 17,
+          "file": "$APP/app.contract",
+          "id": "lower-title-twice",
+          "line": 10,
+          "message": "this heading says the same value, as the route's `header` heading does, so the title shows twice: on iOS once in the navigation bar and once in the page, and on the web just under the header that says it. Drop this heading, or make it say something else (a section's own name, \"Results\") \u2014 the bar's title already names the screen (docs/recipes/navigation-stack.md)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 9,
+          "end_col": 13,
+          "file": "$APP/app.contract",
+          "id": "lower-title-twice",
+          "line": 14,
+          "message": "this heading says \"Title\", as the route's `header` heading does, so the title shows twice: on iOS once in the navigation bar and once in the page, and on the web just under the header that says it. Drop this heading, or make it say something else (a section's own name, \"Results\") \u2014 the bar's title already names the screen (docs/recipes/navigation-stack.md)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
     }
   ],
   "batches": [
@@ -2899,6 +4896,73 @@
         "control-accent-inheritance",
         "control-conditional-class",
         "control-field-role-exemptions"
+      ]
+    },
+    {
+      "baseline": "ce7ad2088b93ccad6b10e4e977f477760b0da8f4",
+      "cases": [
+        "checking5-header-empty",
+        "checking5-invalid-header-empty",
+        "checking5-header-duplicate",
+        "checking5-invalid-header-duplicate",
+        "checking5-header-placed",
+        "checking5-invalid-header-placed",
+        "checking5-header-title-row",
+        "checking5-invalid-header-title-row",
+        "checking5-header-pressable",
+        "checking5-invalid-header-pressable",
+        "checking5-header-conditional-first",
+        "checking5-invalid-header-conditional-first",
+        "checking5-header-unknown",
+        "checking5-invalid-header-unknown",
+        "checking5-header-nested",
+        "checking5-invalid-header-nested",
+        "checking5-header-nested-hidden",
+        "checking5-invalid-header-nested-hidden",
+        "checking5-title-siblings",
+        "checking5-invalid-title-siblings",
+        "checking5-title-branch-local",
+        "checking5-invalid-title-branch-local",
+        "checking5-title-bound",
+        "checking5-invalid-title-bound",
+        "checking5-title-section-hidden",
+        "checking5-invalid-title-section-hidden",
+        "checking5-tabs-single",
+        "checking5-invalid-tabs-single",
+        "checking5-tabs-search",
+        "checking5-invalid-tabs-search",
+        "checking5-tabs-conditional",
+        "checking5-invalid-tabs-conditional",
+        "checking5-swipe-missing",
+        "checking5-invalid-swipe-missing",
+        "checking5-swipe-inside",
+        "checking5-invalid-swipe-inside",
+        "checking5-swipe-template",
+        "checking5-invalid-swipe-template",
+        "checking5-swipe-computed",
+        "checking5-invalid-swipe-computed",
+        "checking5-keys-literal-root",
+        "checking5-invalid-keys-literal-root",
+        "checking5-keys-top-root",
+        "checking5-invalid-keys-top-root",
+        "checking5-back-headers",
+        "checking5-invalid-back-headers",
+        "checking5-back-hidden",
+        "checking5-invalid-back-hidden",
+        "checking5-count-scopes",
+        "checking5-invalid-count-scopes",
+        "checking5-colours-shadow",
+        "checking5-invalid-colours-shadow",
+        "checking5-imported-header",
+        "checking5-invalid-imported-header",
+        "checking5-count-number-scopes",
+        "checking5-invalid-count-number-scopes",
+        "checking5-keys-entry-id",
+        "checking5-invalid-keys-entry-id",
+        "checking5-keys-literal-route",
+        "checking5-invalid-keys-literal-route",
+        "checking5-header-match-suffix",
+        "checking5-invalid-header-match-suffix"
       ]
     }
   ]
