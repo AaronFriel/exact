@@ -786,7 +786,7 @@ internal object Exact {
         val hidden = pageHidden
         val eligible = executionEligible()
         val o = owner
-        if (o != null) o.sync { Native.hidden(hidden, eligible) } else Native.hidden(hidden, eligible)
+        if (o != null) o.sync { Native.hidden(hidden, eligible) } else { Native.hidden(hidden, eligible); turned() }
     }
     /** The store's writes on disk before the activity goes to the background, so a kill after its stop loses none
      * committed before (exact2 writes them on a thread of its own): at most [ms]. Whether every commit was written

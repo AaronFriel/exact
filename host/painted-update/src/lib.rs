@@ -61,7 +61,6 @@ impl Store for Updates {
         let Some(prepared) = Updates::prepare_activation(self)? else {
             return Ok(None);
         };
-        prepared.assets.verify()?;
         Ok(Some(selection(prepared)))
     }
     fn commit_activation(&mut self, entry: Option<String>, seq: u64) -> Result<(), String> {
@@ -75,14 +74,16 @@ impl Store for Updates {
     }
 }
 
-/// A prepared generation as the presenter takes it, its assets checked.
+/// A pinned generation with lazy reads and a full check for path-based readers.
 fn selection(prepared: exact_update::PreparedSelection) -> Selection {
+    let assets = prepared.assets.clone();
     Selection {
         entry: prepared.generation.entry,
         seq: prepared.generation.seq,
         plan: prepared.plan,
         names: prepared.assets.names(),
         dir: Some(prepared.assets.root().to_path_buf()),
+        verify_assets: Box::new(move || assets.verify()),
         assets: Arc::new(move |name| prepared.assets.resolve(name)),
     }
 }

@@ -8,6 +8,8 @@ impl<D: DataSource> Presenter<D> {
     /// every check; a boot note it left goes to the journal.
     pub fn set_updates(&mut self, updates: Option<Box<dyn crate::delivery::Store>>) {
         self.updates = updates;
+        self.update_waits_for_requests = false;
+        self.update_explicit = false;
         self.update_checks =
             (self.updates.as_ref()).map(|_| super::checks::Checks::from_compat(&self.compat));
         if let Some(note) = self.updates.as_mut().and_then(|u| u.take_note()) {
@@ -276,14 +278,23 @@ impl<D: DataSource> Presenter<D> {
     /// A development generation or an update is being prepared: the display
     /// loop polls for it. A loading data source wakes the loop itself.
     pub fn delivery_pending(&self) -> bool {
-        self.pending_dev.is_some() || self.pending_update
+        self.pending_dev.is_some() || self.update_ready()
+    }
+
+    pub(super) fn update_ready(&self) -> bool {
+        self.pending_update
+            && (self.update_explicit
+                || self
+                    .update_checks
+                    .as_ref()
+                    .is_none_or(|c| c.activation_allowed()))
+            && !(self.update_waits_for_requests && self.host.runner().has_pending())
     }
 
     /// Wake an idle display while an executable image is loading off-thread.
     pub fn module_pending(&self) -> bool {
         (self.painted && self.activation_failed.is_none() && self.host.data_pending())
-            || self.pending_dev.is_some()
-            || self.pending_update
+            || self.delivery_pending()
     }
 
     /// Check the stream's head now, on the store's thread; the outcome
@@ -354,6 +365,7 @@ impl<D: DataSource> Presenter<D> {
     /// start and stop): the store checks, and activates under `immediate`,
     /// as the cadence asks (LLP 1030.006 D5). Nothing before first pixel.
     pub fn update_foreground(&mut self, foreground: bool) {
+        let was_ready = self.update_ready();
         let now = self.update_clock();
         let asks = match self.update_checks.as_mut() {
             Some(checks) if self.painted => checks.foreground(foreground, now),
@@ -362,7 +374,13 @@ impl<D: DataSource> Presenter<D> {
         if asks.check {
             self.check_update();
         }
-        self.pending_update |= asks.activate;
+        if asks.activate {
+            self.pending_update = true;
+            self.update_waits_for_requests = false;
+        }
+        if !was_ready && self.update_ready() {
+            self.executor.notify();
+        }
     }
 
     /// A periodic check that is due, started; then a finished check, if one
@@ -386,6 +404,7 @@ impl<D: DataSource> Presenter<D> {
             .is_some_and(|c| c.completed(&line))
         {
             self.pending_update = true;
+            self.update_waits_for_requests = false;
         }
         true
     }
@@ -415,20 +434,32 @@ impl<D: DataSource> Presenter<D> {
         let Some(candidate) = updates.prepare_activation().map_err(HostError::Asset)? else {
             return Ok(false);
         };
+        let pair =
+            crate::delivery::Module::prepare(&candidate.assets, &candidate.names, &self.compat)
+                .map_err(HostError::Asset)?;
+        let decoded = Plan::decode(&candidate.plan).map_err(HostError::Plan)?;
+        crate::delivery::within_linked(
+            &candidate.plan,
+            pair.as_ref().map(|pair| pair.receipt.as_str()),
+            &self.compat,
+        )
+        .map_err(HostError::Unlinked)?;
+        if pair.is_some() && self.host.runner().has_pending() {
+            return Err(HostError::RequestsPending);
+        }
+        (candidate.verify_assets)().map_err(HostError::Asset)?;
+        let module = pair
+            .map(|pair| pair.read(&candidate.assets))
+            .transpose()
+            .map_err(HostError::Asset)?;
         let assets = Assets::selected(self.assets.root().to_path_buf(), candidate.assets.clone());
         let candidate_dir = candidate.dir.clone();
-        let decoded = Plan::decode(&candidate.plan).map_err(HostError::Plan)?;
         let text = TextEngine::shared_for_assets(&decoded, &assets);
         let mut delivery = self.host.runner().delivery().with_compat(&self.compat);
         updates.status_into(&mut delivery);
         updates.staged_stream_into(&mut delivery);
         delivery.seq = candidate.seq;
         delivery.staged = false;
-        let module =
-            crate::delivery::Module::resolve(&candidate.assets, &candidate.names, &self.compat)
-                .map_err(HostError::Asset)?;
-        crate::delivery::within_linked(&candidate.plan, module.as_ref(), &self.compat)
-            .map_err(HostError::Unlinked)?;
         let kept = self.focus_place();
         let mut carried = self.host.carry();
         let data = self.prepare_logic(
@@ -694,6 +725,7 @@ component App
                 assets: Arc::new(|_| Ok(None)),
                 names: Vec::new(),
                 dir: None,
+                verify_assets: Box::new(|| Ok(())),
             }))
         }
         fn commit_activation(&mut self, entry: Option<String>, seq: u64) -> Result<(), String> {

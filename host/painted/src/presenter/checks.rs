@@ -106,6 +106,11 @@ impl Checks {
         self.take_staged()
     }
 
+    /// Automatic activation waits until the app is in the foreground.
+    pub fn activation_allowed(&self) -> bool {
+        !self.immediate || self.foreground
+    }
+
     fn take_staged(&mut self) -> bool {
         let now = self.immediate && self.foreground && self.staged;
         if now {

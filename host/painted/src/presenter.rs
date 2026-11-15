@@ -212,6 +212,8 @@ pub struct Presenter<D: DataSource> {
     dev: Option<crate::fetch::Poller>,
     pending_dev: Option<crate::fetch::Generation>,
     pending_update: bool,
+    update_explicit: bool,
+    update_waits_for_requests: bool,
     /// When the store checks its stream, with one attached (LLP 1030.006 D5).
     update_checks: Option<checks::Checks>,
     /// The boot is good when a reader drew it ([`Presenter::reader_drew`]),
@@ -661,6 +663,8 @@ impl<D: DataSource> Presenter<D> {
             dev: None,
             pending_dev: None,
             pending_update: false,
+            update_explicit: false,
+            update_waits_for_requests: false,
             update_checks: None,
             reader_blesses: false,
             blessed: false,

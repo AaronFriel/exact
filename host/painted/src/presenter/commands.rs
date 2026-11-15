@@ -37,13 +37,21 @@ impl<D: DataSource> Presenter<D> {
         self.orientation_unavailable();
         self.package_turn();
         self.run_queued_commands();
-        if self.pending_update && !self.activation_deferred() {
+        if self.update_ready() && !self.activation_deferred() {
+            self.update_waits_for_requests = false;
             self.pending_update = false;
             match self.activate_update(data()) {
                 Ok(true) => {}
                 Ok(false) => eprintln!("exact update: nothing is staged"),
                 Err(HostError::PreparingModule) => self.pending_update = true,
+                Err(HostError::RequestsPending) => {
+                    self.pending_update = true;
+                    self.update_waits_for_requests = true;
+                }
                 Err(e) => eprintln!("exact update: activate: {e}"),
+            }
+            if !self.pending_update {
+                self.update_explicit = false;
             }
         }
     }
@@ -87,7 +95,11 @@ impl<D: DataSource> Presenter<D> {
                         eprintln!("exact update: no store, or a check is already running");
                     }
                 }
-                "deliveryActivate" => self.pending_update = true,
+                "deliveryActivate" => {
+                    self.pending_update = true;
+                    self.update_explicit = true;
+                    self.update_waits_for_requests = false;
+                }
                 "relaunch" => self.host.log(if self.agent {
                     "relaunch refused: the agent owns this process; start a new drive on the same storage"
                 } else {

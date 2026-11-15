@@ -629,10 +629,12 @@ pub(crate) fn boot_presenter_with_painter<D: DataSource + Default>(
     // A selection that needs what the binary does not link is refused
     // before its boot is counted (LLP 1030.006 D4a).
     let linked = match (&config.entry, &module) {
-        (Some(_), Ok(module)) => {
-            crate::delivery::within_linked(&config.plan, module.as_ref(), &compat)
-                .map_err(crate::host::HostError::Unlinked)
-        }
+        (Some(_), Ok(module)) => crate::delivery::within_linked(
+            &config.plan,
+            module.as_ref().map(|m| m.receipt.as_str()),
+            &compat,
+        )
+        .map_err(crate::host::HostError::Unlinked),
         _ => Ok(()),
     };
     // The selected bytes passed verification. Record the attempt before

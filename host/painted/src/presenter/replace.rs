@@ -119,6 +119,8 @@ impl<D: DataSource> Presenter<D> {
             dev: _,
             pending_dev: _,
             pending_update: _,
+            update_explicit: _,
+            update_waits_for_requests: _,
             update_checks: _,
             reader_blesses: _,
             blessed: _,

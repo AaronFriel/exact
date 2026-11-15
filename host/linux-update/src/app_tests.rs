@@ -1133,3 +1133,93 @@ fn a_live_rust_swap_refuses_before_loading_while_a_request_is_pending() {
     assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 0);
     assert_eq!(presenter.host().runner().pending(), pending);
 }
+
+#[test]
+fn delivered_module_reads_wait_for_requests_and_all_assets_verify_before_commit() {
+    use exact_runner::{Answer, Store};
+    struct Held;
+    impl DataSource for Held {
+        fn query(&mut self, name: &str, _: &[Value]) -> Result<Value, DataError> {
+            Err(DataError::UnknownSource(name.into()))
+        }
+        fn answer(&mut self, _: &mut Store, _: &str, _: &[Value]) -> Result<Answer, DataError> {
+            Ok(Answer::Later(exact_runner::Request::continuation(1)))
+        }
+        fn replacement(&self, _: &[u8], _: &str, _: Vec<u8>) -> Result<Self, DataError> {
+            Ok(Self)
+        }
+    }
+    let plan = contract::compile("component App\n  mutation w as shape number\n  action start\n    send w = wait()\n  action cancel\n    w = none\n  view\n    column\n      button press=start testId=\"start\"\n        text \"Start\"\n      button press=cancel testId=\"cancel\"\n        text \"Cancel\"\n").unwrap().encode();
+    for (dir_name, file, receipt) in [
+        (
+            "rust",
+            "app.module.wasm",
+            br#"{"module":{"file":"app.module.wasm"}}"#.as_slice(),
+        ),
+        ("typescript", "app.hbc", b"{}".as_slice()),
+    ] {
+        let dir = crate::TempDir(std::env::temp_dir().join(format!(
+            "exact-delivery-lazy-assets-{}-{dir_name}",
+            std::process::id()
+        )));
+        std::fs::create_dir_all(&dir).unwrap();
+        let compat = UPDATE_COMPAT.replace(
+            "\"rustMode\":\"wasm\"",
+            "\"rustMode\":\"wasm\",\"executors\":[\"hermes\"]",
+        );
+        let module_path = format!("{dir_name}/{file}");
+        let mut client = checked_as(
+            &compat,
+            &dir,
+            &plan,
+            &plan,
+            &[
+                (&format!("{dir_name}/app.module.json"), receipt.to_vec()),
+                (&module_path, b"module".to_vec()),
+                ("assets/unused.txt", b"signed".to_vec()),
+            ],
+            true,
+        );
+        let candidate = client.prepare_activation().unwrap().unwrap();
+        let root = candidate.assets.root().to_path_buf();
+        let updates = Updates::from_client(client).unwrap();
+        let (mut presenter, error) =
+            exact_painted::Presenter::boot(&plan, Held, (390., 844.), 1., dir.to_path_buf())
+                .unwrap();
+        assert!(error.is_none(), "{error:?}");
+        presenter.set_delivery_from_compat(&compat);
+        presenter.set_updates(Some(Box::new(updates)));
+        let id = |p: &exact_painted::Presenter<Held>, name| {
+            let k = p.host().kernel();
+            k.node_by_key(k.find_by_test_id(name)[0]).unwrap().id
+        };
+        presenter.tap(id(&presenter, "start")).unwrap();
+        assert!(presenter.host().runner().has_pending());
+        // A missing executable makes any eager disk read fail, even one
+        // outside the presenter's resolver. Its signed roster stays intact.
+        std::fs::remove_file(root.join(&module_path)).unwrap();
+        let result = presenter.activate_update(Held);
+        assert!(
+            matches!(result, Err(exact_painted::host::HostError::RequestsPending)),
+            "{dir_name}: {result:?}"
+        );
+        assert_eq!(presenter.host().runner().delivery().seq, 0);
+        std::fs::write(root.join(&module_path), b"module").unwrap();
+        presenter.tap(id(&presenter, "cancel")).unwrap();
+        assert!(!presenter.host().runner().has_pending());
+        // Path-based readers can open an asset the plan never resolved.
+        // Full verification must still refuse it before the store commits.
+        std::fs::write(root.join("assets/unused.txt"), b"broken").unwrap();
+        let result = presenter.activate_update(Held);
+        assert!(
+            matches!(result, Err(exact_painted::host::HostError::Asset(_))),
+            "{dir_name}: {result:?}"
+        );
+        assert_eq!(presenter.host().runner().delivery().seq, 0);
+        assert!(presenter.host().runner().delivery().staged);
+        std::fs::write(root.join("assets/unused.txt"), b"signed").unwrap();
+        assert!(presenter.activate_update(Held).unwrap());
+        assert_eq!(presenter.host().runner().delivery().seq, 1);
+        assert!(!presenter.host().runner().delivery().staged);
+    }
+}

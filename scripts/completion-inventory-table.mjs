@@ -217,11 +217,12 @@ export const classifications = [
     ["apple:host/apple/src/abi/exports.rs", "exact_delivery_api exact_delivery_sync"],
     ["painted:host/painted/src/host.rs", "Host::set_delivery Host::set_delivery_from_compat"],
     ["painted:host/painted/src/presenter.rs", "Presenter::set_delivery_from_compat"],
+    ["painted:host/painted/src/presenter/checks.rs", "Checks::activation_allowed"],
     ["painted:host/painted/src/presenter/delivery.rs",
       "Presenter::activate_update Presenter::activation_error Presenter::check_update Presenter::data_activating Presenter::delivery_pending Presenter::first_pixel " +
       "Presenter::first_pixel_told Presenter::first_pixel_unshown Presenter::module_pending Presenter::poll_development Presenter::poll_update Presenter::prepare_logic " +
       "Presenter::said_at_boot Presenter::set_development Presenter::set_module Presenter::set_updates Presenter::sync_delivery Presenter::tick_development " +
-      "Presenter::turn_due_ms Presenter::update_fd"],
+      "Presenter::turn_due_ms Presenter::update_fd Presenter::update_ready"],
     ["runner:runner/src/runner/delivery.rs", "Runner::delivery Runner::set_delivery Runner::set_delivery_from_compat"],
   ]),
   group("durable module work", ["durable operation"], "retained request or report until its source turn ends; process-local today", "durable",
