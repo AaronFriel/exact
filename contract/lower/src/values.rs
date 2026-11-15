@@ -545,6 +545,19 @@ fn style_value(
             {
                 return err("lower-flex-basis", format!("CSS flex-basis `{v}` requires intrinsic basis sizing; exact2 dimension rows represent auto, lengths and percentages, and do not implement that intrinsic sizing mode. Use auto for a basis taken from the main-size property"), span);
             }
+            const SIZES: [StyleId; 6] = [
+                StyleId::Width,
+                StyleId::Height,
+                StyleId::MinWidth,
+                StyleId::MaxWidth,
+                StyleId::MinHeight,
+                StyleId::MaxHeight,
+            ];
+            if rows.iter().any(|row| SIZES.contains(row))
+                && matches!(v.trim(), "min-content" | "max-content" | "fit-content")
+            {
+                return err("lower-attr-value", format!("`{}=\"{v}\"` is an intrinsic size, which exact2 dimension rows (auto, lengths and percentages) do not represent. An `auto` size that nothing stretches is the content's: a child of a flex row, or of a flex column with `align-self=\"flex-start\"`", a.name), span);
+            }
             if rows.contains(&StyleId::Transition) {
                 if let Err(reason) = exact_motion::Transitions::parse(v) {
                     let supported = "translate, scale, rotate, opacity; color, background-color, border-color (and each side), -exact-tint-color, box-shadow; SVG fill, stroke, stroke-dashoffset, r, cx, cy, x, y, rx, ry, d; numeric height on admitted height owners";

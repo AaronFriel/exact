@@ -1075,6 +1075,20 @@ impl Parser {
             self.newline()?;
             return Ok(Stmt::Let { name, expr, span });
         }
+        // Each statement runs once, in order: there is no loop and no
+        // early exit, so `for` and `return` are refused with what to write.
+        if self.at_ident("for") {
+            return self.err(
+                "syntax-expected-statement",
+                "`for` repeats views; an action has no loop. Compute the list or value the loop would build with a list function, then assign it once: `items = items.filter(x => x.id != id)`, `total = sum(xs.map(x => x * 2))`, or `match first(xs.filter(x => x.id == id))` for one item",
+            );
+        }
+        if self.at_ident("return") && !matches!(self.peek2(), TokenKind::Punct("=" | "(")) {
+            return self.err(
+                "syntax-expected-statement",
+                "an action returns no value: its effect is what it assigns, sends and calls. Compute a value in a `fn` or a derive that the caller reads, and put statements that should not always run under `if`",
+            );
+        }
         let (name, span) = self.ident()?;
         if self.eat_punct("=") {
             let expr = self.expr()?;

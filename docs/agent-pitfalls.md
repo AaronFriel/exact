@@ -21,6 +21,14 @@ This list holds what the [agent guide](contract-for-agents.md)'s rules don't mak
 
 ## Layout
 
+- **Inline runs with nothing between them never wrap apart.** Chips written as
+  adjacent runs (`text "one" padding="4px 8px" margin-right=6`, then `text
+  "two" …`) stay on one line and run off the edge. Cause: CSS breaks a line
+  only at a soft wrap opportunity, and two inline boxes with no white space
+  between them have none (CSS Text 3 §5), so the runs are one word; the web
+  does the same, and the margins still apply. Fix: a `text " "` run between
+  each pair. (expo/exact#649, web and iOS simulator, 2026-11-15.)
+
 - **A search field pushes a header button off a phone.** Under `--chrome agent`,
   the authored header lays out in the page. A search field with no width constraint
   can keep its intrinsic width even when the heading has `flex=1`. Give the field
@@ -936,13 +944,16 @@ price: answers arrive `Later`, outside the action's transaction (LLP 1027.002 D1
   Declare the root's resource over the list, or the mutation in the root, and
   pass each row its answer or an action that sends it.
 
-- **A send reads a derive from before the action's writes.** An action's writes
-  commit together; reading a derive after assigning one of its inputs still reads
-  the previous commit's derive. Build the next record explicitly for the send,
-  for example `DepartureState(current, at=current.at + 600000, status="Delayed")`,
-  and assign local state in the same action. Caltrain's activity update sent
-  "On time" after incrementing its delay until it built that next record
-  (`apps/caltrain/app.contract`, LLP 1126.001 WP9).
+- **A derive read after the action assigns its input is the old value, with no
+  warning.** With `derive count = items.length`, `items = next` then `found =
+  count` reads the old list's count. A derive read in an action is the starting
+  state's, as a state's read is, but only the state's read is warned of
+  (`analyze-read-after-assign`; a derive is a settled value, LLP 1089 D3). Read
+  what you assigned (`found = next.length`), and build the next record
+  explicitly for a send, for example `DepartureState(current, at=current.at +
+  600000, status="Delayed")`. Caltrain's activity update sent "On time" after
+  incrementing its delay until it built that next record
+  (`apps/caltrain/app.contract`, LLP 1126.001 WP9; expo/exact#649, 2026-11-15).
 
 - **A name refused as reserved.** `none`, `some`, `true`, `false` and the expression
   words (`if`, `for`, `match`, `and`, …) cannot name a state, a parameter or a `let`

@@ -509,9 +509,11 @@ component App
 
 The first press yields `1/2`. Writing `doubled = count * 2` instead would use the
 old count and yield `1/0`. The same snapshot rule applies inside nested branches
-and to locals declared after a state assignment. The compiler warns of such a read
-(`analyze-read-after-assign`), naming the line that assigned the slot, and of a
-send and an assignment of one newest-wins mutation on one path
+and to locals declared after a state assignment, and a derive read after the
+action assigns its input is the starting state's derive. The compiler warns when
+a state is read that way (`analyze-read-after-assign`), naming the line that
+assigned the slot, but not when a derive is: read the local you assigned. It
+also warns of a send and an assignment of one newest-wins mutation on one path
 (`analyze-send-assigned`): the assignment forgets the request in flight and keeps
 its value, whichever comes first, so a retry hides the old result while
 `pending(m)` instead, and a logout sends through a mutation of its own.
@@ -524,7 +526,9 @@ record. `send` targets a mutation owned by that component.
 
 Permitted statements: assignment, `let`, `send`, `refresh`, known host command,
 a call of an action, `if`/`else` (`else if c` is `else` around one nested `if`),
-and option `match`. No loops. The compiler
+and option `match`. No loops: compute the list or value with `map`, `filter` or
+`sum` and assign it once. No `return`: a value to compute is a `fn` or a derive.
+The compiler
 infers effects from the body, through its calls; `writes` is a refusal, not an
 optional annotation. Use `symbols` when you need the inferred write set.
 
