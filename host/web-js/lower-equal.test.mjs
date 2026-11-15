@@ -228,7 +228,8 @@ test('adoption swaps a server page\'s inline rows for the arm class with no mome
       };
       new MutationObserver(() => { window.__lowered = [...document.querySelectorAll('[data-exact-text] > span, [data-testid]')]; }).observe(document, { subtree: true, childList: true });
     });
-    await page.goto(serve(dist));
+    // The page has only press handlers, so it waits for the reader (LLP 1048.007 D1); `?agent=` starts it at once.
+    await page.goto(serve(dist) + '?agent=1');
     await page.waitForFunction(() => globalThis.exact?.journal?.some(l => l.endsWith('adopted the document')), null, { timeout: 30000 });
     const swaps = await page.evaluate(() => window.__swaps);
     expect(swaps.length).toBeGreaterThan(0);
