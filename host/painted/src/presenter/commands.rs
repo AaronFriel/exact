@@ -37,7 +37,7 @@ impl<D: DataSource> Presenter<D> {
         self.orientation_unavailable();
         self.package_turn();
         self.run_queued_commands();
-        if self.pending_update {
+        if self.pending_update && !self.activation_deferred() {
             self.pending_update = false;
             match self.activate_update(data()) {
                 Ok(true) => {}

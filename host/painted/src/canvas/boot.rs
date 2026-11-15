@@ -82,6 +82,9 @@ impl<D: DataSource + Default> CanvasHost<D> {
         // booted (LLP 1030.006 D1); entry zero's are the APK's.
         crate::delivery::set_reader_root(config.entry.as_ref().and(config.selected_dir.clone()));
         agent::own_time(&mut p, started);
+        // A frame recorded here may still crash the reader's Kotlin: the
+        // boot is good once the reader drew it (LLP 1030.006 D5).
+        p.set_reader_blesses();
         crate::surfaces::acquire_fd();
         // What the reader read of the device, before the first frame (D3.1).
         if let Some(e) = device::configured().and_then(|d| p.set_device(&d)) {

@@ -187,6 +187,11 @@ fn keyboard(kind: &str, mode: Option<&str>) -> i32 {
 }
 
 impl<D: DataSource> Presenter<D> {
+    /// Whether a field the shell hosts is composing.
+    pub(super) fn hosted_composing(&self) -> bool {
+        !self.hosted.composing.is_empty()
+    }
+
     /// The live text fields the shell hosts, in tree order.
     fn hosted_ids(&self) -> Vec<ViewId> {
         let kernel = self.host.kernel();

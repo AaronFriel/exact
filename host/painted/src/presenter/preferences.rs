@@ -123,6 +123,7 @@ impl<D: DataSource> Presenter<D> {
         }) {
             eprintln!("exact: page: {error}");
         }
+        self.update_foreground(!hidden);
         true
     }
 

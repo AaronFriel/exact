@@ -72,6 +72,8 @@ object Native {
      * leading toward `velocity` px/s. Bit 0: a paint is wanted; bit 1: rows are left for another slice. */
     @JvmStatic external fun refine(limit: Int, velocity: Float): Int
     @JvmStatic external fun nextDue(): Double
+    /** The wake descriptors, -1 where absent: executor replies, decoded images, the GPU module's acquired images
+     * ([Wakes.ACQUIRED]) and the update store's finished checks. */
     @JvmStatic external fun fds(): IntArray
     /** A driver from outside scrolls the feed by [dy] px ([ExactActivity.drive]). A finger's scroll is the
      * calls below. */
@@ -262,6 +264,9 @@ object Native {
     @JvmStatic external fun pictureChanged(source: String, revoked: Boolean)
     /** Activity visibility and the process's execution eligibility. On the host's thread. */
     @JvmStatic external fun hidden(hidden: Boolean, eligible: Boolean)
+    /** The reader drew a frame of the running generation, which makes its boot good (LLP 1030.006 D5); whether to say
+     * so again after the next. On the exact thread. */
+    @JvmStatic external fun drew(): Boolean
     /** Waits up to [ms] for the store's writes, which exact2 makes on a thread of its own: whether every commit handed
      * over was written (a write that failed is tried once more; failing again, it stays pending). Any thread. */
     @JvmStatic external fun storeDrain(ms: Int): Boolean

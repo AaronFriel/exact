@@ -30,8 +30,9 @@ open class ExactActivity : Activity() {
     protected open val video: ((Context) -> VideoPlayer)? = null
     private var natives: Natives? = null
 
-    /** A signed update activated with its own assets ([Requests]): the open videos and pages are opened again. */
-    internal fun assetsMoved() { natives?.reroot() }
+    /** A signed update activated ([Requests]): the open videos and pages are opened from its assets again, and its
+     * boot is good once the view draws it. */
+    internal fun assetsMoved() { natives?.reroot(); if (::view.isInitialized) view.blessNext() }
     private var nativeState: Bundle? = null
     private var nativeStarted = false
     private var nativeResumed = false

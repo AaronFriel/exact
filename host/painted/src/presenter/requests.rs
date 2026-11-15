@@ -101,7 +101,8 @@ pub enum Request {
     Files(exact_runner::PickerRequest),
     /// The running generation's assets are now in this directory (empty:
     /// the embedded ones), after a signed update activated (LLP 1030.006
-    /// D1): the reader opens its sounds, videos and pages there again.
+    /// D1): the reader opens its sounds, videos and pages there again, and
+    /// says when it drew the new generation (D5).
     Assets(String),
 }
 

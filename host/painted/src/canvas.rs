@@ -1164,6 +1164,7 @@ impl<D: DataSource + Default> CanvasHost<D> {
         if p.module_pending() {
             p.first_pixel();
         }
+        p.update_launched();
         self.painted_once = true;
         self.painted = p.still().map(|still| Painted {
             still,
@@ -1233,13 +1234,17 @@ impl<D: DataSource + Default> CanvasHost<D> {
         }
     }
 
-    /// Drain the wakes (executor replies, decoded images) without painting;
-    /// whether a frame is now wanted.
+    /// Drain the wakes (executor replies, decoded images, the update store's
+    /// line) without painting; whether a frame is now wanted.
     pub fn poll(&mut self) -> bool {
         let now = self.now();
         if let Some(e) = self.p.pump(now) {
             eprintln!("exact: {e}");
         }
+        // Read on an idle screen too, or its level-triggered descriptor
+        // wakes the looper forever (LLP 1030.006 D5); a line asks for a
+        // turn, which applies an `immediate` activation it staged.
+        let updated = self.p.poll_update();
         self.p.poll_development(D::default);
         self.p.run_commands(D::default);
         self.p.poll_images();
@@ -1247,7 +1252,7 @@ impl<D: DataSource + Default> CanvasHost<D> {
         if self.p.module_pending() {
             self.p.first_pixel();
         }
-        self.animating()
+        updated || self.animating()
     }
     /// Whether another display frame is wanted.
     pub fn animating(&self) -> bool {
@@ -1357,6 +1362,12 @@ impl<D: DataSource + Default> CanvasHost<D> {
     /// The descriptors that wake the presenter (executor replies, decoded images).
     pub fn fds(&self) -> [i32; 2] {
         [self.p.executor_fd(), self.p.image_fd()]
+    }
+
+    /// The update store's completion descriptor, or -1 with no store: last
+    /// in `Native.fds`, after the acquire descriptor (LLP 1030.006 D5).
+    pub fn update_fd(&self) -> i32 {
+        self.p.update_fd().unwrap_or(-1)
     }
 
     /// A picture announced by `IMAGE_DEF`, once (premultiplied RGBA rows).

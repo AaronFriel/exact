@@ -187,6 +187,12 @@ impl Preview {
 }
 
 impl<D: DataSource> Presenter<D> {
+    /// Whether a predictive Back gesture previews a pop or a sheet's close
+    /// now (not yet cancelled or committed).
+    pub(in crate::presenter) fn back_previewing(&self) -> bool {
+        (self.stage.preview.as_ref()).is_some_and(|p| p.release.is_none())
+    }
+
     /// The top sheet, with its frame now.
     fn grab_sheet(&self) -> Option<(NodeKey, f32)> {
         let sheet = self

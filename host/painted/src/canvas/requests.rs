@@ -115,6 +115,12 @@ impl<D: DataSource + Default> CanvasHost<D> {
         self.force |= self.p.page_execution(hidden, eligible);
     }
 
+    /// The reader drew a frame (`Native.drew`): whether it should say so
+    /// again after its next one ([`crate::presenter::Presenter::reader_drew`]).
+    pub fn drew(&mut self) -> bool {
+        self.p.reader_drew()
+    }
+
     /// A package's call of the app's handler (`ExtensionContext.invoke`, LLP
     /// 1133.016 D15 item 1): its number, whose answer `Native.invoked` reads.
     pub fn module_invoke(&mut self, body: &str) -> i32 {

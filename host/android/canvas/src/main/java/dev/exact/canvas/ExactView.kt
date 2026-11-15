@@ -381,8 +381,20 @@ class ExactView(context: Context, private val live: Boolean, private val onFirst
         // messages behind its barrier, and the mark then waited for that frame, which waits for this one's on
         // RenderThread (30-45 ms, the first with text): 82 ms where the same launch otherwise marked 47.
         if (first) { first = false; android.os.Handler.createAsync(android.os.Looper.getMainLooper()).post(onFirst); if (warm) postDelayed({ warmer.prepare() }, 300) }
+        if (blessing) { blessing = false; android.os.Handler.createAsync(android.os.Looper.getMainLooper()).post(bless) }
         if (!owned) schedule()
     }
+
+    /** Whether exact2 is to be told of the next drawing: the running generation's boot is good once this view drew it
+     * without crashing (LLP 1030.006 D5), and exact2 answers whether it still waits for one ([Native.drew]). */
+    private var blessing = true
+    private val bless = Runnable {
+        val o = owner
+        blessing = if (o != null) o.sync(false) { Native.drew() } else Native.drew()
+    }
+
+    /** A signed update activated: its boot is good once drawn too. */
+    internal fun blessNext() { blessing = true; invalidate() }
 
     /** The owner booted (or could not). */
     fun ownerStarted(ok: Boolean) { started = ok; contacts.started(); invalidate() }

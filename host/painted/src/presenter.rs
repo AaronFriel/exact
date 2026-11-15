@@ -40,6 +40,7 @@ mod arrive;
 mod back;
 pub mod bars;
 mod build_channel;
+mod checks;
 pub mod clipboard;
 mod clock;
 mod collection;
@@ -203,6 +204,12 @@ pub struct Presenter<D: DataSource> {
     dev: Option<crate::fetch::Poller>,
     pending_dev: Option<crate::fetch::Generation>,
     pending_update: bool,
+    /// When the store checks its stream, with one attached (LLP 1030.006 D5).
+    update_checks: Option<checks::Checks>,
+    /// The boot is good when a reader drew it ([`Presenter::reader_drew`]),
+    /// not at first pixel; and whether it has (LLP 1030.006 D5).
+    reader_blesses: bool,
+    blessed: bool,
     text: Shared,
     make_text: fn(&Plan, &Assets) -> Shared,
     /// A touch down's press, to lay out ahead (`ahead.rs`).
@@ -642,6 +649,9 @@ impl<D: DataSource> Presenter<D> {
             dev: None,
             pending_dev: None,
             pending_update: false,
+            update_checks: None,
+            reader_blesses: false,
+            blessed: false,
             last_frame_succeeded: false,
             display: display_frame::State::default(),
             choice,
