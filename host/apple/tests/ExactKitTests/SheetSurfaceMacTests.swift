@@ -49,9 +49,26 @@ final class SheetSurfaceMacTests: XCTestCase {
         f.window.beginSheet(reference)
         XCTAssertTrue(f.window.attachedSheet === reference)
         let picture = try capture(reference)
+        // The same material over red in the reference: the window server
+        // blends a behind-window material with what lies behind the window,
+        // so the red is hidden. On a locked screen it lays the material over
+        // the window's own content instead, and Exact's ground, over red,
+        // cannot match a sheet with nothing under it.
+        let red = NSView(frame: try XCTUnwrap(reference.contentView).bounds)
+        red.wantsLayer = true
+        red.layer?.backgroundColor = NSColor.red.cgColor
+        let probe = NSVisualEffectView(frame: red.bounds)
+        probe.material = .sheet
+        probe.blendingMode = .behindWindow
+        red.addSubview(probe)
+        reference.contentView?.addSubview(red)
+        let overRed = try capture(reference)
         f.window.endSheet(reference)
         let expected = try colour(picture, y: 30)
         try XCTSkipUnless(expected.contains { $0 > 8 } && expected.contains { $0 < 247 }, "window-server capture is blank; sheet surfaces cannot be measured")
+        let blended = try colour(overRed, y: 30)
+        try XCTSkipUnless(zip(blended, expected).allSatisfy { abs($0 - $1) <= 1 },
+                          "the window server lays a behind-window material over the window's content (\(blended) against \(expected)); sheet surfaces cannot be measured")
 
         try f.press("open")
         let ground = try f.node("ground")
