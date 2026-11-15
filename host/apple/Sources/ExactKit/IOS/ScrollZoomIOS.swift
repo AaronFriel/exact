@@ -37,25 +37,9 @@ extension NodeView {
         let action = style["touch_action"]?.string ?? "auto"
         return action == "auto" || action == "manipulation" || action.split(separator: " ").contains("pinch-zoom")
     }
-    /// D1's range, when either row is written.
-    var zoomRange: ClosedRange<CGFloat>? {
-        let low = style["min_zoom"]?.number, high = style["max_zoom"]?.number
-        guard low != nil || high != nil else { return nil }
-        let valid = { (v: Double?) in v.flatMap { $0.isFinite && $0 > 0 ? CGFloat($0) : nil } ?? 1 }
-        let lo = valid(low)
-        return lo...max(lo, valid(high))
-    }
-
-    /// D3 on both axes at zoom `z`: how far the child's scaled border box
-    /// stands from where layout put it, and how far the content reaches.
+    /// D3 in `sv`'s port (`ScrollZoom.swift`).
     func zoomPlace(_ z: CGFloat, child: NodeView, in sv: UIScrollView) -> (shift: CGPoint, used: CGSize) {
-        let f = child.laidOutFrame, box = contentBox(), border = number("border_width")
-        // After the scaled box: its end margin and the scroller's end padding.
-        let trail = CGSize(width: max(0, layoutBounds.maxX - number("border_width_right", border) - box.maxX) + child.number("margin_right"),
-                           height: max(0, layoutBounds.maxY - number("border_width_bottom", border) - box.maxY) + child.number("margin_bottom"))
-        let used = CGSize(width: f.minX + f.width * z + trail.width, height: f.minY + f.height * z + trail.height)
-        let port = scrollPort(sv).size
-        return (CGPoint(x: max(0, port.width - used.width) / 2, y: max(0, port.height - used.height) / 2), used)
+        zoomPlace(z, child: child, frame: child.laidOutFrame, port: scrollPort(sv).size)
     }
 
     /// How far the content reaches under the zoom, which `fitScroll` sizes the scroller to.

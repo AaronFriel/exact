@@ -243,6 +243,16 @@ extension Agent {
                 "ry": r2(max(0, document.height + i.top + i.bottom - visible.height))]
     }
 
+    /// A zoomable scroller's offsets and ranges in zoomed points, and its
+    /// zoom and range (LLP 1057.001.000 §6).
+    static func zoomed(_ v: NodeView, _ sv: NSScrollView) -> [String: Any] {
+        let clip = sv.contentView, i = sv.contentInsets, z = sv.magnification, o = clip.bounds.origin
+        let document = sv.documentView?.frame.size ?? .zero, port = clip.frame.size
+        return ["sx": r2(o.x * z + i.left), "sy": r2(o.y * z + i.top),
+                "rx": r2(max(0, i.left + document.width * z + i.right - port.width)), "ry": r2(max(0, i.top + document.height * z + i.bottom - port.height)),
+                "scrollZoom": Double(z), "minZoom": Double(v.zoomRange?.lowerBound ?? 1), "maxZoom": Double(v.zoomRange?.upperBound ?? 1)]
+    }
+
     /// The same, for a live scroller.
     static func overscroll(of sv: NSScrollView) -> (CGFloat, CGFloat) {
         overscroll(origin: sv.contentView.bounds.origin,
@@ -267,6 +277,7 @@ extension Agent {
                 n["sx"] = Agent.r2(o.x)
                 n["sy"] = Agent.r2(o.y)
                 n.merge(Agent.range(of: sv)) { _, new in new }
+                if sv.zoom != nil { n.merge(Agent.zoomed(v, sv)) { _, new in new } }
                 // How far past its own ends this scroller currently sits.
                 // A stretched rubber band is a real state a driver could not
                 // otherwise see: the offset alone reads as an ordinary

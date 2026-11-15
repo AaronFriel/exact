@@ -1307,6 +1307,7 @@ package final class Presenter {
             guard let node = views[id] else { continue }
             if !collections.owns(node.id) { node.restoreScrollPosition(authored: authored.contains { $0.isDescendant(of: node) }) }
             if node.pendingScrollTop != nil || node.pendingScrollLeft != nil { collections.userIntent(node.id) }
+            node.settleZoom() // the zoom, then the batch's offsets in its extent (LLP 1057.001.000 D2)
             node.applyPendingScroll()
             node.resnap()
         }

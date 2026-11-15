@@ -684,12 +684,12 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
         }
     }
     func sendScrollEvent() {
+        if let sv = scroll, let zoom = sv.zoom { return sendZoomScrollEvent(sv, zoom) }
         guard handlers.contains("scroll"), let sv = scroll, case let point = sv.contentView.bounds.origin, point != lastScrollEvent,
               presenter?.views[id] === self, hasScrollLayoutBox else { return }
         lastScrollEvent = point
-        // CSS's extents (`ScrollEvent`): the port, and the port plus
-        // the range the clip view clamps to, so at the end
-        // `scrollHeight - scrollTop - clientHeight` is 0 (chat F4).
+        // CSS's extents (`ScrollEvent`): the port, and the port plus the range the clip
+        // view clamps to, so at the end `scrollHeight - scrollTop - clientHeight` is 0 (chat F4).
         let port = sv.contentView.bounds.size, document = sv.documentView?.frame.size ?? port
         let range = CGSize(width: max(0, document.width - port.width), height: max(0, document.height - port.height))
         presenter?.scroll(id, [point.x, point.y, port.width + range.width, port.height + range.height,
@@ -1323,7 +1323,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
         guard let scroll, let document = scroll.documentView else { return }
         let visible = scroll.contentView.bounds.size, origin = scroll.kernelDocumentOrigin, o = grid?.origin ?? .zero, s = presenter?.gridScale ?? 1
         let size = CGSize(width: max(PixelGrid.length(content.width, from: o, vertical: false, scale: s) - origin.x, visible.width), height: max(PixelGrid.length(content.height, from: o, vertical: true, scale: s) - origin.y, visible.height)) // ending where its last edge is drawn (`PixelGridMac.swift`)
-        if document.frame.size != size { document.setFrameSize(size) }
+        if case let size = scroll.zoom?.child?.grid?.layout.size ?? size, document.frame.size != size { document.setFrameSize(size) }
     }
 
     package override func viewDidMoveToWindow() {
