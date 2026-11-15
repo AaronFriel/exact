@@ -9,21 +9,21 @@
 #if os(iOS) || os(tvOS)
 import UIKit
 
-/// The app's window: an ordinary `UIWindow` that, under the agent only,
-/// logs the touches it dispatched.
+/// The app's window: an ordinary `UIWindow` that, under the agent or
+/// `--live` only, logs the touches it dispatched.
 public final class ExactWindow: UIWindow {
     public override func sendEvent(_ event: UIEvent) {
         // Read before UIKit delivers the event: which lifts lost the view their touch began on (`TouchLog.viewGone`),
         // and when the window had the event, on the mach clock of `UITouch.timestamp`
-        let gone = ExactEnv.agentMode && event.type == .touches ? TouchLog.viewGone(event) : []
-        let dispatched = ExactEnv.agentMode ? CACurrentMediaTime() : 0
+        let gone = ExactEnv.agentCarried && event.type == .touches ? TouchLog.viewGone(event) : []
+        let dispatched = ExactEnv.agentCarried ? CACurrentMediaTime() : 0
         // Inspect mode takes every touch and press (InspectIOS.swift), and
         // knows the touches down when it begins. (It reached this window,
         // so the agent's touch log still has it.)
         #if EXACT_INSPECT && os(iOS)
         InspectHost.see(event)
         if Inspect.on || InspectHost.owning, InspectHost.take(event, in: self) {
-            if ExactEnv.agentMode, event.type == .touches { TouchLog.record(event, in: self, gone: gone, dispatched: dispatched) }
+            if ExactEnv.agentCarried, event.type == .touches { TouchLog.record(event, in: self, gone: gone, dispatched: dispatched) }
             return
         }
         #endif
@@ -37,7 +37,7 @@ public final class ExactWindow: UIWindow {
             HeldState.input(at: touch.view) // a contact on a held node, or in it, lets its hold go (HeldState.swift)
         }
         super.sendEvent(event)
-        if ExactEnv.agentMode, event.type == .touches { TouchLog.record(event, in: self, gone: gone, dispatched: dispatched) }
+        if ExactEnv.agentCarried, event.type == .touches { TouchLog.record(event, in: self, gone: gone, dispatched: dispatched) }
         // A navigation is timed from its input: a finger lifting or a press.
         if event.type == .presses || (event.allTouches ?? []).contains(where: { $0.phase == .ended }) {
             ExactLaunch.shared.input(at: event.timestamp)

@@ -144,7 +144,7 @@ final class NativeButtonIOS: UIButton {
         didSet { refreshActiveState() }
     }
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
-        if ExactEnv.agentMode { TouchLog.reach(touches) }
+        if ExactEnv.agentCarried { TouchLog.reach(touches) }
         super.touchesBegan(touches, with: event)
     }
     /// Where the touch lifted while UIKit sends the action it ends with (in

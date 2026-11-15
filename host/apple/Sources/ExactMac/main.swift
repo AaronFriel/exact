@@ -7,6 +7,8 @@
 // frames and exits — what `scripts/metrics.mjs` reads. EXACT_AGENT=1 is the
 // agent API (LLP 1012, `Agent.swift`): the driver owns the clock and drives
 // the app over stdio; `scripts/smoke.mjs` is a script of its operations.
+// EXACT_AGENT=live (`--live`) is the same carrier on an ordinary launch: the
+// wall clock and normal scheduling, input and reads but no clock.
 import AppKit
 import ExactKit
 import ExactComposition
@@ -31,9 +33,8 @@ let execToMainMs = processStart().map { (mainAt - $0) * 1000 }
 
 let smoke = ExactEnv.smoke
 let agentMode = ExactEnv.agentMode
-let agentReadable = agentMode || ExactEnv.environment["EXACT_AGENT"] == "live"
 setvbuf(stdout, nil, _IOLBF, 0)
-if agentReadable { Agent.prepareStdio() }
+if ExactEnv.agentCarried { Agent.prepareStdio() }
 // Nothing restores this app: a session boots its plan, and the window below is
 // not restorable. AppKit still saves the application's own state some fifteen
 // seconds after launch, and to do that it asks the window server for the order
@@ -969,7 +970,7 @@ func finishLaunching() {
     /// ordered front; an accessory app's window is not key until something
     /// asks, and a `type` asks (`AgentMac`).
 
-    if agentReadable {
+    if ExactEnv.agentCarried {
         DispatchQueue.main.async { agentReady() }
     }
     if smoke {
@@ -1008,7 +1009,7 @@ func launchWithoutWindow() {
 /// which clears the session's error, but the driver asked for this one.
 nonisolated(unsafe) var planRefusal: String?
 func agentReady() {
-    guard agentReadable, !readySent else { return }
+    guard ExactEnv.agentCarried, !readySent else { return }
     readySent = true
     Agent.reply(["ready": true, "boot": session.bootMs, "views": session.viewCount, "error": planRefusal ?? session.bootError ?? session.nativeArtifactFailure ?? NSNull()])
     Agent.startStdio(sessions: [("main", session)])

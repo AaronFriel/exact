@@ -106,9 +106,7 @@ extension FrameHealth {
             guard duration.isFinite, duration >= 1, duration <= 120_000, duration.rounded() == duration else {
                 return ["error": "perf frames track start takes a node and a lease of 1–120000 ms."]
             }
-            guard enabled, !virtual else {
-                return ["format": FrameHealthTrack.format, "available": false, "track": false, "reason": unavailableCode ?? "virtual-clock"]
-            }
+            if let blocked { return ["format": FrameHealthTrack.format, "available": false, "track": false, "reason": blocked] }
             guard let node, let scroller else { return ["format": FrameHealthTrack.format, "error": "no-scroller", "reason": "The node has no native scroller to track."] }
             let replaced = track != nil
             let started = FrameHealthTrack(node: node, scroller: scroller, now: now, durationMs: duration, maximumFramesPerSecond: maximumFramesPerSecond)

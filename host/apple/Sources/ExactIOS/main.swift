@@ -7,7 +7,9 @@
 // EXACT_SMOKE=1 prints the boot time and the startup phases after the first
 // frames and exits. EXACT_AGENT=1 with EXACT_AGENT_SOCKET=<path> is the agent
 // API (LLP 1012, `Agent.swift`, `AgentIOS.swift`): the driver owns the clock
-// and drives the app over a Unix socket. `xcrun simctl launch` passes the
+// and drives the app over a Unix socket; EXACT_AGENT=live (`--live`) is the
+// same carrier on an ordinary launch, the wall clock and normal scheduling,
+// input and reads but no clock. `xcrun simctl launch` passes the
 // environment through as SIMCTL_CHILD_*; `bun host/apple/build.mjs --ios`
 // builds, bundles, installs, and launches.
 import ExactKit
@@ -90,7 +92,7 @@ final class Adapter: ExactSessionDelegate {
         guard !announced, state != .created, state != .destroyed else { return }
         announced = true
         DispatchQueue.main.async {
-            if agentMode { agentReady() }
+            if ExactEnv.agentCarried { agentReady() }
             if smoke { printSmoke() }
         }
     }
@@ -127,7 +129,7 @@ nonisolated(unsafe) var readySent = false
 /// plan, which clears the session's error, but the driver asked for this one.
 nonisolated(unsafe) var planRefusal: String?
 func agentReady() {
-    guard agentMode, !readySent, session.booted || session.bootError != nil else { return }
+    guard ExactEnv.agentCarried, !readySent, session.booted || session.bootError != nil else { return }
     readySent = true
     Agent.startSocket(ready: ["ready": true, "boot": session.bootMs, "views": session.viewCount, "error": planRefusal ?? session.bootError ?? session.nativeArtifactFailure ?? NSNull(), "pid": Int(getpid())], sessions: [("main", session)])
 }

@@ -1162,6 +1162,8 @@ final class FrameHealthMetricsTests: XCTestCase {
         XCTAssertNil(demand.unavailableExplanation)
         XCTAssertFalse(demand.enabled || demand.observesNativeScrolling)
         XCTAssertEqual(demand.handle, 0)
+        // An agent's capture is refused for what it is, not for a virtual clock that is not there
+        XCTAssertEqual(demand.setAgentCapture("start")["reason"] as? String, "collection-disabled")
         demand.requestedRate(120)
         // Seen, the card has it collect, under the rate requested before
         demand.hudEffectiveVisible = true

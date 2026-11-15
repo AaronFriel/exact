@@ -17,9 +17,7 @@ extension FrameHealth {
               duration >= 1, duration <= 120_000, duration.rounded() == duration else {
             return ["error": "Frame capture requires start, stop or clear and a duration of 1–120000 ms."]
         }
-        guard enabled, !virtual else {
-            return ["available": false, "capture": false, "reason": unavailableCode ?? "virtual-clock"]
-        }
+        if let blocked { return ["available": false, "capture": false, "reason": blocked] }
         _ = nativeHealth?.setAgentCapture(action, duration: duration)
         let now = CACurrentMediaTime()
         if action == "start" { agentCaptureUntil = now + duration / 1000 }

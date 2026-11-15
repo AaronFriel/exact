@@ -817,6 +817,10 @@ public final class Agent {
     /// clock waited on (LLP 1016.000 D9): `held` and `heldTargets`, as the
     /// web hosts' do. An error reply is left as it is.
     func clock(_ req: [String: Any]) -> [String: Any] {
+        // `--live` keeps the wall clock for the whole launch: only an input's landing, which takes nothing, is taken.
+        if ExactEnv.agentLive, req["land"] as? Bool != true {
+            return ["error": "--live runs the app on the wall clock, which the driver does not hold. Let real time pass between operations (perf frames live <ms> waits and measures), or drive without --live to move the clock.", "code": "live-clock"]
+        }
         // An input's landing on the wall's clock takes nothing (`clockStep`),
         // so a capture lets real input finish (LLP 1079.000 §7).
         let landsOnWall = req["land"] as? Bool == true && session.clock == nil && !ExactEnv.agentFreezes

@@ -5094,8 +5094,10 @@ teardown removes it. The core creates no expiry timer, extra display link, stack
 sampling, screenshots or log collection. The optional scroll observer is described below.
 
 An attached agent can use the existing device carrier (`ios --device`, optionally
-`--phone <name|udid>`), or a simulator, with `--timing platform`: on the agent's
-clock a capture stays paused (`virtual-clock`). A drive runs these operations
+`--phone <name|udid>`), or a simulator, with `--timing platform` or, on the
+simulator, `--live` ([reference](reference.md#inspect-work-and-native-presentation)).
+Once a `clock` operation has taken the agent's clock, a capture stays paused
+(`virtual-clock`). A drive runs these operations
 (`sky` is a canvas):
 
 ```text

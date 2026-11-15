@@ -93,6 +93,9 @@ final class FrameHealth {
     var enabled: Bool { handle != 0 && (policy != .onDemand || demanded) }
     /// Whether it collects now or can when asked
     var available: Bool { unavailableCode == nil }
+    /// Why it does not collect now, nil when it does: the agent's clock, else its unavailable code, else (an
+    /// on-demand collector the card has not asked for) `collection-disabled`
+    var blocked: String? { virtual ? "virtual-clock" : enabled ? nil : unavailableCode ?? "collection-disabled" }
     /// Whether it may observe native scrolling now: in a development build, while it collects (LLP 1079.000 §6.1)
     var observesNativeScrolling: Bool { enabled && Self.developmentObserver }
 

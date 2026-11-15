@@ -1773,10 +1773,17 @@ Missing coverage is not a zero.
 
 On Apple, `"perf frames live 500"` observes display-link callbacks for 500 ms without
 advancing or changing the current clock. Its reply identifies scheduling, substitutions
-and dropped records. A normal Mac event loop is available with
-`bun scripts/agent.mjs macos --live --storage latency "tap change-station" "type station-search Palo" state`.
-The driver launches and closes this process and keeps input available. `--live` uses
-normal scheduling and the wall clock; `--storage` chooses its scratch store. Set
+and dropped records. An ordinary launch on the wall clock is available on macOS and the
+iOS simulator with
+`bun scripts/agent.mjs macos --live --storage latency "tap change-station" "type station-search Palo" state`
+(`ios --live` likewise). The driver launches and closes this process and keeps input
+available. `--live` uses normal scheduling and the wall clock: `performanceNow()` and
+timers advance in real time between operations, and `perf frames` records real frames
+(with `--touch platform` on the simulator, a drag is a real touch and the `scroll`
+source observes it). The driver never holds the clock, so `clock` is refused; let time
+pass with `perf frames live <ms>`. A phone is not supported: its carrier is agent mode,
+and a real drag there needs an XCTest runner on the device. `--storage` chooses its
+scratch store. Set
 `EXACT_STORE=real` in the launch environment to use the app's real secret and preference
 stores and secret presence. App files still follow the drive's scratch-store setting
 (`--storage`) and are unavailable when no scratch store is configured. `state.storage` and the observation's `store` describe those

@@ -34,6 +34,12 @@ public enum ExactEnv {
     /// (`BakedCompatibility.production`).
     static let productionBake = BakedCompatibility.production(BakedCompatibility.json)
     public static let agentMode = environment["EXACT_AGENT"] == "1"
+    /// `EXACT_AGENT=live` (the driver's `--live`): an ordinary launch on the
+    /// wall clock that the driver can still reach, which sends input and
+    /// reads but never holds the clock (`Agent.clock` refuses it).
+    public static let agentLive = environment["EXACT_AGENT"] == "live"
+    /// Whether the launch serves the driver: agent mode or `--live`.
+    public static let agentCarried = agentMode || agentLive
     /// `EXACT_AGENT_BIND` (`--bind`, LLP 1133.001 D7): extensions answered by their implementations under the agent.
     static let agentBind = Set((environment["EXACT_AGENT_BIND"] ?? "").split(separator: ",").map(String.init))
     /// `EXACT_AGENT_TIMING=platform` (LLP 1035.003 D5, opt-in): under the
