@@ -147,17 +147,9 @@ versions, all three filters, both index widths, block boundaries and malformed
 streams. Filter arithmetic matches npm's WASM SIMD decoder (`f32`, ties-to-even),
 which can differ by one integer from its JavaScript reference decoder.
 
-To regenerate from the repository root, install the tools in an isolated directory
-with its own package manifest, then run the retained generator:
-
-```sh
-mkdir -p target/meshopt-tools
-printf '{"private":true}\n' > target/meshopt-tools/package.json
-bun add --cwd target/meshopt-tools @gltf-transform/cli@4.2.1 @gltf-transform/core@4.5.1 @gltf-transform/extensions@4.5.1 @gltf-transform/functions@4.5.1 meshoptimizer@0.25.0
-bun game/bake/tests/fixtures/meshopt/generate.mjs target/meshopt-tools/node_modules
-cargo test --manifest-path game/Cargo.toml --locked -p exact-game-bake
-```
-
-The CLI version is 4.2.1; its core, extensions and functions packages are 4.5.1
-(the version stamped in the GLB). Review regenerated expectations independently
-of the Rust implementation; never regenerate them to make a failing test pass.
+They were made once with glTF-Transform's CLI 4.2.1 (core, extensions and functions
+4.5.1, the version stamped in the GLB) and npm `meshoptimizer@0.25.0`: `optimize` on
+the cube, then each compressed view, and inputs encoded at both vertex versions and
+with each filter, decoded by npm's decoder. Regenerated expectations are reviewed
+independently of the Rust implementation, never regenerated to make a failing test
+pass.
