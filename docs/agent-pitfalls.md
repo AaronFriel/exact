@@ -1000,6 +1000,18 @@ price: answers arrive `Later`, outside the action's transaction (LLP 1027.002 D1
   a web build sends that request from a server (`docs/contract-for-agents.md`,
   "An app's own sign-in screens").
 
+- **An error listener's later fetch reaches the server from the web build
+  only.** A fetch that a data module's `error` or `unhandledrejection` listener
+  makes after an `await`, in a `.then`, or in its report's reply is sent on the
+  web build, where the listener is the page's. Natively, only a plain HTTP fetch
+  made in the listener itself is sent. The later one is refused with a line in
+  `logs`: `fetch() called outside an answer: it was never run`, or `fetch()
+  called after an error event's listener returned` (LLP 1175 D3, D7). On the
+  web the listener also hears the whole page, and a request of its own that
+  fails uncaught calls it again. Fix: fetch in the listener itself, before any
+  `await`, and catch the failure ([recipe](recipes/report-errors.md)).
+  (Scratch app under `agent macos` and `agent web`, 2026-11-14.)
+
 - **`Date.now()` in a data module passes its Bun tests and fails on the
   device.** Since 2026-10-05 the build refuses a direct use by file and line
   (`Date.now()`, `new Date()`, `Math.random()`, `setInterval` and the frame

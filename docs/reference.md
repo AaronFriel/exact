@@ -2318,9 +2318,10 @@ failed answer is not an `error` event; call `reportError(e)` in the answer's
 `catch` to send it there. Natively, a listener may `fetch` a plain HTTP URL
 while it runs, and no answer waits for that request. Fetch in the listener
 itself, not after an `await`, and catch the request's failure. Every unhandled
-rejection still reaches `logs` (`data: unhandled rejection: …`), whatever a
-listener does. What the answer does not catch fails it
-(`failure(x).code`, above) and reaches `logs`.
+rejection still reaches `logs` (`data: unhandled rejection: …`), and one that
+no listener cancels also reaches the system's log. What the answer does not
+catch fails it (`failure(x).code`, above) and reaches `logs`. The
+[recipe](recipes/report-errors.md) sends them to a server.
 
 A newer send may replace a mutation's reply. An operation already issued still
 runs, in the order it was issued; the replaced reply is dropped, and that
