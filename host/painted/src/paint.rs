@@ -1170,7 +1170,16 @@ impl Painter {
                 self.text_input(walk, node, rect, surface.outer.rect, content, &outer, ts)
             }
             NodeType::Svg => self.svg(walk, node, paint.content_shape(&geometry), ts),
-            NodeType::Video | NodeType::WebView | NodeType::NativeView => {
+            // @ref LLP 1042.001 D5 — the poster under the picture, until
+            // its source's first frame.
+            NodeType::Video => {
+                let edge = geometry.content_edge();
+                if !self.media.framed.contains(&node.key) {
+                    self.picture(walk, node, content, edge, ts);
+                }
+                self.native(node, &edge, ts)
+            }
+            NodeType::WebView | NodeType::NativeView => {
                 self.native(node, &geometry.content_edge(), ts)
             }
             NodeType::Control if node.props.str(PropId::Type) == Some("select") => {

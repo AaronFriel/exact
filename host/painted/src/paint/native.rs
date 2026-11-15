@@ -49,6 +49,9 @@ pub(crate) struct Media {
     pub(crate) commands: std::collections::BTreeMap<exact_kernel::NodeKey, Commands>,
     /// The nodes asked since the last paint: their rows paint again.
     pub(crate) asked: Vec<exact_kernel::NodeKey>,
+    /// The media nodes whose player has shown their source's first frame
+    /// (`frameReady`): their poster is gone.
+    pub(crate) framed: std::collections::BTreeSet<exact_kernel::NodeKey>,
 }
 
 /// A media node's commands so far.
@@ -110,6 +113,7 @@ impl Painter {
                         "muted": flag(PropId::Muted),
                         "paused": p.bool(PropId::Paused),
                         "controls": flag(PropId::Controls),
+                        "poster": p.str(PropId::Poster).is_some_and(|s| !s.is_empty()),
                         "preload": p.str(PropId::Preload),
                         "controlslist": p.str(PropId::Controlslist),
                         "volume": number(PropId::Volume),

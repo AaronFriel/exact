@@ -80,6 +80,18 @@ impl<D: DataSource> Presenter<D> {
         let Ok(state) = serde_json::from_str::<serde_json::Value>(state) else {
             return false;
         };
+        // Its poster shows until this source's first frame (LLP 1042.001 D5).
+        let framed = state["frameReady"].as_bool() == Some(true);
+        let poster_changed = framed != self.brush.media.framed.contains(&key);
+        if poster_changed {
+            if framed {
+                self.brush.media.framed.insert(key);
+            } else {
+                self.brush.media.framed.remove(&key);
+            }
+            self.brush.media.asked.push(key);
+            self.dirty = true;
+        }
         let size = match (state["videoWidth"].as_f64(), state["videoHeight"].as_f64()) {
             (Some(w), Some(h)) if w > 0.0 && h > 0.0 => Some((w as f32, h as f32)),
             _ => None,
@@ -100,7 +112,7 @@ impl<D: DataSource> Presenter<D> {
             },
         );
         if size.is_none() || size == before {
-            return false;
+            return poster_changed;
         }
         if let Some(error) = self.host.set_intrinsic(id, size) {
             eprintln!("exact: video {id}: {error}");
@@ -116,6 +128,11 @@ impl<D: DataSource> Presenter<D> {
         for key in self.brush.media.asked.drain(..) {
             dirty.node(key);
         }
+        for id in self.images.posters_changed.drain(..) {
+            if let Some(node) = self.host.kernel().node(id) {
+                dirty.node(node.key);
+            }
+        }
         let kernel = self.host.kernel();
         let epoch = kernel.epoch();
         if self.brush.media.epoch == Some(epoch) {
@@ -123,6 +140,7 @@ impl<D: DataSource> Presenter<D> {
         }
         self.brush.media.epoch = Some(epoch);
         (self.brush.media.commands).retain(|key, _| kernel.node_by_key(*key).is_some());
+        (self.brush.media.framed).retain(|key| kernel.node_by_key(*key).is_some());
         let timed: std::collections::BTreeSet<_> = if kernel.has_type(NodeType::Video) {
             (kernel.preorder_where(&self.host.roots(), |t, _| t == NodeType::Video))
                 .into_iter()

@@ -83,7 +83,12 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
     private var resumes = false
     /** A play or pause the off-screen rule did not ask for ended the rule for this node. */
     private var overridden = false
-    private var frameReady = false
+    /** This source's first frame is in the view. */
+    private var rendered = false
+    /** Playback or a seek has begun for this source: with a frame, the poster is gone (D5, LLP 1042 §3). */
+    private var begun = false
+    private var poster = false
+    private val frameReady get() = rendered && begun
     private var error: String? = null
     private var unavailable: String? = null
     private var pendingSeek: Double? = null
@@ -118,7 +123,7 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
         exo.stop()
         exo.clearMediaItems()
         exo.setPlaybackParameters(PlaybackParameters.DEFAULT)
-        applied = null; src = ""; prepared = false; frameReady = false; error = null; unavailable = null
+        applied = null; src = ""; prepared = false; rendered = false; begun = false; error = null; unavailable = null
         pendingSeek = null; seekLanded = false; resumes = false; overridden = false; speed = 1f; inView = false; timed = false
         videoW = 0; videoH = 0
         this.sink = sink
@@ -129,6 +134,8 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
         generation = props.optInt("generation")
         presenter(props.optBoolean("controls"), props.optBoolean("audio"))
         fit = props.optString("fit", "contain")
+        poster = props.optBoolean("poster")
+        unveil()
         if (width != boxW || height != boxH || before?.optString("fit") != fit) { boxW = width; boxH = height; layoutPicture() }
 
         muted = props.optBoolean("muted")
@@ -168,8 +175,11 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
     private fun load(props: JSONObject, source: String, uri: String, from: MediaRecord.Resume?) {
         src = source
         val restoring = from != null && from.src == source
-        prepared = false; frameReady = false; error = null; unavailable = null; pendingSeek = null; seekLanded = false
+        prepared = false; rendered = false; error = null; unavailable = null; pendingSeek = null; seekLanded = false
         videoW = 0; videoH = 0
+        // A node that had played or moved comes back without its poster.
+        begun = restoring && (!from.paused || from.positionMs > 0)
+        unveil()
         projection.load(restoring, paused = if (restoring) from.paused else true)
         exo.playWhenReady = false
         if (restoring) {
@@ -233,6 +243,7 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
         if (!muted && volume > 0f && !claimFocus()) { projection.event("error", "not-allowed"); return }
         if (projection.ended) { projection.seek(0.0); exo.seekTo(0) }
         projection.play(autoplay = ask != Ask.AUTHOR)
+        begin()
         start()
     }
 
@@ -251,6 +262,7 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
     private fun prepare() { prepared = true; exo.prepare() }
 
     private fun seek(seconds: Double) {
+        begin()
         if (projection.readyState < 1) { pendingSeek = seconds; return }
         projection.seek(seconds)
         exo.seekTo((seconds * 1000).roundToLong().coerceAtLeast(0))
@@ -308,6 +320,7 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
             frame.addView(made, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
             made.player = exo
             controls = made
+            unveil()
             explore()
         } else {
             val view = controls ?: return
@@ -329,6 +342,16 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
         view.controllerShowTimeoutMs = if (stays) 0 else PlayerControlView.DEFAULT_SHOW_TIMEOUT_MS
         view.controllerHideOnTouch = !stays
         if (stays) view.showController()
+    }
+
+    private fun begin() { if (!begun) { begun = true; unveil(); pushState() } }
+
+    /** Under a poster the picture stays unseen until this source's first frame after playback or a seek began, so
+     * the poster the painter draws beneath shows through (D5); with none, the first frame shows as it comes. */
+    private fun unveil() {
+        val hidden = poster && !frameReady
+        texture.alpha = if (hidden) 0f else 1f
+        controls?.videoSurfaceView?.alpha = if (hidden) 0f else 1f
     }
 
     /** One rect, the picture `object-fit` makes (D5): the texture's transform, the captions' place, D6's cap. */
@@ -427,7 +450,8 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
         }
 
         override fun onRenderedFirstFrame() {
-            frameReady = true
+            rendered = true
+            unveil()
             sink?.firstFrame()
         }
 
