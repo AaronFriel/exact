@@ -113,6 +113,25 @@ mod tests {
     use exact_bake::host::runtime_entry;
     use exact_runner::Value;
 
+    /// Removes its directory when dropped, so a failing test leaves nothing behind.
+    struct TempDir(std::path::PathBuf);
+    impl std::ops::Deref for TempDir {
+        type Target = std::path::Path;
+        fn deref(&self) -> &std::path::Path {
+            &self.0
+        }
+    }
+    impl AsRef<std::path::Path> for TempDir {
+        fn as_ref(&self) -> &std::path::Path {
+            &self.0
+        }
+    }
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
     #[test]
     fn a_game_without_data_names_its_runtime_storage() {
         for platform in ["ios", "web", "linux"] {
@@ -151,7 +170,9 @@ mod tests {
 
     #[test]
     fn contract_source_graph_includes_imported_sources() {
-        let dir = std::env::temp_dir().join(format!("game-contract-watch-{}", std::process::id()));
+        let dir = TempDir(
+            std::env::temp_dir().join(format!("game-contract-watch-{}", std::process::id())),
+        );
         fs::create_dir_all(&dir).unwrap();
         let root = dir.join("app.contract");
         let imported = dir.join("personal-inventory.contract");
@@ -236,7 +257,8 @@ mod tests {
 
     #[test]
     fn game_declaration_checks_names_and_arity_in_unmounted_branches() {
-        let dir = std::env::temp_dir().join(format!("game-declaration-{}", std::process::id()));
+        let dir =
+            TempDir(std::env::temp_dir().join(format!("game-declaration-{}", std::process::id())));
         fs::create_dir_all(dir.join(".shells")).unwrap();
         fs::write(
             dir.join(".shells/surfaces.json"),

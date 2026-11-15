@@ -1,5 +1,5 @@
 use super::{compatibility_with_trust, stored_module, Manifest};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 #[test]
 fn the_baked_painter_round_trips_per_host_without_changing_bundle_compatibility() {
@@ -366,7 +366,7 @@ fn rust_policy_inherits_and_refuses_invalid_configuration() {
 
 /// A minimal app: a data crate with one file, a manifest with one icon
 /// and a deploy policy, no shaders.
-fn app(name: &str) -> PathBuf {
+fn app(name: &str) -> crate::TempDir {
     let dir = std::env::temp_dir().join(format!("exact-compat-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(dir.join("data/src")).unwrap();
@@ -381,7 +381,7 @@ fn app(name: &str) -> PathBuf {
         r#"{"name":"App","icons":[{"src":"assets/a.png"}],"app":{"id":"com.example.app","name":"App"},"host":{"ios":{"minimumOS":"17.0","backgroundModes":["fetch"]}},"deploy":{"origin":"continuous","bundles":"continuous"}}"#,
     )
     .unwrap();
-    dir
+    crate::TempDir(dir)
 }
 
 /// A Rust-only app's grants are read here and nowhere earlier: a set a

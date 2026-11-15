@@ -1,30 +1,50 @@
 mod support;
 use std::fs;
-fn temp() -> std::path::PathBuf {
+
+/// Removes its directory when dropped, so a failing test leaves nothing behind.
+struct TempDir(std::path::PathBuf);
+impl std::ops::Deref for TempDir {
+    type Target = std::path::Path;
+    fn deref(&self) -> &std::path::Path {
+        &self.0
+    }
+}
+impl AsRef<std::path::Path> for TempDir {
+    fn as_ref(&self) -> &std::path::Path {
+        &self.0
+    }
+}
+impl Drop for TempDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+fn temp() -> TempDir {
     let p = std::env::temp_dir().join(format!(
         "asset-outputs-{}-{:?}",
         std::process::id(),
         std::thread::current().id()
     ));
     fs::create_dir_all(p.join("art")).unwrap();
-    p
+    TempDir(p)
 }
 const CRATE: &str = include_str!("fixtures/crate.gltf");
 /// The crate's one texture, named by its content.
 const CRATE_TEX: &str = "textures/86b6f64da4937176.tex";
 #[test]
 fn app_cli_bakes_paths_with_spaces_and_refuses_authored_replacements() {
-    let app = std::env::temp_dir().join(format!(
+    let app = TempDir(std::env::temp_dir().join(format!(
         "asset CLI outputs {} {:?}",
         std::process::id(),
         std::thread::current().id()
-    ));
+    )));
     fs::create_dir_all(app.join("art")).unwrap();
     fs::write(app.join("art/crate.gltf"), CRATE).unwrap();
     let run = || {
         std::process::Command::new(env!("CARGO_BIN_EXE_exact-game-bake"))
             .arg("--art")
-            .arg(&app)
+            .arg(&*app)
             .output()
             .unwrap()
     };
@@ -294,7 +314,7 @@ fn content_equal_without_ownership_never_adopts_authored_output() {
     fs::remove_dir_all(app).unwrap();
 }
 
-fn interrupt_bake(update: bool) -> std::path::PathBuf {
+fn interrupt_bake(update: bool) -> TempDir {
     let app = temp();
     let source = app.join("art/strip.png");
     if update {
@@ -406,7 +426,7 @@ fn concurrent_cli_bakes_share_output_ownership() {
                         start.wait();
                         std::process::Command::new(env!("CARGO_BIN_EXE_exact-game-bake"))
                             .arg("--art")
-                            .arg(&app)
+                            .arg(&*app)
                             .output()
                             .unwrap()
                     })

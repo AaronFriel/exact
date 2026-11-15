@@ -804,6 +804,26 @@ mod stem_tests {
 #[cfg(test)]
 mod png_kind_tests {
     use super::*;
+
+    /// Removes its directory when dropped, so a failing test leaves nothing behind.
+    struct TempDir(std::path::PathBuf);
+    impl std::ops::Deref for TempDir {
+        type Target = std::path::Path;
+        fn deref(&self) -> &std::path::Path {
+            &self.0
+        }
+    }
+    impl AsRef<std::path::Path> for TempDir {
+        fn as_ref(&self) -> &std::path::Path {
+            &self.0
+        }
+    }
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
     #[test]
     fn pngs_under_textures_and_data_bake_as_filtered_repeating_material_textures() {
         let art = Path::new("/game/art");
@@ -819,7 +839,9 @@ mod png_kind_tests {
             PngKind::Rgbm
         );
         assert_eq!(PngKind::of(art, &art.join("data/rgbm.png")), PngKind::Data);
-        let dir = std::env::temp_dir().join(format!("exact-bake-png-kind-{}", std::process::id()));
+        let dir = TempDir(
+            std::env::temp_dir().join(format!("exact-bake-png-kind-{}", std::process::id())),
+        );
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("soil.png");
         let mut image = image::RgbaImage::new(8, 8);

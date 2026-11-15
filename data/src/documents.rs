@@ -458,8 +458,9 @@ mod tests {
     fn a_selected_file_does_not_require_listing_its_parent() {
         use std::os::unix::fs::PermissionsExt;
         use std::os::unix::io::AsRawFd;
-        let root =
-            std::env::temp_dir().join(format!("exact-docs-file-scope-{}", std::process::id()));
+        let root = crate::TempDir(
+            std::env::temp_dir().join(format!("exact-docs-file-scope-{}", std::process::id())),
+        );
         std::fs::create_dir_all(&root).unwrap();
         std::fs::write(root.join("selected.md"), "selected").unwrap();
         std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o111)).unwrap();
@@ -497,7 +498,9 @@ mod tests {
 
     #[test]
     fn a_watch_covers_its_file_its_folders_entries_or_its_subtree() {
-        let root = std::env::temp_dir().join(format!("exact-docs-watch-{}", std::process::id()));
+        let root = crate::TempDir(
+            std::env::temp_dir().join(format!("exact-docs-watch-{}", std::process::id())),
+        );
         std::fs::create_dir_all(root.join("notes/deep")).unwrap();
         std::fs::write(root.join("notes/a.md"), "a").unwrap();
         let folder = mint(&root.join("notes"), 7201).unwrap();
@@ -529,7 +532,9 @@ mod tests {
 
     #[test]
     fn a_document_handle_belongs_to_its_minting_session() {
-        let folder = std::env::temp_dir().join(format!("exact-docs-owner-{}", std::process::id()));
+        let folder = crate::TempDir(
+            std::env::temp_dir().join(format!("exact-docs-owner-{}", std::process::id())),
+        );
         std::fs::create_dir_all(&folder).unwrap();
         let doc = mint(&folder, 7101).unwrap();
         assert!(matches!(resolve(&doc, 7101), Ok(Resolved::Real { .. })));
@@ -548,8 +553,10 @@ mod tests {
 
     #[test]
     fn a_minted_path_resolves_beneath_its_handle_and_nowhere_else() {
-        let folder =
-            std::env::temp_dir().join(format!("exact-docs-test-{}/notes", std::process::id()));
+        let root = crate::TempDir(
+            std::env::temp_dir().join(format!("exact-docs-test-{}", std::process::id())),
+        );
+        let folder = root.join("notes");
         std::fs::create_dir_all(&folder).unwrap();
         let doc = mint(&folder, 7001).unwrap();
         assert!(doc.starts_with("doc:/") && doc.ends_with("/notes"), "{doc}");
@@ -583,7 +590,9 @@ mod tests {
     #[cfg(unix)]
     fn an_open_route_selects_a_file_symlinks_target() {
         use std::os::unix::fs::symlink;
-        let root = std::env::temp_dir().join(format!("exact-docs-route-{}", std::process::id()));
+        let root = crate::TempDir(
+            std::env::temp_dir().join(format!("exact-docs-route-{}", std::process::id())),
+        );
         std::fs::create_dir_all(root.join("chosen")).unwrap();
         std::fs::create_dir_all(root.join("outside")).unwrap();
         let target = root.join("outside/note.md");
@@ -607,7 +616,9 @@ mod tests {
 
     #[test]
     fn selecting_a_replacement_folder_mints_its_own_handle() {
-        let root = std::env::temp_dir().join(format!("exact-docs-repick-{}", std::process::id()));
+        let root = crate::TempDir(
+            std::env::temp_dir().join(format!("exact-docs-repick-{}", std::process::id())),
+        );
         let chosen = root.join("chosen");
         let moved = root.join("moved");
         std::fs::create_dir_all(&chosen).unwrap();
@@ -643,7 +654,9 @@ mod tests {
     fn a_selected_name_that_is_not_utf8_never_addresses_its_lossy_spelling() {
         use std::ffi::OsString;
         use std::os::unix::ffi::OsStringExt;
-        let root = std::env::temp_dir().join(format!("exact-docs-name-{}", std::process::id()));
+        let root = crate::TempDir(
+            std::env::temp_dir().join(format!("exact-docs-name-{}", std::process::id())),
+        );
         std::fs::create_dir_all(&root).unwrap();
         let invalid = root.join(OsString::from_vec(b"note-\xff.md".to_vec()));
         let other = root.join("note-\u{fffd}.md");

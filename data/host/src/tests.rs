@@ -561,6 +561,7 @@ fn forgotten_hands_a_child_its_own_tokens_and_lets_go_of_the_rest() {
 #[test]
 fn a_document_path_reads_and_writes_the_chosen_file_under_its_grant() {
     let dir = std::env::temp_dir().join(format!("exact-doc-storage-{}", std::process::id()));
+    let _remove = Paths(dir.clone());
     let folder = dir.join("notes");
     std::fs::create_dir_all(&folder).unwrap();
     std::fs::write(folder.join("a.md"), "# A").unwrap();
@@ -687,6 +688,7 @@ fn a_chosen_file_is_copied_into_an_app_file_under_both_grants() {
 #[test]
 fn a_write_that_expects_what_it_read_is_refused_once_the_file_changed() {
     let dir = std::env::temp_dir().join(format!("exact-doc-expect-{}", std::process::id()));
+    let _remove = Paths(dir.clone());
     std::fs::create_dir_all(&dir).unwrap();
     let file = dir.join("drawing.json");
     std::fs::write(&file, "one").unwrap();
@@ -733,6 +735,7 @@ fn a_write_that_expects_what_it_read_is_refused_once_the_file_changed() {
 fn the_kept_list_reads_and_forgets_under_doc_keep() {
     use exact_data::documents::kept;
     let dir = std::env::temp_dir().join(format!("exact-doc-kept-{}", std::process::id()));
+    let _remove = Paths(dir.clone());
     std::fs::create_dir_all(&dir).unwrap();
     let file = dir.join("drawing.json");
     std::fs::write(&file, "one").unwrap();
@@ -783,6 +786,7 @@ fn the_kept_list_reads_and_forgets_under_doc_keep() {
 fn a_kept_file_renamed_between_launches_reads_through_its_kept_path() {
     use exact_data::documents::kept::{self, Identity};
     let dir = std::env::temp_dir().join(format!("exact-doc-renamed-{}", std::process::id()));
+    let _remove = Paths(dir.clone());
     std::fs::create_dir_all(&dir).unwrap();
     let dir = std::fs::canonicalize(&dir).unwrap();
     std::fs::write(dir.join("moved.md"), "kept").unwrap();

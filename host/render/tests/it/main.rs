@@ -1081,3 +1081,19 @@ component App
     assert!(body.contains(">2.3.4 (56)<"), "{body}");
     assert!(!body.contains("type=\"module\""), "activate=never: {body}");
 }
+
+/// A dist directory, removed when dropped.
+struct Dist(std::path::PathBuf);
+
+impl Drop for Dist {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+impl std::ops::Deref for Dist {
+    type Target = Path;
+    fn deref(&self) -> &Path {
+        &self.0
+    }
+}

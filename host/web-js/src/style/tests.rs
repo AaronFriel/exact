@@ -115,9 +115,7 @@ fn a_bound_theme_name_writes_its_entry() {
 /// expression, bound, read their folded colours as the kernel does.
 #[test]
 fn a_bound_design_name_and_synthetic_token_write_their_values() {
-    let dir = std::env::temp_dir().join(format!("exact-web-js-forma-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = crate::TestDir::new("exact-web-js-forma");
     std::fs::write(
         dir.join("app.forma"),
         "forma t\n\ntheme\n  brand = #c8102e\n  surface.card = #000000\n",

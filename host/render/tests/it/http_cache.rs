@@ -92,7 +92,7 @@ component App
     for server_index in 0..2 {
         let server = Server::bind(
             Serve {
-                dist: dir.clone(),
+                dist: dir.to_path_buf(),
                 port: 0,
                 name: "Cache".into(),
                 origin: None,
@@ -123,7 +123,6 @@ component App
         assert_eq!(api.counts[0].load(Ordering::SeqCst), server_index + 1);
         assert_eq!(api.counts[1].load(Ordering::SeqCst), (server_index + 1) * 3);
     }
-    std::fs::remove_dir_all(dir).unwrap();
 }
 
 struct Api {

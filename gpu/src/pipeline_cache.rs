@@ -445,7 +445,27 @@ fn unpack(bytes: &[u8], key: u64) -> Option<&[u8]> {
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
     use super::*;
-    pub(super) fn directory() -> PathBuf {
+
+    /// Removes its directory when dropped, so a failing test leaves nothing behind.
+    pub(super) struct TempDir(std::path::PathBuf);
+    impl std::ops::Deref for TempDir {
+        type Target = std::path::Path;
+        fn deref(&self) -> &std::path::Path {
+            &self.0
+        }
+    }
+    impl AsRef<std::path::Path> for TempDir {
+        fn as_ref(&self) -> &std::path::Path {
+            &self.0
+        }
+    }
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    pub(super) fn directory() -> TempDir {
         static ID: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let path = std::env::temp_dir().join(format!(
             "exact-cache-test-{}-{}",
@@ -453,7 +473,7 @@ mod tests {
             ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
         ));
         std::fs::create_dir(&path).unwrap();
-        path
+        TempDir(path)
     }
 
     #[test]

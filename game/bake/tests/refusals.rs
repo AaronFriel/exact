@@ -1,4 +1,24 @@
 use serde_json::json;
+
+/// Removes its directory when dropped, so a failing test leaves nothing behind.
+struct TempDir(std::path::PathBuf);
+impl std::ops::Deref for TempDir {
+    type Target = std::path::Path;
+    fn deref(&self) -> &std::path::Path {
+        &self.0
+    }
+}
+impl AsRef<std::path::Path> for TempDir {
+    fn as_ref(&self) -> &std::path::Path {
+        &self.0
+    }
+}
+impl Drop for TempDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
 fn source() -> serde_json::Value {
     serde_json::from_str(include_str!("fixtures/crate.gltf")).unwrap()
 }
@@ -40,11 +60,11 @@ fn unsupported_outlined_materials_name_the_model_and_mesh() {
     );
 }
 fn bake(value: serde_json::Value) -> Result<exact_game::asset::Model, String> {
-    let dir = std::env::temp_dir().join(format!(
+    let dir = TempDir(std::env::temp_dir().join(format!(
         "exact-bake-{}-{:?}",
         std::process::id(),
         std::thread::current().id()
-    ));
+    )));
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join("fixture.gltf");
     std::fs::write(&path, value.to_string()).unwrap();
@@ -190,7 +210,7 @@ fn cubic_tracks_preserve_gltf_neighbour_tangents_through_bake() {
         .into_iter()
         .flat_map(|x| [x, 0., 0.])
         .collect();
-    let dir = std::env::temp_dir().join(format!("exact-cubic-{}", std::process::id()));
+    let dir = TempDir(std::env::temp_dir().join(format!("exact-cubic-{}", std::process::id())));
     std::fs::create_dir_all(&dir).unwrap();
     let bytes: Vec<u8> = times
         .iter()
