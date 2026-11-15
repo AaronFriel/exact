@@ -20,6 +20,7 @@ pub(super) const NAME: &str = "module work";
 
 #[derive(Clone)]
 struct Authority {
+    completion: Option<super::CompletionReply>,
     module: Option<super::ModuleInstance>,
     origin: CallOrigin,
     invocation: u64,
@@ -46,6 +47,15 @@ pub(super) struct ModuleWork {
     /// Kept tickets the host refused at admission, settled as failures, and
     /// whether each was ordered.
     refused: Vec<(u64, &'static str, bool)>,
+}
+
+impl ModuleWork {
+    pub(super) fn completion(
+        &mut self,
+        ticket: u64,
+    ) -> Option<&mut Option<super::CompletionReply>> {
+        Some(&mut self.tickets.get_mut(&ticket)?.1.completion)
+    }
 }
 
 impl<D: DataSource> Runner<D> {
@@ -118,7 +128,16 @@ impl<D: DataSource> Runner<D> {
     /// the answer without it (`data_timers.rs`). A module's send in it is
     /// not cancelled: as a browser's `Promise.race`, the loser runs on.
     pub(super) fn keep_running(&mut self, ticket: u64, token: u64, fetch: Option<u64>) {
+        let completion = self
+            .pending
+            .iter()
+            .find(|p| p.ticket == ticket)
+            .and_then(|p| p.completion.clone());
+        if let Some(reply) = &completion {
+            reply.retain();
+        }
         let authority = Authority {
+            completion,
             module: self
                 .pending
                 .iter()
@@ -153,6 +172,7 @@ impl<D: DataSource> Runner<D> {
             request.reach = self.reach_of(origin);
             self.log(super::lines::enqueued(ticket, NAME, &request));
             let authority = Authority {
+                completion: None,
                 module: request.module.clone(),
                 origin,
                 invocation,
@@ -236,6 +256,7 @@ impl<D: DataSource> Runner<D> {
         }
         if p.admitted_effects() && !self.poisoned {
             let authority = Authority {
+                completion: p.completion.clone(),
                 module: p.module.clone(),
                 origin: self.ticket_origin(p.ticket),
                 invocation: self.ticket_id(p.ticket),
@@ -313,6 +334,9 @@ impl<D: DataSource> Runner<D> {
         let kept = self.data.keep_sent(&self.store, &in_flight, refused);
         for ((p, authority), token) in letting.iter().zip(kept) {
             if let Some(token) = token {
+                if let Some(reply) = &authority.completion {
+                    reply.retain();
+                }
                 self.module_work
                     .tickets
                     .insert(p.ticket, (token, authority.clone()));
@@ -356,9 +380,9 @@ impl<D: DataSource> Runner<D> {
                         let next = r.next_ticket;
                         r.next_ticket += 1;
                         request.reach = r.reach_of(authority.origin);
-                        r.module_work
-                            .tickets
-                            .insert(next, (token, authority.clone()));
+                        let mut next_authority = authority.clone();
+                        next_authority.completion = None;
+                        r.module_work.tickets.insert(next, (token, next_authority));
                         r.requests.push(RequestOut {
                             completion: None,
                             class: crate::RequestClass::Ordered,

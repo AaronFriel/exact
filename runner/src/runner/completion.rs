@@ -1,4 +1,4 @@
-//! Runner-issued replies and subscriptions (LLP 1172.019 §2 item 1, Carry).
+//! Runner-issued request completions (LLP 1172.019 §2 item 1, Carry).
 
 use super::{CommitReceipt, DataSource, Outcome, RequestOut, Runner, RunnerError, Target};
 use std::fmt;
@@ -10,15 +10,49 @@ pub(super) struct Identity {
     generation: Arc<()>,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Owner {
+    Ui(Target),
+    Mapper { stream: u64, target: Target },
+    ModuleWork,
+    Background,
+    Tool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Class {
     UiOwned,
+    DurableProcessLocal,
 }
 
 #[derive(Clone, Copy, Debug)]
 enum Protocol {
     Reply,
     Subscription,
+    DurableOperation,
+}
+
+struct Binding {
+    identity: Identity,
+    ticket: u64,
+    owner: Owner,
+    class: Class,
+    protocol: Protocol,
+    taken: bool,
+}
+
+impl fmt::Debug for Binding {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Binding")
+            .field("session", &Arc::as_ptr(&self.identity.session))
+            .field("generation", &Arc::as_ptr(&self.identity.generation))
+            .field("ticket", &self.ticket)
+            .field("owner", &self.owner)
+            .field("class", &self.class)
+            .field("protocol", &self.protocol)
+            .field("taken", &self.taken)
+            .finish()
+    }
 }
 
 /// Authority for one issued delivery. Only the runner can mint it. A one-shot
@@ -31,30 +65,14 @@ enum Protocol {
 /// ```
 ///
 /// ```compile_fail
-/// use exact_runner::CompletionCapability;
-/// let reply = CompletionCapability { ticket: 1 };
+/// use exact_runner::{CompletionCapability, CompletionReply};
+/// fn forge(binding: CompletionReply) -> CompletionCapability {
+///     CompletionCapability { binding }
+/// }
 /// ```
+#[derive(Debug)]
 pub struct CompletionCapability {
-    identity: Identity,
-    ticket: u64,
-    // The target and ticket name the existing pending record, which owns the
-    // source, arguments and component row. No second request registry (E12).
-    owner: Target,
-    class: Class,
-    protocol: Protocol,
-}
-
-impl fmt::Debug for CompletionCapability {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("CompletionCapability")
-            .field("session", &Arc::as_ptr(&self.identity.session))
-            .field("generation", &Arc::as_ptr(&self.identity.generation))
-            .field("ticket", &self.ticket)
-            .field("owner", &self.owner)
-            .field("class", &self.class)
-            .field("protocol", &self.protocol)
-            .finish()
-    }
+    binding: CompletionReply,
 }
 
 /// Authority held for a stream or long poll's life, including its terminal
@@ -80,60 +98,71 @@ pub struct CompletionSubscription {
 
 impl From<&CompletionSubscription> for CompletionCapability {
     fn from(subscription: &CompletionSubscription) -> Self {
-        let slot = subscription
-            .binding
-            .0
-            .lock()
-            .unwrap_or_else(|e| e.into_inner());
-        let binding = slot
-            .as_ref()
-            .expect("subscription binding lives with its holders");
-        binding.subscription_delivery()
-    }
-}
-
-impl CompletionCapability {
-    fn subscription_delivery(&self) -> Self {
         Self {
-            identity: self.identity.clone(),
-            ticket: self.ticket,
-            owner: self.owner,
-            class: Class::UiOwned,
-            protocol: Protocol::Subscription,
+            binding: subscription.binding.clone(),
         }
     }
 }
 
-/// Authority shared by an outgoing request and its pending record. One-shot
-/// clones share one take; subscription clones share one binding for its life.
+/// Authority shared by an outgoing request and its lifetime record. One-shot
+/// and durable-round clones share one take; subscriptions keep their binding.
 #[derive(Clone, Debug)]
-pub struct CompletionReply(Arc<Mutex<Option<CompletionCapability>>>);
+pub struct CompletionReply(Arc<Mutex<Binding>>);
 
 impl CompletionReply {
     /// Take the runner's authority once, for [`Runner::deliver`].
     /// A subscription has no one-shot authority; use [`Self::subscription`].
     pub fn take(&self) -> Option<CompletionCapability> {
-        let mut slot = self.0.lock().unwrap_or_else(|e| e.into_inner());
-        if matches!(slot.as_ref()?.protocol, Protocol::Subscription) {
+        let mut binding = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        if matches!(binding.protocol, Protocol::Subscription) || binding.taken {
             return None;
         }
-        slot.take()
+        binding.taken = true;
+        Some(CompletionCapability {
+            binding: self.clone(),
+        })
     }
 
     /// The runner's reusable stream/long-poll binding, for [`Runner::deliver`].
     /// Borrow it on each delivery; neither an event nor its commit consumes it.
     pub fn subscription(&self) -> Option<CompletionSubscription> {
-        let slot = self.0.lock().unwrap_or_else(|e| e.into_inner());
-        matches!(slot.as_ref()?.protocol, Protocol::Subscription).then(|| CompletionSubscription {
+        let binding = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        matches!(binding.protocol, Protocol::Subscription).then(|| CompletionSubscription {
             binding: self.clone(),
         })
     }
 
+    pub(super) fn retain(&self) {
+        let mut binding = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        // The host may already have extracted its capability. Transfer the
+        // shared binding, never mint a replacement (LLP 1172.019 Carry).
+        binding.owner = Owner::ModuleWork;
+        binding.class = Class::DurableProcessLocal;
+        binding.protocol = Protocol::DurableOperation;
+    }
+
     pub(super) fn delivery(&self) -> Option<CompletionCapability> {
-        let mut slot = self.0.lock().unwrap_or_else(|e| e.into_inner());
-        match slot.as_ref()?.protocol {
-            Protocol::Subscription => Some(slot.as_ref()?.subscription_delivery()),
-            Protocol::Reply => slot.take(),
+        let mut binding = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        if !matches!(binding.protocol, Protocol::Subscription) {
+            if binding.taken {
+                return None;
+            }
+            binding.taken = true;
+        }
+        Some(CompletionCapability {
+            binding: self.clone(),
+        })
+    }
+
+    pub(super) fn completion(
+        &self,
+        outcome: Outcome,
+        timing: Option<crate::CompletionTiming>,
+    ) -> Completion {
+        match self.0.lock().unwrap_or_else(|e| e.into_inner()).protocol {
+            Protocol::Reply => Completion::Reply { outcome, timing },
+            Protocol::Subscription => Completion::Subscription { outcome, timing },
+            Protocol::DurableOperation => Completion::DurableOperation { outcome, timing },
         }
     }
 }
@@ -157,31 +186,72 @@ pub enum Completion {
         /// Execution and delivery wait, apart from the seekable agent clock.
         timing: Option<crate::CompletionTiming>,
     },
+    /// A background/tool round or retained module request. Its authority
+    /// survives UI retirement, but is process-local: no crash recovery or
+    /// blind retry is added by carry (LLP 1172.019 §3 inventory).
+    DurableOperation {
+        /// The one outcome of this round; a successor gets fresh authority.
+        outcome: Outcome,
+        /// Execution and delivery wait, apart from the seekable agent clock.
+        timing: Option<crate::CompletionTiming>,
+    },
 }
 
 impl<D: DataSource> Runner<D> {
+    fn completion_record(&mut self, ticket: u64) -> Option<(Owner, &mut Option<CompletionReply>)> {
+        if self.is_background(ticket) {
+            return Some((Owner::Background, &mut self.background.completion));
+        }
+        if self.is_tool(ticket) {
+            return Some((Owner::Tool, self.tool_completion(ticket)?));
+        }
+        if self.is_module_work(ticket) {
+            return Some((Owner::ModuleWork, self.module_work.completion(ticket)?));
+        }
+        if let Some((owner, slot)) = self.mapper_turns.completion(ticket) {
+            return Some((owner, slot));
+        }
+        let p = self.pending.iter_mut().find(|p| p.ticket == ticket)?;
+        Some((Owner::Ui(p.target), &mut p.completion))
+    }
+
+    pub(super) fn request_completion(&mut self, ticket: u64) -> Option<CompletionReply> {
+        self.completion_record(ticket)?.1.clone()
+    }
+
     pub(super) fn issue_completions(&mut self, requests: &mut [RequestOut]) {
         for request in requests {
-            let Some(pending) = self.pending.iter_mut().find(|p| p.ticket == request.ticket) else {
+            let subscription = self
+                .pending
+                .iter()
+                .any(|p| p.ticket == request.ticket && p.stream.is_some());
+            let identity = self
+                .completion_identity
+                .get_or_init(Identity::default)
+                .clone();
+            let Some((owner, slot)) = self.completion_record(request.ticket) else {
                 continue;
             };
-            let capability = CompletionCapability {
-                identity: self
-                    .completion_identity
-                    .get_or_init(Identity::default)
-                    .clone(),
-                ticket: pending.ticket,
-                owner: pending.target,
-                class: Class::UiOwned,
-                protocol: if pending.stream.is_some() {
-                    Protocol::Subscription
-                } else {
-                    Protocol::Reply
-                },
-            };
-            let reply = CompletionReply(Arc::new(Mutex::new(Some(capability))));
-            pending.completion = Some(reply.clone());
-            request.completion = Some(reply);
+            let reply = slot.get_or_insert_with(|| {
+                CompletionReply(Arc::new(Mutex::new(Binding {
+                    identity,
+                    ticket: request.ticket,
+                    owner,
+                    class: match owner {
+                        Owner::Ui(_) | Owner::Mapper { .. } => Class::UiOwned,
+                        _ => Class::DurableProcessLocal,
+                    },
+                    protocol: match owner {
+                        Owner::ModuleWork | Owner::Background | Owner::Tool => {
+                            Protocol::DurableOperation
+                        }
+                        _ if subscription => Protocol::Subscription,
+                        _ => Protocol::Reply,
+                    },
+                    taken: false,
+                })))
+            });
+            request.completion = Some(reply.clone());
         }
     }
 
@@ -193,7 +263,15 @@ impl<D: DataSource> Runner<D> {
         capability: impl Into<CompletionCapability>,
         completion: Completion,
     ) -> Result<Option<CommitReceipt>, RunnerError> {
-        self.deliver_reply(capability.into().ticket, completion)
+        let capability = capability.into();
+        let binding = capability
+            .binding
+            .0
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let ticket = binding.ticket;
+        drop(binding);
+        self.deliver_reply(ticket, completion)
     }
 }
 

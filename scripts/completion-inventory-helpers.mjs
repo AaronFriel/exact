@@ -236,10 +236,6 @@ export function helperClassifications(group) {
     ["painted:host/painted/src/canvas/jni_extensions.rs", "Java_dev_exact_canvas_Native_activate"],
     ["painted:host/painted/src/canvas/requests.rs", "CanvasHost::extension_activated"],
   ]),
-  group("request lifecycle", ["one-shot", "subscription", "durable operation"], "module report's pending ticket and retained source turn", "UI-owned",
-    "runner/module_work.rs take_reports reserves a ticket with the report's origin, invocation and causes, then retains the send through keep_send.", [
-    ["runner:runner/src/runner/module_work.rs", "Runner::take_reports#next_ticket:1"],
-  ], "durable when the report names retained effectful module work; this counter alone establishes no recovery"),
   group("region and text", ["one-shot"], "current layout region, paragraph or content measurement", "UI-owned",
     "exact_region_fallback and exact_text_paragraph_bases answer the current region and text request; painted stage.rs fit_content measures the current sheet.", [
     ["apple:host/apple/src/abi/exports.rs", "exact_region_fallback"],
