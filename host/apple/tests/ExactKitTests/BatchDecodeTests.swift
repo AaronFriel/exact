@@ -42,6 +42,7 @@ final class BatchDecodeTests: XCTestCase {
         let decoder = JSONDecoder()
         decoder.userInfo[.oracleAssets] = resolver
         let old = try decoder.decode(OracleBatch.self, from: data)
+        let metadata = try decoder.decode(OracleBatchMetadata.self, from: data)
         let new = decoded ?? Batch.decode(data, resolver: resolver)
         XCTAssertEqual(new.error, old.error, file: file, line: line)
         XCTAssertEqual(new.timers, old.timers, file: file, line: line)
@@ -49,6 +50,31 @@ final class BatchDecodeTests: XCTestCase {
         XCTAssertEqual(new.pending, old.pending, file: file, line: line)
         XCTAssertEqual(new.clock?.bitPattern, old.clock?.bitPattern, file: file, line: line)
         XCTAssertEqual(new.timerDueMs?.bitPattern, old.timerDueMs?.bitPattern, file: file, line: line)
+        XCTAssertEqual([new.canvas, new.waitContinue, new.frames, new.canvasOwed, new.controls, new.layoutProvisional,
+                        new.unchanged, new.storeReadPending, new.storeActivationPending, new.busy, new.requests, new.spatial,
+                        new.landing, new.stored, new.unsupported, new.facts],
+                       [metadata.canvas, metadata.waitContinue, metadata.frames, metadata.canvasOwed, metadata.controls, metadata.layoutProvisional,
+                        metadata.unchanged, metadata.storeReadPending, metadata.storeActivationPending, metadata.busy, metadata.requests, metadata.spatial,
+                        metadata.landing, metadata.stored, metadata.unsupported, metadata.facts].map { $0 ?? false }, file: file, line: line)
+        XCTAssertEqual(new.wakelock, metadata.wakelock, file: file, line: line)
+        XCTAssertEqual(new.mustFinish, metadata.mustFinish, file: file, line: line)
+        XCTAssertEqual(new.timerWaits, metadata.waits ?? [], file: file, line: line)
+        XCTAssertEqual([new.canvasImages, new.alerts, new.journal, new.announced],
+                       [metadata.canvasImages, metadata.alerts, metadata.journal, metadata.announced].map { $0 ?? [] }, file: file, line: line)
+        XCTAssertEqual(new.live, metadata.live, file: file, line: line)
+        XCTAssertEqual(new.design, metadata.design?.string, file: file, line: line)
+        var modes: [String: String]?
+        if case .object(let values)? = metadata.modes { modes = values.compactMapValues { $0.string } }
+        XCTAssertEqual(new.modes, modes, file: file, line: line)
+        let sequence = metadata.seq.flatMap { range -> [UInt64]? in
+            guard range.count == 2, range.allSatisfy({ $0 >= 0 && $0 == $0.rounded() }) else { return nil }
+            return range.map { UInt64($0) }
+        }
+        XCTAssertEqual(new.seq.map { [$0.0, $0.1] }, sequence, file: file, line: line)
+        XCTAssertEqual(new.nativeTimers, metadata.nativeTimers?.map {
+            NativeTimerWake(index: $0.index, generation: UInt64($0.generation)!, due: $0.due,
+                            interval: $0.interval, tolerance: $0.tolerance, once: $0.once)
+        }, file: file, line: line)
         XCTAssertEqual(new.ops.count, old.ops.count, file: file, line: line)
         for (a, b) in zip(new.ops, old.ops) {
             XCTAssertEqual(a.op.rawValue, b.op.rawValue, file: file, line: line)
@@ -95,6 +121,61 @@ final class BatchDecodeTests: XCTestCase {
         }
     }
     private func compare(_ text: String) throws -> Batch { try compare(Data(text.utf8)) }
+
+    func testEnvelopeSchedulingAndNativeTimerRecords() throws {
+        let fields = #"""
+        "ops":[],"timers":true,"motion":true,"canvas":true,"waits":[-2,50,-1,100],
+        "waitContinue":true,"frames":true,"canvasOwed":true,"controls":true,"layoutProvisional":true,
+        "canvasImages":["map"],"unchanged":true,"storeReadPending":true,"storeActivationPending":true,
+        "pending":true,"requests":true,"busy":true,"spatial":true,"clock":-0.0,"timer_due_ms":123.25,
+        "landing":true,"stored":true,"error":"problem","modes":{"theme":"dark","ignored":false},
+        "live":"applied","unsupported":true,"design":"digest","facts":true,"wakelock":false,
+        "mustFinish":false,"alerts":["alert"],"journal":["line"],"announced":["store"],"seq":[3,5],
+        "orientationlock":{"types":5,"natural":true,"current":false,"by":[[7,"current"],[8,"natural"]]},
+        "nativeTimers":[{"once":true,"tolerance":4294967295,"interval":1,"due":0,"generation":"18446744073709551615","index":4294967295,"future":[{}]}]
+        """#
+        let batch = try compare("{" + fields + "}")
+        XCTAssertEqual(batch.orientation?.types, 5)
+        XCTAssertEqual(batch.orientation?.natural, true)
+        XCTAssertEqual(batch.orientation?.current, false)
+        XCTAssertEqual(batch.orientation?.holders, [#"view 7 "current""#, #"view 8 "natural""#])
+        let nulls = try JSONSerialization.jsonObject(with: Data(("{" + fields + "}").utf8)) as! [String: Any]
+        let empty = try compare(JSONSerialization.data(withJSONObject: nulls.mapValues { _ in NSNull() }))
+        XCTAssertNil(empty.orientation)
+        XCTAssertNil(empty.nativeTimers)
+        for wire in [#"{"nativeTimers":[],"seq":[],"design":12,"modes":true,"orientationlock":false}"#,
+                     #"{"nativeTimers":[],"seq":[1.5,2],"design":false}"#,
+                     #"{"seq":[-1,2],"modes":{"ignored":null}}"#] {
+            let value = try compare(wire)
+            XCTAssertNil(value.seq)
+            XCTAssertNil(value.design)
+            XCTAssertNil(value.orientation)
+        }
+        let first = Batch.decode(Data(#"{"timers":null,"timers":true,"nativeTimers":[],"nativeTimers":[false]}"#.utf8))
+        XCTAssertNil(first.error)
+        XCTAssertFalse(first.timers)
+        XCTAssertEqual(first.nativeTimers, [])
+        let timer = #""index":0,"generation":"0","due":10,"interval":1,"tolerance":0,"once":false"#
+        let last = Batch.decode(Data((#"{"nativeTimers":[{"# + timer + #", "due":20}]}"#).utf8))
+        XCTAssertNil(last.error)
+        XCTAssertEqual(last.nativeTimers?.first?.due, 20)
+        for key in ["index", "generation", "due", "interval", "tolerance", "once"] {
+            var row = try JSONSerialization.jsonObject(with: Data(("{" + timer + "}").utf8)) as! [String: Any]
+            row.removeValue(forKey: key)
+            for value in [row, row.merging([key: NSNull()]) { _, new in new }] {
+                let wire = try JSONSerialization.data(withJSONObject: ["ops": [["op": "destroy", "id": 1]], "nativeTimers": [value]])
+                let invalid = Batch.decode(wire)
+                XCTAssertEqual(invalid.error, "unreadable batch", key)
+                XCTAssertTrue(invalid.ops.isEmpty, key)
+            }
+        }
+        for replacement in [#""interval":0"#, #""due":-1"#, #""index":4294967296"#,
+                            #""generation":"18446744073709551616""#, #""generation":1"#,
+                            #""tolerance":0.5"#, #""once":0"#] {
+            let invalid = Batch.decode(Data((#"{"nativeTimers":[{"# + timer + "," + replacement + "}]}").utf8))
+            XCTAssertEqual(invalid.error, "unreadable batch", replacement)
+        }
+    }
 
     func testInlineColorWireForms() throws {
         let light: [Double] = [1, 2, 3, 4], dark: [Double] = [5, 6, 7, 8]
