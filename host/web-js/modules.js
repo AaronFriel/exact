@@ -450,6 +450,9 @@ export function modules(rows, bound = {}, views = {}, events = {}) {
     // A directory a handle fills (LLP 1133.012 D12 item 7): emptied, made, and listed.
     remove: path => fileStore().then(s => s.rm(path)),
     mkdir: path => fileStore().then(s => s.mkdir(path)),
+    // A Blob made the file's entry by reference, as a picked file is (LLP 1133.008.000 D2): the page reads none of it.
+    // `refusal` is asked inside the store's transaction, and what it returns stops the write.
+    put: (path, blob, refusal) => fileStore().then(async s => { await s.mkdir(path.slice(0, path.lastIndexOf("/"))); return s.putBlob(path, blob, refusal); }),
     list: path => fileStore().then(s => s.readdir(path)).catch(() => []),
   };
   // The page's Audio Session (W3C Audio Session; LLP 1133.009 D7, LLP 1133.012 D4): `play-and-record` while a

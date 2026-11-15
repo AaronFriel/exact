@@ -393,7 +393,7 @@ final class GroupedListHost: GroupedLists {
         guard before(middle), !node.disabled, presenter.views[node.id] === node else { return ["error": "tap #\(id): its row changed during pointer handlers"] }
         let at = presenter.viewportScroll.convert(middle, from: nil)
         let page = presenter.viewportScroll.pageOrigin // a box's space (LLP 1130)
-        let reply: [String: Any] = ["tapped": id, "at": [Agent.r2(at.x - page.x), Agent.r2(at.y - page.y)],
+        let reply: [String: Any] = ["tapped": id, "at": [InspectionValue.r2(at.x - page.x), InspectionValue.r2(at.y - page.y)],
                                     "delivery": "host-activation", "native": "grouped-list"]
         if row.view != node.id, row.accessory == "toggle" {
             guard list.toggle(row.view) else { return ["error": "tap #\(id): the switch is disabled"] }
@@ -415,15 +415,15 @@ final class GroupedListHost: GroupedLists {
             let c = list.collection, i = c.adjustedContentInset
             return ["view": "UICollectionView", "listStyle": list.model.style, "sections": list.model.sections.count,
                     "rows": list.model.sections.reduce(0) { $0 + $1.rows.count },
-                    "offset": Agent.r2(c.contentOffset.y + i.top), "content": Agent.r2(c.contentSize.height),
-                    "insets": [Agent.r2(i.top), Agent.r2(i.bottom)]]
+                    "offset": InspectionValue.r2(c.contentOffset.y + i.top), "content": InspectionValue.r2(c.contentSize.height),
+                    "insets": [InspectionValue.r2(i.top), InspectionValue.r2(i.bottom)]]
         }
         guard let (list, row) = list(drawing: node.id), row.view == node.id else { return nil }
         var seen: [String: Any] = ["view": "UICollectionViewListCell", "accessory": row.accessory, "custom": row.custom]
         if let cell = list.cell(row.view) {
             let r = cell.convert(cell.bounds, to: presenter.viewportScroll)
             let page = presenter.viewportScroll.pageOrigin
-            seen["frame"] = [Agent.r2(r.minX - page.x), Agent.r2(r.minY - page.y), Agent.r2(r.width), Agent.r2(r.height)]
+            seen["frame"] = [InspectionValue.r2(r.minX - page.x), InspectionValue.r2(r.minY - page.y), InspectionValue.r2(r.width), InspectionValue.r2(r.height)]
         }
         return seen
     }

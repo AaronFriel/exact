@@ -11,7 +11,7 @@ import {canonicalBytes, classify, inspectHead} from './deploy.mjs';
 import {publishedModule, publishStream, streamHead} from './publisher.mjs';
 import {admitHead, latestRecord} from './deploy-heads.mjs';
 import {DirectoryOrigin, streamPath} from './origin.mjs';
-import {generateKeyPairSync, sign} from 'node:crypto';
+import {createHash, generateKeyPairSync, sign} from 'node:crypto';
 import {filesystem, filesystemRead, filesystemTree} from './filesystem.mjs';
 import {streamBundle, unbundledTextures} from './texture-families.mjs';
 import {rustAbi, rustBundle, tieredBytes, tieredNative} from './rust.mjs';
@@ -19,13 +19,14 @@ import {canonicalJson} from './deploy-signing.mjs';
 import {binaryInputFile, cohortReceipt} from './deploy-heads.mjs';
 import {binarySourceInputs, buildInputCollector, directoryInputNames, swiftTargetInputs, watchOutput} from './cargo-dep-info.mjs';
 import {appleAssetCatalogInventory, launchImageInventory, nativeResourceInventory} from '../host/apple/assets.mjs';
+import {notificationServiceInputChanges, notificationServiceSourceRoot} from './notification-service.mjs';
 
 // The publisher's functions with boundary doubles, for an app at a fresh
 // root whose cohort's binary has prelude runtime 4 and whose baked module
 // needs `runtime` (its receipt's). Bun's native subprocess import bypasses
 // module mocks; explicit bindings also isolate deployment tests.
 // `entries`: the named entries (name to text) the Rust or TypeScript bake makes beside the plan.
-function harness(classify=()=>({bundle:true}), runtime=4, {appBake, bake, graphTool, cohortRuntime=4, grants='', watch=fs.watch, targets, entries={}, planRequires={}, moduleGrants='', rustModule=true, produced, reuseSignature, graphs, computed=c=>c, bytecodeVersion}={}) {
+function harness(classify=()=>({bundle:true}), runtime=4, {appBake, bake, graphTool, compatForEnv, cohortRuntime=4, grants='', watch=fs.watch, targets, entries={}, planRequires={}, moduleGrants='', rustModule=true, produced, reuseSignature, graphs, computed=c=>c, bytecodeVersion}={}) {
   const root=fs.mkdtempSync(resolve(tmpdir(),'exact-push-profile-'));
   const app={id:'fixture',name:'fixture',displayName:'Fixture',dir:root,target:root,manifest:{app:{origin:root},deploy:{signing:{keys:{test:'public'}}}}};
   const compat={id:'a'.repeat(32),target:'fixture',inputs:{app:'fixture',platform:'linux',store:{L:'A'},rustMode:'native',grantCeiling:grants,keys:{test:'public'},typescriptRuntime:cohortRuntime}};
@@ -44,7 +45,7 @@ function harness(classify=()=>({bundle:true}), runtime=4, {appBake, bake, graphT
   const bindings={
     ...Object.fromEntries(['existsSync','mkdirSync','readFileSync','readlinkSync','writeFileSync','mkdtempSync','rmSync'].map(name=>[name,fs[name]])), watch,
     filesystem, filesystemRead, filesystemTree, unbundledTextures, streamBundle,
-    nativeManifestMetadata, directoryInputNames, watchOutput, appleAssetCatalogInventory, launchImageInventory, nativeResourceInventory,
+    nativeManifestMetadata, directoryInputNames, watchOutput, notificationServiceInputChanges, notificationServiceSourceRoot, appleAssetCatalogInventory, launchImageInventory, nativeResourceInventory,
     channelOf,validateChannel,resolve,relative,homedir,ROOT:fileURLToPath(new URL('..',import.meta.url)),
     process:{env:{EXACT_GAME_PROOF_PROFILE:'gpu-dev',EXACT_UPDATE_TRUST:'development'}},
     console:{log(){}},Refusal:Error,refuse(message){throw Error(message)},
@@ -74,7 +75,11 @@ function harness(classify=()=>({bundle:true}), runtime=4, {appBake, bake, graphT
       if(['graph','compat'].includes(name)&&graphTool)return realSpawnSync(graphTool,args,{...opts,env:{...process.env,...opts.env}});
       if(name==='graph'&&graphs)return {status:0,stdout:JSON.stringify({...graph,...graphs[fs.readFileSync(args[1],'utf8')]})};
       // Unchanged sources compute each cohort's own inputs for its target.
-      if(name==='compat'){const target=args[args.indexOf('--target')+1];return {status:0,stdout:JSON.stringify(computed(builds.find(b=>b.compat.target===target)?.compat??compat))};}
+      if(name==='compat'){
+        const target=args[args.indexOf('--target')+1];
+        const base=computed(builds.find(b=>b.compat.target===target)?.compat??compat);
+        return {status:0,stdout:JSON.stringify(compatForEnv?.(opts.env,base)??base)};
+      }
       if(name==='typescript'&&bake)return realSpawnSync(bake,args,{...opts,env:{...process.env,...opts.env}});
       if(name==='typescript'){
         const out=args[args.indexOf('--out')+1];fs.mkdirSync(out,{recursive:true});
@@ -93,9 +98,73 @@ function harness(classify=()=>({bundle:true}), runtime=4, {appBake, bake, graphT
   const functions=(publisher.slice(publisher.indexOf('/** The streams of `channel`'),publisher.indexOf('// ---------------------------------------------------------------- publishing'))
     +source.slice(source.indexOf('function parseArgs('),source.indexOf('\nif (process.argv[1]')))
     .replaceAll('export async function ', 'async function ').replaceAll('export function ', 'function ').replaceAll('export const ', 'const ');
-  const pusher=new Function(...Object.keys(bindings),functions+'\nreturn { pusher, streams, streamCandidates };')(...Object.values(bindings));
+  const pusher=new Function(...Object.keys(bindings),functions+'\nreturn { pusher, streams, streamCandidates, binaryInputChanges };')(...Object.values(bindings));
   return {root,app,build,cohort,calls,published,bundles,bundled,destinations,rows,bindings,...pusher};
 }
+
+test.each([
+  ['the default selection', ['widgets', 'activities', 'intents', 'alarms', 'notifications', 'watch']],
+  ['--extensions none', []],
+])('an unchanged Apple cohort keeps %s current', async (_, appleExtensions) => {
+  const { root, app, binaryInputChanges } = harness();
+  try {
+    app.manifest = { app: { id: 'fixture', name: 'Fixture' } };
+    app.target = resolve(root, 'target');
+    const compat = { target: 'aarch64-apple-ios', delivery: {}, inputs: { platform: 'ios', store: { L: 'A' }, keys: {} } };
+    const evidence = { version: 1, metadata: { ...nativeManifestMetadata(app.manifest, 'ios'), appleExtensions,
+      delivery: compat.delivery, store: compat.inputs.store, keys: compat.inputs.keys }, files: [], directories: [], absent: [], links: [] };
+    const bytes = Buffer.from(JSON.stringify(evidence));
+    expect(binaryInputChanges(bytes, app, compat)).toEqual([]);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('notification service cohort evidence ignores hidden entries', async () => {
+  const { root, app, binaryInputChanges } = harness();
+  const service = resolve(root, 'modules/apple/notification-service');
+  try {
+    fs.mkdirSync(resolve(service, '.hidden'), { recursive: true });
+    fs.writeFileSync(resolve(service, 'NotificationService.swift'), 'class NotificationService {}\n');
+    fs.writeFileSync(resolve(service, '.DS_Store'), 'Finder metadata');
+    fs.writeFileSync(resolve(service, '.hidden/Ignored.swift'), 'ignored\n');
+    app.manifest = { app: { id: 'fixture', name: 'Fixture' } };
+    app.target = resolve(root, 'target');
+    const compat = { target: 'aarch64-apple-ios', delivery: {}, inputs: { platform: 'ios', store: { L: 'A' }, keys: {} } };
+    const source = Buffer.from('class NotificationService {}\n'), size = Buffer.alloc(8); size.writeBigUInt64LE(BigInt(source.length));
+    const tree = createHash('sha256').update('NotificationService.swift').update(Buffer.from([0])).update(size).update(source).digest('hex');
+    const identity = { tree, files: [{ path: 'NotificationService.swift', sha256: sha256(source) }] };
+    const evidence = { version: 1, metadata: { ...nativeManifestMetadata(app.manifest, 'ios'), appleExtensions: ['notifications'],
+      delivery: compat.delivery, store: compat.inputs.store, keys: compat.inputs.keys }, files: [], directories: [], absent: [], links: [],
+      inventories: [{ kind: 'notification-service', root: 'app', path: 'modules/apple/notification-service', identity }] };
+    const bytes = Buffer.from(JSON.stringify(evidence));
+    expect(binaryInputChanges(bytes, app, compat)).toEqual([]);
+    fs.writeFileSync(resolve(service, '.DS_Store'), 'changed');
+    fs.writeFileSync(resolve(service, '.new'), 'new ignored file'); fs.mkdirSync(resolve(service, 'target')); fs.writeFileSync(resolve(service, 'target/Generated.swift'), 'ignored\n');
+    expect(binaryInputChanges(bytes, app, compat)).toEqual([]);
+    fs.writeFileSync(resolve(service, 'NotificationService.swift'), 'class NotificationService { let changed = true }\n');
+    expect(binaryInputChanges(bytes, app, compat)).toEqual(['app/modules/apple/notification-service/NotificationService.swift']);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('stream candidates preserve an excluded cohort notification service selection', async () => {
+  const compatForEnv = (env, compat) => ({ ...compat, inputs: { ...compat.inputs,
+    notificationService: env.EXACT_APPLE_EXTENSIONS === '' ? null : { tree: 'present', files: ['NotificationService.swift'] } } });
+  const { root, app, cohort, streamCandidates } = harness(classifyArtifacts, 4, { rustModule: false, compatForEnv });
+  const service = resolve(root, 'modules/apple/notification-service');
+  try {
+    fs.mkdirSync(service, { recursive: true }); fs.writeFileSync(resolve(service, 'NotificationService.swift'), 'class NotificationService {}\n');
+    app.manifest = { app: { id: 'fixture', name: 'Fixture' }, deploy: { signing: { keys: { test: 'public' } } } };
+    Object.assign(cohort.compat.inputs, { platform: 'ios', rustMode: 'off', notificationService: null, formatVersion: 4, kernelSchema: '0'.repeat(16), executors: [] });
+    const evidence = { version: 1, metadata: { ...nativeManifestMetadata(app.manifest, 'ios'), appleExtensions: [],
+      delivery: cohort.compat.delivery, store: cohort.compat.inputs.store, keys: cohort.compat.inputs.keys }, files: [], directories: [], absent: [], links: [] };
+    const bytes = Buffer.from(JSON.stringify(evidence)); cohort.binaryInputs = { sha256: sha256(bytes), bytes: bytes.length };
+    const origin = { get: async () => bytes };
+    const stream = { channel: 'prod', compatibilityId: cohort.compat.id };
+    const snapshot = { bundle: { plan: { bytes: Buffer.from('plan') }, assets: [] }, compat: cohort.compat, graph: { artifacts: [] } };
+    const [candidate] = await streamCandidates(app, origin, [{ stream, head: { assets: [] }, cohort, platform: 'ios' }],
+      { EXACT_UPDATE_TRUST: 'production', EXACT_GAME_PROOF_PROFILE: 'release' }, { snapshot });
+    expect(candidate.build.pendingInputs).toEqual([]);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
 
 test.each([
   { name: 'the only channel', deploy: { channels: { dogfood: 'dogfood-origin' } }, expected: 'dogfood', origin: 'dogfood-origin' },
@@ -201,6 +270,16 @@ test('push refuses a TypeScript module that needs a newer prelude than the cohor
     await expect(pusher({_:[root],origin:root,keys:root})).rejects.toThrow(/typescriptRuntime \(requires a prelude of runtime 5 or later; this cohort's is 4\).*It needs a new binary/);
     expect(calls).not.toContain('publish');
   } finally {fs.rmSync(root,{recursive:true,force:true})}
+});
+
+test('refused stream candidates preserve the evidence diagnostic', () => {
+  const source = fs.readFileSync(new URL('./push.mjs', import.meta.url), 'utf8');
+  const start = source.indexOf('    // Every current stream is checked before any is published.');
+  const end = source.indexOf('    const results = [];', start);
+  const update = { reason: 'the binary input receipt is missing or does not match', row: { platform: 'ios', compatibilityId: 'a'.repeat(32) } };
+  const check = new Function('current', 'classifyArtifacts', 'signingKey', 'refuse', 'app', 'binaryCommand', 'name', source.slice(start, end));
+  expect(() => check([update], () => ({ bundle: false, binary: true, missing: ['unrelated'] }), {}, message => { throw Error(message); }, { name: 'fixture' }, () => 'a new binary', row => `${row.platform} ${row.compatibilityId.slice(0, 8)}`))
+    .toThrow(/binary input receipt is missing or does not match.*needs a new binary/);
 });
 
 // The real bake and classifier: a module that may open a database needs
@@ -618,6 +697,7 @@ test.each(['minimumOS', 'grantPurposes', 'localizations', 'orientation', 'shortc
     else if (changed) fs.writeFileSync(resolve(root, 'strings/en.json'), JSON.stringify({ 'purpose.eye': 'Photograph your receipt.' }));
     const snapshot = { bundle, compat: cohort.compat, graph: { artifacts: [] } };
     const [update] = await streamCandidates(app, origin, [{ stream, head: { assets: [] }, cohort, platform: 'ios' }], env, { snapshot });
+    expect(update.reason).toBeUndefined();
     const check = classifyArtifacts(update.build, cohort, { id: 'test', public: raw });
     expect(check.binary).toBe(changed !== null);
     if (changed) expect(update.build.pendingInputs).toContain(changed);

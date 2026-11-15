@@ -33,8 +33,7 @@ import { writeAppleBatchReader } from '../../kernel/build/apple-batch.mjs';
 // unlocked, paired, Developer Mode on. --archive is the same device build
 // with no phone: it signs with EXACT_IDENTITY and EXACT_PROFILE (both
 // required: an ad hoc or App Store profile and its distribution identity,
-// as a build service such as EAS supplies them), takes get-task-allow from
-// that profile, and writes the signed bundle as an .ipa instead of
+// as a build service such as EAS supplies them), takes get-task-allow from that profile, and writes the signed bundle as an .ipa instead of
 // installing it. --unsigned also works without --archive: it needs neither, and never installs. The bundle is ad-hoc
 // signed with no profile and no team, for a consumer that re-signs it with
 // its own (AppDrop, a store's resigner). The simulator and phone helpers live
@@ -42,7 +41,7 @@ import { writeAppleBatchReader } from '../../kernel/build/apple-batch.mjs';
 // These developer builds explicitly allow unsigned updates. --release, --distribution, --archive (or EXACT_UPDATE_TRUST=production) build a signed-update-only artifact.
 import { platformWidgetEntries, activityEntries, hasEntries, widgetGroup, prepareWidgetCore, sharedWidgetCore, placeCoreFramework, dropLeftoverCore, entryProfiles, alarmActivity } from './widgets.mjs';
 import { assembleMac, assembleIOS, buildIntents, shortcutKeys, placeMacDylibs } from './bundle.mjs';
-import { EXTENSION_KINDS, extensionKinds, withoutExtensions } from './extensions.mjs';
+import { EXTENSION_KINDS, assertNotificationServiceGrants, extensionKinds, notificationService, notificationServiceDirectory, notificationServicePlatformRefusal, withoutExtensions } from './extensions.mjs';
 import { buildWatch, watchCompanion, watchProfiles } from './watch.mjs';
 import { spawn, spawnSync } from './toolchain.mjs';
 import { metalRequired, metalToolchainInstructions } from './metal.mjs';
@@ -86,8 +85,7 @@ const run = (cmd, args, opts = {}) => {
     stdio: opts.stdio === 'ignore' ? ['ignore', 'ignore', 'pipe'] : opts.stdio ?? 'inherit' }));
   if (r.status !== 0) throw new Error(`${cmd} failed (${r.status ?? r.error?.message})${r.stderr?.length ? ': ' + String(r.stderr).trim() : ''}`);
   return r;
-};
-const read = (cmd, args, opts = {}) => spawnSync(...appleCargo(cmd, args, { cwd: root, encoding: 'utf8', ...opts }));
+}; const read = (cmd, args, opts = {}) => spawnSync(...appleCargo(cmd, args, { cwd: root, encoding: 'utf8', ...opts }));
 /** Whether the pinned toolchain, which a build uses whatever RUSTUP_TOOLCHAIN says, has `target`'s std; if not, says so for `flag`. */
 const hasStd = (flag, target) => read('rustup', ['target', 'list', '--installed', '--toolchain', PINNED_RUST]).stdout?.split('\n').includes(target) || (console.error(`${flag} needs Rust's ${target} std, which the pinned toolchain lacks. Install it with \`rustup target add ${target} --toolchain ${PINNED_RUST}\``), process.exitCode = 1, false);
 // Fail on deployment-target and sysroot warnings because Apple tools can still link incompatible inputs
@@ -597,13 +595,15 @@ async function main(args, lockHeld = false) {
     if (process.env.EXACT_UPDATE_TRUST) console.error(`ignoring EXACT_UPDATE_TRUST=${process.env.EXACT_UPDATE_TRUST}: what is distributed bakes production trust`);
     process.env.EXACT_UPDATE_TRUST = 'production';
   }
-  const app = quietFor(resolveApp(args.find((a, i) => !a.startsWith('--') && !['--sim', '--phone', '--url', '--archive', '--optimize', '--link', '--watch-sim', '--extensions'].includes(args[i - 1]))), root);
+  const packaged = extensionKinds(args), app = quietFor(resolveApp(args.find((a, i) => !a.startsWith('--') && !['--sim', '--phone', '--url', '--archive', '--optimize', '--link', '--watch-sim', '--extensions'].includes(args[i - 1]))), root);
+  const notification = packaged.has('notifications') || !ios || tv || args.includes('--watchos') ? notificationService(app) : null;
+  if (ios && !notification) packaged.delete('notifications');
+  const notificationRefusal = notificationServicePlatformRefusal(notification, args.includes('--watchos') ? 'watchOS' : tv ? 'tvOS' : ios ? 'ios' : 'macOS'); if (notificationRefusal) { console.error(notificationRefusal.replace(notification.directory, relative(app.dir, notification.directory))); process.exitCode = 1; return; }
   if (!ios && !args.includes('--watchos') && (args.includes('--painted-benchmark') || app.manifest.host?.macos?.presenter === 'painted')) {
     return (await import('../apple-painted/build.mjs')).buildPainted(app, args, { macInfoPlist });
   }
   // --extensions: which app extensions this build packages (a build service's quick development build leaves some out).
   buildStep('prepare');
-  const packaged = extensionKinds(args);
   if (packaged.size < EXTENSION_KINDS.length) { app.manifest = withoutExtensions(app.manifest, packaged); console.log(`host/apple: extensions ${[...packaged].join(',') || 'none'} (--extensions)`); }
   if (args.includes('--watchos')) return buildWatch(app, args, { runApple, appleArtifacts, appleBuildLock, receipt, buildParent: args => main(args, true) });
   const { optimize, profile: productionProfile } = appleProduction(app, ios ? 'ios' : 'macos', args);
@@ -675,6 +675,7 @@ async function main(args, lockHeld = false) {
   const cargoEnv = {
     ...developmentBuildEnv(),
     EXACT_WIDGET_GALLERY: gallery ? '1' : '0',
+    EXACT_APPLE_EXTENSIONS: [...packaged].join(','),
     // An iOS build's Mac side is its build scripts and proc macros: the host's target, as every cargo call's.
     MACOSX_DEPLOYMENT_TARGET: ios ? process.env.MACOSX_DEPLOYMENT_TARGET || HOST_MACOS : targets.macos,
     ...(ios ? tv ? { TVOS_DEPLOYMENT_TARGET: compiled.ios } : { IPHONEOS_DEPLOYMENT_TARGET: compiled.ios } : {}),
@@ -909,6 +910,7 @@ async function main(args, lockHeld = false) {
   } }));
   const libDir = paths.capture;
   const bakedCompat = buildReceipt.compat;
+  if (packaged.has('notifications')) assertNotificationServiceGrants(notification, bakedCompat.inputs?.grantCeiling);
   // What only a macOS provisioning profile authorizes (LLP 1133.010 D7), resolved with the widgets' signing: one
   // profile, one team, the identity of that team.
   const signing = ios ? null : macSigning(app, bakedCompat, { current: sha1, widgets: macWidgets, release: production || distribution, distribution, store: appstore ? 'appstore' : null, sandboxed: args.includes('--sandbox') });
@@ -1021,12 +1023,11 @@ async function main(args, lockHeld = false) {
   }
   // An arm is compiled once per sources, arguments and compiler, and kept in the
   // scratch path (rebuilt every time, two cost 93 s of a build at load 120): the
-  // host's are shared by every app's build, an app's module artifact (`own`)
-  // stays in its own directory. Each is written under this process's name and
-  // renamed, as another app's build may compile it at once; a cached one is
-  // copied out at once and marked used, so another build's `evictArms` keeps it.
+  // Host arms are shared; an app's module artifact stays in its own directory.
+  // Each is written under this process's name and renamed because another build may
+  // compile it concurrently; a cached copy is marked used so `evictArms` keeps it.
   const snapshot = snapshotSources(modules.apple, resolve(webBuildDir, 'module-sources')); if (modules.apple.length) console.log(`host/apple: the app's Swift modules compile as they are now (${modules.apple.length} copied); an edit from here on needs another build`);
-  { const folder = moduleDirectory(app.dir, tv ? 'tvos' : ios ? 'ios' : 'macos'), below = (d, depth = 0) => depth > 3 ? [] : readdirSync(d, { withFileTypes: true }).flatMap(e => e.isDirectory() && !/\.(xcframework|framework|bundle|app)$/.test(e.name) ? below(resolve(d, e.name), depth + 1) : e.isFile() && depth && e.name.endsWith('.swift') ? [resolve(d, e.name)] : []); const skipped = existsSync(folder) ? below(folder) : []; if (skipped.length) console.warn(`host/apple: ${skipped.length} Swift file${skipped.length === 1 ? '' : 's'} below ${relative(app.dir, folder)} ${skipped.length === 1 ? 'is' : 'are'} not compiled (${skipped.slice(0, 4).map(f => relative(folder, f)).join(', ')}${skipped.length > 4 ? ', …' : ''}): a module's Swift is the folder's own files, not its subfolders' (LLP 1156.002 D10)`); }
+  { const folder = moduleDirectory(app.dir, tv ? 'tvos' : ios ? 'ios' : 'macos'), serviceFolder = notificationServiceDirectory(app), below = (d, depth = 0) => depth > 3 || d === serviceFolder ? [] : readdirSync(d, { withFileTypes: true }).flatMap(e => e.isDirectory() && !/\.(xcframework|framework|bundle|app)$/.test(e.name) ? below(resolve(d, e.name), depth + 1) : e.isFile() && depth && e.name.endsWith('.swift') ? [resolve(d, e.name)] : []); const skipped = existsSync(folder) ? below(folder) : []; if (skipped.length) console.warn(`host/apple: ${skipped.length} Swift file${skipped.length === 1 ? '' : 's'} below ${relative(app.dir, folder)} ${skipped.length === 1 ? 'is' : 'are'} not compiled (${skipped.slice(0, 4).map(f => relative(folder, f)).join(', ')}${skipped.length > 4 ? ', …' : ''}): a module's Swift is the folder's own files, not its subfolders' (LLP 1156.002 D10)`); }
   // Where a module's Swift packages compile (LLP 1133.001 D5), this build's own: an arm's key names it `<packages>`.
   const packageDir = resolve(webBuildDir, 'packages');
   // A roster probe route's packages compile for its own target, in a directory of its own (`rosterRoutes`).
@@ -1331,8 +1332,7 @@ async function main(args, lockHeld = false) {
     if (args.includes('--run')) process.exitCode = runMac(bundlePath ? resolve(bundlePath, 'Contents/MacOS', paths.executable) : paths.binary, { ...env, ...launchEnv, EXACT_ASSETS: paths.capture });
     return;
   }
-
-  const { bundles, frameworkSymbols } = assembleIOS({intents, shared, library, moduleLibraries, packageLibraries, serviceDylibs, triple: iosTripleFor(app, device, tv, compiled.ios), app, paths, binDir, bin, clipBin, device, development, appleReach, tv, bakedCompat, bakedPlan, ipa, linkRoot, swiftc, buildReceipt, rosterKeys, sdkName, production, distribution, stampSdk, libDir, gpuArtifacts, looseArms, modulesBuilt, modulesLoadName, hasSvg, svgBuilt, svgLoadName, svgFilterBuilt, svgFilterLibraryName, canvasGpuBuilt, canvasGpuLoadName, args, unsigned, prof, ph, sha1, composition, destination, target, sdk, hasGpu, dylib, alarm: ios && !tv && packaged.has('alarms') ? alarmActivity(packages) : null, watch: device && !tv && packaged.has('watch') && watchCompanion(app)}, bundleTools);
+  const { bundles, frameworkSymbols } = assembleIOS({intents, shared, library, moduleLibraries, packageLibraries, serviceDylibs, triple: iosTripleFor(app, device, tv, compiled.ios), app, paths, binDir, bin, clipBin, device, development, appleReach, tv, bakedCompat, bakedPlan, ipa, linkRoot, swiftc, buildReceipt, rosterKeys, sdkName, production, distribution, stampSdk, libDir, gpuArtifacts, looseArms, modulesBuilt, modulesLoadName, hasSvg, svgBuilt, svgLoadName, svgFilterBuilt, svgFilterLibraryName, canvasGpuBuilt, canvasGpuLoadName, args, unsigned, prof, ph, sha1, composition, destination, target, sdk, hasGpu, dylib, alarm: ios && !tv && packaged.has('alarms') ? alarmActivity(packages) : null, notification: packaged.has('notifications') ? notification : null, watch: device && !tv && packaged.has('watch') && watchCompanion(app)}, bundleTools);
   publishProducts();
   release();
   if (!ipa && frameworkSymbols.count) console.log(`host/apple: framework symbols: ${resolve(paths.products, basename(frameworkSymbols.dir))} (${frameworkSymbols.count} frameworks, ${(frameworkSymbols.saved / 1048576).toFixed(1)} MB off them)`);

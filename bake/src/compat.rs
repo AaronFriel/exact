@@ -773,6 +773,10 @@ fn compatibility_with_trust(
             tags if tags.is_empty() => Value::Null,
             tags => json!({ "appleAbi": 3, "webAbi": 1, "tags": tags }),
         },
+        // The service extension is app-authored native code in the installed
+        // cohort, not a replaceable module. Its complete tree therefore moves
+        // compatibility when an ordinary build replaces its executable.
+        "notificationService": notification_service(app_dir, platform, target)?,
         // @ref LLP 1075.003.000.001 §4.3 — the hatch words this platform's
         // module is built to handle, from app.json: the cohort's capability.
         "hatches": match contract::native::hatches_on(manifest, platform)? {
@@ -809,6 +813,16 @@ fn compatibility_with_trust(
         if let Some(handlers) = manifest.json.get("protocol_handlers") {
             if !handlers.as_array().is_some_and(Vec::is_empty) {
                 inputs["protocolHandlers"] = handlers.clone();
+            }
+        }
+    }
+    // Linux has no bundle beside the executable. Its portal picker reads the
+    // same declared file types from the compatibility metadata the binary
+    // already carries (LLP 1030 D2; LLP 1069.010 D2).
+    if platform == "linux" && !target.contains("android") {
+        if let Some(handlers) = manifest.json.get("file_handlers") {
+            if !handlers.as_array().is_some_and(Vec::is_empty) {
+                inputs["fileHandlers"] = handlers.clone();
             }
         }
     }
@@ -925,6 +939,163 @@ fn executors(app_dir: &Path, platform: &str) -> Vec<String> {
     out
 }
 
+/// The convention-defined iOS notification service target and its complete
+/// source identity. Other Apple hosts neither advertise nor package it.
+fn notification_service(
+    app_dir: &Path,
+    platform: &str,
+    target: &str,
+) -> Result<serde_json::Value, String> {
+    let selected = std::env::var("EXACT_APPLE_EXTENSIONS").ok();
+    if std::env::var_os("OUT_DIR").is_some() {
+        println!("cargo:rerun-if-env-changed=EXACT_APPLE_EXTENSIONS");
+    }
+    if platform != "ios" || target.contains("-tvos") || target.contains("-watchos") {
+        return Ok(serde_json::Value::Null);
+    }
+    if selected
+        .as_deref()
+        .is_some_and(|kinds| !kinds.split(',').any(|kind| kind == "notifications"))
+    {
+        return Ok(serde_json::Value::Null);
+    }
+    let dir = app_dir.join("modules/apple/notification-service");
+    let directory_exists = match std::fs::metadata(&dir) {
+        Ok(metadata) => metadata.is_dir(),
+        Err(error) if notification_service_is_absent(&error) => false,
+        Err(error) => return Err(format!("modules/apple/notification-service: {error}")),
+    };
+    if let Some(out) = std::env::var_os("OUT_DIR") {
+        if let Some(path) = crate::receipt::watch::notification_service_tree(
+            &dir,
+            &[PathBuf::from(out)],
+            selected.as_deref(),
+            platform,
+            target,
+        ) {
+            println!("cargo:rerun-if-changed={}", path.display());
+        }
+    }
+    if !directory_exists {
+        return Ok(serde_json::Value::Null);
+    }
+    for name in [
+        "modules",
+        "modules/apple",
+        "modules/apple/notification-service",
+    ] {
+        match std::fs::symlink_metadata(app_dir.join(name)) {
+            Ok(metadata) if metadata.file_type().is_symlink() => {
+                return Err(format!(
+                    "{name}: is a symbolic link; notification service sources cannot be symbolic links"
+                ));
+            }
+            Ok(metadata) if metadata.is_dir() => {}
+            Ok(_) => return Ok(serde_json::Value::Null),
+            Err(error) => return Err(format!("{name}: {error}")),
+        }
+    }
+    let (tree, files) = notification_service_identity(&dir)?;
+    Ok(serde_json::json!({
+        "bundleSuffix": "notifications",
+        "bundleName": "ExactNotificationService",
+        "principalClass": "ExactNotificationService.NotificationService",
+        "tree": tree,
+        "files": files,
+    }))
+}
+
+fn notification_service_is_absent(error: &std::io::Error) -> bool {
+    if matches!(
+        error.kind(),
+        std::io::ErrorKind::NotFound | std::io::ErrorKind::NotADirectory
+    ) {
+        return true;
+    }
+    #[cfg(target_vendor = "apple")]
+    if error.raw_os_error() == Some(62) {
+        return true;
+    }
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    if error.raw_os_error() == Some(40) {
+        return true;
+    }
+    false
+}
+
+/// Swift sources anywhere below the convention root and its one top-level
+/// privacy manifest, ordered by the UTF-8 bytes of their `/`-joined names.
+/// Links are refused instead of acquiring source bytes from outside the app.
+fn notification_service_identity(dir: &Path) -> Result<(String, Vec<serde_json::Value>), String> {
+    let mut paths = Vec::new();
+    walk_notification_service(dir, dir, &mut paths)?;
+    paths.sort_by(|a, b| a.0.as_bytes().cmp(b.0.as_bytes()));
+    let mut tree = Sha256::new();
+    let mut files = Vec::with_capacity(paths.len());
+    for (name, path) in paths {
+        let bytes = std::fs::read(&path).map_err(|e| format!("{name}: {e}"))?;
+        tree.update(name.as_bytes());
+        tree.update([0]);
+        tree.update((bytes.len() as u64).to_le_bytes());
+        tree.update(&bytes);
+        files.push(serde_json::json!({
+            "path": name,
+            "sha256": hex(&Sha256::digest(&bytes)),
+        }));
+    }
+    Ok((hex(&tree.finalize()), files))
+}
+
+fn walk_notification_service(
+    root: &Path,
+    dir: &Path,
+    out: &mut Vec<(String, PathBuf)>,
+) -> Result<(), String> {
+    let entries = std::fs::read_dir(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("{}: {e}", dir.display()))?;
+        let path = entry.path();
+        let name = entry.file_name().into_string().map_err(|name| {
+            format!(
+                "{} contains a non-UTF-8 source name",
+                name.to_string_lossy()
+            )
+        })?;
+        if name.starts_with('.') || name == "target" {
+            continue;
+        }
+        let relative = path
+            .strip_prefix(root)
+            .expect("a read_dir child stays below its root")
+            .components()
+            .map(|part| part.as_os_str().to_str())
+            .collect::<Option<Vec<_>>>()
+            .ok_or_else(|| format!("{} contains a non-UTF-8 source name", path.display()))?
+            .join("/");
+        let kind = entry.file_type().map_err(|e| format!("{relative}: {e}"))?;
+        if kind.is_symlink() {
+            return Err(format!(
+                "{relative} is a symbolic link; notification service sources cannot be symbolic links"
+            ));
+        }
+        if kind.is_dir() {
+            walk_notification_service(root, &path, out)?;
+        } else if kind.is_file() {
+            if !relative.ends_with(".swift") && relative != "PrivacyInfo.xcprivacy" {
+                return Err(format!(
+                    "{relative} is an unsupported notification service resource; use Swift sources and a top-level PrivacyInfo.xcprivacy"
+                ));
+            }
+            out.push((relative, path));
+        } else {
+            return Err(format!(
+                "{relative} is not a regular notification service source file"
+            ));
+        }
+    }
+    Ok(())
+}
+
 /// The data crate's source-input digest (LLP 1030 D3a): its tree, the trees
 /// of the path crates it is built from, the workspace lockfile, the
 /// toolchain — never its compiled output, which a `wasm32` build can keep
@@ -974,6 +1145,11 @@ fn data_crate(app_dir: &Path, named: Option<&str>) -> Result<serde_json::Value, 
 
 /// The digest of every file under `dir` and how many there are.
 fn tree_digest(dir: &Path) -> Result<(String, usize), String> {
+    let (tree, files) = tree_identity(dir)?;
+    Ok((tree, files.len()))
+}
+
+fn tree_identity(dir: &Path) -> Result<(String, Vec<PathBuf>), String> {
     let mut files = Vec::new();
     walk(dir, dir, &mut files)?;
     files.sort();
@@ -985,7 +1161,7 @@ fn tree_digest(dir: &Path) -> Result<(String, usize), String> {
         h.update((bytes.len() as u64).to_le_bytes());
         h.update(&bytes);
     }
-    Ok((hex(&h.finalize()), files.len()))
+    Ok((hex(&h.finalize()), files))
 }
 
 /// The path crates the data crate at `dir` is built from, by package name
@@ -1289,3 +1465,11 @@ pub(crate) fn canonical(v: &serde_json::Value, out: &mut String) {
 #[cfg(test)]
 #[path = "compat_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "compat_notification_service_tests.rs"]
+mod notification_service_tests;
+
+#[cfg(test)]
+#[path = "compat_file_handlers_tests.rs"]
+mod file_handlers_tests;

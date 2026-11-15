@@ -55,6 +55,7 @@ if (!app) { console.error('usage: bun host/web-js/build.mjs <app> [--plan <app.p
 const appDir = process.env.EXACT_APP_DIR ? resolve(process.env.EXACT_APP_DIR) : resolve(root, 'apps', app);
 // Before anything reads a package: the dev loop runs this build directly, not through resolveApp (#115).
 try { installedFileDependencies(appDir); } catch (error) { console.error(`error: ${error.message}`); process.exit(1); }
+const manifest = readManifest(appDir, app);
 const out = resolve(opt('--out') ?? `/tmp/exact-web-js-dist/${app}`);
 // Bun's runtime transpiler cache keys a module by its text and keeps the
 // imports this build's mount resolver gives it (below), so the same file at
@@ -62,8 +63,7 @@ const out = resolve(opt('--out') ?? `/tmp/exact-web-js-dist/${app}`);
 // the first. A build through mounts runs without that cache: it starts again
 // that way before it touches anything.
 if (process.env.BUN_RUNTIME_TRANSPILER_CACHE_PATH !== '0') {
-  let mounts = {};
-  try { mounts = JSON.parse(readFileSync(resolve(appDir, 'app.json'), 'utf8')).typescript?.sources ?? {}; } catch {}
+  const mounts = manifest.typescript?.sources ?? {};
   if (Object.keys(mounts).length) {
     const again = spawnSync(process.execPath, process.argv.slice(1), { stdio: 'inherit', env: { ...process.env, BUN_RUNTIME_TRANSPILER_CACHE_PATH: '0' } });
     process.exit(again.status ?? 1);
@@ -105,7 +105,6 @@ rmSync(out, { recursive: true, force: true });
 mkdirSync(gen, { recursive: true });
 
 const input = opt('--plan') ?? opt('--contract') ?? resolve(appDir, 'app.contract');
-const manifest = JSON.parse(readFileSync(resolve(appDir, 'app.json'), 'utf8'));
 // documents-glue reads the app's web manifest lazily. The JS path exits from
 // host/web/build.mjs after this builder succeeds, so it owns the same artifact.
 const manifestNotes = [];

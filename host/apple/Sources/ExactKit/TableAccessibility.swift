@@ -274,7 +274,7 @@ extension NodeView {
 
 /// A table's column as AppKit's table serves one (`AXColumn`): its index,
 /// the cells in it from the top, and its header.
-final class TableColumnElement: NSAccessibilityElement, AgentOwned {
+final class TableColumnElement: NSAccessibilityElement, InspectionOwned {
     private weak var table: NodeView?
     private let index: Int
     init(_ table: NodeView, index: Int) {
@@ -282,7 +282,7 @@ final class TableColumnElement: NSAccessibilityElement, AgentOwned {
         self.index = index
         super.init()
     }
-    var agentViewId: UInt32? { table?.id }
+    var inspectionViewId: UInt32? { table?.id }
     private var cells: [NodeView] { table?.tableCells.filter { $0.place.covers(column: index) }.map(\.view) ?? [] }
     override func isAccessibilityElement() -> Bool { true }
     override func accessibilityRole() -> NSAccessibility.Role? { .column }
@@ -308,13 +308,13 @@ final class TableColumnElement: NSAccessibilityElement, AgentOwned {
 }
 
 /// A table's header (`AXHeader`): a group of its column headers.
-final class TableHeaderElement: NSAccessibilityElement, AgentOwned {
+final class TableHeaderElement: NSAccessibilityElement, InspectionOwned {
     private weak var table: NodeView?
     init(_ table: NodeView) {
         self.table = table
         super.init()
     }
-    var agentViewId: UInt32? { table?.id }
+    var inspectionViewId: UInt32? { table?.id }
     private var headers: [NodeView] { table?.columnHeaders() ?? [] }
     override func isAccessibilityElement() -> Bool { true }
     override func accessibilityRole() -> NSAccessibility.Role? { .group }

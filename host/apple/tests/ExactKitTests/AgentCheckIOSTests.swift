@@ -190,7 +190,7 @@ final class AgentCheckIOSTests: XCTestCase {
 
         let observation = agent.check(["capture": true])
         defer { _ = agent.check(["release": true]) }
-        XCTAssertEqual(observation["keyboard"] as? Double, Agent.r2(keys), "the observation has the keyboard's top")
+        XCTAssertEqual(observation["keyboard"] as? Double, InspectionValue.r2(keys), "the observation has the keyboard's top")
         XCTAssertEqual((observation["advice"] as? [[String: Any]])?.compactMap { $0["id"] as? Int }, [102])
         let items = try XCTUnwrap(observation["items"] as? [[String: Any]])
         XCTAssertFalse(items.contains { [102, 103].contains($0["id"] as? Int ?? -1) })
@@ -205,7 +205,7 @@ final class AgentCheckIOSTests: XCTestCase {
         // `windowTop` down, and the rest once the display shows the app's drawing at `opaque`.
         let keyboard = try XCTUnwrap(capture["keyboard"] as? [String: Any])
         XCTAssertEqual(keyboard["visible"] as? Bool, true)
-        XCTAssertEqual(keyboard["windowTop"] as? Double, Agent.r2(keys), "the keyboard's pixels come from the display")
+        XCTAssertEqual(keyboard["windowTop"] as? Double, InspectionValue.r2(keys), "the keyboard's pixels come from the display")
         XCTAssertEqual(capture["front"] as? Bool, true, "the display is read only for an app in front")
         let opaque = try XCTUnwrap(capture["opaque"] as? [[Double]]).map { CGPoint(x: $0[0], y: $0[1]) }
         let glass = material.convert(material.bounds, to: win)

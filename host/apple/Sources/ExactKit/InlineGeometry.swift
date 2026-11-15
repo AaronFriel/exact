@@ -54,7 +54,7 @@ extension Presenter {
                 ancestor = view.superview
             }
             guard start <= end, node.window != nil, !node.cssVisibilityHidden, let rect = node.readerAtomFrame(Int(start), Int(end)) else { return nil }
-            return Agent.box(rect, of: node, viewport: viewport)
+            return InspectionGeometry.box(rect, of: node, viewport: viewport)
         }
         guard start <= end, let node = views[id], node.window != nil, !node.isHidden, !node.fieldComposing,
               let field = node.textArea, end <= node.fieldText.utf16.count else { return nil }
@@ -145,17 +145,18 @@ extension Presenter {
         }
         guard !result.isNull, !result.isInfinite else { return nil }
         if start == end { result.size.width = 0 }
-        return Agent.box(result, of: field, viewport: viewport)
+        return InspectionGeometry.box(result, of: field, viewport: viewport)
     }
 
     func inlineFrame(_ id: UInt32) -> CGRect? {
         guard let run = inlineText(id), let owner = textHost(id), owner.window != nil else { return nil }
-        let rect = owner.inlineRects(run).map { Agent.box($0, of: owner, viewport: viewport) }
+        let rect = owner.inlineRects(run).map { InspectionGeometry.box($0, of: owner, viewport: viewport) }
             .reduce(CGRect.null) { $0.union($1) }
         return rect.isNull ? nil : rect
     }
 }
 
+#if EXACT_AGENT
 extension Agent {
     func inlineLayout() -> [[String: Any]] {
         presenter.inlineOwners.keys.sorted().compactMap { id in
@@ -164,6 +165,7 @@ extension Agent {
         }
     }
 }
+#endif
 
 extension NodeView {
     /// The glyph that `index` is in, in `line`'s coordinates: its left and

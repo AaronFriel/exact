@@ -66,6 +66,11 @@ fn source_capture_skips_module_xcframeworks_with_versioned_slices() {
         }
     }
     assert_eq!(sources(&app.0).unwrap(), before);
+    let service = app.0.join("modules/apple/notification-service");
+    std::fs::create_dir_all(&service).unwrap();
+    std::os::unix::fs::symlink("../../../app.ts", service.join("helper.ts")).unwrap();
+    assert!(sources(&app.0).unwrap_err().contains("source links"));
+    std::fs::remove_file(service.join("helper.ts")).unwrap();
     // Skipping binary bundles must not admit source links beside them.
     std::os::unix::fs::symlink("../../app.ts", app.0.join("modules/apple/helper.ts")).unwrap();
     assert!(sources(&app.0).unwrap_err().contains("source links"));

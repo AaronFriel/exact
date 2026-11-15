@@ -325,11 +325,11 @@ final class AtomCatcher: NSView {
 /// (`NodeView.withAtoms`), and its parent is the element that lists it
 /// (`NodeView.atomParent`). The agent joins it to the field's node, as iOS's
 /// container does.
-package final class AtomElement: NSAccessibilityElement, AgentOwned {
+package final class AtomElement: NSAccessibilityElement, InspectionOwned {
     weak var field: TextArea?
     let range: NSRange
     var atom: MarkupAtom
-    package var agentViewId: UInt32? { field?.owner?.id }
+    package var inspectionViewId: UInt32? { field?.owner?.id }
     init(field: TextArea, range: NSRange, atom: MarkupAtom) {
         (self.field, self.range, self.atom) = (field, range, atom)
         super.init()

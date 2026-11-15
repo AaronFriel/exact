@@ -312,6 +312,14 @@
   function headOwner() {
     return head ? owner(head.call) : null;
   }
+  // Storage this call already issued, excluding `hostWork`: an answer drains
+  // these FIFO operations before it asks the browser host for an unheld secret
+  // lease (LLP 1097 D7).
+  function hasQueuedStorage(call) {
+    if (head && owner(head.call) === call) return true;
+    for (var i = 0; i < queue.length; i++) if (owner(queue[i].call) === call) return true;
+    return false;
+  }
   // Native image cancellation uses Ibex's identity on the original Promise.
   // Other promises may resolve to raw capabilities (a database or statement).
   global.__exact_storage_promise = function () {
@@ -467,6 +475,7 @@
     errorText: errorText,
     background: background,
     owner: owner,
+    browserSecrets: browserSecrets,
     storing: storing,
     unstore: unstore,
     storageCounts: storageCounts,
@@ -578,7 +587,21 @@
   }
   function settleResult(call, final) {
     var secret = call.secrets && call.secrets[0];
-    if (secret && !secret.held) return JSON.stringify({ tag: 1, call: call.id, ticket: 0, secret: secret.name });
+    if (secret && !secret.held) {
+      if (browserSecrets && !call.lost && !call.letGo) {
+        if (hasQueuedStorage(call)) {
+          var storageOwner = headOwner();
+          return JSON.stringify({
+            tag: 1,
+            call: call.id,
+            ticket: 0,
+            waiting: !!storageOwner && storageOwner !== call,
+          });
+        }
+        secret.asked = true;
+      }
+      return JSON.stringify({ tag: 1, call: call.id, ticket: 0, secret: secret.name });
+    }
     // A fetch its continuation tried after it staged socket operations
     // (refused at the fetch) refuses the mutation too, before any frame.
     if (call.socketConflict && call.status === "done") {

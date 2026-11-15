@@ -213,6 +213,8 @@ if (!process.argv.includes('--flow') && !process.argv.includes('--scaling') && !
 const json = process.argv.includes('--json');
 const rebuild = process.argv.includes('--rebuild');
 const long = process.argv.includes('--long');
+const APPLE_AGENT_FAILURES = ['ios_speed_failed', 'ios_size_failed', 'ios_balanced_failed', 'agent_development_ios_failed',
+  'agent_production_macos_failed', 'agent_development_macos_failed', 'agent_symbol_proof_failed'];
 const rules = readFileSync(resolve(ROOT, 'rules/RULES.md'), 'utf8');
 const budget = (label) => rules.match(new RegExp(`\\|\\s*${label}[^|]*\\|\\s*([^|\\n]+)`, 'i'))?.[1].trim() ?? '?';
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
@@ -931,6 +933,34 @@ if (long) {
       }
       out[`ios_${optimize}_bytes`] = strippedSize(binary) - out.ios_floor_bytes;
     }
+    const development = { ...own, EXACT_UPDATE_TRUST: 'development' };
+    const prerequisites = [
+      ...(out.ios_speed_failed ? ['production iOS speed build failed'] : []),
+      ...(out.ios_size_failed ? ['production iOS size build failed'] : []),
+      ...(out.ios_balanced_failed ? ['production iOS balanced build failed'] : []),
+    ];
+    for (const [label, key, args, buildEnv] of [
+      ['development iOS', 'agent_development_ios_failed', [hello.crate('apple'), '--ios', '--no-install'], development],
+      ['production macOS', 'agent_production_macos_failed', [hello.crate('apple')], env],
+      ['development macOS', 'agent_development_macos_failed', [hello.crate('apple')], development],
+    ]) {
+      const built = spawnSync(process.execPath, [resolve(ROOT, 'host/apple/build.mjs'), ...args], { cwd: ROOT, env: buildEnv, encoding: 'utf8' });
+      if (built.status !== 0) {
+        out[key] = `exit ${built.status ?? 1}: ${failure(built)}`;
+        prerequisites.push(`${label} build failed`);
+        console.error(`${label} Hello for the agent link proof: ${out[key]}`);
+      }
+    }
+    if (prerequisites.length) out.agent_symbol_proof_failed = `not qualified: ${prerequisites.join('; ')}`;
+    else {
+      const proofEnv = { ...own, EXACT_REQUIRED: '1' };
+      delete proofEnv.EXACT_GLUE_FAST;
+      const proof = spawnSync(process.execPath, ['test', 'host/apple/link.test.mjs', '--test-name-pattern', 'production omits the agent'], { cwd: ROOT, env: proofEnv, encoding: 'utf8' });
+      if (proof.status !== 0) {
+        out.agent_symbol_proof_failed = `exit ${proof.status ?? 1}: ${failure(proof)}`;
+        console.error(`Apple agent link proof: ${out.agent_symbol_proof_failed}`);
+      }
+    }
   });
 }
 
@@ -1089,6 +1119,8 @@ out.macos_total_ms = out.macos_exec_ms + out.macos_paint_ms;
 out.macos_framework_ms = out.macos_runner_ms + out.macos_apply_ms;
 out.total_s = (Date.now() - t0) / 1000 + (out.source_capture_s ?? 0);
 
+const appleAgentFailed = APPLE_AGENT_FAILURES.some(key => out[key]);
+if (appleAgentFailed) process.exitCode = 1;
 if (json) { console.log(JSON.stringify(out)); process.exit(process.exitCode ?? 0); }
 
 const ms = (v) => (Number.isFinite(v) ? `${v.toFixed(v < 10 ? 2 : 1)} ms` : 'n/a');
@@ -1156,6 +1188,12 @@ if (long) {
     const budget = Number.isFinite(bytes) ? `; budget ${limit.toLocaleString('en-US')} B, ${bytes.toLocaleString('en-US')} B ${bytes <= limit ? 'within' : 'VIOLATION'}` : '';
     rows.push([`iOS: hello app, optimized for ${optimize}`, out[`ios_${optimize}_failed`] ? 'FAILED' : mib(bytes), out[`ios_${optimize}_failed`] ?? `production, simulator, stripped, over an empty UIKit app (${mib(out.ios_floor_bytes)}); one text node: the core and nothing a plan adds; ${{ size: 'the embed default', balanced: 'the iOS and tvOS app default', speed: 'the Mac default' }[optimize]}${budget}`]);
   }
+  for (const [label, key, success] of [
+    ['agent proof: development iOS', 'agent_development_ios_failed', 'Hello built'],
+    ['agent proof: production macOS', 'agent_production_macos_failed', 'Hello built'],
+    ['agent proof: development macOS', 'agent_development_macos_failed', 'Hello built'],
+    ['agent proof: production omits it', 'agent_symbol_proof_failed', 'iOS and macOS symbols checked'],
+  ]) rows.push([label, out[key] ? 'FAILED' : 'passed', out[key] ?? success]);
   rows.push(['macOS: touch one line, rebuild', out.macos_touch_failed ? 'FAILED' : s(out.macos_touch_s), out.macos_touch_failed ?? `host/apple/src/host.rs; budget ${budget('Touch one line')}`]);
   // The JS target's bytes, gated (LLP 1047.002 D5), then LLP 1047 D9: each app's wasm, and its code by capability (KiB of code).
   for (const [name, m] of Object.entries(out.web_js_bytes ?? {})) rows.push(jsTargetRow(name, m));

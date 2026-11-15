@@ -232,7 +232,7 @@ final class GroupedAccessibilityIOSTests: GroupedListFixture {
         XCTAssertTrue(receipts.isAccessibilityElement)
         XCTAssertEqual(receipts.accessibilityLabel, "Read Receipts")
         XCTAssertEqual(receipts.accessibilityValue, toggle.accessibilityValue)
-        XCTAssertEqual(receipts.agentViewId, 13)
+        XCTAssertEqual(receipts.inspectionViewId, 13)
         let elements = p.axElements(roots: [p.viewport])["elements"] as? [[String: Any]] ?? []
         let switches = elements.filter { $0["testId"] as? String == "toggle" }
         XCTAssertEqual(switches.count, 1)

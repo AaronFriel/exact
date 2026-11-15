@@ -419,8 +419,10 @@ public final class ExactSession {
     var systemDark = false
     var launchViewport: (plan: Data?, cover: Bool)?
     #endif
+    #if EXACT_AGENT
     /// This session's agent, once a carrier asked for it (`Agent.swift`).
     var agentBox: Agent?
+    #endif
     /// Milliseconds from `main` to this session's first node draw and layout.
     public internal(set) var firstDrawMs: Double?
     public internal(set) var firstLayoutMs: Double?

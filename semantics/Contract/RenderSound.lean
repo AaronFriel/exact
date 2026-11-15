@@ -28,6 +28,23 @@ theorem StoreOK.find {p : Program} {store : RowStore} {id s} (h : StoreOK p stor
   obtain ⟨⟨i, t⟩, hm, rfl⟩ := hf
   exact h i t (List.mem_of_find?_eq_some hm)
 
+/-- This proves slot typing for any marker identifiers because each marker
+carries an empty slot list. It uses no computational property of `regionTags`
+and does not prove marker-tag freshness. -/
+theorem StoreOK.frameMarkers {p : Program} {id frame} :
+    StoreOK p (frameMarkers p id frame) := by
+  intro i s h
+  rw [Contract.frameMarkers] at h
+  obtain ⟨marker, -, hm⟩ := List.mem_map.mp h
+  injection hm with _ hs
+  exact hs ▸ RowsOK.nil
+
+theorem StoreOK.recordInstance {p : Program} {live id slots frame}
+    (hlive : StoreOK p live) (hslots : RowsOK p slots) :
+    StoreOK p (recordInstance p live id slots frame) := by
+  rw [Contract.recordInstance]
+  exact (hlive.append (StoreOK.single hslots)).append StoreOK.frameMarkers
+
 theorem StoreOK.rowSlots {p : Program} {store : RowStore} (h : StoreOK p store) :
     ∀ rows : List RowId, RowsOK p (Contract.rowSlots store rows)
   | [] => RowsOK.nil
@@ -164,6 +181,14 @@ theorem tabValues_good {p : Program} (hfn : ProgOK p) {E : Err → Prop}
     · exact GoodW.bind (tabValues_good hfn hE henv hl (fun prop hp => h prop (List.mem_cons_of_mem _ hp)))
         fun _ _ => True.intro
 
+theorem elementNavigation_good {p : Program} (hfn : ProgOK p) {E : Err → Prop}
+    (hE : ∀ e, Legit e → e ≠ .pending → E e) {fuel G env Γ ls tabs props}
+    (henv : EnvOKE p E G env) (hl : LocalsOK p Γ ls)
+    (h : ∀ prop ∈ tabProps props, ∃ t, HasTy p G Γ prop.2 t) :
+    GoodW E (fun _ => True) (elementNavigation fuel env ls tabs props) := by
+  unfold elementNavigation
+  exact GoodW.bind (tabValues_good hfn hE henv hl h) fun _ _ => True.intro
+
 theorem rowKey_good {E : Err → Prop} (hE : ∀ e, Legit e → e ≠ .pending → E e) (v : Value) :
     GoodW E (fun _ => True) (rowKey v) := by
   unfold rowKey
@@ -274,6 +299,30 @@ theorem settleOwned_good {p : Program} {E : Err → Prop}
 
 /-! ## Rendering -/
 
+private theorem nodesTy_windowed {p : Program} {G Γ} : ∀ {children : List Node},
+    NodesTy p G Γ children →
+    NodesTy p G Γ (children.map fun child => match child with
+      | .each .. => .element "#window" [] [] [] [child]
+      | _ => child)
+  | [], _ => by simp [NodesTy]
+  | child :: rest, h => by
+    cases child with
+    | element tag pos props hs children =>
+      simp only [List.map_cons, NodesTy] at h ⊢
+      exact ⟨h.1, h.2.1, nodesTy_windowed h.2.2⟩
+    | when tag c thn els =>
+      simp only [List.map_cons, NodesTy] at h ⊢
+      exact ⟨h.1, h.2.1, h.2.2.1, h.2.2.2.1, h.2.2.2.2.1,
+        nodesTy_windowed h.2.2.2.2.2⟩
+    | each tag x ix list key body =>
+      simp only [NodesTy] at h
+      simp only [List.map_cons, NodesTy]
+      refine ⟨?_, ⟨h.1, trivial⟩, nodesTy_windowed h.2⟩
+      simp [ElementTy, lookupField, tabProps]
+    | matchN tag subject x someNodes noneNodes =>
+      simp only [List.map_cons, NodesTy] at h ⊢
+      exact ⟨h.1, h.2.1, h.2.2.1, nodesTy_windowed h.2.2.2⟩
+
 /-- **Rendering is safe.** A well-typed view rendered in a well-typed
 environment, from a well-typed row store, renders elements whose handlers
 are `VNodeOK` and a row store of well-typed slots, or fails legitimately:
@@ -322,13 +371,30 @@ theorem render_good {p : Program} (hp : WellTyped p) {E : Err → Prop}
             obtain ⟨⟨htext, htid, hnav, hhs⟩, hkids, -⟩ := hn
             refine GoodW.bind (elementText_good hfn hE hok hl htext) fun _ _ => ?_
             refine GoodW.bind (elementTestId_good hfn hE hok hl htid) fun _ _ => ?_
-            refine GoodW.bind (tabValues_good hfn hE hok hl hnav) fun values _ => ?_
+            refine GoodW.bind (elementNavigation_good hfn hE hok hl hnav) fun navigation _ => ?_
+            have hkids' : NodesTy p (compScope p) Γ
+                (if tag == "list" &&
+                    ((lookupField "virtualized" props).map tabLiteral matches .some (.bool true)) then
+                  children.map (fun child => match child with
+                    | .each .. => .element "#window" [] [] [] [child]
+                    | _ => child)
+                 else children) := by
+              by_cases hwindowed : (tag == "list" &&
+                ((lookupField "virtualized" props).map tabLiteral matches .some (.bool true))) = true
+              · simpa [hwindowed] using nodesTy_windowed hkids
+              · simpa [hwindowed] using hkids
             have hk : GoodW E (fun r => ViewOK p r.1 ∧ StoreOK p r.2)
-                (if (cx.tabs.element props (values.filterMap fun (n, v) => v.map (n, ·))).opened then
-                  render n { cx with tabs := cx.tabs.children props } ls children live
+                (if navigation.rendersChildren then
+                  render n { cx with tabs := cx.tabs.children props } ls
+                    (if tag == "list" &&
+                        ((lookupField "virtualized" props).map tabLiteral matches .some (.bool true)) then
+                      children.map (fun child => match child with
+                        | .each .. => .element "#window" [] [] [] [child]
+                        | _ => child)
+                     else children) live
                  else pure ([], live)) := by
               split
-              · exact ihR henv hcm hst hlive hl hkids
+              · exact ihR henv hcm hst hlive hl hkids'
               · exact ⟨ViewOK.nil, hlive⟩
             refine GoodW.bind hk fun ⟨kids, l2⟩ ⟨hv2, hs2⟩ => ?_
             refine ⟨ViewOK.single ?_ hv2, hs2⟩
@@ -362,9 +428,10 @@ theorem render_good {p : Program} (hp : WellTyped p) {E : Err → Prop}
       unfold render.renderArm
       refine GoodW.bind (armSlots_good hp hE henv hcm hst hl hinit) fun _ _ => ?_
       refine GoodW.bind (settleOwned_good hE henv.prog) fun slots hslots => ?_
+      rw [henv.prog]
       exact ihR (henv.withRows hslots).withOwned
         (hcm.imp_left fun h => Complete.withOwned (env := { cx.env with rows := slots ++ cx.env.rows }) h)
-        hst (hlive.append (StoreOK.single hslots)) hl hbody
+        hst (hlive.recordInstance hslots) hl hbody
     · intro cx Γ ls tag x ix key body items i seen live a k henv hcm hst hlive hl hitems hk hinit hbody
       cases items with
       | nil => simp only [render.renderRows, GoodW]; exact ⟨ViewOK.nil, hlive⟩
@@ -376,9 +443,10 @@ theorem render_good {p : Program} (hp : WellTyped p) {E : Err → Prop}
         refine GoodW.bind (rowKey_good hE kv) fun key' _ => ?_
         refine GoodW.bind (armSlots_good hp hE henv hcm hst hl' hinit) fun _ _ => ?_
         refine GoodW.bind (settleOwned_good hE henv.prog) fun slots hslots => ?_
+        rw [henv.prog]
         refine GoodW.bind (ihR (henv.withRows hslots).withOwned
             (hcm.imp_left fun h => Complete.withOwned (env := { cx.env with rows := slots ++ cx.env.rows }) h)
-            hst (hlive.append (StoreOK.single hslots)) hl' hbody)
+            hst (hlive.recordInstance hslots) hl' hbody)
           fun ⟨vs, l1⟩ ⟨hv1, hs1⟩ => ?_
         refine GoodW.bind (ihW henv hcm hst hs1 hl hitems.2 hk hinit hbody) fun ⟨more, l2⟩ ⟨hv2, hs2⟩ => ?_
         exact ⟨hv1.append hv2, hs2⟩

@@ -95,6 +95,27 @@ theorem handlerLists_append {a b : List Node} :
   | nil => simp [Node.handlerLists]
   | cons n ns ih => simp [Node.handlerLists, ih]
 
+private theorem handlerLists_windowed (children : List Node) :
+    Node.handlerLists (children.map (fun child => match child with
+      | .each .. => .element "#window" [] [] [] [child]
+      | _ => child)) = Node.handlerLists children := by
+  induction children with
+  | nil => rfl
+  | cons child rest ih => cases child <;> simp [Node.handlerLists, Node.handlerList, ih]
+
+private theorem handlerLists_renderChildren (tag : String) (props : List (String × Expr))
+    (children : List Node) :
+    Node.handlerLists (if tag == "list" &&
+        ((lookupField "virtualized" props).map tabLiteral matches .some (.bool true)) then
+      children.map (fun child => match child with
+        | .each .. => .element "#window" [] [] [] [child]
+        | _ => child)
+      else children) = Node.handlerLists children := by
+  by_cases h : (tag == "list" &&
+    ((lookupField "virtualized" props).map tabLiteral matches .some (.bool true))) = true
+  · simp [h, handlerLists_windowed]
+  · simp [h]
+
 /-- A rendered element carries only handlers its view declares. -/
 theorem render_handlers : ∀ fuel,
     (∀ {cx ls nodes live vs live'}, render fuel cx ls nodes live = .ok (vs, live') →
@@ -130,7 +151,11 @@ theorem render_handlers : ∀ fuel,
           simp only [Node.handlerList]
           refine .single (fun _ h => List.mem_append_left _ h) ?_
           split at hk
-          · exact (ihR hk).mono fun _ h => List.mem_append_right _ h
+          · refine (ihR hk).mono fun x h => ?_
+            have h' : x ∈ Node.handlerLists children :=
+              (congrArg (fun handlers => x ∈ handlers)
+                (handlerLists_renderChildren tag props children)).mp h
+            exact List.mem_append_right _ h'
           · simp only [Except.pure_ok_iff, Prod.mk.injEq] at hk
             rw [← hk.1]; exact .nil
         | when tag c thn els =>

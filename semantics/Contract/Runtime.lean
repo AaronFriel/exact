@@ -179,12 +179,48 @@ earlier rows of that list had the same key (the runner's `dup`). A row in
 a nested `each` is named by its path from the outermost. -/
 abbrev RowId := List (Nat × Value × Nat)
 
-/-- Each live row's slots. -/
+/-- The binder values the render chose for one live region instance. -/
+structure RowFrame where
+  item : Option Value := .none
+  index : Option Nat := .none
+  bound : Option Value := .none
+  deriving Repr, Inhabited
+
+/-- Each live row's slots. The renderer also adds empty marker rows after
+an instance to retain its item, index, or match binding. Their tag is
+outside the program's region tags, so they cannot name an authored row. -/
 abbrev RowStore := List (RowId × List (String × Value))
 
 def RowStore.find (rs : RowStore) (id : RowId) : Option (List (String × Value)) :=
   (rs.find? fun (i, _) => i.length == id.length &&
     (i.zip id).all fun ((t, k, d), (t', k', d')) => t == t' && d == d' && Value.same k k').map (·.2)
+
+def regionTags : List Node → List Nat
+  | [] => []
+  | .element _ _ _ _ children :: rest => regionTags children ++ regionTags rest
+  | .when tag _ thn els :: rest => tag :: (regionTags thn ++ regionTags els ++ regionTags rest)
+  | .matchN tag _ _ someNodes noneNodes :: rest =>
+    tag :: (regionTags someNodes ++ regionTags noneNodes ++ regionTags rest)
+  | .each tag _ _ _ _ body :: rest => tag :: (regionTags body ++ regionTags rest)
+
+/-- A tag no authored region has. It distinguishes render-owned frame
+markers from live instance rows without changing the row-store type. -/
+def instanceMarkerTag (p : Program) : Nat :=
+  (regionTags p.view).foldl max 0 + 1
+
+def frameMarkerIds (p : Program) (id : RowId) (frame : RowFrame) : List RowId :=
+  let marker (kind : Nat) (value : Value) : RowId :=
+    id ++ [(instanceMarkerTag p, value, kind)]
+  (frame.item.map (marker 0)).toList ++
+    (frame.index.map (fun i => marker 1 (.num (F64.ofNat i)))).toList ++
+    (frame.bound.map (marker 2)).toList
+
+def frameMarkers (p : Program) (id : RowId) (frame : RowFrame) : RowStore :=
+  (frameMarkerIds p id frame).map fun marker => (marker, [])
+
+def recordInstance (p : Program) (live : RowStore) (id : RowId)
+    (slots : List (String × Value)) (frame : RowFrame) : RowStore :=
+  live ++ [(id, slots)] ++ frameMarkers p id frame
 
 /-- A rendered element: what the view shows and what a host can address. -/
 structure VNode where
@@ -219,6 +255,7 @@ structure RenderCx where
   tabs : TabCx := {}
   /-- What the instances' requests ask (LLP 1035.005.004 D2). -/
   oracle : Oracle := {}
+  enterFrame : RowFrame := {}
 
 /-- An element's text: the first positional argument, displayed, of a tag
 whose positional is its text (`text`, `tspan`, `option`). -/
@@ -254,6 +291,15 @@ def elementControl (tag : String) (props : List (String × Expr)) : Option Strin
     | _ => Option.none
   else Option.none
 
+/-- The navigation fact that decides whether an element's children render. -/
+def elementNavigation (fuel : Nat) (env : Env) (ls : Locals) (tabs : TabCx)
+    (props : List (String × Expr)) : Result TabInfo := do
+  let values ← (tabProps props).mapM fun (name, e) => do
+    pure (name, ← unsetRefused (eval fuel env false ls e))
+  pure (tabs.element props (values.filterMap fun (n, v) => v.map (n, ·)))
+
+def TabInfo.rendersChildren (navigation : TabInfo) : Bool := navigation.opened
+
 /-- Render a view. Returns the elements and the rows that are live after
 it (their slots, kept from `store` or initialized now). -/
 def render : Nat → RenderCx → Locals → List Node → RowStore → Result (List VNode × RowStore)
@@ -264,15 +310,13 @@ def render : Nat → RenderCx → Locals → List Node → RowStore → Result (
       | .element tag pos props hs children => do
         let text ← elementText fuel cx.env ls tag pos
         let testId ← elementTestId fuel cx.env ls props
-        let values ← (tabProps props).mapM fun (name, e) => do
-          pure (name, ← unsetRefused (eval fuel cx.env false ls e))
-        let navigation := cx.tabs.element props (values.filterMap fun (n, v) => v.map (n, ·))
+        let navigation ← elementNavigation fuel cx.env ls cx.tabs props
         let windowed := tag == "list" && ((lookupField "virtualized" props).map tabLiteral matches .some (.bool true))
         -- Only the direct data region is hidden from observation and tab discovery.
         let children := if windowed then children.map (fun child => match child with
           | .each .. => .element "#window" [] [] [] [child]
           | _ => child) else children
-        let (kids, live) ← (if navigation.opened then
+        let (kids, live) ← (if navigation.rendersChildren then
           render fuel { cx with tabs := cx.tabs.children props } ls children live
           else pure ([], live))
         pure ([{ tag, testId, text, handlers := hs, locals := ls, rows := cx.rows,
@@ -281,13 +325,14 @@ def render : Nat → RenderCx → Locals → List Node → RowStore → Result (
                  navigation, children := kids : VNode }], live)
       | .when tag c thn els => do
         match ← eval fuel cx.env false ls c with
-        | .bool true => renderArm fuel cx ls tag 0 thn live
-        | .bool false => renderArm fuel cx ls tag 1 els live
+        | .bool true => renderArm fuel { cx with enterFrame := {} } ls tag 0 thn live
+        | .bool false => renderArm fuel { cx with enterFrame := {} } ls tag 1 els live
         | _ => .error (.type "`when` on a value that is not a bool")
       | .matchN tag s x sm nn => do
         match ← eval fuel cx.env false ls s with
-        | .some v => renderArm fuel cx ((x, v) :: ls) tag 0 sm live
-        | .none => renderArm fuel cx ls tag 1 nn live
+        | .some v =>
+          renderArm fuel { cx with enterFrame := { bound := some v } } ((x, v) :: ls) tag 0 sm live
+        | .none => renderArm fuel { cx with enterFrame := {} } ls tag 1 nn live
         | _ => .error (.type "`match` on a value that is not an option")
       | .each tag x ix list key body => do
         let items ← (← eval fuel cx.env false ls list).asList
@@ -328,8 +373,8 @@ where
       let slots ← settleOwned fuel cx.oracle cx.env ls (tag, arm) slots
       let cx' : RenderCx := { cx with
         env := Env.withOwned { cx.env with rows := slots ++ cx.env.rows }, rows := id :: cx.rows,
-        tabs := cx.tabs.enter (.num (F64.ofNat arm)) }
-      render fuel cx' ls body (live ++ [(id, slots)])
+        tabs := cx.tabs.enter (.num (F64.ofNat arm)), enterFrame := {} }
+      render fuel cx' ls body (recordInstance cx.env.prog live id slots cx.enterFrame)
   /-- The rows of an `each`, in list order. `seen` holds the keys of the
   rows before this one, for `dup`. -/
   renderRows : Nat → RenderCx → Locals → Nat → String → Option String → Expr → List Node →
@@ -350,8 +395,10 @@ where
       let slots ← settleOwned fuel cx.oracle cx.env ls' (tag, 0) slots
       let cx' : RenderCx := { cx with
         env := Env.withOwned { cx.env with rows := slots ++ cx.env.rows },
-        rows := id :: cx.rows, tabs := cx.tabs.enter k dup }
-      let (vs, live) ← render fuel cx' ls' body (live ++ [(id, slots)])
+        rows := id :: cx.rows, tabs := cx.tabs.enter k dup, enterFrame := {} }
+      let frame : RowFrame := { item := some item, index := some i }
+      let (vs, live) ← render fuel cx' ls' body
+        (recordInstance cx.env.prog live id slots frame)
       let (more, live) ← renderRows fuel cx ls tag x ix key body items (i + 1) (seen ++ [k]) live
       pure (vs ++ more, live)
 
@@ -360,6 +407,10 @@ def tabIndex : List VNode → Tabs.Index
   | [] => []
   | n@{ children, .. } :: rest => n.navigation ::
       ((if n.windowed then [] else tabIndex children) ++ tabIndex rest)
+
+/-- The tab context from which render and validation traverse a configuration. -/
+def renderTabContext (o : Oracle) (view : List VNode) : TabCx :=
+  { opened := Tabs.visited (tabIndex view), every := o.everyTab }
 
 /-- Render empty waiting panels, then open the ones selection requires.
 Each pass retains the preceding pass's initialized slots. The bound only
@@ -535,8 +586,7 @@ def update (p : Program) (o : Oracle) (slots : List (String × Value)) (store : 
     Result (Settled × Result (List VNode × RowStore)) := do
   let st ← settle p o slots now prev force
   let env : Env := { prog := p, slots, derives := st.derives, resources := st.resources, now, idle := st.idle }
-  .ok (st, renderTabs fuel
-    { env, store, tabs := { opened := Tabs.visited (tabIndex view), every := o.everyTab }, oracle := o })
+  .ok (st, renderTabs fuel { env, store, tabs := renderTabContext o view, oracle := o })
 
 /-- Whether the router slot, if the program has one, holds a valid router
 (`Route.routerOf`). -/
@@ -1043,7 +1093,7 @@ def boot (p : Program) (o : Oracle) : Config × Outcome :=
       | .error e => (empty, .refused e)
       | .ok timers =>
       let env : Env := { prog := p, slots, derives := st.derives, resources := st.resources, now := 0, idle := st.idle }
-      match renderTabs fuel { env, store := [], tabs := { every := o.everyTab }, oracle := o } with
+      match renderTabs fuel { env, store := [], tabs := renderTabContext o [], oracle := o } with
       | .ok (view, live) =>
         ({ slots, settled := st, store := live, view, now := 0, timers }, .ok)
       -- A view that fails to render at boot fails the boot: there is no

@@ -10,6 +10,9 @@ import { simulator, useXcode } from './devices.mjs';
 import { spawnSync } from 'node:child_process';
 import { assertActivityRefusals } from './activities.mjs';
 import { resolveApp } from '../../scripts/app.mjs';
+import { receiptChanges } from '../../scripts/agent-launch.mjs';
+import { need, notApplicable } from '../../scripts/coverage.mjs';
+import { appleArtifacts } from './build.mjs';
 import { appleComposition, assertCapabilityFrameworks, assertLinkedSdk, compiledTargets, deploymentTargets, iosSimulatorTarget, loadedDylibs, recordMinimumOS } from './link.mjs';
 import { composedModule, moduleSeam, moduleLibraryLinkArgs, systemFrameworks, packageCompiler, rosterProbe, rosterProbeMain } from './compose.mjs';
 import { placeMacDylibs } from './bundle.mjs';
@@ -725,6 +728,51 @@ test.skipIf(process.platform !== 'darwin' || helloBake().length === 0)('hello li
     assert.deepEqual(names.split('\n').filter(s => /PresenceKeychain|PresenceCheck|presenceKeychainHook|presence_secrets|exact_on_presence_keychain/.test(s)), []);
   }
 });
+
+const agentHelloBakes = () => {
+  const clients = resolve(import.meta.dir, '../../target/clients');
+  if (!existsSync(clients)) return [];
+  return readdirSync(clients).flatMap((client) => {
+    const owner = join(clients, client, 'com.exact.hello');
+    return [
+      ['iOS', 'production', join(owner, 'ios-simulator/aarch64-apple-ios-sim/embedded/production/standalone/Hello.dSYM/Contents/Resources/DWARF/Hello'), join(owner, 'ios-simulator/aarch64-apple-ios-sim/embedded/production/standalone/Hello.receipt.json')],
+      ['iOS', 'development', join(owner, 'ios-simulator/aarch64-apple-ios-sim/embedded/development/standalone/Hello.app/Hello'), join(owner, 'ios-simulator/aarch64-apple-ios-sim/embedded/development/standalone/Hello.app/receipt.json')],
+      ['macOS', 'production', join(owner, 'macos/aarch64-apple-darwin/embedded/production/standalone/Hello.dSYM/Contents/Resources/DWARF/Hello'), join(owner, 'macos/aarch64-apple-darwin/embedded/production/standalone/receipt.json')],
+      ['macOS', 'development', join(owner, 'macos/aarch64-apple-darwin/embedded/development/standalone/Hello'), join(owner, 'macos/aarch64-apple-darwin/embedded/development/standalone/receipt.json')],
+    ].map(([platform, trust, symbols, receipt]) => ({ platform, trust, symbols, receipt }))
+      .filter(({ symbols, receipt }) => existsSync(symbols) || existsSync(receipt));
+  });
+};
+const expectedAgentHelloBakes = () => {
+  const app = resolveApp('hello');
+  const iosProduction = appleArtifacts(app, { destination: 'ios-simulator', trust: 'production' });
+  const iosDevelopment = appleArtifacts(app, { destination: 'ios-simulator', trust: 'development' });
+  const macProduction = appleArtifacts(app, { trust: 'production' });
+  const macDevelopment = appleArtifacts(app, { trust: 'development' });
+  return [
+    { platform: 'iOS', trust: 'production', symbols: join(`${iosProduction.binary}.dSYM`, 'Contents/Resources/DWARF', iosProduction.executable), receipt: join(iosProduction.products, `${iosProduction.executable}.receipt.json`) },
+    { platform: 'iOS', trust: 'development', symbols: join(iosDevelopment.bundle, iosDevelopment.executable), receipt: join(iosDevelopment.bundle, 'receipt.json') },
+    { platform: 'macOS', trust: 'production', symbols: join(`${macProduction.binary}.dSYM`, 'Contents/Resources/DWARF', macProduction.executable), receipt: join(macProduction.products, 'receipt.json') },
+    { platform: 'macOS', trust: 'development', symbols: macDevelopment.binary, receipt: join(macDevelopment.products, 'receipt.json') },
+  ];
+};
+const requiredAgentHelloBakes = () => {
+  const bySymbols = new Map([...agentHelloBakes(), ...expectedAgentHelloBakes()].map(bake => [bake.symbols, bake]));
+  return [...bySymbols.values()];
+};
+const missingAgentHelloBakes = () => {
+  const app = resolveApp('hello'), missing = [];
+  for (const bake of requiredAgentHelloBakes()) {
+    const label = `${bake.platform} ${bake.trust}`;
+    if (!existsSync(bake.symbols)) missing.push(`${label} symbols at ${bake.symbols}`);
+    if (!existsSync(bake.receipt)) missing.push(`${label} receipt at ${bake.receipt}`);
+    else {
+      const changed = receiptChanges(bake.receipt, app);
+      if (changed.length) missing.push(`${label} is stale (${changed.slice(0, 3).join(', ')}${changed.length > 3 ? ` and ${changed.length - 3} more` : ''})`);
+    }
+  }
+  return missing.length ? missing.join('; ') : null;
+};
 // The executor's cache, which parses URLs and grants, and the process's launch work stay out of it.
 test.skipIf(process.platform !== 'darwin' || helloBake().length === 0)('an app whose plan and grants open no I/O links no launch preloads (LLP 1047.001)', () => {
   for (const symbols of helloBake()) {
@@ -732,6 +780,39 @@ test.skipIf(process.platform !== 'darwin' || helloBake().length === 0)('an app w
     assert.deepEqual(names.split('\n').filter((s) => /14exact_executor5cache|15launch_preloads6Launch/.test(s)), []);
   }
 });
+
+const agentSymbolCheck = process.platform !== 'darwin' ? notApplicable('Darwin only')
+  : process.env.EXACT_GLUE_FAST === '1' ? notApplicable('the async glue step builds no Apple apps; metrics --long builds and checks these artifacts')
+  : need('Apple Hello builds', missingAgentHelloBakes());
+agentSymbolCheck('production omits the agent while development links it (LLP 1047.001)', () => {
+  const names = (binary) => {
+    const raw = spawnSync('xcrun', ['llvm-nm', '--demangle', binary], { encoding: 'utf8', maxBuffer: 1 << 28 });
+    assert.equal(raw.status, 0, raw.stderr);
+    const demangled = spawnSync('xcrun', ['swift-demangle'], { input: raw.stdout, encoding: 'utf8', maxBuffer: 1 << 28 });
+    assert.equal(demangled.status, 0, demangled.stderr);
+    return demangled.stdout;
+  };
+  // llvm-nm prefixes a symbol with its address and type; this positive control
+  // proves the matcher is looking through that prefix before absence is useful.
+  const line = (symbol) => new RegExp(`^[0-9a-fA-F]+\\s+\\S\\s+.*${symbol}`, 'm');
+  const app = resolveApp('hello'), bakes = requiredAgentHelloBakes();
+  assert.ok(bakes.some(bake => bake.platform === 'iOS' && bake.trust === 'production'));
+  assert.ok(bakes.some(bake => bake.platform === 'macOS' && bake.trust === 'production'));
+  for (const bake of bakes) {
+    assert.deepEqual(receiptChanges(bake.receipt, app), [], `${bake.platform} ${bake.trust} build is stale`);
+    const receipt = JSON.parse(readFileSync(bake.receipt, 'utf8'));
+    assert.equal(receipt.build?.trust, bake.trust, `${bake.platform} receipt has another trust`);
+    const symbols = names(bake.symbols);
+    if (bake.trust === 'production') {
+      assert.match(symbols, line('ExactKit\\.FrameHealth\\.reportSource\\.getter'), `${bake.platform} positive control`);
+      assert.doesNotMatch(symbols, line('ExactKit\\.Agent(?:[.( ]|$)'), `${bake.platform} production agent`);
+    } else {
+      assert.match(symbols, line(`static ExactKit\\.Agent\\.${bake.platform === 'iOS' ? 'startSocket' : 'startStdio'}`), `${bake.platform} carrier`);
+      assert.match(symbols, line('ExactKit\\.Agent\\.accessibilityElementsTree'), `${bake.platform} accessibility`);
+      assert.match(symbols, line('ExactKit\\.Agent\\.layout\\(\\)'), `${bake.platform} layout`);
+    }
+  }
+}, 60_000);
 
 test('the load commands are read from the file, each slice of a universal one; a binary with no capability framework passes the check', () => {
   assert.ok(loadedDylibs('/bin/ls').includes('/usr/lib/libSystem.B.dylib'));

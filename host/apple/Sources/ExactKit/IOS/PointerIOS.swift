@@ -406,7 +406,9 @@ extension NodeView {
     // bubbles. A pan cancels it (the scroll view's `canCancelContentTouches`):
     // scroll always wins.
     package override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        #if EXACT_AGENT
         if ExactEnv.agentCarried { TouchLog.reach(touches) }
+        #endif
         let layoutHit = touches.first.flatMap { touch in
             touch.view.flatMap { LayoutHits.touched($0, at: touch.location(in: nil)) }
         }

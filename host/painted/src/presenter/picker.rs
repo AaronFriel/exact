@@ -535,6 +535,11 @@ impl<D: DataSource> Presenter<D> {
         timeout: std::time::Duration,
     ) {
         let (inbox, wake) = (self.portal.clone(), self.executor.waker());
+        let filters = if request.kind == exact_runner::file_pickers::Kind::Directory {
+            Ok(Vec::new())
+        } else {
+            crate::portal::filters(&self.compat)
+        };
         let kind = request.kind;
         let ask = {
             let mut asks = inbox.lock().unwrap_or_else(|e| e.into_inner());
@@ -546,7 +551,12 @@ impl<D: DataSource> Presenter<D> {
         let asked = std::thread::Builder::new()
             .name("exact-portal".into())
             .spawn(move || {
-                let outcome = crate::portal::choose(&request, address.as_deref(), timeout);
+                let outcome = match filters {
+                    Ok(filters) => {
+                        crate::portal::choose(&request, &filters, address.as_deref(), timeout)
+                    }
+                    Err(reason) => crate::portal::Outcome::Refused(reason),
+                };
                 (inbox.lock().unwrap_or_else(|e| e.into_inner()))
                     .answered
                     .push((ask, kind, outcome));

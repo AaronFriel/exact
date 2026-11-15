@@ -8,13 +8,14 @@ import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import vm from 'node:vm';
 import { modulePrelude } from '../web-js/glue.mjs';
+import { isolatedAbortSignal, moduleRealm, race, secretEnvironment, TASK_DELAYED_LOCKS } from './module-storage-harness.mjs';
 
 const ROOT = resolve(import.meta.dir, '../..');
 // The runner's normalized set for `net.fetch https://api.castle.test` (as tests/it/request.rs's batch carries it).
 const GRANTS = {version:1,entries:[[1,'net.fetch https://api.castle.test',['fetch','https','api.castle.test',443],null]],error:null,seal:'825ec7a8503217b3'};
 
 test('the image waiter cannot expose a raw database behind the storage queue', async () => {
-  const realm = vm.createContext({ URL, TextEncoder, TextDecoder, AbortController, AbortSignal, crypto,
+  const realm = vm.createContext({ URL, TextEncoder, TextDecoder, AbortController, AbortSignal: isolatedAbortSignal(), crypto,
     __exact_host: () => '', console: { error() {} } });
   vm.runInContext(readFileSync(resolve(ROOT, 'js/src/binary.js'), 'utf8'), realm);
   vm.runInContext(modulePrelude(ROOT), realm);
@@ -52,7 +53,7 @@ test('the image waiter cannot expose a raw database behind the storage queue', a
 for (const phase of ['sync', 'rename']) test(`a timed-out atomic write held at ${phase} keeps its queue slot`, async () => {
   const dir = mkdtempSync(resolve(tmpdir(), 'exact-storage-timeout-'));
   const path = resolve(dir, 'value'), temporary = text => resolve(dir, 'staged-' + text);
-  const realm = vm.createContext({ URL, TextEncoder, TextDecoder, AbortController, AbortSignal, crypto,
+  const realm = vm.createContext({ URL, TextEncoder, TextDecoder, AbortController, AbortSignal: isolatedAbortSignal(), crypto,
     __exact_host: () => '', console: { error() {} } });
   vm.runInContext(readFileSync(resolve(ROOT, 'js/src/binary.js'), 'utf8'), realm);
   vm.runInContext(modulePrelude(ROOT), realm);
@@ -121,7 +122,7 @@ for (const phase of ['sync', 'rename']) test(`a timed-out atomic write held at $
 
 // A realm whose `atomicWriteFile` holds the write of `first` until `release()`; `order` records what the store did.
 function heldWriteRealm(answer) {
-  const realm = vm.createContext({ URL, TextEncoder, TextDecoder, AbortController, AbortSignal, DOMException, crypto,
+  const realm = vm.createContext({ URL, TextEncoder, TextDecoder, AbortController, AbortSignal: isolatedAbortSignal(), DOMException, crypto,
     __exact_host: () => '', console: { error() {} } });
   vm.runInContext(readFileSync(resolve(ROOT, 'js/src/binary.js'), 'utf8'), realm);
   vm.runInContext(modulePrelude(ROOT), realm);
@@ -192,7 +193,7 @@ test('a let-go storage timeout rejects only the timed-out answer\'s queued work'
 });
 
 test('image writes notify only for a successful widget-readable destination', async () => {
-  const realm = vm.createContext({ URL, TextEncoder, TextDecoder, AbortController, AbortSignal, crypto,
+  const realm = vm.createContext({ URL, TextEncoder, TextDecoder, AbortController, AbortSignal: isolatedAbortSignal(), crypto,
     __exact_host: () => '', console: { error() {} } });
   vm.runInContext(readFileSync(resolve(ROOT, 'js/src/binary.js'), 'utf8'), realm);
   vm.runInContext(modulePrelude(ROOT), realm);
@@ -264,7 +265,7 @@ export { refuseCodeFromStrings } from ${JSON.stringify(resolve(ROOT, 'host/web/s
     const sha = new Bun.CryptoHasher('sha256').update(script).digest('hex');
     globalThis.reads = [];
     const win = vm.createContext({ console: { log() {}, info() {}, warn() {}, error() {}, debug() {} }, TextEncoder, TextDecoder, structuredClone, setTimeout, clearTimeout,
-      queueMicrotask, URL, Headers, DOMException, crypto, indexedDB: null, MessageChannel, Uint8Array, ArrayBuffer, AbortController, AbortSignal, addEventListener() {} });
+      queueMicrotask, URL, Headers, DOMException, crypto, indexedDB: null, MessageChannel, Uint8Array, ArrayBuffer, AbortController, AbortSignal: isolatedAbortSignal(), addEventListener() {} });
     win.window = win;
     for (const name of ['Promise', 'Error', 'SyntaxError', 'Object', 'Array', 'JSON', 'Symbol', 'Function', 'eval']) win[name] = vm.runInContext(name, win); // what storage.js builds in the realm
     win.document = { createElement: () => ({}), head: { append: el => vm.runInContext(el.textContent, win) } };
@@ -301,112 +302,16 @@ export { refuseCodeFromStrings } from ${JSON.stringify(resolve(ROOT, 'host/web/s
   }
 });
 
-// The real prelude and host turns, with storage backends that land at once.
-// `done` closes either placement even when an answer is still parked.
-async function moduleRealm(script, { placement = 'worker', key = 'k', top = '', secrets = false, stored = [], controlWorkerMessages = false } = {}) {
-  const declaration = 'net.fetch https://api.castle.test' + (secrets ? '\nsecret.keep token' : '');
-  const normalized = secrets ? { version: 1, entries: [...GRANTS.entries, [2, 'secret.keep token', ['secret-keep', 'token'], null]], error: null, seal: '7c439325539248a1' } : GRANTS;
-  const dir = mkdtempSync(resolve(tmpdir(), 'exact-worker-storage-')), captured = {};
-  const saved = Object.fromEntries(['fetch', 'document', 'location', 'exact', 'Worker'].map(name => [name, Object.getOwnPropertyDescriptor(globalThis, name)]));
-  let realm;
-  const done = () => {
-    realm?.dispose();
-    for (const [name, descriptor] of Object.entries(saved)) { if (descriptor) Object.defineProperty(globalThis, name, descriptor); else delete globalThis[name]; }
-    rmSync(dir, { recursive: true, force: true });
-  };
+test('a module realm does not replace the test process AbortSignal.timeout', async () => {
+  const timeout = Object.getOwnPropertyDescriptor(AbortSignal, 'timeout');
+  const w = await moduleRealm(`return 'ready';`, { placement: 'main' });
   try {
-    for (const name of ['module-glue.js', 'module-worker.js', 'storage.js', 'grant-admission.js', 'faults.js', 'navigation.js']) writeFileSync(resolve(dir, name), hostFixtureFile(resolve(ROOT, 'host/web', name)));
-    writeFileSync(resolve(dir, 'storage-environment.js'), `export const directories = Object.freeze({ data: 'app:/data', cache: 'app:/cache', temporary: 'app:/tmp' });
-export const storageKey = () => ${JSON.stringify(key)}; export const agentStorageRefusal = 'no store'; export const agentReads = ['readdir']; export const emptyRead = () => []; export const agentSeed = () => null;
-export const agentStream = () => null; export const keyStore = () => ({}); export const now = () => 0;
-export { refuseCodeFromStrings } from ${JSON.stringify(resolve(ROOT, 'host/web/storage-environment.js'))};`);
-    writeFileSync(resolve(dir, 'storage-fs.js'), `export const createFileSystem = () => {
-  const files = new Map();
-  return { readFile: async path => {
-    if (path.endsWith('/held')) await new Promise(resolve => { globalThis.__exact_test_release_held_storage = resolve; });
-    return files.get(path) ?? new TextEncoder().encode(path);
-  }, readdir: async () => [],
-    writeFile: async (path, bytes) => { files.set(path, bytes); }, dispose() {} };
-};`);
-    writeFileSync(resolve(dir, 'storage-sqlite.js'), `export const createSqlite = () => ({
-  open: async () => ({ query: async (_sql, params) => params,
-    prepare: async () => ({ query: async params => params, close: async () => {} }), close: async () => {} }), dispose() {} });`);
-    const prelude = modulePrelude(ROOT);
-    const binary = readFileSync(resolve(ROOT, 'js/src/binary.js'), 'utf8');
-    const bytes = new TextEncoder().encode(`exact = { abi: 1, appId: 'test.storage', grants: ${JSON.stringify(declaration)}, answer(source, args, store, storage) {
-  const read = path => storage.fs.readFile(path).then(bytes => new TextDecoder().decode(bytes));
-  ${script}
-} };
-${top}`);
-    const sha = new Bun.CryptoHasher('sha256').update(bytes).digest('hex');
-    globalThis.fetch = async url => { const r = new Response(String(url).endsWith('module-prelude.js') ? prelude : String(url).endsWith('module-binary.js') ? binary : 'never'); Object.defineProperty(r, 'url', { value: 'http://127.0.0.1/x' }); return r; };
-    globalThis.location = { href: 'http://127.0.0.1/', origin: 'http://127.0.0.1' };
-    globalThis.exact = {};
-    if (placement === 'worker' && controlWorkerMessages) {
-      const NativeWorker = globalThis.Worker;
-      const messages = { held: false, queue: [], barriers: [] };
-      captured.messages = messages;
-      globalThis.Worker = class {
-        constructor(...args) {
-          this.worker = new NativeWorker(...args);
-          messages.dispatch = event => this.onmessage?.(event);
-          this.worker.onmessage = event => {
-            if (!messages.held) { messages.dispatch(event); return; }
-            messages.queue.push(event);
-            for (const [count, done] of messages.barriers) if (messages.queue.length >= count) done();
-          };
-          this.worker.onerror = event => this.onerror?.(event);
-          this.worker.onmessageerror = event => this.onmessageerror?.(event);
-        }
-        postMessage(...args) { return this.worker.postMessage(...args); }
-        terminate() { return this.worker.terminate(); }
-      };
-    }
-    if (placement === 'main') {
-      const win = vm.createContext({ console: { log() {}, info() {}, warn() {}, error() {}, debug() {} }, TextEncoder, TextDecoder, structuredClone, setTimeout, clearTimeout,
-        queueMicrotask, URL, Headers, DOMException, crypto, indexedDB: null, MessageChannel, Uint8Array, ArrayBuffer, AbortController, AbortSignal, addEventListener() {} });
-      win.window = win;
-      for (const name of ['Promise', 'Error', 'SyntaxError', 'Object', 'Array', 'JSON', 'Symbol', 'Function', 'eval']) win[name] = vm.runInContext(name, win);
-      win.document = { createElement: () => ({}), head: { append: el => vm.runInContext(el.textContent, win) } };
-      const frame = { contentWindow: win, setAttribute() {}, remove() {} };
-      Object.defineProperty(globalThis, 'document', { configurable: true, value: { createElement: () => frame, body: { append() {} } } });
-      // The realm's door, kept as module-glue installs it (the prelude takes and deletes it at load).
-      Object.defineProperty(win, '__exact_host', { configurable: true, set(door) {
-        captured.door = door; Object.defineProperty(win, '__exact_host', { configurable: true, writable: true, value: door });
-      } });
-    }
-    const { createGrantSet } = await import(resolve(dir, 'grant-admission.js'));
-    const glue = await import(resolve(dir, 'module-glue.js'));
-    const grants = declaration;
-    const receipt = new TextEncoder().encode(JSON.stringify({ version: 1, abi: 1, appId: 'test.storage', grants, web: { file: 'app.js', bytes: bytes.length, sha256: sha }, module: { sha256: 'b'.repeat(64) } }));
-    realm = await glue.prepare({ receipt, script: bytes }, { appId: 'test.storage', grants, grantSet: createGrantSet(normalized), placement });
-    const request = (op, source, extra = {}) => ({ op, id: realm.id, target: source, source, args: [], store: [['recovery-owner', source], ...stored], grants: secrets ? ['token'] : [], ...extra });
-    return {
-      done, door: () => captured.door, aborted: () => glue.call({ op: 'aborted', id: realm.id }).tickets,
-      ask: source => glue.run(glue.call(request('answer', source)).continuation),
-      askWithDeliver: (source, deliver) => glue.run(glue.call(request('answer', source)).continuation, deliver),
-      resume: (source, response = { status: 200, headers: [], body: 'fresh' }) => glue.run(glue.call(request('resume', source, { outcome: { response } })).continuation),
-      background: () => glue.call({ op: 'background', id: realm.id }),
-      drain: () => glue.run(glue.call({ op: 'background-round', id: realm.id }).token),
-      forget: inFlight => glue.call({ op: 'forget', id: realm.id, inFlight: inFlight.map(s => request('answer', s)) }),
-      overlay: source => glue.call({ op: 'overlay', id: realm.id, source, args: [], answer: [], writes: [] }),
-      holdWorkerMessagesAfter: count => {
-        const dispatch = captured.messages.dispatch;
-        captured.messages.dispatch = event => {
-          dispatch(event);
-          if (--count === 0) captured.messages.held = true;
-        };
-      },
-      workerMessages: count => captured.messages.queue.length >= count ? Promise.resolve() : new Promise(done => captured.messages.barriers.push([count, done])),
-      workerMessage: index => captured.messages.queue[index]?.data,
-      releaseWorkerMessages: () => {
-        captured.messages.held = false;
-        for (const event of captured.messages.queue.splice(0)) captured.messages.dispatch(event);
-      },
-    };
-  } catch (error) { done(); throw error; }
-}
-const race = p => Promise.race([p.then(v => v, e => `rejected: ${e.message}`), new Promise(r => setTimeout(() => r('STILL WAITING'), 1500))]);
+    expect(Object.getOwnPropertyDescriptor(AbortSignal, 'timeout')).toEqual(timeout);
+    expect((await w.ask('probe')).value).toBe('ready');
+  } finally { w.done(); }
+  expect(Object.getOwnPropertyDescriptor(AbortSignal, 'timeout')).toEqual(timeout);
+});
+
 
 // #128: the module's realm, the iframe's (module-glue.js `prepare`) and the worker's (module-worker.js `init`), runs no
 // code from a string, as Hermes runs none, and keeps what a function needs of `Function` (storage-environment.js
@@ -646,99 +551,6 @@ Object.defineProperty(exact, 'overlay', { get() {
   } finally { w.done(); }
 }, 20000);
 
-function secretEnvironment(kept) {
-  const saved = Object.fromEntries(['navigator', 'localStorage'].map(name => [name, Object.getOwnPropertyDescriptor(globalThis, name)]));
-  const disk = new Map([['exact.secret.token', kept]]), queues = new Map(), held = new Set();
-  let writesFail = false, requested = 0, granted = 0, entered = 0;
-  const requestBarriers = [], grantBarriers = [], enterBarriers = [];
-  const grant = () => { granted++; for (const [count, done] of grantBarriers) if (granted >= count) done(); };
-  const enter = () => { entered++; for (const [count, done] of enterBarriers) if (entered >= count) done(); };
-  const later = () => new Promise(resolve => {
-    const channel = new MessageChannel();
-    channel.port1.onmessage = () => { channel.port1.close(); channel.port2.close(); resolve(); };
-    channel.port2.postMessage(null);
-  });
-  const pump = name => {
-    const queue = queues.get(name);
-    if (held.has(name) || !queue?.length) return;
-    const next = queue.shift();
-    held.add(name);
-    void (async () => {
-      await later();
-      await later();
-      if (next.cancelled) { held.delete(name); pump(name); return; }
-      next.lockGranted = true;
-      grant();
-      try {
-        const running = next.work({ name, mode: 'exclusive' });
-        enter();
-        next.resolve(await running);
-      }
-      catch (error) { next.reject(error); }
-      finally { held.delete(name); pump(name); }
-    })();
-  };
-  const locks = { request(name, options, work) {
-    if (typeof options === 'function') { work = options; options = {}; }
-    requested++;
-    for (const [count, done] of requestBarriers) if (requested >= count) done();
-    if (options.ifAvailable && held.has(name)) return (async () => { await later(); await later(); return work(null); })();
-    return new Promise((resolve, reject) => {
-      const next = { work, resolve, reject, lockGranted: false, cancelled: false };
-      const abort = () => {
-        if (next.lockGranted || next.cancelled) return;
-        next.cancelled = true;
-        reject(new Error('aborted'));
-      };
-      options.signal?.addEventListener('abort', abort, { once: true });
-      const finish = next.resolve;
-      next.resolve = value => { options.signal?.removeEventListener('abort', abort); finish(value); };
-      (queues.get(name) ?? queues.set(name, []).get(name)).push(next);
-      pump(name);
-    });
-  } };
-  Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { locks } });
-  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: { getItem: key => disk.get(key) ?? null, setItem: (key, value) => { if (writesFail) throw new Error('quota'); disk.set(key, value); }, removeItem: key => disk.delete(key) } });
-  return { disk, requested(count) { return requested >= count ? Promise.resolve() : new Promise(done => requestBarriers.push([count, done])); },
-    granted(count) { return granted >= count ? Promise.resolve() : new Promise(done => grantBarriers.push([count, done])); },
-    entered(count) { return entered >= count ? Promise.resolve() : new Promise(done => enterBarriers.push([count, done])); },
-    checkpoint: later, requestCount: () => requested, grantCount: () => granted, failWrites() { writesFail = true; }, restore() {
-    for (const [name, descriptor] of Object.entries(saved)) { if (descriptor) Object.defineProperty(globalThis, name, descriptor); else delete globalThis[name]; }
-  } };
-}
-
-const TASK_DELAYED_LOCKS = `{
-  const queues = new Map(), held = new Set();
-  const later = () => new Promise(resolve => {
-    const channel = new MessageChannel();
-    channel.port1.onmessage = () => { channel.port1.close(); channel.port2.close(); resolve(); };
-    channel.port2.postMessage(null);
-  });
-  const pump = name => {
-    const queue = queues.get(name);
-    if (held.has(name) || !queue?.length) return;
-    const next = queue.shift();
-    held.add(name);
-    void (async () => {
-      await later();
-      await later();
-      try { next.resolve(await next.work({name, mode:'exclusive'})); }
-      catch (error) { next.reject(error); }
-      finally { held.delete(name); pump(name); }
-    })();
-  };
-  const locks = { request(name, options, work) {
-    if (typeof options === 'function') { work = options; options = {}; }
-    if (options.ifAvailable && held.has(name)) return (async () => { await later(); await later(); return work(null); })();
-    return new Promise((resolve, reject) => {
-      (queues.get(name) ?? queues.set(name, []).get(name)).push({work, resolve, reject});
-      pump(name);
-    });
-  } };
-  const moduleNavigator = typeof navigator === 'object' ? navigator : {};
-  if (typeof navigator !== 'object') Object.defineProperty(globalThis, 'navigator', {configurable:true, value:moduleNavigator});
-  Object.defineProperty(moduleNavigator, 'locks', {configurable:true, value:locks});
-}`;
 
 for (const placement of ['main', 'worker']) test(`${placement}: module read flags remain boolean across secret waits`, async () => {
   const environment = secretEnvironment('old');
@@ -941,6 +753,275 @@ for (const placement of ['main', 'worker']) test(`${placement}: a completed leas
   } finally { w.done(); environment.restore(); }
 }, 20000);
 
+for (const placement of ['main', 'worker']) test(`${placement}: a held lease parked behind another answer's storage does not deadlock`, async () => {
+  const environment = secretEnvironment('login');
+  const w = await moduleRealm(`if (source === 'lease-holder') return store.exclusive('token', async () => {
+    store.set('token', 'half-written');
+    await fetch('https://api.castle.test/lease', { method: 'POST', body: 'login' });
+    await read('app:/data/queued-behind-owner');
+    store.set('token', 'complete');
+    return 'lease-finished';
+  });
+  if (source === 'storage-owner') {
+    const ownStorage = read('app:/data/owner');
+    return store.exclusive('token', async () => {
+      await ownStorage;
+      return store.get('token');
+    });
+  }
+  return 'ready';`, { placement, secrets: true, stored: [['token', 'stale']], taskDelayedStorage: true });
+  try {
+    expect((await w.ask('lease-holder')).request.url).toBe('https://api.castle.test/lease');
+    const storageOwner = w.ask('storage-owner');
+    await w.storageEvent('finish', 'app:/data/owner');
+    await environment.requested(2);
+    const grantsBeforeHolderFinishes = environment.grantCount();
+    const holder = w.resume('lease-holder');
+    const settled = await race(Promise.allSettled([holder, storageOwner]));
+    expect(settled).not.toBe('STILL WAITING');
+    expect(settled).toMatchObject([{ status: 'fulfilled', value: { value: 'lease-finished' } }, { status: 'fulfilled', value: { value: 'complete' } }]);
+    expect(grantsBeforeHolderFinishes).toBe(1);
+    expect(environment.disk.get('exact.secret.token')).toBe('complete');
+    expect(environment.disk.has('exact.exclusive.exact.secret.token')).toBe(false);
+  } finally { w.done(); environment.restore(); }
+}, 20000);
+for (const placement of ['main', 'worker']) test(`${placement}: an answer drains storage before waiting for a secret`, async () => {
+  const environment = secretEnvironment('login');
+  const w = await moduleRealm(`globalThis.leaseBodies ??= 0;
+  if (source === 'holder') return store.exclusive('token', async () => {
+    await fetch('https://api.castle.test/holder', { method: 'POST', body: 'login' });
+    await read('app:/data/holder-storage');
+    store.set('token', 'complete');
+    return 'holder-finished';
+  });
+  if (source === 'head') {
+    const file = read('app:/data/head');
+    return fetch('https://api.castle.test/head').then(async () => (await file, 'head-finished'));
+  }
+  if (source === 'waiter') {
+    const seen = [];
+    const own = label => value => { seen.push(label + ':' + store.get('recovery-owner')); return value; };
+    const one = read('app:/data/waiter-1').then(own('one'));
+    const rejected = read('app:/data/reject').catch(() => {
+      seen.push('reject:' + store.get('recovery-owner'));
+      return read('app:/data/waiter-recovery').then(own('recovery'));
+    });
+    const two = read('app:/data/waiter-2').then(own('two'));
+    const storage = Promise.all([one, rejected, two]);
+    return store.exclusive('token', async () => {
+      globalThis.leaseBodies++;
+      await storage;
+      return { seen, token: store.get('token') };
+    });
+  }
+  return globalThis.leaseBodies;`, { placement, secrets: true, stored: [['token', 'stale']], taskDelayedStorage: true });
+  try {
+    expect((await w.ask('holder')).request.url).toBe('https://api.castle.test/holder');
+    expect((await w.ask('head')).request.url).toBe('https://api.castle.test/head');
+    const waiter = w.ask('waiter');
+    expect((await w.ask('barrier')).value).toBe(0);
+    const lockRequestsBeforeDrain = environment.requestCount();
+    const holder = w.resume('holder');
+    const head = w.resume('head');
+    const settled = await race(Promise.allSettled([holder, head, waiter]));
+    expect(settled).not.toBe('STILL WAITING');
+    expect(lockRequestsBeforeDrain).toBe(1);
+    expect(settled).toMatchObject([{ status: 'fulfilled', value: { value: 'holder-finished' } },
+      { status: 'fulfilled', value: { value: 'head-finished' } }, { status: 'fulfilled', value: { value: { token: 'complete' } } }]);
+    expect(settled[2].value.value.seen).toEqual(['one:waiter', 'reject:waiter', 'two:waiter', 'recovery:waiter']);
+    expect(w.storageEvents().filter(event => event[0] === 'start').map(event => event[1])).toEqual([
+      'app:/data/head', 'app:/data/waiter-1', 'app:/data/reject', 'app:/data/waiter-2',
+      'app:/data/holder-storage', 'app:/data/waiter-recovery',
+    ]);
+    expect(environment.requestCount()).toBe(2);
+  } finally { w.done(); environment.restore(); }
+}, 30000);
+for (const placement of ['main', 'worker']) test(`${placement}: an answer forgotten while draining storage never starts its lease body`, async () => {
+  const environment = secretEnvironment('login');
+  const w = await moduleRealm(`globalThis.leaseBodies ??= 0;
+  if (source === 'head') {
+    const file = read('app:/data/head');
+    return fetch('https://api.castle.test/head').then(async () => (await file, 'head-finished')); }
+  if (source === 'forgotten') {
+    const file = read('app:/data/forgotten');
+    return store.exclusive('token', async () => {
+      globalThis.leaseBodies++;
+      await file;
+      return 'lease-ran';
+    });
+  }
+  return globalThis.leaseBodies;`, { placement, secrets: true, stored: [['token', 'stale']], taskDelayedStorage: true });
+  try {
+    expect((await w.ask('head')).request.url).toBe('https://api.castle.test/head');
+    await w.storageEvent('start', 'app:/data/head');
+    const forgotten = race(w.ask('forgotten'));
+    expect((await w.ask('barrier')).value).toBe(0);
+    w.forget(['head']);
+    const head = w.resume('head');
+    expect((await race(head)).value).toBe('head-finished');
+    expect(String(await forgotten)).toContain('rejected');
+    expect((await w.ask('inspect')).value).toBe(0);
+    expect(environment.requestCount()).toBe(0);
+  } finally { w.done(); environment.restore(); }
+}, 20000);
+for (const placement of ['main', 'worker']) test(`${placement}: storage issued for an answer that waits for a lease is refused by name`, async () => {
+  const environment = secretEnvironment('login');
+  const w = await moduleRealm(`if (source === 'holder') return store.exclusive('token', async () => {
+    await fetch('https://api.castle.test/holder', { method: 'POST', body: 'login' });
+    return 'holder-finished';
+  });
+  if (source === 'waiter') {
+    globalThis.waitingCall = __exact_async_context.current();
+    return store.exclusive('token', async () => 'waiter-finished');
+  }
+  if (source === 'inject') {
+    const before = __exact_async_context.swap(globalThis.waitingCall);
+    const refused = read('app:/data/too-late').then(() => 'ran', error => error.message);
+    __exact_async_context.swap(before);
+    return refused;
+  }
+  return 'ready';`, { placement, secrets: true, stored: [['token', 'stale']], taskDelayedStorage: true });
+  try {
+    expect((await w.ask('holder')).request.url).toBe('https://api.castle.test/holder');
+    const waiter = w.ask('waiter');
+    await environment.requested(2);
+    const refused = await w.ask('inject');
+    expect(refused.value).toBe('storage.readFile() called while its answer waits for store.exclusive(): it was never run');
+    expect(w.storageEvents().some(event => event[1] === 'app:/data/too-late')).toBe(false);
+    expect((await w.resume('holder')).value).toBe('holder-finished');
+    expect((await waiter).value).toBe('waiter-finished');
+  } finally { w.done(); environment.restore(); }
+}, 20000);
+for (const placement of ['main', 'worker']) test(`${placement}: a completed lease whose answer then waits on storage does not deadlock a lease waiter with storage in flight`, async () => {
+  const environment = secretEnvironment('login');
+  const w = await moduleRealm(`if (source === 'holder') return store.exclusive('token', async () => {
+    await fetch('https://api.castle.test/holder', { method: 'POST', body: 'login' });
+    store.set('token', 'completed');
+  }).then(() => read('app:/data/after-complete')).then(() => 'holder-finished');
+  if (source === 'waiter') {
+    const ownStorage = read('app:/data/waiter');
+    return store.exclusive('token', async () => {
+      await ownStorage;
+      return store.get('token');
+    });
+  }
+  return 'ready';`, { placement, secrets: true, stored: [['token', 'stale']], taskDelayedStorage: true });
+  try {
+    expect((await w.ask('holder')).request.url).toBe('https://api.castle.test/holder');
+    const waiter = w.ask('waiter');
+    await w.storageEvent('start', 'app:/data/waiter');
+    await environment.checkpoint();
+    const holder = w.resume('holder');
+    const settled = await race(Promise.allSettled([holder, waiter]));
+    expect(settled).not.toBe('STILL WAITING');
+    expect(settled).toMatchObject([{ status: 'fulfilled', value: { value: 'holder-finished' } },
+      { status: 'fulfilled', value: { value: 'completed' } }]);
+    expect(environment.disk.get('exact.secret.token')).toBe('completed');
+  } finally { w.done(); environment.restore(); }
+}, 20000);
+for (const placement of ['main', 'worker']) test(`${placement}: a lease's storage catch and finally remain in its own turn`, async () => {
+  const environment = secretEnvironment('login');
+  const w = await moduleRealm(`if (source === 'holder') return store.exclusive('token', async () => {
+    await fetch('https://api.castle.test/holder', { method: 'POST', body: 'login' });
+    try {
+      await read('app:/data/reject');
+    } catch (_) {
+      store.set('token', 'caught');
+      await Promise.resolve();
+      await fetch('https://api.castle.test/cleanup', { method: 'POST', body: store.get('recovery-owner') });
+    } finally {
+      store.set('token', 'finally');
+      await new Promise(resolve => setTimeout(resolve, 0));
+    }
+    return 'holder-finished';
+  });
+  if (source === 'head') {
+    const file = read('app:/data/head');
+    return fetch('https://api.castle.test/head').then(async () => (await file, 'head-finished'));
+  }
+  return store.exclusive('token', async () => store.get('token'));`, { placement, secrets: true, stored: [['token', 'stale']], taskDelayedStorage: true });
+  try {
+    expect((await w.ask('holder')).request.url).toBe('https://api.castle.test/holder');
+    expect((await w.ask('head')).request.url).toBe('https://api.castle.test/head');
+    const holder = w.resume('holder');
+    const head = await w.resume('head');
+    const cleanup = await holder;
+    expect(head).toMatchObject({ value: 'head-finished', writes: [] });
+    expect(cleanup.request).toMatchObject({ url: 'https://api.castle.test/cleanup', body: 'holder' });
+    expect(cleanup.writes).toContainEqual(['token', 'caught', true]);
+    const following = w.ask('following');
+    await environment.requested(2);
+    expect(environment.grantCount()).toBe(1);
+    const timer = await w.resume('holder');
+    expect(timer.timer).toBeDefined();
+    expect(timer.writes.at(-1)).toEqual(['token', 'finally', true]);
+    expect(environment.grantCount()).toBe(1);
+    expect((await w.resume('holder')).value).toBe('holder-finished');
+    expect((await following).value).toBe('finally');
+    expect(environment.disk.get('exact.secret.token')).toBe('finally');
+  } finally { w.done(); environment.restore(); }
+}, 20000);
+
+for (const placement of ['main', 'worker']) test(`${placement}: a completed lease cannot resurrect a later sign-out`, async () => {
+  const environment = secretEnvironment('login');
+  const w = await moduleRealm(`if (source === 'holder') return store.exclusive('token', async () => {
+    store.set('token', 'completed-login');
+  }).then(() => fetch('https://api.castle.test/later')).then(() => store.exclusive('token', async () => store.get('token')));
+  if (source === 'sign-out') return store.exclusive('token', async () => store.forget('token'));
+  return store.exclusive('token', async () => store.get('token'));`, { placement, secrets: true, stored: [['token', 'login']], taskDelayedStorage: true });
+  try {
+    const later = await w.askWithDeliver('holder', w.commit);
+    expect(later.request.url).toBe('https://api.castle.test/later');
+    expect(environment.disk.get('exact.secret.token')).toBe('completed-login');
+    expect(w.runnerValue('token')).toBe('completed-login');
+    const signedOut = await w.askWithDeliver('sign-out', w.commit);
+    expect(signedOut.value).toBeNull();
+    expect(environment.disk.has('exact.secret.token')).toBe(false);
+    expect(w.runnerValue('token')).toBeNull();
+    const resumed = await w.resumeWithDeliver('holder', undefined, w.commit);
+    expect(resumed.value).toBeNull();
+    expect(resumed.writes).toEqual([]);
+    expect(environment.disk.has('exact.secret.token')).toBe(false);
+    expect(w.runnerValue('token')).toBeNull();
+    expect((await w.ask('following')).value).toBeNull();
+  } finally { w.done(); environment.restore(); }
+}, 20000);
+
+for (const placement of ['main', 'worker']) for (const caught of [false, true]) test(`${placement}: today's rejected lease with queued storage ${caught ? 'publishes its partial credential after an outer catch' : 'recovers by deleting the credential'}`, async () => {
+  const environment = secretEnvironment('old');
+  const w = await moduleRealm(`if (source === 'head') {
+    const file = read('app:/data/head');
+    return fetch('https://api.castle.test/head').then(async () => (await file, 'head-finished')); }
+  if (source === 'failed') {
+    const failed = store.exclusive('token', async () => {
+      await fetch('https://api.castle.test/token', { method: 'POST', body: 'old' });
+      store.set('token', 'partial');
+      void read('app:/data/queued').catch(() => {});
+      throw new Error('lease body failed');
+    });
+    return ${caught ? "failed.catch(error => 'caught: ' + error.message)" : 'failed'};
+  }
+  return store.exclusive('token', async () => store.get('token'));`, { placement, secrets: true, stored: [['token', 'old']], taskDelayedStorage: true });
+  try {
+    expect((await w.ask('head')).request.url).toBe('https://api.castle.test/head');
+    expect((await w.ask('failed')).request.url).toBe('https://api.castle.test/token');
+    expect(environment.disk.get('exact.exclusive.exact.secret.token')).toBe('1');
+    const failed = w.resumeWithDeliver('failed', undefined, result => { if (result.tag === 0) w.commit(result); });
+    const head = w.resume('head');
+    expect((await race(head)).value).toBe('head-finished');
+    if (placement === 'main' && w.background().head) await w.drain();
+    const failedResult = await race(failed);
+    if (caught) expect(failedResult.value).toBe('caught: lease body failed');
+    else expect(failedResult.tag).toBe(2);
+    expect(failedResult.writes.at(-1)).toEqual(['token', 'partial', true]);
+    const following = await w.askWithDeliver('following', w.commit);
+    expect(following.value).toBe(caught ? 'partial' : null);
+    expect(environment.disk.get('exact.secret.token') ?? null).toBe(caught ? 'partial' : null);
+    expect(environment.disk.has('exact.exclusive.exact.secret.token')).toBe(false);
+    expect(w.runnerValue('token')).toBe(caught ? 'partial' : null);
+  } finally { w.done(); environment.restore(); }
+}, 20000);
+
 for (const placement of ['main', 'worker']) test(`${placement}: a timer resumed during lease publication starts outside the completed turn`, async () => {
   const environment = secretEnvironment('login');
   const w = await moduleRealm(`if (source === 'timer') return (async () => {
@@ -974,20 +1055,24 @@ for (const placement of ['main', 'worker']) test(`${placement}: a lease complete
     store.set('token', 'parked-complete');
   }).then(() => read('app:/data/parked')).then(() => fetch('https://api.castle.test/later')).then(response => response.text());
   if (source === 'following') return store.exclusive('token', async () => store.get('token'));
-  return 'ready';`, { placement, secrets: true, stored: [['token', 'stale']] });
+  return 'ready';`, { placement, secrets: true, stored: [['token', 'stale']], taskDelayedStorage: true });
   try {
     expect((await w.ask('holder')).request.url).toBe('https://api.castle.test/holder');
     const parked = w.ask('parked');
     await environment.granted(1);
     expect((await w.ask('barrier')).value).toBe('ready');
+    expect(environment.disk.get('exact.secret.token')).toBe('login');
+    const following = w.ask('following');
+    await environment.requested(2);
+    await environment.checkpoint();
+    await environment.checkpoint();
+    expect(environment.grantCount()).toBe(1);
     const holder = w.resume('holder');
     const later = await parked;
     expect(later.request.url).toBe('https://api.castle.test/later');
     expect((await holder).value).toBe('fresh');
     expect(environment.disk.get('exact.secret.token')).toBe('parked-complete');
-    const following = w.ask('following');
-    await environment.requested(2);
-    expect(await race(environment.granted(2))).toBeUndefined();
+    await environment.granted(2);
     const grantsWhileLaterWorkWaits = environment.grantCount();
     expect((await following).value).toBe('parked-complete');
     expect(grantsWhileLaterWorkWaits).toBe(2);
@@ -1007,7 +1092,7 @@ test(`worker: forgetting a parked answer after a completed lease releases the lo
   }).then(() => read('app:/data/forgotten'));
   if (source === 'following') return store.exclusive('token', async () => store.get('token'));
   if (source === 'release') { globalThis.__exact_test_release_held_storage(); return 'released'; }
-  return source === 'barrier' ? 'ready' : read('app:/data/' + source);`, { placement, secrets: true, stored: [['token', 'stale']] });
+  return source === 'barrier' ? 'ready' : read('app:/data/' + source);`, { placement, secrets: true, stored: [['token', 'stale']], taskDelayedStorage: true });
   try {
     expect((await w.ask('holder')).request.url).toBe('https://api.castle.test/holder');
     const forgotten = w.ask('forgotten');
@@ -1086,6 +1171,21 @@ test(`worker: a successful result forgotten before delivery cannot write after i
   } finally { w.done(); environment.restore(); }
 }, 20000);
 
+test(`worker: forgetting after committed delivery does not undo the secret publication`, async () => {
+  const environment = secretEnvironment('login');
+  const w = await moduleRealm(`if (source === 'publish') return store.exclusive('token', async () => {
+    store.set('token', 'committed'); return 'published'; });
+  return store.exclusive('token', async () => store.get('token'));`, { placement: 'worker', secrets: true, stored: [['token', 'login']] });
+  try {
+    expect((await w.askWithDeliver('publish', w.commit)).value).toBe('published');
+    expect(environment.disk.get('exact.secret.token')).toBe('committed');
+    expect(w.runnerValue('token')).toBe('committed');
+    w.forget([]);
+    expect(environment.disk.get('exact.secret.token')).toBe('committed');
+    expect((await w.ask('following')).value).toBe('committed');
+  } finally { w.done(); environment.restore(); }
+}, 20000);
+
 for (const placement of ['main', 'worker']) test(`${placement}: a lease ends before later browser work and a forgotten call stays settled`, async () => {
   const environment = secretEnvironment('login');
   const w = await moduleRealm(`if (source === 'logout') return store.exclusive('token', async () => {
@@ -1127,14 +1227,19 @@ for (const placement of ['main', 'worker']) test(`${placement}: a lease ends bef
 }, 20000);
 
 
-for (const placement of ['main', 'worker']) test(`${placement}: abandoning a sent secret update cannot replay its credential`, async () => {
+for (const placement of ['main', 'worker']) test(`${placement}: an interrupted secret lease publishes no half-written credential and recovers`, async () => {
   const environment = secretEnvironment('old');
   const w = await moduleRealm(`return store.exclusive('token', async () => {
-    if (source === 'refresh') await fetch('https://api.castle.test/token', {method:'POST', body:'old'});
+    if (source === 'refresh') {
+      store.set('token', 'half-written');
+      await fetch('https://api.castle.test/token', {method:'POST', body:'old'});
+      store.set('token', 'complete');
+    }
     return store.get('token');
   });`, { placement, secrets: true, stored: [['token', 'stale']] });
   try {
     expect((await w.ask('refresh')).request.method).toBe('POST');
+    expect(environment.disk.get('exact.secret.token')).toBe('half-written');
     expect(environment.disk.get('exact.exclusive.exact.secret.token')).toBe('1');
     w.forget([]);
     expect((await w.ask('read')).value).toBeNull();
@@ -1144,5 +1249,26 @@ for (const placement of ['main', 'worker']) test(`${placement}: abandoning a sen
     environment.disk.set('exact.exclusive.exact.secret.token', '1');
     expect((await w.ask('successor')).value).toBeNull();
     expect(environment.disk.has('exact.exclusive.exact.secret.token')).toBe(false);
+  } finally { w.done(); environment.restore(); }
+}, 20000);
+
+for (const placement of ['main', 'worker']) for (const wait of ['GET', 'timer']) test(`${placement}: an interrupted secret lease after a ${wait} exposes today's half-written credential`, async () => {
+  const environment = secretEnvironment('old');
+  const body = wait === 'GET' ? "await fetch('https://api.castle.test/token');" : 'await new Promise(resolve => setTimeout(resolve, 0));';
+  const w = await moduleRealm(`if (source === 'interrupted') return store.exclusive('token', async () => {
+    store.set('token', 'half-written');
+    ${body}
+    store.set('token', 'complete');
+  });
+  return store.exclusive('token', async () => store.get('token'));`, { placement, secrets: true, stored: [['token', 'old']] });
+  try {
+    const interrupted = await w.ask('interrupted');
+    if (wait === 'GET') expect(interrupted.request.method).toBe('GET');
+    else expect(interrupted.timer).toBeDefined();
+    expect(environment.disk.get('exact.secret.token')).toBe('half-written');
+    expect(environment.disk.has('exact.exclusive.exact.secret.token')).toBe(false);
+    w.forget([]);
+    expect((await w.ask('successor')).value).toBe('half-written');
+    expect(environment.disk.get('exact.secret.token')).toBe('half-written');
   } finally { w.done(); environment.restore(); }
 }, 20000);

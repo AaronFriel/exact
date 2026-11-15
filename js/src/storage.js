@@ -12,7 +12,8 @@
       journal = env.journal,
       errorText = env.errorText,
       background = env.background,
-      owner = env.owner;
+      owner = env.owner,
+      browserSecrets = env.browserSecrets;
     var storing = env.storing,
       unstore = env.unstore,
       storageCounts = env.storageCounts,
@@ -133,6 +134,14 @@
         );
         journal("storage refused: " + refused.message);
         return Promise.reject(refused);
+      }
+      var waitingSecret = call.secrets && call.secrets[0];
+      if (browserSecrets && !call.letGo && waitingSecret && waitingSecret.asked && !waitingSecret.held) {
+        var waitingRefusal = storageError(
+          "storage." + method + "() called while its answer waits for store.exclusive(): it was never run"
+        );
+        journal("storage refused: " + waitingRefusal.message);
+        return Promise.reject(waitingRefusal);
       }
       var refused;
       // A file operation names its path: a document the person chose

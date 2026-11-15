@@ -249,6 +249,7 @@ extension Capture {
     }
 }
 
+#if EXACT_AGENT
 extension Agent {
     /// Let the window server composite readbacks at the Metal layers' places.
     /// A CPU capture of the whole content loses backdrop filters and materials.
@@ -302,4 +303,5 @@ extension Agent {
         return context.makeImage() ?? image
     }
 }
+#endif
 #endif

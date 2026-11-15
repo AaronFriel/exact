@@ -1,7 +1,7 @@
 // app.json keys the web manifest standard defines (scripts/app.schema.json).
 import { test } from 'bun:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 
@@ -472,17 +472,47 @@ test('the manifest orientation locks the iPhone, and an unknown one is refused',
 });
 
 test('document handlers and TypeScript source mounts accept their manifest shapes and reject guessed ones', async () => {
-  const { readManifest } = await import('./app.mjs');
+  const { readManifest, webAppManifest } = await import('./app.mjs');
   const { documentTypes } = await import('../host/apple/documents.mjs');
   const dir = mkdtempSync(resolve(tmpdir(), 'manifest-author-shapes-'));
   const base = { name: 'Reader', app: { id: 'dev.exact.reader', name: 'Reader' } };
   const read = extra => { writeFileSync(resolve(dir, 'app.json'), JSON.stringify({ ...base, ...extra })); return readManifest(dir, 'reader'); };
-  const file_handlers = [{ action: '/', accept: { 'text/markdown': ['.md'] } }];
+  const file_handlers = [{ action: '/', name: 'Documents', accept: {
+    'text/markdown': ['.MD', 'markdown'],
+    'application/octet-stream': ['.tar.gz', 'c++'],
+    'application/x-studio-board+json': ['board'],
+  } }];
   const sources = { backend: '../generated', snapback4: '../runtime' };
   try {
+    const suffixes = JSON.parse(readFileSync(resolve(import.meta.dir, 'fixtures/document-suffixes.json'), 'utf8'));
+    for (const { declaration, canonical, error } of suffixes) {
+      if (canonical) {
+        assert.equal(read({ file_handlers: [{ action: '/', accept: { 'text/markdown': [declaration] } }] }).file_handlers[0].accept['text/markdown'][0], canonical);
+      } else {
+        assert.throws(() => read({ file_handlers: [{ action: '/', accept: { 'text/markdown': [declaration] } }] }), new RegExp(error.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+      }
+    }
     const manifest = read({ file_handlers, typescript: { sources } });
-    assert.deepEqual(manifest.file_handlers, file_handlers);
+    assert.deepEqual(manifest.file_handlers[0].accept, {
+      'text/markdown': ['.md', '.markdown'],
+      'application/octet-stream': ['.tar.gz', '.c++'],
+      'application/x-studio-board+json': ['.board'],
+    });
+    assert.deepEqual(webAppManifest(manifest, 'Reader').file_handlers, manifest.file_handlers);
+    assert.deepEqual(documentTypes({ manifest })[0].CFBundleTypeExtensions, ['board']);
+    assert.deepEqual(documentTypes({ manifest })[1].CFBundleTypeExtensions, ['md', 'markdown', 'tar.gz', 'c++']);
     assert.deepEqual(manifest.typescript.sources, sources);
+    const before = { variant: process.env.EXACT_VARIANT, app: process.env.EXACT_VARIANT_APP };
+    try {
+      process.env.EXACT_VARIANT = 'dev'; process.env.EXACT_VARIANT_APP = dir;
+      const selected = read({ variants: { dev: { idSuffix: '.dev', name: 'Reader Dev' } }, file_handlers });
+      assert.equal(selected.app.id, 'dev.exact.reader.dev');
+      assert.equal(selected.file_handlers[0].accept['text/markdown'][0], '.md');
+      assert.deepEqual(documentTypes({ id: selected.app.id, manifest: selected })[0].LSItemContentTypes, ['dev.exact.reader.studio-board']);
+    } finally {
+      if (before.variant === undefined) delete process.env.EXACT_VARIANT; else process.env.EXACT_VARIANT = before.variant;
+      if (before.app === undefined) delete process.env.EXACT_VARIANT_APP; else process.env.EXACT_VARIANT_APP = before.app;
+    }
     for (const [mime, ext, uti] of [
       ['audio/mpeg', '.mp3', 'public.mp3'], ['audio/wav', '.wav', 'com.microsoft.waveform-audio'],
       ['audio/mp4', '.m4a', 'public.mpeg-4-audio'], ['audio/ogg', '.ogg', 'org.xiph.ogg-audio'],
@@ -493,6 +523,20 @@ test('document handlers and TypeScript source mounts accept their manifest shape
     }
     assert.throws(() => read({ file_handlers: { 'text/markdown': ['.md'] } }), /file_handlers:.*array/);
     assert.throws(() => read({ file_handlers: [{ action: '/', accept: ['text/markdown'] }] }), /file_handlers\[0\].accept:.*object/);
+    for (const extension of ['', '.', '.md.', 'm*d', 'm?d', 'm[d]', 'm/d', 'm\\d', 'm_d', 'm-d', 'mé', '.1234567890123456']) {
+      assert.throws(
+        () => read({ file_handlers: [{ action: '/', accept: { 'text/markdown': [extension] } }] }),
+        /file_handlers\[0\]\.accept\.text\/markdown\[0\]:.*is not a file suffix/,
+        JSON.stringify(extension),
+      );
+    }
+    for (const name of ['', 'Markdown\0files', 'Markdown\nfiles']) {
+      assert.throws(
+        () => read({ file_handlers: [{ action: '/', name, accept: { 'text/markdown': ['.md'] } }] }),
+        /file_handlers\[0\]\.name:.*is not a label/,
+        JSON.stringify(name),
+      );
+    }
     assert.throws(() => read({ typescript: { sources: ['../generated'] } }), /typescript.sources:.*object/);
     assert.throws(() => read({ typescript: { sources: { backend: { path: '../generated' } } } }), /typescript.sources.backend:.*string/);
   } finally { rmSync(dir, { recursive: true, force: true }); }

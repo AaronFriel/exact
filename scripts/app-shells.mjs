@@ -12,7 +12,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { cargoEnvironment, lockedMetadata, pathFrom, patchLines } from './app.mjs';
+import { cargoEnvironment, lockedMetadata, pathFrom, patchLines, readManifest as readAppManifest } from './app.mjs';
 import { pathWithin } from './paths.mjs';
 import { nativePackages } from './package-libraries.mjs';
 import { MEMBER_OF, appCrates, authoredWorkspace, gpuShellsDir, notAMember, shellsDir } from './cargo-check.mjs';
@@ -74,7 +74,7 @@ const hostDefaults = (platform) => ({
   windows: { window: { width: 1024, height: 720, minWidth: 360, minHeight: 500 } },
 }[platform] ?? {});
 
-const readManifest = (dir) => JSON.parse(readFileSync(resolve(dir, 'app.json'), 'utf8'));
+const readManifest = (dir) => readAppManifest(dir, basename(dir));
 const writeManifest = (dir, manifest) => writeFileSync(resolve(dir, 'app.json'), JSON.stringify(manifest, null, 2) + '\n');
 
 /** Whether the manifest names the platform. */

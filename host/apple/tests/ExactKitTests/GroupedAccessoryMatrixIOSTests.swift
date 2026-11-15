@@ -220,7 +220,7 @@ final class GroupedAccessoryMatrixIOSTests: XCTestCase {
                 XCTAssertEqual(cell.accessibilityValue != nil, heard, name)
                 XCTAssertEqual(cell.accessibilityTraits.contains(.toggleButton), heard, name)
                 XCTAssertEqual(found.first?["role"] as? String, heard ? "switch" : "button", name)
-                XCTAssertEqual(cell.agentViewId, heard ? control.id : nil, name)
+                XCTAssertEqual(cell.inspectionViewId, heard ? control.id : nil, name)
             case "radio":
                 XCTAssertEqual(cell.accessibilityTraits.contains(.selected), checked && heard, name)
                 XCTAssertEqual(cell.accessories.map(\.accessoryType), checked ? [.checkmark] : [], name)

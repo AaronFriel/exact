@@ -667,6 +667,7 @@ fn the_inputs_name_every_field_and_an_undeclared_app_gets_defaults() {
         "dataCrate",
         "gpuSurfaces",
         "nativeModules",
+        "notificationService",
         "hatches",
         "icons",
         "capabilities",
@@ -687,6 +688,7 @@ fn the_inputs_name_every_field_and_an_undeclared_app_gets_defaults() {
     assert!(i["rustAbi"].is_null());
     assert!(i["rustTarget"].is_null());
     assert!(i["rustModule"].is_null());
+    assert!(i["notificationService"].is_null());
     assert_eq!(i["executors"], serde_json::json!(["native"]));
     assert_eq!(i["arch"], "aarch64");
     assert_eq!(i["minimumOS"], "17.0");

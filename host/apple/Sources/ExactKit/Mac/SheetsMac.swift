@@ -48,7 +48,7 @@
 import AppKit
 
 /// A sheet's window. Titled, which is what takes the keyboard.
-final class SheetWindow: ExactAgentWindow {}
+final class SheetWindow: ExactDrivenWindow {}
 
 /// A dialog's sheet: its window, the view that holds the dialog's subtree,
 /// and the window it is a sheet on. A modal route's sheet is the same, with
