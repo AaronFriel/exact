@@ -74,6 +74,8 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
     private var speed = 1f
     private var pitchPreserved = true
     private var keepAwake = true
+    /** The node handles `timeupdate`: only then does the 4 Hz clock run (D3). */
+    private var timed = false
     private var inView = true
     /** Chrome's off-screen rule paused it, so it plays again once seen (LLP 1042 §7 B). */
     private var resumes = false
@@ -115,7 +117,7 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
         exo.clearMediaItems()
         exo.setPlaybackParameters(PlaybackParameters.DEFAULT)
         applied = null; src = ""; prepared = false; frameReady = false; error = null; unavailable = null
-        pendingSeek = null; seekLanded = false; resumes = false; overridden = false; speed = 1f; inView = false
+        pendingSeek = null; seekLanded = false; resumes = false; overridden = false; speed = 1f; inView = false; timed = false
         videoW = 0; videoH = 0
         this.sink = sink
     }
@@ -133,6 +135,8 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
         exo.repeatMode = if (props.optBoolean("loop")) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
         keepAwake = props.optBoolean("preventsDisplaySleepDuringVideoPlayback", true)
         frame.keepScreenOn = keepAwake && projection.playing
+        timed = props.optBoolean("timeupdate")
+        tick(exo.isPlaying)
         tracks(props)
 
         val source = props.optString("src")
@@ -458,7 +462,8 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
     }
     private var ticking = false
 
-    private fun tick(on: Boolean) {
+    private fun tick(playing: Boolean) {
+        val on = playing && timed
         if (on == ticking) return
         ticking = on
         if (on) main.postDelayed(ticker, 250) else main.removeCallbacks(ticker)

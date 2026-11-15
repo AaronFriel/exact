@@ -35,6 +35,17 @@ pub enum NativeKind {
     Hatch = 5,
 }
 
+/// What a media node's props carry beside its own: what the presenter knows
+/// of it from the runner (LLP 1042.001 D3).
+#[derive(Default)]
+pub(crate) struct Media {
+    /// The tree these were found in.
+    pub(crate) epoch: Option<u64>,
+    /// The media nodes that handle `timeupdate`: only their players run its
+    /// 4 Hz clock.
+    pub(crate) timed: std::collections::BTreeSet<exact_kernel::NodeKey>,
+}
+
 impl Painter {
     /// @ref LLP 1115.001.000 D4 — a view a Kotlin hatch hosts at `node`:
     /// over its paint, in its border box `rect`, where the node is. A node
@@ -97,6 +108,7 @@ impl Painter {
                         "preventsDisplaySleepDuringVideoPlayback": p.bool(PropId::PreventsDisplaySleepDuringVideoPlayback),
                         "audio": p.str(PropId::SemanticTag) == Some("audio"),
                         "label": p.str(PropId::AccessibilityLabel),
+                        "timeupdate": self.media.timed.contains(&node.key),
                         "fit": match node.style.object_fit {
                             ObjectFit::Contain => "contain",
                             ObjectFit::Cover => "cover",

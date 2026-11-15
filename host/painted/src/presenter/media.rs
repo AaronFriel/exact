@@ -109,6 +109,31 @@ impl<D: DataSource> Presenter<D> {
         true
     }
 
+    /// @ref LLP 1042.001 D3 — which media nodes handle `timeupdate`, found
+    /// again when the tree changed; the rows of those that changed paint
+    /// again, so their players hear it.
+    pub(crate) fn sync_media(&mut self, dirty: &mut crate::paint::rows::Dirty) {
+        let kernel = self.host.kernel();
+        let epoch = kernel.epoch();
+        if self.brush.media.epoch == Some(epoch) {
+            return;
+        }
+        self.brush.media.epoch = Some(epoch);
+        let timed: std::collections::BTreeSet<_> = if kernel.has_type(NodeType::Video) {
+            (kernel.preorder_where(&self.host.roots(), |t, _| t == NodeType::Video))
+                .into_iter()
+                .filter(|id| (self.host.runner().handlers_of(*id)).contains(&EventKind::Timeupdate))
+                .filter_map(|id| kernel.node(id).map(|n| n.key))
+                .collect()
+        } else {
+            Default::default()
+        };
+        for key in timed.symmetric_difference(&self.brush.media.timed) {
+            dirty.node(*key);
+        }
+        self.brush.media.timed = timed;
+    }
+
     /// `state.media`: each mounted media node's row, as its player last
     /// reported it with the time run on at its rate since, or, where no
     /// player has reported, an element that never plays, saying why.

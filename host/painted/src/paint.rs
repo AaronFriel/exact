@@ -417,6 +417,7 @@ pub struct Painter {
     pub(crate) split: Option<crate::presenter::split::Split>,
     pub(crate) window_canvas: Option<ViewId>,
     pub(crate) direct_canvases: std::collections::BTreeSet<ViewId>,
+    pub(crate) media: native::Media,
     pub(crate) alert: Option<alert::Picture>,
     /// The text engine, shared with the kernel's measurer.
     pub text: Shared,
@@ -564,6 +565,7 @@ impl Painter {
             split: None,
             window_canvas: None,
             direct_canvases: Default::default(),
+            media: Default::default(),
             text,
             scale,
             dark: false,
