@@ -19,17 +19,17 @@
 
 #[cfg(target_os = "linux")]
 pub mod display;
-#[cfg(all(test, unix, not(target_os = "linux")))]
+#[cfg(all(test, unix, not(any(target_os = "linux", target_os = "android"))))]
 #[path = "display/flip.rs"]
 mod display_flip;
-#[cfg(any(target_os = "linux", all(test, unix)))]
+#[cfg(any(target_os = "linux", all(test, unix, not(target_os = "android"))))]
 #[path = "display/event_loop.rs"]
 mod event_loop;
 #[cfg(target_os = "linux")]
 pub mod input;
 #[cfg(target_os = "linux")]
 pub mod vnc;
-#[cfg(all(test, unix, not(target_os = "linux")))]
+#[cfg(all(test, unix, not(any(target_os = "linux", target_os = "android"))))]
 #[path = "vnc/auth.rs"]
 mod vnc_auth;
 
