@@ -4,7 +4,10 @@
 // superview/subviews edges in members containing a cast or type test. It misses
 // string interpolations, generated sources outside Sources, aliases of NodeView,
 // interprocedural/custom ancestor helpers and dynamic dispatch; regex literals
-// can confuse it. Bridge returns cover explicit non-Void Runtime declarations in
+// can confuse it. Its member scopes are guessed from braces, so edges outside a
+// trailing closure after a binding, a `defer` block or a `class func`'s nested
+// block, casts written `as? (NodeView?)`, and walks beside a file-scope cast escape.
+// It stops ordinary growth; a SwiftSyntax census would close these (QUEUE.md). Bridge returns cover explicit non-Void Runtime declarations in
 // ExactCore/Bridge.swift only, not inferred returns or Runtime extensions elsewhere.
 // Rust uses the inventory's structural parser, not macro expansion or type checking.
 // Receipt aliases beyond CommitReceipt/Advanced/Dispatched/Timed can escape. Count
