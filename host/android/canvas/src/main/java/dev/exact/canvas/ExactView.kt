@@ -91,10 +91,11 @@ class ExactView(context: Context, private val live: Boolean, private val onFirst
     private var heldCopy: Map<Int, android.graphics.RenderNode>? = null
     /** Nodes exact2's reader animates, sampled every frame while any plays. */
     private val layers: Layers = Layers({ node, ops, ox, oy, memo, scale ->
-        // A layer recorded again (a dash phase, a colour, a pixelated image's scale): its paths are read once.
+        // A layer recorded again (a dash phase, a colour, a pixelated image's scale, a drawing HWUI let go): its paths
+        // are read once. Through [relayer], as the drawing HWUI let go is recorded while [main] replays a row.
         val c = node.beginRecording()
-        main.memo = memo; main.layerScale = scale
-        try { main.replayAt(c, IntBuffer.wrap(ops), 0, ops.size, ox, oy, node) } finally { main.memo = null; main.layerScale = 1f }
+        relayer.memo = memo; relayer.layerScale = scale
+        try { relayer.replayAt(c, IntBuffer.wrap(ops), 0, ops.size, ox, oy, node) } finally { relayer.memo = null; relayer.layerScale = 1f }
         node.endRecording()
     }) { fonts[it] }.also { if (skipOffscreen) it.rowShows = Layers.RowShows { row -> rowShows(row) } }
     /** layerbounds=0: layers' nodes cover everything, unclipped (each move or fade damages the window), to compare. */
@@ -102,10 +103,12 @@ class ExactView(context: Context, private val live: Boolean, private val onFirst
     private val bounds = Bounds().also { it.row = { id -> rows[id] } }
     private val measured = RectF()
     private val placed = android.graphics.Rect()
-    private val main: Player = Player(fonts).also { p ->
+    /** A Player that draws the stream into this view: every id resolved to its node, and each row's and layer's slots
+     * that lost their drawings recorded again as it is drawn. */
+    private fun resolving(p: Player): Player {
         p.origins = nativeOrigins
         p.dotsAtOnce = (context as Activity).intent.getStringExtra("dots") != "0"
-        p.layer = { layers.lookup(it) }
+        p.layer = { id -> layers.drawn(id)?.also { slots.refill(Slots.layer(id)) } }
         p.shared = { shared.node(it) }
         p.image = { images[it] }
         p.animated = { animated[it] }
@@ -114,7 +117,12 @@ class ExactView(context: Context, private val live: Boolean, private val onFirst
         p.group = { id -> groups.getOrPut(id) { android.graphics.RenderNode("exact group").apply { setClipToBounds(false) } } }
         p.holder = { id -> scrolling.holder(id) }
         p.slot = { slots.nodes[it] }
+        return p
     }
+    private val main: Player = resolving(Player(fonts))
+    /** Records a layer again from its kept drawing ([Layers]), which can come while [main] replays a row: a Player's
+     * scratch state is one replay's. */
+    private val relayer: Player = resolving(Player(fonts))
     private val background = Player(fonts).also { it.origins = nativeOrigins }
     private val shared = SharedElements(main, { images[it] }, layers::mapShared, layers::sharedOpacity) { id, rect ->
         groups[id]?.let { rect.offset(it.translationX, it.translationY) }
@@ -191,6 +199,7 @@ class ExactView(context: Context, private val live: Boolean, private val onFirst
      * the presenter places the page in it, and the view is laid out there ([ExactActivity.chrome]). */
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         main.width = w; main.height = h
+        relayer.width = w; relayer.height = h
         if (owner != null || started || w == 0 || h == 0) return
         if (booting) {
             // exact2 booted (and painted its first frame) while the activity was set up.
