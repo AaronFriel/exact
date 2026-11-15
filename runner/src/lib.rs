@@ -54,6 +54,7 @@ pub mod delivery;
 pub mod design;
 pub mod desktop;
 pub mod device;
+pub mod entry;
 pub mod failure;
 pub mod fetch_template;
 pub mod file_pickers;

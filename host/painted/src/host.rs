@@ -54,7 +54,7 @@ mod scale;
 #[path = "store_writer.rs"]
 mod store_writer;
 #[path = "system_support.rs"]
-mod system;
+pub(crate) mod system;
 #[path = "transform_binding.rs"]
 mod transform_binding;
 #[path = "value_watch.rs"]
