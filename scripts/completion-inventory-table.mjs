@@ -26,7 +26,7 @@ export const classifications = [
     ["painted:host/painted/src/canvas/timers.rs", "CanvasHost::background"],
   ]),
   group("UI facts", ["subscription"], "current session, viewport, page or rendered geometry", "UI-owned",
-    "runner/src/runner/viewport.rs and page.rs settle facts of the live session; these entries carry no app/account operation identity.", [
+    "runner/src/runner/viewport.rs and page.rs settle facts of the live session; these entries carry no app/account operation identity. painted presenter/zoom.rs sync_zoom retains zoom state only for matching live node keys; settle_zoom reconciles authored values with the current gesture.", [
     ["apple:host/apple/src/abi/exports.rs",
       "exact_control_text_changed exact_insets exact_orientation_applied exact_resize exact_scrolled exact_segments exact_set_button_measure exact_set_console " +
       "exact_set_control_text exact_set_display_scale exact_set_fonts exact_set_inline_boxes exact_set_inline_geometry exact_set_lines exact_set_measure exact_set_mode " +
@@ -91,9 +91,10 @@ export const classifications = [
     ["web:host/web/src/abi.rs", "exact_motion exact_report_colors exact_resize exact_set_display_scale exact_set_page exact_set_place exact_set_root_font_size exact_set_time exact_set_update exact_set_viewport_geometry"],
     ["web:host/web/src/abi/mode.rs", "exact_set_mode"],
     ["web:host/web/src/canvas2d.rs", "exact_surface_record"],
+    ["painted:host/painted/src/presenter/zoom.rs", "Presenter::set_shell_taps Presenter::settle_zoom Presenter::sync_zoom"],
   ]),
   group("UI input", ["one-shot"], "current mounted view, action binding or interaction", "UI-owned",
-    "runner/src/runner/event.rs dispatches through a mounted view and its action binding; no independent operation identity is supplied. runner/advance.rs dispatch_at and advance/inputs.rs dispatch_at_with_receipt deliver input at the host clock after due timers.", [
+    "runner/src/runner/event.rs dispatches through a mounted view and its action binding; no independent operation identity is supplied. runner/advance.rs dispatch_at and advance/inputs.rs dispatch_at_with_receipt deliver input at the host clock after due timers. painted presenter/zoom.rs targets live zoomable nodes for pinch, wheel and double tap; canvas/scroll.rs and jni_scroll.rs forward shell gestures. contact.rs press_lifted validates the live activation target.", [
     ["apple:host/apple/src/abi/exports.rs", "exact_dispatch"],
     ["painted:host/painted/src/canvas/access.rs", "CanvasHost::access CanvasHost::access_act CanvasHost::access_off"],
     ["painted:host/painted/src/canvas/field.rs", "CanvasHost::field_action CanvasHost::field_composing CanvasHost::field_edited CanvasHost::field_focused CanvasHost::field_input CanvasHost::field_selected"],
@@ -118,7 +119,7 @@ export const classifications = [
     ["painted:host/painted/src/presenter/collection.rs", "Presenter::collection_scroll_turn Presenter::dispatch_authored_scroll"],
     ["painted:host/painted/src/presenter/contact.rs",
       "Presenter::contact_live Presenter::contact_position Presenter::pan_candidate Presenter::pointer_cancel Presenter::pointer_down " +
-      "Presenter::pointer_down_with_clicks Presenter::pointer_lost Presenter::pointer_move Presenter::pointer_up Presenter::pointerdown_prevents_focus"],
+      "Presenter::pointer_down_with_clicks Presenter::pointer_lost Presenter::pointer_move Presenter::pointer_up Presenter::pointerdown_prevents_focus Presenter::press_lifted"],
     ["painted:host/painted/src/presenter/control.rs", "Presenter::commit_control_value Presenter::key_click Presenter::toggle_control Presenter::toggle_control_with_press"],
     ["painted:host/painted/src/presenter/desktop_access.rs",
       "Presenter::access_focus Presenter::access_focus_node Presenter::access_origin Presenter::access_select Presenter::access_selection Presenter::access_text " +
@@ -164,10 +165,18 @@ export const classifications = [
     ["web:host/web/src/abi.rs", "exact_dispatch"],
     ["runner:runner/src/runner/advance.rs", "Runner::dispatch_at"],
     ["runner:runner/src/runner/advance/inputs.rs", "Runner::dispatch_at_with_receipt"],
+    ["painted:host/painted/src/canvas/jni_scroll.rs", "Java_dev_exact_canvas_Native_zoom Java_dev_exact_canvas_Native_zoomTap Java_dev_exact_canvas_Native_zoomWheel"],
+    ["painted:host/painted/src/canvas/scroll.rs", "CanvasHost::zoom CanvasHost::zoom_tap CanvasHost::zoom_wheel"],
+    ["painted:host/painted/src/presenter/zoom.rs",
+      "Presenter::double_tap_container Presenter::double_tap_zoom Presenter::scroll_container_to Presenter::tap_waits Presenter::wheel_zoom " +
+      "Presenter::zoom_double_tap Presenter::zoom_pinch_began Presenter::zoom_pinch_ended Presenter::zoom_pinched Presenter::zoom_tap_down " +
+      "Presenter::zoomable_from Presenter::zoomable_under"],
   ]),
-  group("background work", ["durable operation"], "app/module background round until completion or session shutdown; process-local today", "durable",
-    "runner/src/runner/background.rs:87-105 resumes a background round outside Contract slots and then arms its successor; no UI then/commit owns that round.", [
+  group("background work", ["durable operation"], "app/module background round or widget refresh until completion, deadline or session shutdown; process-local today", "durable",
+    "runner/src/runner/background.rs:87-105 resumes a background round outside Contract slots and then arms its successor; no UI then/commit owns that round. painted snapshot.rs timeline and its JNI adapter run a widget refresh without a presenter, reading the store and pumping requests until completion or deadline; no crash recovery is provided.", [
     ["runner:runner/src/runner/background.rs", "Runner::background_operations Runner::background_state Runner::send_background#next_ticket:1"],
+    ["painted:host/painted/src/snapshot.rs", "timeline"],
+    ["painted:host/painted/src/snapshot/jni.rs", "Java_dev_exact_widgets_Native_timeline"],
   ]),
   group("canvas draws", ["subscription"], "canvas lifetime, generation and in-flight draw sequence", "UI-owned",
     "runner/src/runner/canvas2d.rs:790-805 refuses mismatched generation/sequence and canvas_reply at 1291 accepts that triple; draw/capture work targets those live canvases.", [
@@ -538,7 +547,7 @@ export const classifications = [
     ["runner:runner/src/runner/modules/presence.rs", "Runner::install_presence Runner::presence_list"],
   ]),
   group("presentation helpers", ["one-shot"], "synchronous calculation or retained presentation resource; no runner completion", "UI-owned",
-    "The export computes or releases presentation data; its caller owns the input/output buffers and resource lifetime.", [
+    "The export computes or releases presentation data; its caller owns the input/output buffers and resource lifetime. painted snapshot.rs render boots an isolated entry per size and returns its tree without I/O or a continuation; snapshot/jni.rs returns that JSON. presenter/zoom.rs computes and reports the current container geometry.", [
     ["apple:host/apple/src/calc.rs", "exact_calc_create exact_calc_destroy exact_calc_resolve"],
     ["apple:host/apple/src/collapse.rs", "exact_text_collapse"],
     ["apple:host/apple/src/corner.rs", "exact_corner_outline"],
@@ -555,6 +564,9 @@ export const classifications = [
     ["painted:host/painted/src/surfaces.rs", "Presenter::retier_surfaces Presenter::surface_lifecycle Presenter::sync_surfaces"],
     ["painted:host/painted/src/surfaces/window.rs", "Presenter::collect_painter_retirement Presenter::reset_painter_present_deadline"],
     ["web-js:host/web-js/motion/src/abi.rs", "m_gesture m_in m_out m_scratch m_translate"],
+    ["painted:host/painted/src/presenter/zoom.rs", "Presenter::move_zoom Presenter::port_point Presenter::reported_zoom Presenter::zoom_layout Presenter::zoom_now"],
+    ["painted:host/painted/src/snapshot.rs", "error_json render Session::tree"],
+    ["painted:host/painted/src/snapshot/jni.rs", "Java_dev_exact_widgets_Native_render"],
   ]),
   group("raster decodes", ["one-shot"], "raster session, decode request and retained lease", "UI-owned",
     "host/apple/src/raster_exports.rs exposes session/request handles, cancellation and lease release. RasterBackend.swift trims cold pictures by session/source generation and retires evicted sources while surviving leases keep their backing charges. A completed decode belongs to those consumer leases, not an app operation.", [
@@ -614,7 +626,7 @@ export const classifications = [
     ["painted:host/painted/src/presenter/pump.rs", "Presenter::release_held_work"],
   ], "durable for a retained effectful/background ticket; holds() also accepts those tickets (reply.rs:27-33)."),
   group("session lifecycle", ["one-shot"], "session creation, boot, replacement or teardown; no independent completion", "UI-owned",
-    "Runner boot constructs session state (runner/src/runner.rs); host ABI buffers and configuration belong to that runtime handle.", [
+    "Runner boot constructs session state (runner/src/runner.rs); host ABI buffers and configuration belong to that runtime handle. painted snapshot.rs Session::boot constructs one entry session; runner/entry.rs slots validates the props and configuration carried into it.", [
     ["apple:host/apple/src/abi/exports.rs",
       "exact_boot exact_boot_entry exact_boot_plan exact_check_prepared exact_commit_plan exact_create exact_destroy exact_discard_plan exact_in " +
       "exact_on_document_forgotten exact_out exact_prepare_plan"],
@@ -643,6 +655,8 @@ export const classifications = [
     ["runner:runner/src/runner/console.rs", "Runner::set_console"],
     ["runner:runner/src/runner/delivery.rs", "Runner::boot_at Runner::boot_stored Runner::boot_with_delivery Runner::boot_with_delivery_linked"],
     ["web:host/web/src/abi.rs", "exact_boot exact_boot_module exact_boot_plan exact_in exact_out"],
+    ["painted:host/painted/src/snapshot.rs", "Session::boot"],
+    ["runner:runner/src/entry.rs", "slots"],
   ]),
   group("share results", ["one-shot"], "share-sheet request or command until reported completion/cancellation", "UI-owned",
     "host/apple/src/abi/exports.rs exact_share/ exact_share_land and host/painted/src/presenter/requests.rs associate share UI with its pending command; this is separate from incoming router share tokens.", [
@@ -1214,10 +1228,10 @@ export const classifications = [
       "Uses::has Uses::is_empty Uses::iter Uses::with Uses::with_grants zoomable zooms"],
   ]),
   group("holds", ["one-shot"], "held request/node until answer, cancellation or node retirement", "UI-owned",
-    "The named public runner-crate source is the holds API or its value/admission helper. runner/src/runner/device.rs:1-12 retires holds with the requesting node or ticket and refuses duplicate answers; the agent hold is not an executor request.", [
+    "The named public runner-crate source is the holds API or its value/admission helper. runner/src/runner/device.rs:1-12 retires holds with the requesting node or ticket and refuses duplicate answers; the agent hold is not an executor request. runner/auth.rs arm_with_fixture admits or holds the current auth request by ticket, as arm does.", [
     ["runner:runner/src/agent.rs", "answer"],
     ["runner:runner/src/auth.rs",
-      "accept arm callbacks carrier_callback check_grants complete forgotten hold_opened loopback_callback one_code_or_error receive_callback session_grant_refusal " +
+      "accept arm arm_with_fixture callbacks carrier_callback check_grants complete forgotten hold_opened loopback_callback one_code_or_error receive_callback session_grant_refusal " +
       "Session::from_json Session::summary Session::to_json Sessions::has_settled_for Sessions::live settle take_any_settled take_settled"],
   ]),
   group("inspection", ["one-shot"], "synchronous session inspection or diagnostics; no delivered completion", "UI-owned",
