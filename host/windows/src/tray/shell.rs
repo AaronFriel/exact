@@ -1,29 +1,32 @@
 //! The icons' hidden window and what `Shell_NotifyIconW` is told.
 #![allow(unsafe_code)]
-use super::{Callback, CALLBACK};
+use super::{Callback, Icon, CALLBACK};
 use std::{cell::RefCell, rc::Rc};
-use windows_sys::Win32::{
-    Foundation::HWND,
-    Graphics::Gdi::{
-        CreateBitmap, CreateCompatibleDC, CreateDIBSection, DeleteDC, DeleteObject, GdiFlush,
-        SelectObject, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS, HBITMAP,
-    },
-    System::{
-        LibraryLoader::GetModuleHandleW,
-        Registry::{RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_DWORD},
-    },
-    UI::{
-        HiDpi::{GetDpiForSystem, GetSystemMetricsForDpi},
-        Shell::{
-            DefSubclassProc, RemoveWindowSubclass, SetWindowSubclass, Shell_NotifyIconW, NIF_ICON,
-            NIF_MESSAGE, NIF_SHOWTIP, NIF_TIP, NIM_ADD, NIM_DELETE, NIM_MODIFY, NIM_SETVERSION,
-            NOTIFYICONDATAW, NOTIFYICON_VERSION_4,
+use windows_sys::{
+    core::GUID,
+    Win32::{
+        Foundation::HWND,
+        Graphics::Gdi::{
+            CreateBitmap, CreateCompatibleDC, CreateDIBSection, DeleteDC, DeleteObject, GdiFlush,
+            SelectObject, BITMAPINFO, BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS, HBITMAP,
         },
-        WindowsAndMessaging::{
-            CreateIconIndirect, CreateWindowExW, DestroyIcon, DestroyWindow, DrawIconEx, LoadIconW,
-            LoadImageW, RegisterWindowMessageW, DI_NORMAL, HICON, ICONINFO, IDI_APPLICATION,
-            IMAGE_ICON, LR_DEFAULTCOLOR, SM_CXSMICON, WM_NCDESTROY, WM_SETTINGCHANGE,
-            WS_EX_TOOLWINDOW, WS_POPUP,
+        System::{
+            LibraryLoader::GetModuleHandleW,
+            Registry::{RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_DWORD},
+        },
+        UI::{
+            HiDpi::{GetDpiForSystem, GetSystemMetricsForDpi},
+            Shell::{
+                DefSubclassProc, RemoveWindowSubclass, SetWindowSubclass, Shell_NotifyIconW,
+                NIF_GUID, NIF_ICON, NIF_MESSAGE, NIF_SHOWTIP, NIF_TIP, NIM_ADD, NIM_DELETE,
+                NIM_MODIFY, NIM_SETVERSION, NOTIFYICONDATAW, NOTIFYICON_VERSION_4,
+            },
+            WindowsAndMessaging::{
+                CreateIconIndirect, CreateWindowExW, DestroyIcon, DestroyWindow, DrawIconEx,
+                LoadIconW, LoadImageW, RegisterWindowMessageW, DI_NORMAL, HICON, ICONINFO,
+                IDI_APPLICATION, IMAGE_ICON, LR_DEFAULTCOLOR, SM_CXSMICON, WM_NCDESTROY,
+                WM_SETTINGCHANGE, WS_EX_TOOLWINDOW, WS_POPUP,
+            },
         },
     },
 };
@@ -49,12 +52,31 @@ struct State {
     taskbar_created: u32,
 }
 
+/// How the shell took an icon.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(crate) enum Shown {
+    /// As asked.
+    AsAsked,
+    /// By its id alone: the shell refused its GUID.
+    WithoutGuid,
+    /// Not at all.
+    Refused,
+}
+
+/// An icon the shell shows: what it was asked for, whether the shell took
+/// its GUID, and the `HICON` last given for it.
+struct Placed {
+    icon: Icon,
+    by_guid: bool,
+    hicon: HICON,
+}
+
 /// The hidden top-level window the shell sends the icons' messages to, and
-/// each icon shown, by id, with the `HICON` last given for it.
+/// each icon shown.
 pub(crate) struct Shell {
     window: HWND,
     state: Rc<State>,
-    icons: Vec<(u16, HICON)>,
+    icons: Vec<Placed>,
 }
 
 impl Shell {
@@ -118,68 +140,103 @@ impl Shell {
         std::mem::take(&mut *self.state.heard.borrow_mut())
     }
 
-    fn data(&self, id: u16) -> NOTIFYICONDATAW {
+    /// The structure that names icon `id`, by `guid` when given.
+    fn data(&self, id: u16, guid: Option<u128>) -> NOTIFYICONDATAW {
         let mut data: NOTIFYICONDATAW = unsafe { std::mem::zeroed() };
         data.cbSize = std::mem::size_of::<NOTIFYICONDATAW>() as u32;
         data.hWnd = self.window;
         data.uID = u32::from(id);
+        if let Some(guid) = guid {
+            data.uFlags = NIF_GUID;
+            data.guidItem = GUID::from_u128(guid);
+        }
         data
     }
 
-    /// Show icon `id`, or show it anew, with `tip` and `icon`, which it then
-    /// owns. Whether the shell took it.
-    pub(crate) fn show(&mut self, id: u16, tip: [u16; 128], icon: HICON) -> bool {
-        let mut data = self.data(id);
-        data.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_SHOWTIP;
-        data.uCallbackMessage = CALLBACK;
+    /// Add icon `id` by `guid` (or by its id), in version 4. Whether the
+    /// shell took it.
+    fn add(&self, id: u16, guid: Option<u128>, tip: [u16; 128], icon: HICON) -> bool {
+        let mut data = self.data(id, guid);
+        data.uFlags |= NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_SHOWTIP;
+        data.uCallbackMessage = CALLBACK + u32::from(id);
         data.hIcon = icon;
         data.szTip = tip;
-        let known = self.icons.iter().position(|(i, _)| *i == id);
-        let told = match known {
-            Some(_) => unsafe { Shell_NotifyIconW(NIM_MODIFY, &data) != 0 },
-            None => {
-                let added = unsafe { Shell_NotifyIconW(NIM_ADD, &data) != 0 };
-                data.Anonymous.uVersion = NOTIFYICON_VERSION_4;
-                added && unsafe { Shell_NotifyIconW(NIM_SETVERSION, &data) != 0 }
-            }
-        };
-        match known {
-            Some(at) => unsafe {
-                DestroyIcon(std::mem::replace(&mut self.icons[at].1, icon));
-            },
-            None if told => self.icons.push((id, icon)),
-            None => unsafe {
-                DestroyIcon(icon);
-            },
+        if unsafe { Shell_NotifyIconW(NIM_ADD, &data) } == 0 {
+            return false;
         }
-        told
+        data.Anonymous.uVersion = NOTIFYICON_VERSION_4;
+        if unsafe { Shell_NotifyIconW(NIM_SETVERSION, &data) } == 0 {
+            // Its callbacks would not be version 4's.
+            unsafe { Shell_NotifyIconW(NIM_DELETE, &self.data(id, guid)) };
+            return false;
+        }
+        true
     }
 
-    /// Remove icon `id`.
-    pub(crate) fn remove(&mut self, id: u16) {
-        let Some(at) = self.icons.iter().position(|(i, _)| *i == id) else {
+    /// Show `icon`, or show it anew, with `tip` and `hicon`, which it then
+    /// owns. A GUID the shell refuses (it is bound to another executable's
+    /// path) leaves the icon known by its id alone.
+    pub(crate) fn show(&mut self, icon: Icon, tip: [u16; 128], hicon: HICON) -> Shown {
+        if let Some(at) = self.icons.iter().position(|p| p.icon == icon) {
+            let guid = icon.guid.filter(|_| self.icons[at].by_guid);
+            let mut data = self.data(icon.id, guid);
+            data.uFlags |= NIF_ICON | NIF_TIP | NIF_SHOWTIP;
+            data.hIcon = hicon;
+            data.szTip = tip;
+            let told = unsafe { Shell_NotifyIconW(NIM_MODIFY, &data) } != 0;
+            unsafe { DestroyIcon(std::mem::replace(&mut self.icons[at].hicon, hicon)) };
+            return match told {
+                true => Shown::AsAsked,
+                false => Shown::Refused,
+            };
+        }
+        let by_guid = icon.guid.is_some() && self.add(icon.id, icon.guid, tip, hicon);
+        let shown = match by_guid {
+            true => Shown::AsAsked,
+            false if self.add(icon.id, None, tip, hicon) => match icon.guid {
+                Some(_) => Shown::WithoutGuid,
+                None => Shown::AsAsked,
+            },
+            false => Shown::Refused,
+        };
+        match shown {
+            Shown::Refused => unsafe {
+                DestroyIcon(hicon);
+            },
+            _ => self.icons.push(Placed {
+                icon,
+                by_guid,
+                hicon,
+            }),
+        }
+        shown
+    }
+
+    /// Remove `icon`.
+    pub(crate) fn remove(&mut self, icon: Icon) {
+        let Some(at) = self.icons.iter().position(|p| p.icon == icon) else {
             return;
         };
-        let (_, icon) = self.icons.remove(at);
-        let data = self.data(id);
+        let placed = self.icons.remove(at);
+        let data = self.data(icon.id, icon.guid.filter(|_| placed.by_guid));
         unsafe {
             Shell_NotifyIconW(NIM_DELETE, &data);
-            DestroyIcon(icon);
+            DestroyIcon(placed.hicon);
         }
     }
 
     /// Explorer started again with none of the icons: each is added anew.
     pub(crate) fn forget(&mut self) {
-        for (_, icon) in self.icons.drain(..) {
-            unsafe { DestroyIcon(icon) };
+        for placed in self.icons.drain(..) {
+            unsafe { DestroyIcon(placed.hicon) };
         }
     }
 }
 
 impl Drop for Shell {
     fn drop(&mut self) {
-        for id in self.icons.iter().map(|(id, _)| *id).collect::<Vec<_>>() {
-            self.remove(id);
+        for icon in self.icons.iter().map(|p| p.icon).collect::<Vec<_>>() {
+            self.remove(icon);
         }
         unsafe { DestroyWindow(self.window) };
     }
@@ -331,8 +388,9 @@ unsafe extern "system" fn receive(
 ) -> isize {
     unsafe {
         let state = &*(data as *const State);
+        let callback = super::callback(message, wparam, lparam);
         let heard = match message {
-            CALLBACK => Some(Heard::Callback(super::callback(wparam, lparam))),
+            _ if callback.is_some() => callback.map(Heard::Callback),
             m if m == state.taskbar_created && m != 0 => Some(Heard::TaskbarCreated),
             WM_SETTINGCHANGE if lparam != 0 => {
                 let name: Vec<u16> = (0..)
@@ -354,7 +412,7 @@ unsafe extern "system" fn receive(
             if let Some(wake) = &*state.wake.borrow() {
                 wake();
             }
-            if message == CALLBACK {
+            if callback.is_some() {
                 return 0;
             }
         }

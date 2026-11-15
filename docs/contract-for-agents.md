@@ -4443,11 +4443,12 @@ opens the menu when there is none, and a right click opens the menu. On both
 the button takes no room in the page; elsewhere it is an ordinary button. An
 accessory app's status menu ends with the host's Quit, and a Windows status
 menu with Exit; `-exact-menu-remove="status-quit"` removes either. On Windows
-a placed status item makes closing the window hide it, as `keepRunning` does. Bare `focus()` brings the
+a placed status item leaves the close button closing the app, as Windows'
+guidelines advise; only `keepRunning` makes it hide the window. Bare `focus()` brings the
 window forward on macOS and Windows, showing it if it was hidden (Linux logs
 it as unsupported); `hideWindow()` puts it away again with the app still
-running, as the person's close does while a status item is placed or under
-`keepRunning` (macOS and Windows; refused in the journal elsewhere, and where
+running, as the person's close does under `keepRunning`, or on macOS while a
+status item is placed (refused in the journal elsewhere, and where
 the app would end without its window); the agent lists the items as
 `state.statusItems` and `state.dockMenu`.
 

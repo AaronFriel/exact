@@ -3,7 +3,7 @@
 //! work, and after it the icons and the menu's window follow the tree.
 //! A measured run places none.
 use super::*;
-use crate::tray::{self, Does, Flyout, Heard, Input, Op, Shell};
+use crate::tray::{self, Does, Flyout, Heard, Icon, Input, Op, Shell, Shown};
 use exact_painted::presenter::top::StatusItem;
 
 /// What an icon shows: its tooltip and its pixels.
@@ -12,8 +12,8 @@ type Picture = ([u16; 128], Vec<u8>);
 pub(super) struct Tray {
     shell: Option<Shell>,
     flyout: Option<Flyout>,
-    /// Each icon the shell shows, by id, as it was last told.
-    placed: Vec<(u16, Picture)>,
+    /// Each icon the shell shows, as it was last told.
+    placed: Vec<(Icon, Picture)>,
     /// Each item as of the last sync, by its icon's id.
     items: Vec<(u16, StatusItem)>,
     /// The kernel epoch the icons were drawn at; `None` draws them again.
@@ -26,10 +26,17 @@ pub(super) struct Tray {
     anchor: ((i32, i32), f32),
     painted: Option<(u32, u32)>,
     said_image: bool,
+    /// The app's `id`, which names the icons' GUIDs in a production build.
+    guid_owner: Option<String>,
+    said_guid: bool,
 }
 
 impl Tray {
-    fn new(name: &str, proxy: &EventLoopProxy<crate::accessibility::Event>) -> Tray {
+    fn new(
+        name: &str,
+        guid_owner: Option<String>,
+        proxy: &EventLoopProxy<crate::accessibility::Event>,
+    ) -> Tray {
         let shell = Shell::new(name);
         let flyout = Flyout::new();
         let wake = |proxy: EventLoopProxy<_>| {
@@ -52,12 +59,9 @@ impl Tray {
             anchor: ((0, 0), 1.),
             painted: None,
             said_image: false,
+            guid_owner,
+            said_guid: false,
         }
-    }
-
-    /// Whether any icon is shown.
-    pub(super) fn placed(&self) -> bool {
-        !self.placed.is_empty()
     }
 
     fn app_icon(&mut self, side: u32) -> Option<Vec<u8>> {
@@ -80,14 +84,14 @@ impl<D: DataSource + Default + 'static> App<D> {
             return;
         };
         p.place_status_items();
-        self.tray = Some(Tray::new(&self.name, &self.proxy));
+        let guid_owner = tray::guid_owner(&self.config.compat);
+        self.tray = Some(Tray::new(&self.name, guid_owner, &self.proxy));
     }
 
     /// What the icons and the menu heard: a click presses its button or
     /// opens its menu, and the menu's pointer and keys reach it. Exit ends
     /// the app as the person's close of a window that does not hide would.
     pub(super) fn tray_input(&mut self, events: &ActiveEventLoop) {
-        let hides = self.hides_on_close();
         let (Some(tray), Some(p)) = (&mut self.tray, &mut self.presenter) else {
             return;
         };
@@ -120,7 +124,9 @@ impl<D: DataSource + Default + 'static> App<D> {
                         Does::Press => p.status_press(item.node, now),
                         Does::Menu { keyboard } => {
                             let (room, scale) = Flyout::room(heard.at);
-                            if p.open_status_menu(item.node, room, hides, keyboard, now) {
+                            // The menu ends with Exit whenever an icon is
+                            // placed, as this one is (D7).
+                            if p.open_status_menu(item.node, room, true, keyboard, now) {
                                 tray.anchor = (heard.at, scale);
                             }
                         }
@@ -155,11 +161,21 @@ impl<D: DataSource + Default + 'static> App<D> {
         if tray.epoch != Some(epoch) {
             tray.epoch = Some(epoch);
             let (side, scale) = tray::shell::icon_side();
-            let mut items = Vec::new();
+            let mut items: Vec<(u16, StatusItem)> = Vec::new();
             let mut wanted = Vec::new();
             for item in p.status_items() {
                 let taken: Vec<u16> = items.iter().map(|(id, _)| *id).collect();
-                let id = tray::id(&item.name, &taken);
+                let name = item.name.clone().unwrap_or_else(|| item.node.to_string());
+                let id = tray::id(&name, &taken);
+                // A GUID needs a name an update keeps, and one no earlier
+                // item has.
+                let named_before = |name: &String| {
+                    (items.iter()).any(|(_, earlier)| earlier.name.as_ref() == Some(name))
+                };
+                let guid = (tray.guid_owner.as_deref())
+                    .zip(item.name.as_ref().filter(|name| !named_before(name)))
+                    .map(|(app, name)| tray::guid(app, name));
+                let icon = Icon { id, guid };
                 let drawn = item
                     .image
                     .and_then(|image| p.status_icon(image, side, scale, tray.dark));
@@ -179,7 +195,7 @@ impl<D: DataSource + Default + 'static> App<D> {
                 };
                 let pixels = drawn.or_else(|| tray.app_icon(side)).unwrap_or_default();
                 wanted.push((
-                    id,
+                    icon,
                     (
                         tray::tip(&item.label),
                         tray::icon_bgra(&pixels, item.disabled),
@@ -194,23 +210,32 @@ impl<D: DataSource + Default + 'static> App<D> {
             let mut refused = Vec::new();
             for op in tray::ops(&tray.placed, &wanted) {
                 match op {
-                    Op::Delete(id) => shell.remove(id),
-                    Op::Add(id) | Op::Modify(id) => {
-                        let (_, (tip, pixels)) = wanted.iter().find(|(w, _)| *w == id).unwrap();
+                    Op::Delete(icon) => shell.remove(icon),
+                    Op::Add(icon) | Op::Modify(icon) => {
+                        let (_, (tip, pixels)) = wanted.iter().find(|(w, _)| *w == icon).unwrap();
                         let shown = tray::shell::icon(pixels, side)
-                            .is_some_and(|icon| shell.show(id, *tip, icon));
-                        if !shown {
-                            p.host_mut().log(format!(
-                                "status item: the notification area refused icon {id}"
-                            ));
-                            refused.push(id);
+                            .map_or(Shown::Refused, |hicon| shell.show(icon, *tip, hicon));
+                        match shown {
+                            Shown::AsAsked => {}
+                            Shown::WithoutGuid => {
+                                if !std::mem::replace(&mut tray.said_guid, true) {
+                                    p.host_mut().log("status item: the notification area refused the icon's GUID, which Windows binds to the executable's path; it is known by its number, and the person's choice to show it may not carry over (LLP 1133.025 §14)");
+                                }
+                            }
+                            Shown::Refused => {
+                                p.host_mut().log(format!(
+                                    "status item: the notification area refused icon {}",
+                                    icon.id
+                                ));
+                                refused.push(icon);
+                            }
                         }
                     }
                 }
             }
             // An icon the shell refused is tried again at the next change.
             tray.placed = (wanted.into_iter())
-                .filter(|(id, _)| !refused.contains(id))
+                .filter(|(icon, _)| !refused.contains(icon))
                 .collect();
         }
         let Some(flyout) = &mut tray.flyout else {

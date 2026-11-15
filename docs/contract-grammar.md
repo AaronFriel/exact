@@ -2867,14 +2867,15 @@ the virtual clock).
   hidden, brings it forward and activates the app; Linux brings no window
   forward and logs it as unsupported. `focus(id)` stays an element's.
   `hideWindow()` puts the session's window away as the person's close does
-  while a status item is placed or under `keepRunning`, and the app keeps
-  running; the next `focus()` shows it.
+  under `keepRunning`, or on macOS while a status item is placed, and the
+  app keeps running; the next `focus()` shows it.
   On Windows `host.windows.window.keepRunning: true` makes closing the window
   hide it, as on the Mac, and a login item registered `hidden` opens no
   window at that launch. A Windows app is one process: launching it again
   shows the window it has, and a location on that command line (a
-  jump-list task) opens in it. A placed status item hides the window on
-  close too, and is the person's way back and, by its menu's Exit, way out.
+  jump-list task) opens in it. A placed status item does not make the close
+  hide the window there, as Windows' guidelines advise; it is a way back to a
+  window `keepRunning` hid, and its menu's Exit a way out.
 
   `@exact/global-shortcuts` on Windows accepts `PrintScreen` and modified
   chords such as `Control+PrintScreen`. Bare `PrintScreen` answers

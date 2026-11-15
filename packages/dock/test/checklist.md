@@ -90,7 +90,12 @@ development build of an app that depends on the three packages.
    disabled row is dimmed and presses nothing; a click outside, Alt or
    Escape closes the menu and runs nothing. The menu ends with Exit, which
    ends the app. Hide Menu Bar Item removes the icon, and Show brings it
-   back. With the icon placed, the close button hides the window. Restart
+   back. With the icon placed and no `keepRunning`, the close button ends
+   the app; with `keepRunning`, it hides the window, and starting the app
+   from Start shows it again. In a production build, turn the icon on in
+   Settings › Personalization › Taskbar › Other system tray icons, quit, and
+   start the app again: it is still shown there, and the journal has no
+   "refused the icon's GUID". Restart
    Explorer (`taskkill /f /im explorer.exe`, then `explorer`): the icon
    comes back. Switch Settings › Personalization › Colors between dark and
    light: the star follows. With Narrator on, note what it reads in the

@@ -10,10 +10,10 @@
 //! be hidden: the surface is open as ever (one at a time, the page inert,
 //! a row's choice pressing the row), only placed nowhere in the page. The
 //! host paints it from [`Presenter::status_menu_pixels`] and hands back its
-//! pointer and keys in the menu's own points. While closing the window
-//! hides it, the menu ends with a separator and Exit (D7), unless the
-//! root's `-exact-menu-remove` names `status-quit`; Exit closes the menu
-//! and leaves the rest to the host ([`Presenter::take_status_exit`]).
+//! pointer and keys in the menu's own points. When the host asks, the menu
+//! ends with a separator and Exit (D7), unless the root's
+//! `-exact-menu-remove` names `status-quit`; Exit closes the menu and
+//! leaves the rest to the host ([`Presenter::take_status_exit`]).
 use super::*;
 
 /// The node an Exit row stands for: none of the tree's.
@@ -33,9 +33,10 @@ pub(super) struct Menu {
 pub struct StatusItem {
     /// The button.
     pub node: ViewId,
-    /// What keeps the item's place across launches: its `id`, else its
-    /// `testId`, else the node's number, as the Mac's `autosaveName`.
-    pub name: String,
+    /// What keeps the item's place across launches and updates, as the
+    /// Mac's `autosaveName`: its `id`, else its `testId`; `None` with
+    /// neither.
+    pub name: Option<String>,
     /// Its `aria-label`, else its text: the item's tooltip.
     pub label: String,
     /// `disabled`: dimmed, with no press and no menu.
@@ -79,7 +80,7 @@ impl<D: DataSource> Presenter<D> {
                 let name = [PropId::Id, PropId::TestId]
                     .into_iter()
                     .find_map(|prop| node.props.str(prop).filter(|s| !s.is_empty()))
-                    .map_or_else(|| id.to_string(), str::to_owned);
+                    .map(str::to_owned);
                 Some(StatusItem {
                     node: id,
                     name,
@@ -115,8 +116,7 @@ impl<D: DataSource> Presenter<D> {
             .is_some_and(|list| list.split_whitespace().any(|id| id == "status-quit"))
     }
 
-    /// A status menu ends with Exit while its host says closing the window
-    /// hides it.
+    /// A status menu ends with Exit when its host asked for it.
     pub(super) fn with_exit(&self, pop: ViewId, plan: Option<Plan>) -> Option<Plan> {
         let status = self.top.status.as_ref().filter(|s| s.exit);
         let root = status.and_then(|s| self.host.kernel().node_by_key(s.root));
@@ -149,7 +149,7 @@ impl<D: DataSource> Presenter<D> {
     }
 
     /// Open status button `id`'s menu in its host's window, whose screen
-    /// has `room` (points) for it; `exit` while closing the window hides it.
+    /// has `room` (points) for it, ending with Exit when `exit` (D7).
     /// Opened from the keyboard, its first row takes the focus, as WinUI's
     /// MenuFlyout gives it. Whether it opened.
     pub fn open_status_menu(

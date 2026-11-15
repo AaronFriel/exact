@@ -21,16 +21,25 @@
 //!   ([Taskbar Creation Notification](https://learn.microsoft.com/windows/win32/shell/taskbar#taskbar-creation-notification)).
 //!   The icons' window is therefore a hidden top-level window, not a
 //!   message-only one, which broadcasts do not reach.
-//! - **An icon's identity** is its window and a 16-bit id (the callback
-//!   carries the id in `lParam`'s high word), hashed from the button's
-//!   `id`, else its `testId`, so that the person's choice to show or hide it
-//!   in the taskbar follows it across launches, as the Mac's `autosaveName`
-//!   keeps a status item's place. No GUID is given: the shell binds one to
-//!   the executable's path, and a development build moves.
+//! - **An icon's identity** is its window and an id hashed from the
+//!   button's `id`, else its `testId`, so that the person's choice to show
+//!   or hide it in the taskbar follows it across launches, as the Mac's
+//!   `autosaveName` keeps a status item's place. A production build also
+//!   gives it a GUID derived from the app's `id` and that name, which the
+//!   shell prefers, and which no update changes. The shell binds a GUID to
+//!   the executable's path, so a development build, whose path moves, gives
+//!   none, and an icon whose GUID the shell refuses is added by its id
+//!   alone ([NOTIFYICONDATAW](https://learn.microsoft.com/windows/win32/api/shellapi/ns-shellapi-notifyicondataw#troubleshooting)).
+//!   Each icon's callback is its own message, `CALLBACK` plus its id: "if
+//!   guidItem is specified, uID is ignored", so `lParam`'s high word is not
+//!   relied on to say which icon was clicked.
 
-/// `Shell_NotifyIconW`'s callback message: `WM_APP + 1`.
+/// `WM_APP`: icon `id`'s callback message is `CALLBACK + id`, so ids run
+/// from 1 to [`ID_MAX`], which keeps every message below `0xC000`, where
+/// registered messages start.
 #[cfg_attr(not(windows), allow(dead_code))]
-pub(crate) const CALLBACK: u32 = 0x8000 + 1;
+pub(crate) const CALLBACK: u32 = 0x8000;
+const ID_MAX: u16 = 0x3FFF;
 /// `NIN_SELECT` (`WM_USER`), and `NIN_KEYSELECT` (`NIN_SELECT | NINF_KEY`).
 const NIN_SELECT: u16 = 0x400;
 const NIN_KEYSELECT: u16 = 0x401;
@@ -48,9 +57,10 @@ pub(crate) enum Event {
     Other,
 }
 
-/// A callback, decoded: under version 4 `lParam`'s low word is the event
-/// and its high word the icon's id, and `wParam` holds the anchor's screen
-/// coordinates, as `GET_X_LPARAM` and `GET_Y_LPARAM` read them.
+/// A callback, decoded: `message` names the icon (`CALLBACK + id`); under
+/// version 4 `lParam`'s low word is the event, and `wParam` holds the
+/// anchor's screen coordinates, as `GET_X_LPARAM` and `GET_Y_LPARAM` read
+/// them.
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(not(windows), allow(dead_code))]
 pub(crate) struct Callback {
@@ -59,22 +69,26 @@ pub(crate) struct Callback {
     pub at: (i32, i32),
 }
 
+/// `message` decoded, or `None` when it is no icon's callback.
 #[cfg_attr(not(windows), allow(dead_code))]
-pub(crate) fn callback(wparam: usize, lparam: isize) -> Callback {
+pub(crate) fn callback(message: u32, wparam: usize, lparam: isize) -> Option<Callback> {
+    let icon = u16::try_from(message.checked_sub(CALLBACK)?)
+        .ok()
+        .filter(|id| (1..=ID_MAX).contains(id))?;
     let event = match lparam as usize as u16 {
         NIN_SELECT => Event::Select { keyboard: false },
         NIN_KEYSELECT => Event::Select { keyboard: true },
         WM_CONTEXTMENU => Event::Menu,
         _ => Event::Other,
     };
-    Callback {
+    Some(Callback {
         event,
-        icon: (lparam as usize >> 16) as u16,
+        icon,
         at: (
             wparam as u16 as i16 as i32,
             (wparam >> 16) as u16 as i16 as i32,
         ),
-    }
+    })
 }
 
 /// What a click does to an item (D4's Windows clicks).
@@ -101,17 +115,65 @@ pub(crate) fn does(event: Event, press: bool, menu: bool, disabled: bool) -> Doe
 }
 
 /// The icon's id for an item named `name`, distinct from the ids `taken`:
-/// FNV-1a folded to 16 bits, then the next free one; never 0.
+/// FNV-1a folded to 1 to [`ID_MAX`], else the next free one. Of two names
+/// that fold alike, the first listed keeps the id.
 #[cfg_attr(not(windows), allow(dead_code))]
 pub(crate) fn id(name: &str, taken: &[u16]) -> u16 {
     let hash = name.bytes().fold(0x811c_9dc5_u32, |h, b| {
         (h ^ u32::from(b)).wrapping_mul(0x0100_0193)
     });
-    let mut id = ((hash >> 16) ^ hash) as u16;
-    while id == 0 || taken.contains(&id) {
-        id = id.wrapping_add(1);
+    let next = |id: u16| id % ID_MAX + 1;
+    let mut id = next(((hash >> 16) ^ hash) as u16);
+    for _ in 0..ID_MAX {
+        if !taken.contains(&id) {
+            break;
+        }
+        id = next(id);
     }
     id
+}
+
+/// The icon's GUID in a production build: a name-based UUID (version 8,
+/// from SHA-256, as RFC 9562 §6.5 builds one) of the app's `id` and the
+/// item's `name`, so the same app and button give the same GUID in every
+/// build and update.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) fn guid(app: &str, name: &str) -> u128 {
+    use sha2::{Digest, Sha256};
+    let digest = Sha256::new()
+        .chain_update("exact notification icon\0")
+        .chain_update(app)
+        .chain_update("\0")
+        .chain_update(name)
+        .finalize();
+    let mut bytes = [0u8; 16];
+    bytes.copy_from_slice(&digest[..16]);
+    bytes[6] = (bytes[6] & 0x0F) | 0x80;
+    bytes[8] = (bytes[8] & 0x3F) | 0x80;
+    u128::from_be_bytes(bytes)
+}
+
+/// Whose GUIDs a binary's icons take: its app's `id` in a production
+/// build (`compat`'s embedded trust), else none.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) fn guid_owner(compat: &str) -> Option<String> {
+    if !exact_runner::delivery::production(compat) {
+        return None;
+    }
+    serde_json::from_str::<serde_json::Value>(compat)
+        .ok()?
+        .pointer("/inputs/app")?
+        .as_str()
+        .filter(|id| !id.is_empty())
+        .map(str::to_owned)
+}
+
+/// What the shell knows an icon by: its id, and its GUID if it has one.
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(not(windows), allow(dead_code))]
+pub(crate) struct Icon {
+    pub id: u16,
+    pub guid: Option<u128>,
 }
 
 /// `szTip`: the label in at most 127 UTF-16 units and a NUL, never ending
@@ -169,30 +231,35 @@ pub(crate) fn taskbar_dark(system_uses_light: Option<u32>) -> bool {
 }
 
 /// What the shell must be told to show `wanted` where it shows `placed`:
-/// each `(id, picture)`, in order, where a picture is whatever tells two
-/// icons apart (the tooltip and the pixels).
+/// each `(key, picture)`, in order, where a key is what the shell knows an
+/// icon by and a picture is whatever tells two icons apart (the tooltip and
+/// the pixels). A key that changes is a removal and an addition, and every
+/// removal comes first.
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(not(windows), allow(dead_code))]
-pub(crate) enum Op {
-    Add(u16),
-    Modify(u16),
-    Delete(u16),
+pub(crate) enum Op<K> {
+    Add(K),
+    Modify(K),
+    Delete(K),
 }
 
 #[cfg_attr(not(windows), allow(dead_code))]
-pub(crate) fn ops<T: PartialEq>(placed: &[(u16, T)], wanted: &[(u16, T)]) -> Vec<Op> {
+pub(crate) fn ops<K: Copy + PartialEq, T: PartialEq>(
+    placed: &[(K, T)],
+    wanted: &[(K, T)],
+) -> Vec<Op<K>> {
     let gone = placed
         .iter()
-        .filter(|(id, _)| !wanted.iter().any(|(w, _)| w == id))
-        .map(|(id, _)| Op::Delete(*id));
+        .filter(|(key, _)| !wanted.iter().any(|(w, _)| w == key))
+        .map(|(key, _)| Op::Delete(*key));
     let changed =
-        wanted
-            .iter()
-            .filter_map(|(id, picture)| match placed.iter().find(|(p, _)| p == id) {
-                None => Some(Op::Add(*id)),
-                Some((_, was)) if was != picture => Some(Op::Modify(*id)),
+        wanted.iter().filter_map(
+            |(key, picture)| match placed.iter().find(|(p, _)| p == key) {
+                None => Some(Op::Add(*key)),
+                Some((_, was)) if was != picture => Some(Op::Modify(*key)),
                 Some(_) => None,
-            });
+            },
+        );
     gone.chain(changed).collect()
 }
 
@@ -237,7 +304,7 @@ pub(crate) mod shell;
 #[cfg(windows)]
 pub(crate) use flyout::{Flyout, Input};
 #[cfg(windows)]
-pub(crate) use shell::{Heard, Shell};
+pub(crate) use shell::{Heard, Shell, Shown};
 
 #[cfg(test)]
 mod tests;

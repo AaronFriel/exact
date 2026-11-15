@@ -569,14 +569,16 @@ as on the Mac. A Windows app is one process, with `keepRunning` or without:
 launching it again (Start, its taskbar pin, a shortcut) shows the window it
 has, and a launch with a location (a jump-list task) shows it and opens the
 location there. A bare `focus()` shows it too, `hideWindow()` hides it as
-the close button does (refused in the journal without `keepRunning` or a
-status item), and the app's own `close()` ends the app. A login item
+the close button does (refused in the journal without `keepRunning`), and
+the app's own `close()` ends the app. A login item
 registered `hidden` (`@exact/login-item`) opens no window at that launch:
 the app runs, and shows its window when launched again or when it calls
 `focus()`. A `-exact-menu="status"` button is the app's notification-area
-icon (LLP 1133.025 D4): while one is placed, closing the window hides it
-whether or not `keepRunning` is set, and the icon's menu ends with Exit,
-which asks `beforeunload` and ends the app.
+icon (LLP 1133.025 D4). It does not change what closing the window does:
+without `keepRunning` the app still ends, since Windows' guidelines advise
+against Close putting a program in the notification area
+([notification area](https://learn.microsoft.com/windows/win32/uxguide/winenv-notification)).
+The icon's menu ends with Exit, which asks `beforeunload` and ends the app.
 
 A native module whose work must finish before the app exits (a child process
 to stop, a socket to flush) overrides `willQuit(done:)`. On every orderly

@@ -17,20 +17,26 @@ fn a_callback_names_its_event_its_icon_and_where_it_was_asked() {
         (0x203, Event::Other),
     ];
     for (raw, event) in cases {
-        let (w, l) = packed(raw, 0xBEEF, (1918, 1060));
-        let got = callback(w, l);
+        let (w, l) = packed(raw, 0x1234, (1918, 1060));
+        let got = callback(CALLBACK + 0x1234, w, l);
         assert_eq!(
             got,
-            Callback {
+            Some(Callback {
                 event,
-                icon: 0xBEEF,
+                icon: 0x1234,
                 at: (1918, 1060)
-            }
+            })
         );
     }
-    // A monitor left of or above the primary has negative coordinates.
-    let (w, l) = packed(0x7B, 1, (-1200, -40));
-    assert_eq!(callback(w, l).at, (-1200, -40));
+    // The message names the icon, whatever `lParam`'s high word holds: a
+    // GUID's icon ignores its uID.
+    let (w, l) = packed(0x7B, 0, (-1200, -40));
+    let got = callback(CALLBACK + 7, w, l).unwrap();
+    assert_eq!((got.icon, got.at), (7, (-1200, -40)));
+    // Messages outside the icons' range are no callback.
+    for message in [CALLBACK, CALLBACK + 0x4000, 0x7FFF, 0xC000] {
+        assert_eq!(callback(message, w, l), None, "{message:#x}");
+    }
 }
 
 #[test]
@@ -63,12 +69,51 @@ fn a_selection_presses_else_opens_the_menu_and_the_context_menu_never_presses() 
 fn an_icons_id_follows_its_name_and_no_two_share_one() {
     let a = id("tray", &[]);
     assert_eq!(a, id("tray", &[]), "the same across launches");
-    assert_ne!(a, 0);
-    assert_ne!(id("tray", &[a]), a);
+    assert!((1..=0x3FFF).contains(&a));
     assert_ne!(id("other", &[]), a);
+    // Two names that fold to one id: the second takes the next free one.
+    let twin = (0..)
+        .map(|i| format!("item-{i}"))
+        .find(|n| id(n, &[]) == a)
+        .unwrap();
+    assert_eq!(id(&twin, &[a]), a % 0x3FFF + 1);
+    assert_eq!(id("tray", &[0x3FFF]), a, "only a taken id moves");
+    let last = (0..)
+        .map(|i| format!("item-{i}"))
+        .find(|n| id(n, &[]) == 0x3FFF)
+        .unwrap();
+    assert_eq!(id(&last, &[0x3FFF]), 1, "past the last id comes the first");
     // Every id is taken but one.
-    let taken: Vec<u16> = (1..=u16::MAX).filter(|i| *i != 7).collect();
+    let taken: Vec<u16> = (1..=0x3FFF).filter(|i| *i != 7).collect();
     assert_eq!(id("tray", &taken), 7);
+}
+
+#[test]
+fn an_icons_guid_follows_its_app_and_name_in_every_build() {
+    let g = guid("com.example.snap", "tray");
+    // Pinned: a changed GUID loses the person's choice to show the icon.
+    assert_eq!(g, guid("com.example.snap", "tray"));
+    assert_eq!(format!("{g:032x}"), "9668442291f582f2a3881f7c3a7f7eeb");
+    assert_eq!((g >> 76) & 0xF, 8, "version 8");
+    assert_eq!((g >> 62) & 0b11, 0b10, "RFC 9562's variant");
+    assert_ne!(guid("com.example.other", "tray"), g);
+    assert_ne!(guid("com.example.snap", "plain"), g);
+    // The separator keeps the app and the name apart.
+    assert_ne!(guid("com.example.snapt", "ray"), g);
+}
+
+#[test]
+fn only_a_production_build_names_its_icons_by_guid() {
+    let compat = |trust: &str, app: &str| {
+        format!(r#"{{"inputs":{{"app":"{app}"}},"embedded":{{"trust":"{trust}"}}}}"#)
+    };
+    assert_eq!(
+        guid_owner(&compat("production", "com.example.snap")).as_deref(),
+        Some("com.example.snap")
+    );
+    assert_eq!(guid_owner(&compat("development", "com.example.snap")), None);
+    assert_eq!(guid_owner(&compat("production", "")), None);
+    assert_eq!(guid_owner(r#"{"inputs":{"app":"com.example.snap"}}"#), None);
 }
 
 #[test]
@@ -115,6 +160,24 @@ fn the_shell_is_told_only_what_changed() {
     assert_eq!(ops(&wanted, &wanted), []);
     // Explorer restarted: nothing is placed, so everything is added.
     assert_eq!(ops(&[], &wanted), [Op::Add(2), Op::Add(3), Op::Add(4)]);
+    // Of two buttons whose ids fold alike, the first goes: the second takes
+    // its id but keeps its own GUID, so it is removed and added again.
+    let first = Icon {
+        id: 5,
+        guid: Some(1),
+    };
+    let second = Icon {
+        id: 6,
+        guid: Some(2),
+    };
+    let moved = Icon {
+        id: 5,
+        guid: Some(2),
+    };
+    assert_eq!(
+        ops(&[(first, "a"), (second, "b")], &[(moved, "b")]),
+        [Op::Delete(first), Op::Delete(second), Op::Add(moved)]
+    );
 }
 
 #[test]

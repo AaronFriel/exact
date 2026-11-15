@@ -1,6 +1,6 @@
 //! Status items where the host places them (`top/status.rs`, LLP 1133.025
 //! D4): the button leaves the page, its menu opens in the host's window and
-//! chooses there, Exit ends it while closing the window hides it (D7), and
+//! chooses there, Exit ends it when the host asks (D7), and
 //! its image is drawn for the host's icon.
 use super::*;
 use std::path::PathBuf;
@@ -84,7 +84,7 @@ fn each_status_button_is_an_item_with_its_label_image_press_and_menu() {
         [
             StatusItem {
                 node: tray,
-                name: "tray".into(),
+                name: Some("tray".into()),
                 label: "Snap".into(),
                 disabled: false,
                 press: false,
@@ -93,7 +93,7 @@ fn each_status_button_is_an_item_with_its_label_image_press_and_menu() {
             },
             StatusItem {
                 node: named(&p, "plain"),
-                name: "plain".into(),
+                name: Some("plain".into()),
                 label: "Ping".into(),
                 disabled: false,
                 press: true,
@@ -102,6 +102,9 @@ fn each_status_button_is_an_item_with_its_label_image_press_and_menu() {
             },
         ]
     );
+    // With neither `id` nor `testId`, no name keeps its place.
+    let unnamed = boot(&TRAY.replace(r#"button testId="plain" "#, "button "));
+    assert_eq!(unnamed.status_items()[1].name, None);
 }
 
 #[test]
@@ -177,7 +180,7 @@ fn a_status_menu_opened_from_the_keyboard_focuses_its_first_row() {
 }
 
 #[test]
-fn a_status_menu_ends_with_exit_while_closing_the_window_hides_it() {
+fn a_status_menu_ends_with_exit_when_its_host_asks() {
     let mut p = boot(TRAY);
     let tray = named(&p, "tray");
     let now = p.host.now();
