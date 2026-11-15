@@ -798,7 +798,12 @@ package final class Presenter {
         // Keep the surface's explicit transactions inside the batch: a top-level
         // commit can submit its size before the following sibling transforms.
         CATransaction.begin()
-        defer { CATransaction.commit() }
+        defer {
+            CATransaction.commit()
+            // The GPU capture renders what Core Animation has committed, and
+            // a transaction still open would give it the previous batch.
+            if !applying { session?.canvases.captureIfNeeded() }
+        }
         session?.fieldChrome.presented(batch.layoutProvisional)
         let outerWaiting = fieldsWaiting; fieldsWaiting = menus.waitingFields(batch)
         defer { fieldsWaiting = outerWaiting }
@@ -1116,7 +1121,6 @@ package final class Presenter {
         if fit != viewportFit { viewportFit = fit; onViewportFit?() }
         session?.canvases.cancelMovedControls()
         PaintOrder.flush()
-        session?.canvases.captureIfNeeded()
         let changed = touchedAndAbove(touchedIDs + geometryApplied)
         geometryApplied = []
         for id in touchedAndAbove(pressChanged) { views[id]?.endPressCrossFade() }
