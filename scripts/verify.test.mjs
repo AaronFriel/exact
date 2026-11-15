@@ -1300,7 +1300,8 @@ test.each(['moved clock', 'resource date', 'pinned date', 'duplicate names', 'ex
       startServer:async()=>({fresh:reset,beforeTest:async()=>{if(used)await reset();used=true;},check(){},stop:async()=>{},exited:()=>${scenario === 'signal exit' ? 143 : 'died'},exits:()=>${scenario === 'signal exit' ? "['server.ts exited (signal SIGTERM) during the run']" : "died == null ? [] : ['server.ts exited (code 23) during the run']"},tail:()=>''})}));
     mock.module(at('evidence.mjs'),()=>({recordRun(){}}));
     const captures = {};
-    mock.module(at('agent-check.mjs'),()=>({checkOp:async(s,args,{shots})=>{
+    const check = await real('agent-check.mjs');
+    mock.module(at('agent-check.mjs'),()=>({...check,checkOp:async(s,args,{shots})=>{
       const vp = {w:s.width,h:844}, path=shots?.(vp,'light');
       if(path){captures[path]=(captures[path]??0)+1;writeFileSync(path,String(captures[path]));writeFileSync(dir+'/captures.json',JSON.stringify(captures));}
       if(${scenario === 'first screen crash'} && path?.endsWith('390x844-light.png'))died=23;
