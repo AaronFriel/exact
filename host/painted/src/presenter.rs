@@ -1001,13 +1001,15 @@ impl<D: DataSource> Presenter<D> {
             .runner_mut()
             .publish_sockets(|batch| executor.socket(batch));
         let commands = self.host.take_commands();
-        if let Some(activation) = (self.host.router_op())
-            .map(|op| op.activation)
-            .filter(|a| *a > self.fragment_seen)
-        {
-            self.fragment_anchor = None;
-            self.fragment_seen = activation;
-            self.fragment_armed = Some((activation, self.person_scrolls));
+        if let Some(op) = self.host.router_op() {
+            if op.activation == 0 {
+                self.fragment_anchor = None;
+                self.fragment_armed = None;
+            } else if op.activation > self.fragment_seen {
+                self.fragment_anchor = None;
+                self.fragment_seen = op.activation;
+                self.fragment_armed = Some((op.activation, self.person_scrolls));
+            }
         }
         if !commands.is_empty() {
             self.commands.extend(commands);

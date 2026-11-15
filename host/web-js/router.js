@@ -161,8 +161,8 @@ function hostGo(location) {
   const next = navigating(go_)(r, location); if (next !== r) commit(() => W(RouterSlot, next), "host go");
 }
 // @ref LLP 1153 D5 — the scroll to a fragment, the browser's own step made once the route's data has arrived (the
-// runner's `fragment_command`): no resource waiting for its source and no request in flight, a mutation's included and
-// a held one not (held.js `Counting`, the runner's `has_pending`). `fragment.js` finds and scrolls, then holds the
+// runner's `fragment_command`): no resource waiting for its source and no owned request in flight, a mutation's
+// included and a held or forgotten one not (held.js `Counting`, the runner's `has_pending`). `fragment.js` finds and holds the
 // target while the route's pictures load; it loads at first use. `Navigations`: what each `open`, `push`, `replace`
 // or `go` to a location with a fragment returned, with the visit and fragment it left on top: an explicit navigation,
 // which scrolls even to the fragment the visit already shows, where a return by `back` or `select` keeps its place.
@@ -189,7 +189,7 @@ function assigned() {
 const shows = ({ visit, fragment }) => { const r = RouterSlot?.n?.v, t = r && validRouter(r) && top_(r); return !!t && t[0] === visit && t[5] === fragment; };
 function fragmentDue() {
   if (Due && !shows(Due)) Due = null;
-  if (!Due || Counting.size || Resources.some(r => r.waiting)) return;
+  if (!Due || [...Counting].some(t => t.held() && !t.r?.gone) || Resources.some(r => !r.gone && r.waiting)) return;
   const due = Scheduled = Due; Due = null;
   fragments().then(f => { if (Scheduled !== due || !shows(due)) return; Scheduled = null; f.scroll(pageRoot(), due.visit, due.fragment, say, due.activation); }, e => say(`fragment: ${e.message}`));
 }
@@ -263,6 +263,7 @@ export function router(slot, history) {
     const r = slot(); if (!r || !r[1].length) return;
     const op = r === Shown ? Early : mirror(r); Early = null;
     if (op?.scroll) wantScroll(op);
+    else if (op) { Due = Scheduled = null; Fragments?.then(f => f.cancel()); }
   });
   // `effect` runs once synchronously. Its first apply follows
   // `projectRoots`' projection, so publish those initial visits now.

@@ -105,11 +105,12 @@ function apply(batch) {
           break;
         // the title at once: the head's, else the route's (LLP 1115.000 D4.1)
         case "router":
+          host.fragmentTurn++;
           navigation.apply(op);
           if (op.scroll) {
             op.since = navigation.personScrolls;
             (host.fragmentGlue ??= loadAfterPaint("./fragment.js", "fragment")).then((f) => f.arm(root, op, navigation));
-          }
+          } else host.fragmentGlue?.then((f) => f.cancel());
           break;
         // a scroll to the visit's fragment, made at the runner's `scrollToFragment` once its content has arrived, which a scroll by the person since cancels (LLP 1153 D5)
         case "create": {
