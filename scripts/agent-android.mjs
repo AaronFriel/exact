@@ -264,13 +264,13 @@ export function androidDeploy(app, bin, env) {
   const assignments = Object.entries(vars).map(([k, v]) => `${k}=${quote(v)}`).join(' ');
   const shot = `${dir}/agent-shot.png`, { lease, release: releasePorts } = reverseForDrive(tool, serial, vars);
   return {
-    serial, dir, shot,
+    serial, dir, shot, cleanup: releasePorts,
     spawn: (args = []) => {
       const command = `cd ${quote(dir)} && env ${assignments} ${[`./${exe}`, ...args].map(quote).join(' ')}; s=$?; cd / && rm -rf ${quote(dir)}; exit $s`;
       const child = lease.ports.length
         ? spawnCarrier(['headless', tool, serial, command, JSON.stringify(lease)], env)
         : spawn(tool, ['-s', serial, 'shell', '-T', command], { stdio: ['pipe', 'pipe', 'pipe'] });
-      return child.on('exit', releasePorts).on('error', releasePorts);
+      return child.on('close', releasePorts).on('error', releasePorts);
     },
     pull(path) {
       const r = spawnSync(tool, ['-s', serial, 'pull', shot, resolve(path)], { encoding: 'utf8' });
@@ -385,13 +385,14 @@ function readerDeploy(app, apk, env) {
     env = { ...env, EXACT_PLAN: plan };
   }
   const vars = readerVariables(env), { lease, release: releasePorts } = reverseForDrive(tool, serial, vars);
+  const cleanup = code => {
+    if (code !== 0 && code !== RELAY_CLEANED_ERROR) spawnSync(tool, ['-s', serial, 'shell', 'am', 'force-stop', id], { timeout: 5000 });
+    releasePorts();
+  };
   return {
-    serial, dir, shot,
+    serial, dir, shot, cleanup,
     spawn: () => spawnCarrier(['relay', serial, id, JSON.stringify(vars), JSON.stringify(lease)], env)
-      .on('exit', code => {
-        if (code !== 0 && code !== RELAY_CLEANED_ERROR) spawnSync(tool, ['-s', serial, 'shell', 'am', 'force-stop', id]);
-        releasePorts();
-      }).on('error', releasePorts),
+      .on('close', cleanup).on('error', releasePorts),
     pull(path) {
       const r = spawnSync(tool, ['-s', serial, 'pull', shot, resolve(path)], { encoding: 'utf8' });
       if (r.status !== 0) throw new Error(`adb pull the screenshot: ${(r.stderr || r.stdout).trim()}`);
@@ -524,15 +525,26 @@ function releaseReverseState(tool, serial, lease) {
   });
 }
 
-// A killed wrapper must stop its adb children before the parent releases its reverse mappings.
+// Kill adb with its carrier: inherited pipes otherwise keep the parent's close event pending.
 function spawnCarrier(args, env) {
   const grouped = process.platform !== 'win32';
-  const child = spawn(process.execPath, [import.meta.path, ...args], { env, stdio: ['pipe', 'pipe', 'pipe'], detached: grouped });
+  const child = spawn(process.execPath, [import.meta.path, ...args], { env, stdio: ['pipe', 'pipe', 'pipe', 'ipc'], detached: grouped });
   if (grouped) {
     const signalGroup = signal => {
       if (!child.pid) return false;
       try { process.kill(-child.pid, signal); return true; }
-      catch (error) { if (error.code !== 'ESRCH') throw error; return false; }
+      catch (error) {
+        if (error.code === 'ESRCH') return false;
+        // Darwin's killpg can return EPERM while exiting processes or zombies still retain the group.
+        if (process.platform === 'darwin' && error.code === 'EPERM') {
+          const members = spawnSync('ps', ['-axo', 'pgid=,stat='], { encoding: 'utf8' });
+          if (members.status === 0 && !members.stdout.trim().split('\n').some(line => {
+            const [group, state] = line.trim().split(/\s+/);
+            return Number(group) === child.pid && !state?.startsWith('Z') && !state?.includes('E');
+          })) return false;
+        }
+        throw error;
+      }
     };
     child.kill = (signal = 'SIGTERM') => {
       const sent = signalGroup(signal);
@@ -540,13 +552,43 @@ function spawnCarrier(args, env) {
       return sent;
     };
     child.once('exit', () => signalGroup('SIGKILL'));
-  }
+  } else windowsCarrier(child);
   return child;
+}
+
+// Reverse helpers must finish their ownership writes even when the carrier is killed.
+export function windowsCarrier(child, killPid = process.kill.bind(process)) {
+  const pipes = new Set(), kill = child.kill.bind(child);
+  let stopping = false;
+  const stopPipes = () => {
+    stopping = true;
+    for (const pid of pipes) {
+      try { killPid(pid, 'SIGKILL'); pipes.delete(pid); }
+      catch (error) {
+        if (error.code === 'ESRCH') pipes.delete(pid);
+        else console.error(`Android carrier cleanup: pid ${pid}: ${error.message}`);
+      }
+    }
+  };
+  child.on('message', message => {
+    if (!Number.isSafeInteger(message?.adbPipe) || message.adbPipe <= 0) return;
+    if (message.exited) pipes.delete(message.adbPipe); else pipes.add(message.adbPipe);
+    if (stopping) stopPipes();
+  });
+  child.kill = (signal = 'SIGTERM') => { stopPipes(); return kill(signal); };
+  child.once('exit', stopPipes);
+}
+
+function trackAdbPipe(child) {
+  if (!child.pid || !process.send) return;
+  process.send({ adbPipe: child.pid });
+  child.once('exit', () => { if (process.connected) process.send({ adbPipe: child.pid, exited: true }); });
 }
 
 async function headless([tool, serial, command, encodedLease]) {
   const lease = JSON.parse(encodedLease);
   const child = spawn(tool, ['-s', serial, 'shell', '-T', command], { stdio: 'inherit' });
+  trackAdbPipe(child);
   const code = await new Promise(resolve => { child.on('exit', code => resolve(code ?? 1)); child.on('error', () => resolve(1)); });
   process.exit(releaseReverse(tool, serial, lease) ? code : 1);
 }
@@ -575,6 +617,26 @@ export function androidScreenState(power, window) {
   const showing = flag(window, 'isKeyguardShowing|mShowingLockscreen') ?? flag(delegate, 'showing');
   const secure = flag(window, 'isKeyguardSecure') ?? flag(delegate, 'secure');
   return { wakefulness, showing, secure };
+}
+
+/** Permission activities in the focused window or focused app, including a window being replaced. */
+export function androidPermissionPrompt(display) {
+  for (const line of display.split('\n')) {
+    if (!/^\s*m(?:CurrentFocus|FocusedApp)=/.test(line)) continue;
+    const component = /\b([\w.]+\/[\w.]*\bGrantPermissionsActivity)\b/.exec(line)?.[1];
+    if (component) return component;
+  }
+  return null;
+}
+
+function androidPermissionDialog(tool, serial) {
+  // API 29 prints focus at service scope; later versions print it under each display.
+  const focus = spawnSync(tool, ['-s', serial, 'shell', "dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'"], { encoding: 'utf8', timeout: 5000, maxBuffer: 4 << 20 });
+  const prompt = androidPermissionPrompt(focus.stdout ?? '');
+  if (prompt) return prompt;
+  if (focus.status !== 0) throw new Error(`Android focused activity: adb shell dumpsys window: ${(focus.error?.message || focus.stderr || focus.stdout || `exit ${focus.status}`).trim()}`);
+  if (!/^\s*m(?:CurrentFocus|FocusedApp)=/m.test(focus.stdout)) throw new Error('Android focused activity: focus was unreadable (dumpsys window has neither mCurrentFocus nor mFocusedApp)');
+  return null;
 }
 
 const screenDescription = ({ wakefulness, showing }) => `${wakefulness}, keyguard ${showing == null ? 'unknown' : showing ? 'showing' : 'hidden'}`;
@@ -639,15 +701,19 @@ async function relay([serial, id, vars, encodedLease]) {
     const extras = Object.entries(launch).flatMap(([k, v]) => ['--es', `x_${k.slice('EXACT_'.length).toLowerCase()}`, quote(v)]);
     console.error(`Android screen before launch: ${await prepareAndroidScreen(tool, serial)}`);
     sh('shell', 'am', 'force-stop', id);
+    try {
+      const permissionDialog = androidPermissionDialog(tool, serial);
+      if (permissionDialog) console.error(`Android before launch: a permission dialog is up (${permissionDialog}); dismiss it on the device if it covers the app`);
+    } catch (error) { console.error(error.message); }
     sh('logcat', '-c');
-    // `--activity-clear-task`: a force-stop ends the app's process but leaves its task, and an activity of another
-    // app in it (the permission controller's dialog a last drive raised) would cover this launch. `lower=0`: the
-    // engine samples every animation, so none plays on the reader's own clock.
+    // Clear only the app's task; a permission dialog in another task survives and is reported above.
+    // `lower=0`: the engine samples every animation, so none plays on the reader's own clock.
     const started = sh('shell', ['am', 'start', '-W', '--activity-clear-task', '-n', `${id}/dev.exact.app.MainActivity`, '--es', 'agent', name, '--es', 'lower', '0', ...extras, intent].join(' '));
     if (started.status !== 0 || /Error/.test(started.stdout + started.stderr)) throw new Error(`am start ${id}: ${(started.stderr || started.stdout).trim()}`);
     port = Number(sh('forward', 'tcp:0', `localabstract:${name}`).stdout.trim());
     if (!port) throw new Error('adb forward gave no port');
     logs = spawn(tool, ['-s', serial, 'logcat', '-v', 'raw', 'exact:V', 'AndroidRuntime:E', '*:S'], { stdio: ['ignore', 'pipe', 'ignore'] });
+    trackAdbPipe(logs);
     logs.stdout.pipe(process.stderr);
     // The app opens its socket as its activity is made; the forward connects when it is there.
     let socket;
