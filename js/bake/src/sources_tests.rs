@@ -163,14 +163,19 @@ fn mixed_bake_reads_rust_identity_and_own_grants_without_executing_it() {
     let javascript =
         serde_json::json!({"appId":"test.mixed","grants":"net.fetch https://example.test/"});
     assert_eq!(
-        super::mixed_grants(&javascript, Some(&Rust)).unwrap(),
+        super::mixed_grants(&javascript, Some(&Rust), None).unwrap(),
         Some("fs.read app:/data/rust")
     );
-    assert!(super::mixed_grants(&serde_json::json!({"appId":"wrong"}), Some(&Rust)).is_err());
+    assert!(super::mixed_grants(&serde_json::json!({"appId":"wrong"}), Some(&Rust), None).is_err());
     assert_eq!(
-        super::mixed_grants(&javascript, Some(&())).unwrap(),
+        super::mixed_grants(&javascript, Some(&()), None).unwrap(),
         Some("")
     );
+    // Under a variant the Rust source names the base app and the module the variant (LLP 1030.008 D2).
+    let variant = serde_json::json!({"appId":"test.mixed.dev","grants":""});
+    assert!(super::mixed_grants(&variant, Some(&Rust), None).is_err());
+    assert!(super::mixed_grants(&variant, Some(&Rust), Some("test.mixed")).is_ok());
+    assert!(super::mixed_grants(&variant, Some(&Rust), Some("test.other")).is_err());
 }
 
 #[test]

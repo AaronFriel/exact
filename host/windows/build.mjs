@@ -128,6 +128,8 @@ if (import.meta.main) {
   const outAt = args.indexOf('--out');
   if (outAt >= 0 && !args[outAt + 1]) throw new Error('--out needs a directory');
   const app = resolveApp(args.find((arg, i) => !arg.startsWith('--') && (outAt < 0 || i !== outAt + 1)));
+  // Every build packages into one directory, with one set of libraries and one compat.json.
+  if (app.manifest.variant) throw new Error(`variant ${app.manifest.variant.name}: Windows takes no variant (LLP 1030.008 §6); build without --variant or EXACT_VARIANT`);
   prepareShaders(app.manifest);
   const target = bakeTarget('windows');
   const profile = args.includes('--release') ? 'release' : 'gpu-dev';

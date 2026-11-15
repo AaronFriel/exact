@@ -180,9 +180,9 @@ export const driveStore = (app, storage, env, platform = process.platform) => {
  * page's own storage in a development web build (host/web-js/build.mjs `DEVELOPMENT_STORE`). `dir` is canonical
  * (resolveApp's, through symlinks), so one app has one digest however it was reached. */
 export const appDigest = dir => createHash('sha256').update(dir).digest('hex').slice(0, 12);
-/** A host file as a development web build ships it for the app at `dir`: its `DEVELOPMENT_STORE` names the app's
- * own store (storage-environment.js, rt.js `Kept`). A release ships the file as written, null: the id alone. */
-export const developmentStore = (code, dir) => code.replaceAll('const DEVELOPMENT_STORE = null;', `const DEVELOPMENT_STORE = ${JSON.stringify(appDigest(dir))};`);
+/** A host file as a development web build ships it for the app at `dir`, or its `variant` (LLP 1030.008 D9): its own
+ * store, `DEVELOPMENT_STORE` (storage-environment.js, rt.js `Kept`). A release ships the file as written, null: the id alone. */
+export const developmentStore = (code, dir, variant) => code.replaceAll('const DEVELOPMENT_STORE = null;', `const DEVELOPMENT_STORE = ${JSON.stringify(appDigest(variant ? `${dir}#${variant}` : dir))};`);
 export function webStore({ id, dir }, storage, env = process.env, home = homedir(), platform = process.platform) {
   if (!id || !dir) throw new Error('webStore: an app\'s id and directory name its store');
   const cache = platform === 'darwin' ? resolve(home, 'Library/Caches') : env.XDG_CACHE_HOME?.startsWith('/') ? env.XDG_CACHE_HOME : resolve(home, '.cache');
@@ -598,9 +598,8 @@ export function parseFlags(argv) {
     else if (argv[i] === '--open') (flags.open ??= []).push(resolve(value()));
     else if (argv[i] === '--url') flags.url = value();
     else if (argv[i] === '--device') flags.device = true;
-    // Android: the app on the Canvas reader (its APK), not the Linux host headless (`open`'s `reader`).
+    // Android: the app on the Canvas reader (its APK), or the Linux host under adb shell (`--headless`, which an `exact new` app's `agent android` passes).
     else if (argv[i] === '--reader') flags.reader = true;
-    // `--headless`: the Linux host under adb shell, which an `exact new` app's `agent android` asks for with it (app-cli.mjs).
     else if (argv[i] === '--headless') flags.reader = false;
     else if (argv[i] === '--seed') flags.seed = Number(value());
     else if (argv[i] === '--locale') flags.locale = value();
@@ -613,6 +612,7 @@ export function parseFlags(argv) {
     else if (argv[i] === '--chrome') flags.chrome = value();
     else if (argv[i] === '--phone') flags.phone = value();
     else if (argv[i] === '--sim') flags.sim = value();
+    else if (argv[i] === '--variant') { process.env.EXACT_VARIANT = value(); delete process.env.EXACT_VARIANT_APP; }
     else if (argv[i] === '--storage') flags.storage = value();
     else if (argv[i] === '--keep-storage') flags.keepStorage = true;
     else if (argv[i] === '--reset-storage') flags.resetStorage = true;

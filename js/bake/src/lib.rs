@@ -117,12 +117,14 @@ mod composed;
 fn mixed_grants<'a>(
     javascript: &serde_json::Value,
     rust: Option<&'a dyn DataSource>,
+    base: Option<&str>,
 ) -> Result<Option<&'a str>, String> {
     rust.map(|source| {
         // An unnamed source takes the module's identity where it is composed
-        // (`exact_data::Placed::named`, LLP 1153.003 D2).
+        // (`exact_data::Placed::named`, LLP 1153.003 D2); under a variant one
+        // naming the base app takes the variant's (LLP 1030.008 D2).
         let named = source.app_id();
-        if !named.is_empty() && javascript["appId"].as_str() != Some(named) {
+        if !named.is_empty() && Some(named) != base && javascript["appId"].as_str() != Some(named) {
             return Err("mixed bake sources must declare the same app identity".into());
         }
         Ok(source.grants())
@@ -287,7 +289,7 @@ fn build_sources(
         &target,
         &manifest,
         meta["grants"].as_str(),
-        mixed_grants(&meta, rust)?,
+        mixed_grants(&meta, rust, manifest.variant_base())?,
         Some(&baked.entries),
         Some(&meta),
         &meta["env"],
@@ -1173,10 +1175,17 @@ fn bake_in(
     };
     // The app's id is app.json's: `app.ts` need not name it, and one it names is what the
     // receipt carries, which the build checks against the manifest (`bake/src/receipt.rs`).
-    let id = contract::Manifest::read(&app)
-        .map(|m| m.id)
-        .unwrap_or_default();
-    let mut entry = format!("import * as app from './app';\nimport type {{ TypeScriptAnswer }} from './app.contract.d.ts';\nexport const appId: string = (app as unknown as {{ appId?: string }}).appId ?? {};\nexport const grants: string = {grants};\nexport const answer: TypeScriptAnswer = app.answer;\n", serde_json::to_string(&id).unwrap_or_default());
+    // Under a variant the id is the variant's, and an `appId` naming the base app is read as
+    // the variant's (LLP 1030.008 D2).
+    let manifest = contract::Manifest::read(&app).ok();
+    let id = manifest.as_ref().map(|m| m.id.as_str()).unwrap_or_default();
+    let base = manifest
+        .as_ref()
+        .and_then(|m| m.variant_base())
+        .unwrap_or(id);
+    let json = |s: &str| serde_json::to_string(s).unwrap_or_default();
+    let (id, base) = (json(id), json(base));
+    let mut entry = format!("import * as app from './app';\nimport type {{ TypeScriptAnswer }} from './app.contract.d.ts';\nconst named = (app as unknown as {{ appId?: string }}).appId;\nexport const appId: string = named === undefined || named === {base} ? {id} : named;\nexport const grants: string = {grants};\nexport const answer: TypeScriptAnswer = app.answer;\n");
     entry.push_str(OPTIONAL_ENTRY);
     entry.push_str("// __exact_canvas_entry\n");
     write_changed(&stage.join("__exact_entry.ts"), entry.as_bytes())?;

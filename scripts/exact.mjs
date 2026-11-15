@@ -1481,7 +1481,7 @@ async function main(argv) {
     for (const line of brought.lines) console.error(line);
     process.env.EXACT_APP_DIR = outsideDir;
   }
-  const app = resolveApp(name);
+  const app = (await import('./variants.mjs')).withoutVariant(verb, resolveApp(name), rest);
   if (verb === 'run') return run(app, rest);
   // `--release` on `install` is the same path, since that is what it is for.
   if (verb === 'release' || (verb === 'install' && rest.includes('--release'))) return release(app);

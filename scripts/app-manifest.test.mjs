@@ -882,3 +882,76 @@ test('the auth fixture origin associates the selected Android package and shared
     });
   }
 });
+
+test('app.json variants: a suffix, a name, icons and settings per name, refused where wrong (LLP 1030.008)', async () => {
+  const { readManifest } = await import('./app.mjs');
+  const dir = mkdtempSync(resolve(tmpdir(), 'manifest-variants-'));
+  const save = (variants, extra = {}) => writeFileSync(resolve(dir, 'app.json'), JSON.stringify({ name: 'V', app: { id: 'com.example.v', name: 'V' }, env: ['API'], variants, ...extra }));
+  try {
+    const dev = { idSuffix: '.dev', name: 'V Dev', env: { API: 'https://staging.example' } };
+    save({ dev, 'qa-2': { idSuffix: '.qa.two', name: 'V QA' } });
+    assert.deepEqual(readManifest(dir, 'v').variants.dev, dev);
+    assert.equal(readManifest(dir, 'v').app.id, 'com.example.v');
+    for (const [variants, problem, extra] of [
+      [{ Dev: { idSuffix: '.dev', name: 'D' } }, /variants\.Dev\.name/], [{ dev: { idSuffix: 'dev', name: 'D' } }, /variants\.dev\.idSuffix/],
+      [{ dev: { idSuffix: '.1dev', name: 'D' } }, /variants\.dev\.idSuffix/], [{ dev: { idSuffix: '.dev', name: '' } }, /variants\.dev\.name/],
+      [{ dev: { name: 'D' } }, /variants\.dev: missing required "idSuffix"/], [{ dev: { idSuffix: '.dev' } }, /variants\.dev: missing required "name"/],
+      [{ dev: { ...dev, env: { api: 'x' } } }, /variants\.dev\.env\.api\.name/], [{ dev: { ...dev, env: { API: 1 } } }, /variants\.dev\.env\.API/],
+      [{ dev: { ...dev, env: { OTHER: 'x' } } }, /variants\.dev\.env\.OTHER: not a setting the manifest's "env" declares/],
+      [{ dev: { ...dev, bundleId: 'x' } }, /variants\.dev\.bundleId: not a known key/],
+      [{ dev: { ...dev, icons: [{ src: 'assets/missing.png' }] } }, /variants\.dev\.icons\[0\]\.src: assets\/missing\.png does not exist/],
+      [{ dev }, /host\.ios\.appClip\.id com\.other\.Clip does not begin with com\.example\.v\./, { host: { ios: { appClip: { id: 'com.other.Clip' } } } }],
+      [{ dev, qa: { idSuffix: '.dev', name: 'V QA' } }, /variants\.qa\.idSuffix: variants\.dev has \.dev too/],
+      [{ dev: { ...dev, name: 'v' } }, /variants\.dev\.name: "v" installs under the same name as app\.name/],
+      [{ dev, qa: { idSuffix: '.qa', name: 'V Dev.' } }, /variants\.qa\.name: "V Dev\." installs under the same name as variants\.dev\.name/],
+      [{ dev }, /variant: not a known key/, { variant: { name: 'dev', base: 'com.example.v' } }],
+    ]) {
+      save(variants, extra);
+      assert.throws(() => readManifest(dir, 'v'), problem);
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('a selected variant resolves the manifest as contract/cli/src/manifest/variant.rs does', async () => {
+  const { resolveVariant, takeVariant } = await import('./variants.mjs');
+  // The Rust tests' fixture.
+  const manifest = {
+    app: { id: 'com.example.v', name: 'V' }, icons: [{ src: 'assets/icon.png' }],
+    color_scheme_dark: { background_color: '#000000', icons: [{ src: 'assets/dark.png' }] },
+    host: { android: { id: 'com.example.v_android' }, ios: { appClip: { id: 'com.example.v.Clip' }, icon: 'assets/v.icon' } },
+    variants: { dev: { idSuffix: '.dev', name: 'V Dev', icons: [{ src: 'assets/dev.png' }] }, plain: { idSuffix: '.qa.two', name: 'V QA' } },
+  };
+  assert.equal(resolveVariant(manifest, undefined), manifest);
+  const dev = resolveVariant(manifest, 'dev');
+  assert.deepEqual(dev.app, { id: 'com.example.v.dev', name: 'V Dev' });
+  assert.equal(dev.host.android.id, 'com.example.v_android.dev');
+  assert.deepEqual(dev.host.ios, { appClip: { id: 'com.example.v.dev.Clip' } });
+  assert.deepEqual(dev.icons, [{ src: 'assets/dev.png' }]);
+  assert.deepEqual(dev.color_scheme_dark, { background_color: '#000000' });
+  assert.deepEqual(dev.variant, { name: 'dev', base: 'com.example.v' });
+  assert.equal(manifest.app.id, 'com.example.v', 'the manifest itself is left alone');
+  const plain = resolveVariant(manifest, 'plain');
+  assert.equal(plain.app.id, 'com.example.v.qa.two');
+  assert.equal(plain.host.ios.icon, 'assets/v.icon');
+  assert.throws(() => resolveVariant(manifest, 'preview'), /^Error: variant preview: app\.json has no variants\.preview \(it declares dev, plain\)$/);
+  // The flag sets EXACT_VARIANT for this process and its children, over an exported value.
+  const env = { EXACT_VARIANT: 'plain' }, args = ['--run', '--variant', 'dev', 'shelf'];
+  assert.deepEqual(takeVariant(args, env), ['--run', 'shelf']);
+  assert.equal(env.EXACT_VARIANT, 'dev');
+  assert.throws(() => takeVariant(['--variant'], {}), /--variant needs a name/);
+  assert.equal(resolveVariant(dev, 'dev'), dev, 'a resolved manifest is never resolved again');
+});
+
+test('a variant selection names the one app the verb resolved; another app reads as it is', async () => {
+  const { claimVariant, selectedVariant } = await import('./variants.mjs');
+  const one = mkdtempSync(resolve(tmpdir(), 'variant-one-')), other = mkdtempSync(resolve(tmpdir(), 'variant-other-'));
+  try {
+    const env = { EXACT_VARIANT: 'dev' };
+    assert.equal(selectedVariant(one, env), undefined, 'a request alone selects nothing');
+    claimVariant(one, () => ({}), env);
+    claimVariant(other, () => ({}), env);
+    assert.equal(selectedVariant(one, env), 'dev');
+    assert.equal(selectedVariant(other, env), undefined);
+    assert.equal(selectedVariant(one, {}), undefined);
+  } finally { for (const dir of [one, other]) rmSync(dir, { recursive: true, force: true }); }
+});

@@ -1,7 +1,7 @@
 import { grantWords, trimGrant } from '../web/grant-admission.js';
 import { asyncContext, bundleOptions, developmentLocalNetwork, lowered, packageConfig, webImplementations } from '../../js/bake/src/typescript.mjs';
 import { buildPageFiles, writeCrawlerFiles } from '../web/crawl.mjs';
-import { bakeWatchEnv, hatchWords, injectedProfiles, moduleDirectory, resolveApp, webAppManifest, webToolchainEnv } from '../../scripts/app.mjs';
+import { bakeWatchEnv, hatchWords, injectedProfiles, moduleDirectory, readManifest, resolveApp, webAppManifest, webToolchainEnv } from '../../scripts/app.mjs';
 import { rustDataOf } from '../../scripts/app-shells.mjs';
 import { webIconLinks, webThemeColors } from '../../scripts/app-icons.mjs';
 import { webAudioSession, webCspFile, webHead } from '../../scripts/web-head.mjs';
@@ -109,7 +109,9 @@ const manifest = JSON.parse(readFileSync(resolve(appDir, 'app.json'), 'utf8'));
 // documents-glue reads the app's web manifest lazily. The JS path exits from
 // host/web/build.mjs after this builder succeeds, so it owns the same artifact.
 const manifestNotes = [];
-const webManifest = webAppManifest(manifest, manifest.app?.name ?? manifest.name, manifestNotes, appDir);
+// The selected variant's name and icons (LLP 1030.008 D9); its development store is its own.
+const selected = manifest.variants ? readManifest(appDir, app) : manifest;
+const webManifest = webAppManifest(selected, selected.app?.name ?? selected.name, manifestNotes, appDir);
 for (const note of manifestNotes) console.log(note);
 writeFileSync(resolve(out, 'manifest.json'), JSON.stringify(webManifest, null, 2) + '\n');
 // Rust data: the app's own module (`rust.module`), or a module generated
@@ -415,9 +417,10 @@ async function typecheck(checking) {
   // The bake's optional data exports (js/bake/src/lib.rs `OPTIONAL_ENTRY`).
   // The web host supplies its own Canvas 2D seam.
   const optional = "import type { Overlay } from './app.contract.d.ts';\ntype Optional<K extends string> = K extends keyof typeof app ? (typeof app)[K] : undefined;\nexport const overlay: Overlay | undefined = (app as { overlay?: unknown }).overlay as Optional<'overlay'>;\nexport const tools = (app as { tools?: unknown }).tools as Optional<'tools'>;\n";
-  // The app's id is app.json's; app.ts need not name it, and one it names is checked against it below.
-  const id = (await import('../../scripts/app.mjs')).readManifest(appDir, app).app.id;
-  writeFileSync(resolve(stage, '__exact_entry.ts'), `import * as app from './app';\nimport type { TypeScriptAnswer } from './app.contract.d.ts';\nexport const appId: string = (app as unknown as { appId?: string }).appId ?? ${JSON.stringify(id)};\nexport const grants: string = app.grants;\nexport const answer: TypeScriptAnswer = app.answer;\n` + optional
+  // The app's id is app.json's; app.ts need not name it, and one it names is checked against it below. Under a variant
+  // the id is the variant's, and an appId naming the base app is read as the variant's (LLP 1030.008 D2).
+  const { app: { id }, variant } = (await import('../../scripts/app.mjs')).readManifest(appDir, app), base = variant?.base ?? id;
+  writeFileSync(resolve(stage, '__exact_entry.ts'), `import * as app from './app';\nimport type { TypeScriptAnswer } from './app.contract.d.ts';\nconst named = (app as unknown as { appId?: string }).appId;\nexport const appId: string = named === undefined || named === ${JSON.stringify(base)} ? ${JSON.stringify(id)} : named;\nexport const grants: string = app.grants;\nexport const answer: TypeScriptAnswer = app.answer;\n` + optional
     + "export const draw: ((surface: string, args: any, ctx: any, frame: any) => unknown) | undefined = (app as { draw?: unknown }).draw as Optional<'draw'>;\nexport const surfaces = (app as { surfaces?: unknown }).surfaces as Optional<'surfaces'>;\n");
   writeFileSync(resolve(stage, '__exact_paths.json'), JSON.stringify({ app: realpathSync(appDir), mounts, target: 'web' }));
   writeFileSync(resolve(stage,'__exact_backend_source.json'), JSON.stringify(readFileSync(resolve(stage,'app.ts'),'utf8')));
@@ -502,7 +505,7 @@ const grants = ts ? developmentLocalNetwork(String(tsModule.grants ?? '')) : '';
 // bake/src/receipt.rs), refused here as well, so the web loop fails where a
 // native build would (files diary F13).
 if (ts) {
-  const expected = (await import('../../scripts/app.mjs')).readManifest(appDir, app).app.id;
+  const resolved = (await import('../../scripts/app.mjs')).readManifest(appDir, app), expected = resolved.variant?.base ?? resolved.app.id;
   const problems = [
     ...['__exact_backend_source.json', '__exact_backend.json', '__exact_code_warnings.json', '__exact_packages.json', '__exact_entry.ts', '__exact_tsconfig.json', '__exact_config.mjs', '__exact_binding.mjs', '__exact_env.mjs', '__exact_launch_setting.mjs', '__exact_portable.mjs', '__exact_env.json', '__exact_paths.json', '__exact_declarations.json', '__exact_canvas.js', '__exact_canvas.d.ts', 'app.js']
       .filter(name => existsSync(resolve(appDir, name))).map(name => `${name} is reserved for the producer`),
@@ -886,7 +889,7 @@ if (production) for (const f of readdirSync(gen).filter(f => f.endsWith('.js')))
 // shares its origin, so the app directory's digest (agent-launch.mjs `appDigest`) keys its files,
 // databases and kept keys (storage-environment.js) and its `localStorage` (rt.js `Kept`). A release keeps the id alone.
 if (!production) for (const f of readdirSync(gen).filter(f => f.endsWith('.js'))) {
-  const code = readFileSync(resolve(gen, f), 'utf8'), scoped = developmentStore(code, realpathSync(appDir));
+  const code = readFileSync(resolve(gen, f), 'utf8'), scoped = developmentStore(code, realpathSync(appDir), selected.variant?.name);
   if (scoped !== code) writeFileSync(resolve(gen, f), scoped);
 }
 // A build that renders nothing (the dev loop's) makes no server bundle. Pages render
@@ -980,7 +983,7 @@ async function lazyModules(roots) {
     const from = resolve(root, source), code = name.endsWith('.js') || name.endsWith('.mjs') ? readFileSync(from, 'utf8') : null;
     // The adapters' own storage-environment.js names the app's development store, as the page's chunk does (above).
     const bytes = code == null ? readFileSync(from) : within(from, gen) ? code
-      : production ? gateAgent(code, name) : developmentStore(code, realpathSync(appDir));
+      : production ? gateAgent(code, name) : developmentStore(code, realpathSync(appDir), selected.variant?.name);
     const names = [];
     if (code != null) for (const specifier of [...moduleImports(code), ...literalModuleURLs(code)]) {
       const dependency = publicDependency(name, specifier);

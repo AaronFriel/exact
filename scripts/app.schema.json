@@ -1447,6 +1447,31 @@
         ]
       }
     },
+    "variants": {
+      "description": "The app under other identities, each installed beside it with its own data, as a development build beside the store's (LLP 1030.008). `--variant <name>` selects one for a build or a drive (EXACT_VARIANT is the same, and the flag wins); with neither, the app is built as the rest of this file describes it. A variant's `idSuffix` follows app.id, and host.android.id when it is set, so every identifier derived from them follows too: the Apple bundle, its extensions and App Groups, the Android package, the data directories and the update stream.",
+      "type": "object",
+      "propertyNames": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+      "additionalProperties": {
+        "type": "object",
+        "required": ["idSuffix", "name"],
+        "properties": {
+          "idSuffix": {
+            "description": "Appended to app.id (and host.android.id), as `.dev`: one or more parts, each a dot, a letter, then letters, digits or `-`.",
+            "type": "string",
+            "pattern": "^(\\.[a-zA-Z][a-zA-Z0-9-]*)+$"
+          },
+          "name": { "description": "The name people see for this variant, in place of app.name: the launcher, the home screen, the menu bar, the executable.", "type": "string", "minLength": 1 },
+          "icons": { "description": "This variant's icons, in place of `icons`; under it, color_scheme_dark.icons and host.ios.icon and host.macos.icon are not read. Absent: the app's.", "type": "array", "items": { "$ref": "#/$defs/icon" } },
+          "env": {
+            "description": "Values for settings the manifest's `env` declares: after the environment and before .env.local and .env (LLP 1153 D4).",
+            "type": "object",
+            "propertyNames": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*$" },
+            "additionalProperties": { "type": "string" }
+          }
+        },
+        "additionalProperties": false
+      }
+    },
     "typescript": {
       "type": "object",
       "properties": {
