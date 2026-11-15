@@ -1,5 +1,5 @@
 {
-  "baseline": "939dd84f2d31ede73374c7a06916a2196cdf54c6",
+  "baseline": "504a8a11fb3c70f3d8718a620db8c3b1b64f1422",
   "probe": {
     "commit": "ade624d144ac4d86ee69d3eb104226e28686e1bf",
     "originalCounts": {
@@ -1514,7 +1514,7 @@
       ]
     },
     "appleAbiExports": {
-      "ceiling": 290,
+      "ceiling": 291,
       "sites": [
         "host/apple/activityarm/ActivityArm.swift: exact_activity_close",
         "host/apple/activityarm/ActivityArm.swift: exact_activity_open",
@@ -1726,6 +1726,7 @@
         "host/apple/src/corner.rs: exact_corner_outline",
         "host/apple/src/executor.rs: exact_local_network_report",
         "host/apple/src/gradient.rs: exact_gradient",
+        "host/apple/src/gradient.rs: exact_gradient_cycle",
         "host/apple/src/markup.rs: exact_markup_atoms",
         "host/apple/src/markup.rs: exact_markup_auto",
         "host/apple/src/markup.rs: exact_markup_edit",
