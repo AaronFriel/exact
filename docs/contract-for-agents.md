@@ -764,7 +764,7 @@ known yet: the kept answer waits, `logs` says so, and it shows once the argument
 reach the ones it was kept for, also after the data module is ready, unless an
 answer for other arguments was kept in its place first. A known value that
 differs means the kept answer is not used; `logs` names the argument and the
-state or resource it reads.
+state or resource it reads, never an identifying value.
 An answer that must never reach the device's storage (a one-time code, a message
 shown once) ends its line with `transient`: `resource code = otp(request) as shape
 Code transient`. It is never kept, a launch starts from its placeholder, and an

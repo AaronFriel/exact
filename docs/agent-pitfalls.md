@@ -678,10 +678,10 @@ This list holds what the [agent guide](contract-for-agents.md)'s rules don't mak
   empty id meanwhile; if that answer lands before the id, it is kept in the entry's
   place and the id's arrival has nothing to show. An id from a resource that reads
   no device state, on a placeholder that is not empty (`"nobody"`), is a known
-  mismatch, which `logs` names with the resource it read. A resource whose `when`
-  stays false until the id is set asks nothing for the empty id, so its kept answer
-  still waits. (A React Native port's diaries, 2026-11-13;
-  `runner/src/runner/kept_identity_tests.rs`.)
+  mismatch, which `logs` names with the resource it read but never with either
+  identifying value. A resource whose `when` stays false until the id is set asks
+  nothing for the empty id, so its kept answer still waits. (A React Native port's
+  diaries, 2026-11-13; `runner/src/runner/kept_identity_tests.rs`.)
 - **A grouped-list row you lay out loses its side insets, or its content runs off the
   card.** Cause: the sheet gives a custom row (a `row` that is not a title/value row)
   its padding, and `padding="12px 0"` replaces all four sides, so the row's content

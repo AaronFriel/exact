@@ -726,7 +726,8 @@ changed. During a live replacement request, the prior displayed value may remain
 visible even when call arguments changed, so private-data views must gate it by
 owner and authorization. Neither call arguments nor `with` make a resource wait
 for an upstream request to succeed. The default web JS target keeps no persisted
-resource answers (LLP 1027.005 D5).
+resource answers (LLP 1027.005 D5). Kept-answer diagnostics name a differing
+argument and the state or resource it reads, never an identifying value.
 The minute must already contain the current sample for the first ask; a timer
 can update it thereafter. Use `refresh` or `refreshes` for values whose only job
 is forcing another ask. Await true asynchronous prerequisites, such as a valid
