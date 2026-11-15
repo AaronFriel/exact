@@ -23,6 +23,30 @@ struct HatchSource: Equatable {
     let bar: BarSource, back: String, navigation: ObjectIdentifier, dataset: String, scroll: ObjectIdentifier?
 }
 
+/// The bar of each navigation controller Exact builds. UIKit's bar takes
+/// every touch in its frame, its empty areas included; this one leaves a
+/// touch on none of its own controls to a shown control the top route's
+/// header keeps authored (`appearance="none"`, LLP 1075.003 §9.10) where
+/// that control lies under the bar, as a route drawn under its bar places it.
+final class RouteNavigationBar: UINavigationBar {
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        guard let hit = super.hitTest(point, with: event) else { return nil }
+        let onControl = sequence(first: hit, next: { $0 === self ? nil : $0.superview }).contains { $0 is UIControl || $0 is UISearchBar }
+        return onControl || authoredControl(at: point) == nil ? hit : nil
+    }
+
+    /// The shown authored control of the top route's header under `point`,
+    /// in the bar's coordinates.
+    func authoredControl(at point: CGPoint) -> NodeView? {
+        guard let route = (delegate as? UINavigationController)?.topViewController as? RouteController,
+              let ids = route.projectedSource?.authored, let views = route.host?.presenter.views else { return nil }
+        return ids.lazy.compactMap { views[$0] }.first { node in
+            node.window != nil && node.window === self.window && node.bounds.contains(node.convert(point, from: self))
+                && !sequence(first: node as UIView, next: \.superview).contains { $0.isHidden || $0.alpha < 0.01 }
+        }
+    }
+}
+
 /// The delegate Exact gives each navigation controller it builds: Exact's
 /// own handling first, then the app's delegate, which is asked first for a
 /// transition's animator and receives straight anything Exact does not
@@ -499,7 +523,7 @@ extension NavigationHost {
     }
 
     func makeNavigation(first: NodeView?) -> UINavigationController {
-        let nav = UINavigationController()
+        let nav = UINavigationController(navigationBarClass: RouteNavigationBar.self, toolbarClass: nil)
         let stack = registerStack(nav)
         #if !os(tvOS)
         nav.navigationBar.prefersLargeTitles = true
