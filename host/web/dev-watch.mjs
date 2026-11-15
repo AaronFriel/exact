@@ -11,6 +11,23 @@ export function nativeResourceInputs(build) {
   })) : [];
 }
 
+/** What a dev loop watches for its native build receipts: their resource
+ * directories, the files a native build reads, and the subset of those paths
+ * and the receipts' directories, missing and optional inputs that lie in
+ * skipped trees (`outside`). A change to that subset can only invalidate cached
+ * native admission (`cacheBuildInputs`), because nothing else watches it. Cargo's
+ * registry and git sources (`cargo`) are left out: Cargo never rebuilds them on
+ * an edit. */
+export function nativeWatchPaths(receipts, outside, cargo) {
+  const resources = receipts.flatMap(nativeResourceInputs);
+  const directories = new Set(resources.filter(r => r.directory).map(r => r.path));
+  const native = receipts.filter(r => r.compat?.inputs?.platform !== 'web');
+  const files = [...resources.filter(r => !r.directory).map(r => r.path), ...native.flatMap(r => [...r.binary.inputs, ...(r.binary.links ?? [])].map(f => f.path))];
+  const nativeOnly = new Set([...files, ...directories, ...native.flatMap(r => [...r.binary.missing, ...(r.optionalInputs ?? []), ...r.binary.directories.map(d => d.path)])]
+    .filter(p => outside(p) && !cargo(p)));
+  return { directories, files, nativeOnly };
+}
+
 // Receipt validation reads the full native graph only after an input event or
 // a changed receipt. The compiler's metadata polls cover lost notifications.
 export function cacheBuildInputs(validate) {

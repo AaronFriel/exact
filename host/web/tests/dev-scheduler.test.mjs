@@ -12,12 +12,12 @@ import {runInNewContext} from 'node:vm';
 
 // The `new Function` harnesses run slices of dev.mjs at global scope,
 // so these watcher imports are supplied as globals.
-Object.assign(globalThis, { basename, within, nativeResourceInputs });
+Object.assign(globalThis, { basename, within, nativeResourceInputs, nativeWatchPaths });
 import {spawn} from 'node:child_process';
 import {createServer} from 'node:http';
 import {watchStaticTrees} from '../serve.mjs';
 import {acceptModuleReply} from '../dev-phase.mjs';
-import {cacheBuildInputs, nativeResourceInputs, watchDirectoryInputs, watchModuleSources} from '../dev-watch.mjs';
+import {cacheBuildInputs, nativeResourceInputs, nativeWatchPaths, watchDirectoryInputs, watchModuleSources} from '../dev-watch.mjs';
 import {nativeResourceInventory} from '../../apple/assets.mjs';
 import {cdpBrowser, chromium} from '../../../scripts/agent-launch.mjs';
 import {need} from '../../../scripts/coverage.mjs';
@@ -646,7 +646,7 @@ function quietWatches() {
 }
 
 function compilerWatches(directory, quiet, { inputs = [], directories = [], gpuInputs = [], appInputs = [], builds, skipped = /(^|\/)(target|dist)(\/|$)/ } = {}) {
-  const context = { ...quiet.clock, resolve, basename, within, nativeResourceInputs, existsSync, readdirSync, lstatSync, statSync, directoryInputNames,
+  const context = { ...quiet.clock, resolve, basename, within, nativeResourceInputs, nativeWatchPaths, existsSync, readdirSync, lstatSync, statSync, directoryInputNames,
     app: { dir: directory, manifest: {} }, source: resolve(directory, 'app.contract'), skipped,
     builtReceipts: builds ?? [{ binary: { inputs: inputs.map(path => ({ path })), directories: directories.map(path => ({ path })), missing: [] } }],
     readinessContracts: new Set(), contractGraph: () => ({ files: new Set(), sources: new Set() }),
@@ -808,7 +808,7 @@ test('compiler directories discover and coalesce input changes without filesyste
   let context;
   try {
     mkdirSync(tree); mkdirSync(swift); writeFileSync(resolve(swift, 'main.swift'), 'main');
-    context = { ...quiet.clock, resolve, basename, within, nativeResourceInputs, existsSync, readdirSync, lstatSync, statSync, directoryInputNames,
+    context = { ...quiet.clock, resolve, basename, within, nativeResourceInputs, nativeWatchPaths, existsSync, readdirSync, lstatSync, statSync, directoryInputNames,
       app: { dir: directory, manifest: {} }, source: resolve(directory, 'app.contract'), skipped: /(^|\/)(target|dist)(\/|$)/,
       builtReceipts: [{ binary: { inputs: [{ path: resolve(swift, 'main.swift') }, { path: directory }],
         directories: [{ path: tree }, { path: optional }], missing: [] } }],

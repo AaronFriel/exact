@@ -4,7 +4,7 @@
 // carrier and installer stay loopback-only. Games serve HTTP during the first build.
 import { buildingServer } from '../../game/dev.mjs';
 import { acceptModuleReply, failedPhase, phased, phasedAsync } from './dev-phase.mjs';
-import { cacheBuildInputs, nativeResourceInputs, watchDirectoryInputs, watchModuleSources } from './dev-watch.mjs';
+import { cacheBuildInputs, nativeWatchPaths, watchDirectoryInputs, watchModuleSources } from './dev-watch.mjs';
 import { directoryInputNames } from '../../scripts/cargo-dep-info.mjs';
 import { spawn, spawnSync } from 'node:child_process';
 let tuning = null;
@@ -1141,16 +1141,9 @@ function watchCompilerInputs(contract = contractGraph()) {
   // node_modules included (LLP 1091 D10).
   compilerContracts = contract; for (const path of contract.sources) readinessContracts.add(path);
   const outside=p=>skipped.test(p)&&!contract.files.has(p), cargo=p=>/[\\/]\.cargo[\\/]/.test(p);
-  const resources = builtReceipts.flatMap(nativeResourceInputs);
-  resourceDirectories = new Set(resources.filter(r => r.directory).map(r => r.path));
-  const native = builtReceipts.filter(r => r.compat?.inputs?.platform !== 'web');
-  const nativeFiles = [...resources.filter(r => !r.directory).map(r => r.path), ...native.flatMap(r => [...r.binary.inputs, ...(r.binary.links ?? [])].map(f => f.path))];
-  // Cached native admission (`nativeValidation`) learns of a change to a native
-  // receipt's path only from these watches, so its paths in skipped trees are
-  // watched too: a change there invalidates admission and rebuilds nothing.
-  // Cargo's registry and git sources are not: Cargo never rebuilds them on an edit.
-  const nativeOnly = new Set([...nativeFiles, ...resourceDirectories, ...native.flatMap(r => [...r.binary.missing, ...(r.optionalInputs ?? []), ...r.binary.directories.map(d => d.path)])]
-    .filter(p => outside(p) && !cargo(p)));
+  // Paths in skipped trees invalidate cached native admission (`nativeValidation`) and rebuild nothing.
+  const { directories: nativeTrees, files: nativeFiles, nativeOnly } = nativeWatchPaths(builtReceipts, outside, cargo);
+  resourceDirectories = nativeTrees;
   const files = new Set([...nativeFiles, ...builtReceipts.flatMap(r => r.binary.inputs.map(f => f.path)),
     ...rustInputFiles, ...gpuInputs, ...appInputs, ...failedInputs, ...contract.files].filter(p => !outside(p) && !cargo(p)));
   for(const receipt of builtReceipts)for(const missing of [...receipt.binary.missing,...(receipt.optionalInputs??[])])files.add(missing);
