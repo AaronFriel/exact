@@ -2717,8 +2717,9 @@ HDR and metadata where the host can and says what it wrote
 ([Exact developer reference](reference.md#save-an-edit-of-a-photo-storagefstransformimage));
 `compressImage` takes `rotate`, `flip` and `crop` too. Upload a file with `fetch(url, {method: "POST", headers:
 {"content-type": "image/jpeg"}, exactBodyFrom: path})`, not `readFile` then `body`: the host
-reads the file as it sends (under `fs.read`, at most 64 MiB), so a 2 MB photo never passes
-through the answer's 100 ms step; a missing or denied file rejects the fetch, naming why. To show an
+streams the file from disk as it sends (under `fs.read`, with no size bound except 64 MiB on the
+web for a file the app wrote itself), so a 2 MB photo never passes through the answer's 100 ms step
+and a long video costs no memory; a missing or denied file rejects the fetch, naming why. To show an
 upload's percentage while the person goes on, make it a resource's stream with `exactUploadProgress: true`:
 its mapper gets `progress` (`loaded` of `total` bytes sent), then `load` with the reply's `status`, and no
 answer waits for it. It is asked once for its arguments while the app runs, across a reload too, though not the

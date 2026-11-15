@@ -494,9 +494,9 @@ refresh.
 ## Local patch 23, an upload's bytes sent
 
 `stdlib/fetch.rs` gives `Request` an optional `sent` hook (`Sent`), told
-`(loaded, total)` as the body goes out and `(total, total)` by the time the
-headers have arrived (exact2 LLP 1016.000 D10, XMLHttpRequest's upload
-progress), and an optional start hook beside it. `fetch_stream_gated` tells
+`(loaded, total)` as the body goes out, reaching `(total, total)` once it has
+all gone (exact2 LLP 1016.000 D10, XMLHttpRequest's upload progress; patch 46
+stops it at the bytes written when the reply comes first), and an optional start hook beside it. `fetch_stream_gated` tells
 the start hook once, when `admit_hop` has passed the first hop's grant check
 and local-network gate, so a request they refuse never started (the
 embedder's `exact:sending`). The hook answers whether the upload may go out:
@@ -512,8 +512,8 @@ resend (`rustls_http.rs`'s `send`; tested in
 exchange, and `ibex2_darwin_http_headers` takes the bytes the caller last saw,
 returning 2 when they change before the headers, so `transport/darwin.rs`
 tells the hook on the opening thread and waits again.
-`transport/rustls_http.rs` sends such a body through a reader that tells the
-hook each read ureq takes, with an explicit `content-length`. Without a hook
+`transport/rustls_http.rs` sends such a body through a counted reader, with an
+explicit `content-length`, and tells the hook after each write (patch 46). Without a hook
 nothing changes. `fetch_stream_gated`, every request's hop loop, moves the
 body into each hop's request and back instead of cloning it, so a request
 holds one copy of its body while it goes out, the platform's aside.
@@ -1040,6 +1040,34 @@ between minor releases, and an app's own `ureq` must resolve apart from it
 (LLP 1153.003 D6.5). `hermes-lean-sys` and its installer call only `ureq::get`
 and require `"3"`. The atomics call `try_update`, Rust's current name for the
 deprecated `fetch_update`. Replay on a refresh.
+
+## Local patch 46, a request body streamed from a file
+
+`Request::body_file` is a body read from a file as it goes out (exact2 LLP
+1133.008.000 D4): a `BodyFile` over the embedder's `FileBody`, which gives the
+body's length and a reader from its first byte for each attempt. A redirect
+that drops the body drops it; a request with both it and `body` is refused, as
+is one on the asynchronous fetch. Its length is the `Content-Length`.
+
+The portable transport sends it through `SendBody::from_reader`. A request
+whose body is a file and which names no timeout has no limit on the whole
+exchange: each write may wait 60 s (`IDLE_SEND`), then the reply has its usual
+15 s and 15 s. A resend on a new connection opens a new reader. Progress, for
+any counted body, is told after each write that succeeds (`Written`), never on
+the read before it, and is no longer filled to `(total, total)` when the
+response arrives: a reply before the whole body went out tells only the bytes
+written.
+
+Darwin sends it as `uploadTaskWithStreamedRequest:`. `needNewBodyStream`
+supplies each attempt's stream, the first included: the input half of a 64 KiB
+bound stream pair, with a thread (`Ibex2FilePump`) copying the reader's bytes
+into the output half and never writing when there is no space. URLSession's
+own stream lets it read a reply that comes before the body has gone (a 413 in
+under a second, measured); an `NSInputStream` subclass left it waiting 60 s for
+its timeout. A reader that fails fails the exchange with its words unless a
+reply came first. Progress stops at `didSendBodyData`'s last count.
+
+Replay on a refresh.
 
 ## Terminal heap exhaustion
 

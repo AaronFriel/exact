@@ -333,6 +333,11 @@ impl FetchTask {
             Err(HostError::InvalidArgument(
                 "asynchronous fetch requires finite allocation limits".into(),
             ))
+        } else if request.body_file.is_some() {
+            // Its body is an upload held in memory (Exact patch 46).
+            Err(HostError::InvalidArgument(
+                "asynchronous fetch takes no file body".into(),
+            ))
         } else {
             prepare_body(request)
         };

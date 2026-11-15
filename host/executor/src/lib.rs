@@ -1302,9 +1302,10 @@ fn execute(
     ) {
         let _ = armed.send(deadline.clone());
     }
-    // The body from an app file, read now, as late as can be, and refused
-    // before anything is sent (LLP 1108 D6 R2). The deadline or an abort
-    // ends the request while the file is read, and nothing is sent.
+    // The body from an app file, opened now, as late as can be, and refused
+    // before anything is sent (LLP 1108 D6 R2); the transport streams it
+    // (LLP 1133.008.000 D4). The deadline or an abort ends the request while
+    // the file is opened, and nothing is sent.
     let ended = || {
         if deadline.as_ref().is_some_and(Deadline::passed) {
             Some(failed(
@@ -1317,13 +1318,21 @@ fn execute(
             None
         }
     };
-    let roots = match body::prepare(cache_job.0, &request, &ended) {
+    let roots = match body::prepare(cache_job.0, &request, &ended, None) {
         Ok(roots) => roots,
         Err(outcome) => return outcome,
     };
-    if let Err(outcome) = body::resolve(roots.as_ref(), grants, &mut request, &ended) {
-        return outcome;
-    }
+    let body_file = match body::resolve(
+        roots.as_ref(),
+        grants,
+        &mut request,
+        &ended,
+        None,
+        abort.signal(),
+    ) {
+        Ok(file) => file,
+        Err(outcome) => return outcome,
+    };
     // The file a 2xx body goes to (LLP 1108 D6 R2): staged before sending.
     let staged = match body_to::stage(roots.as_ref(), grants, &request) {
         Ok(staged) => staged,
@@ -1358,6 +1367,7 @@ fn execute(
         }
     }
     let mut req = fetch_request(request, forced);
+    req.body_file = body_file;
     cache::observe(cache_job.0, &mut req);
     req.max_body = Some(limit);
     // The platform's idle timeout (URLSession's, 60 s by default) follows

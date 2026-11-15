@@ -3,6 +3,7 @@
 //! `fs.read` grant just before the request goes out, and refuses, sending
 //! nothing, when it may not or cannot.
 use super::*;
+use std::io::Write as _;
 
 /// Each body that reached the transport, with its headers.
 type Sent = Arc<Mutex<Vec<(Vec<u8>, Vec<(String, String)>)>>>;
@@ -15,10 +16,10 @@ impl Transport for Recorder {
         request: &ibex2::stdlib::fetch::Request,
         signal: &AbortSignal,
     ) -> Result<StreamingResponse, HostError> {
-        self.0.lock().unwrap().push((
-            request.body.clone().unwrap_or_default(),
-            request.headers.entries().to_vec(),
-        ));
+        self.0
+            .lock()
+            .unwrap()
+            .push((body_of(request), request.headers.entries().to_vec()));
         Ok(ibex2::stdlib::fetch::Response {
             status: 200,
             status_text: "OK".into(),
@@ -28,6 +29,20 @@ impl Transport for Recorder {
             redirected: false,
         }
         .into_stream(request.body_limit(), signal.clone()))
+    }
+}
+
+/// A request's body as a transport sends it: its bytes, or its file's,
+/// read from the first byte.
+fn body_of(request: &ibex2::stdlib::fetch::Request) -> Vec<u8> {
+    match &request.body_file {
+        Some(file) => {
+            let mut bytes = Vec::new();
+            std::io::Read::read_to_end(&mut file.0.reader().unwrap(), &mut bytes).unwrap();
+            assert_eq!(bytes.len() as u64, file.0.len());
+            bytes
+        }
+        None => request.body.clone().unwrap_or_default(),
     }
 }
 
@@ -128,6 +143,7 @@ impl Drop for Gate {
 #[test]
 fn a_finished_initializer_returns_its_reader_before_the_upload_continues() {
     let _turn = one_at_a_time();
+    super::body::settle_readers();
     let files = Files::new();
     std::fs::write(files.0.join("tmp/photo.jpg"), b"photo").unwrap();
     let (core, _, _) = recording(GRANTS);
@@ -150,17 +166,85 @@ fn a_finished_initializer_returns_its_reader_before_the_upload_continues() {
         }
     }));
     let mut request = upload("app:/tmp/photo.jpg");
-    let roots = super::body::prepare(&core.shared, &request, &|| None).unwrap();
+    let roots = super::body::prepare(&core.shared, &request, &|| None, None).unwrap();
     reply.wait();
-    let result = super::body::resolve(roots.as_ref(), GRANTS, &mut request, &|| None);
+    let abort = AbortController::new();
+    let result = super::body::resolve(
+        roots.as_ref(),
+        GRANTS,
+        &mut request,
+        &|| None,
+        None,
+        abort.signal(),
+    );
     reply.release();
     held.release();
     for reader in readers {
         reader.join().unwrap();
     }
     *super::body::READERS.replied.lock().unwrap() = None;
-    assert!(result.is_ok(), "{result:?}");
-    assert_eq!(request.body, b"photo");
+    let mut sent = ibex2::stdlib::fetch::Request::get("https://example.test/upload");
+    sent.body_file = Some(result.unwrap().expect("a file body"));
+    assert_eq!(body_of(&sent), b"photo");
+}
+
+/// A file's size is taken when it is opened: one that grows sends that
+/// many bytes, and one cut shorter while it is sent fails its body, named,
+/// rather than sending a short body under a long length (LLP 1133.008.000 D4).
+#[test]
+fn a_file_body_keeps_its_size_at_open_and_a_shrinking_one_fails_named() {
+    let _turn = one_at_a_time();
+    super::body::settle_readers();
+    let files = Files::new();
+    let path = files.0.join("tmp/clip.mp4");
+    std::fs::write(&path, vec![3; 600_000]).unwrap();
+    let (core, _, _) = recording(GRANTS);
+    core.set_app_roots(files.roots());
+    let opened = || {
+        let mut request = upload("app:/tmp/clip.mp4");
+        let roots = super::body::prepare(&core.shared, &request, &|| None, None).unwrap();
+        let abort = AbortController::new();
+        super::body::resolve(
+            roots.as_ref(),
+            GRANTS,
+            &mut request,
+            &|| None,
+            None,
+            abort.signal(),
+        )
+        .unwrap()
+        .expect("a file body")
+    };
+    let file = opened();
+    std::fs::OpenOptions::new()
+        .append(true)
+        .open(&path)
+        .unwrap()
+        .write_all(&[9; 1000])
+        .unwrap();
+    let mut out = Vec::new();
+    std::io::Read::read_to_end(&mut file.0.reader().unwrap(), &mut out).unwrap();
+    assert_eq!(
+        out,
+        vec![3; 600_000],
+        "a grown file sent more than its size at open"
+    );
+    let file = opened();
+    assert_eq!(file.0.len(), 601_000);
+    std::fs::OpenOptions::new()
+        .write(true)
+        .open(&path)
+        .unwrap()
+        .set_len(1000)
+        .unwrap();
+    let error =
+        std::io::Read::read_to_end(&mut file.0.reader().unwrap(), &mut Vec::new()).unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("exactBodyFrom app:/tmp/clip.mp4: the file shrank while it was sent"),
+        "{error}"
+    );
 }
 
 #[test]
@@ -377,7 +461,7 @@ fn a_stalled_read_is_settled_by_the_deadline_and_told_to_stop() {
     let started = Instant::now();
     let result = super::body::acquire(
         &READERS,
-        |cancel| {
+        |cancel, _| {
             // A read of many chunks, each slow, that looks between them.
             for _ in 0..300 {
                 if cancel.load(Ordering::Acquire) {
@@ -415,7 +499,7 @@ fn a_stalled_read_is_settled_by_the_deadline_and_told_to_stop() {
     }
     assert_eq!(READERS.running(), 0);
     // A read that finishes after its request ended is not taken either.
-    let result = super::body::acquire(&READERS, |_| Ok(b"bytes".to_vec()), &|| {
+    let result = super::body::acquire(&READERS, |_, _| Ok(b"bytes".to_vec()), &|| {
         Some(failed(FailureKind::Aborted, "native request aborted"))
     });
     assert!(matches!(
@@ -436,7 +520,7 @@ fn stuck_readers_are_bounded_and_keep_their_place_until_they_return() {
     let release = Arc::new(std::sync::atomic::AtomicBool::new(false));
     let stuck = |release: Arc<std::sync::atomic::AtomicBool>| {
         // A read blocked in one call, as on a stalled disk: it cannot look.
-        move |_: &std::sync::atomic::AtomicBool| {
+        move |_: &std::sync::atomic::AtomicBool, _: &super::body::Place| {
             while !release.load(Ordering::Acquire) {
                 std::thread::sleep(Duration::from_millis(2));
             }
@@ -463,7 +547,7 @@ fn stuck_readers_are_bounded_and_keep_their_place_until_they_return() {
     }
     assert_eq!(READERS.running(), super::body::MAX_READERS);
     let first = std::cell::Cell::new(true);
-    let refused = super::body::acquire(&READERS, |_| Ok(b"never".to_vec()), &|| {
+    let refused = super::body::acquire(&READERS, |_, _| Ok(b"never".to_vec()), &|| {
         deadline_after_start(&first)
     });
     assert!(
@@ -477,7 +561,7 @@ fn stuck_readers_are_bounded_and_keep_their_place_until_they_return() {
         std::thread::sleep(Duration::from_millis(5));
     }
     assert_eq!(READERS.running(), 0);
-    let ok = super::body::acquire(&READERS, |_| Ok(b"bytes".to_vec()), &|| None);
+    let ok = super::body::acquire(&READERS, |_, _| Ok(b"bytes".to_vec()), &|| None);
     assert_eq!(ok.unwrap(), b"bytes");
 }
 

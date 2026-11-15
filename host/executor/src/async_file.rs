@@ -15,6 +15,24 @@ pub(in super::super) enum ReaderPhase {
 pub(in super::super) type ReaderHook =
     Arc<dyn Fn(ReaderPhase, Run) -> Result<(), Outcome> + Send + Sync>;
 
+/// What the asynchronous executor reads whole as a file body, since it
+/// does not stream one (LLP 1133.008.000 D4): a larger file is refused,
+/// naming the executor.
+pub(super) const WHOLE_BODY_FROM_BYTES: u64 = 64 << 20;
+
+/// `size`, or the refusal of a file larger than [`WHOLE_BODY_FROM_BYTES`].
+fn whole(path: &str, size: u64) -> Result<u64, Outcome> {
+    if size > WHOLE_BODY_FROM_BYTES {
+        return Err(failed(
+            FailureKind::Unsupported,
+            format!(
+                "exactBodyFrom {path}: too-large: the asynchronous executor reads a file body whole, at most {WHOLE_BODY_FROM_BYTES} bytes, and this one is {size}"
+            ),
+        ));
+    }
+    Ok(size)
+}
+
 impl Machine {
     #[cfg(test)]
     pub(in super::super) fn queued_uploads(&self) -> (usize, usize) {
@@ -101,7 +119,8 @@ impl Machine {
                     None => {
                         #[cfg(test)]
                         m.reader_phase(ReaderPhase::Size, run)?;
-                        let answer = body::size(roots, &app, scope.as_deref(), &path);
+                        let answer = body::size(roots, &app, scope.as_deref(), &path)
+                            .and_then(|size| whole(&path, size));
                         let ok = answer.as_ref().ok().copied();
                         // A failure claims the run when it happens, as any outcome.
                         if ok.is_some()
