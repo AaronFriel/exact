@@ -8,10 +8,10 @@
 // (emit.rs, LLP 1047.002 D1), so a command no action names is never linked.
 // The compiler reads this file's `export const` names as it is built.
 import { popoverCommand, appRootFontSize, liveById, declaredScheme, setFieldSelection, setFieldRangeText } from "./navigation.js";
-import { Kept } from "./rt.js";
+import { Kept, DEVELOPMENT_STORE } from "./rt.js";
 // A development page may hold a fact over the app's own (LLP 1122 T7, theme2's F2 ruling: a copy the design tool pins):
 // the app's choice kept as asked, with how to apply it, and applied only when the fact is not held.
-const asked = (fact, value, apply) => { const x = globalThis.exact; if (!x) return apply(); (x.asked ??= {})[fact] = { value, apply }; if (!x.held?.[fact]) apply(); else x.onAsked?.(); };
+const asked = (fact, value, apply, deferred = false) => { const x = globalThis.exact ?? (deferred ? (globalThis.exact = {}) : null); if (!x) return apply(); (x.asked ??= {})[fact] = { value, apply }; if (!x.held?.[fact] && !deferred) apply(); else x.onAsked?.(); };
 // Bare focus is the window's; under the agent it is journaled (LLP 1133.005 D10).
 export const focus = (say, agentMode) => id => id == null
   ? (agentMode() ? say("focus window") : window.focus()) : liveById(id)?.focus();
@@ -26,7 +26,7 @@ const scheme = s => () => { document.documentElement.style.colorScheme = s === "
 export const setScheme = say => {
   if (!globalThis.__exactRender) try {
     const s = JSON.parse(localStorage.getItem(keptScheme()));
-    if (s === "light" || s === "dark") asked("scheme", s, scheme(s));
+    if (s === "light" || s === "dark") asked("scheme", s, scheme(s), !!DEVELOPMENT_STORE && self !== parent && /^exact-copy-\d{1,2}$/.test(self.name) && !document.getElementById("exact-dev-pin"));
   } catch {}
   return s => {
     if (!globalThis.__exactRender) try {

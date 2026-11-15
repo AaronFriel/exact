@@ -186,7 +186,8 @@ const BOOT_RULES = GOOD_RULES.replace('| Cold start to interactive | 100ms |', '
 function boot(html, files = {}) {
   // The pinned capture script is the one boot.mjs checks every page against.
   const capture = readFileSync(join(dirname(BOOT), '../host/web/capture.js'), 'utf8');
-  const dir = repo({ 'rules/RULES.md': BOOT_RULES, 'host/web/index.html': html, 'host/web/glue.js': '', 'host/web/document-glue.js': '', 'host/web/capture.js': capture, ...files });
+  const scheme = readFileSync(join(dirname(BOOT), '../host/web/scheme.js'), 'utf8');
+  const dir = repo({ 'host/web/scheme.js': scheme, 'rules/RULES.md': BOOT_RULES, 'host/web/index.html': html, 'host/web/glue.js': '', 'host/web/document-glue.js': '', 'host/web/capture.js': capture, ...files });
   mkdirSync(join(dir, 'scripts'), { recursive: true });
   const fixtureBoot = join(dir, 'scripts/boot.mjs');
   copyFileSync(BOOT, fixtureBoot);

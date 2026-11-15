@@ -469,7 +469,7 @@ fn a_document_whose_ids_nobody_keeps_is_the_settled_tree_projected() {
 
 #[test]
 fn a_page_is_the_shell_around_the_document() {
-    let r = at(Post::Soon, Duration::from_secs(5));
+    let mut r = at(Post::Soon, Duration::from_secs(5));
     let shell =
         std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../web/index.html"))
             .unwrap();
@@ -492,7 +492,13 @@ fn a_page_is_the_shell_around_the_document() {
     assert!(html.find(&capture) < html.find("<body").or(html.find("<div id=\"exact-root\"")));
     assert!(scripts[1].starts_with("<script type=\"application/vnd.exact.checkpoint\""));
     assert!(scripts[2].starts_with("<script type=\"module\" src=\"./glue.js\">"));
-    assert!(exact_render::capture().len() <= 1024);
+    assert!(exact_render::capture().len() <= 1536);
+    assert!(!html.contains("<meta name=\"exact-scheme\""));
+    r.chooses_scheme = true;
+    let chosen = exact_render::page(&shell, &r).unwrap();
+    let meta = "<meta name=\"exact-scheme\" content=\"exact.state.#scheme\">";
+    assert!(chosen.contains(meta));
+    assert!(chosen.find(meta) < chosen.find(&capture));
     assert_eq!(html.matches("<meta name=\"viewport\"").count(), 1);
     // An idle page's runtime downloads with the document (LLP 1048.000 D3).
     assert!(html.contains("<link rel=\"preload\" href=\"./app.wasm\" as=\"fetch\" crossorigin>"));

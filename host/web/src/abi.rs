@@ -18,6 +18,11 @@ use crate::host::Host;
 use exact_runner::{DataSource, Event};
 use std::cell::RefCell;
 
+/// Whether the baked plan calls `setScheme`, for the shell's before-paint restore.
+pub fn chooses_scheme(plan: &[u8]) -> bool {
+    exact_plan::Plan::decode(plan).is_ok_and(|plan| exact_runner::uses::chooses_scheme(&plan))
+}
+
 /// The buffers and the host behind the exports.
 pub struct Bridge<D: DataSource> {
     host: Option<Host<D>>,
@@ -1089,6 +1094,12 @@ macro_rules! host {
         #[no_mangle]
         pub extern "C" fn exact_checkpoint(len: u32) {
             EXACT_BRIDGE.with(|b| b.borrow_mut().checkpoint(len as usize))
+        }
+
+        /// Whether the shell can restore a stored scheme before paint.
+        #[no_mangle]
+        pub extern "C" fn exact_chooses_scheme() -> u32 {
+            u32::from($crate::abi::chooses_scheme($plan))
         }
 
         /// The locations the baked plan renders at build (LLP 1048.000 D7),

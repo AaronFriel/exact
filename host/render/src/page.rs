@@ -8,8 +8,8 @@ use exact_web::document::HeroImage;
 /// every document's head, that records presses — a click, or Enter or Space
 /// on an element that hears `press` and isn't a native control — against
 /// their elements from first parse, until the boot glue takes them over and
-/// replays them once after adoption. Once the page has painted (its first
-/// paint entry), a page that doesn't activate on interaction hands its wasm's
+/// replays them once after adoption. It restores a saved scheme before paint.
+/// After its first paint entry, a page that doesn't activate on interaction hands its wasm's
 /// download, which the head's preload began, to the glue (`exact.runtime`).
 /// A navigation that leaves the document stops that download, and removes the
 /// preload, which would otherwise keep it going: the next document needs the
@@ -17,7 +17,11 @@ use exact_web::document::HeroImage;
 /// server's CSP admits it by hash; `scripts/boot.mjs` pins that hash and its
 /// size.
 pub fn capture() -> &'static str {
-    include_str!("../../web/capture.js").trim_end()
+    concat!(
+        include_str!("../../web/scheme.js"),
+        include_str!("../../web/capture.js")
+    )
+    .trim_end()
 }
 
 /// The built shell with the renderer's `<head>` and the capture script in
@@ -39,7 +43,26 @@ pub(crate) fn page_at(
     if is_js(shell) {
         return Ok(page_with(shell, &Js::of(shell)?, rendered, checkpoints));
     }
-    let mut html = shell.to_string();
+    // The rendered head combines the shell's scheme bootstrap with its capture script.
+    let scheme_head = format!(
+        "<script data-exact-scheme>{}</script>\n",
+        include_str!("../../web/scheme.js").trim_end()
+    );
+    let scheme_meta = if rendered.chooses_scheme {
+        shell
+            .lines()
+            .find(|line| line.starts_with("<meta name=\"exact-scheme\""))
+            .unwrap_or("<meta name=\"exact-scheme\" content=\"exact.state.#scheme\">")
+    } else {
+        ""
+    };
+    let mut html = shell.replace(&scheme_head, "");
+    if let Some(meta) = shell
+        .lines()
+        .find(|line| line.starts_with("<meta name=\"exact-scheme\""))
+    {
+        html = html.replace(&format!("{meta}\n"), "");
+    }
     // From `start` through the first `end` after it.
     let cut = |html: &mut String, start: &str, end: &str, with: &str| -> Result<(), String> {
         let lacks = || format!("the shell has no `{start}`…`{end}`");
@@ -65,7 +88,16 @@ pub(crate) fn page_at(
         &mut html,
         "<title>",
         "</title>\n",
-        &format!("{}\n<script>{}</script>\n", rendered.head, capture()),
+        &format!(
+            "{}\n{}<script>{}</script>\n",
+            rendered.head,
+            if scheme_meta.is_empty() {
+                String::new()
+            } else {
+                format!("{scheme_meta}\n")
+            },
+            capture()
+        ),
     )?;
     cut(&mut html, "<!-- Fetched in parallel", "-->\n", "")?;
     let interaction = rendered.activate == exact_plan::ActivatePolicy::Interaction;
@@ -136,7 +168,11 @@ const JS_ENTRY: &str = "<script type=\"module\" src=\"./app.js\"></script>";
 /// `load`; an `interaction` page's at the first press or edit, as every
 /// page's at a press that comes first.
 pub fn capture_js() -> &'static str {
-    include_str!("../../web-js/capture.js").trim_end()
+    concat!(
+        include_str!("../../web/scheme.js"),
+        include_str!("../../web-js/capture.js")
+    )
+    .trim_end()
 }
 
 /// `<html data-scrolldocument>` when an element is the page's scroller
@@ -399,7 +435,13 @@ pub(crate) fn head_js(
             scroll_attr(scroll)
         ),
     );
-    out.push_str(&shell[at.html.1..at.title.0]);
+    out.push_str(&shell[at.html.1..at.title.0].replace(
+        &format!(
+            "<script data-exact-scheme>{}</script>\n",
+            include_str!("../../web/scheme.js").trim_end()
+        ),
+        "",
+    ));
     out.push_str("<script>");
     out.push_str(capture_js());
     out.push_str("</script>\n");
@@ -1100,6 +1142,7 @@ mod tests {
             activate: exact_plan::ActivatePolicy::Inferred,
             wake: String::new(),
             runtime_form: false,
+            chooses_scheme: false,
             drew: false,
         };
         let js = Js::of(shell).unwrap();
@@ -1182,6 +1225,7 @@ mod tests {
                 activate: exact_plan::ActivatePolicy::Inferred,
                 wake: String::new(),
                 runtime_form: false,
+                chooses_scheme: false,
                 drew: false,
             };
             let page = head_js(&shell, &js, "en", "ltr", false, false)

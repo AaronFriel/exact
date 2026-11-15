@@ -122,6 +122,8 @@ pub struct Rendered {
     /// (written so without a kernel, LLP 1048.004): the page doesn't
     /// rewrite it (`page::for_runtime`), and the digest is over this form.
     pub runtime_form: bool,
+    /// Whether the document restores the reader's saved appearance before paint.
+    pub chooses_scheme: bool,
     /// The render drew secure randomness, which is the device's (LLP
     /// 1069.005 D2): its page is its reader's alone.
     pub drew: bool,
@@ -615,6 +617,7 @@ pub(crate) fn finish(
         wake,
         activate: activation,
         runtime_form: false,
+        chooses_scheme: exact_runner::uses::chooses_scheme(plan),
         drew,
     })
 }

@@ -158,7 +158,9 @@ export function renderer(dist, { closed = false, read = path => readFileSync(res
   const script = new vm.Script(read('.gen/server.js').toString('utf8'), { filename: 'server.js' });
   let shell;
   try { shell = read('shell.html').toString('utf8'); } catch (error) { if (error.code !== 'ENOENT') throw error; shell = read('index.html').toString('utf8'); }
-  const capture = readFileSync(new URL('./capture.js', import.meta.url), 'utf8').trim();
+  // The rendered head combines the shell's scheme bootstrap with its capture script.
+  shell = shell.replace(/<script data-exact-scheme>[\s\S]*?<\/script>\n/, '');
+  const capture = (readFileSync(new URL('../web/scheme.js', import.meta.url), 'utf8') + readFileSync(new URL('./capture.js', import.meta.url), 'utf8')).trim();
   // A dist file once; a wasm compiled once, instantiated per render.
   const cache = new Map();
   const files = p => { let v = cache.get(p); if (!v) { v = read(p.replace(/^\.?\//, '')); if (p.endsWith('.wasm')) v = new WebAssembly.Module(v); cache.set(p, v); } return v; };

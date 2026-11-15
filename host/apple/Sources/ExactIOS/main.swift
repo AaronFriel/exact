@@ -39,7 +39,11 @@ setvbuf(stdout, nil, _IOLBF, 0)
 
 let exact = ExactComposition.app
 final class Adapter: ExactSessionDelegate {
-    weak var window: UIWindow?
+    private let scheme = ExactWindowScheme()
+    var window: UIWindow? {
+        get { scheme.window }
+        set { scheme.window = newValue }
+    }
     var announced = false
     /// The capabilities: `setScheme` is the window's interface style —
     /// `light`, `dark`, or `system`, as the web's `color-scheme`, where
@@ -48,11 +52,7 @@ final class Adapter: ExactSessionDelegate {
     func exactSession(_ session: ExactSession, command name: String, args: [Any]) {
         switch name {
         case "setScheme":
-            switch args.first as? String {
-            case "dark": window?.overrideUserInterfaceStyle = .dark
-            case "light": window?.overrideUserInterfaceStyle = .light
-            default: window?.overrideUserInterfaceStyle = .unspecified
-            }
+            scheme.set(args.first as? String)
         // The app's page in Settings (LLP 1133.002 D11); under the agent, journaled only.
         // `change` at the second argument's id hears whether it opened (OpenURL.swift `openURLAnswer`).
         case "openURL" where args.first as? String == UIApplication.openSettingsURLString:

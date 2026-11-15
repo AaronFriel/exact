@@ -358,7 +358,10 @@ async function bootNow(bytes, assets = host.devAssets, current = () => true, mod
   document.getElementById("exact-looks")?.remove();
   // a held state goes unsaid (dev.js holds it again); the last plan's theme (LLP 1095 D4) and state looks (LLP 1121 D8): this boot's batch sets its own
   commitFonts(preparedFonts);
-  focus.restart(kept, () => applyBatch(batch), () => ask({ op: "tree" }), (id) => views.get(id));
+  focus.restart(kept, () => {
+    host.restoringScheme = fresh;
+    try { applyBatch(batch); } finally { host.restoringScheme = false; }
+  }, () => ask({ op: "tree" }), (id) => views.get(id));
   host.toldOffset = null;
   followOffset(now());
   // @ref LLP 1027.000.000 — the date, as the clock the runner already reads

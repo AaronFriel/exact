@@ -246,8 +246,11 @@ test.each([false, true])('named focus, blur, scheme, clipboard and haptic comman
     await page.reload();
     await page.getByTestId('apply').waitFor();
     expect(await page.evaluate(() => globalThis.firstScheme)).toBe('dark');
+    await page.getByTestId('field').focus();
+    expect(await page.evaluate(() => document.activeElement.id)).toBe('field');
     await page.getByTestId('clear').dispatchEvent('click');
     expect(await page.evaluate(() => Object.keys(localStorage).filter(k => k.endsWith('#scheme')))).toEqual([]);
+    expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
     expect(errors).toEqual([]);
   } finally {
     await browser?.close(); server?.stop(true); rmSync(dir, { recursive: true, force: true });

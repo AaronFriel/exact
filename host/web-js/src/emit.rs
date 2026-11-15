@@ -758,12 +758,13 @@ pub fn emit(plan: &Plan, site_attrs: bool, dev_reload: bool) -> Result<Output, S
         })
         .collect();
     let names_js = format!(
-        "{names_js}export const sourceTypes={{{}}};export const pages=[{}];export const viewportMedia={};export const activation={};export const markdownPaths={};\n",
+        "{names_js}export const sourceTypes={{{}}};export const pages=[{}];export const viewportMedia={};export const activation={};export const markdownPaths={};export const choosesScheme={};\n",
         source_types.join(","),
         pages.join(","),
         crate::facts::viewport_media(plan),
         crate::facts::activation(plan),
-        serde_json::to_string(&em.uses.markdown_paths).unwrap()
+        serde_json::to_string(&em.uses.markdown_paths).unwrap(),
+        commands.iter().any(|name| name == "setScheme")
     );
     let imports: Vec<String> = em.uses.names.iter().cloned().collect();
     let commands_import = commands::import(&commands);

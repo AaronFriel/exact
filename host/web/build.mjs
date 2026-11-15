@@ -47,7 +47,7 @@ import { RustMissing, WEB_CRATES, rustMissing, setMetadata } from '../../scripts
 import { closeFilesystemReader } from '../../scripts/filesystem.mjs';
 import { guardFlags, reportBuilt } from '../../scripts/help.mjs';
 import { BINARYEN_DOWNLOAD, optimizeWasm, splitStages, unsplitReason } from './stages.mjs';
-import { interfaceStyle, withInterfaceStyle, withLook } from './look.mjs';
+import { interfaceStyle, launchBackground, schemeHead, withInterfaceStyle, withLook } from './look.mjs';
 import { webIconLinks, webThemeColors } from '../../scripts/app-icons.mjs';
 import { appManifestDigest, appSources, buildFileCards, copyStaticTreeIfPresent, listAssets, hostingNotes, planRouteTable, publicFileCards, replaceBuild, webEnvelope, moduleCards, MODULE_FILES } from './serve.mjs';
 import { foreignBeside } from './generations.mjs';
@@ -589,22 +589,10 @@ function minifyCss(css) {
 // The app's module artifact answers `native.later` on the page too (LLP
 // 1067 D5): the glue finds it by the meta tag below.
 const pageNative = app.modules.web;
-// The page in the app's first-frame background from its first paint (the
-// manifest's background colours, as the iOS launch screen), so nothing lighter or
-// darker shows before the first frame. Only until then: from the first frame
-// the app paints its own, and the canvas beyond it is the browser's for the
-// page's colour scheme, as on the JS target (a launch white kept under an
-// app that chose dark showed beside its root; Markdown's conformance).
-// A fixed `userInterfaceStyle` takes its side alone, as the iOS launch screen does.
-const hex = (value) => /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(value ?? '') ? value : null;
-const launchLight = app.manifest.background_color, launchDark = interfaceStyle(app.manifest) === 'light' ? null : hex(app.manifest.color_scheme_dark?.background_color);
-const launchHtml = 'html:has(#exact-root:empty)';
-const launchCss = !hex(launchLight) ? '' : interfaceStyle(app.manifest) === 'dark' ? `${launchHtml}{background-color:${launchDark ?? launchLight}}`
-  : `${launchHtml}{background-color:${launchLight}}${launchDark ? `@media (prefers-color-scheme:dark){${launchHtml}{background-color:${launchDark}}}` : ''}`;
 writeFileSync(resolve(stage, 'index.html'), readFileSync(resolve(stage, 'index.html'), 'utf8')
-  .replace(/<style>([\s\S]*?)<\/style>/, (_, css) => `<style>${minifyCss(css)}${launchCss}</style>`)
+  .replace(/<style>([\s\S]*?)<\/style>/, (_, css) => `<style>${minifyCss(css)}${launchBackground(app.manifest)}</style>`)
   .replace('<html lang="en">', `<html lang="${escapeHtml(webManifest.lang)}">`)
-  .replace('<title>Exact</title>', `<title>${escapeHtml(webManifest.name)}</title>`)
+  .replace('<title>Exact</title>', `${schemeHead(!bakeOnly && exports.exact_chooses_scheme() ? "exact.state.#scheme" : null, { development: !production, wasm: true })}<title>${escapeHtml(webManifest.name)}</title>`)
   // The manifest's favicons and Apple touch icon, else the shell's default favicon (LLP 1163 D7).
   .replace(/<link rel="icon"[^>]*>/, (link) => webIconLinks(app.manifest, app.dir, link))
   // `app.json`'s `audio_session` (LLP 1096 D7), applied by a separate page entry before the runtime, and

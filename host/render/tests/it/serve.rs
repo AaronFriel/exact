@@ -325,6 +325,13 @@ fn each_route_answers_by_its_policy() {
         exact_data::envelope::base64(&digest)
     };
     assert!(csp.contains(&format!("'sha256-{capture}'")), "{csp}");
+    let scheme = {
+        use sha2::{Digest, Sha256};
+        exact_data::envelope::base64(&Sha256::digest(
+            include_str!("../../../web/scheme.js").trim_end().as_bytes(),
+        ))
+    };
+    assert!(csp.contains(&format!("'sha256-{scheme}'")), "{csp}");
     assert!(body.contains(&format!("<script>{}</script>", exact_render::capture())));
     let scripts = csp
         .split(';')
