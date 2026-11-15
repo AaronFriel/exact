@@ -54,9 +54,9 @@ pub(crate) struct Processes {
     children: Mutex<HashMap<u64, Arc<ChildCtl>>>,
     /// Every child stream's ticket, whose outcomes the agent's clock owes.
     streams: Mutex<std::collections::HashSet<u64>>,
-    /// The process groups this executor started, by group id: each one's
-    /// kill signal and grace, for a quit (`real.rs`).
-    groups: Mutex<HashMap<i32, (String, f64)>>,
+    /// The process groups this executor started, retaining each leader
+    /// through the quit's last signal (`real.rs`).
+    groups: Mutex<HashMap<i32, Arc<groups::Group>>>,
     /// The runner took a completion: output waiting for room goes on.
     pub(crate) drained: Condvar,
     /// The supervisors' clock: the agent's under the agent.

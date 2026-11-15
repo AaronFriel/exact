@@ -539,6 +539,17 @@ putting them in place, and `fork` runs with every signal blocked until the
 child's handlers are defaults. A `PATH` lookup skips relative entries.
 On macOS a group's member list uses libproc's PID count to size its buffer
 and retries a full buffer, so growth cannot silently truncate the list.
+Exit observation uses `waitid(WNOWAIT)`, leaving the leader's identity
+reserved until the supervisor and quit finish signalling, then `wait`
+reaps it. `try_observe_exit` polls without waiting or reaping. Group liveness
+and member lists exclude zombies on both platforms; Linux checks a zombie
+leader's remaining threads. Failed inspection leaves liveness unknown and
+is treated as alive for signalling and escalation. On Linux, membership is
+`getpgid`'s answer, so a process outside the group that `/proc`'s
+`hidepid` makes unreadable does not fail the scan (`process/scan.rs`).
+`signal_process_if` replaces `signal_process`: it signals a pid only if a
+test holds for it, and on Linux holds the process by a pidfd across the
+test, so a pid reused after the test is not signalled.
 `stdlib/fs.rs` resolves `home:/` and `bundle:/` (the namespaces `grant.rs`
 reads) against roots the host sets (`set_roots`), the bundle read only,
 each path admitted as spelt and run from its root's retained descriptor

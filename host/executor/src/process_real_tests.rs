@@ -169,6 +169,7 @@ fn a_real_child_reads_its_stdin_and_streams_its_output_in_order() {
     assert!(seen.contains(&"stderr oops\n".to_string()), "{seen:?}");
     assert!(seen.contains(&"exit 3 null".to_string()), "{seen:?}");
     assert_eq!(seen.last().unwrap(), "end 3 null true");
+    until_reaped(spawned_pid(&first));
 }
 
 #[test]
@@ -207,6 +208,116 @@ fn a_leader_that_exits_first_leaves_no_group_behind() {
 }
 
 #[test]
+fn release_retains_an_exited_leader_through_the_groups_escalation() {
+    retain_leader_after_exit("release");
+}
+
+#[test]
+fn kill_after_exit_reaches_descendants_without_releasing_the_leaders_identity() {
+    retain_leader_after_exit("kill");
+}
+
+#[test]
+fn quit_retains_an_exited_leader_through_the_groups_escalation() {
+    retain_leader_after_exit("quit");
+}
+
+fn retain_leader_after_exit(retirement: &str) {
+    let (_dir, core, woke) = core("process.spawn /bin/sh");
+    // The inherited disposition survives exec, so release must escalate
+    // after the leader exits. Its pipe keeps the incarnation open for kill.
+    let mut body = sh("trap '' TERM; sleep 120 & echo $!; exit 7");
+    body["forceKillAfter"] = 50.into();
+    body["drainTimeout"] = 60_000.into();
+    core.run(request(1, body, true), None).unwrap();
+    let out = collect(&core, &woke, |o| {
+        o.iter().any(|o| event(o) == "exit 7 null")
+    });
+    let leader = spawned_pid(&out);
+    let retained = os::observe_exit(leader).is_ok();
+    let unrelated = raw_sh("read line; exit 9", os::Stdio::Pipe);
+    let shared = core.shared.clone();
+    assert!(os::group_alive(leader), "its descendant still runs");
+    match retirement {
+        "kill" => {
+            write(&core, ProcessOp::Kill("SIGKILL".into()));
+            let rest = collect(&core, &woke, ended);
+            assert_eq!(event(rest.last().unwrap()), "end 7 null true");
+        }
+        "release" => core.forget(|_| false),
+        "quit" => drop(core),
+        _ => unreachable!(),
+    }
+    until_gone(leader, "the descendant outlived the group signal");
+    until_reaped(leader);
+    let untouched = os::group_alive(unrelated.pid);
+    drop(unrelated.stdin);
+    let unrelated_exit = os::wait(unrelated.pid).unwrap();
+    assert!(retained, "the exit event released the leader's identity");
+    assert!(untouched, "another group was signalled");
+    assert_eq!(unrelated_exit, os::Exit::Code(9));
+    assert!(!shared
+        .processes
+        .groups
+        .lock()
+        .unwrap()
+        .contains_key(&leader));
+}
+
+fn until_reaped(pid: i32) {
+    let deadline = Instant::now() + BOUND;
+    while matches!(os::try_observe_exit(pid), Ok(Some(_))) {
+        assert!(Instant::now() < deadline, "leader {pid} was never reaped");
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
+#[test]
+fn the_reaping_wait_does_not_block_on_a_live_reused_pid() {
+    let child = raw_sh("read line", os::Stdio::Pipe);
+    let (tx, rx) = channel();
+    let waiter = std::thread::spawn(move || {
+        until_reaped(child.pid);
+        tx.send(()).unwrap();
+    });
+    let returned = rx.recv_timeout(BOUND).is_ok();
+    drop(child.stdin);
+    os::wait(child.pid).unwrap();
+    waiter.join().unwrap();
+    assert!(returned, "a live reused pid blocked the reaping wait");
+}
+
+fn raw_sh(script: &str, stdin: os::Stdio) -> os::Child {
+    os::spawn(os::Command {
+        arg0: None,
+        program: std::path::Path::new("/bin/sh"),
+        args: &["-c".into(), script.into()],
+        env: &[],
+        cwd: std::path::Path::new("/"),
+        stdin,
+        stdout: os::Stdio::Null,
+        stderr: os::Stdio::Null,
+        session: false,
+    })
+    .unwrap()
+}
+
+#[test]
+fn the_last_group_owner_reaps_after_all_signallers_retire() {
+    let child = raw_sh("exit 7", os::Stdio::Null);
+    let group = super::super::groups::Group::new(child.pid, "SIGTERM", 5000.0);
+    assert_eq!(os::observe_exit(child.pid).unwrap(), os::Exit::Code(7));
+    let quit = group.clone();
+    drop(group);
+    assert_eq!(os::observe_exit(child.pid).unwrap(), os::Exit::Code(7));
+    super::super::groups::end(&quit);
+    assert_eq!(os::observe_exit(child.pid).unwrap(), os::Exit::Code(7));
+    drop(quit);
+    assert!(os::observe_exit(child.pid).is_err());
+    assert!(!os::group_alive(child.pid));
+}
+
+#[test]
 fn a_group_gone_after_its_signal_ends_the_stream() {
     group_gone_ends_stream(false);
 }
@@ -229,6 +340,7 @@ fn group_gone_ends_stream(check_latency: bool) {
     let took = start.elapsed();
     let leader = spawned_pid(&out);
     assert!(!os::group_alive(leader), "the group outlived the stream");
+    until_reaped(leader);
     if check_latency {
         assert!(
             took < Duration::from_secs(5),
@@ -471,16 +583,20 @@ fn text(v: &serde_json::Value) -> String {
 fn exec_file_ends_what_its_child_left_running() {
     let (_dir, core, woke) = core("process.spawn /bin/sh");
     let body = serde_json::json!({ "kind": "execFile", "program": "/bin/sh",
-        "args": ["-c", "sleep 30 >/dev/null 2>&1 & echo $!"], "encoding": "utf8" });
+        "args": ["-c", "sleep 30 >/dev/null 2>&1 & echo $$ $!"], "encoding": "utf8" });
     core.run(request(1, body, false), None).unwrap();
     let out = collect(&core, &woke, |o| !o.is_empty());
     let Outcome::Response(r) = &out[0] else {
         panic!("{out:?}")
     };
     let reply: serde_json::Value = serde_json::from_slice(&r.body).unwrap();
-    let grandchild: i32 = text(&reply["stdout"]).trim().parse().unwrap();
+    let output = text(&reply["stdout"]);
+    let mut pids = output.split_whitespace().map(|p| p.parse::<i32>().unwrap());
+    let leader = pids.next().unwrap();
+    let grandchild = pids.next().unwrap();
+    until_reaped(leader);
     assert!(
-        os::start_time(grandchild).is_none(),
+        !os::group_members(leader).contains(&grandchild),
         "its group ended before the answer"
     );
 }
@@ -700,12 +816,41 @@ fn the_login_shell_answers_the_named_variables_between_markers() {
     let started = Instant::now();
     let out = super::run(
         std::path::Path::new("/bin/sh"),
-        &["-c".into(), "echo hi; sleep 120 &".into()],
+        &["-c".into(), "echo hi; echo $$; sleep 120 &".into()],
         std::path::Path::new("/"),
         Duration::from_secs(60),
     );
-    assert_eq!(out.as_deref(), Some("hi\n"));
+    let out = out.unwrap();
+    let mut lines = out.lines();
+    assert_eq!(lines.next(), Some("hi"));
+    let leader = lines.next().unwrap().parse().unwrap();
+    until_gone(leader, "the login shell's group outlived its capture");
+    until_reaped(leader);
     assert!(started.elapsed() < BOUND, "{:?}", started.elapsed());
+}
+
+#[test]
+fn a_successful_login_capture_leaves_jobs_that_closed_the_pipe_running() {
+    let out = super::run(
+        std::path::Path::new("/bin/sh"),
+        &["-c".into(), "sleep 120 >/dev/null 2>&1 & echo $$ $!".into()],
+        std::path::Path::new("/"),
+        BOUND,
+    )
+    .unwrap();
+    let mut pids = out
+        .split_whitespace()
+        .map(|pid| pid.parse::<i32>().unwrap());
+    let leader = pids.next().unwrap();
+    let job = pids.next().unwrap();
+    let alive = os::group_members(leader).contains(&job);
+    let _ = os::signal_group(leader, os::SIGKILL);
+    until_gone(leader, "the test job outlived its cleanup");
+    until_reaped(leader);
+    assert!(
+        alive,
+        "a successful capture killed the shell's background job"
+    );
 }
 
 #[test]
@@ -768,6 +913,12 @@ fn a_child_whose_thread_cannot_start_fails_its_call() {
             message.contains("cannot start its thread"),
             "{role}: {message}"
         );
+        let records: Vec<serde_json::Value> =
+            serde_json::from_slice(&std::fs::read(dir.join("cache/exact-children.json")).unwrap())
+                .unwrap();
+        let pid = records.last().unwrap()["pgid"].as_i64().unwrap() as i32;
+        until_gone(pid, "the failed spawn left a running group");
+        until_reaped(pid);
         std::thread::sleep(Duration::from_millis(400));
         assert!(!mark.exists(), "{role}: the child ran on");
     }
