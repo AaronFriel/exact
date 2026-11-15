@@ -1241,6 +1241,8 @@ package final class Presenter {
                 forgetFlight(id)
                 views[id]?.holdGone()
                 if endExit(id) { continue }
+                // A route that left with its exit to play stays for it (RouteTransitionMac.swift).
+                if navigation.transitions.keeps(id) { beginExit(id); continue }
                 release(id, forget: true)?.removeFromSuperview()
             case .roots:
                 dialogs.children(root, op.ids.compactMap { views[UInt32($0)] })

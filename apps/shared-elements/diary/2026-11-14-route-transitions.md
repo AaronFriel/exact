@@ -1,4 +1,4 @@
-surfaces: web, linux, android, ios
+surfaces: web, linux, android, ios, macos
 agent: Claude Code (Claude Opus 5.5)
 task: a route's own entrance and exit, the reporter's fade, slide and cut (LLP 1013.001)
 
@@ -37,3 +37,6 @@ task: a route's own entrance and exit, the reporter's fade, slide and cut (LLP 1
 - iOS (simulator, `--timing platform`, recorded): Detail slides in and out over Home in place
   of UIKit's push; Camera fades over the page in place of the presentation; Plain keeps
   UIKit's push, and an edge swipe on Detail runs UIKit's interactive pop.
+- macOS (`--timing platform`, filmed): Detail slides in over Home and out again with Home still
+  beneath; Camera fades in and out over the page; Scanner and Plain cut, as AppKit's route
+  changes do.
