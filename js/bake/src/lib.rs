@@ -160,17 +160,9 @@ fn with_module_identity(compat: &str, meta: &serde_json::Value) -> Result<String
 /// source by the identity the link carries, as `module.rs` reads `APP`, so
 /// the archive compiles the same for apps that differ only in identity.
 fn embedded_entry(mode: &str, inputs: &serde_json::Value, linked: bool) -> Result<String, String> {
-    if linked {
-        contract::rust_entry_naming(
-            "ExactEmbeddedData",
-            "embedded_data()",
-            mode,
-            inputs,
-            Some(linked::LINKED_APP),
-        )
-    } else {
-        contract::rust_entry("ExactEmbeddedData", "embedded_data()", mode, inputs)
-    }
+    // A mixed app's composer places its own children (`.placed(..)`): the entry never wraps it again.
+    let app = linked.then_some(linked::LINKED_APP);
+    contract::rust_entry_composed("ExactEmbeddedData", "embedded_data()", mode, inputs, app)
 }
 
 /// `module.rs`'s first constants: the app, its grants and, but in a linked

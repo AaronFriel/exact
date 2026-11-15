@@ -289,8 +289,9 @@ pub fn empty_entry(
     inputs: &serde_json::Value,
     app: &str,
 ) -> Result<String, String> {
+    // An empty source has nothing to place: the shared Apple game shell's entry is the same for every placement.
     let entry =
-        contract::rust_entry_naming("ExactEmptyData", constructor, "off", inputs, Some(app))?;
+        contract::rust_entry_composed("ExactEmptyData", constructor, "off", inputs, Some(app))?;
     Ok(format!(
         r#"#[derive(Default)]
 struct ExactEmptyData;

@@ -1,6 +1,9 @@
 //! Optional Rust data executors: embedded first frame, replacement after first pixel.
 //! @ref LLP 1029.000 — independently built data modules, one encoded seam on every host.
 
+/// The placement proxy a Rust-only app's generated entry wraps its source in (`rust.placement`).
+#[cfg(not(target_arch = "wasm32"))]
+pub use exact_data;
 use exact_logic_abi as abi;
 #[doc(hidden)]
 pub use exact_plan;

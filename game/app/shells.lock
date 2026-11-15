@@ -1363,6 +1363,7 @@ dependencies = [
 name = "exact-logic"
 version = "0.1.0"
 dependencies = [
+ "exact-data",
  "exact-logic-abi",
  "exact-plan",
  "exact-runner",

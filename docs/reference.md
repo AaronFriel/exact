@@ -4157,7 +4157,11 @@ A module's placement (LLP 1027.002) is the manifest's: `typescript.placement`
 and `rust.placement` are `main` (the default) or `worker`, overridable per
 platform under `platforms.<platform>.placement`; `EXACT_TYPESCRIPT_PLACEMENT`
 and `EXACT_RUST_PLACEMENT` override a bake for a measurement. A change is a new
-compatibility id, never an update. `build_mixed_with` bakes a mixed app through
+compatibility id, never an update. A Rust-only app is placed too: its generated
+entry wraps the source in `exact_data::Placed`. A Rust worker is native only:
+on the web it runs inline, and the bake says so; with Rust updates (a `rust`
+mode other than `off`) the bake refuses `worker`, since an update module would
+run inline. `build_mixed_with` bakes a mixed app through
 its own composer, so a resource only Rust owns needs no TypeScript placeholder;
 the development producer keeps such a resource's last Cargo-baked value and
 the composer's ownership roster for the generated TypeScript provider types.

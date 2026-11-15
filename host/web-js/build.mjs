@@ -116,6 +116,10 @@ const rustData = rustDataOf(manifest);
 const rust = !!manifest.rust?.module || !!rustData;
 const undeclared = !rust && undeclaredRustData(app, appDir, manifest);
 if (undeclared) { console.error(undeclared); process.exit(1); }
+// A Rust worker is native only (LLP 1027.002 §7): on the web the Rust source runs inline, and the build says so.
+if (rust && (process.env.EXACT_RUST_PLACEMENT ?? manifest.rust?.platforms?.web?.placement ?? manifest.rust?.placement) === 'worker') {
+  console.warn(`warning: ${appDir}: rust.placement worker runs inline on web: a Rust worker is native only (LLP 1027.002 §7)`);
+}
 // A TypeScript source (`app.ts`) runs in the page, bundled with it; beside a
 // Rust one (LLP 1027.002), the Rust module answers what it owns and the
 // TypeScript module the rest (ts-data.js, rust-data.js). A synthetic plan
