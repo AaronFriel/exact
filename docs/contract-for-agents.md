@@ -1279,6 +1279,10 @@ On the web the page has no such budget, and a yield lets it paint mid-parse.
 
 ### A TypeScript package for the data module
 
+Source capture skips dot directories at every depth in the app and in
+`typescript.sources` mounts, including `backend/.elixir_ls/` and `server/.venv/`.
+Keep source code outside those directories. Source symlinks remain refused.
+
 A package whose runtime entry is TypeScript source must also provide declaration
 files for the type check. This applies to installed packages and linked `file:`
 or workspace dependencies, including packages outside the app folder. The checker

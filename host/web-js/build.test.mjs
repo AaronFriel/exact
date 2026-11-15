@@ -1191,6 +1191,62 @@ function site(app, source) {
 }
 const generationIn = (body) => /<base href="\/\.exact\/gen\/([0-9a-f]{32})\/">/.exec(body)?.[1];
 
+test('source capture skips nested dot directories in apps and mounts and names refused links', async () => {
+  const root = resolve(import.meta.dir, '../..'), dir = mkdtempSync(resolve(root, 'target/hidden-capture-'));
+  const app = resolve(dir, 'app'), shared = resolve(dir, 'shared'), out = resolve(dir, 'dist');
+  const build = () => spawnSync(process.execPath, ['host/web-js/build.mjs', app, '--out', out, '--render', 'none'],
+    { cwd: root, encoding: 'utf8', env: process.env });
+  let browser, server;
+  try {
+    site(app, 'shape Note\n  text: string\n\ncomponent App\n  resource note = note("ready") as shape Note\n  view\n    text note.text testId="note"\n');
+    mkdirSync(shared);
+    const manifest = JSON.parse(readFileSync(resolve(app, 'app.json'), 'utf8'));
+    manifest.typescript = { sources: { shared: '../shared' } };
+    writeFileSync(resolve(app, 'app.json'), JSON.stringify(manifest));
+    writeFileSync(resolve(shared, '.settings.json'), '{}');
+    writeFileSync(resolve(shared, 'model.ts'), "export const word = 'ready';\n");
+    const source = readFileSync(resolve(app, 'app.ts'), 'utf8');
+    writeFileSync(resolve(app, 'app.ts'), "import { word } from './shared/model';\n" + source.replace('`The note, ${what}.`', '`The note, ${word}.`'));
+    for (const from of [app, shared]) {
+      for (const cache of ['backend/.elixir_ls/build/lib/app', 'server/.venv/bin']) {
+        const at = resolve(from, cache);
+        mkdirSync(at, { recursive: true });
+        mkdirSync(resolve(from, 'backend/priv'), { recursive: true });
+        writeFileSync(resolve(at, 'cache.json'), '{}');
+        symlinkSync(resolve(from, 'backend/priv'), resolve(at, 'priv'));
+        symlinkSync('missing-python', resolve(at, 'python'));
+      }
+    }
+    const built = build();
+    expect(built.status, built.stdout + built.stderr).toBe(0);
+    expect(existsSync(resolve(out, '.gen/typescript/shared/.settings.json'))).toBe(true);
+    for (const from of ['', 'shared']) for (const cache of ['backend/.elixir_ls', 'server/.venv']) {
+      expect(existsSync(resolve(out, '.gen/typescript', from, cache))).toBe(false);
+    }
+    server = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch(request) {
+      const path = new URL(request.url).pathname;
+      return new Response(Bun.file(resolve(out, path === '/' ? 'index.html' : path.slice(1))));
+    } });
+    browser = await suiteBrowser();
+    const page = await browser.newPage();
+    await page.goto(server.url.href);
+    await page.getByTestId('note').waitFor();
+    expect(await page.getByTestId('note').innerText()).toBe('The note, ready.');
+    await browser.close(); browser = null;
+    const link = resolve(app, 'backend/helper.ts');
+    symlinkSync('../app.ts', link);
+    const refused = build();
+    expect(refused.status).toBe(1);
+    expect(refused.stderr).toContain(`error: app: source links are not captured: ${link}`);
+    expect(refused.stderr).not.toContain('failed the type check');
+    rmSync(link);
+    writeFileSync(resolve(app, 'app.ts'), source + '\nconst bad: number = "wrong";\n');
+    const mistyped = build();
+    expect(mistyped.status).toBe(1);
+    expect(mistyped.stderr).toContain('failed the type check');
+  } finally { await browser?.close(); server?.stop(true); rmSync(dir, { recursive: true, force: true }); }
+}, 60000);
+
 /** serve.mjs on `out` as the `serve` verb runs it (`--loopback`), on a free port: `get(path)` a navigation's answer,
  * `renders(path)` how many pages of it serve said it rendered, `heard(done)` once what it said satisfies `done`. */
 async function serving(root, out, { fromEnv = false } = {}) {

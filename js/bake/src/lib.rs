@@ -822,6 +822,7 @@ fn sources(root: &Path) -> Result<BTreeMap<PathBuf, Vec<u8>>, String> {
             let entry = entry.map_err(|e| e.to_string())?;
             let name = entry.file_name();
             let name = name.to_string_lossy();
+            let kind = entry.file_type().map_err(|e| e.to_string())?;
             if at == root && name == "__exact_build.tsbuildinfo" {
                 return Err("__exact_build.tsbuildinfo is reserved for the producer".into());
             }
@@ -830,10 +831,8 @@ fn sources(root: &Path) -> Result<BTreeMap<PathBuf, Vec<u8>>, String> {
                 // compat.json made every build stale, and what a web build keeps beside `dist`.
                 || (at == root && (name == "dist-windows" || beside::beside_dist(&name)))
                 || name.starts_with(".exact-js-bake-")
-                // The app's dot directories hold what no build reads: `.exact/`
-                // keeps an agent's diary, evidence, logs and runtime files
-                // (Depot: a `results.json` beside the app made every build stale).
-                || (at == root && name.starts_with('.') && entry.path().is_dir())
+                // Dot directories at any depth hold tooling state, not app sources.
+                || (name.starts_with('.') && kind.is_dir())
                 // The driver reads a test file; no build does, so editing
                 // one rebuilds nothing (trivia F8).
                 || name.ends_with(".test.contract")
@@ -847,7 +846,6 @@ fn sources(root: &Path) -> Result<BTreeMap<PathBuf, Vec<u8>>, String> {
                 continue;
             }
             let relative = path.strip_prefix(root).unwrap();
-            let kind = entry.file_type().map_err(|e| e.to_string())?;
             // Native link inputs, fingerprinted by the Apple build, not app sources.
             if kind.is_dir()
                 && name.ends_with(".xcframework")

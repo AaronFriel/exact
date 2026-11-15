@@ -353,7 +353,7 @@ if (ts && (composed || existsSync(webScript)) && (composed || !/^\s*fn main\(\)\
 const sayWarnings = (warnings) => { for (const warning of warnings ?? []) console.warn(warning); };
 const captured = ts ? await typecheck(!opt('--data')).catch((error) => {
   console.error(error.code === 'backend-selection' ? `error [backend-selection]: ${error.message}`
-    : `${error.message ?? error}\nerror: ${app}: app.ts failed the type check every host's build runs`);
+    : `error: ${app}: ${error.message ?? error}`);
   sayWarnings(error.warnings);
   process.exit(1);
 }) : null;
@@ -393,8 +393,8 @@ async function typecheck(checking) {
       const name = entry.name, path = resolve(from, name);
       if (resources.size && resources.has(fileIdentity(path))) continue;
       if (['.git', 'node_modules', 'target', 'dist'].includes(name) || name.startsWith('.exact-js-bake-') || (top && name === 'app.contract.d.ts')) continue;
-      // The app's dot directories (`.exact/`: an agent's evidence, logs, runtime files) are no source, as in js/bake's capture.
-      if (top && name.startsWith('.') && entry.isDirectory()) continue;
+      // Dot directories at any depth hold tooling state, not app sources, as in js/bake's capture.
+      if (name.startsWith('.') && entry.isDirectory()) continue;
       // Nor is what a build in `dist` keeps beside it (`web-build --out dist`: serve.mjs `replaceBuild`, generations.mjs).
       if (top && besideDist(name)) continue;
       if (top && mounts.some(([mount]) => mount === name)) continue;
