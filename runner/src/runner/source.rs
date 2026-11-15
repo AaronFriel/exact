@@ -648,7 +648,10 @@ data_source! {
     /// go. A call this source set aside is dropped unless `let_go` names it;
     /// after a `refused` commit, one whose request is in flight again is put
     /// back instead, and its replacement dropped. A source that forwards
-    /// `background` forwards this and `module_landed`.
+    /// `background` forwards this and `module_landed`. `store` is the Store
+    /// as committed when the requests were let go, read-only and outside a
+    /// worker's ordered set (LLP 1027.002 Change 2): nothing here may depend on
+    /// what a turn still in flight could change.
     fn keep_sent(
         &mut self,
         store: &Store,
