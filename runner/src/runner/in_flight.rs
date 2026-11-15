@@ -4,6 +4,15 @@
 
 use super::*;
 
+impl PendingReq {
+    /// An upload the host has not refused at admission, through its reply's
+    /// turns. It holds the app open as a request with effects does, but one
+    /// let go is aborted, never kept (LLP 1133.008.000 D8).
+    fn admitted_upload(&self) -> bool {
+        self.upload && self.refusal.is_none() && !self.refused
+    }
+}
+
 impl<D: DataSource> Runner<D> {
     /// Whether resource `i` has a stream open that has committed a value: it is not
     /// pending, but a newer answer must still let its ticket go.
@@ -146,12 +155,15 @@ impl<D: DataSource> Runner<D> {
 
     /// Work an answer started that the app must finish before it is
     /// suspended or ends: a request with effects in flight, an answer's, a
-    /// kept one or a handler's (LLP 1146 D2), or the module's storage still
-    /// landing (LLP 1097 D10). A host keeps the app running while there is
-    /// (an iOS background task, a quit held), so a reply lands and what its
-    /// turn writes is persisted.
+    /// kept one or a handler's (LLP 1146 D2), an upload the host admitted
+    /// (LLP 1133.008.000 D8), or the module's storage still landing (LLP
+    /// 1097 D10). A host keeps the app running while there is (an iOS
+    /// background task, a quit held), so a reply lands and what its turn
+    /// writes is persisted.
     pub fn must_finish(&self) -> bool {
-        self.effects_in_flight() || self.background_operations() > 0
+        self.effects_in_flight()
+            || self.pending.iter().any(PendingReq::admitted_upload)
+            || self.background_operations() > 0
     }
 
     /// Whether a request with effects the host has not refused is in flight
