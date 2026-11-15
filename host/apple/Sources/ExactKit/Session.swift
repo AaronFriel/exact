@@ -220,7 +220,7 @@ public final class ExactApp {
     public var connectedPage: URL? { connection?.page }
     /// The connection's status line for a dev menu, or nil.
     public var connectionStatus: String? { connection.map { "\($0.page)\($0.devStatus.map { " (\($0.said))" } ?? ($0.terminal != nil ? " (rebuild the host)" : $0.refused != nil ? " (edit not applied)" : generationPending ? " (preparing Rust update)" : " (live)"))" } }
-    /// Re-resolve the connection (the menu's Reload; clears a `{rebuilt}` stop).
+    /// Re-resolve the connection (the menu's Reload); the native program stays pinned.
     public func reloadConnection() { connection?.reload() }
 
     /// A plan is one app generation: every session accepts before any swaps.

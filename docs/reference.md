@@ -1689,6 +1689,12 @@ the same URL with `bun scripts/agent.mjs macos --url http://127.0.0.1:8765/ tree
 The Go/custom-client sequence
 is in LLP 1030.000 §7.
 
+An Apple client pins the native program the server names for its baked cohort
+and target: the binary of that target's build receipt while its inputs are unchanged.
+A web-only rebuild keeps the connection and carried state. Changed native binary inputs,
+or no receipt for the client's cohort, keep the last good generation on screen until
+the host is rebuilt and relaunched.
+
 A native client finds a generation through its envelope, `exact.json`: a
 pointer card of at most 64 KiB that names the plan, and names the asset
 cards' file, `assets.json`, by URL, SHA-256, byte length and card count. The

@@ -1,4 +1,5 @@
 # Queue
+- **The dev server re-reads its native build receipts for every generation** (2026-11-14, `host/web/dev.mjs` `nativePrograms`). Each generation and each native envelope request reads and serializes the receipts again: about 23 ms for one receipt on a loaded Mac, perhaps 4 ms idle. Cache them by file metadata.
 - **A web GPU game's batch costs about 25 µs a mounted element** (2026-11-14, measured fixing #533 in the driver's Chromium on an Apple silicon Mac). Pausing Beacons with a 300-row sheet mounted (a temporary edit) takes 9 to 19 ms in the click handler, 6.3 to 8.7 ms of it in `exact_dispatch`: 21 to 29 µs a row, where Felt reported about 60. #533 took out the layout `bindValues` forced inside that batch (two of its three layouts, 1.6 to 4.2 ms); the one left is `press`'s focus, after the batch. Profile the dispatch by plan site (`agent.mjs web perf`) and cut the per-element work.
 - **An app.ts reload on the Android reader does not repaint** (2026-11-14, #585, an Android 37.2 arm64 emulator). Following a dev loop (`bun exact.mjs android --run --url`), an `app.ts` save reloads the reader with its state carried (`boot (carried)`; `tree` names the new text) and the screen keeps the old pixels; a Contract save repaints. A painted unit test of a plain reload finds the presenter dirty, so the frame is lost after that, on the reader's side or in the module path's validation boot. The Linux host's pixels were not checked.
 - **A production iOS app carries 739 KB of tooling it cannot use** (2026-11-14, the shop benchmark's app at 34676bfa2, `--optimize size`, from its dSYM's symbol table). Of 6.19 MB of Swift code: the agent driver 366 KB, Frame Health and the frame sampler 296 KB, the dev menu and diagnostics 77 KB. A production bake ignores `EXACT_AGENT` (`ExactEnv.environment`, LLP 1069.007 D2), so the driver cannot run there; `EXACT_INSPECT` leaves out Inspect mode and the agent's private API only. Leaving the driver out needs its helpers that other code calls (`Agent.r2`, `Agent.box`, about a hundred references outside the agent's files) moved beside their callers first; whether Frame Health's card and the dev menu can be reached in a production build is unchecked. The same app also links features it never uses: SVG 100 KB, pickers, share and transfer 91, video and sound 53, web frames 48, notifications 42 (LLP 1047.001). The app is 16,622,691 bytes built for size and 21,454,810 balanced; Flutter's entry in that benchmark is 16,465,605.
@@ -1021,10 +1022,6 @@ sits on that list carries the trade it would take.
 - **Safari initial scrolling, phone sweep** (2026-09-08): the web host now gates
   actions/editing without making the baked tree inert; Chrome verifies scrolling
   with the data module held or failed. Repeat the touch-scroll check on iPhone.
-- **Dev program rebuild boundary** (2026-09-07): after the normal phone's live
-  edit passed, a server rebuild reported web inputs changed / iOS inputs unchanged
-  but the iPhone required a native relaunch. Check whether the shared program
-  identity is invalidating unaffected native clients (1030.000).
 
 - **External dev latency** (2026-09-05): Weird Castle's first captured edit took
   300 ms to DOM acceptance (9 ms plan), above the 100 ms budget. Use the existing

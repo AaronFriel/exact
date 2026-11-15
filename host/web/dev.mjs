@@ -4,7 +4,7 @@
 // carrier and installer stay loopback-only. Games serve HTTP during the first build.
 import { buildingServer } from '../../game/dev.mjs';
 import { acceptModuleReply, failedPhase, phased, phasedAsync } from './dev-phase.mjs';
-import { watchDirectoryInputs, watchModuleSources } from './dev-watch.mjs';
+import { cacheBuildInputs, nativeResourceInputs, watchDirectoryInputs, watchModuleSources } from './dev-watch.mjs';
 import { directoryInputNames } from '../../scripts/cargo-dep-info.mjs';
 import { spawn, spawnSync } from 'node:child_process';
 let tuning = null;
@@ -431,7 +431,7 @@ let currentRust = null;
 let currentRustId = null;
 let assetsNeedRebuild = false;
 // This names the actual programs already served, including optional GPU code.
-// A changed program stays terminal even when its compatibility metadata agrees.
+// Browsers reload on changed web bytes; native admission uses its own build receipt.
 const programIdentity = () => {
   if (producersOnly) return JSON.parse(readFileSync(graphPath, 'utf8')).binary.sha256;
   const files = ['app.wasm', 'gpu_bg.wasm', ...gpuModules(app.manifest).map(({ name }) => `gpu/${name}_bg.wasm`), 'markup-editor.wasm', 'textflow.wasm'].map((name) => {
@@ -442,8 +442,9 @@ const programIdentity = () => {
   return createHash('sha256').update(canonicalBytes({ files })).digest('hex');
 };
 let program = programIdentity();
+let nativePrograms = {};
 const announcement = () => current ? {
-  epoch, program, seq: current.seq, generation: current.generation, ...(tuning?.paths.size ? {surfaceAssets:['assets/exact-tables.json']} : {}),
+  epoch, program, nativePrograms: current.envelope.dev.nativePrograms, seq: current.seq, generation: current.generation, ...(tuning?.paths.size ? {surfaceAssets:['assets/exact-tables.json']} : {}),
   digest: current.envelope.plan.sha256, envelope: current.url,
 } : { epoch, ready: false };
 const hello = (nonce) => JSON.stringify({ hello: true, ...announcement(), ...(nonce ? { nonce } : {}) });
@@ -451,6 +452,7 @@ let retentionToken = null;
 const tableGenerations = new Map();
 const isEntryFile = name => name.startsWith('plans/') || name.startsWith('activities/');
 function captureGeneration(reuseCurrentAssets = false, tableUpdate = null) {
+  refreshNativePending();
   // A mixed app publishes one complete candidate. A producer may finish
   // first, but neither language may reset the other's last admitted module.
   if (!tableUpdate && typescript && portableRust && (!currentModule || !currentRust)) return;
@@ -515,7 +517,7 @@ function captureGeneration(reuseCurrentAssets = false, tableUpdate = null) {
   // the URL of the generation that wrote it, which a page reading the asset later (dev.js `later`) still finds.
   const previous = new Map((tableUpdate ? current.envelope.assets : []).map(card => [card.name, card.url]));
   for (const card of assets) card.url = (tableUpdate && !tableUpdate.has(card.name) && previous.get(card.name)) || prefix + card.name.split('/').map(encodeURIComponent).join('/');
-  envelope.dev = { epoch, program, seq, generation, events: '/__dev' };
+  envelope.dev = { epoch, program, nativePrograms, seq, generation, events: '/__dev' };
   if (files.has('app.plan.map.json')) {
     const body = files.get('app.plan.map.json');
     envelope.dev.sourceMap = { url: prefix + 'app.plan.map.json', sha256: createHash('sha256').update(body).digest('hex'), bytes: body.length };
@@ -1079,8 +1081,25 @@ function pushAssets() {
 // until rebuilt; changed compiler inputs are reported as pending, never as
 // a guessed target or compatibility id. @ref LLP 1030 D3; 1030.000 D5.
 let builtReceipts=readBuilds(app,buildEnv);
+const nativeValidation = cacheBuildInputs(pendingBuildInputs);
+let nativeWatchSignature = null, compilerWatchesReady = false;
 const nativePending=new Map();
-function refreshNativePending(){nativePending.clear();for(const r of builtReceipts)if(r.compat.inputs.platform!=='web')nativePending.set(r.compat.target+'/'+r.compat.inputs.platform,pendingBuildInputs(r));}
+function refreshNativePending() {
+  builtReceipts = readBuilds(app, buildEnv);
+  nativeValidation.retain(builtReceipts);
+  nativePending.clear();
+  const programs = {};
+  for (const build of builtReceipts) if (build.compat.inputs.platform !== 'web') {
+    const pending = nativeValidation.pending(build);
+    nativePending.set(build.compat.target + '/' + build.compat.inputs.platform, pending);
+    programs[build.compat.target + '/' + build.compat.id] = pending.length ? null : build.binary.sha256;
+  }
+  nativePrograms = programs;
+  const signature = builtReceipts.map(b => b.compat.target + '/' + b.compat.id + '/' + b.binary.sha256).join(':');
+  // Native receipts change the watches without rerunning the Contract compiler.
+  if (compilerWatchesReady && signature !== nativeWatchSignature) watchCompilerInputs(compilerContracts);
+  nativeWatchSignature = signature;
+}
 refreshNativePending();
 let previousWeb=cohortReceipt(JSON.parse(readFileSync(graphPath,'utf8')));
 function classifyGeneration(planBytes, assets) {
@@ -1103,7 +1122,6 @@ function classifyGeneration(planBytes, assets) {
   return lines;
 }
 function classifyRebuild() {
-  builtReceipts=readBuilds(app,buildEnv);
   refreshNativePending();
   const web=JSON.parse(readFileSync(graphPath,'utf8'));
   const check=classifyArtifacts(web,previousWeb);
@@ -1112,31 +1130,46 @@ function classifyRebuild() {
   return [`web: actual binary inputs ${check.binary?'changed':'unchanged'}; cohort ${web.compat.id}`, ...builtReceipts.filter(r=>r.compat.inputs.platform!=='web').map(r=>`${r.compat.inputs.platform}: ${nativePending.get(r.compat.target+'/'+r.compat.inputs.platform)?.length?'binary inputs changed; rebuild the actual target':'loaded inputs unchanged'} (${r.compat.target})`)];
 }
 const watched=new Map();
-let compilerInputFiles = new Set(), compilerInputTrees = [], compilerMissingInputs = [], swiftSourceDirectories = new Set();
+let compilerInputChanged = () => {}, compilerContracts;
+let compilerInputFiles = new Set(), compilerInputTrees = [], compilerMissingInputs = [], swiftSourceDirectories = new Set(), resourceDirectories = new Set();
 const optionalRoots = () => ['assets', 'deck', 'gpu', 'gpu/shaders'].map(root => existsSync(resolve(app.dir, root)) ? 1 : 0).join('');
 let optionalRootsSeen = optionalRoots();
-function watchCompilerInputs() {
+function watchCompilerInputs(contract = contractGraph()) {
   // Poll file and directory-entry metadata: saves, replacements and new paths
   // remain visible when filesystem notifications are lost or coalesced.
   // A Contract package's files are inputs wherever they are installed,
   // node_modules included (LLP 1091 D10).
-  const contract=contractGraph(); for (const path of contract.sources) readinessContracts.add(path);
-  const outside=p=>skipped.test(p)&&!contract.files.has(p);
-  const files=new Set([...builtReceipts.flatMap(r=>r.binary.inputs.map(f=>f.path)),...rustInputFiles,...gpuInputs,...appInputs,...failedInputs,...contract.files].filter(p=>!outside(p)&&!/[\\/]\.cargo[\\/]/.test(p)));
-  for(const receipt of builtReceipts)for(const missing of receipt.binary.missing)files.add(missing);
+  compilerContracts = contract; for (const path of contract.sources) readinessContracts.add(path);
+  const outside=p=>skipped.test(p)&&!contract.files.has(p), cargo=p=>/[\\/]\.cargo[\\/]/.test(p);
+  const resources = builtReceipts.flatMap(nativeResourceInputs);
+  resourceDirectories = new Set(resources.filter(r => r.directory).map(r => r.path));
+  const native = builtReceipts.filter(r => r.compat?.inputs?.platform !== 'web');
+  const nativeFiles = [...resources.filter(r => !r.directory).map(r => r.path), ...native.flatMap(r => [...r.binary.inputs, ...(r.binary.links ?? [])].map(f => f.path))];
+  // Cached native admission (`nativeValidation`) learns of a change to a native
+  // receipt's path only from these watches, so its paths in skipped trees are
+  // watched too: a change there invalidates admission and rebuilds nothing.
+  // Cargo's registry and git sources are not: Cargo never rebuilds them on an edit.
+  const nativeOnly = new Set([...nativeFiles, ...resourceDirectories, ...native.flatMap(r => [...r.binary.missing, ...(r.optionalInputs ?? []), ...r.binary.directories.map(d => d.path)])]
+    .filter(p => outside(p) && !cargo(p)));
+  const files = new Set([...nativeFiles, ...builtReceipts.flatMap(r => r.binary.inputs.map(f => f.path)),
+    ...rustInputFiles, ...gpuInputs, ...appInputs, ...failedInputs, ...contract.files].filter(p => !outside(p) && !cargo(p)));
+  for(const receipt of builtReceipts)for(const missing of [...receipt.binary.missing,...(receipt.optionalInputs??[])])files.add(missing);
   files.add(resolve(app.dir,'app.json'));
   compilerInputFiles = files;
-  compilerInputTrees = builtReceipts.flatMap(r=>r.binary.directories.map(d=>d.path));
+  compilerInputTrees = [...resourceDirectories, ...builtReceipts.flatMap(r=>r.binary.directories.map(d=>d.path))];
   compilerMissingInputs = builtReceipts.flatMap(r=>r.binary.missing);
   swiftSourceDirectories = new Set([...files].filter(path=>path.endsWith('.swift')).map(path=>resolve(path,'..')));
   const directories=new Set([...compilerInputTrees,...swiftSourceDirectories]);
-  const targets=new Set([...files,...directories]);
-  for(const [path,handle] of watched)if(!targets.has(path)){handle.close();watched.delete(path);}
+  const targets=new Set([...files,...directories,...nativeOnly]);
+  for(const [path,handle] of watched)if(!targets.has(path)||handle.nativeOnly!==nativeOnly.has(path)){handle.close();watched.delete(path);}
   for(const target of targets) {
-    if(outside(target)||/[\\/]\.cargo[\\/]/.test(target)||watched.has(target))continue;
-    const file=files.has(target),dir=file?resolve(target,'..'):target;
+    const only=nativeOnly.has(target);
+    if (watched.has(target) || (!only && (outside(target) || cargo(target)))) continue;
+    const file=files.has(target)||!directories.has(target),dir=file?resolve(target,'..'):target;
     const changedPath=name=>{
       if(file)name=basename(target);
+      compilerInputChanged(name == null ? target : resolve(dir, name));
+      if(only)return;
       if(name==null||skipped.test(name)||/(^|[\\/])\./.test(name)||name.endsWith('dev.js')||assetTrees.some(([tree])=>within(tree, resolve(dir,name)))||resolve(dir,name)===source)return;
       // Parent-directory notifications include unrelated documents and output.
       // Only receipt inputs, declared trees/missing paths, and Swift's implicit
@@ -1166,21 +1199,23 @@ function watchCompilerInputs() {
     try {
       if(file){
         const listener=(now,previous)=>{
-          if(!['dev','ino','size','mtimeNs','ctimeNs'].some(key=>now[key]!==previous[key]))return;
+          if(!['dev','ino','mode','size','mtimeNs','ctimeNs'].some(key=>now[key]!==previous[key]))return;
           // Root metadata changes matter only when an optional source root appears or disappears.
           if(target===app.dir){const roots=optionalRoots();if(roots===optionalRootsSeen)return;optionalRootsSeen=roots;}
           changedPath();
         };
         watchFile(target,{bigint:true,interval:100},listener);
-        watched.set(target,{close:()=>unwatchFile(target,listener)});
-      }else watched.set(target,watchDirectoryInputs(target,changedPath,{
-        readNames:compilerInputTrees.includes(target)?directoryInputNames:readdirSync,
-        ignore:name=>skipped.test(name)||/(^|\/)\./.test(name),
-      }));
+        watched.set(target,{close:()=>unwatchFile(target,listener),nativeOnly:only});
+      }else watched.set(target,{nativeOnly:only,...watchDirectoryInputs(target,changedPath,{
+        readNames:directory=>resourceDirectories.has(directory)?readdirSync(directory):compilerInputTrees.includes(directory)?directoryInputNames(directory):readdirSync(directory),
+        ignore:name=>!resourceDirectories.has(target)&&(skipped.test(name)||/(^|\/)\./.test(name)),
+      })});
     }catch(error){console.error(`cannot watch ${target}: ${error.message}`);}
   }
 }
 watchCompilerInputs();
+compilerInputChanged = path => nativeValidation.invalidate(path);
+compilerWatchesReady = true;
 if (app.manifest.game) {
   const {watchTables} = await import('../../game/app/tables.mjs');
   tuning = await watchTables({app:app.dir, dist, refused:(error,text)=>{ console.error(error); push({error, ...(text ? {surfaceAttempt:{name:'assets/exact-tables.json',text}} : {})}); },
@@ -1225,7 +1260,7 @@ function rebuildNow(files) {
       rustPending = false;
       startCompiler();
       console.log(`rust: rebuilt in ${(ms / 1000).toFixed(1)} s · ${clients.size} page${clients.size === 1 ? '' : 's'} reloading\n  ${classifyRebuild().join('\n  ')}`);
-      push({ rebuilt: builds });
+      push({ rebuilt: builds, nativePrograms });
     } else {
       const errors = out.split('\n').filter((l) => /^(error|warning: unused|\s+-->)/.test(l)).join('\n') || out.trim().split('\n').slice(-12).join('\n');
       early?.phase('host', 'failed');
@@ -1423,6 +1458,12 @@ const serve = async (req, res) => {
     || (index && (req.headers.accept ?? '').includes('application/vnd.exact.envelope+json'));
   if (wantsEnvelope) {
     try {
+      refreshNativePending();
+      // A host may have been built after this loop's last generation. Keep
+      // published envelopes immutable and announce its admission as a new revision.
+      if (current && !canonicalBytes(nativePrograms).equals(canonicalBytes(current.envelope.dev.nativePrograms))) {
+        seq++; captureGeneration(true); push(announcement());
+      }
       if (!current) throw new Error('no current generation');
       res.writeHead(200, { 'content-type': 'application/vnd.exact.envelope+json', vary: 'Accept', 'cache-control': 'no-store' });
       res.end(req.method === 'HEAD' ? undefined : current.files.get('exact.json'));

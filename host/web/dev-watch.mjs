@@ -1,5 +1,44 @@
 import { lstatSync, readdirSync, readlinkSync, statSync, watch } from 'node:fs';
 import { resolve } from 'node:path';
+import { within } from '../../scripts/paths.mjs';
+
+// Resource inventories include empty directories, hidden entries and links;
+// compiler directory filters would omit some of these binary inputs.
+export function nativeResourceInputs(build) {
+  const { nativeResourceApp, metadata } = build.binary;
+  return nativeResourceApp ? (metadata?.nativeResources ?? []).map(entry => ({
+    path: resolve(nativeResourceApp.dir, entry.from, entry.name), directory: !!entry.directory,
+  })) : [];
+}
+
+// Receipt validation reads the full native graph only after an input event or
+// a changed receipt. The compiler's metadata polls cover lost notifications.
+export function cacheBuildInputs(validate) {
+  const records = new Map();
+  return {
+    pending(build) {
+      const key = build.compat.target + '/' + build.compat.id;
+      const identity = JSON.stringify([build.binary, build.settings, build.optionalInputs]);
+      let record = records.get(key);
+      if (record?.identity !== identity) {
+        const resources = nativeResourceInputs(build);
+        record = {identity, files: new Set([...build.binary.inputs, ...(build.binary.links ?? []), ...resources.filter(r => !r.directory)].map(f => f.path)),
+          roots: [...build.binary.missing, ...(build.optionalInputs ?? []), ...build.binary.directories.map(d => d.path), ...resources.filter(r => r.directory).map(r => r.path)]};
+        records.set(key, record);
+      }
+      return record.pending ??= validate(build);
+    },
+    invalidate(path) {
+      for (const record of records.values()) {
+        if (record.files.has(path) || record.roots.some(root => within(root, path) || within(path, root))) delete record.pending;
+      }
+    },
+    retain(builds) {
+      const keys = new Set(builds.map(b => b.compat.target + '/' + b.compat.id));
+      for (const key of records.keys()) if (!keys.has(key)) records.delete(key);
+    },
+  };
+}
 
 // Direct file watchers avoid recursive-directory event coalescing on macOS.
 // The directory watcher discovers new paths; file metadata suppresses its
@@ -86,7 +125,7 @@ export function watchDirectoryInputs(directory, changed, { readNames = readdirSy
     try {
       const stat = lstatSync(path, { bigint: true });
       // Directory mtimes change on child saves and would widen GPU-only rebuilds.
-      return stat.isDirectory() ? `directory:${stat.dev}:${stat.ino}`
+      return stat.isDirectory() ? `directory:${stat.dev}:${stat.ino}:${stat.mode}`
         : ['file', stat.dev, stat.ino, stat.mode, stat.size, stat.mtimeNs, stat.ctimeNs].join(':');
     } catch { return null; }
   };
