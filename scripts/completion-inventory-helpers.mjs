@@ -1,22 +1,6 @@
 // Synchronous runner APIs and their value helpers, plus the platform adapters that use them.
 export function helperClassifications(group) {
   return [
-  group("runner helpers", ["one-shot"], "synchronous invocation, evaluator state or caller-owned value; no independent completion", "UI-owned",
-    "The named runner source evaluates, encodes, compares or constructs caller-owned values. These public helpers have no independently delivered outcome or persisted operation identity.", [
-    ["runner:runner/src/compare.rs", "changed_fields equal equivalent equivalent_all equivalent_opt same shared"],
-    ["runner:runner/src/failure.rs", "Failure::error Failure::exposed_code Failure::of FailureCode::from_name FailureCode::name FailureCode::of_kind FailureCode::seam_error"],
-    ["runner:runner/src/fetch_template.rs", "argument encode expand graphql_error pointer"],
-    ["runner:runner/src/format/mod.rs", "formatting"],
-    ["runner:runner/src/held.rs", "Held::compiled Held::decoded Held::equivalent Held::get Held::is_compiled Held::new Held::read Held::released Held::same"],
-    ["runner:runner/src/lists.rs", "concat flat flat_len index_of position slice sort_by sum"],
-    ["runner:runner/src/machine.rs", "equal equal_items exec Machine::new run step"],
-    ["runner:runner/src/program.rs", "Program::new"],
-    ["runner:runner/src/rows.rs", "repeated"],
-    ["runner:runner/src/stdlib.rs", "assembled calendar_diff call format_number format_time join js_max js_min js_round native_props parse_number push_number"],
-    ["runner:runner/src/strings.rs", "index_of order pieces replace_all slice split"],
-    ["runner:runner/src/vm.rs", "decode eval Frame::row_of instructions intern is_literal Strings::get Strings::is_empty Strings::len Strings::new Strings::of transitive_instructions Trap::bound"],
-    ["runner:runner/src/vm/column.rs", "Column::get Column::is_empty Column::iter Column::len Column::to_vec"],
-  ]),
   group("delivery", ["durable operation"], "installed app/update stream; session application is synchronous", "durable",
     "The named public runner-crate source is the delivery API or its value/admission helper. runner/src/runner/delivery.rs exposes the app delivery state; host delivery synchronization applies persisted stream facts to the current session.", [
     ["runner:runner/src/delivery.rs", "Delivery::field Delivery::with_compat production refuse_analysis"],
