@@ -30,8 +30,10 @@ the actual `displacement` and `grounded` state.
   in the Rapier snapshot and replays exactly after a restore. Friction combines
   geometrically. Restitution combines by `Collider::bounce_combine`: `Max` (the
   default), `Multiply`, `Min` or `Average`; a pair whose colliders differ takes the
-  later of those (Rapier's priority), so `Average` needs both. `ccd`, `force`,
-  `inertia` and a non-default `bounce_combine` are saved and hashed only when set. Contact slop is 0.1 mm; other integration defaults
+  later of those (Rapier's priority), so `Average` needs both. A body writes every
+  field, including default `ccd`, `force` and `inertia` values, so decoding it into
+  an existing body replaces them. A patch keeps fields it omits. A collider writes
+  `bounce_combine` only when non-default. Contact slop is 0.1 mm; other integration defaults
   are Rapier's. The Physics resource sets the solver: `solver_iterations` (substeps,
   4), `contact_frequency` and `static_contact_frequency` (the contact springs
   between moving bodies and against a fixed one, 30 and 60 Hz),
@@ -132,10 +134,11 @@ over 600 ticks of pile/stack/drop/bounce and 120 of minimal is byte-identical to
 previous build (native arm64). They moved again with EXPHYS v3's holes, trajectories
 again unchanged, and once more when the world hash became a stream of per-page
 digests and saves became columnar (EXGAME v4), and again when a hash began reading
-the executor's digest. The current values (in [tests/pins.json](tests/pins.json)) agree on native arm64, on x86-64
-(`--target x86_64-apple-darwin` under Rosetta) and in the web-profile `minimal`
-Wasm under Bun, Off/Save/FreshGame alike, and the living controller still rests at
-tick 547 with Off/Save/FreshGame agreement (2026-10-03).
+the executor's digest, and again when a body began writing its default `ccd`, `force`
+and `inertia`. The current values (in [tests/pins.json](tests/pins.json)) agree on
+native arm64 macOS, native x86-64 Linux and in the web-profile `minimal` Wasm under
+Bun, in Off/Save/FreshGame alike. The living controller still rests at tick 547 with
+Off/Save/FreshGame agreement.
 
 Reproduce from `game/` with `EXACT_UPDATE_TRUST=development`:
 ```
