@@ -227,14 +227,13 @@ test('a meta-data is only a listed name with its value, both strings', () => {
 test("Firebase's messaging service is unexported for its own receiver, and its start-up provider is removed (LLP 1133.004.000 D6)", () => {
   const push = (manifest) => manifestFragment([{ extension: 'push', className: 'exact.push.PushModule', manifest }]);
   const service = { name: 'exact.push.PushService', actions: ['com.google.firebase.MESSAGING_EVENT'] };
-  const xml = push({ services: [service], metadata: [
-    { name: 'firebase_messaging_auto_init_enabled', value: 'false' },
-    { name: 'com.google.firebase.messaging.default_notification_channel_id', value: 'default' },
-    { name: 'com.google.firebase.messaging.default_notification_icon', resource: '@drawable/exact_notification' }] });
+  // The push package's own fragment.
+  const xml = push(JSON.parse(readFileSync(resolve(import.meta.dir, '../packages/push/android/exact.json'), 'utf8')).manifest);
   assert.equal(xml, ['    <application>',
     '        <service android:name="exact.push.PushService" android:exported="false">', '            <intent-filter>',
     '                <action android:name="com.google.firebase.MESSAGING_EVENT" />', '            </intent-filter>', '        </service>',
     '        <meta-data android:name="firebase_messaging_auto_init_enabled" android:value="false" />',
+    '        <meta-data android:name="firebase_messaging_installation_id_enabled" android:value="true" />',
     '        <meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" android:value="default" />',
     '        <meta-data android:name="com.google.firebase.messaging.default_notification_icon" android:resource="@drawable/exact_notification" />',
     '        <provider android:name="com.google.firebase.provider.FirebaseInitProvider" tools:node="remove" />',
@@ -247,6 +246,7 @@ test("Firebase's messaging service is unexported for its own receiver, and its s
   refuses({ services: [{ ...service, foregroundServiceType: 'systemExempted' }] }, 'foreground type');
   refuses({ services: [{ ...service, name: 'com.google.firebase.messaging.FirebaseMessagingService' }] }, 'not a class in exact.push');
   refuses({ metadata: [{ name: 'firebase_messaging_auto_init_enabled', value: 'true' }] }, 'not on the list');
+  refuses({ metadata: [{ name: 'firebase_messaging_installation_id_enabled', value: 'false' }] }, 'not on the list');
   // A package that declares no such service removes no provider.
   assert.doesNotMatch(push({ services: [{ name: 'exact.push.Other' }] }), /provider/);
 });

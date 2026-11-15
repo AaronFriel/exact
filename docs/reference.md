@@ -2939,10 +2939,11 @@ reminder posts the next one when the app runs.
 
 ### Push
 
-`@exact/push` (LLP 1133.004 §9) is a visible push from the app's own server,
-on iOS, iPadOS and macOS, by the Push API's names. Exact sends nothing and relays
-nothing: the app sends its device token to its own server, and the server
-sends to APNs.
+`@exact/push` (LLP 1133.004 §9; LLP 1133.004.000 for Android) is a visible
+push from the app's own server, on iOS, iPadOS, macOS and Android, by the Push
+API's names. Exact sends nothing and relays nothing: the app sends its
+subscription to its own server, and the server sends to APNs, or on Android to
+Firebase Cloud Messaging (FCM).
 
 ```text
 use subscribePush, pushSubscription, PushSubscription from "@exact/push"
@@ -2979,16 +2980,19 @@ register beside them under this grant.
   system's answer: the subscription, or `AbortError` with the system's
   message.
 - `pushSubscription()` reads `{apple: {deviceToken}}`, the token's bytes in
-  lowercase hex, or null. It never asks: its first read in a launch registers
-  once when permission is already granted, as Apple asks of every launch, and
-  a new token is a new value, which the app sends to its server again. Read it
-  in every launch so the server keeps the current token. While permission is
+  lowercase hex, on Android `{android: {installationId}}`, the app's Firebase
+  Installation ID once FCM has registered it, or null. It never asks: its
+  first read in a launch registers once when permission is already granted, as
+  Apple asks of every launch (on Android, once the app has subscribed), and a
+  new token or ID is a new value, which the app sends to its server again. Read
+  it in every launch so the server keeps the current one. While permission is
   `prompt` or `denied` it reads null and registers nothing; a change of
   permission in Settings is read again when the app comes back to the front.
 - `pushPermissionState()` reads `{available, state}`, notifications'
   permission, which the two modules share.
-- On a Mac build signed without the entitlement, and on tvOS, Android, the
-  web, Linux, Windows and the terminal, each call is refused
+- On a Mac build signed without the entitlement, on an Android build without
+  Firebase's configuration (below) or a device without Google Play services,
+  and on tvOS, the web, Linux, Windows and the terminal, each call is refused
   `NotSupportedError`, `pushSubscription()` reads null and the state
   `available: false`.
 
@@ -3033,12 +3037,55 @@ the taps it wants routed with `openNotification(_:session:)`, naming the
 session; a tap for a session that is gone opens nothing. Each may be called on
 any thread.
 
-Under the agent nothing reaches APNs, and `pushSubscription()` reads null
+**On Android** the app links Firebase's messaging client
+(`com.google.firebase:firebase-messaging`) only by importing the package, so
+its first Android build writes the Gradle locks (`bun exact.mjs build android
+--write-locks`). Firebase's configuration is its `google-services.json`, with a
+client whose `package_name` is the app's id: beside `app.json`, or at the path
+`"packages": {"@exact/push": {"android": {"googleServices": "<path>"}}}`
+names (for a file CI writes). The build reads it without the Google Services
+Gradle plugin. A release build without it is refused
+(`push-google-services-missing`); a development build says so and reads
+`available: false`. Firebase starts at the package's first call, not with the
+process. The app is addressed by its installation ID
+(`firebase_messaging_installation_id_enabled`, Firebase's registration since
+firebase-messaging 25.1.0), and FCM registers it at `subscribePush()`, then
+once a launch at the first read that finds an ID, never before the app
+subscribes. `subscribePush()` waits up to a minute for FCM's answer, then is
+refused `AbortError`.
+
+The server sends an FCM v1 notification message to the installation ID
+(`fid`), with `navigate` in `data`:
+
+```json
+{ "message": { "fid": "…",
+  "notification": { "title": "Delayed", "body": "The 9:41 now leaves at 9:52" },
+  "android": { "priority": "high", "notification": { "channel_id": "delays", "tag": "trip-941" } },
+  "data": { "navigate": "/trips/941" } } }
+```
+
+It shows in the background (Firebase shows it) and in front (the package
+shows it), on its `channel_id` when the app declares that channel
+(`host.android.notificationChannels`), else on `default`, with the app's small
+icon. Leave out `icon` and `color`: Firebase honours them for a notification it
+shows. A `tag` replaces a shown notification with that tag, a local one
+included, and `closeNotification(tag)` closes it. Its tap opens `navigate`,
+warm or at launch, as on Apple; the other `data` keys are not read. A data
+message (no `notification`) shows nothing and raises nothing: as a wake it
+waits for Android's headless session.
+
+Under the agent nothing reaches APNs or FCM, and `pushSubscription()` reads null
 while the permission is not granted, as on the phone. A subscribe while
 `prompt` waits on the
 `permission` ticket (`tap @t allow`), then on the subscription's value (`type
 @t '{"apple":{"deviceToken":"ab12"}}'`); `prefer extension
 push.pushSubscription=<json>` sets the value later, as a rotation.
+
+On Android, run under the agent only: the substitute's ticket and rotation,
+and a build carrying Firebase's client with no start-up provider and no
+`google-services.json`, whose calls are refused as above. Not yet run: a
+registration with a Firebase project and a send through FCM to `fid`, in
+front, in the background and after the process ended, and on a phone.
 
 Run on an iOS 27 simulator: the real prompt; a registration the simulator
 answered with a token; a relaunch that only reads `pushSubscription()`

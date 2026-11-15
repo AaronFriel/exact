@@ -134,8 +134,14 @@ open class ExactActivity : Activity() {
         if (Auth.receive(this, intent)) return
         if (Activations.receive(this, intent)) return
         if (Shares.isShare(intent)) Shares.request(this, intent)?.let { Exact.share(it) }
-        else intent.data?.let { Exact.open(it.toString()) }
+        else (intent.data?.toString() ?: pushed(intent))?.let { Exact.open(it) }
     }
+
+    /** The location a push Firebase showed opens: `navigate` from the intent its tap starts, which carries the
+     * message's `data` and Firebase's `google.message_id` (LLP 1133.004.000 D7). Nothing else of it is read; `navigate`
+     * has a link's trust, as any app could start the activity with a link. */
+    private fun pushed(intent: android.content.Intent): String? =
+        intent.takeIf { it.hasExtra("google.message_id") }?.getStringExtra("navigate")?.takeIf { it.isNotEmpty() }
 
     /** Whether an accessibility service is on (LLP 1115.001 D13). The reader answers one through its root
      * ([Root], [Access]) and asks exact2 for the tree only while one is on: with none, exact2 is never asked and
@@ -669,7 +675,8 @@ open class ExactActivity : Activity() {
         // The launching intent's URL is the launch location (LLP 1133.023 D15 item 3): the activity is exported, so
         // any app may start it with one, which reaches only what the navigation root routes, as a link does.
         if (arrived) {
-            intent.data?.takeUnless { Shares.isShare(intent) || Auth.claims(this, it) }?.let { android.system.Os.setenv("EXACT_LAUNCH_URL", it.toString(), true) }
+            (intent.data?.takeUnless { Shares.isShare(intent) || Auth.claims(this, it) }?.toString() ?: pushed(intent))
+                ?.let { android.system.Os.setenv("EXACT_LAUNCH_URL", it, true) }
             // A share that starts the app is its launch location, claimed before the boot (LLP 1133.024 D5).
             Shares.request(this, intent)?.let { android.system.Os.setenv("EXACT_SHARE", it, true) }
         }

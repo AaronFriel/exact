@@ -895,7 +895,7 @@ names no take; `:focus-within` remains out.
   delivery through APNs, the entitlement signed against a profile with Push
   Notifications, and a production build (`packages/push/test/checklist.md`);
   nothing is claimed for a device until that run. Not built: push on macOS (the
-  row is omitted there), on Android (after local notifications), and on the web
+  row is omitted there) and on the web
   (Declarative Web Push or a host worker). Still refused: push-to-start; a
   notification service extension; an event raised by a push, but for a
   declared action the person chose (below).
@@ -928,7 +928,13 @@ names no take; `:focus-within` remains out.
   2026-11-14, after the panel. Built and run on Android 37.2 and Android 11
   emulators. Owed on a phone: delivery after an OEM's background limits have
   stopped the app, Doze over hours, and the channel's sound and heads-up on a
-  locked screen.
+  locked screen. With it, push on Android through FCM in `@exact/push`'s
+  Android implementation: its Firebase Installation ID as the live value, a
+  notification message shown in front too, and its tap opening `data.navigate`.
+  Built and run under the agent and on an emulator with no Firebase project;
+  owed: a registration with a Firebase project and delivery through FCM. A
+  data message as a wake (admitted above, on LLP 1172.016 Q1) waits for
+  Android's headless session; until then it is journaled.
 
 **Components** — roughly 15 built-in tags, not 40; roughly 12 Facet components, not 47.
 
