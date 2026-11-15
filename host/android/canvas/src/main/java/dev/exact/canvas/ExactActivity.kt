@@ -363,12 +363,13 @@ open class ExactActivity : Activity() {
         hosted.covered(requests.surfaces?.open == true)
         view.fields = hosted
         // What the reader answers accessibility services with (D13): the root answers for the page, the bars and
-        // the fields; the page's view and the layers are pictures and say nothing themselves. Hosted elements (a
-        // web view, a video) report themselves, after exact2's nodes.
+        // the fields; the page's view and the layers are pictures and say nothing themselves. A hosted web view
+        // reports itself after exact2's nodes; a media controller stands at its node, as a field does.
         view.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
         view.access = { words -> accessTold(words) }
         root.access.fields = hosted
         root.access.others = { if (elements.childCount > 0) listOf<View>(elements) else emptyList() }
+        root.access.controller = { elements.controller(it) }
         root.addView(elements, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         root.addView(hosted, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         root.addView(view, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))

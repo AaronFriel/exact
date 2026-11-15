@@ -114,6 +114,12 @@ impl<D: DataSource> Presenter<D> {
                 };
                 Some((role, flag::CLICK, [0.0; 3], (name, value)))
             }
+            // @ref LLP 1042.001 D11 — one node: what is in a controller
+            // is the controller's to report.
+            (NodeType::Video, _) => {
+                let name = self.access_label(&node).unwrap_or_default();
+                Some((role::MEDIA, 0, [0.0; 3], (name, String::new())))
+            }
             (_, Some(kind)) if kind != ControlKind::Button => {
                 let (role, flags, range, value) = self.access_control(&node, kind);
                 let name = self.access_label(&node).unwrap_or_default();

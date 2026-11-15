@@ -118,6 +118,9 @@ pub mod role {
     pub const OPTION: i32 = 29;
     /// A drawn `spinbutton`: a number a person steps up and down.
     pub const SPIN_BUTTON: i32 = 30;
+    /// A `video` or `audio`, named by its author: where a reader hosts
+    /// its player's controller, the controller's own view stands here.
+    pub const MEDIA: i32 = 31;
 }
 
 /// A table's or a description list's element as its role (HTML-AAM): a

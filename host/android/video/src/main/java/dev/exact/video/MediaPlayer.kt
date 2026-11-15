@@ -10,6 +10,7 @@ import android.view.ContextThemeWrapper
 import android.view.LayoutInflater
 import android.view.TextureView
 import android.view.View
+import android.view.accessibility.AccessibilityManager
 import android.widget.FrameLayout
 import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
@@ -25,6 +26,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.ui.AspectRatioFrameLayout
+import androidx.media3.ui.PlayerControlView
 import androidx.media3.ui.PlayerView
 import androidx.media3.ui.SubtitleView
 import dev.exact.canvas.AudioClaim
@@ -84,10 +86,14 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
     private var seekLanded = false
     private var claim: AudioClaim? = null
     private val focusType: String? = audioSession(context).takeIf { it == "playback" }
+    private val access = context.getSystemService(AccessibilityManager::class.java)
+    /** While a finger explores the screen (TalkBack), the controller stays shown, so its buttons can be reached (D11). */
+    private val exploring = AccessibilityManager.TouchExplorationStateChangeListener { explore() }
 
     override val view: View get() = frame
     override val lendable: Boolean get() = controls == null
     override val engaged: Boolean get() = !projection.paused && !eligible()
+    override val controller: View? get() = controls
 
     init {
         frame.addView(texture, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
@@ -95,6 +101,7 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
         exo.setVideoTextureView(texture)
         exo.addListener(listener())
         exo.trackSelectionParameters = exo.trackSelectionParameters.buildUpon().setPreferredTextLanguageAndRoleFlagsToCaptioningManagerSettings(context).build()
+        access?.addTouchExplorationStateChangeListener(exploring)
     }
 
     override fun bind(sink: MediaSink) {
@@ -264,6 +271,7 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
     }
 
     override fun release() {
+        access?.removeTouchExplorationStateChangeListener(exploring)
         sink = null
         tick(false)
         releaseFocus()
@@ -283,6 +291,7 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
             frame.addView(made, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT))
             made.player = exo
             controls = made
+            explore()
         } else {
             val view = controls ?: return
             view.player = null
@@ -293,6 +302,15 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
             exo.setVideoTextureView(texture)
         }
         layoutPicture()
+    }
+
+    /** Media3 hides the controller after a while and on a tap; while touch exploration is on it stays (D11). */
+    private fun explore() {
+        val view = controls ?: return
+        val on = access?.isTouchExplorationEnabled == true
+        view.controllerShowTimeoutMs = if (on) 0 else PlayerControlView.DEFAULT_SHOW_TIMEOUT_MS
+        view.controllerHideOnTouch = !on
+        if (on) view.showController()
     }
 
     /** One rect, the picture `object-fit` makes (D5): the texture's transform, the captions' place, D6's cap. */
