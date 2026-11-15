@@ -110,7 +110,7 @@ export function rustFunctions(file, source) {
     let start = i;
     while (start && ![';', '{', '}'].includes(t[start - 1].value)) start--;
     const prefix = words(start, i), owner = impls.filter(s => s.start < i && i < s.end).at(-1)?.owner;
-    if (t[i + 1].value === '$' && (/\b(?:no_mangle|export_name)\b/.test(prefix) || (owner === 'Runner' && /\bpub\b/.test(prefix)))) {
+    if (t[i + 1].value === '$' && /\b(?:no_mangle|export_name|pub)\b/.test(prefix)) {
       throw new Error(`${file}:${t[i].line}: computed API name needs an explicit census parser`);
     }
     if (!/^[A-Za-z_]\w*$/.test(t[i + 1].value)) continue;
@@ -158,6 +158,18 @@ export function discover(root = ROOT) {
       else hosts.push({ file, source, ...parsed });
     }
   }
+  // buildLeaf's lib templates are Rust source too. Retain the surrounding
+  // newlines so diagnostics point at the template, not its generated file.
+  for (const dir of hostDirs) {
+    for (const path of files(join(root, 'host', dir), '.mjs').filter(p => !p.endsWith('.test.mjs'))) {
+      const file = relative(root, path), source = readFileSync(path, 'utf8');
+      for (const match of source.matchAll(/\blib\s*:\s*`((?:\\[\s\S]|[^\\`])*)`/g)) {
+        const start = match.index + match[0].indexOf('`') + 1;
+        const code = source.slice(0, start).replace(/[^\n]/g, ' ') + match[1].replace(/\\`/g, '`');
+        hosts.push({ file, source: code, ...rustFunctions(file, code) });
+      }
+    }
+  }
   function add(host, kind, f, suffix = '', extra = {}) {
     const name = f.exportName ?? f.name;
     const base = `${host}:${f.file}:${f.owner ? `${f.owner}::` : ''}${name}${suffix}`;
@@ -170,9 +182,9 @@ export function discover(root = ROOT) {
   }
   const methods = new Set();
   for (const { functions, t, file, ignored = [] } of runner) {
-    for (const f of functions.filter(f => f.public && f.owner === 'Runner')) {
-      methods.add(f.name);
-      add('runner', 'public runner method', f, '', {
+    for (const f of functions.filter(f => f.public)) {
+      if (f.owner === 'Runner') methods.add(f.name);
+      add('runner', f.owner ? 'public runner method' : 'public runner function', f, '', {
         returnsReceipt: /\bCommitReceipt\b/.test(f.returnType),
         returnsCommitAggregate: /\b(?:Advanced|Dispatched|Timed)\b/.test(f.returnType),
       });
@@ -181,9 +193,17 @@ export function discover(root = ROOT) {
     // identity assignments also include seeds/restores; classify these separately.
     for (let i = 0; i < t.length - 1; i++) {
       const atomic = t[i + 1]?.value === '.' && ['fetch_add', 'try_update', 'fetch_update'].includes(t[i + 2]?.value);
-      const counterWrite = t[i - 1]?.value === '.' && (
+      const member = t[i - 1]?.value === '.' && /^(?:[A-Za-z_]\w*|\d+)$/.test(t[i].value);
+      let arithmeticAssignment = false;
+      if (member && t[i + 1].value === '=') {
+        let end = i + 2;
+        while (end < t.length && t[end].value !== ';') end++;
+        arithmeticAssignment = t.slice(i + 2, end).some(v =>
+          ['+', '-', '*', '/', '%'].includes(v.value) || /^(?:checked|saturating|wrapping)_(?:add|sub)$/.test(v.value));
+      }
+      const counterWrite = member && (
         ['+=', '-='].includes(t[i + 1].value) || (t[i + 1].value === '=' &&
-          /^(?:next(?:_\w+)?|\w*(?:serial|sequence|generation)|seq|request)$/.test(t[i].value)));
+          (arithmeticAssignment || /^(?:next(?:_\w+)?|\w*(?:serial|sequence|generation)|seq|request)$/.test(t[i].value))));
       if (!atomic && !counterWrite) continue;
       if (ignored.some(([a, b]) => a <= i && i <= b)) continue;
       const f = functions.filter(f => f.start < i && i < f.end).at(-1);
@@ -216,10 +236,11 @@ export function discover(root = ROOT) {
       if (f.cExport) add(host, f.jni ? 'JNI export' : 'C ABI export', f);
       else if (['render', 'painted'].includes(host)) {
         const calls = [...f.code.matchAll(/\. (\w+) \(/g)].map(m => m[1]).filter(n => methods.has(n));
+        const hostCalls = [...f.code.matchAll(/\bself \. host \. (\w+) \(/g)].map(m => m[1]).filter(n => methods.has(n));
         // These hosts have Rust interfaces, not a C ABI. Include private adapters
         // too: render's abort settlement is not a public Host method.
         if (f.public ||
-            (calls.length && /\b(?:runner|Runner)\b/.test(`${f.signature} ${f.code}`))) {
+            hostCalls.length || (calls.length && /\b(?:runner|Runner|runner_mut)\b/.test(`${f.signature} ${f.code}`))) {
           add(host, 'Rust host equivalent', f, '', { runnerCalls: [...new Set(calls)].sort() });
         }
       }
@@ -252,7 +273,10 @@ export function discover(root = ROOT) {
 export function inventory(root = ROOT, table = classifications) {
   const entries = discover(root), found = new Set(entries.map(e => e.id)), named = new Map(), errors = [];
   for (const row of table) {
-    if (!row.family || !row.lifetime || !['UI-owned', 'durable'].includes(row.class) || !row.evidence || row.inference !== true) {
+    const protocol = row.protocol;
+    if (!row.family || !row.lifetime || !['UI-owned', 'durable'].includes(row.class) || !row.evidence || row.inference !== true ||
+        !Array.isArray(protocol) || !protocol.length || new Set(protocol).size !== protocol.length ||
+        !protocol.every(p => ['one-shot', 'subscription', 'durable operation'].includes(p))) {
       errors.push(`incomplete classification: ${row.ids?.[0]}`);
     }
     for (const id of row.ids) {
@@ -279,12 +303,13 @@ export function markdown(entries) {
     'The census counts source definitions, including cfg alternatives and macro-defined exports, before app selection.',
     'Classifications are inferences about ownership, not an implemented refusal policy. The census includes queries, configuration and helper exports as well as deliveries.',
     'Generic reply paths name conditional durable ownership beside the UI continuation default. Durable here does not promise process recovery.',
+    'Protocol lists name the conformance cases a door needs; a shared door lists each kind it serves. Synchronous helpers are one-shot uses. Durable-operation classifications do not establish crash recovery.',
     '', ...summary, '',
-    '| Host / kind | Entry | Family | Lifetime | Class (inference) | Evidence |',
-    '|---|---|---|---|---|---|',
+    '| Host / kind | Entry | Family | Protocol | Lifetime | Class (inference) | Evidence |',
+    '|---|---|---|---|---|---|---|',
     ...entries.map(e => {
       const observed = [e.statement, e.via && `via ${e.via}`, e.runnerCalls?.length && `runner calls: ${e.runnerCalls.join(', ')}`].filter(Boolean).join('; ');
-      return `| ${e.host} / ${e.kind} | ${e.symbol} (${e.file}:${e.line}) | ${e.family} | ${e.lifetime} | ${e.class} (inference)${e.durableWhen ? '; ' + cell(e.durableWhen) + ' (inference)' : ''} | ${cell(e.evidence)}${observed ? '; source: ' + cell(observed) : ''} |`;
+      return `| ${e.host} / ${e.kind} | ${e.symbol} (${e.file}:${e.line}) | ${e.family} | ${e.protocol?.join(', ')} | ${e.lifetime} | ${e.class} (inference)${e.durableWhen ? '; ' + cell(e.durableWhen) + ' (inference)' : ''} | ${cell(e.evidence)}${observed ? '; source: ' + cell(observed) : ''} |`;
     }),
   ].join('\n');
 }
@@ -292,7 +317,7 @@ export function markdown(entries) {
 if (import.meta.main) {
   const args = process.argv.slice(2);
   if (args.some(a => !['--json', '--check', '--help'].includes(a))) throw new Error('usage: bun scripts/completion-inventory.mjs [--json|--check]');
-  if (args.includes('--help')) console.log('bun scripts/completion-inventory.mjs [--json|--check]\nLists runner methods, host C exports, render/painted adapters and runner identity writes. Fails on missing or stale classifications.');
+  if (args.includes('--help')) console.log('bun scripts/completion-inventory.mjs [--json|--check]\nLists public runner-crate APIs, host C exports (including Rust lib templates), render/painted adapters and runner identity writes. Fails on missing or stale classifications.');
   else {
     const result = inventory();
     if (args.includes('--json')) console.log(JSON.stringify(result, null, 2));

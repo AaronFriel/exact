@@ -41,6 +41,7 @@ test('new runner APIs, host exports, adapters and mint sites cannot pass unclass
     const file = join(root, 'runner/src/runner.rs');
     writeFileSync(file, 'impl<D> Runner<D> { pub fn known(&mut self) -> CommitReceipt { self.commit() } }');
     const table = [{ family: 'fixture', lifetime: 'fixture session', class: 'UI-owned', inference: true,
+      protocol: ['one-shot'],
       evidence: 'fixture owns its pending completion', ids: ['runner:runner/src/runner.rs:Runner::known'] }];
     assert.deepEqual(inventory(root, table).errors, []);
     writeFileSync(file, readFileSync(file, 'utf8') + `
@@ -52,8 +53,15 @@ test('new runner APIs, host exports, adapters and mint sites cannot pass unclass
         }
         fn other_allocator(&mut self) { self.extensions.next += 1; SERIAL.fetch_add(1, Relaxed); }
         fn unnamed_allocator(&mut self) { self.extensions.arbitrary += 1; }
+        fn assigned_allocator(&mut self) { self.extensions.requests = self.extensions.requests + 1; }
         pub fn r#raw_completion(&mut self) -> CommitReceipt { todo!() }
       }
+      impl Reply {
+        pub fn send(&mut self, outcome: Outcome) {}
+        pub fn message(&mut self, message: Message) {}
+      }
+      impl Native { pub fn changed(&self, topic: &str) {} }
+      impl AnotherOwner { pub fn complete(&mut self, result: Outcome) {} }
     `);
     writeFileSync(join(root, 'host/apple/src/extra.rs'), `macro_rules! exports { () => {
       #[unsafe(no_mangle)] pub unsafe extern "C" fn new_apple() {}
@@ -73,11 +81,16 @@ test('new runner APIs, host exports, adapters and mint sites cannot pass unclass
     }
     writeFileSync(join(root, 'host/web/src/extra.rs'), '#[no_mangle] pub extern "C" fn new_web() {}');
     writeFileSync(join(root, 'host/web-js/motion/src/extra.rs'), '#[no_mangle] pub extern "C" fn new_motion() {}');
+    writeFileSync(join(root, 'host/web-js/module.mjs'), 'const leaf = { lib: `#[no_mangle] pub extern "C" fn embedded_export() {}` };');
     writeFileSync(join(root, 'host/web-capabilities/src/extra.rs'), '#[no_mangle] pub extern "C" fn new_capability() {}');
     writeFileSync(join(root, 'host/render/src/extra.rs'), 'fn adapter(runner: &mut Runner<D>) { runner.new_completion(outcome); }');
     writeFileSync(join(root, 'host/painted/src/extra.rs'), `
       impl<D> CanvasHost<D> { pub fn new_reader_answer(&mut self) {} }
       impl<D> Presenter<D> { pub fn new_presenter_answer(&mut self) {} }
+      impl<D> Presenter<D> {
+        fn runner_adapter(&mut self) { self.host.runner_mut().new_completion(outcome); }
+        fn host_adapter(&mut self) { self.host.new_completion(outcome); }
+      }
       pub fn new_agent_answer(p: &mut Presenter<D>) { p.pump(0.0); p.answer(); }
       impl Agent { pub fn r#answer(&mut self) {} }
       #[cfg(unix)] pub fn platform_answer() {}
@@ -92,20 +105,29 @@ test('new runner APIs, host exports, adapters and mint sites cannot pass unclass
       'runner:runner/src/runner.rs:Runner::other_allocator#next:1',
       'runner:runner/src/runner.rs:Runner::other_allocator#SERIAL.fetch_add:1',
       'runner:runner/src/runner.rs:Runner::unnamed_allocator#arbitrary:1',
+      'runner:runner/src/runner.rs:Runner::assigned_allocator#requests:1',
       'runner:runner/src/runner.rs:Runner::raw_completion',
+      'runner:runner/src/runner.rs:Reply::send',
+      'runner:runner/src/runner.rs:Reply::message',
+      'runner:runner/src/runner.rs:Native::changed',
+      'runner:runner/src/runner.rs:AnotherOwner::complete',
       'apple:host/apple/src/extra.rs:new_apple',
       'apple:host/apple/src/extra.rs:aliased_export',
       'apple:host/apple/src/extra.rs:implicit_c',
       'apple:runner/src/external.rs:new_external',
+      'runner:runner/src/external.rs:new_external',
       'apple:host/apple/Sources/Extra.swift:new_swift_export',
       'apple:host/apple/webarm/Extra.swift:webarm_answer',
       'apple:host/apple/modules/Extra.swift:modules_answer',
       'web:host/web/src/extra.rs:new_web',
       'web-js:host/web-js/motion/src/extra.rs:new_motion',
+      'web-js:host/web-js/module.mjs:embedded_export',
       'web-capabilities:host/web-capabilities/src/extra.rs:new_capability',
       'render:host/render/src/extra.rs:adapter',
       'painted:host/painted/src/extra.rs:CanvasHost::new_reader_answer',
       'painted:host/painted/src/extra.rs:Presenter::new_presenter_answer',
+      'painted:host/painted/src/extra.rs:Presenter::runner_adapter',
+      'painted:host/painted/src/extra.rs:Presenter::host_adapter',
       'painted:host/painted/src/extra.rs:Java_new_answer',
       'painted:host/painted/src/extra.rs:new_agent_answer',
       'painted:host/painted/src/extra.rs:Agent::answer',
@@ -119,8 +141,82 @@ test('new runner APIs, host exports, adapters and mint sites cannot pass unclass
     assert.ok(inventory(root, [...table, ...table]).errors.some(e => e.startsWith('classified twice:')));
     assert.ok(inventory(root, [{ ...table[0], ids: ['gone'] }]).errors.some(e => e === 'stale classification: gone'));
     assert.ok(inventory(root, [{ ...table[0], inference: false }]).errors.some(e => e.startsWith('incomplete classification:')));
+    for (const protocol of [undefined, [], ['unknown'], ['one-shot', 'one-shot'], 'one-shot']) {
+      assert.ok(inventory(root, [{ ...table[0], protocol }]).errors.some(e => e.startsWith('incomplete classification:')),
+        `invalid protocol accepted: ${JSON.stringify(protocol)}`);
+    }
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
+
+test('protocols distinguish replies, subscriptions and durable operations in both outputs', () => {
+  const result = inventory();
+  for (const [symbol, protocol] of [
+    ['Runner::fulfill', ['one-shot', 'subscription', 'durable operation']],
+    ['Runner::changed', ['subscription']],
+    ['Runner::send_background#next_ticket:1', ['durable operation']],
+  ]) {
+    const entry = result.entries.find(e => e.symbol === symbol);
+    assert.deepEqual(entry.protocol, protocol, symbol);
+    assert.deepEqual(JSON.parse(JSON.stringify(entry)).protocol, protocol);
+    const text = markdown([entry]);
+    assert.ok(text.includes('| Family | runner | Total |'));
+    assert.ok(text.includes(`| ${entry.family} | 1 | 1 |`));
+    assert.ok(text.includes('| Protocol |'));
+    assert.ok(text.includes(`| ${protocol.join(', ')} |`));
+  }
+}, 60_000);
+
+test('public reply and announcement APIs outside Runner are classified', () => {
+  const entries = inventory().entries;
+  for (const [symbol, family, protocol] of [
+    ['Reply::send', 'replies', ['one-shot', 'subscription', 'durable operation']],
+    ['Reply::message', 'replies', ['one-shot', 'subscription', 'durable operation']],
+    ['Native::changed', 'module announcements', ['subscription']],
+  ]) {
+    const entry = entries.find(e => e.host === 'runner' && e.symbol === symbol);
+    assert.ok(entry, symbol);
+    assert.equal(entry.family, family);
+    assert.deepEqual(entry.protocol, protocol);
+  }
+}, 60_000);
+
+test('painted picker and share adapters cannot bypass the inventory', () => {
+  const entries = inventory().entries;
+  for (const [symbol, family] of [
+    ['Presenter::finish_files', 'picker results'],
+    ['Presenter::receive', 'shared tokens'],
+    ['Presenter::land', 'shared tokens'],
+  ]) {
+    const entry = entries.find(e => e.host === 'painted' && e.symbol === symbol);
+    assert.ok(entry, symbol);
+    assert.equal(entry.family, family);
+  }
+}, 60_000);
+
+test('painted pumps deliver replies and host-timed runner dispatch delivers input', () => {
+  const entries = inventory().entries;
+  for (const [host, symbol, family] of [
+    ['painted', 'Presenter::pump', 'replies'],
+    ['painted', 'Presenter::pump_with_clock', 'replies'],
+    ['painted', 'Host::fulfill_ready', 'replies'],
+    ['painted', 'Presenter::release_held_work', 'request lifecycle'],
+    ['runner', 'Runner::dispatch_at', 'UI input'],
+    ['runner', 'Runner::dispatch_at_with_receipt', 'UI input'],
+  ]) {
+    assert.equal(entries.find(e => e.host === host && e.symbol === symbol)?.family, family, symbol);
+  }
+}, 60_000);
+
+test('the generated Markdown wasm exports are enumerated at their template source lines', () => {
+  const entries = inventory().entries;
+  for (const symbol of ['alloc', 'pieces', 'output']) {
+    const entry = entries.find(e => e.file === 'host/web-js/module.mjs' && e.symbol === symbol);
+    assert.ok(entry, symbol);
+    assert.equal(entry.family, 'presentation helpers');
+    assert.equal(entry.kind, 'C ABI export');
+    assert.match(readFileSync(entry.file, 'utf8').split('\n')[entry.line - 1], new RegExp(`fn ${symbol}\\(`));
+  }
+}, 60_000);
 
 test('native send and payment attempt allocators are enumerated', () => {
   const entries = discover();
