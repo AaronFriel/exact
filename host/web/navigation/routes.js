@@ -567,6 +567,61 @@ export function pageTitle(said = saidTitle) {
     document.title = title;
   }
 }
+// The scroller whose top a route's bar sits at (presenter/bars.rs `content_scroller`): the one `navigationScroll` names,
+// else the shallowest under the route that scrolls up and down, eight levels at most.
+function contentScroller(route) {
+  const scrolls = (el) => /^(auto|scroll)$/.test(getComputedStyle(el).overflowY), named = route.getAttribute("data-navigationscroll");
+  if (named) {
+    return [...route.querySelectorAll(`[id="${CSS.escape(named)}"]`)].find(scrolls) ?? null;
+  }
+  let level = [route];
+  for (let depth = 0; depth < 8 && level.length && level.length <= 256; depth++) {
+    const hit = level.find(scrolls);
+    if (hit) {
+      return hit;
+    }
+    level = level.flatMap((el) => getComputedStyle(el).display === "none" ? [] : [...el.children]);
+  }
+  return null;
+}
+const clearInset = new WeakSet(), clearBars = new WeakMap(), barResized = globalThis.ResizeObserver && new ResizeObserver((entries) => {
+  for (const { target } of entries) {
+    const route = clearBars.get(target);
+    route?.isConnected && clearBar(route);
+  }
+});
+/** A route that says `navigationBar="transparent"` lays its bar over its top, clear (neutral.css), as iOS gives the bar
+ * a clear scroll-edge appearance and insets no content (NavigationBarIOS.swift `transparentBar`): the route's top inset,
+ * `var(--exact-safe-area-inset-top)`, then includes the bar's height, and the bar is `scrolled` while content is under
+ * it. A header iOS makes no bar of keeps its place. */
+function clearBar(route) {
+  const header = headerOf(route), clear = !!header && route.getAttribute("data-navigationbar") === "transparent" && viewChildren(route)[0] === header && !asWritten(header);
+  if (clearInset.has(route)) {
+    clearInset.delete(route);
+    route.style.removeProperty("--exact-safe-area-inset-top");
+    route.style.removeProperty("--exact-bar-height");
+  }
+  for (const el of viewChildren(route)) {
+    if (el.hasAttribute("data-exact-clear") && !(clear && el === header)) {
+      el.removeAttribute("data-exact-clear");
+      barResized?.unobserve(el);
+      clearBars.delete(el);
+    }
+  }
+  if (!clear) {
+    return;
+  }
+  if (!clearBars.has(header)) {
+    clearBars.set(header, route);
+    barResized?.observe(header);
+  }
+  const below = getComputedStyle(route).getPropertyValue("--exact-safe-area-inset-top") || "0px", height = header.offsetHeight;
+  clearInset.add(route);
+  route.style.setProperty("--exact-bar-height", `${height}px`);
+  route.style.setProperty("--exact-safe-area-inset-top", `calc(${below} + ${height}px)`);
+  barScrolled(route, header);
+}
+const barScrolled = (route, header) => header.setAttribute("data-exact-clear", (contentScroller(route) ?? document.scrollingElement)?.scrollTop > 0 ? "scrolled" : "");
 function appBarBack(nav, routes, index, split, shown) {
   const route = routes[index], header = headerOf(route);
   if (!header) {
@@ -856,6 +911,11 @@ export const navigation = {
     }
     // Capture before either target's link listener commits. Early replay before connect has no action-row association.
     document.addEventListener("click", captureRow, true);
+    document.addEventListener("scroll", () => {
+      for (const header of root.querySelectorAll("[data-exact-clear]")) {
+        clearBars.has(header) && barScrolled(clearBars.get(header), header);
+      }
+    }, { capture: true, passive: true });
     document.addEventListener("click", captureLink, true);
     document.addEventListener("dragstart", (event) => {
       if (root.contains(event.target) && event.target.matches?.("img[data-symbol-source], :is(button, a[href], [data-exact-on~=\"press\"]) img")) {
@@ -1141,6 +1201,7 @@ export const navigation = {
           route.style.setProperty("--exact-split", column ? `${split}px` : "");
           framing?.(routes, index, shownIn, inUse);
           appBarBack(nav, routes, index, split > 0, active || covered);
+          clearBar(route);
           if (stack === at && index === selected) {
             freshPath(route);
           }
