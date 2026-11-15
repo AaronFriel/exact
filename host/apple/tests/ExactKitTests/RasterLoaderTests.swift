@@ -886,6 +886,61 @@ final class RasterLoaderTests: XCTestCase {
         // The worker decodes it again after the decline's delay, and a later turn paints it, as before.
         settle { second.raster != nil }
     }
+    /// A picture whose header the core has read and whose first decode it
+    /// holds, cancelled: a new, larger view of it asks for a decode the core
+    /// lacks, as a boot's batch does.
+    private func primed(_ name: String, identity: Int) throws -> (URL, AssetResolver, Presenter, NodeView, NodeView, RasterLoader, NSWindow) {
+        let (root, resolver, presenter, first, loader, window) = try fixture()
+        try png(root, name, width: 1600, height: 800, identity: identity)
+        first.loadGeneration = 1
+        XCTAssertTrue(loader.load(first, source: name, resolver: resolver))
+        settle { first.raster != nil }
+        loader.cancel(first.id); first.raster = nil
+        let node = NodeView(id: 2, kind: "image", presenter: presenter)
+        presenter.views[2] = node; presenter.viewport.addSubview(node)
+        node.frame = NSRect(x: 0, y: 0, width: 300, height: 150); node.loadGeneration = 1
+        return (root, resolver, presenter, first, node, loader, window)
+    }
+    /// A boot asked for a picture and a worker decoded it while the boot still
+    /// applied. The boot's end takes it, so it paints in the boot's first
+    /// frame, not on the wake a turn later.
+    func testABootPassPaintsAPictureDecodedWhileTheBootApplied() throws {
+        let (root, resolver, presenter, first, node, loader, window) = try primed("boot.png", identity: 51)
+        defer { loader.shutdown(); node.raster = nil; window.close(); try? FileManager.default.removeItem(at: root); withExtendedLifetime((presenter, first)) {} }
+        XCTAssertTrue(loader.load(node, source: "boot.png", resolver: resolver))
+        // A direct pass asks and leaves what it finds ready to a later pass.
+        loader.reconcile()
+        XCTAssertNil(node.raster)
+        // The worker decodes while main is still busy: no turn of the run loop, so no wake runs.
+        let deadline = Date().addingTimeInterval(60)
+        while !loader.testReady(node.id), Date() < deadline { Thread.sleep(forTimeInterval: 0.005) }
+        XCTAssertTrue(loader.testReady(node.id), "the worker decoded it")
+        var sizes: [(UInt32, CGSize?)] = []
+        presenter.onIntrinsic = { sizes += $0 }
+        let announced = loader.testAnnounced.count
+        loader.bootPass()
+        XCTAssertNotNil(node.raster, "on its layer in the boot's transaction")
+        // LLP 1011, "Events": its size and `load` go out on the next main turn.
+        XCTAssertTrue(sizes.isEmpty)
+        XCTAssertEqual(loader.testAnnounced.count, announced)
+        settle { sizes.contains { $0.0 == node.id } && loader.testAnnounced.contains { $0.view == node.id } }
+    }
+    /// A picture whose header is read and which nothing has asked for yet: a
+    /// boot pass leaves it to the wake, which asks.
+    func testABootPassTakesNothingNotReadyAndAsksForNothing() throws {
+        let (root, resolver, presenter, first, node, loader, window) = try primed("later.png", identity: 52)
+        defer { loader.shutdown(); node.raster = nil; window.close(); try? FileManager.default.removeItem(at: root); withExtendedLifetime((presenter, first)) {} }
+        XCTAssertTrue(loader.load(node, source: "later.png", resolver: resolver))
+        var asked = 0
+        loader.testRequest = { _ in asked += 1; return (0, nil) }
+        loader.bootPass()
+        XCTAssertEqual(asked, 0, "a boot pass makes no request")
+        // The same pass as a direct one asks: the header is in, so the count proves something.
+        loader.reconcile()
+        XCTAssertEqual(asked, 1, "a direct pass asks for it")
+        XCTAssertNil(node.raster)
+        loader.testRequest = nil
+    }
     /// Cold pixels are evicted before a decode waits, so pixels no view
     /// holds never lower the resolution a visible image decodes at.
     func testColdPixelsDoNotLowerAResolution() throws {

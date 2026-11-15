@@ -929,6 +929,8 @@ public final class ExactSession {
         if batch.error == nil { tellTime(); refuseUnheardLaunch(); ExactLaunch.shared.treeApplied(self, path: "baked") }
         // A fresh runner must receive the view's current viewport and insets.
         if batch.error == nil { view?.rebooted() }
+        // Pictures decoded while the boot applied paint in its first frame.
+        if batch.error == nil { rasters.bootPass() }
         applyMs = (CACurrentMediaTime() - tApply) * 1000
         bootMs = ExactEnv.wall()
         ExactEnv.stamp("first frame applied")
