@@ -596,6 +596,7 @@ pub struct Runner<D: DataSource> {
     /// its action issues (LLP 1069.003 D3).
     input_source: Option<ViewId>,
     journal_start: usize,
+    journal_echoed: std::cell::Cell<usize>,
     flow_warned: exact_kernel::SortedSet<exact_kernel::NodeKey>,
     fragment_warned: exact_kernel::SortedSet<exact_kernel::NodeKey>,
     /// The lists already found conforming to their types, so a live answer
@@ -974,6 +975,7 @@ impl<D: DataSource> Runner<D> {
             device_links: DeviceLinks::CORE,
             input_source: None,
             journal_start: 0,
+            journal_echoed: Default::default(),
             flow_warned: Default::default(),
             fragment_warned: Default::default(),
             conformed: Default::default(),
@@ -1151,17 +1153,6 @@ impl<D: DataSource> Runner<D> {
                 }
             }
         }
-    }
-
-    /// The retained journal lines, oldest first.
-    pub fn journal(&self) -> impl Iterator<Item = &str> {
-        self.journal.iter().map(String::as_str)
-    }
-
-    /// The index (since boot) of the first retained journal line: how many
-    /// were dropped by the ring.
-    pub fn journal_start(&self) -> usize {
-        self.journal_start
     }
 
     /// Journal an outcome. `was_poisoned` is the runner's state before the
