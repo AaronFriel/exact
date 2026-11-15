@@ -42,6 +42,20 @@ another program replaces it (a new file renamed over the path) mid-session.
   is forgotten at the next launch) and the watch. The fixture builds for
   macOS, but the drive was not run: the screen was locked.
 
+## Status (2026-11-14, macOS selected-file watch)
+
+Main's shipped FSEvents watch retains its recorded claim that watching the
+parent folder survives an atomic replace at a selected path. No measurement on
+this base contradicts it. Branch `fs/doc-watch` attempted a retained descriptor
+watch on `e7fe8fa07`, but it does not ship. Its E1 experiment observed directory
+`NOTE_WRITE` for rename-over and no vnode event on the replaced leaf; E2 observed
+three to five FSEvents deliveries in five trials per path-spelling cell on macOS
+27.0.1. Its last review also found a FIFO that could block shutdown, two
+descriptor-bound coordination races, a leaf that never re-armed after `EACCES`,
+a stale stamp across an unobserved removal and re-addition, and a write that
+could be announced twice. LLP 1069.010.000 retains that attempt's record; none
+of its descriptor-watch code ships.
+
 ## The consumer
 
 Exact Draw edits Excalidraw drawings on disk: a Contract shell (file explorer,
