@@ -60,7 +60,7 @@ option | value
 time | datetime format
 progress | value max start end
 list | listStyle appearance virtualized refreshing scroll-start | reachstart reachend refresh
-scroll | scrollTop navigationScroll keyboardDismissMode | scroll scrollend
+scroll | scrollTop scrollZoom navigationScroll keyboardDismissMode | scroll scrollend
 dialog | closedby | cancel close
 
 ## rules

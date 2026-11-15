@@ -263,6 +263,19 @@ pub(crate) fn f32_row(
         (StyleId::FontStretch, _) => {
             wrong("a nonnegative percentage or a keyword such as `condensed`")
         }
+        // @ref LLP 1057.001.000 D1 — a zoom, as CSS `zoom` takes one: a
+        // number or a percentage of 1, above 0.
+        (StyleId::MinZoom | StyleId::MaxZoom, StyleValue::Number(n))
+            if (*n as f32).is_finite() && *n > 0.0 =>
+        {
+            Ok(*n as f32)
+        }
+        (StyleId::MinZoom | StyleId::MaxZoom, StyleValue::Percent(p))
+            if ((*p / 100.0) as f32).is_finite() && *p > 0.0 =>
+        {
+            Ok((*p / 100.0) as f32)
+        }
+        (StyleId::MinZoom | StyleId::MaxZoom, _) => wrong("a number or a percentage above 0"),
         _ => return None,
     })
 }

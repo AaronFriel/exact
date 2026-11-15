@@ -2210,6 +2210,23 @@ lands and around the projection at the release), from their measured or
 estimated sizes, and an unmounted `always` row between the release and the rest
 holds it; descendants and layout-dependent displacement need mounted rows.
 
+To let a person pinch to zoom a photo, a diagram or a board, put it alone in a
+`scroll` and write `-exact-max-zoom` (and `-exact-min-zoom` below 1 to zoom a
+large child out; each defaults to 1) on the scroll: `scroll
+-exact-max-zoom=4` holding one `image width="100%" height="100%"
+object-fit="contain"` is a photo viewer (LLP 1057.001.000). The child keeps its
+layout and is drawn scaled; the scroll's extent grows with it and centres it
+while it is smaller than the port, so do not align it (`align-items`,
+`justify-content`, an `auto` margin and the like are `lower-zoom-align`). The
+pinch, the bounce at the limits and the double tap are the platform's;
+`touch-action="manipulation"` turns the double tap off, and on a double-tap path
+a `press` on content that is not a control waits for the second tap. `scrollZoom`
+is the zoom as `scrollTop` is the offset: write it for Fit and 2× buttons (with
+`scroll-behavior="smooth"` it animates), and read it as `e.scrollZoom` on the
+`scroll` event's `ScrollEvent`; mirroring every `scroll` into the state you
+bind is safe. Not built yet on every host: `contract vocab -exact-max-zoom`
+says where.
+
 `reorderdrop` belongs only on a vertical `list virtualized=true`
 (each row's handle names it with `reorderFor`); the compiler refuses it on any
 other element, where no host could drag. Lists that share a `reorderGroup`

@@ -819,6 +819,10 @@ fn spell_property(out: &mut String, id: StyleId) {
         StyleId::HitSlopRight => return out.push_str("--exact-hit-slop-right"),
         StyleId::HitSlopBottom => return out.push_str("--exact-hit-slop-bottom"),
         StyleId::HitSlopLeft => return out.push_str("--exact-hit-slop-left"),
+        // @ref LLP 1057.001.000 D1 — a zoomable scroller's range, which the
+        // runtime's zoom module reads from the element's own style.
+        StyleId::MinZoom => return out.push_str("--exact-min-zoom"),
+        StyleId::MaxZoom => return out.push_str("--exact-max-zoom"),
         // @ref LLP 1123 D9 — the safe area where a box is, as an author
         // sets it: index.html registers each as an inherited length.
         StyleId::LocalInsetTop => return out.push_str("--exact-safe-area-inset-top"),
@@ -957,6 +961,8 @@ fn declared(out: &mut String, id: StyleId, value: &RowValue<'_>) {
             | StyleId::Scale
             // CSS `zoom`, an iframe's alone (LLP 1020.002 D6).
             | StyleId::Zoom
+            | StyleId::MinZoom
+            | StyleId::MaxZoom
             // SVG's unitless numbers (LLP 1055 D2); `r`, `cx`, `cy` are lengths.
             | StyleId::FillOpacity
             | StyleId::StrokeOpacity

@@ -1974,7 +1974,8 @@ recently started playing owns the session (else the latest mounted).
 `scroll` appends left then top offsets, and to an action that takes one more
 parameter a `ScrollEvent`: the scroller's own `scrollLeft`, `scrollTop`,
 `scrollWidth`, `scrollHeight`, `clientWidth` and `clientHeight` as the event
-fires, what a web handler reads off `event.target`. "At the end" is the web's
+fires, what a web handler reads off `event.target`, and `scrollZoom`, a
+zoomable scroller's zoom (1 on any other; LLP 1057.001.000). "At the end" is the web's
 arithmetic, on every host and on a virtualized list too (chat F4, a
 jump-to-latest pill); a native host's `scrollHeight` is its port plus the range
 it clamps to:

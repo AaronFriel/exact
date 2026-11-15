@@ -662,6 +662,8 @@ pub fn takes_text(style: StyleId) -> bool {
                         | TextStrokeWidth
                         | ShapeMargin
                         | FontStretch
+                        | MinZoom
+                        | MaxZoom
                 )
         }
         StyleCodec::U16 | StyleCodec::U32 | StyleCodec::I32 => false,
