@@ -1,7 +1,91 @@
 #!/usr/bin/env bun
-// LLP 1172.019 §3: a source census, not a build gate. Run from the checkout root.
+// LLP 1172.019 §2–3: the Swift source census used by the probe and seam ratchets.
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+
+// Strings (including their interpolations) and nested comments are opaque.
+// Offsets and lines survive masking; braces in prose cannot create a scope.
+export function swiftTokens(source) {
+  const result = [];
+  let at = 0, line = 1;
+  const advance = end => { line += (source.slice(at, end).match(/\n/g) ?? []).length; at = end; };
+  const stringAt = start => source.slice(start).match(/^(#*)("""|")/);
+  function commentEnd(start) {
+    let end = start + 2, depth = 1;
+    while (end < source.length && depth) {
+      if (source.startsWith('/*', end)) { depth++; end += 2; }
+      else if (source.startsWith('*/', end)) { depth--; end += 2; }
+      else end++;
+    }
+    return end;
+  }
+  function stringEnd(start, string) {
+    const delimiter = string[2] + string[1], escape = '\\' + string[1];
+    let end = start + string[0].length;
+    while (end < source.length) {
+      if (source.startsWith(delimiter, end)) return end + delimiter.length;
+      if (source.startsWith(escape + '(', end)) {
+        end += escape.length + 1;
+        let depth = 1;
+        while (end < source.length && depth) {
+          const nested = stringAt(end);
+          if (nested) end = stringEnd(end, nested);
+          else if (source.startsWith('/*', end)) end = commentEnd(end);
+          else if (source.startsWith('//', end)) {
+            const newline = source.indexOf('\n', end);
+            end = newline < 0 ? source.length : newline;
+          } else {
+            if (source[end] === '(') depth++;
+            if (source[end] === ')') depth--;
+            end++;
+          }
+        }
+      } else if (source.startsWith(escape, end)) end += escape.length + 1;
+      else end++;
+    }
+    return end;
+  }
+  while (at < source.length) {
+    const tail = source.slice(at);
+    if (/^\s/.test(tail)) { advance(at + 1); continue; }
+    if (tail.startsWith('//')) { advance(source.indexOf('\n', at) < 0 ? source.length : source.indexOf('\n', at)); continue; }
+    if (tail.startsWith('/*')) {
+      advance(commentEnd(at)); continue;
+    }
+    const string = tail.match(/^(#*)("""|")/);
+    if (string) {
+      const end = stringEnd(at, string);
+      result.push({ text: '<string>', at, end, line }); advance(end); continue;
+    }
+    const text = tail.match(/^(?:[A-Za-z_$][A-Za-z_0-9$]*|[0-9]+|->|===|!==|==|!=|&&|\|\||\?\?|[^\s])/)[0];
+    result.push({ text, at, end: at + text.length, line }); advance(at + text.length);
+  }
+  const stack = [];
+  for (let i = 0; i < result.length; i++) {
+    const t = result[i]; t.parent = stack.at(-1) ?? -1;
+    if (['{', '(', '['].includes(t.text)) stack.push(i);
+    if (['}', ')', ']'].includes(t.text)) {
+      const open = stack.pop();
+      if (open !== undefined) { result[open].close = i; t.open = open; }
+    }
+  }
+  return result;
+}
+
+export function swiftStringValue(literal) {
+  const [, hashes, quote] = /^(#*)("""|")/.exec(literal);
+  let value = literal.slice(hashes.length + quote.length, -hashes.length - quote.length);
+  if (quote === '"""') {
+    value = value.replace(/\r\n/g, '\n');
+    const indent = /(?:^|\n)([ \t]*)$/.exec(value)?.[1] ?? '';
+    value = value.slice(1).replace(/\n[ \t]*$/, '').split('\n')
+      .map(line => line.startsWith(indent) ? line.slice(indent.length) : line).join('\n');
+  }
+  const escapes = { '0': '\0', t: '\t', n: '\n', r: '\r', '"': '"', "'": "'", '\\': '\\' };
+  const escape = new RegExp('\\\\' + hashes + '(u\\{([0-9a-fA-F]+)\\}|[0tnr"\'\\\\]|\\n[ \\t]*)', 'g');
+  return value.replace(escape, (_, code, scalar) => scalar ? String.fromCodePoint(parseInt(scalar, 16))
+    : code.startsWith('\n') ? '' : escapes[code]);
+}
 
 export function seamCensus({ root = 'host/apple', args = [], countsOnly = false } = {}) {
   if (args.includes('--help')) {
@@ -20,77 +104,12 @@ export function seamCensus({ root = 'host/apple', args = [], countsOnly = false 
       entry.isDirectory() ? files(join(dir, entry.name)) : entry.name.endsWith('.swift') ? [join(dir, entry.name)] : []);
   }
 
-  // Strings (including their interpolations) and nested comments are opaque.
-  // Offsets and lines survive masking; braces in prose cannot create a scope.
-  function tokens(source) {
-    const result = [];
-    let at = 0, line = 1;
-    const advance = end => { line += (source.slice(at, end).match(/\n/g) ?? []).length; at = end; };
-    const stringAt = start => source.slice(start).match(/^(#*)("""|")/);
-    function commentEnd(start) {
-      let end = start + 2, depth = 1;
-      while (end < source.length && depth) {
-        if (source.startsWith('/*', end)) { depth++; end += 2; }
-        else if (source.startsWith('*/', end)) { depth--; end += 2; }
-        else end++;
-      }
-      return end;
-    }
-    function stringEnd(start, string) {
-      const delimiter = string[2] + string[1], escape = '\\' + string[1];
-      let end = start + string[0].length;
-      while (end < source.length) {
-        if (source.startsWith(delimiter, end)) return end + delimiter.length;
-        if (source.startsWith(escape + '(', end)) {
-          end += escape.length + 1;
-          let depth = 1;
-          while (end < source.length && depth) {
-            const nested = stringAt(end);
-            if (nested) end = stringEnd(end, nested);
-            else if (source.startsWith('/*', end)) end = commentEnd(end);
-            else if (source.startsWith('//', end)) {
-              const newline = source.indexOf('\n', end);
-              end = newline < 0 ? source.length : newline;
-            } else {
-              if (source[end] === '(') depth++;
-              if (source[end] === ')') depth--;
-              end++;
-            }
-          }
-        } else if (source.startsWith(escape, end)) end += escape.length + 1;
-        else end++;
-      }
-      return end;
-    }
-    while (at < source.length) {
-      const tail = source.slice(at);
-      if (/^\s/.test(tail)) { advance(at + 1); continue; }
-      if (tail.startsWith('//')) { advance(source.indexOf('\n', at) < 0 ? source.length : source.indexOf('\n', at)); continue; }
-      if (tail.startsWith('/*')) {
-        advance(commentEnd(at)); continue;
-      }
-      const string = tail.match(/^(#*)("""|")/);
-      if (string) {
-        const end = stringEnd(at, string);
-        result.push({ text: '<string>', at, end, line }); advance(end); continue;
-      }
-      const text = tail.match(/^(?:[A-Za-z_$][A-Za-z_0-9$]*|[0-9]+|->|===|!==|==|!=|&&|\|\||\?\?|[^\s])/)[0];
-      result.push({ text, at, end: at + text.length, line }); advance(at + text.length);
-    }
-    const stack = [];
-    for (let i = 0; i < result.length; i++) {
-      const t = result[i]; t.parent = stack.at(-1) ?? -1;
-      if (['{', '(', '['].includes(t.text)) stack.push(i);
-      if (['}', ')', ']'].includes(t.text)) {
-        const open = stack.pop();
-        if (open !== undefined) { result[open].close = i; t.open = open; }
-      }
-    }
-    return result;
-  }
-
   function declarations(path) {
-    const source = read(path), ts = tokens(source), found = [];
+    const source = read(path), ts = swiftTokens(source), found = [];
+    const modifiers = new Set(['private', 'fileprivate', 'internal', 'package', 'public', 'open',
+      'static', 'class', 'override', 'final', 'required', 'convenience', 'dynamic', 'optional',
+      'lazy', 'weak', 'unowned', 'nonisolated', 'isolated', 'mutating', 'nonmutating',
+      'borrowing', 'consuming', 'distributed', 'prefix', 'postfix', 'infix']);
     for (let i = 0; i < ts.length; i++) {
       if (!['class', 'extension'].includes(ts[i].text) || !['NodeView', 'Presenter', 'Runtime'].includes(ts[i + 1]?.text)) continue;
       const owner = ts[i + 1].text;
@@ -101,7 +120,13 @@ export function seamCensus({ root = 'host/apple', args = [], countsOnly = false 
       for (let j = body + 1; j < close; j++) {
         if (ts[j].parent !== body || !['var', 'let', 'func'].includes(ts[j].text)) continue;
         let start = j;
-        while (start > body + 1 && ts[start - 1].line === ts[j].line) start--;
+        while (start > body + 1) {
+          let previous = start - 1;
+          if (ts[previous].text === ')') previous = (ts[previous].open ?? previous) - 1;
+          if (ts[previous - 1]?.text === '@') start = previous - 1;
+          else if (modifiers.has(ts[previous]?.text)) start = previous;
+          else break;
+        }
         const prefix = ts.slice(start, j).map(t => t.text).join(' ');
         let end = j + 2;
         while (end < close) {
@@ -197,7 +222,7 @@ export function seamCensus({ root = 'host/apple', args = [], countsOnly = false 
   const sourceFiles = files(`${root}/Sources`);
   const casts = [], walks = [], accesses = [], typeTests = [];
   for (const path of sourceFiles) {
-    const source = read(path), ts = tokens(source);
+    const source = read(path), ts = swiftTokens(source);
     const text = (a, b) => ts.slice(a, b).map(t => t.text).join(' ');
     const braceParent = index => {
       let p = ts[index]?.parent ?? -1;
@@ -211,15 +236,24 @@ export function seamCensus({ root = 'host/apple', args = [], countsOnly = false 
         let start = p - 1;
         while (start >= 0 && !['{', '}', ';'].includes(ts[start].text) && ts[start].line >= ts[p].line - 12) start--;
         const header = text(start + 1, p);
-        if (/\b(func|var|let|init|subscript)\b/.test(header) && !/\b(class|extension|struct|enum)\b/.test(header)) return p;
+        if (/\b(func|var|let|init|subscript)\b/.test(header) &&
+            !/\b(class|extension|struct|enum|if|while|guard|for|switch|catch|else|do|repeat)\b/.test(header)) return p;
         p = braceParent(p);
       }
       return nearest;
     };
     const groups = new Map();
+    const castEnds = new Map();
     for (let i = 0; i < ts.length; i++) {
-      if ((ts[i].text === 'as' && ['?', '!'].includes(ts[i + 1]?.text) && ts[i + 2]?.text === 'NodeView') ||
-        (ts[i].text === 'is' && ts[i + 1]?.text === 'NodeView')) {
+      const type = ts[i].text === 'is' ? i + 1
+        : ts[i].text === 'as' && ['?', '!'].includes(ts[i + 1]?.text) ? i + 2 : -1;
+      if (type < 0) continue;
+      let name = type;
+      while (ts[name]?.text === '(') name++;
+      let end = name, open = name - 1;
+      while (open >= type && ts[open].close === end + 1) { end++; open--; }
+      if (ts[name]?.text === 'NodeView' && open < type) {
+        castEnds.set(i, end);
         const m = member(i);
         if (!groups.has(m)) groups.set(m, []);
         groups.get(m).push(i);
@@ -268,7 +302,7 @@ export function seamCensus({ root = 'host/apple', args = [], countsOnly = false 
         const row = { path, line: ts[i].line, column: ts[i].at - source.lastIndexOf('\n', ts[i].at),
           subsystem: subsystem(path), cast: ts[i].text === 'is' ? 'is' : 'as' + ts[i + 1].text,
           direct, treeDerived: derived, scopeLine: ts[scope]?.line ?? 0,
-          expression: source.slice(ts[start].at, ts[i + (ts[i].text === 'is' ? 1 : 2)].end) };
+          expression: source.slice(ts[start].at, ts[castEnds.get(i)].end) };
         if (row.cast === 'is') typeTests.push(row); else casts.push(row);
       }
       // These are candidates: an edge and a NodeView cast in one member need

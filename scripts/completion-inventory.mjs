@@ -3,6 +3,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { classifications } from './completion-inventory-table.mjs';
+import { swiftStringValue, swiftTokens } from './probes/seamcensus.mjs';
 
 const ROOT = resolve(import.meta.dir, '..');
 
@@ -154,15 +155,15 @@ export function swiftCExports(root = ROOT) {
   for (const path of files(join(root, 'host/apple'), '.swift')) {
     const source = readFileSync(path, 'utf8');
     if (!/@\s*_cdecl/.test(source)) continue;
-    const t = tokens(source), file = relative(root, path);
+    const t = swiftTokens(source), file = relative(root, path);
     for (let i = 0; i < t.length - 4; i++) {
-      if (t[i].value !== '@' || t[i + 1].value !== '_cdecl' || t[i + 2].value !== '(') continue;
+      if (t[i].text !== '@' || t[i + 1].text !== '_cdecl' || t[i + 2].text !== '(') continue;
       const literal = t[i + 3];
-      const name = JSON.parse(source.slice(literal.at, literal.end));
+      const name = swiftStringValue(source.slice(literal.at, literal.end));
       let fn = i + 5;
-      while (fn < t.length && t[fn].value !== 'func') fn++;
+      while (fn < t.length && t[fn].text !== 'func') fn++;
       let body = fn;
-      while (body < t.length && t[body].value !== '{') body++;
+      while (body < t.length && t[body].text !== '{') body++;
       if (body === t.length) throw new Error(`${file}:${t[i].line}: @_cdecl without a function body`);
       exports.push({ file, name, line: t[i].line,
         signature: source.slice(t[fn].at, t[body].at).trim() });

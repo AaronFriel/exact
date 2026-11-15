@@ -222,6 +222,116 @@ test('probe deltas are informational and survive lowering the enforcement ceilin
   expect(JSON.parse(readFileSync(join(root, file), 'utf8')).probe).toEqual(probe);
 }));
 
+test('Swift strings without new seams leave the census and gate unchanged', () => fixture(({ root, write, save }) => {
+  const file = 'host/apple/soundarm/SoundArm.swift';
+  const exported = '@_cdecl("exact_existing") public func callback() {}';
+  write(file, exported); save();
+  const before = census(root);
+  write(file, exported + String.raw`
+    let page = """
+    <p>say "hello</p>
+    @_cdecl("not_an_export")
+    """
+    let raw = ##"@_cdecl("also_not_an_export")"##
+    let unicode = "exact_\u{5f}a"
+    let interpolated = "value: \("@_cdecl(\"not_an_export\")")"
+  `);
+  expect(census(root)).toEqual(before);
+  expect(check({ root, report: () => {} })).toBe(0);
+}));
+
+test('Swift export names decode raw, multiline and Unicode literals', () => fixture(({ root, write, save }) => {
+  save();
+  write('host/apple/soundarm/SoundArm.swift', String.raw`
+    @_cdecl(#"exact_raw"#) public func raw() {}
+    @_cdecl("exact_\u{5f}a") public func unicode() {}
+    @_cdecl("""
+      exact_multi
+      """) public func multiline() {}
+    @_cdecl(##"exact_\##u{62}"##) public func rawUnicode() {}
+    @_cdecl(#"""
+      exact_\#
+      continued
+      """#) public func continued() {}
+  `);
+  expect(census(root).appleAbiExports.map(s => s.text)).toEqual([
+    'exact__a', 'exact_b', 'exact_continued', 'exact_multi', 'exact_raw',
+  ]);
+  const lines = [];
+  expect(check({ root, report: s => lines.push(s) })).toBe(1);
+  expect(lines.join('\n')).toContain('appleAbiExports: 5 / 0; GREW by 5');
+  expect(lines.join('\n')).toContain('exact_multi');
+}));
+
+test('optional-binding blocks keep edges outside the block in their enclosing member', () => fixture(({ root, write, save }) => {
+  for (const binding of ['if', 'while']) {
+    const source = `class Control {
+      var row: NodeView? {
+        func parent(_ view: UIView?) -> NodeView? {
+          var at = view?.superview
+          ${binding} let v = at { if let node = v as? NodeView { return node }; at = v.superview }
+          return nil
+        }
+        return parent(self)
+      }
+      func unrelated(_ view: UIView) { consume(view.superview) }
+    }`;
+    write(path, source); save();
+    expect(census(root).treeWalks).toHaveLength(2);
+    write(path, source.replace('view?.superview', 'view?.superview?.superview'));
+    expect(census(root).treeWalks).toHaveLength(3);
+    const lines = [];
+    expect(check({ root, report: s => lines.push(s) })).toBe(1);
+    expect(lines.join('\n')).toContain('treeWalks: 3 / 2; GREW by 1');
+  }
+}));
+
+test('bridge modifiers and attributes apply across lines without leaking between declarations', () => fixture(({ root, write, save }) => {
+  const file = 'host/apple/Sources/ExactCore/Bridge.swift';
+  write(file, `class Runtime {
+    private func secret() -> Int { 0 }
+    @available(*, deprecated, message: "private")
+    package static func visible() -> Int { 0 }
+    func other() -> Int { 0 }
+  }`);
+  save();
+  const expected = census(root).synchronousBridgeReturns;
+  write(file, `class Runtime {
+    private
+    @available(*, deprecated, message: "private")
+    func secret() -> Int { 0 }
+    @available(
+      *, deprecated, message: "private"
+    )
+    package
+    static
+    func visible() -> Int { 0 }
+    func other() -> Int { 0 }
+  }`);
+  expect(census(root).synchronousBridgeReturns.map(s => s.id)).toEqual(expected.map(s => s.id));
+  expect(check({ root, report: () => {} })).toBe(0);
+  write(file, `class Runtime {
+    private
+    func secret() -> Int { 0 }
+  }`);
+  expect(census(root).synchronousBridgeReturns).toHaveLength(0);
+}));
+
+test('parenthesized conditional and forced NodeView casts count with their complete expressions', () => fixture(({ root, write, save }) => {
+  save();
+  write(path, `func parent(_ view: UIView) {
+    let node = view.superview as? (NodeView)
+    let another = view as! ((NodeView))
+    if view is (NodeView) { consume(view) }
+    let pair = view as? (NodeView, Other)
+  }`);
+  expect(census(root).nodeViewCasts.map(s => s.text)).toEqual([
+    'view as! ((NodeView))', 'view.superview as? (NodeView)',
+  ]);
+  expect(census(root).treeWalks).toHaveLength(1);
+  expect(check({ root, report: () => {} })).toBe(1);
+}));
+
 test('the blocking gate runs the census and these tests', () => {
   expect(gateParts.some(p => p[2].includes('scripts/seam-ratchets.mjs'))).toBe(true);
   expect(gateParts.find(p => p[0] === 'scripts')[2]).toContain('./scripts/seam-ratchets.test.mjs');
