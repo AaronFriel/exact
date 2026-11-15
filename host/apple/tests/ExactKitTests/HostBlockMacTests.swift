@@ -42,7 +42,9 @@ final class HostBlockMacTests: XCTestCase {
         wait(for: [released], timeout: 5)
         XCTAssertEqual(s.appliedBatches, before, "the old block and placement never reach the replacement runtime")
         p.blocks.show(replacement, in: container, block: .size(CGSize(width: 400, height: 500)))
-        XCTAssertEqual(s.appliedBatches, before + 1, "the current view still reports")
+        // Two batches: an owner's show tells its local insets first (`tellInsets`, 2edecbfc4, "A route's content reads
+        // its own safe area ... as var(--exact-safe-area-inset-*)"), then its block.
+        XCTAssertEqual(s.appliedBatches, before + 2, "the current view still reports")
     }
 
     private func plan(_ source: String) throws -> Data {
