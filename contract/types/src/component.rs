@@ -710,7 +710,9 @@ fn refine_params_from_view(
     shapes: &Shapes,
     miscounted: &mut Vec<(usize, TypeError)>,
 ) -> Result<(), TypeError> {
-    for (n, scope) in crate::walk_view(nodes, scope, shapes) {
+    for (n, scope) in Node::walk_with(nodes, std::sync::Arc::new(scope.clone()), |node, scope| {
+        crate::view_frames(node, scope, shapes)
+    }) {
         let scope = &scope;
         if let Node::Element { tag, attrs, .. } = n {
             // A checkbox's `change` and `input` carry whether it is

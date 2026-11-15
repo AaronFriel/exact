@@ -1,0 +1,433 @@
+{
+  "baseline": "939dd84f2d31ede73374c7a06916a2196cdf54c6",
+  "cases": [
+    {
+      "name": "handler-arity",
+      "files": {
+        "app.contract": "component App\n  state q = \"\"\n  action setQ\n    q = \"\"\n  view\n    input value=q input=setQ\n"
+      },
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 19,
+          "end_col": 24,
+          "file": "$APP/app.contract",
+          "id": "analyze-handler-arity",
+          "line": 6,
+          "message": "`input=setQ` calls `setQ` with the field's new `value` (string); declare `action setQ(value: string)`, or `action setQ(value: string, event: InputEvent)` for its `InputEvent`",
+          "related": [],
+          "severity": "error"
+        }
+      ]
+    },
+    {
+      "name": "handler-shape",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state n = 0\n  action a\n    n = 1\n  view\n    button \"Go\" press=(on ? a : a)\n"
+      },
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 17,
+          "end_col": 22,
+          "file": "$APP/app.contract",
+          "id": "analyze-handler-shape",
+          "line": 7,
+          "message": "`press=` needs an action name or `action(args)`, not a condition: write one action that chooses, `action pick { if cond { a() } else { b() } }`, and `press=pick`",
+          "related": [],
+          "severity": "error"
+        }
+      ]
+    },
+    {
+      "name": "handler-in-none-arm",
+      "files": {
+        "app.contract": "component App\n  state o: option<number> = none\n  state n = 0\n  action save(x: number)\n    n = x\n  view\n    match o\n      case some(x)\n        button \"Go\" press=save(x)\n      case none\n        button \"Go\" press=save\n"
+      },
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 21,
+          "end_col": 26,
+          "file": "$APP/app.contract",
+          "id": "analyze-handler-arity",
+          "line": 11,
+          "message": "`press=save` calls `save` with nothing; declare `action save`, or `action save(event: MouseEvent)` for its `MouseEvent`",
+          "related": [],
+          "severity": "error"
+        }
+      ]
+    },
+    {
+      "name": "unknown-use",
+      "files": {
+        "app.contract": "component App\n  view\n    Missing()\n"
+      },
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 5,
+          "end_col": 12,
+          "file": "$APP/app.contract",
+          "id": "type-unknown-component",
+          "line": 3,
+          "message": "unknown component `Missing`; declared components: `App`",
+          "related": [],
+          "severity": "error"
+        }
+      ]
+    },
+    {
+      "name": "duplicate-use-arg",
+      "files": {
+        "app.contract": "component App\n  view\n    Child(x=1, x=2)\ncomponent Child\n  props\n    x: number\n  view\n    text `${x}`\n"
+      },
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 16,
+          "end_col": 17,
+          "file": "$APP/app.contract",
+          "id": "analyze-duplicate-arg",
+          "line": 3,
+          "message": "`x` given twice",
+          "related": [],
+          "severity": "error"
+        }
+      ]
+    },
+    {
+      "name": "canvas-parent",
+      "files": {
+        "app.contract": "component App\n  view\n    column\n      if true\n        button \"Jump\" action=\"jump\"\n"
+      },
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 23,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "analyze-control-parent",
+          "line": 5,
+          "message": "`action` requires a button inside a canvas",
+          "related": [],
+          "severity": "error"
+        }
+      ]
+    },
+    {
+      "name": "canvas-wrong-tag",
+      "files": {
+        "app.contract": "component App\n  view\n    canvas\n      view action=\"jump\"\n"
+      },
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 12,
+          "end_col": 18,
+          "file": "$APP/app.contract",
+          "id": "analyze-control-parent",
+          "line": 4,
+          "message": "`action` requires a button inside a canvas",
+          "related": [],
+          "severity": "error"
+        }
+      ]
+    },
+    {
+      "name": "canvas-component-valid",
+      "files": {
+        "app.contract": "component App\n  view\n    canvas\n      Controls()\ncomponent Controls\n  view\n    button \"Jump\" action=\"jump\"\n"
+      },
+      "status": 0,
+      "diagnostics": []
+    },
+    {
+      "name": "interface-binding",
+      "files": {
+        "app.contract": "component App\n  state n = 0\n  action zero\n    n = 0\n  action one(x: number)\n    n = x\n  view\n    Button(callback=one)\ncomponent Button\n  props\n    callback: action\n  view\n    button \"Go\" press=callback()\n"
+      },
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 23,
+          "end_col": 31,
+          "file": "$APP/app.contract",
+          "id": "analyze-action-arity",
+          "line": 13,
+          "message": "`Button.callback` requires 0 (or 1, the last its `MouseEvent`) action parameter(s), but this binding to `one` supplies 0 of its 1",
+          "related": [
+            {
+              "col": 5,
+              "end_col": 13,
+              "file": "$APP/app.contract",
+              "line": 11,
+              "note": "action interface declared here"
+            },
+            {
+              "col": 12,
+              "end_col": 20,
+              "file": "$APP/app.contract",
+              "line": 8,
+              "note": "bound to `one` here; 1 parameter(s) remain"
+            }
+          ],
+          "severity": "error"
+        }
+      ]
+    },
+    {
+      "name": "interface-valid",
+      "files": {
+        "app.contract": "component App\n  state n = 0\n  action zero\n    n = 0\n  action one(x: number)\n    n = x\n  view\n    Button(callback=zero)\ncomponent Button\n  props\n    callback: action\n  view\n    button \"Go\" press=callback()\n"
+      },
+      "status": 0,
+      "diagnostics": []
+    },
+    {
+      "name": "interface-incompatible",
+      "files": {
+        "app.contract": "component App\n  state n = 0\n  action zero\n    n = 0\n  action one(x: number)\n    n = x\n  view\n    text \"ok\"\ncomponent Unused\n  props\n    callback: action\n  view\n    column\n      button \"a\" press=callback()\n      button \"b\" press=callback(1)\n"
+      },
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 24,
+          "end_col": 32,
+          "file": "$APP/app.contract",
+          "id": "analyze-action-arity",
+          "line": 15,
+          "message": "`Unused.callback` has incompatible action requirements: 0 (or 1, the last its `MouseEvent`) and 1 (or 2, the last its `MouseEvent`) parameter(s)",
+          "related": [
+            {
+              "col": 5,
+              "end_col": 13,
+              "file": "$APP/app.contract",
+              "line": 11,
+              "note": "action interface declared here"
+            },
+            {
+              "col": 24,
+              "end_col": 32,
+              "file": "$APP/app.contract",
+              "line": 14,
+              "note": "incompatible invocation required here"
+            }
+          ],
+          "severity": "error"
+        }
+      ]
+    },
+    {
+      "name": "interface-import",
+      "files": {
+        "app.contract": "use Button from \"./button.contract\"\ncomponent App\n  state n = 0\n  action zero\n    n = 0\n  action one(x: number)\n    n = x\n  view\n    Button(callback=one)\n",
+        "button.contract": "component Button\n  props\n    callback: action\n  view\n    button \"Go\" press=callback()\n"
+      },
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 23,
+          "end_col": 31,
+          "file": "$APP/button.contract",
+          "id": "analyze-action-arity",
+          "line": 5,
+          "message": "`Button.callback` requires 0 (or 1, the last its `MouseEvent`) action parameter(s), but this binding to `one` supplies 0 of its 1",
+          "related": [
+            {
+              "col": 5,
+              "end_col": 13,
+              "file": "$APP/button.contract",
+              "line": 3,
+              "note": "action interface declared here"
+            },
+            {
+              "col": 12,
+              "end_col": 20,
+              "file": "$APP/app.contract",
+              "line": 9,
+              "note": "bound to `one` here; 1 parameter(s) remain"
+            }
+          ],
+          "severity": "error"
+        }
+      ]
+    },
+    {
+      "name": "interface-inject",
+      "files": {
+        "app.contract": "component App\n  state n = 0\n  action zero\n    n = 0\n  action one(x: number)\n    n = x\n  provide\n    callback = one\n  view\n    Wrap()\ncomponent Wrap\n  view\n    Injected()\ncomponent Injected\n  inject\n    callback: action\n  view\n    button \"Go\" press=callback()\n"
+      },
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 23,
+          "end_col": 31,
+          "file": "$APP/app.contract",
+          "id": "analyze-action-arity",
+          "line": 18,
+          "message": "`Wrap.callback` requires 0 (or 1, the last its `MouseEvent`) action parameter(s), but this binding to `one` supplies 0 of its 1",
+          "related": [
+            {
+              "col": 5,
+              "end_col": 13,
+              "file": "$APP/app.contract",
+              "line": 16,
+              "note": "action interface declared here"
+            },
+            {
+              "col": 5,
+              "end_col": 13,
+              "file": "$APP/app.contract",
+              "line": 8,
+              "note": "bound to `one` here; 1 parameter(s) remain"
+            }
+          ],
+          "severity": "error"
+        }
+      ]
+    },
+    {
+      "name": "wrapped-css-invalid",
+      "files": {
+        "app.contract": "component App\n  view\n    Child()\ncomponent Child\n  state on = false\n  derive mode = \"contain\"\n  derive choice = (on ? mode : mode)\n  view\n    text \"hi\" user-select=(on ? choice : choice)\n"
+      },
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 17,
+          "end_col": 26,
+          "file": "$APP/app.contract",
+          "id": "lower-css-user-select",
+          "line": 6,
+          "message": "`user-select=\"contain\"` is not implemented: it keeps a selection from leaving its element, and the native presenters' text selection ownership has no such bound. Write one of auto, none, text, all",
+          "related": [],
+          "severity": "error"
+        }
+      ]
+    },
+    {
+      "name": "choice-css-invalid",
+      "files": {
+        "app.contract": "component App\n  state on = false\n  view\n    box user-select=(on ? \"auto\" : \"contain\")\n"
+      },
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 36,
+          "end_col": 45,
+          "file": "$APP/app.contract",
+          "id": "lower-css-user-select",
+          "line": 4,
+          "message": "`user-select=\"contain\"` is not implemented: it keeps a selection from leaving its element, and the native presenters' text selection ownership has no such bound. Write one of auto, none, text, all",
+          "related": [],
+          "severity": "error"
+        }
+      ]
+    },
+    {
+      "name": "ascribed-none",
+      "files": {
+        "app.contract": "component App\n  view\n    column\n      Child(x=none)\ncomponent Child\n  props\n    x: option<number>\n  view\n    match x\n      case some(n)\n        text `${n}`\n      case none\n        text \"empty\"\n"
+      },
+      "status": 0,
+      "diagnostics": []
+    },
+    {
+      "name": "ascribed-invalid",
+      "files": {
+        "app.contract": "component App\n  view\n    Child(x=1)\ncomponent Child\n  props\n    x: string\n  view\n    text x\n"
+      },
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 11,
+          "end_col": 12,
+          "file": "$APP/app.contract",
+          "id": "type-prop",
+          "line": 3,
+          "message": "`x` expects `string`, given `number`",
+          "related": [],
+          "severity": "error"
+        }
+      ]
+    },
+    {
+      "name": "host-native-svg",
+      "files": {
+        "app.contract": "component App\n  view\n    svg\n      foreignObject width=10 height=10\n        text \"hello\"\n",
+        "app.json": "{\"app\": {\"id\": \"dev.test.checking\", \"name\": \"Checking\"}, \"host\": {\"ios\": {}, \"web\": {}}}"
+      },
+      "status": 0,
+      "diagnostics": []
+    },
+    {
+      "name": "menu-note",
+      "files": {
+        "app.contract": "component App\n  view\n    column\n      column id=\"menu\" popover=\"auto\" role=\"menu\"\n        if true\n          button \"Next\" popovertarget=\"next\"\n      column id=\"next\" popover=\"auto\"\n        text \"next\"\n"
+      },
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 11,
+          "end_col": 17,
+          "file": "$APP/app.contract",
+          "id": "lower-menu-row-popover",
+          "line": 6,
+          "message": "note: this menu row's `next` opens from the menu's own invoker (the button that opened the menu, or the node its context menu opened on), not nested in the menu, so it stays open as the menu closes on choose, unless it is written inside the menu: exact2's menu rule (docs/contract-for-agents.md)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "menu-note-isolated-sibling",
+      "files": {
+        "app.contract": "component App\n  view\n    column\n      column id=\"menu\" popover=\"auto\" role=\"menu\"\n        if true\n          button \"Next\" popovertarget=\"next\"\n      button \"Outside\" popovertarget=\"next\"\n      column id=\"next\" popover=\"auto\"\n        text \"next\"\n"
+      },
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 11,
+          "end_col": 17,
+          "file": "$APP/app.contract",
+          "id": "lower-menu-row-popover",
+          "line": 6,
+          "message": "note: this menu row's `next` opens from the menu's own invoker (the button that opened the menu, or the node its context menu opened on), not nested in the menu, so it stays open as the menu closes on choose, unless it is written inside the menu: exact2's menu rule (docs/contract-for-agents.md)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "host-style",
+      "files": {
+        "app.contract": "component App\n  view\n    column\n      box mix-blend-mode=\"multiply\" width=20 height=20\n      svg width=20 height=20\n        rect width=10 height=10 mix-blend-mode=\"screen\"\n",
+        "app.json": "{\"app\": {\"id\": \"dev.test.checking\", \"name\": \"Checking\"}, \"host\": {\"ios\": {}, \"macos\": {}, \"web\": {}, \"android\": {}, \"linux\": {}, \"windows\": {}}}"
+      },
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 11,
+          "end_col": 25,
+          "file": "$APP/app.contract",
+          "id": "lower-attr-tag",
+          "line": 4,
+          "message": "`mix-blend-mode` applies to SVG elements (LLP 1055.000 D19); boxes do not blend yet",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 11,
+          "end_col": 25,
+          "file": "$APP/app.contract",
+          "id": "style-undrawn",
+          "line": 4,
+          "message": "`mix-blend-mode` is not drawn on ios (app.json `host.ios`) and android (app.json `host.android`): blending with a backdrop outside the SVG is not drawn; put all overlapping artwork inside one svg, or use Canvas 2D globalCompositeOperation (including multiply) inside one canvas. The node draws there as if it were unset (set at line 4; LLP 1159.000). `contract vocab mix-blend-mode` says what each host does",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    }
+  ]
+}

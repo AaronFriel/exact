@@ -4,7 +4,7 @@ use contract_syntax::Expr;
 use exact_kernel::ARIA_ROLES;
 
 pub(crate) fn check(value: &Expr) -> Result<(), LowerError> {
-    for value in value.value_leaves() {
+    for value in contract_checking::value_leaves(value) {
         check_leaf(value)?;
     }
     Ok(())

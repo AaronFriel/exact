@@ -188,7 +188,7 @@ fn raster(bytes: &[u8]) -> bool {
 /// The literal strings `e` can be: a string, a template of literals, either
 /// arm of a choice.
 fn literals(e: &Expr, out: &mut Vec<(String, Span)>) {
-    for leaf in e.value_leaves() {
+    for leaf in contract_checking::value_leaves(e) {
         match leaf {
             Expr::Str(s, at) => out.push((s.clone(), *at)),
             Expr::Template(parts, at) => {

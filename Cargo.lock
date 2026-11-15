@@ -948,8 +948,18 @@ dependencies = [
 name = "contract-analyze"
 version = "0.1.0"
 dependencies = [
+ "contract-checking",
  "contract-syntax",
  "contract-types",
+]
+
+[[package]]
+name = "contract-checking"
+version = "0.1.0"
+dependencies = [
+ "contract-syntax",
+ "contract-types",
+ "syn 2.0.119",
 ]
 
 [[package]]
@@ -973,6 +983,7 @@ name = "contract-lower"
 version = "0.1.0"
 dependencies = [
  "contract-analyze",
+ "contract-checking",
  "contract-syntax",
  "contract-types",
  "exact-color",

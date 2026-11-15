@@ -15,6 +15,7 @@ name = "contract_lower"
 crate-type = ["rlib"]
 
 [dependencies]
+contract-checking = { path = "../checking" }
 contract-analyze = { path = "../analyze" }
 contract-syntax = { path = "../syntax" }
 contract-types = { path = "../types" }

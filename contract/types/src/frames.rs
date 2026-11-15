@@ -8,59 +8,45 @@ use crate::{Ref, Scope, Shapes, Ty};
 use contract_syntax::Node;
 use std::sync::Arc;
 
-/// A view's nodes in source order, with names scoped before the caller
-/// checks the node. `if` and `match` arms count as region frames, exactly
-/// as they do in the plan; a `for` binds both its item and its position.
-/// An untyped subject leaves its binding arm unvisited; the type checker
-/// reports the subject's refusal. A `match`'s `none` arm is independent.
-///
-/// The traversal has O(depth) heap frames and no recursive descent. It
-/// infers each region subject once; siblings share their immutable scope.
-/// @ref LLP 1172.013 E1, §4 step 4.
-pub fn walk_view<'a>(
-    nodes: &'a [Node],
-    scope: &Scope,
-    shapes: &'a Shapes,
-) -> impl Iterator<Item = (&'a Node, Arc<Scope>)> {
-    Node::walk_with(
-        nodes,
-        Arc::new(scope.clone()),
-        move |node, scope| match node {
-            Node::When { .. } => {
-                let mut inner = (**scope).clone();
-                inner.push_none();
-                let inner = Arc::new(inner);
-                [Some(inner.clone()), Some(inner)]
-            }
-            Node::Each {
-                var, index, list, ..
-            } => {
-                let inner = match crate::infer(list, scope, shapes) {
-                    Ok(Ty::List(item)) => {
-                        let mut inner = (**scope).clone();
-                        inner.push_each(var, index.as_deref(), *item);
-                        Some(Arc::new(inner))
-                    }
-                    _ => None,
-                };
-                [inner, None]
-            }
-            Node::Match { subject, some, .. } => {
-                let inner = match crate::infer(subject, scope, shapes) {
-                    Ok(Ty::Option(item)) => {
-                        let mut inner = (**scope).clone();
-                        inner.push_region(Some((some.0.clone(), Ref::Bound(0), *item)));
-                        Some(Arc::new(inner))
-                    }
-                    _ => None,
-                };
-                let mut none = (**scope).clone();
-                none.push_none();
-                [inner, Some(Arc::new(none))]
-            }
-            _ => [Some(scope.clone()), Some(scope.clone())],
-        },
-    )
+/// The scopes under a node, shared by parameter inference and checking.
+/// An untyped subject skips only its binding arm; the none arm is independent.
+/// Kept below checking because action parameter inference needs it before `Checked` exists.
+pub fn view_frames(node: &Node, scope: &Arc<Scope>, shapes: &Shapes) -> [Option<Arc<Scope>>; 2] {
+    match node {
+        Node::When { .. } => {
+            let mut inner = (**scope).clone();
+            inner.push_none();
+            let inner = Arc::new(inner);
+            [Some(inner.clone()), Some(inner)]
+        }
+        Node::Each {
+            var, index, list, ..
+        } => {
+            let inner = match crate::infer(list, scope, shapes) {
+                Ok(Ty::List(item)) => {
+                    let mut inner = (**scope).clone();
+                    inner.push_each(var, index.as_deref(), *item);
+                    Some(Arc::new(inner))
+                }
+                _ => None,
+            };
+            [inner, None]
+        }
+        Node::Match { subject, some, .. } => {
+            let inner = match crate::infer(subject, scope, shapes) {
+                Ok(Ty::Option(item)) => {
+                    let mut inner = (**scope).clone();
+                    inner.push_region(Some((some.0.clone(), Ref::Bound(0), *item)));
+                    Some(Arc::new(inner))
+                }
+                _ => None,
+            };
+            let mut none = (**scope).clone();
+            none.push_none();
+            [inner, Some(Arc::new(none))]
+        }
+        _ => [Some(scope.clone()), Some(scope.clone())],
+    }
 }
 
 impl Scope {
@@ -108,33 +94,4 @@ impl Shapes {
             _ => None,
         }
     }
-}
-
-#[test]
-fn view_names_have_the_plan_regions_depth_and_do_not_escape_an_arm() {
-    let file = contract_syntax::parse("component App\n  state xs: number[] = [1]\n  state o: option<string> = none\n  view\n    for x, i in xs key=x\n      if true\n        match o\n          case some(x)\n            text x\n          case none\n            text `${x}`\n      text `${x}`\n    text \"outside\"\n").unwrap();
-    let checked = crate::check(&file, |_| false).unwrap();
-    let root = &checked.expanded.root;
-    let scope = checked
-        .types
-        .component_scope(root, &checked.types.components[0]);
-    // Analysis reads the authored names; expansion's hygiene renames them.
-    let found: Vec<_> = walk_view(&file.components[0].view, &scope, &checked.types.shapes)
-        .filter(|(node, _)| matches!(node, Node::Element { .. }))
-        .map(|(_, scope)| {
-            (
-                scope.lookup("x").map(|(r, t)| (r, t.clone())),
-                scope.lookup("i").map(|(r, _)| r),
-            )
-        })
-        .collect();
-    assert_eq!(
-        found,
-        [
-            (Some((Ref::Bound(0), Ty::String)), Some(Ref::Index(2))),
-            (Some((Ref::Item(2), Ty::Number)), Some(Ref::Index(2))),
-            (Some((Ref::Item(0), Ty::Number)), Some(Ref::Index(0))),
-            (None, None),
-        ]
-    );
 }
