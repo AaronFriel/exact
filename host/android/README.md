@@ -119,9 +119,11 @@ builds of two apps at once do not wait on each other or mix outputs. The library
 with (`-PndkPath`). Beside the APK, `exact-build.json` records when the build began, the library and the Kotlin it
 compiled: a drive refuses an APK older than its sources by it. `--install` then installs the APK on the device a drive
 would use (`--run`: and launches it). The package id and the label are the app's
-`app.json` (`host.android.id`, defaulting to `app.id` with `-` as `_`; `app.name`).
-`ORG_GRADLE_PROJECT_idSuffix=.dev` in the environment builds a side-by-side package
-(`<Android package>.dev`). `./gradlew :canvas:assembleRelease` builds the reader alone.
+`app.json` (`host.android.id`, defaulting to `app.id` with `-` as `_`; `app.name`), which the build passes to
+Gradle as `-PapplicationId` and `-PappName`; the app module requires both. `--variant <name>` builds
+app.json's `variants.<name>` instead, a package beside the plain one with its own label, icons and settings,
+into its own build directories (`app/build/<app>.<name>`, an outside app's `target/android.<name>/`; LLP
+1030.008). `./gradlew :canvas:assembleRelease` builds the reader alone.
 
 A component fixture may compile the real app's Kotlin with
 `ORG_GRADLE_PROJECT_modulesDir=<absolute path to the app's modules/android>`. The default
@@ -250,7 +252,7 @@ Not there: a picture from a URL (below, "Not done").
 drives the app the reader shows, on a phone over adb, by the Linux host's own protocol: no second one. `--reader`
 takes the APK `agent-android.mjs build <app> --apk` made (`EXACT_ANDROID_BIN=<apk>` names another), installs it,
 launches it under a driver and speaks the agent API's JSON lines to it. `ANDROID_SERIAL` picks the phone, and
-`ORG_GRADLE_PROJECT_idSuffix` says the package's suffix, as it did to the build.
+`--variant <name>` the variant's package, as it did to the build; an APK built as another package is refused.
 
 **How a line crosses.** The shell's activity attaches an `AgentDrive` at the reader's driver seam (below) when its
 launch says `agent=<name>`: a socket of that name in the abstract namespace, served only to adb's own user (shell

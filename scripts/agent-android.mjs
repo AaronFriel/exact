@@ -316,9 +316,16 @@ const READER = resolve(import.meta.dir, '../host/android');
  * host/android/app/build/<name>; an app outside it builds under its own target directory. No two apps share any of it,
  * so builds of two apps at once neither mix outputs nor wait on one project's locks. */
 export function apkDirs(app) {
-  const own = !within(resolve(READER, '../..'), app.dir), root = resolve(app.target, 'android');
+  // A variant (LLP 1030.008 D5) builds beside the app, so switching does not rebuild the other's APK.
+  const variant = app.manifest?.variant?.name, name = variant ? `${app.name}.${variant}` : app.name;
+  const own = !within(resolve(READER, '../..'), app.dir), root = resolve(app.target, variant ? `android.${variant}` : 'android');
   return own ? { app: resolve(root, 'app'), canvas: resolve(root, 'canvas'), video: resolve(root, 'video'), cache: resolve(root, 'gradle'), kotlin: resolve(root, 'kotlin') }
-    : { app: resolve(READER, 'app/build', app.name), canvas: resolve(READER, 'canvas/build', app.name), video: resolve(READER, 'video/build', app.name), cache: resolve(READER, '.gradle/apps', app.name), kotlin: resolve(READER, '.kotlin/apps', app.name) };
+    : { app: resolve(READER, 'app/build', name), canvas: resolve(READER, 'canvas/build', name), video: resolve(READER, 'video/build', name), cache: resolve(READER, '.gradle/apps', name), kotlin: resolve(READER, '.kotlin/apps', name) };
+}
+/** Refuses the deleted ORG_GRADLE_PROJECT_idSuffix by name: Gradle would read it as an unknown property and build the
+ * plain package, which would look as if it worked. */
+function refuseIdSuffix(env) {
+  if (env.ORG_GRADLE_PROJECT_idSuffix !== undefined) throw new Error('ORG_GRADLE_PROJECT_idSuffix is deleted: declare a variant in app.json "variants" and build it with --variant <name> (LLP 1030.008)');
 }
 /** Where `build <app> --apk` writes the shell's build: the roster it generates (`extensions/`), the merged manifests
  * (`intermediates/`) and the APK (`outputs/apk/`). `app` is a name or a directory, resolved as the build resolves it. */
@@ -339,8 +346,8 @@ const RELAY_CLEANED_ERROR = 70;
 
 /** The reader carrier (LLP 1107 D1): install the APK and return what `androidDeploy` returns, with a process that
  * launches the app under a driver and relays the agent protocol's lines between its stdio and the app (`relay`).
- * The package is host.android.id (default app.id) with the suffix the APK was built with
- * (ORG_GRADLE_PROJECT_idSuffix, as the build reads it). The app boots its own baked plan with its own assets, at the phone's size, in the phone's fonts, or a
+ * The package is host.android.id (default app.id), a selected variant's (LLP 1030.008), and an APK whose record names
+ * another package is refused. The app boots its own baked plan with its own assets, at the phone's size, in the phone's fonts, or a
  * drive's local `--plan`, pushed to the device and named by the launch extra `x_plan` (EXACT_PLAN, which the reader
  * reads as the Linux host does). A drive's `--world`, `--size` and launch URL do not reach it, and are refused (a
  * test that names a size is skipped, agent-test.mjs). A dev loop's `--url` does: the reader polls it (LLP 1122 D4),
@@ -356,7 +363,10 @@ function readerDeploy(app, apk, env) {
   const devUrl = env.EXACT_DEV_PLAN ? URL.parse(env.EXACT_DEV_PLAN) : null;
   if (env.EXACT_DEV_PLAN && !['http:', 'https:'].includes(devUrl?.protocol)) throw new Error('android --reader: a development plan is a dev loop\'s http(s) URL (--url), not a file');
   if (devUrl) env = { ...env, EXACT_DEV_PLAN: devUrl.href };
-  const serial = androidDevice(env), tool = adb(env), id = androidPackageId(app.manifest ?? { app }) + (env.ORG_GRADLE_PROJECT_idSuffix ?? ''); // as the Gradle shell names the package
+  refuseIdSuffix(env);
+  const id = androidPackageId(app.manifest ?? { app }), built = apkRecord(app, apk)?.package; // as the Gradle shell names the package
+  if (built && built !== id) throw new Error(`android --reader: ${apk} installs as ${built}, not ${id}: build it again (bun exact.mjs android${app.manifest?.variant ? ` --variant ${app.manifest.variant.name}` : ''})`);
+  const serial = androidDevice(env), tool = adb(env);
   const dir = `/data/local/tmp/exact/${id}`, shot = `${dir}/reader-shot-${process.pid}.png`;
   const run = (args, what) => {
     const r = spawnSync(tool, ['-s', serial, ...args], { encoding: 'utf8' });
@@ -997,6 +1007,7 @@ export function buildApk(app, env, profile, writeLocks = false, bundle = false) 
   env = java;
   const crate = app.crate('android');
   if (!app.manifest.game && !crateManifest(app, 'android')) throw new Error(`${app.dir} has no android/ crate, the app's library for the Canvas host: bun exact.mjs update adds one to an app that names android in app.json (apps/shelf/android is one)`);
+  refuseIdSuffix(env);
   // The icon and banner first, so a refused one costs no compile.
   const dirs = apkDirs(app);
   let icons;
@@ -1021,7 +1032,7 @@ export function buildApk(app, env, profile, writeLocks = false, bundle = false) 
   // line, so the refusal is the push implementation's own rather than a `required` key's.
   let firebase = null;
   if (bound.some((b) => b.extension === 'push')) {
-    const id = androidPackageId(app.manifest ?? { app }) + (process.env.ORG_GRADLE_PROJECT_idSuffix ?? '');
+    const id = androidPackageId(app.manifest);
     firebase = googleServices(app.dir, id, config.get('push')?.googleServices);
     const missing = `google-services.json from Firebase with a client whose package_name is ${id}, beside app.json or at the path app.json "packages": {"@exact/push": {"android": {"googleServices": "<path>"}}} names`;
     if (!firebase && profile === 'release') { console.error(`${app.name}: push-google-services-missing: a release build that pushes needs a ${missing}`); return null; }
@@ -1050,7 +1061,10 @@ export function buildApk(app, env, profile, writeLocks = false, bundle = false) 
   // A game's resolved manifest (with its `app` identity) is the one its shells were generated with.
   // A date or time control's picker is Compose Material 3's, linked only for a plan that has one (LLP 1115.001.000 D2).
   const compose = uses.includes('dates') ? ['-Pcompose=1'] : [];
-  const development = JSON.parse(readFileSync(resolve(out, 'compat.json'), 'utf8')).embedded?.trust !== 'production';
+  const compat = JSON.parse(readFileSync(resolve(out, 'compat.json'), 'utf8')), development = compat.embedded?.trust !== 'production';
+  // The library's baked identity is the one the APK installs under, as `assertAppleIdentity` holds an Apple build to it
+  // (LLP 1030.008 D2): the JavaScript and the Rust readers resolved the same variant.
+  if (compat.inputs?.app !== app.id) { console.error(`${app.name}: the library's baked app id is ${compat.inputs?.app}, not ${app.id}: build it again`); return null; }
   // A `video` or `audio` plays on Media3, linked for a plan that makes one, and for every development build, whose
   // plan may gain one and has no fallback (LLP 1042.001 D2).
   const video = uses.includes('video') || development ? ['-Pvideo=1'] : [];
@@ -1064,7 +1078,7 @@ export function buildApk(app, env, profile, writeLocks = false, bundle = false) 
     // shipped the reader's old classes once (LLP 1159.002 D1). A daemon started in the locks' own Gradle home would
     // outlive the home.
     assembled = runGradle(['--no-watch-fs', ...(env.CI || graph.env.GRADLE_USER_HOME ? ['--no-daemon'] : []), bundle ? ':app:bundleRelease' : ':app:assembleRelease', `-Papp=${app.name}`, `-PappDir=${app.manifest.game ? app.workspace : app.dir}`,
-      `-PexactDevelopment=${development ? '1' : '0'}`,
+      `-PexactDevelopment=${development ? '1' : '0'}`, `-PapplicationId=${androidPackageId(app.manifest)}`, `-PappName=${app.displayName}`,
       `-PappBuildDir=${dirs.app}`, `-PcanvasBuildDir=${dirs.canvas}`, `-PvideoBuildDir=${dirs.video}`, `-PndkPath=${env.ANDROID_NDK_HOME}`, '--project-cache-dir', dirs.cache, `-Pkotlin.project.persistent.dir=${dirs.kotlin}`,
       ...gpuArgs, ...(icons.icon ? [`-PappIcon=${icons.icon}`] : []), ...(icons.banner ? [`-PappBanner=${icons.banner}`] : []), ...(launch ? [`-PappTheme=${launch}`] : []), ...compose, ...video, ...extensionArgs(app, out, config, bound, firebase), ...graph.args], { env: { ...env, ANDROID_HOME: androidSdk(env), ...graph.env } }, process.platform, { lockAdvice: maven.length && !writeLocks ? `${app.name}: Gradle locks or verification metadata do not match its dependencies; for an intended graph change, run ${androidLockCommand(app)}, then review and commit gradle.lockfile and gradle-verification.xml` : null });
     if (assembled) graph.kept();
@@ -1077,7 +1091,7 @@ export function buildApk(app, env, profile, writeLocks = false, bundle = false) 
   if (kept) { console.error(`exact android: ${kept}`); return null; }
   const keptSound = keptLibrary(readFileSync(sound), zipEntry(readFileSync(apk), `${bundle ? 'base/' : ''}lib/arm64-v8a/libexact_sound.so`), [dirs.app], 'libexact_sound.so');
   if (keptSound) { console.error(`exact android sound: ${keptSound}`); return null; }
-  writeFileSync(resolve(dirname(apk), 'exact-build.json'), JSON.stringify({ started, library: built(crate), workspace: app.workspace ?? app.dir,
+  writeFileSync(resolve(dirname(apk), 'exact-build.json'), JSON.stringify({ started, package: androidPackageId(app.manifest), library: built(crate), workspace: app.workspace ?? app.dir,
     sources: [...READER_SOURCES, ...[resolve(app.dir, 'modules/android')].filter(existsSync), ...icons.files] }) + '\n');
   // What its bake inlined of each setting (LLP 1153 D4), bound to the APK, for a drive to compare with their sources.
   recordBuiltSettings(apk, app, out);
@@ -1232,7 +1246,7 @@ function installApk(app, apk, { run = false, url = null, built = 0, installed: o
     console.error(error.message);
     return 1;
   }
-  const id = androidPackageId(app.manifest ?? { app }) + (process.env.ORG_GRADLE_PROJECT_idSuffix ?? ''), started = Date.now();
+  const id = androidPackageId(app.manifest ?? { app }), started = Date.now();
   const installed = spawnSync(adb(), ['-s', serial, 'install', '-r', apk], { encoding: 'utf8' });
   if (installed.status !== 0 || /^Failure/m.test(installed.stdout)) { console.error(`adb install: ${(installed.stderr || installed.stdout).trim()}`); return 1; }
   console.error(`built in ${(built / 1000).toFixed(1)} s, installed on ${serial} as ${id} in ${((Date.now() - started) / 1000).toFixed(1)} s`);
@@ -1260,7 +1274,8 @@ function installApk(app, apk, { run = false, url = null, built = 0, installed: o
 export async function apkBuildFirst(app) {
   const { apkChanges } = await import('./agent-stdio.mjs'), { bakedSettingChanges } = await import('./agent-launch.mjs'), apk = readerApk(app);
   const why = !existsSync(apk) ? 'no APK yet' : apkChanges(app, apk).length ? 'the APK is older than its sources'
-    : bakedSettingChanges(apk, app).length ? 'a setting changed since the APK was built' : null;
+    : bakedSettingChanges(apk, app).length ? 'a setting changed since the APK was built'
+      : (apkRecord(app, apk)?.package ?? androidPackageId(app.manifest)) !== androidPackageId(app.manifest) ? 'the APK installs as another package' : null;
   if (!why) return null;
   console.error(`building the APK (${why}): bun exact.mjs android`);
   const started = Date.now(), r = spawnSync(process.execPath, [import.meta.path, 'build', app.dir, '--apk'], { encoding: 'utf8', maxBuffer: 256 << 20 });
