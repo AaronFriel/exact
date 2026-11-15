@@ -73,6 +73,7 @@ impl Store for Updates {
             entry: prepared.generation.entry,
             seq: prepared.generation.seq,
             plan: prepared.plan,
+            names: prepared.assets.names(),
             assets: Arc::new(move |name| prepared.assets.resolve(name)),
         })
     }
@@ -106,6 +107,7 @@ impl Store for Updates {
                 entry: prepared.generation.entry,
                 seq: prepared.generation.seq,
                 plan: prepared.plan,
+                names: prepared.assets.names(),
                 assets: Arc::new(move |name| prepared.assets.resolve(name)),
             }),
         )

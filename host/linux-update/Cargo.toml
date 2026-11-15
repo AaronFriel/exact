@@ -18,4 +18,8 @@ caltrain = { path = "../../apps/caltrain" }
 caltrain-data = { path = "../../apps/caltrain/data" }
 exact-kernel = { path = "../../kernel" }
 contract = { path = "../../contract/cli" }
+# A selected TypeScript pair, baked and run (src/app_tests/typescript.rs).
+exact-js = { path = "../../js" }
+exact-js-bake = { path = "../../js/bake" }
+exact-logic = { path = "../../logic" }
 serde_json = "1.0"

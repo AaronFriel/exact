@@ -329,7 +329,8 @@ impl<D: DataSource> Presenter<D> {
         delivery.seq = candidate.seq;
         delivery.staged = false;
         let module =
-            crate::delivery::Module::resolve(&candidate.assets).map_err(HostError::Asset)?;
+            crate::delivery::Module::resolve(&candidate.assets, &candidate.names, &self.compat)
+                .map_err(HostError::Asset)?;
         let kept = self.focus_place();
         let mut carried = self.host.carry();
         let data = self.prepare_logic(
@@ -583,6 +584,7 @@ component App
                 seq: 1,
                 plan: self.0.clone(),
                 assets: Arc::new(|_| Ok(None)),
+                names: Vec::new(),
             }))
         }
         fn commit_activation(&mut self, entry: Option<String>, seq: u64) -> Result<(), String> {

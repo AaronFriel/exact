@@ -377,6 +377,11 @@ impl Config {
                 self.plan = prepared.plan.to_vec().into();
                 self.fallback_plan = Some(baked.to_vec());
                 self.entry = prepared.entry;
+                self.module = crate::delivery::Module::resolve(
+                    &prepared.assets,
+                    &prepared.names,
+                    &self.compat,
+                );
                 self.selected_assets = Some(prepared.assets);
             }
         }
@@ -583,10 +588,7 @@ pub(crate) fn boot_presenter_with_painter<D: DataSource + Default>(
             updates.boot_started();
         }
     }
-    let module = match &config.selected_assets {
-        Some(assets) => crate::delivery::Module::resolve(assets),
-        None => config.module.clone(),
-    };
+    let module = config.module.clone();
     let admitted = crate::traced(c"boot data construction", D::default);
     let source = module
         .as_ref()

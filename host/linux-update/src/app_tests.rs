@@ -7,7 +7,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::time::Duration;
 
-const UPDATE_COMPAT: &str = r#"{"id":"fixture00000000","inputs":{"app":"com.exact.fixture","keys":null,"trust":"development","store":{"L":"A"}},"delivery":{"channel":"prod","origin":"https://updates.example"}}"#;
+const UPDATE_COMPAT: &str = r#"{"id":"fixture00000000","inputs":{"app":"com.exact.fixture","keys":null,"trust":"development","store":{"L":"A"},"rustMode":"wasm"},"delivery":{"channel":"prod","origin":"https://updates.example"}}"#;
 /// Dev binaries check only a named origin; name the fixture's.
 const ORIGIN: &str = "https://updates.example";
 
@@ -35,7 +35,18 @@ fn checked(
     assets: &[(&str, Vec<u8>)],
     running: bool,
 ) -> Client {
-    let mut client = Client::open_at(dir, dir, UPDATE_COMPAT, baked, Some(ORIGIN)).unwrap();
+    checked_as(UPDATE_COMPAT, dir, baked, plan, assets, running)
+}
+
+fn checked_as(
+    compat: &str,
+    dir: &Path,
+    baked: &[u8],
+    plan: &[u8],
+    assets: &[(&str, Vec<u8>)],
+    running: bool,
+) -> Client {
+    let mut client = Client::open_at(dir, dir, compat, baked, Some(ORIGIN)).unwrap();
     if running {
         client.boot_started().unwrap();
     }
@@ -89,11 +100,15 @@ fn checked(
         client
     } else {
         drop(client);
-        Client::open_at(dir, dir, UPDATE_COMPAT, baked, Some(ORIGIN)).unwrap()
+        Client::open_at(dir, dir, compat, baked, Some(ORIGIN)).unwrap()
     }
 }
 
 fn selected_config(dir: &Path, baked: &[u8], client: Client) -> Config {
+    selected_config_as(UPDATE_COMPAT, dir, baked, client)
+}
+
+fn selected_config_as(compat: &str, dir: &Path, baked: &[u8], client: Client) -> Config {
     let mut config = Config {
         content_region: None,
         launch: "/".into(),
@@ -111,7 +126,7 @@ fn selected_config(dir: &Path, baked: &[u8], client: Client) -> Config {
         dev_said: None,
         card: String::new(),
         vnc: None,
-        compat: UPDATE_COMPAT.into(),
+        compat: compat.into(),
         explicit: false,
         entry: None,
         selected_assets: None,
@@ -126,6 +141,8 @@ fn selected_config(dir: &Path, baked: &[u8], client: Client) -> Config {
     config.use_updates(Box::new(Updates::from_client(client).unwrap()), baked);
     config
 }
+
+mod typescript;
 
 #[test]
 fn an_analysis_boot_refuses_before_touching_an_attached_selection() {
