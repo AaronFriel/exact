@@ -1,6 +1,7 @@
 // What a Mac build signs that only a provisioning profile authorizes (Apple
 // TN3125; LLP 1133.010 D7): the device rows' Mac entitlements (push, App
-// Attest, the Declared Age Range, Group Activities), the keychain group a locked secret is kept
+// Attest, the Declared Age Range, Group Activities, the iCloud key-value
+// store), the keychain group a locked secret is kept
 // in (a Mac keeps one only in the data-protection keychain, whose access
 // groups the signature names, TN3137), a passkey's associated domains, and
 // Sign in with Apple's and Apple Pay's entitlements (LLP 1030.005 §6 piece 4).
@@ -23,6 +24,8 @@ export function presenceLines(ceiling = '') {
 
 const KEYCHAIN = 'keychain-access-groups', DOMAINS = 'com.apple.developer.associated-domains';
 const SIGN_IN = 'com.apple.developer.applesignin', PAY = 'com.apple.developer.in-app-payments';
+/** `device.icloud-kv`'s entitlement, valued as the application identifier is: `<prefix>.<bundle id>`. */
+export const KEY_VALUE_STORE = 'com.apple.developer.ubiquity-kvstore-identifier';
 /** Each device row's Mac profile entitlement (`reach.profileEntitlements`, runner/src/device.rs): its line, what the
  * app reports while it is not signed, and whether a release without it is refused. A Mac release without push ships,
  * reporting it unavailable, as Android and the web do (LLP 1133.004 §9 P7), and so does one without SharePlay, whose
@@ -32,6 +35,8 @@ const ROW_EFFECTS = {
   'com.apple.developer.devicecheck.appattest-environment': ['device.attestation', 'attestationStatus().available is false and attest fails NotSupportedError', true],
   'com.apple.developer.declared-age-range': ['device.age-range', 'ageRangeStatus().available is false and requestAgeRange fails NotSupportedError', true],
   'com.apple.developer.group-session': ['device.shareplay', 'SharePlay is unavailable to the app', false],
+  // Unsigned, the store keeps values on this Mac without saying so, so a release that cannot sign it is refused.
+  [KEY_VALUE_STORE]: ['device.icloud-kv', 'NSUbiquitousKeyValueStore keeps its values on this Mac and syncs none', true],
 };
 
 /** Whether a build signs device grant `line` (`device.<row>`): the bake's ceiling grants it, and on the Mac
@@ -120,6 +125,7 @@ export function macProfileEntitlements(app, profile, needs, compat) {
     else if (entitlement === DOMAINS) out[DOMAINS] = associatedDomains(compat?.reach?.auth, profile.dev);
     else if (entitlement === SIGN_IN) out[SIGN_IN] = ['Default'];
     else if (entitlement === PAY) out[PAY] = compat?.reach?.payments?.merchantIds ?? [];
+    else if (entitlement === KEY_VALUE_STORE) out[KEY_VALUE_STORE] = out['com.apple.application-identifier'];
     else out[entitlement] = entitlement.endsWith('-environment') ? signedEnvironment(profile.dev) : true;
   }
   return out;
@@ -272,21 +278,24 @@ export function signInEntitlement(auth, { simulator = false, team = null, allows
   return (auth?.signIn?.apple ?? []).length && signable ? { 'com.apple.developer.applesignin': ['Default'] } : {};
 }
 
-/** A grant's entitlement's value (`reach.entitlements`): `true`, or the string the build chooses (LLP 1133.028 D15
+/** A grant's entitlement's value (`reach.entitlements`): `true`, the bundle's `identifier` (its
+ * `application-identifier`) for the iCloud key-value store, or the string the build chooses (LLP 1133.028 D15
  * item 1). An environment follows the signing, not the compiler: `debuggable` is the signing profile's
  * `get-task-allow`, true on a simulator, so `development` there and under a development profile and `production`
  * under the others. App Attest's and push's (`aps-environment`, LLP 1133.004 §9 P2, which a Live Activity that takes
  * pushes signs too); Apple uses production for TestFlight and App Store builds whatever they say. */
-export function entitlementValue(name, debuggable) {
+export function entitlementValue(name, debuggable, identifier = null) {
   if (name === 'com.apple.developer.devicecheck.appattest-environment' || name === 'aps-environment') return signedEnvironment(debuggable);
+  if (name === KEY_VALUE_STORE) return identifier;
   return true;
 }
 
 /** The grant entitlements (`reach.entitlements`) a bundle of `app` signs, and so the ones its profile must allow:
- * all of them for the app, none of push's for an App Clip, whose notifications are ephemeral (`NSAppClip`), or for an
- * extension, which reads no token (LLP 1133.004 §9 P2). The signature and the profile check both read this. */
+ * all of them for the app; for an App Clip, whose notifications are ephemeral (`NSAppClip`), or an extension, which
+ * reads no token, none of push's (LLP 1133.004 §9 P2), and none of the iCloud key-value store's, which is the app's.
+ * The signature and the profile check both read this. */
 export function grantEntitlements(app, names = []) {
-  return app.clipParent || app.widgetAppId ? names.filter((name) => name !== 'aps-environment') : names;
+  return app.clipParent || app.widgetAppId ? names.filter((name) => name !== 'aps-environment' && name !== KEY_VALUE_STORE) : names;
 }
 
 /** @ref LLP 1133.034 D13 — the `payment.apple-pay` grants' merchant IDs, where they can be signed: on a simulator, or

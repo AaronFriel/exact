@@ -3291,6 +3291,12 @@ writes the line, the build signs the row's entitlements, and `exact deploy`'s re
 it. `device.shareplay`, added for such a package, signs Group Activities'
 `com.apple.developer.group-session` on iOS and, under a provisioning profile that allows it,
 on the Mac; not on tvOS. A Mac build without such a profile signs none and still ships.
+`device.icloud-kv`, for an app module that uses `NSUbiquitousKeyValueStore`, names no purpose
+and signs `com.apple.developer.ubiquity-kvstore-identifier` with the app's application
+identifier (`<team prefix>.<bundle id>`, `SIMULATORX.<bundle id>` on a simulator) on iOS and
+tvOS and, under a profile that allows it, on the Mac. Its App Clip and extensions sign none. A
+device build needs a profile with the iCloud capability; a Mac release without one is refused,
+since the store would keep its values on that Mac without saying so.
 
 **Host events.** A call the system makes on a delegate, held by ExactKit until the package
 that takes it drains it, even when it came before the package's module loaded. The list is

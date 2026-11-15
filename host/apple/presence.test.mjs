@@ -322,3 +322,48 @@ test('the Mac sample host takes the app\'s id under its profile, and a second id
   expect(macHostIdentity(app, { name: 'Notes Mac', appId: 'TEAM.com.example.notes' })).toEqual({ id: 'com.example.notes', name: 'Host (not Exact)' });
   expect(macHostIdentity(app, null).id).toBe('com.example.notes.host');
 });
+
+test('the iCloud key-value store signs the application identifier as its value, where a profile allows it (expo/exact#663)', async () => {
+  const { entitlements, SIMULATOR_PREFIX } = await import('./build.mjs');
+  const { KEY_VALUE_STORE, macProfileEntitlements } = await import('./presence.mjs');
+  const { profile: iosProfile, allows } = await import('./devices.mjs');
+  const { mkdtempSync, copyFileSync, writeFileSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const store = { id: 'com.example.notes', manifest: { host: { ios: {} } } };
+  const reach = { entitlements: [KEY_VALUE_STORE] };
+  const value = (plist) => new RegExp(`<key>${KEY_VALUE_STORE.replaceAll('.', '\\.')}</key>\\s*<string>([^<]*)</string>`).exec(plist)?.[1];
+  // iOS: the signing profile's prefix, or a simulator's; an App Clip and an extension sign none.
+  const device = entitlements(store, 'TEAMID0000', true, reach, { prefix: 'PREFIX0000' });
+  expect(value(device)).toBe('PREFIX0000.com.example.notes');
+  expect(value(entitlements(store, null, true, reach, { simulator: true }))).toBe(`${SIMULATOR_PREFIX}.com.example.notes`);
+  expect(entitlements({ ...store, id: 'com.example.notes.Clip', clipParent: store.id }, null, true, reach, { simulator: true })).not.toContain(KEY_VALUE_STORE);
+  expect(entitlements({ ...store, widgetAppId: store.id }, null, true, reach, { simulator: true })).not.toContain(KEY_VALUE_STORE);
+  // The signature carries it: codesign reads it back from a signed executable.
+  const dir = mkdtempSync(join(tmpdir(), 'exact-kvstore-'));
+  try {
+    const bin = join(dir, 'true'), ent = join(dir, 'e.plist');
+    copyFileSync('/usr/bin/true', bin);
+    writeFileSync(ent, device);
+    expect(Bun.spawnSync(['codesign', '--force', '--sign', '-', '--entitlements', ent, bin]).exitCode).toBe(0);
+    expect(value(Bun.spawnSync(['codesign', '-d', '--entitlements', '-', '--xml', bin]).stdout.toString())).toBe('PREFIX0000.com.example.notes');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+  // An iOS device build needs a profile that allows it: one without iCloud is refused, naming the entitlement.
+  const ios = (entitlements, name) => ({ name, team: 'TEAMID0000', prefix: 'PREFIX0000', appId: 'PREFIX0000.*', path: `/p/${name}`, platforms: ['iOS'],
+    devices: ['PHONE'], dev: true, method: 'development', expires: new Date(Date.now() + 864e7), entitlements, keychain: [], groups: [] });
+  const without = ios(['application-identifier'], 'no iCloud'), withStore = ios(['application-identifier', KEY_VALUE_STORE], 'iCloud');
+  expect(allows(without, reach.entitlements)).toBe(false);
+  expect(() => iosProfile('PHONE', store.id, reach.entitlements, { installed: [without], named: null, team: null }))
+    .toThrow(/^grant-device-profile: com\.apple\.developer\.ubiquity-kvstore-identifier is needed by this app's grants/);
+  expect(iosProfile('PHONE', store.id, reach.entitlements, { installed: [without, withStore], named: null, team: null })).toBe(withStore);
+  // The Mac: only under a profile that allows it, valued from that profile; a release without one is refused.
+  const compat = bake('device.icloud-kv', [KEY_VALUE_STORE]), said = [];
+  expect(macProvisioning(store, compat, { find: none, log: (l) => said.push(l) })).toBeNull();
+  expect(said).toEqual([expect.stringMatching(/^device\.icloud-kv: this build signs no com\.apple\.developer\.ubiquity-kvstore-identifier, since .*: NSUbiquitousKeyValueStore keeps its values on this Mac and syncs none\.$/)]);
+  expect(() => macProvisioning(store, compat, { release: true, find: none })).toThrow(/^grant-needs-profile: device\.icloud-kv: /);
+  const mac = (entitlements, name) => ({ ...ios(entitlements, name), platforms: ['OSX'], devices: ['THIS-MAC'] });
+  expect(macProfile(store, [KEY_VALUE_STORE], { installed: [mac([], 'no iCloud')], named: null, udid: 'THIS-MAC', team: null })).toBeNull();
+  const chosen = mac([KEY_VALUE_STORE], 'iCloud');
+  expect(macProfile(store, [KEY_VALUE_STORE], { installed: [chosen], named: null, udid: 'THIS-MAC', team: null })).toBe(chosen);
+  expect(macProfileEntitlements(store, chosen, macProfileNeeds(compat), compat)[KEY_VALUE_STORE]).toBe('PREFIX0000.com.example.notes');
+});

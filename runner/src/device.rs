@@ -582,6 +582,20 @@ pub const DEVICES: &[Device] = &[
         tvos: false,
         ..ROW
     },
+    // The iCloud key-value store, for an app's own Swift module (expo/exact#663):
+    // nothing is asked, and without the entitlement `NSUbiquitousKeyValueStore`
+    // keeps values on the one device. Its value is the team prefix and the
+    // bundle id, as `application-identifier` is (Apple, "Synchronizing app
+    // preferences with iCloud"), which the Apple build derives at signing
+    // (`host/apple/presence.mjs`); a Mac takes it only with a profile.
+    Device {
+        name: "icloud-kv",
+        sandbox: Some(Sandbox::Profile),
+        purpose: false,
+        ios_entitlements: &["com.apple.developer.ubiquity-kvstore-identifier"],
+        macos_profile: &["com.apple.developer.ubiquity-kvstore-identifier"],
+        ..ROW
+    },
     // App Tracking Transparency (D13): iOS and tvOS alone; Apple lists the
     // key for no Mac.
     Device {
@@ -951,6 +965,22 @@ mod tests {
         assert_eq!(row.macos_profile, ["com.apple.developer.group-session"]);
         assert!(!row.tvos && row.ios.is_empty() && row.macos.is_empty() && row.web.is_none());
         let errors = device_grants("device.shareplay purpose.play").unwrap_err();
+        assert!(errors[0].contains("names no purpose"), "{errors:?}");
+    }
+
+    /// The iCloud key-value store names no purpose and signs one entitlement,
+    /// whose value the Apple build derives, on iOS, tvOS and under a Mac profile.
+    #[test]
+    fn icloud_kv_signs_the_key_value_store_entitlement() {
+        let rows = device_grants("device.icloud-kv").unwrap();
+        let row = rows[0].device;
+        let key = "com.apple.developer.ubiquity-kvstore-identifier";
+        assert!(rows[0].purpose.is_empty());
+        assert_eq!(row.ios_entitlements, [key]);
+        assert!(row.ios_entitlement_values.is_empty(), "derived at signing");
+        assert_eq!(row.macos_profile, [key]);
+        assert!(row.tvos && row.ios.is_empty() && row.android.is_empty() && row.web.is_none());
+        let errors = device_grants("device.icloud-kv purpose.sync").unwrap_err();
         assert!(errors[0].contains("names no purpose"), "{errors:?}");
     }
 

@@ -1259,7 +1259,7 @@ Some entitlements hold on a Mac only under a provisioning profile that
 authorizes them (Apple TN3125), and the Mac build signs them from one (LLP
 1133.010 D7): push's `com.apple.developer.aps-environment` (`device.push`), App
 Attest's environment (`device.attestation`), the Declared Age Range
-(`device.age-range`), Group Activities (`device.shareplay`), the keychain group a locked secret is kept in
+(`device.age-range`), Group Activities (`device.shareplay`), the iCloud key-value store (`device.icloud-kv`), the keychain group a locked secret is kept in
 (`secret.keep` with a presence policy), and a passkey's associated domains
 (`auth.passkey`). An app whose grants need any of them is built from the
 newest installed macOS profile for its id (or the team's wildcard) that allows

@@ -355,7 +355,7 @@ export const entitlements = (app, team = null, debuggable = true, reach = null, 
   const clips = appClip(app) && !app.widgetTV ? linked.filter((d) => d.startsWith('applinks:')).map((d) => `appclips:${d.slice('applinks:'.length)}`) : [];
   const all = [...new Set([...(app.clipParent ? linked.filter((d) => !d.startsWith('applinks:')) : linked), ...clips])];
   if (all.length) dict['com.apple.developer.associated-domains'] = all;
-  for (const name of grantEntitlements(app, reach?.entitlements)) dict[name] = reach.entitlementValues?.[name] ?? entitlementValue(name, debuggable);
+  for (const name of grantEntitlements(app, reach?.entitlements)) dict[name] = reach.entitlementValues?.[name] ?? entitlementValue(name, debuggable, dict['application-identifier']);
   Object.assign(dict, merchantEntitlement(reach, { simulator, team, allows }));
   return plistFile({ ...dict, ...signInEntitlement(reach?.auth, { simulator, team, allows }) });
 };
