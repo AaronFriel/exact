@@ -55,7 +55,9 @@ fn native_active_colors_replace_only_the_authored_fields() {
     assert!(
         shown
             .data()
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .any(|c| c[2] > 240 && c[0] < 20 && c[1] < 20),
         "the native title shows its active ink"
     );

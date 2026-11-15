@@ -599,7 +599,7 @@ impl<D: DataSource + Default + 'static> App<D> {
                     height
                 ));
             }
-            for (out, pixel) in buffer.iter_mut().zip(frame.data().chunks_exact(4)) {
+            for (out, pixel) in buffer.iter_mut().zip(frame.data().as_chunks::<4>().0) {
                 *out =
                     (u32::from(pixel[0]) << 16) | (u32::from(pixel[1]) << 8) | u32::from(pixel[2]);
             }

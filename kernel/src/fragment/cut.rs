@@ -794,8 +794,8 @@ fn publish(
             continue;
         }
         let mut rects = Vec::with_capacity(cl - cf + 1);
-        for k in cf..=cl {
-            let s = walk.starts[k].1;
+        for (k, start) in (cf..).zip(&walk.starts[cf..=cl]) {
+            let s = start.1;
             let top = if k == cf { b.top } else { s };
             let end = if k == cl { b.bottom } else { s + g.h };
             let (dx, dy) = shift(k);

@@ -727,7 +727,7 @@ impl TextMeasurer for CallbackMeasurer {
         });
         out.truncate(count.min(out.len()));
         // A non-finite pair is a box on no line, which the kernel hides.
-        origins.extend(out.chunks_exact(2).map(|p| (p[0], p[1])));
+        origins.extend(out.as_chunks::<2>().0.iter().map(|p| (p[0], p[1])));
     }
 
     /// @ref LLP 1093 D6 — the paragraph's line boxes, from the app's hook.

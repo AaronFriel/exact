@@ -1021,7 +1021,8 @@ ureq 3.4.0 vendored under another name (`vendor/ureq/EXACT-PATCHES.md`): the
 portable transport implements ureq's `unversioned` traits, which change
 between minor releases, and an app's own `ureq` must resolve apart from it
 (LLP 1153.003 D6.5). `hermes-lean-sys` and its installer call only `ureq::get`
-and require `"3"`. Replay on a refresh.
+and require `"3"`. The atomics call `try_update`, Rust's current name for the
+deprecated `fetch_update`. Replay on a refresh.
 
 ## Terminal heap exhaustion
 

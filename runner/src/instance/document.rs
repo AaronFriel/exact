@@ -164,7 +164,7 @@ impl DocTree {
                 && n.props.str(PropId::SemanticTag) == Some("header")
                 && up.is_some_and(|p| p.props.get(PropId::NavigationKey).is_some())
                 || alert(n)
-                || up.is_some_and(&alert) && !button(n)
+                || up.is_some_and(alert) && !button(n)
                 || surface(n)
         };
         let mut at = Some(node);

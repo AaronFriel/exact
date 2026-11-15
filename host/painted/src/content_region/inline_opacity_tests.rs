@@ -63,7 +63,12 @@ fn retained_inline_opacity_uses_the_accepted_source() {
         "text-shadow=\"0px 40px 0px red\"",
     ] {
         let full = draw(1., paint);
-        assert!(full.data().chunks_exact(4).any(|p| p != [255; 4]));
+        assert!(full
+            .data()
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .any(|p| *p != [255; 4]));
         for opacity in [0., 0.5] {
             let actual = draw(opacity, paint);
             for (a, s) in actual.data().iter().zip(full.data()) {
@@ -114,7 +119,11 @@ fn retained_inline_opacity_is_the_presented_opacity() {
     assert!(error.is_none(), "{error:?}");
     let live = live.frame().clone();
     assert!(
-        live.data().chunks_exact(4).all(|p| p == [255; 4]),
+        live.data()
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .all(|p| *p == [255; 4]),
         "the live painter shows the run at its presented opacity, 0"
     );
     assert!(

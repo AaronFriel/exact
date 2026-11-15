@@ -459,7 +459,7 @@ fn mixed_appearance_translucent_gradient_keeps_legacy_premultiplication() {
             exact_kernel::gradient::premultiplied_ramp(&expected.layers()[0].resolved(false));
         let stops = gradient[legacy_key].as_array().unwrap();
         assert_eq!(stops.len(), ramp.len() * 5);
-        for (row, (at, c)) in stops.chunks_exact(5).zip(ramp) {
+        for (row, (at, c)) in stops.as_chunks::<5>().0.iter().zip(ramp) {
             assert!((row[0].as_f64().unwrap() - f64::from(at)).abs() < 0.00001);
             assert_eq!(
                 &row[1..],

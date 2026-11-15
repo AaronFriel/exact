@@ -64,8 +64,10 @@ impl Painter {
         // The band: what the dilation covers and the erosion does not.
         for (px, e) in band
             .data_mut()
-            .chunks_exact_mut(4)
-            .zip(inside.data().chunks_exact(4))
+            .as_chunks_mut::<4>()
+            .0
+            .iter_mut()
+            .zip(inside.data().as_chunks::<4>().0)
         {
             let keep = 255 - e[3] as u32;
             for v in px.iter_mut() {
@@ -261,14 +263,16 @@ mod tests {
                     ts.post_scale(scale, scale),
                     None,
                 );
-                assert!(expected.data().chunks_exact(4).any(|p| p[3] > 0));
+                assert!(expected.data().as_chunks::<4>().0.iter().any(|p| p[3] > 0));
                 let mut inside = expected.clone();
                 morphology(&mut expected, scale, true);
                 morphology(&mut inside, scale, false);
                 for (px, e) in expected
                     .data_mut()
-                    .chunks_exact_mut(4)
-                    .zip(inside.data().chunks_exact(4))
+                    .as_chunks_mut::<4>()
+                    .0
+                    .iter_mut()
+                    .zip(inside.data().as_chunks::<4>().0)
                 {
                     for v in px {
                         *v = ((*v as u32 * (255 - e[3] as u32) + 127) / 255) as u8;
@@ -276,8 +280,10 @@ mod tests {
                 }
                 let different = actual
                     .data()
-                    .chunks_exact(4)
-                    .zip(expected.data().chunks_exact(4))
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .zip(expected.data().as_chunks::<4>().0)
                     .filter(|(a, b)| a != b)
                     .count();
                 assert_eq!(different, 0, "origin {origin:?}, scale {scale}");
@@ -325,11 +331,13 @@ mod tests {
             painter.backend.begin(200.0, 200.0, 1.0);
             painter.stroke_pass(&paragraph, &palette, 2.0, origin, ts);
             let expected = painter.backend.finish().unwrap();
-            assert!(expected.data().chunks_exact(4).any(|p| p[3] > 0));
+            assert!(expected.data().as_chunks::<4>().0.iter().any(|p| p[3] > 0));
             let different = actual
                 .data()
-                .chunks_exact(4)
-                .zip(expected.data().chunks_exact(4))
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .zip(expected.data().as_chunks::<4>().0)
                 .filter(|(a, b)| a != b)
                 .count();
             assert_eq!(different, 0, "move from {old:?} to {origin:?}");
@@ -370,7 +378,7 @@ mod tests {
             .borrow_mut()
             .get(2.0, 3.0, &palette, (0.0, 0.0), &paragraph)
             .unwrap();
-        assert!(first.data().chunks_exact(4).any(|p| p[3] > 0));
+        assert!(first.data().as_chunks::<4>().0.iter().any(|p| p[3] > 0));
         let mut moved = palette;
         moved[0].source = 20;
         painter.stroke_pass(
@@ -407,7 +415,7 @@ mod tests {
             .borrow_mut()
             .get(2.0, 1.0, &moved, (0.0, 0.0), &paragraph)
             .unwrap();
-        assert!(red.data().chunks_exact(4).any(|p| p[0] > 0));
+        assert!(red.data().as_chunks::<4>().0.iter().any(|p| p[0] > 0));
         assert_eq!(
             BAND_BUILDS.get() - before,
             4,
@@ -522,8 +530,18 @@ mod tests {
                 .borrow_mut()
                 .get(2.0, 1.0, palette, (0.0, 0.0), &paragraph)
                 .unwrap();
-            assert!(band.data().chunks_exact(4).any(|p| p[channel] > 0));
-            assert!(band.data().chunks_exact(4).all(|p| p[2 - channel] == 0));
+            assert!(band
+                .data()
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .any(|p| p[channel] > 0));
+            assert!(band
+                .data()
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .all(|p| p[2 - channel] == 0));
         }
         assert_eq!(
             text.borrow().residency().owned_capacity_bytes - bytes_before,
@@ -558,7 +576,7 @@ mod tests {
         for (w, h) in [(1, 1), (9, 7), (32, 16)] {
             let mut source = Pixmap::new(w, h).unwrap();
             let mut seed = 1234u32;
-            for pixel in source.data_mut().chunks_exact_mut(4) {
+            for pixel in source.data_mut().as_chunks_mut::<4>().0 {
                 seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
                 let a = (seed >> 24) as u8;
                 pixel.copy_from_slice(&[a / 2, a / 3, a, a]);

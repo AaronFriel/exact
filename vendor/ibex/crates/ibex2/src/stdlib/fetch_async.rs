@@ -899,7 +899,7 @@ impl WorkerService for BoundedWorkerPool {
             .as_ref()
             .ok_or_else(|| HostError::Failed("HTTP workers retired".into()))?;
         self.occupied
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| {
+            .try_update(Ordering::AcqRel, Ordering::Acquire, |n| {
                 (n < self.capacity).then_some(n + 1)
             })
             .map_err(|_| HostError::Failed("HTTP worker capacity exhausted".into()))?;

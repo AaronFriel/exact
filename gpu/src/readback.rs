@@ -83,7 +83,8 @@ impl Readback {
                 .zip(mapped.chunks_exact(self.row as usize))
             {
                 if bgra {
-                    for (d, s) in dst.chunks_exact_mut(4).zip(src.chunks_exact(4)) {
+                    for (d, s) in std::iter::zip(dst.as_chunks_mut::<4>().0, src.as_chunks::<4>().0)
+                    {
                         d.copy_from_slice(&[s[2], s[1], s[0], s[3]]);
                     }
                 } else {
@@ -273,8 +274,10 @@ mod tests {
             let mut output = vec![77; len + 4];
             assert_eq!(module.readback_into(id, &frame, &mut output), Some(true));
             assert!(output[..len]
-                .chunks_exact(4)
-                .all(|pixel| pixel == [red as u8, 0, 255, 255]));
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .all(|pixel| *pixel == [red as u8, 0, 255, 255]));
             assert_eq!(&output[len..], &[77; 4], "caller suffix remains untouched");
             let mut short = vec![77; len - 1];
             assert!(module.readback_into(id, &frame, &mut short).is_none());

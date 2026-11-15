@@ -156,8 +156,10 @@ fn block_payloads_draw_the_rgba8_material_within_tolerance() {
         let (mut sum, mut worst, mut changed) = (0u64, 0u8, 0);
         for (a, b) in reference
             .data
-            .chunks_exact(4)
-            .zip(image.data.chunks_exact(4))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(image.data.as_chunks::<4>().0)
         {
             let d = (0..3).map(|c| a[c].abs_diff(b[c])).max().unwrap();
             sum += u64::from(d);

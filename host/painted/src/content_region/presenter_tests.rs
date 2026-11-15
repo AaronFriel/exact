@@ -1312,11 +1312,19 @@ fn retained_text_stays_inside_its_overflow_clip() {
     assert!(p.last_frame_succeeded);
     let paragraph = p.host.kernel().node(id(&p, "paragraph")).unwrap().frame;
     let width = frame.width() as usize;
-    let red = |p: &[u8]| p[0] > 128 && p[1] < 100 && p[2] < 100;
-    let inside = frame.data().chunks_exact(4).filter(|p| red(p)).count();
+    let red = |p: &[u8; 4]| p[0] > 128 && p[1] < 100 && p[2] < 100;
+    let inside = frame
+        .data()
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .filter(|p| red(p))
+        .count();
     let past = frame
         .data()
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .enumerate()
         .filter(|(i, p)| (i % width) as f32 >= paragraph.width + 2.0 && red(p))
         .count();

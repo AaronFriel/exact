@@ -193,10 +193,10 @@ fn sprites_use_blocks_only_where_they_decode_exactly() {
         let authored = read(&format!("{stem}.tex"));
         for family in ["bc", "astc"] {
             let t = read(&format!("{stem}.{family}.tex"));
-            for level in 0..t.mips.len() {
+            for (level, mip) in authored.mips[..t.mips.len()].iter().enumerate() {
                 assert_eq!(
                     exact_game_bake::compress::decode(&t, level),
-                    authored.mips[level],
+                    *mip,
                     "{stem}.{family}.tex level {level} keeps the palette"
                 );
             }
@@ -538,13 +538,18 @@ fn masked_coverage_survives_block_encoding() {
     let stem = name.strip_suffix(".tex").unwrap();
     let rgba = &textures[name];
     let covered = |texels: &[u8]| {
-        let n = texels.chunks_exact(4).filter(|p| p[3] >= 128).count();
+        let n = texels
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .filter(|p| p[3] >= 128)
+            .count();
         n as f64 / (texels.len() / 4) as f64
     };
     for family in ["bc", "astc"] {
         let t = &textures[&format!("{stem}.{family}.tex")];
-        for level in 0..t.mips.len() - 2 {
-            let expected = covered(&rgba.mips[level]);
+        for (level, mip) in rgba.mips[..t.mips.len() - 2].iter().enumerate() {
+            let expected = covered(mip);
             let actual = covered(&exact_game_bake::compress::decode(t, level));
             eprintln!("{family} level {level}: {actual:.3} vs {expected:.3}");
             assert!(

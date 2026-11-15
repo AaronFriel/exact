@@ -145,7 +145,7 @@ fn pixels(engine: &mut TextEngine, p: &Paragraph) -> Vec<u8> {
         Transform::identity(),
         None,
     );
-    assert!(image.data().chunks_exact(4).any(|p| p[3] != 0));
+    assert!(image.data().as_chunks::<4>().0.iter().any(|p| p[3] != 0));
     image.data().to_vec()
 }
 #[test]

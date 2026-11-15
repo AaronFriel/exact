@@ -22,19 +22,19 @@ fn identity(name: &str) -> bool {
 }
 
 fn leaf(name: &str) -> bool {
-    if name.is_empty() || matches!(name, "." | "..") || name.contains('\0') {
-        return false;
-    }
-    #[cfg(windows)]
-    {
-        let mut parts = Path::new(name).components();
-        if exact_grants::WindowsPath::validate_component(name).is_err()
-            || !matches!(parts.next(), Some(std::path::Component::Normal(_)))
-            || parts.next().is_some()
-        {
-            return false;
-        }
-    }
+    !(name.is_empty() || matches!(name, "." | "..") || name.contains('\0')) && platform_leaf(name)
+}
+
+#[cfg(windows)]
+fn platform_leaf(name: &str) -> bool {
+    let mut parts = Path::new(name).components();
+    exact_grants::WindowsPath::validate_component(name).is_ok()
+        && matches!(parts.next(), Some(std::path::Component::Normal(_)))
+        && parts.next().is_none()
+}
+
+#[cfg(not(windows))]
+fn platform_leaf(_: &str) -> bool {
     true
 }
 

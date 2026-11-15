@@ -309,7 +309,13 @@ fn upload_rows(
                 right = texture.width() as usize;
                 break;
             }
-            for (x, (a, b)) in old.chunks_exact(4).zip(new.chunks_exact(4)).enumerate() {
+            for (x, (a, b)) in old
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .zip(new.as_chunks::<4>().0)
+                .enumerate()
+            {
                 if a != b {
                     left = left.min(x);
                     right = right.max(x + 1);

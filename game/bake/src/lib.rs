@@ -347,7 +347,7 @@ fn sources(path: &Path) -> Result<(Model, ModelSources), String> {
             }
         }
         for skin in &mut model.skins {
-            for matrix in skin.inverse_binds.chunks_exact_mut(16) {
+            for matrix in skin.inverse_binds.as_chunks_mut::<16>().0 {
                 for value in &mut matrix[12..15] {
                     *value *= scale;
                 }
@@ -367,7 +367,7 @@ fn sources(path: &Path) -> Result<(Model, ModelSources), String> {
     let (mut lo, mut hi) = (Vec3::splat(f32::INFINITY), Vec3::splat(f32::NEG_INFINITY));
     for (node, offset) in model.nodes.iter().zip(offsets) {
         if let Some(mesh) = node.mesh {
-            for p in model.meshes[mesh as usize].positions.chunks_exact(3) {
+            for p in model.meshes[mesh as usize].positions.as_chunks::<3>().0 {
                 let p = offset.transform_point3(Vec3::from_slice(p));
                 lo = lo.min(p);
                 hi = hi.max(p);

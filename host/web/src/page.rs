@@ -736,11 +736,10 @@ impl Murmur128 {
             self.block(&tail);
             self.fill = 0;
         }
-        let mut blocks = bytes.chunks_exact(16);
-        for block in &mut blocks {
+        let (blocks, rest) = bytes.as_chunks::<16>();
+        for block in blocks {
             self.block(block);
         }
-        let rest = blocks.remainder();
         self.tail[..rest.len()].copy_from_slice(rest);
         self.fill = rest.len();
     }

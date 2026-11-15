@@ -158,7 +158,7 @@ fn retiring_catalog_outlives_engine_and_supplies_cpu_and_gpu_fonts() {
         image
     };
     let expected = render(&mut engine);
-    assert!(expected.data().chunks_exact(4).any(|p| p[3] != 0));
+    assert!(expected.data().as_chunks::<4>().0.iter().any(|p| p[3] != 0));
     let batches = engine.glyph_runs(&a, &palette);
     assert!(!batches.is_empty());
     // Exercise the public install boundary, then make the CURRENT catalog
@@ -458,7 +458,7 @@ mod face_metrics {
             image.data().to_vec()
         };
         let expected = pixels(&mut engine, &p);
-        assert!(expected.chunks_exact(4).any(|p| p[3] != 0));
+        assert!(expected.as_chunks::<4>().0.iter().any(|p| p[3] != 0));
         engine.catalog = Rc::new(RefCell::new(catalog::Catalog::from_bytes(&[], "none")));
         assert_eq!(pixels(&mut engine, &p), expected);
         let b = source.layout(Some(201.75));

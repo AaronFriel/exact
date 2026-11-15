@@ -539,7 +539,9 @@ component App
                 state = (
                     ops[3],
                     ops[names..names + ops[names - 1] as usize * 2]
-                        .chunks_exact(2)
+                        .as_chunks::<2>()
+                        .0
+                        .iter()
                         .map(|k| u64::from(k[0]) | u64::from(k[1]) << 32)
                         .collect(),
                 );
@@ -652,7 +654,9 @@ component App
             let ops = take();
             assert_eq!(ops[0], STATE);
             let names: Vec<_> = ops[5..9]
-                .chunks_exact(2)
+                .as_chunks::<2>()
+                .0
+                .iter()
                 .map(|k| u64::from(k[0]) | u64::from(k[1]) << 32)
                 .collect();
             assert_eq!(names, expected);

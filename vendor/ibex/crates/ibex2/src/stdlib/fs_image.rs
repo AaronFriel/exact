@@ -294,7 +294,7 @@ impl ImageWork {
     pub fn new(limits: WorkLimits) -> Self {
         Self(Arc::new(Registry {
             generation: GENERATION
-                .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_add(1))
+                .try_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_add(1))
                 .expect("image owner identity exhausted"),
             limits,
             state: Mutex::new(RegistryState {

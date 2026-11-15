@@ -1283,7 +1283,9 @@ impl<D: DataSource> Bridge<D> {
             self.refusal("intrinsics: truncated record")
         } else {
             let sizes: Vec<_> = bytes
-                .chunks_exact(12)
+                .as_chunks::<12>()
+                .0
+                .iter()
                 .map(|r| {
                     let word = |i: usize| [r[i], r[i + 1], r[i + 2], r[i + 3]];
                     let (w, h) = (f32::from_le_bytes(word(4)), f32::from_le_bytes(word(8)));

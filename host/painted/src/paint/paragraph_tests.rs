@@ -69,8 +69,10 @@ fn nested_text_paints_the_same_paragraph_that_layout_measured() {
         let actual = nested.frame();
         assert!(expected
             .data()
-            .chunks_exact(4)
-            .any(|p| p != [255, 255, 255, 255]));
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .any(|p| *p != [255, 255, 255, 255]));
         assert!(
             actual.data() == expected.data(),
             "nested run pixels differ despite identical measured paragraph at width {width}"
@@ -87,12 +89,19 @@ fn inline_opacity_fades_all_run_paints_and_ancestor_lines() {
         p.frame().clone()
     };
     let solid = draw(1., 1., 1.);
-    assert!(solid.data().chunks_exact(4).any(|p| p != [255; 4]));
+    assert!(solid
+        .data()
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .any(|p| *p != [255; 4]));
     assert!(
         draw(0., 1., 0.5)
             .data()
-            .chunks_exact(4)
-            .all(|p| p == [255; 4]),
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .all(|p| *p == [255; 4]),
         "a zero-opacity inline container leaves no glyph, background, shadow, stroke or decoration"
     );
     for opacity in [0., 0.25, 1.] {
@@ -121,9 +130,11 @@ fn glyph_clipped_backgrounds_take_only_their_opacity_groups_runs() {
     let mut faded = 0;
     for ((full, zero), half) in solid
         .data()
-        .chunks_exact(4)
-        .zip(hidden.data().chunks_exact(4))
-        .zip(half.data().chunks_exact(4))
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .zip(hidden.data().as_chunks::<4>().0)
+        .zip(half.data().as_chunks::<4>().0)
     {
         if full == zero {
             assert_eq!(full, half, "the opaque sibling must paint once");
@@ -229,7 +240,14 @@ fn repainting_an_unchanged_headline_reuses_its_stroke() {
 const COLORS: &str = "      text testId=\"paragraph\" color=\"#00000000\" font-size=24 line-height=1.5\n        text color=\"light-dark(#ff0000,#008000)\"\n          text \"MMMM \" font-weight=700 testId=\"red\"\n        text color=\"light-dark(#0000ff,#800080)\" href=\"https://example.com/\" testId=\"link\"\n          text \"WWWW\" font-family=\"monospace\" font-style=\"italic\" font-size=18 testId=\"blue\"\n";
 
 fn has_color(frame: &tiny_skia::Pixmap, color: [u8; 4]) -> bool {
-    frame.data().chunks_exact(4).filter(|p| *p == color).count() > 10
+    frame
+        .data()
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .filter(|p| **p == color)
+        .count()
+        > 10
 }
 
 #[test]
@@ -418,8 +436,8 @@ fn styled_paragraph_pixels_on_real_gpu_when_available() {
             );
             let bounds = |pixmap: &Pixmap| {
                 let mut bounds = [u32::MAX, u32::MAX, 0, 0];
-                for (i, pixel) in pixmap.data().chunks_exact(4).enumerate() {
-                    if pixel == color {
+                for (i, pixel) in pixmap.data().as_chunks::<4>().0.iter().enumerate() {
+                    if *pixel == color {
                         let (x, y) = (i as u32 % pixmap.width(), i as u32 / pixmap.width());
                         bounds = [
                             bounds[0].min(x),
@@ -473,7 +491,7 @@ fn a_box_draws_its_lines_through_nested_text_in_its_own_colour() {
     );
     let frame = p.frame();
     let (mut red, mut blue) = (0, 0);
-    for px in frame.data().chunks_exact(4) {
+    for px in frame.data().as_chunks::<4>().0 {
         match (px[0], px[1], px[2], px[3]) {
             (200.., ..160, ..160, 200..) => red += 1,
             (..160, ..160, 200.., 200..) => blue += 1,
@@ -497,7 +515,7 @@ fn the_nearest_box_line_shows_and_hidden_text_draws_none() {
     );
     let frame = p.frame();
     let (mut red, mut green) = (0, 0);
-    for px in frame.data().chunks_exact(4) {
+    for px in frame.data().as_chunks::<4>().0 {
         match (px[0], px[1], px[2], px[3]) {
             (200.., ..160, ..160, 200..) => red += 1,
             (..160, 200.., ..160, 200..) => green += 1,
@@ -527,10 +545,16 @@ fn a_strike_paints_over_the_glyphs_it_crosses() {
     let red = [255, 0, 0, 255];
     let mut covered = 0;
     let mut cut = 0;
-    for (expected, actual) in line.data().chunks_exact(4).zip(text.data().chunks_exact(4)) {
-        if expected == red {
+    for (expected, actual) in line
+        .data()
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .zip(text.data().as_chunks::<4>().0)
+    {
+        if *expected == red {
             covered += 1;
-            cut += usize::from(actual != red);
+            cut += usize::from(*actual != red);
         }
     }
     assert!(covered > 100, "the reference strike must paint");
@@ -550,8 +574,8 @@ fn an_underline_covers_the_text_shadow_and_casts_its_own() {
     let mut covered = 0;
     let mut cut = 0;
     let mut missing = 0;
-    for (i, expected) in line.data().chunks_exact(4).enumerate() {
-        if expected == black {
+    for (i, expected) in line.data().as_chunks::<4>().0.iter().enumerate() {
+        if *expected == black {
             covered += 1;
             cut += usize::from(text.data()[i * 4..i * 4 + 4] != black);
             let shadow = (i + 6 * text.width() as usize) * 4;
@@ -577,8 +601,8 @@ fn decorations_and_glyphs_cast_one_translucent_shadow_beyond_the_line_box() {
         let line = draw("transparent", "none");
         let text = draw("#000000", "0px 70px 0px #ff000080");
         let mut covered = 0;
-        for (i, expected) in line.data().chunks_exact(4).enumerate() {
-            if expected == [0, 0, 0, 255] {
+        for (i, expected) in line.data().as_chunks::<4>().0.iter().enumerate() {
+            if *expected == [0, 0, 0, 255] {
                 covered += 1;
                 let shadow = (i + 70 * text.width() as usize) * 4;
                 assert_eq!(
@@ -613,9 +637,11 @@ fn a_runs_shadow_does_not_shadow_an_ancestors_decoration() {
     );
     let points: Vec<_> = line
         .data()
-        .chunks_exact(4)
+        .as_chunks::<4>()
+        .0
+        .iter()
         .enumerate()
-        .filter_map(|(i, p)| (p == [0, 0, 0, 255]).then_some(i))
+        .filter_map(|(i, p)| (*p == [0, 0, 0, 255]).then_some(i))
         .collect();
     assert!(points.len() > 100, "the reference underline must paint");
     let width = text.width() as usize;
@@ -653,8 +679,8 @@ fn a_decoration_keeps_its_declaring_boxs_shadow_when_a_child_disables_it() {
     let line = draw("none");
     let text = draw("0px 6px 0px #ff0000");
     let mut covered = 0;
-    for (i, expected) in line.data().chunks_exact(4).enumerate() {
-        if expected == [0, 0, 0, 255] {
+    for (i, expected) in line.data().as_chunks::<4>().0.iter().enumerate() {
+        if *expected == [0, 0, 0, 255] {
             covered += 1;
             assert_eq!(&text.data()[i * 4..i * 4 + 4], expected);
             let shadow = (i + 6 * text.width() as usize) * 4;
@@ -664,8 +690,10 @@ fn a_decoration_keeps_its_declaring_boxs_shadow_when_a_child_disables_it() {
     assert!(covered > 100, "the reference underline must paint");
     let red = text
         .data()
-        .chunks_exact(4)
-        .filter(|p| *p == [255, 0, 0, 255])
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .filter(|p| **p == [255, 0, 0, 255])
         .count();
     assert_eq!(red, covered, "only the underline casts a shadow");
 }
@@ -680,8 +708,8 @@ fn a_nearer_decoration_does_not_remove_an_ancestors_shadow() {
             "      text color=\"#000000\" font-size=40 text-decoration-line=\"{line}\" text-shadow=\"0px 60px 0px #ff0000\"\n        text \"HHHH\" text-decoration-line=\"{line}\" text-shadow=\"none\"\n"
         ));
         let mut covered = 0;
-        for (i, expected) in reference.data().chunks_exact(4).enumerate() {
-            if expected == [0, 0, 0, 255] {
+        for (i, expected) in reference.data().as_chunks::<4>().0.iter().enumerate() {
+            if *expected == [0, 0, 0, 255] {
                 covered += 1;
                 let shadow = (i + 60 * text.width() as usize) * 4;
                 assert_eq!(
@@ -714,11 +742,13 @@ fn nested_decoration_shadows_paint_in_declaring_box_order() {
         let mut overlap = 0;
         for ((earlier, later), actual) in earlier
             .data()
-            .chunks_exact(4)
-            .zip(later.data().chunks_exact(4))
-            .zip(combined.data().chunks_exact(4))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(later.data().as_chunks::<4>().0)
+            .zip(combined.data().as_chunks::<4>().0)
         {
-            if earlier == [255, 0, 0, 255] && later == [0, 255, 0, 255] {
+            if *earlier == [255, 0, 0, 255] && *later == [0, 255, 0, 255] {
                 overlap += 1;
                 assert_eq!(actual, later, "the child's {child} shadow paints last");
             }
@@ -738,8 +768,8 @@ fn a_leaf_restoring_an_ancestors_shadow_keeps_decoration_shadow_order() {
         "          text \"HHHH\" text-shadow=\"0px 60px 0px #ff0000\"\n",
     ));
     let mut covered = 0;
-    for (i, expected) in line.data().chunks_exact(4).enumerate() {
-        if expected == [0, 0, 0, 255] {
+    for (i, expected) in line.data().as_chunks::<4>().0.iter().enumerate() {
+        if *expected == [0, 0, 0, 255] {
             covered += 1;
             let shadow = (i + 60 * text.width() as usize) * 4;
             assert_eq!(
@@ -765,8 +795,10 @@ fn a_partial_shadow_override_does_not_split_a_blurred_decoration() {
     let mut covered = 0;
     for (i, (expected, actual)) in line
         .data()
-        .chunks_exact(4)
-        .zip(text.data().chunks_exact(4))
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .zip(text.data().as_chunks::<4>().0)
         .enumerate()
     {
         if expected[1] < 250 {
@@ -798,8 +830,14 @@ fn a_strike_paints_over_a_later_runs_overlapping_shadow() {
     );
     let mut covered = 0;
     let mut cut = 0;
-    for (expected, actual) in line.data().chunks_exact(4).zip(text.data().chunks_exact(4)) {
-        if expected == [255, 0, 0, 255] {
+    for (expected, actual) in line
+        .data()
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .zip(text.data().as_chunks::<4>().0)
+    {
+        if *expected == [255, 0, 0, 255] {
             covered += 1;
             cut += usize::from(actual != expected);
         }
@@ -821,7 +859,12 @@ fn hidden_markdown_casts_no_decoration_shadow() {
         };
         assert!(has_color(&draw("visible"), [255, 0, 0, 255]));
         assert!(
-            draw("hidden").data().chunks_exact(4).all(|p| p == [255; 4]),
+            draw("hidden")
+                .data()
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .all(|p| *p == [255; 4]),
             "hidden Markdown paints neither glyphs nor decoration shadows: {text}"
         );
     }
@@ -843,11 +886,13 @@ fn a_later_markdown_spans_shadow_paints_over_an_earlier_spans_glyphs() {
     let mut overlap = 0;
     for ((glyph, shadow), actual) in glyphs
         .data()
-        .chunks_exact(4)
-        .zip(shadows.data().chunks_exact(4))
-        .zip(both.data().chunks_exact(4))
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .zip(shadows.data().as_chunks::<4>().0)
+        .zip(both.data().as_chunks::<4>().0)
     {
-        if glyph == [0, 0, 0, 255] && shadow == [0, 255, 0, 255] {
+        if *glyph == [0, 0, 0, 255] && *shadow == [0, 255, 0, 255] {
             overlap += 1;
             assert_eq!(actual, shadow, "the later span's shadow paints last");
         }
@@ -893,11 +938,13 @@ fn a_later_siblings_shadow_paints_over_an_earlier_siblings_strike() {
         let mut overlap = 0;
         for ((line, shadow), actual) in line
             .data()
-            .chunks_exact(4)
-            .zip(shadow.data().chunks_exact(4))
-            .zip(combined.data().chunks_exact(4))
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(shadow.data().as_chunks::<4>().0)
+            .zip(combined.data().as_chunks::<4>().0)
         {
-            if line == [255, 0, 0, 255] && shadow == [0, 255, 0, 255] {
+            if *line == [255, 0, 0, 255] && *shadow == [0, 255, 0, 255] {
                 overlap += 1;
                 assert_eq!(actual, shadow, "the later sibling covers the strike");
             }
@@ -922,11 +969,13 @@ fn a_later_siblings_decoration_shadow_follows_earlier_content() {
             let mut overlap = 0;
             for ((earlier, later), actual) in earlier
                 .data()
-                .chunks_exact(4)
-                .zip(later.data().chunks_exact(4))
-                .zip(combined.data().chunks_exact(4))
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .zip(later.data().as_chunks::<4>().0)
+                .zip(combined.data().as_chunks::<4>().0)
             {
-                if earlier == [255, 0, 0, 255] && later == [0, 255, 0, 255] {
+                if *earlier == [255, 0, 0, 255] && *later == [0, 255, 0, 255] {
                     overlap += 1;
                     assert_eq!(
                         actual, later,
@@ -945,11 +994,13 @@ fn later_covers(earlier: &Pixmap, later: &Pixmap, combined: &Pixmap, what: &str)
     let mut overlap = 0;
     for ((earlier, later), actual) in earlier
         .data()
-        .chunks_exact(4)
-        .zip(later.data().chunks_exact(4))
-        .zip(combined.data().chunks_exact(4))
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .zip(later.data().as_chunks::<4>().0)
+        .zip(combined.data().as_chunks::<4>().0)
     {
-        if earlier == [255, 0, 0, 255] && later == [0, 255, 0, 255] {
+        if *earlier == [255, 0, 0, 255] && *later == [0, 255, 0, 255] {
             overlap += 1;
             assert_eq!(actual, later, "{what}");
         }
@@ -1196,7 +1247,7 @@ fn a_clipping_text_keeps_its_own_glyphs_inside_its_padding_box() {
     let mut p = fixture("      text \"MMMMMMMMMMMMMMMM\" width=50 height=30 white-space=\"nowrap\" overflow=\"hidden\" font-size=20 color=\"#000000\"\n");
     let frame = p.frame();
     let ink = |columns: std::ops::Range<usize>| {
-        let pixels = frame.data().chunks_exact(4).enumerate();
+        let pixels = frame.data().as_chunks::<4>().0.iter().enumerate();
         pixels
             .filter(|(i, px)| columns.contains(&(i % 300)) && px[0] < 128)
             .count()

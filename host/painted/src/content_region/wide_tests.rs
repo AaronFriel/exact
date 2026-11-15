@@ -56,7 +56,7 @@ fn wide(css: &str) -> u16 {
 }
 
 fn has(frame: &[u8], rgba: [u8; 4]) -> bool {
-    frame.chunks_exact(4).any(|px| px == rgba)
+    frame.as_chunks::<4>().0.contains(&rgba)
 }
 
 #[test]

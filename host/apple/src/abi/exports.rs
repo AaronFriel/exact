@@ -610,7 +610,7 @@ macro_rules! host {
                 // SAFETY: the caller keeps four doubles per id live for this call.
                 unsafe { std::slice::from_raw_parts(clips, count as usize * 4) }
             };
-            let frames: Vec<_> = ids.iter().zip(rects.chunks_exact(4)).enumerate()
+            let frames: Vec<_> = ids.iter().zip(rects.as_chunks::<4>().0).enumerate()
                 .map(|(i, (&id, r))| {
                     let clip = clips.get(i * 4..i * 4 + 4).filter(|c| !c[0].is_nan())
                         .map(|c| [c[0], c[1], c[2], c[3]]);

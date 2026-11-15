@@ -517,7 +517,7 @@ fn length_fix_up_uses_the_painted_size_and_repetition_keeps_its_period() {
     )
     .unwrap();
     let (ramp, _) = hatch.gradient().unwrap().placed(100.0, 70.0, false);
-    for pair in ramp.stops.chunks_exact(4).collect::<Vec<_>>().windows(2) {
+    for pair in ramp.stops.as_chunks::<4>().0.windows(2) {
         assert_eq!(pair[0][3].at, pair[1][0].at);
     }
     assert!(ramp.stops.windows(2).all(|pair| pair[0].at <= pair[1].at));

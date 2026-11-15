@@ -124,7 +124,13 @@ fn compare(
         mask,
         (0., 0., 320., 128.),
     );
-    for (y, row) in actual.data().chunks_exact(320 * 4).enumerate() {
+    for (y, row) in actual
+        .data()
+        .as_chunks::<{ 320 * 4 }>()
+        .0
+        .iter()
+        .enumerate()
+    {
         if !rows.contains(&(y as u32)) {
             assert!(
                 row.iter().all(|&v| v == 255),

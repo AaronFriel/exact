@@ -755,14 +755,14 @@ impl Catalog {
                     }
                 }
                 Content::SubpixelMask => {
-                    for px in img.data.chunks_exact(4) {
+                    for px in img.data.as_chunks::<4>().0 {
                         let m = px[0].max(px[1]).max(px[2]);
                         let alpha = (m as u32 * a as u32 / 255) as u8;
                         data.extend_from_slice(&premultiply(r, g, b, alpha));
                     }
                 }
                 Content::Color => {
-                    for px in img.data.chunks_exact(4) {
+                    for px in img.data.as_chunks::<4>().0 {
                         let alpha = (px[3] as u32 * a as u32 / 255) as u8;
                         data.extend_from_slice(&premultiply(px[0], px[1], px[2], alpha));
                     }

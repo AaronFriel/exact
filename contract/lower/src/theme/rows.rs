@@ -573,18 +573,14 @@ fn shape(
 /// [`kept`]'s rows, whatever the value.
 fn style_row(a: &Attr) -> bool {
     let n = a.name.as_str();
-    if n.contains("transition")
+    !(n.contains("transition")
         || n.contains("animation")
         || crate::tags::rows(a).is_empty()
         || (n != "font"
             && matches!(
                 crate::tags::attr_valued(n, &a.value),
                 Some(crate::tags::AttrTarget::Shorthand | crate::tags::AttrTarget::Flex)
-            ))
-    {
-        return false;
-    }
-    true
+            )))
 }
 
 /// Each literal `v` writes as written, into `out`: a string or number, or

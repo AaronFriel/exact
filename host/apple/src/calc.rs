@@ -55,7 +55,9 @@ impl Context {
             _ => None,
         };
         env.segments = values[segments..]
-            .chunks_exact(4)
+            .as_chunks::<4>()
+            .0
+            .iter()
             .map(|r| {
                 exact_kernel::style::env::Rect::new(
                     r[0] as f32,
