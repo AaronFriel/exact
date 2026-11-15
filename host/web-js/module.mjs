@@ -234,19 +234,26 @@ ${patch}
   return module(resolve(crate, 'Cargo.toml'), `exact_js_module_${app.replaceAll('-', '_')}`, out, `${app}: the module`);
 }
 
-/** The refusal of an app at `dir` whose web crate (`web/Cargo.toml`) links a crate beside app.json while `manifest`
- * names neither `rust.data` nor `rust.module.package`, or null. Linking it means the web build script bakes a Rust
- * source, but the JS target runs only the module the manifest names (LLP 1153.003 D2), so the page would ship none and
- * no request of the app's would be answered. */
+/** The refusal of an app at `dir` whose web crate bakes a Rust source while `manifest` names neither `rust.data` nor
+ * `rust.module.package`, or null. The JS target runs only the module the manifest names (LLP 1153.003 D2), so the
+ * page would ship none and no request the source owns would be answered. The web crate bakes one when
+ * `web/Cargo.toml` links a crate beside app.json, or when `web/build.rs` composes one with app.ts, which a source
+ * defined in the build script itself does without linking any. */
 export function undeclaredRustData(app, dir, manifest) {
   if (manifest.rust?.module?.package || manifest.rust?.data !== undefined) return null;
   let web;
   try { web = Bun.TOML.parse(readFileSync(resolve(dir, 'web/Cargo.toml'), 'utf8')); } catch { return null; }
   const tables = [web.dependencies, ...Object.values(web.target ?? {}).map(target => target?.dependencies)].filter(Boolean);
   const linked = new Set(tables.flatMap(Object.values).map(dep => dep?.path).filter(path => typeof path === 'string').map(path => resolve(dir, 'web', path)));
-  const crate = appCrates(dir).find(crate => crate.name && linked.has(crate.dir));
-  return crate ? undeclaredDataCrate(`${app}: web/Cargo.toml links ${crate.name}, a crate beside app.json`,
-    'the web build runs only the Rust source rust.data names, so this page would answer none of the app\'s requests', [crate], manifest) : null;
+  const crates = appCrates(dir), crate = crates.find(crate => crate.name && linked.has(crate.dir));
+  const consequence = 'the web build runs only the Rust source rust.data names, so this page would answer none of the app\'s requests';
+  if (crate) return undeclaredDataCrate(`${app}: web/Cargo.toml links ${crate.name}, a crate beside app.json`, consequence, [crate], manifest);
+  let script = '';
+  try { script = readFileSync(resolve(dir, 'web/build.rs'), 'utf8'); } catch {}
+  const composer = /\bexact_js_bake::(build_mixed(?:_with)?|build_beside)\s*\(/.exec(script)?.[1];
+  return composer ? undeclaredDataCrate(`${app}: web/build.rs composes a Rust source with app.ts (exact_js_bake::${composer})`,
+    `${consequence} the Rust source owns. A source that is not in a crate of its own beside app.json cannot be named: move it into one`,
+    crates.filter(crate => crate.name && crate.dir !== resolve(dir, 'web')), manifest) : null;
 }
 
 /** The app's explicit logic module (`rust.module.package`, LLP 1029.000):

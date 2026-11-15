@@ -152,10 +152,11 @@ export function rustDataOf(manifest) {
 
 /** The refusal of an app with a Rust data crate that app.json's `rust.data` does not name (LLP 1153.003 D2). `found`
  * says how the build knows the app has one; `crates` are the crates that may be it, each `{ name, manifest }`. The
- * line to add names the first, and keeps the manifest's other `rust` fields (its string form is the mode). */
+ * line to add names the first, or `<crate>` when there is none yet, and keeps the manifest's other `rust` fields (its
+ * string form is the mode). */
 export function undeclaredDataCrate(found, consequence, crates, manifest) {
-  const [crate] = crates;
-  const lib = (() => { try { return Bun.TOML.parse(readFileSync(crate.manifest, 'utf8')).lib?.name; } catch { return undefined; } })() ?? crate.name.replaceAll('-', '_');
+  const crate = crates[0] ?? { name: '<crate>' };
+  const lib = (() => { try { return Bun.TOML.parse(readFileSync(crate.manifest, 'utf8')).lib?.name; } catch { return undefined; } })() ?? (crates.length ? crate.name.replaceAll('-', '_') : '<library>');
   const mode = typeof manifest.rust === 'string' ? manifest.rust : manifest.rust?.mode;
   const among = crates.length > 1 ? ` (the data crate: one of ${crates.map(c => c.name).join(', ')})` : '';
   return `${found}, and app.json names no rust.data: ${consequence}. Name the data crate and the source it answers with in app.json${among}, as apps/forma-host/app.json does:\n`
