@@ -74,6 +74,7 @@ fn seen(p: &Presenter<()>) -> (String, String, usize, u64) {
 
 #[test]
 fn the_release_finds_its_screen_shaped_and_nothing_changed_before_it() {
+    super::pin_font();
     let mut p = boot();
     let (x, y) = centre(&p, "row");
     p.pointer_down(x, y, 0.).unwrap();
@@ -125,6 +126,7 @@ fn the_release_finds_its_screen_shaped_and_nothing_changed_before_it() {
 
 #[test]
 fn a_new_runtime_family_reshapes_text_opened_on_press_release() {
+    super::pin_font();
     let source = r#"component App
   state open = false
   state family = "sans-serif"
@@ -165,6 +167,7 @@ fn a_new_runtime_family_reshapes_text_opened_on_press_release() {
 
 #[test]
 fn a_slice_stops_at_its_budget_and_the_slices_end() {
+    super::pin_font();
     let mut p = boot();
     let (x, y) = centre(&p, "row");
     p.pointer_down(x, y, 0.).unwrap();
@@ -187,6 +190,7 @@ fn a_slice_stops_at_its_budget_and_the_slices_end() {
 
 #[test]
 fn input_or_a_commit_abandons_it_and_a_press_that_mounts_nothing_leaves_nothing() {
+    super::pin_font();
     let mut p = boot();
     let (x, y) = centre(&p, "row");
     // The touch ends before a slice ran.

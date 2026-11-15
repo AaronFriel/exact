@@ -58,6 +58,7 @@ fn ink(p: &mut Presenter<()>, name: &str) -> (u32, u32) {
 
 #[test]
 fn a_fields_text_align_places_its_line() {
+    super::pin_font();
     let mut p = boot();
     let (l0, l1) = ink(&mut p, "left");
     let (c0, c1) = ink(&mut p, "center");
@@ -113,6 +114,7 @@ fn caret_columns(p: &mut Presenter<()>, name: &str) -> Vec<u32> {
 
 #[test]
 fn a_centered_fields_caret_sits_at_its_text() {
+    super::pin_font();
     let mut p = boot();
     let (c0, c1) = ink(&mut p, "center");
     let caret = caret_columns(&mut p, "focused");

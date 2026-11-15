@@ -80,7 +80,7 @@ impl SurfacePainter for Nothing {
 }
 
 fn windowed() -> Presenter<()> {
-    let (mut p, error) = Presenter::boot_with(
+    let (mut p, error) = Presenter::boot_with_fixture_fonts(
         &crate::test_plan(APP),
         (),
         (400., 800.),
@@ -453,7 +453,7 @@ fn windows_dialog_focus_outline_follows_input_without_losing_action() {
 #[test]
 fn desktop_dialog_wheel_is_confined_to_content_and_does_not_move_focus() {
     let source = APP.replace("Modally.", &"A long explanation. ".repeat(100));
-    let (mut p, error) = Presenter::boot_with(
+    let (mut p, error) = Presenter::boot_with_fixture_fonts(
         &crate::test_plan(&source),
         (),
         (400., 500.),
@@ -595,7 +595,7 @@ fn desktop_menu_home_and_end_skip_disabled_rows_and_keep_focus_inside() {
         button press=send disabled=true
           text "Unavailable last"
 "#;
-    let (mut p, error) = Presenter::boot_with(
+    let (mut p, error) = Presenter::boot_with_fixture_fonts(
         &crate::test_plan(source),
         (),
         (360., 500.),
@@ -879,7 +879,7 @@ fn a_shell_dismissal_fires_cancel_but_cannot_keep_the_window_open() {
     let source = APP.replace("  state said", "  state events = \"\"\n  action cancelled\n    preventDefault()\n    events = `${events}cancel,`\n  action closed\n    events = `${events}close,`\n  state said")
         .replace("dialog id=\"dpm\"", "dialog cancel=cancelled close=closed id=\"dpm\"")
         .replace("text said testId=\"said\"", "text events testId=\"events\"\n      text said testId=\"said\"");
-    let (mut p, error) = Presenter::boot_with(
+    let (mut p, error) = Presenter::boot_with_fixture_fonts(
         &crate::test_plan(&source),
         (),
         (400., 800.),
@@ -935,7 +935,7 @@ fn a_menu_rows_press_point_is_in_points_at_any_scale() {
           text "Row"
       text at testId="at"
 "#;
-    let (mut p, error) = Presenter::boot_with(
+    let (mut p, error) = Presenter::boot_with_fixture_fonts(
         &crate::test_plan(source),
         (),
         (400., 800.),

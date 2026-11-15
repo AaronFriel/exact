@@ -9,7 +9,7 @@ fn fixture(text: &str) -> Presenter<()> {
 
 fn program(source: &str) -> Presenter<()> {
     let plan = contract::compile(source).unwrap();
-    let (presenter, error) = Presenter::boot_with(
+    let (presenter, error) = Presenter::boot_with_fixture_fonts(
         &plan.encode(),
         (),
         (300.0, 300.0),
@@ -361,7 +361,7 @@ fn identical_fonts_keep_distinct_run_colors_and_source_nodes() {
             source: 2,
         },
     ];
-    let mut engine = TextEngine::new();
+    let mut engine = crate::text::fixtures::engine();
     let paragraph = engine.paragraph(&spec, Some(260.0));
     let batches = engine.glyph_runs(&paragraph, &palette);
     assert_eq!(
@@ -875,14 +875,17 @@ fn hidden_markdown_casts_no_decoration_shadow() {
 /// (CSS Text Decoration 3 §4).
 #[test]
 fn a_later_markdown_spans_shadow_paints_over_an_earlier_spans_glyphs() {
-    let draw = |color, shadow| {
+    let draw = |text, color, shadow| {
         decoration_frame(&format!(
-            "      text \"~~HH~~ ~~........~~\" markup=\"markdown\" color=\"{color}\" font-size=40 text-shadow=\"{shadow}\"\n"
+            "      text \"{text}\" markup=\"markdown\" color=\"{color}\" font-size=40 text-shadow=\"{shadow}\"\n"
         ))
     };
-    let glyphs = draw("#000000", "none");
-    let shadows = draw("transparent", "-100px 0px 0px #00ff00");
-    let both = draw("#000000", "-100px 0px 0px #00ff00");
+    let text = "~~HH~~ ~~........~~";
+    // The reference is the earlier span alone: the later span's shadow can
+    // also fall on the later span's own strike, which paints over it.
+    let glyphs = draw("~~HH~~", "#000000", "none");
+    let shadows = draw(text, "transparent", "-100px 0px 0px #00ff00");
+    let both = draw(text, "#000000", "-100px 0px 0px #00ff00");
     let mut overlap = 0;
     for ((glyph, shadow), actual) in glyphs
         .data()
@@ -1070,7 +1073,7 @@ fn a_later_runs_glyph_shadow_is_not_painted_with_an_ancestors_decoration_shadow(
 #[test]
 fn html_maxlength_is_enforced_by_linux_typing() {
     let plan = contract::compile("component App\n  state draft = \"\"\n  action edit(value: string)\n    draft = value\n  view\n    input value=draft input=edit maxlength=3 testId=\"limited\"\n").unwrap();
-    let (mut p, error) = Presenter::boot_with(
+    let (mut p, error) = Presenter::boot_with_fixture_fonts(
         &plan.encode(),
         (),
         (300.0, 300.0),

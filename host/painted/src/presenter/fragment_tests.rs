@@ -64,7 +64,7 @@ component App
 }
 
 fn boot() -> Presenter<()> {
-    let (mut p, error) = Presenter::boot_with(
+    let (mut p, error) = Presenter::boot_with_fixture_fonts(
         &plan(),
         (),
         (400., 800.),
@@ -315,7 +315,7 @@ fn nested_scroll_styled(
 {rows}      box height=2000 flex-shrink=0
 "#
     );
-    let (p, error) = Presenter::boot_with(
+    let (p, error) = Presenter::boot_with_fixture_fonts(
         &crate::test_plan(&source),
         (),
         (400., 300.),
@@ -414,7 +414,7 @@ fn nested_scroll_into_view_projects_both_axes_through_two_ports_and_the_page() {
     let mut expected = Vec::new();
     for display in [false, true] {
         for already_scrolled in [false, true] {
-            let (mut p, error) = Presenter::boot_with(
+            let (mut p, error) = Presenter::boot_with_fixture_fonts(
                 &plan,
                 (),
                 (400., 300.),
@@ -578,7 +578,7 @@ fn scroll_into_view_uses_the_page_offset_of_an_immediate_frame() {
       box height=2000
 "#,
     );
-    let (mut p, error) = Presenter::boot_with(
+    let (mut p, error) = Presenter::boot_with_fixture_fonts(
         &plan,
         (),
         (400., 300.),
@@ -654,7 +654,7 @@ fn scroll_into_view_reveals_an_inline_targets_glyphs() {
 "#,
             "Line\\n".repeat(12)
         ));
-        let (mut p, error) = Presenter::boot_with(
+        let (mut p, error) = Presenter::boot_with_fixture_fonts(
             &plan,
             (),
             (400., 300.),
@@ -698,7 +698,7 @@ fn scroll_into_view_reveals_the_visible_part_of_a_projective_target() {
 "#
         ));
         for mode in ["headless", "acknowledged", "pending"] {
-            let (mut p, error) = Presenter::boot_with(
+            let (mut p, error) = Presenter::boot_with_fixture_fonts(
                 &plan,
                 (),
                 (400., 300.),

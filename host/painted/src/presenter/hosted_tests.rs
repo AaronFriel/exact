@@ -81,7 +81,7 @@ const LONG: &str = r#"component Long
 "#;
 
 fn boot(source: &str) -> Presenter<()> {
-    let (mut p, error) = Presenter::boot_with(
+    let (mut p, error) = Presenter::boot_with_fixture_fonts(
         &crate::test_plan(source),
         (),
         (320., 480.),
@@ -384,7 +384,7 @@ component App
             .encode()
     };
     let boot_plan = |plan: &[u8]| {
-        let (mut p, error) = Presenter::boot_with(
+        let (mut p, error) = Presenter::boot_with_fixture_fonts(
             plan,
             (),
             (320., 480.),

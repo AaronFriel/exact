@@ -20,7 +20,7 @@ const APP: &str = r##"component App
 "##;
 
 fn boot() -> Presenter<()> {
-    let (p, error) = Presenter::boot_with(
+    let (p, error) = Presenter::boot_with_fixture_fonts(
         &contract::compile(APP)
             .unwrap_or_else(|e| panic!("{e}"))
             .encode(),
@@ -145,7 +145,7 @@ fn a_pressed_ancestor_leaves_a_native_fields_ink() {
         input value=words change=write font-size=40 aria-label="Native" testId="native"
         input value=words change=write font-size=40 appearance="none" aria-label="Own" testId="own"
 "##;
-    let (mut p, error) = Presenter::boot_with(
+    let (mut p, error) = Presenter::boot_with_fixture_fonts(
         &contract::compile(FIELDS)
             .unwrap_or_else(|e| panic!("{e}"))
             .encode(),
@@ -187,7 +187,7 @@ fn an_ancestors_moving_colour_stops_at_a_native_field() {
         input value=words change=write font-size=40 aria-label="Native" testId="native"
         input value=words change=write font-size=40 appearance="none" aria-label="Own" testId="own"
 "##;
-    let (mut p, error) = Presenter::boot_with(
+    let (mut p, error) = Presenter::boot_with_fixture_fonts(
         &contract::compile(FIELDS)
             .unwrap_or_else(|e| panic!("{e}"))
             .encode(),
@@ -228,7 +228,7 @@ fn a_link_with_no_press_shows_its_active_paint() {
       link href="https://example.com/b" width=300 height=120 testId="bare"
         text "Bare"
 "##;
-    let (mut p, error) = Presenter::boot_with(
+    let (mut p, error) = Presenter::boot_with_fixture_fonts(
         &contract::compile(LINK)
             .unwrap_or_else(|e| panic!("{e}"))
             .encode(),
@@ -279,7 +279,7 @@ fn a_shrinking_link_is_followed_from_its_unpressed_box() {
       link href="https://example.com/a" -exact-press-scale=0.5 background-color="#00ff00" width=300 height=120 testId="link"
         text "Away"
 "##;
-    let (mut p, error) = Presenter::boot_with(
+    let (mut p, error) = Presenter::boot_with_fixture_fonts(
         &contract::compile(LINK)
             .unwrap_or_else(|e| panic!("{e}"))
             .encode(),

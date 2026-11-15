@@ -6,6 +6,7 @@ use exact_painted::{presenter::PainterChoice, Presenter};
 
 #[test]
 fn native_active_colors_replace_only_the_authored_fields() {
+    super::pin_font();
     let plan = contract::compile(
         r##"component App
   state count = 0
@@ -75,6 +76,7 @@ fn native_active_colors_replace_only_the_authored_fields() {
 
 #[test]
 fn a_native_button_presses_is_sized_and_takes_no_value() {
+    super::pin_font();
     let plan = contract::compile(
         r#"component App
   state n = 0
@@ -159,6 +161,7 @@ fn a_native_button_presses_is_sized_and_takes_no_value() {
 /// Enter presses it, as it presses a custom tab.
 #[test]
 fn a_native_tab_presses_on_enter_as_a_button_does() {
+    super::pin_font();
     let plan = contract::compile(
         r#"component App
   state n = 0
@@ -213,6 +216,7 @@ fn a_native_tab_presses_on_enter_as_a_button_does() {
 
 #[test]
 fn empty_invoker_targets_still_run_the_press_handler() {
+    super::pin_font();
     for attrs in [
         "popovertarget=\"\"",
         "commandfor=\"\" command=\"show-modal\"",
@@ -258,6 +262,7 @@ fn empty_invoker_targets_still_run_the_press_handler() {
 
 #[test]
 fn disabled_buttons_keep_authored_accent_fill() {
+    super::pin_font();
     let plan = contract::compile(r##"component App
   view
     column width=400 height=300 background-color="white" align-items="flex-start"
@@ -287,6 +292,7 @@ fn disabled_buttons_keep_authored_accent_fill() {
 
 #[test]
 fn native_and_bare_buttons_ring_on_focus_without_a_handler() {
+    super::pin_font();
     let plan = contract::compile(r##"component App
   action focusNative
     focus("native")
@@ -366,6 +372,7 @@ fn native_and_bare_buttons_ring_on_focus_without_a_handler() {
 /// The same buttons without it ring.
 #[test]
 fn outline_none_paints_no_ring_on_a_focused_button() {
+    super::pin_font();
     for quiet in [false, true] {
         let outline = if quiet { " outline=\"none\"" } else { "" };
         let plan = contract::compile(&format!(r##"component App

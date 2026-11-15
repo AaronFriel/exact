@@ -28,6 +28,7 @@ impl<D: DataSource> Presenter<D> {
             scale,
             Assets::embedded(assets),
             PainterBoot::selected(choice),
+            TextEngine::shared_for_assets,
             None,
             "/",
             Some(region),

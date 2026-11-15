@@ -88,7 +88,7 @@ mod tests {
         text "Prefix "
         text "Tail" testId="tail"
 "#;
-        let (p, error) = Presenter::boot_with(
+        let (p, error) = Presenter::boot_with_fixture_fonts(
             &crate::test_plan(source),
             (),
             (200., 200.),

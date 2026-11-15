@@ -62,6 +62,7 @@ fn pixel(p: &mut Presenter<()>, name: &str, x: u32, y: u32) -> [u8; 4] {
 
 #[test]
 fn native_geometry_uses_chrome_and_stops_ancestor_typography() {
+    super::pin_font();
     let p = boot();
     let k = p.host().kernel();
     assert!(k.env().control_text_styles.is_some());
@@ -126,6 +127,7 @@ fn near(a: [u8; 4], b: [u8; 4]) -> bool {
 
 #[test]
 fn native_paint_is_materials_filled_field() {
+    super::pin_font();
     let mut p = boot();
     let page = [32, 32, 32, 255];
     let h = frame(&p, "native").height as u32;
@@ -166,6 +168,7 @@ fn native_paint_is_materials_filled_field() {
 
 #[test]
 fn focused_bare_fields_ring_the_outer_box() {
+    super::pin_font();
     let mut p = boot();
     for name in ["bare", "authored"] {
         p.tap(id(&p, name)).unwrap();
@@ -178,6 +181,7 @@ fn focused_bare_fields_ring_the_outer_box() {
 /// its focus is its indicator, which `outline` does not reach.
 #[test]
 fn outline_none_paints_no_ring_on_a_focused_field() {
+    super::pin_font();
     let mut p = boot();
     // The accent over the box's top edge, where a ring is and no indicator.
     let ring = |p: &mut Presenter<()>, name: &str| {
@@ -214,6 +218,7 @@ fn outline_none_paints_no_ring_on_a_focused_field() {
 
 #[test]
 fn native_value_under_white_ancestor_uses_host_font_and_visible_ink() {
+    super::pin_font();
     let mut p = boot();
     for name in ["contrast", "contrast-area"] {
         let n = p.host().kernel().node(id(&p, name)).unwrap();
@@ -236,6 +241,7 @@ fn native_value_under_white_ancestor_uses_host_font_and_visible_ink() {
 
 #[test]
 fn disabled_native_ink_dims_but_authored_color_wins() {
+    super::pin_font();
     let mut p = boot();
     // Material's disabled text is `onSurface` at 38 %: never the full ink.
     for (name, dimmed) in [("disabled", true), ("disabled-authored", false)] {
@@ -252,6 +258,7 @@ fn disabled_native_ink_dims_but_authored_color_wins() {
 
 #[test]
 fn oversized_field_line_paints_at_the_kernel_baseline() {
+    super::pin_font();
     let plan = contract::compile(r##"component App
   view
     row align-items="baseline" padding-top=60 color="red" font-size=16 line-height="80px"
@@ -292,6 +299,7 @@ fn oversized_field_line_paints_at_the_kernel_baseline() {
 
 #[test]
 fn mouse_file_press_precedes_production_picker_refusal() {
+    super::pin_font();
     assert!(
         !exact_painted::picker::agent(),
         "exercise the production refusal"

@@ -284,7 +284,7 @@ pub(super) fn finish(text: &Shared, pending: Pending) {
     let text = if fonts.is_empty() {
         text.clone()
     } else {
-        crate::text::TextEngine::for_svg(&fonts)
+        text.borrow().for_svg(&fonts)
     };
     match paint(text, &scene, css, scale, pixels) {
         Ok(drawn) => {

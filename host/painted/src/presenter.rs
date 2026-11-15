@@ -204,6 +204,7 @@ pub struct Presenter<D: DataSource> {
     pending_dev: Option<crate::fetch::Generation>,
     pending_update: bool,
     text: Shared,
+    make_text: fn(&Plan, &Assets) -> Shared,
     /// A touch down's press, to lay out ahead (`ahead.rs`).
     ahead: Option<ahead::Ahead>,
     pub(crate) brush: Painter,
@@ -431,6 +432,7 @@ impl<D: DataSource> Presenter<D> {
             scale,
             assets,
             painter,
+            TextEngine::shared_for_assets,
             Some(delivery),
             launch,
             region,
@@ -448,6 +450,7 @@ impl<D: DataSource> Presenter<D> {
         scale: f32,
         assets: Assets,
         painter: PainterBoot,
+        make_text: fn(&Plan, &Assets) -> Shared,
         delivery: Option<exact_runner::Delivery>,
         launch: &str,
         region: Option<crate::content_region::ContentRegionRegistration>,
@@ -473,9 +476,7 @@ impl<D: DataSource> Presenter<D> {
         crate::app::boot_phase(c"plan-ready");
         #[cfg(windows)]
         let preparing = painter.prepare_direct();
-        let text = crate::traced(c"boot fonts", || {
-            TextEngine::shared_for_assets(&decoded, &assets)
-        });
+        let text = crate::traced(c"boot fonts", || make_text(&decoded, &assets));
         if let Some(reason) = assets.take_refusal() {
             return Err(HostError::Asset(reason));
         }
@@ -553,6 +554,7 @@ impl<D: DataSource> Presenter<D> {
             group: None,
             brush: Painter::new(text.clone(), scale, backend),
             text,
+            make_text,
             ahead: None,
             viewport,
             scroll: BTreeMap::new(),
@@ -699,7 +701,7 @@ impl<D: DataSource> Presenter<D> {
         let module = module.or_else(|| self.module.clone());
         let decoded = Plan::decode(plan).map_err(HostError::Plan)?;
         // Preserve live font state until the candidate runner boots successfully.
-        let candidate_text = TextEngine::shared_for_assets(&decoded, &self.assets);
+        let candidate_text = (self.make_text)(&decoded, &self.assets);
         if let Some(reason) = self.assets.take_refusal() {
             return Err(HostError::Asset(reason));
         }
@@ -1399,3 +1401,6 @@ fn attached(kernel: &exact_kernel::Kernel, id: ViewId) -> bool {
     }
     false
 }
+
+#[cfg(test)]
+mod fixtures;

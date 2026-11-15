@@ -89,7 +89,7 @@ impl SurfacePainter for Pixels {
 }
 
 fn boot_source(source: &str) -> Presenter<()> {
-    let (p, error) = Presenter::boot_with(
+    let (p, error) = Presenter::boot_with_fixture_fonts(
         &crate::test_plan(source),
         (),
         (412., 916.),
@@ -459,7 +459,7 @@ fn without_bars_a_route_pushed_inside_a_sheet_takes_its_box() {
         r#"navigationPresentation="modal" navigationDetent="medium large" testId="route-info" position="absolute" inset=0"#,
         r#"navigationPresentation="modal" navigationDetent="medium large" testId="route-info" position="absolute" top=100 left=40 width=300 height=500"#,
     );
-    let (mut p, error) = Presenter::boot_with(
+    let (mut p, error) = Presenter::boot_with_fixture_fonts(
         &crate::test_plan(&source),
         (),
         (412., 916.),

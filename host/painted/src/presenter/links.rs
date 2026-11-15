@@ -309,7 +309,7 @@ component App
 
     #[test]
     fn a_markdown_link_to_a_route_navigates_and_one_out_of_the_app_is_logged() {
-        let (mut p, error) = Presenter::boot_with(
+        let (mut p, error) = Presenter::boot_with_fixture_fonts(
             &crate::test_plan(SRC),
             (),
             (400., 300.),
@@ -344,7 +344,7 @@ component App
 
     #[test]
     fn a_url_from_outside_goes_to_the_root_when_it_routes_it() {
-        let (mut p, error) = Presenter::boot_with(
+        let (mut p, error) = Presenter::boot_with_fixture_fonts(
             &crate::test_plan(SRC),
             (),
             (400., 300.),
@@ -405,7 +405,7 @@ component App
       button press=launch testId="launch" height=40
         text "Open a URL"
 "#;
-        let (mut p, error) = Presenter::boot_with(
+        let (mut p, error) = Presenter::boot_with_fixture_fonts(
             &crate::test_plan(source),
             (),
             (400., 300.),

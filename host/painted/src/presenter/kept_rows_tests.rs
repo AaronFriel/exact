@@ -84,7 +84,7 @@ fn a_renewed_row_is_not_the_row_it_was() {
     let cells: String = (0..6)
         .map(|i| format!("        box height=50 width=200 testId=\"c{i}\"\n"))
         .collect();
-    let (mut p, error) = Presenter::boot_with(
+    let (mut p, error) = Presenter::boot_with_fixture_fonts(
         &contract::compile(&format!(
             "component App\n  view\n    scroll testId=\"port\" width=200 height=400\n      column\n{cells}"
         ))
@@ -142,7 +142,7 @@ fn a_new_reader_is_sent_every_row_again() {
     let cells: String = (0..6)
         .map(|i| format!("        box height=50 width=200 testId=\"c{i}\"\n"))
         .collect();
-    let (mut p, error) = Presenter::boot_with(
+    let (mut p, error) = Presenter::boot_with_fixture_fonts(
         &contract::compile(&format!(
             "component App\n  view\n    scroll testId=\"port\" width=200 height=400\n      column\n{cells}"
         ))
@@ -185,7 +185,7 @@ fn a_new_reader_is_sent_every_row_again() {
 #[test]
 fn a_row_whose_padding_alone_changed_is_recorded_again() {
     for moved in [false, true] {
-        let (mut p, error) = Presenter::boot_with(
+        let (mut p, error) = Presenter::boot_with_fixture_fonts(
             &contract::compile(
                 &r##"component App
   state narrow = false
@@ -259,7 +259,7 @@ fn inline_frame_retained_rows_keep_initial_and_scrolled_viewport_origins() {
           box height=400
 "#
         );
-        let (mut p, error) = Presenter::boot_with(
+        let (mut p, error) = Presenter::boot_with_fixture_fonts(
             &crate::test_plan(&source),
             (),
             (400., 500.),
@@ -328,7 +328,7 @@ fn fractional_row_scroll_matches_a_fresh_walk_with_clips_and_hinted_text() {
           text "Hinted text" font-size=17 color="#ffffff"
         view width=120 height=200 background-color="#44aa33"
 "##;
-    let (mut p, _) = Presenter::boot_with(
+    let (mut p, _) = Presenter::boot_with_fixture_fonts(
         &crate::test_plan(source),
         (),
         (140., 100.),

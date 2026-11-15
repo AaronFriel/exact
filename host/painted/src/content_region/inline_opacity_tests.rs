@@ -8,7 +8,7 @@ fn retained_inline_opacity_uses_the_accepted_source() {
         let source = format!(
             "component App\n  state changed = false\n  action replace\n    changed = true\n  view\n    view id=\"owner\" width=400 height=200 overflow-x=\"hidden\" overflow-y=\"hidden\"\n      view id=\"content\" width=400 height=200\n        text font-size=32 color=\"#000000\" opacity=0.5 {paint} testId=\"paragraph\" press=replace\n          text opacity=0.5\n            text (changed ? \"new paragraph\" : \"HHHH\") opacity=(changed ? 1 : {opacity})\n      text \"pending\" id=\"pending\" position=\"absolute\"\n"
         );
-        let (mut p, error) = Presenter::boot_with_content_region(
+        let (mut p, error) = Presenter::boot_region_with_fixture_fonts(
             &crate::test_plan(&source),
             (),
             (400., 200.),
@@ -27,7 +27,7 @@ fn retained_inline_opacity_uses_the_accepted_source() {
         p.frame();
         ready(&mut p);
         let original = p.frame().clone();
-        let (mut live, error) = Presenter::boot_with(
+        let (mut live, error) = Presenter::boot_with_fixture_fonts(
             &crate::test_plan(&source),
             (),
             (400., 200.),
@@ -88,7 +88,7 @@ fn retained_inline_opacity_is_the_presented_opacity() {
     crate::content_region::test_wait_idle();
     // At 0 ms the fill holds the run at opacity 0; its style says 1.
     let source = "keyframes appear\n  from opacity=0\n  to opacity=1\ncomponent App\n  view\n    view id=\"owner\" width=400 height=200 overflow-x=\"hidden\" overflow-y=\"hidden\"\n      view id=\"content\" width=400 height=200\n        text font-size=32 color=\"#000000\"\n          text opacity=0.5\n            text \"HHHH\" animation=\"appear 1s linear both\"\n      text \"pending\" id=\"pending\" position=\"absolute\"\n";
-    let (mut p, error) = Presenter::boot_with_content_region(
+    let (mut p, error) = Presenter::boot_region_with_fixture_fonts(
         &crate::test_plan(source),
         (),
         (400., 200.),
@@ -107,7 +107,7 @@ fn retained_inline_opacity_is_the_presented_opacity() {
     p.frame();
     ready(&mut p);
     let retained = p.frame().clone();
-    let (mut live, error) = Presenter::boot_with(
+    let (mut live, error) = Presenter::boot_with_fixture_fonts(
         &crate::test_plan(source),
         (),
         (400., 200.),
