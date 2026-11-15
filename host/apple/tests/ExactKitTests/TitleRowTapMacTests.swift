@@ -123,13 +123,18 @@ final class TitleRowTapMacTests: XCTestCase {
         let (window, session) = try mount()
         defer { window.close(); session.destroy() }
         func node(_ id: String) throws -> NodeView { try XCTUnwrap(session.presenter.views.values.first { $0.props["testId"] == id }) }
+        // Each mouseUp is queued before its mouseDown is sent, as the single click above does: a button's
+        // tracking loop waits in mouseDown for the up, which nothing would post once it is waiting.
         func doubleClick(at p: NSPoint) throws {
             for clicks in 1...2 {
-                for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
-                    NSApp.sendEvent(try XCTUnwrap(NSEvent.mouseEvent(with: type, location: p, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
-                                                                     windowNumber: window.windowNumber, context: nil, eventNumber: clicks,
-                                                                     clickCount: clicks, pressure: type == .leftMouseDown ? 1 : 0)))
+                func event(_ type: NSEvent.EventType) throws -> NSEvent {
+                    try XCTUnwrap(NSEvent.mouseEvent(with: type, location: p, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+                                                     windowNumber: window.windowNumber, context: nil, eventNumber: clicks,
+                                                     clickCount: clicks, pressure: type == .leftMouseDown ? 1 : 0))
                 }
+                NSApp.postEvent(try event(.leftMouseUp), atStart: true)
+                NSApp.sendEvent(try event(.leftMouseDown))
+                if let up = NSApp.nextEvent(matching: .leftMouseUp, until: Date(), inMode: .default, dequeue: true) { NSApp.sendEvent(up) }
             }
             RunLoop.main.run(until: Date().addingTimeInterval(0.3))
         }
