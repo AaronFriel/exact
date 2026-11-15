@@ -112,7 +112,7 @@ ops: a target is a testId, else a view's exact text or label
   screenshot <png> compare <ref> · prefer <feature> <value> · fail|pass fetch <prefix>
 
 how (snippets compile)
-a second screen, a sheet: A screen is a route, not an `if`; a sheet's root adds `navigationPresentation="modal"`, its Cancel the `id` `navigationBack` names (`pattern list-detail`).
+a second screen, a sheet: A screen is a route, not an `if`; a sheet's root has `navigationPresentation="modal"`, its Cancel the `id` `navigationBack` names (`pattern list-detail`).
   routes nav
     home "/"
       edit "/edit"
@@ -138,7 +138,7 @@ a second screen, a sheet: A screen is a route, not an `if`; a sheet's root adds 
             text "New" role="heading"
             button press=save buttonStyle="bordered-prominent" aria-label="Save"
               image "symbol:checkmark"
-a confirmation: What can't be undone (Delete) asks first. `aria-label` is the question; actions run their `press` and close (`command="close"`); Cancel has no `press`. Open it with `command="show-modal"` or `showModal(id)`.
+a confirmation: What can't be undone asks first. `aria-label` is the question; actions run their `press` and close (`command="close"`); Cancel has no `press`. Open it: `command="show-modal"` or `showModal(id)`.
   state n = 1
   action remove
     n = 0
@@ -149,7 +149,7 @@ a confirmation: What can't be undone (Delete) asks first. `aria-label` is the qu
       text "Delete"
     button commandfor="remove" command="close"
       text "Cancel"
-a timer: `every(ms, action)` repeats; `after(ms, action)` runs once. Options: `wait=frame|update|scrollend|idle`, `max=ms`, `tolerance=ms`. See `vocab timers`.
+a timer: `every(ms, action)` repeats; `after(ms, action)` runs once. Options: `wait=frame|update|scrollend|idle`, `max=ms`, `tolerance=ms`. More: `vocab timers`.
   state now = 0
   task tick mount
     every(1000, step)
@@ -180,7 +180,7 @@ a dated record: The write reads the clock, not a ticked `now`; `performanceNow()
   action log
     let at = time.epochAtZero + performanceNow()
     days = days.concat([formatDate(at, time.utcOffset, "iso")])
-a test, and verify: Tests start with empty storage. `clock data` lands replies, `clock settle` ends transitions, `clock held` lands held replies; `reload` keeps storage. `bun exact.mjs verify` tests, checks end screens, relaunches; `verify ios` last; `--shots <dir>` keeps shots. It runs `contract verify`; keep its receipt.
+a test, and verify: Tests start with no storage. `clock data` lands replies, `clock settle` ends transitions, `clock held` lands held replies; `reload` keeps storage. `bun exact.mjs verify` tests, checks end screens, relaunches; `verify ios` last; `--shots <dir>` keeps shots. It runs `contract verify`; keep its receipt.
   test "a pick survives a relaunch"
     tap "pick"
     clock data
@@ -213,5 +213,5 @@ component App
 - `min`, `max`, `step` are numbers; with `inputmode="decimal"` a negative `min` gives the pad its ± key.
 - Symbols: `"symbol:<role>"` (below); `symbol:sf/<name>` is Apple-only.
 - Not in Contract (`vocab <name>` says what instead): abs pow sqrt sort reduce find some every contains padStart parseInt.
-idioms with code (vocab <name>): scroll loading plural choice select screen notfound modal confirm date persist swipe task mutation resource source match for if let fn shape props derive action stepper gradients menu search menubar ::placeholder ::backdrop glass bar-buttons haptics status-bar toast titlebar share use members svg env safe-area var media css cache rtl
+idioms with code (vocab <name>): scroll loading plural choice select screen notfound modal confirm date persist swipe task mutation resource source match for if let fn shape props derive action stepper gradients menu search menubar ::placeholder ::backdrop view-transition glass bar-buttons haptics status-bar toast titlebar share use members svg env safe-area var media css cache rtl
 symbol roles: back close compose add microphone send search copy select-text more delete forward home person messages notifications settings repeat activity bookmark document select reorder list cart sort filter heart reply share ellipsis photo play pause skip-back-15 skip-forward-15 skip-back-30 skip-forward-30 speaker speaker-mute moon pin link checkmark forward-chevron at hashtag follow sign-out quote feeds calendar book layers lock people stop circle alert minus-circle pencil waveform info camera star minus chart sparkles refresh menu adjust chooser download install open-app download-pending package mail emoji translate bag phone smartphone article radio; with a <role>-fill: bookmark select heart home notifications person play pause stop star alert info bag

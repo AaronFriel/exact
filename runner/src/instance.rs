@@ -1041,6 +1041,21 @@ impl NodeInst {
                                 ));
                             }
                         }
+                        // So do a route's entrance and exit (LLP 1013.001 D1).
+                        Ok(
+                            row @ (exact_kernel::StyleId::ViewTransitionNew
+                            | exact_kernel::StyleId::ViewTransitionOld),
+                        ) => {
+                            if let Some(resolve) = u.sites.resolve_keyframes {
+                                let list = match row {
+                                    exact_kernel::StyleId::ViewTransitionNew => {
+                                        &mut p.rare.view_transition_new
+                                    }
+                                    _ => &mut p.rare.view_transition_old,
+                                };
+                                u.notes.extend(resolve(&u.sites.keyframes, list));
+                            }
+                        }
                         Ok(_) => {}
                         Err(
                             bridge::BridgeError::Style(_) | bridge::BridgeError::StyleKind { .. },

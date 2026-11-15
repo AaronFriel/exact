@@ -71,6 +71,10 @@ pub const STYLE_NAMES: &[(&str, &str, AttrTarget)] = &[
     // @ref LLP 1035.001 D11 — `::backdrop`'s `background-color`, the part
     // block's declaration (contract_syntax::BACKDROP_COLOR).
     ("::backdrop background-color", "css CSS Position 4", AttrTarget::Styles(&[StyleId::BackdropColor])),
+    // @ref LLP 1013.001 D1 — a route's entrance and exit, each part's one
+    // declaration, the `animation` shorthand (route_parts.rs).
+    ("::view-transition-new animation", "css CSS View Transitions 1", AttrTarget::Styles(&[StyleId::ViewTransitionNew])),
+    ("::view-transition-old animation", "css CSS View Transitions 1", AttrTarget::Styles(&[StyleId::ViewTransitionOld])),
     ("overflow-wrap", "css CSS Text 3", AttrTarget::Styles(&[StyleId::OverflowWrap])),
     ("field-sizing", "css CSS Form Control Styling 1", AttrTarget::Styles(&[StyleId::FieldSizing])),
     ("scroll-snap-type", "css CSS Scroll Snap 1", AttrTarget::Styles(&[StyleId::ScrollSnapType])),

@@ -1243,6 +1243,61 @@ component App
 - Another property in the block (`backdrop-filter`, `opacity`) is refused; so is the block on any
   element other than a `dialog`.
 
+## view-transition: a route's own entrance and exit
+names: ::view-transition-new, ::view-transition-old, view transition, route transition, screen transition, page transition, navigation animation, view-transition-name, stackAnimation, enterTransition, popExitTransition, transitionSpec, fade route, slide route
+
+A route (an element with `navigationKey`) chooses its own entrance and exit with CSS View
+Transitions' two parts: `::view-transition-new` plays when a push (or a `fullscreen`
+presentation) adds it, `::view-transition-old` when a pop (or the dismissal) removes it. Each
+holds one declaration, the `animation` shorthand, naming `keyframes` that move `opacity`,
+`translate`, `scale` and `rotate`, or `none` for a cut. Only the route added or removed moves;
+the route beneath stands still. Declaring a part replaces the platform's transition for that
+change; a route with no parts keeps the platform's push and pop. Write the parts in a `style`
+the route takes, or under the route before its children.
+
+```contract
+keyframes fade-in
+  from opacity=0
+keyframes fade-out
+  to opacity=0
+
+style Fades
+  ::view-transition-new
+    animation="fade-in 180ms ease-out both"
+  ::view-transition-old
+    animation="fade-out 150ms ease-in both"
+
+routes nav
+  home "/"
+  camera "/camera"
+
+component App
+  action open
+    nav = push(nav, path("camera"))
+  action back
+    nav = back(nav)
+  view
+    main navigationKey=`${top(nav).id}` navigationBack="close" width="100%" height="100%"
+      for e in stack(nav) key=e.id
+        if e.name == "camera"
+          column navigationKey=`${e.id}` navigationPresentation="fullscreen" class=Fades background-color="black"
+            button press=back id="close"
+              text "Close"
+        else
+          column navigationKey=`${e.id}`
+            button press=open
+              text "Camera"
+```
+
+- The longhands (`animation-duration`…) are refused: the shorthand resets every one, so no
+  browser default leaks in. An `infinite` or `paused` animation is refused, and a value is a
+  literal or a choice of literals (`still ? "none" : "fade-in 180ms"`).
+- A sheet (`navigationPresentation="modal"`), a route with `navigationSource` (the zoom), and
+  any element that is no route refuse the parts; an element that moves between states takes
+  `sharedElement` instead. A tab switch keeps the platform's.
+- Under reduce motion the change cuts. On iOS the edge swipe keeps UIKit's interactive pop;
+  Android's predictive Back scrubs the authored exit.
+
 ## glass: Liquid Glass, a material or a blur behind a box
 names: Liquid Glass, liquid-glass, liquidGlass, material, materials, vibrancy, blur, frosted, UIVisualEffectView, UIGlassEffect, BlurView, GlassView, expo-blur, expo-glass-effect, tintColor, glass tint, tinted glass, isInteractive, UIBlurEffect, dark blur, blur tint, blur intensity, intensity
 

@@ -5,7 +5,9 @@
 //! Each declaration is carried as an attribute named for the part and the
 //! property (`::placeholder color`, [`part_attr`]), so a class's and the
 //! node's merge as any row does and the node's own wins. Lowering admits a
-//! placeholder's `color` and a backdrop's `background-color` alone.
+//! placeholder's `color` and a backdrop's `background-color` alone, and on a
+//! route `::view-transition-new`'s and `::view-transition-old`'s `animation`
+//! alone (LLP 1013.001 D1).
 
 use super::*;
 
@@ -39,12 +41,15 @@ impl Parser {
         };
         let part = format!("::{name}");
         let refusal = match name.as_str() {
-            "placeholder" | "backdrop" => None,
+            "placeholder" | "backdrop" | "view-transition-new" | "view-transition-old" => None,
+            "view-transition-group" | "view-transition-image-pair" | "view-transition" => Some(format!(
+                "`{part}` has nothing to style: a route's transition is its picture alone, so its parts are `::view-transition-new` (its entrance) and `::view-transition-old` (its exit), each with `animation` (LLP 1013.001)"
+            )),
             "before" | "after" => Some(format!(
                 "`{part}` has no generated box in Contract: write what it would show as a child (a `text`, an `image`), which every host lays out, draws and reads aloud"
             )),
             _ => Some(format!(
-                "`{part}` is not a part Contract has; it has `::placeholder` (its `color`), on an `input` or a `textarea`, and `::backdrop` (its `background-color`), on a `dialog`"
+                "`{part}` is not a part Contract has; it has `::placeholder` (its `color`), on an `input` or a `textarea`, `::backdrop` (its `background-color`), on a `dialog`, and `::view-transition-new` and `::view-transition-old` (their `animation`), on a route"
             )),
         };
         if let Some(message) = refusal {
@@ -71,11 +76,11 @@ impl Parser {
             return Err(SyntaxError {
                 id: "syntax-empty-block",
                 message: format!(
-                    "`{part}` needs its declarations indented under it: `{}`",
-                    if name == "backdrop" {
-                        "background-color=\"#00000066\""
-                    } else {
-                        "color=\"#6b7280\""
+                    "`{part}` needs its declarations indented under it: {}",
+                    match name.as_str() {
+                        "placeholder" => "`color=\"#6b7280\"`",
+                        "backdrop" => "`background-color=\"#00000066\"`",
+                        _ => "`animation=\"fade-in 180ms ease-out both\"`",
                     }
                 ),
                 span,

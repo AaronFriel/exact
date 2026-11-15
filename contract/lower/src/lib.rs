@@ -70,6 +70,7 @@ mod popover_surface;
 mod resource_args;
 mod roles;
 mod root_names;
+mod route_parts;
 mod routes;
 mod row_look;
 mod scale;
@@ -611,6 +612,7 @@ fn lower_body(
                     let hint = (name.is_empty() && !a.name.is_empty())
                         .then(|| "; the press's opacity is `opacity` in an `:active` part (LLP 1121 D8)".to_string())
                         .or_else(|| fields::part_hint(&a.name))
+                        .or_else(|| route_parts::hint(&a.name))
                         .or_else(|| lint::css_hint(&a.name))
                         .or_else(|| tags::renamed(&a.name).map(|n| {
                             if n.starts_with(":active ") { lint::active_migration_hint(&a.name, n) }
@@ -1351,6 +1353,8 @@ impl<'a> Lowerer<'a> {
                             StyleId::Transition
                                 | StyleId::Animation
                                 | StyleId::ExitAnimation
+                                | StyleId::ViewTransitionNew
+                                | StyleId::ViewTransitionOld
                                 | StyleId::LayoutTransition
                         )
                     })

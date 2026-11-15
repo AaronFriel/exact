@@ -86,7 +86,7 @@ component App
 
 ## how
 ### a second screen, a sheet
-A screen is a route, not an `if`; a sheet's root adds `navigationPresentation="modal"`, its Cancel the `id` `navigationBack` names (`pattern list-detail`).
+A screen is a route, not an `if`; a sheet's root has `navigationPresentation="modal"`, its Cancel the `id` `navigationBack` names (`pattern list-detail`).
 ```contract
 routes nav
   home "/"
@@ -115,7 +115,7 @@ main navigationKey=`${top(nav).id}` navigationBack="back"
             image "symbol:checkmark"
 ```
 ### a confirmation
-What can't be undone (Delete) asks first. `aria-label` is the question; actions run their `press` and close (`command="close"`); Cancel has no `press`. Open it with `command="show-modal"` or `showModal(id)`.
+What can't be undone asks first. `aria-label` is the question; actions run their `press` and close (`command="close"`); Cancel has no `press`. Open it: `command="show-modal"` or `showModal(id)`.
 ```contract
 state n = 1
 action remove
@@ -129,7 +129,7 @@ dialog id="remove" role="alertdialog" aria-label="Delete it?"
     text "Cancel"
 ```
 ### a timer
-`every(ms, action)` repeats; `after(ms, action)` runs once. Options: `wait=frame|update|scrollend|idle`, `max=ms`, `tolerance=ms`. See `vocab timers`.
+`every(ms, action)` repeats; `after(ms, action)` runs once. Options: `wait=frame|update|scrollend|idle`, `max=ms`, `tolerance=ms`. More: `vocab timers`.
 ```contract
 state now = 0
 task tick mount
@@ -175,7 +175,7 @@ action log
   days = days.concat([formatDate(at, time.utcOffset, "iso")])
 ```
 ### a test, and verify
-Tests start with empty storage. `clock data` lands replies, `clock settle` ends transitions, `clock held` lands held replies; `reload` keeps storage. `bun exact.mjs verify` tests, checks end screens, relaunches; `verify ios` last; `--shots <dir>` keeps shots.
+Tests start with no storage. `clock data` lands replies, `clock settle` ends transitions, `clock held` lands held replies; `reload` keeps storage. `bun exact.mjs verify` tests, checks end screens, relaunches; `verify ios` last; `--shots <dir>` keeps shots.
 It runs `contract verify`; keep its receipt.
 ```contract-test
 test "a pick survives a relaunch"

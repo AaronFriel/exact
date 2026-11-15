@@ -477,6 +477,16 @@ impl Build<'_> {
                         Ok(StyleId::ExitAnimation) => {
                             self.sites.keyframes.resolve(&mut patch.rare.exit_animation);
                         }
+                        Ok(StyleId::ViewTransitionNew) => {
+                            self.sites
+                                .keyframes
+                                .resolve(&mut patch.rare.view_transition_new);
+                        }
+                        Ok(StyleId::ViewTransitionOld) => {
+                            self.sites
+                                .keyframes
+                                .resolve(&mut patch.rare.view_transition_old);
+                        }
                         Ok(_) => {}
                         // A value its row refuses is unset, its declaration's
                         // intent kept, as on a kernel (`ClearStyle`).

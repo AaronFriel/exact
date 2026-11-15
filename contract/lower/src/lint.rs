@@ -321,6 +321,9 @@ pub(crate) fn unknown_attr(tag: &str, a: &Attr) -> LowerError {
         None if crate::fields::part_hint(&a.name).is_some() => {
             crate::fields::part_hint(&a.name).unwrap_or_default()
         }
+        None if crate::route_parts::hint(&a.name).is_some() => {
+            crate::route_parts::hint(&a.name).unwrap_or_default()
+        }
         Some(new @ ("press" | "change" | "input")) => format!(
             "; `{}` is `{new}` here: a handler is named for its event (LLP 1005 §3)",
             a.name

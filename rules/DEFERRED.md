@@ -962,7 +962,10 @@ reading. Nothing that isn't HTML is added by it.
   follows this player. (`webview` came off
   2026-08-30 as LLP 1020's `iframe` — it unblocks Weird Castle's entire content
   model, the client that exists to surface Castle web decks; the take: LLP 1013
-  view transitions moved behind the deck lane. LLP 1020 §6. What stays no from
+  view transitions moved behind the deck lane. LLP 1020 §6. Route transitions are
+  admitted as LLP 1013.001, the take waived by Charlie, 2026-11-14, after the panel
+  (decision D16 (a)); element flights across routes stay deferred with LLP 1013.000
+  stage 3. What stays no from
   exact1's webview: `top` topology, navigation policy, the controller ops, `allow`,
   author-facing `srcdoc` — each with its return trigger in LLP 1020 §5.)
 - **Expanded (Daehyeon Mun, 2026-10-19; trade):** `postMessage(text, iframeId)` sends

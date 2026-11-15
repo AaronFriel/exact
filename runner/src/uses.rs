@@ -441,7 +441,12 @@ pub fn uses(plan: &Plan) -> Uses {
                 }
                 if matches!(
                     StyleId::from_bit(u32::from(binding.id)),
-                    Some(StyleId::Animation | StyleId::ExitAnimation)
+                    Some(
+                        StyleId::Animation
+                            | StyleId::ExitAnimation
+                            | StyleId::ViewTransitionNew
+                            | StyleId::ViewTransitionOld
+                    )
                 ) {
                     uses = uses.with(Capability::Animations);
                 }
