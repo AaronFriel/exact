@@ -392,14 +392,6 @@ pub fn compatibility_id_pinned(
     crate::reach::derive(app_dir, platform, plan.as_ref(), &mut compat)?;
     if target.contains("android") {
         crate::channels::derive(app_dir, &manifest.json, &mut compat)?;
-        if let Some(plan) = &plan {
-            compat.inputs["androidLinked"] = android_linked(
-                plan,
-                compat.inputs["grantCeiling"].as_str(),
-                &contract::native::app_text(app_dir),
-            );
-            compat.id = compatibility_digest(&compat.inputs);
-        }
     }
     // The plans that ship, each resolved once (the receipt writes the entry
     // plans): an even-odd icon in any moves the id (stage 14 C2,
@@ -410,6 +402,17 @@ pub fn compatibility_id_pinned(
     let out = std::env::var_os("OUT_DIR").map(std::path::PathBuf::from);
     let other = crate::icon_rules::shipped(app_dir, plan.as_ref(), out.as_deref())?;
     let ships = other.as_ref().or(plan.as_ref());
+    // From the plan that ships, which the APK's build reads: a TypeScript
+    // bake's marks the resources its module answers, which link the host's
+    // I/O, and the `app.contract` plan alone does not.
+    if let (true, Some(ships)) = (target.contains("android"), ships) {
+        compat.inputs["androidLinked"] = android_linked(
+            ships,
+            compat.inputs["grantCeiling"].as_str(),
+            &contract::native::app_text(app_dir),
+        );
+        compat.id = compatibility_digest(&compat.inputs);
+    }
     crate::icon_rules::apply(&mut compat, ships, entries)?;
     crate::atom_faces::apply(&mut compat, ships, entries);
     if !target.contains("watchos") {
