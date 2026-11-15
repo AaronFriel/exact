@@ -41,7 +41,8 @@ struct Gradient {
     /// extended linear sRGB with alpha 0–1.
     private let lightLinear: Bool
     private let darkLinear: Bool
-    private func linear(dark: Bool) -> Bool { dark && self.dark != nil ? darkLinear : lightLinear }
+    /// Whether the stops under an appearance are extended linear sRGB.
+    func linear(dark: Bool) -> Bool { dark && self.dark != nil ? darkLinear : lightLinear }
 
     init?(_ value: BatchValue?, tint: PlatformColor? = nil) {
         guard case .object(let o)? = value else { return nil }
@@ -81,18 +82,20 @@ struct Gradient {
         darkLinear = o["darkSpace"]?.string == "srgb-linear"
     }
 
-    /// Resolve in the kernel after the presenter knows the gradient box.
-    private func resolved(in box: CGRect, dark: Bool) -> Gradient? {
+    /// Resolve in the kernel after the presenter knows the gradient box;
+    /// `cycle`, one period of a repeating linear gradient (`exact_gradient_cycle`).
+    private func resolved(in box: CGRect, dark: Bool, cycle: Bool = false) -> Gradient? {
         guard let css = dark ? darkCss ?? css : css else { return nil }
+        let resolve = cycle ? exact_gradient_cycle : exact_gradient
         return Owner.shared.sync {
             let input = Array(css.utf8), w = Float(box.width), h = Float(box.height)
             let color = tint?[dark ? 1 : 0] ?? []
             return color.withUnsafeBufferPointer { c in
                 let tint = color.isEmpty ? nil : c.baseAddress
-                let n = exact_gradient(input, input.count, w, h, dark ? 1 : 0, tint, nil, 0)
+                let n = resolve(input, input.count, w, h, dark ? 1 : 0, tint, nil, 0)
                 guard n > 0 else { return nil }
                 var bytes = [UInt8](repeating: 0, count: n)
-                _ = exact_gradient(input, input.count, w, h, dark ? 1 : 0, tint, &bytes, n)
+                _ = resolve(input, input.count, w, h, dark ? 1 : 0, tint, &bytes, n)
                 return bytes.withUnsafeBufferPointer {
                     var reader = BatchReader(bytes: $0)
                     return (try? reader.value()).flatMap { Gradient($0) }
@@ -123,11 +126,24 @@ struct Gradient {
         return ctx.makeImage()
     }
 
+    /// One period of a repeating linear gradient placed in `box`: its stops
+    /// over the period, and the line in `box`'s space from the period's first
+    /// stop to its last (#661). Nil for any other gradient, or a box with no
+    /// extent along the line.
+    func cycle(in box: CGRect, dark: Bool) -> (gradient: Gradient, start: CGPoint, end: CGPoint)? {
+        guard isRepeatingLinear, let g = resolved(in: box, dark: dark, cycle: true),
+              case .axial(let a, let b) = g.placement(in: box) else { return nil }
+        return (g, a, b)
+    }
+
+    /// `repeating-linear-gradient()`, whose period a pattern can tile (#661).
+    var isRepeatingLinear: Bool { css?.hasPrefix("repeating-linear-gradient(") == true }
+
     /// Conic geometry and repeated hard stops need the drawn painter;
     /// Core Animation's single ramp quantizes a hatch's stop boundaries.
     var needsDrawing: Bool {
         if case .conic = shape { return true }
-        return css?.hasPrefix("repeating-linear-gradient(") == true || css?.hasPrefix("conic-gradient(") == true
+        return isRepeatingLinear || css?.hasPrefix("conic-gradient(") == true
     }
 
     /// Locations 0–1 and their sRGB colours under an appearance. `dense`
@@ -233,26 +249,29 @@ struct Gradient {
             paintConic(ctx, center: c, from: from, reach: clip.boundingBox, dark: dark)
             return
         }
-        let (locations, colors) = stops(dark: dark)
         if case .axial(let a, let b) = place {
-            let cuts = locations.indices.dropFirst().filter {
-                locations[$0] == locations[$0 - 1] && locations[$0] > locations[0] && locations[$0] < locations.last!
-            }
-            if !cuts.isEmpty {
-                paintAxialRuns(ctx, start: a, end: b, locations: locations, colors: colors, cuts: Array(cuts), dark: dark)
-                return
-            }
+            paintAxial(ctx, start: a, end: b, dark: dark)
+            return
+        }
+        guard case .radial(let c, let r) = place else { return }
+        let (locations, colors) = stops(dark: dark)
+        guard let g = CGGradient(colorsSpace: CGColorSpace(name: linear(dark: dark) ? CGColorSpace.extendedLinearSRGB : CGColorSpace.sRGB), colors: colors as CFArray, locations: locations) else { return }
+        ctx.translateBy(x: c.x, y: c.y); ctx.scaleBy(x: r.width, y: r.height)
+        ctx.drawRadialGradient(g, startCenter: .zero, startRadius: 0, endCenter: .zero, endRadius: 1, options: [.drawsAfterEndLocation])
+    }
+
+    /// The stops from `a` to `b`, extended past both, over the clip.
+    func paintAxial(_ ctx: CGContext, start a: CGPoint, end b: CGPoint, dark: Bool) {
+        let (locations, colors) = stops(dark: dark)
+        let cuts = locations.indices.dropFirst().filter {
+            locations[$0] == locations[$0 - 1] && locations[$0] > locations[0] && locations[$0] < locations.last!
+        }
+        if !cuts.isEmpty {
+            paintAxialRuns(ctx, start: a, end: b, locations: locations, colors: colors, cuts: Array(cuts), dark: dark)
+            return
         }
         guard let g = CGGradient(colorsSpace: CGColorSpace(name: linear(dark: dark) ? CGColorSpace.extendedLinearSRGB : CGColorSpace.sRGB), colors: colors as CFArray, locations: locations) else { return }
-        switch place {
-        case .axial(let a, let b):
-            ctx.drawLinearGradient(g, start: a, end: b, options: [.drawsBeforeStartLocation, .drawsAfterEndLocation])
-        case .radial(let c, let r):
-            ctx.translateBy(x: c.x, y: c.y); ctx.scaleBy(x: r.width, y: r.height)
-            ctx.drawRadialGradient(g, startCenter: .zero, startRadius: 0, endCenter: .zero, endRadius: 1, options: [.drawsAfterEndLocation])
-        case .conic:
-            break
-        }
+        ctx.drawLinearGradient(g, start: a, end: b, options: [.drawsBeforeStartLocation, .drawsAfterEndLocation])
     }
 
     /// Core Graphics quantizes hard stops inside a ramp: an expanded hatch
@@ -447,9 +466,18 @@ extension NodeView {
     }
 
     /// Whether the background's gradients need `draw(_:)`: several layers,
-    /// or a conic or repeating one (LLP 1077 D5, LLP 1066).
+    /// or a conic or repeating one (LLP 1077 D5, LLP 1066). Repeating linear
+    /// gradients alone are patterns instead (`gradientPatterned`).
     var gradientDraws: Bool {
         let layers = Gradient.layers(style["background_image"], tint: gradientTint)
+        if gradientPatterned(layers) { return false }
         return layers.count > 1 || layers.contains { $0.needsDrawing }
+    }
+
+    /// A background of repeating linear gradients only, not `fixed`: Core
+    /// Animation tiles each one's period (`GradientPatternLayer`, #661)
+    /// wherever nothing else makes the box draw.
+    func gradientPatterned(_ layers: [Gradient]) -> Bool {
+        !gradientFixed && !layers.isEmpty && layers.allSatisfy(\.isRepeatingLinear)
     }
 }
