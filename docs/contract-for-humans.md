@@ -1113,7 +1113,8 @@ A screen reader's increment and decrement (VoiceOver's swipe up and down,
 TalkBack's and Windows' adjust) are then a keydown and a keyup at it, as
 Safari sends them to an ARIA slider: ArrowUp and ArrowDown for a spin
 button or an `aria-orientation="vertical"` slider, else ArrowRight and
-ArrowLeft, swapped in a right-to-left document. A `progress` or
+ArrowLeft, swapped where the slider's `direction` is `rtl` (the
+document's, unless the slider says its own). A `progress` or
 `input type="range"` says its own value.
 Leave font sizes, colours and control metrics unsaid and the platform supplies them;
 what you set on a node wins.

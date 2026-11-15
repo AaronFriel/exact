@@ -87,3 +87,56 @@ fn a_drawn_range_steps_by_its_authors_keys() {
     );
     assert!(!p.access_act(named(&nodes, "Floor").id, act::BACKWARD, 0.0, 0.0));
 }
+
+/// Two horizontal sliders, one of them `direction: ltr` and the other
+/// `rtl`, under a document of `direction`, each saying the keys it hears.
+fn sliders_in(direction: Direction) -> Presenter<Data> {
+    const SLIDERS: &str = r#"component App
+  state heard = ""
+  action hear(k: string)
+    heard = `${heard} ${k}`
+  view
+    column width=320 height=400 align-items="flex-start"
+      box role="slider" tabindex=0 aria-label="Plain" aria-valuenow=50 key=hear width=200 height=30
+      box role="slider" tabindex=0 aria-label="Ltr" aria-valuenow=50 key=hear direction="ltr" width=200 height=30
+      box role="slider" tabindex=0 aria-label="Rtl" aria-valuenow=50 key=hear direction="rtl" width=200 height=30
+      text heard testId="heard" width=300 height=20
+"#;
+    let launch = exact_runner::time::Launch {
+        direction: Some(direction),
+        ..exact_runner::time::Launch::NONE
+    };
+    exact_runner::time::launching_with(launch, || boot(SLIDERS, (320., 400.), 0))
+}
+
+/// A service's increment on a horizontal slider is ArrowRight where the
+/// slider's own computed `direction` is `ltr` and ArrowLeft where it is
+/// `rtl`, whatever the document's: the slider inherits the document's
+/// unless its author says otherwise.
+#[test]
+fn a_drawn_sliders_increment_follows_its_own_direction() {
+    for (document, plain) in [
+        (Direction::Rtl, "ArrowLeft"),
+        (Direction::Ltr, "ArrowRight"),
+    ] {
+        let mut p = sliders_in(document);
+        assert_eq!(p.host().runner().direction(), document.name());
+        let nodes = statement(&mut p).nodes;
+        for name in ["Plain", "Ltr", "Rtl"] {
+            assert!(p.access_act(named(&nodes, name).id, act::FORWARD, 0.0, 0.0));
+        }
+        settle(&mut p);
+        let kernel = p.host().kernel();
+        let heard = kernel
+            .node(id(&p, "heard"))
+            .unwrap()
+            .props
+            .str(PropId::Text);
+        let heard = heard.unwrap_or_default().trim().to_string();
+        assert_eq!(
+            heard,
+            format!("{plain} ArrowRight ArrowLeft"),
+            "{document:?}"
+        );
+    }
+}

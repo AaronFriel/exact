@@ -301,15 +301,15 @@ extension NodeView {
     /// (`AccessibilityNodeObject::postKeyboardKeysForValueChange`): ArrowUp or
     /// ArrowDown for a spin button (ARIA's keys for one) or an
     /// `aria-orientation="vertical"` slider, else ArrowRight or ArrowLeft,
-    /// swapped in a right-to-left document. No default action follows. False
-    /// where there is nothing to step.
+    /// swapped where the node's computed `direction` is `rtl`. No default
+    /// action follows. False where there is nothing to step.
     @discardableResult
     func stepRange(up: Bool) -> Bool {
         guard adjustsRange, !inert, let presenter, presenter.views[id] === self else { return false }
         let key = if rangeRole == "spinbutton" || props["accessibilityOrientation"] == "vertical" {
             up ? "ArrowUp" : "ArrowDown"
         } else {
-            up == (presenter.documentDirection != "rtl") ? "ArrowRight" : "ArrowLeft"
+            up == ((style["direction"]?.string ?? presenter.documentDirection) != "rtl") ? "ArrowRight" : "ArrowLeft"
         }
         _ = presenter.keyDown(at: self, key, code: key)
         presenter.keyUp(at: self, key, code: key)
