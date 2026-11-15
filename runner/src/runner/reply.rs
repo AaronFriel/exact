@@ -354,10 +354,7 @@ impl<D: DataSource> Runner<D> {
                 let contents = self.note_reads(i, reads_before, draws_before);
                 self.module_work.reply_reader = Some((i, contents));
             }
-            // A module's source that data code read: the answer is asked
-            // again when that source's answer changes (LLP 1133.002 D14).
-            let module = (p.keepable.as_ref()).and_then(|r| self.module_topic(&r.body));
-            for topic in self.store.take_topics().into_iter().chain(module) {
+            for topic in self.store.take_topics() {
                 if !self.resources[i].watching.contains(&topic) {
                     self.resources[i].watching.push(topic);
                 }
