@@ -1014,6 +1014,15 @@ and `onUnhandled` return whether a listener cancelled. Without the option the
 binding behaves as upstream's. `js/tests/it/error_events.rs` covers it. Offer
 upstream; replay on a refresh until it lands.
 
+## Local patch 45, ibex2 takes Exact's private copy of ureq
+
+`ibex2` depends on `ureq = { package = "exact-ureq", path = "../../../ureq" }`,
+ureq 3.4.0 vendored under another name (`vendor/ureq/EXACT-PATCHES.md`): the
+portable transport implements ureq's `unversioned` traits, which change
+between minor releases, and an app's own `ureq` must resolve apart from it
+(LLP 1153.003 D6.5). `hermes-lean-sys` and its installer call only `ureq::get`
+and require `"3"`. Replay on a refresh.
+
 ## Terminal heap exhaustion
 
 The borrowed adapter propagates native engine exceptions through installation,
