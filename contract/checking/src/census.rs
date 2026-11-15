@@ -13,6 +13,27 @@ struct Body {
     calls: BTreeSet<String>,
 }
 
+impl Body {
+    fn call(&mut self, expr: &syn::Expr) {
+        let path = match expr {
+            syn::Expr::Path(path) => &path.path,
+            syn::Expr::Paren(expr) => return self.call(&expr.expr),
+            syn::Expr::Group(expr) => return self.call(&expr.expr),
+            syn::Expr::Reference(expr) => return self.call(&expr.expr),
+            _ => return,
+        };
+        let segments: Vec<_> = path.segments.iter().map(|s| s.ident.to_string()).collect();
+        let shared = segments
+            .windows(2)
+            .any(|pair| pair[0] == "Node" && matches!(pair[1].as_str(), "walk" | "walk_with"));
+        if !shared {
+            if let Some(name) = segments.last() {
+                self.calls.insert(name.clone());
+            }
+        }
+    }
+}
+
 impl<'ast> Visit<'ast> for Body {
     fn visit_path(&mut self, path: &'ast syn::Path) {
         self.view |= path.segments.iter().any(|s| s.ident == "Node");
@@ -20,27 +41,19 @@ impl<'ast> Visit<'ast> for Body {
     }
 
     fn visit_expr_call(&mut self, call: &'ast syn::ExprCall) {
-        if let syn::Expr::Path(path) = &*call.func {
-            let segments: Vec<_> = path
-                .path
-                .segments
-                .iter()
-                .map(|s| s.ident.to_string())
-                .collect();
-            let shared = segments
-                .windows(2)
-                .any(|pair| pair[0] == "Node" && matches!(pair[1].as_str(), "walk" | "walk_with"));
-            if !shared {
-                if let Some(name) = segments.last() {
-                    self.calls.insert(name.clone());
-                }
-            }
+        self.call(&call.func);
+        // Function arguments can recurse through iterator adapters or other helpers.
+        for arg in &call.args {
+            self.call(arg);
         }
         visit::visit_expr_call(self, call);
     }
 
     fn visit_expr_method_call(&mut self, call: &'ast syn::ExprMethodCall) {
         self.calls.insert(call.method.to_string());
+        for arg in &call.args {
+            self.call(arg);
+        }
         self.view |= matches!(
             call.method.to_string().as_str(),
             "child_lists" | "scoped_child_lists" | "child_lists_mut" | "scoped_child_lists_mut"
@@ -169,8 +182,8 @@ fn recursive_view_walks_do_not_grow() {
     let measured = std::env::var_os("CHECKING_CENSUS_ROOT");
     let root = measured.as_deref().map(Path::new).unwrap_or(here);
     let walks = census(root);
-    // 939dd84f2 had 163 sites; this batch removes two.
-    const CEILING: usize = 161;
+    // Including callback edges, 939dd84f2 had 185 sites; this batch removes three.
+    const CEILING: usize = 182;
     eprintln!(
         "{} compiler hand walks (ceiling {CEILING}):\n{}",
         walks.len(),
@@ -196,4 +209,46 @@ fn census_finds_direct_mutual_and_iterative_walks_but_not_shared_traversal() {
     let mut functions = Functions::default();
     functions.visit_file(&file);
     assert_eq!(functions.walks(), ["direct", "first", "second", "stacked"]);
+}
+
+#[test]
+fn census_finds_callback_recursion_but_not_shared_traversal() {
+    let file = syn::parse_file(
+        r#"
+        fn pointed(n: &Node) -> bool { n.children().any(pointed) }
+        fn every(n: &Node) -> bool { n.children().all(every) }
+        fn each(n: &Node) { n.children().for_each(each); }
+        fn found(n: &Node) -> Option<String> { n.children().find_map(found) }
+        fn mapped(n: &Node) -> Vec<String> { n.children().flat_map(mapped).collect() }
+        fn qualified(n: &Node) -> bool { n.children().any(crate::qualified) }
+        fn associated(n: &Node) -> bool { Iterator::any(n.children(), associated) }
+        fn parenthesized(n: &Node) -> bool { n.children().any((parenthesized)) }
+        fn borrowed(n: &Node) -> bool { n.children().any(&borrowed) }
+        fn first(n: &Node) -> bool { n.children().any(second) }
+        fn second(n: &Node) -> bool { n.children().all(first) }
+        fn leaf(n: &Node) -> bool { n.tag() == "div" }
+        fn nonrecursive(n: &Node) -> bool { n.children().any(leaf) }
+        fn walk(nodes: &[Node]) { nodes.iter().map(Node::walk); }
+        fn walk_with(nodes: &[Node]) { pass(nodes, Node::walk_with); }
+    "#,
+    )
+    .unwrap();
+    let mut functions = Functions::default();
+    functions.visit_file(&file);
+    assert_eq!(
+        functions.walks(),
+        [
+            "pointed",
+            "every",
+            "each",
+            "found",
+            "mapped",
+            "qualified",
+            "associated",
+            "parenthesized",
+            "borrowed",
+            "first",
+            "second"
+        ]
+    );
 }
