@@ -41,7 +41,8 @@ export function answers(resources, types, sourceTypes) {
     }
     out.push(`[${JSON.stringify(r.name)},${JSON.stringify(r.source)},[${r.settled.map((a, k) => encode(a, params[k] ?? 's')).join(',')}],${encode(r.value, type)}]`);
   };
-  resources.forEach(({ r }, i) => r.each ? r.members().forEach(element => write(element, types[i][1])) : write(r, types[i]));
+  // a child's resource writes each instance's answer, which the boot's instances take by their arguments (LLP 1035.005.004 D8)
+  resources.forEach(({ r }, i) => r.each ? r.members().forEach(element => write(element, types[i][1])) : r.instances ? r.members().forEach(own => write(own, types[i])) : write(r, types[i]));
   return { answers: `[${out.join(',')}]`, open, readers };
 }
 

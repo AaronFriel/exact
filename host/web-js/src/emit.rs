@@ -36,6 +36,8 @@ mod named_records;
 mod pages;
 #[path = "regions.rs"]
 mod regions;
+#[path = "resources.rs"]
+mod resources;
 #[path = "rows.rs"]
 mod rows;
 #[path = "said.rs"]
@@ -160,6 +162,9 @@ struct Em<'a> {
     /// The tab panels whose contents wait for their first selection
     /// (`exact_runner::instance::panel_sites`; tabs.js).
     panels: Vec<exact_plan::NodesId>,
+    /// Whether a child's resource is in the plan: its instances' paths are
+    /// then kept (LLP 1035.005.004 D8).
+    owns_requests: bool,
 }
 
 /// The runner's reserved sources the JS runtime answers itself: the page's
@@ -248,6 +253,7 @@ pub fn emit(plan: &Plan, site_attrs: bool, dev_reload: bool) -> Result<Output, S
         site_attrs,
         dev_reload,
         panels: exact_runner::instance::tabs::panel_sites(plan),
+        owns_requests: plan.resources.iter().any(|r| r.owner.is_some()),
     };
     em.heights = em.drag_targets(PropId::HeightDragFor);
     em.transforms = em.drag_targets(PropId::TransformDragFor);
@@ -363,83 +369,27 @@ pub fn emit(plan: &Plan, site_attrs: bool, dev_reload: bool) -> Result<Output, S
     let midi = timers::midi(&mut em, &mut body)?;
     let transport = timers::transport(&mut em, &mut body)?;
     for (i, r) in plan.resources.iter().enumerate() {
-        let mut args = Vec::new();
-        for (k, a) in r.args.iter().enumerate() {
-            let f = code::expression(
-                plan,
-                plan.code(plan.arg(a).expr),
-                &code::evaluation(
-                    &top,
-                    format!("resource {:?} argument {}", plan.str(r.name), k + 1),
-                    false,
-                ),
-                &mut em.uses,
-            )
-            .map_err(|e| format!("resource {}: {e}", plan.str(r.name)))?;
-            args.push(f);
-        }
-        if let Some(each) = each::resource(plan, i, &args, &top, &mut em.uses)? {
-            body.push_str(&each);
+        // A child's resource is made with each instance of its arm, and a
+        // late one after the late slots it reads (LLP 1035.005.004 D1, D2).
+        if r.owner.is_some() {
+            let owned = em.uses.rt("owned");
+            let _ = write!(
+                body,
+                "const r_{i}={owned}({});",
+                serde_json::to_string(plan.str(r.name)).unwrap()
+            );
             continue;
         }
-        // What it shows while it waits with nothing kept (LLP 1048.003 D6,
-        // 1054.000.002): an `else source()` row's value, a declared
-        // `else empty(…)`, or the type's zero; a placeholder row has none.
-        let is_placeholder = plan
-            .resources
-            .iter()
-            .any(|o| o.placeholder.map(|p| p.0 as usize) == Some(i));
-        let placeholder = match (r.placeholder, plan.bytes(r.placeholder_value)) {
-            (Some(p), _) => format!("()=>r_{}()", p.0),
-            (None, b) if !b.is_empty() => {
-                value_js(&Value::from_bytes(b).map_err(|e| e.to_string())?)
-            }
-            _ if is_placeholder => "void 0".into(),
-            _ => pages::zero(plan, r.ty),
-        };
-        // Host facts and store readers are asked at launch (LLP 1027 D4).
-        let fact = HOST_FACTS.contains(&plan.str(r.source));
-        let initial = plan.bytes(r.initial);
-        let initial = if initial.is_empty() || fact {
-            "void 0".to_string()
-        } else {
-            value_js(&Value::from_bytes(initial).map_err(|e| e.to_string())?)
-        };
-        let initial_args = plan.bytes(r.initial_args);
-        let initial_args = if initial_args.is_empty() || fact || r.reader {
-            "void 0".to_string()
-        } else {
-            value_js(&Value::from_bytes(initial_args).map_err(|e| e.to_string())?)
-        };
-        let res = if dev_reload {
-            "$devRes".to_string()
-        } else {
-            em.uses.rt("res")
-        };
-        let res = each::constructor(r, res);
-        // An `else` row's compiled answer is the bake's for every launch,
-        // never asked again (each was a worker turn; the runner's
-        // `is_placeholder_row`, review B4): it is settled, not a bake.
-        let kept = if is_placeholder { ",1" } else { "" };
-        let carry = if dev_reload {
-            format!(",{}{kept}", type_json(plan, r.ty))
-        } else {
-            kept.to_string()
-        };
-        // Its last `context` arguments are its `with` context (LLP 1027.005
-        // D6), which identify no upload it asks (uploads.js, LLP 1016.000 D10).
-        let args = each::arguments(plan, r, &args, &top, &mut em.uses)?;
-        let _ = write!(
-            body,
-            "const r_{i}={res}({},{},{args},{initial},{initial_args},{},{placeholder}{carry});",
-            serde_json::to_string(plan.str(r.name)).unwrap(),
-            serde_json::to_string(plan.str(r.source)).unwrap(),
-            serde_json::to_string(&type_code(plan, r.ty)).unwrap()
-        );
-        // The runner's own resource shows its facts, never a write (overlay.js)
-        if exact_plan::RUNNER_OWNED_SOURCES.contains(&plan.str(r.source)) {
-            let _ = write!(body, "r_{i}.r.owned=true;");
+        if r.late {
+            continue;
         }
+        body.push_str(&resources::declaration(
+            plan,
+            i,
+            &top,
+            dev_reload,
+            &mut em.uses,
+        )?);
     }
     for (i, m) in plan.mutations.iter().enumerate() {
         let refreshes: Vec<String> = m
@@ -470,6 +420,16 @@ pub fn emit(plan: &Plan, site_attrs: bool, dev_reload: bool) -> Result<Output, S
         if r.late {
             root_slot(plan, i, &top, dev_reload, &mut em.uses, &mut body)?;
         }
+    }
+    // A child's resource used outside every region reads those slots.
+    for (i, _) in plan.resources.iter().enumerate().filter(|(_, r)| r.late) {
+        body.push_str(&resources::declaration(
+            plan,
+            i,
+            &top,
+            dev_reload,
+            &mut em.uses,
+        )?);
     }
     for (i, r) in plan.actions.iter().enumerate() {
         // An action that touches row slots takes the row in force first.

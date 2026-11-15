@@ -56,7 +56,7 @@ export function presenceRows(row, list, key, identify = rowKey) {
       write(index.n, value[1]);
       return true;
     };
-    return row(p, item, index);
+    return row(p, item, index, k);
   };
 }
 

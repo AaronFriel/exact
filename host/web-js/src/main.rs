@@ -38,6 +38,8 @@ mod modes;
 mod modes_tests;
 #[cfg(test)]
 mod module_tests;
+#[cfg(test)]
+mod owned_tests;
 mod paint;
 #[cfg(test)]
 mod paint_tests;

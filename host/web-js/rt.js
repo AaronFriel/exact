@@ -939,4 +939,4 @@ export * from './router.js';
 import { routerValid } from './router.js';
 export { queues, gated } from './schedule.js'; // queued sends and gated tasks (LLP 1092), their own file
 export { timerWaits } from './timer-waits.js';
-export { resEach } from './each.js';
+export { resEach, owned, own, keptOwned, rowPath } from './each.js';

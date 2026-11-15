@@ -3,7 +3,7 @@
 // row is: an element that joins makes one, which asks, unless the boot makes it from a page that answered it
 // (`keptMember`); one that leaves lets only its own ticket go, once the commit that dropped it stands; the others go
 // on. `r` reads their values as `S[]` in the list's order, pending or failed when any element's is.
-import { res, memo, scope, end, untracked, sig, write, eq, say, stood, restoring, owner, Resources, Invocation, Refusal, checkpoint, booting, equal, conforms } from "./rt.js";
+import { res, memo, scope, end, untracked, sig, write, eq, say, stood, restoring, owner, onEnd, Resources, Invocation, Refusal, checkpoint, booting, equal, conforms } from "./rt.js";
 import { join, forget } from "./overlay.js";
 
 /** The page's answer for an element of list `name` at its arguments `args()`, while the runtime boots (LLP 1048.000
@@ -26,6 +26,13 @@ function keptMember(name, source, args, type) {
   }
   return null;
 }
+
+/** A row's segment of an instance path from its identity `k` (rows.js `rowKey`), as the runner's owners.rs writes
+ * it: its key's text, then `#<n>` for the key's nth repeat. */
+export const rowPath = k => {
+  const d = /^d(\d+):/.exec(k), key = d ? k.slice(d[0].length) : k;
+  return key[0] + key.slice(key.indexOf(':')) + (d ? '#' + d[1] : '');
+};
 
 const keyText = v => typeof v === "string" ? "s:" + v : typeof v === "number" ? (Number.isFinite(v) ? "n:" + (v === 0 ? 0 : v) : null) : typeof v === "boolean" ? "b:" + v : null;
 
@@ -88,4 +95,43 @@ export function resEach(name, source, list, key, args, type, elem, zero) {
     reconcile: undo => each(r => r.reconcile(undo)), revise: undo => each(r => r.revise(undo)) };
   g.n.resource = g.r;
   return g;
+}
+
+/** A child's resource (LLP 1035.005.004 D1): the declared row, standing for every instance's own. `members`: the live
+ * instances' resources, whose answers a page's checkpoint holds (checkpoint.js); `retired`: the asks of instances gone,
+ * which `perf` still counts under the declared name, as the runner counts by row. */
+export function owned(name) {
+  const g = () => { throw new Refusal(`resource ${JSON.stringify(name)} is an instance's, read on its instance`); };
+  const live = new Set();
+  g.r = { name, declared: name.split("#")[0], instances: true, live, retired: 0, members: () => [...live] };
+  return g;
+}
+
+/** Row `g`'s resource for the instance being built, `make()` in its scope: asked now, after the instance's state, and
+ * let go with the instance, its ticket forgotten so a late reply changes nothing (D2, D4). `path` names the instance
+ * (the agent's `instances`). */
+export function own(g, make, path) {
+  const m = make(), r = m.r;
+  r.declared = g.r.declared;
+  r.path = path;
+  g.r.live.add(r);
+  onEnd(() => {
+    g.r.live.delete(r);
+    g.r.retired += r.asks ?? 0;
+    if (r.ticket) {
+      Invocation.letGo(r.ticket);
+      say(`forget ticket ${r.ticket.id} (${r.name})`);
+      r.ticket = null;
+    }
+    const k = Resources.indexOf(r);
+    if (k >= 0) Resources.splice(k, 1);
+  });
+  untracked(m);
+  return m;
+}
+
+/** An instance's page answer at its arguments while the runtime boots, found as a list element's is; `null` (never
+ * `undefined`, which `res` would look up by name) without one. */
+export function keptOwned(name, source, args, type) {
+  return keptMember(name, source, args, type);
 }

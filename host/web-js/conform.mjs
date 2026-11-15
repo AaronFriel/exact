@@ -336,8 +336,9 @@ function diffPng(a, b, sideBySide, masks = []) {
   }
   return share;
 }
-// The document's head too: the active head's fields, as every runner reports them (runner/src/head.rs).
-const STATE_KEYS = ['slots', 'derives', 'resources', 'writes', 'head', 'reorder', 'sounds', 'transport', 'midi', 'sessionCore', 'background'];
+// The document's head too: the active head's fields, as every runner reports them (runner/src/head.rs). A child's
+// resources by instance path (`owned`, `instances`; LLP 1035.005.004 D8) too.
+const STATE_KEYS = ['slots', 'derives', 'resources', 'owned', 'instances', 'writes', 'head', 'reorder', 'sounds', 'transport', 'midi', 'sessionCore', 'background'];
 // The media session (LLP 1098 D10) by testId (each target numbers its views its own way) and the artwork's path (each
 // page has its own port): what every host records (`sessionCore`, Linux's too), and what the pages publish (`session`).
 const addSession = s => {
