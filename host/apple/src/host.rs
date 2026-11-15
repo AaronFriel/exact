@@ -134,6 +134,11 @@ mod svg_lower;
 #[cfg(test)]
 #[path = "svg_tests.rs"]
 mod svg_tests;
+#[path = "tables.rs"]
+mod tables;
+#[cfg(test)]
+#[path = "tables_tests.rs"]
+mod tables_tests;
 #[path = "timeline_scroll.rs"]
 mod timeline_scroll;
 #[cfg(test)]
@@ -241,6 +246,9 @@ pub struct Host<D: DataSource> {
     timeline_scrolls: timeline_scroll::TimelineScrolls,
     /// Each multi-column record as the presenter last heard it (LLP 1093 D7).
     fragments: IdMap<ViewId, String>,
+    /// Each table's and table part's record as the presenter last heard it
+    /// (`tables.rs`).
+    tables: IdMap<ViewId, String>,
     ranks: IdMap<ViewId, i64>,
     roots: Vec<ViewId>,
     /// Last published common collection snapshot; refreshed only after layout.
@@ -594,6 +602,7 @@ impl<D: DataSource> Host<D> {
             stickies: IdMap::default(),
             timeline_scrolls: Default::default(),
             fragments: IdMap::default(),
+            tables: IdMap::default(),
             ranks: IdMap::default(),
             roots: Vec::new(),
             collections_json: "[]".into(),

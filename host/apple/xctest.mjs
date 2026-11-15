@@ -32,6 +32,7 @@ export function compileFixtures(root, run, env, dir, prefix, appId) {
     { platform: prefix === 'EXACT' ? 'macos' : 'ios', icons: [{ svg: 'two.svg', viewBox: '0 0 24 24' }] });
 
   contract([resolve(root, 'host/apple/tests/fixtures/fragment.contract'), '-o', env[`${prefix}_FRAGMENT_PLAN`] = resolve(dir, 'fragment.plan')]);
+  contract([resolve(root, 'host/apple/tests/fixtures/table-access.contract'), '-o', env[`${prefix}_TABLE_ACCESS_PLAN`] = resolve(dir, 'table-access.plan')]);
   if (prefix === 'TEST_RUNNER_EXACT') {
     // LaunchColorIOSTests reads the build's XML and compiled catalogue as an app bundle.
     const fixtures = env[`${prefix}_LAUNCH_COLOR_FIXTURES`] = resolve(dir, 'launch-colors');

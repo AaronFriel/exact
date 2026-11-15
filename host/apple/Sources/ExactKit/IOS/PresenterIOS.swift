@@ -104,6 +104,7 @@ package final class Presenter {
     var videoVisibility: VideoVisibilityHost?
     lazy package var collections = CollectionHost(self)
     lazy var stickies = StickyHost(self)
+    let tableGrid = TableGrid()
     lazy var pool = NodePool(self)
     /// Heavy leaves held mid-fling (LLP 1068 §5.1).
     lazy var leaves = HeavyLeaves(self)
@@ -1012,10 +1013,12 @@ package final class Presenter {
             case .fragments:
                 if flats.isFlat(id) { flats.promote(id) }
                 views[id]?.applyColumns(op.payload)
+            case .table: tableGrid.apply(id, op.payload)
             case .destroy:
                 views[id]?.holdGone()
                 elements.destroyed(id)
                 stickies.forget(id)
+                tableGrid.forget(id)
                 forgetFlight(id)
                 if flats.isFlat(id) { flats.destroy(id); return }
                 if endExit(id) { return }

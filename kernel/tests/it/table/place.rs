@@ -47,6 +47,9 @@ fn each_cell_stands_where_its_spans_put_it_and_a_caption_is_no_row() {
         ],
     ));
     assert_eq!(k.table_size(2), Some((3, 3)));
+    let mut views = k.table_views();
+    views.sort_unstable();
+    assert_eq!(views, [2, 3, 5, 6, 7, 9, 11, 12, 13, 15, 17, 19, 20, 22]);
     let places = [6, 7, 9, 12, 13, 15, 17, 19, 20, 22].map(|v| at(&k, v));
     let expected = [
         [2, 0, 1, 0, 3],

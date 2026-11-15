@@ -363,7 +363,7 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
     /// not `accessibilityElementsHidden`, which would hide them too.
     package override var isAccessibilityElement: Bool {
         get {
-            guard kind == "native" else { return accessibilityExposed && super.isAccessibilityElement }
+            guard kind == "native" else { return accessibilityExposed && (super.isAccessibilityElement || isTableCellElement) }
             // A native module's box (LLP 1024): the module's own elements
             // when its view has some; else the box, named by the Contract.
             return accessibilityExposed && (super.isAccessibilityElement || authoredLabel != nil) && presenter?.session?.natives.speaksForItself(self) != true
@@ -483,7 +483,7 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
     /// A pointer over the node (an iPad's trackpad or mouse; a phone has
     /// none): `hover` in and out.
     package override var accessibilityElements: [Any]? {
-        get { textAccessibilityChildren() ?? super.accessibilityElements ?? NodeView.emptyBoxAccessibility(of: self) }
+        get { textAccessibilityChildren() ?? tableElementsInDrawnOrder ?? super.accessibilityElements ?? NodeView.emptyBoxAccessibility(of: self) }
         set { super.accessibilityElements = newValue }
     }
     /// A text field's Enter as a key (its characters are its `input`, the
