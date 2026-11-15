@@ -6,8 +6,7 @@
 // - A post's channel is a declared one (`host.android.notificationChannels`), `default` unless `android.channelId`
 //   names another; the host made both after the first frame (`Channels.kt`). An id the declaration lacks refuses
 //   `TypeError`; a literal one was refused by the bake.
-// - `silent` always wins: from Android 12 the post keeps its channel and is silenced alone; below it, it goes to the
-//   quiet channel `silent`, which has no sound or vibration.
+// - `silent` always wins: the post keeps its channel and is silenced alone.
 // - A post to a channel the person turned off, or with the app's notifications off, refuses `NotAllowedError`, as
 //   `denied` does: the platform would drop it without a word.
 // - A post with a `showTrigger` in the future is kept and posted then, with no session ([Later]).
@@ -69,10 +68,6 @@ class NotificationsModule(context: ExtensionContext) : ExactExtension(context) {
         /** The request code of a tag's intents: one post's never stands in for another's. */
         fun code(tag: String, slot: Int = 0): Int = 31 * tag.hashCode() + slot
 
-        /** The channel [record] posts on: its own, or the quiet one for a silent post below Android 12. */
-        fun channel(app: Context, record: JSONObject): String =
-            if (record.optBoolean("silent") && Build.VERSION.SDK_INT < 31) Channels.quiet(app) else record.getString("channel")
-
         /** The button of [action], a declared action's record: an activity start through the app's alias, as every
          * action is on Android (LLP 1133.004.000 D5), mutable only when it has a text field, whose reply the
          * platform writes into it. */
@@ -100,7 +95,7 @@ class NotificationsModule(context: ExtensionContext) : ExactExtension(context) {
             val navigate = record.optString("navigate").takeIf { record.has("navigate") }
             val tap = ExtensionContext.activation(app, "notifications", "notificationclick", JSONArray().put(tag).put(event), navigate)
             val open = PendingIntent.getActivity(app, code(identifier), tap, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-            val channel = channel(app, record)
+            val channel = record.getString("channel")
             val builder = Notification.Builder(app, channel)
             builderHatch?.invoke(builder)
             // An empty title is the web's too: the platform then shows the app's name.
@@ -109,8 +104,8 @@ class NotificationsModule(context: ExtensionContext) : ExactExtension(context) {
             if (body != null) builder.setContentText(body).setStyle(Notification.BigTextStyle().bigText(body))
             // Android has no per-post silence on the platform's builder: a child of a group whose summary alone alerts
             // makes no sound and does not peek, whatever its channel plays (`GROUP_ALERT_SUMMARY`), which is how
-            // AndroidX's `NotificationCompat.Builder.setSilent` silences one post.
-            if (record.optBoolean("silent") && Build.VERSION.SDK_INT >= 31) builder.setGroupAlertBehavior(Notification.GROUP_ALERT_SUMMARY).setGroup(SILENT_GROUP)
+            // AndroidX's `NotificationCompat.Builder.setSilent` silences one post (API 26, below the floor).
+            if (record.optBoolean("silent")) builder.setGroupAlertBehavior(Notification.GROUP_ALERT_SUMMARY).setGroup(SILENT_GROUP)
             if (record.has("category")) builder.setCategory(record.getString("category"))
             if (record.has("number")) builder.setNumber(record.getInt("number"))
             val actions = record.optJSONArray("actions") ?: JSONArray()
@@ -163,7 +158,7 @@ class NotificationsModule(context: ExtensionContext) : ExactExtension(context) {
             val status = status().also(::announce)
             if (status.getString("state") != "granted") return@ask reply(refused("NotAllowedError", "notifications are off for this app"))
             val record = record(args, channel, category, number, actions(args))
-            val posted = channel(app, record)
+            val posted = record.getString("channel")
             if (manager.getNotificationChannel(posted)?.importance == NotificationManager.IMPORTANCE_NONE) {
                 return@ask reply(refused("NotAllowedError", "the channel \"$posted\" is off in Settings"))
             }

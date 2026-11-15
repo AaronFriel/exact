@@ -2902,8 +2902,7 @@ grant beside this one: see [Push](#push).
   literal is refused at build, `android-channel-undeclared`; a computed one
   `TypeError`). A changed importance or sound for an installed channel does
   nothing, as on the platform: declare a new id instead. `silent=true` always
-  wins (from Android 12 the post is silenced alone; below it, it goes on a
-  quiet channel). A post on a channel the person turned off refuses
+  wins: the post keeps its channel and is silenced alone. A post on a channel the person turned off refuses
   `NotAllowedError`, and `notificationStatus().android.channels` lists each
   channel's importance as the person left it (`none` when off).
   `android.category=` and `android.number=` are the platform's category and

@@ -1052,7 +1052,7 @@
                 "type": "object",
                 "required": ["id", "name"],
                 "properties": {
-                  "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$", "description": "The NotificationChannel id, an Android resource name; `silent` is reserved." },
+                  "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$", "description": "The NotificationChannel id, an Android resource name." },
                   "name": { "type": "string", "description": "A strings key (LLP 1060): the channel's name in Settings." },
                   "description": { "type": "string", "description": "A strings key: the channel's description in Settings." },
                   "importance": { "enum": ["min", "low", "default", "high"], "description": "The platform's IMPORTANCE_* name; `default` when absent. `high` shows a post heads-up." },
