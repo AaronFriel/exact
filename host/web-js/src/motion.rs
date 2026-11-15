@@ -9,6 +9,18 @@ use exact_plan::{BindingKind, EventKind, NodesId, Value};
 use std::fmt::Write as _;
 
 impl Em<'_> {
+    /// Whether node `i` binds a route's entrance or exit, which loads
+    /// shared.js as a written one does (LLP 1013.001 D1).
+    pub(super) fn binds_route_part(&self, i: u32) -> bool {
+        let parts = [
+            StyleId::ViewTransitionNew as u16,
+            StyleId::ViewTransitionOld as u16,
+        ];
+        (self.plan.node(NodesId(i)).bindings.iter())
+            .map(|b| self.plan.binding(b))
+            .any(|b| b.kind == BindingKind::Style && parts.contains(&b.id))
+    }
+
     /// The runtime function that registers node `i` with presence, if any. A bound
     /// exit takes `px`, which keeps its value from the start of each commit and
     /// loads presence even when the first value is `none`; another node with a
@@ -32,7 +44,7 @@ impl Em<'_> {
         if bound_exit {
             Some("px")
         } else {
-            declares.then_some("pr")
+            (declares || self.binds_route_part(i)).then_some("pr")
         }
     }
 

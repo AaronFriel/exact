@@ -138,6 +138,8 @@ struct Em<'a> {
     follow: bool,
     /// Whether a `video` or `audio` is in the plan (`media.js` is installed).
     media: bool,
+    /// Whether a route declares its own entrance or exit (shared.js plays it).
+    route_parts: bool,
     /// Whether an image draws a symbol (`symbols.js`), and whether a
     /// binding names one (its roles are then the plan's strings).
     symbols: (bool, bool),
@@ -236,6 +238,7 @@ pub fn emit(plan: &Plan, site_attrs: bool, dev_reload: bool) -> Result<Output, S
         list: false,
         follow: false,
         media: false,
+        route_parts: false,
         symbols: (false, false),
         heights: Default::default(),
         transforms: Default::default(),
@@ -608,6 +611,14 @@ pub fn emit(plan: &Plan, site_attrs: bool, dev_reload: bool) -> Result<Output, S
         });
     if sheets {
         body.push_str("$useSheets($sheetFrame);");
+    }
+    // @ref LLP 1013.001 D2 — a route's own entrance or exit plays through
+    // shared.js, which loads after first paint when a node asks for it: a
+    // plan with one asks at boot, since the route that declares it is
+    // seldom mounted then, and its first push would otherwise cut.
+    if em.route_parts {
+        let load = em.uses.rt("pr");
+        let _ = write!(body, "{load}();");
     }
     if let Some(slot) = plan.router {
         let router = em.uses.rt("router");
@@ -1122,6 +1133,8 @@ impl Em<'_> {
             "const {e}={h}({parent},\"{element}\",{class},{attrs_js},{text});"
         );
         if let Some(register) = self.presence_registration(i, !presence.is_empty()) {
+            self.route_parts |=
+                presence.contains("--exact-view-transition-") || self.binds_route_part(i);
             let register = self.uses.rt(register);
             let _ = write!(self.out, "{register}({e});");
         }

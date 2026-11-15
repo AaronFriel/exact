@@ -495,6 +495,14 @@ impl Em<'_> {
                 let (say, view) = (self.uses.rt("say"), self.uses.rt("viewId"));
                 one("--exact-exit-animation", Some(crate::presence::declaration_map(&values, &format!("{view}({e})"), &say, "exit-animation")))
             }
+            // @ref LLP 1013.001 D1 — a route's entrance and exit, read by
+            // shared.js from the route's own style as the change happens.
+            StyleId::ViewTransitionNew | StyleId::ViewTransitionOld => {
+                let values = crate::presence::route_parts(plan, plan.code(b.expr), id);
+                let (say, view) = (self.uses.rt("say"), self.uses.rt("viewId"));
+                let name = crate::presence::route_part_property(id);
+                one(name, Some(crate::presence::declaration_map(&values, &format!("{view}({e})"), &say, &name[2..])))
+            }
             // A side is the author's when they wrote it or the other of its
             // pair (css.rs `unsaid_side`): only a side the sheet alone sets mirrors.
             _ => style::style_writes(b.id, timeline, b.written || style::other_side(id).and_then(binding).is_some_and(|o| o.written))
@@ -834,6 +842,9 @@ pub(super) fn presence_decls(css: &mut String) -> String {
         if [
             "--exact-layout-transition:",
             "--exact-exit-animation:",
+            // A route's entrance and exit (LLP 1013.001), which shared.js reads.
+            "--exact-view-transition-new:",
+            "--exact-view-transition-old:",
             "--exact-drag-timeline:",
             "--exact-animation-timeline:",
             // A synced animation's clock (LLP 1055.002), read the same way.

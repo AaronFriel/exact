@@ -162,6 +162,22 @@ fn css_text_in(
                     );
                 }
             }
+            // @ref LLP 1013.001 D1 — a route's entrance and exit: custom
+            // properties shared.js reads as the route change happens, its
+            // `none` written as itself (the author's cut). The rules they
+            // name are in the page's stylesheet, as `animation`'s.
+            (StyleId::ViewTransitionNew | StyleId::ViewTransitionOld, RowValue::Animations(a)) => {
+                if let Some(link) = crate::link::linked().animations {
+                    let name = match id {
+                        StyleId::ViewTransitionNew => "--exact-view-transition-new",
+                        _ => "--exact-view-transition-old",
+                    };
+                    match a.0.is_empty() {
+                        true => push_text!(&mut out, "{}:none;", name),
+                        false => push_text!(&mut out, "{}:{};", name, (link.list)(a, false)),
+                    }
+                }
+            }
             // @ref LLP 1057.003 D2 — a drag timeline is no timeline the
             // browser runs: custom properties the page's drag code
             // (motion-glue.js) reads. A bound consumer's animations are

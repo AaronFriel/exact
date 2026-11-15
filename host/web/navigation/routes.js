@@ -55,6 +55,22 @@ export const liveById = (id, root = document) => {
 };
 // a command by id means the live element: one leaving keeps its ids for its own references
 const leavingSheets = new Set(), shownRoutes = new WeakMap();
+// @ref LLP 1013.001 D2, D6 — while a route transition plays (shared.js), the route beneath a pushed route stays shown
+// and the pushed route inert; the projection keeps both so until the transition ends.
+const heldRoutes = new Set(), arrivingRoutes = new Set();
+/** Each navigation root under `root` with the routes it last showed in its selected stack, bottom first. */
+export const shownStacks = (root) => new Map([...root.querySelectorAll("[navigationBack]")].map((nav) => [nav, shownRoutes.get(nav) ?? []]));
+/** Hold `beneath` shown and `arriving` inert, projected now; what it returns lets them go and projects again. */
+export function holdRoutes(beneath, arriving) {
+  heldRoutes.add(beneath);
+  arrivingRoutes.add(arriving);
+  navigation.project(root, log);
+  return () => {
+    heldRoutes.delete(beneath);
+    arrivingRoutes.delete(arriving);
+    navigation.project(root, log);
+  };
+}
 export function sheetLeaves(el) {
   if (typeof matchMedia !== "function" || typeof HTMLTextAreaElement !== "function" || el.nodeType !== 1 || el.getAttribute("navigationPresentation") !== "modal" || el.hasAttribute("data-exiting") || !el.isConnected || el.querySelector("audio, video, dialog[open], :popover-open") || "createValueRange" in HTMLTextAreaElement.prototype && el.querySelector("textarea[data-decorations]") || getComputedStyle(el).position !== "fixed" || matchMedia("(prefers-reduced-motion: reduce)").matches) {
     return false;
@@ -1191,9 +1207,9 @@ export const navigation = {
           }
           const covered = modal && (index >= beneath && index < presented || split > 0 && index === 0);
           // a sheet shows what it sits over: the page (in the strip above a narrow sheet) and any sheets between, which only the top one dims
-          route.style.visibility = active || covered ? "" : "hidden";
+          route.style.visibility = active || covered || heldRoutes.has(route) ? "" : "hidden";
           route.toggleAttribute("data-exact-covered", covered);
-          setInert(route, !active || !!route.authoredInert);
+          setInert(route, !active || arrivingRoutes.has(route) || !!route.authoredInert);
           const column = !split ? null : index === 0 ? "list" : sheet(route) || shownIn[index] >= 0 ? null : "detail";
           if (route.getAttribute("data-exact-split") !== column) {
             column ? route.setAttribute("data-exact-split", column) : route.removeAttribute("data-exact-split");
