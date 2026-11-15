@@ -333,6 +333,13 @@ struct HostState {
     module_outstanding: usize,
 }
 
+impl HostState {
+    /// No device to answer storage: the bake's module, or a validation pass's.
+    fn deferring(&self) -> bool {
+        self.baking || self.validating
+    }
+}
+
 /// A TypeScript data source: bytecode, its bake-time identity, and the
 /// engine that runs it once loaded.
 pub struct Module {
@@ -1052,7 +1059,13 @@ impl Module {
                     .map_err(|e| DataError::Unavailable(format!("`{source}` threw: {e}")))?;
                 reply = Module::decode_reply(sig, engine, source, &text)?;
             }
-            Ok(Module::step(sig, engine, source, reply, self.host.baking))
+            Ok(Module::step(
+                sig,
+                engine,
+                source,
+                reply,
+                self.host.deferring(),
+            ))
         })();
         self.host.store = None;
         self.host.turn = None;

@@ -185,7 +185,13 @@ impl Module {
                 return Err(DataError::UnknownSource(source.to_string()));
             };
             let reply = Module::decode_reply(sig, engine, source, &text)?;
-            Ok(Module::step(sig, engine, source, reply, self.host.baking))
+            Ok(Module::step(
+                sig,
+                engine,
+                source,
+                reply,
+                self.host.deferring(),
+            ))
         })();
         self.host.store = None;
         self.host.turn = None;
@@ -364,7 +370,13 @@ impl Module {
                 let text = Module::settle_reply(engine, &id, "").map_err(threw)?;
                 reply = Module::decode_reply(sig, engine, source, &text)?;
             }
-            Ok(Module::step(sig, engine, source, reply, self.host.baking))
+            Ok(Module::step(
+                sig,
+                engine,
+                source,
+                reply,
+                self.host.deferring(),
+            ))
         })();
         self.host.store = None;
         if let Some(error) = self.retire_oom() {

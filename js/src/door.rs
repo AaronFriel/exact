@@ -69,13 +69,14 @@ pub(crate) unsafe extern "C" fn host_door(
             None => Err("store.forget: no store at bake".into()),
         },
         // Storage's availability, as the prelude's refusal code (kanban
-        // F28): none at bake; none for a drive that names no scratch store;
-        // none where the host configured no directories.
+        // F28): none at bake or in a validation pass (the device answers what
+        // either leaves pending); none for a drive that names no scratch
+        // store; none where the host configured no directories.
         5 => match state.store {
             Some(store) => {
                 // A read even at bake: the build compiles no answer that tried.
                 (*store).observe_external_read();
-                if state.baking {
+                if state.deferring() {
                     Err("bake".into())
                 } else {
                     // `a` is the path a file operation names: a document
@@ -95,7 +96,7 @@ pub(crate) unsafe extern "C" fn host_door(
                     || a.starts_with("home:/")
                     || a.starts_with("bundle:/");
                 super::storage::refusal(
-                    !state.baking,
+                    !state.deferring(),
                     state.storage || document,
                     state.agent.is_some(),
                 )
