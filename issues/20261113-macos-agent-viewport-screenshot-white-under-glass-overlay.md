@@ -1,63 +1,55 @@
-# A macOS agent `screenshot` of a glass page under the title bar is all white, while `screenshot … window` is right
+# A macOS agent viewport screenshot under glass must show the composited page
 
 **Status:** Open
-**Systems:** host/apple/Sources/ExactKit/Mac/AgentMac.swift (`screenshot`), host/apple/Sources/ExactKit/Mac/CaptureMac.swift, NodeViewMac.swift (`GlassBackground`)
+**Systems:** host/apple/Sources/ExactKit/Mac/AgentMac.swift, CaptureMac.swift, NodeViewMac.swift
 **Severity:** P2
 **Author:** Claude (Opus 5.5), from Exact diaries sent 2026-11-11 to 2026-11-13
 **Date:** 2026-11-13
 **Related:** issues/closed/20260904-macos-offscreen-capture-can-be-transparent.md
 
-## What is wrong
+Fixed by “Mac glass viewport screenshots crop the window server picture and fall back to the compositor” when that commit lands.
 
-`Agent.screenshot` (`AgentMac.swift:1236`) has two paths. With `window` it asks the
-window server for the window's picture (`ownWindowImage`). Without it, it draws
-`presenter.navigation.split.agentRoot` itself: `Capture.picture(of:)` runs
-`cacheDisplay` over the view tree (`AgentMac.swift:1274-1281`, `draw(_:to:)` at
-`:1359`), with iframes and native views swapped for snapshots. In an app whose page
-fills the window under the title bar (`viewport-fit="cover"`, every route
-`navigationBar="none"`, `display_override: ["window-controls-overlay"]`) and has
-`backgroundMaterial="glass"` in its tree, the second path writes an all-white picture.
+## What was wrong
 
-Not reproduced here (this checkout runs on Linux). A likely cause, unconfirmed: a glass
-node is an `NSGlassEffectView` whose `contentView` holds the node's children
-(`NodeViewMac.swift:33`, `syncMaterialVisibility` at `:615`). The window server
-composites the glass and its content; `cacheDisplay` may draw neither, so a glass box at
-or near the root leaves only the window's background. Nothing in `CaptureMac.swift`
-handles a glass material.
+The plain agent `screenshot` draws the page viewport. AppKit composites an
+`NSGlassEffectView` at the WindowServer, so a CPU picture can differ from the
+page a person sees.
 
-## The failure
+On `ecdaf06fb`, main's shared compositor passed four reviewed cases unchanged:
+nested glass, a focused field editor, a clean layer-painted image, and a dirty
+translucent image. The root/live mirror still failed. Its live glass backdrop
+was blue, while the captured backdrop was white; the largest sampled channel
+delta was `0.443`, against a `0.04` bound. The existing root test only checked
+the red child and therefore passed.
 
-On Exact `5434f432`, macOS 26.6, Apple silicon:
+## What is fixed
 
-```
-agent macos --size 1280x800 "clock +1500 real" "screenshot a.png" "screenshot b.png window"
-```
+Main's shared compositor remains the ordinary screenshot and canvas-upload
+path. A viewport containing non-hidden native glass, with no hidden ancestor,
+prefers the WindowServer composite cropped to the viewport. Selection does not
+interpret rectangles, clips, masks or transforms: a false positive still gives
+the right viewport pixels. If the server has no picture, the capture falls back
+to the shared compositor and its reply notes that glass was not composited.
+Canvas readbacks are installed before the WindowServer picture and restored
+before the shared-compositor fallback, so a translucent canvas paints once.
+Live views are neither reparented nor CPU-drawn.
 
-`a.png` is 1280 × 800 and white (about 4 KB); `b.png` shows the app. The result was the
-same with the driver window uncovered on a second display. The reply gave no sign that
-the picture was empty.
+Both macOS WindowServer screenshot forms flush and wait two display refreshes,
+as main's whole-window capture did on `ecdaf06fb`. Capture inserts no marker or
+other view into the live window. The whole-window path is main's capture again,
+then composes any attached window.
 
-## Fix
+## Verification and limits
 
-Reproduce with a host test: a root with `backgroundMaterial="glass"` and a coloured child,
-captured by `Capture.picture(of:)`. If the glass's content is what goes missing, draw
-`NSGlassEffectView.contentView` into the capture as `withGuests` does for iframes, or fill
-the glass's area as `paintedContent` fills a covered canvas. Until then, a picture that
-comes out one flat colour while the tree has visible nodes should say so in the reply and
-point to `screenshot <png> window`.
+`GlassGroupMacTests` covers the root/live mirror, nested glass, the focused
+editor, clean and dirty layer images, conservative hidden-view selection,
+translated and nested shape clips, unavailable-server fallback, unchanged view
+trees, a translucent canvas fallback, and unequal corners. The product
+drive compared viewport and whole-window screenshots of the same native-glass
+page on macOS 27.0.1. The viewport was 1280 by 800; the window picture was
+1280 by 832, including its 32 title-bar rows. Comparing the viewport with the
+remaining window rows found zero changed pixels and a maximum channel delta of
+zero. `GlassGroupMacTests`, `AgentCanvasCaptureMacTests`,
+`MaterialTableTests` and `SheetSurfaceMacTests` cover this path.
 
-## Verification
-
-The blank viewport does not reproduce on macOS 27. `GlassGroupMacTests.testViewportCaptureKeepsTheContentOfAGlassRoot`
-captures a full-size content view with controls overlay, a cover viewport, a glass
-root and a red child. The child remains red in `Capture.picture(of:)`. A CLI drive
-of the glass-root plan also captures its red child and text.
-
-`NodeViewMac.swift` places the authored children in `NSGlassEffectView.contentView`.
-`Capture.picture` in `Mac/CaptureMac.swift` renders a copy of the layer tree
-in paint order, shared with canvas uploads. No glass replacement is needed on
-macOS 27. The reported macOS 26.6 environment was unavailable; window-server
-comparison was also unavailable because the current screen supplied no window image.
-
-A macOS 26.6 run is owed. The macOS 27 regression test does not establish that
-the reported capture failure is fixed by the shared compositor.
+The unchecked parent-and-sheet composite and the macOS 26.6 run remain owed.

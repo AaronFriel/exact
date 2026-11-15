@@ -611,9 +611,17 @@ This list holds what the [agent guide](contract-for-agents.md)'s rules don't mak
 - **A Mac glass panel shows sharp content behind a wrapper.** AppKit's
   `backdrop-filter` samples only the parent's subtree, even when every wrapper
   is transparent. Make the glass a direct sibling of what it covers; put a
-  floating composer beside its scrolling transcript. Check it with `agent macos
-  "screenshot glass.png window"`: only the composited window capture shows
-  background filters; a plain `screenshot` shows every macOS glass sharp.
+  floating composer beside its scrolling transcript. CSS `backdrop-filter`
+  does not select the native-glass viewport path, so check its compositor blur
+  with `agent macos "screenshot glass.png window"`. Only native Liquid Glass
+  (`backgroundMaterial="glass"`, an `NSGlassEffectView`) selects the
+  WindowServer viewport path. `backgroundMaterial="sidebar"` and the other
+  `NSVisualEffectView` materials do not. If the WindowServer has no picture,
+  the viewport restores canvas readbacks, falls back to the ordinary
+  layer-tree capture and notes that glass was not composited. A capture
+  flushes, waits two display refreshes and reads the window without inserting
+  any view into it. The server's empty picture cannot distinguish a locked
+  screen from a sleeping display.
   (T3 Code backdrop case B; LLP 1053.000 §3.)
 - **A link in the app's own scheme never matches.** `signalclone://connect?x=1`
   reaches the root's `navigate` handler as the location `/connect?x=1`: the scheme
@@ -1373,6 +1381,12 @@ price: answers arrive `Later`, outside the action's transaction (LLP 1027.002 D1
   (Authoring bench, LLP 1087, t2-todo on iOS: about 20 minutes, 2026-10-05.)
 
 ## Driving and testing
+
+- **`packages/speech-recognition/test/drives.mjs --help` runs the web drives.**
+  That short package script has no help mode, so an unrecognized first argument
+  leaves its default platform in place. Pass a platform and optional drive number,
+  for example `ios --only 6`, or read the script before invoking it.
+  (Speech transcription rebase, 2026-11-15.)
 
 - **An Android APK drive needs an awake, unlocked screen.** The relay checks and
   wakes it and dismisses an insecure keyguard before launching. A secure lock

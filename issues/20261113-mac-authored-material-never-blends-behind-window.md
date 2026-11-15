@@ -1,71 +1,34 @@
 # On macOS an authored material always blends within the window, so an app's own sidebar never shows the desktop
 
 **Status:** Open
-**Systems:** host/apple/Sources/ExactKit/Mac/NodeViewMac.swift (material, line 605), kernel/tables/schema.json (`materials`), contract/cli/src/vocab/concepts.md (`glass`)
+**Systems:** host/apple/Sources/ExactKit/Mac/NodeViewMac.swift, host/apple/tests/ExactKitTests/MaterialTable.swift
 **Severity:** P3
 **Author:** Claude (Opus 5.5), from Exact diaries sent 2026-11-11 to 2026-11-13
 **Date:** 2026-11-13
 
-## What is wrong
+Fixed by “Mac glass viewport screenshots crop the window server picture and fall back to the compositor” when that commit lands.
 
-Every `backgroundMaterial` that is an `NSVisualEffectView` gets
-`blendingMode = .withinWindow`; only the sheet's own ground gets
-`.behindWindow` (`NodeViewMac.swift:603` to `:606`). So
-`backgroundMaterial="sidebar"` on an app-drawn side panel blurs the page under
-it and never the desktop behind the window. AppKit's source list and
-`NSSplitViewItem(sidebarWithViewController:)` blend behind the window, and the
-latter is what Exact uses when the root `tablist` is the window's sidebar
-(`SidebarViewsMac.swift:62`, LLP 1115.002 D3).
-An app whose side panel is its own, not a `tablist`, cannot get that look:
-a Mac user would see the difference beside any Finder or Mail window. LLP
-1053's materials table records no decision on blending mode.
+## What was wrong
 
-## The failure
+An authored `backgroundMaterial="sidebar"` blended within the window, unlike
+AppKit's sidebar material, so it sampled the page rather than the backdrop
+behind the window.
 
-A panel with `backgroundMaterial="sidebar"` over coloured content in a key
-window took the page's colours, not the wallpaper's. Seen on exact2
-`5434f4325`, macOS host. Confirmed by reading the code at `49ae6357`; not run.
+Main already carries the implementation: an authored sidebar uses
+`.behindWindow`, while authored fill and content remain above the material. On
+`ecdaf06fb`, both existing `MaterialTableTests` passed, as did all three
+`SheetSurfaceMacTests`.
 
-## Fix
+## What this commit adds
 
-Blend behind the window where the material is a window-level one and nothing
-of the page lies under the node: `sidebar` (and probably `hud-window`, which
-AppKit uses for panels) on a node with no painted ancestor between it and the
-window could take `.behindWindow` by default, as a hand-built sidebar does,
-leaving `.withinWindow` for a material over page content. If the host cannot
-tell, the reporter's suggestion is a way to ask (a second word on the value,
-`backgroundMaterial="sidebar behind-window"`), but the platform default is
-better than a new knob, per LLP 1115's "say less". A behind-window material
-needs the window's background under it to be clear, which the page's
-`background-color` would cover; the fix has to state what the root paints
-there.
+The material implementation stands. The carried WindowServer test supplies
+the missing pixel proof: it places AppKit's own sidebar and the authored
+sidebar at the same frame in one window, waits for a distinct paint marker to
+appear, then compares their backdrop pixels. It also proves that the authored
+blue ancestor remains beside the material and its red child remains above it.
 
-## Verification
+On macOS 27.0.1 with the display unlocked, all 3 `MaterialTableTests` and all
+3 `SheetSurfaceMacTests` pass.
 
-`MaterialTableTests` checks an authored sidebar under a painted ancestor,
-including changes to other materials and back. It uses behind-window blending
-and preserves the ancestor's paint. `VisibilityMacTests` checks that authored
-fills and content remain above materials. Caltrain's Mac host also ran a
-Contract fixture with a sidebar beside an in-window material over a red page.
-
-Desktop pixels could not be qualified: the window server supplied no picture
-of the fixture window, reporting an asleep display or locked screen. The
-existing `SheetSurfaceMacTests.testAuthoredGroundMatchesAnAppKitSheetInDarkMode`
-likewise failed reading its standalone AppKit reference picture before testing
-Exact's material. The known-failure tool reports that failure as unknown on
-origin/main. No window background or ancestor fill was cleared.
-
-
-## Capture still owed
-
-A WindowServer capture was retried with `/usr/sbin/screencapture -x -o -l`
-on an AppKit `.sidebar` / `.behindWindow` reference over a solid blue window,
-with red content beside the material. The reference was visible but could not
-become key. `screencapture` exited 1 with “could not create image from window”.
-No desktop-pixel comparison was possible.
-
-The eleven `MaterialTableTests` and `VisibilityMacTests` pass: the blending
-mode is built and authored fill and content remain above the material. The
-issue remains open until an unlocked-display capture compares the authored
-sidebar over a painted ancestor with the AppKit reference and confirms both
-the backdrop and the authored paint above it.
+The issue remains open until the fixing commit lands. Nothing is owed on
+another unlocked screen; a macOS 26.6 run is outside this lane.

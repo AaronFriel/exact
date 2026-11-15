@@ -74,6 +74,7 @@ final class SheetSurfaceMacTests: XCTestCase {
         let ground = try f.node("ground")
         let actualSheet = try XCTUnwrap(ground.window)
         let material = try XCTUnwrap(ground.materialView as? NSVisualEffectView)
+        XCTAssertEqual(actualSheet.frame, reference.frame)
         XCTAssertEqual(material.material, .sheet)
         XCTAssertEqual(material.blendingMode, .behindWindow)
         XCTAssertNil(try f.node("modal").materialView)
