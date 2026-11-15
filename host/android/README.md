@@ -254,6 +254,13 @@ takes the APK `agent-android.mjs build <app> --apk` made (`EXACT_ANDROID_BIN=<ap
 launches it under a driver and speaks the agent API's JSON lines to it. `ANDROID_SERIAL` picks the phone, and
 `--variant <name>` the variant's package, as it did to the build; an APK built as another package is refused.
 
+Before launch the driver reports a focused Android permission dialog on stderr, leaving JSON stdout unchanged.
+It reads only window focus lines on Android 10 and later, and reports a dialog even if the read fails after
+returning its focus line. If the read fails without a dialog or omits focus, it logs the error and continues
+launching. State replies pass through unchanged.
+The carrier clears the app's task, but a permission dialog in another task can survive. If it covers the app,
+dismiss it on the device and retry. The drive does not grant or revoke permissions or stop the permission controller.
+
 **How a line crosses.** The shell's activity attaches an `AgentDrive` at the reader's driver seam (below) when its
 launch says `agent=<name>`: a socket of that name in the abstract namespace, served only to adb's own user (shell
 or root: any app on the phone can reach an abstract socket). adb forwards it; the carrier's process

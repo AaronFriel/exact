@@ -411,10 +411,16 @@ Ports    none. Runs to completion.`,
     common: ['pattern [<name>]    a working, tested starter'],
     flags: [['--force', 'replace a file you edited (without it, it is refused, named)']],
     body: `With no name, lists the patterns. With one, writes its app.contract, app.ts and
-app.test.contract here (and what else it needs: rest's and site's server.ts, site's .env and
-app.json keys) with this app's id and name, then the types app.ts imports. A file still as exact
-new or a pattern wrote it is replaced; one you edited is refused unless --force. Each pattern
+app.test.contract in the selected app (and what else it needs: rest's and site's server.ts,
+site's .env and app.json keys), then the types app.ts imports. The wrapper selects its own app,
+even from another directory; the checkout CLI uses EXACT_APP_DIR or the working directory.
+The destination is printed before writing. The app must already have app.json and app.contract.
+An untouched exact new starter is replaced without --force; a file you edited, including a
+manually emptied app.contract, is refused unless --force. Each pattern
 passes its own tests and no-tells; rest's and site's run with test or verify, which run its server.
+To try a pattern in a separate app:
+  bun <exact2>/scripts/exact.mjs new ../pattern-scratch
+  bun ../pattern-scratch/exact.mjs pattern tabs
 Ports    none. Runs to completion.`,
     example: 'bun exact.mjs pattern list-detail && bun exact.mjs test web',
   },

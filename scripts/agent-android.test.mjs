@@ -1,15 +1,17 @@
 // The Android carrier's reader variables, drive setup and reverse mappings (agent-android.mjs).
 // Stand-in adb devices exercise relay cleanup without an emulator or a device.
 import { afterAll, test, expect, spyOn } from 'bun:test';
-import { spawn, spawnSync } from 'node:child_process';
-import { once } from 'node:events';
+import { ChildProcess, spawn, spawnSync } from 'node:child_process';
+import { once, EventEmitter } from 'node:events';
+import { PassThrough } from 'node:stream';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { pollUntil } from './agent-launch.mjs';
-import { androidJavaEnv, androidSdk, androidSdkPackages, androidScreenState, reverseRoot } from './agent-android.mjs';
+import { androidJavaEnv, androidSdk, androidSdkPackages, androidScreenState, androidPermissionPrompt, reverseRoot } from './agent-android.mjs';
 
+const focusCommand = "dumpsys window | grep -E 'mCurrentFocus|mFocusedApp'";
 const screenFixtures = resolve(import.meta.dir, 'fixtures/android-screen');
 const screenDump = (state, kind) => readFileSync(resolve(screenFixtures, `${state}.${kind}.txt`), 'utf8');
 
@@ -139,7 +141,8 @@ import { spawnSync } from 'node:child_process';
 import { createInterface } from 'node:readline';
 const args = process.argv.slice(2);
 appendFileSync(${JSON.stringify(calls)}, JSON.stringify(args) + '\\n');
-const cmd = args.slice(2);
+const cmd = args.slice(2), pipedFocus = cmd[0] === 'shell' && cmd[1] === ${JSON.stringify(focusCommand)};
+if (pipedFocus) cmd.splice(1, 1, 'dumpsys', 'window');
 const display = ${JSON.stringify(display)}, screen = JSON.parse(readFileSync(display, 'utf8'));
 if (cmd[0] === 'shell' && cmd[1] === 'dumpsys') {
   if (screen.failDump === cmd[2]) { console.error('dump failed'); process.exit(1); }
@@ -150,6 +153,13 @@ if (cmd[0] === 'shell' && cmd[1] === 'dumpsys') {
   const state = screen.wakefulness === 'Asleep' ? (screen.showing ? (screen.secure ? 'asleep-pin' : 'asleep-swipe') : 'asleep-no-lock')
     : screen.showing ? (screen.secure ? 'awake-pin' : 'awake-swipe') : screen.dismissals ? 'awake-dismissed' : 'awake-unlocked';
   if (cmd[2] === 'power') process.stdout.write(screen.power ?? readFileSync(${JSON.stringify(screenFixtures)} + '/' + state + '.power.txt', 'utf8'));
+  if (cmd[2] === 'window' && (!cmd[3] || ['windows', 'displays'].includes(cmd[3]))) {
+    if (screen.failFocus) { if (screen.focus) process.stdout.write(screen.focus); console.error('focus dump failed'); process.exit(1); }
+    const focus = screen.focus ?? 'mCurrentFocus=null\\n  mFocusedApp=null\\n';
+    if (pipedFocus) process.stdout.write(focus);
+    else if (cmd[3] === 'displays' && (screen.api ?? 29) < 30) process.stdout.write('WINDOW MANAGER DISPLAY CONTENTS\\n  Display: mDisplayId=0\\n');
+    else process.stdout.write('WINDOW MANAGER WINDOWS\\n' + ((screen.api ?? 29) < 30 ? '  ' : '  Display: mDisplayId=0\\n    ') + focus);
+  }
   if (cmd[2] === 'window' && cmd[3] === 'policy') {
     if (screen.largePolicy) process.stdout.write('Window policy details\\n'.repeat(100000));
     let policy = screen.window ?? readFileSync(${JSON.stringify(screenFixtures)} + '/' + state + '.policy.txt', 'utf8');
@@ -213,6 +223,7 @@ if (cmd[0] === 'shell' && cmd[1] === '-T') {
   const fixture = { port: server.port, app: { id: 'dev.exact.fixture', dir }, bin, env, closed, connected,
     commands: () => readFileSync(calls, 'utf8').trim().split('\n').map(JSON.parse),
     mappings: () => JSON.parse(readFileSync(mappings, 'utf8')), stopSocket: () => server.stop(true),
+    focus: (focus, failFocus = false) => writeFileSync(display, JSON.stringify({ ...JSON.parse(readFileSync(display, 'utf8')), focus, failFocus })),
     replace: destination => writeFileSync(mappings, JSON.stringify(destination ? { 'tcp:4791': destination } : {})),
     failNextReverse: action => writeFileSync(mappings + '.' + action + '.fail', ''),
     shells: () => readFileSync(resolve(dir, 'shells'), 'utf8').trim().split('\n').map(Number),
@@ -259,6 +270,177 @@ test('the Android reader uses a variant\'s package for lookup, launch and drive 
   }
 });
 
+test('Android permission detection reads only the focused window and activity', () => {
+  const component = 'com.android.permissioncontroller/com.android.permissioncontroller.permission.ui.GrantPermissionsActivity';
+  for (const line of [`mCurrentFocus=Window{abc u0 ${component}}`, `mFocusedApp=ActivityRecord{abc u0 ${component} t42}`,
+    `mCurrentFocus=null\n  mFocusedApp=ActivityRecord{abc u0 ${component} t42}`]) expect(androidPermissionPrompt(line)).toBe(component);
+  for (const line of ['', 'mCurrentFocus=null', 'mCurrentFocus=Window{abc u0 dev.exact.app/.MainActivity}',
+    `Window #0 Window{abc u0 ${component}}`, `mLastFocus=Window{abc u0 ${component}}`,
+    `mCurrentFocus=Window{abc u0 ${component}Extra}`]) expect(androidPermissionPrompt(line)).toBeNull();
+});
+
+for (const [api, controller] of [[29, 'com.android.permissioncontroller'], [30, 'com.google.android.permissioncontroller']]) test(`the Android reader reports a surviving API ${api} ${controller} permission dialog`, async () => {
+  const { androidDeploy } = await import('./agent-android.mjs');
+  const component = `${controller}/com.android.permissioncontroller.permission.ui.GrantPermissionsActivity`;
+  const fixture = androidDriveFixture(true, null, false, null, false, { api, focus: `mCurrentFocus=Window{123 u0 ${component}}` });
+  let child;
+  try {
+    child = androidDeploy(fixture.app, fixture.bin, fixture.env).spawn();
+    const closed = once(child, 'close');
+    let error = '', output = '';
+    child.stderr.on('data', data => { error += data; });
+    child.stdout.on('data', data => {
+      output += data;
+      if (output.trim().split('\n').length === 1) child.stdin.write('{"op":"state"}\n');
+      else if (output.trim().split('\n').length === 2) {
+        fixture.focus('mCurrentFocus=Window{abc u0 dev.exact.fixture/dev.exact.app.MainActivity}');
+        child.stdin.write('{"op":"state"}\n');
+      } else if (output.trim().split('\n').length === 3) {
+        fixture.focus(null, true);
+        child.stdin.write('{"op":"state"}\n');
+      } else child.stdin.end('{"op":"quit"}\n');
+    });
+    expect(await closed).toEqual([0, null]);
+    expect(error).toContain(`a permission dialog is up (${component})`);
+    expect(output.trim().split('\n').slice(1)).toEqual(Array(3).fill('{"fixture":true}'));
+    const commands = fixture.commands().map(args => args.slice(2));
+    expect(commands).not.toContainEqual(['shell', 'dumpsys', 'window']);
+    const launch = commands.findIndex(args => args[0] === 'shell' && args[1].startsWith('am start '));
+    expect(commands.slice(0, launch)).toContainEqual(['shell', focusCommand]);
+    expect(commands.slice(launch + 1)).not.toContainEqual(['shell', focusCommand]);
+    expect(commands.filter(args => args[0] === 'shell' && args[1] === 'am' && args[2] === 'force-stop').every(args => args[3] === fixture.app.id)).toBe(true);
+    expect(commands.some(args => args.join(' ').match(/\b(?:grant|revoke|keyevent|stack remove)\b/))).toBe(false);
+    expect(fixture.mappings()).toEqual({});
+  } finally {
+    if (child?.exitCode === null) { const closed = once(child, 'close'); child.kill(); await closed; }
+    fixture.dispose();
+  }
+});
+
+for (const screen of [
+  { api: 29, focus: 'mCurrentFocus=Window{123 u0 com.android.permissioncontroller/.permission.ui.GrantPermissionsActivity}' },
+  { api: 30, focus: 'mFocusedApp=ActivityRecord{123 u0 com.google.android.permissioncontroller/com.android.permissioncontroller.permission.ui.GrantPermissionsActivity t42}' },
+  { api: 29, focus: '  mTopFocusedDisplayId=0\n' },
+  { api: 30, failFocus: true },
+  { api: 29, failFocus: true, focus: 'mCurrentFocus=Window{123 u0 com.android.permissioncontroller/.permission.ui.GrantPermissionsActivity}' },
+]) test(`the Android CLI preserves JSON and reports startup focus: ${JSON.stringify(screen)}`, async () => {
+  const fixture = androidDriveFixture(true, null, false, null, false, screen);
+  writeFileSync(resolve(fixture.app.dir, 'app.json'), JSON.stringify({ name: 'fixture', app: { id: fixture.app.id, name: 'Fixture' } }));
+  writeFileSync(resolve(fixture.app.dir, 'app.contract'), 'component App\n  view\n    text "Fixture"\n');
+  let driver;
+  try {
+    driver = spawn(process.execPath, [resolve(import.meta.dir, 'agent.mjs'), 'android', '--reader', '--json', '--app', fixture.app.dir, 'state'],
+      { env: { ...fixture.env, EXACT_ANDROID_BIN: fixture.bin }, stdio: ['pipe', 'pipe', 'pipe'] });
+    const closed = once(driver, 'close');
+    let output = '', error = '';
+    driver.stdout.on('data', data => { output += data; });
+    driver.stderr.on('data', data => { error += data; });
+    expect(await closed).toEqual([0, null]);
+    expect(JSON.parse(output).fixture).toBe(true);
+    expect(error).toContain(screen.focus?.includes('GrantPermissionsActivity') ? 'a permission dialog is up ('
+      : screen.failFocus ? 'focus dump failed' : 'focus was unreadable');
+    expect(fixture.mappings()).toEqual({});
+  } finally {
+    if (driver?.exitCode === null && driver.signalCode === null) { const closed = once(driver, 'close'); driver.kill(); await closed; }
+    fixture.dispose();
+  }
+});
+
+test('an unexpected carrier exit fails a pending request before its pipes close and starts cleanup', async () => {
+  const android = await import('./agent-android.mjs');
+  const { openStdio } = await import('./agent-stdio.mjs');
+  const { waitAtMost } = await import('./agent-wire.mjs');
+  const fixture = androidDriveFixture(false), before = process.env.EXACT_ANDROID_BIN;
+  writeFileSync(resolve(fixture.app.dir, 'app.json'), JSON.stringify({ name: 'fixture', app: { id: fixture.app.id, name: 'Fixture' } }));
+  writeFileSync(resolve(fixture.app.dir, 'app.contract'), 'component App\n  view\n    text "Fixture"\n');
+  const child = new EventEmitter();
+  Object.assign(child, { stdin: new PassThrough(), stdout: new PassThrough(), stderr: new PassThrough(), exitCode: null, signalCode: null });
+  let released, session;
+  const cleaned = new Promise(resolve => { released = resolve; });
+  const deploy = spyOn(android, 'androidDeploy').mockReturnValue({ spawn: () => child, cleanup: released });
+  try {
+    process.env.EXACT_ANDROID_BIN = fixture.bin;
+    const opening = openStdio({ host: 'android', app: fixture.app.dir, onProcess() {
+      setImmediate(() => child.stdout.write('{"ready":true}\n'));
+    } });
+    session = await opening;
+    const request = session.ask({ op: 'state' });
+    const ended = spyOn(child.stdin, 'end');
+    child.stderr.write('fatal: boom');
+    await new Promise(resolve => setImmediate(resolve));
+    child.exitCode = 1; child.emit('exit', 1, null);
+    const failure = waitAtMost(request, 1000, () => { throw new Error('request waited for the open pipes'); });
+    await expect(failure).rejects.toThrow('the app exited (exit code 1)');
+    // A fragment with no newline is in the hangup, and the exited child's stdin is left alone.
+    await expect(failure).rejects.toThrow('app: fatal: boom');
+    expect(ended).not.toHaveBeenCalled();
+    expect(child.stdout.destroyed).toBe(false);
+    await waitAtMost(cleaned, 6000, () => { throw new Error('unexpected exit did not start cleanup'); });
+    expect(child.stdout.destroyed).toBe(true);
+    expect(child.stderr.destroyed).toBe(true);
+  } finally {
+    child.emit('close', 1, null);
+    await session?.close();
+    for (const stream of [child.stdin, child.stdout, child.stderr]) stream.destroy();
+    deploy.mockRestore();
+    if (before === undefined) delete process.env.EXACT_ANDROID_BIN; else process.env.EXACT_ANDROID_BIN = before;
+    fixture.dispose();
+  }
+}, 8000);
+
+for (const unexpected of [false, true]) test(`Windows carrier cleanup kills only its recorded pipe owners (unexpected exit: ${unexpected})`, async () => {
+  const { windowsCarrier } = await import('./agent-android.mjs');
+  const child = new EventEmitter(), killed = [];
+  child.kill = signal => { killed.push([10, signal]); child.emit('exit', null, signal); return true; };
+  windowsCarrier(child, (pid, signal) => killed.push([pid, signal]));
+  child.emit('message', { adbPipe: 11 });
+  child.emit('message', { adbPipe: 12 });
+  child.emit('message', { adbPipe: 12, exited: true });
+  child.emit('message', { reverse: 13 });
+  if (unexpected) child.emit('exit', 1, null); else expect(child.kill('SIGKILL')).toBe(true);
+  expect(killed).toEqual(unexpected ? [[11, 'SIGKILL']] : [[11, 'SIGKILL'], [10, 'SIGKILL']]);
+  // A spawn notification already in flight when the carrier died still owns a pipe.
+  child.emit('message', { adbPipe: 14 });
+  expect(killed.at(-1)).toEqual([14, 'SIGKILL']);
+});
+
+for (const alreadyExited of [false, true]) test(`closing a carrier bounds inherited pipes left open (already exited: ${alreadyExited})`, async () => {
+  const { closeStdio } = await import('./agent-stdio.mjs');
+  const child = new EventEmitter();
+  Object.assign(child, { stdin: new PassThrough(), stdout: new PassThrough(), stderr: new PassThrough(),
+    exitCode: alreadyExited ? 1 : null, signalCode: null });
+  let killed = false, released = false;
+  child.kill = () => { killed = true; child.signalCode = 'SIGKILL'; child.emit('exit', null, 'SIGKILL'); };
+  const closed = once(child, 'close');
+  try {
+    await closeStdio(child, closed, () => { released = true; });
+    expect(killed).toBe(!alreadyExited);
+    expect(released).toBe(true);
+    expect(child.stdout.destroyed).toBe(true);
+    expect(child.stderr.destroyed).toBe(true);
+  } finally { for (const stream of [child.stdin, child.stdout, child.stderr]) stream.destroy(); child.emit('close'); }
+}, 7000);
+
+test('the Android reader logs a failed focused activity read, launches and releases its mappings', async () => {
+  const { androidDeploy } = await import('./agent-android.mjs');
+  const fixture = androidDriveFixture(true, null, false, null, false, { failFocus: true });
+  let child;
+  try {
+    child = androidDeploy(fixture.app, fixture.bin, fixture.env).spawn();
+    const closed = once(child, 'close');
+    let error = '';
+    child.stderr.on('data', data => { error += data; });
+    child.stdout.once('data', () => child.stdin.end('{"op":"quit"}\n'));
+    expect(await closed).toEqual([0, null]);
+    expect(error).toContain('Android focused activity: adb shell dumpsys window: focus dump failed');
+    expect(fixture.commands().some(args => args[2] === 'shell' && args[3].startsWith('am start '))).toBe(true);
+    expect(fixture.mappings()).toEqual({});
+  } finally {
+    if (child?.exitCode === null) { const closed = once(child, 'close'); child.kill(); await closed; }
+    fixture.dispose();
+  }
+});
+
 test('Android screen dumps recognize both delegate headings and stop at the next section', () => {
   for (const [name, wakefulness, showing, secure] of [
     ['awake-unlocked', 'Awake', false, false], ['asleep-no-lock', 'Asleep', false, false],
@@ -291,11 +473,11 @@ for (const wakefulness of ['Asleep', 'Awake']) test(`the Android reader checks a
     expect(await closed).toEqual([0, null]);
     const commands = fixture.commands().map(args => args.slice(2));
     const launch = commands.findIndex(args => args[0] === 'shell' && args[1].startsWith('am start '));
-    const screenCalls = commands.filter(args => args[0] === 'shell' && ['dumpsys', 'input', 'wm'].includes(args[1]));
+    const screenCalls = commands.filter(args => args[0] === 'shell' && ['dumpsys', 'input', 'wm', focusCommand].includes(args[1]));
     const check = [['shell', 'dumpsys', 'power'], ['shell', 'dumpsys', 'window', 'policy']];
-    expect(screenCalls).toEqual(wakefulness === 'Awake' ? check : [
+    expect(screenCalls).toEqual([...(wakefulness === 'Awake' ? check : [
       ...check, ['shell', 'input', 'keyevent', 'KEYCODE_WAKEUP'], ...check, ['shell', 'wm', 'dismiss-keyguard'], ...check,
-    ]);
+    ]), ['shell', focusCommand]]);
     expect(commands.indexOf(screenCalls.at(-1))).toBeLessThan(launch);
   } finally {
     if (child?.exitCode === null) { const closed = once(child, 'close'); child.kill(); await closed; }
@@ -324,7 +506,6 @@ for (const [name, screen, dismissals] of [
     const commands = fixture.commands().map(args => args.slice(2));
     expect(commands.filter(args => args[1] === 'wm')).toHaveLength(dismissals);
     expect(commands).toContainEqual(['shell', 'dumpsys', 'window', 'policy']);
-    expect(commands).not.toContainEqual(['shell', 'dumpsys', 'window']);
     const launch = commands.findIndex(args => args[0] === 'shell' && args[1].startsWith('am start '));
     const lastDismissal = commands.findLastIndex(args => args[1] === 'wm');
     expect(launch).toBeGreaterThan(lastDismissal);
@@ -482,15 +663,18 @@ async function carrierEnded(pid) {
   }, Boolean, { bound: 8000 })).toBe(true);
 }
 
-for (const kill of ['child', 'pid']) test(`killing the Android headless ${kill} stops its adb shell before releasing its reverse`, async () => {
-  const { androidDeploy } = await import('./agent-android.mjs');
+for (const windows of [false, true]) for (const kill of ['child', 'pid']) test(`killing the Android headless ${kill} stops its adb shell before releasing its reverse (Windows cleanup: ${windows})`, async () => {
+  const { androidDeploy, windowsCarrier } = await import('./agent-android.mjs');
   const fixture = androidDriveFixture(false, null, false, null, true);
   let child, closed, shell;
   try {
     child = androidDeploy(fixture.app, fixture.bin, fixture.env).spawn();
+    if (windows) { child.removeAllListeners('exit'); child.kill = ChildProcess.prototype.kill.bind(child); windowsCarrier(child); }
+    const announced = once(child, 'message');
     closed = once(child, 'close');
     await once(child.stdout, 'data');
     [shell] = fixture.shells();
+    expect((await announced)[0].adbPipe).toBe(shell);
     const exited = once(child, 'exit');
     if (kill === 'child') child.kill('SIGKILL'); else process.kill(child.pid, 'SIGKILL');
     await exited;
@@ -507,24 +691,112 @@ for (const kill of ['child', 'pid']) test(`killing the Android headless ${kill} 
   }
 }, 15000);
 
-test('killing an Android carrier group leaves an in-flight reverse mutation running', async () => {
+test.skipIf(process.platform === 'win32')('Android reverse cleanup waits for a signalled adb shell to close', async () => {
+  const { androidDeploy } = await import('./agent-android.mjs');
+  const fixture = androidDriveFixture(false, null, false, null, true);
+  let child, closed, signal;
+  const kill = process.kill.bind(process);
+  try {
+    child = androidDeploy(fixture.app, fixture.bin, fixture.env).spawn();
+    closed = once(child, 'close');
+    await once(child.stdout, 'data');
+    // A group signal need not finish every member before the carrier's exit is observed.
+    signal = spyOn(process, 'kill').mockImplementation((pid, value) => {
+      if (pid !== -child.pid) return kill(pid, value);
+      setImmediate(() => { try { kill(pid, value); } catch (error) { if (error.code !== 'ESRCH') throw error; } });
+      return true;
+    });
+    kill(child.pid, 'SIGKILL');
+    await closed;
+    expect(fixture.liveShellsAtRemoval()).toEqual([]);
+    expect(fixture.mappings()).toEqual({});
+  } finally {
+    signal?.mockRestore();
+    if (child?.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+    if (closed) await closed;
+    fixture.dispose();
+  }
+}, 15000);
+
+test.skipIf(process.platform !== 'darwin')('Android group cleanup accepts EPERM only when no member is live', async () => {
+  const { androidDeploy } = await import('./agent-android.mjs');
+  const fixture = androidDriveFixture(false, null, false, null, true);
+  let child, closed, signal, refused = true;
+  const kill = process.kill.bind(process), denied = Object.assign(new Error('fixture group permission error'), { code: 'EPERM' });
+  try {
+    child = androidDeploy(fixture.app, fixture.bin, fixture.env).spawn();
+    closed = once(child, 'close');
+    await once(child.stdout, 'data');
+    signal = spyOn(process, 'kill').mockImplementation((pid, value) => {
+      if (refused && pid === -child.pid) throw denied;
+      return kill(pid, value);
+    });
+    expect(() => child.kill('SIGKILL')).toThrow(denied.message);
+    refused = false;
+    child.kill('SIGKILL');
+    await closed;
+    // Darwin can report EPERM while only unreaped zombies retain the group.
+    refused = true;
+    expect(child.kill('SIGKILL')).toBe(false);
+    expect(fixture.mappings()).toEqual({});
+  } finally {
+    signal?.mockRestore();
+    if (child?.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+    if (closed) await closed;
+    fixture.dispose();
+  }
+}, 15000);
+
+test.skipIf(process.platform === 'win32')('closing an Android session waits for carrier cleanup', async () => {
+  const { openStdio } = await import('./agent-stdio.mjs');
+  const fixture = androidDriveFixture(false, null, false, null, true), before = process.env.EXACT_ANDROID_BIN;
+  writeFileSync(resolve(fixture.app.dir, 'app.json'), JSON.stringify({ name: 'fixture', app: { id: fixture.app.id, name: 'Fixture' } }));
+  writeFileSync(resolve(fixture.app.dir, 'app.contract'), 'component App\n  view\n    text "Fixture"\n');
+  let child, closed, signal;
+  const kill = process.kill.bind(process);
+  try {
+    process.env.EXACT_ANDROID_BIN = fixture.bin;
+    const session = await openStdio({ host: 'android', app: fixture.app.dir, env: fixture.env,
+      onProcess(process) { child = process; closed = once(child, 'close'); } });
+    signal = spyOn(process, 'kill').mockImplementation((pid, value) => {
+      if (pid !== -child.pid) return kill(pid, value);
+      setImmediate(() => { try { kill(pid, value); } catch (error) { if (error.code !== 'ESRCH') throw error; } });
+      return true;
+    });
+    kill(child.pid, 'SIGKILL');
+    await session.close();
+    expect(fixture.mappings()).toEqual({});
+    expect(fixture.liveShellsAtRemoval()).toEqual([]);
+  } finally {
+    signal?.mockRestore();
+    if (child?.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+    if (closed) await closed;
+    if (before === undefined) delete process.env.EXACT_ANDROID_BIN; else process.env.EXACT_ANDROID_BIN = before;
+    fixture.dispose();
+  }
+}, 15000);
+
+for (const windows of [false, true]) test(`killing an Android carrier group leaves an in-flight reverse mutation running (Windows cleanup: ${windows})`, async () => {
   const fixture = androidDriveFixture(false), gate = fixture.holdReverse('--remove');
   let driver, closed, holder;
   try {
     driver = spawn(process.execPath, ['--eval', `
-      import { androidDeploy } from ${JSON.stringify(resolve(import.meta.dir, 'agent-android.mjs'))};
+      import { ChildProcess } from 'node:child_process';
+      import { androidDeploy, windowsCarrier } from ${JSON.stringify(resolve(import.meta.dir, 'agent-android.mjs'))};
       const child = androidDeploy(${JSON.stringify(fixture.app)}, ${JSON.stringify(fixture.bin)}, process.env).spawn();
-      child.stdout.pipe(process.stdout); child.stderr.pipe(process.stderr);
-      child.stdout.once('data', () => child.stdin.end('{"op":"quit"}\\n'));
-      process.stdin.once('data', () => { child.kill('SIGKILL'); console.log('killed'); });
+      if (${windows}) { child.removeAllListeners('exit'); child.kill = ChildProcess.prototype.kill.bind(child); windowsCarrier(child); }
+      child.stderr.pipe(process.stderr);
+      child.stdout.once('data', () => { console.log(JSON.stringify({ carrier: child.pid })); child.stdin.end('{"op":"quit"}\\n'); });
+      process.stdin.once('data', () => child.kill('SIGKILL'));
       child.on('close', code => process.exit(code ?? 1));
     `], { env: fixture.env, stdio: ['pipe', 'pipe', 'pipe'] });
     closed = once(driver, 'close');
-    await once(driver.stdout, 'data');
+    const [ready] = await once(driver.stdout, 'data'), { carrier } = JSON.parse(ready);
     holder = await pollUntil(gate.entered, Boolean, { bound: 8000 });
     expect(holder).toBeGreaterThan(0);
-    const killed = once(driver.stdout, 'data');
-    driver.stdin.write('kill'); await killed;
+    driver.stdin.write('kill');
+    // The driver's close handler waits for this held helper and can block stdout from flushing.
+    await carrierEnded(carrier);
     const status = spawnSync('ps', ['-o', 'stat=', '-p', String(holder)], { encoding: 'utf8' });
     expect(status.status).toBe(0);
     expect(status.stdout.trim().startsWith('Z')).toBe(false);

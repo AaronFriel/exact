@@ -16,6 +16,16 @@ import { jsonLines, hangup, waitAtMost, bootRefusal, REPLY_MS } from './agent-wi
 import { platformWheel } from './agent-wheel.mjs';
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 
+// A descendant can retain the pipes after its carrier exits, even after the parent kills the carrier.
+export async function closeStdio(child, closed, cleanup) {
+  await waitAtMost(closed, 2000);
+  if (child.exitCode === null && child.signalCode === null) { try { child.kill('SIGKILL'); } catch {} }
+  await waitAtMost(closed, 2000, () => {
+    try { cleanup?.(); }
+    finally { for (const stream of [child.stdin, child.stdout, child.stderr]) stream?.destroy(); }
+  });
+}
+
 /** The command that builds what an Android drive runs: the APK (`reader`), else the Linux host for Android. */
 const androidRebuild = (a, reader) => ownVerb(a, reader ? 'android' : 'android --headless') ?? `bun scripts/agent-android.mjs build ${a.name}${reader ? ' --apk' : ''}`;
 /** What changed since the APK was built, by the record its build left (agent-android.mjs `apkRecord`): the library's
@@ -108,16 +118,41 @@ export async function openStdio({ host, plan, world, size, app, env: extra = {},
     : droid ? droid.spawn(env.EXACT_LAUNCH_URL ? [env.EXACT_LAUNCH_URL] : []) : spawn(bin, portable && env.EXACT_LAUNCH_URL ? [env.EXACT_LAUNCH_URL] : documents, { env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide:true });
   onProcess?.(child);
   const hostLines = [];
-  child.stderr.on('data', (d) => { for (const l of String(d).split('\n')) if (l) hostLines.push('app: ' + l); });
+  // hostLines takes each chunk as it arrives, so a diagnostic with no newline yet still reaches a timeout or exit
+  // message; the Android startup lines are forwarded to the driver's stderr only once complete.
+  let partial = '';
+  child.stderr.on('data', (d) => {
+    const text = String(d);
+    for (const l of text.split('\n')) if (l) hostLines.push('app: ' + l);
+    if (!droid) return;
+    const parts = (partial + text).split('\n');
+    partial = parts.pop();
+    for (const line of parts) if (/^Android (?:before launch|focused activity):/.test(line)) console.error(line);
+  });
   if (device) child.stdout.on('data', (d) => { for (const l of String(d).split('\n')) if (l) hostLines.push('app: ' + l); });
   let lines = device ? null : jsonLines(child.stdout, child.stdin, hostLines);
   const fail = (why) => { lines?.fail(why); bridge?.fail(new Error(why)); };
-  const exited = new Promise((r) => {
-    // A failed spawn may emit error without exit, so cleanup must finish on either.
-    child.on('error', (e) => { fail(`launch failed: ${e.message}`); r(); });
-    child.on('exit', (code, signal) => { r(code ?? signal); fail(closing ? 'the app was closed' : hangup({ what: 'the app exited', exit: { code, signal }, hostLines, reports: device || droid ? [] : crashReports(basename(bin), launched) })); });
+  const closed = new Promise(resolve => {
+    child.once('close', resolve);
+    child.once('error', resolve);
   });
-  const close = async () => { closing = true; bridge?.close(); try { child.stdin.end(); if (device) child.kill('SIGTERM'); } catch {} await waitAtMost(exited, 2000); if (child.exitCode === null && child.signalCode === null) { try { child.kill('SIGKILL'); } catch {} } await exited; };
+  let closingPromise;
+  const close = () => {
+    if (closingPromise) return closingPromise;
+    closing = true; bridge?.close();
+    // Ending the stdin of a process that has exited raises EPIPE on the stream, which would end the driver.
+    if (child.exitCode === null && child.signalCode === null) {
+      child.stdin.on('error', () => {});
+      try { child.stdin.end(); if (device) child.kill('SIGTERM'); } catch {}
+    }
+    return closingPromise = closeStdio(child, closed, droid?.cleanup);
+  };
+  const cleanupAfterExit = () => { if (!closing) void close().catch(error => console.error(`app cleanup: ${error.message}`)); };
+  child.on('error', error => { fail(`launch failed: ${error.message}`); cleanupAfterExit(); });
+  child.on('exit', (code, signal) => {
+    fail(closing ? 'the app was closed' : hangup({ what: 'the app exited', exit: { code, signal }, hostLines, reports: device || droid ? [] : crashReports(basename(bin), launched) }));
+    cleanupAfterExit();
+  });
   let readyTimeout;
   try {
     const readyLine = device ? bridge.ready.then(({ socket, announcement }) => {
