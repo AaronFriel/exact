@@ -621,9 +621,16 @@ impl<'k> Resolver<'k, '_> {
             ),
             |v| ((v.x as f32, v.y as f32), (v.z as f32, v.w as f32)),
         );
-        let rotate = self
-            .value(key, Property::Rotate)
-            .map_or(style.rotate, |v| v.x as f32);
+        let rotate = self.value(key, Property::Rotate).map_or_else(
+            || {
+                exact_motion::rotation::presented(exact_motion::rotation::value(
+                    style.rotate as f64,
+                    style.rotate_axis.0.map(f64::from),
+                ))
+                .x as f32
+            },
+            |v| v.x as f32,
+        );
         let scale = self
             .value(key, Property::Scale)
             .map_or(style.scale, |v| v.x as f32);

@@ -830,7 +830,7 @@ pub fn emit(plan: &Plan, site_attrs: bool, dev_reload: bool) -> Result<Output, S
     // carries them: the browser runs `animation` rows.
     for row in &plan.keyframes {
         if let Ok(frames) = exact_motion::Keyframes::parse(plan.str(row.css)) {
-            let text = frames.css();
+            let text = exact_web::css::rotation_keyframes_css(&frames);
             let _ = write!(css, "@keyframes {}{{{text}}}", plan.str(row.name));
             // A pressable node plays the copy that also animates
             // `--exact-scale` (exact_web::css::keyframes_name).
@@ -1160,9 +1160,18 @@ impl Em<'_> {
                     self.markdown(i, &e, &format!("()=>{source}"), plan.code(b.expr));
                 }
                 // Refused SVG literals still run their binding to journal the refusal.
-                if b.kind != BindingKind::Prop
-                    || !exact_runner::bridge::prop_value(b.id, &v)
-                        .is_err_and(|e| crate::svg_lengths::refused(&e))
+                let svg_animation = node_type.is_svg_element()
+                    && b.kind == BindingKind::Style
+                    && matches!(
+                        exact_kernel::StyleId::from_bit(b.id as u32),
+                        Some(
+                            exact_kernel::StyleId::Animation | exact_kernel::StyleId::ExitAnimation
+                        )
+                    );
+                if !svg_animation
+                    && (b.kind != BindingKind::Prop
+                        || !exact_runner::bridge::prop_value(b.id, &v)
+                            .is_err_and(|e| crate::svg_lengths::refused(&e)))
                 {
                     continue;
                 }

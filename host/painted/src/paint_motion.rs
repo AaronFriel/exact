@@ -295,7 +295,12 @@ impl<D: DataSource> Host<D> {
                     entry.layout = layout_presented(&self.engine, p.node, p.value).map(|v| v as f32)
                 }
                 Property::Scale => entry.scale = p.value.x as f32,
-                Property::Rotate => entry.rotate = p.value.x as f32,
+                Property::Rotate => {
+                    entry.rotate = p.value.x as f32;
+                    entry.rotate_axis = exact_kernel::style::space::RotateAxis(
+                        exact_motion::rotation::axis(p.value).map(|v| v as f32),
+                    );
+                }
                 Property::Opacity => entry.opacity = p.value.x as f32,
                 Property::R => entry.svg[0] = Some(p.value.x as f32),
                 Property::StrokeDashoffset => entry.svg[1] = Some(p.value.x as f32),
@@ -323,7 +328,10 @@ impl<D: DataSource> Host<D> {
                     && s.translate_percent == (v.z as f32, v.w as f32)
             }
             Property::Scale => s.scale == v.x as f32,
-            Property::Rotate => s.rotate == v.x as f32,
+            Property::Rotate => {
+                s.rotate == v.x as f32
+                    && s.rotate_axis.0 == exact_motion::rotation::axis(v).map(|v| v as f32)
+            }
             Property::Opacity => s.opacity == v.x as f32,
             Property::Layout => {
                 s.layout == layout_presented(&self.engine, p.node, v).map(|v| v as f32)

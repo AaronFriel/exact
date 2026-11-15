@@ -473,10 +473,10 @@ impl<D: DataSource> Host<D> {
     ) {
         // A layout box is presented as its offset from the laid-out
         // origin and its size's difference from the laid-out size;
-        // identity is `0 0 0 0`. The other three are one or two numbers.
+        // identity is `0 0 0 0`. Rotation carries its angle and axis.
         let values = match property {
             Property::Layout => layout_presented(&self.engine, node, value),
-            Property::Translate => [value.x, value.y, value.z, value.w],
+            Property::Translate | Property::Rotate => [value.x, value.y, value.z, value.w],
             _ => [value.x, 0.0, 0.0, 0.0],
         };
         let identity = match property.identity() {
@@ -497,8 +497,8 @@ impl<D: DataSource> Host<D> {
         if self.native_protected_id(view) && !self.native_current() {
             return;
         }
-        if property == Property::Layout {
-            batch.present4(view, "layout", values);
+        if matches!(property, Property::Layout | Property::Rotate) {
+            batch.present4(view, property.name(), values);
         } else if property == Property::Translate && (values[2] != 0.0 || values[3] != 0.0) {
             // Its percentages ride as `w` and `h`; the presenter
             // resolves them against the box (chess diary #4).

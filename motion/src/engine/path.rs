@@ -123,8 +123,8 @@ impl Engine {
         };
         let mut curve = Running::start(
             &declaration,
-            Value::scalar(0.0),
-            Value::scalar(1.0),
+            Property::D,
+            (Value::scalar(0.0), Value::scalar(1.0)),
             Value::ZERO,
             now,
             Value::scalar(0.0),

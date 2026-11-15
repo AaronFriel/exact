@@ -320,7 +320,12 @@ fn css_text_in(
             // @ref LLP 1077 D8 — `rotate` is the angle and its axis, and
             // `translate` x, y and z: one declaration each.
             (StyleId::Rotate, RowValue::Number(n)) if style.rotate_axis.0 != [0.0, 0.0, 1.0] => {
-                push_text!(&mut out, "rotate:{} ", style.rotate_axis.css());
+                push_text!(
+                    &mut out,
+                    "--exact-rotate-axis:{};rotate:{} ",
+                    style.rotate_axis.css(),
+                    style.rotate_axis.css()
+                );
                 num_into(&mut out, *n as f32);
                 out.push_str("deg;");
             }
@@ -575,7 +580,7 @@ pub fn keyframes_name(a: &exact_motion::animation::Animation, press: bool) -> St
 /// each `scale` keyframe into `--exact-scale`: its important `scale`
 /// composition wins over the animation's own.
 pub fn keyframes_css(a: &exact_motion::animation::Animation, press: bool) -> String {
-    let text = a.keyframes.css();
+    let text = rotation_keyframes_css(&a.keyframes);
     if !press_rule(a, press) {
         return text;
     }
@@ -590,6 +595,18 @@ pub fn keyframes_css(a: &exact_motion::animation::Animation, press: bool) -> Str
     }
     out.push_str(rest);
     out
+}
+
+/// Bare angles use the node's axis; explicit keyframe axes stay in CSS rotate.
+pub fn rotation_keyframes_css(frames: &exact_motion::Keyframes) -> String {
+    frames.css_values(|p, v| {
+        let text = exact_motion::animation::value_css(p, v);
+        if p == Property::Rotate && [v.y, v.z, v.w] == [0.0; 3] {
+            format!("var(--exact-rotate-axis,z) {text}")
+        } else {
+            text
+        }
+    })
 }
 
 /// Send each `@keyframes` rule `style`'s animations name, and its exit's,

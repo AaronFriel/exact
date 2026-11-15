@@ -85,23 +85,23 @@ impl Motion {
     }
 
     /// A node's targets after a commit, at `now`: translate x and y, its x
-    /// and y percentages of the box, scale, rotate (degrees), opacity. The
+    /// and y percentages of the box, scale, rotate (degrees), opacity, rotation axis. The
     /// first observation of a node is taken as it is (nothing transitions),
     /// as the kernel's `adopt` does.
     pub fn observe(
         &mut self,
         node: u64,
-        values: [f64; 7],
+        values: [f64; 10],
         velocity: Option<Value>,
         now: f64,
     ) -> Result<(), EngineError> {
         self.seek(now)?;
         let enabled = self.enabled_translate.remove(&node);
-        let [x, y, px, py, scale, rotate, opacity] = values;
+        let [x, y, px, py, scale, rotate, opacity, ax, ay, az] = values;
         let targets = [
             Value::four(x, y, px, py),
             Value::scalar(scale),
-            Value::scalar(rotate),
+            Value::four(rotate, ax, ay, az),
             Value::scalar(opacity),
         ];
         for (property, value) in TARGETS.into_iter().zip(targets) {

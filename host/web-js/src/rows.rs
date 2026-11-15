@@ -12,7 +12,6 @@ use std::fmt::Write as _;
 
 #[path = "text_style.rs"]
 mod text_style;
-
 impl Em<'_> {
     /// Clock ticks format cached instants without evaluating app code.
     pub(super) fn live_time(
@@ -179,6 +178,8 @@ impl Em<'_> {
             .is_some_and(|t| style::can_be(plan, plan.code(t.expr), &|s| !clock(s)));
         let id = StyleId::from_bit(b.id as u32).ok_or("unknown style row")?;
         let kind = NodeType::from_wire(row.node_type).ok_or("unknown node type")?;
+        let checked_animation = self.svg_animation(i, id, e, f, scope)?;
+        let f = checked_animation.as_deref().unwrap_or(f);
         // @ref LLP 1115.002 D6 — a metric the binding may name is its value
         // in the web's column before the row's own map sees it.
         let metric = style::metric_map(plan, plan.code(b.expr))
@@ -319,9 +320,9 @@ impl Em<'_> {
             // @ref LLP 1077 D8 — the `rotate` and `translate` attributes bind
             // these with the same value: the angle's and xy's declaration
             // writes the author's whole text.
-            StyleId::RotateAxis | StyleId::TranslateZ | StyleId::TranslatePercent => {
-                let pair = if id == StyleId::RotateAxis { StyleId::Rotate } else { StyleId::Translate };
-                if binding(pair).is_some_and(|o| plan.code(o.expr) == plan.code(b.expr)) {
+            StyleId::RotateAxis => one("--exact-rotate-axis", Some("v=>{const w=String(v??'').trim().split(/\\s+/);if(w.length===2)return w.find(x=>/^[xyz]$/i.test(x))||'z';return w.length===4?w.slice(0,3).join(' '):'z'}".into())),
+            StyleId::TranslateZ | StyleId::TranslatePercent => {
+                if binding(StyleId::Translate).is_some_and(|o| plan.code(o.expr) == plan.code(b.expr)) {
                     return Ok(());
                 }
                 return refuse("a dynamic 3D part without its `rotate` or `translate`");

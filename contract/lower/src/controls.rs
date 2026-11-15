@@ -985,7 +985,7 @@ impl Lowerer<'_> {
                     || self
                         .keyframes
                         .get(&anim.name)
-                        .is_some_and(|ps| ps.iter().all(|p| native_motion(*p)));
+                        .is_some_and(|frames| frames.properties().into_iter().all(native_motion));
                 if !ok {
                     return err(
                         "lower-button-style-attr",

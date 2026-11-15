@@ -1518,6 +1518,11 @@ price: answers arrive `Later`, outside the action's transaction (LLP 1027.002 D1
   before `screenshot`. (Authoring bench, LLP 1087, t5-pomodoro, 2026-10-07:
   about 5 minutes and a probe script to find.)
 
+- **A macOS viewport screenshot omits a box's 3D rotation.** Both a static
+  `rotate="-45deg x"` and a sampled axis keyframe can look unrotated in the
+  default capture. Use `screenshot out.png window` to read the composited
+  window; `layout` also reports the transformed bounds. (#609, 2026-11-14.)
+
 - **A macOS `screenshot` shows no focus ring on a native field or button.** AppKit
   draws its focus ring only in the key window of the active app, and the driver's
   window is never key; nor is the ring in any picture a process can make of its own

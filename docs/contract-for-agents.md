@@ -4048,6 +4048,15 @@ names read in any ASCII case (`0.3S EASE` is `0.3s ease`), its numbers are CSS's
 (`1.s` and `infs` are no times), and a keyframes name keeps its case: in
 `animation="Spin 1s EASE"` the name is `Spin` and `EASE` is the easing.
 
+A `rotate` keyframe accepts the node's rotation syntax: an angle (degrees when
+unitless), optionally with `x`, `y`, `z`, or a three-number axis. For example,
+`to rotate="-90deg x"` folds a card edge-on. An angle-only keyframe uses the
+node's declared axis, so `to rotate=-90` on `rotate="0deg x"` also folds about X.
+An explicit keyframe axis overrides the node's; differing axes interpolate by
+spherical interpolation, while a common axis preserves full turns. SVG elements
+and route-transition pictures refuse spatial keyframes because their native
+transforms are 2D; animate a surrounding box or a box inside the route instead.
+
 In a virtualized list, `-exact-animation-trigger="view"` (the default) holds a
 prefetched row's animations until the row first overlaps its list's port.
 `"none"` starts them on insertion. Reveal preserves authored pauses; leaving

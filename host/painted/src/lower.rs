@@ -155,6 +155,7 @@ impl<D: DataSource> Host<D> {
             };
             let props = animations.properties();
             let playable = !props.is_empty()
+                && !self.spatial_rotation(*node)
                 && props.iter().all(|p| LOWERED.contains(p))
                 && !animations
                     .0
@@ -203,9 +204,9 @@ impl<D: DataSource> Host<D> {
             return;
         }
         let now = self.engine.now();
-        // A track the reader plays whose node now has something painted over
-        // the property (a press row, a look naming it, set while it played)
-        // is the engine's again, from where its curve is (LLP 1121 D8).
+        // Reclaim tracks when the painter needs their sampled values: a
+        // spatial box has no compositor layer, and a press or look composes
+        // with the node's own presentation (LLP 1121 D8).
         for (node, t) in &self.played {
             let Some(n) = self
                 .runner
@@ -215,7 +216,7 @@ impl<D: DataSource> Host<D> {
                 continue;
             };
             for (property, _) in t {
-                if crate::host::press::paints_over(&n, *property) {
+                if !playable(&n, &[*property]) || self.spatial_rotation(*node) {
                     self.engine.reclaim_played(*node, *property);
                 }
             }
@@ -252,8 +253,15 @@ impl<D: DataSource> Host<D> {
             if self
                 .engine
                 .transition_ends(node, property)
-                .is_some_and(|t| t.waits)
+                .is_some_and(|t| {
+                    t.waits
+                        || property == Property::Rotate
+                            && !exact_motion::rotation::planar(t.from, t.to)
+                })
             {
+                continue;
+            }
+            if self.spatial_rotation(node) {
                 continue;
             }
             let key = exact_kernel::motion::node_key(node);
@@ -281,6 +289,19 @@ impl<D: DataSource> Host<D> {
         }
     }
 
+    // A transition back to Z can still paint a spatial frame. Check both
+    // ends so a delay or a zero-angle first frame cannot hand off a fade.
+    fn spatial_rotation(&self, node: u64) -> bool {
+        let spatial = |v: Value| v.y != 0.0 || v.z != 0.0;
+        self.engine
+            .value(node, Property::Rotate)
+            .is_some_and(spatial)
+            || self
+                .engine
+                .transition_ends(node, Property::Rotate)
+                .is_some_and(|t| spatial(t.from) || spatial(t.to))
+    }
+
     /// Sample the reader's curve before a hold takes it. The painter and
     /// engine publish the target while the reader plays these values.
     pub(super) fn played_value(&self, node: u64, property: Property, now: f64) -> Option<Value> {
@@ -304,7 +325,11 @@ impl<D: DataSource> Host<D> {
         Some(match &t.curve {
             PlayedCurve::Easing { easing, .. } => {
                 let progress = easing.progress(progress);
-                t.from.zip(t.to, |a, b| a + (b - a) * progress)
+                if property == Property::Rotate {
+                    exact_motion::rotation::interpolate(t.from, t.to, progress)
+                } else {
+                    t.from.lerp(t.to, progress)
+                }
             }
             PlayedCurve::Frames { values, .. } => {
                 let position = progress * values.len().saturating_sub(1) as f64;
@@ -388,7 +413,10 @@ impl<D: DataSource> Host<D> {
                         &[(TX, 0), (TY, 1)],
                     ),
                     Property::Scale => (Value::scalar(base.scale as f64), &[(SCALE, 0)]),
-                    Property::Rotate => (Value::scalar(base.rotate as f64), &[(ROTATE, 0)]),
+                    Property::Rotate => (
+                        self.engine.target(node_u64(key), p).unwrap_or(Value::ZERO),
+                        &[(ROTATE, 0)],
+                    ),
                     Property::R => (Value::scalar(r0 as f64), &[(R, 0)]),
                     Property::StrokeDashoffset => (Value::scalar(dash0() as f64), &[(DASH, 0)]),
                     Property::Cx => (Value::scalar(cx0 as f64), &[(CX, 0)]),
@@ -410,6 +438,11 @@ impl<D: DataSource> Host<D> {
                     out.push(track.len() as u32);
                     for (offset, e, v) in &track {
                         f(&mut out, *offset);
+                        let v = if p == Property::Rotate {
+                            exact_motion::rotation::presented(*v)
+                        } else {
+                            *v
+                        };
                         f(&mut out, if axis == 1 { v.y } else { v.x });
                         easing(&mut out, Some(*e));
                     }
@@ -434,7 +467,18 @@ impl<D: DataSource> Host<D> {
                 }
                 _ => continue,
             };
-            let axis = |v: &Value, a: usize| if a == 1 { v.y } else { v.x };
+            let axis = |v: &Value, a: usize| {
+                let v = if *p == Property::Rotate {
+                    exact_motion::rotation::presented(*v)
+                } else {
+                    *v
+                };
+                if a == 1 {
+                    v.y
+                } else {
+                    v.x
+                }
+            };
             for &(code, a) in axes {
                 out.push(code);
                 f(&mut out, t.start);
@@ -690,6 +734,11 @@ fn playable(n: &exact_kernel::NodeRef<'_>, props: &[Property]) -> bool {
     let turns = props
         .iter()
         .any(|p| matches!(p, Property::Translate | Property::Scale | Property::Rotate));
+    if (!svg || turns) && exact_kernel::motion::rotation_needs_sampling(s)
+        || !svg && s.translate_z != 0.0
+    {
+        return false;
+    }
     if svg {
         // The scene keeps an animated element's transform in parts about its
         // origin; a non-scaling stroke would scale, a clip or effect would not

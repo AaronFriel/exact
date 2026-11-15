@@ -63,6 +63,22 @@ pub fn transitions(style: &StyleProps) -> Transitions {
     }
 }
 
+/// Whether rotation needs sampling rather than a scalar Z compositor track.
+pub fn rotation_needs_sampling(style: &StyleProps) -> bool {
+    style.rotate_axis.is_3d()
+        || style
+            .animation
+            .0
+            .iter()
+            .chain(&style.rare.exit_animation.0)
+            .any(|a| {
+                !a.keyframes.planar_rotation(exact_motion::rotation::value(
+                    style.rotate as f64,
+                    style.rotate_axis.0.map(f64::from),
+                ))
+            })
+}
+
 /// The generation-checked kernel key packed into an engine node number.
 pub fn node_key(node: u64) -> NodeKey {
     NodeKey {
@@ -238,7 +254,10 @@ pub fn targets(style: &StyleProps) -> [(Property, Value); 4] {
             ),
         ),
         (Property::Scale, Value::scalar(style.scale as f64)),
-        (Property::Rotate, Value::scalar(style.rotate as f64)),
+        (
+            Property::Rotate,
+            exact_motion::rotation::value(style.rotate as f64, style.rotate_axis.0.map(f64::from)),
+        ),
         (Property::Opacity, Value::scalar(style.opacity as f64)),
     ]
 }

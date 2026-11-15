@@ -1,7 +1,6 @@
 // One presenter identity per kernel node (LLP 1008 §5); inline text stays
 // unmounted as its paragraph's run data (LLP 1033). Mounted NSViews draw
-// backgrounds, borders, and text are drawn; frames come from the kernel's
-// layout; transforms and opacity from presentation values. Everything a
+// with kernel frames and presented transforms and opacity. Everything a
 // node reaches beyond itself — the text engine, the canvases, the web
 // views, the session's clock — it reaches through its presenter's session
 // (LLP 1031 D1), never a global.
@@ -125,6 +124,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
     var stickyOffset = CGPoint.zero
     package var scale: CGFloat = 1
     package var rotate: CGFloat = 0
+    var rotationAxis: [Double] = [0, 0, 0]
     weak package var presenter: Presenter?
     package var textArea: NSTextView?
     var textAreaScroll: NSScrollView?

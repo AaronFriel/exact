@@ -9,6 +9,66 @@ use exact_plan::{BindingKind, EventKind, NodesId, Value};
 use std::fmt::Write as _;
 
 impl Em<'_> {
+    /// Resolve SVG rotation eligibility with the current animation name and axis.
+    pub(super) fn svg_animation(
+        &mut self,
+        i: u32,
+        id: StyleId,
+        e: &str,
+        f: &str,
+        scope: &Scope,
+    ) -> Result<Option<String>, String> {
+        let plan = self.plan;
+        let row = plan.node(NodesId(i));
+        if !exact_kernel::NodeType::from_wire(row.node_type)
+            .is_some_and(exact_kernel::NodeType::is_svg_element)
+            || !matches!(id, StyleId::Animation | StyleId::ExitAnimation)
+        {
+            return Ok(None);
+        }
+        let binding = |id: StyleId| {
+            row.bindings
+                .iter()
+                .map(|b| plan.binding(b))
+                .find(|b| b.kind == BindingKind::Style && b.id == id as u16)
+        };
+        let mut spatial = Vec::new();
+        let mut inherited = Vec::new();
+        for rule in &plan.keyframes {
+            let frames =
+                exact_motion::Keyframes::parse(plan.str(rule.css)).map_err(|e| e.to_string())?;
+            let name = plan.str(rule.name);
+            if frames.spatial_rotation() {
+                spatial.push(name);
+            }
+            if frames
+                .properties()
+                .contains(&exact_motion::Property::Rotate)
+                && frames
+                    .track(
+                        exact_motion::Property::Rotate,
+                        exact_motion::Value::four(0., 1., 0., 0.),
+                        false,
+                        &exact_motion::Easing::Linear,
+                    )
+                    .iter()
+                    .any(|(_, _, v)| v.y != 0. || v.z != 0.)
+            {
+                inherited.push(name);
+            }
+        }
+        let rotate = match binding(StyleId::Rotate) {
+            Some(b) => self.bound(i, e, &b, scope)?,
+            None => "()=>0".into(),
+        };
+        let say = self.uses.rt("say");
+        let spatial = serde_json::to_string(&spatial).unwrap();
+        let inherited = serde_json::to_string(&inherited).unwrap();
+        Ok(Some(format!(
+            r#"()=>{{const v=({f})(),r=String(({rotate})()).trim().split(/\s+/),axis=r.length===4?(Number(r[0])!==0||Number(r[1])!==0):r.some(w=>/^[xy]$/i.test(w)),style=document.createElement('div').style;style.animation=v??'';const names=style.animationName.split(',').map(n=>n.trim().replace(/^['"]|['"]$/g,''));if(names.some(n=>{spatial}.includes(n)||axis&&{inherited}.includes(n))){{{say}('animation refused: spatial rotation on an SVG element; animate a box around the svg');return 'none'}}return v}}"#
+        )))
+    }
+
     /// Whether node `i` binds a route's entrance or exit, which loads
     /// shared.js as a written one does (LLP 1013.001 D1).
     pub(super) fn binds_route_part(&self, i: u32) -> bool {

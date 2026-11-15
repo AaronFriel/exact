@@ -1389,3 +1389,101 @@ fn clearing_or_refusing_authored_velocity_restores_interruption_inheritance() {
         );
     }
 }
+
+#[test]
+fn ios_rotation_tracks_preserve_sign_and_sample_axis_changes() {
+    for (from, to, lowered) in [
+        ("0 0 -1 0deg", "0 0 -1 90deg", true),
+        ("0 0 -1 10deg", "z 350deg", false),
+    ] {
+        let source = format!("keyframes spin\n  from rotate=\"{from}\"\n  to rotate=\"{to}\"\ncomponent App\n  state on = false\n  action go\n    on = true\n  view\n    column\n      button \"Go\" testId=\"go\" press=go\n      view testId=\"box\" width=120 height=60 animation=(on ? \"spin 1s linear both\" : \"none\")\n");
+        let (mut host, _) = Host::boot(
+            &contract::compile(&source).unwrap().encode(),
+            NoData,
+            Box::new(MonospaceMeasurer::default()),
+            300.,
+            300.,
+        )
+        .unwrap();
+        ios(&mut host);
+        let batch = host.dispatch_at(id(&host, "go"), Event::Press, 0.);
+        let box_id = id(&host, "box");
+        let node = motion_node(host.runner.kernel().node(box_id).unwrap().key);
+        assert_eq!(!host.engine.node_sampled(node), lowered, "{batch}");
+        if lowered {
+            let spec = specs(&batch, box_id).unwrap();
+            let values = spec[0]["v"].as_array().unwrap();
+            assert!(
+                (values.last().unwrap().as_f64().unwrap() + std::f64::consts::FRAC_PI_2).abs()
+                    < 1e-4,
+                "{spec:?}"
+            );
+        } else {
+            host.advance(500.);
+            let v = host.engine.sampled_value(node, Property::Rotate).unwrap();
+            assert!((v.x + 10.0).abs() < 1e-5, "{v:?}");
+        }
+    }
+    let source = "component App\n  state on = false\n  action go\n    on = true\n  view\n    column\n      button \"Go\" testId=\"go\" press=go\n      view testId=\"box\" width=120 height=60 rotate=(on ? \"45deg z\" : \"90deg x\") transition=\"rotate 1s linear\"\n";
+    let (mut host, _) = Host::boot(
+        &contract::compile(source).unwrap().encode(),
+        NoData,
+        Box::new(MonospaceMeasurer::default()),
+        300.,
+        300.,
+    )
+    .unwrap();
+    ios(&mut host);
+    host.dispatch_at(id(&host, "go"), Event::Press, 0.);
+    let node = motion_node(host.runner.kernel().node(id(&host, "box")).unwrap().key);
+    host.advance(500.);
+    assert!(!host.engine.is_played(node, Property::Rotate));
+    let actual = host.engine.value(node, Property::Rotate).unwrap();
+    let expected = exact_motion::rotation::interpolate(
+        exact_motion::rotation::parse("x 90deg").unwrap(),
+        exact_motion::rotation::parse("z 45deg").unwrap(),
+        0.5,
+    );
+    assert!((actual.x - expected.x).abs() < 1e-8, "{actual:?}");
+}
+
+#[test]
+fn negative_z_rows_inherit_the_authored_axis() {
+    for row in ["\"0 0 -1 0deg\"", "rotation"] {
+        for lowered in [false, true] {
+            let source = format!("keyframes spin\n  to rotate=60\ncomponent App\n  state rotation = \"0 0 -1 0deg\"\n  state on = false\n  action go\n    on = true\n  view\n    column\n      button \"Go\" testId=\"go\" press=go\n      view testId=\"box\" width=100 height=100 rotate={row} animation=(on ? \"spin 1s linear both\" : \"none\")\n");
+            let (mut host, _) = Host::boot(
+                &contract::compile(&source).unwrap().encode(),
+                NoData,
+                Box::new(MonospaceMeasurer::default()),
+                300.,
+                300.,
+            )
+            .unwrap();
+            if lowered {
+                ios(&mut host);
+            }
+            let batch = host.dispatch_at(id(&host, "go"), Event::Press, 0.);
+            let node = motion_node(host.runner.kernel().node(id(&host, "box")).unwrap().key);
+            if lowered {
+                let spec = specs(&batch, id(&host, "box")).unwrap();
+                let values = spec[0]["v"].as_array().unwrap();
+                assert!(
+                    (values.last().unwrap().as_f64().unwrap() + std::f64::consts::PI / 3.).abs()
+                        < 1e-4
+                );
+            } else {
+                host.advance(500.);
+                assert_eq!(
+                    host.engine.sampled_value(node, Property::Rotate).unwrap().x,
+                    -30.
+                );
+                host.advance(1000.);
+                assert_eq!(
+                    host.engine.sampled_value(node, Property::Rotate).unwrap().x,
+                    -60.
+                );
+            }
+        }
+    }
+}

@@ -22,6 +22,7 @@ use crate::layout::LayoutMirror;
 use crate::segmented;
 use crate::selector::SelectorIndex;
 use crate::wire::Op;
+mod animation;
 mod capacity;
 mod defaults;
 mod inherited;
@@ -504,6 +505,7 @@ fn validate(arena: &NodeArena, ops: &[Op]) -> Result<capacity::Batch, ApplyError
         }
     }
     staged.check_depth(&arrivals)?;
+    animation::validate(arena, &staged, ops)?;
     // Conservative: ignores free-slot reuse, so it only ever refuses a batch that
     // would have fit within a few slots of the four-billion-node ceiling.
     if arena.slot_space() as u64 + creates > u32::MAX as u64 {

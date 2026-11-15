@@ -29,6 +29,8 @@ pub struct Presented {
     pub press_paint: f32,
     /// Degrees.
     pub rotate: f32,
+    /// The presented rotation axis, including an animated axis.
+    pub rotate_axis: exact_kernel::style::space::RotateAxis,
     /// Zero to one.
     pub opacity: f32,
     /// An SVG shape's presented `r`, `stroke-dashoffset`, `cx`, `cy`, `x`, `y`, `rx`, `ry`.
@@ -57,6 +59,7 @@ impl Presented {
         press: 1.0,
         press_paint: 0.0,
         rotate: 0.0,
+        rotate_axis: exact_kernel::style::space::RotateAxis([0.0, 0.0, 1.0]),
         opacity: 1.0,
         svg: [None; 8],
         colors: PaintValues::NONE,
@@ -67,6 +70,10 @@ impl Presented {
 
     /// The committed style's values (what the engine starts from).
     pub fn from_style(s: &StyleProps) -> Presented {
+        let rotation = exact_motion::rotation::presented(exact_motion::rotation::value(
+            s.rotate as f64,
+            s.rotate_axis.0.map(f64::from),
+        ));
         Presented {
             dark: None,
             translate: (s.translate.x, s.translate.y),
@@ -74,7 +81,10 @@ impl Presented {
             scale: s.scale,
             press: 1.0,
             press_paint: 0.0,
-            rotate: s.rotate,
+            rotate: rotation.x as f32,
+            rotate_axis: exact_kernel::style::space::RotateAxis(
+                exact_motion::rotation::axis(rotation).map(|v| v as f32),
+            ),
             opacity: s.opacity,
             svg: [None; 8],
             colors: PaintValues::NONE,

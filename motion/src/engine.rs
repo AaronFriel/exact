@@ -585,8 +585,15 @@ impl Engine {
                 match declaration {
                     Some(declaration) => {
                         let velocity = change.velocity.unwrap_or(Value::ZERO);
-                        let mut running =
-                            Running::start(&declaration, before, after, velocity, now, before, 1.0);
+                        let mut running = Running::start(
+                            &declaration,
+                            change.property,
+                            (before, after),
+                            velocity,
+                            now,
+                            before,
+                            1.0,
+                        );
                         running.pending = pend;
                         let presented = running.sample(now).value;
                         slot.set_running(Some(running));
@@ -610,7 +617,19 @@ impl Engine {
                 slot.set_owner(None);
                 let current = running.sample(now);
                 slot.set_target(after);
-                let inherited = change.velocity.unwrap_or(current.velocity);
+                let inherited = change.velocity.unwrap_or_else(|| {
+                    if change.property == Property::Rotate {
+                        Value::scalar(crate::rotation::retarget_velocity(
+                            running.from,
+                            running.to,
+                            current.value,
+                            after,
+                            current.velocity.x,
+                        ))
+                    } else {
+                        current.velocity
+                    }
+                });
                 let Some(declaration) = declaration.filter(|t| {
                     current.value != after
                         || inherited != Value::ZERO
@@ -635,8 +654,8 @@ impl Engine {
                         .clamp(0.0, 1.0);
                     Running::start(
                         &declaration,
-                        current.value,
-                        after,
+                        change.property,
+                        (current.value, after),
                         inherited,
                         now,
                         running.to,
@@ -645,8 +664,8 @@ impl Engine {
                 } else {
                     Running::start(
                         &declaration,
-                        current.value,
-                        after,
+                        change.property,
+                        (current.value, after),
                         inherited,
                         now,
                         current.value,
@@ -758,7 +777,7 @@ impl Engine {
                 animated.or(underlying).map(|value| Presentation {
                     node: key.0,
                     property: key.1,
-                    value,
+                    value: presentation(key.1, value),
                 })
             })
             .collect()
@@ -813,7 +832,9 @@ impl Engine {
 
     /// The current presentation value of one property.
     pub fn value(&self, node: u64, property: Property) -> Option<Value> {
-        self.slots.get(&(node, property)).map(Slot::presented)
+        self.slots
+            .get(&(node, property))
+            .map(|s| presentation(property, s.presented()))
     }
 
     /// What a sampling host paints for one property now: a sampled
@@ -824,10 +845,12 @@ impl Engine {
         let slot = self.slots.get(&(node, property));
         let underlying = slot.map(Slot::presented);
         if slot.is_some_and(|s| s.running().is_some()) || self.lowered_for(node, property) {
-            return underlying;
+            return underlying.map(|v| presentation(property, v));
         }
         let base = underlying.or_else(|| base(property))?;
-        self.animated(node, property, base).or(underlying)
+        self.animated(node, property, base)
+            .or(underlying)
+            .map(|v| presentation(property, v))
     }
 
     /// The current target of one property.
@@ -891,6 +914,14 @@ fn validate_value(property: Property, value: Value) -> Result<(), EngineError> {
         return Err(EngineError::InvalidValueShape);
     }
     Ok(())
+}
+
+fn presentation(property: Property, value: Value) -> Value {
+    if property == Property::Rotate {
+        crate::rotation::presented(value)
+    } else {
+        value
+    }
 }
 
 #[cfg(test)]

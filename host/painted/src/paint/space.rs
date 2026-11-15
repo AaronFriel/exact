@@ -101,9 +101,8 @@ pub(super) fn reach(
                 cy + ch / 2.0 + ty + q.layout[1],
             );
             let k = (q.scale * q.press).abs().max(1.0);
-            let turned = q.rotate % 360.0 != 0.0
-                || child.style.rotate_axis.is_3d()
-                || child.style.translate_z != 0.0;
+            let turned =
+                q.rotate % 360.0 != 0.0 || q.rotate_axis.is_3d() || child.style.translate_z != 0.0;
             let (hw, hh) = if turned {
                 let d = k * cw.hypot(ch);
                 (d, d)
@@ -167,7 +166,7 @@ fn spatial_matrix(
     offset: (f32, f32),
 ) -> M4 {
     let s = node.style;
-    let axis = s.rotate_axis.0;
+    let axis = p.rotate_axis.0;
     // The box's own transform about `transform-origin`, as CSS orders
     // the individual properties: translate, rotate, scale.
     let (ox, oy) = s.transform_origin.resolve(w, h);
@@ -209,7 +208,7 @@ pub(crate) fn mapping(
 ) -> [f32; 9] {
     let f = node.frame;
     let rect = (f.x, f.y, f.width, f.height);
-    if node.style.rotate_axis.is_3d() || node.style.translate_z != 0. {
+    if p.rotate_axis.is_3d() || node.style.translate_z != 0. {
         let parent = node.parent.and_then(|id| kernel.node(id)).map(|parent| {
             let frame = parent.frame;
             (parent, frame)
@@ -263,7 +262,8 @@ impl Painter {
                 || node.computed_row(StyleId::TextStrokeWidth, |s| s.text_stroke_width) > 0.0
                 || s.content_transition != exact_kernel::ContentTransition::None
                 || self.placements.contains_key(&id)
-                || (id != root && (s.rotate_axis.is_3d() || s.translate_z != 0.0))
+                || (id != root
+                    && ((walk.scene.presented)(id).rotate_axis.is_3d() || s.translate_z != 0.0))
             {
                 return None;
             }
@@ -286,7 +286,7 @@ impl Painter {
         clip: Option<Rect4>,
     ) -> bool {
         let s = node.style;
-        if self.flatten == Some(node.id) || !(s.rotate_axis.is_3d() || s.translate_z != 0.0) {
+        if self.flatten == Some(node.id) || !(p.rotate_axis.is_3d() || s.translate_z != 0.0) {
             return false;
         }
         if w <= 0.0 || h <= 0.0 {

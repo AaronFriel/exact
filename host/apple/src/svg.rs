@@ -716,9 +716,12 @@ fn element(
                     Property::Translate => {
                         (Value::new(t.translate.0 as f64, t.translate.1 as f64), 1.0)
                     }
-                    Property::Rotate => {
-                        (Value::scalar(t.rotate as f64), std::f64::consts::PI / 180.0)
-                    }
+                    Property::Rotate => (
+                        engine
+                            .target(key, Property::Rotate)
+                            .unwrap_or(Value::scalar(t.rotate as f64)),
+                        std::f64::consts::PI / 180.0,
+                    ),
                     Property::Scale => (Value::scalar(t.scale as f64), 1.0),
                     _ => (Value::ZERO, 1.0),
                 };

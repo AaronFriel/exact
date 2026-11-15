@@ -6,8 +6,9 @@
 //! the individual transform properties `translate`, `scale`, `rotate`, and
 //! `opacity`. Names, units, identity values, and interpolation are CSS's:
 //! `translate` is two lengths in points, `scale` one number, `rotate` an angle
-//! in degrees, `opacity` a number; each interpolates componentwise and
-//! linearly (CSS Transitions §4, "animation type: by computed value"). The
+//! in degrees with an optional axis, and `opacity` a number. Rotation
+//! keyframes interpolate through [`crate::rotation`]; the others interpolate
+//! componentwise (CSS Transitions §4, "animation type: by computed value"). The
 //! numeric `height` trial adds a scalar in pixels, with host-owned admission
 //! and layout (LLP 1041 §8.12). Its CSS initial `auto` has no numeric value.
 //! SVG 2's `stroke-dashoffset` and `r` are scalars in user units (LLP 1055 D6),
@@ -50,7 +51,7 @@ pub enum Property {
     Translate = 0,
     /// `scale: <n>`, uniform; one is the natural size.
     Scale = 1,
-    /// `rotate: <angle>`, in degrees.
+    /// `rotate`: degrees in x, its optional axis in y/z/w.
     Rotate = 2,
     /// `opacity: <n>`, zero to one.
     Opacity = 3,
@@ -286,10 +287,11 @@ impl Property {
     /// How many components the value carries: four for `translate` (its x
     /// and y lengths, then its x and y percentages of the box, which CSS
     /// interpolates componentwise as a `calc()`), three for `box-shadow`'s
-    /// geometry and for a variation axis, four for a colour and for `layout`'s box, else one.
+    /// geometry and for a variation axis, four for rotation, colour and
+    /// `layout`'s box, else one.
     pub fn components(self) -> usize {
         match self {
-            Property::Translate => 4,
+            Property::Translate | Property::Rotate => 4,
             Property::BoxShadow | Property::FontVariationSettings => 3,
             Property::Layout => 4,
             p if p.is_color() => 4,

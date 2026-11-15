@@ -225,6 +225,12 @@ pub enum DecodeError {
 #[allow(missing_docs)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ApplyError {
+    /// SVG elements cannot present spatial rotation; animate a box around the SVG.
+    SpatialSvgAnimation {
+        op_index: usize,
+        id: ViewId,
+        style: StyleId,
+    },
     /// An authored line height was negative.
     InvalidLineHeight { op_index: usize },
     /// The op targets an id that is not live.
@@ -448,7 +454,10 @@ impl fmt::Display for DecodeError {
 
 impl fmt::Display for ApplyError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "apply rejected: {self:?}")
+        match self {
+            Self::SpatialSvgAnimation { id, .. } => write!(f, "apply rejected: spatial animation on SVG element #{id} cannot be drawn on Apple or painted hosts; animate a box around the svg"),
+            _ => write!(f, "apply rejected: {self:?}"),
+        }
     }
 }
 

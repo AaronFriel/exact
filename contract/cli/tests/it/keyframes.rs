@@ -23,6 +23,42 @@ fn fixture() -> String {
     std::fs::read_to_string(path).unwrap()
 }
 
+#[test]
+fn keyframes_accept_a_rotation_axis_and_angle_units() {
+    for rotation in ["-90deg x", "y -0.25turn", "1 1 0 100grad", "1.5rad"] {
+        let source = format!("keyframes fold\n  to rotate=\"{rotation}\"\ncomponent App\n  view\n    view animation=\"fold 1s linear both\"\n");
+        contract::compile(&source).unwrap_or_else(|e| panic!("{rotation}: {e}"));
+    }
+}
+
+#[test]
+fn spatial_keyframes_on_svg_elements_name_the_unsupported_hosts() {
+    let source = "keyframes fold\n  to rotate=\"-90deg x\"\ncomponent App\n  view\n    svg viewBox=\"0 0 100 100\"\n      rect width=100 height=100 animation=\"fold 1s linear both\"\n";
+    let e = contract::compile(source).unwrap_err();
+    assert_eq!(e.id, "lower-animation-target");
+    assert!(
+        e.message.contains("Apple or painted hosts"),
+        "{}",
+        e.message
+    );
+    assert!(e.message.contains("box around the `svg`"), "{}", e.message);
+}
+
+#[test]
+fn svg_angle_keyframes_refuse_an_inherited_spatial_axis() {
+    for row in ["0deg x", "0deg y", "1 1 0 0deg", "0deg z"] {
+        let source = format!("keyframes fold\n  to rotate=-90\ncomponent App\n  view\n    svg\n      rect rotate=\"{row}\" animation=\"fold 1s linear\"\n");
+        let result = contract::compile(&source);
+        if row == "0deg z" {
+            result.unwrap();
+        } else {
+            let e = result.unwrap_err();
+            assert_eq!(e.id, "lower-animation-target");
+            assert!(e.message.contains("Apple or painted hosts"));
+        }
+    }
+}
+
 fn animation(r: &Runner<NoData>, test_id: &str) -> (bool, Animations) {
     let k = r.kernel();
     let node = k.node_by_key(k.find_by_test_id(test_id)[0]).unwrap();
@@ -678,7 +714,7 @@ fn a_colour_keyframe_takes_the_designs_tokens() {
     .unwrap_err();
     assert_eq!(scale.id, "lower-keyframes");
     assert!(
-        scale.message.contains("one factor for both axes"),
+        scale.message.contains("one factor for both axes") && scale.message.contains("-90deg x"),
         "{scale}"
     );
 }

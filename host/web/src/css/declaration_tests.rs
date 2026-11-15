@@ -267,9 +267,6 @@ fn every_grid_row_has_css_and_none_is_skipped() {
     }
 }
 
-/// LLP 1066: a gradient is one `background-image` declaration after the
-/// colour it paints over; a `light-dark()` stop is the browser's to
-/// resolve, and `none` clears.
 #[test]
 fn a_3d_rotate_and_translate_are_one_declaration_each() {
     fn t(s: &str) -> StyleValue<'_> {
@@ -288,7 +285,12 @@ fn a_3d_rotate_and_translate_are_one_declaration_each() {
     assert!(text.contains("rotate:y 30deg;"), "{text}");
     assert!(text.contains("translate:1px 2px 3px;"), "{text}");
     assert!(text.contains("perspective:800px;"), "{text}");
-    assert_eq!(text.matches("rotate").count(), 1, "{text}");
+    assert!(text.contains("--exact-rotate-axis:y;"), "{text}");
+    assert_eq!(
+        text.split(';').filter(|d| d.starts_with("rotate:")).count(),
+        1,
+        "{text}"
+    );
     // Chess diary #4: a percentage is the browser's to resolve.
     let text = css(
         &[

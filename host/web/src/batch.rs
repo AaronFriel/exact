@@ -467,7 +467,7 @@ impl Batch {
                 s.push(',');
             }
             let (x, y) = (Shortest(*x), Shortest(*y));
-            if pair && (*px != 0.0 || *py != 0.0) {
+            if property == "rotate" || pair && (*px != 0.0 || *py != 0.0) {
                 push_text!(&mut s, "[{},{},{},{}]", x, y, Shortest(*px), Shortest(*py));
             } else if pair {
                 push_text!(&mut s, "[{},{}]", x, y);

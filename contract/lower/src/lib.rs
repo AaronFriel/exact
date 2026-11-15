@@ -263,7 +263,7 @@ pub(crate) struct Lowerer<'a> {
     pub(crate) atoms: BTreeMap<String, atoms::Declared>,
     pub atom_scopes: BTreeMap<u32, Vec<(String, String)>>,
     /// The `keyframes` declarations, by name, with what each animates (LLP 1055 D5).
-    pub keyframes: BTreeMap<String, Vec<exact_motion::Property>>,
+    pub keyframes: BTreeMap<String, exact_motion::Keyframes>,
     /// The file's `fn` declarations, by name, expanded inline at each call
     /// (LLP 1017 P5), each with its body's repeated calls bound once.
     pub fns: BTreeMap<&'a str, (&'a FnDecl, &'a Expr)>,

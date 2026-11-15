@@ -48,6 +48,7 @@ pub mod math;
 pub mod parse;
 pub mod path;
 pub mod property;
+pub mod rotation;
 pub mod spring;
 pub mod transition;
 pub mod uikit;

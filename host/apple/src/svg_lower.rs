@@ -64,6 +64,13 @@ fn forward(frames: &[Keyframe], default: &Easing, property: Property, underlying
     if pts.last().is_none_or(|p| p.0 < 1.0) {
         pts.push((1.0, None, underlying));
     }
+    if property == Property::Rotate {
+        for (_, _, v) in &mut pts {
+            *v = exact_motion::rotation::presented(exact_motion::rotation::with_axis(
+                *v, underlying,
+            ));
+        }
+    }
     let mut t = Track {
         times: vec![pts[0].0],
         values: vec![pts[0].2],
@@ -86,7 +93,13 @@ fn forward(frames: &[Keyframe], default: &Easing, property: Property, underlying
                 begin(&mut t, a.0, a.2);
                 push(&mut t, b.0, b.2, c);
             }
-            None => stepped_keys(&mut t, a.0, b.0, easing, colour, |p| a.2.lerp(b.2, p)),
+            None => stepped_keys(&mut t, a.0, b.0, easing, colour, |p| {
+                if property == Property::Rotate {
+                    exact_motion::rotation::interpolate(a.2, b.2, p)
+                } else {
+                    a.2.lerp(b.2, p)
+                }
+            }),
         }
     }
     t
@@ -501,6 +514,7 @@ pub(crate) fn eligibility(
             .iter()
             .any(|a| a.duration <= 0.0 || a.iterations <= 0.0);
         let sampled = if paired
+            || (props.contains(&Property::Rotate) && exact_kernel::motion::rotation_needs_sampling(n.style))
             || instant
             // An inline run has no layer to play a spec on: its paragraph
             // paints the engine's sample.
@@ -733,6 +747,10 @@ fn playable(
         Property::Opacity => !in_glass_group(kernel, &n),
         Property::Translate | Property::Scale | Property::Rotate => {
             box_eligible(kernel, &n, &[p], interactive)
+                && (p != Property::Rotate
+                    || engine
+                        .transition_ends(key, p)
+                        .is_some_and(|t| exact_motion::rotation::planar(t.from, t.to)))
         }
         Property::BackgroundColor => {
             layer_paints_background(&n)
@@ -863,13 +881,23 @@ pub(crate) fn transition_specs(
                 (*duration, track)
             }
         };
+        if p == Property::Rotate {
+            for v in &mut track.values {
+                *v = exact_motion::rotation::presented(*v);
+            }
+        }
+        let from = if p == Property::Rotate {
+            exact_motion::rotation::presented(t.from)
+        } else {
+            t.from
+        };
         // Backwards fill holds the uneased value through a transition's delay.
         // Keep the eased start just inside the active interval, as at a jump.
-        if track.values[0] != t.from && track.times.len() > 1 {
+        if track.values[0] != from && track.times.len() > 1 {
             track.times[0] = HAIR * track.times[1];
             track.values[0] = track.values[0].lerp(track.values[1], HAIR);
             track.times.insert(0, 0.0);
-            track.values.insert(0, t.from);
+            track.values.insert(0, from);
             track.curves.insert(0, LINEAR);
         }
         let parts: &[(usize, &str)] = match p {
@@ -1107,7 +1135,8 @@ fn box_eligible(
         .iter()
         .any(|p| matches!(p, Property::Translate | Property::Scale | Property::Rotate));
     if turns
-        && (n.layout_position() == exact_kernel::PositionType::Sticky
+        && (exact_kernel::motion::rotation_needs_sampling(s)
+            || n.layout_position() == exact_kernel::PositionType::Sticky
             || !s.transform_origin.centred()
             || !s.rare.layout_transition.0.is_empty()
             || subtree_any(kernel, n.id, &|id| {

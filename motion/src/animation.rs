@@ -381,6 +381,22 @@ impl Keyframes {
         Ok(())
     }
 
+    /// An axis outside the screen plane needs a spatial host target.
+    pub fn spatial_rotation(&self) -> bool {
+        self.0.iter().any(|f| {
+            f.values
+                .iter()
+                .any(|(p, v)| *p == Property::Rotate && (v.y != 0.0 || v.z != 0.0))
+        })
+    }
+
+    /// Whether a scalar Z track can play every resolved rotation interval.
+    pub fn planar_rotation(&self, underlying: Value) -> bool {
+        self.track(Property::Rotate, underlying, false, &Easing::Linear)
+            .windows(2)
+            .all(|w| crate::rotation::planar(w[0].2, w[1].2))
+    }
+
     /// The keyframes one property takes part in, as (offset, easing, value),
     /// under an animation whose own timing function is `easing`, with CSS's
     /// implicit `0%` and `100%` from `underlying` where no keyframe
@@ -402,6 +418,11 @@ impl Keyframes {
         for f in self.0.iter() {
             let Some(v) = f.get(property, dark) else {
                 continue;
+            };
+            let v = if property == Property::Rotate {
+                crate::rotation::with_axis(v, underlying)
+            } else {
+                v
             };
             let e = f.easing.as_ref().unwrap_or(easing);
             match out.iter_mut().find(|k| k.0 == f.offset && k.1 == e) {
@@ -582,18 +603,32 @@ impl Animation {
         if p >= 1.0 {
             let n = track.len();
             if n >= 2 && track[n - 2].0 >= 1.0 {
-                return track[n - 1].2;
+                let v = track[n - 1].2;
+                return if property == Property::Rotate {
+                    crate::rotation::presented(v)
+                } else {
+                    v
+                };
             }
             start = n.saturating_sub(2);
         }
         let (a, b) = (&track[start], &track[(start + 1).min(track.len() - 1)]);
         let span = b.0 - a.0;
         if span <= 0.0 {
-            return if p >= b.0 { b.2 } else { a.2 };
+            let v = if p >= b.0 { b.2 } else { a.2 };
+            return if property == Property::Rotate {
+                crate::rotation::presented(v)
+            } else {
+                v
+            };
         }
         let local = (p - a.0) / span;
         let eased = a.1.progress(local);
-        a.2.lerp(b.2, eased)
+        if property == Property::Rotate {
+            crate::rotation::interpolate(a.2, b.2, eased)
+        } else {
+            a.2.lerp(b.2, eased)
+        }
     }
 }
 
