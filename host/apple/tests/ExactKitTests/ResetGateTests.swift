@@ -307,6 +307,10 @@ final class ResetGateTests: XCTestCase {
             ExactSession.asyncFills = asynchronous
             let (session, plan) = try boot()
             until("the timer runs") { (try? ticks(session)) ?? 0 > 1 }
+            // The ticker's layouts wake a reply pump for the route-overflow check (7995abac3), at most once every
+            // 100 ms: the held window starts as one lands, so the next cannot be held in the firing's place.
+            let pumps = session.replyPumpsForTests
+            until("a route-overflow pump lands") { session.replyPumpsForTests > pumps && session.repliesInFlight == 0 }
             let row = try XCTUnwrap(session.taskTimers.rows.first, "the ticker's native timer")
             let timer = try XCTUnwrap(session.taskTimers.timerForTests(row.index))
             while session.now() < row.due + 1 { Thread.sleep(forTimeInterval: 0.002) } // its beat is due

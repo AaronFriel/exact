@@ -1120,6 +1120,8 @@ public final class ExactSession {
 
     #if DEBUG
     var onLandForTests: ((Published, Batch) -> Void)?
+    /// Tests: the reply pumps this session has asked for (`pumpReplies`).
+    var replyPumpsForTests = 0
     /// Tests: a skipped batch's alerts and journal lines as `logSkipped` writes them.
     var onSkippedLogForTests: (([String], [String]) -> Void)?
     var onApplyForTests: ((Batch) -> Void)?

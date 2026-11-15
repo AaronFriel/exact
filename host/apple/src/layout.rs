@@ -79,8 +79,10 @@ impl<D: DataSource> Host<D> {
         // A package view's displayed state, by the same rule, now the
         // presenter's covers are set (LLP 1133.008 D8 item 2).
         self.runner.report_views();
+        // Every batch's exit, so an owed check is woken by whatever call comes at its deadline.
+        self.request_route_overflow();
         batch.finish(
-            self.runner.timer_due_ms(),
+            self.route_overflow_due(self.runner.timer_due_ms()),
             !self.engine.quiescent(),
             self.runner.now_ms(),
             error,
@@ -91,7 +93,10 @@ impl<D: DataSource> Host<D> {
     pub(crate) fn refused(&self, error: Option<String>) -> String {
         let mut batch = Batch::new();
         self.state_onto(&mut batch);
-        let (timers, motion) = (self.runner.timer_due_ms(), !self.engine.quiescent());
+        let (timers, motion) = (
+            self.route_overflow_due(self.runner.timer_due_ms()),
+            !self.engine.quiescent(),
+        );
         batch.finish(timers, motion, self.runner.now_ms(), error.as_deref())
     }
 

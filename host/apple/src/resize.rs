@@ -20,7 +20,6 @@ impl<D: DataSource> Host<D> {
         let (mut batch, error) = self.resize_rounds(batch, error);
         self.route_overflow.settled =
             error.is_none() && !batch.layout_provisional && !self.layout_owed;
-        self.request_route_overflow();
         self.drain_canvas_captures(&mut batch);
         self.forget_canvas_captures();
         self.state_onto(&mut batch);

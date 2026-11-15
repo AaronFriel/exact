@@ -37,6 +37,8 @@ impl<D: DataSource> Host<D> {
                 .chain(self.runner.reask_due_ms())
                 // An answer waiting on its own timer (`data_timers.rs`): the clock goes to it too.
                 .chain(self.runner.data_timer_due_ms())
+                // A route-overflow check owed by the wake's throttle (`route_overflow.rs`).
+                .chain(self.route_overflow_owed_ms())
                 .reduce(f64::max)
             {
                 Some(t) => format!("{{\"settle\":{}}}", exact_runner::agent::num(t)),

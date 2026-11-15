@@ -15,6 +15,9 @@ extension ExactSession {
         let began = CACurrentMediaTime()
         let captured = generation, time = now()
         repliesInFlight += 1
+        #if DEBUG
+        replyPumpsForTests += 1
+        #endif
         // Keep parsing, settlement and batch decoding on the existing owner.
         // Publication joins fills and ticks before any later synchronous batch.
         runtime.pumpAsync(now: time) { [weak self] batch in
