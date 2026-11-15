@@ -430,6 +430,19 @@ internal class Owner(private val hwbuf: Boolean, private val fast: Boolean, prio
         handler.post { f(); produce() }
     }
 
+    private val replies = OwnerReplies(::call) { id, answer -> Native.answer(id, answer) }
+
+    fun reply(id: Int, answer: String?) = replies.answer(id, answer)
+
+    /** Called from Native.agent on this thread. Return data, never re-enter the borrowed Rust host. */
+    fun agentTurn(requests: IntArray?): String {
+        check(Looper.myLooper() == thread.looper)
+        if (requests != null) postMain { asked?.invoke(requests) ?: Requests.detached(requests) }
+        return org.json.JSONArray().apply {
+            for ((id, answer) in replies.take()) put(org.json.JSONArray().put(id).put(answer ?: org.json.JSONObject.NULL))
+        }.toString()
+    }
+
     /** The store's writes on disk ([Native.storeDrain]), behind what was sent to the exact thread before it: at most
      * [ms] in all, the main thread waiting (the activity going to the background). Whether they were. */
     fun drainStore(ms: Long): Boolean {
@@ -642,6 +655,9 @@ internal object Exact {
         return o.sync { o.drainWindow(); String(Native.agent(line.toByteArray(Charsets.UTF_8)), Charsets.UTF_8) }
     }
 
+    /** The waiting agent's request/answer turn, called by JNI on the exact thread. */
+    @JvmStatic fun agentTurn(requests: IntArray?): String = checkNotNull(owner).agentTurn(requests)
+
     /** What an [ExactForma] asks ([Native.forma], LLP 1121 D12): on exact2's thread, waited for, publishing
      * nothing. An error's JSON where no host runs or the library predates the call. */
     fun forma(request: String): String {
@@ -711,7 +727,7 @@ internal object Exact {
     /** The answer to a request exact2 made ([Native.answer]), or its cancellation (null): on exact2's thread. */
     fun answer(id: Int, answer: String?) {
         val o = owner
-        if (o != null) o.call { Native.answer(id, answer) } else Native.answer(id, answer)
+        if (o != null) o.reply(id, answer) else Native.answer(id, answer)
     }
 
     /** A package calls an app handler on the host's thread and publishes what it changed. */

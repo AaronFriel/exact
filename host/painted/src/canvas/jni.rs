@@ -11,6 +11,9 @@
 // FFI to the JNI, jnigraphics and AHardwareBuffer APIs.
 #![allow(unsafe_code)]
 
+#[path = "jni_agent.rs"]
+pub mod jni_agent;
+
 #[path = "jni_bytes.rs"]
 mod byte_arrays;
 pub use byte_arrays::{bytes, utf8};
@@ -400,7 +403,7 @@ macro_rules! canvas_jni {
                 line: $crate::canvas::jni_sys::jbyteArray,
             ) -> $crate::canvas::jni_sys::jbyteArray {
                 let line = $crate::canvas::jni::utf8(env, line);
-                let reply = with(|h| h.agent(&line));
+                let reply = with(|h| $crate::canvas::jni::jni_agent::run(env, h, &line));
                 let reply = reply.unwrap_or_else(|| r#"{"error":"no host on this thread"}"#.into());
                 $crate::canvas::jni::bytes(env, reply.as_bytes())
             }

@@ -169,7 +169,7 @@ pub use painter::{set_custom_painter, PainterChoice, PainterFactory, PainterInfo
 pub(crate) use palette::reported_accent;
 pub use palette::{material, ContrastPalette, Material, Palette, MATERIAL_ROLES};
 pub use pointer::PointerKind;
-pub use requests::{Haptic, Pick, Request};
+pub use requests::{AgentTurn, Haptic, Pick, Request};
 pub use scrollers::{Scroller, Under, PAGE};
 pub use stage::SHEET_HANDLE;
 pub use window::{Chrome, Window};

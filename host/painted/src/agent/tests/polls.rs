@@ -91,3 +91,80 @@ fn a_clock_jump_services_each_polled_package_call_before_replying() {
         ]
     );
 }
+
+#[test]
+fn a_clock_wait_services_the_readers_requests_and_answers_on_its_owner() {
+    let plan = contract::compile(
+        "component App\n  resource value = polled() as shape number\n  view\n    text value.toString()\n",
+    ).unwrap();
+    let source = exact_plan::SourcesId(
+        plan.sources
+            .iter()
+            .position(|s| plan.str(s.name) == "polled")
+            .unwrap() as u32,
+    );
+    let mut builder = exact_plan::builder::PlanBuilder::from_plan(plan);
+    builder.module(
+        source,
+        ("counter", "@fixture/counter"),
+        "polled",
+        false,
+        true,
+        "never",
+        "",
+        r#"{"default":0,"poll":{"option":"interval","default":100}}"#,
+    );
+    let (mut p, error) = Presenter::boot_with(
+        &builder.finish().unwrap().encode(),
+        (),
+        (100., 40.),
+        1.,
+        std::path::PathBuf::new(),
+        PainterChoice::Cpu,
+    )
+    .unwrap();
+    assert!(error.is_none(), "{error:?}");
+    p.serve_requests();
+    p.bind_modules(vec!["counter".into()], vec![]);
+    let owner = std::thread::current().id();
+    let mut calls = 0;
+    let mut replies = Vec::new();
+    p.set_agent_turn(Some(Box::new(move |_now, words| {
+        assert_eq!(std::thread::current().id(), owner);
+        let ready = std::mem::take(&mut replies);
+        if let Some(words) = words {
+            let mut at = 0;
+            while at < words.len() {
+                let end = at + 3 + words[at + 2] as usize;
+                if words[at] == 11 {
+                    calls += 1;
+                    replies.push((words[at + 1], Some(calls.to_string())));
+                }
+                at = end;
+            }
+        }
+        ready
+    })));
+    let bound = std::time::Duration::from_secs(1);
+    p.pump(0.);
+    p.package_turn();
+    assert!(p.pending(), "the bound module has an unanswered request");
+    let initial = clock_within(&mut p, r#"{"op":"clock","settle":true}"#, bound);
+    assert!(
+        initial.contains("\"settled\":true"),
+        "the reader's answer waited behind the clock op: {initial}"
+    );
+    assert_eq!(
+        p.host().runner().resource("value"),
+        Some(&Value::Number(1.))
+    );
+    for (to, calls) in [(100, 2), (200, 3), (1000, 4), (1000, 4)] {
+        let reply = clock_within(&mut p, &format!(r#"{{"op":"clock","to":{to}}}"#), bound);
+        assert_eq!(
+            p.host().runner().resource("value"),
+            Some(&Value::Number(f64::from(calls))),
+            "{reply}"
+        );
+        assert!(!p.host().runner().polls_asking(), "{reply}");
+    }
+}

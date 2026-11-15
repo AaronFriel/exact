@@ -238,6 +238,7 @@ type Inbox = std::sync::Arc<std::sync::Mutex<Vec<(Vec<u8>, exact_runner::Reply)>
 pub(super) struct State {
     /// Whether a shell takes requests ([`Presenter::serve_requests`]).
     shell: bool,
+    pub(super) agent_turn: Option<AgentTurn>,
     /// The last id given; ids start at 1 and are never reused.
     last: u32,
     queued: Vec<(u32, Request)>,
@@ -371,6 +372,9 @@ fn encode(id: u32, request: &Request, out: &mut Vec<i32>) {
     out[at + 2] = (out.len() - at - 3) as i32;
 }
 
+/// The reader's request handoff and queued answers, serviced only on the owner thread.
+pub type AgentTurn = Box<dyn FnMut(f64, Option<Vec<i32>>) -> Vec<(i32, Option<String>)>>;
+
 impl<D: DataSource> Presenter<D> {
     pub(super) fn request_files(&mut self, picker: exact_runner::PickerRequest) {
         let view = picker.view;
@@ -393,6 +397,23 @@ impl<D: DataSource> Presenter<D> {
         self.requests
             .waiting
             .insert(request, Waiting::Files(Some(view)));
+    }
+
+    /// Service the reader during an agent operation that holds its owner thread.
+    /// The callback hands requests to the UI thread and takes only queued answers.
+    pub fn set_agent_turn(&mut self, turn: Option<AgentTurn>) -> Option<AgentTurn> {
+        std::mem::replace(&mut self.requests.agent_turn, turn)
+    }
+
+    pub(super) fn agent_reader_turn(&mut self) {
+        let Some(mut turn) = self.requests.agent_turn.take() else {
+            return;
+        };
+        let replies = turn(self.host.now(), self.take_requests());
+        self.requests.agent_turn = Some(turn);
+        for (id, answer) in replies {
+            self.answer_request(id as u32, answer.as_deref());
+        }
     }
 
     /// A shell takes this presenter's requests from now on: the commands
