@@ -562,8 +562,7 @@ for (const engine of ['chromium', 'firefox', 'webkit']) test(`${engine}: the neu
       await page.mouse.move(1, 1);
       expect(await page.evaluate(() => [css('pressable', 'backgroundImage'), css('inline', 'textDecorationLine')])).toEqual(['none', 'none']);
       // In a bar it dims instead, to the shell's press dim, with no wash, and at once: nothing moves, hovered or left,
-      // pressed or let go. An author's hover look (here its variable) replaces the dim, and an opacity the author wrote
-      // wins.
+      // pressed or let go. An author's hover look (here its variable) replaces the dim, and an opacity the author wrote wins.
       const seen = (id) => page.evaluate((id) => [css(id, 'opacity'), css(id, 'backgroundImage'), document.getElementById(id).getAnimations().length], id);
       // A press, held then let go: its opacity each time, and whether anything moved rather than changed at once.
       const press = (id) => page.evaluate((id) => { const b = document.getElementById(id), held = []; for (const on of [true, false]) { b.toggleAttribute('data-pressed', on); held.push(css(id, 'opacity'), b.getAnimations().length); } return held; }, id);
