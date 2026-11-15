@@ -218,14 +218,20 @@ snapshot. Exact's render and non-Apple executors consume that portable path.
 
 Patch 9's app interface stays Exact's and is replayed on a refresh:
 `bindings/storage.d.ts` declares `compressImage(from, to, {maxDimension,
-maxBytes, type})` resolving to `{path, type, size, width, height}`, as Exact's docs
+maxBytes, quality, type})` resolving to `{path, type, size, width, height}`, as Exact's docs
 give it, and Exact's prelude (`js/src/prelude.js`) adapts that to upstream's
 positional binding (`compressImage(from, to, maxDimension, maxBytes)`, replying
 `width\theight\tsize`). Exact adds a fifth positional argument, the media type
 (exact2 LLP 1069.002 A1.11, 2026-10-20): `boundary_abi.rs` reads it into
 `fs_image::ImageRequest::format` (`ImageFormat::Jpeg` when absent, `Png`; any
-other value is an invalid argument), and the codec is Exact's. Replay both on a
-refresh. The October 13 refresh replaced the declaration with
+other value is an invalid argument), and the codec is Exact's. The fourth,
+`maxBytes`, may be undefined or null (exact2 LLP 1069.002 A1.12, 2026-11-14):
+`ImageRequest::max_bytes` is an `Option`, `None` for no byte target, and the
+codec's output is then bounded by the service's `max_output_bytes`
+(`ImageJob::prepare`, `execute`); the call's `quality` rides in patch 9a's
+options JSON, which the codec reads.
+`fs_image.rs`'s `a_compression_without_a_byte_target_is_bounded_by_the_service`
+pins it. Replay all three on a refresh. The October 13 refresh replaced the declaration with
 the positional form; `contract/cli/tests/it/typescript.rs` now pins it. Upstream
 now preserves Exact's app error branches: a source over the read cap is
 `compressImage: too-large:`, and a trial deadline before publication is

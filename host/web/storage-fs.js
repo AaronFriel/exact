@@ -416,15 +416,15 @@ export function createFileSystem(appId, grants, timers = ownTimers) {
     const file = await open();
     return mutate([to], () => store.putBlob(to, file));
   };
-  // `compressImage(from, to, {maxDimension, maxBytes, type, rotate, flip, crop})`
-  // (LLP 1069.002 A1, LLP 1133.019 D15): both grants are checked and the
+  // `compressImage(from, to, {maxDimension, maxBytes, quality, type, rotate,
+  // flip, crop})` (LLP 1069.002 A1, A1.12; LLP 1133.019 D15): both grants are checked and the
   // options too before anything is read; the codec runs outside the mutation
   // lock, and only the write takes it.
   fs.compressImage = async (from, to, options) => {
     if (typeof from !== 'string' || typeof to !== 'string' || !from.startsWith('app:/') || !to.startsWith('app:/'))
       throw failure('compressImage: needs app:/ paths', 'failed');
     const image = await import('./storage-image.js');
-    const { maxDimension, maxBytes, type } = image.limits(options);
+    const { type, ...budget } = image.limits(options);
     const edit = image.editOptions('storage.fs.compressImage()', options, false);
     from = authorize(grants, 'fs.read', from);
     to = authorize(grants, 'fs.write', to);
@@ -432,7 +432,7 @@ export function createFileSystem(appId, grants, timers = ownTimers) {
     // An entry is one IndexedDB record, read whole by any operation (`stat`
     // too); its size is checked before it becomes a Blob or is decoded.
     const { blob } = await store.blob(from, undefined, image.MAX_BYTES);
-    const out = await image.compress(blob, maxDimension, maxBytes, undefined, type, edit);
+    const out = await image.compress(blob, budget, undefined, type, edit);
     const size = out.bytes.byteLength;
     await mutate([to], () => store.atomicWriteOwnedFile(to, out.bytes));
     return { path: to, type, size, width: out.width, height: out.height };

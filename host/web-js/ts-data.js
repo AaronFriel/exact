@@ -408,15 +408,18 @@ function imageOptions(method, from, to, options, limits) {
   }
   return out;
 }
+// `maxBytes` and `quality` may each be unsaid, not both (LLP 1069.002 A1.12).
 function compressLimits(from, to, options) {
-  const api = 'storage.fs.compressImage()', d = options?.maxDimension, b = options?.maxBytes;
+  const api = 'storage.fs.compressImage()', d = options?.maxDimension, b = options?.maxBytes, q = options?.quality;
   if (typeof from !== 'string' || typeof to !== 'string') return new TypeError(`${api}: from and to must be app:/ paths`);
-  if (!options || typeof options !== 'object') return new TypeError(`${api}: options must be {maxDimension, maxBytes}`);
+  if (!options || typeof options !== 'object') return new TypeError(`${api}: options must be an object`);
   if (!Number.isInteger(d) || d < 1 || d > 8192) return new TypeError(`${api}: maxDimension must be an integer from 1 to 8192`);
-  if (!Number.isInteger(b) || b < 1 || b > 67108864) return new TypeError(`${api}: maxBytes must be an integer from 1 to 67108864`);
+  if (b !== undefined && (!Number.isInteger(b) || b < 1 || b > 67108864)) return new TypeError(`${api}: maxBytes must be an integer from 1 to 67108864`);
+  if (q !== undefined && !(typeof q === 'number' && q >= 0 && q <= 1)) return new TypeError(`${api}: quality must be a number from 0 to 1`);
+  if (b === undefined && q === undefined) return new TypeError(`${api}: needs maxBytes, quality or both`);
   const type = options.type === undefined ? 'image/jpeg' : options.type;
   if (type !== 'image/jpeg' && type !== 'image/png') return new TypeError(`${api}: type must be "image/jpeg" or "image/png"`);
-  return { maxDimension: d, maxBytes: b, type };
+  return { maxDimension: d, type, ...(b === undefined ? {} : { maxBytes: b }), ...(q === undefined ? {} : { quality: q }) };
 }
 const optionsRefusal = (...args) => { const out = imageOptions(...args); return out instanceof Error ? out : null; };
 const isDocument = args => args.slice(0, 2).some(p => typeof p === 'string' && p.startsWith('doc:/'));

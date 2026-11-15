@@ -592,9 +592,10 @@
     }
     // The image calls' options (`imageCall`, below), checked before
     // anything is queued, as the host's arguments after `from` and `to`:
-    // `compressImage`'s two numbers and type (LLP 1069.002 A1, A1.11), then its
-    // edit, and `transformImage`'s all, each as the one JSON value the codec
-    // reads (LLP 1133.019 D17).
+    // `compressImage`'s two numbers (`maxBytes` undefined when unsaid) and
+    // type (LLP 1069.002 A1, A1.11, A1.12), then its edit and `quality`, and
+    // `transformImage`'s all, each as the one JSON value the codec reads
+    // (LLP 1133.019 D17).
     var IMAGE_WORDS = {
       flip: ["horizontal", "vertical"],
       resizeQuality: ["pixelated", "low", "medium", "high"],
@@ -636,7 +637,7 @@
           ? options !== undefined && (!options || typeof options !== "object")
           : !options || typeof options !== "object"
       )
-        fail(transform ? "options must be an object" : "options must be {maxDimension, maxBytes}");
+        fail("options must be an object");
       options = options || {};
       crop = options.crop;
       take("rotate", finite, "a finite number of degrees");
@@ -654,12 +655,17 @@
       if (!transform) {
         var dimension = options.maxDimension,
           bytes = options.maxBytes,
+          quality = options.quality,
           type = options.type === undefined ? "image/jpeg" : options.type;
         if (!Number.isInteger(dimension) || dimension < 1 || dimension > 8192)
           fail("maxDimension must be an integer from 1 to 8192");
-        if (!Number.isInteger(bytes) || bytes < 1 || bytes > 67108864)
+        if (bytes !== undefined && (!Number.isInteger(bytes) || bytes < 1 || bytes > 67108864))
           fail("maxBytes must be an integer from 1 to 67108864");
+        if (quality !== undefined && !(typeof quality === "number" && quality >= 0 && quality <= 1))
+          fail("quality must be a number from 0 to 1");
+        if (bytes === undefined && quality === undefined) fail("needs maxBytes, quality or both");
         if (type !== "image/jpeg" && type !== "image/png") fail('type must be "image/jpeg" or "image/png"');
+        if (quality !== undefined) out.quality = quality;
         return [dimension, bytes, type].concat(Object.keys(out).length ? [JSON.stringify(out)] : []);
       }
       take("resizeWidth", side, "an integer from 1 to 16384");
@@ -682,8 +688,8 @@
       word("metadata");
       return [JSON.stringify(out)];
     }
-    // `fs.compressImage(from, to, {maxDimension, maxBytes, type, rotate, flip, crop})` (LLP 1069.002 A1,
-    // A1.11; LLP 1133.019 D15) and `fs.transformImage(from, to, options)` (D14): their options are checked
+    // `fs.compressImage(from, to, {maxDimension, maxBytes, quality, type, rotate, flip, crop})` (LLP 1069.002
+    // A1, A1.11, A1.12; LLP 1133.019 D15) and `fs.transformImage(from, to, options)` (D14): their options are checked
     // before anything is queued and travel as `imageOptions` words them; natively the reply is
     // `width\theight\tsize`, a transform's then its path and the codec's report, and on the web the record.
     function imageCall(method, from, to, options, record) {

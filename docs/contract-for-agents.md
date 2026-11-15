@@ -2628,8 +2628,8 @@ Blob of your own for an SVG `img`, or into a `srcdoc` frame under a `sandbox`
 without `allow-same-origin` for HTML. The web, macOS and iOS give files; Android
 does not (LLP 1020.001 D7). Shrink a picked photo for an upload limit with
 `storage.fs.compressImage(path, to, {maxDimension, maxBytes})`, which writes an
-upright JPEG with no location metadata (`type: "image/png"` writes a PNG that
-keeps transparency; [Exact developer reference](reference.md#shrink-a-picked-image-for-upload-storagefscompressimage));
+upright JPEG with no location metadata (`quality`, 0 to 1, sets its quality, with
+or without `maxBytes`; `type: "image/png"` writes a PNG that keeps transparency; [Exact developer reference](reference.md#shrink-a-picked-image-for-upload-storagefscompressimage));
 Linux answers `unsupported`. Save an edit (a turn, a flip, a crop, a size) with
 `storage.fs.transformImage(path, to, {rotate, crop})`, which keeps the photo's colour,
 HDR and metadata where the host can and says what it wrote

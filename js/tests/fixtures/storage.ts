@@ -414,6 +414,30 @@ async function work(_source:string, args:unknown[], store:Store, storage:Storage
     }
     return {text: out.join("\n")};
   }
+  // An explicit `quality` (LLP 1069.002 A1.12): each record's type, size,
+  // width and height, then each refusal's name and message, in one answer.
+  if (op === "compress-quality") {
+    const data = storage.fs.directories.data, out: string[] = [];
+    const steps: (() => Promise<any>)[] = [
+      () => storage.fs.compressImage(data + "/in.jpg", data + "/low.jpg", { maxDimension: 32, quality: 0.1 }),
+      () => storage.fs.compressImage(data + "/in.jpg", data + "/high.jpg", { maxDimension: 32, quality: 1 }),
+      () => storage.fs.stat(data + "/high.jpg").then(high =>
+        storage.fs.compressImage(data + "/in.jpg", data + "/capped.jpg", { maxDimension: 32, maxBytes: high.size, quality: 1 })),
+      () => storage.fs.compressImage(data + "/in.jpg", data + "/plain.png", { maxDimension: 32, maxBytes: 2_000_000, type: "image/png" }),
+      () => storage.fs.compressImage(data + "/in.jpg", data + "/quality.png", { maxDimension: 32, maxBytes: 2_000_000, quality: 0.1, type: "image/png" }),
+      () => storage.fs.compressImage(data + "/in.jpg", data + "/x.jpg", { maxDimension: 32, quality: 1.5 }),
+      () => storage.fs.compressImage(data + "/in.jpg", data + "/x.jpg", { maxDimension: 32, quality: NaN }),
+      () => storage.fs.compressImage(data + "/in.jpg", data + "/x.jpg", { maxDimension: 32, quality: null as any }),
+      () => storage.fs.compressImage(data + "/in.jpg", data + "/x.jpg", { maxDimension: 32 } as any),
+      () => storage.fs.compressImage(data + "/in.jpg", data + "/x.jpg", { maxDimension: 32, maxBytes: 0, quality: 2 }),
+      () => storage.fs.compressImage(data + "/in.jpg", data + "/x.jpg", { maxDimension: 32, quality: 0.5, type: "image/webp" as any }),
+    ];
+    for (const step of steps) {
+      try { const r = await step(); out.push([r.type, r.size, r.width, r.height].join(" ")); }
+      catch (e:any) { out.push(e.name + " " + e.message); }
+    }
+    return {text: out.join("\n")};
+  }
   // `type: "image/png"` (LLP 1069.002 A1.11): the record and the file's
   // first 26 bytes (its IHDR's colour type last), then a type it refuses.
   if (op === "compress-png") {

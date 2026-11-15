@@ -3688,7 +3688,7 @@ needs `fs.read app:/tmp/picked`. In a drive, `tap pdf` followed by
 
 ### Shrink a picked image for upload (`storage.fs.compressImage`)
 
-`storage.fs.compressImage(from, to, {maxDimension, maxBytes, type})` decodes the image
+`storage.fs.compressImage(from, to, {maxDimension, maxBytes, quality, type})` decodes the image
 at `from`, scales it so its longer side is at most `maxDimension` pixels, and
 writes a JPEG of at most `maxBytes` bytes at `to`, searching JPEG quality the way
 Bluesky's composer does (from quality 51 down and up; when 51 and 26 both miss,
@@ -3698,7 +3698,14 @@ becomes white and the colour is sRGB. With `type: 'image/png'` it writes a PNG
 instead, which keeps transparency: PNG has no quality, so it is encoded at the
 fitted size and, while over `maxBytes`, the size shrinks by 0.8, at most four
 times. It resolves `{path, type, size, width, height}`, `type` the one written
-(LLP 1069.002 Amendment A1, A1.11):
+(LLP 1069.002 Amendment A1, A1.11).
+
+`quality`, from 0 to 1 as `canvas.toBlob` takes it, sets the JPEG quality
+instead of leaving it to the search (A1.12). With `maxBytes` it is a ceiling:
+each size is encoded at `quality` first, and when that is over `maxBytes` the
+search runs below it, then shrinks as above. Without `maxBytes` it is one
+encode at `quality` at the fitted size (at most 64 MiB). One of `maxBytes` and
+`quality` is required. A PNG ignores `quality`.
 
 ```ts
 export const grants = 'fs.read app:/tmp\nfs.write app:/tmp';
@@ -3707,6 +3714,9 @@ await storage.fs.mkdir('app:/tmp/upload');
 const out = await storage.fs.compressImage(files[0].path, `app:/tmp/upload/${seed}.jpg`,
   { maxDimension: 4000, maxBytes: 2_000_000 });
 const body = await storage.fs.readFile(out.path);
+// a thumbnail at a quality of its own, no byte limit
+const thumb = await storage.fs.compressImage(files[0].path, `app:/tmp/upload/${seed}-thumb.jpg`,
+  { maxDimension: 400, quality: 0.7 });
 ```
 
 Both paths are `app:/` files (`fs.read` on `from`, `fs.write` on `to`); create
@@ -3714,7 +3724,8 @@ Both paths are `app:/` files (`fs.read` on `from`, `fs.write` on `to`); create
 and left as it was on any failure. It always re-encodes, so
 compare the pick's `size`, `width` and `height` first to skip it. It is one
 storage operation in the module's queue; natively it runs off the JS thread. A bad option
-(a `type` other than `'image/jpeg'`, the default, or `'image/png'` too)
+(a `type` other than `'image/jpeg'`, the default, or `'image/png'`; a
+`quality` that is not a number from 0 to 1; neither `maxBytes` nor `quality`)
 rejects with a `TypeError`; otherwise a refusal's `code` is `denied`, a
 filesystem code, `failed` (a path that is not `app:/`), `too-large` (over 64 MiB,
 or a header over 64 Mi pixels, checked before decoding), `undecodable`, `unfit`
@@ -4550,7 +4561,7 @@ JSON result or the host's message. The operations:
 | `"sqlite.transaction"` | the same, `execute` commands only | the executes' results, all or none |
 | `"fs.readFile"`, `"fs.atomicWriteFile"`, `"fs.writeFile"`, `"fs.appendFile"` | `{"path"}`, and `"text"` (or `"bytes"`) to write | read: `{"base64"}`; write: `null` |
 | `"fs.mkdir"`, `"fs.rm"`, `"fs.stat"`, `"fs.readdir"`, `"fs.rename"`, `"fs.copyFile"` | `{"path"}`, and `"destination"` to move or copy | as `storage.fs` answers |
-| `"fs.compressImage"` | `{"path", "destination", "maxDimension", "maxBytes"}`, and `"type"` (`"image/png"`; absent or `null` is JPEG), `"rotate"`, `"flip"`, `"crop"` | `{"path", "type", "size", "width", "height"}`, as `storage.fs.compressImage` answers |
+| `"fs.compressImage"` | `{"path", "destination", "maxDimension"}`, `"maxBytes"`, `"quality"` or both, and `"type"` (`"image/png"`; absent or `null` is JPEG), `"rotate"`, `"flip"`, `"crop"`; `null` is absent | `{"path", "type", "size", "width", "height"}`, as `storage.fs.compressImage` answers |
 | `"fs.transformImage"` | `{"path", "destination"}` and `storage.fs.transformImage`'s options beside them (`"rotate"`, `"crop"`, `"metadata"`, …; `null` is absent) | `{"path", "type", "size", "width", "height", "colorSpace", "hdr", "metadata"}`, as it answers |
 
 Grant what it touches: `sqlite.open app:/data/x.db`, `fs.read app:/data`,

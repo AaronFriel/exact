@@ -22,7 +22,7 @@ stub('storage-fs.js', `const files = new Map(); export const createFileSystem = 
   atomicWriteFile: (p, v) => new Promise((ok, no) => setTimeout(() => p.includes('absent/') ? no(Object.assign(new Error('filesystem: No such file'), { code: 'ENOENT' })) : ok(files.set(p, v)), 5)),
   writeFile: (p, v) => new Promise(ok => setTimeout(() => ok(files.set(p, v)), 1)),
   readFile: async p => files.get(p) ?? '',
-  compressImage: async (from, to, o) => ({ path: to, type: o.type, size: o.maxBytes, width: o.maxDimension, height: 1, ...(o.rotate === undefined ? {} : { rotate: o.rotate }) }),
+  compressImage: async (from, to, o) => ({ path: to, type: o.type, size: o.maxBytes, width: o.maxDimension, height: 1, ...(o.rotate === undefined ? {} : { rotate: o.rotate }), ...(o.quality === undefined ? {} : { quality: o.quality, unsaid: !('maxBytes' in o) }) }),
   transformImage: async (from, to, o) => ({ path: to + '.jpg', options: o }) });`);
 stub('app.mjs', `export const appId = 'test';
   export function answer(source, [op, value], store, storage) {
@@ -41,6 +41,11 @@ stub('app.mjs', `export const appId = 'test';
     if (op === 'compress-png') return storage.fs.compressImage('app:/tmp/in.png', 'app:/tmp/out.png', { maxDimension: 8, maxBytes: 100, type: 'image/png' }).then(r => JSON.stringify(r));
     if (op === 'compress-bad-type') return storage.fs.compressImage('app:/tmp/in.png', 'app:/tmp/out.webp', { maxDimension: 8, maxBytes: 100, type: 'image/webp' })
       .then(() => 'ok', e => e.constructor.name + ' ' + e.code + ' ' + e.message);
+    if (op === 'compress-quality') return storage.fs.compressImage('app:/tmp/in.jpg', 'app:/tmp/out.jpg', { maxDimension: 8, quality: 0.5 }).then(r => JSON.stringify(r));
+    if (op === 'compress-bad-quality') return storage.fs.compressImage('app:/tmp/in.jpg', 'app:/tmp/out.jpg', { maxDimension: 8, maxBytes: 100, quality: 2 })
+      .then(() => 'ok', e => e.constructor.name + ' ' + e.message);
+    if (op === 'compress-neither') return storage.fs.compressImage('app:/tmp/in.jpg', 'app:/tmp/out.jpg', { maxDimension: 8 })
+      .then(() => 'ok', e => e.constructor.name + ' ' + e.message);
     if (op === 'compress-edit') return storage.fs.compressImage('app:/tmp/in.jpg', 'app:/tmp/out.jpg', { maxDimension: 8, maxBytes: 100, rotate: 90 }).then(r => JSON.stringify(r));
     if (op === 'transform') {
       const options = { rotate: 90, crop: { x: 0, y: 0, width: 4, height: 4 }, metadata: 'no-location', unknown: true };
@@ -1079,6 +1084,13 @@ test('compressImage copies its options and refuses bad ones before the queue', a
   const badType = ask('compress-bad-type');
   expect(data.background().queued + data.background().inFlight).toBe(0);
   expect(await badType.promise).toBe('TypeError undefined storage.fs.compressImage(): type must be "image/jpeg" or "image/png"');
+  // `quality` (A1.12): passed on, and with it `maxBytes` may be unsaid; a bad one, or neither, a TypeError before the queue.
+  expect(JSON.parse(await ask('compress-quality').promise)).toEqual({ path: 'app:/tmp/out.jpg', type: 'image/jpeg', width: 8, height: 1, quality: 0.5, unsaid: true });
+  for (const [op, says] of [['compress-bad-quality', 'quality must be a number from 0 to 1'], ['compress-neither', 'needs maxBytes, quality or both']]) {
+    const refused = ask(op);
+    expect(data.background().queued + data.background().inFlight).toBe(0);
+    expect(await refused.promise).toBe(`TypeError storage.fs.compressImage(): ${says}`);
+  }
   // LLP 1133.019 D14, D15: the edit and a transform's options, copied as checked.
   expect(JSON.parse(await ask('compress-edit').promise)).toMatchObject({ rotate: 90, width: 8 });
   expect(JSON.parse(await ask('transform').promise)).toEqual({ path: 'app:/tmp/edit.jpg',
