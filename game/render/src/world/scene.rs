@@ -14,64 +14,11 @@ use pointer::CameraPointer;
 /// radiance of 3. Exposure applies after.
 pub const PHOTOMETRIC_SCALE: f32 = 0.0003;
 
-/// The displayed global: drawn(parent) · local · offset. Presentation offsets
-/// (exact_game::Offset) move an entity and everything under it; without one on
-/// the chain this is the simulated global, exactly.
-pub(crate) fn drawn(w: &World, e: Entity) -> Option<glam::Affine3A> {
-    let affine = |t: Transform| {
-        glam::Affine3A::from_scale_rotation_translation(t.scale, t.rotation, t.position)
-    };
-    let offset = |e: Entity| w.get::<exact_game::Offset>(e).map(|o| affine(o.0));
-    // Most chains carry no offset: no allocation for them.
-    let mut at = e;
-    let mut any = false;
-    for _ in 0..=w.len() {
-        any |= w.has::<exact_game::Offset>(at);
-        match w.get::<Parent>(at) {
-            Some(p) if !any => at = p.0,
-            _ => break,
-        }
-    }
-    if !any {
-        return w.global(e);
-    }
-    // The parent chain, bounded even if tools edit a cycle.
-    let mut chain = vec![e];
-    while let Some(p) = w.get::<Parent>(*chain.last().unwrap()) {
-        if chain.len() > w.len() {
-            break;
-        }
-        chain.push(p.0);
-    }
-    // The offset nearest the root: above it the simulated global holds.
-    let Some(first) = (0..chain.len()).rev().find(|&i| offset(chain[i]).is_some()) else {
-        return w.global(e);
-    };
-    let mut global = w.global(chain[first])? * offset(chain[first]).unwrap();
-    for &below in chain[..first].iter().rev() {
-        let local = affine(*w.get::<Transform>(below)?);
-        global = global * local * offset(below).unwrap_or(glam::Affine3A::IDENTITY);
-    }
-    Some(global)
-}
+mod poses;
+pub(crate) use poses::PoseRows;
+
 pub(crate) fn pose(w: &World, e: Entity) -> Option<Transform> {
-    drawn(w, e).map(decompose)
-}
-// Roots use their authored quaternion and signed scale in the opaque buffers.
-// Decomposing even an unparented affine can move a reflection into the rotation.
-pub(crate) fn primitive_endpoint(
-    w: &World,
-    e: Entity,
-    global: impl FnOnce() -> Option<glam::Affine3A>,
-) -> Option<Transform> {
-    if !w.has::<Parent>(e) && !w.has::<exact_game::Offset>(e) {
-        w.get::<Transform>(e).map(|t| *t)
-    } else {
-        global().map(decompose)
-    }
-}
-pub(crate) fn primitive_pose(w: &World, e: Entity) -> Option<Transform> {
-    primitive_endpoint(w, e, || drawn(w, e))
+    PoseRows::new(w).pose(e)
 }
 // Shared by direct reads and feed rows that already know no offsets exist.
 pub(super) fn decompose(global: glam::Affine3A) -> Transform {
@@ -86,62 +33,11 @@ pub(super) fn decompose(global: glam::Affine3A) -> Transform {
         scale,
     }
 }
-// Resolve an explicit start through the same local/offset chain as current poses.
-// No override means the caller keeps its ordinary retained history.
 pub(crate) fn interpolation_origin(w: &World, e: Entity) -> Option<Transform> {
-    if w.fresh().is_empty() {
-        return None;
-    }
-    if !w.has::<Parent>(e) && !w.has::<exact_game::Offset>(e) {
-        return w.interpolation_origin(e);
-    }
-    let mut chain = vec![e];
-    while let Some(p) = w.get::<Parent>(*chain.last()?) {
-        if chain.len() > w.len() {
-            return None;
-        }
-        chain.push(p.0);
-    }
-    let first = (0..chain.len())
-        .rev()
-        .find(|&i| w.interpolation_origin(chain[i]).is_some())?;
-    let mut global = match chain.get(first + 1) {
-        Some(&parent) => drawn(w, parent)?,
-        None => glam::Affine3A::IDENTITY,
-    };
-    for &entity in chain[..=first].iter().rev() {
-        let local = w
-            .interpolation_origin(entity)
-            .or_else(|| w.get::<Transform>(entity).map(|t| *t))?;
-        let offset = w
-            .get::<exact_game::Offset>(entity)
-            .map_or(Transform::default(), |o| o.0);
-        for t in [local, offset] {
-            global *=
-                glam::Affine3A::from_scale_rotation_translation(t.scale, t.rotation, t.position);
-        }
-    }
-    Some(decompose(global))
+    PoseRows::new(w).interpolation_origin(e)
 }
-// Bounded even if tools edit a cycle before propagation.
-pub(crate) fn snap(w: &World, mut e: Entity, parent_changed: bool) -> bool {
-    if parent_changed {
-        return true;
-    }
-    // Without a fresh pose, no ancestor can require an interpolation reset.
-    if w.fresh().is_empty() {
-        return false;
-    }
-    for _ in 0..=w.len() {
-        if w.is_fresh(e) {
-            return true;
-        }
-        let Some(parent) = w.get::<Parent>(e) else {
-            return false;
-        };
-        e = parent.0;
-    }
-    false
+pub(crate) fn snap(w: &World, e: Entity, parent_changed: bool) -> bool {
+    PoseRows::new(w).snap(e, parent_changed)
 }
 /// [`snap`] in a feed that knows which chains changed: `chains`, given when
 /// some parent edge did, answers for `e`'s own chain, so an edit elsewhere in
