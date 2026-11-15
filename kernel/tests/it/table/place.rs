@@ -131,4 +131,32 @@ fn rows_count_in_the_order_they_are_drawn_so_only_the_first_tfoot_is_last() {
     let row = |id| at(&k, id).map(|[_, row, ..]| row);
     assert_eq!([8, 12, 4].map(row), [0, 1, 2].map(Some), "rows");
     assert_eq!([9, 13, 5].map(row), [0, 1, 2].map(Some), "cells");
+    assert_eq!(k.table_order(2), Some(vec![1, 2, 0]), "listed as drawn");
+}
+
+/// A table's children are listed in the order it draws them; a block
+/// table orders each anonymous table's parts, and a box between two keeps
+/// its place. A table drawn as written has no order of its own.
+#[test]
+fn a_tables_children_are_listed_as_drawn_and_a_box_keeps_its_place() {
+    let group = |name: &'static str| tag(name, vec![tag("tr", vec![cell(&[], 20.0, 10.0)])]);
+    let in_order = lay_out(tag("table", ["thead", "tbody", "tfoot"].map(group).into()));
+    assert_eq!(in_order.table_order(2), None);
+    let mut k = lay_out(tag(
+        "table",
+        vec![
+            group("tfoot"),
+            group("tbody"),
+            N::Box(20.0, 10.0),
+            group("tbody"),
+            group("thead"),
+        ],
+    ));
+    assert_eq!(
+        k.table_order(2),
+        Some(vec![4, 1, 2, 3, 0]),
+        "the box is no part"
+    );
+    restyle(&mut k, 2, 2, &[(StyleId::Display, "block")]);
+    assert_eq!(k.table_order(2), Some(vec![1, 0, 2, 4, 3]));
 }

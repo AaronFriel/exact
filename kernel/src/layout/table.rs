@@ -169,6 +169,38 @@ impl Tables {
         Some((p.table, area))
     }
 
+    /// `owner`'s children in the order its table draws them ([`form`]), as
+    /// each one's index among them as written; a child it does not place
+    /// keeps its index. `None` when that is the written order.
+    fn order(&self, arena: &NodeArena, owner: u32) -> Option<Vec<usize>> {
+        let parts = &self.formed.get(&owner)?.parts;
+        let children = arena.children(owner);
+        let written: IdMap<u32, usize> =
+            children.iter().enumerate().map(|(i, s)| (*s, i)).collect();
+        let drawn: Vec<usize> = (parts.iter())
+            .filter_map(|s| written.get(s).copied())
+            .collect();
+        let mut placed = vec![false; children.len()];
+        for &i in &drawn {
+            placed[i] = true;
+        }
+        let mut drawn = drawn.into_iter();
+        let order: Vec<usize> = (0..children.len())
+            .map(|i| {
+                if placed[i] {
+                    drawn.next().unwrap_or(i)
+                } else {
+                    i
+                }
+            })
+            .collect();
+        order
+            .iter()
+            .enumerate()
+            .any(|(i, at)| i != *at)
+            .then_some(order)
+    }
+
     /// How many rows and columns `table`'s grids have, captions aside.
     fn size(&self, table: u32) -> Option<(u32, u32)> {
         let f = self.formed.get(&table).filter(|f| !f.rows.is_empty())?;
@@ -817,6 +849,13 @@ impl LayoutTree {
     /// columns from 0 (a row's `columns` 0: every column).
     pub(crate) fn table_place(&self, arena: &NodeArena, slot: u32) -> Option<(u32, Area)> {
         self.tables.place(arena, slot)
+    }
+
+    /// `slot`'s children in the order its table draws them, from the last
+    /// layout, as each one's index among them as written; `None` when that
+    /// is the written order.
+    pub(crate) fn table_order(&self, arena: &NodeArena, slot: u32) -> Option<Vec<usize>> {
+        self.tables.order(arena, slot)
     }
 
     /// How many rows and columns `slot`'s table has, from the last layout;

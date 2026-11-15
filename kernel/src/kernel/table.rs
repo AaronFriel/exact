@@ -45,6 +45,17 @@ impl Kernel {
         })
     }
 
+    /// The order `view`'s table draws its children in, as of the last
+    /// layout (CSS 2.2 §17.2), as each child's index among them as written:
+    /// the captions, the first `thead`, the other row groups and rows as
+    /// written, then the first `tfoot`. A child the table does not place,
+    /// such as a box between a block table's anonymous tables, keeps its
+    /// index. `None` when `view` draws its children as written.
+    pub fn table_order(&self, view: ViewId) -> Option<Vec<usize>> {
+        let tree = self.layout.as_deref().and_then(LayoutMirror::tree_ref)?;
+        tree.table_order(&self.arena, self.arena.slot_of(view)?)
+    }
+
     /// How many rows and columns `view`, a table, has as of the last
     /// layout, its captions aside; `None` for a node no table formation
     /// lays out as one (a `table` whose author made it flex or grid).

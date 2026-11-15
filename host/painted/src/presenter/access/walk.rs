@@ -282,7 +282,7 @@ impl<D: DataSource> Presenter<D> {
             Some(hash) => rowed(hash),
             None => (id & 0x3fff_ffff) as i32,
         };
-        for (index, child) in node.child_nodes().enumerate() {
+        let mut visit = |index: usize, child: NodeRef<'_>| {
             let key = child.props.str(PropId::ListItemKey);
             let mut under = scope;
             under.hash = match key.filter(|key| !key.is_empty()) {
@@ -292,6 +292,20 @@ impl<D: DataSource> Presenter<D> {
                     .map(|hash| fnv(hash, &(index as u32).to_le_bytes())),
             };
             self.access_walk_node(b, child, under);
+        };
+        // A table's rows are visited in the order it draws and counts them
+        // (`Node::grid`), not as written: the first `tfoot` last.
+        match kernel.table_order(id) {
+            Some(order) => {
+                let written: Vec<NodeRef<'_>> = node.child_nodes().collect();
+                for index in order {
+                    visit(index, written[index]);
+                }
+            }
+            None => node
+                .child_nodes()
+                .enumerate()
+                .for_each(|(i, c)| visit(i, c)),
         }
     }
 }
