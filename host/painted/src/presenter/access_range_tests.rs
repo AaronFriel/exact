@@ -52,6 +52,8 @@ fn a_drawn_range_steps_by_its_authors_keys() {
         "a spin button with no maximum goes up"
     );
     assert_eq!(flags(&nodes, "Tilt"), both);
+    let roles = ["Level", "Floor", "Tilt"].map(|name| named(&nodes, name).role);
+    assert_eq!(roles, [role::SLIDER, role::SPIN_BUTTON, role::SLIDER]);
     let of = |name: &str| named(&nodes, name).id;
     let heard = |p: &Presenter<Data>| {
         let kernel = p.host().kernel();

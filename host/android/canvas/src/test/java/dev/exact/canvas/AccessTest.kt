@@ -16,6 +16,7 @@ class AccessTest {
     private class Said(
         val id: Int, val parent: Int, val role: Int, val name: String = "",
         val set: Pair<Int, Int> = 0 to 0, val grid: List<Int> = listOf(0, 0, 0, 0),
+        val flags: Int = 0, val range: List<Float> = listOf(0f, 0f, 0f),
     )
 
     /** A statement of the page telling [nodes] whole, as the reader is given it. */
@@ -30,7 +31,9 @@ class AccessTest {
         w.add(0)
         w.add(nodes.size)
         for (n in nodes) {
-            w.addAll(listOf(n.id, n.parent, n.id, n.role, 0, 0, 0, 100, 20, 0, 0, 0, n.set.first, n.set.second))
+            w.addAll(listOf(n.id, n.parent, n.id, n.role, n.flags, 0, 0, 100, 20))
+            w.addAll(n.range.map { java.lang.Float.floatToIntBits(it) })
+            w.addAll(listOf(n.set.first, n.set.second))
             w.addAll(n.grid)
             for (s in listOf(n.name, "", "")) string(s)
         }
@@ -107,5 +110,21 @@ class AccessTest {
         val second = info(4).collectionItemInfo!!
         assertEquals(listOf(1, 1, 0, 1), listOf(second.rowIndex, second.rowSpan, second.columnIndex, second.columnSpan))
         assertNull(info(3).collectionItemInfo)
+    }
+
+    /** A drawn spin button is what TalkBack steps by swiping up and down, a SeekBar, which only steps (a drawn range
+     * takes no value set to it); its value is its number, not a float's "3.0". */
+    @Test fun aSpinButtonIsAdjustableAndSaysItsNumber() {
+        val access = told(listOf(
+            Said(1, 0, Access.SPIN_BUTTON, "Floor", flags = Access.RANGE or Access.FORWARD or Access.BACKWARD, range = listOf(1f, 100f, 3f)),
+        ))
+        val info = access.provider.createAccessibilityNodeInfo(1)!!
+        assertEquals("android.widget.SeekBar", info.className)
+        assertEquals(listOf(1f, 100f, 3f), info.rangeInfo!!.let { listOf(it.min, it.max, it.current) })
+        assertEquals("3", info.stateDescription)
+        val actions = info.actionList.map { it.id }
+        assertTrue(AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_FORWARD.id in actions)
+        assertTrue(AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_BACKWARD.id in actions)
+        assertFalse(AccessibilityNodeInfo.AccessibilityAction.ACTION_SET_PROGRESS.id in actions)
     }
 }

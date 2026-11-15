@@ -116,6 +116,8 @@ pub mod role {
     pub const LIST_BOX: i32 = 28;
     /// A row of an open `select`'s menu: ARIA's `option`.
     pub const OPTION: i32 = 29;
+    /// A drawn `spinbutton`: a number a person steps up and down.
+    pub const SPIN_BUTTON: i32 = 30;
 }
 
 /// A table's or a description list's element as its role (HTML-AAM): a

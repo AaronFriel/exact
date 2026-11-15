@@ -363,6 +363,8 @@ fn map_node(
         role::SWITCH => Role::Switch,
         role::RADIO => Role::RadioButton,
         role::SLIDER => Role::Slider,
+        // UI Automation's Spinner, with RangeValue below.
+        role::SPIN_BUTTON => Role::SpinButton,
         role::IMAGE => Role::Image,
         role::TAB => Role::Tab,
         role::SCROLLER => Role::ScrollView,
@@ -541,9 +543,10 @@ mod tests {
         let native = map_node(&slider, (0., 0.), false, false, false);
         assert!(native.supports_action(Action::Decrement));
         assert!(native.supports_action(Action::SetValue));
-        let mut spin = source(role::PROGRESS);
+        let mut spin = source(role::SPIN_BUTTON);
         spin.flags = flag::RANGE | flag::BACKWARD;
         let spin = map_node(&spin, (0., 0.), false, false, false);
+        assert_eq!(spin.role(), Role::SpinButton);
         assert!(spin.supports_action(Action::Decrement));
         assert!(!spin.supports_action(Action::SetValue));
     }

@@ -298,12 +298,14 @@ internal class Access(private val host: View) {
         info.addAction(if (focused == n.id) AccessibilityAction.ACTION_CLEAR_ACCESSIBILITY_FOCUS else AccessibilityAction.ACTION_ACCESSIBILITY_FOCUS)
         // Its words: what it says is its text, and what only names it is its description.
         when (n.role) {
-            IMAGE, SLIDER, PROGRESS, SCROLLER, TABLIST, GROUP, DROPDOWN -> if (n.name.isNotEmpty()) info.contentDescription = n.name
+            IMAGE, SLIDER, SPIN_BUTTON, PROGRESS, SCROLLER, TABLIST, GROUP, DROPDOWN -> if (n.name.isNotEmpty()) info.contentDescription = n.name
             UP -> info.contentDescription = n.name.ifEmpty { up(host.context) }
             EDIT -> { info.text = n.value; info.hintText = n.name; info.isEditable = true }
             else -> info.text = n.name
         }
-        if (n.role != EDIT && n.value.isNotEmpty()) { if (Build.VERSION.SDK_INT >= 30) info.stateDescription = n.value else Legacy.state(info, n.value) }
+        // A spin button's value is its number, as ARIA has it: TalkBack would read a float range's as "3.0".
+        val state = if (n.role == SPIN_BUTTON && n.value.isEmpty() && n.has(RANGE)) java.text.NumberFormat.getInstance().format(n.now.toDouble()) else n.value
+        if (n.role != EDIT && state.isNotEmpty()) { if (Build.VERSION.SDK_INT >= 30) info.stateDescription = state else Legacy.state(info, state) }
         if (n.hint.isNotEmpty()) info.tooltipText = n.hint
         when (n.role) {
             HEADING -> info.isHeading = true
@@ -314,7 +316,7 @@ internal class Access(private val host: View) {
                 if (n.of > 0) info.collectionItemInfo = item(0, n.at - 1, n.has(SELECTED))
             }
             TABLIST -> if (n.of > 0) info.collectionInfo = collection(1, n.of, AccessibilityNodeInfo.CollectionInfo.SELECTION_MODE_SINGLE)
-            SLIDER, PROGRESS -> if (n.has(RANGE)) info.rangeInfo = if (Build.VERSION.SDK_INT >= 30) AccessibilityNodeInfo.RangeInfo(AccessibilityNodeInfo.RangeInfo.RANGE_TYPE_FLOAT, n.min, n.max, n.now) else Legacy.range(n.min, n.max, n.now)
+            SLIDER, SPIN_BUTTON, PROGRESS -> if (n.has(RANGE)) info.rangeInfo = if (Build.VERSION.SDK_INT >= 30) AccessibilityNodeInfo.RangeInfo(AccessibilityNodeInfo.RangeInfo.RANGE_TYPE_FLOAT, n.min, n.max, n.now) else Legacy.range(n.min, n.max, n.now)
             // An open select's menu, as a Spinner's popup list has it: all its options counted, one of them selected.
             LIST_BOX -> {
                 info.isScrollable = n.has(FORWARD) || n.has(BACKWARD)
@@ -565,6 +567,7 @@ internal class Access(private val host: View) {
         const val DEFINITION = 27
         const val LIST_BOX = 28
         const val OPTION = 29
+        const val SPIN_BUTTON = 30
 
         /** A node's flags (`presenter::access::flag`). */
         const val CLICK = 1
@@ -605,6 +608,9 @@ internal class Access(private val host: View) {
             SWITCH -> "android.widget.Switch"
             RADIO -> "android.widget.RadioButton"
             SLIDER -> "android.widget.SeekBar"
+            // Android has no spin button. A SeekBar is what TalkBack steps by swiping up and down; it reads a
+            // NumberPicker that has no children of its own as a progress bar, which it does not step.
+            SPIN_BUTTON -> "android.widget.SeekBar"
             IMAGE -> "android.widget.ImageView"
             SCROLLER -> if (n.has(SIDEWAYS)) "android.widget.HorizontalScrollView" else "android.widget.ScrollView"
             PROGRESS -> "android.widget.ProgressBar"
