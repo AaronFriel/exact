@@ -263,7 +263,7 @@ pub(crate) fn slop_hits(kernel: &Kernel, b: &PaintedBox, x: f32, y: f32) -> bool
         return false;
     }
     let grow = |q: Rect4| (q.0 - l, q.1 - t, q.2 + l + r, q.3 + t + bottom);
-    let mut grown = *b;
+    let mut grown = b.clone();
     match b.affine {
         Some((ts, local)) => {
             grown.affine = Some((ts, grow(local)));

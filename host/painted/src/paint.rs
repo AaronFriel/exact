@@ -322,7 +322,7 @@ type ProjectiveHit = ([f32; 9], Rect4, Option<Rect4>, [[f32; 3]; 2]);
 /// A node's box as painted: its transformed bounding box in viewport
 /// points, the clip it was painted under (viewport points, axis-aligned),
 /// and its scroll offset when it is a scroll container.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct PaintedBox {
     /// The node.
     pub id: ViewId,
@@ -334,6 +334,7 @@ pub struct PaintedBox {
     pub scroll: Option<(f32, f32)>,
     /// Generic pointer eligibility of this painted scene, including inheritance.
     pub(crate) pointer_hit: bool,
+    shape_clips: Vec<shape::HitClip>,
     projective: Option<ProjectiveHit>,
     affine: Option<(Transform, Rect4)>,
     press: f32,
@@ -365,32 +366,6 @@ impl PaintedBox {
             self.rect.0 + self.rect.2 / 2.,
             self.rect.1 + self.rect.3 / 2.,
         )
-    }
-
-    /// Whether a point (viewport points) is inside the box and its clip.
-    pub fn contains(&self, x: f32, y: f32) -> bool {
-        let inside = |r: Rect4| x >= r.0 && x < r.0 + r.2 && y >= r.1 && y < r.1 + r.3;
-        let (local_x, local_y) = self
-            .projective
-            .map_or((x, y), |(inv, ..)| crate::placement::map(&inv, x, y));
-        let affine_hit = self.affine.is_none_or(|(ts, rect)| {
-            ts.invert().is_some_and(|inverse| {
-                let mut point = tiny_skia::Point::from_xy(local_x, local_y);
-                inverse.map_point(&mut point);
-                point.x >= rect.0
-                    && point.x < rect.0 + rect.2
-                    && point.y >= rect.1
-                    && point.y < rect.1 + rect.3
-            })
-        });
-        affine_hit
-            && inside(self.rect)
-            && self.clip.is_none_or(inside)
-            && self.projective.is_none_or(|(inv, rect, clip, planes)| {
-                let (x, y) = crate::placement::map(&inv, x, y);
-                let inside = |r: Rect4| x >= r.0 && x < r.0 + r.2 && y >= r.1 && y < r.1 + r.3;
-                inside(rect) && clip.is_none_or(inside) && crate::placement::accepts(&planes, x, y)
-            })
     }
 }
 
@@ -1015,7 +990,9 @@ impl Painter {
         // `revealed` (LLP 1094): the wrapper's inherited hidden shows, and
         // a node that sets its own hidden does not.
         let visible = paints(walk.scene.kernel, id, walk.reveal);
+        let hit_start = walk.boxes.len();
         walk.boxes.push(PaintedBox {
+            shape_clips: Vec::new(),
             id,
             pointer_hit: node
                 .computed_row(exact_kernel::StyleId::PointerEvents, |s| s.pointer_events)
@@ -1051,11 +1028,12 @@ impl Painter {
             self.backend.push_mask(&Shape::rect((x, y, w, h)), ts);
         }
         // @ref LLP 1043.000 §3 D7 — polygon demo ink and exclusion share an outline.
-        let path_clip = !node.style.rare.clip_path.commands().is_empty()
-            && self
-                .backend
-                .push_css_clip(&node.style.rare.clip_path, ts.pre_translate(x, y));
+        let (sx, sy, sw, sh) = p.surface((x, y, w, h));
+        let css = node.style.rare.clip_path.resolved(sw, sh);
+        let clip_ts = ts.pre_translate(sx, sy);
+        let path_clip = css.has_path() && self.backend.push_css_clip(&css, clip_ts);
         self.box_content(walk, &node, (x, y, w, h), ts, offset, clip_rect);
+        shape::clip_hits(&mut walk.boxes[hit_start..], &css, clip_ts);
         self.dark = previous;
         if path_clip {
             self.backend.pop_clip();

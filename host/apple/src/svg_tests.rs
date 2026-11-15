@@ -677,3 +677,77 @@ fn an_unrelated_commit_does_not_rebuild_a_played_morphs_scene() {
         "the original morph continues"
     );
 }
+
+#[test]
+fn computed_svg_clip_changes_cross_as_paths_and_refuse_basic_shapes_with_a_note() {
+    let app = r#"component App
+  state clip = "url(#cut)"
+  action change
+    clip = "path('M50 50H100V100H50Z')"
+  action basic
+    clip = "inset(25%)"
+  view
+    column
+      svg width=100 height=100
+        defs
+          clipPath id="cut"
+            rect width=50 height=50
+        rect width=100 height=100 clip-path=clip
+      button "Change" testId="change" press=change
+      button "Basic" testId="basic" press=basic
+"#;
+    let (mut host, batch) = Host::boot(
+        &contract::compile(app).unwrap().encode(),
+        NoData,
+        Box::new(MonospaceMeasurer::default()),
+        200.,
+        300.,
+    )
+    .unwrap();
+    let before = scene(&batch)["els"][0]["cl"].clone();
+    assert!(before.is_object());
+    let id = |host: &Host<NoData>, name: &str| {
+        let k = host.runner.kernel();
+        k.node_by_key(k.find_by_test_id(name)[0]).unwrap().id
+    };
+    let change = id(&host, "change");
+    let batch = host.dispatch_at(change, Event::Press, 0.);
+    let after = scene(&batch)["els"][0]["cl"].clone();
+    assert!(after.is_object());
+    assert_ne!(before, after);
+    let basic = id(&host, "basic");
+    let batch = host.dispatch_at(basic, Event::Press, 0.);
+    assert!(scene(&batch)["els"][0]["cl"].is_null());
+    assert!(host
+        .runner
+        .journal()
+        .any(|line| line.contains("basic-shape clip-path")));
+    let batch = host.dispatch_at(change, Event::Press, 0.);
+    assert_eq!(scene(&batch)["els"][0]["cl"], after);
+}
+
+#[test]
+fn a_pixel_clip_keeps_circle_geometry_on_the_sampled_clock() {
+    for (clip, played) in [("none", true), ("path('M0 0H50V100H0Z')", false)] {
+        let app = format!(
+            r#"keyframes move
+  from cx=20
+  to cx=80
+component App
+  view
+    svg width=100 height=100
+      circle testId="circle" cx=20 cy=50 r=20 animation="move 1s linear infinite" clip-path="{clip}"
+"#
+        );
+        let (_, batch) = Host::boot(
+            &contract::compile(&app).unwrap().encode(),
+            NoData,
+            Box::new(MonospaceMeasurer::default()),
+            100.,
+            100.,
+        )
+        .unwrap();
+        let batch: serde_json::Value = serde_json::from_str(&batch).unwrap();
+        assert_eq!(batch["motion"], !played, "{clip}");
+    }
+}

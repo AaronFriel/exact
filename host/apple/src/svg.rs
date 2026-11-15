@@ -300,9 +300,13 @@ impl SvgState {
                 &Sampled(engine),
                 appearance.dark(node.key),
             );
-            if let Some(limit) = resolved.over {
+            let note = resolved
+                .over
+                .map(|limit| format!("{limit}; drawing nothing"))
+                .or_else(|| resolved.refused.map(str::to_string));
+            if let Some(note) = note {
                 if self.over_warned.insert(root) {
-                    notes.push(format!("svg #{root}: {limit}; drawing nothing"));
+                    notes.push(format!("svg #{root}: {note}"));
                 }
             }
             let scene = serialize(&resolved, engine, &self.pressable, bx);

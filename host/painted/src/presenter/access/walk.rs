@@ -209,7 +209,7 @@ impl<D: DataSource> Presenter<D> {
             if let Some(s) = scroller {
                 let (flags, range) = Self::access_scroll(&s);
                 let words = (label.unwrap_or_default(), String::new());
-                let painted = b.boxes.get(&id).copied();
+                let painted = b.boxes.get(&id).cloned();
                 let Some(own) =
                     self.access_emit(b, &scope, &node, role::SCROLLER, flags, range, || {
                         Some(words)

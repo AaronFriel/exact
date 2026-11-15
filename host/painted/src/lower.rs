@@ -750,6 +750,7 @@ fn playable(n: &exact_kernel::NodeRef<'_>, props: &[Property]) -> bool {
             || s.mix_blend_mode != exact_kernel::MixBlendMode::Normal
             || s.rare.svg_mask.url().is_some()
             || s.rare.clip_path.url().is_some()
+            || s.rare.clip_path.has_path()
             || served(&s.fill)
             || served(&s.stroke)
             || (turns && s.vector_effect == exact_kernel::VectorEffect::NonScalingStroke)

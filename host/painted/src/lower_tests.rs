@@ -439,7 +439,11 @@ fn a_looks_color_leaves_the_colour_track_to_the_reader() {
 /// element unblended is the reader's.
 #[test]
 fn a_blended_svg_element_is_sampled_not_the_readers() {
-    for (blend, played) in [("normal", true), ("multiply", false)] {
+    for (blend, clip, played) in [
+        ("normal", "none", true),
+        ("multiply", "none", false),
+        ("normal", "path('M0 0H50V100H0Z')", false),
+    ] {
         let source = format!(
             r##"component App
   state o = 1
@@ -448,7 +452,7 @@ fn a_blended_svg_element_is_sampled_not_the_readers() {
   view
     box width=400 height=500
       svg width=100 height=100
-        circle testId="target" cx=50 cy=50 r=40 fill="#3366cc" opacity=o transition="opacity 1s linear" mix-blend-mode="{blend}"
+        circle testId="target" cx=50 cy=50 r=40 fill="#3366cc" opacity=o transition="opacity 1s linear" mix-blend-mode="{blend}" clip-path="{clip}"
       button testId="go" press=go
         text "Go"
 "##

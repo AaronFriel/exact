@@ -1196,7 +1196,7 @@ impl<D: DataSource> Presenter<D> {
         self.boxes
             .iter()
             .find(|b| b.id == id && self.display.allows(self.host.kernel(), id))
-            .copied()
+            .cloned()
             .or_else(|| {
                 self.inline_box(id)
                     .filter(|_| self.display.allows(self.host.kernel(), id))
@@ -1270,7 +1270,7 @@ impl<D: DataSource> Presenter<D> {
                     && self.display.allows(self.host.kernel(), b.id)
             })
             .find_map(|b| {
-                let mut hit = *b;
+                let mut hit = b.clone();
                 if current && !self.brush.region_blocks_action(b.id) {
                     let node = self.host.kernel().node(b.id)?;
                     hit.pointer_hit = node

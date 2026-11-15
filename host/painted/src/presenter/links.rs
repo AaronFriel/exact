@@ -150,7 +150,7 @@ impl<D: DataSource> Presenter<D> {
             return None;
         }
         let parent = self.inline_block(id)?;
-        let mut painted = *self.boxes.iter().find(|b| b.id == parent)?;
+        let mut painted = self.boxes.iter().find(|b| b.id == parent)?.clone();
         let paragraph = self.brush.inline_text.get(&parent)?;
         painted.id = id;
         painted.with_scroll_rect(paragraph.local_frame(id)?)

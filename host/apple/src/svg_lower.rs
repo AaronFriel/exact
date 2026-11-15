@@ -1004,6 +1004,7 @@ fn circle_moves(n: &exact_kernel::NodeRef<'_>, props: &[Property]) -> bool {
         && exact_kernel::svg::transform::is_identity(s.transform.matrix())
         && s.vector_effect != exact_kernel::VectorEffect::NonScalingStroke
         && s.rare.clip_path.url().is_none()
+        && !s.rare.clip_path.has_path()
         && s.rare.svg_mask.url().is_none()
         && s.filter.is_none()
         && !served(&s.fill)

@@ -493,9 +493,10 @@ extension NodeView {
         if clipsOneAxis { return oneAxisClipContains(point) }
         let uniform = number("border_width")
         let widths = ["top", "right", "bottom", "left"].map { number("border_width_" + $0, uniform) }
-        if x && y { return innerOutline(widths, in: bounds).contains(point) }
-        return x ? point.x >= bounds.minX + widths[3] && point.x <= bounds.maxX - widths[1]
-            : point.y >= bounds.minY + widths[0] && point.y <= bounds.maxY - widths[2]
+        let box = surface?.frame ?? bounds
+        if x && y { return innerOutline(widths, in: box).contains(point) }
+        return x ? point.x >= box.minX + widths[3] && point.x <= box.maxX - widths[1]
+            : point.y >= box.minY + widths[0] && point.y <= box.maxY - widths[2]
     }
     /// Its scroll view's frame: its bounds, and the band past them.
     package var scrollFrame: CGRect { bounds.inset(by: UIEdgeInsets(top: -pageBand.top, left: 0, bottom: -pageBand.bottom, right: 0)) }

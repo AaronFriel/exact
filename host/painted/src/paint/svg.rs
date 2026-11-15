@@ -328,10 +328,13 @@ pub(super) fn affine(t: [f32; 6]) -> Transform {
 
 impl Painter {
     pub(super) fn svg_note(&mut self, node: &NodeRef<'_>, scene: &scene::Scene) {
-        if let Some(limit) = scene.over {
+        let note = scene
+            .over
+            .map(|limit| format!("{limit}; drawing nothing"))
+            .or_else(|| scene.refused.map(str::to_string));
+        if let Some(note) = note {
             if self.svg_warned.insert(node.key) {
-                self.notes
-                    .push(format!("svg #{}: {limit}; drawing nothing", node.id));
+                self.notes.push(format!("svg #{}: {note}", node.id));
             }
         }
     }
@@ -345,13 +348,6 @@ impl Painter {
     ) {
         let scene = resolve_svg(walk.scene, node, content.rect, self.dark);
         self.svg_note(node, &scene);
-        if let Some(refusal) = scene.refused {
-            // @ref LLP 1055.000 D13 — refused by name, once.
-            static SAID: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-            if !SAID.swap(true, std::sync::atomic::Ordering::Relaxed) {
-                eprintln!("exact svg: {refusal}");
-            }
-        }
         let (ox, oy) = effective_overflow(node);
         let clips = ox != Overflow::Visible || oy != Overflow::Visible;
         // The elements the reader animates (`crate::host::lower`).

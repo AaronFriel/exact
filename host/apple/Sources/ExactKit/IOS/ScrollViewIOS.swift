@@ -13,10 +13,11 @@ package final class PlainView: UIView {
         let m = (superview as? Viewport)?.pageMargins ?? .zero
         // A one-axis clip's box fits its children's paint, not their hit
         // slop: past the node it limits only the clipped axis. Its canvas
-        // overlay leaves the clip to the canvas's own hit test.
+        // overlay leaves the clip to the canvas's own hit test. A layout
+        // transition uses its shown padding edge.
         let inside: Bool
-        if let node = superview as? NodeView, node.clipBox === self, node.clipsOneAxis {
-            inside = node.oneAxisClipContains(convert(point, to: node))
+        if let node = superview as? NodeView, node.clipBox === self, node.clipsOneAxis || node.surface != nil {
+            inside = node.reachesChildren(at: convert(point, to: node))
         } else {
             inside = canvasOverlayOwner?.clipsOneAxis == true
                 || bounds.inset(by: UIEdgeInsets(top: -m.top, left: -m.left, bottom: -m.bottom, right: -m.right)).contains(point)

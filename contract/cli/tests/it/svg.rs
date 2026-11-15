@@ -1338,3 +1338,95 @@ component App
         Some(r#"{"fx":"bloom","offset":"2"}"#)
     );
 }
+
+#[test]
+fn basic_clip_shapes_compile_and_bad_values_name_the_supported_grammar() {
+    for css in [
+        "polygon(0% 2%, 50% 0%, 100% 3%, 100% 97%, 50% 100%, 0% 98%)",
+        "inset(4px round 8px)",
+        "circle(40% at 50% 50%)",
+        "ellipse(40% 30% at center)",
+        "path('m2 2h20v20h-20z')",
+    ] {
+        boot(&format!(
+            "component A\n  view\n    view clip-path=\"{css}\"\n"
+        ));
+    }
+    for css in [
+        "polygon(0% 0%,)",
+        "inset(4px round -1px)",
+        "path('M 0 NaN')",
+    ] {
+        let message = refused(&format!(
+            "component A\n  view\n    view clip-path=\"{css}\"\n"
+        ));
+        assert!(message.contains("lower-attr-value"));
+        assert!(message.contains("CSS pixels"));
+        assert!(!message.contains("explicit absolute"));
+    }
+}
+
+#[test]
+fn svg_basic_clips_are_web_only_and_native_errors_name_alternatives() {
+    let dir = crate::scratch::Scratch::new(format!("exact-svg-clips-{}", std::process::id()));
+    let source = dir.join("app.contract");
+    for host in [
+        "web", "ios", "macos", "tvos", "watchos", "linux", "windows", "android",
+    ] {
+        std::fs::write(
+            dir.join("app.json"),
+            format!(
+                r#"{{"app":{{"id":"dev.test.clips","name":"Clips"}},"host":{{"{host}":{{}}}}}}"#
+            ),
+        )
+        .unwrap();
+        for tag in [
+            "rect width=100 height=80",
+            "g",
+            "text \"Hello\"",
+            "svg x=40 y=30",
+        ] {
+            for value in [
+                "\"inset(25%)\"",
+                "\"circle(10px)\"",
+                "(on ? \"ellipse(30% 40%)\" : \"none\")",
+            ] {
+                let src = format!("component App\n  state on = true\n  state clip = \"polygon(0 0, 100% 0, 0 100%)\"\n  view\n    svg\n      {tag} clip-path={value}\n");
+                std::fs::write(&source, &src).unwrap();
+                let result = contract::compile_path(&source);
+                if host == "web" {
+                    result.unwrap_or_else(|e| panic!("{src}: {e}"));
+                } else {
+                    let message = result
+                        .err()
+                        .unwrap_or_else(|| panic!("{host} compiled {src}"))
+                        .to_string();
+                    assert!(message.contains("lower-svg-clip-host"), "{message}");
+                    assert!(
+                        message.contains("path()") && message.contains("userSpaceOnUse"),
+                        "{message}"
+                    );
+                    assert!(message.contains(host), "{message}");
+                }
+            }
+        }
+        for body in [
+            "view clip-path=\"inset(25%)\"",
+            "svg clip-path=\"circle(40%)\"",
+            "svg\n      rect clip-path=\"path('m0 0h20v20h-20z')\"",
+            "svg\n      g clip-path=\"url(#cut)\"",
+            "svg\n      rect clip-path=clip",
+            "svg\n      rect clip-path=`path('M0 0H${n}V20Z')`",
+            "svg\n      text \"Hello\" clip-path=(on ? \"path('M0 0H20V20Z')\" : \"none\")",
+        ] {
+            std::fs::write(
+                &source,
+                format!("component App\n  state on = true\n  state n = 20\n  state clip = \"url(#cut)\"\n  view\n    {body}\n"),
+            )
+            .unwrap();
+            contract::compile_path(&source).unwrap_or_else(|e| panic!("{host}: {body}: {e}"));
+        }
+        std::fs::write(&source, "style Cut\n  clip-path=\"inset(0)\"\ncomponent App\n  view\n    svg\n      g class=Cut\n").unwrap();
+        assert_eq!(contract::compile_path(&source).is_ok(), host == "web");
+    }
+}

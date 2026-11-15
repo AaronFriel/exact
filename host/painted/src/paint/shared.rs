@@ -166,7 +166,7 @@ impl Painter {
             && node.computed_row(StyleId::ImageRendering, |s| s.image_rendering)
                 == exact_kernel::ImageRendering::Auto
             && node.style.rare.mask_image.gradient().is_none()
-            && node.style.rare.clip_path.commands().is_empty()
+            && !node.style.rare.clip_path.has_path()
             && paint.background[3] == 0
             && paint.gradients.is_empty()
             && paint.widths.iter().all(|w| *w == 0.0)

@@ -868,7 +868,7 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
             // parent box first made those visible choices impossible to tap.
             // A scroller's scroll view reaching into the page's bands takes them too (LLP 1130 D3).
             let band = scrollView == nil ? .zero : pageBand
-            let box = clipsOneAxis ? surface?.frame ?? bounds : bounds
+            let box = surface?.frame ?? bounds
             let outsideX = point.x < box.minX || point.x > box.maxX
             let outsideY = point.y < box.minY - band.top || point.y > box.maxY + band.bottom
             if outsideX && (style["overflow_x"]?.string ?? "visible") != "visible" { return nil }
@@ -1220,7 +1220,7 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
         if old["color_scheme"] != s["color_scheme"] { applyColorScheme() }
         applyTint(from: old)
         updateSymbol(); syncDynamicRange(from: old)
-        (clipPath, clipRule) = (ClipPath.path(s["clip_path"]), ClipPath.rule(s["clip_path"]))
+        (clipPath, clipRule) = (ClipPath.path(s["clip_path"], size: bounds.size), ClipPath.rule(s["clip_path"]))
         applyBoxMask()
         applyFilter()
         updateMaterial()

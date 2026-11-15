@@ -65,6 +65,7 @@ impl Painter {
             }
         }
         for mut b in child_walk.boxes {
+            b.map_clips(inv);
             b.projective = Some((inv, b.rect, b.clip, clip_depth));
             b.rect = placement::clipped_bounds(&h, clip_depth, b.rect);
             b.clip = clip;
@@ -144,7 +145,7 @@ mod tests {
             .expect("placed inline capture");
         assert!(inline.views().any(|view| view == tail));
         let local = inline.frame(tail).unwrap();
-        let rect = painted.with_scroll_rect(local).unwrap().rect;
+        let rect = painted.clone().with_scroll_rect(local).unwrap().rect;
         assert!((rect.0 - local.0 - 10.).abs() < 0.01, "{local:?}: {rect:?}");
         assert!(
             (rect.1 - local.1 * 0.8 - 20.).abs() < 0.01,

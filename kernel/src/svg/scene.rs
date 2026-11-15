@@ -75,7 +75,7 @@ pub struct Scene {
     /// The elements, in paint order.
     pub items: Vec<Item>,
     /// What this host cannot draw and so leaves out, by name: a
-    /// `foreignObject` (LLP 1055.000 D13), which is the web's alone.
+    /// `foreignObject` or a basic clip shape on an SVG element.
     pub refused: Option<&'static str>,
     /// The cost limit the scene passed (LLP 1011.001 D2); `items` is then
     /// empty.
@@ -540,15 +540,15 @@ impl<'k> Resolver<'k, '_> {
                 Kind::Shape(Box::new(shape))
             }
         };
-        let clip = if style.rare.clip_path.url().is_some() {
-            let bbox = match &kind {
+        let bbox = if style.rare.clip_path.url().is_some() || style.rare.clip_path.has_path() {
+            match &kind {
                 Kind::Shape(s) => s.path.bounds(),
                 _ => self.bbox(node, &style, vp),
-            };
-            self.clip(node, bbox, vp, 0).map(Box::new)
+            }
         } else {
             None
         };
+        let clip = self.clip(node, bbox, vp, 0).map(Box::new);
         let mask = if style.rare.svg_mask.url().is_some() {
             let bbox = match &kind {
                 Kind::Shape(s) => s.path.bounds(),

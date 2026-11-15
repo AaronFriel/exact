@@ -692,7 +692,7 @@ impl<D: DataSource> Presenter<D> {
             })
         });
         let painted = module.and_then(|id| self.box_of(id));
-        let rect = painted.map(|b| b.rect).unwrap_or_default();
+        let rect = painted.as_ref().map(|b| b.rect).unwrap_or_default();
         let node = module.and_then(|id| self.host.kernel().node(id));
         let content = painted
             .zip(node.as_ref())

@@ -842,6 +842,23 @@ pub(crate) fn check_svg_content(
     Ok(())
 }
 
+fn native_clip(value: &Expr) -> bool {
+    match value {
+        Expr::None(_) => true,
+        Expr::Str(v, _) => {
+            exact_kernel::clip::ClipPath::parse(v).is_none_or(|clip| clip.shape_data().is_none())
+        }
+        Expr::Ternary(_, yes, no, _)
+        | Expr::Match {
+            some: yes,
+            none: no,
+            ..
+        } => native_clip(yes) && native_clip(no),
+        Expr::Let { body, .. } | Expr::Typed(body, _, _) => native_clip(body),
+        _ => true,
+    }
+}
+
 fn check_svg_attrs_with(
     tag: &str,
     in_svg: bool,
@@ -856,7 +873,7 @@ fn check_svg_attrs_with(
             continue;
         }
         // A `clipPath` by reference clips SVG elements (LLP 1055.000 D10);
-        // a box's `clip-path` is a path.
+        // a box takes a path or a basic shape.
         if matches!(tag, "text" | "tspan") && element && a.name == "rotate" {
             return err(
                 "lower-svg-attr",
@@ -882,9 +899,28 @@ fn check_svg_attrs_with(
         {
             return err(
                 "lower-attr-value",
-                "`clip-path: url(#…)` clips SVG elements; a box takes `path(\"…\")`",
+                "`clip-path: url(#…)` clips SVG elements; a box takes a basic shape or `path(\"…\")`",
                 a.span,
             );
+        }
+        if element && a.name == "clip-path" && !native_clip(&a.value) {
+            let native: Vec<_> = crate::icons::shipped()
+                .into_iter()
+                .filter(|t| {
+                    matches!(
+                        t.name.as_str(),
+                        "ios" | "macos" | "tvos" | "watchos" | "linux" | "windows" | "android"
+                    )
+                })
+                .map(|t| t.described())
+                .collect();
+            if !native.is_empty() {
+                return err(
+                    "lower-svg-clip-host",
+                    format!("basic-shape `clip-path` on SVG elements is not implemented on {}. Use `path()` in CSS pixels on a surrounding box, or `url(#id)` on the SVG element with a `clipPath` in `userSpaceOnUse` coordinates without percentages; computed `url()`, `path()` and `none` also work. Basic shapes work on boxes on every host and on SVG elements on the web", native.join(", ")),
+                    a.span,
+                );
+            }
         }
         if let Some(owners) = owners(&a.name) {
             if !owners.contains(&tag) {

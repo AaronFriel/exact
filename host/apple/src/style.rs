@@ -206,6 +206,20 @@ pub(crate) fn style_json_rows(
                 systems.extend(c.system_name().map(|s| (name, s)));
                 true
             }
+            RowValue::ClipPath(p) if p.shape_value_count() > 0 => {
+                let (shape, values) = p.shape_data().unwrap();
+                let values = values.iter().map(|n| num(*n)).collect::<Vec<_>>().join(",");
+                let rule = if p.rule() == exact_kernel::FillRule::Evenodd {
+                    "evenodd"
+                } else {
+                    "nonzero"
+                };
+                let _ = write!(
+                    out,
+                    "{{\"shape\":\"{shape}\",\"values\":[{values}],\"rule\":\"{rule}\"}}"
+                );
+                true
+            }
             RowValue::ClipPath(p) => {
                 let commands: Vec<_> = p
                     .commands()

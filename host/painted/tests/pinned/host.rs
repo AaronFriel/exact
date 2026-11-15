@@ -82,7 +82,7 @@ fn boxed<D: DataSource>(p: &mut Presenter<D>, test_id: &str) -> PaintedBox {
     p.boxes()
         .iter()
         .find(|b| ids.contains(&b.id))
-        .copied()
+        .cloned()
         .unwrap()
 }
 

@@ -401,6 +401,7 @@ fn project(walk: &mut Walk<'_, '_>, child_walk: Walk<'_, '_>, inv: [f32; 9], cli
     walk.inline.extend(child_walk.inline);
     let planes = [[0., 0., 1.]; 2];
     for mut b in child_walk.boxes {
+        b.map_clips(inv);
         // A box already in its own plane (a 3D child) maps through both:
         // this island's inverse, then its own (LLP 1077 D8).
         // A clip between the two planes (an overflow inside this

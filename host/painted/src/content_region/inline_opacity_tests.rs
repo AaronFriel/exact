@@ -131,3 +131,60 @@ fn retained_inline_opacity_is_the_presented_opacity() {
         "the retained paragraph takes the presented opacity"
     );
 }
+
+#[test]
+fn retained_basic_clip_hits_use_the_published_ancestor_shape() {
+    let _service = crate::content_region::test_service();
+    let source = r#"component App
+  state changed = false
+  action replace
+    changed = true
+  view
+    view id="owner" width=200 height=200 overflow="hidden"
+      view id="content" width=200 height=200
+        view width=100 height=100 clip-path=(changed ? "none" : "inset(25%)")
+          view width=100 height=100 testId="hit" press=replace
+      text "pending" id="pending" position="absolute"
+"#;
+    let (mut p, error) = Presenter::boot_region_with_fixture_fonts(
+        &crate::test_plan(source),
+        (),
+        (200., 200.),
+        1.,
+        PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../apps/caltrain")),
+        PainterChoice::Cpu,
+        ContentRegionRegistration {
+            activate: None,
+            owner: "owner",
+            content: "content",
+            pending: "pending",
+        },
+    )
+    .unwrap();
+    assert!(error.is_none(), "{error:?}");
+    p.frame();
+    ready(&mut p);
+    let first = p.display_frame().unwrap();
+    assert!(p.display_complete(&first));
+    let target = id(&p, "hit");
+    assert_ne!(p.hit(5., 5.), Some(target));
+    assert_eq!(p.hit(50., 50.), Some(target));
+    p.pointer_down(5., 5., 0.).unwrap();
+    p.pointer_up(5., 5., 1.).unwrap();
+    assert_ne!(p.hit(5., 5.), Some(target));
+    p.pointer_down(50., 50., 2.).unwrap();
+    p.pointer_up(50., 50., 3.).unwrap();
+    ready(&mut p);
+    let second = p.display_frame().unwrap();
+    assert_ne!(
+        p.hit(5., 5.),
+        Some(target),
+        "unacknowledged scene keeps its clip"
+    );
+    assert!(p.display_complete(&second));
+    assert_eq!(
+        p.hit(5., 5.),
+        Some(target),
+        "published replacement has no clip"
+    );
+}

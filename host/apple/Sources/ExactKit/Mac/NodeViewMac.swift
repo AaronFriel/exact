@@ -801,19 +801,18 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
         return hitBounds.contains(inCanvas) && !refusesOwnHit(self, local: inCanvas) ? self : nil
     }
 
-    /// CSS visible overflow is hit where it paints, as on iOS: AppKit
-    /// refuses a point outside a view's frame before it asks the subviews,
-    /// so a positioned popup beyond its parent's box took no clicks (ledger
-    /// F13, shop F18). Outside this box and unclipped, the children are
-    /// asked here (in a one-axis clip's box, which shares the node's space), topmost first.
+    /// AppKit stops at the final frame. Ask children where visible overflow
+    /// or an animated surface extends past it, in their unchanged coordinates.
     private func overflowHit(_ point: NSPoint) -> NSView? {
-        guard !isHidden, scroll == nil, clipBox == nil || clipsOneAxis, !clipsToBounds, !container.subviews.isEmpty else { return nil }
+        guard !isHidden, scroll == nil, clipBox == nil || clipsOneAxis || surface != nil, !clipsToBounds, !container.subviews.isEmpty else { return nil }
         let local = convert(point, from: superview)
         if clipsOneAxis, !oneAxisClipContains(local) { return nil }
-        let outsideX = local.x < bounds.minX || local.x > bounds.maxX
-        let outsideY = local.y < bounds.minY || local.y > bounds.maxY
+        let outsideX = local.x < bounds.minX || local.x >= bounds.maxX
+        let outsideY = local.y < bounds.minY || local.y >= bounds.maxY
         guard outsideX || outsideY else { return nil }
-        if !clipsOneAxis {
+        if let surface, overflowClips {
+            guard surface.clip.path?.contains(local) != false else { return nil }
+        } else if !clipsOneAxis {
             if outsideX && (style["overflow_x"]?.string ?? "visible") != "visible" { return nil }
             if outsideY && (style["overflow_y"]?.string ?? "visible") != "visible" { return nil }
         }
@@ -1127,7 +1126,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
             || number("border_width_left", uniformBorder) > 0
         layerContentsRedrawPolicy = kind != "text" && wantsUpdateLayer ? .onSetNeedsDisplay : .duringViewResize
         updateSymbol()
-        (clipPath, clipRule) = (ClipPath.path(s["clip_path"]), ClipPath.rule(s["clip_path"]))
+        (clipPath, clipRule) = (ClipPath.path(s["clip_path"], size: bounds.size), ClipPath.rule(s["clip_path"]))
         // Inline text is unmounted run data. Its containing paragraph owns
         // the backing store; create this node's layer only when it mounts.
         if kind != "text" || superview != nil { wantsLayer = true }
@@ -1293,8 +1292,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
         if moved, !backdropOperations.isEmpty { applyBackdrop() }
     }
 
-    /// The reduction depends on the size, which the kernel's layout sets
-    /// after the style.
+    /// Clips and corner radii resolve after layout supplies the new size.
     package override func setFrameSize(_ newSize: NSSize) {
         let changed = newSize != frame.size
         super.setFrameSize(newSize)
@@ -1304,6 +1302,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
         if focusVisible { noteFocusRingMaskChanged() } // the ring follows the box
         layerPaintCache = nil
         if hasBoxPaint || clipsToBounds || clipBox != nil { applyClipRadius() }
+        syncEllipticalClip()
         if materialView != nil { applyMaterialRadius() }
         if !backdropOperations.isEmpty { applyBackdrop() }
         // Border, gradient and image sublayers follow the new size.

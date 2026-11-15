@@ -94,6 +94,7 @@ impl Painter {
         };
         let planes = [[0., 0., 1.]; 2];
         for mut b in apart.boxes {
+            b.map_clips(inverse);
             b.projective = Some((inverse, b.rect, b.clip, planes));
             b.rect = placement::clipped_bounds(&h, planes, b.rect);
             b.clip = clip;

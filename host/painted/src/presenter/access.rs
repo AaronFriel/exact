@@ -604,7 +604,7 @@ impl<D: DataSource> Presenter<D> {
         let painted = b
             .boxes
             .get(&node.id)
-            .copied()
+            .cloned()
             .or_else(|| self.inline_box(node.id))?;
         let rect = (
             painted.rect.0 + scope.shift.0,
@@ -951,7 +951,7 @@ impl<D: DataSource> Presenter<D> {
         let mut b = Build {
             out: Vec::new(),
             used: BTreeSet::new(),
-            boxes: self.boxes.iter().map(|b| (b.id, *b)).collect(),
+            boxes: self.boxes.iter().map(|b| (b.id, b.clone())).collect(),
             origin: (frame[0], frame[1]),
             item: (0, 0),
             limits: self.collection_scroll_limits(),

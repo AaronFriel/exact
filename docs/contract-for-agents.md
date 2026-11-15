@@ -3900,6 +3900,26 @@ JSON-LD. A page's own title and metas stay its `head` element's.
 
 ## Time, motion, graphics, and platform facts
 
+`clip-path` clips a box and its contents. Use `polygon(0% 25%, 100% 0%, 50% 100%)`
+for an outline that follows the box's size, or `inset(4px round 8px)` for an
+inset with rounded corners. Coordinates and radii take `px`, `%`, or unitless
+zero. Insets take one to four edges; `round` takes one to four radii and an
+optional `/` followed by vertical radii. `circle()` and `ellipse()` take lengths
+or `closest-side`/`farthest-side`, with an optional `at` position (one or two
+lengths or position keywords). The default reference is the border box, or the
+fill box on a web SVG element. Percentages follow its current size; a circle's
+percentage radius uses its diagonal divided by √2. `polygon(evenodd, …)` uses
+the even-odd fill rule. `path('…')` accepts SVG path data in fixed CSS pixels;
+`url(#id)` references a `clipPath` on an SVG element. Other reference boxes,
+calculations, relative length units and three/four-value positions are refused.
+Basic shapes on SVG children (including groups, text and nested `svg`) are
+web-only; a build targeting native hosts refuses a known basic-shape value.
+Computed `url(#id)`, `path()` and `none` remain supported. A computed basic
+shape on native SVG is ignored with a host note. Use a basic shape on a
+surrounding box, or a `url(#id)` clip on the SVG element in `userSpaceOnUse`
+coordinates without percentages instead.
+See [CSS Masking 1 §5](https://www.w3.org/TR/css-masking-1/#the-clip-path).
+
 A root task has one `every(ms, action)`, `after(ms, action)`,
 `every(frame, action)`, or keyed `change(action)` entry, on the line under it:
 

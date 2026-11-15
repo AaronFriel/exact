@@ -317,7 +317,7 @@ impl<D: DataSource> Presenter<D> {
             .filter(|_| !hidden && self.display.allows(kernel, id))
             .zip(self.brush.field_content.get(&id).copied())
             .map(|(at, within)| {
-                let b = self.boxes[at];
+                let b = &self.boxes[at];
                 let groups = self.brush.row_groups();
                 let group = groups.iter().find(|g| g.1 <= at && at < g.2);
                 (b, within, group.map_or(0, |g| g.0))
@@ -329,7 +329,7 @@ impl<D: DataSource> Presenter<D> {
         if inert || disabled || self.host.flying(id) {
             flags |= INERT;
         }
-        let group = place.map_or(0, |p| p.2);
+        let group = place.as_ref().map_or(0, |p| p.2);
         out.extend([id as i32, known.generation as i32, flags, group as i32]);
         let (rect, clip) = match place {
             Some((b, within, _)) => (
