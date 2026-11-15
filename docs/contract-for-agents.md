@@ -3310,6 +3310,13 @@ sample host's `a` and `b`), and in an app `main` (a later Mac window `window-2`,
 `window-3`, in the order they open). `session` is unique only within the process and
 `hostSession` new at each launch; key nothing durable by either.
 
+An admitted `app:/` path that a source passes resolves on the same context: Swift
+`ExactPackageContext.file` for a file and `directory` for a directory, Kotlin
+`ExtensionContext.file` and `directory`. The destination may be missing, and the package
+creates it; an existing destination of the other kind is refused, as is a path that
+leads through a symbolic link. The result is a path, not an open handle, so a package
+opens or empties it promptly (LLP 1133.009 D10).
+
 ### A package's native module, library and web assets
 
 A package fills the data module's one native module (`native.call` in `app.ts`) from the
