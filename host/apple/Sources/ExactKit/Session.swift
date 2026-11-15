@@ -702,7 +702,7 @@ public final class ExactSession {
             if batch.frameWorkTiming != nil { batch.frameWorkTiming?.landed = began }
             if case .advance = next.kind { applyUnlessEmpty(batch) } else if !(changesNothing(batch) && clockUnchanged(batch)) {
                 apply(batch)
-            }
+            } else { logSkipped(batch) }
             #if DEBUG
             onLandForTests?(next.kind, batch)
             #endif
@@ -761,7 +761,7 @@ public final class ExactSession {
             // A report inside the built window commits nothing: while a list
             // moves that is most frames. Skip the presenter's finalization
             // pass for it, unless the clock or the motion it reports is news.
-            if changesNothing(batch) && clockUnchanged(batch) { return workEnded() }
+            if changesNothing(batch) && clockUnchanged(batch) { logSkipped(batch); return workEnded() }
             apply(batch)
         }
         presenter.onClose = { [unowned self] id in apply(runtime.dialogClose(id, now: now())) }
@@ -1079,7 +1079,7 @@ public final class ExactSession {
         guard !fillInFlight, !tickInFlight, !advanceInFlight, !canvasInFlight, noticesInFlight == 0, changesNothing(batch) else { apply(batch); return }
         updateTimerState(batch)
         // Its transactions are reported once (LLP 1079 D3): account for them, at no presentation cost.
-        sampler?.batch(batch.seq, ms: 0); logAlerts(batch.alerts); logJournal(batch.journal); relayStore(batch)
+        sampler?.batch(batch.seq, ms: 0); logSkipped(batch); relayStore(batch)
         if let q = batch.seq { natives.hatchClock.seq = q.1 } // its commits are the hatches' latest
         timerDue = batch.timerDueMs; timerLanding = batch.landing
         scheduleClock(due: batch.timerDueMs)
@@ -1112,7 +1112,7 @@ public final class ExactSession {
             let batch = runtime.viewScheme(id, dark: dark)
             // Appearance already changed natively; retain its transaction accounting without rescheduling.
             if !ownerInFlight, changesNothing(batch), clockUnchanged(batch) {
-                sampler?.batch(batch.seq, ms: 0)
+                sampler?.batch(batch.seq, ms: 0); logSkipped(batch)
                 if let q = batch.seq { natives.hatchClock.seq = q.1 }
             } else { apply(batch) }
         }
@@ -1120,6 +1120,8 @@ public final class ExactSession {
 
     #if DEBUG
     var onLandForTests: ((Published, Batch) -> Void)?
+    /// Tests: a skipped batch's alerts and journal lines as `logSkipped` writes them.
+    var onSkippedLogForTests: (([String], [String]) -> Void)?
     var onApplyForTests: ((Batch) -> Void)?
     /// Tests: a tick's slice the owner published, not yet landed.
     func publishTickForTests(_ batch: Batch) { tickInFlight = true; publish(.tick, batch, generation) }
