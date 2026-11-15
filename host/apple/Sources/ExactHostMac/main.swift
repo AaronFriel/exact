@@ -59,7 +59,7 @@ var views: [String: ExactView] = ["a": viewA, "b": viewB]
 /// screen can replace the Exact view inside it (a push) and give it back (a pop).
 var panes: [String: NSView] = [:]
 
-let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1040, height: 720), styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
+let window = ExactAgentWindow(contentRect: NSRect(x: 0, y: 0, width: 1040, height: 720), styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
 window.title = "Host (not Exact)"
 let split = NSSplitView(frame: window.contentView!.bounds)
 split.isVertical = true

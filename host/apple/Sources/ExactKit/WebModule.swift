@@ -294,15 +294,12 @@ final class WebViews {
         return view
     }
 
-    /// A drive's window sits behind the other apps' (`NSWindow.Level.agentBehind`),
-    /// where it is usually covered, and WebKit runs a covered window's pages as
-    /// a hidden tab's: no animation frames, timers about once a second, nothing
-    /// new painted. While the session holds a guest its window stands at the
-    /// normal level, in front, as a live frame recording lifts it
-    /// (`Agent.liveFrames`), and goes back behind when the last guest goes.
+    /// Host-owned windows lack ExactAgentWindow's occlusion override (LLP 1031).
+    /// Keep their guests live by lifting them while mounted, then restore the
+    /// driven level. Exact's own windows and sheets stay behind without lifting.
     private func keepGuestsSeen() {
         #if os(macOS)
-        guard Agent.windowsBehind, let window = session?.presenter.viewport.window else { return }
+        guard Agent.windowsBehind, let window = session?.presenter.viewport.window, !(window is ExactAgentWindow) else { return }
         let guests = entries.values.contains { $0.handle != nil }
         if guests, !lifted, window.level == .agentBehind {
             lifted = true

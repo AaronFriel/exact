@@ -1365,9 +1365,32 @@ extension NSWindow.Level {
     /// its pictures are of this window alone (`CGWindowListCreateImage`), with
     /// canvas readbacks composited in place of Metal layers in either occlusion state,
     /// and page visibility is the driver's (`PageFacts.hidden`). A live frame
-    /// observation (`liveFrames`) lifts it while it records, and an iframe
-    /// guest, whose WebKit page is not on that clock, while the session holds one.
+    /// observation (`liveFrames`) lifts it while it records. WebKit reads
+    /// `ExactAgentWindow.occlusionState` to keep a mounted guest live at this level.
     public static let agentBehind = NSWindow.Level(rawValue: NSWindow.Level.normal.rawValue - 1)
+}
+
+/// WebKit reads this public AppKit property when deciding whether to run a
+/// page's frames and timers. At the driver's reserved level, a covered window
+/// and its sheets still have live pages; their window-server order never changes.
+open class ExactAgentWindow: NSWindow {
+    public override var occlusionState: NSWindow.OcclusionState {
+        let actual = super.occlusionState
+        var parent: NSWindow = self
+        while let over = parent.sheetParent { parent = over }
+        guard parent.level == .agentBehind, isVisible, !isMiniaturized, !NSApp.isHidden else { return actual }
+        return actual.union(.visible)
+    }
+
+    fileprivate var physicalOcclusionState: NSWindow.OcclusionState { super.occlusionState }
+}
+
+extension NSWindow {
+    /// Rendering and frame measurements need the physical state: Metal cannot
+    /// present to a covered window even when WebKit is told its page is visible.
+    public var screenOcclusionState: NSWindow.OcclusionState {
+        (self as? ExactAgentWindow)?.physicalOcclusionState ?? occlusionState
+    }
 }
 
 extension Agent {

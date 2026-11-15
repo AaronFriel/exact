@@ -177,7 +177,7 @@ final class FrameHealth {
         for name in [NSWindow.didMiniaturizeNotification, NSWindow.didChangeOcclusionStateNotification] {
             lifecycle.append(NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self, weak session] notification in
                 guard let window = session?.presenter.viewport.window, notification.object as? NSWindow === window,
-                      window.isMiniaturized || !window.occlusionState.contains(.visible) else { return }
+                      window.isMiniaturized || !window.screenOcclusionState.contains(.visible) else { return }
                 self?.stop()
             })
         }

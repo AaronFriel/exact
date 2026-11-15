@@ -259,7 +259,8 @@ export async function macTests(pkg, scratch, env, canvasGpu, only = null) {
   const one = (group) => new Promise((done) => {
     const gpu = group.includes(gpuClass) ? { EXACT_CANVAS_GPU_DYLIB: canvasGpu } : {};
     const liveStore = group.some(c => c === 'ExactKitTests.LiveStoreObservationTests' || c === 'ExactKitTests.LiveScratchStoreObservationTests') ? { EXACT_AGENT: 'live', EXACT_STORE: 'real', EXACT_AGENT_STORAGE: group.includes('ExactKitTests.LiveScratchStoreObservationTests') ? 'agent2-live' : '' } : {};
-    const testEnv = { ...env, ...gpu, ...liveStore };
+    const behindWeb = group.includes('ExactKitTests.AgentWebWindowMacTests') ? { EXACT_AGENT: '1', EXACT_AGENT_TIMING: 'agent' } : {};
+    const testEnv = { ...env, ...gpu, ...liveStore, ...behindWeb };
     if (group.includes('ExactKitTests.LiveStoreObservationTests')) delete testEnv.EXACT_AGENT_STORAGE;
     const child = spawn('xcrun', ['xctest', '-XCTest', group.join(','), bundle], { cwd: pkg, env: testEnv, stdio: ['ignore', 'pipe', 'pipe'] });
     let out = '';

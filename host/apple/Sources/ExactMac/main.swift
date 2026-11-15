@@ -212,7 +212,7 @@ func footprint() -> UInt64 {
 /// `--window-size` is, whatever the screen: AppKit would shorten an 860-point
 /// window to fit a 720-point display, and a node the script reads at y 630
 /// would then be below the viewport's edge, where no tap reaches it.
-final class ExactWindow: NSWindow {
+final class ExactWindow: ExactAgentWindow {
     override func constrainFrameRect(_ frameRect: NSRect, to screen: NSScreen?) -> NSRect {
         agentMode ? frameRect : super.constrainFrameRect(frameRect, to: screen)
     }
