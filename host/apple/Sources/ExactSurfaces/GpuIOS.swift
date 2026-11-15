@@ -477,7 +477,8 @@ final class CanvasesHost {
         for (e, _) in ordered where live(e.view.id) === e && e.view.needsCapture {
             if let m = e.module {
                 capture(m, e)
-                if let outer = e.view.canvasAbove { outer.needsCapture = true }
+                // Only an ancestor that samples its children recaptures; another would keep the flag forever.
+                if let outer = e.view.canvasAbove, entries[outer.id]?.through == true { outer.needsCapture = true }
             }
         }
     }
