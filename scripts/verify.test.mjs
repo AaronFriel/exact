@@ -716,7 +716,9 @@ test.skipIf(!!chromium().unavailable)('verify on a new app: clean, a failing tes
     assert.deepEqual([warned(quiet.stderr), warned(quiet.stdout)], [[], []]);
     const clean = verify('--shots', 'out/shots');
     assert.equal(clean.status, 0, clean.stdout + clean.stderr);
-    assert.ok(clean.lines.length <= 10, clean.stdout);
+    // Verify builds into a publication of its own, so its report starts with that build.
+    assert.match(clean.lines[0], /^built web \(/, clean.stdout);
+    assert.ok(clean.lines.length <= 11, clean.stdout);
     assert.ok(clean.lines.includes("largest text size (root font size 53 px at 390x844, iOS's body at its largest), 5 screens: nothing spills"), clean.stdout); // 4, and 1 the tests pass through
     assert.ok(!clean.lines.some((l) => l.startsWith('compiler:')), clean.stdout);
     assert.ok(clean.lines.includes('tests: 2 passed, 0 failed'), clean.stdout);
@@ -782,8 +784,8 @@ test.skipIf(!!chromium().unavailable)('verify on a new app: clean, a failing tes
     assert.deepEqual(warned(tested.stdout), []);
     const found = verify();
     assert.equal(found.status, 0, found.stdout + found.stderr);
-    assert.equal(found.lines[0], 'compiler: 1 warning', found.stdout);
-    assert.match(found.lines[1].trim(), warning);
+    assert.deepEqual([found.lines[0].replace(/\(.*\)$/, '(…)'), found.lines[1]], ['built web (…)', 'compiler: 1 warning'], found.stdout);
+    assert.match(found.lines[2].trim(), warning);
     assert.match(found.stdout, /^ {2}\(light only\) contrast Text "Faint"#\d+ \[.*\]: 1\.\d:1 \(#dddddd on #ffffff(?:, [^)]*)?\), needs 4\.5:1/m);
     assert.match(found.lines.at(-1), /^verify: 2 problems \(2 findings; the tests passed\) in /);
 
@@ -800,7 +802,7 @@ test.skipIf(!!chromium().unavailable)('verify on a new app: clean, a failing tes
     const r = JSON.parse(json.stdout);
     assert.equal(r.semantics.exit, 0);
     assert.match(r.semantics.output, /^verify receipt — reproduce:/m);
-    assert.deepEqual([r.host, r.built, r.tests.passed, r.tests.failed, r.problems, r.exit, r.screenshots.length, r.compiler.length], ['web', null, 2, 0, 2, 0, 7, 1]);
+    assert.deepEqual([r.host, r.built.warnings, r.tests.passed, r.tests.failed, r.problems, r.exit, r.screenshots.length, r.compiler.length], ['web', [], 2, 0, 2, 0, 7, 1]);
     // Each screen at each width and scheme: the first screen, the two test ends (in their own sessions), the relaunch.
     const onScreen = (screen) => r.checks.filter((c) => c.screen === screen).map((c) => `${c.size.join('x')} ${c.scheme} ${c.findings.map((f) => f.kind).join(',')}`);
     for (const screen of ['first screen', 'the greeting loads', "the header's button likes it", 'relaunch']) assert.deepEqual(onScreen(screen), ['390x844 light contrast', '390x844 dark ', '1280x900 light contrast', '1280x900 dark '], screen);
