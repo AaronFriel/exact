@@ -570,8 +570,10 @@ impl Painter {
 
     pub(crate) fn replaced(&mut self) {
         self.native_session = native::new_session();
-        // A fresh kernel can reuse both epochs and node keys.
+        // A fresh kernel can reuse both epochs and node keys: a row kept by
+        // key would replay the old tree's drawing.
         self.paint_epoch = None;
+        self.discard_rows();
         self.shared = SharedState::default();
         self.svg_warned.clear();
         // The old tree's presses: its view ids are another tree's now.
