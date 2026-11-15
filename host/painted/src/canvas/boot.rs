@@ -78,6 +78,9 @@ impl<D: DataSource + Default> CanvasHost<D> {
         if let Some(e) = error {
             eprintln!("exact: {e}");
         }
+        // The reader opens sounds, videos and pages from the generation that
+        // booted (LLP 1030.006 D1); entry zero's are the APK's.
+        crate::delivery::set_reader_root(config.entry.as_ref().and(config.selected_dir.clone()));
         agent::own_time(&mut p, started);
         crate::surfaces::acquire_fd();
         // What the reader read of the device, before the first frame (D3.1).

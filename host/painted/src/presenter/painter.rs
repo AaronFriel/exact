@@ -870,6 +870,7 @@ mod tests {
                 explicit: true,
                 entry: None,
                 selected_assets: None,
+                selected_dir: None,
                 module: Ok(None),
                 updates: None,
                 hatches: None,

@@ -89,6 +89,9 @@ internal class SoundOutput(
     }
     private val poll = Runnable { drain() }
 
+    /** The running generation's assets moved ([AssetRoot]): the next batch opens its files there. */
+    fun reroot() { files = emptyList() }
+
     fun apply(body: JSONObject) {
         val names = body.getJSONArray("files").let { a -> List(a.length()) { a.getString(it) } }
         if (body.optBoolean("reset") || names != files) { close(); files = names; reportedFailures.clear(); status = "closed"; error = null; failedAt = Double.NEGATIVE_INFINITY }
@@ -129,7 +132,7 @@ internal class SoundOutput(
                     }
                 } ?: throw IllegalStateException("audio focus refused")
             }
-            val root = File(context.filesDir, "app").canonicalFile
+            val root = AssetRoot.of(context).canonicalFile
             val paths = files.map { name ->
                 File(root, name).canonicalFile.also { require(it.path.startsWith(root.path + File.separator)) { "sound path leaves app assets" } }.path
             }.toTypedArray()

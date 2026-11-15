@@ -744,6 +744,7 @@ impl crate::delivery::Store for StagedPlan {
             plan: self.0.clone(),
             assets: Arc::new(|_| Ok(None)),
             names: Vec::new(),
+            dir: None,
         }))
     }
     fn commit_activation(&mut self, _: Option<String>, _: u64) -> Result<(), String> {

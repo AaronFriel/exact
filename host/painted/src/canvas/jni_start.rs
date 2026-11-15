@@ -5,6 +5,19 @@
 #[macro_export]
 macro_rules! canvas_jni_start {
     () => {
+        /// The running generation's asset directory, or null for the APK's
+        /// own (`delivery::reader_root`, LLP 1030.006 D1).
+        #[no_mangle]
+        pub unsafe extern "system" fn Java_dev_exact_canvas_Native_assetRoot(
+            env: *mut JNIEnv,
+            _class: jclass,
+        ) -> jstring {
+            match $crate::delivery::reader_root() {
+                Some(dir) => $crate::canvas::field::java(env, &dir.to_string_lossy()),
+                None => std::ptr::null_mut(),
+            }
+        }
+
         /// The process environment the host reads, from the reader's files
         /// directory `dir`.
         unsafe fn environment(env: *mut JNIEnv, dir: jstring, live: jboolean) {

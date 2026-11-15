@@ -84,12 +84,27 @@ private class VideoSize(val width: Int, val height: Int, val ratio: Float)
  */
 class Natives(
     context: Context,
-    private val assets: File,
+    private val root: () -> File,
     private val modules: Map<String, NativeModule>,
     private val videos: ((Context) -> VideoPlayer)? = null,
 ) : FrameLayout(context) {
     internal var keeps = false
         private set
+    /** Where a video's or a page's path is a file ([AssetRoot]). */
+    private val assets: File get() = root()
+
+    /** The running generation's assets moved (a signed update activated, LLP 1030.006 D1): every video and page is
+     * opened again, so one at an unchanged path shows the new generation's file. */
+    fun reroot() {
+        for (e in elements.values) {
+            if (e.props.isEmpty()) continue
+            when (e.kind) {
+                0 -> { sources.remove(e.view); apply(e, e.props) }
+                1 -> { val props = e.props; e.props = ""; apply(e, props) }
+            }
+        }
+        if (refresh()) frame()
+    }
 
     override fun requestDisallowInterceptTouchEvent(disallow: Boolean) {
         keeps = disallow

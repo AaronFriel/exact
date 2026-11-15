@@ -29,6 +29,9 @@ open class ExactActivity : Activity() {
     /** The app's `video` player ([VideoPlayer]); none for an app without video. */
     protected open val video: ((Context) -> VideoPlayer)? = null
     private var natives: Natives? = null
+
+    /** A signed update activated with its own assets ([Requests]): the open videos and pages are opened again. */
+    internal fun assetsMoved() { natives?.reroot() }
     private var nativeState: Bundle? = null
     private var nativeStarted = false
     private var nativeResumed = false
@@ -342,7 +345,7 @@ open class ExactActivity : Activity() {
         Exact.answered = { view.onPublished() }
         Exact.turned = { view.turned() }
         if (input) view.keys = Keys(view)
-        val elements = Natives(this, File(storage, "app"), Extensions.withViews(modules), video)
+        val elements = Natives(this, { AssetRoot.of(this) }, Extensions.withViews(modules), video)
         natives = elements
         elements.lifecycle.restore(nativeState)
         nativeState = null

@@ -274,6 +274,8 @@ object Native {
 
     /** The file an `app:/data|cache|tmp/…` path names, or null (`ExtensionContext.file`). */
     @JvmStatic external fun appFile(path: String): String?
+    /** The running generation's asset directory when a signed update's is running, else null ([AssetRoot]). */
+    @JvmStatic external fun assetRoot(): String?
     /** The app's directory [index] names: 0 `data`, 1 `cache`, 2 `tmp` ([ExtensionContext.data]). */
     @JvmStatic external fun appRoot(index: Int): String?
     /** Whether extension [name] is told it runs under the agent ([ExtensionContext.agent]). Any thread. */

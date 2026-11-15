@@ -140,6 +140,8 @@ pub struct Config {
     pub entry: Option<String>,
     /// The selected generation's complete, lazily verified asset roster.
     pub selected_assets: Option<AssetResolver>,
+    /// The selected generation's verified asset directory.
+    pub selected_dir: Option<std::path::PathBuf>,
     /// Explicit development logic paired with the selected plan.
     pub module: Result<Option<crate::delivery::Module>, String>,
     /// The update store, opened before the boot it selects (`run`); the
@@ -353,6 +355,7 @@ impl Config {
             explicit,
             entry: None,
             selected_assets: None,
+            selected_dir: None,
             module: exact_plan
                 .as_deref()
                 .or(exact_dev_plan.as_deref())
@@ -383,6 +386,7 @@ impl Config {
                     &self.compat,
                 );
                 self.selected_assets = Some(prepared.assets);
+                self.selected_dir = prepared.dir;
             }
         }
         self.updates = Some(updates);
@@ -665,6 +669,7 @@ pub(crate) fn boot_presenter_with_painter<D: DataSource + Default>(
             }
             config.entry = None;
             config.selected_assets = None;
+            config.selected_dir = None;
             let launch = exact_runner::time::Launch {
                 clock: clock(),
                 ..launch_facts

@@ -190,6 +190,22 @@ impl AssetSet {
         self.cards.keys().cloned().collect()
     }
 
+    /// The directory the names resolve under (`entries/<entry>/assets`).
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
+
+    /// Read every asset and check it against its signed card, for a reader
+    /// that opens files by path rather than through [`AssetSet::resolve`].
+    /// The first mismatch is the error; no bytes are kept.
+    pub fn verify(&self) -> Result<(), String> {
+        for (name, card) in self.cards.iter() {
+            safe_name(name)?;
+            read_card(&self.root.join(name), card)?;
+        }
+        Ok(())
+    }
+
     /// Resolve one name. `Ok(None)` means the complete roster omits it;
     /// `Err` means the signed card exists but the stored bytes no longer match.
     /// A result, including a refusal, is cached across clones after one read.

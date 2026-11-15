@@ -321,6 +321,7 @@ impl<D: DataSource> Presenter<D> {
             return Ok(false);
         };
         let assets = Assets::selected(self.assets.root().to_path_buf(), candidate.assets.clone());
+        let candidate_dir = candidate.dir.clone();
         let decoded = Plan::decode(&candidate.plan).map_err(HostError::Plan)?;
         let text = TextEngine::shared_for_assets(&decoded, &assets);
         let mut delivery = self.host.runner().delivery().with_compat(&self.compat);
@@ -409,6 +410,14 @@ impl<D: DataSource> Presenter<D> {
         self.images = images;
         self.restore_focus(kept);
         self.pointer = None;
+        // The reader opens sounds, videos and pages by path: it resolves
+        // them again under the generation now running (LLP 1030.006 D1).
+        crate::delivery::set_reader_root(candidate_dir.clone());
+        self.request(super::Request::Assets(
+            candidate_dir
+                .map(|d| d.display().to_string())
+                .unwrap_or_default(),
+        ));
         self.host.log("exact update: activated the staged bundle");
         self.sync_delivery();
         self.after_commit();
@@ -587,6 +596,7 @@ component App
                 plan: self.0.clone(),
                 assets: Arc::new(|_| Ok(None)),
                 names: Vec::new(),
+                dir: None,
             }))
         }
         fn commit_activation(&mut self, entry: Option<String>, seq: u64) -> Result<(), String> {

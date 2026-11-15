@@ -16,6 +16,28 @@ pub struct Selection {
     pub assets: AssetResolver,
     /// Every name the signed asset index lists.
     pub names: Vec<String>,
+    /// The directory those names are files under, every one checked against
+    /// its card: what a reader that opens files by path reads (LLP 1030.006
+    /// D1). Absent where the resolver has no directory.
+    pub dir: Option<std::path::PathBuf>,
+}
+
+/// The running generation's asset directory, for a reader that opens
+/// sounds, videos and pages by path: a selected update's verified
+/// directory, or none for the embedded assets (LLP 1030.006 D1).
+static READER_ROOT: std::sync::Mutex<Option<std::path::PathBuf>> = std::sync::Mutex::new(None);
+
+/// The reader's asset directory is now `dir` (none: the embedded assets).
+pub fn set_reader_root(dir: Option<std::path::PathBuf>) {
+    *READER_ROOT.lock().unwrap_or_else(|e| e.into_inner()) = dir;
+}
+
+/// The reader's asset directory, when an update's is running.
+pub fn reader_root() -> Option<std::path::PathBuf> {
+    READER_ROOT
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone()
 }
 
 /// Operations the presenter needs from a linked delivery adapter.

@@ -24,14 +24,14 @@ pub fn open(
 impl Store for Updates {
     fn prepare_selected(&mut self) -> Option<Selection> {
         let prepared = Updates::prepare_selected(self)?;
+        // A reader opens some assets by path, past the resolver's check: the
+        // whole generation is checked before it boots (LLP 1030.006 D1).
+        if let Err(why) = prepared.assets.verify() {
+            self.selection_corrupt(&prepared.generation, &why);
+            return None;
+        }
         self.pin(prepared.generation.clone());
-        Some(Selection {
-            entry: prepared.generation.entry,
-            seq: prepared.generation.seq,
-            plan: prepared.plan,
-            names: prepared.assets.names(),
-            assets: Arc::new(move |name| prepared.assets.resolve(name)),
-        })
+        Some(selection(prepared))
     }
     fn boot_started(&mut self) {
         Updates::boot_started(self);
@@ -58,15 +58,11 @@ impl Store for Updates {
         Updates::take_line(self)
     }
     fn prepare_activation(&self) -> Result<Option<Selection>, String> {
-        Ok(
-            Updates::prepare_activation(self)?.map(|prepared| Selection {
-                entry: prepared.generation.entry,
-                seq: prepared.generation.seq,
-                plan: prepared.plan,
-                names: prepared.assets.names(),
-                assets: Arc::new(move |name| prepared.assets.resolve(name)),
-            }),
-        )
+        let Some(prepared) = Updates::prepare_activation(self)? else {
+            return Ok(None);
+        };
+        prepared.assets.verify()?;
+        Ok(Some(selection(prepared)))
     }
     fn commit_activation(&mut self, entry: Option<String>, seq: u64) -> Result<(), String> {
         Updates::commit_activation(self, &exact_update::Generation { entry, seq })
@@ -76,6 +72,18 @@ impl Store for Updates {
     }
     fn status_into(&self, delivery: &mut Delivery) {
         Updates::status_into(self, delivery);
+    }
+}
+
+/// A prepared generation as the presenter takes it, its assets checked.
+fn selection(prepared: exact_update::PreparedSelection) -> Selection {
+    Selection {
+        entry: prepared.generation.entry,
+        seq: prepared.generation.seq,
+        plan: prepared.plan,
+        names: prepared.assets.names(),
+        dir: Some(prepared.assets.root().to_path_buf()),
+        assets: Arc::new(move |name| prepared.assets.resolve(name)),
     }
 }
 
