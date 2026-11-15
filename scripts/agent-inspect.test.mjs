@@ -2,7 +2,7 @@
 // reads by name, down a dotted path, as `expect state` does, even where a view carries the name; a plain view's is the record.
 import { test, expect } from 'bun:test';
 import { render, renderTrace, renderFrameHealthReport, renderFrameHealthMetrics, perfOp, readTrack, renderPerf, stateOp, tapRefusal, nextCommitTasks, settleBound, planLocators, perfDelta } from './agent-inspect.mjs';
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { open } from './agent-session.mjs';
@@ -259,11 +259,13 @@ test('ink traces retain phase and coverage information without inventing frame j
 
 test('--plan finds plans with a map beside them in a directory, and refuses one with none', () => {
   const dir = mkdtempSync(join(tmpdir(), 'plan-'));
-  mkdirSync(join(dir, 'bake', 'dev'), { recursive: true });
-  writeFileSync(join(dir, 'bake', 'dev', 'macos.plan.map.json'), '{}');
-  expect(planLocators(dir)).toEqual([join(dir, 'bake', 'dev', 'macos.plan')]);
-  expect(planLocators(join(dir, 'x.plan.map.json'))).toEqual([join(dir, 'x.plan')]);
-  expect(() => planLocators(join(dir, 'bake', 'dev', 'empty-dir-does-not-exist'))).toThrow();
+  try {
+    mkdirSync(join(dir, 'bake', 'dev'), { recursive: true });
+    writeFileSync(join(dir, 'bake', 'dev', 'macos.plan.map.json'), '{}');
+    expect(planLocators(dir)).toEqual([join(dir, 'bake', 'dev', 'macos.plan')]);
+    expect(planLocators(join(dir, 'x.plan.map.json'))).toEqual([join(dir, 'x.plan')]);
+    expect(() => planLocators(join(dir, 'bake', 'dev', 'empty-dir-does-not-exist'))).toThrow();
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('perf during subtracts each handler\'s dispatches and drops the ones that did not run', () => {

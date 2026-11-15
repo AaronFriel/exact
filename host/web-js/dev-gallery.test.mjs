@@ -13,7 +13,7 @@ import { spawnSync } from 'node:child_process';
 import { cpSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, request } from 'node:http';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { galleryCache } from './dev-gallery.mjs';
 import { FRAME_ANCESTORS } from '../../scripts/forma-server.mjs';
 import { fileURLToPath } from 'node:url';
@@ -40,7 +40,8 @@ async function devLoop(dir, env = {}) {
   await new Promise((ok) => listener.listen(0, '127.0.0.1', ok));
   const port = listener.address().port;
   await new Promise((ok) => listener.close(ok));
-  const dist = mkdtempSync(join(tmpdir(), 'exact-dev-gallery-'));
+  // The build's lock and kept generations go beside its dist (serve.mjs `replaceBuild`): the dist sits in a directory of its own.
+  const dist = join(mkdtempSync(join(tmpdir(), 'exact-dev-gallery-')), 'dist');
   const dev = spawnOwned(process.execPath, [resolve(ROOT, 'host/web/dev.mjs'), '--app', dir, '--port', String(port)], { cwd: ROOT, env: { ...process.env, EXACT_WEB_DIST: dist, ...env }, stdio: ['ignore', 'pipe', 'pipe'] });
   let out = '';
   dev.stderr.on('data', (d) => { out = (out + d).slice(-20000); });
@@ -48,7 +49,7 @@ async function devLoop(dir, env = {}) {
     dev.stdout.on('data', (d) => { out = (out + d).slice(-20000); if (out.includes('plan ready') && out.includes(`127.0.0.1:${port}/`)) ok(); });
     dev.on('exit', (code) => fail(new Error(`the dev loop exited ${code}: ${out}`)));
   });
-  return { base: `http://127.0.0.1:${port}`, port, dev, said: () => out, stop: async () => { await dev.stop(30_000); rmSync(dist, { recursive: true, force: true }); } };
+  return { base: `http://127.0.0.1:${port}`, port, dev, said: () => out, stop: async () => { await dev.stop(30_000); rmSync(dirname(dist), { recursive: true, force: true }); } };
 }
 
 /** An SSE stream's frames, as they come; `close` ends it. */

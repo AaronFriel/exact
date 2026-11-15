@@ -2,14 +2,15 @@
 // commit that lands assigns its very value to the router, and the scroll waits for every request in flight, a mutation's
 // too, as the runner's `fragment_command` waits on `has_pending`. rt.js and router.js run beside stand-ins for the
 // modules they import, and a fragment.js that records what it is asked.
-import { test, expect } from 'bun:test';
-import { copyFileSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { afterAll, test, expect } from 'bun:test';
+import { copyFileSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { standIns } from './stand-ins.mjs';
 import { fileURLToPath } from 'node:url';
 
 const dir = mkdtempSync(resolve(tmpdir(), 'exact-js-fragment-'));
+afterAll(() => rmSync(dir, { recursive: true, force: true }));
 const REAL = ['rt.js', 'clock.js', 'resources.js', 'tree.js', 'events.js', 'pieces.js', 'mount.js', 'strings.js', 'request-send.js', 'shape.js', 'held.js', 'font-family.js', 'observers.js', 'grid.js', 'overlay.js', 'roster.js', 'router.js', 'route-pattern.js', 'schedule.js', 'budget.js', 'elements.js'];
 for (const f of REAL) copyFileSync(resolve(fileURLToPath(new URL(`../../web-js/${f}`, import.meta.url))), resolve(dir, f));
 for (const [file, source] of standIns(REAL)) writeFileSync(resolve(dir, file), source);

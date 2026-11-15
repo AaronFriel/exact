@@ -1,7 +1,8 @@
 // The JS target's runtime in a `web-js` directory, as built, for the suites that drive it in Bun: the modules they
 // run, beside stand-ins for the rest (stand-ins.mjs). A suite writes its own stubs into `dir` before it imports
 // anything from there: the loader reads the directory once.
-import { copyFileSync, cpSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { afterAll } from 'bun:test';
+import { copyFileSync, cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -9,6 +10,7 @@ import { standIns } from './stand-ins.mjs';
 
 // modules.js imports the web host's `../web/address-space.js`, stood in
 export const root = mkdtempSync(resolve(tmpdir(), 'exact-js-baked-')), dir = resolve(root, 'web-js');
+afterAll(() => rmSync(root, { recursive: true, force: true }));
 mkdirSync(dir);
 mkdirSync(resolve(root, 'web'));
 writeFileSync(resolve(root, 'web/address-space.js'), 'export const setSpaceState = () => {};');

@@ -423,6 +423,8 @@ async function iosRunsFixture(body) {
     opening?.mockRestore();
     process.env.PATH = savedPath;
     rmSync(record, { force: true });
+    // A body that fails while it holds the touch lock (touches.mjs `lock`) leaves the lock behind.
+    rmSync(resolve(tmpdir(), `exact-touches-${udid}.lock`), { force: true });
     rmSync(root, { recursive: true, force: true });
   }
 }

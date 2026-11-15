@@ -67,7 +67,10 @@ async function inChrome(test) {
     await readyPage(cdp, sessionId, `http://127.0.0.1:${server.address().port}/`);
     await test(evaluate, call);
   } finally {
+    // Chrome writes its profile until it has exited.
+    const exited = child.exitCode === null && child.signalCode === null ? new Promise((ok) => child.once('exit', ok)) : null;
     child.kill();
+    await exited;
     server.close();
     rmSync(profile, { recursive: true, force: true });
   }

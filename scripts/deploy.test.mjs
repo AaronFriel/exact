@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 import { captureAssets, assetCards, copyStaticTreeIfPresent, webEnvelope, publicFileCards, listAssets, readStaticFile, readDevGeneration, retainDevGeneration } from '../host/web/serve.mjs';
 import { resolveApp, webGpuArtifacts, withAppFixture } from './app.mjs';
 import { streamBundle } from './texture-families.mjs';
-import { bake, sealEnvelope, canonicalBytes, classify, classifyArtifacts, cohortReceipt, defaultRelease, deployRun, holdBundles, inspectHead, materializeSnapshot, readAssetIndex, streamIndex, portableAssetNames, publishRoot, publishStream, renderTable, snapshotOf as capturedSnapshotOf, streamHead } from './deploy.mjs';
+import { bake, sealEnvelope, canonicalBytes, classify, classifyArtifacts, cohortReceipt, defaultRelease, deployRun, holdBundles, inspectHead, disposeSnapshot, materializeSnapshot, readAssetIndex, streamIndex, portableAssetNames, publishRoot, publishStream, renderTable, snapshotOf as capturedSnapshotOf, streamHead } from './deploy.mjs';
 import { blobPath, DirectoryOrigin, HttpsOrigin, OriginUnavailable, sha256, webReleasePath, webRootPath } from './origin.mjs';
 // Minimal compiler receipts for origin protocol fixtures below; capability
 // behavior is tested independently with declared requirements.
@@ -476,7 +476,8 @@ async function rejects(action, matches) {
   const compiler = join(fixture, 'contract-stub');
   writeFileSync(compiler, '#!/usr/bin/env bun\nconsole.log(JSON.stringify({packages:[],sources:[{origin:"app",path:process.argv.at(-1)}],consulted:[],errors:[]}));\n');
   chmodSync(compiler, 0o755);
-  const snapshotOf = (app, opts, exactRoot) => capturedSnapshotOf(app, { ...opts, compiler }, exactRoot);
+  const snapshots = [];
+  const snapshotOf = (app, opts, exactRoot) => { const snapshot = capturedSnapshotOf(app, { ...opts, compiler }, exactRoot); snapshots.push(snapshot); return snapshot; };
   const init = (repo, files) => {
     mkdirSync(repo, { recursive: true });
     spawnSync('git', ['init', '-q'], { cwd: repo });
@@ -735,6 +736,7 @@ async function rejects(action, matches) {
     stagedGitSealed, escapingSymlinkRefused,
     ignoredRootRefused, ignoredRootCaptured,
     ignoredDependencyRefused, capturedDependency, dependencyRefused }));
+  for (const snapshot of snapshots) disposeSnapshot(snapshot);
   rmSync(fixture, { recursive: true, force: true });
 }
 {

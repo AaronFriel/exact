@@ -1,7 +1,7 @@
 // Authored expects over a tree (agent-test.mjs): a node the tree carries but the
 // shipped app does not show — a header node the iOS navigation bar leaves out,
 // which the agent's own chrome still paints — fails, and says why (LLP 1116 D2).
-import { test, expect } from 'bun:test';
+import { afterAll, test, expect } from 'bun:test';
 import { spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -12,6 +12,10 @@ import { axFindings } from './agent-ax.mjs';
 import { withEpoch } from './agent-launch.mjs';
 import { serveBuildTree } from '../host/web/serve.mjs';
 import { fileURLToPath } from 'node:url';
+// A fixture's build can fail before the `try` that removes its directory.
+const scratches = [];
+const scratch = (prefix) => { const dir = mkdtempSync(join(tmpdir(), prefix)); scratches.push(dir); return dir; };
+afterAll(() => { for (const dir of scratches) rmSync(dir, { recursive: true, force: true }); });
 
 test('always predicates preserve JSON types, option kinds and the previous state', () => {
   const state = { slots: { n: 2, flag: false, absent: null, answer: { ok: true }, empty: [], text: '2' }, derives: { doubled: 4 } };
@@ -34,7 +38,7 @@ test('always predicates preserve JSON types, option kinds and the previous state
 });
 
 test('device properties see boot, typing and clock changes, and reset stays between tests', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'exact-properties-')), contract = join(dir, 'app.contract'), file = join(dir, 'app.test.contract');
+  const dir = scratch('exact-properties-'), contract = join(dir, 'app.contract'), file = join(dir, 'app.test.contract');
   const plan = join(dir, 'app.plan'), dist = join(dir, 'dist');
   writeFileSync(contract, `component App
   state ready = true

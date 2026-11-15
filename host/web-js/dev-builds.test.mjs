@@ -10,9 +10,10 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { suiteBrowser } from '../../scripts/agent-launch.mjs';
+import { installLock } from '../../scripts/filesystem.mjs';
 import { appSources } from '../web/serve.mjs';
 
 const ROOT = resolve(fileURLToPath(new URL('../..', import.meta.url)));
@@ -28,12 +29,13 @@ async function devLoop(dir, env = {}) {
   await new Promise(ok => listener.listen(0, '127.0.0.1', ok));
   const port = listener.address().port;
   await new Promise(ok => listener.close(ok));
-  const dist = mkdtempSync(join(tmpdir(), 'exact-js-builds-'));
+  // The build's lock and kept generations go beside its dist (serve.mjs `replaceBuild`): the dist sits in a directory of its own.
+  const dist = join(mkdtempSync(join(tmpdir(), 'exact-js-builds-')), 'dist');
   // Owned: ended with what it starts when the test ends, a timeout included (scripts/test-children.mjs).
   const dev = spawnOwned(process.execPath, [resolve(ROOT, 'host/web/dev.mjs'), '--app', dir, '--port', String(port)], { cwd: ROOT, env: { ...process.env, EXACT_WEB_DIST: dist, ...env }, stdio: ['ignore', 'pipe', 'pipe'] });
   const stop = async () => {
     await dev.stop(30_000);
-    rmSync(dist, { recursive: true, force: true });
+    rmSync(dirname(dist), { recursive: true, force: true });
   };
   let out = '', err = '';
   dev.stderr.on('data', d => { err = (err + d).slice(-4000); });
@@ -477,5 +479,7 @@ test("the JS loop: an edit to a copied file: library rebuilds with the library's
   } finally {
     await loop?.stop().catch(() => {});
     rmSync(dir, { recursive: true, force: true });
+    // The lock the reinstall took, kept in TMPDIR by the app's path (filesystem.mjs `installLock`).
+    rmSync(installLock(dir), { force: true });
   }
 }, 1_200_000);

@@ -2,7 +2,7 @@ import {test} from 'bun:test';
 import assert from 'node:assert/strict';
 import {readFileSync, writeFileSync, mkdirSync, unlinkSync, mkdtempSync, openSync, ftruncateSync, closeSync, rmSync, existsSync, readdirSync, watch, renameSync, watchFile, unwatchFile, statSync, lstatSync, utimesSync, symlinkSync, chmodSync} from 'node:fs';
 import {tmpdir} from 'node:os';
-import {basename, join, resolve} from 'node:path';
+import {basename, dirname, join, resolve} from 'node:path';
 import {within} from '../../../scripts/paths.mjs';
 import {open} from '../../../scripts/agent.mjs';
 import {compilerPaths, gpuModules, pendingBuildInputs} from '../../../scripts/app.mjs';
@@ -78,7 +78,8 @@ test('the JS dev loop carries state by built logic revision and refreshes host f
   const appDir=resolve(fileURLToPath(new URL('../../../apps/realworld',import.meta.url))),contract=resolve(appDir,'app.contract'),logic=resolve(appDir,'app.ts'),helper=resolve(appDir,'dev-reload-helper.ts');
   const original=readFileSync(contract,'utf8'),originalLogic=readFileSync(logic,'utf8');
   const restoreTimes=keepTimes([contract,logic]);
-  const privateDist=mkdtempSync(join(tmpdir(),'exact-dev-carry-'));
+  // The build's lock and kept generations go beside its dist (serve.mjs `replaceBuild`): each dist here sits in a directory of its own.
+  const privateDist=join(mkdtempSync(join(tmpdir(),'exact-dev-carry-')),'dist');
   const withProbe=text=>text
     .replace('component RealWorld\n','shape DevReloadAnswer\n  value: string\nshape DevReloadRow\n  id: string\nshape DevReloadPage\n  visibilityState: string\n  onLine: bool\n  canShare: bool\n\ncomponent RealWorld\n  state reloadProbe = "fresh"\n  state rowProbe = "row fresh"\n')
     .replace('  resource follows = followings() as shape Follow[]\n','  resource follows = followings() as shape Follow[]\n  resource devReloadAnswer = devReloadAnswer() as shape DevReloadAnswer\n  resource devReloadRows = devReloadRows() as shape DevReloadRow[]\n  resource devReloadPage = exactPage() as shape DevReloadPage\n')
@@ -148,16 +149,16 @@ test('the JS dev loop carries state by built logic revision and refreshes host f
     writeFileSync(contract,original);
     writeFileSync(logic,originalLogic);
     restoreTimes();
-    rmSync(privateDist,{recursive:true,force:true});
     if(existsSync(helper))unlinkSync(helper);
     await drive?.close();
     if(dev?.exitCode===null){dev.kill('SIGTERM');await new Promise(ok=>{const t=setTimeout(ok,2000);dev.once('exit',()=>{clearTimeout(t);ok()})})}
+    rmSync(dirname(privateDist),{recursive:true,force:true});
   }
 },180_000);
 test('the Caltrain JS dev loop keeps its station search across an app edit', async () => {
   const contract=resolve(fileURLToPath(new URL('../../../apps/caltrain/app.contract',import.meta.url))),original=readFileSync(contract,'utf8');
   const restoreTimes=keepTimes([contract]);
-  const privateDist=mkdtempSync(join(tmpdir(),'exact-dev-carry-'));
+  const privateDist=join(mkdtempSync(join(tmpdir(),'exact-dev-carry-')),'dist');
   // The brand's text, wherever the layout puts it; an edit that no longer applies fails here, not as a reload that never shows.
   const edited=original.replace(/(\n\s*text )"Caltrain"( [^\n]*testId="brand")/,'$1"Caltrain reloaded"$2');
   assert.notEqual(edited, original, 'the brand edit no longer applies to apps/caltrain/app.contract');
@@ -183,9 +184,9 @@ test('the Caltrain JS dev loop keeps its station search across an app edit', asy
   } finally {
     writeFileSync(contract,original);
     restoreTimes();
-    rmSync(privateDist,{recursive:true,force:true});
     await drive?.close();
     if(dev?.exitCode===null){dev.kill('SIGTERM');await new Promise(ok=>{const t=setTimeout(ok,2000);dev.once('exit',()=>{clearTimeout(t);ok()})})}
+    rmSync(dirname(privateDist),{recursive:true,force:true});
   }
 },180_000);
 need('chrome', unavailable)('a page whose first build failed reloads into the fixed build', async () => {
@@ -195,7 +196,7 @@ need('chrome', unavailable)('a page whose first build failed reloads into the fi
   const contract=resolve(fileURLToPath(new URL('../../../apps/realworld/app.contract',import.meta.url))),original=readFileSync(contract,'utf8');
   const restoreTimes=keepTimes([contract]);
   const listener=createServer();await new Promise((ok,fail)=>{listener.once('error',fail);listener.listen(0,'127.0.0.1',ok)});const port=listener.address().port;await new Promise(ok=>listener.close(ok));
-  const dist=mkdtempSync(join(tmpdir(),'exact-dev-error-dist-'));
+  const dist=join(mkdtempSync(join(tmpdir(),'exact-dev-error-dist-')),'dist');
   let dev,suite,lines='';
   const waitFor=async (read,accept,ms=60000)=>{const end=Date.now()+ms;let last;while(Date.now()<end){try{last=await read();if(accept(last))return last}catch{}await new Promise(r=>setTimeout(r,50))}throw new Error(`not observed: ${JSON.stringify(last)}\n${lines.slice(-3000)}`)};
   try {
@@ -217,7 +218,7 @@ need('chrome', unavailable)('a page whose first build failed reloads into the fi
     restoreTimes();
     await suite?.close();
     if(dev?.exitCode===null){dev.kill('SIGTERM');await new Promise(ok=>{const t=setTimeout(ok,2000);dev.once('exit',()=>{clearTimeout(t);ok()})})}
-    rmSync(dist,{recursive:true,force:true});
+    rmSync(dirname(dist),{recursive:true,force:true});
   }
 },420_000);
 test('static watcher follows immediate creation, in-place edits, and directory replacement', async () => {

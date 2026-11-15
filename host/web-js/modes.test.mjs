@@ -243,16 +243,19 @@ test('a development build boots in the modes its reload carried', async () => {
 // modes still work.
 test('a release copy of modes.js has no live entry point', async () => {
   const { withoutDev } = await import('./module.mjs');
-  const { mkdtempSync, readFileSync, writeFileSync } = await import('node:fs');
+  const { mkdtempSync, readFileSync, rmSync, writeFileSync } = await import('node:fs');
   const { join } = await import('node:path');
   const release = withoutDev(readFileSync(new URL('./modes.js', import.meta.url), 'utf8'));
   for (const live of ['function design(', 'tupleRules', 'tupleKey', 'designDigest', 'dev-only']) expect(release).not.toContain(live);
   const dir = mkdtempSync(join((await import('node:os')).tmpdir(), 'exact-modes-release-'));
-  writeFileSync(join(dir, 'rt.js'), 'export const After = [], PropHooks = {}, inflight = { n: 0 }, say = () => {};\n');
-  writeFileSync(join(dir, 'modes.js'), release);
-  const document = createDocument();
-  Object.assign(globalThis, { document, __exactRender: true, exact: {} });
-  const { modes } = await import(join(dir, 'modes.js'));
+  let modes;
+  try {
+    writeFileSync(join(dir, 'rt.js'), 'export const After = [], PropHooks = {}, inflight = { n: 0 }, say = () => {};\n');
+    writeFileSync(join(dir, 'modes.js'), release);
+    const document = createDocument();
+    Object.assign(globalThis, { document, __exactRender: true, exact: {} });
+    ({ modes } = await import(join(dir, 'modes.js')));
+  } finally { rmSync(dir, { recursive: true, force: true }); }
   modes([['dark-style', ['black', 'dim']]], {}, [], {}, [], {}, 'd0', 's0');
   expect(globalThis.exact.design).toBeUndefined();
   expect(globalThis.exact.modes).toBeDefined();

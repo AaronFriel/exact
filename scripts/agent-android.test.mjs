@@ -1,6 +1,6 @@
 // The Android carrier's reader variables, drive setup and reverse mappings (agent-android.mjs).
 // Stand-in adb devices exercise relay cleanup without an emulator or a device.
-import { test, expect, spyOn } from 'bun:test';
+import { afterAll, test, expect, spyOn } from 'bun:test';
 import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -114,6 +114,10 @@ test('the Android reader variable filter and activity allowlist include the auth
   expect(Object.keys(vars).map((name) => `x_${name.slice('EXACT_'.length).toLowerCase()}`).filter((extra) => !activity.includes(`"${extra}"`))).toEqual([]);
 });
 
+// A test that times out never reaches its own `finally`.
+const driveFixtures = [];
+afterAll(() => { for (const fixture of driveFixtures) fixture.dispose(); });
+
 // The stand-in device reaches the fixture only while its reverse mapping exists.
 function androidDriveFixture(reader, destination = null, reacquire = false, failedRemoval = null, stuckShell = false, screen = {}) {
   const dir = mkdtempSync(resolve(tmpdir(), 'exact-adb-')), calls = resolve(dir, 'calls'), mappings = resolve(dir, 'mappings');
@@ -205,7 +209,7 @@ if (cmd[0] === 'shell' && cmd[1] === '-T') {
   const env = { ...process.env, ANDROID_HOME: dir, ANDROID_SERIAL: serial,
     XDG_CACHE_HOME: resolve(dir, 'cache'), EXACT_AGENT: '1', EXACT_AUTH_FIXTURE: 'http://127.0.0.1:4791' };
   for (const name of ['EXACT_DEV_PLAN', 'EXACT_PLAN', 'EXACT_WORLD', 'EXACT_LAUNCH_URL']) delete env[name];
-  return { port: server.port, app: { id: 'dev.exact.fixture', dir }, bin, env, closed, connected,
+  const fixture = { port: server.port, app: { id: 'dev.exact.fixture', dir }, bin, env, closed, connected,
     commands: () => readFileSync(calls, 'utf8').trim().split('\n').map(JSON.parse),
     mappings: () => JSON.parse(readFileSync(mappings, 'utf8')), stopSocket: () => server.stop(true),
     replace: destination => writeFileSync(mappings, JSON.stringify(destination ? { 'tcp:4791': destination } : {})),
@@ -220,6 +224,8 @@ if (cmd[0] === 'shell' && cmd[1] === '-T') {
     },
     dispose() { server.stop(true); rmSync(dir, { recursive: true, force: true }); rmSync(reverseRoot(serial), { recursive: true, force: true }); },
   };
+  driveFixtures.push(fixture);
+  return fixture;
 }
 test('the Android reader uses its declared package and suffix for lookup, launch and drive storage', async () => {
   const { androidDeploy } = await import('./agent-android.mjs');
