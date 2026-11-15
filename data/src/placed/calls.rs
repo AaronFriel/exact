@@ -109,6 +109,9 @@ impl<D: DataSource + 'static> Placed<D> {
         if self.stages.get(&k).is_some_and(VecDeque::is_empty) {
             self.stages.remove(&k);
         }
+        if let Some(Stage::Turn(token)) = &stage {
+            self.turn_ended(*token);
+        }
         match stage {
             Some(Stage::Turn(_)) => {
                 let mut more = Vec::new();

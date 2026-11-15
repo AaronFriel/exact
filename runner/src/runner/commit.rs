@@ -812,11 +812,17 @@ impl<D: DataSource> Runner<D> {
         self.notes.clear();
         self.commands.clear();
         // Module work never handed out (a report, a delivery's continuation) is dropped with it.
-        let unsent: Vec<u64> = (self.requests.iter().map(|r| r.ticket))
-            .filter(|t| self.is_module_work(*t))
+        // A continuation the source minted is discarded there too, so a lone worker's
+        // delivery stops holding its Store (LLP 1027.002 Change 2).
+        let unsent: Vec<(u64, Option<u64>)> = (self.requests.iter())
+            .filter(|r| self.is_module_work(r.ticket))
+            .map(|r| (r.ticket, r.request.continuation))
             .collect();
-        for ticket in unsent {
+        for (ticket, continuation) in unsent {
             self.drop_module_work(ticket);
+            if let Some(token) = continuation {
+                self.data.discard(token);
+            }
         }
         self.requests.clear();
         self.drop_background();

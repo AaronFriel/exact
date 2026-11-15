@@ -8,6 +8,8 @@
 //! be built there.
 
 mod calls;
+mod order;
+use order::{Running, Waiting};
 mod worker;
 use crate::envelope;
 use exact_plan::{Plan, Value};
@@ -280,6 +282,16 @@ pub struct Placed<D> {
     kept: HashMap<u64, Option<u64>>,
     deliveries: HashMap<u64, Arc<Mutex<Option<Outcome>>>>,
     delivery_waiters: HashSet<u64>,
+    /// What holds the Store on the owner while its reply is outstanding, and
+    /// what waits for it, in order (`order.rs`, LLP 1027.002 Change 2).
+    running: Option<Running>,
+    held: VecDeque<Waiting>,
+    /// A kept reply's delivery continuation, to its kept token.
+    deliveries_of: HashMap<u64, u64>,
+    /// Tests of the owner queue's own mechanics (coalesced retirements,
+    /// unqueued turns) queue several turns at once; production never does.
+    #[cfg(test)]
+    unordered: bool,
     stages: HashMap<(Key, Option<u64>), VecDeque<Stage>>,
     more: HashMap<Target, Vec<Request>>,
     next: u64,
@@ -347,6 +359,11 @@ impl<D: DataSource + 'static> Placed<D> {
             kept: HashMap::new(),
             deliveries: HashMap::new(),
             delivery_waiters: HashSet::new(),
+            running: None,
+            held: VecDeque::new(),
+            deliveries_of: HashMap::new(),
+            #[cfg(test)]
+            unordered: false,
             stages: HashMap::new(),
             more: HashMap::new(),
             next: 0,
@@ -767,13 +784,16 @@ impl<D: DataSource + 'static> exact_runner::DataSourceWrapper for Placed<D> {
     /// key whose recorded call hasn't been dispatched.
     fn forgotten(&mut self, store: &exact_runner::Store, in_flight: &[InFlight<'_>]) {
         let tokens: HashSet<u64> = in_flight.iter().filter_map(|f| f.continuation).collect();
-        self.recorded
-            .retain(|token, call| recorded_key(call).0.is_none() || tokens.contains(token));
-        self.hosted.retain(|token, _| tokens.contains(token));
         let live: HashMap<Key, Option<u64>> = in_flight
             .iter()
             .map(|f| (key(Some(f.target), f.source, f.args), f.continuation))
             .collect();
+        let held_live = self.held_live(&live);
+        self.recorded.retain(|token, call| {
+            recorded_key(call).0.is_none() || tokens.contains(token) || held_live.contains(token)
+        });
+        self.hosted.retain(|token, _| tokens.contains(token));
+        self.let_go(&live);
         let recorded = &self.recorded;
         let newer = |k: &Key| matches!(live.get(k), Some(Some(t)) if matches!(recorded.get(t), Some(Recorded::Answer { .. })));
         self.more
@@ -848,6 +868,12 @@ impl<D: DataSource + 'static> exact_runner::DataSourceWrapper for Placed<D> {
                 self.hosted.remove(&token);
             }
             return dispatch;
+        }
+        if self.owner.is_some() && !self.unordered() {
+            self.sync_generation();
+            if !self.reserve(token) {
+                return Dispatch::Held;
+            }
         }
         let Some(recorded) = self.recorded.remove(&token) else {
             return match self.inner.as_mut() {
@@ -940,6 +966,10 @@ impl<D: DataSource + 'static> exact_runner::DataSourceWrapper for Placed<D> {
             .into_iter()
             .map(|token| (token, DataSource::dispatch(self, token, store)))
             .collect();
+        if self.owner.is_some() {
+            self.sync_generation();
+            self.release_next(store, &mut out);
+        }
         let Some(inner) = self.inner.as_mut() else {
             return out;
         };
@@ -961,10 +991,22 @@ impl<D: DataSource + 'static> exact_runner::DataSourceWrapper for Placed<D> {
     }
 
     fn discard(&mut self, token: u64) {
+        if let Some(kept) = self.deliveries_of.get(&token).copied() {
+            self.delivery_ended(kept);
+            self.kept.remove(&kept);
+        }
         if self.deliveries.remove(&token).is_some() {
             self.delivery_waiters.remove(&token);
             return;
         }
+        self.turn_ended(token);
+        self.held
+            .retain(|w| !matches!(w, Waiting::Turn(t) if *t == token));
+        // The exact stage, so a later call with the same key cannot take it.
+        for stages in self.stages.values_mut() {
+            stages.retain(|s| !matches!(s, Stage::Turn(t) if *t == token));
+        }
+        self.stages.retain(|_, stages| !stages.is_empty());
         if let Some(child) = self.hosted.remove(&token) {
             if let Some(inner) = self.inner.as_mut() {
                 inner.discard(child);
@@ -972,24 +1014,13 @@ impl<D: DataSource + 'static> exact_runner::DataSourceWrapper for Placed<D> {
             return;
         }
         match self.recorded.remove(&token) {
-            Some(recorded) => {
-                let fetch = match &recorded {
-                    Recorded::Resume { fetch, .. } => *fetch,
-                    _ => None,
-                };
-                let k = (recorded_key(&recorded), fetch);
-                if let Some(stages) = self.stages.get_mut(&k) {
-                    stages.pop_back();
-                    if stages.is_empty() {
-                        self.stages.remove(&k);
-                    }
-                }
-            }
+            Some(_) => {}
             None => {
+                // On an owner, a token not recorded here is ended or
+                // unknown: it is never the child's to hear.
                 if let Some(owner) = &self.owner {
                     owner.lock().unwrap().unqueued.remove(&token);
-                }
-                if let Some(inner) = self.inner.as_mut() {
+                } else if let Some(inner) = self.inner.as_mut() {
                     inner.discard(token);
                 }
             }
@@ -1103,6 +1134,9 @@ impl<D: DataSource + 'static> exact_runner::DataSourceWrapper for Placed<D> {
             .remove(&token)
             .ok_or_else(|| unavailable("unknown kept worker reply"))?;
         let Some(child) = child else {
+            // The delivery's envelope is back, whatever it holds: the Store
+            // is free before it is applied, so a failing apply cannot hold it.
+            self.delivery_ended(token);
             envelope::apply(outcome, store, &mut self.logs)?;
             return Ok(None);
         };
@@ -1117,14 +1151,9 @@ impl<D: DataSource + 'static> exact_runner::DataSourceWrapper for Placed<D> {
                 wake();
             }
         });
-        let unsent = owner.lock().unwrap().turn(Job::KeptReply {
-            token: child,
-            outcome,
-            snapshot: envelope::snapshot(store, &self.grants),
-            clock: store.clock_ms(),
-            reply,
-        });
-        drop(unsent);
+        drop(owner);
+        // It reads and writes the Store too: it takes its turn (`order.rs`).
+        self.deliver_in_turn((token, continuation, child), outcome, reply, store);
         Ok(Some(Request::continuation(continuation)))
     }
 

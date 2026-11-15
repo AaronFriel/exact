@@ -171,3 +171,72 @@ fn a_report_aborted_before_it_is_taken_is_never_handed_out() {
     assert_eq!(*landed.lock().unwrap(), [7]);
     assert!(r.in_flight().is_empty(), "{:?}", r.in_flight());
 }
+
+/// A delivery's continuation the host has not taken when the runner is
+/// poisoned is dropped with its module work and discarded at the source
+/// that minted it, so a lone worker's delivery stops holding its Store
+/// (LLP 1027.002 Change 2).
+#[test]
+fn poison_discards_a_delivery_continuation_not_yet_handed_out() {
+    struct Delivering {
+        made: Vec<Report>,
+        discarded: Arc<Mutex<Vec<u64>>>,
+    }
+    impl DataSource for Delivering {
+        fn query(&mut self, _: &str, _: &[Value]) -> Result<Value, DataError> {
+            unreachable!("the fixture implements answer")
+        }
+        fn answer(&mut self, _: &mut Store, _: &str, _: &[Value]) -> Result<Answer, DataError> {
+            self.made.push(Report {
+                token: 7,
+                request: Request::get("https://example.test/report"),
+                by: Reporter::Answer(Target::Mutation(0)),
+            });
+            Ok(Answer::Now(Value::Bool(true)))
+        }
+        fn take_reports(&mut self) -> Vec<Report> {
+            std::mem::take(&mut self.made)
+        }
+        fn module_delivery(
+            &mut self,
+            _: &mut Store,
+            _: u64,
+            _: Outcome,
+        ) -> Result<Option<Request>, DataError> {
+            Ok(Some(Request::continuation(55)))
+        }
+        fn discard(&mut self, token: u64) {
+            self.discarded.lock().unwrap().push(token);
+        }
+    }
+    let discarded = Arc::new(Mutex::new(Vec::new()));
+    let source = Delivering {
+        made: Vec::new(),
+        discarded: discarded.clone(),
+    };
+    let plan = contract::compile(SRC).expect("the fixture compiles");
+    let mut r = Runner::boot(
+        plan,
+        source,
+        Kernel::with_monospace(),
+        Default::default(),
+        "/",
+    )
+    .unwrap();
+    r.act("go", vec![]).unwrap();
+    let out: Vec<RequestOut> = (r.take_requests().into_iter())
+        .filter(|o| o.target == "module work")
+        .collect();
+    assert_eq!(out.len(), 1, "{out:?}");
+    r.fulfill(
+        out[0].ticket,
+        Outcome::Failed {
+            kind: crate::FailureKind::Network,
+            message: "offline".into(),
+        },
+    )
+    .unwrap();
+    assert!(discarded.lock().unwrap().is_empty());
+    r.poison();
+    assert_eq!(*discarded.lock().unwrap(), [55]);
+}

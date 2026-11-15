@@ -773,6 +773,34 @@ fn a_route_lists_its_pages_with_its_source() {
     );
 }
 
+/// A worker-placed source (a lone `Placed`, one ordered set, LLP 1027.002
+/// Change 2) lists its pages too: the enumerator parses each turn's reply
+/// before it dispatches the next, so it never meets `Dispatch::Held`.
+#[test]
+fn a_worker_placed_pages_source_is_never_held() {
+    struct Listed;
+    impl DataSource for Listed {
+        fn query(&mut self, source: &str, _: &[Value]) -> Result<Value, DataError> {
+            Err(DataError::UnknownSource(source.into()))
+        }
+        fn answer(&mut self, _: &mut Store, _: &str, _: &[Value]) -> Result<Answer, DataError> {
+            Ok(Answer::Now(Value::list(vec![Value::str("1")])))
+        }
+    }
+    let plan = contract::compile(
+        "routes nav\n  tab home \"/\" render=build\n    post \"/post/:post\" render=build pages=posts(\"public\")\ncomponent A\n  view\n    text \"a\"\n",
+    )
+    .unwrap();
+    let row = plan
+        .routes
+        .iter()
+        .find(|r| plan.str(r.name) == "post")
+        .unwrap();
+    let worker = exact_data::Placed::new(Listed, exact_runner::Placement::Worker);
+    let listed = exact_render::pages(&plan, worker, row, Duration::from_secs(5));
+    assert_eq!(listed.unwrap(), ["/post/1"]);
+}
+
 /// A `pages=` source that is re-asked without end (`Dispatch::Again` gets
 /// its outcome at once, every time) still meets the enumerator's deadline
 /// (Astra, code review round 1: the loop checked it only after a drain came
