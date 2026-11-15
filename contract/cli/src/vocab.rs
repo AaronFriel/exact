@@ -916,6 +916,8 @@ const TRANSCRIPT_END: &str = "on a `list virtualized=true` (a grouped list never
 /// tab it was on.
 const NAVIGATE: &str = "on the navigation root: a location from outside the running app (a link, a protocol handler's or a notification's URL, the web's Back and Forward), whose action chooses the verb (LLP 1038 D8). `go` pops to the location when the selected stack holds it, selects the tab whose top it is, and otherwise pushes it on the selected tab, whatever tab declares its route. `open(nav, url)` lands in the route's declared tab, that tab's stack its declared chain. A cold launch's location is no event: it opens there, as `open` does";
 
+const PLAYING: &str = "on video or audio, with no payload: playback is ready to start after a pause or delay for media data (WHATWG: https://html.spec.whatwg.org/multipage/media.html#event-media-playing). The web forwards the browser's event. Apple waits until the item's timebase advances, then reports once per start or resumption; calling play alone does not fire it. Use playing to hand over a feed's volume; timeupdate remains a periodic position report (250 ms on Apple). This is not a guarantee that a speaker has produced sound. Android and the painted hosts do not currently deliver this event (LLP 1042).";
+
 /// What `metadata=` takes (LLP 1098 D1): the Media Session's record.
 const METADATA: &str = "MediaMetadata(title=, artist=, album=, artwork=), each a string";
 
@@ -1064,6 +1066,9 @@ fn attr_json(name: &str, a: &AttrTarget) -> Value {
             }
             if name == "navigate" {
                 doc["note"] = NAVIGATE.into();
+            }
+            if name == "playing" {
+                doc["note"] = PLAYING.into();
             }
         }
         AttrTarget::Surface => {}
@@ -1327,6 +1332,9 @@ fn attr_detail(name: &str, a: &AttrTarget) -> Vec<String> {
         }
         AttrTarget::Handler(event) if name == "navigate" => {
             vec![format!("event {event}"), NAVIGATE.into()]
+        }
+        AttrTarget::Handler(event) if name == "playing" => {
+            vec![format!("event {event}"), PLAYING.into()]
         }
         // The action's signature first: the scroll port guessed one
         // `ScrollEvent` parameter, and `moved(x, y)` was a later bullet.
