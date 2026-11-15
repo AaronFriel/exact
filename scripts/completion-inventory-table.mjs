@@ -372,6 +372,7 @@ export const classifications = [
     ["painted:host/painted/src/presenter/height_drag.rs", "Presenter::height_candidate"],
     ["painted:host/painted/src/presenter/layout_json.rs", "Presenter::layout_json"],
     ["painted:host/painted/src/presenter/links.rs", "Presenter::inline_hit"],
+    ["painted:host/painted/src/presenter/media.rs", "Presenter::media_json"],
     ["painted:host/painted/src/presenter/painter.rs",
       "Presenter::apple_painter_can_draw Presenter::apple_painter_retry_deadline Presenter::apple_painter_starting Presenter::apple_window_frame " +
       "Presenter::attach_apple_layer Presenter::attach_painter_window Presenter::displayed_process_ms"],
@@ -420,11 +421,14 @@ export const classifications = [
     ["web:host/web/src/abi/clock.rs", "exact_live_clock exact_requests_pending"],
     ["web:host/web/src/abi/mode.rs", "exact_design_rows"],
   ]),
-  group("media and sensors", ["subscription"], "current MIDI/sound/sensor session, device handle or scheduled sample", "UI-owned",
-    "runner/src/runner/modules/samples.rs and runner/src/midi.rs number live sensor/device work; sound.rs owns voice/haptic IDs. No persisted operation record is created.", [
+  group("media and sensors", ["subscription"], "current MIDI/sound/video/sensor session, element allocation, device handle or scheduled sample", "UI-owned",
+    "runner/src/runner/modules/samples.rs and runner/src/midi.rs number live sensor/device work; sound.rs owns voice/haptic IDs. Android Natives.kt posts player events/state through Native.media and CanvasHost::media; presenter/media.rs reader_media accepts only the current native session and video node key. No persisted operation record is created.", [
     ["apple:host/apple/src/abi/exports.rs", "exact_midi"],
     ["apple:host/apple/src/executor.rs", "exact_local_network_report"],
+    ["painted:host/painted/src/canvas/jni.rs", "Java_dev_exact_canvas_Native_media"],
+    ["painted:host/painted/src/canvas/requests.rs", "CanvasHost::media"],
     ["painted:host/painted/src/midi.rs", "Host::drain_outputs Host::extension_agent Host::midi_agent Host::midi_host"],
+    ["painted:host/painted/src/presenter/media.rs", "Presenter::reader_media"],
     ["painted:host/painted/src/presenter/preferences.rs", "Presenter::extension_agent Presenter::midi_agent"],
     ["runner:runner/src/midi.rs", "Midi::push#next:1 Midi::retract_seq#next:1 Midi::ticks#next:1"],
     ["runner:runner/src/runner/midi.rs", "Runner::midi Runner::midi_agent Runner::midi_host Runner::midi_input Runner::midi_inputs Runner::set_midi Runner::take_midi"],
@@ -530,7 +534,7 @@ export const classifications = [
     ["apple:host/apple/src/calc.rs", "exact_calc_create exact_calc_destroy exact_calc_resolve"],
     ["apple:host/apple/src/collapse.rs", "exact_text_collapse"],
     ["apple:host/apple/src/corner.rs", "exact_corner_outline"],
-    ["apple:host/apple/src/gradient.rs", "exact_gradient"],
+    ["apple:host/apple/src/gradient.rs", "exact_gradient exact_gradient_cycle"],
     ["apple:host/apple/src/markup.rs", "exact_markup_atoms exact_markup_auto exact_markup_edit exact_markup_free exact_markup_pieces exact_markup_plain exact_markup_selection exact_markup_style"],
     ["apple:host/apple/src/material.rs", "exact_material_platform"],
     ["apple:host/apple/src/pan_velocity.rs", "exact_pan_sample exact_pan_velocity exact_velocity"],
@@ -542,7 +546,7 @@ export const classifications = [
     ["painted:host/painted/src/press.rs", "Host::look_motion Host::retire_presses"],
     ["painted:host/painted/src/surfaces.rs", "Presenter::retier_surfaces Presenter::surface_lifecycle Presenter::sync_surfaces"],
     ["painted:host/painted/src/surfaces/window.rs", "Presenter::collect_painter_retirement Presenter::reset_painter_present_deadline"],
-    ["web-js:host/web-js/motion/src/abi.rs", "m_gesture m_in m_out m_scratch"],
+    ["web-js:host/web-js/motion/src/abi.rs", "m_gesture m_in m_out m_scratch m_translate"],
   ]),
   group("raster decodes", ["one-shot"], "raster session, decode request and retained lease", "UI-owned",
     "host/apple/src/raster_exports.rs exposes session/request handles, cancellation and lease release. A completed decode belongs to those consumer leases, not an app operation.", [
@@ -744,10 +748,12 @@ export const classifications = [
     ["runner:runner/src/store/presence.rs", "Store::adopt_occupancy#revision:1 Store::set_locked#revision:1"],
   ]),
   group("replies", ["one-shot", "subscription", "durable operation"], "current presenter/reader session; a request may pump several completion families", "UI-owned",
-    "host/painted/src/agent.rs serve and agent/stdio.rs handle_request pump the current Presenter, then dispatch hold/picker answers and frame work.", [
+    "host/painted/src/agent.rs serve and agent/stdio.rs handle_request pump the current Presenter, then dispatch hold/picker answers and frame work. canvas/jni_agent.rs run calls agent_with_reader, which installs set_agent_turn only for the agent call and restores it afterward; pump.rs and commands.rs use that callback to hand out requests and admit queued reader answers.", [
     ["painted:host/painted/src/agent.rs", "serve"],
     ["painted:host/painted/src/agent/stdio.rs", "handle handle_for_window"],
-    ["painted:host/painted/src/canvas/agent.rs", "after_turn next_stream waiting"],
+    ["painted:host/painted/src/canvas/agent.rs", "after_turn CanvasHost::agent_with_reader next_stream waiting"],
+    ["painted:host/painted/src/canvas/jni_agent.rs", "run"],
+    ["painted:host/painted/src/presenter/requests.rs", "Presenter::set_agent_turn"],
   ], "durable when the pumped reply names retained effectful/background work; agent dispatch does not change that ownership."),
   group("session lifecycle", ["one-shot"], "host/session setup, boot configuration, platform thread or teardown", "UI-owned",
     "The named host/painted source configures or constructs the current host, platform services or render backend. These entries create no independent durable completion owner.", [
