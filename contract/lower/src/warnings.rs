@@ -67,7 +67,9 @@ pub(crate) fn with_text_styles(
     let controlled = roles::controlled(checked);
     routeless_header::check(checked, &mut out);
     // Track the navigation root (the outermost `navigationKey`) and its `navigationBack`.
-    crate::menu_rows::notes(&root.view, &mut out);
+    let checking = contract_checking::Checking::new(checked);
+    let checked_view = checking.expanded();
+    crate::menu_rows::notes(&checked_view, &mut out);
     crate::symbols::tints(&root.view, checked.file, lowered, &mut out);
     let mut stack: Vec<(&Node, bool, Option<&str>)> =
         root.view.iter().rev().map(|n| (n, false, None)).collect();
@@ -195,7 +197,7 @@ pub(crate) fn with_text_styles(
     crate::warning_rank::keep_first(&mut out);
     out.extend(platform);
     crate::control_roles::unreachable(&root.view, &checked.file.styles, &mut out);
-    crate::style_hosts::undrawn(&root.view, &checked.file.styles, &mut out);
+    crate::style_hosts::undrawn(&checked_view, &checked.file.styles, &mut out);
     one_scheme(
         root,
         &checked.file.styles,

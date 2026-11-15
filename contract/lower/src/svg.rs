@@ -1031,7 +1031,7 @@ fn each_literal(
     value: &Expr,
     check: &mut dyn FnMut(&str, Span) -> Result<(), LowerError>,
 ) -> Result<(), LowerError> {
-    for leaf in value.value_leaves() {
+    for leaf in contract_checking::value_leaves(value) {
         if let Expr::Str(text, span) = leaf {
             check(text, *span)?;
         }

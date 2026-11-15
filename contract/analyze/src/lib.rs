@@ -29,6 +29,7 @@ pub use shortcuts::{
 
 pub use contract_types::handler_arity_message;
 
+use contract_checking::{Checking, Visit};
 use contract_syntax::{Component, Expr, File, Node, Span};
 use contract_types::{Checked, Ref, Scope, Shapes, Ty};
 use std::collections::{BTreeMap, BTreeSet};
@@ -213,11 +214,8 @@ pub fn check(checked: &Checked<'_>) -> Result<Analysis, AnalyzeError> {
 /// Every independent refusal: each component's actions, tasks and view are
 /// checked whatever the others found.
 pub fn check_all(checked: &Checked<'_>) -> Result<Analysis, Vec<AnalyzeError>> {
-    let Checked {
-        file,
-        types,
-        expanded,
-    } = checked;
+    let Checked { file, expanded, .. } = checked;
+    let checking = Checking::new(checked);
     let mut errors = Vec::new();
     if let Err(e) = check_routes_root(file, true) {
         errors.push(e);
@@ -251,9 +249,8 @@ pub fn check_all(checked: &Checked<'_>) -> Result<Analysis, Vec<AnalyzeError>> {
     // owns no `resource`, `mutation`, or `task` is the type pass's refusal
     // (`type-child-resource`), made before its view is checked.
     for (ci, c) in file.components.iter().enumerate() {
-        let ct = &types.components[ci];
         let scoped = if ci == 0 { &expanded.root } else { c };
-        let scope = types.component_scope(scoped, ct);
+        let checked_view = checking.authored(ci);
         errors.extend(check_tasks(c));
         // The root's actions with every call expanded: a caller's sends and
         // writes and its callees' are one commit (LLP 1088 D8, LLP 1089 D3,
@@ -264,14 +261,14 @@ pub fn check_all(checked: &Checked<'_>) -> Result<Analysis, Vec<AnalyzeError>> {
             errors.extend(gates::check(scoped, &file.fns));
         }
         let view = View {
-            file,
-            actions: scoped,
-            shapes: &types.shapes,
+            checking: &checking,
+            actions: checking.actions(ci),
+            shapes: checking.shapes(),
         };
-        errors.extend(check_view(&c.view, &scope, &view));
+        errors.extend(check_view(&checked_view, &view));
     }
-    errors.extend(check_controls(&expanded.root.view, false).err());
-    errors.extend(arity::check(file, types, &expanded.root).err());
+    errors.extend(check_controls(&checking.expanded()).err());
+    errors.extend(arity::check(&checking).err());
     if errors.is_empty() {
         Ok(Analysis {})
     } else {
@@ -588,32 +585,29 @@ pub fn handler_accepts(attr: &str, given: usize, params: &[Ty]) -> bool {
     }
 }
 
-/// What the view check reads besides the scope: the file's components, the
-/// component whose actions the scope's `Ref::Action`s index, and the shapes.
+/// Declaration facts and action signatures, without a second route to the view tree.
 struct View<'a> {
-    file: &'a File,
-    actions: &'a Component,
+    checking: &'a Checking<'a>,
+    actions: &'a [contract_syntax::Action],
     shapes: &'a Shapes,
 }
 
-fn check_view(nodes: &[Node], scope: &Scope, view: &View<'_>) -> Vec<AnalyzeError> {
+fn check_view(nodes: &contract_checking::View<'_>, view: &View<'_>) -> Vec<AnalyzeError> {
     let mut errors = Vec::new();
-    for (n, scope) in contract_types::walk_view(nodes, scope, view.shapes) {
+    for (n, scope) in nodes.scoped() {
         check_node(n, &scope, view, &mut errors);
     }
     errors
 }
 
-fn check_node(n: &Node, scope: &Scope, view: &View<'_>, errors: &mut Vec<AnalyzeError>) {
-    let file = view.file;
+fn check_node(n: Visit<'_>, scope: &Scope, view: &View<'_>, errors: &mut Vec<AnalyzeError>) {
+    let checking = view.checking;
     let result = (|| -> Result<(), AnalyzeError> {
-        match n {
-            Node::Children { .. } => {}
-            Node::Element { tag, attrs, .. } => {
-                let control = contract_syntax::payload_control(tag, attrs);
-                for a in attrs {
-                    if is_handler(&a.name, &a.value) {
-                        errors.extend(check_handler(&a.name, &a.value, scope, a.span, control, view).map_err(
+        if let Some((tag, _, attrs)) = n.element() {
+            let control = contract_syntax::payload_control(tag, attrs);
+            for a in attrs {
+                if is_handler(&a.name, &a.value) {
+                    errors.extend(check_handler(&a.name, &a.value, scope, a.span, control, view).map_err(
                             |mut e| {
                                 // A hyphenated tag is a native module's (LLP 1024 D1): an
                                 // event's name there is the box's handler, never a prop.
@@ -623,31 +617,27 @@ fn check_node(n: &Node, scope: &Scope, view: &View<'_>, errors: &mut Vec<Analyze
                                 e
                             },
                         ).err());
-                    }
                 }
             }
-            Node::Use {
-                name, args, span, ..
-            } => {
-                if !file.components.iter().any(|x| &x.name == name) {
+        } else if let Some((declaration, name, args)) = n.component_use() {
+            let span = n.span();
+            if declaration.is_none() {
+                return err(
+                    "analyze-unknown-component",
+                    checking.unknown_component_message(name),
+                    span,
+                );
+            }
+            let mut seen = BTreeSet::new();
+            for a in args {
+                if !seen.insert(a.name.clone()) {
                     return err(
-                        "analyze-unknown-component",
-                        file.unknown_component_message(name),
-                        *span,
+                        "analyze-duplicate-arg",
+                        format!("`{}` given twice", a.name),
+                        a.span,
                     );
                 }
-                let mut seen = BTreeSet::new();
-                for a in args {
-                    if !seen.insert(a.name.clone()) {
-                        return err(
-                            "analyze-duplicate-arg",
-                            format!("`{}` given twice", a.name),
-                            a.span,
-                        );
-                    }
-                }
             }
-            _ => {}
         }
         Ok(())
     })();
@@ -708,7 +698,7 @@ fn check_handler(
         let checked_attr = contract_syntax::typed_event(attr, control);
         let valid = handler_accepts(checked_attr, given, params);
         if !valid {
-            let declared = view.actions.actions.get(index as usize);
+            let declared = view.actions.get(index as usize);
             let params: Vec<(String, Ty)> = declared
                 .map(|a| {
                     a.params
@@ -757,13 +747,11 @@ fn check_handler(
 }
 
 // Check the expanded tree: a component can supply a canvas's controls.
-fn check_controls(nodes: &[Node], in_canvas: bool) -> Result<(), AnalyzeError> {
-    let descend = |node: &Node, in_canvas: &bool| {
-        let inner = *in_canvas || matches!(node, Node::Element { tag, .. } if tag == "canvas");
-        [Some(inner), Some(inner)]
-    };
-    for (node, in_canvas) in Node::walk_with(nodes, in_canvas, descend) {
-        if let Node::Element { tag, attrs, .. } = node {
+fn check_controls(view: &contract_checking::View<'_>) -> Result<(), AnalyzeError> {
+    for (node, in_canvas) in view.walk_with(false, |node, in_canvas| {
+        *in_canvas || node.element().is_some_and(|(tag, _, _)| tag == "canvas")
+    }) {
+        if let Some((tag, _, attrs)) = node.element() {
             for attr in attrs.iter().filter(|a| a.name == "action") {
                 if !in_canvas || tag != "button" {
                     return err(

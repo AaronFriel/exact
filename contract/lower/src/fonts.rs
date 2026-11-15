@@ -278,7 +278,7 @@ impl Lowerer<'_> {
     pub(super) fn literal_family_arms(e: &Expr) -> bool {
         let mut folded = e.clone();
         fold_constant_families(&mut folded, true);
-        let mut leaves = folded.value_leaves();
+        let mut leaves = contract_checking::value_leaves(&folded);
         leaves.all(|leaf| matches!(leaf, Expr::Str(..)))
     }
 
@@ -471,7 +471,7 @@ fn family_clear(s: &str) -> bool {
 /// Visit the literal family names for validation, including ones beside
 /// runtime arms; the remaining string is resolved when it changes.
 fn family_arms(e: &Expr, visit: &mut dyn FnMut(&str, Span)) -> Result<(), LowerError> {
-    for leaf in e.value_leaves() {
+    for leaf in contract_checking::value_leaves(e) {
         if let Expr::Str(name, span) = leaf {
             if name.trim().is_empty() || family_clear(name) {
                 continue;

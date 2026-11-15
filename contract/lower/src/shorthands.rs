@@ -612,7 +612,7 @@ impl Lowerer<'_> {
 
 /// Native interaction limits must also cover computed expressions, not only literals.
 pub(crate) fn portable_literal(value: &Expr, name: &str) -> Result<(), LowerError> {
-    for leaf in value.value_leaves() {
+    for leaf in contract_checking::value_leaves(value) {
         if !matches!(leaf, Expr::Str(..)) {
             return err("lower-css-interaction", format!("`{name}` takes a CSS keyword literal or a choice of literals so native support can be checked; computed strings cannot be checked"), leaf.span());
         }

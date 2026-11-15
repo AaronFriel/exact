@@ -438,7 +438,7 @@ fn style_value(
         super::shorthands::portable_literal(&a.value, &a.name)?;
         // Other string rows may carry runtime design-token names.
         if !matches!(a.value, Expr::Str(..)) {
-            for value in a.value.value_leaves() {
+            for value in contract_checking::value_leaves(&a.value) {
                 let literal = Attr {
                     value: value.clone(),
                     span: value.span(),
@@ -885,7 +885,7 @@ fn style_value(
     Ok(())
 }
 fn css_wide_branches(e: &Expr, rows: &[StyleId]) -> bool {
-    e.value_leaves().all(|leaf| match leaf {
+    contract_checking::value_leaves(e).all(|leaf| match leaf {
         Expr::Str(s, _) => rows
             .iter()
             .all(|row| StyleValue::Text(s.as_str().into()).unsets(*row)),
@@ -1281,7 +1281,7 @@ pub(crate) fn check_prop_value(
 }
 /// The string literals `e` can be: itself, or the arms of a `?:`, `match` or `let`.
 fn string_leaves<'e>(e: &'e Expr, out: &mut Vec<(&'e str, Span)>) {
-    for leaf in e.value_leaves() {
+    for leaf in contract_checking::value_leaves(e) {
         if let Expr::Str(s, span) = leaf {
             out.push((s, *span));
         }
