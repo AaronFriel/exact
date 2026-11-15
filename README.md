@@ -741,10 +741,11 @@ else here was admitted because a real app needed it.
   (`exact-camera srcObject=`) and takes still photos (`takePhoto`) on the web, iOS,
   macOS, and Android, behind the `device.camera` grant (LLP 1133.008).
   `takePhotoWithCameraApp` takes one in the system camera UI instead: Android's camera
-  app, iOS's camera picker, and on the web a file input with `capture`. It needs no grant
-  on Android; iOS shows the `device.camera` line's purpose. It does not record video
-  from the camera or hand its frames to code, and it has no Windows, Linux, tvOS, or
-  watchOS implementation.
+  app, iOS's camera picker, and on the web a file input with `capture`;
+  `recordVideoWithCameraApp` records a video there (LLP 1133.008.000). Neither needs a
+  grant on Android; iOS shows the `device.camera` line's purpose, and for a video the
+  `device.microphone` line's too. It does not record video in the app or hand the
+  camera's frames to code, and it has no Windows, Linux, tvOS, or watchOS implementation.
 - **Data.** TypeScript or Rust sources, optionally on a worker, and sources declared in
   Contract: an HTTP request whose JSON answer is read field by field. An app whose
   sources are all declared has no data module, and its native build links no JavaScript

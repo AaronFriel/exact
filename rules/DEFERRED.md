@@ -1173,6 +1173,17 @@ reading. Nothing that isn't HTML is added by it.
   waived by Charlie's ask (2026-11-12: work the open issues through to the
   ideal end state). Still out: the macOS, Windows, Linux, tvOS, visionOS
   and watchOS cells, and `capture` on the HTML `input` tag.
+  **Expanded (Charlie, 2026-11-15, expo/exact#633; LLP 1133.008.000):**
+  a video from the system camera UI, `recordVideoWithCameraApp`: Android's
+  camera app (`MediaStore.ACTION_VIDEO_CAPTURE`), iOS's
+  `UIImagePickerController` in movie mode, and the web's file input with
+  `accept="video/*"` and `capture`, the video the person keeps written to
+  an `app:/` path and answered as a `Video`. Consumer: the same
+  access-control app, whose guards record a short video and upload it
+  (`exactBodyFrom`, now streamed from disk with no size bound where it is
+  streamed). Unblocks that without app Kotlin or Swift. Take: none
+  offered; waived by the same ask. Still out: video recording in the app,
+  and the macOS, Windows, Linux, tvOS, visionOS and watchOS cells.
 - **Expanded (Charlie, 2026-10-23, "Expand, no take", on LLP 1133.009 §15
   question 6):** recording the microphone to a file and reading its level,
   by Media Capture's and MediaStream Recording's names (`getUserMedia(audio=)`
