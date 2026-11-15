@@ -316,11 +316,20 @@ fn inline_detached_and_reused_keys_are_ineligible_but_numeric_roots_are_allowed(
 
 #[test]
 fn height_transition_roundtrips_exwf_without_changing_previous_property_codes() {
-    // A path's `d` rides past the wire's codes (LLP 1055.000 D15).
+    // A path's `d` and `filter` ride past the wire's codes and the
+    // `border-color` shorthand's (LLP 1055.000 D15, LLP 1003.002 D1).
+    assert_eq!(
+        (
+            Property::COUNT,
+            Property::D as usize,
+            Property::Filter as usize
+        ),
+        (27, 28, 29)
+    );
     for (code, property) in Property::ALL
         .into_iter()
         .enumerate()
-        .chain([(Property::D as usize, Property::D)])
+        .chain(Property::TRANSITION_ONLY.map(|p| (p as usize, p)))
     {
         if property == Property::ShadowColor {
             continue; // named only by `box-shadow`; refused on the wire (LLP 1062)

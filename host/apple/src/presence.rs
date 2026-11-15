@@ -424,9 +424,10 @@ impl<D: DataSource> Host<D> {
             }) else {
                 continue;
             };
-            if Property::PAINT.contains(&p.property) {
+            if Property::PAINT.contains(&p.property) || p.property == Property::Filter {
                 // @ref LLP 1055.000 D6 — an `svg`'s scene shows its colours;
-                // a box's are its style, re-sent with the presented values.
+                // a box's are its style, re-sent with the presented values,
+                // and so is its filter (LLP 1003.002 D8).
                 if !self.svg.touch(self.runner.kernel(), view) {
                     let inherits = p.property == Property::Color;
                     if let Some((_, changed)) = colored.iter_mut().find(|(id, _)| *id == view) {

@@ -192,6 +192,7 @@ impl<D: DataSource> Presenter<D> {
             roots: &roots,
             presented: &presented,
             paths: &|id| host.presented_path(id),
+            filters: &|id| host.presented_filter(id),
             scroll: model_scroll.as_ref().unwrap_or(&self.scroll),
             page,
             images: &self.images.bitmaps,

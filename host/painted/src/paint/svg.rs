@@ -444,7 +444,15 @@ pub(super) fn resolve_svg(
     content: Rect4,
     dark: bool,
 ) -> exact_kernel::svg::Scene {
-    resolve_with(walk.kernel, node, content, walk.presented, walk.paths, dark)
+    resolve_with(
+        walk.kernel,
+        node,
+        content,
+        walk.presented,
+        walk.paths,
+        walk.filters,
+        dark,
+    )
 }
 
 /// [`resolve_svg`] with the host's presented values and paths by view.
@@ -454,6 +462,7 @@ pub fn resolve_with(
     content: Rect4,
     presented: &dyn Fn(exact_kernel::ViewId) -> super::Presented,
     paths: &dyn Fn(exact_kernel::ViewId) -> Option<exact_motion::PathValue>,
+    filters: &dyn Fn(exact_kernel::ViewId) -> Option<exact_motion::FilterValue>,
     dark: bool,
 ) -> exact_kernel::svg::Scene {
     /// The host's values by node, as the scene asks for them.
@@ -461,6 +470,7 @@ pub fn resolve_with(
         kernel: &'a exact_kernel::Kernel,
         value: V,
         paths: &'a dyn Fn(exact_kernel::ViewId) -> Option<exact_motion::PathValue>,
+        filters: &'a dyn Fn(exact_kernel::ViewId) -> Option<exact_motion::FilterValue>,
     }
     impl<V: Fn(NodeKey, Property) -> Option<Value>> scene::Present for ByNode<'_, V> {
         fn value(&self, key: NodeKey, p: Property) -> Option<Value> {
@@ -468,6 +478,9 @@ pub fn resolve_with(
         }
         fn path(&self, key: NodeKey) -> Option<exact_motion::PathValue> {
             (self.paths)(self.kernel.node_by_key(key)?.id)
+        }
+        fn filter(&self, key: NodeKey) -> Option<exact_motion::FilterValue> {
+            (self.filters)(self.kernel.node_by_key(key)?.id)
         }
     }
     {
@@ -499,6 +512,7 @@ pub fn resolve_with(
                 kernel,
                 value,
                 paths,
+                filters,
             },
             dark,
         )

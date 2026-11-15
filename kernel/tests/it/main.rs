@@ -23,6 +23,7 @@ mod cover;
 mod env;
 mod export;
 mod field_text;
+mod filter_motion;
 mod fit_content_native;
 mod fit_text;
 mod flex_auto_minimum;

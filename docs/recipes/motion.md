@@ -41,8 +41,9 @@ component App
 ```
 
 - **Animates:** translate, scale, rotate, opacity, colours, `box-shadow`, SVG geometry,
-  numeric `height`, `font-weight`, `font-stretch`, `font-variation-settings`. Other layout
-  is refused; use `-exact-layout-transition`. A native `button`: opacity and transforms.
+  numeric `height`, `font-weight`, `font-stretch`, `font-variation-settings`, `filter`
+  (transitions). Layout: `-exact-layout-transition`. Native `button`: opacity,
+  transforms.
 - **Spring:** `-exact-spring(stiffness, damping, mass)`: transition timing, no duration;
   not `animation`.
 - **Hover scale:** `:hover`, `:focus-visible` take `scale=1.08` with

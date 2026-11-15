@@ -106,6 +106,9 @@ mod activation_tests;
 #[cfg(test)]
 #[path = "box_motion_tests.rs"]
 mod box_motion_tests;
+#[cfg(test)]
+#[path = "filter_motion_tests.rs"]
+mod filter_motion_tests;
 #[path = "layout.rs"]
 mod layout;
 use layout::{content_size, published_content_box};

@@ -465,8 +465,8 @@ fn serialize(
 }
 
 /// The engine's values as a scene presents them: a sampled animation's
-/// value now, and a path's `d` while a transition moves it (LLP 1055.000
-/// D15).
+/// value now, and a path's `d` (LLP 1055.000 D15) or a `filter` (LLP
+/// 1003.002) while a transition moves it.
 struct Sampled<'e>(&'e Engine);
 
 impl exact_kernel::svg::scene::Present for Sampled<'_> {
@@ -475,6 +475,9 @@ impl exact_kernel::svg::scene::Present for Sampled<'_> {
     }
     fn path(&self, key: NodeKey) -> Option<exact_motion::PathValue> {
         self.0.presented_path(motion_node(key))
+    }
+    fn filter(&self, key: NodeKey) -> Option<exact_motion::FilterValue> {
+        self.0.presented_filter(motion_node(key))
     }
 }
 

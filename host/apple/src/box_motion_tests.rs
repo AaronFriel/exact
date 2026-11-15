@@ -1148,11 +1148,13 @@ fn random_lowered_colour_tracks_play_as_the_engine_samples() {
 }
 
 #[test]
-fn an_unsupported_filter_transition_is_named() {
-    let literal = "component App\n  view\n    box transition=\"opacity 200ms, filter 200ms\"\n";
+fn an_unsupported_transition_property_is_named() {
+    let literal = "component App\n  view\n    box transition=\"opacity 200ms, clip-path 200ms\"\n";
     let diagnostics = contract::compile(literal).unwrap_err();
-    assert!(format!("{diagnostics:?}").contains("`filter` is not a supported transition property"));
-    let source = "component App\n  state transitions = \"opacity 200ms, filter 200ms\"\n  view\n    box transition=transitions\n";
+    assert!(
+        format!("{diagnostics:?}").contains("`clip-path` is not a supported transition property")
+    );
+    let source = "component App\n  state transitions = \"opacity 200ms, clip-path 200ms\"\n  view\n    box transition=transitions\n";
     let plan = contract::compile(source).unwrap().encode();
     let (host, _) = Host::boot(
         &plan,
@@ -1164,7 +1166,7 @@ fn an_unsupported_filter_transition_is_named() {
     .unwrap();
     let logs = host.agent("{\"op\":\"logs\"}");
     assert!(logs.contains("invalid transition value"), "{logs}");
-    assert!(logs.contains("filter 200ms"), "{logs}");
+    assert!(logs.contains("clip-path 200ms"), "{logs}");
 }
 
 #[test]

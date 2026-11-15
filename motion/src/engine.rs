@@ -316,7 +316,10 @@ pub struct Engine {
     clocks: clock::Clocks,
     // Each path's `d`, and the two ends of its transition (LLP 1055.000
     // D15); the progress is the node's `Property::D` slot.
-    paths: BTreeMap<u64, path::PathTrack>,
+    paths: BTreeMap<u64, path::Track<crate::path::PathValue>>,
+    // Each `filter` a transition covers, and its transition's ends (LLP
+    // 1003.002 D6); the progress is the node's `Property::Filter` slot.
+    filters: BTreeMap<u64, path::Track<crate::filter::FilterValue>>,
     // What plays: every animation, or nothing but settled values (LLP
     // 1047.001 D3), chosen once when the engine is made.
     links: &'static links::EngineLinks,
@@ -448,6 +451,7 @@ impl Engine {
             && !self.animations.contains_key(&node)
             && !self.animating.contains(&node)
             && !self.paths.contains_key(&node)
+            && !self.filters.contains_key(&node)
             && !self.timelines.names(node)
             && !self.clocks.names(node)
             && none(&self.running)
@@ -466,6 +470,7 @@ impl Engine {
         self.forget_timelines(node);
         self.forget_clock(node);
         self.paths.remove(&node);
+        self.filters.remove(&node);
         // Removing a list must not scan every other node once per row, nor
         // probe every table once per property: a list row's retirement
         // removes a node per box. Its running, pending and played curves are
@@ -492,6 +497,9 @@ impl Engine {
     pub fn remove_property(&mut self, node: u64, property: Property) -> bool {
         if property == Property::D {
             self.paths.remove(&node);
+        }
+        if property == Property::Filter {
+            self.filters.remove(&node);
         }
         self.dirty.remove(&(node, property));
         self.running.remove(&(node, property));

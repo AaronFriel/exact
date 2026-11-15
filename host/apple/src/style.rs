@@ -791,26 +791,36 @@ pub fn style_json_for(node: &NodeRef<'_>, env: &Env) -> (String, Vec<Skipped>) {
 }
 
 /// Presented paint over the rows while it moves (LLP 1055.000 D6, LLP
-/// 1062): one slot per [`Property::PAINT`]; `None` shows the row.
-#[derive(Debug, Clone, Copy, Default, PartialEq)]
-pub struct Shown(pub [Option<exact_motion::Value>; Property::PAINT.len()]);
+/// 1062): one slot per [`Property::PAINT`], and the `filter` a transition
+/// moves (LLP 1003.002 D8); `None` shows the row.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Shown {
+    paint: [Option<exact_motion::Value>; Property::PAINT.len()],
+    /// The presented `filter`.
+    pub filter: Option<exact_kernel::svg::filter::FilterList>,
+}
 
 impl Shown {
     /// The presented value of one paint property.
     pub fn get(&self, property: Property) -> Option<exact_motion::Value> {
         let i = Property::PAINT.iter().position(|p| *p == property)?;
-        self.0[i]
+        self.paint[i]
+    }
+
+    /// Whether anything is presented over the rows.
+    pub fn moving(&self) -> bool {
+        self.paint.iter().any(Option::is_some) || self.filter.is_some()
     }
 
     /// Set one paint property's presented value.
     pub fn set(&mut self, property: Property, value: Option<exact_motion::Value>) {
         if let Some(i) = Property::PAINT.iter().position(|p| *p == property) {
-            self.0[i] = value;
+            self.paint[i] = value;
         }
     }
 }
 
-fn fixed(v: exact_motion::Value) -> ColorValue {
+pub(crate) fn fixed(v: exact_motion::Value) -> ColorValue {
     // LLP 1100 D2: Oklab motion keeps its gamut frame by frame.
     if v.oklab {
         let (linear, alpha) = v.linear_srgb();
@@ -820,8 +830,13 @@ fn fixed(v: exact_motion::Value) -> ColorValue {
     ColorValue::Fixed(exact_kernel::Color(u32::from_be_bytes([r, g, b, a])))
 }
 
-/// The presented colour, background, tint and shadow over `computed`'s rows.
+/// The presented colour, background, tint, shadow and filter over
+/// `computed`'s rows.
 fn paint_over(computed: &mut StyleProps, shown: &Shown) {
+    if let Some(f) = &shown.filter {
+        computed.filter = f.clone();
+        computed.mask.set(StyleId::Filter);
+    }
     if let Some(c) = shown.get(Property::Color) {
         computed.text_color = fixed(c);
         computed.mask.set(StyleId::TextColor);

@@ -379,6 +379,7 @@ mod measurement {
                                 shown
                             },
                             paths: &|_| None,
+                            filters: &|_| None,
                             scroll: &BTreeMap::new(),
                             page: (0., 0.),
                             images: &BTreeMap::new(),

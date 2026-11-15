@@ -36,7 +36,8 @@ pub fn transitions() -> String {
     let properties: std::collections::BTreeMap<_, _> = exact_motion::Property::ALL
         .iter()
         .flat_map(|p| [p.name(), p.css_name()])
-        .chain(["all", "border-color", "d"])
+        .chain(["all", "border-color"])
+        .chain(exact_motion::Property::TRANSITION_ONLY.map(|p| p.name()))
         .filter_map(|name| {
             let transition = exact_motion::Transitions::parse(name).ok()?;
             let mut style = StyleProps::default();

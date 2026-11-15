@@ -381,6 +381,8 @@ pub struct Scene<'a> {
     pub presented: &'a dyn Fn(ViewId) -> Presented,
     /// A path's `d` while a transition moves it (LLP 1055.000 D15).
     pub paths: &'a dyn Fn(ViewId) -> Option<exact_motion::PathValue>,
+    /// A `filter` while a transition moves it (LLP 1003.002 D8).
+    pub filters: &'a dyn Fn(ViewId) -> Option<exact_motion::FilterValue>,
     /// Scroll offsets of scroll containers (host state, LLP 1010).
     pub scroll: &'a BTreeMap<ViewId, (f32, f32)>,
     /// The page's scroll offset: the window is a viewport over a document.

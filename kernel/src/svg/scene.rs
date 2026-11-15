@@ -51,6 +51,11 @@ pub trait Present {
     fn path(&self, _key: NodeKey) -> Option<exact_motion::PathValue> {
         None
     }
+    /// The presented `filter` of `key` while a transition moves it (LLP
+    /// 1003.002 D8).
+    fn filter(&self, _key: NodeKey) -> Option<exact_motion::FilterValue> {
+        None
+    }
 }
 
 impl<F: Fn(NodeKey, Property) -> Option<Value>> Present for F {
@@ -463,6 +468,11 @@ impl<'k> Resolver<'k, '_> {
             if let Some(v) = self.value(key, Property::StrokeDashoffset) {
                 style.stroke_dashoffset = v.x as f32;
             }
+        }
+        // After `color`: a moving filter's share of `currentcolor` reads it
+        // (LLP 1003.002 D7).
+        if let Some(f) = self.presented.filter(key) {
+            style.filter = crate::motion::filter_list(&f, style.text_color);
         }
     }
 

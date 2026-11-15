@@ -1020,7 +1020,7 @@ pub fn transition_css(t: &Transitions) -> (String, bool) {
                     // sides as their shorthand.
                     TransitionProperty::All => Property::ALL
                         .into_iter()
-                        .chain([Property::D])
+                        .chain(Property::TRANSITION_ONLY)
                         .filter(|p| !p.springs() && *p != Property::ShadowColor)
                         .map(|p| match p {
                             Property::BorderTopColor => "border-color",
@@ -1204,6 +1204,7 @@ mod writer_tests {
             "opacity 1s steps(4, jump-both), height 200ms linear 50ms",
             "opacity 1s linear(0, 0.2, 0.6 60%, 0.8, 1), translate 1s linear(0 0% 20%, 1 80% 100%)",
             "translate -exact-spring(180, 12, 1)",
+            "filter 400ms ease, opacity 1s",
         ] {
             let t = Transitions::parse(text).unwrap();
             assert_eq!(transition_css(&t), transition_joined(&t), "{text}");
@@ -1227,6 +1228,8 @@ mod writer_tests {
             transition_css(&t),
             (format!("background-color {curve}"), false)
         );
+        let t = Transitions::parse("filter -exact-spring(180, 12, 1) 0s 100ms").unwrap();
+        assert_eq!(transition_css(&t), (format!("filter {curve}"), false));
         let t = Transitions::parse("opacity 1s, all -exact-spring(180, 12, 1) 0s 100ms").unwrap();
         let (text, skipped) = transition_css(&t);
         assert!(skipped, "the compositor rows' spring is the host's");
@@ -1238,7 +1241,7 @@ mod writer_tests {
             names.join(" "),
             "opacity 1s ease 0s,all 0s ease 0s,stroke-dashoffset r color background-color fill stroke cx cy x y \
              rx ry border-color --exact-tint box-shadow font-weight font-stretch \
-             font-variation-settings d "
+             font-variation-settings d filter "
         );
     }
 }

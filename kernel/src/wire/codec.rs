@@ -26,6 +26,9 @@ const BORDER_COLOR: u8 = Property::COUNT as u8 + 1;
 /// A path's `d` (LLP 1055.000 D15): its property's code, past the wire's.
 const PATH_D: u8 = Property::D as u8 + 1;
 
+/// `filter` (LLP 1003.002 D1): its property's code, past `d`'s.
+const FILTER: u8 = Property::Filter as u8 + 1;
+
 /// Round `n` up to a multiple of 8.
 pub const fn align8(n: usize) -> usize {
     (n + 7) & !7
@@ -361,6 +364,7 @@ impl<'a> Reader<'a> {
                 0 => TransitionProperty::All,
                 BORDER_COLOR => TransitionProperty::BorderColor,
                 PATH_D => TransitionProperty::Property(Property::D),
+                FILTER => TransitionProperty::Property(Property::Filter),
                 p => TransitionProperty::Property(
                     Property::from_wire(p - 1)
                         .filter(|p| *p != Property::ShadowColor)
@@ -735,7 +739,7 @@ mod tests {
         // schema. The literal makes an accidental removal of that coupling a
         // test failure whenever the byte snapshot above is intentionally moved.
         // Recomputed when the schema changes; the digest test prints the value.
-        assert_eq!(SCHEMA_DIGEST, 0x8d6ff77343bf0d86);
+        assert_eq!(SCHEMA_DIGEST, 0x015f5bbe4f1d3730);
     }
 
     #[test]

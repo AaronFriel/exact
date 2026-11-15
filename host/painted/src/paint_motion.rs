@@ -32,6 +32,13 @@ impl<D: DataSource> Host<D> {
         self.engine.presented_path(motion_node(key))
     }
 
+    /// A `filter` while a transition moves it (LLP 1003.002 D8); `None`
+    /// paints the row.
+    pub fn presented_filter(&self, id: ViewId) -> Option<exact_motion::FilterValue> {
+        let key = self.runner.kernel().node(id)?.key;
+        self.engine.presented_filter(motion_node(key))
+    }
+
     /// Adopt a commit's paint, after its `motion_sync` set the rows.
     pub(super) fn sync_paint(&mut self, receipt: &CommitReceipt) {
         let _roles = self.runner.bind_roles(); // Its own (LLP 1121 stage 5).
@@ -272,8 +279,9 @@ impl<D: DataSource> Host<D> {
             if p.property == Property::Height || self.presents_nothing(view, &p) {
                 continue;
             }
-            // A path's `d` is read from the engine where it is painted.
-            if p.property == Property::D {
+            // A path's `d` and a `filter` are read from the engine where
+            // they are painted.
+            if Property::TRANSITION_ONLY.contains(&p.property) {
                 changed = true;
                 self.row_dirty.node(key);
                 continue;

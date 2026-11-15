@@ -521,7 +521,7 @@ pub(crate) fn eligibility(
             || n.is_inline_run()
             || (percent && !(boxed && !svg))
             || engine.timeline_bound(*node)
-            || under_box_filter(kernel, &n)
+            || under_box_filter(kernel, engine, &n)
             // A glass group ignores the opacity Core Animation plays between
             // it and its glass; the host isolates on what it is told.
             || (props.contains(&Property::Opacity) && in_glass_group(kernel, &n))
@@ -530,7 +530,7 @@ pub(crate) fn eligibility(
             || props.iter().any(|p| crate::looks::paints_over(&n, *p))
             // Drawn into an island's pixels, which Core Animation does not
             // animate (except a live filter picture on iOS).
-            || (svg && in_picture(kernel, &n, box_motion))
+            || (svg && in_picture(kernel, engine, &n, box_motion))
             || (boxed && svg && !svg_turns(&n, &props))
             || (moves && !circle_moves(&n, &props))
         {
@@ -616,8 +616,8 @@ pub(crate) fn hand_over_paths(kernel: &Kernel, engine: &mut Engine, live: bool) 
             && !served(&s.stroke)
             && s.vector_effect != exact_kernel::VectorEffect::NonScalingStroke
             && !marked(kernel, &n)
-            && !in_picture(kernel, &n, live)
-            && !under_box_filter(kernel, &n);
+            && !in_picture(kernel, engine, &n, live)
+            && !under_box_filter(kernel, engine, &n);
         let same = engine.path_ends(node).is_some_and(|(from, to)| {
             let (a, b) = (
                 exact_kernel::svg::parse_d(&from.to_d()),
@@ -735,7 +735,7 @@ fn playable(
         || n.node_type == NodeType::Svg
         || skip(n.id)
         || crate::looks::paints_over(&n, p)
-        || under_box_filter(kernel, &n)
+        || under_box_filter(kernel, engine, &n)
         || engine
             .animation_plays(key)
             .iter()
@@ -1057,8 +1057,8 @@ pub(crate) fn resample(
                     .contains(&Property::Opacity)
             })
         };
-        if under_box_filter(kernel, &n)
-            || (svg && in_picture(kernel, &n, live))
+        if under_box_filter(kernel, engine, &n)
+            || (svg && in_picture(kernel, engine, &n, live))
             || (opacity() && in_glass_group(kernel, &n))
         {
             engine.set_node_sampled(node, true);
@@ -1069,11 +1069,14 @@ pub(crate) fn resample(
 }
 
 /// Whether a node is drawn into a filtered box's picture (CSS `filter` on
-/// a box, `BoxFilter` on Apple): it or a box above it has a filter, so its
-/// animations are sampled and each frame redraws the picture.
-fn under_box_filter(kernel: &Kernel, n: &exact_kernel::NodeRef<'_>) -> bool {
-    let filtered =
-        |a: &exact_kernel::NodeRef<'_>| !a.node_type.is_svg_element() && !a.style.filter.is_none();
+/// a box, `BoxFilter` on Apple): it or a box above it has a filter, or a
+/// filter transition running (LLP 1003.002 D8: `blur()` → `none` shows the
+/// picture until it ends), so its animations are sampled and each frame
+/// redraws the picture.
+fn under_box_filter(kernel: &Kernel, engine: &Engine, n: &exact_kernel::NodeRef<'_>) -> bool {
+    let filtered = |a: &exact_kernel::NodeRef<'_>| {
+        !a.node_type.is_svg_element() && (!a.style.filter.is_none() || filter_moves(engine, a))
+    };
     if filtered(n) {
         return true;
     }
@@ -1087,6 +1090,11 @@ fn under_box_filter(kernel: &Kernel, n: &exact_kernel::NodeRef<'_>) -> bool {
     false
 }
 
+/// Whether `a`'s `filter` transition is running (LLP 1003.002 D8).
+fn filter_moves(engine: &Engine, a: &exact_kernel::NodeRef<'_>) -> bool {
+    engine.is_active(exact_kernel::motion::motion_node(a.key), Property::Filter)
+}
+
 /// Whether an element is drawn only into pixels, where a layer's own
 /// animation would not show: under a filtered or masked element (an
 /// island), or inside a definition (a mask's, pattern's, marker's or clip
@@ -1096,7 +1104,7 @@ fn under_box_filter(kernel: &Kernel, n: &exact_kernel::NodeRef<'_>) -> bool {
 /// is an exception on iOS (`live`): its picture follows its content on the
 /// GPU (`SvgFilterLive`), where Core Animation renders the content with its
 /// animations each frame, so what is inside it lowers as anywhere else.
-fn in_picture(kernel: &Kernel, n: &exact_kernel::NodeRef<'_>, live: bool) -> bool {
+fn in_picture(kernel: &Kernel, engine: &Engine, n: &exact_kernel::NodeRef<'_>, live: bool) -> bool {
     use exact_kernel::svg::filter::FilterFn;
     let followed = |f: &exact_kernel::svg::filter::FilterList| {
         live && !f.0.iter().any(|x| matches!(x, FilterFn::Url(_)))
@@ -1113,7 +1121,10 @@ fn in_picture(kernel: &Kernel, n: &exact_kernel::NodeRef<'_>, live: bool) -> boo
             | NodeType::SvgSymbol => return true,
             _ => {}
         }
+        // A moving filter is CSS functions (LLP 1003.002 D2), whatever its
+        // row says now.
         if (!a.style.filter.is_none() && !followed(&a.style.filter))
+            || (!live && filter_moves(engine, &a))
             || a.style.rare.svg_mask.url().is_some()
         {
             return true;

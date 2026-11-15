@@ -270,6 +270,7 @@ impl<D: DataSource> Presenter<D> {
                 (0.0, 0.0, css, css),
                 &|id| self.host.presented(id),
                 &|id| self.host.presented_path(id),
+                &|id| self.host.presented_filter(id),
                 dark,
             );
             return Some(crate::paint::Painter::svg_picture(

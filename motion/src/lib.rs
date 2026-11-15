@@ -43,6 +43,7 @@ pub mod animation;
 pub mod color;
 pub mod easing;
 pub mod engine;
+pub mod filter;
 pub mod gesture;
 pub mod math;
 pub mod parse;
@@ -66,6 +67,7 @@ pub use engine::{
     NamedTimeline, PlayedCurve, PlayedTransition, Presentation, SpringDescriptor, SpringFrames,
     TransformHold, TransitionEnds,
 };
+pub use filter::{FilterKind, FilterStep, FilterValue};
 pub use parse::ParseError;
 pub use path::{PathCommand, PathValue};
 pub use property::{Property, Value};

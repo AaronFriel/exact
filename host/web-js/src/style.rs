@@ -691,7 +691,7 @@ pub static TRANSITION_ENTRIES: std::sync::LazyLock<String> = std::sync::LazyLock
     use exact_motion::Property;
     let mut properties: std::collections::BTreeMap<_, Vec<&str>> = Property::ALL
         .into_iter()
-        .chain([Property::D])
+        .chain(Property::TRANSITION_ONLY)
         .filter(|p| *p != Property::ShadowColor)
         .map(|p| {
             (
@@ -708,7 +708,7 @@ pub static TRANSITION_ENTRIES: std::sync::LazyLock<String> = std::sync::LazyLock
     properties.insert("all", vec![]);
     let all: Vec<_> = Property::ALL
         .into_iter()
-        .chain([Property::D])
+        .chain(Property::TRANSITION_ONLY)
         .filter(|p| !p.springs() && *p != Property::ShadowColor)
         .map(|p| {
             if p == Property::BorderTopColor {

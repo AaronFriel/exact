@@ -332,15 +332,15 @@ pub fn codec(row: StyleId) -> String {
 }
 
 /// What a `transition` names (`transition-property`, LLP 1002): `all`,
-/// `border-color`, and each property the engine moves, a path's `d` among
-/// them (LLP 1055.000 D15).
+/// `border-color`, and each property the engine moves, a path's `d` and
+/// `filter` among them (LLP 1055.000 D15, LLP 1003.002).
 pub fn transition_properties() -> Vec<&'static str> {
     use exact_motion::Property;
     let mut names = vec!["all", "border-color"];
     names.extend(
         Property::ALL
             .into_iter()
-            .chain([Property::D])
+            .chain(Property::TRANSITION_ONLY)
             .filter(|p| *p != Property::ShadowColor)
             .map(|p| p.name()),
     );
