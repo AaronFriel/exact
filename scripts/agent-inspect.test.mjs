@@ -78,16 +78,18 @@ test('Android live windows read their baseline once the lease lends the clock, a
   expect(s.now).toBe(1700);
 });
 
-test('Apple live windows use a host-side wait and release their lease on errors', async () => {
+test('Apple live windows read their baseline once the lease holds, use a host-side wait and release their lease on errors', async () => {
   const requests = [], cursor = { version: 1 };
+  let started = false;
   const s = { host: 'ios', op: async request => {
     requests.push(request);
-    if (request.capture) return { capture: request.capture === 'start' };
+    if (request.capture) { started = request.capture === 'start'; return { capture: started }; }
     if (request.cursor) throw new Error('disconnected');
-    return { available: true, cursor };
+    // An on-demand collector collects once the lease asks it to
+    return started ? { available: true, cursor } : { available: false, reason: 'collection-disabled' };
   }, perf: () => { throw new Error('legacy sampler'); } };
   await expect(perfOp(s, ['frames', 'live', '1'])).rejects.toThrow('disconnected');
-  expect(requests.map(request => request.capture ?? 'health')).toEqual(['health', 'start', 'health', 'stop']);
+  expect(requests.map(request => request.capture ?? (request.cursor ? 'delta' : 'health'))).toEqual(['health', 'start', 'health', 'delta', 'stop']);
   expect(requests.some(request => request.op === 'clock')).toBe(false);
   await expect(perfOp(s, ['frames', 'live', '30001'])).rejects.toThrow();
 });

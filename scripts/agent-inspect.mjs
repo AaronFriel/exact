@@ -570,12 +570,15 @@ export async function perfOp(s, args, line, step) {
     if (live !== undefined && !(Number.isInteger(live) && live > 0 && live <= 120000)) throw new MalformedOperation('perf frames live <ms>: a whole number of milliseconds, 1–120000');
     if (live !== undefined && ['ios', 'host-ios', 'macos', 'host'].includes(s.host)) {
       if (live > 30000 || late !== undefined || args.length !== 3 || args[1] !== 'live') throw new MalformedOperation('perf frames live <1–30000 ms> on Apple; use report for hitch detail');
-      const before = await s.op({ op: 'perf', frames: true, health: true });
-      if (before.error || !before.available) return before;
-      if (before.capture?.agentLeaseRemainingMs > 0) throw new MalformedOperation('a live frame capture is already active; read health or stop that capture first');
+      const current = await s.op({ op: 'perf', frames: true, health: true });
+      if (current.error) return current;
+      if (current.capture?.agentLeaseRemainingMs > 0) throw new MalformedOperation('a live frame capture is already active; read health or stop that capture first');
+      // The lease starts an on-demand collector in a new generation, so the baseline is read once it holds.
       const capture = await s.op({ op: 'perf', frames: true, capture: 'start', durationMs: live + 5000 });
       if (!capture.capture) return capture;
       try {
+        const before = await s.op({ op: 'perf', frames: true, health: true });
+        if (before.error || !before.available) return before;
         await new Promise(resolve => setTimeout(resolve, live));
         return await s.op({ op: 'perf', frames: true, health: true, cursor: before.cursor });
       } finally { await s.op({ op: 'perf', frames: true, capture: 'stop' }); }

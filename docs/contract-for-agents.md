@@ -5113,7 +5113,12 @@ An attached agent can use the existing device carrier (`ios --device`, optionall
 `--phone <name|udid>`), or a simulator, with `--timing platform` or, on the
 simulator, `--live` ([reference](reference.md#inspect-work-and-native-presentation)).
 Once a `clock` operation has taken the agent's clock, a capture stays paused
-(`virtual-clock`). A drive runs these operations
+(`virtual-clock`). A collector that collects on demand (`ExactFrameHealthMode` is
+`demand`) is started by `capture start` and `track start` as by the card's showing, in
+a new generation, and stops when their lease ends or they stop, unless the card shows;
+between leases `perf frames health` reads nothing (`collection-disabled`). Where
+collection is off, both are refused with `collection-disabled`. A drive runs these
+operations
 (`sky` is a canvas):
 
 ```text
@@ -5211,8 +5216,9 @@ or invalid distribution accounting. Saturation is explicit. `histogram.valid`
 describes accounting, not health. All metric responses fit the same 4000-byte wire
 envelope.
 
-Apple `perf frames live <1–30000 ms>` waits in the driver with a bounded capture lease,
-then reads a cursor delta and releases its lease. During that lease the host refuses
+Apple `perf frames live <1–30000 ms>` takes a bounded capture lease, reads its
+baseline once the lease holds, waits in the driver, then reads a cursor delta and
+releases its lease. During that lease the host refuses
 all virtual-clock requests, including implicit takeover from held-clock operations.
 Use real input. Platform timing now preserves frame tasks, timer wakeups, async fills
 and macOS ordinary-wheel/reorder timing; frozen-clock agents retain their deterministic path.
