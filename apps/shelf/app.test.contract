@@ -183,11 +183,17 @@ test "discover shows an error, then tries again"
 test "Scan Barcode opens the scan screen inside the add sheet, and Cancel goes back"
   tap "add-book"
   clock settle
-  tap "scan-barcode"
+  perf
+    tap "scan-barcode"
+    clock +400
+  expect perf query lookup == 1
   expect state current.name == "scan"
   expect text "scan-hint" == "Point the camera at the barcode on the back of the book"
-  clock +400
-  tap "scan-cancel"
+  // The scan's requests go with its screen.
+  perf
+    tap "scan-cancel"
+    clock +400
+  expect perf query lookup == 0
   expect state current.name == "add"
   expect state scanTrack == ""
 

@@ -138,9 +138,8 @@ component Shelf
   state draftPages = ""
   state draftStatus = "want"
   state submitted = false
-  // The scan's camera track, and the ISBNs Try Again passed over.
+  // The scan's camera track.
   state scanTrack = ""
-  state skipped: string[] = []
   // The book a quote is for, and the lines turned off in the quote sheet.
   state quoteBook = ""
   state quoteOff: number[] = []
@@ -155,8 +154,6 @@ component Shelf
   mutation logged as shape Ack queue refreshes lib
   resource formats = getSupportedFormats() as shape BarcodeFormats else empty()
   resource camera = cameraStatus() as shape CameraStatus else empty()
-  resource scan = detectedBarcodes(track=scanTrack, formats=["ean_13"]) as shape BarcodeScan else empty()
-  resource lookup = bookByIsbn(isbn) as shape Found else empty()
   resource readerAny = textDetectorAvailability() as shape TextDetectorAvailability else empty()
   resource reader = textDetectorAvailability(languages=quoteLanguages) as shape TextDetectorAvailability else empty()
   mutation opened as shape MediaStream then arm
@@ -195,8 +192,6 @@ component Shelf
       short_name=some(b.title), description=none, url=`/book/${b.id}`, icons=none, apple=none, android=none)))
   derive canScan = formats.tracks and formats.formats.includes("ean_13") and camera.available
   derive backCamera = MediaTrackConstraints(deviceId=none, groupId=none, facingMode=some("environment"), width=none, height=none, aspectRatio=none, frameRate=none, resizeMode=none, zoom=none, torch=none, sampleRate=none, sampleSize=none, channelCount=none, echoCancellation=none, autoGainControl=none, noiseSuppression=none, latency=none)
-  // The first ISBN the scan has seen that Try Again did not pass over.
-  derive isbn = scanTrack == "" ? "" : match first(scan.seen.filter(s => isIsbn(s.rawValue) and not skipped.includes(s.rawValue))) { case some(s) => s.rawValue, case none => "" }
   // The person's language and English; the platform's default where it reads neither.
   derive quoteLanguages = [time.locale, "en"]
   derive canQuote = readerAny.availability == "available"
@@ -274,7 +269,6 @@ component Shelf
 
   // Scan Barcode: the back camera, a screen inside the add sheet, and the lookup.
   action openScan
-    skipped = []
     send opened = getUserMedia(video=true, videoConstraints=backCamera)
     nav = push(nav, "/add/scan")
   // The camera opened; if the scan screen was left while it was asked, it stops.
@@ -295,13 +289,11 @@ component Shelf
   action endScan
     endTrack()
     nav = back(nav)
-  action useBook
-    draftTitle = lookup.title
-    draftAuthor = lookup.author
-    draftPages = lookup.pages > 0 ? `${lookup.pages}` : ""
+  action useBook(found: Found)
+    draftTitle = found.title
+    draftAuthor = found.author
+    draftPages = found.pages > 0 ? `${found.pages}` : ""
     endScan()
-  action tryAgain
-    skipped = skipped.concat([isbn])
   action save
     submitted = true
     if titleError == "" and pagesError == ""
@@ -656,41 +648,7 @@ component Shelf
               // The scan: pushed inside the add sheet, the camera running only
               // while it is shown.
               if e.name == "scan"
-                column navigationKey=`${e.id}`
-                  testId="route-scan"
-                  position="absolute"
-                  inset=0
-                  display="flex"
-                  flex-direction="column"
-                  header display="flex"
-                    align-items="center"
-                    justify-content="space-between"
-                    padding="8px 16px"
-                    button press=endScan testId="scan-cancel"
-                      text "Cancel"
-                    text "Scan Barcode" role="heading" aria-level=2
-                  exact-camera srcObject=scanTrack
-                    aria-label="Viewfinder"
-                    testId="scan-viewfinder"
-                    object-fit="cover"
-                    flex=1
-                    min-height=0
-                    width="100%"
-                  column gap=8 padding=16 align-items="center" testId="scan-result"
-                    if isbn == ""
-                      text "Point the camera at the barcode on the back of the book" text-align="center"
-                        testId="scan-hint"
-                    else if pending(lookup) or lookup.isbn != isbn
-                      progress aria-label="Looking up the book" testId="scan-looking"
-                    else if lookup.found
-                      text lookup.title role="heading" aria-level=3 text-align="center" testId="scan-title"
-                      text lookup.author color="-exact-secondary-label" text-align="center" testId="scan-author"
-                      button press=useBook buttonStyle="bordered-prominent" testId="use-book"
-                        text "Use This Book"
-                    else
-                      text `No book found for ISBN ${isbn}` text-align="center" testId="scan-none"
-                      button press=tryAgain buttonStyle="bordered" testId="scan-again"
-                        text "Try Again"
+                Scan(entry=e.id, track=scanTrack, cancel=endScan, use=useBook)
               if e.name == "discover"
                 Discover(entry=e.id, shown=(nav.tab == t.name), owned=owned, add=addWork)
               if e.name == "stats"
@@ -844,6 +802,59 @@ component Discover
         else
           for w in works.works key = w.key
             WorkRow(work=w, added=owned.includes(w.key), add=add)
+
+component Scan
+  // The scan owns what it sees and looks up (LLP 1035.005.004): `scan`,
+  // `lookup` and the ISBNs Try Again passed over go with the screen, so
+  // Cancel ends its requests. The camera stays the root's.
+  props
+    entry: number
+    track: string
+    cancel: action
+    use: action
+  state skipped: string[] = []
+  resource scan = detectedBarcodes(track=track, formats=["ean_13"]) as shape BarcodeScan else empty()
+  // The first ISBN the scan has seen that Try Again did not pass over.
+  derive isbn = track == "" ? "" : match first(scan.seen.filter(s => isIsbn(s.rawValue) and not skipped.includes(s.rawValue))) { case some(s) => s.rawValue, case none => "" }
+  resource lookup = bookByIsbn(isbn) as shape Found else empty()
+  action tryAgain
+    skipped = skipped.concat([isbn])
+  view
+    column navigationKey=`${entry}`
+      testId="route-scan"
+      position="absolute"
+      inset=0
+      display="flex"
+      flex-direction="column"
+      header display="flex"
+        align-items="center"
+        justify-content="space-between"
+        padding="8px 16px"
+        button press=cancel testId="scan-cancel"
+          text "Cancel"
+        text "Scan Barcode" role="heading" aria-level=2
+      exact-camera srcObject=track
+        aria-label="Viewfinder"
+        testId="scan-viewfinder"
+        object-fit="cover"
+        flex=1
+        min-height=0
+        width="100%"
+      column gap=8 padding=16 align-items="center" testId="scan-result"
+        if isbn == ""
+          text "Point the camera at the barcode on the back of the book" text-align="center"
+            testId="scan-hint"
+        else if pending(lookup) or lookup.isbn != isbn
+          progress aria-label="Looking up the book" testId="scan-looking"
+        else if lookup.found
+          text lookup.title role="heading" aria-level=3 text-align="center" testId="scan-title"
+          text lookup.author color="-exact-secondary-label" text-align="center" testId="scan-author"
+          button press=use(lookup) buttonStyle="bordered-prominent" testId="use-book"
+            text "Use This Book"
+        else
+          text `No book found for ISBN ${isbn}` text-align="center" testId="scan-none"
+          button press=tryAgain buttonStyle="bordered" testId="scan-again"
+            text "Try Again"
 
 component BookRow
   props
