@@ -399,6 +399,31 @@ final class CanvasPlacedDrawingIOSTests: XCTestCase {
         XCTAssertTrue(child.boxFilter?.casts == true)
     }
 
+    func testSurfaceCreationAndFollowingLayoutCaptureOnlyTheFinalChildren() throws {
+        let d = try deck("canvas-presentation-capture")
+        defer { d.session.destroy() }
+        let child = node(101, d.session.presenter, CGRect(x: 0, y: 0, width: 100, height: 100), in: d.overlay)
+        let fill = UIView(frame: child.bounds)
+        fill.backgroundColor = .red
+        child.addSubview(fill)
+        d.host.entries.removeValue(forKey: d.canvas.id)
+        capturedChildPixels = []
+
+        d.session.apply(wireBatch([["op": "surface", "id": 100, "name": "deck", "values": []]]))
+        XCTAssertTrue(capturedChildPixels?.isEmpty == true, "creation must not capture an unfinished presentation")
+        fill.backgroundColor = .blue
+        d.session.apply(wireBatch([["op": "frame", "id": 101, "x": 0, "y": 10, "w": 100, "h": 100]]))
+        XCTAssertTrue(capturedChildPixels?.isEmpty == true, "following layout joins the pending capture")
+        waitForMainQueue()
+
+        let captured = try XCTUnwrap(capturedChildPixels)
+        XCTAssertEqual(captured.count, 1, "one texture after creation and layout")
+        let final = try XCTUnwrap(captured.last)
+        XCTAssertEqual(final, [0, 0, 255, 255], "the surface receives the final blue child")
+        XCTAssertFalse(d.canvas.needsCapture)
+        XCTAssertEqual(d.host.captures, 1)
+    }
+
     func testUnchangedLayerFilterClipsDoNotRecaptureCanvasTextures() throws {
         let d = try deck("canvas-layer-filter-clips")
         defer { d.session.destroy() }

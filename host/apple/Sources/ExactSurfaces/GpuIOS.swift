@@ -486,6 +486,13 @@ final class CanvasesHost {
     private func capture(_ m: GpuModule, _ e: Entry) {
         // A nested readback can post a message and apply another batch here.
         guard live(e.view.id) === e, e.presentable, !e.capturing else { return }
+        // Creation and UIKit's inset reports belong to one presentation.
+        // Capture its final children once (LLP 1172.023 E3).
+        if session?.isApplyingPresentation == true {
+            e.view.needsCapture = true
+            scheduleCapture()
+            return
+        }
         e.capturing = true
         defer { e.capturing = false }
         guard let overlay = e.view.overlay, e.view.window != nil, let metal = e.view.canvasMetal else { return }
