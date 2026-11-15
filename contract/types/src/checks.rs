@@ -36,7 +36,9 @@ pub(super) fn roster_spelling(f: exact_plan::Stdlib, spec: &str) -> &str {
         (Stdlib::ToString, "any") => "number | string | bool",
         (Stdlib::First | Stdlib::At, "any") => "list",
         // The ISO 4217 codes `"currency"` takes (LLP 1116 D8), too many to spell here.
-        (Stdlib::FormatNumber, code) if code.starts_with("\"USD\"") => "\"USD\" | \"EUR\" | …",
+        (Stdlib::FormatNumber, code) if code.starts_with("\"USD\"") => {
+            "\"USD\" | \"EUR\" | … | 0..=100"
+        }
         _ => spec,
     }
 }
@@ -350,6 +352,20 @@ fn owner_scopes(
         &mut scopes,
     );
     (scopes, complete)
+}
+
+/// The scopes of the arms a child's lifted requests are owned by, which
+/// read their arguments and gates there (LLP 1035.005.004 D1).
+pub(super) fn owned_scopes(
+    c: &Component,
+    ct: &ComponentTypes,
+    types: &Types,
+    owners: &[Owner],
+) -> BTreeMap<(u32, u8), Scope> {
+    if !owners.iter().any(|o| matches!(o, Owner::Arm { .. })) {
+        return BTreeMap::new();
+    }
+    owner_scopes(c, ct, types).0
 }
 
 /// Infer each lifted child state's initializer where its instance is

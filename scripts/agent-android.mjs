@@ -29,7 +29,7 @@
 // EXACT_FONTS. The painter is the CPU one unless EXACT_PAINTER says
 // otherwise: the GPU painter needs a real GPU's Vulkan (an emulator's
 // SwiftShader crashes it).
-import { writeTamberNames } from './tamber-names.mjs';
+import { writeFormaNames } from './forma-names.mjs';
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { inflateRawSync } from 'node:zlib';
@@ -38,7 +38,7 @@ import { createConnection } from 'node:net';
 import { homedir, tmpdir, userInfo } from 'node:os';
 import { basename, dirname, resolve } from 'node:path';
 import { within } from './paths.mjs';
-import { HOST_DEV, PINNED_RUST, androidPackageId, bakeWatchEnv, buildBake, claimLive, hermesBundle, cargoEnvironment, copyShaders, gpuModules, injectedProfiles, linuxBuild, mavenProblems, resolveApp, wholeProgram } from './app.mjs';
+import { HOST_DEV, PINNED_RUST, androidPackageId, bakeWatchEnv, buildBake, claimLive, hermesBundle, cargoEnvironment, copyShaders, linuxBuild, mavenProblems, resolveApp } from './app.mjs';
 import { ANDROID_MIN_API, hermesAndroidBundle } from './hermes-android.mjs';
 import { ANDROID_PAGE_SIZE, androidCargo } from './cargo-check.mjs';
 import { guardFlags, reportBuilt } from './help.mjs';
@@ -46,6 +46,7 @@ import { androidImplementations, packageConfig } from '../js/bake/src/typescript
 import { recordBuiltSettings } from '../js/bake/src/__exact_env.mjs';
 import { configMetaData, fragmentPermissions, manifestFragment, withMetaData, withAuthCallbacks } from './android-manifest.mjs';
 import { androidShareActivity } from './share-target.mjs';
+import { CHANNELS_RECEIVER, androidNotificationResources, googleServices } from './android-channels.mjs';
 import { pickIcon, placeRgba, readPng, resize } from './app-icons.mjs';
 import { encodePng } from './png.mjs';
 import { copyStaticTreeIfPresent } from '../host/web/serve.mjs';
@@ -94,6 +95,41 @@ export function androidJavaFix(env = process.env, platform = process.platform, s
   const rejected = env.JAVA_HOME ? `JAVA_HOME=${env.JAVA_HOME}`
     : platform === 'darwin' && existsSync(resolve(studio, 'bin/java')) ? `Android Studio JDK at ${studio} and java/javac on PATH` : 'java/javac on PATH';
   return `Android needs a JDK 17 or newer (${rejected} is unusable): set JAVA_HOME to a JDK directory${env.JAVA_HOME ? '' : ', or put java and javac on PATH'}`;
+}
+
+const JDK_CRASH_FIX = 'Set JAVA_HOME to JDK 17.0.16 or later in 17, 21.0.8 or later in 21, or JDK 24 or newer';
+
+/** JDK-8335662 affects C1's AArch64 OSR entry. Check the JVM's architecture, including a JVM run under Rosetta. */
+export function androidJdkRisk(settings) {
+  const version = /^\s*java\.version\s*=\s*(\S+)/m.exec(settings)?.[1];
+  const arch = /^\s*os\.arch\s*=\s*(\S+)/m.exec(settings)?.[1];
+  const parts = /^(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:\.\d+)*(?:[-+][\w.+-]+)?$/.exec(version ?? '');
+  if (!parts || !['aarch64', 'arm64'].includes(arch)) return null;
+  const major = Number(parts[1]), interim = Number(parts[2] ?? 0), update = Number(parts[3] ?? 0);
+  const fixed = major >= 24 || major === 17 && (interim > 0 || update >= 16) || major === 21 && (interim > 0 || update >= 8);
+  if (major < 17 || fixed) return null;
+  return `JDK ${version} on ${arch} can crash Gradle (JDK-8335662: C1 OSR entry, "Field too big for insn"). ${JDK_CRASH_FIX}`;
+}
+
+/** Inspect the JDK selected by androidJavaEnv without changing the caller's JVM options. */
+export function androidJavaRisk(env = process.env, platform = process.platform) {
+  const java = env.JAVA_HOME ? resolve(env.JAVA_HOME.replaceAll('"', ''), 'bin', platform === 'win32' ? 'java.exe' : 'java')
+    : Bun.which(platform === 'win32' ? 'java.exe' : 'java', { PATH: env.PATH ?? '' });
+  if (!java) return null;
+  const result = spawnSync(java, ['-XshowSettings:properties', '-version'], { env, encoding: 'utf8', timeout: 5000 });
+  return result.status === 0 ? androidJdkRisk(`${result.stderr ?? ''}\n${result.stdout ?? ''}`) : null;
+}
+
+function gradleCrashLogs(dir) {
+  let files;
+  try { files = readdirSync(dir).filter(file => /^hs_err_pid\d+\.log$/.test(file)); } catch { return; }
+  for (const file of files) {
+    const path = resolve(dir, file);
+    let log;
+    try { log = readFileSync(path, 'utf8'); } catch { continue; }
+    if (log.includes('Field too big for insn') && /assembler_aarch64|LIR_Assembler::osr_entry/.test(log))
+      console.error(`Gradle failed; ${path} matches the JVM crash JDK-8335662. It may be from an earlier run; check its date. ${JDK_CRASH_FIX}.`);
+  }
 }
 
 function sdkManager(env, platform) {
@@ -161,16 +197,34 @@ export function hermesApi(dir) {
   } catch { return null; }
 }
 
-/** The device a drive uses: ANDROID_SERIAL, else the one adb lists as ready. With several and none named it refuses to
- * choose: another lane's emulator or a person's phone may be among them. */
-export function androidDevice(env = process.env) {
+/** ANDROID_SERIAL, else one ready device. Wireless debugging can expose several transports for the same phone;
+ * matching serials, Android IDs and one entry per transport corroborate their identity. */
+export function androidDevice(env = process.env, run = spawnSync) {
   if (env.ANDROID_SERIAL) return env.ANDROID_SERIAL;
-  const listed = spawnSync(adb(env), ['devices'], { encoding: 'utf8' });
+  const listed = run(adb(env), ['devices'], { encoding: 'utf8' });
   if (listed.error) throw new Error(`adb: ${listed.error.message} (install the SDK's platform-tools, or set ANDROID_HOME)`);
   const ready = listed.stdout.split('\n').map((l) => l.split('\t')).filter(([, s]) => s?.trim() === 'device').map(([id]) => id);
   if (!ready.length) throw new Error('no Android device or emulator is ready: start one (`emulator -avd <name>`), `adb connect <host:port>` one elsewhere, or attach a phone with USB debugging on');
-  if (ready.length > 1) throw new Error(`${ready.length} Android devices are ready (${ready.join(', ')}): set ANDROID_SERIAL to the one to use`);
-  return ready[0];
+  if (ready.length === 1) return ready[0];
+  // `getprop` prints `unknown` for an unset serial and `settings get` prints `null` for a missing ID, both
+  // with status 0: neither names a device, so neither can show two entries are one.
+  const read = (id, args) => {
+    const got = run(adb(env), ['-s', id, 'shell', ...args], { encoding: 'utf8', timeout: 5000 });
+    const value = got.status === 0 ? got.stdout?.trim() : '';
+    return value && value !== 'null' && value !== 'unknown' ? value : null;
+  };
+  const serials = ready.map(id => read(id, ['getprop', 'ro.serialno']));
+  if (serials.every(serial => serial && serial === serials[0]) && !ready.some(id => id.startsWith('emulator-'))) {
+    const identities = ready.map(id => read(id, ['settings', 'get', 'secure', 'android_id']));
+    const serial = serials[0], addresses = ready.filter(id => /^\S+:\d+$/.test(id));
+    const mdns = ready.filter(id => id.startsWith(`adb-${serial}-`) && id.endsWith('._adb-tls-connect._tcp'));
+    const usb = ready.filter(id => id === serial);
+    if (identities.every(identity => identity && identity === identities[0])
+        && addresses.length <= 1 && mdns.length <= 1 && usb.length <= 1
+        && addresses.length + mdns.length + usb.length === ready.length)
+      return addresses[0] ?? usb[0];
+  }
+  throw new Error(`${ready.length} Android devices are ready (${ready.join(', ')}): set ANDROID_SERIAL to the one to use`);
 }
 
 const quote = (s) => `'${String(s).replace(/'/g, "'\\''")}'`;
@@ -288,12 +342,13 @@ const RELAY_CLEANED_ERROR = 70;
  * The package is host.android.id (default app.id) with the suffix the APK was built with
  * (ORG_GRADLE_PROJECT_idSuffix, as the build reads it). The app boots its own baked plan with its own assets, at the phone's size, in the phone's fonts, or a
  * drive's local `--plan`, pushed to the device and named by the launch extra `x_plan` (EXACT_PLAN, which the reader
- * reads as the Linux host does). A drive's `--world`, `--size` and launch URL do not reach it, and all but the size
- * are refused. A dev loop's `--url` does: the reader polls it (LLP 1122 D4), through `adb reverse` when it is this
- * Mac's loopback, as is the app's server a test runs here. */
+ * reads as the Linux host does). A drive's `--world`, `--size` and launch URL do not reach it, and are refused (a
+ * test that names a size is skipped, agent-test.mjs). A dev loop's `--url` does: the reader polls it (LLP 1122 D4),
+ * through `adb reverse` when it is this Mac's loopback, as is the app's server a test runs here. */
 function readerDeploy(app, apk, env) {
   for (const [name, flag] of [['EXACT_WORLD', '--world'], ['EXACT_LAUNCH_URL', 'a launch URL']])
     if (env[name]) throw new Error(`android --reader: ${flag} does not reach the reader, which boots the plan its APK bakes`);
+  if (env.EXACT_SIZE) throw new Error('android --reader: --size does not reach the reader, which runs at the phone\'s size; --headless takes it');
   if (env.EXACT_PLAN && (!existsSync(env.EXACT_PLAN) || URL.parse(env.EXACT_PLAN)?.protocol?.startsWith('http')))
     throw new Error('android --reader: --plan is a local plan file, which the drive pushes to the phone');
   // A dev loop's URL (`--url`, LLP 1122 D4): the reader polls it, as the Linux display does, through
@@ -338,13 +393,15 @@ function readerDeploy(app, apk, env) {
 /** What the reader reads of a drive's `env`, which reaches it as its `x_<name>` launch extras (`ExactActivity`'s
  * `environment`): EXACT_AGENT and every EXACT_AGENT_* (the store, the epoch, the locale, the seed, the fetch faults),
  * EXACT_STORE (`real`: the platform's stores, a conformance suite's), the auth fixture a test declares
- * (EXACT_AUTH_FIXTURE, LLP 1146 D4), a pushed plan and a dev loop's URL. */
+ * (EXACT_AUTH_FIXTURE, LLP 1146 D4), a pushed plan, a dev loop's URL, and the update store's origin and directory
+ * (LLP 1030.006 D7). */
 export const readerVariables = (env) => Object.fromEntries(Object.entries(env).filter(([k]) =>
-  k === 'EXACT_AGENT' || k.startsWith('EXACT_AGENT_') || ['EXACT_STORE', 'EXACT_AUTH_FIXTURE', 'EXACT_DEV_PLAN', 'EXACT_PLAN'].includes(k)));
+  k === 'EXACT_AGENT' || k.startsWith('EXACT_AGENT_') || ['EXACT_STORE', 'EXACT_AUTH_FIXTURE', 'EXACT_DEV_PLAN', 'EXACT_PLAN', 'EXACT_UPDATE_ORIGIN', 'EXACT_UPDATE_DIR'].includes(k)));
 
 /** The ports of this Mac's loopback the reader is to reach through `adb reverse`, for the drive: a dev loop's
- * (`--url`) and the app's server that a test declares its auth fixture (`test android` starts it here). */
-export const reversedPorts = (vars) => [...new Set([vars.EXACT_DEV_PLAN, vars.EXACT_AUTH_FIXTURE].map((v) => URL.parse(v ?? ''))
+ * (`--url`), the app's server that a test declares its auth fixture (`test android` starts it here) and an update
+ * origin `serve.mjs` serves. */
+export const reversedPorts = (vars) => [...new Set([vars.EXACT_DEV_PLAN, vars.EXACT_AUTH_FIXTURE, vars.EXACT_UPDATE_ORIGIN].map((v) => URL.parse(v ?? ''))
   .filter((url) => url && ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname))
   .map((url) => url.port || (url.protocol === 'https:' ? '443' : '80')))];
 
@@ -634,17 +691,6 @@ async function relay([serial, id, vars, encodedLease]) {
   finally { cleanup(); }
 }
 
-/** The build script's output directory of `crate`, where it wrote its plan, `compat.json` and `uses.txt`
- * (`contract::native::android_entry`), found by Cargo's JSON messages. */
-function planOut(messages, crate) {
-  for (const line of messages.split('\n')) {
-    if (!line.startsWith('{')) continue;
-    const m = JSON.parse(line);
-    if (m.reason === 'build-script-executed' && (m.package_id.includes(`#${crate}@`) || m.package_id.startsWith(`${crate} `))) return m.out_dir;
-  }
-  return null;
-}
-
 /** The SHA-256 of what an ELF64 file loads: its PT_LOAD segments' bytes, past the ELF header. AGP strips a
  * packaged library's debug symbols, which rewrites the header and nothing a segment holds, so this is the same
  * for the library a build staged and the one its APK holds, and differs for another build's (LLP 1159.002 D2). */
@@ -780,10 +826,13 @@ async function gradleWithAdvice(command, args, advice) {
  * could not be started is said so. */
 export function runGradle(args, options, platform = process.platform, { studio, run = spawnSync, lockAdvice } = {}) {
   const env = androidJavaEnv(options.env, platform, studio) ?? options.env;
+  const risk = androidJavaRisk(env, platform);
+  if (risk) console.error(`warning: ${risk}`);
   const [command, ...prefix] = gradleWrapper(platform, env);
   const invocation = lockAdvice ? [process.execPath, ['--no-env-file', '-e', `await (${gradleWithAdvice})(...JSON.parse(process.argv[1]))`, JSON.stringify([command, [...prefix, ...args], lockAdvice])]] : [command, [...prefix, ...args]];
   const gradle = run(...invocation, { cwd: READER, stdio: 'inherit', ...options, env });
   if (gradle.error) console.error(`could not start Gradle (${command}): ${gradle.error.message}`);
+  if (gradle.status !== 0) gradleCrashLogs(options.cwd ?? READER);
   return gradle.status === 0;
 }
 
@@ -817,9 +866,12 @@ export function androidIcons(manifest, dir, res) {
   const glyph = adaptive && pick({ purposes: ['monochrome'], px: LAYER, glyph: true, name: "Android's themed icon" });
   const banner = pick({ purposes: ['any'], shape: 16 / 9, px: 640, name: 'the Android TV banner' });
   if (problems.length) throw new Error(problems.join('\n'));
-  const refs = { icon: adaptive || legacy ? '@mipmap/exact_icon' : null, banner: banner ? '@drawable/exact_banner' : null };
+  const picked = [adaptive, legacy, glyph, banner], digests = picked.map((file) => file && createHash('sha256').update(readFileSync(file.path)).digest('hex'));
+  // `files`: each picked file and its digest, which the build record keeps for a drive's staleness check (`apkChanges`).
+  const refs = { icon: adaptive || legacy ? '@mipmap/exact_icon' : null, banner: banner ? '@drawable/exact_banner' : null,
+    files: picked.flatMap((file, i) => file ? [{ file: file.path, sha256: digests[i] }] : []) };
   // Made again only when a picked file or the background colour changes: the key of what was made is kept beside `res`.
-  const key = createHash('sha256').update(JSON.stringify([ANDROID_ICONS, [adaptive, legacy, glyph, banner].map((file) => file && [file.src, createHash('sha256').update(readFileSync(file.path)).digest('hex')]), manifest.background_color ?? null])).digest('hex');
+  const key = createHash('sha256').update(JSON.stringify([ANDROID_ICONS, picked.map((file, i) => file && [file.src, digests[i]]), manifest.background_color ?? null])).digest('hex');
   if (existsSync(res) && existsSync(`${res}.key`) && readFileSync(`${res}.key`, 'utf8') === key) return refs;
   rmSync(res, { recursive: true, force: true });
   const write = (path, bytes) => { mkdirSync(dirname(resolve(res, path)), { recursive: true }); writeFileSync(resolve(res, path), bytes); };
@@ -905,23 +957,11 @@ export function androidReleaseEnvironment(env = process.env, bundle = false) {
     ...(env.EXACT_KEYSTORE ? { EXACT_KEYSTORE: resolve(env.EXACT_KEYSTORE) } : {}) };
 }
 
-/** Why a production Android build cannot start, or null. Android is the Linux bake, which refuses production trust with
- * an update store (`deploy.store.linux` not "0") and no stream to join (bake/src/receipt.rs): said here, before minutes
- * of Cargo, as the Apple build says its own. */
-export function androidStreamRefusal(name, manifest, env = process.env) {
-  if (env.EXACT_UPDATE_TRUST !== 'production' || env.EXACT_BAKE_ANALYSIS === '1' || manifest.deploy?.store?.linux === '0') return null;
-  if (env.EXACT_UPDATE_RECEIPT || env.EXACT_UPDATE_GENESIS === '1') return null;
-  return `${name}: this Android build bakes production trust, and Android uses the Linux bake, whose update store is on (deploy.store.linux is not "0"), so the build belongs to an update stream. For a binary without Exact updates, set deploy.store.linux to "0" in app.json (deploy.store.android does not turn the bake's store off). To ship into a stream, set EXACT_UPDATE_RECEIPT to its authenticated publisher receipt (scripts/deploy.mjs), or EXACT_UPDATE_GENESIS=1 to start a new one.`;
-}
-
-/** Whether an APK carries GPU libraries beside the app's (LLP 1009 D6): the primary module or a `gpu.modules` entry. */
-export const carriesGpu = (app) => app.hasGpu || gpuModules(app.manifest).length > 0;
-
 /** The app baked for the phone (`buildBake`), the GPU modules first, and each GPU library the bake built, at the
  * path Cargo gave it: a crate's `[lib] name` names the file, and the bake records that name for the host to open. */
 export function bakeGpuLibraries(app, options, bake = buildBake) {
   const libraries = [];
-  bake(app, 'linux', ANDROID_TARGET, { ...options, kind: 'android', prepareGpu: (product) => { libraries.push(product); return product; } });
+  bake(app, 'android', ANDROID_TARGET, { ...options, kind: 'android', prepareGpu: (product) => { libraries.push(product); return product; } });
   return libraries;
 }
 
@@ -955,9 +995,10 @@ export function stageSoundLibrary(jniLibs, env) {
 
 /** The app on the Canvas reader, as an APK: its `android/` crate (a cdylib over `exact_painted::canvas_jni!`; a game's
  * is generated under `.shells/`) built for the phone's ABI and put, with the app's assets and its icon and banner
- * (`androidIcons`), where the Gradle shell packages them (host/android/app), then `:app:assembleRelease`. An app with
- * GPU modules (LLP 1009) is built as a Linux bake is (`buildBake`): the modules first, then the library with their
- * digests baked in, so each ships beside it and must reach the device byte for byte (`stageGpuLibraries`).
+ * (`androidIcons`), where the Gradle shell packages them (host/android/app), then `:app:assembleRelease`. The library
+ * is built as a Linux bake is (`buildBake`), which writes the build's receipt; an app with GPU modules (LLP 1009) has
+ * the modules built first and their digests baked in, so each ships beside it and must reach the device byte for byte
+ * (`stageGpuLibraries`).
  * Gradle wants a JDK (17 or newer) and the SDK's platform. The APK's path, or null. */
 export function buildApk(app, env, profile, writeLocks = false, bundle = false) {
   env = androidReleaseEnvironment(env, bundle);
@@ -972,24 +1013,30 @@ export function buildApk(app, env, profile, writeLocks = false, bundle = false) 
   try { icons = androidIcons(app.manifest, app.dir, resolve(dirs.app, 'icons/res')); }
   catch (error) { for (const line of error.message.split('\n')) console.error(`${app.name}: ${line}`); return null; }
   const launch = androidLaunch(app.manifest, resolve(dirs.app, 'launch/res'));
+  if (app.manifest.widgets?.length) console.warn(`${app.name}: app.json's widgets are Apple-only (WidgetKit), so this APK has none; Android home-screen widgets made from the same rows are planned in an RFC, and the rows need no change`);
   const built = (name) => resolve(app.target, ANDROID_TARGET, profile, `lib${name.replaceAll('-', '_')}.so`);
-  let gpu = [], out = null;
-  if (carriesGpu(app)) {
-    try { gpu = bakeGpuLibraries(app, { profile, env }); }
-    catch (error) { console.error(error.message); return null; }
-    out = bakedOut(resolve(app.target, ANDROID_TARGET, profile, 'build'), crate);
-  } else {
-    // JSON on stdout, for the crate's build-script output directory; the compiler's own messages still on stderr.
-    const cargo = spawnSync(...androidCargo('cargo', ['build', ...injectedProfiles(app), ...wholeProgram('android', profile), '--profile', profile, '-p', crate, '--target', ANDROID_TARGET, '--message-format=json-render-diagnostics'], { cwd: app.workspace ?? app.dir, env, stdio: ['inherit', 'pipe', 'inherit'], maxBuffer: 1 << 28 }));
-    if (cargo.status !== 0) return null;
-    out = planOut(cargo.stdout.toString(), crate);
-  }
+  // Every library is baked (`buildBake`), which writes the build's receipt (android-aarch64-linux-android.build.json):
+  // a first `push` starts a stream from exactly this APK's cohort (LLP 1030.006 D6).
+  let gpu;
+  try { gpu = bakeGpuLibraries(app, { profile, env }); }
+  catch (error) { console.error(error.message); return null; }
+  const out = bakedOut(resolve(app.target, ANDROID_TARGET, profile, 'build'), crate);
   const extensions = JSON.parse(readFileSync(resolve(out, 'artifacts.json'), 'utf8')).extensions;
   const bound = androidImplementations(app.dir, extensions);
   const maven = mavenCoordinates(app, bound);
   if (!writeLocks && !mavenLocksPresent(app, maven)) return null;
   let config;
   try { config = packageConfig(app.dir, 'android', { extensions, release: profile === 'release' }); } catch (error) { console.error(`${app.name}: ${error.message}`); return null; }
+  // Firebase's options for an app that pushes (LLP 1133.004.000 D6). The file beside app.json needs no configuration
+  // line, so the refusal is the push implementation's own rather than a `required` key's.
+  let firebase = null;
+  if (bound.some((b) => b.extension === 'push')) {
+    const id = androidPackageId(app.manifest ?? { app }) + (process.env.ORG_GRADLE_PROJECT_idSuffix ?? '');
+    firebase = googleServices(app.dir, id, config.get('push')?.googleServices);
+    const missing = `google-services.json from Firebase with a client whose package_name is ${id}, beside app.json or at the path app.json "packages": {"@exact/push": {"android": {"googleServices": "<path>"}}} names`;
+    if (!firebase && profile === 'release') { console.error(`${app.name}: push-google-services-missing: a release build that pushes needs a ${missing}`); return null; }
+    if (!firebase) console.warn(`${app.name}: push is unavailable in this development build, which finds no ${missing} (a release build refuses it)`);
+  }
   const uses = planUses(out);
   // The page-size argument is in every rustflags source the build makes or Cargo was handed (`androidCargo`), but a
   // table in the app's Cargo configuration takes precedence over the build's own and can leave it out.
@@ -1015,7 +1062,7 @@ export function buildApk(app, env, profile, writeLocks = false, bundle = false) 
   const compose = uses.includes('dates') ? ['-Pcompose=1'] : [];
   const development = JSON.parse(readFileSync(resolve(out, 'compat.json'), 'utf8')).embedded?.trust !== 'production';
   // The token names its hatches read (LLP 1121 D12), beside them in the build.
-  if (existsSync(resolve(app.dir, 'modules/android'))) writeTamberNames(app, 'kotlin');
+  if (existsSync(resolve(app.dir, 'modules/android'))) writeFormaNames(app, 'kotlin');
   const graph = mavenGraph(app, writeLocks, maven, env);
   if (!graph) return null;
   let assembled;
@@ -1026,7 +1073,7 @@ export function buildApk(app, env, profile, writeLocks = false, bundle = false) 
     assembled = runGradle(['--no-watch-fs', ...(env.CI || graph.env.GRADLE_USER_HOME ? ['--no-daemon'] : []), bundle ? ':app:bundleRelease' : ':app:assembleRelease', `-Papp=${app.name}`, `-PappDir=${app.manifest.game ? app.workspace : app.dir}`,
       `-PexactDevelopment=${development ? '1' : '0'}`,
       `-PappBuildDir=${dirs.app}`, `-PcanvasBuildDir=${dirs.canvas}`, `-PndkPath=${env.ANDROID_NDK_HOME}`, '--project-cache-dir', dirs.cache, `-Pkotlin.project.persistent.dir=${dirs.kotlin}`,
-      ...gpuArgs, ...(icons.icon ? [`-PappIcon=${icons.icon}`] : []), ...(icons.banner ? [`-PappBanner=${icons.banner}`] : []), ...(launch ? [`-PappTheme=${launch}`] : []), ...compose, ...extensionArgs(app, out, config, bound), ...graph.args], { env: { ...env, ANDROID_HOME: androidSdk(env), ...graph.env } }, process.platform, { lockAdvice: maven.length && !writeLocks ? `${app.name}: Gradle locks or verification metadata do not match its dependencies; for an intended graph change, run ${androidLockCommand(app)}, then review and commit gradle.lockfile and gradle-verification.xml` : null });
+      ...gpuArgs, ...(icons.icon ? [`-PappIcon=${icons.icon}`] : []), ...(icons.banner ? [`-PappBanner=${icons.banner}`] : []), ...(launch ? [`-PappTheme=${launch}`] : []), ...compose, ...extensionArgs(app, out, config, bound, firebase), ...graph.args], { env: { ...env, ANDROID_HOME: androidSdk(env), ...graph.env } }, process.platform, { lockAdvice: maven.length && !writeLocks ? `${app.name}: Gradle locks or verification metadata do not match its dependencies; for an intended graph change, run ${androidLockCommand(app)}, then review and commit gradle.lockfile and gradle-verification.xml` : null });
     if (assembled) graph.kept();
   } finally {
     graph.done();
@@ -1038,7 +1085,7 @@ export function buildApk(app, env, profile, writeLocks = false, bundle = false) 
   const keptSound = keptLibrary(readFileSync(sound), zipEntry(readFileSync(apk), `${bundle ? 'base/' : ''}lib/arm64-v8a/libexact_sound.so`), [dirs.app], 'libexact_sound.so');
   if (keptSound) { console.error(`exact android sound: ${keptSound}`); return null; }
   writeFileSync(resolve(dirname(apk), 'exact-build.json'), JSON.stringify({ started, library: built(crate), workspace: app.workspace ?? app.dir,
-    sources: [...READER_SOURCES, ...[resolve(app.dir, 'modules/android')].filter(existsSync)] }) + '\n');
+    sources: [...READER_SOURCES, ...[resolve(app.dir, 'modules/android')].filter(existsSync), ...icons.files] }) + '\n');
   // What its bake inlined of each setting (LLP 1153 D4), bound to the APK, for a drive to compare with their sources.
   recordBuiltSettings(apk, app, out);
   return apk;
@@ -1126,12 +1173,12 @@ export function coldGradleHome(env = process.env) {
  * permissions the app's grant lines derive (the bake's `reach.android`) with those its names derive, and the
  * components its packages' manifest fragments declare with the meta-data `config` (`packageConfig`'s) carries, as
  * Gradle properties. */
-function extensionArgs(app, out, config, bound) {
+function extensionArgs(app, out, config, bound, firebase) {
   const generated = resolve(apkDirs(app).app, 'extensions');
   rmSync(generated, { recursive: true, force: true });
-  let permissions = [], services = {}, features = [], callbacks = [];
+  let permissions = [], services = {}, features = [], callbacks = [], reach = null;
   try {
-    const reach = JSON.parse(readFileSync(resolve(out, 'compat.json'), 'utf8')).reach;
+    reach = JSON.parse(readFileSync(resolve(out, 'compat.json'), 'utf8')).reach;
     permissions = reach?.android ?? [];
     callbacks = reach?.auth?.callbacks ?? [];
     // The reader's foreground services the lines declare, with their purposes' text (LLP 1133.033 D2).
@@ -1162,8 +1209,13 @@ function extensionArgs(app, out, config, bound) {
   for (const [name, targets] of Object.entries(app.manifest?.packages ?? {})) for (const [key, value] of Object.entries(targets?.android ?? {})) {
     if (typeof value?.env === 'string' && !process.env[value.env] && config.has(name.split('/').at(-1))) console.warn(`${app.name}: ${value.env} is unset, so ${name}'s ${key} is absent from this development build (a release build refuses it)`);
   }
+  // The notification channels, strings, sounds and small icon (LLP 1133.004.000 D1, D3), and Firebase's options for
+  // an app that pushes (D6), for an app that grants notifications, with the receiver that makes the channels again
+  // when the app is updated.
+  const notify = androidNotificationResources(app.manifest, app.dir, resolve(apkDirs(app).app, 'notify/res'), { channels: reach?.androidChannels, locales: reach?.locales, base: reach?.base, firebase });
+  if (notify && !notify.icon) console.warn(`${app.name}: app.json's icons have no "monochrome" one, so its notifications show the platform's generic glyph in the status bar; add a white glyph on a transparent background with "purpose": "monochrome"`);
   // The share target's filters on the app's activity (LLP 1133.024 D5), inside the same `<application>`.
-  const fragment = withAuthCallbacks(withMetaData(manifestFragment(bound, { privacyPolicy: app.manifest?.privacy_policy ?? null }), [...configMetaData(config), ...(androidShareActivity(app.manifest?.share_target) ?? [])]), callbacks), fragmentFile = resolve(apkDirs(app).app, 'manifest-fragment.xml');
+  const fragment = withAuthCallbacks(withMetaData(manifestFragment(bound, { privacyPolicy: app.manifest?.privacy_policy ?? null }), [...configMetaData(config), ...(androidShareActivity(app.manifest?.share_target) ?? []), ...(notify ? CHANNELS_RECEIVER : [])]), callbacks), fragmentFile = resolve(apkDirs(app).app, 'manifest-fragment.xml');
   rmSync(fragmentFile, { force: true });
   if (fragment) { mkdirSync(dirname(fragmentFile), { recursive: true }); writeFileSync(fragmentFile, fragment); }
   return [...(bound.length ? [`-PextensionDirs=${[...bound.flatMap((b) => b.dirs), generated].join(',')}`] : []), ...(permissions.length ? [`-Ppermissions=${permissions.join(',')}`] : []),
@@ -1171,9 +1223,16 @@ function extensionArgs(app, out, config, bound) {
     ...(features.length ? [`-PandroidFeatures=${features.join(',')}`] : [])];
 }
 
+/** The `am start` arguments that launch the app `id`, following the dev loop at `url` when there is one (LLP 1122 D4):
+ * `-S` stops a running reader first, since it reads its launch extras once per process. */
+export const launchArgs = (id, url = null) =>
+  ['shell', 'am', 'start', '-W', ...(url ? ['-S'] : []), '-n', `${id}/dev.exact.app.MainActivity`, ...(url ? ['--es', 'x_dev_plan', url] : [])];
+
 /** `--install` (`--run`: and launch it): the APK onto the device `androidDevice` names. With none ready the build
- * stands and says how to install it; with several and no ANDROID_SERIAL it refuses. The exit code. */
-function installApk(app, apk, { run = false, built = 0, installed: onInstalled = () => {} } = {}) {
+ * stands and says how to install it; several entries must be one phone’s transports or name ANDROID_SERIAL. `url`
+ * (`--url`) is a dev loop the launched app follows; a loop on this Mac's loopback is reversed onto the device, and the
+ * mapping stays after this command, as the app keeps polling the loop. The exit code. */
+function installApk(app, apk, { run = false, url = null, built = 0, installed: onInstalled = () => {} } = {}) {
   let serial;
   try { serial = androidDevice(); } catch (error) {
     if (/^no Android device/.test(error.message)) { console.error(`built in ${(built / 1000).toFixed(1)} s; not installed: ${error.message}`); return run ? 1 : 0; }
@@ -1186,8 +1245,20 @@ function installApk(app, apk, { run = false, built = 0, installed: onInstalled =
   console.error(`built in ${(built / 1000).toFixed(1)} s, installed on ${serial} as ${id} in ${((Date.now() - started) / 1000).toFixed(1)} s`);
   onInstalled(serial);
   if (!run) return 0;
-  const launched = spawnSync(adb(), ['-s', serial, 'shell', 'am', 'start', '-W', '-n', `${id}/dev.exact.app.MainActivity`], { encoding: 'utf8' });
+  for (const port of url ? reversedPorts({ EXACT_DEV_PLAN: url }) : []) {
+    const reversed = spawnSync(adb(), ['-s', serial, 'reverse', `tcp:${port}`, `tcp:${port}`], { encoding: 'utf8' });
+    if (reversed.status !== 0) { console.error(`adb reverse tcp:${port}: ${(reversed.stderr || reversed.stdout).trim()}`); return 1; }
+    console.error(`${serial} reaches this Mac's port ${port} (adb reverse; adb reverse --remove tcp:${port} drops it)`);
+  }
+  let launched;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    launched = spawnSync(adb(), ['-s', serial, ...launchArgs(id, url)], { encoding: 'utf8' });
+    // After a reinstall the launcher can start the app again between `-S`'s stop and this start, which then reaches
+    // that process as a new intent, whose extras it no longer reads: stop it and start again.
+    if (!url || !/delivered to currently running top-most instance/.test(launched.stdout)) break;
+  }
   if (launched.status !== 0 || /Error/.test(launched.stdout + launched.stderr)) { console.error(`am start: ${(launched.stderr || launched.stdout).trim()}`); return 1; }
+  if (url) console.error(`${id} follows ${url}: a Contract or app.ts save reloads it with its state; a native change needs a new APK`);
   return 0;
 }
 
@@ -1244,6 +1315,9 @@ if (import.meta.main && process.argv[2] === 'reverse') {
   const bundle = args.includes('--bundle');
   if (bundle && (args.includes('--headless') || args.includes('--run'))) throw new Error('--bundle takes neither --headless nor --run');
   if (args.includes('--no-install') && args.includes('--run')) throw new Error('--no-install takes no --run');
+  const url = args.includes('--url') ? args[args.indexOf('--url') + 1] : null;
+  if (url !== null && (!args.includes('--run') || args.includes('--headless'))) throw new Error('--url is the dev loop the launched APK follows: it goes with --run, not --headless');
+  if (url !== null && !['http:', 'https:'].includes(URL.parse(url ?? '')?.protocol)) throw new Error(`--url takes a dev loop's http(s) URL (bun exact.mjs web prints it), not ${url}`);
   if (bundle) process.env.EXACT_UPDATE_TRUST = 'production';
   const apkWanted = (bundle || args.includes('--apk')) && !args.includes('--headless');
   // The pinned toolchain's targets: the app's workspace builds with it, and rustup in the app's own directory, which
@@ -1255,8 +1329,6 @@ if (import.meta.main && process.argv[2] === 'reverse') {
     process.exit(1);
   }
   const app = resolveApp(name);
-  const unstreamed = androidStreamRefusal(app.name, app.manifest);
-  if (unstreamed) { console.error(unstreamed); process.exit(1); }
   // A TypeScript app's library links the Android Hermes bundle: said before minutes of compiling, not at the link.
   const typescript = androidUsesHermes(app, apkWanted ? 'android' : 'linux'), hermes = androidHermesDir();
   if (!hermes && typescript) {
@@ -1276,7 +1348,7 @@ if (import.meta.main && process.argv[2] === 'reverse') {
     // `--json`'s object once the install is done: `installed` names the device, or is null when none was ready.
     const trust = process.env.EXACT_UPDATE_TRUST ?? 'development', install = !bundle && !args.includes('--no-install') && (args.includes('--install') || args.includes('--run'));
     let serial = null;
-    const code = install ? installApk(app, apk, { run: args.includes('--run'), built: Date.now() - started, installed: (s) => { serial = s; } }) : 0;
+    const code = install ? installApk(app, apk, { run: args.includes('--run'), url, built: Date.now() - started, installed: (s) => { serial = s; } }) : 0;
     if (!code && args.includes('--json')) reportBuilt({ path: apk, target: 'android', trust, ...(install ? { installed: serial } : {}) });
     process.exit(code);
   }

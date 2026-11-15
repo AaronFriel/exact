@@ -485,7 +485,7 @@ component Fam
         button "Clear" press=clear testId="clear"
         button "Color" press=color testId="color"
         button "Spaces" press=spaces testId="spaces"
-`, { 'app.tamber': 'tamber t\n\naxes\n  ink = tint | plain\n\ntheme\n  accent.mix = AccentColor\n    when ink=plain: #000000\n' }), 120000);
+`, { 'app.forma': 'forma t\n\naxes\n  ink = tint | plain\n\ntheme\n  accent.mix = AccentColor\n    when ink=plain: #000000\n' }), 120000);
 }
 
 const SPELLINGS_SOURCE = `component App

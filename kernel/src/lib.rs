@@ -70,7 +70,7 @@ pub mod wire;
 
 pub use arena::text_style::bolder;
 pub use bars::{Bar, HeaderShape, RootTabs};
-pub use control::{Choice, ControlKind, PressFace, Progress, Range, RoleStep, RoleStop};
+pub use control::{Choice, ControlKind, PressFace, Progress, Range, RoleStep, RoleStop, TypeAhead};
 pub use control_measurement::{
     ButtonFaceStyle, ButtonFonts, ButtonImagePlacement, ButtonMeasure, ButtonMeasureRequest,
     ControlFont, ControlTextStyles, FieldChrome, FieldChromeRequest, FieldKind,
@@ -88,7 +88,7 @@ pub use id::{AxisOffer, Frame, NodeFlags, NodeKey, Offer, ViewId};
 pub use invocation::Invocation;
 pub use kernel::{
     credited_edges, BlockAxis, BlockMeasure, HostBlock, HostCover, Kernel, NodeRef,
-    PresentedHeight, StickyConstraint,
+    PresentedHeight, StickyConstraint, TablePlace,
 };
 pub use layout::LayoutReceipt;
 pub use motion::{motion_node, MotionSync};

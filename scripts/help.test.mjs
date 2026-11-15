@@ -13,7 +13,7 @@ import { HELP, appleBuildRefusal, guardFlags, helpText, indexText, knownFlags } 
 import { scriptFlags } from './help-parity.mjs';
 
 const ROOT = resolve(import.meta.dir, '..');
-const APP_VERBS = ['web', 'web-build', 'serve', 'test', 'agent', 'verify', 'ios', 'mac', 'share', 'linux', 'windows', 'android', 'update', 'lock', 'add', 'contract', 'tamber', 'hatch', 'snapback', 'backend', 'pattern', 'docs', 'feedback'];
+const APP_VERBS = ['web', 'web-build', 'serve', 'test', 'agent', 'verify', 'ios', 'mac', 'share', 'linux', 'windows', 'android', 'update', 'lock', 'add', 'contract', 'forma', 'hatch', 'snapback', 'backend', 'pattern', 'docs', 'feedback'];
 const timed = (args, options) => {
   const t = performance.now(), r = spawnSync(process.execPath, args, { encoding: 'utf8', timeout: 15_000, ...options });
   return { ...r, ms: performance.now() - t };
@@ -121,8 +121,8 @@ test('a flag that takes a value is refused by name when the value is missing or 
   assert.equal(appleBuildRefusal(['--ios', '--link', 'plan']), null);
 });
 
-test('tamber help lists every binding language', () => {
-  assert.match(helpText('tamber'), /gen ts\|rust\|swift\|kotlin <app>/);
+test('forma help lists every binding language', () => {
+  assert.match(helpText('forma'), /gen ts\|rust\|swift\|kotlin <app>/);
 });
 
 test('each verb\'s help names exactly the flags its script parses, in a short text', () => {

@@ -30,6 +30,8 @@ interface NativeModule {
     fun update(view: View, props: JSONObject)
     /** Bound before the first update. Keep this callback only until the next binding; a retired one is ignored. */
     fun events(view: View, emit: (String, String) -> Unit) {}
+    /** Activity callbacks; CREATE receives saved state, SAVE_INSTANCE_STATE fills its private bundle (LLP 1133.021). */
+    fun lifecycle(view: View, event: ViewLifecycle, state: android.os.Bundle? = null) {}
     fun reset(view: View): Boolean = false
     fun destroy(view: View) {}
 }
@@ -82,10 +84,33 @@ private class VideoSize(val width: Int, val height: Int, val ratio: Float)
  */
 class Natives(
     context: Context,
-    private val assets: File,
+    private val root: () -> File,
     private val modules: Map<String, NativeModule>,
     private val videos: ((Context) -> VideoPlayer)? = null,
 ) : FrameLayout(context) {
+    internal var keeps = false
+        private set
+    /** Where a video's or a page's path is a file ([AssetRoot]). */
+    private val assets: File get() = root()
+
+    /** The running generation's assets moved (a signed update activated, LLP 1030.006 D1): every video and page is
+     * opened again, so one at an unchanged path shows the new generation's file. */
+    fun reroot() {
+        for (e in elements.values) {
+            if (e.props.isEmpty()) continue
+            when (e.kind) {
+                0 -> { sources.remove(e.view); apply(e, e.props) }
+                1 -> { val props = e.props; e.props = ""; apply(e, props) }
+            }
+        }
+        if (refresh()) frame()
+    }
+
+    override fun requestDisallowInterceptTouchEvent(disallow: Boolean) {
+        keeps = disallow
+        super.requestDisallowInterceptTouchEvent(disallow)
+    }
+
     private class Element(val id: Int, val kind: Int, var view: View, val node: RenderNode) {
         var props = ""
         var module: String? = null
@@ -247,6 +272,7 @@ class Natives(
         }
     }
 
+    internal val lifecycle = HostedLifecycle()
     private val elements = HashMap<Int, Element>()
     private val byView = HashMap<View, Element>()
     private val pool = HashMap<String, ArrayList<View>>()
@@ -311,7 +337,7 @@ class Natives(
         e.node.endRecording()
     }
 
-    /** The node id of the element whose view is [view] or holds it ([ExactTamber]'s place), or null (main thread). */
+    /** The node id of the element whose view is [view] or holds it ([ExactForma]'s place), or null (main thread). */
     fun place(view: View): Int? {
         var v: View? = view
         while (v != null && v !== this) {
@@ -323,6 +349,10 @@ class Natives(
 
     /** The node op 28 draws for [id] (main thread). */
     fun node(id: Int): RenderNode? = elements[id]?.node
+
+    internal var origins: PaintedOrigins? = null
+    internal fun transform(view: View, matrix: android.graphics.Matrix): Boolean =
+        byView[view]?.let { origins?.transform(it.node, matrix) } == true
 
     /** A view the app's Kotlin hatches host at a node (kind 5, LLP 1115.001.000 D4), made for this layer's
      * activity: each element its own. */
@@ -543,7 +573,11 @@ class Natives(
             val name = json.optString("module")
             val module = modules[name]
             if (module == null) { android.util.Log.w("exact", "no native module $name"); null }
-            else pool[name]?.removeLastOrNull() ?: module.create(context, moduleProps(json), id)
+            else {
+                val key = "$name:$id:${json.optInt("slot")}:${json.optInt("generation")}"
+                val borrowed = if (lifecycle.awaiting(key)) null else pool[name]?.removeLastOrNull()
+                borrowed ?: module.create(context, moduleProps(json), id)
+            }
         }
     }
 
@@ -670,16 +704,19 @@ class Natives(
                 }
             }
         }
+        modules[e.module]?.let { lifecycle.made(e.view, "${e.module}:${e.id}:${e.slot}:${e.generation}", it) }
     }
 
-    /** A module button under an unscrolled tap. Other native input stays with its dedicated host. */
-    fun click(id: Int, slot: Int, generation: Int, session: Long, x: Float, y: Float): Boolean {
-        val e = elements[id]?.takeIf { it.kind == 2 && !it.parked && it.slot == slot && it.generation == generation && it.session == session } ?: return false
-        if (e.disabled || !e.view.isEnabled || !e.view.isClickable) return false
-        e.view.translationX = x
-        e.view.translationY = y
-        return e.view.performClick()
+    /** The module view the engine's hit names, while that allocation of that session is still mounted and enabled
+     * when its reply arrives. */
+    fun taker(id: Int, slot: Int, generation: Int, session: Long): View? {
+        val e = elements[id]?.takeIf {
+            it.kind == 2 && !it.parked && it.slot == slot && it.generation == generation && it.session == session
+        } ?: return null
+        return e.view.takeIf { !e.disabled && it.isEnabled }
     }
+
+    internal var retiring: ((View) -> Unit)? = null
 
     private fun moduleProps(json: JSONObject): JSONObject =
         json.optString("props").takeIf { it.isNotEmpty() }?.let { runCatching { JSONObject(it) }.getOrNull() } ?: JSONObject()
@@ -767,9 +804,8 @@ class Natives(
     }
 
     /** The frame rates GPU canvases ask for ([Native.frameRates]: view and rate pairs, 0 for the display's): a
-     * canvas with a window of its own asks the compositor for its rate as a fixed source (Android 11 and later), so
-     * a 60 fps canvas on a 120 Hz panel is shown at an even 60; one drawn in the reader's window votes for its rate
-     * as a view (Android 15 and later). Elsewhere the module's own pacing holds the rate (LLP 1009). */
+     * canvas with a window of its own votes on its surface (Android 11 and later); one drawn in the reader's window
+     * votes on its view (Android 15 and later). These are platform hints; the module still paces its cap (LLP 1009). */
     fun frameRates(rates: IntArray) {
         for (k in 0 until rates.size / 2) {
             val e = elements[rates[2 * k]] ?: continue
@@ -787,8 +823,9 @@ class Natives(
         val surface = e.surface
         if (e.view is SurfaceView && surface != null && surface.isValid && android.os.Build.VERSION.SDK_INT >= 30) {
             try {
-                surface.setFrameRate(fps, if (fps > 0f) android.view.Surface.FRAME_RATE_COMPATIBILITY_FIXED_SOURCE
-                    else android.view.Surface.FRAME_RATE_COMPATIBILITY_DEFAULT)
+                // AOSP's RefreshRateSelector suppresses touch boost for Default votes. FIXED_SOURCE permits a
+                // higher multiple on touch; a canvas cap asks to keep its rate during interaction (#574).
+                surface.setFrameRate(fps, android.view.Surface.FRAME_RATE_COMPATIBILITY_DEFAULT)
             } catch (x: IllegalArgumentException) {}
         } else if (android.os.Build.VERSION.SDK_INT >= 35) {
             e.view.requestedFrameRate = if (fps > 0f) fps else android.view.View.REQUESTED_FRAME_RATE_CATEGORY_DEFAULT
@@ -828,6 +865,7 @@ class Natives(
 
     /** [e]'s view is kept for the next element of its kind, or goes. */
     private fun retire(e: Element, reuse: Boolean = true) {
+        if (e.kind == 2) retiring?.invoke(e.view)
         e.eventBinding++
         if (pooled(e.kind)) held--
         val module = e.module?.let { modules[it] }
@@ -844,6 +882,7 @@ class Natives(
             }
             e.playing = false; e.inView = false; e.stale = false; e.video = null
         } else if (e.kind == 2 && module != null && (pool[e.module!!]?.size ?: 0) < modulePool && module.reset(e.view)) {
+            lifecycle.unbind(e.view)
             pool.getOrPut(e.module!!) { ArrayList() }.add(e.view)
         } else if (e.kind == 1 && reuse && webPool.size < WEB_POOL && webs) {
             webPool.add((e.view as WebView).apply {
@@ -855,6 +894,7 @@ class Natives(
                 onPause()
             })
         } else {
+            lifecycle.destroyed(e.view)
             module?.destroy(e.view)
             removeView(e.view)
             (e.view as? WebView)?.destroy()
@@ -867,7 +907,7 @@ class Natives(
         webPool.clear()
         for (v in videoPool) { players.remove(v)?.release(); removeView(v) }
         videoPool.clear(); sources.clear(); sizes.clear()
-        for ((name, views) in pool) for (v in views) { modules[name]?.destroy(v); removeView(v) }
+        for ((name, views) in pool) for (v in views) { lifecycle.destroyed(v); modules[name]?.destroy(v); removeView(v) }
         pool.clear()
     }
 }

@@ -147,6 +147,7 @@ fn token_refresh_is_durable_before_the_preload_uses_the_new_secret() {
             std::process::id(),
             feed.address.port()
         ));
+        let _remove = crate::TempDir(directory.clone());
         let grants = format!(
             "net.fetch http://{}\nnet.fetch http://{}\nsecret.keep session\nsecret.keep refresh",
             token.address, feed.address

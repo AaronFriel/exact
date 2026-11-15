@@ -33,9 +33,10 @@ import { Leave, exiting } from './pieces.js';
 import { Resources } from './resources.js';
 import { conforms } from './shape.js';
 // `Booting`: while the boot builds the view (`mount`); `start`: the page's time when it mounted, from which its wall
-// clock runs.
+// clock runs, null before then. It may be 0 or less: a paused test clock can read 0 at the mount, and an adopted
+// render's clock may have run longer than the page has.
 export let Booting = false,
-  start = 0;
+  start = null;
 export const booting = () => Booting;
 export let Adopt = false,
   // The parents whose rows a keyed list adopted: one holding rows past the list's (a page built ahead, opened at a

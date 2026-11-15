@@ -302,6 +302,7 @@ fn stale_bad_metrics_drop_only_their_owner_and_cannot_publish() {
         TextMetrics {
             width: f32::NAN,
             height: -1.,
+            pending: false,
             first_baseline: None,
         },
         Rc::new(DropProbe(drops.clone())),

@@ -46,6 +46,7 @@ mod package_views;
 pub mod picker;
 mod resolve;
 mod retained;
+pub mod root;
 mod shape_schema;
 pub use retained::{check_path_reusing, retention_build, Check, Kept, Retained, Stop};
 mod properties;
@@ -54,16 +55,17 @@ mod rust;
 mod sources;
 mod strings;
 mod surface;
+use surface::fact_shape;
 mod symbols;
 pub use contract_analyze::SuggestionCheck;
 pub use properties::{check_properties_path, check_suggestions_path, properties, tests};
 mod tests_json;
 pub use tests_json::{authored_json, tests_json};
-pub mod snapshot;
-pub mod tamber_levels;
-pub mod tamber_params;
+pub mod forma_levels;
+pub mod forma_params;
 /// `uses` (LLP 1121 stage 4, commit 6): where the app reads a token.
-pub mod tamber_uses;
+pub mod forma_uses;
+pub mod snapshot;
 pub mod terminal;
 mod typescript;
 pub mod watch;
@@ -74,21 +76,21 @@ pub use contract_types::strings::Strings;
 pub use exact_runner::DataSource;
 mod preload;
 pub use logic::{
-    apple_linked, linux_entry, native_storage_constructor, rust_entry, rust_entry_naming,
-    web_linked, web_rust_mode,
+    apple_linked, linux_entry, native_storage_constructor, rust_entry, rust_entry_composed,
+    rust_entry_naming, web_linked, web_rust_mode,
 };
-pub use manifest::{Activity, Configuration, Manifest, Parameter, Widget};
+pub use manifest::{Activity, Configuration, Manifest, Parameter, RustData, Widget};
 pub use map::{plan_digest, SourceMap};
 pub use module_rust::module_rust;
 pub use preload::preload_expression;
 pub use resolve::Origin;
 pub use rust::{compile_path_for_rust, rust};
 pub use sources::{
-    code_beside, design_path, with_contract_texts, with_design_text, GraphBase, Package, Source,
-    SourceGraph,
+    code_beside, design_name_error, design_path, with_contract_texts, with_design_text, GraphBase,
+    Package, Source, SourceGraph,
 };
 pub use symbols::{editor_symbols_json, symbols_json, PartialSymbols};
-pub use typescript::{design_exports, typescript, typescript_exporting};
+pub use typescript::{design_exports, typescript, typescript_exporting, typescript_sources};
 /// The app's strings tables (LLP 1060 D1), `None` for an app without a
 /// `strings` directory, every refusal in one message: the bake reads grant
 /// purposes from them (LLP 1069.008 D1).
@@ -588,7 +590,7 @@ pub fn rerun_if_changed(path: &Path) {
         // A package design or bundled SVG image not there yet.
         if consulted
             .extension()
-            .is_some_and(|e| e == "tamber" || e.eq_ignore_ascii_case("svg"))
+            .is_some_and(|e| e == "forma" || e.eq_ignore_ascii_case("svg"))
         {
             println!(
                 "cargo:metadata=exact-optional-input={}",
@@ -1192,6 +1194,8 @@ pub fn bake_with_warnings<D: DataSource>(
             );
         }
     }
+    // @ref LLP 1035.005.004 D8 — and the answers of the boot render's instances.
+    runner.bake_launch_answers(&mut b, &dated);
     b.finish()
         .map(|plan| (plan, runner.bake_warnings().to_vec()))
         .map_err(|e| BakeError::Runner(RunnerError::Plan(e)))
@@ -1300,50 +1304,6 @@ fn first_frame<D: DataSource>(
     }
     lint(&mut runner, answered)?;
     Ok(runner)
-}
-
-/// The runner's own sources (LLP 1030 D7 delivery; LLP 1039 D1 viewport;
-/// LLP 1069.000 D2 page) are answered by the runner, not by the data crate,
-/// so the fields each can fill are a closed set — a declared field it does
-/// not know would refuse every boot on every device, which is a build-time
-/// refusal here instead, naming the field.
-fn fact_shape(
-    plan: &Plan,
-    source: &str,
-    fields: &[&str],
-    id: &'static str,
-) -> Result<(), BakeError> {
-    for row in plan.resources.iter() {
-        if plan.str(row.source) != source {
-            continue;
-        }
-        let name = plan.str(row.name);
-        let ty = plan.type_(row.ty);
-        if ty.kind != exact_plan::TypeKind::Record {
-            return Err(BakeError::Lint {
-                site: None,
-                id,
-                message: format!(
-                    "`resource {name} = {source}()` must be `as shape` a record of {}",
-                    fields.join(", ")
-                ),
-            });
-        }
-        for f in ty.fields.iter() {
-            let field = plan.str(plan.field(f).name);
-            if !fields.contains(&field) {
-                return Err(BakeError::Lint {
-                    site: None,
-                    id,
-                    message: format!(
-                        "`{name}` declares `{field}`, which {source} does not answer; it answers {}",
-                        fields.join(", ")
-                    ),
-                });
-            }
-        }
-    }
-    Ok(())
 }
 
 /// The layout lint (LLP 1017 P1d): the compiler cannot see layout, bake can.

@@ -197,10 +197,12 @@ extension NodeView {
                             runs[i].background = color
                             (runs[i].backgroundBox, runs[i].backgroundRadii) = (paint.backgroundBox, paint.backgroundRadii)
                             (runs[i].backgroundBefore, runs[i].backgroundAfter) = (paint.backgroundBefore, paint.backgroundAfter)
+                            (runs[i].backgroundAbove, runs[i].backgroundBelow) = (paint.backgroundAbove, paint.backgroundBelow)
                             runs[i].backgroundOpacity = run.opacityGroups(in: byId)
                         } else if paint.backgroundBox != 0 {
                             runs[i].outerBackgrounds.append(OuterBackground(color: color, box: paint.backgroundBox, radii: paint.backgroundRadii,
-                                                                            before: paint.backgroundBefore, after: paint.backgroundAfter, opacity: run.opacityGroups(in: byId)))
+                                                                            before: paint.backgroundBefore, after: paint.backgroundAfter,
+                                                                            above: paint.backgroundAbove, below: paint.backgroundBelow, opacity: run.opacityGroups(in: byId)))
                         }
                     }
                 }
@@ -211,7 +213,7 @@ extension NodeView {
             // another's, or beside a box's room, which no background covers
             // but its own boxes'.
             if !runs.contains(where: { $0.background != nil && ($0.backgroundRadii.contains { !$0.isZero } || $0.backgroundBefore != 0 || $0.backgroundAfter != 0
-                                                                   || !$0.outerBackgrounds.isEmpty) })
+                                                                   || $0.backgroundAbove != 0 || $0.backgroundBelow != 0 || !$0.outerBackgrounds.isEmpty) })
                 && !runs.contains(where: { $0.inlineStart != 0 || $0.inlineEnd != 0 }) {
                 for i in runs.indices { runs[i].backgroundBox = 0; runs[i].backgroundRadii = []; runs[i].outerBackgrounds = [] }
             }

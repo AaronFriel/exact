@@ -7,7 +7,9 @@
 // EXACT_SMOKE=1 prints the boot time and the startup phases after the first
 // frames and exits. EXACT_AGENT=1 with EXACT_AGENT_SOCKET=<path> is the agent
 // API (LLP 1012, `Agent.swift`, `AgentIOS.swift`): the driver owns the clock
-// and drives the app over a Unix socket. `xcrun simctl launch` passes the
+// and drives the app over a Unix socket; EXACT_AGENT=live (`--live`) is the
+// same carrier on an ordinary launch, the wall clock and normal scheduling,
+// input and reads but no clock. `xcrun simctl launch` passes the
 // environment through as SIMCTL_CHILD_*; `bun host/apple/build.mjs --ios`
 // builds, bundles, installs, and launches.
 import ExactKit
@@ -39,7 +41,11 @@ setvbuf(stdout, nil, _IOLBF, 0)
 
 let exact = ExactComposition.app
 final class Adapter: ExactSessionDelegate {
-    weak var window: UIWindow?
+    private let scheme = ExactWindowScheme()
+    var window: UIWindow? {
+        get { scheme.window }
+        set { scheme.window = newValue }
+    }
     var announced = false
     /// The capabilities: `setScheme` is the window's interface style —
     /// `light`, `dark`, or `system`, as the web's `color-scheme`, where
@@ -48,11 +54,7 @@ final class Adapter: ExactSessionDelegate {
     func exactSession(_ session: ExactSession, command name: String, args: [Any]) {
         switch name {
         case "setScheme":
-            switch args.first as? String {
-            case "dark": window?.overrideUserInterfaceStyle = .dark
-            case "light": window?.overrideUserInterfaceStyle = .light
-            default: window?.overrideUserInterfaceStyle = .unspecified
-            }
+            scheme.set(args.first as? String)
         // The app's page in Settings (LLP 1133.002 D11); under the agent, journaled only.
         // `change` at the second argument's id hears whether it opened (OpenURL.swift `openURLAnswer`).
         case "openURL" where args.first as? String == UIApplication.openSettingsURLString:
@@ -90,7 +92,7 @@ final class Adapter: ExactSessionDelegate {
         guard !announced, state != .created, state != .destroyed else { return }
         announced = true
         DispatchQueue.main.async {
-            if agentMode { agentReady() }
+            if ExactEnv.agentCarried { agentReady() }
             if smoke { printSmoke() }
         }
     }
@@ -127,7 +129,7 @@ nonisolated(unsafe) var readySent = false
 /// plan, which clears the session's error, but the driver asked for this one.
 nonisolated(unsafe) var planRefusal: String?
 func agentReady() {
-    guard agentMode, !readySent, session.booted || session.bootError != nil else { return }
+    guard ExactEnv.agentCarried, !readySent, session.booted || session.bootError != nil else { return }
     readySent = true
     Agent.startSocket(ready: ["ready": true, "boot": session.bootMs, "views": session.viewCount, "error": planRefusal ?? session.bootError ?? session.nativeArtifactFailure ?? NSNull(), "pid": Int(getpid())], sessions: [("main", session)])
 }
@@ -201,6 +203,8 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
             planRefusal = ExactDevelopmentPlan(path).installInitial(on: exact)
         }
         session = exact.makeSession(delegate: adapter, label: "main")
+        // Before any scene connects: the delegate methods of the host events this build takes (LLP 1133.001.000 D2).
+        exact.installHostEvents(applicationDelegate: nil, sceneDelegate: SceneDelegate.self)
         #if !os(tvOS)
         // A notification's background action that launched the app with no scene boots it with none (LLP 1133.004 stage 2).
         exact.installNotificationClicks(boot: { $0.bootForWake() }, activate: nil)
@@ -269,6 +273,8 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         #if !os(tvOS)
         let notificationResponse = connectionOptions.notificationResponse
         if let notificationResponse { exact.openNotification(notificationResponse) }
+        // A taken host event that launched the app (an accepted iCloud share); the URLs below route as ever.
+        exact.hostEvents(connectionOptions: connectionOptions)
         #endif
         let contexts = connectionOptions.urlContexts.map(\.url).sorted { $0.absoluteString < $1.absoluteString }
         let activities = connectionOptions.userActivities.filter { $0.activityType == NSUserActivityTypeBrowsingWeb }

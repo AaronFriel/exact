@@ -14,6 +14,43 @@ private final class CanvasCaptureWindow: NSWindow {
 final class AgentCanvasCaptureMacTests: XCTestCase {
     override class func setUp() { super.setUp(); ExactSurfaces.install() }
 
+    func testViewportCaptureComposesCanvasReadbacksWithTheirChildren() throws {
+        _ = NSApplication.shared
+        let session = ExactApp.shared.makeSession(label: "viewport-canvas")
+        defer { session.destroy() }
+        let p = session.presenter
+        p.viewport.frame = NSRect(x: 0, y: 0, width: 100, height: 100)
+        let window = NSWindow(contentRect: p.viewport.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false; window.contentView = p.viewport
+        defer { window.close() }
+        p.apply(wireBatch([
+            ["op": "create", "id": 1, "kind": "canvas"],
+            ["op": "create", "id": 2, "kind": "view", "style": ["background_color": [255, 0, 0, 128]]],
+            ["op": "children", "id": 1, "ids": [2]], ["op": "roots", "ids": [1]],
+            ["op": "frame", "id": 1, "x": 0, "y": 0, "w": 100, "h": 100],
+            ["op": "frame", "id": 2, "x": 0, "y": 40, "w": 100, "h": 20],
+        ]))
+        let entry = CanvasesHost.Entry(view: try XCTUnwrap(p.views[1]), name: "viewport-pixels", values: [])
+        entry.id = 1; entry.module = module()
+        session.surfaceHost.entries[1] = entry
+        window.orderFrontRegardless(); window.displayIfNeeded(); CATransaction.flush()
+        let path = FileManager.default.temporaryDirectory.appendingPathComponent("viewport-canvas-\(UUID().uuidString).png")
+        defer { try? FileManager.default.removeItem(at: path) }
+        let reply = session.agentInstance.screenshot(["path": path.path])
+        XCTAssertNil(reply["error"], "\(reply)")
+        let rep = try XCTUnwrap(NSBitmapImageRep(data: Data(contentsOf: path)))
+        func pixel(_ y: Int) -> [UInt] {
+            var components = [UInt](repeating: 0, count: rep.samplesPerPixel)
+            rep.getPixel(&components, atX: rep.pixelsWide / 2, y: y * rep.pixelsHigh / 100)
+            return components
+        }
+        XCTAssertEqual(pixel(10), [255, 0, 0, 255], "the readback's top stripe stays upright")
+        XCTAssertEqual(pixel(80), [0, 255, 0, 255], "Metal supplies the pixels")
+        XCTAssertEqual(pixel(50), [128, 127, 0, 255], "the child composites once in sRGB")
+        XCTAssertEqual(rep.pixelsWide, Int(100 * window.backingScaleFactor))
+        XCTAssertEqual(rep.colorSpace, .sRGB)
+    }
+
     func testWindowCaptureKeepsCanvasPixelsForEitherOcclusionState() throws {
         _ = NSApplication.shared
         let sessions = (0..<2).map { ExactApp.shared.makeSession(label: "window-canvas-\($0)") }
@@ -113,7 +150,10 @@ final class AgentCanvasCaptureMacTests: XCTestCase {
         let before = NSBitmapImageRep(cgImage: original)
         let after = try XCTUnwrap(NSBitmapImageRep(data: Data(contentsOf: path)))
         XCTAssertEqual(after.pixelsWide, original.width); XCTAssertEqual(after.pixelsHigh, original.height)
-        for (x, y) in [(0, 0), (original.width / 2, 5), (original.width - 1, 0)] {
+        // At 2x the rounded corners' outermost pixels too; on a 1x display (a headless Mac's virtual one) a corner's single
+        // antialiased pixel varies by a few 255ths from capture to capture, so the top edge's middle alone.
+        let points = window.backingScaleFactor >= 2 ? [(0, 0), (original.width / 2, 5), (original.width - 1, 0)] : [(original.width / 2, 5)]
+        for (x, y) in points {
             let actual = try XCTUnwrap(after.colorAt(x: x, y: y))
             let expected = try XCTUnwrap(before.colorAt(x: x, y: y))
             XCTAssertEqual(actual.alphaComponent, expected.alphaComponent, accuracy: 0.01, "window shape")

@@ -6,14 +6,17 @@ import java.nio.ByteBuffer
 /** exact2 on the main thread: layout, shaping and the paint walk, recorded as Canvas ops. */
 object Native {
     init { System.loadLibrary("exactcanvas") }
+    /** Bind the application JVM before any host starts TLS work. */
+    @JvmStatic external fun trust(context: android.content.Context)
     /** Boot the app's host on the calling thread, in a window of this size in pixels ([window] told its insets);
      * whether it booted. Where a host already runs on this thread (the activity was made again in this process,
      * LLP 1115.001 D15.1) nothing boots: that host is adopted in this window, and paints everything again for the
-     * reader that calls, which has none of the last one's rows, faces or pictures. */
-    @JvmStatic external fun start(width: Int, height: Int, scale: Float, dir: String, live: Boolean): Boolean
+     * reader that calls, which has none of the last one's rows, faces or pictures. `dir` is the app's files
+     * directory; `store` its no-backup directory, where a library with an update store keeps it (LLP 1030.006 D3). */
+    @JvmStatic external fun start(width: Int, height: Int, scale: Float, dir: String, store: String, live: Boolean): Boolean
     /** [start] on a thread of its own; [adopt] takes the host. Where a host already runs in this process nothing
      * boots, and [adopt] adopts that one as [start] does. */
-    @JvmStatic external fun startAsync(width: Int, height: Int, scale: Float, dir: String, live: Boolean)
+    @JvmStatic external fun startAsync(width: Int, height: Int, scale: Float, dir: String, store: String, live: Boolean)
     /** Wait for [startAsync]'s host and run it on this thread from now on; whether it booted. */
     @JvmStatic external fun adopt(): Boolean
     /** The device's settings, whole ([Device], LLP 1115.001 D3.1): before [start], from any thread, so the host boots
@@ -69,6 +72,8 @@ object Native {
      * leading toward `velocity` px/s. Bit 0: a paint is wanted; bit 1: rows are left for another slice. */
     @JvmStatic external fun refine(limit: Int, velocity: Float): Int
     @JvmStatic external fun nextDue(): Double
+    /** The wake descriptors, -1 where absent: executor replies, decoded images, the GPU module's acquired images
+     * ([Wakes.ACQUIRED]) and the update store's finished checks. */
     @JvmStatic external fun fds(): IntArray
     /** A driver from outside scrolls the feed by [dy] px ([ExactActivity.drive]). A finger's scroll is the
      * calls below. */
@@ -80,10 +85,11 @@ object Native {
      * rows are a node the reader can move, bit 3 no scrollbar, bit 4 it hears `refresh`, bit 5 its `refreshing`
      * is true, bits 6 and 7 its `keyboardDismissMode`), its revision, then as float bits its offset (x, y), its farthest offset
      * (x, y) and the box it shows in (x, y, width, height). exact2 tells the reader of each of them from then on
-     * ([scrollers]). After the scrollers: the native module button under the point (0: none), then its painted
-     * box x, y, width and height as float bits, in pixels, its allocation slot and generation, and how many long
-     * presses a node has taken so far (wrapping), and the session token's low and high words. Then each scroller's
-     * snap, in the same order (`host/painted/src/presenter/snap.rs`,
+     * ([scrollers]). After the scrollers: the native module view under the point (0: none), then its painted
+     * border box x, y, width and height as float bits, in pixels, its allocation slot and generation, how many long
+     * presses a node has taken so far (wrapping), the session token's low and high words, its painted content origin
+     * x and y as float bits, and the Exact context-menu candidate (0: none). Then each scroller's snap, in the same
+     * order (`host/painted/src/presenter/snap.rs`,
      * `reader_snaps`): flags (bit 0 it snaps sideways, bit 1 up and down, bit 2 `mandatory`), then sideways and then up
      * and down its snapport's length as float bits, a count, and per snap area the least and greatest offsets it rests
      * at as float bits and 1 for `scroll-snap-stop: always`, in pixels; flag bit 3: a virtualized list, whose areas past
@@ -239,6 +245,12 @@ object Native {
     @JvmStatic external fun answer(id: Int, answer: String?)
     /** A topic an extension announced ([ExtensionContext.changed]): its readers are asked again. On the host's thread. */
     @JvmStatic external fun changed(topic: String)
+    /** A person's act on an extension's own platform UI ([Activations]): its event [event] with [args], a JSON array,
+     * raised with a person's origin (LLP 1133.004 D6); for a notification's action, only while the plan declares
+     * [action], the action's record. On the host's thread. */
+    @JvmStatic external fun activate(extension: String, event: String, args: String, action: String?)
+    /** A line for the session's journal. On the host's thread. */
+    @JvmStatic external fun journal(line: String)
     /** The extensions the APK carries, one a line ([Extensions]); under the agent, told so unless the drive names them
      * (`--bind`). On the host's thread. */
     @JvmStatic external fun bindExtensions(names: String)
@@ -252,6 +264,9 @@ object Native {
     @JvmStatic external fun pictureChanged(source: String, revoked: Boolean)
     /** Activity visibility and the process's execution eligibility. On the host's thread. */
     @JvmStatic external fun hidden(hidden: Boolean, eligible: Boolean)
+    /** The reader drew a frame of the running generation, which makes its boot good (LLP 1030.006 D5); whether to say
+     * so again after the next. On the exact thread. */
+    @JvmStatic external fun drew(): Boolean
     /** Waits up to [ms] for the store's writes, which exact2 makes on a thread of its own: whether every commit handed
      * over was written (a write that failed is tried once more; failing again, it stays pending). Any thread. */
     @JvmStatic external fun storeDrain(ms: Int): Boolean
@@ -264,6 +279,8 @@ object Native {
 
     /** The file an `app:/data|cache|tmp/…` path names, or null (`ExtensionContext.file`). */
     @JvmStatic external fun appFile(path: String): String?
+    /** The running generation's asset directory when a signed update's is running, else null ([AssetRoot]). */
+    @JvmStatic external fun assetRoot(): String?
     /** The app's directory [index] names: 0 `data`, 1 `cache`, 2 `tmp` ([ExtensionContext.data]). */
     @JvmStatic external fun appRoot(index: Int): String?
     /** Whether extension [name] is told it runs under the agent ([ExtensionContext.agent]). Any thread. */
@@ -287,11 +304,11 @@ object Native {
      * host's own handler (`host/painted/src/canvas/agent.rs`), on the host's thread. From the first one the host's turns
      * run at the driver's clock, which only a `clock` request moves. [AgentDrive] calls it for a driver over adb. */
     @JvmStatic external fun agent(line: ByteArray): ByteArray
-    /** What an [ExactTamber] asks (LLP 1121 D12), on the host's thread: `{"view": id or 0, "names": [..]}`, answered
+    /** What an [ExactForma] asks (LLP 1121 D12), on the host's thread: `{"view": id or 0, "names": [..]}`, answered
      * `{"inputs": "<u64>", "colors": {name: ARGB or null}}`, each colour as exact2 paints it at that view (its pinned
      * modes, its scheme), null for a name the design lacks; `inputs` moves when anything the answer read does. A
      * view that is no live node, or a name that is no string, is answered `{"error": ...}`. */
-    @JvmStatic external fun tamber(request: String): String
+    @JvmStatic external fun forma(request: String): String
     /** Run the calling thread on the cores outside the slowest cluster; whether it was set. */
     @JvmStatic external fun fastCores(): Boolean
     /** An ADPF hint session over [tids] (this process's threads), [targetNs] their work's target. */

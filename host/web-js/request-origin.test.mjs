@@ -17,11 +17,11 @@ const root = resolve(import.meta.dir, '../..');
 const PRIVATE = 'http://192.168.1.40/json', PUBLIC = 'https://public.example/json', SOCKET = 'ws://192.168.1.40/socket';
 
 function normalized(spec) {
-  const { cmd, pre } = webCompiler();
+  const { cmd, pre, env: toolEnv } = webCompiler();
   if (cmd === 'cargo') throw new Error('build the compiler first: cargo build -p exact-web-js');
   const scratch = mkdtempSync(resolve(tmpdir(), 'exact-grants-')), input = resolve(scratch, 'grants.txt');
   writeFileSync(input, spec);
-  const run = spawnSync(cmd, [...pre, 'normalize-grants', input], { cwd: root, encoding: 'utf8' });
+  const run = spawnSync(cmd, [...pre, 'normalize-grants', input], { env: toolEnv, cwd: root, encoding: 'utf8' });
   rmSync(scratch, { recursive: true });
   if (run.status !== 0) throw new Error(run.stderr || 'the grant normalizer failed');
   return JSON.parse(run.stdout);

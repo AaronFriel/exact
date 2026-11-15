@@ -318,8 +318,11 @@ pub(crate) fn active_migration_hint(name: &str, target: &str) -> String {
 
 pub(crate) fn unknown_attr(tag: &str, a: &Attr) -> LowerError {
     let hint = match tags::renamed(&a.name) {
-        None if crate::fields::placeholder_hint(&a.name).is_some() => {
-            crate::fields::placeholder_hint(&a.name).unwrap_or_default()
+        None if crate::fields::part_hint(&a.name).is_some() => {
+            crate::fields::part_hint(&a.name).unwrap_or_default()
+        }
+        None if crate::route_parts::hint(&a.name).is_some() => {
+            crate::route_parts::hint(&a.name).unwrap_or_default()
         }
         Some(new @ ("press" | "change" | "input")) => format!(
             "; `{}` is `{new}` here: a handler is named for its event (LLP 1005 §3)",
@@ -460,7 +463,7 @@ fn shorthand(a: &Attr, names: &Substituted) -> Result<(), LowerError> {
     if a.name == "font"
         && crate::type_tokens::tokens_named(
             &a,
-            exact_tamber::Kind::Type,
+            exact_forma::Kind::Type,
             &[],
             &Default::default(),
             false,

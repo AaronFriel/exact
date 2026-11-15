@@ -76,10 +76,13 @@ pub const RECIPES: &[(&str, &str)] = &[
     recipe!("purchases"),
     recipe!("random-and-shuffle"),
     recipe!("random-rolls"),
+    recipe!("report-errors"),
     recipe!("responsive-columns"),
     recipe!("rest-backend"),
     recipe!("properties"),
+    recipe!("second-window"),
     recipe!("sequencer"),
+    recipe!("settings-window"),
     recipe!("shipped-data"),
     recipe!("sign-in"),
     recipe!("snapback"),
@@ -89,7 +92,7 @@ pub const RECIPES: &[(&str, &str)] = &[
     recipe!("suspending-feed"),
     recipe!("symbols"),
     recipe!("tabs"),
-    recipe!("tamber"),
+    recipe!("forma"),
     recipe!("tests"),
     recipe!("theme"),
     recipe!("timer-in-a-component"),
@@ -104,6 +107,7 @@ pub const RECIPES: &[(&str, &str)] = &[
 ];
 
 pub const PATTERNS: &[(&str, &str)] = &[
+    pattern!("chat"),
     pattern!("dashboard"),
     pattern!("list-detail"),
     pattern!("one-screen"),

@@ -8,6 +8,7 @@ android {
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     // A package's unit tests compile its Kotlin into this module's tests; the reader links none of it.
     sourceSets {
+        getByName("main").kotlin.directories.add("../../../vendor/ibex/crates/ibex2/android")
         getByName("test").kotlin.directories.addAll(listOf(
             "../../../packages/age-range/android", "../../../packages/age-range/test",
             "../../../packages/barcode-detection/android", "../../../packages/barcode-detection/test",
@@ -23,6 +24,7 @@ android {
             "../../../packages/geolocation/android", "../../../packages/geolocation/test",
             "../../../packages/text-detection/android", "../../../packages/text-detection/test",
             "../../../packages/language-model/android", "../../../packages/language-model/test",
+            "../../../packages/maps/android", "../../../packages/maps/test",
             "../../../packages/media-capture/android", "../../../packages/media-capture/test",
             "../../../packages/motion/android", "../../../packages/motion/test",
             "../../../packages/local-auth/android", "../../../packages/local-auth/test",
@@ -41,6 +43,7 @@ dependencies {
     testImplementation("com.google.mlkit:barcode-scanning:17.3.0")
     testImplementation("com.google.mlkit:genai-prompt:1.0.0-beta4")
     testImplementation("junit:junit:4.13.2")
+    testImplementation("com.google.android.gms:play-services-maps:20.1.0")
     testImplementation(libs.robolectric)
     testImplementation("androidx.camera:camera-camera2:1.6.2")
     testImplementation("androidx.camera:camera-lifecycle:1.6.2")

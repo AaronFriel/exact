@@ -300,13 +300,13 @@ test('paired module capture includes bytecode named only by the embedded receipt
 test('JS Rust producers generate privately and read grants from their captured module', async () => {
   const { cpSync } = await import('node:fs');
   const source = readFileSync(resolve(import.meta.dir, '../host/web-js/build.mjs'), 'utf8');
-  const start = source.indexOf('if (rust) {\n  mkdirSync');
+  const start = source.indexOf('if (rustLinked) {\n  mkdirSync');
   const body = source.slice(start, source.indexOf('// The granted secrets:', start));
   const dir = mkdtempSync(resolve(tmpdir(), 'exact-js-rust-owner-')), out = resolve(dir, 'out'), gen = resolve(out, '.gen');
   try {
     mkdirSync(gen, { recursive: true }); writeFileSync(resolve(gen, 'app.bind.plan'), 'plan');
     const env = { resolve, mkdirSync, existsSync, dirname: path => resolve(path, '..'), cpSync, readFileSync, createHash,
-      rust: true, devReload: true, devLogic: [], opt: () => null, out, gen, app: 'fixture', canvas2d: false, appDir: dir, ts: false,
+      rustLinked: true, root: dir, sep: '/', moduleSourceDirs: () => [], devReload: true, devLogic: [], opt: () => null, out, gen, app: 'fixture', canvas2d: false, appDir: dir, ts: false,
       normalizeGrants: () => ({ entries: [] }),
       buildModule(app, at) {
         expect(at).toBe(resolve(gen, 'rust-module')); mkdirSync(at, { recursive: true });
@@ -323,11 +323,11 @@ test('a Rust module holds its Cargo product claim through optimization and captu
   const { awaitBuildOutput } = await import('./app.mjs');
   const { lockHeld } = await import('../host/web/build-lock.mjs');
   const source = readFileSync(resolve(import.meta.dir, '../host/web-js/module.mjs'), 'utf8');
-  const body = source.slice(source.indexOf('function module('), source.indexOf("/** Rust's string"));
+  const body = source.slice(source.indexOf('function module('), source.indexOf('\nexport function buildModule'));
   const dir = mkdtempSync(resolve(tmpdir(), 'exact-js-rust-cargo-')), out = resolve(dir, 'private');
   const lock = resolve(dir, '.claims/fixture.lock.flock');
   try {
-    const env = { TARGET: dir, resolve, dirname: path => resolve(path, '..'), mkdirSync, awaitBuildOutput,
+    const env = { TARGET: dir, resolve, dirname: path => resolve(path, '..'), mkdirSync, awaitBuildOutput, moduleDepInfo: new Map(),
       fresh: () => false, cargoWasm() { expect(lockHeld(lock)).toBe(true); return { status: 0 }; },
       replace: (path, write) => write(path), optimize(from, to) { expect(lockHeld(lock)).toBe(true); writeFileSync(to, 'captured module'); },
     };

@@ -283,13 +283,13 @@ fn border(name: &str, text: &str, span: Span) -> Result<[String; 3], LowerError>
                 // token is a length, which the refusal below names.
                 use exact_kernel::style::{scale, theme};
                 let length = scale::is_base(word)
-                    || crate::theme::measure_named(word) == Some(exact_tamber::Kind::Length);
+                    || crate::theme::measure_named(word) == Some(exact_forma::Kind::Length);
                 if crate::theme::scan::dotted_name(word)
                     && theme::bound()
                     && !theme::names(word)
                     && !length
                 {
-                    return err("tamber-unknown-token", format!("`{name}=\"{text}\"`: `{word}` is no token of this app's design and no role"), span);
+                    return err("forma-unknown-token", format!("`{name}=\"{text}\"`: `{word}` is no token of this app's design and no role"), span);
                 }
                 return err("lower-css-shorthand", format!("`{word}` is not an admitted `{name}` width, style or color; widths are nonnegative px/pt lengths, `-exact-hairline` or thin/medium/thick"), span);
             }

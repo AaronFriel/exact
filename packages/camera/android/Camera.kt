@@ -9,7 +9,7 @@
 //   own (`CAPTURE_MODE_MINIMIZE_LATENCY`, flash off, JPEG, D2); `fillLightMode` and the `android.*` words set the
 //   flash, mode and quality, a builder field built again when it changes. The shutter sound is
 //   `MediaActionSound.SHUTTER_CLICK` at each capture, unless `android.shutterSound` is false where the platform
-//   allows it.
+//   allows it. Before API 33 the regional requirement cannot be queried, so the sound stays on.
 // - Hosted views take no touches beyond a click (`host/android/README.md`): no tap to focus or pinch to zoom yet (D8
 //   item 6, recorded as a tell).
 // - Under the agent no capture exists: the viewfinder shows a drawn test card, mirrored for a `user` camera, and
@@ -38,6 +38,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.media.MediaActionSound
+import android.os.Build
 import android.provider.MediaStore
 import android.view.View
 import android.widget.ImageView
@@ -281,7 +282,7 @@ class CameraModule(context: ExtensionContext) : ExactExtension(context) {
         val source = entry.video?.invoke() ?: return reply(error("InvalidStateError"))
         val android = args.optJSONObject("android") ?: JSONObject()
         val capture = try { imageCapture(source, args, android) } catch (e: TrackError) { return reply(error(e.code)) }
-        if (android.optBoolean("shutterSound", true) || MediaActionSound.mustPlayShutterSound()) sound.play(MediaActionSound.SHUTTER_CLICK)
+        if (android.optBoolean("shutterSound", true) || Build.VERSION.SDK_INT < 33 || MediaActionSound.mustPlayShutterSound()) sound.play(MediaActionSound.SHUTTER_CLICK)
         // A photo in flight is a consumer: its lease holds until the file is written (D3).
         val holder = Sub(entry.id, "app")
         holder.leave = context.tracks.subscribe(entry.id, holder, false, "app")

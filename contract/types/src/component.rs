@@ -31,7 +31,7 @@ fn action_checks_reuse_declarations_and_observe_prior_writes() {
     let c = &file.components[0];
     let mut sink = Sink::default();
     SCOPE_BUILDS.with(|count| count.set(0));
-    let ct = check_component(c, &Types::default(), None, &mut sink);
+    let ct = check_component(c, &Types::default(), None, &[], &mut sink);
     assert!(sink.errors.is_empty(), "{:?}", sink.errors);
     assert_eq!(ct.slots, vec![Ty::Option(Box::new(Ty::Number)); 2]);
     // Call-parameter refinement still has one scope per action; body checks
@@ -77,6 +77,7 @@ pub(crate) fn check_component(
     c: &Component,
     types: &Types,
     owners: Option<&[Owner]>,
+    resource_owners: &[Owner],
     sink: &mut Sink,
 ) -> ComponentTypes {
     let shapes = &types.shapes;
@@ -225,10 +226,17 @@ pub(crate) fn check_component(
     let scope = types.component_scope(c, &ct);
     let after_derives = sink.errors.len();
     let mut resource_args = Vec::with_capacity(c.resources.len());
-    for r in &c.resources {
-        let (each, errors) = crate::each::args_scope(r, &scope, shapes);
+    // A child's request reads its instance's frame (LLP 1035.005.004 D1): its
+    // use site's scope, as its state's initializer does.
+    let arms = super::checks::owned_scopes(c, &ct, types, resource_owners);
+    for (i, r) in c.resources.iter().enumerate() {
+        let Some(scope) = resource_scope(resource_owners, &arms, i, &scope) else {
+            resource_args.push(vec![Ty::Unknown; r.args.len()]);
+            continue;
+        };
+        let (each, errors) = crate::each::args_scope(r, scope, shapes);
         errors.into_iter().for_each(|e| sink.push(e));
-        let scope = each.as_ref().unwrap_or(&scope);
+        let scope = each.as_ref().unwrap_or(scope);
         let args: Vec<Ty> = r
             .args
             .iter()
@@ -306,9 +314,13 @@ pub(crate) fn check_component(
     // checked). One source, one signature.
     {
         let scope = types.component_scope(c, &ct);
+        let arms = super::checks::owned_scopes(c, &ct, types, resource_owners);
         for (i, r) in c.resources.iter().enumerate() {
-            let each = crate::each::args_scope(r, &scope, shapes).0;
-            let scope = each.as_ref().unwrap_or(&scope);
+            let Some(scope) = resource_scope(resource_owners, &arms, i, &scope) else {
+                continue;
+            };
+            let each = crate::each::args_scope(r, scope, shapes).0;
+            let scope = each.as_ref().unwrap_or(scope);
             sink.keep_unit(crate::each::gate(r, scope, shapes));
             // An argument that failed above is reported there, once.
             let params: Vec<Ty> = r
@@ -502,6 +514,21 @@ fn hides_fn(c: &Component, p: &Param, ty: &Ty, kind: &str, shapes: &Shapes) -> O
         ),
         span: p.span,
     })
+}
+
+/// Resource `i`'s scope: `root` for the root's own and for a use outside
+/// every region, its arm's for a child's lifted request (`arms`); `None`
+/// when that region was not checked, which the view check says why.
+fn resource_scope<'s>(
+    owners: &[Owner],
+    arms: &'s std::collections::BTreeMap<(u32, u8), crate::Scope>,
+    i: usize,
+    root: &'s crate::Scope,
+) -> Option<&'s crate::Scope> {
+    match owners.get(i).copied().unwrap_or(Owner::Root) {
+        Owner::Root | Owner::Instance => Some(root),
+        Owner::Arm { tag, arm } => arms.get(&(tag, arm)),
+    }
 }
 
 /// The first call of `name` in the component's derives, states, provides or

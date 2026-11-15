@@ -367,6 +367,8 @@ impl Lowerer<'_> {
         // @ref LLP 1116.009 D3 — and a sheet is never transparent.
         let sheet_page = self.nav_place.sheet_page(expanded, *span);
         let expanded = sheet_page.as_deref().unwrap_or(expanded);
+        // @ref LLP 1013.001 D4 — a route's entrance and exit, by its place.
+        self.check_route_parts(&self.nav_place, tag, expanded)?;
         let nav_place = self
             .nav_place
             .enter(first, tag, expanded, children, *span)?;

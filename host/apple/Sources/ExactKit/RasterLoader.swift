@@ -584,6 +584,11 @@ final class RasterLoader {
     var testRequest: ((ExactRasterDemand) -> (request: UInt64, refusal: UInt64?))?
     /// The next `count` decodes fail as ImageIO's do on a busy system.
     func testDecline(next count: Int) { backend.lock.lock(); backend.testDeclines = count; backend.lock.unlock() }
+    /// Whether the core holds the picture a view asked for ready, not yet taken.
+    func testReady(_ view: UInt32) -> Bool {
+        guard let request = interests[view]?.request, request != 0 else { return false }
+        return exact_raster_status(id, request) == 4
+    }
     #endif
     init(budget: UInt64 = RasterLoader.minimumBudget,
          sourceLimit: Int = 1152, metadataLimit: Int = 64) {
@@ -675,6 +680,14 @@ final class RasterLoader {
     /// (LLP 1011, "Events").
     func mountPass() {
         reconcile(.mount)
+    }
+    /// At the end of a boot's apply: the pictures already decoded go on their
+    /// layers in the boot's own transaction, its first frame, instead of on the
+    /// wake that would bring them a turn later. It takes only what the core
+    /// holds ready, so the first frame never waits for a decode; it asks for
+    /// nothing, and what it lands is reported on the next turn (LLP 1011).
+    func bootPass() {
+        reconcile(.boot)
     }
     /// The views a batch under way asked to load: its mount pass's.
     private var mounting = Set<UInt32>()
@@ -969,8 +982,9 @@ final class RasterLoader {
     /// main turn; a mount pass runs in a batch's epilogue, over the views that
     /// batch loaded; a direct pass (a retry, a resize, a display change) may run
     /// inside a batch or a layout. The wake and mount passes take a cache hit as
-    /// they ask for it; a direct pass leaves it to the wake, as before.
-    enum Pass { case wake, mount, direct }
+    /// they ask for it; a direct pass leaves it to the wake, as before. A boot
+    /// pass (`bootPass`) only takes what is ready.
+    enum Pass { case wake, mount, direct, boot }
     func reconcile(_ pass: Pass = .direct) {
         #if DEBUG
         testReconciliations += 1
@@ -980,12 +994,12 @@ final class RasterLoader {
         // wake runs between batches, never inside one, so views still listed then
         // are a pass that never came (an epilogue not run), and it lets them go.
         let batch = pass == .mount ? mounting : []
-        if pass != .direct { mounting.removeAll() }
+        if pass == .wake || pass == .mount { mounting.removeAll() }
         guard !destroyed, !paused else { return }
         // Decoded pictures put on their layers: a late frame's `image` (LLP 1144 D2).
         let began = HostPhases.shared.begin(.image)
         defer { HostPhases.shared.end(began) }
-        admitDeferred()
+        if pass != .boot { admitDeferred() }
         // Every image this turn lands reports its natural size together,
         // after the loop: one layout for them all, not one each.
         var landed: [(view: NodeView, generation: Int, size: CGSize)] = []
@@ -994,9 +1008,10 @@ final class RasterLoader {
         // request let go of.
         var progress = false
         defer {
-            // A mount pass runs inside the batch's epilogue: what it landed is
-            // reported, and its `load`s sent, on the next turn.
-            if pass == .mount {
+            // A mount pass runs inside the batch's epilogue, a boot pass at the
+            // boot's end: what it landed is reported, and its `load`s sent, on
+            // the next turn.
+            if pass == .mount || pass == .boot {
                 if !landed.isEmpty || !settled.isEmpty {
                     DispatchQueue.main.async { [weak self, landed, settled] in self?.publish(landed, settled) }
                 }
@@ -1028,6 +1043,12 @@ final class RasterLoader {
         for viewID in ids {
             guard var item = interests[viewID], let view = item.view,
                   view.loadGeneration == item.generation, view.presenter?.views[viewID] === view else { cancel(viewID); continue }
+            // A boot pass takes a ready picture and leaves everything else as it is.
+            if pass == .boot {
+                if !item.delivered, item.failure == nil, item.request != 0,
+                   exact_raster_status(id, item.request) == 4, take(viewID, &item, view) { progress = true }
+                continue
+            }
             if item.parked {
                 guard Self.mayShow(view) else { continue }
                 item.parked = false; interests[viewID] = item; unpark(viewID)

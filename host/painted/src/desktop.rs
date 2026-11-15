@@ -62,6 +62,16 @@ pub trait Services {
     /// This launch was the login item's: `Some(hidden)`, read before the
     /// session booted.
     fn login_launch(&self) -> Option<bool>;
+    /// Call `changed`, from any thread, when the system takes or gives back
+    /// a chord it can reserve (Windows: bare Print Screen, as Snipping
+    /// Tool's setting changes), until `session` is unwatched.
+    fn watch_reserved(&self, session: &str, changed: Box<dyn Fn() + Send>) {
+        let _ = (session, changed);
+    }
+    /// Stop calling `session`'s [`Services::watch_reserved`] callback.
+    fn unwatch_reserved(&self, session: &str) {
+        let _ = session;
+    }
 }
 
 /// A press the host heard, waiting for the presenter's turn.

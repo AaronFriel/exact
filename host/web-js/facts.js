@@ -71,7 +71,10 @@ function shareReporter() {
   if (!facts) return;
   (globalThis.exact ??= {}).page = { prefer: p => { facts.prefer(p); pageChanged(); if (p?.["gpu-tier"]) viewportChanged(); return facts.read(); }, read: () => facts.read() };
 }
-const pageFields = f => ({ visibilityState: f["visibility-state"], frozen: f.frozen, onLine: f.online, canShare: f["can-share"], canShareFiles: f["can-share-files"], canSharePictures: f["can-share-pictures"], canOpenFiles: f["can-open-files"], hasFocus: f["has-focus"], navigationType: f["navigation-type"], persisted: f.persisted, restores: f.restores, iframePartition: f["iframe-partition"] === true });
+const pageFields = f => ({ visibilityState: f["visibility-state"], frozen: f.frozen, onLine: f.online, canShare: f["can-share"], canShareFiles: f["can-share-files"], canSharePictures: f["can-share-pictures"], canOpenFiles: f["can-open-files"], hasFocus: f["has-focus"], navigationType: f["navigation-type"], persisted: f.persisted, restores: f.restores, iframePartition: f["iframe-partition"] === true, name: windowName() });
+// `window.name`, an empty one set to `main` the first time it is read, so the tab the person opened is `main` and one a
+// link's `target` opened keeps its name (LLP 1030.004 D2). A render has no window: `main`.
+const windowName = () => typeof window === "object" && typeof window.name === "string" ? (window.name ||= "main") : "main";
 export function page(readers) {
   pageReaders = readers;
   const facts = reporter();
@@ -122,11 +125,11 @@ export function activities(readers) {
 }
 
 // Replaced with string literals by build.mjs for both the page and its renderer.
-export const deliveryFacts = { stream: "embedded", seq: 0, embeddedSeq: 0, staged: false, sunset: "", interpreted: [], compatibilityId: "", version: globalThis.__exactVersion ?? "", buildNumber: globalThis.__exactBuildNumber ?? "", L: "0", E: [] };
+export const deliveryFacts = { stream: "embedded", seq: 0, embeddedSeq: 0, staged: false, sunset: "", interpreted: [], compatibilityId: "", version: globalThis.__exactVersion ?? "", buildNumber: globalThis.__exactBuildNumber ?? "", production: globalThis.__exactProduction ?? false, L: "0", E: [] };
 export function delivery(readers) {
   (data.reserved ??= {}).exactDelivery = (_, a, name) => {
     const [fields, baked] = readers[name];
-    const value = { ...deliveryFacts, ...Object.fromEntries(fields.map((field, i) => [field, baked?.[i] ?? deliveryFacts[field]])), version: deliveryFacts.version, buildNumber: deliveryFacts.buildNumber };
+    const value = { ...deliveryFacts, ...Object.fromEntries(fields.map((field, i) => [field, baked?.[i] ?? deliveryFacts[field]])), version: deliveryFacts.version, buildNumber: deliveryFacts.buildNumber, production: deliveryFacts.production };
     return byName(readers, name, value);
   };
 }

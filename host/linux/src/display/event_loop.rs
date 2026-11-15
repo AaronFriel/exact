@@ -77,10 +77,11 @@ pub(crate) fn run<D: DataSource>(
     let mut plan_seen = config.dev_plan.as_deref().and_then(mtime);
     // The dev plan's modification time and since when it has waited on requests in flight.
     let mut held: Option<(Option<ReloadStamp>, Instant)> = None;
-    // First pixel is the first frame presented (LLP 1026 D11); the update
-    // check follows two seconds after it, off the boot path.
+    // First pixel is the first frame presented (LLP 1026 D11). It asks for
+    // the launch's update check; the presenter's cadence asks for the rest
+    // (LLP 1030.006 D5). The window counts as in the foreground throughout:
+    // this loop is not told its focus.
     let mut first_pixel: Option<Instant> = None;
-    let mut check_due: Option<Instant> = None;
     loop {
         if measured {
             // A replaced host's flip and samples are the old runner's.
@@ -102,9 +103,7 @@ pub(crate) fn run<D: DataSource>(
                 marks.submitted(first_pixel.is_none());
             }
             match submitted {
-                Ok(Some(frame)) => {
-                    presented(&mut p, frame, events, &mut first_pixel, &mut check_due)
-                }
+                Ok(Some(frame)) => presented(&mut p, frame, events, &mut first_pixel),
                 Ok(None) => {}
                 Err(e) => {
                     eprintln!("exact: {e}");
@@ -151,8 +150,8 @@ pub(crate) fn run<D: DataSource>(
         if p.delivery_pending() {
             timeout = if timeout < 0 { 50 } else { timeout.min(50) };
         }
-        if let Some(due) = check_due {
-            let wait = due.saturating_duration_since(Instant::now()).as_millis() as i32;
+        if let Some(due) = p.update_check_due() {
+            let wait = due.min(i32::MAX as f64) as i32;
             timeout = if timeout < 0 { wait } else { timeout.min(wait) };
         }
         if events.idle() && timeout < 0 {
@@ -182,7 +181,7 @@ pub(crate) fn run<D: DataSource>(
                             );
                         }
                     }
-                    presented(&mut p, frame, events, &mut first_pixel, &mut check_due);
+                    presented(&mut p, frame, events, &mut first_pixel);
                     let paint = p.last_frame_ms().map(|(ms, _)| ms);
                     if let Some(line) = display
                         .sequence()
@@ -224,10 +223,6 @@ pub(crate) fn run<D: DataSource>(
         }
         p.poll_update();
         p.run_commands(data);
-        if check_due.is_some_and(|due| Instant::now() >= due) {
-            check_due = None;
-            p.check_update();
-        }
         events.turn(&mut p, wall);
 
         if let Some(e) = p.admit_idle_timer(wall()) {
@@ -352,7 +347,6 @@ fn presented<D: DataSource>(
     frame: SubmittedFrame,
     events: &mut impl Events<D>,
     first: &mut Option<Instant>,
-    check_due: &mut Option<Instant>,
 ) {
     // Pixels belong to this receipt, even if input/reload changed the live Host.
     events.publish(frame.pixels().clone());
@@ -362,7 +356,7 @@ fn presented<D: DataSource>(
     p.follow_pointer();
     if first.is_none() {
         *first = Some(Instant::now());
-        *check_due = Some(Instant::now() + Duration::from_secs(2));
+        p.update_launched();
     }
 }
 

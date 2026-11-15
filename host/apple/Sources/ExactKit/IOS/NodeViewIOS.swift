@@ -580,6 +580,7 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
 
     /// The view is gone: no load in flight may report for it.
     func forget() {
+        layoutHits = nil
         holdGone() // out of the map: a hold on it is let go (HeldState.swift)
         cancelPressContact()
         let previousTransform = transformHold; transformHold = nil
@@ -844,7 +845,7 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
     package override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         // A true leaf cannot hit beyond its bounds; flat children can overflow.
         if !bounds.contains(point), subviews.isEmpty,
-           presenter?.flats.holdsLeaves(id) != true, !hitBounds.contains(point) { return nil }
+           presenter?.flats.holdsLeaves(id) != true, layoutHits == nil, !hitBounds.contains(point) { return nil }
         // UIKit's conversion already carries a box in space through its
         // plane (LLP 1077 D8); a hidden back face is the host's to refuse.
         if placedAncestor?.placementHidden == true || hidesBack() { return nil }
@@ -867,7 +868,7 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
             // parent box first made those visible choices impossible to tap.
             // A scroller's scroll view reaching into the page's bands takes them too (LLP 1130 D3).
             let band = scrollView == nil ? .zero : pageBand
-            let box = clipsOneAxis ? surface?.frame ?? bounds : bounds
+            let box = surface?.frame ?? bounds
             let outsideX = point.x < box.minX || point.x > box.maxX
             let outsideY = point.y < box.minY - band.top || point.y > box.maxY + band.bottom
             if outsideX && (style["overflow_x"]?.string ?? "visible") != "visible" { return nil }
@@ -1134,6 +1135,8 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
         } else if kind == "image" || props["accessibilityRole"] == "img" {
             updateImageAccessibility()
         }
+        // A drawn `slider` or `spinbutton` steps by VoiceOver's swipe up and down (`stepRange`).
+        if accessibilityTraits.contains(.adjustable) != (adjustsRange && !actsAsButton) { accessibilityTraits.formSymmetricDifference(.adjustable) }
         if kind == "image", let src = props["imageSource"], src != imageSource { loadImage(src) }
         if kind == "image", props["imageSource"] == nil, imageSource != nil {
             loadGeneration += 1
@@ -1219,7 +1222,7 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
         if old["color_scheme"] != s["color_scheme"] { applyColorScheme() }
         applyTint(from: old)
         updateSymbol(); syncDynamicRange(from: old)
-        (clipPath, clipRule) = (ClipPath.path(s["clip_path"]), ClipPath.rule(s["clip_path"]))
+        (clipPath, clipRule) = (ClipPath.path(s["clip_path"], size: bounds.size), ClipPath.rule(s["clip_path"]))
         applyBoxMask()
         applyFilter()
         updateMaterial()

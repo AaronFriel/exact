@@ -69,24 +69,26 @@ fn log_as(tag: &CStr, priority: c_int, text: &str) {
     }
 }
 
-/// One line of the app's `console` to logcat under `exact-app` (`adb logcat
-/// -s exact-app`), at its method's priority, when `EXACT_LOG_CONSOLE=1`: the
-/// reader sets it in a development build, so a release build writes none
-/// (LLP 1027.009 D1). The presenter's sink calls it for each runner it shows.
+/// One line of the app's `console` to logcat at its method's priority, in
+/// every build (LLP 1027.009 D1, D3), tagged with the app's package name,
+/// which the reader sets as `EXACT_PACKAGE` before this library loads
+/// (`adb logcat -s com.example.app`). The presenter's sink calls it for each
+/// runner it shows.
 pub fn console(method: exact_runner::Console, text: &str) {
     use exact_runner::Console;
-    static ON: std::sync::LazyLock<bool> =
-        std::sync::LazyLock::new(|| std::env::var("EXACT_LOG_CONSOLE").is_ok_and(|v| v == "1"));
-    if !*ON {
-        return;
-    }
+    static TAG: std::sync::LazyLock<CString> = std::sync::LazyLock::new(|| {
+        std::env::var("EXACT_PACKAGE")
+            .ok()
+            .and_then(|name| CString::new(name).ok())
+            .unwrap_or_else(|| c"exact-app".to_owned())
+    });
     let priority = match method {
         Console::Debug => 3,
         Console::Log | Console::Info => 4,
         Console::Warn => 5,
         Console::Error => 6,
     };
-    log_as(c"exact-app", priority, text);
+    log_as(&TAG, priority, text);
 }
 
 /// Send this process's stdout and stderr to logcat, line by line: the host

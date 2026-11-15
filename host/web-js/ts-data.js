@@ -234,6 +234,33 @@ const changed = (r, topic) => {
 };
 const announce = (topic, why) => commit(() => { const m = moduleWatched.get(topic); for (const r of Resources) if (r.watches?.has(topic) || m?.has(r.source)) changed(r, topic); }, `${why} ${topic}`);
 const watch = topic => answering.call.watches.add(topic);
+// Another tab's durable write (LLP 1030.004 D2): its topics cross between the app's tabs on a channel of the app's,
+// after the write lands, and a tab never hears its own. An answer's read watches them, which opens the channel: in
+// its first turn the answer's call, after an await the pending one (`activeCall`), or the one that opened the database.
+// Outside a browser (a test's Bun) the channel keeps no process alive.
+let tabs = null;
+const channel = () => tabs ??= typeof BroadcastChannel === 'function'
+  ? Object.assign(new BroadcastChannel(`exact.topics.${appId ?? ''}`), { onmessage: e => typeof e.data === 'string' && announce(e.data, 'another tab') })
+  : { postMessage() {} };
+const listening = () => { const c = channel(); c.unref?.(); return c; };
+const shared = {
+  watch: (topics, opener) => {
+    const call = answering.call ?? activeCall() ?? opener;
+    if (!call?.watches || call.settled || call.mutation || !topics.length) return;
+    listening();
+    for (const t of topics) call.watches.add(t);
+  },
+  relay: topics => topics.forEach(t => listening().postMessage(t)),
+};
+// An app file's topic is its URL; its directory's, which lists it, too (js/src/storage.js `fileTopics`).
+const fileTopics = path => {
+  if (typeof path !== 'string' || !path.startsWith('app:/')) return [];
+  let href;
+  try { href = new URL(path).href.replace(/\/$/, ''); } catch { return []; }
+  const parent = href.slice(0, href.lastIndexOf('/'));
+  return /^app:\/./.test(parent) ? [href, parent] : [href];
+};
+const FILE_WRITES = /^(writeFile|atomicWriteFile|appendFile|mkdir|rm|rename|copyFile)$/;
 // A native module's name called from data code (LLP 1133.002 D14): admitted by
 // the page runtime's modules.js as a Contract read is; a source's reader is
 // asked again when its answer changes, as a topic's is.
@@ -381,15 +408,18 @@ function imageOptions(method, from, to, options, limits) {
   }
   return out;
 }
+// `maxBytes` and `quality` may each be unsaid, not both (LLP 1069.002 A1.12).
 function compressLimits(from, to, options) {
-  const api = 'storage.fs.compressImage()', d = options?.maxDimension, b = options?.maxBytes;
+  const api = 'storage.fs.compressImage()', d = options?.maxDimension, b = options?.maxBytes, q = options?.quality;
   if (typeof from !== 'string' || typeof to !== 'string') return new TypeError(`${api}: from and to must be app:/ paths`);
-  if (!options || typeof options !== 'object') return new TypeError(`${api}: options must be {maxDimension, maxBytes}`);
+  if (!options || typeof options !== 'object') return new TypeError(`${api}: options must be an object`);
   if (!Number.isInteger(d) || d < 1 || d > 8192) return new TypeError(`${api}: maxDimension must be an integer from 1 to 8192`);
-  if (!Number.isInteger(b) || b < 1 || b > 67108864) return new TypeError(`${api}: maxBytes must be an integer from 1 to 67108864`);
+  if (b !== undefined && (!Number.isInteger(b) || b < 1 || b > 67108864)) return new TypeError(`${api}: maxBytes must be an integer from 1 to 67108864`);
+  if (q !== undefined && !(typeof q === 'number' && q >= 0 && q <= 1)) return new TypeError(`${api}: quality must be a number from 0 to 1`);
+  if (b === undefined && q === undefined) return new TypeError(`${api}: needs maxBytes, quality or both`);
   const type = options.type === undefined ? 'image/jpeg' : options.type;
   if (type !== 'image/jpeg' && type !== 'image/png') return new TypeError(`${api}: type must be "image/jpeg" or "image/png"`);
-  return { maxDimension: d, maxBytes: b, type };
+  return { maxDimension: d, type, ...(b === undefined ? {} : { maxBytes: b }), ...(q === undefined ? {} : { quality: q }) };
 }
 const optionsRefusal = (...args) => { const out = imageOptions(...args); return out instanceof Error ? out : null; };
 const isDocument = args => args.slice(0, 2).some(p => typeof p === 'string' && p.startsWith('doc:/'));
@@ -436,9 +466,13 @@ function renderStorage(owner) {
   };
   return Object.freeze({ fs: Object.freeze({ directories: DIRECTORIES, ...fs, watch }), sqlite: Object.freeze({ open: refuse('storage.sqlite.open()') }), work: promise => Promise.resolve(promise) });
 }
+// False in a production page whose sources hold no `fs.read`, `fs.write` or `sqlite.open` grant (build.mjs
+// `storageGrants`, LLP 1047.002 D3): its bundle keeps the refusals below and drops what only a grant reaches, the
+// adapters, the SQLite handles and the topics a write tells the app's other tabs.
+const STORAGE_GRANTED = true;
 function storageOf(grants) {
   const ordinary = start => answering.ordinary(start, true);
-  const admitted = ['fs-read', 'fs-write', 'sqlite-open'].some(kind => hasGrant(grants, kind));
+  const admitted = STORAGE_GRANTED && ['fs-read', 'fs-write', 'sqlite-open'].some(kind => hasGrant(grants, kind));
   let fs, sqlite;
   const key = () => import('./storage-environment.js').then(({ storageKey, agentStorageRefusal }) => {
     const k = appId ? storageKey(appId) : null;
@@ -476,7 +510,9 @@ function storageOf(grants) {
   const image = (method, from, to, options, limits) => {
     const out = imageOptions(method, from, to, options, limits);
     if (out instanceof Error) return Promise.reject(out);
-    return (admitted ? queued(`${method} ${from}`, () => files().then(f => f[method](from, to, out))) : denied(`fs.${method}`)).catch(refused);
+    if (!admitted) return denied(`fs.${method}`).catch(refused);
+    return queued(`${method} ${from}`, () => files().then(f => f[method](from, to, out))).catch(refused)
+      .then(written => { shared.relay(fileTopics(written?.path ?? to)); return written; });
   };
   const compressImage = (from, to, options) => {
     const limits = compressLimits(from, to, options);
@@ -505,11 +541,16 @@ function storageOf(grants) {
         const wrongExpect = expectRefusal(m, args);
         if (wrongExpect) return Promise.reject(wrongExpect);
         const captured = structuredClone(args);
+        // With no storage grant no tab of the app writes a file, so a refused call watches no topic and tells none.
+        if (!admitted) return denied(`fs.${m}`, isDocument(captured) && !copiesIn(m, captured)).catch(refused);
         const run = () => copiesIn(m, captured) ? documents().then(files).then(f => globalThis.exact.documents.copyFile(captured[0], captured[1], grants, f))
           : isDocument(captured) ? documents().then(f => f[m](...captured)) : files().then(f => f[m](...captured), orEmpty(m, captured[0]));
-        return (admitted ? queued(`${m}${typeof args[0] === 'string' ? ` ${args[0]}` : ''}`, run) : denied(`fs.${m}`, isDocument(captured) && !copiesIn(m, captured))).catch(refused);
+        const done = queued(`${m}${typeof args[0] === 'string' ? ` ${args[0]}` : ''}`, run).catch(refused);
+        const topics = [...(m === 'copyFile' ? [] : fileTopics(captured[0])), ...(/^(rename|copyFile)$/.test(m) ? fileTopics(captured[1]) : [])];
+        if (!FILE_WRITES.test(m)) { shared.watch(topics); return done; }
+        return done.then(v => { shared.relay(topics); return v; });
       })])) }),
-    sqlite: Object.freeze({ open: path => ordinary(() => { const call = answering.call; return (admitted ? queued(`open ${path}`, () => databases().then(([d]) => d.open(path))).then(d => sqlite.then(([, m]) => m.database(d, path, call, queued, openDatabases))) : denied(`sqlite.open ${path}: no grant covers it; grant \`sqlite.open ${path}\`, or \`sqlite.open ${String(path).slice(0, String(path).lastIndexOf('/'))}\` for every file there (a grant covers its path and what is below it, by whole names)`)).catch(refused); }) }),
+    sqlite: Object.freeze({ open: path => ordinary(() => { const call = answering.call; return (admitted ? queued(`open ${path}`, () => databases().then(([d]) => d.open(path))).then(d => sqlite.then(([, m]) => m.database(d, path, call, queued, openDatabases, shared))) : denied(`sqlite.open ${path}: no grant covers it; grant \`sqlite.open ${path}\`, or \`sqlite.open ${String(path).slice(0, String(path).lastIndexOf('/'))}\` for every file there (a grant covers its path and what is below it, by whole names)`)).catch(refused); }) }),
     work: promise => Promise.resolve(promise),
   });
 }
@@ -526,16 +567,16 @@ export function install(data, mixed = false, modules = null) {
   data.grants = setAppGrantSet(tsGrantSet);
   const storage = globalThis.__exactRender ? renderStorage(null) : storageOf(tsGrantSet);
   if (globalThis.__exactRender) { data.watchedInRender = watchedInRender; data.refusedInRender = refusedInRender; }
-  globalThis.captureCanvas = (surface, path) => {
+  globalThis.captureCanvas = (surface, path, type, quality) => {
     if (overlaying.on) return Promise.reject(inOverlay('captureCanvas()'));
     if (answering.mapper || answering.mapperCall) return Promise.reject(new Error("captureCanvas() is unavailable in a stream's mapper: capture in the answer that opens the stream"));
     const call = answering.call, active = () => !!call && !call.settled && (call.wanted?.() ?? call.turn) && !call.ticket?.r?.gone;
     if (globalThis.__exactRender) return refuseInRender('captureCanvas()', call);
     if (!active()) return Promise.reject(new DOMException('captureCanvas() requires a live answer: call it directly or after await', 'InvalidStateError'));
     return ordinary(() => {
-      const ready = canvasCommitted(surface, active);
+      const ready = canvasCommitted(surface, active, { type, quality });
       return Promise.all([ready, import('./canvas-capture.js')]).then(([, m]) =>
-        m.captureCanvas(surface, path, (path, png) => m.writeCanvas(appId, tsGrantSet, path, png, active), ready, active));
+        m.captureCanvas(surface, path, (path, bytes) => m.writeCanvas(appId, tsGrantSet, path, bytes, active), ready, active));
     });
   };
   // The module's storage, as the runner's `state.background` (LLP 1097 D8).

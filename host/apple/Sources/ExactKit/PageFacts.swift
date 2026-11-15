@@ -404,6 +404,7 @@ extension ExactSession {
         // Keep URLSession running through the bounded close wait in setPage.
         freezeCloseHold.moved(PageFacts.frozen)
         defer { freezeCloseHold.moved(false) }
+        if clock == nil { followOffset() }
         let reads = runtime.readsOnLine()
         readsOnLineKnown = (generation, reads)
         apply(runtime.setPage(PageFacts.bits(pageWindow, page: view?.window, readsOnLine: reads)))
@@ -417,6 +418,15 @@ extension ExactSession {
     func tellDisplayScale() {
         guard booted, state != .destroyed else { return }
         apply(runtime.setDisplayScale(PageFacts.displayScale(presenter.viewport)))
+    }
+    /// What the first boot's first layout reads of the view, told before it
+    /// boots: the insets (which the boot takes), the root font size and the
+    /// display scale. Told after the boot instead, each lays the tree out again.
+    func primeView(insets: (top: CGFloat, right: CGFloat, bottom: CGFloat, left: CGFloat), displayScale: Double) {
+        guard !booted, state != .destroyed else { return }
+        _ = runtime.insets(top: insets.top, right: insets.right, bottom: insets.bottom, left: insets.left)
+        _ = runtime.setRootFontSize(PageFacts.rootFontSize)
+        _ = runtime.setDisplayScale(displayScale)
     }
 }
 

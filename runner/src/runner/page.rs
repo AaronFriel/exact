@@ -96,6 +96,11 @@ impl<D: DataSource> Runner<D> {
         let mut fields = Vec::with_capacity(ty.fields.len as usize);
         for f in ty.fields.iter() {
             let name = self.plan.str(self.plan.field(f).name);
+            // `window.name`, the session's for its life (LLP 1030.004 D2).
+            if name == "name" {
+                fields.push(Value::str(&self.window_name));
+                continue;
+            }
             match self.page.field(name) {
                 Some(v) => fields.push(v),
                 None => {

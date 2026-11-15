@@ -43,11 +43,13 @@ pub mod animation;
 pub mod color;
 pub mod easing;
 pub mod engine;
+pub mod filter;
 pub mod gesture;
 pub mod math;
 pub mod parse;
 pub mod path;
 pub mod property;
+pub mod rotation;
 pub mod spring;
 pub mod transition;
 pub mod uikit;
@@ -56,8 +58,8 @@ pub mod word;
 
 pub use animation::link as link_animations;
 pub use animation::{
-    Animation, AnimationError, Animations, Direction, FillMode, Keyframes, Phase, MAX_ANIMATIONS,
-    MAX_KEYFRAMES, MAX_VALUES,
+    Animation, AnimationError, Animations, Direction, FillMode, Keyframes, Phase, Picture,
+    MAX_ANIMATIONS, MAX_KEYFRAMES, MAX_VALUES,
 };
 pub use easing::{Easing, EasingError, LinearStop, StepPosition};
 pub use engine::{
@@ -65,6 +67,7 @@ pub use engine::{
     NamedTimeline, PlayedCurve, PlayedTransition, Presentation, SpringDescriptor, SpringFrames,
     TransformHold, TransitionEnds,
 };
+pub use filter::{FilterKind, FilterStep, FilterValue};
 pub use parse::ParseError;
 pub use path::{PathCommand, PathValue};
 pub use property::{Property, Value};

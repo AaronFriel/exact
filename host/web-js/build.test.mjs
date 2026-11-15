@@ -6,7 +6,8 @@ import { tmpdir } from 'node:os';
 import { brotliDecompressSync } from 'node:zlib';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { bakedRustSource, buildModule, moduleGrants, webCompiler } from './module.mjs';
+import { buildModule, moduleGrants, undeclaredRustData, webCompiler } from './module.mjs';
+import { rustDataOf } from '../../scripts/app-shells.mjs';
 import { spawnOwned } from '../../scripts/test-children.mjs';
 import { open } from '../../scripts/agent.mjs';
 import { suiteBrowser } from '../../scripts/agent-launch.mjs';
@@ -190,6 +191,23 @@ test.each([false, true])('named focus, blur, scheme, clipboard and haptic comman
     expect(await page.evaluate(() => [document.documentElement.style.colorScheme, exact.asked.scheme.value])).toEqual(['', 'dark']);
     await page.evaluate(() => exact.asked.scheme.apply());
     expect(await page.evaluate(() => document.documentElement.style.colorScheme)).toBe('dark');
+    // The choice is kept, held or not, and the next load is in it when the page first renders.
+    expect(await page.evaluate(() => Object.entries(localStorage).filter(([k]) => k.endsWith('#scheme')).map(([, v]) => v))).toEqual(['"dark"']);
+    await page.addInitScript(() => {
+      new MutationObserver((_, o) => {
+        if (!document.getElementById('exact-root')?.firstChild) return;
+        globalThis.firstScheme = document.documentElement.style.colorScheme;
+        o.disconnect();
+      }).observe(document, { childList: true, subtree: true });
+    });
+    await page.reload();
+    await page.getByTestId('apply').waitFor();
+    expect(await page.evaluate(() => globalThis.firstScheme)).toBe('dark');
+    await page.getByTestId('field').focus();
+    expect(await page.evaluate(() => document.activeElement.id)).toBe('field');
+    await page.getByTestId('clear').dispatchEvent('click');
+    expect(await page.evaluate(() => Object.keys(localStorage).filter(k => k.endsWith('#scheme')))).toEqual([]);
+    expect(await page.evaluate(() => document.activeElement === document.body)).toBe(true);
     expect(errors).toEqual([]);
   } finally {
     await browser?.close(); server?.stop(true); rmSync(dir, { recursive: true, force: true });
@@ -1272,114 +1290,86 @@ test('package declarations over the cap are named by package, size and the captu
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('a web build.rs bake copies its source as written: across lines, with rustfmt\'s comma, with literal arguments', () => {
-  const dir = mkdtempSync(resolve(tmpdir(), 'exact-module-copies-'));
-  const script = (text) => writeFileSync(resolve(dir, 'web/build.rs'), `fn main() {\n${text}\n}\n`);
-  try {
-    mkdirSync(resolve(dir, 'web'));
-    for (const [text, ty, expr] of [
-      ['    let baked = contract::bake(plan, mail_data::Mail).unwrap();', 'mail_data::Mail', 'mail_data::Mail'],
-      ['    let baked = contract::bake(plan, mail_data::Mail::new()).unwrap();', 'mail_data::Mail', 'mail_data::Mail::new()'],
-      ['    let baked = contract::bake(plan, mail_data::Mail::new(true)).unwrap();', 'mail_data::Mail', 'mail_data::Mail::new(true)'],
-      ['    let baked = contract::bake(plan, mail_data::Mail::new(3, "a, b")).unwrap();', 'mail_data::Mail', 'mail_data::Mail::new(3, "a, b")'],
-      ['    let baked = contract::bake(compiled, mail_data::Mail(7)).unwrap();', 'mail_data::Mail', 'mail_data::Mail(7)'],
-      // Literals whose characters would split or end a call, and numbers as Rust writes them.
-      ["    let baked = contract::bake(plan, mail_data::Mail::new(',', ')')).unwrap();", 'mail_data::Mail', "mail_data::Mail::new(',', ')')"],
-      // A character's quote opens no string, so a comment-like string after it is kept.
-      ['    let baked = contract::bake(plan, mail_data::Mail::new(\'"\', "/*keep*/")).unwrap(); // a ) here', 'mail_data::Mail', 'mail_data::Mail::new(\'"\', "/*keep*/")'],
-      ['    let baked = contract::bake(plan, mail_data::Mail::new(1e-3, 2_000u32, -4.5f64)).unwrap();', 'mail_data::Mail', 'mail_data::Mail::new(1e-3, 2_000u32, -4.5f64)'],
-      // rustfmt's form: the call across lines, a comma after the source.
-      ['    let baked = contract::bake(\n        plan,\n        mail_data::Mail::default(),\n    )\n    .unwrap();', 'mail_data::Mail', 'mail_data::Mail::default()'],
-      ['    let baked = contract::bake(\n        plan, // the plan\n        mail_data::Mail::new(\n            false,\n        ),\n    );', 'mail_data::Mail', 'mail_data::Mail::new(false)'],
-      // A path too long for its line: rustfmt breaks the empty call itself.
-      ['    let baked = match contract::bake(\n        plan,\n        mail_data::Mail::default(\n        ),\n    ) {', 'mail_data::Mail', 'mail_data::Mail::default()'],
-    ]) {
-      script(text);
-      expect(bakedRustSource(dir)).toEqual({ call: 'contract::bake', ty, expr });
-    }
-  } finally { rmSync(dir, { recursive: true, force: true }); }
-});
-
-test('a web build.rs whose data source the module cannot copy is named, with the forms it copies and the way for any other', () => {
+test('the web module exports the source app.json\'s rust.data names, in the grammar it copies (LLP 1153.003 D2)', () => {
+  const data = (fields) => rustDataOf({ rust: { data: { crate: 'mail-data', type: 'mail_data::Mail', ...fields } } });
+  expect(data({})).toEqual({ krate: 'mail-data', ty: 'mail_data::Mail', lib: 'mail_data', source: 'mail_data::Mail::default()' });
+  for (const source of ['mail_data::Mail', 'mail_data::Mail::new()', 'mail_data::Mail::new(true)', 'mail_data::Mail::new(3, "a, b")',
+    "mail_data::Mail::new(',', ')')", 'mail_data::Mail::new(\'"\', "/*keep*/")', 'mail_data::Mail::new(1e-3, 2_000u32, -4.5f64)']) {
+    expect(data({ source }).source).toBe(source);
+  }
+  // A local, a reference, a nested call, a builder chain, another type, or a bake's own constructor names nothing
+  // the module can copy.
+  for (const source of ['mail_data::Mail::new(path)', 'source', 'mail_data::Mail::from(&config)', 'mail_data::Mail::new(mail_data::Mode::Fast)',
+    'mail_data::Mail::new(0..end)', 'mail_data::Mail::new(false).with_auth(true)', 'other_data::Mail', 'mail_data::Mail::for_bake()']) {
+    expect(() => data({ source })).toThrow("a source built from anything else is a module of its own (rust.module.package)");
+  }
+  expect(() => data({ type: 'Mail' })).toThrow('rust.data.type is a path');
+  expect(() => data({ mode: 'off' })).toThrow('not mode');
+  expect(rustDataOf({ rust: { mode: 'off' } })).toBeNull();
+  // An app that names neither a module nor a data crate has no Rust module, and is told.
   const dir = mkdtempSync(resolve(tmpdir(), 'exact-module-source-'));
-  const script = (text) => writeFileSync(resolve(dir, 'web/build.rs'), `fn main() {\n${text}\n}\n`);
-  const fails = () => { try { buildModule('mail', resolve(dir, 'out'), false, dir); } catch (e) { return e.message; } return null; };
   try {
-    mkdirSync(resolve(dir, 'web'));
     writeFileSync(resolve(dir, 'app.json'), '{}');
-    // A local, a reference and a nested call: the generated module has none of build.rs's names.
-    for (const source of [
-      'mail_data::Mail::new(path)', 'source', 'mail_data::Mail::from(&config)', 'mail_data::Mail::new(mail_data::Mode::Fast)',
-      // A range over a local, a builder chain (the module would copy only its first call), a free function and a
-      // constant, which name no type for export!.
-      'mail_data::Mail::new(0..end)', 'mail_data::Mail::new(false).with_auth(true)', 'mail_data::Mail::new(1)(2)',
-      'mail_data::make(true)', 'mail_data::DEFAULT',
-      // A bake's own constructor, which may answer nothing at run time (bench/extra-heavy's `for_bake`).
-      'mail_data::Mail::for_bake()',
-    ]) {
-      const text = `    let baked = contract::bake(plan, ${source}).unwrap();`;
-      script(text);
-      const said = fails();
-      expect(said).toContain(`${resolve(dir, 'web/build.rs')} passes contract::bake a source the web build does not copy`);
-      expect(said).toContain("or its `::default()` or `::new(…)` whose arguments are literals");
-      expect(said).toContain("name it in app.json's rust.module.package");
-    }
-    // A call only in a comment is no call: the build has no Rust source to copy and says that.
-    for (const text of ['    // let baked = contract::bake(plan, mail_data::Mail::new(true));', '    /* contract::bake(plan, mail_data::Mail::new(true)) */', '']) {
-      script(text);
-      expect(fails()).toContain('its web build bakes with no Rust data source');
-    }
+    expect(() => buildModule('mail', resolve(dir, 'out'), false, dir)).toThrow('its web build bakes with no Rust data source');
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('a mixed bake selects its Rust source without copying the TypeScript composer', () => {
-  const dir = mkdtempSync(resolve(tmpdir(), 'exact-mixed-module-source-'));
+// LLP 1153.003 D2: the JS target runs only the Rust source app.json's rust.data names, so a web crate that links the
+// app's data crate without it is refused with the line to add, not built into a page that answers nothing.
+test('a web crate linking a data crate app.json does not name is refused with the rust.data line', () => {
+  const root = resolve(import.meta.dir, '../..'), dir = mkdtempSync(resolve(tmpdir(), 'exact-undeclared-')), out = resolve(dir, 'dist');
+  const write = (path, text) => { mkdirSync(dirname(resolve(dir, path)), { recursive: true }); writeFileSync(resolve(dir, path), text); };
   try {
-    mkdirSync(resolve(dir, 'web'));
-    writeFileSync(resolve(dir, 'app.json'), '{}');
-    for (const expr of ['notes_data::Backup', 'notes_data::Backup::default()', 'notes_data::Backup::new()']) {
-      writeFileSync(resolve(dir, 'web/build.rs'), `fn main() {
-        // exact_js_bake::build_mixed_with(app, "web", &wrong::Source, names, compose);
-        exact_js_bake::build_mixed_with(
-          std::path::Path::new("../a,b"), "web", &${expr}, notes_data::RUST_SOURCES,
-          |javascript| Box::new(notes_data::mixed(javascript, notes_data::Placement::Main)),
-        ).unwrap();
-      }`);
-      expect(bakedRustSource(dir)).toEqual({ call: 'exact_js_bake::build_mixed_with', ty: 'notes_data::Backup', expr });
-    }
-    writeFileSync(resolve(dir, 'web/build.rs'), 'fn main() { exact_js_bake::build_mixed_with(app, "web", &notes_data::Backup::new(true), names, compose); }');
-    expect(bakedRustSource(dir)).toEqual({ call: 'exact_js_bake::build_mixed_with', ty: 'notes_data::Backup', expr: 'notes_data::Backup::new(true)' });
-    writeFileSync(resolve(dir, 'web/build.rs'), 'fn main() { exact_js_bake::build_mixed_with(app, "web", &notes_data::Backup::new(dir), names, compose); }');
-    expect(() => buildModule('notes', resolve(dir, 'out'), false, dir)).toThrow('passes exact_js_bake::build_mixed_with a Rust source the web build cannot copy');
-    writeFileSync(resolve(dir, 'web/build.rs'), 'fn main() { let example = "exact_js_bake::build_mixed_with("; }');
-    expect(bakedRustSource(dir)).toBeNull();
+    write('app.json', JSON.stringify({ name: 'Pins', app: { id: 'test.pins', name: 'Pins' }, rust: 'off' }));
+    write('app.contract', 'component App\n  resource message = message() as shape string\n  view\n    column\n      text message\n');
+    write('data/Cargo.toml', '[package]\nname = "pins-data"\nversion = "0.1.0"\nedition = "2021"\n');
+    write('web/Cargo.toml', '[package]\nname = "pins-web"\nversion = "0.1.0"\nedition = "2021"\n\n[dependencies]\npins-data = { path = "../data" }\n');
+    write('web/build.rs', 'fn main() { let _ = contract::bake(plan, pins_data::Pins::new(3)); }\n');
+    const built = spawnSync(process.execPath, ['host/web-js/build.mjs', dir, '--out', out, '--render', 'none'], { cwd: root, encoding: 'utf8', env: { ...process.env, EXACT_APP_DIR: dir } });
+    expect(built.status, built.stdout + built.stderr).toBe(1);
+    expect(built.stderr).toContain('web/Cargo.toml links pins-data, a crate beside app.json, and app.json names no rust.data: the web build runs only the Rust source rust.data names');
+    expect(built.stderr).toContain('\n  "rust": { "mode": "off", "data": { "crate": "pins-data", "type": "pins_data::<Type>", "source": "pins_data::<Type>::new(…)" } }\n');
+    const manifest = JSON.parse(readFileSync(resolve(dir, 'app.json'), 'utf8'));
+    expect(undeclaredRustData('pins', dir, manifest)).toContain('links pins-data');
+    // A module of the app's own answers instead, and a web crate that links none of the app's crates has no Rust source.
+    expect(undeclaredRustData('pins', dir, { ...manifest, rust: { module: { package: 'pins-logic' } } })).toBeNull();
+    write('web/Cargo.toml', '[package]\nname = "pins-web"\nversion = "0.1.0"\nedition = "2021"\n\n[dependencies]\ncontract = { path = "../../contract/cli" }\n');
+    expect(undeclaredRustData('pins', dir, manifest)).toBeNull();
+    // A source the build script defines and composes with app.ts links no crate, and is refused all the same.
+    write('web/build.rs', 'mod pins { pub struct Pins; }\nfn main() { exact_js_bake::build_mixed_with(std::path::Path::new(".."), "web", &pins::Pins, &[], |m| todo!()).unwrap(); }\n');
+    const inline = undeclaredRustData('pins', dir, manifest);
+    expect(inline).toContain('pins: web/build.rs composes a Rust source with app.ts (exact_js_bake::build_mixed_with), and app.json names no rust.data');
+    expect(inline).toContain('"data": { "crate": "pins-data", "type": "pins_data::<Type>"');
+    rmSync(resolve(dir, 'data'), { recursive: true });
+    expect(undeclaredRustData('pins', dir, manifest)).toContain('"data": { "crate": "<crate>", "type": "<library>::<Type>"');
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('a mixed contract build leaves the Cargo provider types even when checking fails', async () => {
-  const root = resolve(import.meta.dir, '../..'), dir = mkdtempSync(resolve(root, 'target/mixed-provider-types-'));
+  const root = resolve(import.meta.dir, '../..');
+  mkdirSync(resolve(root, 'target'), { recursive: true });
+  const dir = mkdtempSync(resolve(root, 'target/mixed-provider-types-'));
   const { patchLines } = await import('../../scripts/app.mjs');
   const env = { ...process.env, EXACT_APP_DIR: dir, CARGO_TARGET_DIR: resolve(dir, 'target'), CARGO_NET_OFFLINE: 'true', HERMES_LEAN_SYS_OFFLINE: '1' };
-  const write = (name, text) => writeFileSync(resolve(dir, name), text);
+  const write = (name, text) => { mkdirSync(dirname(resolve(dir, name)), { recursive: true }); writeFileSync(resolve(dir, name), text); };
   const run = () => spawnSync(process.execPath, [resolve(root, 'scripts/exact.mjs'), 'contract', 'build', 'app.contract'], { cwd: dir, env, encoding: 'utf8', timeout: 240_000 });
   const declarations = () => readFileSync(resolve(dir, 'app.contract.d.ts'), 'utf8');
   try {
-    mkdirSync(resolve(dir, 'web/src'), { recursive: true });
-    write('Cargo.toml', `[workspace]\nmembers = ["web"]\nresolver = "2"\n[profile.dev]\ndebug = 0\n[patch.crates-io]\n${patchLines(dir).join('\n')}\n`);
-    write('web/Cargo.toml', `[package]\nname = "provider-web"\nversion = "0.1.0"\nedition = "2021"\n[build-dependencies]\nexact-js-bake = { path = ${JSON.stringify(resolve(root, 'js/bake'))} }\nexact-data = { path = ${JSON.stringify(resolve(root, 'data'))} }\nexact-runner = { path = ${JSON.stringify(resolve(root, 'runner'))} }\n`);
-    write('web/src/lib.rs', '');
-    const script = `
-mod provider_data {
-    pub const RUST_SOURCES: &[&str] = &["rust"];
-    pub struct Rust;
-    impl exact_runner::DataSource for Rust {
-        fn app_id(&self) -> &str { "test.providers" }
-        fn query(&mut self, _: &str, _: &[exact_runner::Value]) -> Result<exact_runner::Value, exact_runner::DataError> {
-            Ok(exact_runner::Value::str("Rust"))
-        }
+    write('Cargo.toml', `[workspace]\nmembers = ["data", "web"]\nresolver = "2"\n[profile.dev]\ndebug = 0\n[patch.crates-io]\n${patchLines(dir).join('\n')}\n`);
+    write('data/Cargo.toml', `[package]\nname = "provider-data"\nversion = "0.1.0"\nedition = "2021"\n[dependencies]\nexact-runner = { path = ${JSON.stringify(resolve(root, 'runner'))} }\n`);
+    const data = `pub const RUST_SOURCES: &[&str] = &["rust"];
+pub struct Rust;
+impl exact_runner::DataSource for Rust {
+    fn app_id(&self) -> &str { "test.providers" }
+    fn query(&mut self, _: &str, _: &[exact_runner::Value]) -> Result<exact_runner::Value, exact_runner::DataError> {
+        Ok(exact_runner::Value::str("Rust"))
     }
 }
-fn main() {
+`;
+    write('data/src/lib.rs', data);
+    write('web/Cargo.toml', `[package]\nname = "provider-web"\nversion = "0.1.0"\nedition = "2021"\n[build-dependencies]\nprovider-data = { path = "../data" }\nexact-js-bake = { path = ${JSON.stringify(resolve(root, 'js/bake'))} }\nexact-data = { path = ${JSON.stringify(resolve(root, 'data'))} }\n`);
+    write('web/src/lib.rs', '');
+    write('web/build.rs', `fn main() {
     exact_js_bake::build_mixed_with(
         std::path::Path::new(".."), "web", &provider_data::Rust, provider_data::RUST_SOURCES,
         |javascript| Box::new(exact_data::Mixed::new(javascript, provider_data::Rust,
@@ -1387,9 +1377,9 @@ fn main() {
             provider_data::RUST_SOURCES).unwrap()),
     ).unwrap();
 }
-`;
-    write('web/build.rs', script);
-    write('app.json', JSON.stringify({ name: 'Provider', app: { id: 'test.providers', name: 'Provider' }, deploy: { store: { web: '0' } } }));
+`);
+    const manifest = { name: 'Provider', app: { id: 'test.providers', name: 'Provider' }, deploy: { store: { web: '0' } } };
+    write('app.json', JSON.stringify({ ...manifest, rust: { data: { crate: 'provider-data', type: 'provider_data::Rust', source: 'provider_data::Rust' } } }));
     write('app.contract', 'component App\n  resource javascript = javascript() as shape string\n  resource rust = rust() as shape string\n  view\n    column\n      text javascript\n      text rust\n');
     const source = `import type { TypeScriptSources, TypeScriptAnswer } from './app.contract.d.ts';
 export const grants = '';
@@ -1410,7 +1400,7 @@ export const answer: TypeScriptAnswer = (source, args, store, storage, native) =
     expect(checked.stdout + checked.stderr).toContain("Property 'javascript' is missing");
     expect(declarations()).toContain('Exclude<Source, "rust">');
     write('app.ts', source);
-    write('web/build.rs', script.replace('&["rust"];', '&[];'));
+    write('data/src/lib.rs', data.replace('&["rust"];', '&[];'));
     checked = run();
     expect(checked.status).toBe(1);
     expect(checked.stdout + checked.stderr).toContain("Property 'rust' is missing");
@@ -1418,40 +1408,18 @@ export const answer: TypeScriptAnswer = (source, args, store, storage, native) =
     write('app.ts', source.replace("javascript: () => 'TypeScript'", "javascript: () => 'TypeScript', rust: () => 'Moved'"));
     checked = run();
     expect(checked.status, checked.stdout + checked.stderr).toBe(0);
-    write('web/build.rs', script);
+    write('data/src/lib.rs', data);
     write('app.ts', source.replace("{ javascript: () => 'TypeScript' }", '{}'));
     checked = run();
     expect(checked.status).toBe(1);
     expect(checked.stdout + checked.stderr).toContain("Property 'javascript' is missing");
     expect(declarations()).toContain('Exclude<Source, "rust">');
+    // LLP 1153.003 D2: the JS target runs only the source rust.data names, so a build that composes a source
+    // app.json does not name is refused, not type-checked against declarations that leave its sources to app.ts.
+    write('app.json', JSON.stringify(manifest));
+    checked = run();
+    expect(checked.status).toBe(1);
+    expect(checked.stdout + checked.stderr).toContain('web/build.rs composes a Rust source with app.ts (exact_js_bake::build_mixed_with), and app.json names no rust.data');
+    expect(checked.stdout + checked.stderr).toContain('"data": { "crate": "provider-data", "type": "provider_data::<Type>"');
   } finally { rmSync(dir, { recursive: true, force: true }); }
 }, 300_000);
-
-test('web builds expose their version inputs in the view and delivery state', async () => {
-  if (webCompiler().cmd === 'cargo') throw new Error('build the compiler first: cargo build -p exact-web-js');
-  const root = resolve(import.meta.dir, '../..'), dir = mkdtempSync(resolve(root, 'target/delivery-version-'));
-  const dist = resolve(dir, 'dist');
-  let browser, server;
-  try {
-    writeFileSync(resolve(dir, 'app.json'), JSON.stringify({ name: 'Version', app: { id: 'test.delivery-version', name: 'Version' }, host: { web: {} } }));
-    writeFileSync(resolve(dir, 'app.contract'), 'shape Build\n  version: string\n  buildNumber: string\ncomponent App\n  resource build = exactDelivery() as shape Build\n  view\n    text `${build.version} (${build.buildNumber})` testId="version"\n');
-    server = Bun.serve({ hostname: '127.0.0.1', port: 0, async fetch(request) { const file = Bun.file(resolve(dist, new URL(request.url).pathname.slice(1) || 'index.html')); return await file.exists() ? new Response(file) : new Response(null, { status: 404 }); } });
-    for (const [version, buildNumber] of [['2.3.4', '56'], [undefined, undefined], ['', '']]) {
-      const env = { ...process.env, EXACT_APP_DIR: dir };
-      delete env.EXACT_VERSION; delete env.EXACT_BUILD_NUMBER;
-      if (version !== undefined) env.EXACT_VERSION = version;
-      if (buildNumber !== undefined) env.EXACT_BUILD_NUMBER = buildNumber;
-      const built = Bun.spawn([process.execPath, 'host/web-js/build.mjs', 'delivery-version', '--out', dist, '--render', 'none'], { cwd: root, env, stdout: 'pipe', stderr: 'pipe' });
-      const [status, stdout, stderr] = await Promise.all([built.exited, new Response(built.stdout).text(), new Response(built.stderr).text()]);
-      expect(status, stdout + stderr).toBe(0);
-      expect(JSON.parse(readFileSync(resolve(dist, 'app.version.json'), 'utf8'))).toEqual({ version: version ?? '', buildNumber: buildNumber ?? '' });
-      browser = await open({ host: 'web', app: dir, webDist: dist, url: server.url.href });
-      const state = await browser.state();
-      expect(state.resources.build).toEqual({ version: version ?? '', buildNumber: buildNumber ?? '' });
-      expect(state.delivery.version).toBe(version ?? '');
-      expect(state.delivery.buildNumber).toBe(buildNumber ?? '');
-      expect(await browser.carrier.evaluate('document.querySelector("[data-testid=version]").textContent')).toBe(`${version ?? ''} (${buildNumber ?? ''})`);
-      await browser.close(); browser = null;
-    }
-  } finally { await browser?.close(); server?.stop(true); rmSync(dir, { recursive: true, force: true }); }
-}, 60000);

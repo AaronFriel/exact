@@ -23,7 +23,7 @@
 use std::collections::{BTreeSet, HashMap};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
-    Arc,
+    Arc, Mutex,
 };
 
 // Web surfaces stay on the browser thread; native acquisition shares them with a worker.
@@ -129,6 +129,10 @@ pub enum Lifecycle {
     Interrupted,
     /// The external interruption ended; device work may resume.
     Resumed,
+    /// A trusted press anywhere in the page, delivered inside it: a browser
+    /// starts audio output only in a user gesture, and a press on the app's
+    /// own controls is one even when it never reaches the canvas.
+    Activated,
 }
 
 /// Delivery failure, independent of GPU readiness.
@@ -498,6 +502,9 @@ pub struct Module {
     gpu: Option<Gpu>,
     instance: Option<wgpu::Instance>,
     device_lost: Arc<AtomicBool>,
+    /// The first validation error no scope caught since the last
+    /// [`Module::flush`] ([`Module::set_gpu`]).
+    uncaptured: Arc<Mutex<Option<String>>>,
     instances: HashMap<u32, Instance>,
     next: u32,
     error: String,
@@ -669,6 +676,7 @@ impl Module {
             gpu: None,
             instance: None,
             device_lost: Arc::new(AtomicBool::new(false)),
+            uncaptured: Arc::default(),
             instances: HashMap::new(),
             next: 0,
             error: String::new(),
@@ -702,6 +710,15 @@ impl Module {
             #[cfg(target_arch = "wasm32")]
             crate::web::notify_loss(&lost);
         });
+        // Rendering and readback hold error scopes (`frame::Recording`); an
+        // error outside them (preparing assets, say) is kept for the next
+        // flush to report, where wgpu's default handler would abort.
+        self.uncaptured = Arc::default();
+        let uncaptured = self.uncaptured.clone();
+        gpu.device.on_uncaptured_error(Arc::new(move |error| {
+            let mut kept = uncaptured.lock().unwrap_or_else(|e| e.into_inner());
+            kept.get_or_insert_with(|| error.to_string());
+        }));
         #[cfg(not(target_arch = "wasm32"))]
         {
             self.pipeline_cache = PipelineCache::for_module(&gpu.device, self.cache_artifact);
@@ -764,6 +781,15 @@ impl Module {
         self.gpu
             .as_ref()
             .filter(|_| !self.device_lost.load(Ordering::Acquire))
+    }
+
+    /// Move an error no scope caught into [`Module::take_error`]; whether
+    /// there was one.
+    fn take_uncaptured(&mut self) -> bool {
+        let kept = (self.uncaptured.lock())
+            .unwrap_or_else(|e| e.into_inner())
+            .take();
+        kept.map(|e| self.error = e).is_some()
     }
 
     /// Consume the last failure's text, for the presenter to report once.
@@ -934,8 +960,8 @@ impl Module {
         }
     }
 
-    /// Deliver host lifecycle codes: 0 hidden, 1 visible, 2 interrupted, 3 resumed.
-    /// Unknown codes are ignored, including from a newer host.
+    /// Deliver host lifecycle codes: 0 hidden, 1 visible, 2 interrupted, 3 resumed,
+    /// 4 activated. Unknown codes are ignored, including from a newer host.
     pub fn lifecycle(&mut self, id: u32, code: u32) {
         self.settle(id);
         let event = match code {
@@ -943,6 +969,7 @@ impl Module {
             1 => Lifecycle::Visible,
             2 => Lifecycle::Interrupted,
             3 => Lifecycle::Resumed,
+            4 => Lifecycle::Activated,
             _ => return,
         };
         if let Some(inst) = self.instances.get_mut(&id) {

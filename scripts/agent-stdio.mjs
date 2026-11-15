@@ -1,13 +1,15 @@
 // Native desktop and phone carriers over the agent JSON-lines wire.
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
-import { basename, dirname, resolve } from 'node:path';
+import { createHash } from 'node:crypto';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { basename, dirname, extname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { appleRunBinary, appleArtifacts, assertAppleIdentity } from '../host/apple/build.mjs';
 import { phone, phoneBridge, phoneStartupFailure, forwardedEnv, crashReports } from '../host/apple/devices.mjs';
 import { resolveApp, executableName, linuxBinary, bakeOutput, bakeTarget } from './app.mjs';
-import { linuxRebuild, nativeBuild, ownVerb, planOverride, rebuildCommand, refuseBuild } from './agent-build.mjs';
-import { refuseStale, refuseBackendOrigin, refuseBinaryBackend, proofProductChanges, unchecked, packagedBuildChanges, depInfoChanges, depInfoNewer, newerThan, bakedSettingChanges } from './agent-launch.mjs';
+import { linuxRebuild, macSandboxed, nativeBuild, ownVerb, planOverride, rebuildCommand, refuseBuild } from './agent-build.mjs';
+import { refuseStale, refuseBackendOrigin, refuseBinaryBackend, proofProductChanges, unchecked, packagedBuildChanges, depInfoChanges, depInfoNewer, newerThan, shown, bakedSettingChanges } from './agent-launch.mjs';
 import { androidBinary, androidDeploy, apkRecord } from './agent-android.mjs';
 import { nativeKey, mouseContact } from './agent-keys.mjs';
 import { jsonLines, hangup, waitAtMost, bootRefusal, REPLY_MS } from './agent-wire.mjs';
@@ -17,12 +19,15 @@ const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 /** The command that builds what an Android drive runs: the APK (`reader`), else the Linux host for Android. */
 const androidRebuild = (a, reader) => ownVerb(a, reader ? 'android' : 'android --headless') ?? `bun scripts/agent-android.mjs build ${a.name}${reader ? ' --apk' : ''}`;
 /** What changed since the APK was built, by the record its build left (agent-android.mjs `apkRecord`): the library's
- * inputs by its Cargo dep-info (the Rust, and the plan's and the module's sources the bake watched), and the Kotlin. */
+ * inputs by its Cargo dep-info (the Rust, and the plan's and the module's sources the bake watched), the Kotlin by
+ * time, and the icons by digest, so a deleted icon is a change too. */
 export function apkChanges(a, apk) {
   const record = apkRecord(a, apk);
   if (!record) return [`${apk} (no build record beside it: built before drives checked one)`];
-  const since = Date.parse(record.started);
-  return [...depInfoNewer(since, record.library, record.library.replace(/\.so$/, '.d'), record.workspace), ...newerThan(since, record.sources)];
+  const since = Date.parse(record.started), digest = (file) => { try { return createHash('sha256').update(readFileSync(file)).digest('hex'); } catch { return null; } };
+  return [...depInfoNewer(since, record.library, record.library.replace(/\.so$/, '.d'), record.workspace),
+    ...newerThan(since, record.sources.filter((root) => !root.sha256)),
+    ...record.sources.filter((root) => root.sha256 && digest(root.file) !== root.sha256).map((root) => shown(root.file))];
 }
 
 /** One JSON-lines protocol over stdio on desktop hosts, or a phone's outbound socket. `reader`: on Android, the app
@@ -140,7 +145,7 @@ export async function openStdio({ host, plan, world, size, app, env: extra = {},
       throw new Error(why);
     });
     return {
-      host, boot: ready.boot, hostLines, gpuMs: () => null, sessions: ready.sessions ?? null, state, plan,
+      host, reader: android && bin.endsWith('.apk'), boot: ready.boot, hostLines, gpuMs: () => null, sessions: ready.sessions ?? null, state, plan,
       ask, reveal: (id) => ask({ op: 'reveal', id }),
       async input(id, kind, opts) {
         if (kind === 'key') {
@@ -158,10 +163,13 @@ export async function openStdio({ host, plan, world, size, app, env: extra = {},
         return r;
       },
       async screenshot(path, window = false, film = false) {
-        const remote = device ? `${ready.container}/tmp/exact-agent.png` : droid ? droid.shot : path;
+        // A sandboxed Mac app writes only in its container (`mac --sandbox`, LLP 1030.005 D4); the driver moves the file out.
+        const contained = macBuild && macSandboxed(a) ? resolve(homedir(), 'Library/Containers', a.id, 'Data/tmp', `exact-agent-${process.pid}${extname(path)}`) : null;
+        const remote = device ? `${ready.container}/tmp/exact-agent.png` : droid ? droid.shot : contained ?? path;
         const r = await ask({ op: 'screenshot', path: remote, window, ...(film ? { film } : {}) });
         if (r.error) throw new Error(r.error);
         if (droid) { droid.pull(path); r.screenshot = path; }
+        if (contained) { mkdirSync(dirname(resolve(path)), { recursive: true }); copyFileSync(contained, path); rmSync(contained, { force: true }); r.screenshot = path; }
         if (device) {
           const copied = spawnSync('xcrun', ['devicectl', 'device', 'copy', 'from', '--quiet', '--device', ph.udid,
             '--domain-type', 'appDataContainer', '--domain-identifier', a.id, '--source', 'tmp/exact-agent.png', '--destination', resolve(path)], { encoding: 'utf8', timeout: 20000 });

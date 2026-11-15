@@ -6,6 +6,7 @@
 
 use super::CanvasHost;
 use exact_runner::DataSource;
+use serde_json::Value as Json;
 
 impl<D: DataSource + Default> CanvasHost<D> {
     /// What the presenter asks of the reader since it last took them, as
@@ -114,6 +115,12 @@ impl<D: DataSource + Default> CanvasHost<D> {
         self.force |= self.p.page_execution(hidden, eligible);
     }
 
+    /// The reader drew a frame (`Native.drew`): whether it should say so
+    /// again after its next one ([`crate::presenter::Presenter::reader_drew`]).
+    pub fn drew(&mut self) -> bool {
+        self.p.reader_drew()
+    }
+
     /// A package's call of the app's handler (`ExtensionContext.invoke`, LLP
     /// 1133.016 D15 item 1): its number, whose answer `Native.invoked` reads.
     pub fn module_invoke(&mut self, body: &str) -> i32 {
@@ -127,6 +134,45 @@ impl<D: DataSource + Default> CanvasHost<D> {
     /// LLP 1016.002): its readers are asked again.
     pub fn extension_changed(&mut self, topic: &str) {
         self.p.host().runner().native_slot().changed(topic);
+    }
+
+    /// A person's act on what an extension posted on the platform's own UI
+    /// (a notification's tap or action, `Native.activate`): its event,
+    /// raised with a person's origin as Apple's notification delegate raises
+    /// it (LLP 1133.004 D6, D7). `args` is a JSON array. An action's
+    /// `action`, the declared record its post carried, raises only while the
+    /// plan declares it, as Apple's categories are its current declarations.
+    pub fn extension_activated(
+        &mut self,
+        extension: &str,
+        event: &str,
+        args: &str,
+        action: Option<&str>,
+    ) {
+        let runner = self.p.host_mut().runner_mut();
+        if let Some(action) = action {
+            let record = serde_json::from_str(action).unwrap_or(Json::Null);
+            if !runner.declares_action(extension, &record) {
+                let name = record["action"].as_str().unwrap_or("");
+                runner.log(format!(
+                    "{extension}: the action \"{name}\" is not one this version of the app declares, and raised nothing"
+                ));
+                self.force = true;
+                return;
+            }
+        }
+        if let Err(e) =
+            runner.raise_module_event(extension, event, args, exact_runner::CallOrigin::App)
+        {
+            runner.log(e);
+        }
+        self.force = true;
+    }
+
+    /// A line the reader journals (`Native.journal`).
+    pub fn journal(&mut self, line: String) {
+        self.p.host_mut().runner_mut().log(line);
+        self.force = true;
     }
 
     /// The extensions the APK carries (`exact.app.ExactExtensions`, LLP

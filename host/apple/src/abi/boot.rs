@@ -183,6 +183,7 @@ impl<D: DataSource> Bridge<D> {
                 self.presenter_hooks(&mut host, &hooks);
                 self.executor = executor;
                 let batch = Host::ending(self.host.replace(host), batch);
+                self.launch_layout.insets = None;
                 self.parked.clear();
                 Ok(batch)
             }

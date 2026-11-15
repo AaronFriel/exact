@@ -236,7 +236,7 @@ async function nodeOf(el) {
       if (row) found = { at, ...ownRow(t, at, row, lv) };
       else if (e?.b && t.implied.includes(name)) { const row = impliedRow(t, at, name, lv); if (row) found = { at, ...row }; }
     }
-    // (And the ancestor's plan site, which the design server names by its source: tamber/1.16 `fromAt`.)
+    // (And the ancestor's plan site, which the design server names by its source: forma/1.16 `fromAt`.)
     if (found) { const { at, ...row } = found; style[name] = { ...row, source: "inherited", from: viewOf(at), ...(siteOf(at) != null ? { fromSite: siteOf(at) } : {}) }; continue; }
     style[name] = { value: t.initial[name], source: "initial" };
   }
@@ -285,7 +285,7 @@ async function selectedReport(el, click = null, moved = null) {
   return envelope(selected);
 }
 
-// A click's selection carries a token (tamber/1.7) the outline answering it
+// A click's selection carries a token (forma/1.7) the outline answering it
 // names: that one scrolls nothing. A selection is its element in a page: a
 // refresh after a reload finds it again by its site and instance path.
 let clicks = 0, asks = 0;
@@ -303,7 +303,7 @@ async function select(el, clicked = false, click = null, moved = null) {
   }
   env.report(r);
 }
-// `inspect` `{select: {up, plan, from, instance}}` (tamber/1.16; 1.17 by this page's own tree): the selection moves up
+// `inspect` `{select: {up, plan, from, instance}}` (forma/1.16; 1.17 by this page's own tree): the selection moves up
 // `up` copies, as a click on the node it lands on would select it, reported with `moved: {up, stepped}`. Walking up from
 // the selection, its own copy seen, each ancestor of a copy not yet seen is one step (a slot's host among them, a
 // component that only renders another none); at step `up` it lands on that copy's outermost ancestor; with fewer, on

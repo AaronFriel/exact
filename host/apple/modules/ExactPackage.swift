@@ -1,10 +1,10 @@
 // What a package's Swift implementation of a module sees of exact2 (LLP
 // 1133.001 D5; LLP 1133.009 D10 items 1-3; LLP 1133.008 D8 item 9): the
 // `ExactPackage` module, compiled on its own before the packages, which
-// import it, and linked into the app's one module, whose adapter for each
-// package (`exactExtensions`, written by host/apple/build.mjs) holds one
-// instance per session. Nothing of ExactKit or of the app's own module is
-// reachable from here.
+// import it. The seam links into the app module; each package's implementation
+// links into its own library, loaded at first use (LLP 1067.000.001). Its
+// adapter keeps one instance per session. Nothing of ExactKit or of the
+// app's own module is reachable from here.
 //
 // Every entry is on the main thread (LLP 1067.000 D4).
 import AVFoundation
@@ -266,6 +266,8 @@ public final class ExactPackageContext {
     /// The app's remote-notification registration, kept by the host (LLP
     /// 1133.004 §9 P3).
     public let push: ExactPushRegistration
+    /// The host events held for this session (LLP 1133.001.000 D2).
+    public let hostEvents: ExactHostEvents
 
     public init(agent: Bool, session: String, hostSession: String = "", label: String? = nil,
                 data: URL? = nil, cache: URL? = nil, temporary: URL? = nil, changed: @escaping (String) -> Void,
@@ -289,6 +291,7 @@ public final class ExactPackageContext {
                 },
                 regions: ExactRegions = ExactRegions { _, _ in nil },
                 push: ExactPushRegistration = ExactPushRegistration { nil },
+                hostEvents: ExactHostEvents = ExactHostEvents { _ in [] },
                 expireWake: @escaping (String) -> Void = { _ in },
                 state: @escaping ([String: Any]) -> Void = { _ in }) {
         self.agent = agent; self.session = session; self.hostSession = hostSession; self.label = label ?? session
@@ -299,7 +302,7 @@ public final class ExactPackageContext {
         self.tracks = tracks; fileFn = file; self.audioSession = audioSession; pictureFn = picture
         self.surfaces = surfaces; orientationFn = orientation; viewFn = view; invokeFn = invoke
         emitFn = emit; activationFn = activation; wakeFn = wake; self.wakes = wakes; self.transfers = transfers
-        self.pads = pads; afterFn = after; self.regions = regions; self.push = push; expireWakeFn = expireWake; stateFn = state
+        self.pads = pads; afterFn = after; self.regions = regions; self.push = push; self.hostEvents = hostEvents; expireWakeFn = expireWake; stateFn = state
     }
 
     /// `body` once, `ms` later on the session's clock: the agent's under the
@@ -511,6 +514,17 @@ public protocol ExactPackage: AnyObject {
     func woke(_ wake: ExactWake)
 }
 
+/// The retained result of a package library's C factory. The shared seam owns
+/// this box so an existential's layout never crosses the C entry itself.
+public final class ExactPackageImplementation {
+    public let package: any ExactPackage
+    public let authenticator: (any ExactAuthenticator)?
+    public init(_ package: any ExactPackage, authenticator: (any ExactAuthenticator)? = nil) {
+        self.package = package
+        self.authenticator = authenticator
+    }
+}
+
 public extension ExactPackage {
     func call(_ name: String, _ args: [String: Any]) throws -> [String: Any] { ["error": "NotSupportedError"] }
     func release(_ name: String) {}
@@ -659,6 +673,24 @@ public final class ExactPushRegistration {
     /// `{token?, error?, answers}`: the last device token in lowercase hex,
     /// or the last failure's message, and how many answers this process had.
     public var current: [String: Any] { readFn() ?? ["answers": 0] }
+}
+
+/// The host events the app's delegates received for one session (LLP
+/// 1133.001.000 D2): a call such as an accepted iCloud share, which the host
+/// holds from launch until the implementation that declares the event in
+/// `"hostEvents"` takes it, even when it came before the module loaded. Each
+/// payload is the system's object (a `CKShare.Metadata`), which the
+/// implementation casts. Each later delivery is posted as `arrived`, its
+/// `userInfo` `{event, session}`; a test posts `deliver` with `{event,
+/// payload, session?}` (an `NSDictionary`) as the system would deliver one.
+public final class ExactHostEvents {
+    public static let arrived = Notification.Name("exact.hostEvents.arrived")
+    public static let deliver = Notification.Name("exact.hostEvents.deliver")
+    private let takeFn: (String) -> [NSObject]
+    public init(_ take: @escaping (String) -> [NSObject]) { takeFn = take }
+    /// What is held of `event` for this session, in arrival order, removed
+    /// from the host's mailbox. Any thread.
+    public func take(_ event: String) -> [NSObject] { takeFn(event) }
 }
 
 /// A wake the host was given for an implementation's due requests.

@@ -159,6 +159,9 @@ const TOGGLES: &str = r#"component App
         row
           text "Muted"
           input type="checkbox" switch checked=dark change=flip aria-disabled=true
+        row
+          text "**Bold** text" markup="markdown"
+          input type="checkbox" switch checked=dark change=flip
       section aria-disabled=true
         row
           text "Managed"
@@ -308,8 +311,8 @@ fn told(words: &[i32]) -> Told {
     at += 1;
     let mut nodes = Vec::new();
     for _ in 0..count {
-        let w = &words[at..at + 14];
-        let (name, next) = string(words, at + 14);
+        let w = &words[at..at + 18];
+        let (name, next) = string(words, at + 18);
         let (value, next) = string(words, next);
         let (hint, next) = string(words, next);
         nodes.push(Node {
@@ -321,6 +324,7 @@ fn told(words: &[i32]) -> Told {
             rect: [w[5] as f32, w[6] as f32, w[7] as f32, w[8] as f32],
             range: [float(at + 9), float(at + 10), float(at + 11)],
             set: (w[12], w[13]),
+            grid: [w[14], w[15], w[16], w[17]],
             name,
             value,
             hint,
@@ -489,7 +493,7 @@ fn a_control_is_its_kind_with_its_state_and_what_is_hidden_is_no_node() {
             (
                 role::SLIDER,
                 "Volume",
-                flag::RANGE | flag::FORWARD | flag::BACKWARD
+                flag::RANGE | flag::SETTABLE | flag::FORWARD | flag::BACKWARD
             ),
             (role::TOGGLE, "Bold", check),
             (role::BUTTON, "Save", flag::CLICK),
@@ -544,6 +548,8 @@ fn a_grouped_toggle_row_is_one_switch_named_by_its_row() {
             (role::TEXT, "Inert", 0),
             // Its `aria-disabled` is the row's, and overrides the section's.
             (role::SWITCH, "Muted", check | flag::DISABLED),
+            // A Markdown title names it by the words it draws.
+            (role::SWITCH, "Bold text", check),
             (role::SWITCH, "Managed", check | flag::DISABLED),
             (role::SWITCH, "Allowed", check),
         ]
@@ -918,7 +924,7 @@ fn an_action_is_the_presenters_own_press_scroll_and_step() {
     assert_eq!(volume.range[2], 100.0);
     assert_eq!(
         volume.flags,
-        flag::RANGE | flag::BACKWARD,
+        flag::RANGE | flag::SETTABLE | flag::BACKWARD,
         "nothing above its greatest"
     );
     assert!(!p.access_act(of("Volume"), act::FORWARD, 0.0, 0.0));
@@ -1081,6 +1087,88 @@ fn a_table_and_a_description_list_are_their_roles() {
     assert_eq!(parent("Electric").map(|n| n.role), Some(role::DEFINITION));
 }
 
+/// A table says its rows and columns, and each row and cell where the
+/// kernel's table placed it, from 1: a caption is no row, and a `colspan`
+/// and a `rowspan` move the cells after them. A description list counts its
+/// terms; a definition has no place.
+#[test]
+fn a_tables_cells_stand_where_their_spans_put_them() {
+    let source = r#"component App
+  view
+    column
+      table
+        caption
+          text "Moves"
+        thead
+          tr
+            th colspan=2
+              text "Move"
+            th
+              text "Power"
+        tbody
+          tr
+            th scope="row" rowspan=2
+              text "Tackle"
+            td
+              text "Normal"
+            td
+              text "40"
+          tr
+            td
+              text "Physical"
+            td
+              text "35"
+      dl
+        dt
+          text "Type"
+        dt
+          text "Kind"
+        dd
+          text "Electric"
+        dt
+          text "Weight"
+        dd
+          text "6 kg"
+"#;
+    let mut p = boot(source, (320., 600.), 0);
+    let told = statement(&mut p);
+    let nodes = &told.nodes;
+    let holder = |name: &str| {
+        let parent = named(nodes, name).parent;
+        nodes.iter().find(|n| n.id == parent).unwrap()
+    };
+    let table = nodes.iter().find(|n| n.role == role::TABLE).unwrap();
+    assert_eq!(table.grid, [0, 3, 0, 3]);
+    let rows: Vec<_> = (nodes.iter())
+        .filter(|n| n.role == role::ROW)
+        .map(|n| n.grid)
+        .collect();
+    assert_eq!(rows, [[1, 1, 1, 3], [2, 1, 1, 3], [3, 1, 1, 3]]);
+    let cells = ["Move", "Power", "Tackle", "Normal", "40", "Physical", "35"];
+    let placed = cells.map(|name| holder(name).grid);
+    assert_eq!(
+        placed,
+        [
+            [1, 1, 1, 2],
+            [1, 1, 3, 1],
+            [2, 2, 1, 1],
+            [2, 1, 2, 1],
+            [2, 1, 3, 1],
+            [3, 1, 2, 1],
+            [3, 1, 3, 1],
+        ]
+    );
+    assert_eq!(holder("Moves").grid, [0; 4], "a caption has no place");
+    let list = nodes
+        .iter()
+        .find(|n| n.role == role::DESCRIPTION_LIST)
+        .unwrap();
+    assert_eq!((list.set, list.grid), ((0, 3), [0; 4]));
+    let terms = ["Type", "Kind", "Weight"].map(|name| holder(name).set);
+    assert_eq!(terms, [(1, 3), (2, 3), (3, 3)]);
+    assert_eq!(holder("Electric").set, (0, 0), "a definition has no place");
+}
+
 /// HTML's `title` describes what something else names, and names what
 /// nothing else does (accname's step 2I; HTML-AAM's description); a title
 /// that is already the name is not said twice.
@@ -1136,3 +1224,277 @@ fn a_markdown_text_is_read_as_its_reader_draws_it() {
         .iter()
         .any(|n| n.name.starts_with("Title") && n.name.ends_with("See the docs and code.")));
 }
+
+/// One rule for a grouped row, whether or not its title is Markdown: a row
+/// with a trailing switch is one switch named by the row; a switch left out
+/// of the tree leaves the row's words; a row or an ancestor left out of the
+/// tree is no node; and a text with a link or a press of its own keeps each
+/// part its own node.
+#[test]
+fn a_grouped_rows_nodes_follow_one_rule_whatever_its_text() {
+    let check = flag::CLICK | flag::CHECKABLE;
+    let switch = "input type=\"checkbox\" switch checked=on change=flip";
+    let radio = "input type=\"radio\" name=\"network\" value=\"home\" aria-label=\"Home network\"";
+    // The section's, the row's and the title's attributes, what follows the
+    // title, and the nodes the row is.
+    type Case<'a> = (
+        &'a str,
+        &'a str,
+        &'a str,
+        Vec<String>,
+        Vec<(i32, &'a str, i32)>,
+    );
+    let cases: Vec<Case<'_>> = vec![
+        (
+            "",
+            "",
+            "",
+            vec![switch.into()],
+            vec![(role::SWITCH, "Home", check)],
+        ),
+        (
+            "",
+            "",
+            "",
+            vec![format!("{switch} aria-label=\"Wi-Fi\"")],
+            vec![(role::SWITCH, "Wi-Fi", check)],
+        ),
+        (
+            "",
+            "aria-label=\"Network\"",
+            "",
+            vec![format!("{switch} aria-label=\"Wi-Fi\"")],
+            vec![(role::SWITCH, "Network", check)],
+        ),
+        (
+            "",
+            "",
+            "",
+            vec![format!("{switch} disabled=true")],
+            vec![(role::SWITCH, "Home", flag::CHECKABLE | flag::DISABLED)],
+        ),
+        (
+            "",
+            "",
+            "",
+            vec![format!("{switch} aria-disabled=true")],
+            vec![(role::SWITCH, "Home", check | flag::DISABLED)],
+        ),
+        // Left out of the tree: the control, the row, an ancestor.
+        (
+            "",
+            "",
+            "",
+            vec![format!("{switch} aria-hidden=true")],
+            vec![(role::TEXT, "Home", 0)],
+        ),
+        ("", "aria-hidden=true", "", vec![switch.into()], vec![]),
+        ("aria-hidden=true", "", "", vec![switch.into()], vec![]),
+        // A text that is not shown names nothing.
+        (
+            "",
+            "",
+            "",
+            vec!["text \"secret\" display=\"none\"".into(), switch.into()],
+            vec![(role::SWITCH, "Home", check)],
+        ),
+        // A run of the title that is not shown changes nothing, whatever it would do.
+        (
+            "",
+            "",
+            "",
+            vec![
+                "  text \"unseen\" press=help display=\"none\"".into(),
+                switch.into(),
+            ],
+            vec![(role::SWITCH, "Home", check)],
+        ),
+        (
+            "",
+            "",
+            "",
+            vec![
+                "  text \"unseen\" href=\"https://example.com/docs\" display=\"none\"".into(),
+                switch.into(),
+            ],
+            vec![(role::SWITCH, "Home", check)],
+        ),
+        // A text that acts keeps its action, and the switch its own node.
+        (
+            "",
+            "",
+            "press=help",
+            vec![switch.into()],
+            vec![
+                (role::BUTTON, "Home", flag::CLICK),
+                (role::SWITCH, "", check),
+            ],
+        ),
+        (
+            "",
+            "",
+            "",
+            vec![
+                "text\n            text \"Help\" href=\"https://example.com/docs\"".into(),
+                switch.into(),
+            ],
+            vec![
+                (role::TEXT, "Home", 0),
+                (role::TEXT, "Help", 0),
+                (role::LINK, "Help", flag::CLICK),
+                (role::SWITCH, "", check),
+            ],
+        ),
+        // A radio is its own node beside the row's words on a painted host.
+        (
+            "",
+            "",
+            "",
+            vec![radio.into()],
+            vec![
+                (role::TEXT, "Home", 0),
+                (role::RADIO, "Home network", check),
+            ],
+        ),
+        (
+            "",
+            "",
+            "",
+            vec![format!("{radio} disabled=true")],
+            vec![
+                (role::TEXT, "Home", 0),
+                (
+                    role::RADIO,
+                    "Home network",
+                    flag::CHECKABLE | flag::DISABLED,
+                ),
+            ],
+        ),
+        (
+            "",
+            "",
+            "",
+            vec![format!("{radio} aria-disabled=true")],
+            vec![
+                (role::TEXT, "Home", 0),
+                (role::RADIO, "Home network", check | flag::DISABLED),
+            ],
+        ),
+        (
+            "",
+            "",
+            "",
+            vec![format!("{radio} aria-hidden=true")],
+            vec![(role::TEXT, "Home", 0)],
+        ),
+        // A value beside the title.
+        (
+            "",
+            "",
+            "",
+            vec!["text \"On\"".into()],
+            vec![(role::TEXT, "Home", 0), (role::TEXT, "On", 0)],
+        ),
+    ];
+    for markdown in [false, true] {
+        for (section, row, title, parts, expected) in &cases {
+            let (words, markup) = if markdown {
+                ("**Home**", " markup=\"markdown\"")
+            } else {
+                ("Home", "")
+            };
+            let parts: String = parts
+                .iter()
+                .map(|part| format!("          {part}\n"))
+                .collect();
+            let source = format!(
+                r#"component App
+  state on = false
+  state helped = 0
+  action flip(checked: bool)
+    on = checked
+  action help
+    helped = helped + 1
+  view
+    list appearance="auto" listStyle="inset-grouped" width=320 height=600
+      section {section}
+        row {row}
+          text "{words}"{markup} {title}
+{parts}"#
+            );
+            let mut p = boot(&source, (320., 600.), 0);
+            let nodes = statement(&mut p).nodes;
+            let said: Vec<_> = (nodes.iter())
+                .filter(|n| n.role != role::SCROLLER)
+                .map(|n| (n.role, n.name.as_str(), n.flags))
+                .collect();
+            assert_eq!(&said, expected, "Markdown={markdown}:\n{source}");
+            // A node that says it can be pressed does what its part does.
+            if let Some(button) = nodes.iter().find(|n| n.role == role::BUTTON) {
+                assert!(p.access_act(button.id, act::CLICK, 0., 0.));
+                settle(&mut p);
+                let helped = p.host.runner().slot("helped");
+                assert_eq!(
+                    helped,
+                    Some(&Value::Number(1.0)),
+                    "Markdown={markdown}:\n{source}"
+                );
+            }
+            if let Some(link) = nodes.iter().find(|n| n.role == role::LINK) {
+                assert!(p.access_act(link.id, act::CLICK, 0., 0.));
+                settle(&mut p);
+                assert!(p
+                    .host
+                    .runner()
+                    .journal()
+                    .any(|line| line.contains("openURL https://example.com/docs")));
+            }
+        }
+    }
+}
+
+/// An image with a press of its own keeps its row's parts their own nodes,
+/// whether or not the title is Markdown: the row's switch does not speak for
+/// a row that presses something else.
+#[test]
+fn a_grouped_rows_image_that_presses_keeps_its_own_node() {
+    for (words, markup) in [("Home", ""), ("**Home**", " markup=\"markdown\"")] {
+        let source = format!(
+            r#"component App
+  state on = false
+  state helped = 0
+  action flip(checked: bool)
+    on = checked
+  action help
+    helped = helped + 1
+  view
+    list appearance="auto" listStyle="inset-grouped" width=320 height=600
+      section
+        row
+          image "symbol:star" press=help aria-label="Favourite"
+          text "{words}"{markup}
+          input type="checkbox" switch checked=on change=flip
+"#
+        );
+        let mut p = boot(&source, (320., 600.), 0);
+        let nodes = statement(&mut p).nodes;
+        let said: Vec<_> = (nodes.iter())
+            .filter(|n| n.role != role::SCROLLER)
+            .map(|n| (n.role, n.name.as_str(), n.flags))
+            .collect();
+        let expected = [
+            (role::BUTTON, "Favourite", flag::CLICK),
+            (role::TEXT, "Home", 0),
+            (role::SWITCH, "", flag::CLICK | flag::CHECKABLE),
+        ];
+        assert_eq!(said, expected, "{source}");
+        let button = nodes.iter().find(|n| n.role == role::BUTTON).unwrap();
+        assert!(p.access_act(button.id, act::CLICK, 0., 0.));
+        settle(&mut p);
+        let helped = p.host.runner().slot("helped");
+        assert_eq!(helped, Some(&Value::Number(1.0)), "{source}");
+    }
+}
+
+#[path = "access_range_tests.rs"]
+mod range;

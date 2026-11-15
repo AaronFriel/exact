@@ -99,7 +99,7 @@ test('a change touches the hosts whose code it is', () => {
 });
 
 test.each(['runner', 'canvas', 'route', 'color', 'logic', 'markdown', 'textflow', 'update', 'grants',
-  'data', 'tamber', 'bake', 'gpu', 'game/engine', 'a-new-shared-crate'])(
+  'data', 'forma', 'bake', 'gpu', 'game/engine', 'a-new-shared-crate'])(
   '%s touches every host', (dir) => {
     expect(hostsTouched([`${dir}/src/lib.rs`])).toEqual(allHosts);
   },

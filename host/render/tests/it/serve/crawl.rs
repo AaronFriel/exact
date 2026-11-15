@@ -47,7 +47,7 @@ component Crawled
     .unwrap();
     let server = Server::bind(
         Serve {
-            dist: dir.clone(),
+            dist: dir.to_path_buf(),
             port: 0,
             name: "Crawled".into(),
             origin: Some("https://blog.test".into()),
@@ -73,5 +73,4 @@ component Crawled
         assert!(body.contains(&format!("Authored {name}")), "{body}");
     }
     drop(served);
-    std::fs::remove_dir_all(dir).unwrap();
 }

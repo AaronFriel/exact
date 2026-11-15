@@ -297,11 +297,18 @@ function arm(api, run, ms, args) {
 }
 // Run `run` as `call`'s turn, as its timers run: in flight until the page's next task, so the agent's jump lands what it
 // started (its microtasks, the answer's continuation) before the next timer fires, as a browser runs them between tasks.
+// A callback's throw is journaled and reported to the page as a browser reports a timer's (LLP 1175 D2), with no answer
+// current, as natively.
 function runAs(call, run) {
   const { clock, journal } = answering.page;
   call.firing = (call.firing ?? 0) + 1; call.recount?.();
   globalThis.setTimeout(() => { call.firing--; call.recount?.(); });
-  asCall(call, () => { try { run(); } catch (e) { journal.push(`t=${clock.now} data: a timer's callback threw: ${e?.message ?? e}`); } });
+  let thrown = null;
+  asCall(call, () => { try { run(); } catch (e) { thrown = { e }; } });
+  if (thrown) {
+    journal.push(`t=${clock.now} data: a timer's callback threw: ${thrown.e?.message ?? thrown.e}`);
+    globalThis.reportError?.(thrown.e);
+  }
   // What the callback sent on a socket goes now, before the next timer of the same advance (ts-stream.js `later`).
   answering.later?.(call);
 }

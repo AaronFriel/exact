@@ -222,6 +222,10 @@ pub trait Backend {
     /// Whether this backend places a CPU island: the walk makes none it
     /// would not (a text stroke's band).
     fn supports_island_image(&self) -> bool;
+    /// Whether an island can blend with previously painted pixels.
+    fn supports_blend(&self) -> bool {
+        true
+    }
     /// An SVG island's pixels over `dst` in `ts`'s space, blended by `mode`.
     fn island_image(&mut self, pixels: Arc<Pixmap>, dst: Rect4, ts: Transform, mode: u8);
     /// Draw through a row-major projective matrix until `plane_end`. A backend
@@ -385,6 +389,14 @@ pub trait Backend {
     }
     /// The layer ends.
     fn layer_end(&mut self) {}
+    /// Shared-element identity and engine progress, before this frame's destroys.
+    fn shared_frame(&mut self, _state: &super::SharedState) {}
+    /// Keep this live subtree apart from its normal slot on a native reader.
+    fn shared_begin(&mut self, _element: &super::SharedElement<'_>) -> bool {
+        false
+    }
+    /// Finish a named live subtree.
+    fn shared_end(&mut self) {}
     /// The last frame's (encode + render, readback) milliseconds, on a
     /// backend that has them.
     fn last_frame_ms(&self) -> Option<(f64, f64)> {

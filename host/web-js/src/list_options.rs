@@ -41,7 +41,14 @@ impl Em<'_> {
                 Input::Derive(i) => format!("d_{i}()"),
                 Input::Resource(i) => format!("r_{i}()"),
                 Input::PendingResource(i) => format!("r_{i}.p()"),
-                Input::PendingMutation(i) => format!("[m_{i}.p(),m_{i}.e()]"),
+                Input::PendingMutation(i) if self.plan.mutations[i].owner.is_none() => {
+                    format!("[m_{i}.p(),m_{i}.e()]")
+                }
+                // A child's, on the instance in force (LLP 1035.005.004 D6).
+                Input::PendingMutation(i) => match &scope.rows {
+                    Some(rows) => format!("[{rows}.m{i}.p(),{rows}.m{i}.e()]"),
+                    None => continue,
+                },
                 Input::FailedResource(i) => format!("r_{i}.e()"),
                 Input::Clock => format!("{}()", self.uses.rt("x_performanceNow")),
             };

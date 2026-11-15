@@ -84,7 +84,8 @@ pub use http::{CacheMode, Redirect};
 #[path = "request_preload.rs"]
 mod preload;
 pub use preload::{
-    Launch, LaunchContext, LaunchRequest, MissingPreloadSecret, Preload, PreloadPart, PreloadWhen,
+    secret_in_origin, Launch, LaunchContext, LaunchRequest, Preload, PreloadFillError, PreloadPart,
+    PreloadWhen,
 };
 #[path = "request_http.rs"]
 mod http;
@@ -172,7 +173,8 @@ pub struct Request {
     pub cache: CacheMode,
     /// A preload to take by name when method and URL agree (LLP 1162.000 D1).
     pub preload: Option<Box<str>>,
-    /// Checked prefetch option; currently a plain fetch on every host (LLP 1162.000 D5).
+    /// Start a preload alongside the caller's ordinary read on Apple, Linux,
+    /// Windows and Android hosts (LLP 1162.000 D5).
     pub prefetch: bool,
     /// The server may hold the reply until something changes (a long poll;
     /// LLP 1016.000 D9): pending as any request, but no clock waits on it,
@@ -870,13 +872,15 @@ pub enum SurfaceRequest {
         /// The complete carried state; hosts never project or truncate it.
         bytes: Vec<u8>,
     },
-    /// Write the kept bitmap of a 2D canvas as a PNG file
+    /// Write the kept bitmap of a 2D canvas as an image file
     /// ([`crate::canvas_capture`]).
     Canvas {
         /// The authored canvas surface name.
         name: String,
         /// The `app:/` file to write.
         path: String,
+        /// The image type and quality asked for.
+        encoding: crate::canvas_capture::Encoding,
         /// The runner's owned drawing boundary; absent until the requesting commit stands.
         job: Option<crate::canvas_capture::CaptureJob>,
     },

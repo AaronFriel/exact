@@ -1,6 +1,6 @@
 import { viewParent, viewChildren } from './navigation/lists.js';
 // @ref LLP 1043.000 §3 D7/D8 — flow settlement must not change LLP 1012's API.
-import { test, expect } from 'bun:test';
+import { afterAll, test, expect } from 'bun:test';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import { spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
@@ -23,6 +23,10 @@ import { declaration, deferred, fixture, requestClock, source, timedRequests } f
 
 const engineTest = Object.fromEntries(await Promise.all(['chromium', 'firefox', 'webkit'].map(async e => [e, need(e, await browserMissing(e))])));
 const compiler = resolve(process.env.CARGO_TARGET_DIR ?? fileURLToPath(new URL('../../target', import.meta.url)), 'debug', process.platform === 'win32' ? 'contract.exe' : 'contract');
+// A fixture's build can fail before the `try` that removes its directory.
+const scratches = [];
+const scratch = (prefix) => { const dir = mkdtempSync(join(tmpdir(), prefix)); scratches.push(dir); return dir; };
+afterAll(() => { for (const dir of scratches) rmSync(dir, { recursive: true, force: true }); });
 
 const mapAt = (digest, line = 12) => ({digest, nodes: [{file: '/app/ui/bubble.contract', line, col: 3, end_col: 9, component: 'Bubble',
   chain: [{file: '/app/app.contract', line: 45, col: 5, end_col: 11, component: 'App'}],
@@ -506,7 +510,7 @@ test('launch setup supplies fixed defaults and carries CLI overrides to every ho
 });
 
 test('programmatic web opens stay on Chrome and Firefox drives a small Exact plan', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'exact-firefox-agent-')), contract = join(dir, 'app.contract'), plan = join(dir, 'app.plan'), dist = join(dir, 'dist'), png = join(dir, 'page.png');
+  const dir = scratch('exact-firefox-agent-'), contract = join(dir, 'app.contract'), plan = join(dir, 'app.plan'), dist = join(dir, 'dist'), png = join(dir, 'page.png');
   writeFileSync(contract, `component BrowserFixture
   state presses = 0
   state words = ""
@@ -1263,7 +1267,7 @@ test('a typed pick answer split at a space names the pick step that keeps the pa
 });
 
 test('a mouse drag presses and releases the left button on the web', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'exact-mouse-drag-')), contract = join(dir, 'app.contract'), plan = join(dir, 'app.plan'), dist = join(dir, 'dist');
+  const dir = scratch('exact-mouse-drag-'), contract = join(dir, 'app.contract'), plan = join(dir, 'app.plan'), dist = join(dir, 'dist');
   writeFileSync(contract, `component MouseDrag
   state log = ""
   action at(kind: string, e: PointerEvent)

@@ -2,9 +2,9 @@
 // on this Mac, a test class to an `xctest` process; on a simulator, the
 // `.xctestrun` xcodebuild wrote, without the Thread Performance Checker.
 import { spawn, spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { availableParallelism } from 'node:os';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { appleAssets, appleAssetCatalogInventory, rasterIconAssets, iosAssets, plistFile } from './assets.mjs';
 import { encodePng } from '../../scripts/png.mjs';
 
@@ -13,11 +13,15 @@ const read = (cmd, args, opts = {}) => spawnSync(cmd, args, { encoding: 'utf8', 
 /** Rebuild fixture plans with `env.EXACT_CONTRACT`; write their paths to `<prefix>_<KEY>_PLAN`.
  * Plans embed the current schema digest. App entries need the test app's `appId` to boot. */
 export function compileFixtures(root, run, env, dir, prefix, appId) {
-  const contract = args => run(env.EXACT_CONTRACT, ['build', ...args]);
+  const contract = args => run(env.EXACT_CONTRACT, ['build', ...args], { env });
+  contract([resolve(root, 'host/apple/tests/fixtures/layout-only-row.contract'), '-o', env[`${prefix}_LAYOUT_ONLY_ROW_PLAN`] = resolve(dir, 'layout-only-row.plan')]);
+  contract([resolve(root, 'host/apple/tests/fixtures/layout-only-paint.contract'), '-o', env[`${prefix}_LAYOUT_ONLY_PAINT_PLAN`] = resolve(dir, 'layout-only-paint.plan')]);
+  // Made afresh: a target from before the tamber->forma rename keeps an app.tamber here, which contract refuses.
   const iconApp = resolve(dir, 'entries/raster-icons');
+  rmSync(iconApp, { recursive: true, force: true });
   mkdirSync(resolve(iconApp, 'assets'), { recursive: true });
   writeFileSync(resolve(iconApp, 'app.json'), JSON.stringify({ app: { id: appId, name: 'Raster icons' }, host: { ios: {}, macos: {} } }));
-  writeFileSync(resolve(iconApp, 'app.tamber'), 'tamber icons\n\nicons\n  icon.two = icon(svg "two.svg")\n');
+  writeFileSync(resolve(iconApp, 'app.forma'), 'forma icons\n\nicons\n  icon.two = icon(svg "two.svg")\n');
   writeFileSync(resolve(iconApp, 'assets/two.svg'), '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="20" viewBox="0 0 24 24"><path fill="#ff0000" d="M0 0h12v24H0Z"/><path fill="#0000ff" d="M12 0h12v24H12Z"/></svg>');
   writeFileSync(resolve(iconApp, 'app.contract'), 'component App\n  view\n    column\n      button\n        image "symbol:icon.two" -exact-symbol-rendering="multicolor"\n        text "Colours"\n      image "symbol:icon.two" -exact-symbol-rendering="multicolor" width=80 testId="raster-wide"\n');
   contract([resolve(iconApp, 'app.contract'), '-o', env[`${prefix}_RASTER_ICONS_PLAN`] = resolve(dir, 'raster-icons.plan')]);
@@ -48,6 +52,7 @@ export function compileFixtures(root, run, env, dir, prefix, appId) {
   contract([resolve(root, 'host/apple/tests/fixtures/fixed-page.contract'), '-o', env[`${prefix}_FIXED_PAGE_PLAN`] = resolve(dir, 'fixed-page.plan')]);
   contract([resolve(root, 'host/apple/tests/fixtures/arrangement-sizing.contract'), '-o', env[`${prefix}_ARRANGEMENT_SIZING_PLAN`] = resolve(dir, 'arrangement-sizing.plan')]);
   contract([resolve(root, 'host/apple/tests/fixtures/canvas-capture.contract'), '-o', env[`${prefix}_CANVAS_CAPTURE_PLAN`] = resolve(dir, 'canvas-capture.plan')]);
+  contract([resolve(root, 'host/apple/tests/fixtures/range-adjust.contract'), '-o', env[`${prefix}_RANGE_ADJUST_PLAN`] = resolve(dir, 'range-adjust.plan')]);
   // A test that writes its own manifest names the app the tests link (`SheetFixture`'s `data`).
   env[`${prefix}_TEST_APP_ID`] = appId;
   contract([resolve(root, 'host/apple/tests/fixtures/page-freeze.contract'), '-o', env[`${prefix}_PAGE_FREEZE_PLAN`] = resolve(dir, 'page-freeze.plan')]);
@@ -70,9 +75,11 @@ export function compileFixtures(root, run, env, dir, prefix, appId) {
   // A box's length read against the document's environment stops a test (LLP 1123 D9).
   env[`${prefix}_STRICT_LOCAL_INSETS`] = '1';
   contract([resolve(root, 'host/apple/tests/fixtures/headless-reply.contract'), '-o', env[`${prefix}_HEADLESS_REPLY_PLAN`] = resolve(dir, 'headless-reply.plan')]);
-  for (const [name, key] of [['grouped-card', 'GROUPED_CARD'], ['frame-health', 'FRAME_HEALTH'], ['store-refresh', 'STORE_REFRESH'], ['headless', 'HEADLESS'], ['headless-markdown', 'HEADLESS_MARKDOWN'], ['headless-hidden-markdown', 'HEADLESS_HIDDEN_MARKDOWN'], ['headless-live', 'HEADLESS_LIVE'], ['headless-back', 'HEADLESS_BACK'], ['native-navigation-scroll', 'NATIVE_SCROLL'], ['intersect', 'INTERSECT'], ['native-buttons', 'BUTTONS'], ['keyboard-form', 'KEYBOARD'], ['tab-edge', 'TAB_EDGE'], ['repaint', 'REPAINT'], ['still-title', 'STILL_TITLE'], ['navigation-bars', 'NAVIGATION_BARS'], ['large-title', 'LARGE_TITLE'], ['transparent-bar', 'TRANSPARENT_BAR'], ['bar-band', 'BAR_BAND'], ['pad-bar', 'PAD_BAR'], ['pushed-title', 'PUSHED_TITLE'], ['inline-frame', 'INLINE_FRAME'], ['fieldless', 'FIELDLESS'], ['web-documents', 'WEB_DOCUMENTS'], ['iframe-post-messages', 'IFRAME_POST_MESSAGES'], ['iframe-partition', 'IFRAME_PARTITION'], ['iframe-windows', 'IFRAME_WINDOWS'], ['iframe-pdf', 'IFRAME_PDF'], ['iframe-resident-popover', 'IFRAME_RESIDENT_POPOVER'], ['tab-owner', 'TAB_OWNER'], ['grouped-list-reveal', 'GROUPED_REVEAL'], ['due-now', 'DUE_NOW'], ['caret-reveal', 'CARET_REVEAL'], ['cover-scroll', 'COVER_SCROLL'], ['page-edges', 'PAGE_EDGES'], ['barless-route', 'BARLESS_ROUTE'], ['page-edges-grouped', 'PAGE_EDGES_GROUPED'], ['control-bars', 'CONTROL_BARS'], ['cover-tabs', 'COVER_TABS'], ['layout-insert', 'LAYOUT_INSERT'], ['search-scope', 'SEARCH_SCOPE'], ['barless-tab', 'BARLESS_TAB'], ['pull-refresh', 'PULL_REFRESH'], ['edge-effect', 'EDGE_EFFECT'], ['sticky-bar', 'STICKY_BAR'], ['glass-press', 'GLASS_PRESS'], ['surface-pairs', 'SURFACE_PAIRS'], ['prevent-focus', 'PREVENT_FOCUS'], ['accent-bars', 'ACCENT_BARS'], ['accent-tabs', 'ACCENT_TABS'], ['search-tabs', 'SEARCH_TABS'], ['beside-routes', 'BESIDE_ROUTES'], ['bar-insets', 'BAR_INSETS'], ['bar-hero', 'BAR_HERO'], ['tips', 'TIPS'], ['boot-control-top', 'BOOT_CONTROL_TOP'], ['boot-control-bottom', 'BOOT_CONTROL_BOTTOM'], ['boot-control-tab', 'BOOT_CONTROL_TAB'], ['boot-dialog', 'BOOT_DIALOG'], ['boot-tabs', 'BOOT_TABS'], ['boot-clipboard', 'BOOT_CLIPBOARD'], ['boot-motion', 'BOOT_MOTION'], ['boot-plain', 'BOOT_PLAIN'], ['boot-padded', 'BOOT_PADDED'], ['boot-transform', 'BOOT_TRANSFORM'], ['boot-tip', 'BOOT_TIP']]) {
+  for (const [name, key] of [['saved-scheme', 'SAVED_SCHEME'], ['grouped-card', 'GROUPED_CARD'], ['frame-health', 'FRAME_HEALTH'], ['store-refresh', 'STORE_REFRESH'], ['headless', 'HEADLESS'], ['headless-markdown', 'HEADLESS_MARKDOWN'], ['headless-hidden-markdown', 'HEADLESS_HIDDEN_MARKDOWN'], ['headless-live', 'HEADLESS_LIVE'], ['headless-back', 'HEADLESS_BACK'], ['native-navigation-scroll', 'NATIVE_SCROLL'], ['intersect', 'INTERSECT'], ['native-buttons', 'BUTTONS'], ['keyboard-form', 'KEYBOARD'], ['tab-edge', 'TAB_EDGE'], ['repaint', 'REPAINT'], ['still-title', 'STILL_TITLE'], ['navigation-bars', 'NAVIGATION_BARS'], ['large-title', 'LARGE_TITLE'], ['transparent-bar', 'TRANSPARENT_BAR'], ['bar-band', 'BAR_BAND'], ['pad-bar', 'PAD_BAR'], ['pushed-title', 'PUSHED_TITLE'], ['inline-frame', 'INLINE_FRAME'], ['fieldless', 'FIELDLESS'], ['web-documents', 'WEB_DOCUMENTS'], ['iframe-post-messages', 'IFRAME_POST_MESSAGES'], ['iframe-partition', 'IFRAME_PARTITION'], ['iframe-windows', 'IFRAME_WINDOWS'], ['iframe-pdf', 'IFRAME_PDF'], ['iframe-resident-popover', 'IFRAME_RESIDENT_POPOVER'], ['tab-owner', 'TAB_OWNER'], ['grouped-list-reveal', 'GROUPED_REVEAL'], ['due-now', 'DUE_NOW'], ['caret-reveal', 'CARET_REVEAL'], ['cover-scroll', 'COVER_SCROLL'], ['page-edges', 'PAGE_EDGES'], ['barless-route', 'BARLESS_ROUTE'], ['page-edges-grouped', 'PAGE_EDGES_GROUPED'], ['control-bars', 'CONTROL_BARS'], ['cover-tabs', 'COVER_TABS'], ['layout-insert', 'LAYOUT_INSERT'], ['search-scope', 'SEARCH_SCOPE'], ['barless-tab', 'BARLESS_TAB'], ['pull-refresh', 'PULL_REFRESH'], ['edge-effect', 'EDGE_EFFECT'], ['sticky-bar', 'STICKY_BAR'], ['glass-press', 'GLASS_PRESS'], ['surface-pairs', 'SURFACE_PAIRS'], ['prevent-focus', 'PREVENT_FOCUS'], ['accent-bars', 'ACCENT_BARS'], ['accent-tabs', 'ACCENT_TABS'], ['search-tabs', 'SEARCH_TABS'], ['beside-routes', 'BESIDE_ROUTES'], ['bar-insets', 'BAR_INSETS'], ['bar-hero', 'BAR_HERO'], ['tips', 'TIPS'], ['boot-control-top', 'BOOT_CONTROL_TOP'], ['boot-control-bottom', 'BOOT_CONTROL_BOTTOM'], ['boot-control-tab', 'BOOT_CONTROL_TAB'], ['boot-dialog', 'BOOT_DIALOG'], ['boot-tabs', 'BOOT_TABS'], ['boot-clipboard', 'BOOT_CLIPBOARD'], ['boot-motion', 'BOOT_MOTION'], ['boot-plain', 'BOOT_PLAIN'], ['boot-padded', 'BOOT_PADDED'], ['boot-transform', 'BOOT_TRANSFORM'], ['boot-tip', 'BOOT_TIP']]) {
     contract([resolve(root, `scripts/fixtures/${name}.contract`), '-o', env[`${prefix}_${key}_PLAN`] = resolve(dir, `${name}.plan`)]);
   }
+  // NamedWindowsTests' links that name a window (LLP 1030.004).
+  contract([resolve(root, 'host/apple/tests/fixtures/named-windows.contract'), '-o', env[`${prefix}_NAMED_WINDOWS_PLAN`] = resolve(dir, 'named-windows.plan')]);
   contract([resolve(root, 'host/apple/tests/fixtures/sticky-transition.contract'), '-o', env[`${prefix}_STICKY_TRANSITION_PLAN`] = resolve(dir, 'sticky-transition.plan')]);
   // SwipeScrollDragTests': swipeleft and swiperight rows and a scroller's drag events.
   contract([resolve(root, 'host/apple/tests/fixtures/swipe-scroll-drag.contract'), '-o', env[`${prefix}_SWIPE_SCROLL_DRAG_PLAN`] = resolve(dir, 'swipe-scroll-drag.plan')]);
@@ -94,8 +101,13 @@ export function compileFixtures(root, run, env, dir, prefix, appId) {
   contract([resolve(root, 'host/apple/tests/fixtures/more-tabs.contract'), '-o', env[`${prefix}_MORE_TABS_PLAN`] = resolve(dir, 'more-tabs.plan')]);
   // NotificationActionTests': a post's declared actions and the root's handler.
   contract([resolve(root, 'host/apple/tests/fixtures/notification-actions.contract'), '-o', env[`${prefix}_NOTIFICATION_ACTIONS_PLAN`] = resolve(dir, 'notification-actions.plan')]);
-  const noActions = resolve(dir, 'notification-no-actions.contract');
-  writeFileSync(noActions, readFileSync(resolve(root, 'host/apple/tests/fixtures/notification-actions.contract'), 'utf8').replace(/, actions=\[.*\]/, ''));
+  // Written in this checkout, not beside the plan: its `use … from "@exact/notifications"` resolves from a
+  // node_modules above it, which a CARGO_TARGET_DIR outside the checkout lacks. Renamed into place whole: runs with
+  // other target directories share the name, and a compile must never read it half written.
+  const noActions = resolve(root, 'target/fixture-sources', `${prefix}-notification-no-actions.contract`), writing = `${noActions}.${process.pid}`;
+  mkdirSync(dirname(noActions), { recursive: true });
+  writeFileSync(writing, readFileSync(resolve(root, 'host/apple/tests/fixtures/notification-actions.contract'), 'utf8').replace(/, actions=\[.*\]/, ''));
+  renameSync(writing, noActions);
   contract([noActions, '-o', env[`${prefix}_NOTIFICATION_NO_ACTIONS_PLAN`] = resolve(dir, 'notification-no-actions.plan')]);
   contract([resolve(root, 'host/apple/tests/fixtures/feedback-race.contract'), '-o', env[`${prefix}_FEEDBACK_RACE_PLAN`] = resolve(dir, 'feedback-race.plan')]);
   contract([resolve(root, 'host/apple/tests/fixtures/async-advance.contract'), '-o', env[`${prefix}_ASYNC_ADVANCE_PLAN`] = resolve(dir, 'async-advance.plan')]);
@@ -111,8 +123,11 @@ export function compileFixtures(root, run, env, dir, prefix, appId) {
   contract([resolve(root, 'host/apple/tests/fixtures/untitled-bar.contract'), '-o', env[`${prefix}_UNTITLED_BAR_PLAN`] = resolve(dir, 'untitled-bar.plan')]);
   // NavigationBarIOSTests': a header whose controls share and add a control.
   contract([resolve(root, 'host/apple/tests/fixtures/bar-share.contract'), '-o', env[`${prefix}_BAR_SHARE_PLAN`] = resolve(dir, 'bar-share.plan')]);
+  // NavigationBarIOSTests': a header's title drawn as a face, in an ink per scheme.
+  contract([resolve(root, 'host/apple/tests/fixtures/bar-face-scheme.contract'), '-o', env[`${prefix}_BAR_FACE_SCHEME_PLAN`] = resolve(dir, 'bar-face-scheme.plan')]);
   contract([resolve(root, 'host/apple/tests/fixtures/dialog-sheet-reads.contract'), '-o', env[`${prefix}_DIALOG_SHEET_READS_PLAN`] = resolve(dir, 'dialog-sheet-reads.plan')]);
   contract([resolve(root, 'host/apple/tests/fixtures/route-backdrop.contract'), '-o', env[`${prefix}_ROUTE_BACKDROP_PLAN`] = resolve(dir, 'route-backdrop.plan')]);
+  contract([resolve(root, 'host/apple/tests/fixtures/trailing-time.contract'), '-o', env[`${prefix}_TRAILING_TIME_PLAN`] = resolve(dir, 'trailing-time.plan')]);
   contract([resolve(root, 'host/apple/tests/fixtures/intersect-route.contract'), '-o', env[`${prefix}_INTERSECT_ROUTE_PLAN`] = resolve(dir, 'intersect-route.plan')]);
   // KeyboardSheetIOSTests': a sheet's field, its keyboard toolbar and the keyboard's overlap as a value.
   contract([resolve(root, 'host/apple/tests/fixtures/keyboard-sheet.contract'), '-o', env[`${prefix}_KEYBOARD_SHEET_PLAN`] = resolve(dir, 'keyboard-sheet.plan')]);

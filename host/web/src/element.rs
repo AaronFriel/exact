@@ -1322,7 +1322,7 @@ pub fn props_of(node: &NodeFacts<'_>) -> SortedMap<String, String> {
     // (`noreferrer`, say), which keeps its own (LLP 1141.002 D1).
     if element(node) == "a" {
         let need: &[&str] = match out.get("target").map(String::as_str) {
-            Some("_blank") => &["noopener"],
+            Some(t) if t.eq_ignore_ascii_case("_blank") => &["noopener"],
             Some(_) => &[],
             None if out.get("href").is_some_and(|h| leaves_app(h)) => {
                 out.insert("target".into(), "_blank".into());

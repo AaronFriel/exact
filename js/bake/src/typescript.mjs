@@ -14,7 +14,7 @@ import { resolve, relative, dirname, basename, join, sep, isAbsolute, toNamespac
 // The bake writes the binding's generator beside this file in its stage (js/bake/src/resident.rs `BINDING`).
 import { moduleBinding, languageModelToolCheck, languageModelToolNote, languageModelTools, languageModelToolSources, TOOL_CHECK, unownedTools } from './__exact_binding.mjs';
 // And the settings' reader beside it (resident.rs `ENV`).
-import { envReads, inlineSettings } from './__exact_env.mjs';
+import { checkPreloadBackend, envReads, inlineSettings } from './__exact_env.mjs';
 import { grantsDeclaration, launchGrants as grantsWithLaunches, launchModule, launchSource } from './__exact_launch_setting.mjs';
 export { launchModule, launchSource };
 // And the check of what package code may use (resident.rs `PORTABLE`).
@@ -71,7 +71,7 @@ export function fixtureBackendSelection(app, env=process.env, parse) {
 // The bound on a type check that never ends (the design tool's `build.mjs --check` spun 4.7 days, found 2026-10-26):
 // 10 minutes, a bound for "never", not a target (the clone's check takes seconds). A test may shorten it
 // (EXACT_CHECK_BOUND_MS), read only under EXACT_TEST_TIMING=1, as the design server's clocks are
-// (scripts/tamber-timing.mjs); a value not shorter, not a whole number of ms from 50, or set without the switch is
+// (scripts/forma-timing.mjs); a value not shorter, not a whole number of ms from 50, or set without the switch is
 // ignored. Here, not in a module of its own: the native bake copies this file alone into its stage.
 export const CHECK_BOUND_MS = 10 * 60_000;
 
@@ -503,8 +503,7 @@ export function stagePackages(stage, parse) {
 // captured file by file as the bundle reaches it: each import is resolved
 // from where its importer really is, or from the app for a linked package's peer
 // (Node's lookup, a package's `exports`, `main` and `browser` fields, as a
-// browser bundle resolves them), and the
-// file it leads to is copied into the stage under `node_modules/.packages/
+// browser bundle resolves them), and the file it leads to is copied into the stage under `node_modules/.packages/
 // <name>@<version>/`, with every `package.json` between it and the package's
 // root (their `type` and `sideEffects`). The bundle loads only those copies.
 // `__exact_packages.json` records each file by where it was read and its
@@ -980,6 +979,7 @@ export function configure(stage, incremental=false, parse, web=false) {
       if (!selection) throw error;
       throw Object.assign(new Error(`${selection.source}: ${error.message.replace(/^EXACT_BACKEND_ORIGIN: /,'')}`),{code:'backend-selection'});
     }
+    checkPreloadBackend(app,settings.record,literalBackendOrigin(settings.code,parse),selection);
     const launched=Object.keys(settings.record).filter(name=>settings.record[name].launch);
     launchModule(stage,web ? [] : launched);
     const after=developmentGrants(launchGrants(injected,parse,launched),parse);
@@ -1228,7 +1228,8 @@ export function usedPackages(app) {
  * `macos`, `tvos`), of the `extensions` in the compiled plan (LLP 1133.001
  * D4): each extension, its own Swift module's name,
  * its class, its source files, what it adds to Info.plist (`plist`,
- * `plistKeys`), and the system frameworks it needs from an OS version
+ * `plistKeys`), the host events it takes (`hostEvents`, LLP 1133.001.000
+ * D2), and the system frameworks it needs from an OS version
  * (`frameworks`, LLP 1133.016 D15). */
 export function appleImplementations(app, target, extensions, contractSources = []) {
   const { text } = usedPackages(app), named = `${text}\n${appText(app)}\n${contractSources.map(path => readFileSync(path, 'utf8')).join('\n')}`;
@@ -1256,7 +1257,7 @@ export function appleImplementations(app, target, extensions, contractSources = 
     const events=(i.declaration.names ?? []).some(n=>n.event);
     const credentialMembers = Object.entries(i.declaration.members ?? {}).flatMap(([owner, members]) =>
       Object.keys(members).map(option => `${owner.split('/').at(-1)}.${option}`));
-    return [{privacyManifest:resolve(impl.dir,'PrivacyInfo.xcprivacy'),extension,module:'ExactPkg_'+extension.replace(/\W/g,'_'),className:impl.json.class,sources:files.map(f=>resolve(impl.dir,f)),plist,plistKeys:impl.json.plistKeys ?? null,views:packageViewTags(i,impl),authenticator,start:i.declaration?.start==='load',credentialMembers,frameworks:impl.json.frameworks??{},activity:impl.json.apple?.activity??null}];
+    return [{privacyManifest:resolve(impl.dir,'PrivacyInfo.xcprivacy'),extension,module:'ExactPkg_'+extension.replace(/\W/g,'_'),className:impl.json.class,sources:files.map(f=>resolve(impl.dir,f)),plist,plistKeys:impl.json.plistKeys ?? null,hostEvents:impl.json.hostEvents ?? null,views:packageViewTags(i,impl),authenticator,start:i.declaration?.start==='load',credentialMembers,frameworks:impl.json.frameworks??{},activity:impl.json.apple?.activity??null}];
   });
 }
 

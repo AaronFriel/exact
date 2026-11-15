@@ -4,6 +4,7 @@
 //! keyframes, computed times and `for` positions — proven on the rows the
 //! runner resolves after boot, and on what the compiler refuses.
 
+use crate::scratch::Scratch;
 use exact_kernel::{Kernel, StyleId};
 use exact_motion::{Animations, Direction, Easing, FillMode, Property, Value};
 use exact_plan::{Plan, Value as PlanValue};
@@ -20,6 +21,42 @@ impl DataSource for NoData {
 fn fixture() -> String {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../corpus/keyframes.contract");
     std::fs::read_to_string(path).unwrap()
+}
+
+#[test]
+fn keyframes_accept_a_rotation_axis_and_angle_units() {
+    for rotation in ["-90deg x", "y -0.25turn", "1 1 0 100grad", "1.5rad"] {
+        let source = format!("keyframes fold\n  to rotate=\"{rotation}\"\ncomponent App\n  view\n    view animation=\"fold 1s linear both\"\n");
+        contract::compile(&source).unwrap_or_else(|e| panic!("{rotation}: {e}"));
+    }
+}
+
+#[test]
+fn spatial_keyframes_on_svg_elements_name_the_unsupported_hosts() {
+    let source = "keyframes fold\n  to rotate=\"-90deg x\"\ncomponent App\n  view\n    svg viewBox=\"0 0 100 100\"\n      rect width=100 height=100 animation=\"fold 1s linear both\"\n";
+    let e = contract::compile(source).unwrap_err();
+    assert_eq!(e.id, "lower-animation-target");
+    assert!(
+        e.message.contains("Apple or painted hosts"),
+        "{}",
+        e.message
+    );
+    assert!(e.message.contains("box around the `svg`"), "{}", e.message);
+}
+
+#[test]
+fn svg_angle_keyframes_refuse_an_inherited_spatial_axis() {
+    for row in ["0deg x", "0deg y", "1 1 0 0deg", "0deg z"] {
+        let source = format!("keyframes fold\n  to rotate=-90\ncomponent App\n  view\n    svg\n      rect rotate=\"{row}\" animation=\"fold 1s linear\"\n");
+        let result = contract::compile(&source);
+        if row == "0deg z" {
+            result.unwrap();
+        } else {
+            let e = result.unwrap_err();
+            assert_eq!(e.id, "lower-animation-target");
+            assert!(e.message.contains("Apple or painted hosts"));
+        }
+    }
 }
 
 fn animation(r: &Runner<NoData>, test_id: &str) -> (bool, Animations) {
@@ -655,11 +692,10 @@ fn a_colour_keyframe_takes_the_designs_tokens() {
     let from = &row.0[0].keyframes.0[0];
     assert_eq!(get(&from.values, Property::Color), Some([255, 0, 0, 255]));
     assert_eq!(get(&from.dark, Property::Color), Some([255, 255, 255, 255]));
-    let dir = std::env::temp_dir().join(format!("keyframe-token-axis-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = Scratch::new(format!("keyframe-token-axis-{}", std::process::id()));
     std::fs::write(
-        dir.join("app.tamber"),
-        "tamber t\n\naxes\n  tone = calm | loud\n\ntheme\n  c.chip = #cfced4\n    when tone=loud: #ff0000\n",
+        dir.join("app.forma"),
+        "forma t\n\naxes\n  tone = calm | loud\n\ntheme\n  c.chip = #cfced4\n    when tone=loud: #ff0000\n",
     )
     .unwrap();
     std::fs::write(
@@ -678,7 +714,7 @@ fn a_colour_keyframe_takes_the_designs_tokens() {
     .unwrap_err();
     assert_eq!(scale.id, "lower-keyframes");
     assert!(
-        scale.message.contains("one factor for both axes"),
+        scale.message.contains("one factor for both axes") && scale.message.contains("-90deg x"),
         "{scale}"
     );
 }

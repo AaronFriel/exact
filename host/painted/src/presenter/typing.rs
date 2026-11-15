@@ -754,7 +754,8 @@ impl<D: DataSource> Presenter<D> {
             self.remote_key(id, (name, code, repeat), now_ms);
             return;
         }
-        if !self.display.allows(self.host.kernel(), id) {
+        // Nor do a flight's controls take a key, as they take no press.
+        if !self.display.allows(self.host.kernel(), id) || self.host.flying(id) {
             return;
         }
         if self
@@ -804,6 +805,10 @@ impl<D: DataSource> Presenter<D> {
             return;
         }
         if self.key_click(id, name, now_ms) {
+            return;
+        }
+        // Before Space presses: during a menu's type-ahead it is one more letter.
+        if self.type_ahead_key(id, name, now_ms) {
             return;
         }
         let Some(node) = self.host.kernel().node(id) else {

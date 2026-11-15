@@ -1103,10 +1103,8 @@ impl<D: DataSource> Presenter<D> {
         let Some((ox, oy, _, _)) = self.rect_of(view) else {
             return false;
         };
-        if !self.surfaces.input(
-            view,
-            json!({"t":"wheel","dx":dx,"dy":dy,"x":x-ox,"y":y-oy,"at":at}),
-        ) {
+        let wheel = self.held_keys(json!({"t":"wheel","dx":dx,"dy":dy,"x":x-ox,"y":y-oy,"at":at}));
+        if !self.surfaces.input(view, wheel) {
             self.surfaces
                 .error
                 .get_or_insert_with(|| "GPU surface refused wheel input".into());
@@ -1170,7 +1168,21 @@ impl<D: DataSource> Presenter<D> {
         } else {
             "mouse"
         };
-        self.surfaces.input(view, json!({"t":"pointer","id":1,"phase":phase,"kind":kind,"buttons":buttons,"x":x-ox,"y":y-oy,"dx":dx,"dy":dy,"at":at}))
+        let pointer = self.held_keys(json!({"t":"pointer","id":1,"phase":phase,"kind":kind,"buttons":buttons,"x":x-ox,"y":y-oy,"dx":dx,"dy":dy,"at":at}));
+        self.surfaces.input(view, pointer)
+    }
+    /// `event` with the modifiers held, by the web's names.
+    pub(crate) fn held_keys(&self, mut event: Value) -> Value {
+        let held = self.modifiers();
+        for (name, on) in [
+            ("shiftKey", held.shift),
+            ("ctrlKey", held.ctrl),
+            ("altKey", held.alt),
+            ("metaKey", held.meta),
+        ] {
+            event[name] = on.into();
+        }
+        event
     }
     /// The device's motion for the next canvas pointer event (evdev's
     /// relative axes), so mouse look continues past the screen's edge.

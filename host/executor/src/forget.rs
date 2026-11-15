@@ -255,8 +255,8 @@ impl Core {
                         run.abort.clone()
                     };
                     aborts.extend(abort.map(|abort| (stream, abort)));
-                    // On the machine, cancelling a safe read (or an app's abort) claims it now.
-                    if self.machine.is_some() && asynch::cancel(run, by_app) {
+                    // A worker's rename must see cancellation before abort callbacks run.
+                    if asynch::cancel(run, by_app) && self.machine.is_some() {
                         cancels.push((run.lane, (run.ticket, run.generation)));
                     }
                 }

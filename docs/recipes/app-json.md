@@ -32,7 +32,7 @@
   Cold, it opens in its route's tab (declare `p "/p/:d"`); running, `go` pushes it on the
   selected tab, `open` on its route's (`vocab navigate`).
 - **Other keys:** `userInterfaceStyle` (`dark`/`light`), `categories` (store, Game Mode),
-  `data` (`data-*` words a hatch reads), `tamber` (design file),
+  `data` (`data-*` words a hatch reads), `forma` (design file),
   `typescript.sources` (outside directories `app.ts` imports), `commands` (the app's
   `exact.mjs` verbs).
 - **`strings`**: `{ "base": "en" }` sets the base locale for `strings/<locale>.json`.

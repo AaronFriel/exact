@@ -1,14 +1,19 @@
 //! Driver faults (LLP 1103): a fetch whose URL starts with an armed prefix
 //! fails as a refused connection does, without going out. The table is the
-//! session's: one per runner, shared by every source, placement and lane,
-//! and consulted where the host would hand a plain request to its transport
-//! (`Runner::fault_dispatch`), so each request is counted once. It is the
-//! driver's alone: armed by `EXACT_AGENT_FAIL_FETCH` at launch under the
-//! agent, or by the agent's `faults` operation.
+//! session's: one per runner (a native reload's replacement takes over its
+//! predecessor's), shared by every source, placement and lane, and consulted
+//! where the host would hand a plain request to its transport
+//! (`Runner::fault_dispatch`) and before each long-poll attempt
+//! (`Runner::fetch_fault`), so each request is counted once. It is the driver's alone: armed by
+//! `EXACT_AGENT_FAIL_FETCH` at launch under the agent, or by the agent's
+//! `faults` operation.
 
 use super::Runner;
 use crate::{DataSource, Dispatch, FailureKind, Outcome, RequestOut, Work};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
+
+/// A long poll's check before each HTTP attempt: a matching fault's network error.
+pub type FetchFault = Arc<dyn Fn(&str) -> Option<String> + Send + Sync>;
 
 /// One armed prefix (D3): how many matching fetches it fails yet (`None`:
 /// every one until `pass`), whether it still matches, and how many it has
@@ -34,8 +39,11 @@ impl Fault {
 }
 
 /// The session's fault table.
-#[derive(Debug, Default)]
-pub struct Faults(Mutex<Vec<Fault>>);
+#[derive(Debug, Default, Clone)]
+pub struct Faults {
+    entries: Arc<Mutex<Vec<Fault>>>,
+    lines: Arc<Mutex<std::collections::VecDeque<String>>>,
+}
 
 impl Faults {
     /// The table a launch names: `EXACT_AGENT_FAIL_FETCH`, in
@@ -90,7 +98,10 @@ impl Faults {
                 armed,
             });
         }
-        Ok(Faults(Mutex::new(faults)))
+        Ok(Faults {
+            entries: Arc::new(Mutex::new(faults)),
+            lines: Default::default(),
+        })
     }
 
     /// The table as launch lines, for a reload to carry as it is.
@@ -112,7 +123,7 @@ impl Faults {
     }
 
     fn table(&self) -> std::sync::MutexGuard<'_, Vec<Fault>> {
-        self.0.lock().unwrap_or_else(|e| e.into_inner())
+        self.entries.lock().unwrap_or_else(|e| e.into_inner())
     }
 
     /// Arms `prefix` for `times` fetches, or every one; arming it again
@@ -203,11 +214,47 @@ impl<D: DataSource> Runner<D> {
         &self.faults
     }
 
+    /// Share the live fault table with the executor's long-poll attempts.
+    /// Their journal lines join the runner's at its next pump.
+    pub fn fetch_fault(&self) -> FetchFault {
+        let faults = self.faults.clone();
+        Arc::new(move |url| {
+            if !faults.take(url) {
+                return None;
+            }
+            let message = format!("fetch failed (driver fault): {url}");
+            let mut lines = faults.lines.lock().unwrap_or_else(|e| e.into_inner());
+            lines.push_back(message.clone());
+            if lines.len() > super::JOURNAL_RING {
+                lines.pop_front();
+            }
+            Some(message)
+        })
+    }
+
+    /// Take over the live table of the session this runner replaces in the
+    /// same process. The old executor's long polls take from that table until
+    /// they are let go, so a fault one takes after the reload carried the
+    /// table stays spent here.
+    pub fn share_faults(&mut self, live: &Faults) {
+        self.faults = live.clone();
+    }
+
+    /// Drain executor fault messages before a pump or an agent inspection.
+    pub fn take_fault_logs(&mut self) {
+        let lines =
+            std::mem::take(&mut *self.faults.lines.lock().unwrap_or_else(|e| e.into_inner()));
+        for line in lines {
+            self.log(line);
+        }
+    }
+
     /// What a host runs for a plain request instead of its transport, when
     /// a driver fault matches its URL (LLP 1103 D1, D2): the failure a
     /// refused connection is, `Failed { kind: Network }`, which a
     /// TypeScript source's `fetch` rejects with as `FetchError('Network')`.
-    /// A stream is not matched (D5). The journal says so.
+    /// Long polls check each attempt through [`Runner::fetch_fault`]; other
+    /// streams are not matched (D5). The journal says so.
     pub fn fault_dispatch(&mut self, r: &RequestOut) -> Option<Dispatch> {
         let request = &r.request;
         if request.stream || request.is_native() || request.is_auth() || request.surface.is_some() {
@@ -230,6 +277,68 @@ impl<D: DataSource> Runner<D> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn poll_attempts_share_live_faults_but_other_streams_do_not_take_them() {
+        let mut builder = exact_plan::builder::PlanBuilder::new(exact_kernel::SCHEMA_DIGEST, 1);
+        builder.node(
+            exact_kernel::NodeType::View as u8,
+            None,
+            None,
+            0,
+            &[],
+            &[],
+            None,
+        );
+        let mut runner = Runner::boot(
+            builder.finish().unwrap(),
+            (),
+            exact_kernel::Kernel::with_monospace(),
+            Default::default(),
+            "/",
+        )
+        .unwrap();
+        let fault = runner.fetch_fault();
+        let url = "https://api.test/changes?since=0";
+        runner.faults().arm("https://api.test/", None).unwrap();
+        runner.faults().arm(url, Some(1)).unwrap();
+        for kind in 0..5 {
+            let mut request = crate::Request::get(url);
+            request.stream = true;
+            match kind {
+                1 => request.bytes = true,
+                2 => request.socket = true,
+                3 => request.upload_progress = true,
+                4 => request = request.long_poll("since", "seq"),
+                _ => {}
+            }
+            let out = RequestOut {
+                ticket: 1,
+                target: "live".into(),
+                request,
+                class: Default::default(),
+                forced: false,
+            };
+            assert!(runner.fault_dispatch(&out).is_none());
+        }
+        assert!(runner.faults().json().contains("\"left\":1,\"hits\":0"));
+        assert!(fault(url).unwrap().contains(url));
+        assert!(
+            fault(url).is_some(),
+            "the spent prefix lets the shorter one decide"
+        );
+        runner.faults().pass("https://api.test/");
+        assert!(fault(url).is_none());
+        assert!(fault("https://other.test/").is_none());
+        runner.take_requests();
+        assert_eq!(
+            runner
+                .journal()
+                .filter(|l| l.contains("fetch failed (driver fault)"))
+                .count(),
+            2
+        );
+    }
 
     #[test]
     fn the_longest_prefix_decides_counts_run_out_and_pass_keeps_hits() {

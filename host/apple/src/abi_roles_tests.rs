@@ -258,7 +258,7 @@ fn the_binding_core_answers_each_runtime_from_its_own_design() {
             false,
             |b, _| {
                 let len = b.input_write(br#"{"view": 0, "names": ["CanvasText", "nonesuch"]}"#);
-                let n = b.tamber(len) as usize;
+                let n = b.forma(len) as usize;
                 String::from_utf8(b.output_bytes(n).to_vec()).unwrap()
             },
             |_| String::new(),
@@ -275,7 +275,7 @@ fn the_binding_core_answers_each_runtime_from_its_own_design() {
         false,
         |b, _| {
             let len = b.input_write(br#"{"view": 4294967297, "names": ["CanvasText"]}"#);
-            let n = b.tamber(len) as usize;
+            let n = b.forma(len) as usize;
             String::from_utf8(b.output_bytes(n).to_vec()).unwrap()
         },
         |_| String::new(),

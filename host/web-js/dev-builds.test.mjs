@@ -10,9 +10,10 @@ import { createHash } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { suiteBrowser } from '../../scripts/agent-launch.mjs';
+import { installLock } from '../../scripts/filesystem.mjs';
 import { appSources } from '../web/serve.mjs';
 import { loopWebDist } from '../../scripts/web-build.mjs';
 
@@ -29,12 +30,13 @@ async function devLoop(dir, env = {}) {
   await new Promise(ok => listener.listen(0, '127.0.0.1', ok));
   const port = listener.address().port;
   await new Promise(ok => listener.close(ok));
-  const dist = env.EXACT_WEB_DIST === '' ? loopWebDist({ dir, target: resolve(dir, 'target') }, 'js') : mkdtempSync(join(tmpdir(), 'exact-js-builds-'));
+  // The build's lock and kept generations go beside its dist (serve.mjs `replaceBuild`): the dist sits in a directory of its own.
+  const dist = env.EXACT_WEB_DIST === '' ? loopWebDist({ dir, target: resolve(dir, 'target') }, 'js') : join(mkdtempSync(join(tmpdir(), 'exact-js-builds-')), 'dist');
   // Owned: ended with what it starts when the test ends, a timeout included (scripts/test-children.mjs).
   const dev = spawnOwned(process.execPath, [resolve(ROOT, 'host/web/dev.mjs'), '--app', dir, '--port', String(port)], { cwd: ROOT, env: { ...process.env, EXACT_WEB_DIST: dist, ...env }, stdio: ['ignore', 'pipe', 'pipe'] });
   const stop = async () => {
     await dev.stop(30_000);
-    rmSync(dist, { recursive: true, force: true });
+    rmSync(dirname(dist), { recursive: true, force: true });
   };
   let out = '', err = '';
   dev.stderr.on('data', d => { err = (err + d).slice(-4000); });
@@ -184,7 +186,7 @@ test('the JS loop: a build an edit lands during is set aside, never published, a
   writeFileSync(join(dir, 'app.json'), JSON.stringify({ name: 'Superseded', app: { id: 'com.exact.superseded', name: 'Superseded' } }));
   const view = (text) => `component App\n  view\n    column background-color="surface.card" min-height=40\n      text "${text}"\n`;
   writeFileSync(join(dir, 'app.contract'), view('qz-first'));
-  writeFileSync(join(dir, 'app.tamber'), 'tamber superseded\n\ntheme\n  surface.card = light-dark(#f1f3f5, #16181c)\n');
+  writeFileSync(join(dir, 'app.forma'), 'forma superseded\n\ntheme\n  surface.card = light-dark(#f1f3f5, #16181c)\n');
   let loop = null;
   try {
     // Each build's end comes 2 s after it: an edit lands as one ends.
@@ -222,9 +224,9 @@ test('the JS loop: an edit stops a young build, leaving dist as it was; a value 
   const dir = mkdtempSync(join(tmpdir(), 'exact-stopped-'));
   writeFileSync(join(dir, 'app.json'), JSON.stringify({ name: 'Stopped', app: { id: 'com.exact.stopped', name: 'Stopped' } }));
   const view = (text) => `component App\n  view\n    column background-color="surface.card" min-height=40\n      text "${text}"\n`;
-  const design = (dark) => `tamber stopped\n\ntheme\n  surface.card = light-dark(#f1f3f5, ${dark})\n`;
+  const design = (dark) => `forma stopped\n\ntheme\n  surface.card = light-dark(#f1f3f5, ${dark})\n`;
   writeFileSync(join(dir, 'app.contract'), view('qz-one'));
-  writeFileSync(join(dir, 'app.tamber'), design('#16181c'));
+  writeFileSync(join(dir, 'app.forma'), design('#16181c'));
   let loop = null;
   try {
     loop = await devLoop(dir, { EXACT_DEV_BUILD_HOLD_MS: '4000' });
@@ -280,11 +282,11 @@ test('the JS loop: an edit stops a young build, leaving dist as it was; a value 
     // behind its lock while another build holds it: a build's bound.)
     await until(() => count(/design reader ready/g) >= 3, 300_000);
     const supersededBefore = count(/edit → a build superseded/g);
-    writeFileSync(join(dir, 'app.tamber'), design('#202020'));
+    writeFileSync(join(dir, 'app.forma'), design('#202020'));
     await until(() => count(/edit → batch ready/g) >= 1, 60_000);
     await new Promise(ok => setTimeout(ok, 500));
     const held = Date.now();
-    writeFileSync(join(dir, 'app.tamber'), design('#303030'));
+    writeFileSync(join(dir, 'app.forma'), design('#303030'));
     // Its batch from the design read, not a build's, before the held
     // build could end.
     await until(() => count(/edit → batch ready .*no build/g) >= 2, 60_000);
@@ -314,7 +316,7 @@ test('the JS loop: an edit stops a young build, leaving dist as it was; a value 
       if (count(/edit → plan ready|edit → checked/g) === settled) break;
     }
     const full = Date.now();
-    writeFileSync(join(dir, 'app.tamber'), design('#404040'));
+    writeFileSync(join(dir, 'app.forma'), design('#404040'));
     await until(() => count(/edit → batch ready .*no build/g) > batches, 60_000);
     expect(Date.now() - full).toBeLessThan(3000);
     await until(() => count(/edit → plan ready|edit → checked/g) > settled, 300_000);
@@ -330,8 +332,8 @@ test('the JS loop: a value-only design edit while the design reader builds waits
   const dir = mkdtempSync(join(tmpdir(), 'exact-reader-wait-'));
   writeFileSync(join(dir, 'app.json'), JSON.stringify({ name: 'Reader wait', app: { id: 'com.exact.readerwait', name: 'Reader wait' } }));
   writeFileSync(join(dir, 'app.contract'), 'component App\n  view\n    column background-color="surface.card" min-height=40\n      text "qz-wait"\n');
-  const design = (light) => `tamber readerwait\n\ntheme\n  surface.card = light-dark(${light}, #16181c)\n`;
-  writeFileSync(join(dir, 'app.tamber'), design('#f1f3f5'));
+  const design = (light) => `forma readerwait\n\ntheme\n  surface.card = light-dark(${light}, #16181c)\n`;
+  writeFileSync(join(dir, 'app.forma'), design('#f1f3f5'));
   let loop = null;
   try {
     // The reader's first build is taken 3 minutes after cargo ends (a reader building again after any other edit, on
@@ -342,7 +344,7 @@ test('the JS loop: a value-only design edit while the design reader builds waits
     const until = async (pass, ms) => { const end = Date.now() + ms; while (!pass()) { if (Date.now() > end) throw new Error(`not seen in: ${said().slice(-2000)}`); await new Promise(ok => setTimeout(ok, 100)); } };
     await until(() => said().includes('plan ready'), 900_000);
     if (said().includes('design reader ready')) throw new Error(`the reader was ready before the first build; the hold is too short: ${said().slice(-1500)}`);
-    writeFileSync(join(dir, 'app.tamber'), design('#e0f7e9'));
+    writeFileSync(join(dir, 'app.forma'), design('#e0f7e9'));
     await until(() => said().includes('edit → waiting for the design reader'), 60_000);
     // Nothing builds while it waits.
     expect(count(/edit → building/g)).toBe(0);
@@ -365,10 +367,10 @@ test("the JS loop: an edit to theme-fixture's `when` token builds with setMode a
   const dir = mkdtempSync(join(tmpdir(), 'exact-axes-'));
   writeFileSync(join(dir, 'app.json'), JSON.stringify({ name: 'Axes', app: { id: 'com.exact.axes', name: 'Axes' } }));
   writeFileSync(join(dir, 'app.contract'), 'component App\n  action dim\n    setMode("dark-style", "dim")\n  view\n    column background-color="surface.page" min-height=40\n      button press=dim\n        text "dim"\n      column -exact-mode="dark-style=black" background-color="surface.page"\n        text "pinned"\n');
-  const design = readFileSync(resolve(ROOT, 'apps/theme-fixture/app.tamber'), 'utf8');
+  const design = readFileSync(resolve(ROOT, 'apps/theme-fixture/app.forma'), 'utf8');
   const page = '  surface.page = light-dark(#ffffff, #000000)\n    when dark-style=dim: light-dark(#ffffff, #15202b)\n';
   expect(design).toContain(page);
-  writeFileSync(join(dir, 'app.tamber'), design);
+  writeFileSync(join(dir, 'app.forma'), design);
   let loop = null;
   try {
     loop = await devLoop(dir);
@@ -379,15 +381,15 @@ test("the JS loop: an edit to theme-fixture's `when` token builds with setMode a
     // The `when` line's dark side: its batch, then its build, which checks
     // setMode and the pin against the design's axes.
     const checks = count(/edit → checked|edit → batch ready .*built in|edit → plan ready/g);
-    writeFileSync(join(dir, 'app.tamber'), design.replace(page, page.replace('#15202b', '#16212c')));
+    writeFileSync(join(dir, 'app.forma'), design.replace(page, page.replace('#15202b', '#16212c')));
     await until(() => count(/edit → checked|edit → batch ready .*built in|edit → plan ready/g) > checks || said().includes('build failed'), 300_000);
     expect(said()).not.toContain('build failed');
     expect(JSON.stringify(await (await fetch(`${base}/__dev/design`)).json())).toContain('#16212c');
     // The default's light side alone, which `under scheme=dark` refuses:
     // the build says so, and not that the design declares no axes.
-    writeFileSync(join(dir, 'app.tamber'), design.replace(page, page.replace('#ffffff, #000000', '#fefefe, #000000')));
-    await until(() => said().includes('build failed') && said().includes('[tamber-'), 300_000);
-    expect(said()).toContain('tamber-under-light');
+    writeFileSync(join(dir, 'app.forma'), design.replace(page, page.replace('#ffffff, #000000', '#fefefe, #000000')));
+    await until(() => said().includes('build failed') && said().includes('[forma-'), 300_000);
+    expect(said()).toContain('forma-under-light');
     expect(said()).not.toContain('declares no axes');
   } finally {
     await loop?.stop().catch(() => {});
@@ -400,7 +402,7 @@ test('the JS loop: two loops on two apps under one target/ build at once, each i
     const dir = mkdtempSync(join(tmpdir(), `exact-stage-${name}-`));
     writeFileSync(join(dir, 'app.json'), JSON.stringify({ name, app: { id: `com.exact.${name}`, name } }));
     writeFileSync(join(dir, 'app.contract'), `component App\n  view\n    text "${name}"\n`);
-    writeFileSync(join(dir, 'app.tamber'), `tamber ${name}\n\ntheme\n  ink = #000000\n`);
+    writeFileSync(join(dir, 'app.forma'), `forma ${name}\n\ntheme\n  ink = #000000\n`);
     return dir;
   };
   const dirs = [app('stagea'), app('stageb')];
@@ -478,6 +480,8 @@ test("the JS loop: an edit to a copied file: library rebuilds with the library's
   } finally {
     await loop?.stop().catch(() => {});
     rmSync(dir, { recursive: true, force: true });
+    // The lock the reinstall took, kept in TMPDIR by the app's path (filesystem.mjs `installLock`).
+    rmSync(installLock(dir), { force: true });
   }
 }, 1_200_000);
 

@@ -189,11 +189,7 @@ impl RegionState {
         payload: Rc<dyn Any>,
     ) -> Result<bool, LayoutError> {
         // Purpose and reservation belong to this private Arc, never inferred from tuple equality.
-        if !self
-            .pending
-            .as_ref()
-            .is_some_and(|p| Arc::ptr_eq(&p.0, &request.0))
-        {
+        if self.pending.as_ref() != Some(request) {
             return Ok(false);
         }
         if !metrics.is_valid() {

@@ -331,6 +331,9 @@ final class RouteController: UIViewController, UIScrollViewDelegate {
     /// UIKit still shows it (`NavigationHost.prepare`), until UIKit takes the
     /// route's view out of the window.
     var retiringRoot: NodeView?
+    /// The exit it declares, kept while it is its stack's top: it has left
+    /// the tree when UIKit asks for its pop's animator (RouteTransitionIOS).
+    var exitPart: RoutePart?
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
         retiringRoot?.removeFromSuperview()

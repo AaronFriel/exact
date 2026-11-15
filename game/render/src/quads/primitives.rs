@@ -79,7 +79,9 @@ impl Primitives {
                     }
                 };
                 indices
-                    .chunks_exact(3)
+                    .as_chunks::<3>()
+                    .0
+                    .iter()
                     .map(|t| std::array::from_fn(|i| Vec3::from(vertices[t[i] as usize].position)))
                     .collect()
             };

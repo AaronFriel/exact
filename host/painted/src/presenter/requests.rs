@@ -99,6 +99,11 @@ pub enum Request {
     /// A file input's picker: the shell answers with a JSON array of its
     /// cache copies' paths, null to cancel, or a refusal reason.
     Files(exact_runner::PickerRequest),
+    /// The running generation's assets are now in this directory (empty:
+    /// the embedded ones), after a signed update activated (LLP 1030.006
+    /// D1): the reader opens its sounds, videos and pages there again, and
+    /// says when it drew the new generation (D5).
+    Assets(String),
 }
 
 /// What a picker is opened with, each value as HTML writes it and empty
@@ -144,6 +149,7 @@ impl Request {
             Request::Auth(..) => 17,
             Request::AuthEnd(_) => 19,
             Request::Files(_) => 18,
+            Request::Assets(_) => 20,
         }
     }
 }
@@ -295,7 +301,8 @@ fn encode(id: u32, request: &Request, out: &mut Vec<i32>) {
         | Request::Copy(text)
         | Request::Module(text)
         | Request::Presence(text)
-        | Request::Sound(text) => string(out, text),
+        | Request::Sound(text)
+        | Request::Assets(text) => string(out, text),
         Request::Auth(url, callback, state) => {
             string(out, url);
             string(out, callback);

@@ -10,7 +10,7 @@
 // app publishes a reload or a kept design (`designKept`), never before, so
 // it follows each kept edit, not a scrub's frames. It stops with the loop,
 // and a minute after it was last asked for with no page of it open. The
-// page registers on the build channel with `page: 'gallery'` (tamber/1.15),
+// page registers on the build channel with `page: 'gallery'` (forma/1.15),
 // a label only.
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -168,7 +168,7 @@ export function galleryLoop({ app, root, appDist, channel = () => null, client, 
       const tool = tableTool(), out = resolve(cache, `inspect-${digest}-${process.pid}.json`); // (this loop's own, as dev.mjs's)
       tables.set(digest, (async () => {
         if (!tool) return null;
-        const made = await step(tool.cmd, [...tool.pre, 'inspect-table', resolve(dist, 'app.plan'), out], {});
+        const made = await step(tool.cmd, [...tool.pre, 'inspect-table', resolve(dist, 'app.plan'), out], tool.env ? { env: tool.env } : {});
         tool.done?.();
         let bytes = null;
         try { bytes = made.code === 0 ? readFileSync(out) : null; if (bytes && JSON.parse(bytes).plan !== digest) bytes = null; } catch { bytes = null; }

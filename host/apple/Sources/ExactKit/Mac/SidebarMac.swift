@@ -49,7 +49,10 @@ final class SidebarHost {
     /// What a sidebar would show now; nil for an app with no root tab bar,
     /// one whose placement is the author's, or the agent's own chrome.
     private(set) var shown: Shown?
-    var wanted: Bool { shown != nil }
+    /// A window opened at a route shows that route alone (LLP 1030.004
+    /// D2): no sidebar, and the root tab bar is put away as one stands for it.
+    var rooted = false
+    var wanted: Bool { shown != nil && !rooted }
     /// The window's owner hears when `wanted` changes, after the batch.
     var onWanted: (() -> Void)?
     /// The window keeps its composition across a reset until the new tree is read.
@@ -217,8 +220,14 @@ final class SidebarHost {
     /// Show what was read, where a controller holds this session's view,
     /// and say in the same step that the tablist's box is the platform's.
     private func present() {
+        if rooted, let shown { return project(shown) }
         guard let shown, let controller, controller.hasSidebar, controller.holds(presenter) else { return unproject() }
         controller.show(shown)
+        project(shown)
+    }
+
+    /// The tablist put away, its box the platform's.
+    private func project(_ shown: Shown) {
         if projected !== shown.tablist {
             unprojectView()
             savedAccessibilityHidden = shown.tablist.isAccessibilityHidden()

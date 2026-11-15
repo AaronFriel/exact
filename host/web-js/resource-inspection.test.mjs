@@ -1,12 +1,14 @@
 import { hostFixtureFile } from '../web/tests/glue-fixture.mjs';
 import { test, expect } from 'bun:test';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import { suiteBrowser } from '../../scripts/agent-launch.mjs';
 import { open } from '../../scripts/agent.mjs';
 import { perfDelta } from '../../scripts/agent-inspect.mjs';
 import { browserMissing } from '../../scripts/agent-playwright.mjs';
 import { need } from '../../scripts/coverage.mjs';
+import { webCompiler } from './module.mjs';
 
 function runtimeServer(development = false, names = [[], [], []], types = [[], [], []], map = null) {
   const bytes = JSON.stringify(map);
@@ -974,3 +976,45 @@ test.each(['pending', 'resume', 'resume-refreeze', 'refused', 'skipped'])('freez
       transport:'stopped', reason:'background', streams:mode.startsWith('resume') ? 2 : 1});
   } finally { await browser.close(); server.stop(true); }
 }, 30000);
+
+test('web builds expose their version inputs in the view and delivery state', async () => {
+  if (webCompiler().cmd === 'cargo') throw new Error('build the compiler first: cargo build -p exact-web-js');
+  const root = resolve(import.meta.dir, '../..'), dir = mkdtempSync(resolve(root, 'target/delivery-version-'));
+  const dist = resolve(dir, 'dist');
+  let browser, server;
+  try {
+    writeFileSync(resolve(dir, 'app.json'), JSON.stringify({ name: 'Version', app: { id: 'test.delivery-version', name: 'Version' }, host: { web: {} } }));
+    writeFileSync(resolve(dir, 'app.contract'), 'shape Build\n  version: string\n  buildNumber: string\n  production: bool\ncomponent App\n  resource build = exactDelivery() as shape Build\n  view\n    column\n      text `${build.version} (${build.buildNumber})` testId="version"\n      if build.production\n        text "production" testId="kind"\n      else\n        text "development" testId="kind"\n');
+    server = Bun.serve({ hostname: '127.0.0.1', port: 0, async fetch(request) { const file = Bun.file(resolve(dist, new URL(request.url).pathname.slice(1) || 'index.html')); return await file.exists() ? new Response(file) : new Response(null, { status: 404 }); } });
+    for (const [version, buildNumber, production] of [['2.3.4', '56', false], [undefined, undefined, false], ['', '', false], ['2.3.4', '56', true]]) {
+      const env = { ...process.env, EXACT_APP_DIR: dir };
+      delete env.EXACT_VERSION; delete env.EXACT_BUILD_NUMBER;
+      if (version !== undefined) env.EXACT_VERSION = version;
+      if (buildNumber !== undefined) env.EXACT_BUILD_NUMBER = buildNumber;
+      const built = Bun.spawn([process.execPath, 'host/web-js/build.mjs', 'delivery-version', '--out', dist, '--render', 'none', ...(production ? ['--production'] : [])], { cwd: root, env, stdout: 'pipe', stderr: 'pipe' });
+      const [status, stdout, stderr] = await Promise.all([built.exited, new Response(built.stdout).text(), new Response(built.stderr).text()]);
+      expect(status, stdout + stderr).toBe(0);
+      expect(JSON.parse(readFileSync(resolve(dist, 'app.version.json'), 'utf8'))).toEqual({ version: version ?? '', buildNumber: buildNumber ?? '', production });
+      // A production page links no agent adapter: read what it shows in a plain browser.
+      if (production) {
+        const page = await (await suiteBrowser()).newPage();
+        try {
+          await page.goto(server.url.href);
+          await page.locator('[data-testid=kind]').waitFor();
+          expect(await page.locator('[data-testid=kind]').textContent()).toBe('production');
+          expect(await page.locator('[data-testid=version]').textContent()).toBe(`${version} (${buildNumber})`);
+        } finally { await page.close(); }
+        continue;
+      }
+      browser = await open({ host: 'web', app: dir, webDist: dist, url: server.url.href });
+      const state = await browser.state();
+      expect(state.resources.build).toEqual({ version: version ?? '', buildNumber: buildNumber ?? '', production: false });
+      expect(await browser.carrier.evaluate('document.querySelector("[data-testid=kind]").textContent')).toBe('development');
+      expect(state.delivery.version).toBe(version ?? '');
+      expect(state.delivery.buildNumber).toBe(buildNumber ?? '');
+      expect(state.delivery.production).toBe(production);
+      expect(await browser.carrier.evaluate('document.querySelector("[data-testid=version]").textContent')).toBe(`${version ?? ''} (${buildNumber ?? ''})`);
+      await browser.close(); browser = null;
+    }
+  } finally { await browser?.close(); server?.stop(true); rmSync(dir, { recursive: true, force: true }); }
+}, 60000);

@@ -111,7 +111,7 @@ let executables: [Target] = [
 // as a decision rather than a drawn frame, so it needs no window, no run
 // loop, and no clock (LLP 1033 D4a).
 let tests: [Target] = [
-    .target(name: "ExactPackage", path: "modules", exclude: ["ExactExtensions.swift", "ExactNativeModule.swift", "ExactNativeViews.swift", "ExactServices.swift", "ExactTamber.swift"], sources: ["ExactPackage.swift"]),
+    .target(name: "ExactPackage", path: "modules", exclude: ["ExactExtensions.swift", "ExactNativeModule.swift", "ExactNativeViews.swift", "ExactServices.swift", "ExactForma.swift"], sources: ["ExactPackage.swift"]),
     .target(name: "MediaCaptureImplementation", dependencies: ["ExactPackage"], path: "tests/MediaCaptureImplementation"),
     .target(name: "SignInImplementation", dependencies: ["ExactPackage"], path: "tests/SignInImplementation"),
     .target(name: "PasskeysImplementation", dependencies: ["ExactPackage"], path: "tests/PasskeysImplementation"),
@@ -143,7 +143,7 @@ let iosFloor: String = {
 
 let package = Package(
     name: "Exact",
-    platforms: [.macOS(.v14), .iOS(iosFloor), .tvOS(iosFloor), .watchOS(.v10), .visionOS(.v1)],
+    platforms: [.macOS(.v14), .iOS(iosFloor), .tvOS(iosFloor), .watchOS("26.0"), .visionOS(.v1)],
     products: [.library(name: "ExactCore", type: widgetCore ? .dynamic : nil, targets: ["ExactCore"]), .library(name: "ExactSnapshot", type: widgetCore ? .static : nil, targets: ["ExactSnapshot"])] + (testing ? [.library(name: "ExactKit", targets: ["ExactKit"])] : [
         .library(name: "ExactKit", targets: ["ExactKit"]),
         .library(name: "ExactUpdates", targets: ["ExactUpdates"]),

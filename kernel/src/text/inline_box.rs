@@ -296,4 +296,41 @@ impl crate::NodeRef<'_> {
         }
         background_reach(self.arena, self.slot).scaled(self.arena.fit_scale(self.slot))
     }
+
+    /// For a `text` inside a paragraph, how far its padding box stands
+    /// above and below its text's content area: its `padding-top` and
+    /// `border-top-width`, and its `padding-bottom` and
+    /// `border-bottom-width`. Its background covers it, though it moves no
+    /// line (CSS 2 §10.6.1). Zero for any other node; at its paragraph's fit
+    /// scale, as its runs are.
+    pub fn inline_background_block_reach(&self) -> (f32, f32) {
+        use crate::generated::StyleId;
+        use taffy::style::CompactLength;
+        const ROWS: [StyleId; 6] = [
+            StyleId::PaddingTop,
+            StyleId::PaddingBottom,
+            StyleId::BorderWidthTop,
+            StyleId::BorderWidthBottom,
+            StyleId::BorderStyleTop,
+            StyleId::BorderStyleBottom,
+        ];
+        let own = self.arena.style(self.slot);
+        if !self.arena.is_inline_run(self.slot) || !ROWS.iter().any(|row| own.mask.has(*row)) {
+            return (0.0, 0.0);
+        }
+        let style = crate::style::taffy_style(self.arena, self.slot);
+        let length = |raw: CompactLength| {
+            (raw.tag() == CompactLength::LENGTH_TAG)
+                .then(|| raw.value())
+                .filter(|v| v.is_finite())
+                .unwrap_or(0.0)
+                .max(0.0)
+        };
+        let scale = self.arena.fit_scale(self.slot);
+        (
+            (length(style.padding.top.into_raw()) + length(style.border.top.into_raw())) * scale,
+            (length(style.padding.bottom.into_raw()) + length(style.border.bottom.into_raw()))
+                * scale,
+        )
+    }
 }

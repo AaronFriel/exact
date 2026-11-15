@@ -20,8 +20,8 @@ import android.widget.FrameLayout
  * page in one view, each bar and each surface of the top layer in a [Pane]. None of it says anything to TalkBack by
  * itself, so the view that holds it answers through an [AccessibilityNodeProvider] whose virtual nodes are exact2's
  * own statement of the tree ([Native.access], `host/painted/src/presenter/access.rs`): for each node its identity,
- * what it stands under, what it is, its state, its box, its range, its place in a set, and its name, value and
- * description, in the order a person reads.
+ * what it stands under, what it is, its state, its box, its range, its place in a set and in a table, and its name,
+ * value and description, in the order a person reads.
  *
  * One [Access] answers for one view. The page's is the reader's root ([Root]), which holds the page's view, the
  * bars over it and the text fields under it: its nodes are the top app bar's, then the page's, then the navigation
@@ -57,6 +57,9 @@ internal class Access(private val host: View) {
         val id: Int, val parent: Int, val view: Int, val role: Int, val flags: Int,
         val x: Int, val y: Int, val w: Int, val h: Int,
         val min: Float, val max: Float, val now: Float, val at: Int, val of: Int,
+        /** Where a table's row or cell stands, from 1, and what it covers; a table's rows and columns in [rows] and
+         * [columns]. 0: none. */
+        val row: Int, val rows: Int, val column: Int, val columns: Int,
         val name: String, val value: String, val hint: String,
     ) {
         val children = ArrayList<Int>(0)
@@ -91,10 +94,11 @@ internal class Access(private val host: View) {
             val count = w[at++]
             repeat(count) {
                 val i = at
-                at += 14
+                at += 18
                 nodes.add(Node(
                     w[i], w[i + 1], w[i + 2], w[i + 3], w[i + 4], w[i + 5], w[i + 6], w[i + 7], w[i + 8],
-                    float(i + 9), float(i + 10), float(i + 11), w[i + 12], w[i + 13], string(), string(), string(),
+                    float(i + 9), float(i + 10), float(i + 11), w[i + 12], w[i + 13],
+                    w[i + 14], w[i + 15], w[i + 16], w[i + 17], string(), string(), string(),
                 ))
             }
         }
@@ -238,7 +242,7 @@ internal class Access(private val host: View) {
                     n.has(BACKWARD) && Exact.accessAct(id, BACK, 0f)
                 android.R.id.accessibilityActionSetProgress -> {
                     val to = args?.takeIf { it.containsKey(AccessibilityNodeInfo.ACTION_ARGUMENT_PROGRESS_VALUE) } ?: return false
-                    n.role == SLIDER && Exact.accessAct(id, SET, to.getFloat(AccessibilityNodeInfo.ACTION_ARGUMENT_PROGRESS_VALUE))
+                    n.has(SETTABLE) && Exact.accessAct(id, SET, to.getFloat(AccessibilityNodeInfo.ACTION_ARGUMENT_PROGRESS_VALUE))
                 }
                 else -> false
             }
@@ -265,10 +269,11 @@ internal class Access(private val host: View) {
         }
     }
 
-    /** A one-cell item at [row], [column] of its collection, and a collection [rows] by [columns]. */
-    private fun item(row: Int, column: Int, selected: Boolean) =
-        if (Build.VERSION.SDK_INT >= 30) AccessibilityNodeInfo.CollectionItemInfo(row, 1, column, 1, false, selected)
-        else Legacy.item(row, column, selected)
+    /** An item at [row], [column] of its collection, covering [rows] by [columns], and a collection [rows] by
+     * [columns]. */
+    private fun item(row: Int, column: Int, selected: Boolean, rows: Int = 1, columns: Int = 1, heading: Boolean = false) =
+        if (Build.VERSION.SDK_INT >= 30) AccessibilityNodeInfo.CollectionItemInfo(row, rows, column, columns, heading, selected)
+        else Legacy.item(row, rows, column, columns, heading, selected)
     private fun collection(rows: Int, columns: Int, selection: Int) =
         if (Build.VERSION.SDK_INT >= 30) AccessibilityNodeInfo.CollectionInfo(rows, columns, false, selection)
         else Legacy.collection(rows, columns, selection)
@@ -321,8 +326,17 @@ internal class Access(private val host: View) {
                 val rows = n.children.maxOfOrNull { nodes[it]?.of ?: 0 } ?: 0
                 if (rows > 0) info.collectionInfo = collection(if (n.has(SIDEWAYS)) 1 else rows, if (n.has(SIDEWAYS)) rows else 1, AccessibilityNodeInfo.CollectionInfo.SELECTION_MODE_NONE)
             }
+            // A table, as Chrome tells TalkBack an HTML table: its rows and columns, each cell its place and spans,
+            // a header cell a heading (LLP 1153 D7.3). A row is no item; its cells are.
+            TABLE -> if (n.rows > 0 && n.columns > 0) info.collectionInfo = collection(n.rows, n.columns, AccessibilityNodeInfo.CollectionInfo.SELECTION_MODE_NONE)
+            CELL, COLUMN_HEADER, ROW_HEADER -> {
+                info.isHeading = n.role != CELL
+                if (n.row > 0 && n.column > 0) info.collectionItemInfo = item(n.row - 1, n.column - 1, false, n.rows, n.columns, n.role != CELL)
+            }
+            // A description list is a list of its terms, each placed among them below.
+            DESCRIPTION_LIST -> if (n.of > 0) info.collectionInfo = collection(n.of, 1, AccessibilityNodeInfo.CollectionInfo.SELECTION_MODE_NONE)
         }
-        if (n.role != TAB && n.of > 0 && n.at > 0) {
+        if (n.role != TAB && n.role != CELL && n.role != COLUMN_HEADER && n.role != ROW_HEADER && n.of > 0 && n.at > 0) {
             val sideways = nodes[n.parent]?.has(SIDEWAYS) == true
             info.collectionItemInfo = item(if (sideways) 0 else n.at - 1, if (sideways) n.at - 1 else 0, n.role == OPTION && n.has(SELECTED))
         }
@@ -338,17 +352,18 @@ internal class Access(private val host: View) {
         if (n.has(CLICK) && !(n.role == TAB && n.has(SELECTED))) { info.isClickable = true; info.addAction(AccessibilityAction.ACTION_CLICK) }
         if (n.has(LONG_CLICK)) { info.isLongClickable = true; info.addAction(AccessibilityAction.ACTION_LONG_CLICK) }
         if (n.has(EXPANDABLE) && n.has(CLICK)) info.addAction(if (n.has(EXPANDED)) AccessibilityAction.ACTION_COLLAPSE else AccessibilityAction.ACTION_EXPAND)
-        if (n.role == SCROLLER || n.role == SLIDER || n.role == LIST_BOX) {
+        // A range steps forward and back, as a SeekBar does; only a native one is set to a value (a drawn one steps by its author's keys).
+        if (n.role == SCROLLER || n.role == LIST_BOX || n.has(RANGE)) {
             val sideways = n.has(SIDEWAYS)
             if (n.has(FORWARD)) {
                 info.addAction(AccessibilityAction.ACTION_SCROLL_FORWARD)
-                if (n.role != SLIDER) info.addAction(if (sideways) AccessibilityAction.ACTION_SCROLL_RIGHT else AccessibilityAction.ACTION_SCROLL_DOWN)
+                if (!n.has(RANGE)) info.addAction(if (sideways) AccessibilityAction.ACTION_SCROLL_RIGHT else AccessibilityAction.ACTION_SCROLL_DOWN)
             }
             if (n.has(BACKWARD)) {
                 info.addAction(AccessibilityAction.ACTION_SCROLL_BACKWARD)
-                if (n.role != SLIDER) info.addAction(if (sideways) AccessibilityAction.ACTION_SCROLL_LEFT else AccessibilityAction.ACTION_SCROLL_UP)
+                if (!n.has(RANGE)) info.addAction(if (sideways) AccessibilityAction.ACTION_SCROLL_LEFT else AccessibilityAction.ACTION_SCROLL_UP)
             }
-            if (n.role == SLIDER) info.addAction(AccessibilityAction.ACTION_SET_PROGRESS)
+            if (n.has(SETTABLE)) info.addAction(AccessibilityAction.ACTION_SET_PROGRESS)
         }
         under(info, n.children)
         return info
@@ -413,6 +428,8 @@ internal class Access(private val host: View) {
         said?.let { native.put("role", it) }
         if (info.isHeading) native.put("heading", true)
         info.rangeInfo?.let { native.put("range", org.json.JSONArray(listOf(it.min, it.max, it.current))) }
+        info.collectionInfo?.let { native.put("collection", org.json.JSONArray(listOf(it.rowCount, it.columnCount))) }
+        info.collectionItemInfo?.let { native.put("item", org.json.JSONArray(listOf(it.rowIndex, it.rowSpan, it.columnIndex, it.columnSpan))) }
         if (info.liveRegion != View.ACCESSIBILITY_LIVE_REGION_NONE) native.put("live", if (info.liveRegion == View.ACCESSIBILITY_LIVE_REGION_ASSERTIVE) "assertive" else "polite")
         native.put("actions", org.json.JSONArray(info.actionList.mapNotNull { a ->
             when (a.id) {
@@ -537,6 +554,15 @@ internal class Access(private val host: View) {
         const val DROPDOWN = 16
         const val TOGGLE = 17
         const val UP = 18
+        const val TABLE = 19
+        const val ROW = 20
+        const val CELL = 21
+        const val COLUMN_HEADER = 22
+        const val ROW_HEADER = 23
+        const val CAPTION = 24
+        const val DESCRIPTION_LIST = 25
+        const val TERM = 26
+        const val DEFINITION = 27
         const val LIST_BOX = 28
         const val OPTION = 29
 
@@ -555,6 +581,7 @@ internal class Access(private val host: View) {
         const val POLITE = 1 shl 11
         const val ASSERTIVE = 1 shl 12
         const val RANGE = 1 shl 13
+        const val SETTABLE = 1 shl 14
 
         /** What changed of a node (`presenter::access::change`). */
         private const val SUBTREE = 1
@@ -605,6 +632,12 @@ internal class Access(private val host: View) {
  * accessibility services for all of them ([Access]) while one is on. With none on it is a plain frame.
  */
 internal class Root(context: Context) : FrameLayout(context) {
+    init {
+        // The presenter supplies physical coordinates. An explicit direction survives locale changes;
+        // hosted EditTexts take their own computed direction from Fields.
+        layoutDirection = LAYOUT_DIRECTION_LTR
+    }
+
     val access = Access(this)
     /** Whether an accessibility service is on ([ExactActivity]). */
     var accessible = false

@@ -207,6 +207,10 @@ pub(crate) struct Collection {
     /// A page landed before the first row: the start re-arms at the first
     /// report whose window is measured ([`Collection::page_before_start`]).
     start_owed: bool,
+    /// `reachstart` fired, and neither a change to the rows nor the start
+    /// re-arming has come since: rows put after a leading run at the top
+    /// are its page ([`Collection::end_list_anchor`]).
+    start_asked: bool,
     /// The last realization left window rows unbuilt or kept rows past it.
     pending: bool,
     /// The outer list whose row holds this one (LLP 1070 N1).
@@ -255,6 +259,9 @@ pub(crate) struct Collection {
     keep: Vec<Rc<str>>,
     /// `scroll-start: end`, until the list has opened there.
     at_end: bool,
+    /// `scroll-start: end`, for good: rows put before its window keep its
+    /// last visible row (@ref LLP 1168.000 D1.2).
+    opens_at_end: bool,
     /// Consecutive reports that said the port was travelling, while it opens.
     end_travel: u8,
     /// The followed end last sent as a correction (`start::at_target`).
@@ -379,6 +386,7 @@ impl Collection {
         }
         self.instant = instant;
         let anchor = if changed { self.anchor()? } else { None };
+        let bottom = if changed { self.bottom_anchor()? } else { None };
         let drop_anchor = if changed {
             self.drop_anchor(u.env.now_ms)?
         } else {
@@ -387,6 +395,10 @@ impl Collection {
         // Items that changed in place: the same keys in the same order, and
         // no input of the rows' bodies or keys changed (a live tick's prices).
         let mut in_place: Option<Vec<usize>> = None;
+        // A key put in, taken out or moved, or a row whose value is not
+        // equal: what ends a `reachstart` asked. An answer's other fields, a
+        // row body's or a key's inputs, and equal rows do not.
+        let mut rows_answered = false;
         let (order, last, count) = (self.index.order(), self.last_key(), self.index.len());
         if data_changed {
             let descriptor = u.env.plan.region(self.region);
@@ -442,6 +454,11 @@ impl Collection {
                         .collect(),
                 );
             }
+            // Asked only while a `reachstart` is unanswered: a pass over the
+            // keys' identities and the rows, told apart as the JS target's
+            // `eq` tells them (signed zero apart, NaN itself).
+            rows_answered = self.start_asked
+                && reach::rows_answered(&order, &self.index.order(), &self.items, &items);
             self.items = items;
             self.forget_departed();
         }
@@ -472,6 +489,15 @@ impl Collection {
             }
             if self.edge_handlers[0] && self.page_before_start(&order) {
                 self.start_owed = true;
+            }
+            let anchor = self.end_list_anchor(&order, anchor, bottom);
+            // An answer that changes the rows ends what `reachstart` asked:
+            // a page, a replacement or any other change to them. An empty
+            // or identical answer changes none, nor does one that changes
+            // only its other fields, and the start re-arming ends it then
+            // ([`Collection::geometric_edges`]).
+            if rows_answered {
+                self.start_asked = false;
             }
             let anchor = self.committed_anchor(anchor, drop_anchor);
             self.cancel_if_row_left();
@@ -950,7 +976,7 @@ impl Collection {
         frames: &[Frame],
     ) -> Result<Row, InstanceError> {
         let plan = u.env.plan;
-        let slots: RowSlots = Rc::new(RefCell::new(BTreeMap::new()));
+        let slots: RowSlots = crate::vm::Owned::shared();
         let frame = Frame {
             item: Some(self.items[position].clone()),
             index: Some(position),
@@ -985,7 +1011,7 @@ impl Collection {
                         plan.str(s.name),
                     ));
                 }
-                slots.borrow_mut().insert(i as u32, value);
+                slots.borrow_mut().slots.insert(i as u32, value);
             }
         }
         let around = std::mem::replace(&mut u.theme, self.around.clone());

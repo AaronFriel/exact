@@ -240,6 +240,13 @@ macro_rules! host {
             $crate::abi::with_entry(&EXACT_RUNTIMES, rt, |e| e.bridge.app_changed(&topic));
         }
 
+        /// Another session of the app announced a topic (LLP 1030.004 D2).
+        #[no_mangle]
+        pub extern "C" fn exact_peer_changed(rt: u32, topic: *const u8, len: usize) {
+            let topic = $crate::app_module::text(topic, len);
+            $crate::abi::with_entry(&EXACT_RUNTIMES, rt, |e| e.bridge.peer_changed(&topic));
+        }
+
         /// The plan-font hook, called synchronously by each boot on this
         /// runtime before its first text measurement, with `ctx`.
         #[no_mangle]
@@ -366,10 +373,22 @@ macro_rules! host {
             $crate::abi::with_runtime(&EXACT_RUNTIMES, rt, false, |b, _| b.build_tabs(len, now_ms), |n| n)
         }
 
+        /// Make a UTF-8 location the window's only visit, a batch. @ref LLP 1030.004 D2
+        #[no_mangle]
+        pub extern "C" fn exact_host_root(rt: u32, len: usize, now_ms: f64) -> u32 {
+            $crate::abi::with_runtime(&EXACT_RUNTIMES, rt, false, |b, _| b.host_root(len, now_ms), |n| n)
+        }
+
         /// Follow a UTF-8 location with the runner's own go.
         #[no_mangle]
         pub extern "C" fn exact_host_go(rt: u32, len: usize, now_ms: f64) -> u32 {
             $crate::abi::with_runtime(&EXACT_RUNTIMES, rt, false, |b, _| b.host_go(len, now_ms), |n| n)
+        }
+
+        /// A route's entrance or exit, posed for its box, JSON. @ref LLP 1013.001 D1
+        #[no_mangle]
+        pub extern "C" fn exact_route_part(rt: u32, view: u32, exit: u32, width: f64, height: f64) -> u32 {
+            $crate::abi::with_runtime(&EXACT_RUNTIMES, rt, false, |b, _| b.route_part(view, exit, width, height), |n| n)
         }
 
         /// Deliver native Forward at the navigation root, a batch.
@@ -597,7 +616,7 @@ macro_rules! host {
                 // SAFETY: the caller keeps four doubles per id live for this call.
                 unsafe { std::slice::from_raw_parts(clips, count as usize * 4) }
             };
-            let frames: Vec<_> = ids.iter().zip(rects.chunks_exact(4)).enumerate()
+            let frames: Vec<_> = ids.iter().zip(rects.as_chunks::<4>().0).enumerate()
                 .map(|(i, (&id, r))| {
                     let clip = clips.get(i * 4..i * 4 + 4).filter(|c| !c[0].is_nan())
                         .map(|c| [c[0], c[1], c[2], c[3]]);
@@ -631,6 +650,11 @@ macro_rules! host {
             owner: *mut ::std::ffi::c_void, release: $crate::content_region::RegionRelease) -> u32 {
             let retained = ::std::rc::Rc::new($crate::content_region::NativeRegionOwner::new(owner, release));
             $crate::abi::with_runtime(&EXACT_RUNTIMES, rt, false, |b, _| b.region_complete(id, metrics, retained), |n| n)
+        }
+        /// Return only a current worker request to native layout.
+        #[no_mangle]
+        pub extern "C" fn exact_region_fallback(rt: u32, id: u64) -> u32 {
+            $crate::abi::with_runtime(&EXACT_RUNTIMES, rt, false, |b, _| b.region_fallback(id), |n| n)
         }
 
         /// Process one frozen paired transform packet from exact_in.
@@ -780,6 +804,12 @@ macro_rules! host {
             $crate::abi::with_runtime(&EXACT_RUNTIMES, rt, false, |b, _| { b.set_row_reuse(on != 0); 0 }, |n| n)
         }
 
+        /// Nonzero: subsequent boots omit layout-only boxes inside quiet collection rows (LLP 1171 D4).
+        #[no_mangle]
+        pub extern "C" fn exact_flat_nodes(rt: u32, on: u32) -> u32 {
+            $crate::abi::with_runtime(&EXACT_RUNTIMES, rt, false, |b, _| { b.set_flat_nodes(on != 0); 0 }, |n| n)
+        }
+
         /// Deliver one native timer instance without draining other native timers.
         #[no_mangle]
         pub extern "C" fn exact_fire_native_timer(rt: u32, index: u32, generation: u64, now: f64) -> u32 {
@@ -862,6 +892,24 @@ macro_rules! host {
         #[no_mangle]
         pub extern "C" fn exact_set_launch_time(rt: u32, epoch_at_zero: f64, utc_offset: f64) -> u32 {
             $crate::abi::with_runtime(&EXACT_RUNTIMES, rt, false, |b, _| { b.set_launch_time(epoch_at_zero, utc_offset); 0 }, |n| n)
+        }
+
+        /// The window's name (UTF-8 input) and whether it launches rooted, for the next boot. @ref LLP 1030.004 D2
+        #[no_mangle]
+        pub extern "C" fn exact_set_launch_window(rt: u32, len: usize, rooted: u32) -> u32 {
+            $crate::abi::with_runtime(&EXACT_RUNTIMES, rt, false, |b, _| { b.set_launch_window(len, rooted != 0); 0 }, |n| n)
+        }
+
+        /// The platform's layout direction for every boot from here: 0 ltr, 1 rtl, else the strings table's.
+        #[no_mangle]
+        pub extern "C" fn exact_set_launch_direction(rt: u32, direction: u32) -> u32 {
+            $crate::abi::with_runtime(&EXACT_RUNTIMES, rt, false, |b, _| { b.set_launch_direction(direction); 0 }, |n| n)
+        }
+
+        /// Whether unsaid text takes each paragraph's base from its first strong character, for every boot from here. @ref LLP 1060.000 D3
+        #[no_mangle]
+        pub extern "C" fn exact_set_natural_text(rt: u32, on: u32) -> u32 {
+            $crate::abi::with_runtime(&EXACT_RUNTIMES, rt, false, |b, _| { b.set_launch_natural_text(on != 0); 0 }, |n| n)
         }
 
         /// Where the viewer is (`locale NUL timeZone NUL seed` input) for the next boot or candidate, before it.
@@ -976,8 +1024,8 @@ macro_rules! host {
         /// The binding core (LLP 1121 D12): `{"view", "names"}` in the input
         /// buffer, `{"inputs", "colors"}` UTF-8 in the output buffer.
         #[no_mangle]
-        pub extern "C" fn exact_tamber(rt: u32, len: usize) -> u32 {
-            $crate::abi::with_runtime(&EXACT_RUNTIMES, rt, false, |b, _| b.tamber(len), |n| n)
+        pub extern "C" fn exact_forma(rt: u32, len: usize) -> u32 {
+            $crate::abi::with_runtime(&EXACT_RUNTIMES, rt, false, |b, _| b.forma(len), |n| n)
         }
 
         /// The design digest the running app runs, UTF-8; empty before boot.

@@ -102,8 +102,7 @@ impl World {
                 let mut w = hash::Hasher::default();
                 let mut rows = Vec::new();
                 let end = ((p + 1) * PAGE).min(len);
-                for i in p * PAGE..end {
-                    let slot = &self.state.slots[i];
+                for (i, slot) in (p * PAGE..).zip(&self.state.slots[p * PAGE..end]) {
                     slot.write(&mut w);
                     if slot.alive && !ambient(i) {
                         rows.push((i as u32, slot.generation, 0));

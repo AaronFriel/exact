@@ -22,6 +22,8 @@ pub(super) fn focus_fragments(
                         color: [255; 4],
                         radii: [const { exact_kernel::Dimension::Points(2.0) }; 4],
                         reach: exact_kernel::InlineEdges::default(),
+                        above: 0.0,
+                        below: 0.0,
                         outer: Vec::new(),
                     });
                 }
@@ -116,18 +118,23 @@ fn collect_backgrounds(
                 )
             })
             .filter(|c| c[3] != 0)
-            .map(|color| InlineBackground {
-                color,
-                id: n.id,
-                radii: [
-                    n.style.border_radius_top_left.clone(),
-                    n.style.border_radius_top_right.clone(),
-                    n.style.border_radius_bottom_right.clone(),
-                    n.style.border_radius_bottom_left.clone(),
-                ]
-                .map(|d| d.resolve(&kernel.env_of(n.id))),
-                reach: n.inline_background_reach(),
-                outer: Vec::new(),
+            .map(|color| {
+                let (above, below) = n.inline_background_block_reach();
+                InlineBackground {
+                    color,
+                    id: n.id,
+                    radii: [
+                        n.style.border_radius_top_left.clone(),
+                        n.style.border_radius_top_right.clone(),
+                        n.style.border_radius_bottom_right.clone(),
+                        n.style.border_radius_bottom_left.clone(),
+                    ]
+                    .map(|d| d.resolve(&kernel.env_of(n.id))),
+                    reach: n.inline_background_reach(),
+                    above,
+                    below,
+                    outer: Vec::new(),
+                }
             })
     };
     if node.props.str(PropId::Text).is_some() {

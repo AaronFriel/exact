@@ -467,7 +467,7 @@ impl Batch {
                 s.push(',');
             }
             let (x, y) = (Shortest(*x), Shortest(*y));
-            if pair && (*px != 0.0 || *py != 0.0) {
+            if property == "rotate" || pair && (*px != 0.0 || *py != 0.0) {
                 push_text!(&mut s, "[{},{},{},{}]", x, y, Shortest(*px), Shortest(*py));
             } else if pair {
                 push_text!(&mut s, "[{},{}]", x, y);
@@ -568,8 +568,9 @@ impl Batch {
         ));
     }
 
-    /// `{"op":"canvasCapture","ticket","id","lifetime","generation","w","h","scale","path","scope"}`:
-    /// the page writes the canvas's bitmap as a PNG (`exact_runner::canvas_capture`).
+    /// `{"op":"canvasCapture","ticket","id","lifetime","generation","w","h","scale","path","scope","type","quality"?}`:
+    /// the page writes the canvas's bitmap as `toBlob` encodes `type` and
+    /// `quality` (`exact_runner::canvas_capture`).
     pub fn canvas_capture(
         &mut self,
         ticket: u64,
@@ -592,6 +593,11 @@ impl Batch {
         match scope {
             Some(scope) => quote(scope, &mut s),
             None => s.push_str("null"),
+        }
+        s.push_str(",\"type\":");
+        quote(&c.encoding.media_type, &mut s);
+        if let Some(q) = c.encoding.quality {
+            s.push_str(&text!(",\"quality\":{}", Shortest(q)));
         }
         s.push('}');
         self.ops.push(s);

@@ -88,7 +88,7 @@ export function gs(e, name, values) {
  * capability); `types` are the arguments' declared types where known. */
 let Canvas2d = null;
 const CanvasMounts = new Set();
-export const canvasCommitted = (surface, active = () => true) => committedCanvas(surface, active, Finishes, () => Canvas2d, CanvasMounts);
+export const canvasCommitted = (surface, active = () => true, encoding = {}) => committedCanvas(surface, active, Finishes, () => Canvas2d, CanvasMounts, encoding);
 Link.canvasCommitted = canvasCommitted;
 export function c2(e, name, values, types, names) {
   const c = { e, name, types, names, mounted: clock.now, args: null };
@@ -198,8 +198,10 @@ export function exitView(el, root) {
   return exiting(el);
 }
 const Created = [];
+/** Load the presence piece after first paint, for `e` (a view that declares a row it reads), or for none: a plan with
+ * a route's own entrance or exit asks at boot (LLP 1013.001). */
 export function pr(e) {
-  Created.push(e);
+  if (e) Created.push(e);
   if (Presence || typeof requestAnimationFrame !== 'function' || globalThis.__exactRender) return;
   inflight.n++;
   Presence = new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))

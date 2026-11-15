@@ -431,8 +431,15 @@ impl Engine {
         let pend = (self.start_on_frame && !fling).then_some(at);
         let mut running = declaration.map(|declaration| {
             let start = if pend.is_some() { at } else { now_s };
-            let mut curve =
-                Running::start(declaration, from, slot.target, velocity, start, from, 1.0);
+            let mut curve = Running::start(
+                declaration,
+                token.property,
+                (from, slot.target),
+                velocity,
+                start,
+                from,
+                1.0,
+            );
             curve.pending = pend;
             curve
         });

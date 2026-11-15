@@ -20,6 +20,8 @@ mod find;
 mod foresee;
 mod keys;
 pub mod looks;
+mod owners;
+pub use owners::OwnerInst;
 mod rare;
 mod region;
 pub mod tabs;
@@ -402,6 +404,12 @@ pub struct Update<'a> {
     pub full: bool,
     /// Rows an action wrote since the last update.
     pub rows: RowWrites,
+    /// Resources a child declares whose request in some instance shows
+    /// something new since the last update (LLP 1035.005.004 D2).
+    pub owned: Vec<usize>,
+    /// Mutations a child declares whose `pending` or failure in some
+    /// instance changed since the last update (D6).
+    pub owned_sends: Vec<usize>,
     /// Inputs changed since the tree last updated; `None` outside
     /// [`Tree::update`], where everything is stale.
     changed: Option<Bits>,
@@ -474,6 +482,8 @@ impl<'a> Update<'a> {
             work: InstanceWork::default(),
             full: false,
             rows: RowWrites::default(),
+            owned: Vec::new(),
+            owned_sends: Vec::new(),
             changed: None,
             dirty_frames: 0,
             dirty_fields: 0,
@@ -1041,6 +1051,21 @@ impl NodeInst {
                                 ));
                             }
                         }
+                        // So do a route's entrance and exit (LLP 1013.001 D1).
+                        Ok(
+                            row @ (exact_kernel::StyleId::ViewTransitionNew
+                            | exact_kernel::StyleId::ViewTransitionOld),
+                        ) => {
+                            if let Some(resolve) = u.sites.resolve_keyframes {
+                                let list = match row {
+                                    exact_kernel::StyleId::ViewTransitionNew => {
+                                        &mut p.rare.view_transition_new
+                                    }
+                                    _ => &mut p.rare.view_transition_old,
+                                };
+                                u.notes.extend(resolve(&u.sites.keyframes, list));
+                            }
+                        }
                         Ok(_) => {}
                         Err(
                             bridge::BridgeError::Style(_) | bridge::BridgeError::StyleKind { .. },
@@ -1252,7 +1277,14 @@ impl Tree {
     pub fn update(&mut self, u: &mut Update<'_>) -> Result<(), InstanceError> {
         // New views cannot change the typography of already measured rows.
         let last_existing_view = u.ids.next;
-        u.changed = Some(u.sites.data.deps.changed(&self.seen, &u.env));
+        let mut changed = u.sites.data.deps.changed(&self.seen, &u.env);
+        for &i in &u.owned {
+            u.sites.data.deps.mark_resource(&mut changed, i);
+        }
+        for &i in &u.owned_sends {
+            u.sites.data.deps.mark_mutation(&mut changed, i);
+        }
+        u.changed = Some(changed);
         let roots = update_all(u, &mut self.children, &[]);
         u.changed = None;
         if roots? {

@@ -39,6 +39,9 @@ public final class ExactView: UIView {
     private var canvas: UIColor?
     private var lastSize = CGSize.zero
     private var lastInsets = UIEdgeInsets.zero
+    /// The insets told before the boot in flight (`ExactSession.primeView`):
+    /// what its runner laid out with.
+    private var primedInsets: UIEdgeInsets?
     /// The layout regions last told (LLP 1123 D10); `nil` until a booted
     /// runner has them.
     private var lastRegions: [CGFloat]?
@@ -175,8 +178,15 @@ public final class ExactView: UIView {
 
     /// Paint motion resolves `light-dark()` by this view's appearance (LLP 1062).
     /// A system appearance change reaches the view as a trait change too:
-    /// `prefers-color-scheme` is told again (LLP 1069.000 D1).
-    private func reportScheme() { fitAheadOfLayout(); session.scheme(dark: traitCollection.userInterfaceStyle == .dark); session.tellPreferences(); session.natives.scopesChanged() }
+    /// `prefers-color-scheme` is told again (LLP 1069.000 D1), and the bars'
+    /// drawn items are drawn again in it.
+    private func reportScheme() {
+        fitAheadOfLayout()
+        session.scheme(dark: traitCollection.userInterfaceStyle == .dark)
+        session.tellPreferences()
+        session.natives.scopesChanged()
+        session.presenter.navigation.appearanceChanged()
+    }
     /// An app or window tint changed: `AccentColor` is reported again (LLP 1095 D9).
     public override func tintColorDidChange() { super.tintColorDidChange(); fitAheadOfLayout(); session.reportColors() }
 
@@ -535,6 +545,10 @@ public final class ExactView: UIView {
             lastInsets = insets
             presenter.insets = insets
             lastFold = segments
+            // The boot lays out with these, a refused plan's fallback with
+            // what its own fit primes again.
+            session.primeView(insets: (insets.top, insets.right, insets.bottom, insets.left), displayScale: PageFacts.displayScale(self))
+            primedInsets = insets
             guard boot else { return }
             session.boot(size: size, fallbackSize: {
                 // Refusal can change the root policy before the bake settles.
@@ -655,7 +669,9 @@ public final class ExactView: UIView {
     func rebooted() {
         // A new runner has no screen: tell it again first (Grok's review).
         if let screen = lastScreen { session.view(Runtime.ViewChange(screen: .some(screen))) }
-        if lastInsets != .zero { session.insets(top: lastInsets.top, right: lastInsets.right, bottom: lastInsets.bottom, left: lastInsets.left) }
+        // A new runner holds the insets told before its boot, or none.
+        if lastInsets != (primedInsets ?? .zero) { session.insets(top: lastInsets.top, right: lastInsets.right, bottom: lastInsets.bottom, left: lastInsets.left) }
+        primedInsets = nil
         lastRegions = nil  // the next fit tells the new runner
         lastKeyboard = 0  // as the new runner holds
         session.segments(lastFold)

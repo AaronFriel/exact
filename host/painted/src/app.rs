@@ -140,6 +140,8 @@ pub struct Config {
     pub entry: Option<String>,
     /// The selected generation's complete, lazily verified asset roster.
     pub selected_assets: Option<AssetResolver>,
+    /// The selected generation's verified asset directory.
+    pub selected_dir: Option<std::path::PathBuf>,
     /// Explicit development logic paired with the selected plan.
     pub module: Result<Option<crate::delivery::Module>, String>,
     /// The update store, opened before the boot it selects (`run`); the
@@ -353,6 +355,7 @@ impl Config {
             explicit,
             entry: None,
             selected_assets: None,
+            selected_dir: None,
             module: exact_plan
                 .as_deref()
                 .or(exact_dev_plan.as_deref())
@@ -377,7 +380,13 @@ impl Config {
                 self.plan = prepared.plan.to_vec().into();
                 self.fallback_plan = Some(baked.to_vec());
                 self.entry = prepared.entry;
+                self.module = crate::delivery::Module::resolve(
+                    &prepared.assets,
+                    &prepared.names,
+                    &self.compat,
+                );
                 self.selected_assets = Some(prepared.assets);
+                self.selected_dir = prepared.dir;
             }
         }
         self.updates = Some(updates);
@@ -575,18 +584,24 @@ pub(crate) fn boot_presenter_with_painter<D: DataSource + Default>(
         booted.0.said_at_boot(dev_said.clone());
         booted
     };
+    let module = config.module.clone();
+    // A selection that needs what the binary does not link is refused
+    // before its boot is counted (LLP 1030.006 D4a).
+    let linked = match (&config.entry, &module) {
+        (Some(_), Ok(module)) => {
+            crate::delivery::within_linked(&config.plan, module.as_ref(), &compat)
+                .map_err(crate::host::HostError::Unlinked)
+        }
+        _ => Ok(()),
+    };
     // The selected bytes passed verification. Record the attempt before
     // app construction or the painter can crash; a returned integrity
     // refusal below durably discards the selection and clears its count.
-    if !config.explicit && config.entry.is_some() {
+    if !config.explicit && config.entry.is_some() && linked.is_ok() {
         if let Some(updates) = updates.as_mut() {
             updates.boot_started();
         }
     }
-    let module = match &config.selected_assets {
-        Some(assets) => crate::delivery::Module::resolve(assets),
-        None => config.module.clone(),
-    };
     let admitted = crate::traced(c"boot data construction", D::default);
     let source = module
         .as_ref()
@@ -595,8 +610,8 @@ pub(crate) fn boot_presenter_with_painter<D: DataSource + Default>(
             Some(module) => module.replacement(&config.plan, &admitted),
             None => Ok(admitted),
         });
-    let booted = source
-        .map_err(crate::host::HostError::Asset)
+    let booted = linked
+        .and_then(|()| source.map_err(crate::host::HostError::Asset))
         .and_then(|data| {
             let launch = exact_runner::time::Launch {
                 clock: clock(),
@@ -654,6 +669,7 @@ pub(crate) fn boot_presenter_with_painter<D: DataSource + Default>(
             }
             config.entry = None;
             config.selected_assets = None;
+            config.selected_dir = None;
             let launch = exact_runner::time::Launch {
                 clock: clock(),
                 ..launch_facts
@@ -731,6 +747,8 @@ fn development_variable(name: &str) -> bool {
             | "EXACT_SMOKE"
             | "EXACT_SHOT"
             | "EXACT_DISPLAY"
+            | "EXACT_UPDATE_ORIGIN"
+            | "EXACT_UPDATE_DIR"
     ) || name.starts_with("EXACT_AGENT_")
 }
 
@@ -940,6 +958,8 @@ mod scale_tests {
                 .env("EXACT_VNC", "1")
                 .env("EXACT_AGENT", "1")
                 .env("EXACT_AGENT_SHARE", "untrusted")
+                .env("EXACT_UPDATE_ORIGIN", "https://127.0.0.1/must-not-check")
+                .env("EXACT_UPDATE_DIR", "/must-not-open")
                 .output()
                 .unwrap();
             assert!(
@@ -958,6 +978,8 @@ mod scale_tests {
             "EXACT_VNC",
             "EXACT_AGENT",
             "EXACT_AGENT_SHARE",
+            "EXACT_UPDATE_ORIGIN",
+            "EXACT_UPDATE_DIR",
         ] {
             assert!(std::env::var_os(name).is_none(), "{name}");
         }

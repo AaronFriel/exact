@@ -183,9 +183,31 @@ impl Painter {
         self.invalidate_rows(kernel, dirty);
     }
 
-    fn invalidate_rows(&mut self, kernel: &Kernel, dirty: Dirty) {
+    fn invalidate_rows(&mut self, kernel: &Kernel, mut dirty: Dirty) {
         if self.rows.kept.is_empty() {
             return;
+        }
+        // A source can animate outside the row holding its SVG instance.
+        let changed: IdSet<_> = dirty
+            .hard
+            .iter()
+            .filter_map(|k| kernel.node_by_key(*k))
+            .filter(|n| n.node_type.is_svg_element())
+            .map(|n| n.id)
+            .collect();
+        if !changed.is_empty() {
+            let arena = kernel.arena();
+            for slot in arena
+                .iter_live()
+                .filter(|s| arena.node_type(*s) == NodeType::Svg)
+            {
+                if exact_kernel::svg::scene_sources(kernel, arena.local_id(slot))
+                    .iter()
+                    .any(|id| changed.contains(id))
+                {
+                    dirty.hard.push(arena.key(slot));
+                }
+            }
         }
         // Each node climbed, with the row it is in (or none): a row's nodes,
         // and those outside rows, climb their shared ancestors once.
@@ -595,7 +617,8 @@ impl Painter {
             counters::add(Counter::RowsReplayed, 1);
             let d = (origin.0 - row.origin.0, origin.1 - row.origin.1);
             for b in &row.boxes {
-                let mut b = *b;
+                let mut b = b.clone();
+                b.translate_clips(d.0, d.1);
                 b.rect.0 += d.0;
                 b.rect.1 += d.1;
                 b.clip = within(b.clip.map(|c| (c.0 + d.0, c.1 + d.1, c.2, c.3)), clip_rect);
@@ -677,6 +700,7 @@ impl Painter {
         let mut capture = self.rows.recording.take().expect("recording");
         if local {
             for b in &mut walk.boxes[start..] {
+                b.translate_clips(origin.0, origin.1);
                 b.rect.0 += origin.0;
                 b.rect.1 += origin.1;
                 b.clip = b.clip.map(|c| (c.0 + origin.0, c.1 + origin.1, c.2, c.3));

@@ -212,7 +212,7 @@ extension NodeView {
     func activateLink(_ url: String, bubbled: Bool = false) -> Bool {
         if pressReaderAtom(url) { return true }
         guard let session = presenter?.session, !disabled, !(bubbled ? authoredInert : inert) else { return false }
-        if url.hasPrefix("/") && !url.hasPrefix("//") { return session.navigate(url) }
+        if url.hasPrefix("/") && !url.hasPrefix("//") { return session.navigate(url, target: props["target"]) }
         session.delegate?.exactSession(session, command: "openURL", args: [url]); return true
     }
     /// Whether `activateInline` acts on run `id`: it is enabled and has a
@@ -239,6 +239,6 @@ extension NodeView {
         // A route in the note navigates; anything else is the app's to open
         // (session.follow). A button's own `href` uses `activateLink`.
         guard let url = run.props["href"], let session = presenter.session else { return false }
-        return session.follow(url)
+        return session.follow(url, target: run.props["target"])
     }
 }

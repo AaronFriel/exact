@@ -5,6 +5,8 @@
 #![deny(missing_docs)]
 
 mod android;
+mod mixed;
+pub use mixed::{build_beside, build_mixed, build_mixed_with};
 mod beside;
 pub mod cli;
 mod icon;
@@ -101,37 +103,6 @@ pub const APP_BYTECODE: &[u8] = {
 };
 "#;
 
-/// Bake a mixed app using each source's own identity and grants. Metadata reads
-/// never invoke or activate the Rust implementation; first-frame values bake
-/// through TypeScript alone.
-pub fn build_mixed(app: &Path, platform: &str, rust: &dyn DataSource) -> Result<(), BakeError> {
-    library::link(app, platform, false).map_err(BakeError)?;
-    icon::link();
-    build_sources(app, platform, Some(rust), None, false).map_err(BakeError)
-}
-
-/// Bake a mixed app through its own composer (LLP 1027.002 §5 step 0): the
-/// bake's TypeScript module is composed with the app's Rust source by
-/// `compose`, so a resource only Rust owns bakes its first-frame value
-/// through Rust, with no TypeScript placeholder. `rust_sources` names what
-/// Rust owns, for the TypeScript provider types and the receipt the
-/// development producer seeds from.
-pub fn build_mixed_with(
-    app: &Path,
-    platform: &str,
-    rust: &dyn DataSource,
-    rust_sources: &[&str],
-    compose: impl Fn(Module) -> Box<dyn DataSource>,
-) -> Result<(), BakeError> {
-    library::link(app, platform, false).map_err(BakeError)?;
-    icon::link();
-    let composer = Composer {
-        rust_sources: rust_sources.iter().map(|s| s.to_string()).collect(),
-        compose: Box::new(compose),
-    };
-    build_sources(app, platform, Some(rust), Some(composer), false).map_err(BakeError)
-}
-
 /// How a Cargo bake composes the TypeScript module with the app's Rust.
 struct Composer<'a> {
     rust_sources: Vec<String>,
@@ -148,7 +119,10 @@ fn mixed_grants<'a>(
     rust: Option<&'a dyn DataSource>,
 ) -> Result<Option<&'a str>, String> {
     rust.map(|source| {
-        if javascript["appId"].as_str() != Some(source.app_id()) {
+        // An unnamed source takes the module's identity where it is composed
+        // (`exact_data::Placed::named`, LLP 1153.003 D2).
+        let named = source.app_id();
+        if !named.is_empty() && javascript["appId"].as_str() != Some(named) {
             return Err("mixed bake sources must declare the same app identity".into());
         }
         Ok(source.grants())
@@ -187,17 +161,9 @@ fn with_module_identity(compat: &str, meta: &serde_json::Value) -> Result<String
 /// source by the identity the link carries, as `module.rs` reads `APP`, so
 /// the archive compiles the same for apps that differ only in identity.
 fn embedded_entry(mode: &str, inputs: &serde_json::Value, linked: bool) -> Result<String, String> {
-    if linked {
-        contract::rust_entry_naming(
-            "ExactEmbeddedData",
-            "embedded_data()",
-            mode,
-            inputs,
-            Some(linked::LINKED_APP),
-        )
-    } else {
-        contract::rust_entry("ExactEmbeddedData", "embedded_data()", mode, inputs)
-    }
+    // A mixed app's composer places its own children (`.placed(..)`): the entry never wraps it again.
+    let app = linked.then_some(linked::LINKED_APP);
+    contract::rust_entry_composed("ExactEmbeddedData", "embedded_data()", mode, inputs, app)
 }
 
 /// `module.rs`'s first constants: the app, its grants and, but in a linked
@@ -315,7 +281,6 @@ fn build_sources(
     }
     let manifest = contract::Manifest::read(app)?;
     let target = std::env::var("TARGET").map_err(|e| e.to_string())?;
-    let module = exact_bake::stored_module(&meta, &manifest, platform)?;
     let compat = exact_bake::compatibility_id_pinned(
         app,
         platform,
@@ -324,7 +289,8 @@ fn build_sources(
         meta["grants"].as_str(),
         mixed_grants(&meta, rust)?,
         Some(&baked.entries),
-        module,
+        Some(&meta),
+        &meta["env"],
     )?;
     // A TypeScript app's update carries its module pair (`typescript/`); a
     // mixed app's two modules travel as one generation, which no host takes yet.
@@ -396,6 +362,21 @@ fn build_sources(
         };
         metadata.push_str(&format!(
             "pub const {name}: {placement_type} = {placement_type}::{variant};\n"
+        ));
+    }
+    // Beside a Rust source, the sources the TypeScript module answers: what a generated host's composition gives it
+    // (`exact_data::Mixed::new`, LLP 1153.003 D2).
+    if rust.is_some() {
+        let plan = exact_plan::Plan::decode(&baked.plan).map_err(|e| format!("{e:?}"))?;
+        let rust_sources: Vec<String> = meta["rustSources"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|name| name.as_str().map(str::to_owned))
+            .collect();
+        metadata.push_str(&format!(
+            "#[allow(dead_code)]\npub const TYPESCRIPT_SOURCES: &[&str] = &{:?};\n",
+            contract::typescript_sources(&plan, &rust_sources)
         ));
     }
     replace_changed(&out.join("module.rs"), metadata.as_bytes())?;
@@ -1279,6 +1260,7 @@ fn bake_in(
             .map_or_else(|| e.to_string(), |map| map.bake_error(&e).to_string())
     })?;
     warnings.extend(deferred_warnings);
+    let android_permissions = android::module_permissions(&plan, &grants, &app);
     let plan = plan.encode();
     let source_map = source_map.map(|map| map.json(&plan));
     let packages = package_code(stage)?.packages;
@@ -1289,7 +1271,7 @@ fn bake_in(
         "typescriptRuntime": exact_bake::compat::typescript_runtime_of(&script, &grants),
         "surfaces": surfaces,
         "rustSources": rust_sources,
-        "bytecodeVersion": exact_js::BYTECODE_VERSION,
+        "bytecodeVersion": exact_js::BYTECODE_VERSION, "androidPermissions": android_permissions,
         "plan": {"file": "app.plan", "sha256": digest(&plan), "bytes": plan.len()},
         "module": {"file": "app.hbc", "sha256": digest(&bytecode), "bytes": bytecode.len()},
         "web": {"file": "app.js", "sha256": digest(&script), "bytes": script.len()},

@@ -223,11 +223,11 @@ internal class Owner(private val hwbuf: Boolean, private val fast: Boolean, prio
     /** Boot at the size the view is expected to have; [done] on the main thread with whether it booted. An activity
      * made again in this process (LLP 1115.001 D15.1) calls this for its own view: [Native.start] then adopts the host
      * that runs on this thread, which paints everything again for the new reader, and starts no second one. */
-    fun boot(width: Int, height: Int, scale: Float, dir: String, live: Boolean, done: (Boolean) -> Unit) {
+    fun boot(width: Int, height: Int, scale: Float, dir: String, store: String, live: Boolean, done: (Boolean) -> Unit) {
         handler.post {
             android.os.Trace.beginSection("exact boot")
             try { Native.hardwarePictures(hwbuf) } catch (e: UnsatisfiedLinkError) { }
-            val ok = Native.start(width, height, scale, dir, live)
+            val ok = Native.start(width, height, scale, dir, store, live)
             android.os.Trace.endSection()
             if (ok) {
                 // What was published or scrolled for the reader before this one is not this one's.
@@ -448,7 +448,7 @@ internal class Owner(private val hwbuf: Boolean, private val fast: Boolean, prio
     }
 
     /** Run [f] on the exact thread and wait for it, publishing nothing: a question that changes nothing
-     * ([ExactTamber]). */
+     * ([ExactForma]). */
     fun <T> ask(f: () -> T): T {
         if (Looper.myLooper() == thread.looper) return f()
         val task = FutureTask<T> { f() }
@@ -474,7 +474,7 @@ internal class Owner(private val hwbuf: Boolean, private val fast: Boolean, prio
         val access = if (accessible) try { Native.access(accessAgain).also { accessAgain = false } } catch (e: UnsatisfiedLinkError) { accessible = false; null } else null
         // The bindings ask again first, so a frame's colours read the new answers; every turn, as a token only
         // native code reads moves no paint (one inputs call per binding).
-        Tambers.turned()
+        Formas.turned()
         if (fresh == null && (told != null || fields != null || bars != null || access != null)) {
             queue.add(Pub(timerReports.publish(), null, true, seq, 0, told, fields, bars, access))
             Native.timerObservation(readerScrolling, readerSampling, true, false)
@@ -642,10 +642,10 @@ internal object Exact {
         return o.sync { o.drainWindow(); String(Native.agent(line.toByteArray(Charsets.UTF_8)), Charsets.UTF_8) }
     }
 
-    /** What an [ExactTamber] asks ([Native.tamber], LLP 1121 D12): on exact2's thread, waited for, publishing
+    /** What an [ExactForma] asks ([Native.forma], LLP 1121 D12): on exact2's thread, waited for, publishing
      * nothing. An error's JSON where no host runs or the library predates the call. */
-    fun tamber(request: String): String {
-        val f = { try { Native.tamber(request) } catch (e: UnsatisfiedLinkError) { "{\"error\":\"no tamber in this library\"}" } }
+    fun forma(request: String): String {
+        val f = { try { Native.forma(request) } catch (e: UnsatisfiedLinkError) { "{\"error\":\"no forma in this library\"}" } }
         val o = owner
         return if (o != null) o.ask(f) else if (live) f() else "{\"error\":\"no host\"}"
     }
@@ -721,6 +721,14 @@ internal object Exact {
 
     /** What the extensions tell exact2 ([Native.changed], [Native.bindExtensions]): on exact2's thread, in order. */
     fun changed(topic: String) { val o = owner; if (o != null) o.call { Native.changed(topic) } else Native.changed(topic) }
+    /** A person's act on what an extension posted ([Activations]): its event raised with a person's origin, as an
+     * input, on exact2's thread; [action] is the declared action's record a notification's action carries. */
+    fun activate(extension: String, event: String, args: String, action: String?) {
+        val o = owner
+        if (o != null) { o.input(); o.call { Native.activate(extension, event, args, action) } } else Native.activate(extension, event, args, action)
+    }
+    /** A line for the session's journal, on exact2's thread. */
+    fun journal(line: String) { val o = owner; if (o != null) o.call { Native.journal(line) } else Native.journal(line) }
     /** A turn on exact2's thread, which asks for a display frame while a canvas input's samples wait. */
     fun wake() { owner?.call {} }
     fun presence(answer: String) { val o = owner; if (o != null) o.call { Native.presence(answer) } else Native.presence(answer) }

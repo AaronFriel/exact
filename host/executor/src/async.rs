@@ -97,7 +97,7 @@ pub(super) enum Claim {
 }
 
 /// Claim `run`'s transition for `claim`, if nothing has: whether it won.
-fn claim(state: &mut State, run: Run, claim: Claim) -> bool {
+pub(super) fn claim(state: &mut State, run: Run, claim: Claim) -> bool {
     match find(&mut state.running, run) {
         Some(r) if !r.terminal && r.claim == Claim::None => {
             r.claim = claim;
@@ -659,6 +659,7 @@ impl Machine {
                 job.work.is_some(),
             ),
             cache_barrier: super::cache::barrier(&job.request, job.class, job.work.is_some()),
+            refresh: super::preload::Refresh::of(&job.request, job.class, job.forced),
             invalidates: super::cache::invalidates(&job.request, job.work.is_some()),
         });
         let start: Start =
@@ -1034,7 +1035,7 @@ fn charge(book: &Book, lane: usize, job: &Job, kind: Kind) -> (usize, usize) {
 /// Whether `job` fits the lane's free bytes now.
 fn fits(state: &State, lane: usize, job: &Job, kind: Kind) -> bool {
     let (more, upload) = charge(&state.book, lane, job, kind);
-    more + upload <= BYTES[lane].saturating_sub(state.bytes[lane])
+    super::reads::has_room(state, lane, more + upload)
 }
 
 /// The same shared admission for a read's first hop and its redirects (LLP 1162 D1).

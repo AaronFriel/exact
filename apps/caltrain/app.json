@@ -95,7 +95,7 @@
       }
     }
   ],
-  "rust": { "module": { "package": "caltrain-logic" } },
+  "rust": { "data": { "crate": "caltrain-data", "type": "caltrain_data::Caltrain", "source": "caltrain_data::Caltrain" }, "module": { "package": "caltrain-logic" } },
   "host": {
     "ios": {
       "minimumOS": "17.0",

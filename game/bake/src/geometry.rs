@@ -92,7 +92,7 @@ pub fn primitive(
         material: p.material().index().map_or(default, |i| i as u32),
         ..Default::default()
     };
-    for weights in mesh.weights.chunks_exact_mut(4) {
+    for weights in mesh.weights.as_chunks_mut::<4>().0 {
         let sum = weights.iter().sum::<f32>();
         if !sum.is_finite() || sum <= 0.0 || weights.iter().any(|w| *w < 0.0) {
             return Err("skin weights must be nonnegative with positive sum".into());
@@ -106,7 +106,7 @@ pub fn primitive(
 }
 fn bounds(m: &mut MeshData) {
     let (mut lo, mut hi) = (Vec3::splat(f32::INFINITY), Vec3::splat(f32::NEG_INFINITY));
-    for p in m.positions.chunks_exact(3) {
+    for p in m.positions.as_chunks::<3>().0 {
         let p = Vec3::from_slice(p);
         lo = lo.min(p);
         hi = hi.max(p);
@@ -140,7 +140,7 @@ pub fn merge(a: &mut MeshData, b: MeshData) {
 }
 fn normals(p: &[f32], indices: &[u32]) -> Vec<f32> {
     let mut n = vec![Vec3::ZERO; p.len() / 3];
-    for tri in indices.chunks_exact(3) {
+    for tri in indices.as_chunks::<3>().0 {
         let [a, b, c] = [tri[0] as usize, tri[1] as usize, tri[2] as usize];
         let v = |i| Vec3::from_slice(&p[i * 3..i * 3 + 3]);
         let normal = (v(b) - v(a)).cross(v(c) - v(a));

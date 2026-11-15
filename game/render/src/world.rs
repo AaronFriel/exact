@@ -1106,7 +1106,9 @@ impl Feed {
                 let len = page_len(first, r.max_slots());
                 let default = material_floats(Material::default());
                 for (i, out) in self.page_scratch[..len * 12]
-                    .chunks_exact_mut(12)
+                    .as_chunks_mut::<12>()
+                    .0
+                    .iter_mut()
                     .enumerate()
                 {
                     if let Some(p) = page

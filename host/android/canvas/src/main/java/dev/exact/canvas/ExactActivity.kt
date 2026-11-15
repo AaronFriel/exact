@@ -29,6 +29,13 @@ open class ExactActivity : Activity() {
     /** The app's `video` player ([VideoPlayer]); none for an app without video. */
     protected open val video: ((Context) -> VideoPlayer)? = null
     private var natives: Natives? = null
+
+    /** A signed update activated ([Requests]): the open videos and pages are opened from its assets again, and its
+     * boot is good once the view draws it. */
+    internal fun assetsMoved() { natives?.reroot(); if (::view.isInitialized) view.blessNext() }
+    private var nativeState: Bundle? = null
+    private var nativeStarted = false
+    private var nativeResumed = false
     /** The app's text fields, each the platform's own ([Fields], LLP 1115.001 D8). */
     private var fields: Fields? = null
     /** The row pitch `start=N` scrolls by (0: the app's plan scrolls to it itself). */
@@ -79,6 +86,7 @@ open class ExactActivity : Activity() {
         // once (decoded pictures otherwise stay held).
         if (!again) android.system.Os.setenv("MIMALLOC_PURGE_DELAY", "0", false)
         super.onCreate(state)
+        nativeState = state?.getBundle("exact.hosted")
         hatchReader?.activity = this
         // The starting window goes the moment the first frame is drawn, not after its exit fade (splashfade=1: the
         // platform's fade, to compare): the first frame is what shows.
@@ -92,6 +100,7 @@ open class ExactActivity : Activity() {
         edgeToEdge()
         // exact2's thread, made before the assets are checked: it loads exact2's library meanwhile.
         owner()
+        Native.trust(applicationContext)
         // The modules' implementations the APK carries answer their names (LLP 1133.001 D5).
         Extensions.bind(this)
         installAssets(File(storage, "app"))
@@ -113,6 +122,8 @@ open class ExactActivity : Activity() {
         accessibility.addAccessibilityStateChangeListener(accessWatch)
         // A restored share keeps its route; an auth callback can recreate a destroyed activity with saved state.
         if (again && (arrived || intent.data?.let { Auth.claims(this, it) } == true)) received(intent)
+        // A notification's tap that started the process: held until the first frame ([Activations]).
+        else if (!again && arrived) Activations.receive(this, intent)
     }
 
     /** A URL or a share given to the running activity: its location, as a link's (LLP 1133.023 D15 item 3), or the
@@ -125,9 +136,16 @@ open class ExactActivity : Activity() {
 
     private fun received(intent: android.content.Intent) {
         if (Auth.receive(this, intent)) return
+        if (Activations.receive(this, intent)) return
         if (Shares.isShare(intent)) Shares.request(this, intent)?.let { Exact.share(it) }
-        else intent.data?.let { Exact.open(it.toString()) }
+        else (intent.data?.toString() ?: pushed(intent))?.let { Exact.open(it) }
     }
+
+    /** The location a push Firebase showed opens: `navigate` from the intent its tap starts, which carries the
+     * message's `data` and Firebase's `google.message_id` (LLP 1133.004.000 D7). Nothing else of it is read; `navigate`
+     * has a link's trust, as any app could start the activity with a link. */
+    private fun pushed(intent: android.content.Intent): String? =
+        intent.takeIf { it.hasExtra("google.message_id") }?.getStringExtra("navigate")?.takeIf { it.isNotEmpty() }
 
     /** Whether an accessibility service is on (LLP 1115.001 D13). The reader answers one through its root
      * ([Root], [Access]) and asks exact2 for the tree only while one is on: with none, exact2 is never asked and
@@ -262,7 +280,7 @@ open class ExactActivity : Activity() {
      * sent it. A new one adopts the host, which paints everything again for it; the app is as it was.
      */
     private fun read() {
-        natives?.destroyAll()
+        natives?.let { nativeState = it.lifecycle.save(); it.destroyAll() }
         fields?.leaving()
         root.removeAllViews()
         // Before the host boots: its first layout measures the app's text fields in a field of this activity's
@@ -295,13 +313,13 @@ open class ExactActivity : Activity() {
             owner.configure(device)
             owner.colors(colors)
             owner.window(size.first, size.second, density, edges)
-            owner.boot(size.first, size.second, density, storage.absolutePath, live) { ok -> view.ownerStarted(ok) }
+            owner.boot(size.first, size.second, density, storage.absolutePath, noBackupFilesDir.absolutePath, live) { ok -> view.ownerStarted(ok) }
             booting = true
         } else if (intent.getStringExtra("asyncboot") != "0") {
             try { Native.hardwarePictures(intent.getStringExtra("hwbuf") != "0") } catch (e: UnsatisfiedLinkError) { }
             Thread({
                 device.tell(); Native.colors(colors); Native.window(size.first, size.second, density, edges)
-                Native.startAsync(size.first, size.second, density, storage.absolutePath, live)
+                Native.startAsync(size.first, size.second, density, storage.absolutePath, noBackupFilesDir.absolutePath, live)
             }, "exact-load").apply { priority = Thread.MAX_PRIORITY }.start()
             booting = true
         } else { device.tell(); Native.colors(colors); Native.window(size.first, size.second, density, edges) }
@@ -314,6 +332,9 @@ open class ExactActivity : Activity() {
                 if (start > 0 && startPitchDp > 0f) view.scrollBy(start * startPitchDp * Device.scale(this))
                 driver?.contentReady()
                 Extensions.firstFrame()
+                Activations.started()
+                channelLocales = resources.configuration.locales
+                Channels.made(this)
             }
         }
         view.booting = booting
@@ -325,8 +346,12 @@ open class ExactActivity : Activity() {
         Exact.answered = { view.onPublished() }
         Exact.turned = { view.turned() }
         if (input) view.keys = Keys(view)
-        val elements = Natives(this, File(storage, "app"), Extensions.withViews(modules), video)
+        val elements = Natives(this, { AssetRoot.of(this) }, Extensions.withViews(modules), video)
         natives = elements
+        elements.lifecycle.restore(nativeState)
+        nativeState = null
+        if (nativeStarted) elements.lifecycle.event(ViewLifecycle.START)
+        if (nativeResumed) elements.lifecycle.event(ViewLifecycle.RESUME)
         elements.hatched = { node, context -> hatchReader?.made(node, context) }
         view.natives = elements
         // The app's text fields (LLP 1115.001 D8) outlive a reader made again: a field keeps its view, and with it
@@ -488,6 +513,9 @@ open class ExactActivity : Activity() {
         override fun onChange(selfChange: Boolean) = configure()
     }
 
+    /** The locales the notification channels were last named in. */
+    private var channelLocales: android.os.LocaleList? = null
+
     /** A configuration changed in place (LLP 1115.001 D15.1): the manifest declares the size, night mode, font scale,
      * bold text, locale, density and keyboard changes, so none of them makes the activity again. The settings go to
      * the host whole ([configure]), and the window with its density ([window]); a new size or new insets arrive
@@ -495,6 +523,8 @@ open class ExactActivity : Activity() {
     override fun onConfigurationChanged(config: android.content.res.Configuration) {
         super.onConfigurationChanged(config)
         configure()
+        // The channels' names are the strings tables' (LLP 1133.004.000 D1).
+        if (config.locales != channelLocales) { channelLocales = config.locales; Channels.made(this) }
         root.rootWindowInsets?.let { window(it) }
     }
 
@@ -505,11 +535,13 @@ open class ExactActivity : Activity() {
      * stop makes the reader again ([read]). */
     override fun onStart() {
         super.onStart()
+        nativeStarted = true
         if (stopped) { stopped = false; take(); read() }
         contentResolver.registerContentObserver(android.provider.Settings.Global.getUriFor(android.provider.Settings.Global.ANIMATOR_DURATION_SCALE), false, settings)
         contentResolver.registerContentObserver(android.provider.Settings.System.getUriFor(android.provider.Settings.System.TIME_12_24), false, settings)
         // What changed while the activity was stopped and is no configuration change.
         configure()
+        natives?.lifecycle?.event(ViewLifecycle.START)
         view.running(true)
         Exact.hidden(false)
         requests.foreground(true)
@@ -540,6 +572,7 @@ open class ExactActivity : Activity() {
     override fun onStop() {
         stopped = true
         Exact.owner?.windowFrames?.detach(window)
+        nativeStarted = false
         requests.foreground(false)
         if (reads()) Auth.stopped()
         // A replaced activity's stop can come after its successor's start: the page is the successor's to hide.
@@ -547,6 +580,7 @@ open class ExactActivity : Activity() {
         if (reads()) pads.background()
         if (reads()) Extensions.stopped(isChangingConfigurations)
         view.running(false, reads())
+        natives?.lifecycle?.event(ViewLifecycle.STOP)
         // Behind the hide, the pads' release and the stop of the turns (none queued after it), what they and anything
         // since the pause committed is on disk before Android may kill it.
         if (!Exact.drainStore()) android.util.Log.w("exact", "the store's writes did not finish before the stop")
@@ -558,12 +592,16 @@ open class ExactActivity : Activity() {
      * reads again what the person may have changed in Settings ([Extensions.resumed]). */
     override fun onResume() {
         super.onResume()
+        nativeResumed = true
+        natives?.lifecycle?.event(ViewLifecycle.RESUME)
         Auth.resumed()
         requests.resumed()
         Extensions.resumed()
     }
 
     override fun onPause() {
+        nativeResumed = false
+        natives?.lifecycle?.event(ViewLifecycle.PAUSE)
         // Everything committed before the pause is on disk (exact2 writes the store on a thread of its own).
         if (!Exact.drainStore()) android.util.Log.w("exact", "the store's writes did not finish before the pause")
         Extensions.paused()
@@ -582,6 +620,17 @@ open class ExactActivity : Activity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         Extensions.activityResult(requestCode, resultCode, data)
+    }
+
+    override fun onSaveInstanceState(state: Bundle) {
+        natives?.lifecycle?.save()?.let { state.putBundle("exact.hosted", it) }
+        super.onSaveInstanceState(state)
+    }
+
+    @Deprecated("Deprecated in Android")
+    override fun onLowMemory() {
+        natives?.lifecycle?.event(ViewLifecycle.LOW_MEMORY)
+        super.onLowMemory()
     }
 
     override fun onDestroy() {
@@ -630,18 +679,20 @@ open class ExactActivity : Activity() {
         // The launching intent's URL is the launch location (LLP 1133.023 D15 item 3): the activity is exported, so
         // any app may start it with one, which reaches only what the navigation root routes, as a link does.
         if (arrived) {
-            intent.data?.takeUnless { Shares.isShare(intent) || Auth.claims(this, it) }?.let { android.system.Os.setenv("EXACT_LAUNCH_URL", it.toString(), true) }
+            (intent.data?.takeUnless { Shares.isShare(intent) || Auth.claims(this, it) }?.toString() ?: pushed(intent))
+                ?.let { android.system.Os.setenv("EXACT_LAUNCH_URL", it, true) }
             // A share that starts the app is its launch location, claimed before the boot (LLP 1133.024 D5).
             Shares.request(this, intent)?.let { android.system.Os.setenv("EXACT_SHARE", it, true) }
         }
         // GPU modules (LLP 1009) come from this APK. Exported intents never select executable content.
         android.system.Os.setenv("EXACT_NATIVE_LIBS", applicationInfo.nativeLibraryDir, true)
         android.system.Os.setenv("EXACT_MOVE_TRACKS", "1", true)
+        // The logcat tag of the app's `console` lines, in every build (`host/painted/src/android.rs`, `console`): the
+        // package name, as Apple's subsystem is the bundle identifier. A label can be localized and hold spaces.
+        android.system.Os.setenv("EXACT_PACKAGE", packageName, true)
         val development = packageManager.getApplicationInfo(packageName, android.content.pm.PackageManager.GET_META_DATA)
             .metaData?.getBoolean("dev.exact.development", false) == true
         if (!development) return
-        // The data module's `console` lines to logcat under `exact-app` (`host/painted/src/android.rs`, `console`).
-        android.system.Os.setenv("EXACT_LOG_CONSOLE", "1", true)
         // rows=0: no kept rows, every frame walks every row (exact2's EXACT_ROWS), to compare.
         if (intent.getStringExtra("rows") == "0") android.system.Os.setenv("EXACT_ROWS", "0", true)
         // imgvp=N: keep N viewports of decoded pictures (exact2's EXACT_IMAGE_VIEWPORTS; 12 by default).
@@ -663,7 +714,9 @@ open class ExactActivity : Activity() {
             "x_agent_fail_fetch", "x_agent_process", "x_agent_home", "x_agent_login_env",
             "x_agent_share", "x_agent_bind", "x_agent_pads", "x_agent_timing", "x_agent_presentation", "x_agent_chrome",
             "x_rows", "x_moves", "x_idle_frames", "x_slots", "x_lower", "x_row_reuse",
-            "x_image_viewports", "x_defer_collections", "x_log_journal").forEach { k ->
+            "x_image_viewports", "x_defer_collections", "x_log_journal",
+            // The update store's origin and directory (LLP 1030.006 D7); a production bake ignores both.
+            "x_update_origin", "x_update_dir").forEach { k ->
             intent.getStringExtra(k)?.let { android.system.Os.setenv("EXACT_" + k.removePrefix("x_").uppercase(), it, true) }
         }
         // A move may carry layers' tracks ([applyMove]), so a row coming into view starts its animations without a

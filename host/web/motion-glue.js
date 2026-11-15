@@ -144,7 +144,7 @@ export function motionController({views,now,generation,request,applyBatch,inert,
   // A translate frame is `[x,y]` lengths, or `[x,y,px,py]` with percentages
   // of the box, which the browser resolves (chess diary #4).
   const axis=(l,p)=>p?(l?`calc(${l}px + ${p}%)`:`${p}%`):`${l}px`;
-  const css=(property,value)=>property==='translate'?`${axis(value[0],value[2])} ${axis(value[1],value[3])}`:property==='rotate'?`${value[0]}deg`:property==='height'?`${Math.max(0,value[0])}px`:String(value[0]);
+  const css=(property,value)=>property==='translate'?`${axis(value[0],value[2])} ${axis(value[1],value[3])}`:property==='rotate'?`${value[1]||0} ${value[2]||0} ${value[3]||(!(value[1]||value[2])?1:0)} ${value[0]}deg`:property==='height'?`${Math.max(0,value[0])}px`:String(value[0]);
   const call=(op,h,value=[0,0],t=now())=>request({op,view:h.view,property:h.property,token:h.token??0,x:value[0],y:value[1],now:t});
   const local=h=>h && h.generation===generation() && views.get(h.view)===h.el && h.el.isConnected && held.get(key(h.view,h.property))===h;
   const eligible=el=>el?.isConnected&&!el.closest('[disabled]')&&!el.matches(':disabled')&&!inert(el)&&el.getClientRects().length>0&&getComputedStyle(el).visibility==='visible';
@@ -746,7 +746,7 @@ export function motionController({views,now,generation,request,applyBatch,inert,
       cancelProperty(id,property);
       if(!op.values.length || held.has(k)) return;
       const el=views.get(id); if(!el) return;
-      const animation=el.animate(op.values.map(value=>({[cssProperty(el,property)]:css(property,property==='translate'?value:[value,0])})),
+      const animation=el.animate(op.values.map(value=>({[cssProperty(el,property)]:css(property,Array.isArray(value)?value:[value,0])})),
         {delay:op.delay,duration:op.duration,easing:'linear',fill:'backwards'});
       // Started where the engine lowered it (`at`, the host's clock), not
       // when the browser next commits a pending animation, two frames later

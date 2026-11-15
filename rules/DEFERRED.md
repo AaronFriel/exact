@@ -641,6 +641,17 @@ through to the ideal end state). Still out, and the data module's: token
 refresh, pagination across requests, offline queues and retries, an overlay,
 streams, uploads, form bodies, and an origin from `app.json`'s `env`.
 
+**Expanded (expo/exact#423, #427, #578; LLP 1153.003):** an app's own crates (a
+data crate, a GPU module) sit beside `app.json` and join the workspaces exact2
+generates under `.exact/`, so an app with Rust data writes no host crate and no
+workspace: `app.json`'s `rust.data` names the crate, the host crates link it and
+bake through one shared call, and the app captures a lock only when its crates
+leave exact2's. Consumer: an app made by `exact new --rust`, and every
+in-repository Rust-data app's manifest. Take: waived by Charlie, 2026-11-14,
+after the panel. Still out: a host crate the app writes beside generated ones
+(an authored workspace is the escape), and a crate deeper than one level below
+`app.json` as a member.
+
 ## Features carried over as "no"
 
 **Admitted (Charlie, 2026-10-12, textrows ruling):** bounded
@@ -648,6 +659,13 @@ streams, uploads, form bodies, and an origin from `app.json`'s `env`.
 the tooltips, toasts, empty states and themed fields of
 `issues/closed/20261009-balanced-text-placeholder-color.md`. This
 amends LLP 1104's placeholder refusal. `-webkit-font-smoothing` stays deferred.
+
+**Admitted (Charlie, 2026-11-14, on a panel; LLP 1035.001 D11):** a
+`::backdrop` part on a `dialog` containing only `background-color`: what lies
+beneath the modal dialog, in place of the platform's dim, fading in and out
+with it. Consumer: Felt's full-window dialog (expo/exact#490), which paints
+its own 55 % dim and read about 64 % over UIKit's 20 %. Its other properties (`backdrop-filter`, `opacity`) stay
+refused.
 
 **Admitted (Daehyeon Mun, 2026-10-28, waived; LLP 1019 D12):**
 `-webkit-font-smoothing: auto | antialiased`, an inherited paint row. This
@@ -700,6 +718,18 @@ approach, go ahead and implement it and then make a cool example app and
 commit and push everything." No take named. It adds no runner surface, global
 or grant kind. A data module's own way to announce a change (LLP 1157 §8
 question 1) is not admitted.
+
+**Expanded (Charlie, 2026-11-14, issue panel D1; LLP 1133.001.000):** a
+package outside exact2 opts into closed lists that stay exact2's: Info.plist
+keys, device rows (`device.shareplay` added; `device.cloudkit` once the
+package can be read) and host events (`cloudkit-share`, held until the
+package takes it, writing `CKSharingSupported` when it is taken). A row is
+admitted for a package readable at a pinned version. Consumer: nqh-packages'
+CloudKit and SharePlay packages (#531, #532, #526). Unblocks sharing an iCloud
+zone and a SharePlay session from a package on an unpatched exact2. Take:
+waived by Charlie, 2026-11-14, after the panel. Still out: a package adding to
+a list; CloudKit and SharePlay as standard modules; silent notifications for
+CloudKit; an Android event seam.
 
 **Expanded (Daehyeon Mun, 2026-10-23; LLP 1133.005):** a local listener,
 `exactListen("unix:<path>", options)`: a data capability in `fetch`'s shape
@@ -786,7 +816,7 @@ names no take; `:focus-within` remains out.
   state* — slots by name where their types still fit, settled resources where
   their arguments still match, the clock — and is otherwise a restart: no patch
   format, no generations, no identity matching. LLP 1007 §6; Charlie, 2026-08-28.)
-  **Admitted (Charlie, 2026-10-14; LLP 1121 §9 Q3), development builds only:** Tamber's
+  **Admitted (Charlie, 2026-10-14; LLP 1121 §9 Q3), development builds only:** Forma's
   live table, which replaces design token values in a running development session without
   a reload (LLP 1121 D13). It patches values only: no code, no slots, no tree. A scrub
   session previews values for the length of a gesture. Release builds change their
@@ -828,8 +858,8 @@ names no take; `:focus-within` remains out.
   the extension redraws it). Consumer: Interview's AI answer being written,
   which only its server can advance. Unblocks a Live Activity that stays true
   while its app is suspended. Still refused: push-to-start, remote
-  notifications (a visible push admitted 2026-11-11, below; a data-only push
-  stays refused), and everything the click ruling left refused. Take: none
+  notifications (a visible push admitted 2026-11-11, and a data-only push as a
+  wake's trigger 2026-11-14, both below), and everything the click ruling left refused. Take: none
   named; the ruling stands as its own waiver.
   **Expanded (Charlie, 2026-10-18, "recs work, go for it", on LLP 1133.002
   §12 question 6):** a readable permission fact for geolocation,
@@ -872,11 +902,19 @@ names no take; `:focus-within` remains out.
   delivery through APNs, the entitlement signed against a profile with Push
   Notifications, and a production build (`packages/push/test/checklist.md`);
   nothing is claimed for a device until that run. Not built: push on macOS (the
-  row is omitted there), on Android (after local notifications), and on the web
+  row is omitted there) and on the web
   (Declarative Web Push or a host worker). Still refused: push-to-start; a
-  data-only push as a wake's trigger (`content-available`, the
-  `remote-notification` background mode); a notification service extension; an
-  event raised by a push, but for a declared action the person chose (below).
+  notification service extension; an event raised by a push, but for a
+  declared action the person chose (below).
+  **Expanded (Charlie, 2026-11-14, "admit", on LLP 1172.016 Q1 after a
+  three-seat panel split two to one for admitting):** a data-only push as a
+  wake's trigger (`content-available`, the `remote-notification` background
+  mode), under LLP 1133.017's wake rules: origin, grants, the first-unlock
+  refusal, owned work and expiry. The system delivers such a push at its own
+  discretion, so it is a best-effort hint to refresh, and no app's correctness
+  may depend on one arriving; foreground recovery stays sufficient. Consumer:
+  an app's server telling it that data changed while it is in the background
+  (LLP 1172.016 E8). Take: none named; the ruling stands as its own waiver.
   **Expanded (Charlie, 2026-11-12, "build the ideal end state now", after a
   design panel; expo/exact#127; LLP 1133.004 stage 2):** a notification's
   actions on macOS and iOS: a post declares them as a literal list, which the
@@ -886,8 +924,24 @@ names no take; `:focus-within` remains out.
   for that one action, held until its work has ended or the system's time has
   run out. Consumer: expo/exact#127's app, whose pushes carry Approve. Unblocks
   a notification's Snooze, Reply and Approve without app Swift. Take: none
-  named; the ruling stands as its own waiver. Not built: actions on Android,
-  Windows and the web; the dismissal; `requireInteraction`.
+  named; the ruling stands as its own waiver. Not built: actions on Windows
+  and the web; the dismissal; `requireInteraction`.
+  **Expanded (Charlie, 2026-11-14, expo/exact#537, after a three-seat panel;
+  LLP 1133.004.000):** notifications on Android: the module's names, declared
+  channels (`host.android.notificationChannels`), the `monochrome` icon as the
+  small icon, a click through an unexported alias, timed posts and actions
+  (each delivered in the foreground until Android's headless session).
+  Consumer: expo/exact#537's gatehouse app. Take: waived by Charlie,
+  2026-11-14, after the panel. Built and run on Android 37.2 and Android 11
+  emulators. Owed on a phone: delivery after an OEM's background limits have
+  stopped the app, Doze over hours, and the channel's sound and heads-up on a
+  locked screen. With it, push on Android through FCM in `@exact/push`'s
+  Android implementation: its Firebase Installation ID as the live value, a
+  notification message shown in front too, and its tap opening `data.navigate`.
+  Built and run under the agent and on an emulator with no Firebase project;
+  owed: a registration with a Firebase project and delivery through FCM. A
+  data message as a wake (admitted above, on LLP 1172.016 Q1) waits for
+  Android's headless session; until then it is journaled.
 
 **Components** — roughly 15 built-in tags, not 40; roughly 12 Facet components, not 47.
 
@@ -908,7 +962,10 @@ reading. Nothing that isn't HTML is added by it.
   follows this player. (`webview` came off
   2026-08-30 as LLP 1020's `iframe` — it unblocks Weird Castle's entire content
   model, the client that exists to surface Castle web decks; the take: LLP 1013
-  view transitions moved behind the deck lane. LLP 1020 §6. What stays no from
+  view transitions moved behind the deck lane. LLP 1020 §6. Route transitions are
+  admitted as LLP 1013.001, the take waived by Charlie, 2026-11-14, after the panel
+  (decision D16 (a)); element flights across routes stay deferred with LLP 1013.000
+  stage 3. What stays no from
   exact1's webview: `top` topology, navigation policy, the controller ops, `allow`,
   author-facing `srcdoc` — each with its return trigger in LLP 1020 §5.)
 - **Expanded (Daehyeon Mun, 2026-10-19; trade):** `postMessage(text, iframeId)` sends
@@ -1059,9 +1116,9 @@ reading. Nothing that isn't HTML is added by it.
   refused where the default is. The agent's tree, `tap … pictureinpicture`
   and `screenshot … window pictureinpicture` reach it. The default stays
   AVKit's. Consumer: the T3 Code clone's server and desktop Browser tabs,
-  matching T3 Code v0.1.6. Still out: an app's second window of its own
-  views (a floating window holding a subtree), and media controls in
-  Exact's window.
+  matching T3 Code v0.1.6. Still out: a floating window holding a subtree
+  of a window, and media controls in Exact's window. A second window at
+  one of the app's routes is LLP 1030.004's.
   **Expanded (Daehyeon Mun, 2026-11-02, evening: "picture in picture
   follows v0.1.6 when several windows open"; LLP 1042 §9.2):** a `"panel"`
   per image, beside the one picture-in-picture window (AVKit's or Exact's
@@ -1434,12 +1491,17 @@ reading. Nothing that isn't HTML is added by it.
   a cursor the runner holds. Consumer: Pulse, a heart-rate strap's
   display. Unblocks reading a Bluetooth LE peripheral without app Swift or
   Kotlin. Take: none named; the ruling is its own waiver. Still out, each
-  until a consumer asks (LLP 1133.022 §20): Bluetooth in the background,
-  `bluetooth-central`, iOS state restoration and Android's companion
-  presence wakes; scanning for advertisements, the peripheral role and
-  Bluetooth Classic; `exclusionFilters` and filters with several
+  until a consumer asks (LLP 1133.022 §20): iOS state restoration and
+  Android's companion presence wakes; scanning for advertisements, the
+  peripheral role and Bluetooth Classic; `exclusionFilters` and filters with several
   services; an app's own scan list on Android; and the Linux, visionOS and
   watchOS cells.
+  **Expanded (maintainers' #603 implementation request, 2026-11-14):**
+  `device.bluetooth-background` derives iOS's `bluetooth-central` mode beside
+  `device.bluetooth` for an app's own native module (LLP 1067). This unblocks
+  a workout app receiving a strap's heart rate with the screen locked. Take:
+  waived by the scoped implementation request. State restoration, Android
+  companion presence wakes and the rest of LLP 1133.022 §20 remain out.
 - NFC was never on the doing list. **Expanded (Charlie, 2026-10-26,
   "Converged: build (Recommended)", waived; LLP 1133.035 §16 question
   8):** Web NFC's NDEF reading and writing (`nfcStatus`, `scan`,
@@ -1814,6 +1876,11 @@ path exists after than before. Still refused: a drawing language in Contract
     size (LLP 1056 D9). Unblocks
     a screenshot annotation tool that exports what its canvas shows. Synchronous
     readback stays refused.
+  - **Expanded (Charlie, 2026-11-14, expo/exact#504; take waived):** the
+    capture takes `toBlob`'s `type` and `quality`: JPEG on every host by the
+    system encoder (Linux by `jpeg-encoder`, having none), another type only
+    where the system encodes it, else PNG (LLP 1056 D9). No WebP, JPEG XL or
+    AVIF encoder ships.
 **Expanded (Seth Webster, 2026-09-26, for grnl; LLP 1061–1064):** paint motion
 on boxes — `transition` and keyframes on `background-color`, `color`, borders,
 `-exact-tint-color` and `box-shadow`, `light-dark()` pairs moving with the appearance —
@@ -1834,7 +1901,7 @@ highlight is (a shrink is feedback, not motion).
 TUI host came off on 2026-10-06: §Surfaces.)
 
 **Admitted (Charlie, 2026-10-14; LLP 1122 §9 Q2 and LLP 1121 §9 Q3), development
-builds only:** the Tamber protocol server (`tamber/1`, LLP 1121 D13) and the design tool
+builds only:** the Forma protocol server (`forma/1`, LLP 1121 D13) and the design tool
 (LLP 1122). The tool is a web JS-target app, and every client edits through the protocol.
 Each host's development build gains an **inspect mode** and a build channel: four commands
 down (inspect, outline, hold, pin) and three reports up (status, a selection,
@@ -1845,7 +1912,7 @@ captures of running apps, and a hosted relay.
 
 **Admitted (Charlie, 2026-10-30, "when you're happy with it, have astra implement it";
 LLP 1155 r2), development builds only, for a two-day experiment:** a Chrome DevTools
-inspection adapter in the Bun dev tooling, over the agent carrier (Stage 0) and the Tamber
+inspection adapter in the Bun dev tooling, over the agent carrier (Stage 0) and the Forma
 build channel (Stage 1), with one bounded read command on that channel and a one-instance
 outline; it shows the mounted tree, observed layout, style provenance and Contract
 locations through the stock frontend at a recorded version. Read-only, loopback,
@@ -1881,12 +1948,23 @@ stream reaches after its first message, which settlement does not wait for
 from `tree`, `state`, or `layout`. The old repo's six primitives grew eighty wire names
 one reasonable "view" at a time; the count is the cost. (Charlie, 2026-08-29.)
 
-Not shipping: session record/replay, causal trace, behavior diff and verify, mutation
+Not shipping: causal trace, behavior diff and verify, mutation
 dry-run, contract witness / dataflow / ~~source-map~~ / bindings, accessibility audit (narrowed below), plan
 drag, correlate, visual query, network, perf, pasteboard, onboarding,
 revalidate, code grant/resume/cancel. (`perf` shipped as LLP 1079 narrows it: work
 counts and presented frames; never a causal trace, a flame chart, a devtools UI or
 production telemetry.)
+
+**Admitted (Charlie, 2026-11-14: "OK add it"; LLP 1172.021):** recording a session
+into an authored test. `--record` on a drive or a session with a person writes a
+`.test` file in the test grammar: the same operations the driver has (`tap`, `type`,
+`clock` marks, `prefer`), targeted by test ID or role, never by coordinates, with
+the session's network answers kept as fixtures for the executor's test substitute
+(LLP 1172.000 step 3). Replay is running that test. It adds no operation. Recorded
+answers are redacted by default, and a secret field or a secret's value is never
+recorded. Consumer: a real session turned into a regression test, and a bug report
+into a reproduction (LLP 1172.021 E8). Take: none named; the ruling stands as its
+own waiver.
 
 **Narrowed (Charlie, 2026-10-03, waiver: "I guess that trade makes sense ?
 idk wdy"; LLP 1080.002):** `tree --ax` reads the platform's own exposed
@@ -1911,7 +1989,7 @@ have landed (1035.005 §1's order), and `contract` blocks as executable assertio
 (LLP 1006 §8) stay off the doing-list. The witness, dataflow and any general
 provenance explorer stay refused.
 **Read (LLP 1151, 2026-10-28; waiver approved by Charlie the same day, "approve waiver yes"):** formatting and navigation have landed; the authored-test grammar's `always`, `after` and `never refuses` blocks (test files, compiled to nothing an app runs) are read as outside this take; executable assertions in a component stay refused.
-**Widened (Charlie, 2026-10-14; LLP 1122 §9 Q2), development builds only:** the Tamber
+**Widened (Charlie, 2026-10-14; LLP 1122 §9 Q2), development builds only:** the Forma
 server may also read the map, to join a build's inspect report with its source for the
 design tool (LLP 1122 D5). It records each file's source digest and each winning row's
 attribute span. A host still never reads a map, and no map is in a bake. The tool shows
@@ -2033,3 +2111,10 @@ The owner admitted unattended native build commands, signing/version inputs,
 Android App Bundle output and one EAS recipe per platform on 2026-11-12. This unblocks an app repository's
 custom EAS build. Provider adapters and automatic account, credential and
 store provisioning remain deferred.
+
+**A second window at a route (LLP 1030.004; expo/exact#335, #280 item 7).** A
+`link` whose `target` names a window opens that window at the link's route on the
+Mac; the Settings window is the one named `settings`. Unblocks a Mac app with a
+compose window, an inspector window or a Settings window, without app Swift. Take:
+none offered; waived by Charlie, 2026-11-14, after the panel (decision D3: all three
+seats chose to build it).

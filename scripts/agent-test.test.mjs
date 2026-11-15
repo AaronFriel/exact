@@ -1,17 +1,21 @@
 // Authored expects over a tree (agent-test.mjs): a node the tree carries but the
 // shipped app does not show — a header node the iOS navigation bar leaves out,
 // which the agent's own chrome still paints — fails, and says why (LLP 1116 D2).
-import { test, expect } from 'bun:test';
+import { afterAll, test, expect } from 'bun:test';
 import { spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { backendFetchPrefixes, churnLines, disabledExpectation, nativeFetchOrigins, NO_FAILURES, perfExpectation, pickHint, propertyHolds, testMutationClock, refusalExpectation, refuseDisabled, runTests, stateHolds, serverRequest, testScope, textExpectation, treeExpectation, unarranged } from './agent-test.mjs';
+import { backendFetchPrefixes, churnLines, disabledExpectation, focusedExpectation, nativeFetchOrigins, NO_FAILURES, perfExpectation, pickHint, propertyHolds, testMutationClock, refusalExpectation, refuseDisabled, runTests, stateHolds, serverRequest, testScope, textExpectation, treeExpectation, unarranged } from './agent-test.mjs';
 import { axFindings } from './agent-ax.mjs';
 import { withEpoch } from './agent-launch.mjs';
 import { serveBuildTree } from '../host/web/serve.mjs';
 import { fileURLToPath } from 'node:url';
+// A fixture's build can fail before the `try` that removes its directory.
+const scratches = [];
+const scratch = (prefix) => { const dir = mkdtempSync(join(tmpdir(), prefix)); scratches.push(dir); return dir; };
+afterAll(() => { for (const dir of scratches) rmSync(dir, { recursive: true, force: true }); });
 
 test('always predicates preserve JSON types, option kinds and the previous state', () => {
   const state = { slots: { n: 2, flag: false, absent: null, answer: { ok: true }, empty: [], text: '2' }, derives: { doubled: 4 } };
@@ -34,7 +38,7 @@ test('always predicates preserve JSON types, option kinds and the previous state
 });
 
 test('device properties see boot, typing and clock changes, and reset stays between tests', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'exact-properties-')), contract = join(dir, 'app.contract'), file = join(dir, 'app.test.contract');
+  const dir = scratch('exact-properties-'), contract = join(dir, 'app.contract'), file = join(dir, 'app.test.contract');
   const plan = join(dir, 'app.plan'), dist = join(dir, 'dist');
   writeFileSync(contract, `component App
   state ready = true
@@ -239,6 +243,15 @@ test('present means shown in the app; missing is the tree\'s', () => {
   expect(treeExpectation(nodes, 'tagline', false).message).toBe('expected testId "tagline" absent, it was present');
 });
 
+test('expect focused reads the node every host\'s tree marks focused, and names what holds the focus instead', () => {
+  const tree = [{ id: 1, type: 'Pressable', props: { testId: 'picker' } }, { id: 2, type: 'Pressable', props: { testId: 'row' }, focused: true }, { id: 3, type: 'Pressable', props: { testId: 'row' } }, { id: 4, type: 'View', props: {} }];
+  expect(focusedExpectation(tree, 'row')).toBeNull();
+  expect(focusedExpectation(tree, 'picker').message).toBe('expected "picker" focused, "row" has it');
+  expect(focusedExpectation(tree, 'gone').message).toBe('expected "gone" focused, no view carries that testId');
+  expect(focusedExpectation([tree[0], { ...tree[3], focused: true }], 'picker').message).toBe('expected "picker" focused, View#4 has it');
+  expect(focusedExpectation([tree[0]], 'picker').message).toBe('expected "picker" focused, nothing has the focus');
+});
+
 // LLP 1116.010 D3 (chat-rooms and password-generator, round 12): a disabled control is asserted, and pressing one fails the step.
 test('expect disabled and enabled read the prop every host\'s tree carries; a press is refused while context eligibility follows the element type', async () => {
   const tree = [{ id: 1, type: 'Pressable', props: { testId: 'send', disabled: true } }, { id: 2, props: { testId: 'arm' } }, { id: 3, props: { testId: 'native', disabled: 'true' } }, { id: 4, props: { testId: 'update', accessibilityDisabled: true } },
@@ -380,6 +393,7 @@ component App
         column navigationKey=\`\${e.id}\`
           text e.url
 `);
+  // A reload restores the earlier visits as well as the top route (#527).
   writeFileSync(file, `test "reload keeps earlier visits" on web
   type "root" "/item/one"
   expect state depth == 2
@@ -392,7 +406,7 @@ component App
   clock +60000
   reload
   expect state url == "/item/two"
-  expect state depth == 2
+  expect state depth == 3
   tap "root" history -1
   expect state url == "/item/one"
   tap "root" history -1
@@ -576,13 +590,16 @@ test "an expected refusal before reload does not accept the next journal"
   } finally { server.close(); rmSync(dir,{recursive:true,force:true}); }
 },180_000);
 
-test('authored media preferences apply before observations, override by name, and survive reload', async () => {
+test('authored preferences use the drive parser, override by name, and survive reload', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'exact-test-media-'));
   const contract = join(dir, 'app.contract'), plan = join(dir, 'app.plan'), dist = join(dir, 'dist'), file = join(dir, 'app.test.contract');
   writeFileSync(contract, `shape Viewport
   prefersColorScheme: string
   prefersReducedMotion: bool
+shape Page
+  onLine: bool
 component App
+  resource page = exactPage() as shape Page
   resource viewport = exactViewport() as shape Viewport
   view
     column
@@ -623,11 +640,38 @@ test "invalid later value"
   expect text "scheme" == "dark"
   prefer prefers-color-scheme banana
 
-test "page facts are outside the test media grammar"
+test "page facts use the drive parser"
+  prefer online false
+  expect state page.onLine == false
+  reload
+  expect state page.onLine == false
+  prefer online true
+  expect state page.onLine == true
+  reload
+  expect state page.onLine == true
   prefer online false
 
 test "a failure does not stop the next test"
   expect text "scheme" == "dark"
+
+test "large text at launch survives reload"
+  prefer root-font-size "24"
+  expect text "scheme" == "dark"
+  reload
+
+test "large text can change between steps"
+  expect text "scheme" == "dark"
+  prefer root-font-size "28px"
+  reload
+
+test "invalid text size"
+  prefer root-font-size "0"
+
+test "text size does not leak into another test"
+  expect text "scheme" == "dark"
+
+test "a host refuses an unsupported page fact"
+  prefer keyboard-navigation true
 `);
   const root = fileURLToPath(new URL('..', import.meta.url));
   const compile = spawnSync(join(process.env.CARGO_TARGET_DIR ?? join(root, 'target'), 'debug', 'contract'), ['build', contract, '-o', plan], { cwd: root, encoding: 'utf8' });
@@ -642,22 +686,45 @@ test "a failure does not stop the next test"
       if (t.failures.length) return {};
       const dark = t.launch.media['prefers-color-scheme'] === 'dark';
       expect(await s.carrier.evaluate("matchMedia('(prefers-color-scheme: dark)').matches")).toBe(dark);
+      const fontSize = parseFloat(t.launch.media['root-font-size'] ?? '16');
+      const rootSize = () => s.carrier.evaluate('parseFloat(getComputedStyle(document.documentElement).fontSize)');
+      expect(await rootSize()).toBe(fontSize);
       await t.restart();
       expect(textExpectation((await s.tree()).nodes, 'scheme', dark ? 'dark' : 'light')).toBeNull();
+      expect(await rootSize()).toBe(fontSize);
+      if (t.launch.media.online != null) expect((await s.state()).resources.page.onLine).toBe(false);
       ends.push(t.launch.media);
       return {};
     } });
-    expect(r.results.map(t => t.end?.error)).toEqual(Array(7).fill(undefined));
-    expect(r.results.map(t => t.failures.length)).toEqual([0, 0, 1, 1, 1, 1, 0]);
-    for (const [index, line, said] of [[2, 24, 'prefers-color-scheme banana: expected'], [3, 28, 'unknown dark: did you mean `prefer prefers-color-scheme dark`? expected'], [4, 33, 'prefers-color-scheme banana: expected']]) {
-      expect(r.results[index].failures[0]).toContain(`line ${line}: prefer: ${said}`);
+    expect(r.results.map(t => t.end?.error)).toEqual(Array(12).fill(undefined));
+    expect(r.results.map(t => t.failures.length)).toEqual([0, 0, 1, 1, 1, 0, 0, 0, 0, 1, 0, 1]);
+    for (const [index, line, name, value] of [[2, 24, 'prefers-color-scheme', 'banana'], [3, 28, 'unknown', 'dark'], [4, 33, 'prefers-color-scheme', 'banana']]) {
+      const hint = name === 'unknown' ? 'did you mean `prefer prefers-color-scheme dark`? ' : '';
+      expect(r.results[index].failures[0]).toContain(`line ${line}: prefer: ${name} ${value}: ${hint}expected`);
     }
-    expect(r.results[5].failures[0]).toContain('test prefer: expected a CSS media feature');
+    expect(r.results[9].failures[0]).toContain('prefer: root-font-size 0: expected');
+    expect(r.results[11].failures[0]).toContain('prefer: keyboard-navigation: true is not a page fact this host sets');
+    expect(r.results[11].failures[0]).not.toContain('test prefer:');
     expect(ends).toEqual([
       { 'prefers-color-scheme': 'light', 'prefers-reduced-motion': 'reduce' },
       { 'prefers-color-scheme': 'light', 'prefers-reduced-motion': 'reduce' },
+      { 'prefers-color-scheme': 'dark', 'prefers-reduced-motion': 'reduce', online: false },
+      { 'prefers-color-scheme': 'dark', 'prefers-reduced-motion': 'reduce' },
+      { 'prefers-color-scheme': 'dark', 'prefers-reduced-motion': 'reduce', 'root-font-size': 24 },
+      { 'prefers-color-scheme': 'dark', 'prefers-reduced-motion': 'reduce', 'root-font-size': 28 },
       { 'prefers-color-scheme': 'dark', 'prefers-reduced-motion': 'reduce' },
     ]);
+    for (const [inherited, own] of [['displayScale', 'display-scale'], ['display-scale', 'displayScale']]) {
+      writeFileSync(file, `prefer ${inherited} "2"
+test "scale override before launch"
+  prefer ${own} "1"
+  expect text "scheme" == "light"
+  reload
+  expect text "scheme" == "light"
+`);
+      const overridden = await runTests({ host: 'web', file, app: 'caltrain', url: `http://127.0.0.1:${server.address().port}/` });
+      expect(overridden.results.map(t => t.failures)).toEqual([[]]);
+    }
   } finally { server.close(); rmSync(dir, { recursive: true, force: true }); }
 }, 180_000);
 
@@ -970,4 +1037,68 @@ test('at keeps the origin of a remote web test', () => {
     const result = spawnSync(process.execPath, [script], { encoding: 'utf8', timeout: 30000 });
     expect(result.status, result.stdout + result.stderr).toBe(0);
   } finally { rmSync(dir, { recursive: true, force: true }); }
+}, 30000);
+test('the APK carrier skips a test that names a size, saying why, and refuses a drive\'s --size (#547)', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'exact-test-apk-size-')), script = join(dir, 'check.mjs');
+  writeFileSync(join(dir, 'app.contract'), 'component App\n  view\n    text "Test"\n');
+  writeFileSync(join(dir, 'app.test.contract'), 'test "wide"\n  size 1280x800\n  expect state ready == true\ntest "phone"\n  expect state ready == true\n');
+  writeFileSync(script, `
+    import assert from 'node:assert/strict';
+    import {mock} from 'bun:test';
+    const sizes = [];
+    mock.module(${JSON.stringify(fileURLToPath(new URL('./agent.mjs', import.meta.url)))}, () => ({open: async (o) => {
+      sizes.push(o.size);
+      return {host:'android', now:0, op:async()=>({clock:0,lines:[]}), clock:async()=>({}), state:async()=>({mutationRequests:0,slots:{ready:true}}), logs:async()=>({lines:[]}), close:async()=>{}};
+    }}));
+    const {runTests} = await import(${JSON.stringify(fileURLToPath(new URL('./agent-test.mjs', import.meta.url)))});
+    const file = ${JSON.stringify(join(dir, 'app.test.contract'))};
+    const r = await runTests({host:'android', reader:true, app:${JSON.stringify(dir)}, file});
+    assert.equal(r.failed, 0, JSON.stringify(r));
+    assert.equal(r.passed, 1);
+    assert.equal(r.results[0].skipped, "size 1280x800: the APK runs at the phone's size; --headless takes it");
+    assert.deepEqual(sizes, [undefined], 'only the phone-sized test opens the app');
+    await assert.rejects(runTests({host:'android', reader:true, app:${JSON.stringify(dir)}, file, size:[1280, 800]}), /--size does not reach the APK/);
+    const headless = await runTests({host:'android', reader:false, app:${JSON.stringify(dir)}, file});
+    assert.equal(headless.passed, 2, '--headless takes the size');
+    console.log('completed');
+  `);
+  try {
+    const r = spawnSync(process.execPath, [script], {encoding:'utf8', timeout:60000});
+    expect(r.status, r.stdout + r.stderr).toBe(0);
+    expect(r.stdout).toContain('completed');
+  } finally {rmSync(dir, {recursive:true, force:true});}
+}, 60000);
+test('single-value page facts replay by canonical name and drive-only forms are refused', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'exact-test-page-')), script = join(dir, 'check.mjs');
+  writeFileSync(join(dir, 'app.contract'), 'component App\n  view\n    text "Test"\n');
+  const pageFacts = {frozen:'false', 'visibility-state':'hidden', online:'false', 'can-share':'false', 'can-share-files':'false', 'can-share-pictures':'false', 'can-open-files':'false', 'iframe-partition':'false', 'has-focus':'false', 'keyboard-navigation':'true', 'bold-text':'true', 'root-font-size':'24px', 'display-scale':'2', 'gpu-tier':'low'};
+  const driveOnly = {posture:'folded', segments:'2x1', gap:'40', mode:'density=compact', extension:'nfc.field=clear', Segments:'2x1', Mode:'density=compact', Extension:'nfc.field=clear'};
+  writeFileSync(join(dir, 'app.test.contract'), `test "page facts"\n${Object.entries(pageFacts).map(([name,value]) => `  prefer ${name} ${JSON.stringify(value)}\n`).join('')}  expect state ready == true\n  prefer Online true\n  prefer rootFontSize "28px"\n  reload\n  expect state ready == true\n${Object.entries(driveOnly).map(([name,value]) => `test "refuse ${name}"\n  prefer ${name} ${JSON.stringify(value)}\n`).join('')}`);
+  writeFileSync(script, `
+    import assert from 'node:assert/strict';
+    import {mock} from 'bun:test';
+    import {preferGroups} from ${JSON.stringify(fileURLToPath(new URL('./agent-prefer.mjs', import.meta.url)))};
+    let page, opens = 0, calls = [];
+    mock.module(${JSON.stringify(fileURLToPath(new URL('./agent.mjs', import.meta.url)))}, () => ({open: async () => {
+      opens++; page = {};
+      return {host:'linux', now:0, prefer:async facts=>{calls.push(facts); Object.assign(page,preferGroups(facts).page); return {};},
+        op:async()=>({clock:0,lines:[]}), clock:async()=>({}), state:async()=>({mutationRequests:0,slots:{ready:true}}),
+        logs:async()=>({lines:[]}), close:async()=>{}};
+    }}));
+    const {runTests} = await import(${JSON.stringify(fileURLToPath(new URL('./agent-test.mjs', import.meta.url)))});
+    const expected = {...preferGroups(${JSON.stringify(pageFacts)}).page, online:true, 'root-font-size':28};
+    const r = await runTests({host:'linux', app:${JSON.stringify(dir)}, file:${JSON.stringify(join(dir, 'app.test.contract'))},
+      atEnd:async(s,t)=>{if(t.name === 'page facts') {assert.deepEqual(page,expected); assert.deepEqual(t.launch.media,expected);} return {};}});
+    assert.equal(r.passed,1,JSON.stringify(r));
+    assert.equal(r.failed,${Object.keys(driveOnly).length},JSON.stringify(r));
+    assert.equal(r.results[0].end?.error,undefined);
+    for (const t of r.results.slice(1)) assert.match(t.failures[0],new RegExp(t.name.slice(7)+' is drive-only for now'));
+    assert.equal(opens,${Object.keys(driveOnly).length+2});
+    assert.equal(calls.length,${Object.keys(pageFacts).length*2+2});
+    assert.ok(calls.every(facts=>!Object.hasOwn(facts,'Online')&&!Object.hasOwn(facts,'rootFontSize')));
+  `);
+  try {
+    const r = spawnSync(process.execPath, [script], {encoding:'utf8', timeout:30000});
+    expect(r.status, r.stdout + r.stderr).toBe(0);
+  } finally {rmSync(dir, {recursive:true, force:true});}
 }, 30000);

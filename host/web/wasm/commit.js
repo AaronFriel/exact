@@ -1,4 +1,4 @@
-import { views, retiredViews, presence, host, followedScrolls, motion, loadAfterPaint, root, agentMode, log, t0, readOut, writeIn, loadLiveTime, lists, arrange, pieces, loadGpuIfNeeded, afterNativePaint, deferFulfill, holds, agentKeepsStore, pendingStore, moduleReady, safelyFulfill, encoder, track, byTicket, forgettable, surfaceGranted, HOST_WORK_BASE64, loadPageNative, localAssetURL, controllers, pageFile, heldAsks, httpHelpers, now, postSurface, ask, picker, inflight, documentsGlue, frameNav, followScroll, messageFrames, messageViews, dropSurface, register, seek, settleFollow, pendingScrolls, rememberScroll, ownFollowed, releaseFollowed, collections, focusAutofocus, markScrollDocument, letGo, holdWake, holdOrientation, clocks } from "../glue.js";
+import { AGENT_ADMITTED, views, retiredViews, presence, host, followedScrolls, motion, loadAfterPaint, root, agentMode, log, t0, readOut, writeIn, loadLiveTime, lists, arrange, pieces, loadGpuIfNeeded, afterNativePaint, deferFulfill, holds, agentKeepsStore, pendingStore, moduleReady, safelyFulfill, encoder, track, byTicket, forgettable, surfaceGranted, HOST_WORK_BASE64, loadPageNative, localAssetURL, controllers, pageFile, heldAsks, httpHelpers, now, postSurface, ask, picker, inflight, documentsGlue, frameNav, followScroll, messageFrames, messageViews, dropSurface, register, seek, settleFollow, pendingScrolls, rememberScroll, ownFollowed, releaseFollowed, collections, focusAutofocus, markScrollDocument, letGo, holdWake, holdOrientation, clocks } from "../glue.js";
 import { prepareContexts, positionContexts } from "./context.js";
 import { pageTitle, navigation, noteFit, syncListItemRoles, listItem, settleValue, afterPaint, createGrantSet, rawGrantText, grantError, grantWords, scopedGrantSet, refusal, appRootFontSize, liveById, navigableURL, sheetLeaves, popoverCommand, runFocusCommands, inertAncestor, refitTexts } from "../navigation.js";
 import { applyProps, nativeCreate, listView, appSource, syncMedia, forgetList, syncViewportFit, refreshSymbols, syncLists } from "./views.js";
@@ -105,11 +105,12 @@ function apply(batch) {
           break;
         // the title at once: the head's, else the route's (LLP 1115.000 D4.1)
         case "router":
+          host.fragmentTurn++;
           navigation.apply(op);
           if (op.scroll) {
             op.since = navigation.personScrolls;
             (host.fragmentGlue ??= loadAfterPaint("./fragment.js", "fragment")).then((f) => f.arm(root, op, navigation));
-          }
+          } else host.fragmentGlue?.then((f) => f.cancel());
           break;
         // a scroll to the visit's fragment, made at the runner's `scrollToFragment` once its content has arrived, which a scroll by the person since cancels (LLP 1153 D5)
         case "create": {
@@ -327,8 +328,9 @@ function apply(batch) {
           track(p, op.ticket);
           break;
         }
-        // A canvas capture (LLP 1056 D9, as amended for #188): the glue's PNG of the canvas's bitmap, written as a
-        // Rust source's `fs.atomicWriteFile` is; `{path, width, height, scale}` or a refusal by name, both JSON.
+        // A canvas capture (LLP 1056 D9, as amended for #188 and #504): the glue's encoding of the canvas's bitmap,
+        // written as a Rust source's `fs.atomicWriteFile` is; `{path, width, height, scale, type}` or a refusal by
+        // name, both JSON.
         case "canvasCapturePrepare": {
           const owner = host.incarnation;
           // The stylesheet's queued flush precedes this layout read.
@@ -344,13 +346,13 @@ function apply(batch) {
           if (!holds(op.ticket)) break;
           const requestIncarnation = host.incarnation, answer = (status, value) => safelyFulfill(requestIncarnation, op.ticket, 0, status, "", encoder.encode(JSON.stringify(value)));
           const p = new Promise((resolve, reject) => pieces.canvas2d({ capture: op, resolve, reject })).then(async (blob) => {
-            const png = new Uint8Array(await blob.arrayBuffer());
+            const bytes = new Uint8Array(await blob.arrayBuffer());
             const storage = await storageService(requestIncarnation);
             if (!holds(op.ticket, requestIncarnation)) return;
-            await storage.writePng(op.path, png, scopedGrantSet(host.grantSet, op.scope), () => holds(op.ticket, requestIncarnation)).catch((error) => {
+            await storage.writeCapture(op.path, bytes, scopedGrantSet(host.grantSet, op.scope), () => holds(op.ticket, requestIncarnation)).catch((error) => {
               throw Object.assign(error, { name: /denied: /.test(error.message) ? "NotAllowedError" : error.code === "agent" ? "NotSupportedError" : "EncodingError" });
             });
-            answer(200, { path: op.path, width: op.w, height: op.h, scale: op.scale });
+            answer(200, { path: op.path, width: op.w, height: op.h, scale: op.scale, type: blob.type || "image/png" });
           }).catch((error) => answer(400, { name: ["NotAllowedError", "NotSupportedError"].includes(error.name) ? error.name : "EncodingError", message: `${op.path}: ${error.message ?? error}` }));
           track(p, op.ticket);
           break;
@@ -507,7 +509,11 @@ function apply(batch) {
           // `light`/`dark` are the property's own values.
           if (op.name === "setScheme") {
             const s = String(op.args[0] ?? "");
-            document.documentElement.style.colorScheme = s === "system" ? "" : s;
+            const apply = () => { document.documentElement.style.colorScheme = s === "system" ? "" : s; };
+            const x = globalThis.exact;
+            (x.asked ??= {}).scheme = { value: s, apply };
+            const deferred = host.restoringScheme && op.source == null && AGENT_ADMITTED && self !== parent && /^exact-copy-\d{1,2}$/.test(self.name) && !document.getElementById("exact-dev-pin");
+            if (!deferred) apply();
           } else if (op.name === "haptic") {
             navigator.vibrate?.(op.args?.[0] === "selection" ? 5 : 12);
           } else if (op.name === "setRootFontSize") {

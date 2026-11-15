@@ -169,9 +169,12 @@ extension NodeView {
     }
     /// A plain field's paragraph base direction: CSS `direction`, said either
     /// way as Apple text's is (`TextEngine.setBaseDirection`), so no first
-    /// strong character picks it (LLP 1001 §1).
+    /// strong character picks it (LLP 1001 §1). Where it is unsaid and the
+    /// document's text is natural, AppKit's text system resolves each
+    /// paragraph itself, as an `NSTextField`'s does (LLP 1060.000 D3).
     var fieldBaseDirection: NSWritingDirection {
-        style["direction"]?.string == "rtl" ? .rightToLeft : .leftToRight
+        if TextStyle.isNatural(style) { return .natural }
+        return style["direction"]?.string == "rtl" ? .rightToLeft : .leftToRight
     }
     var fieldAlignment: NSTextAlignment {
         switch style["text_align"]?.string {

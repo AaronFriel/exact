@@ -28,7 +28,7 @@ pub(super) fn keep(ops: Option<Vec<u32>>) {
 pub(super) fn reader_replaced() {
     FINISHED.with(|f| *f.borrow_mut() = None);
     streams().clear();
-    pending().clear();
+    with_pending(|p| p.clear());
 }
 
 pub(super) fn next_stream() -> Option<Vec<u32>> {
@@ -100,6 +100,8 @@ pub(super) fn end(b: &[u32], i: usize) -> Option<usize> {
         RING => i + 26,
         SLOT_SET | LAYER_SET | TRACKS => i + 3 + at(2)?,
         CLOCK => i + 3,
+        shared::STATE | shared::SET => i + 2 + at(1)?,
+        shared::DRAW => i + 3,
         _ => return None,
     })
 }
@@ -117,6 +119,7 @@ pub(super) fn needs_world(b: &[u32]) -> bool {
             ROW_BEGIN if needs_world(&b[i + 6..j - 1]) => return true,
             SLOT_SET if needs_world(&b[i + 3..j]) => return true,
             LAYER_SET if needs_world(&b[i + 19..j]) => return true,
+            shared::SET | shared::DRAW => return true,
             _ => (),
         }
         i = j;
@@ -139,6 +142,8 @@ fn defines(op: u32) -> bool {
             | TRACKS
             | LAYER_FREE
             | CLOCK
+            | shared::STATE
+            | shared::SET
     )
 }
 
@@ -162,10 +167,17 @@ pub fn drawing(b: &[u32]) -> Option<(Vec<u32>, bool)> {
 
 /// Carry only retained definitions into a newer frame. Unknown streams stay whole.
 fn carry_definitions(older: &[u32], newer: &mut Vec<u32>) -> bool {
+    // The reader captures shared sources before any earlier definitions mutate them.
+    if newer.first() == Some(&shared::STATE) {
+        return false;
+    }
     let mut definitions = Vec::new();
     let mut row_sets = false;
     let mut i = 0;
     while i < older.len() {
+        if older[i] == shared::STATE {
+            return false;
+        }
         let Some(j) = end(older, i).filter(|j| *j <= older.len()) else {
             return false;
         };
@@ -252,6 +264,18 @@ mod tests {
     use super::*;
 
     #[test]
+    fn entering_shared_state_after_an_ordinary_frame_preserves_both_boundaries() {
+        let old = vec![IMAGE_DEF, 7, 10, 10, IMAGE, 7, 0, 0, 10, 10];
+        let state = vec![shared::STATE, 5, 0, 0, 1, 9, 0, shared::DRAW, 9, 0];
+        let mut new = state.clone();
+        assert!(!carry_definitions(&old, &mut new));
+        assert_eq!(
+            new, state,
+            "STATE must remain first before reader mutations"
+        );
+    }
+
+    #[test]
     fn a_scrolls_direct_child_background_keeps_the_device_scale() {
         use crate::presenter::{PainterChoice, Presenter};
 
@@ -272,7 +296,7 @@ mod tests {
             text "Second line"
 "##;
         for scale in [1., 2.625] {
-            let (mut p, error) = Presenter::boot_with(
+            let (mut p, error) = Presenter::boot_with_fixture_fonts(
                 &crate::test_plan(source),
                 (),
                 (411., 500.),
@@ -352,7 +376,7 @@ mod tests {
             let source = format!(
                 "component App\n  view\n    iframe src=\"https://example.com/\" width=100 height=100{attribute}\n"
             );
-            let (mut p, error) = Presenter::boot_with(
+            let (mut p, error) = Presenter::boot_with_fixture_fonts(
                 &crate::test_plan(&source),
                 (),
                 (200., 200.),
@@ -411,7 +435,7 @@ component App
               button id="back" press=back width=100 height=40
                 text "Back"
 "##;
-        let (mut p, error) = Presenter::boot_with(
+        let (mut p, error) = Presenter::boot_with_fixture_fonts(
             &crate::test_plan(source),
             (),
             (400., 500.),
@@ -481,9 +505,51 @@ component App
     }
 
     #[test]
+    fn a_hosted_hit_names_the_native_contents_painted_origin() {
+        use crate::presenter::{PainterChoice, Presenter};
+        for scale in [1., 2., 2.75] {
+            let (mut p, error) = Presenter::boot_with_fixture_fonts(
+                &crate::test_plan(r##"component App
+  view
+    view margin=10.25 padding=12 width=350 height=350
+      test-map testId="map" width=200 height=200 padding=20 border-width=3 border-style="solid" translate="4px 7px"
+"##),
+                (), (400., 400.), scale, std::path::PathBuf::new(), PainterChoice::Canvas,
+            ).unwrap();
+            assert!(error.is_none(), "{error:?}");
+            p.frame();
+            let ops = FINISHED.with(|f| f.borrow_mut().take()).unwrap();
+            let mut matrix = [1., 0., 0., 1., 0., 0.];
+            let mut native = None;
+            let mut at = 0;
+            while at < ops.len() {
+                if ops[at] == MATRIX {
+                    matrix = std::array::from_fn(|i| f32::from_bits(ops[at + 1 + i]));
+                }
+                if ops[at] == NATIVE {
+                    let rect: [f32; 4] = std::array::from_fn(|i| f32::from_bits(ops[at + 3 + i]));
+                    let x = matrix[0] * rect[0] + matrix[2] * rect[1] + matrix[4];
+                    let y = matrix[1] * rect[0] + matrix[3] * rect[1] + matrix[5];
+                    native = Some((ops[at + 1], x, y, rect[2], rect[3]));
+                }
+                at = end(&ops, at).unwrap();
+            }
+            let (id, x, y, width, height) = native.expect("the module's op 28");
+            assert_eq!((width, height), (200., 200.));
+            let words = p.reader_module(x + 5. * scale, y + 5. * scale, scale);
+            assert_eq!(words[0], id as i32);
+            let origin = [words[10], words[11]].map(|v| f32::from_bits(v as u32));
+            assert_eq!(origin, [(x + 0.5).floor(), (y + 0.5).floor()]);
+            let border = [words[1], words[2]].map(|v| f32::from_bits(v as u32));
+            assert!((x - border[0] - 23. * scale).abs() < 0.01);
+            assert!((y - border[1] - 23. * scale).abs() < 0.01);
+        }
+    }
+
+    #[test]
     fn turned_boxes_record_shapes_without_cpu_pictures() {
         use crate::presenter::{PainterChoice, Presenter};
-        let (mut p, error) = Presenter::boot_with(
+        let (mut p, error) = Presenter::boot_with_fixture_fonts(
             &crate::test_plan("component App\n  view\n    view perspective=600 width=200 height=100 margin=100\n      view rotate=\"y 40deg\" width=200 height=100 background-color=\"#ff0000\"\n        text \"Turned card\" font-size=18 color=\"white\" margin=12\n"),
             (), (400., 400.), 3., std::path::PathBuf::new(), PainterChoice::Canvas,
         ).unwrap();
@@ -530,7 +596,7 @@ component App
             (recorded, drawn)
         }
 
-        let (mut p, error) = Presenter::boot_with(
+        let (mut p, error) = Presenter::boot_with_fixture_fonts(
             &crate::test_plan(
                 r##"component App
   state shown = false
@@ -792,11 +858,11 @@ component App
         recorder.ops = vec![IMAGE, 1, 0, 0, 1, 1];
         recorder.finish_stream().unwrap();
         assert!(waiting());
-        assert!(pending().contains_key(&1));
+        assert!(with_pending(|p| p.contains_key(&1)));
         reader_replaced();
         assert!(!waiting());
         assert!(FINISHED.with(|f| f.borrow().is_none()));
-        assert!(pending().is_empty());
+        assert!(with_pending(|p| p.is_empty()));
 
         let new = Picture::Canvas(Arc::new(Pixmap::new(2, 1).unwrap()));
         let mut recorder = Recorder::new();
@@ -804,7 +870,7 @@ component App
         recorder.finish_stream().unwrap();
         let newest = FINISHED.with(|f| f.borrow_mut().take());
         assert_eq!(after_turn(newest), Some(vec![IMAGE_DEF, 1, 2, 1]));
-        assert_eq!(pending().remove(&1).unwrap().key(), new.key());
+        assert_eq!(with_pending(|p| p.remove(&1)).unwrap().key(), new.key());
         assert!(next_stream().is_none());
     }
 }

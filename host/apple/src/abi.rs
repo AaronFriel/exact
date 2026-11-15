@@ -530,6 +530,15 @@ impl<D: DataSource> Bridge<D> {
         }
     }
 
+    /// Another session of the app announced `topic` after a durable write
+    /// (LLP 1030.004 D2): this session's watching answers are asked again.
+    /// The write was not this session's, so it reports no storage change.
+    pub fn peer_changed(&mut self, topic: &str) {
+        if let Some(host) = &mut self.host {
+            host.native_slot().changed(topic);
+        }
+    }
+
     fn adopt_app_module(&self) {
         if let Some(host) = &self.host {
             let slot = host.native_slot();
@@ -863,6 +872,12 @@ impl<D: DataSource> Bridge<D> {
             return self.prepare_error("no prepared plan");
         };
         candidate.host.commit_boot();
+        if let Some(live) = &self.host {
+            candidate
+                .host
+                .runner_mut()
+                .share_faults(live.runner().faults());
+        }
         // The old executor lets go of everything, then says which uploads had
         // begun to go out; the rest never left (LLP 1016.000 D10).
         if let Some(old) = self.executor.as_deref() {
@@ -889,6 +904,7 @@ impl<D: DataSource> Bridge<D> {
         self.presenter_hooks(&mut candidate.host, &candidate.hooks);
         self.executor = executor;
         let batch = Host::ending(self.host.replace(candidate.host), candidate.batch);
+        self.launch_layout.insets = None;
         self.adopt_app_module();
         self.rebind();
         self.parked.clear();
@@ -1273,7 +1289,9 @@ impl<D: DataSource> Bridge<D> {
             self.refusal("intrinsics: truncated record")
         } else {
             let sizes: Vec<_> = bytes
-                .chunks_exact(12)
+                .as_chunks::<12>()
+                .0
+                .iter()
                 .map(|r| {
                     let word = |i: usize| [r[i], r[i + 1], r[i + 2], r[i + 3]];
                     let (w, h) = (f32::from_le_bytes(word(4)), f32::from_le_bytes(word(8)));
@@ -1352,6 +1370,9 @@ impl<D: DataSource> Bridge<D> {
     /// An agent request (the input buffer's first `len` bytes, JSON); the
     /// output is the reply, not a batch.
     pub fn agent(&mut self, len: usize) -> u32 {
+        if let Some(host) = self.host.as_mut() {
+            host.runner_mut().take_fault_logs();
+        }
         let request =
             String::from_utf8_lossy(&self.input[..len.min(self.input.len())]).into_owned();
         // `tap @t` / `type @t` answer a held device request (LLP 1069.007
@@ -1426,6 +1447,10 @@ mod collection_tests;
 #[cfg(test)]
 #[path = "abi/canvas_scale_tests.rs"]
 mod canvas_scale_tests;
+
+#[cfg(test)]
+#[path = "abi/launch_layout_tests.rs"]
+mod launch_layout_tests;
 
 #[path = "abi_collections.rs"]
 mod collections;

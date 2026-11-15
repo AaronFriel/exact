@@ -177,6 +177,9 @@ private final class VideoArm: NSObject, NowPlayingPlayer {
     var atEnd = false
     var lastPaused = true
     var lastTimeStatus = AVPlayer.TimeControlStatus.paused
+    var playingReported = false
+    var observedTimebase: CMTimebase?
+    var timebaseNotifications: [NSObjectProtocol] = []
     /// The playback rate last reported by `ratechange` (HTML's playbackRate):
     /// starting and pausing change the player's rate, not this.
     var reportedRate: Float = 1
@@ -213,7 +216,10 @@ private final class VideoArm: NSObject, NowPlayingPlayer {
         displayObservations = [presentation.observe(\.isReadyForDisplay, options: [.new]) { [weak self] _, _ in self?.displayReadinessChanged() }]
         #endif
         playerObservations = [
-            player.observe(\.timeControlStatus, options: [.new]) { [weak self] _, _ in self?.timeStatusChanged() },
+            player.observe(\.timeControlStatus, options: [.new]) { [weak self] player, change in
+                guard let self else { return }
+                self.timeStatusChanged(change.newValue ?? player.timeControlStatus, generation: self.generation)
+            },
             player.observe(\.rate, options: [.new]) { [weak self] _, _ in self?.rateChanged() },
             player.observe(\.volume, options: [.new]) { [weak self] _, _ in self?.volumeChanged() },
             player.observe(\.isMuted, options: [.new]) { [weak self] _, _ in self?.volumeChanged() }
@@ -365,20 +371,59 @@ private final class VideoArm: NSObject, NowPlayingPlayer {
         }
         return "decode"
     }
-    func timeStatusChanged() {
-        guard Thread.isMainThread else { DispatchQueue.main.async { [weak self] in self?.timeStatusChanged() }; return }
-        guard !invalidated else { return }
+    func timeStatusChanged(_ status: AVPlayer.TimeControlStatus, generation token: Int) {
+        guard Thread.isMainThread else {
+            DispatchQueue.main.async { [weak self] in self?.timeStatusChanged(status, generation: token) }; return
+        }
+        guard !invalidated, generation == token else { return }
         #if os(iOS)
         audioControls?.refresh()
         #endif
-        let status = player.timeControlStatus
         let paused = status == .paused
         if paused != lastPaused { lastPaused = paused; emit(paused ? "pause" : "play"); if !paused { NowPlaying.shared.played(self) } }
         if status != lastTimeStatus {
             lastTimeStatus = status
-            if status == .playing { posterDismissed = true; showPoster(); emit("playing") }
+            if status == .playing { posterDismissed = true; showPoster() }
+            else { playingReported = false }
             if status == .waitingToPlayAtSpecifiedRate { emit("waiting") }
         }
+        observePlaybackClock()
+        playbackClockChanged()
+    }
+    /// AVPlayer's `.playing` can precede the item's clock by hundreds of
+    /// milliseconds. Core Media's effective rate includes its source clocks;
+    /// observing it leaves the 250 ms timeupdate observer unchanged.
+    func observePlaybackClock() {
+        guard let timebase = player.currentItem?.timebase, observedTimebase !== timebase else { return }
+        clearPlaybackClock()
+        observedTimebase = timebase
+        let token = generation
+        timebaseNotifications = [kCMTimebaseNotification_EffectiveRateChanged, kCMTimebaseNotification_TimeJumped].map { name in
+            NotificationCenter.default.addObserver(forName: Notification.Name(name as String), object: timebase, queue: nil) { [weak self] _ in
+                let advancing = CMTimebaseGetEffectiveRate(timebase) > 0
+                // Core Media can post while holding a lock AVKit needs on
+                // main. A notification queue of .main waits and deadlocks.
+                DispatchQueue.main.async {
+                    guard let self, !self.invalidated, self.generation == token,
+                          self.observedTimebase === timebase else { return }
+                    self.playbackClockChanged(advancing)
+                }
+            }
+        }
+    }
+    func playbackClockChanged(_ advancing: Bool? = nil) {
+        guard !invalidated, let timebase = observedTimebase, player.currentItem?.timebase === timebase else { return }
+        guard advancing ?? (CMTimebaseGetEffectiveRate(timebase) > 0) else { playingReported = false; return }
+        guard !playingReported, player.timeControlStatus == .playing, seekTarget == nil,
+              player.currentItem?.status == .readyToPlay, !atEnd else { return }
+        playingReported = true
+        emit("playing")
+    }
+    func clearPlaybackClock() {
+        timebaseNotifications.forEach(NotificationCenter.default.removeObserver)
+        timebaseNotifications.removeAll()
+        observedTimebase = nil
+        playingReported = false
     }
     func update(_ values: [String: String]) {
         let old = props
@@ -482,6 +527,7 @@ private final class VideoArm: NSObject, NowPlayingPlayer {
     }
     func loadSource() {
         generation += 1
+        clearPlaybackClock()
         hdrTask?.cancel(); hdrTask = nil
         hdrItem = false
         lastError = nil
@@ -503,6 +549,7 @@ private final class VideoArm: NSObject, NowPlayingPlayer {
             DispatchQueue.main.async {
                 guard let self, let item, !self.invalidated, self.generation == token else { return }
                 if item.status == .failed {
+                    self.clearPlaybackClock()
                     SharedAssets.forget(url)
                     self.fail(Self.code(item.error, ready: self.itemReady), item.error?.localizedDescription ?? "Media could not be loaded")
                 }
@@ -515,6 +562,8 @@ private final class VideoArm: NSObject, NowPlayingPlayer {
                     self.emit("canplay")
                     if let time = self.pendingSeek { self.pendingSeek = nil; self.seek(time) }
                     if self.wantsPlay { self.play() }
+                    self.observePlaybackClock()
+                    self.playbackClockChanged()
                     self.layout()
                 }
             }
@@ -552,6 +601,7 @@ private final class VideoArm: NSObject, NowPlayingPlayer {
         guard player.currentItem?.status == .readyToPlay else { pendingSeek = time; return }
         posterDismissed = true; showPoster()
         seekTarget = time; seeks += 1; atEnd = false
+        playingReported = false
         emit("seeking")
         let token = generation, mine = seeks
         player.seek(to: CMTime(seconds: time, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] completed in
@@ -564,6 +614,7 @@ private final class VideoArm: NSObject, NowPlayingPlayer {
                 self.audioControls?.refresh()
                 #endif
                 self.emit("seeked"); self.emit("timeupdate", payload: String(self.seconds))
+                self.playbackClockChanged()
             }
         }
     }
@@ -845,6 +896,7 @@ private final class VideoArm: NSObject, NowPlayingPlayer {
     func invalidate() {
         guard !invalidated else { return }
         invalidated = true; generation += 1; posterGeneration += 1
+        clearPlaybackClock()
         hdrTask?.cancel(); hdrTask = nil
         NowPlaying.shared.left(self)
         player.pause()

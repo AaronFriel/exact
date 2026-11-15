@@ -18,6 +18,58 @@ delete process.env.DEVELOPMENT_TEAM;
 
 const packagingTools = process.platform === 'darwin' && ['clang', 'codesign', 'sips', 'dsymutil', 'nm'].every((tool) => Bun.which(tool));
 
+test('simulator assets use the installed bundle or a private copy of an explicit override', async () => {
+  const { simulatorAssetRoot } = await import('../host/apple/assets.mjs');
+  const dir = mkdtempSync(resolve(tmpdir(), 'exact-simulator-assets-'));
+  const installed = resolve(dir, 'container/App.app'), stage = resolve(dir, 'drive/assets');
+  try {
+    assert.equal(simulatorAssetRoot(installed), installed);
+    assert.equal(existsSync(stage), false);
+    for (const folder of ['Desktop', 'Documents', 'Downloads', 'Library/Mobile Documents/com~apple~CloudDocs']) {
+      const source = resolve(dir, folder, 'app/target/clients/capture');
+      mkdirSync(resolve(source, 'assets'), { recursive: true });
+      writeFileSync(resolve(source, 'assets/page.html'), folder);
+      writeFileSync(resolve(source, 'local.html'), 'a root-relative fixture');
+      symlinkSync(resolve(source, 'assets/page.html'), resolve(source, 'assets/linked.html'));
+      symlinkSync(resolve(source, 'assets'), resolve(source, 'linked-assets'));
+      assert.equal(simulatorAssetRoot(installed, source, stage), stage);
+      assert.equal(realpathSync(resolve(stage, 'assets/page.html')), resolve(realpathSync(stage), 'assets/page.html'));
+      assert.equal(readFileSync(resolve(stage, 'assets/page.html'), 'utf8'), folder);
+      assert.equal(readFileSync(resolve(stage, 'local.html'), 'utf8'), 'a root-relative fixture');
+      rmSync(source, { recursive: true });
+      assert.equal(readFileSync(resolve(stage, 'assets/page.html'), 'utf8'), folder);
+      assert.equal(readFileSync(resolve(stage, 'assets/linked.html'), 'utf8'), folder);
+      assert.equal(readFileSync(resolve(stage, 'linked-assets/page.html'), 'utf8'), folder);
+      rmSync(stage, { recursive: true });
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('simulator plans stage the initial generation and a later plan-only edit with their modules', async () => {
+  const { simulatorPlanPath } = await import('../host/apple/assets.mjs');
+  const dir = mkdtempSync(resolve(tmpdir(), 'exact-simulator-plan-'));
+  const source = resolve(dir, 'Desktop/app/target/clients/ios/plan');
+  try {
+    for (const generation of ['initial', 'edited']) {
+      mkdirSync(resolve(source, 'rust/native'), { recursive: true });
+      const files = ['app.plan', 'app.module.json', 'app.hbc', 'rust/native/app.dylib', 'rust/native/app.module.json'];
+      for (const name of files) writeFileSync(resolve(source, name), `${generation}:${name}`);
+      const stage = resolve(dir, `drive-${generation}/plan`);
+      assert.equal(simulatorPlanPath(resolve(source, 'app.plan'), stage), resolve(stage, 'app.plan'));
+      rmSync(source, { recursive: true });
+      for (const name of files) {
+        assert.equal(readFileSync(resolve(stage, name), 'utf8'), `${generation}:${name}`);
+        assert.equal(realpathSync(resolve(stage, name)), resolve(realpathSync(stage), name));
+      }
+    }
+    mkdirSync(source, { recursive: true });
+    writeFileSync(resolve(source, 'fixture.plan'), 'bare plan');
+    const bare = simulatorPlanPath(resolve(source, 'fixture.plan'), resolve(dir, 'bare'));
+    assert.equal(readFileSync(bare, 'utf8'), 'bare plan');
+    assert.equal(existsSync(resolve(dir, 'bare/app.hbc')), false);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('Apple production optimization defaults, manifest choices and command-line overrides agree with artifact paths', async () => {
   const { appleProduction } = await import('../host/apple/link.mjs');
   const { appleArtifacts } = await import('../host/apple/build.mjs');
@@ -472,8 +524,14 @@ test('device grants derive the plists, their translations and the release entitl
     assert.match(plist, /<key>NSSpeechRecognitionUsageDescription<\/key><string>Transcribes.<\/string>/);
     assert.match(plist, /<key>CFBundleLocalizations<\/key><array><string>en<\/string><string>fr<\/string><\/array>/);
   }
-  // No device grant, no key: the plists are what they were.
-  for (const plist of [infoPlist(app, false), macInfoPlist(app, { reach: { ...reach, usage: {} } })]) assert.doesNotMatch(plist, /UsageDescription|CFBundleLocalizations/);
+  // No device grant, no usage key; the strings tables are still the bundle's localizations (#486).
+  for (const plist of [infoPlist(app, false, { reach: { ...reach, usage: {} } }), macInfoPlist(app, { reach: { ...reach, usage: {} } })]) {
+    assert.doesNotMatch(plist, /UsageDescription/);
+    assert.match(plist, /<key>CFBundleDevelopmentRegion<\/key><string>en<\/string>/);
+    assert.match(plist, /<key>CFBundleLocalizations<\/key><array><string>en<\/string><string>fr<\/string><\/array>/);
+  }
+  // No strings table, no localization.
+  for (const plist of [infoPlist(app, false), macInfoPlist(app, { reach: { ...reach, usage: {}, base: null, locales: null } })]) assert.doesNotMatch(plist, /UsageDescription|CFBundleLocalizations|CFBundleDevelopmentRegion/);
   const dir = mkdtempSync(resolve(tmpdir(), 'exact-usage-'));
   try {
     writeUsageStrings(reach, dir);
@@ -1178,6 +1236,39 @@ test('watch owns the build before the parent starts and reports a skipped TypeSc
 });
 
 
+test('a device watch app is arm64 from watchOS 26, signed with profiles of the iPhone app\'s kind that grant its group (LLP 1126.002 D7, D10)', async () => {
+  const { watchInfo, watchDestination, watchProfiles, buildWatch } = await import('../host/apple/watch.mjs');
+  const dir = mkdtempSync(resolve(tmpdir(), 'exact-watch-device-'));
+  try {
+    const app = { dir, id: 'com.exact.watchy', displayName: 'Watchy', manifest: { watch: { source: 'watch.contract', component: 'Watch' }, widgets: [{ kind: 'next', families: ['accessoryInline'] }] } };
+    assert.deepEqual(watchDestination(true), { target: 'aarch64-apple-watchos', triple: 'arm64-apple-watchos26.0', sdkName: 'watchos', platform: 'WatchOS' });
+    assert.deepEqual(watchDestination(false), { target: 'aarch64-apple-watchos-sim', triple: 'arm64-apple-watchos26.0-simulator', sdkName: 'watchsimulator', platform: 'WatchSimulator' });
+    const fields = { appInfo: { CFBundleVersion: '7', CFBundleShortVersionString: '1.2' }, group: 'group.com.exact.watchy.watchkitapp', entries: [], live: true, generation: 'g' };
+    const device = watchInfo(app, { ...fields, device: true, toolchain: { DTSDKName: 'watchos27.2' } });
+    assert.deepEqual([device.CFBundleSupportedPlatforms, device.DTPlatformName, device.MinimumOSVersion, device.UIRequiredDeviceCapabilities, device.DTSDKName], [['WatchOS'], 'watchos', '26.0', ['arm64'], 'watchos27.2']);
+    assert.deepEqual([device.WKApplication, device.WKCompanionAppBundleIdentifier, device.CFBundleIdentifier, device.CFBundleVersion], [true, app.id, `${app.id}.watchkitapp`, '7']);
+    const simulator = watchInfo(app, fields);
+    assert.deepEqual([simulator.CFBundleSupportedPlatforms, simulator.MinimumOSVersion, simulator.UIRequiredDeviceCapabilities], [['WatchSimulator'], '26.0', undefined]);
+
+    const make = (id, extra = {}) => ({ name: id, appId: `PREFIX.${id}`, team: 'TEAM', prefix: 'PREFIX', platforms: ['iOS'], expires: new Date(Date.now() + 86400000),
+      method: 'development', dev: true, devices: ['PHONE'], groups: ['group.com.exact.watchy.watchkitapp'], keychain: [], entitlements: [], ...extra });
+    const like = make(app.id, { groups: [] }), watch = make(`${app.id}.watchkitapp`), extension = make(`${app.id}.watchkitapp.widgets`);
+    assert.deepEqual(watchProfiles({ app, udid: 'PHONE', like, installed: [like, watch, extension] }), [watch, extension]);
+    assert.deepEqual(watchProfiles({ app: { ...app, manifest: { watch: app.manifest.watch } }, udid: 'PHONE', like, installed: [watch] }), [watch], 'no complications, no extension profile');
+    assert.deepEqual(watchProfiles({ app: { ...app, manifest: {} }, udid: 'PHONE', like, installed: [] }), [], 'no watch app, no profiles');
+    for (const [changed, why] of [[{ groups: [] }, /does not grant the App Group group.com.exact.watchy.watchkitapp/], [{ team: 'OTHER' }, /is team OTHER's, not TEAM's/],
+      [{ devices: ['OTHER'] }, /does not include this phone/], [{ method: 'adhoc', dev: false }, /is Ad Hoc, not development/]]) {
+      assert.throws(() => watchProfiles({ app, udid: 'PHONE', like, installed: [{ ...watch, ...changed }, extension] }), why, JSON.stringify(changed));
+    }
+    assert.throws(() => watchProfiles({ app, udid: 'PHONE', like, installed: [watch] }), /com.exact.watchy.watchkitapp.widgets.*none on this Mac is for it.*register the App ID com.exact.watchy.watchkitapp.widgets with App Groups/);
+    // An archive's: the App Store profiles of the iPhone app's, which name no device.
+    const store = { method: 'appstore', dev: false, devices: [] };
+    assert.deepEqual(watchProfiles({ app, udid: undefined, like: { ...like, ...store }, installed: [{ ...watch, ...store }, { ...extension, ...store }] }).length, 2);
+    await assert.rejects(buildWatch(app, ['--watchos', '--device'], {}), /a --device or --archive build of the iPhone app embeds its watch app/);
+    await assert.rejects(buildWatch(app, ['--watchos', '--extensions', 'widgets'], {}), /--extensions leaves out/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('a refused parent prevents use of a stale companion bundle', async () => {
   const { buildWatch } = await import('../host/apple/watch.mjs');
   const before = process.exitCode ?? 0, events = [];
@@ -1283,7 +1374,7 @@ for (const [moduleDirectory, staleDirectory] of [['', null], ['Modules', null], 
   if (process.platform !== 'darwin') return;
   const { sharedWidgetCore } = await import('../host/apple/widgets.mjs');
   const dir = mkdtempSync(resolve(tmpdir(), 'exact-core-recopy-'));
-  const run = (command, args) => { const r = spawnSync(command, args, { encoding: 'utf8' }); assert.equal(r.status, 0, r.stderr); return r; };
+  const run = (command, args) => { const r = spawnSync(command, args, { encoding: 'utf8', env: { ...process.env, TMPDIR: dir } }); assert.equal(r.status, 0, r.stderr); return r; }; // swiftc leaves a TemporaryDirectory.* in its TMPDIR
   try {
     const bin = resolve(dir, 'bin'), base = resolve(dir, 'core'); mkdirSync(bin);
     const triple = moduleTripleFor({ manifest: {} }, false);

@@ -26,6 +26,7 @@ impl<D: DataSource> Presenter<D> {
             glides,
             page,
             focus_out,
+            type_ahead,
             autofocus_from,
             disabled_blur,
             edited,
@@ -107,6 +108,7 @@ impl<D: DataSource> Presenter<D> {
             hosted: _,
             access: _,
             // The window's, the device's and the session's.
+            make_text: _,
             live_clock: _,
             native_timers: _,
             timers_hidden: _,
@@ -114,6 +116,9 @@ impl<D: DataSource> Presenter<D> {
             dev: _,
             pending_dev: _,
             pending_update: _,
+            update_checks: _,
+            reader_blesses: _,
+            blessed: _,
             viewport: _,
             compat: _,
             window_active: _,
@@ -163,6 +168,7 @@ impl<D: DataSource> Presenter<D> {
         *glides = Default::default();
         *page = (0.0, 0.0);
         focus_out.clear();
+        *type_ahead = Default::default();
         *autofocus_from = None;
         disabled_blur.clear();
         // An unbound control's own state, a choice or typed text (LLP

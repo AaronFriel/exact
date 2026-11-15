@@ -45,6 +45,7 @@ package final class Presenter {
     /// A view's props were written (`NodeView.props`' own observer).
     func propsChanged(_ view: NodeView) {
         chrome.note(view.id, props: view.props)
+        AriaCarriers.note(view, of: self)
         if view.disabled { view.showFieldFocus(false) }
         view.syncDisabledLook()
         view.relook() // a look holds on no disabled node (LLP 1121 D8)
@@ -681,6 +682,7 @@ package final class Presenter {
         hoveredInline = nil
         hoveredNodes = []; hovered = nil
         chrome = ChromeIndex()
+        AriaCarriers.forget(presenter: self)
         scrollers.removeAll()
         pendingScrolls.removeAll()
         heightBindings.removeAll()
@@ -1227,6 +1229,7 @@ package final class Presenter {
             case .land: if let f = flights[id] { landFlight(f) }
             case .rank:
                 if let rank = op.payload["rank"] as? NSNumber { views[id]?.setRank(rank.int64Value) }
+            case .layoutHits, .layoutHitsWithdrawn: break
             case .sticky: stickies.apply(id, op.payload)
             case .fragments: views[id]?.applyColumns(op.payload)
             case .unknown: blocks.applied(op)
@@ -1238,6 +1241,8 @@ package final class Presenter {
                 forgetFlight(id)
                 views[id]?.holdGone()
                 if endExit(id) { continue }
+                // A route that left with its exit to play stays for it (RouteTransitionMac.swift).
+                if navigation.transitions.keeps(id) { beginExit(id); continue }
                 release(id, forget: true)?.removeFromSuperview()
             case .roots:
                 dialogs.children(root, op.ids.compactMap { views[UInt32($0)] })
@@ -1266,7 +1271,7 @@ package final class Presenter {
                 case "translate": v.translatePx = CGPoint(x: x, y: CGFloat(op.y)); v.translatePercent = CGPoint(x: CGFloat(op.w), y: CGFloat(op.h)); v.applyTransform()
                 case "layout": v.layoutOffset = CGPoint(x: x, y: CGFloat(op.y)); v.layoutResize = CGSize(width: CGFloat(op.w), height: CGFloat(op.h)); v.applyTransform(); v.applySurface()
                 case "scale": v.scale = x; v.applyTransform()
-                case "rotate": v.rotate = x; v.applyTransform()
+                case "rotate": v.rotate = x; v.rotationAxis = [op.y, op.w, op.h]; v.applyTransform()
                 case "opacity": v.presentedAlpha = x; v.alphaValue = v.disabledShown ? x * NodeView.disabledOpacity : x; v.refreshPressOpacity()
                 case "flight": presentFlight(id, x)
                 default: break

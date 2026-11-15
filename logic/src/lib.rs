@@ -1,6 +1,9 @@
 //! Optional Rust data executors: embedded first frame, replacement after first pixel.
 //! @ref LLP 1029.000 — independently built data modules, one encoded seam on every host.
 
+/// The placement proxy a Rust-only app's generated entry wraps its source in (`rust.placement`).
+#[cfg(not(target_arch = "wasm32"))]
+pub use exact_data;
 use exact_logic_abi as abi;
 #[doc(hidden)]
 pub use exact_plan;
@@ -491,6 +494,11 @@ impl<D: DataSource> exact_runner::DataSourceWrapper for Swappable<D> {
             None => Ok(()),
         }
     }
+    fn take_reports(&mut self) -> Vec<exact_runner::Report> {
+        self.embedded
+            .as_mut()
+            .map_or_else(Vec::new, |embedded| embedded.take_reports())
+    }
     fn module_delivery(
         &mut self,
         store: &mut Store,
@@ -804,3 +812,30 @@ mod target_tests;
 
 #[cfg(all(test, any(target_os = "macos", target_os = "linux")))]
 mod native_tests;
+
+/// A test's directory, removed when dropped, so a test that fails or panics
+/// leaves nothing in the system temp directory.
+#[cfg(test)]
+pub(crate) struct TempDir(pub(crate) std::path::PathBuf);
+
+#[cfg(test)]
+impl std::ops::Deref for TempDir {
+    type Target = std::path::Path;
+    fn deref(&self) -> &std::path::Path {
+        &self.0
+    }
+}
+
+#[cfg(test)]
+impl AsRef<std::path::Path> for TempDir {
+    fn as_ref(&self) -> &std::path::Path {
+        &self.0
+    }
+}
+
+#[cfg(test)]
+impl Drop for TempDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}

@@ -140,6 +140,7 @@ impl<D: DataSource> Runner<D> {
     /// `console` lines also queued for the host (LLP 1027.009 D2).
     pub(super) fn take_data_logs(&mut self) {
         self.hear_aborted();
+        self.take_reports();
         for line in self.data.take_logs() {
             self.journal_module_line(line);
         }

@@ -15,11 +15,12 @@ what to write for a name Contract lacks. The web's methods are called on their v
   `range(n)`.
 - **Numbers:** `floor(n)` · `ceil(n)` · `round(n)` · `min(a, b)` · `max(a, b)` ·
   `sin(rad)` · `cos(rad)` · `+ - * / %`.
-- **Formatting:** `formatNumber(n, "decimal" | "percent" | "compact")` ·
-  `formatNumber(n, "currency", "USD")` · `n.toFixed(d)` · `formatDecimal(cents, 2)` ·
-  `formatDate(msOrDayKey, offset, "medium" | "month-year" | "iso")` · `formatTime(ms, offset, "short")` ·
-  `formatDay(then, now, offset, "day"|"day-time"|"list"|"section")` ·
-  `calendarDiff(from, to, "years" | "months")` · `t("key", name=value)`.
+- **Formatting:** `formatNumber(n, "decimal"|"percent"|"compact")`, `(n, "decimal", 1)`,
+  `(n, "currency", "USD")` · `n.toFixed(d)` · `formatDecimal(cents, 2)` ·
+  `formatDate(msOrDayKey, offset, "medium"|"month-year"|"month-day"|"iso")` ·
+  `formatTime(ms, offset, "short"|"2-digit")` ·
+  `formatDay(then, now, offset, "day"|"list"|…)` ·
+  `calendarDiff(from, to, "years"|"months")` · `t("key", name=value)`.
 - **Time:** `performanceNow()`, ms since launch; the date is
   `time.epochAtZero + performanceNow()` ([dates and days](dates-and-days.md)).
 - **Routes:** `push(nav, location)` · `replace(nav, location)` · `back(nav)` ·

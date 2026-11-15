@@ -23,7 +23,7 @@
 // ending "verify: clean" or "verify: N problems" (`--json`: one object). Exit 1 when the build, a test, a launch
 // or the relaunch fails; check's findings, the accessibility tree's, the relaunch's, those at the largest text size and the compiler's warnings
 // (`contract build`'s, whether or not this run built) are counted in the last line but fail it only under `--strict`, since check reads the screen
-// by heuristics and some of either only advise; a warning that is information (`tamber-unreachable`) is said, not
+// by heuristics and some of either only advise; a warning that is information (`forma-unreachable`) is said, not
 // counted. Without an owned server the web's tests and its two launches run at once. With one, first screens
 // precede the tests, each on an empty server; the chosen test is replayed before relaunch. A simulator takes
 // one drive at a time, with UIKit's bars (`--chrome platform`). An app's own server runs where the app calls it,
@@ -40,6 +40,7 @@
 //
 //   bun scripts/verify.mjs [web|ios|windows|android] --app <name> [--sim <udid|name>] [--shots <dir>] [--rescroll] [--strict] [--json]
 import { LAUNCH_MEDIA } from './agent-prefer.mjs';
+import { toolEnv } from './tools.mjs';
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -136,7 +137,7 @@ async function compilerWarningsOf(app) {
   const env = cargoEnvironment(process.env), binary = resolve(ROOT, 'target/debug', process.platform === 'win32' ? 'contract.exe' : 'contract');
   delete env.RUSTUP_TOOLCHAIN; delete env.CARGO_TARGET_DIR; // as `exact contract` runs it: exact2's toolchain and target
   const [command, ...pre] = fresh(binary, resolve(ROOT, 'target/debug/contract.d')) ? [binary] : ['cargo', 'run', '-q', '--manifest-path', resolve(ROOT, 'Cargo.toml'), '-p', 'contract', '--'];
-  const child = spawn(command, [...pre, 'build', '--json', resolve(app.dir, 'app.contract')], { cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = spawn(command, [...pre, 'build', '--json', resolve(app.dir, 'app.contract')], { cwd: ROOT, env: toolEnv(env), stdio: ['ignore', 'pipe', 'pipe'] });
   let said = '';
   for (const stream of [child.stdout, child.stderr]) stream.on('data', (d) => { said += d; });
   await new Promise((done) => { child.on('close', done); child.on('error', done); });
@@ -449,6 +450,9 @@ export async function largestText(s, screen) {
     for (let page = 0; page < PAGES; page++) {
       obs = await s.op({ op: 'check' });
       for (const it of obs.items ?? []) looked.add(it.id).add(it.of);
+      // Menu substitutes remain in tree for taps, but their rows are not page content to scroll to.
+      const omit = id => { looked.add(id); for (const child of nodes.get(id)?.children ?? []) omit(child); };
+      for (const a of obs.advice ?? []) if (a.kind === 'menu') omit(a.id);
       const before = found.size;
       const compared = { ...obs, items: (obs.items ?? []).filter(it => !projected.has(it.id) && !projected.has(it.of)) };
       for (const f of judge(compared, null, { host: web ? 'web' : 'ios' })) if (LARGE_KINDS.has(f.kind) && !accepts(ACCEPT, f, nodes) && !found.has(`${f.kind} ${f.id}`)) found.set(`${f.kind} ${f.id}`, f);
@@ -718,6 +722,8 @@ export function judgeRelaunch(test, fresh, after, { busy = [], failed = {}, held
  * zone, the locale and the seed. Media preferences are applied through the session before observations. */
 const LAUNCH_FACTS = ['epoch', 'timeZone', 'locale', 'seed'];
 const launchOf = (launch) => Object.fromEntries(LAUNCH_FACTS.filter((k) => launch?.[k] != null).map((k) => [k, launch[k]]));
+/** The media preferences and module permissions a launch applied, which a launch under its facts applies again. */
+const preferencesOf = (launch) => ({ ...launch?.media, ...launch?.permissions });
 
 /** The facts a relaunch on the store `test` left is made under: its launch facts, the date being the one it had reached
  * (its launch date plus its `clock` steps), as a `reload` relaunches (LLP 1116.009 D1): a phone restarted at 9:05 wakes at 9:05. */
@@ -728,11 +734,11 @@ export const relaunchFacts = (test) => ({ ...test.end?.launch, ...(test.end?.rea
 export const movedClock = (test) => test.end?.reached != null && test.end.launch?.epoch != null && test.end.reached !== test.end.launch.epoch;
 
 /** Whether `test` launched under facts other than the driver's own, which the first screens launch under: a date, zone,
- * locale or seed its leading lines pinned, or a media preference it applied. What it stored is read back under those facts, and a fresh launch to compare
+ * locale or seed its leading lines pinned, or a media preference or module permission it applied. What it stored is read back under those facts, and a fresh launch to compare
  * with must be made under them too (LLP 1116.007 D3.4). */
 export function pinnedLaunch(test, defaults) {
   const launch = test.end?.launch;
-  return !!launch && (LAUNCH_FACTS.some((k) => launch[k] != null && launch[k] !== defaults[k]) || Object.entries(launch.media ?? {}).some(([k, v]) => v !== (defaults.media?.[k] ?? LAUNCH_MEDIA[k])));
+  return !!launch && (LAUNCH_FACTS.some((k) => launch[k] != null && launch[k] !== defaults[k]) || Object.entries(launch.media ?? {}).some(([k, v]) => v !== (defaults.media?.[k] ?? LAUNCH_MEDIA[k])) || Object.keys(launch.permissions ?? {}).length > 0);
 }
 
 /** What a fresh launch shows under `launch`'s facts on an empty scratch store, for `seen`'s comparison. */
@@ -740,7 +746,7 @@ async function freshUnder(host, app, launch, store) {
   const [{ open }, { driveStore, removeBrowserProfile }] = await Promise.all([import('./agent.mjs'), import('./agent-launch.mjs')]);
   const s = await open({ host, app: app.selector, storage: store, env: { EXACT_AGENT_STORAGE_FRESH: '1' }, ...launchOf(launch), ...(host === 'web' ? { size: WEB_SIZES[0] } : hostOpen(host, app)) });
   try {
-    for (const [name, value] of Object.entries(launch?.media ?? {})) await s.prefer({ [name]: value });
+    for (const [name, value] of Object.entries(preferencesOf(launch))) await s.prefer({ [name]: value });
     await s.clock('data');
     await s.clock('settle');
     return await seen(s, await s.state().catch(() => ({})));
@@ -758,7 +764,7 @@ async function relaunch(host, app, test, fresh, shots) {
   const [{ open }, { driveStore, removeBrowserProfile }] = await Promise.all([import('./agent.mjs'), import('./agent-launch.mjs')]);
   const s = await open({ host, app: app.selector, storage: test.store, ...launchOf(relaunchFacts(test)), ...(host === 'web' ? { size: WEB_SIZES[0], ...(test.end.port ? { port: test.end.port } : {}) } : hostOpen(host, app)) });
   try {
-    for (const [name, value] of Object.entries(test.end?.launch?.media ?? {})) await s.prefer({ [name]: value });
+    for (const [name, value] of Object.entries(preferencesOf(test.end?.launch))) await s.prefer({ [name]: value });
     const started = performance.now(), b = (st) => (st.background?.queued ?? 0) + (st.background?.inFlight ?? 0);
     const waiting = (st) => [...(st.pending ?? []).filter((p) => !p.device && !p.held).map((p) => p.name), ...(b(st) ? ['storage'] : [])];
     let state, busy;

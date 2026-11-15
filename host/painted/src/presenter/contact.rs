@@ -170,10 +170,11 @@ impl<D: DataSource> Presenter<D> {
                             .is_none_or(|key| self.touch_activation_live(key)))
                     && contact
                         .feedback
+                        .as_ref()
                         .filter(|_| contact.press_activates)
                         .is_none_or(|(key, _)| {
-                            self.input_live(key)
-                                && self.host.kernel().node_by_key(key).is_some_and(|n| {
+                            self.input_live(*key)
+                                && self.host.kernel().node_by_key(*key).is_some_and(|n| {
                                     n.props.link().is_some()
                                         || (self.host.runner().handlers_of(n.id))
                                             .contains(&EventKind::Press)
@@ -291,6 +292,7 @@ impl<D: DataSource> Presenter<D> {
         self.host.land_presses();
         self.brush.ripples.land(self.host.now());
         self.land_bar_ripple();
+        self.land_surface_ripple();
         self.dirty = true;
     }
     pub(crate) fn contact_event_ms(&self) -> Option<f64> {
@@ -733,10 +735,10 @@ impl<D: DataSource> Presenter<D> {
         });
         // A pressed box that shows its press (a scale shrinks it) activates
         // where the lift is in the box it had unpressed, a link as a press.
-        let press_activates = feedback.is_some_and(|(key, _)| {
+        let press_activates = feedback.as_ref().is_some_and(|(key, _)| {
             self.host
                 .kernel()
-                .node_by_key(key)
+                .node_by_key(*key)
                 .is_some_and(|node| crate::host::press::shows(&node))
         });
         if let Some((key, _)) = feedback {
@@ -863,7 +865,7 @@ impl<D: DataSource> Presenter<D> {
         contact
             .pan_velocity
             .push(event_ms / 1000., Value::new(x as f64, y as f64));
-        if let Some((key, box_)) = contact.feedback {
+        if let Some((key, ref box_)) = contact.feedback {
             self.host.press_feedback(key, box_.contains(x, y), now_ms);
             self.dirty = true;
         }

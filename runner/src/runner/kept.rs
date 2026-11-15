@@ -438,8 +438,9 @@ impl<D: DataSource> Runner<D> {
     /// Keep a store-reading resource's fresh answer for the next boot's
     /// first frame (LLP 1027 D4), when this source may not be ready then.
     pub(super) fn keep_answer(&mut self, i: usize, args: &[Value], value: &Value) {
-        // An element of a resource over a list is the launch's to ask.
-        if self.member(i).is_some() {
+        // An element of a resource over a list is the launch's to ask, and
+        // so is an instance's request (LLP 1035.005.004 D8).
+        if self.member(i).is_some() || self.owned_row(i).is_some() {
             return;
         }
         self.answered_waiting(i, args, false);
@@ -893,7 +894,7 @@ impl<D: DataSource> Runner<D> {
         let m = target
             .mutation()
             .expect("a send's target names its mutation");
-        let name = self.plan.str(self.plan.mutations[m].name).to_string();
+        let name = self.mutation_name(m).to_string();
         let answer = self
             .check_send_arguments(m, &args)
             .map_err(|e| format!("{e:?}"))
@@ -917,7 +918,7 @@ impl<D: DataSource> Runner<D> {
                 answer.map_err(|e| format!("{e:?}"))
             });
         let refused = match answer {
-            Ok(super::Answer::Now(value)) if self.conforms(&value, self.plan.mutations[m].ty) => {
+            Ok(super::Answer::Now(value)) if self.conforms(&value, self.mutation_row(m).ty) => {
                 match self.mutation_slot(m) {
                     Ok(slot) => {
                         if self.newest_wins(m) {

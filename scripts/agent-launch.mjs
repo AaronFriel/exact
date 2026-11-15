@@ -25,7 +25,6 @@ import { HOST_CRATES } from './cargo-check.mjs';
 import { webSourceRoots } from '../host/web/build.mjs';
 import { changedContractReads } from './web-build.mjs';
 import { CONFIG_JSON, DECLARATIONS, MODULE_FILE, moduleGraph } from './module-graph.mjs';
-
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 
 /** Poll host I/O until ready; a bound only ends a hung load. Return its last observation for diagnostics. */
@@ -466,7 +465,8 @@ const sharedBrowsers = new Map();
 /** A test suite's browser: the process's one Playwright browser of this engine (`chromium`, `firefox`, `webkit`), Chromium
  * build (`needs`, as `chromium` takes them) and launch options, shared by every suite that asks for the same, so only the
  * first suite to ask launches it. What a suite opens on it is its own: `newContext` and `newPage` each make a browser context, and `close`
- * closes those, never the browser, which Playwright closes when the process exits. */
+ * closes those, never the browser, which closes after the test file or before normal process exit, as `cdpBrowser`'s does.
+ * Closing it is what removes the profile and artifacts directories Playwright made for it. */
 export async function suiteBrowser(engine = 'chromium', { needs = [], timeout, ...launch } = {}) {
   const playwright = await import('playwright-core');
   const options = { headless: true, ...(engine === 'chromium' ? { executablePath: chromium({ needs }).executable } : {}), ...launch };
@@ -489,17 +489,25 @@ export async function suiteBrowser(engine = 'chromium', { needs = [], timeout, .
 }
 
 const sharedCdpBrowsers = new Map();
+/** Close every shared browser, Playwright's and the CDP ones. */
+const closeSharedBrowsers = () => Promise.all([
+  ...[...sharedBrowsers.values()].map(launching => launching.then(browser => browser.close(), () => {})),
+  ...[...sharedCdpBrowsers.values()].map(shared => shared.close()),
+]);
 // Bun's test runner exits without `beforeExit` or `exit`, so a test file's
 // shared browsers close in an `afterAll`. It is registered here, as the file
 // loads, so it runs when the file ends: registered inside `cdpBrowser`, it ran
 // when the `beforeAll` that called it ended (Bun 1.4.2), before the tests.
-// Outside the test runner `afterAll` throws, and nothing is registered.
+// Bun evaluates this module once per run, so in a run of several files the
+// hook is the first file's, and a browser a later file launches is left open
+// at exit with its directories. Outside the test runner `afterAll` throws,
+// and nothing is registered.
 try {
   const { afterAll } = await import('bun:test');
-  afterAll(() => Promise.all([...sharedCdpBrowsers.values()].map(shared => shared.close())), 15000);
+  afterAll(closeSharedBrowsers, 15000);
 } catch {}
 process.on('beforeExit', async () => {
-  try { await Promise.all([...sharedCdpBrowsers.values()].map(shared => shared.close())); }
+  try { await closeSharedBrowsers(); }
   catch (error) { console.error(error); process.exitCode = 1; }
 });
 /** A test suite's Chromium over the DevTools pipe, for a test that speaks CDP itself (`Cdp`): the process's one browser
@@ -774,7 +782,7 @@ export function launchEnvironment(facts) {
 // These detect staleness; passing them is not proof of freshness. A
 // binary the caller names (EXACT_LINUX_BIN, EXACT_MAC_BIN) is the caller's
 // own: the driver says it did not check. A served page (--url) is its server's.
-const shown = path => within(ROOT, path) ? relative(ROOT, path) : path;
+export const shown = path => within(ROOT, path) ? relative(ROOT, path) : path;
 const listed = changed => changed.slice(0, 3).join(', ') + (changed.length > 3 ? ` and ${changed.length - 3} more` : '');
 
 /** Throws when `changed` names anything: what, since which build, and the command that rebuilds it. */
@@ -970,7 +978,7 @@ export function newerThan(since, roots, skip = () => false) {
   for (const root of roots) {
     if (root.file) {
       const info = statSync(root.file, { throwIfNoEntry: false });
-      // A recorded file now gone is a change by its digest (webChanges), not by its time.
+      // A recorded file now gone is a change by its digest (webChanges, apkChanges), not by its time.
       if (info?.mtimeMs > since) out.push(shown(root.file));
     } else if (typeof root === 'string') walk(root, true);
     else walk(root.shallow, false);
@@ -1480,7 +1488,6 @@ export async function launchEntries(s, flags) {
     if (r?.error) throw new Error(r.error);
   }
 }
-
 if (import.meta.main) {
   const helperArgs = process.argv.slice(2);
   if (helperArgs.includes('--fixture-port')) {

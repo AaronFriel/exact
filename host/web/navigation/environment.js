@@ -478,6 +478,16 @@ export function launchLocation(platform = globalThis) {
   const rest = q.toString();
   return pathname + (rest ? "?" + rest : "") + hash;
 }
+/** The locations of this document's history entries before the current one, oldest first, by the Navigation API: after
+ * a reload, the visits Back returns to without loading a page (`NavigationHistoryEntry.sameDocument`). */
+export function launchVisits(platform = globalThis) {
+  const entries = platform.navigation?.entries?.() ?? [], at = platform.navigation?.currentEntry?.index ?? -1;
+  let from = at;
+  while (from > 0 && entries[from - 1].sameDocument) {
+    from--;
+  }
+  return entries.slice(from, Math.max(at, 0)).map((entry) => launchLocation({ location: new URL(entry.url) }));
+}
 // Drive facts use the launch URL after route changes too (storage-environment.js `launchHref`).
 const launched = () => new URL(globalThis.performance?.getEntriesByType?.("navigation")[0]?.name ?? location.href).searchParams;
 let pageTime;

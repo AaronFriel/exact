@@ -361,7 +361,7 @@ impl<D: DataSource> Runner<D> {
         let m = target
             .mutation()
             .expect("a send's target names its mutation");
-        let ty = self.plan.mutations[m].ty;
+        let ty = self.mutation_row(m).ty;
         self.module_target(target, source, args, ty)
     }
 
@@ -422,7 +422,7 @@ impl<D: DataSource> Runner<D> {
         let what = match target {
             Target::Resource(i) => format!("query {}", self.plan.str(self.resource_row(i).name)),
             Target::Mutation(m) | Target::Sent(m, _) => {
-                format!("send {}", self.plan.str(self.plan.mutations[m].name))
+                format!("send {}", self.mutation_name(m))
             }
         };
         let reader = match target {

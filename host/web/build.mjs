@@ -42,11 +42,12 @@ import { authClientMetadata, checkModuleRoster, gpuModules, markWorlds, rustPoli
 import { webAudioSession, webCspFile, webHead } from '../../scripts/web-head.mjs';
 import { buildRust, rustFiles, rustCards, rustPackage } from '../../scripts/rust.mjs';
 import { webAppManifest, webDist, copyShaders, bakeOutput, bakeWatchEnv, buildBake, contractLast, readBake, verifyBakeFiles, developmentBuildEnv, resolveApp, webToolchainEnv } from '../../scripts/app.mjs';
-import { buildEditor, buildFlow } from '../web-js/module.mjs';
+import { buildEditor, buildFlow, compilerSet } from '../web-js/module.mjs';
+import { RustMissing, WEB_CRATES, rustMissing, setMetadata } from '../../scripts/tools.mjs';
 import { closeFilesystemReader } from '../../scripts/filesystem.mjs';
 import { guardFlags, reportBuilt } from '../../scripts/help.mjs';
 import { BINARYEN_DOWNLOAD, optimizeWasm, splitStages, unsplitReason } from './stages.mjs';
-import { interfaceStyle, withInterfaceStyle, withLook } from './look.mjs';
+import { interfaceStyle, launchBackground, schemeHead, withInterfaceStyle, withLook } from './look.mjs';
 import { webIconLinks, webThemeColors } from '../../scripts/app-icons.mjs';
 import { appManifestDigest, appSources, buildFileCards, copyStaticTreeIfPresent, listAssets, hostingNotes, planRouteTable, publicFileCards, replaceBuild, webEnvelope, moduleCards, MODULE_FILES } from './serve.mjs';
 import { foreignBeside } from './generations.mjs';
@@ -96,14 +97,20 @@ export function webSourceRoots(app, js, render = 'rust') {
     for (const name of ['Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml', '.cargo/config.toml', '.cargo/config']) files.add(resolve(metadata.workspace_root, name));
     workspaces.push({ metadata, packages: local });
   };
-  closure(webMetadata(SDK_ROOT), ['exact-web-js', 'exact-web', 'exact-js-bake', 'exact-markdown-editor', 'exact-web-js-motion', 'exact-textflow']);
+  // The compiler and the leaves from a tool set: its record of Cargo's answer, and Cargo is not asked (LLP 1174 D5).
+  const set = js ? compilerSet() : null, recorded = set && setMetadata(set);
+  // Without Rust only a set answers what Cargo would: said as that, not as `cargo metadata` failing (LLP 1174 D5).
+  if (js && !set && rustMissing()) throw new RustMissing('exact-web-js');
+  closure(recorded ?? webMetadata(SDK_ROOT), WEB_CRATES);
   const names = [], build = resolve(app.dir, 'web/build.rs');
   const authored = existsSync(build) && !/^\s*fn main\(\)\s*\{\s*exact_js_bake::build\w*\(/m.test(readFileSync(build, 'utf8'));
   if (app.crate) {
     if (!js || authored) names.push(app.crate('web'));
     if (app.manifest.rust?.module?.package) names.push(app.manifest.rust.module.package);
-    if (app.manifest.game || existsSync(resolve(app.dir, 'gpu/Cargo.toml'))) names.push(app.crate('gpu'));
-    names.push(...gpuModules(app.manifest).map(({ name }) => app.crate(`gpu-${name}`)));
+    const gpu = [...(app.manifest.game || existsSync(resolve(app.dir, 'gpu/Cargo.toml')) ? [app.crate('gpu')] : []), ...gpuModules(app.manifest).map(({ name }) => app.crate(`gpu-${name}`))];
+    // A generated app's GPU crates resolve in a workspace of their own (LLP 1153.003 D5.1).
+    const own = gpu.length && app.gpuWorkspace && app.gpuWorkspace !== app.workspace ? app.gpuWorkspace : null;
+    if (own) closure(webMetadata(own), gpu); else names.push(...gpu);
     const at = (!js || render === 'rust') && ['linux', 'web'].find(dir => existsSync(resolve(app.dir, dir, 'src/bin', `${app.name ?? app.crate('web').replace(/-web$/, '')}-render.rs`)));
     if (at) names.push(app.crate(at));
   }
@@ -123,6 +130,10 @@ export function webSourceRoots(app, js, render = 'rust') {
     if (directory || (watch && !info)) roots.add(path);
     if (!directory) files.add(path);
   };
+  // What the set's products were built from beyond their crates' directories: includes and build-script watches.
+  // (A source build finds the same in the target directory's dep-info, the Contract compiler's and the filesystem
+  // helper's included.)
+  if (recorded) for (const product of Object.values(set.manifest.products)) for (const [file] of product.inputs) add(resolve(SDK_ROOT, file), true);
   const targetsOf = workspaces.flatMap(({ packages }) => packages.flatMap(pkg => pkg.targets ?? []));
   const sources = new Set(targetsOf.map(target => resolve(target.src_path)));
   // rustc names a target's dep-info after its crate (`<crate>-<hash>.d`, `lib<crate>.d`, `<crate>.d`), so the
@@ -183,6 +194,12 @@ function completeWebInputs(app, js, render, inputRoots, inputs, inputsAt) {
   }
 }
 
+/** `app.version.json` beside the plan, from the bake's embedded record: what the Rust renderer answers for
+ * `exactDelivery()`'s version, build number and `production` (the binary's resolved trust), as the page does. */
+export function versionFile(embedded) {
+  return JSON.stringify({ version: embedded.version, buildNumber: embedded.buildNumber, production: embedded.trust === 'production' }) + '\n';
+}
+
 async function main() {
 guardFlags('web-build', process.argv.slice(2));
 const target = ['--js', '--wasm'].find((flag) => process.argv.includes(flag));
@@ -231,7 +248,8 @@ const [{ rolldown }, { minifySync }] = await Promise.all([import('rolldown'), im
 // build, and what it refuses is an error; `--wasm` is internal (below).
 const game = app.manifest.game !== undefined;
 const jsTarget = target !== '--wasm' && !game && !bakeOnly;
-const inputRoots = webSourceRoots(app, jsTarget, render[1] ?? 'rust');
+let inputRoots;
+try { inputRoots = webSourceRoots(app, jsTarget, render[1] ?? 'rust'); } catch (error) { if (!error.rustMissing) throw error; console.error(error.message); process.exit(1); }
 if (checkOnly) {
   if (!jsTarget) {
     webToolchainEnv(developmentBuildEnv());
@@ -509,7 +527,7 @@ if (bakeOnly ? !!moduleInput : typeof exports.exact_module_artifact === 'functio
   finally { await bundle.close(); }
 }
 const bakedReceipt = readBake(app, 'web', 'wasm32-unknown-unknown', buildEnv.EXACT_BAKE_OUTPUT);
-writeFileSync(resolve(stage, 'app.version.json'), JSON.stringify({ version: bakedReceipt.embedded.version, buildNumber: bakedReceipt.embedded.buildNumber }) + '\n');
+writeFileSync(resolve(stage, 'app.version.json'), versionFile(bakedReceipt.embedded));
 if (!bakeOnly) {
   if (typeof exports.exact_compat !== 'function') throw new Error('the web wasm exposes no baked receipt');
   const compatLen = exports.exact_compat();
@@ -578,22 +596,10 @@ function minifyCss(css) {
 // The app's module artifact answers `native.later` on the page too (LLP
 // 1067 D5): the glue finds it by the meta tag below.
 const pageNative = app.modules.web;
-// The page in the app's first-frame background from its first paint (the
-// manifest's background colours, as the iOS launch screen), so nothing lighter or
-// darker shows before the first frame. Only until then: from the first frame
-// the app paints its own, and the canvas beyond it is the browser's for the
-// page's colour scheme, as on the JS target (a launch white kept under an
-// app that chose dark showed beside its root; Markdown's conformance).
-// A fixed `userInterfaceStyle` takes its side alone, as the iOS launch screen does.
-const hex = (value) => /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(value ?? '') ? value : null;
-const launchLight = app.manifest.background_color, launchDark = interfaceStyle(app.manifest) === 'light' ? null : hex(app.manifest.color_scheme_dark?.background_color);
-const launchHtml = 'html:has(#exact-root:empty)';
-const launchCss = !hex(launchLight) ? '' : interfaceStyle(app.manifest) === 'dark' ? `${launchHtml}{background-color:${launchDark ?? launchLight}}`
-  : `${launchHtml}{background-color:${launchLight}}${launchDark ? `@media (prefers-color-scheme:dark){${launchHtml}{background-color:${launchDark}}}` : ''}`;
 writeFileSync(resolve(stage, 'index.html'), readFileSync(resolve(stage, 'index.html'), 'utf8')
-  .replace(/<style>([\s\S]*?)<\/style>/, (_, css) => `<style>${minifyCss(css)}${launchCss}</style>`)
+  .replace(/<style>([\s\S]*?)<\/style>/, (_, css) => `<style>${minifyCss(css)}${launchBackground(app.manifest)}</style>`)
   .replace('<html lang="en">', `<html lang="${escapeHtml(webManifest.lang)}">`)
-  .replace('<title>Exact</title>', `<title>${escapeHtml(webManifest.name)}</title>`)
+  .replace('<title>Exact</title>', `${schemeHead(!bakeOnly && exports.exact_chooses_scheme() ? "exact.state.#scheme" : null, { development: !production, wasm: true })}<title>${escapeHtml(webManifest.name)}</title>`)
   // The manifest's favicons and Apple touch icon, else the shell's default favicon (LLP 1163 D7).
   .replace(/<link rel="icon"[^>]*>/, (link) => webIconLinks(app.manifest, app.dir, link))
   // `app.json`'s `audio_session` (LLP 1096 D7), applied by a separate page entry before the runtime, and

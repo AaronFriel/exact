@@ -68,6 +68,12 @@ export function nativeBuild(host, app, { sample = false, checked = null, launch 
   return { built, receipt, changed, backendOrigin };
 }
 
+/** Whether the macOS build a drive of `app` launches signs the App Sandbox (`mac --sandbox`, LLP 1030.005 D4), as
+ * its receipt's entitlements say. */
+export function macSandboxed(app) {
+  try { return /<key>com\.apple\.security\.app-sandbox<\/key>\s*<true\/>/.test(JSON.parse(readFileSync(receiptPath('macos', app), 'utf8')).entitlements ?? ''); } catch { return false; }
+}
+
 /** The receipt of the build a drive of `app` on `host` (`ios`, else macOS) launches, or undefined without one. */
 export function receiptPath(host, app, { sample = false } = {}) {
   if (host === 'ios') {

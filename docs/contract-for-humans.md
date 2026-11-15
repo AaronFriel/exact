@@ -60,8 +60,8 @@ bun scripts/exact.mjs new ../hello
 ```
 
 The new app has `app.contract` (its interface), `app.ts` (its data module),
-`app.json` (its manifest), `app.test.contract`, `web/` and `apple/` crates, and its
-own Cargo workspace; it consumes this checkout by path. Its generated `exact.mjs`
+`app.json` (its manifest) and `app.test.contract`; a native verb generates its host
+crates under `.exact/`. It consumes this checkout by path. Its generated `exact.mjs`
 runs the web and native commands (`bun exact.mjs test`, for example; `bun exact.mjs
 test web tests/*.test.contract` runs the files named, from the current directory,
 in turn); run it with no verb to list them, and see the [tooling reference](reference.md).
@@ -1107,8 +1107,14 @@ and 100 where a bound is unsaid, and none for a `spinbutton`) and
 `aria-valuetext`: it is one element, its children unread, and its value is the
 platform's (UIKit's `accessibilityValue` as a percentage, "30%", a
 `spinbutton`'s as its number, "3", or the text; AppKit's value, minimum and
-maximum, the text its description). A `progress` or `input type="range"` says
-its own value.
+maximum, the text its description). A `slider` or `spinbutton` is adjusted
+by its own keys: give it `tabindex=0` and a `key` handler for the arrows.
+A screen reader's increment and decrement (VoiceOver's swipe up and down,
+TalkBack's and Windows' adjust) are then a keydown and a keyup at it, as
+Safari sends them to an ARIA slider: ArrowUp and ArrowDown for a spin
+button or an `aria-orientation="vertical"` slider, else ArrowRight and
+ArrowLeft, swapped in a right-to-left document. A `progress` or
+`input type="range"` says its own value.
 Leave font sizes, colours and control metrics unsaid and the platform supplies them;
 what you set on a node wins.
 
@@ -1474,9 +1480,9 @@ A route pushed while a sheet is on top is shown inside that sheet, which keeps t
 detents of the route that opened it, and Back returns to the route before it in
 the sheet. iOS and macOS show it in the sheet's own navigation stack, the web and
 Android lay it out in the sheet's box, and desktop Linux in the box the sheet's
-own route was laid out in. On Android a drag down or a tap on the scrim closes the
-sheet with what was pushed inside it. A route pushed over a `fullscreen` route is
-a page of its own.
+own route was laid out in. On iOS and Android a drag down, or a tap behind a sheet
+with `closedby="any"`, closes the sheet with what was pushed inside it. A route
+pushed over a `fullscreen` route is a page of its own.
 
 `path("item", value)` checks the route and encodes its parameters. Always build
 locations with it: a template literal as a location is refused and a string

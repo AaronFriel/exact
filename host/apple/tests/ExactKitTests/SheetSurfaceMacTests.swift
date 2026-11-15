@@ -60,7 +60,15 @@ final class SheetSurfaceMacTests: XCTestCase {
         XCTAssertEqual(material.material, .sheet)
         XCTAssertEqual(material.blendingMode, .behindWindow)
         XCTAssertNil(try f.node("modal").materialView)
-        XCTAssertEqual(try colour(try capture(actualSheet), y: 30), expected, "the authored ground, over red, is the colour of AppKit's sheet")
+        // Exact on a 2x display. A 1x or unnamed (virtual) display's window server blends the two sheets' materials a
+        // unit apart on a channel (a headless Mac's: [58, 53, 50] against [57, 53, 50]).
+        let actual = try colour(try capture(actualSheet), y: 30)
+        if actualSheet.backingScaleFactor >= 2, NSScreen.main?.localizedName.isEmpty == false, NSScreen.main?.localizedName != "Display" {
+            XCTAssertEqual(actual, expected, "the authored ground, over red, is the colour of AppKit's sheet")
+        } else {
+            XCTAssertEqual(actual.count, expected.count)
+            for (a, e) in zip(actual, expected) { XCTAssertLessThanOrEqual(abs(a - e), 1, "the authored ground, over red, is the colour of AppKit's sheet: \(actual) against \(expected)") }
+        }
     }
 
     func testGroupedCardFillUsesItsWindowSurface() throws {

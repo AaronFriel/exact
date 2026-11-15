@@ -7,6 +7,7 @@ import AppKit
 package enum Capture {
     /// A capture is drawing: its draws are not repaints (D4 b).
     nonisolated(unsafe) static var capturing = false
+    nonisolated(unsafe) static var redrawingBackingStore = false
     /// Guest pictures for this turn, by the node that draws each (two
     /// sessions' ids can be the same); the remote platform views are hidden
     /// while their owning nodes draw these (@ref LLP 1020 D4/D6, `withGuests`).
@@ -32,7 +33,7 @@ package enum Capture {
             }
         }
         hide(view)
-        let rep = paintOrderBitmap(of: view, scale: scale, prepared: true)
+        let rep = picture(of: view, scale: scale, prepared: true)
         for o in hidden { o.isHidden = false }
         view.alphaValue = alpha
         return rep
@@ -56,8 +57,14 @@ extension Capture {
         if unattached(view) { view.window?.displayIfNeeded() }
     }
 
-    static func paintOrderBitmap(of view: NSView, scale: CGFloat? = nil, prepared: Bool = false) -> NSBitmapImageRep? {
-        if !prepared { prepareBackingLayers(of: view) }
+    /// An sRGB picture at the view's backing scale, or the requested pixels per point.
+    static func picture(of view: NSView, scale: CGFloat? = nil, prepared: Bool = false) -> NSBitmapImageRep? {
+        if !prepared {
+            prepareBackingLayers(of: view)
+            // Screenshots also sample animations installed this turn. An
+            // upload is already prepared, before its visibility changes.
+            CATransaction.flush()
+        }
         view.displayIfNeeded()
         let scale = scale ?? view.pixelScale ?? 2
         guard let root = view.layer else { return nil }
@@ -92,6 +99,72 @@ extension Capture {
         ctx.scaleBy(x: scale, y: -scale)
         tree.render(in: ctx)
         return ctx.makeImage()
+    }
+
+    /// Core Animation's CPU renderer omits shadows. Contentless casters
+    /// already carry the resolved path, blur and colour; draw those into
+    /// their copy, keeping the caster's mask and sibling order.
+    static func shadowPicture(of layer: CALayer, flipped: Bool, scale: CGFloat) -> CGImage? {
+        guard layer.contents == nil, layer.shadowOpacity > 0,
+              let path = layer.shadowPath, let color = layer.shadowColor else { return nil }
+        let bounds = layer.bounds
+        let width = Int((bounds.width * scale).rounded()), height = Int((bounds.height * scale).rounded())
+        guard width > 0, height > 0,
+              let ctx = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8,
+                                  bytesPerRow: width * 4, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        ctx.scaleBy(x: scale, y: scale)
+        if flipped { ctx.translateBy(x: 0, y: bounds.height); ctx.scaleBy(x: 1, y: -1) }
+        ctx.translateBy(x: -bounds.minX, y: -bounds.minY)
+        ctx.setAlpha(CGFloat(layer.shadowOpacity))
+        ctx.castShadow(path, offset: layer.shadowOffset, blur: layer.shadowRadius * 2, color: color, rule: .winding, scale: scale)
+        return ctx.makeImage()
+    }
+
+    /// Text rasters cast their content alpha, with no shadow path. Keep the
+    /// ink and its shadow in one expanded picture so neither is clipped to
+    /// the ink's bounds and translucent glyphs cover their shadow once. A
+    /// backing store AppKit drew is never rendered from a copy
+    /// (`PaintCapture.swift`): `redrawn`, the node's drawing made again and
+    /// the box it covers, is the ink in its place.
+    static func contentShadowPicture(of layer: CALayer, redrawn: (image: CGImage, box: CGRect)? = nil,
+                                     flipped: Bool, scale: CGFloat) -> CALayer? {
+        guard layer.contents != nil, layer.shadowPath == nil, layer.shadowOpacity > 0,
+              let color = layer.shadowColor else { return nil }
+        let image: CGImage, bounds: CGRect
+        if let redrawn {
+            (image, bounds) = redrawn
+        } else {
+            guard !borrowsBackingStore(layer) else { return nil }
+            let ink = layer.valueCopy()
+            ink.opacity = 1; ink.shadowOpacity = 0
+            ink.isGeometryFlipped = flipped
+            ink.transform = CATransform3DIdentity
+            ink.bounds.origin = .zero
+            defer { ink.contents = nil }
+            bounds = layer.bounds
+            guard let picture = picture(of: ink, size: bounds.size, scale: scale) else { return nil }
+            image = picture
+        }
+        let reach = ceil(layer.shadowRadius * 3)
+        let shadow = bounds.offsetBy(dx: layer.shadowOffset.width, dy: layer.shadowOffset.height).insetBy(dx: -reach, dy: -reach)
+        let pixels = bounds.union(shadow).applying(CGAffineTransform(scaleX: scale, y: scale)).integral
+        let box = pixels.applying(CGAffineTransform(scaleX: 1 / scale, y: 1 / scale))
+        let width = Int(pixels.width), height = Int(pixels.height)
+        guard width > 0, height > 0,
+              let ctx = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8,
+                                  bytesPerRow: width * 4, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
+              let shadowColor = color.copy(alpha: color.alpha * CGFloat(layer.shadowOpacity)) else { return nil }
+        ctx.scaleBy(x: scale, y: scale)
+        ctx.setShadow(offset: CGSize(width: layer.shadowOffset.width * scale, height: -layer.shadowOffset.height * scale),
+                      blur: layer.shadowRadius * 2 * scale, color: shadowColor)
+        ctx.draw(image, in: CGRect(x: bounds.minX - box.minX, y: box.maxY - bounds.maxY,
+                                  width: bounds.width, height: bounds.height))
+        let picture = CALayer()
+        picture.frame = box
+        picture.contents = ctx.makeImage()
+        return picture
     }
 }
 

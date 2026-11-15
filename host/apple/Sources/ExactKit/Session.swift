@@ -34,6 +34,12 @@ public enum ExactEnv {
     /// (`BakedCompatibility.production`).
     static let productionBake = BakedCompatibility.production(BakedCompatibility.json)
     public static let agentMode = environment["EXACT_AGENT"] == "1"
+    /// `EXACT_AGENT=live` (the driver's `--live`): an ordinary launch on the
+    /// wall clock that the driver can still reach, which sends input and
+    /// reads but never holds the clock (`Agent.clock` refuses it).
+    public static let agentLive = environment["EXACT_AGENT"] == "live"
+    /// Whether the launch serves the driver: agent mode or `--live`.
+    public static let agentCarried = agentMode || agentLive
     /// `EXACT_AGENT_BIND` (`--bind`, LLP 1133.001 D7): extensions answered by their implementations under the agent.
     static let agentBind = Set((environment["EXACT_AGENT_BIND"] ?? "").split(separator: ",").map(String.init))
     /// `EXACT_AGENT_TIMING=platform` (LLP 1035.003 D5, opt-in): under the
@@ -181,7 +187,7 @@ public final class ExactApp {
         let live = Set(sessionRefs.compactMap { $0.session?.label })
         let named = label.isEmpty ? (1...).lazy.map { "session-\($0)" }.first { !live.contains($0) }! : label
         let s = ExactSession(app: self, label: named)
-        s.delegate = delegate; PushRegistration.listen() // before its packages can register
+        s.delegate = delegate; PushRegistration.listen(); HostEvents.listen() // before its packages can register or drain
         sessionRefs.append(WeakSession(s))
         sessionRefs.removeAll { $0.session == nil }
         return s
@@ -189,6 +195,7 @@ public final class ExactApp {
 
     func forget(_ session: ExactSession) {
         sessionRefs.removeAll { $0.session == nil || $0.session === session }
+        HostEvents.ended(session.label)
     }
 
     /// Connect to the app URL (LLP 1023 D1–D3): the envelope resolved, the
@@ -219,7 +226,7 @@ public final class ExactApp {
     public var connectedPage: URL? { connection?.page }
     /// The connection's status line for a dev menu, or nil.
     public var connectionStatus: String? { connection.map { "\($0.page)\($0.devStatus.map { " (\($0.said))" } ?? ($0.terminal != nil ? " (rebuild the host)" : $0.refused != nil ? " (edit not applied)" : generationPending ? " (preparing Rust update)" : " (live)"))" } }
-    /// Re-resolve the connection (the menu's Reload; clears a `{rebuilt}` stop).
+    /// Re-resolve the connection (the menu's Reload); the native program stays pinned.
     public func reloadConnection() { connection?.reload() }
 
     /// A plan is one app generation: every session accepts before any swaps.
@@ -361,6 +368,9 @@ public final class ExactSession {
     /// Nil until this session's launch route is journaled.
     var seenNavigationEntries: Set<UInt64>?
     var pendingLaunchLocations: [String] = []
+    /// The host's window for a link's `target`, `_blank` or a name (LLP 1030.004 D1); unset, links navigate in place.
+    /// `resume` (Settings…, D5): the window forward as it stands, or opened where it last was.
+    public var openWindow: ((_ location: String, _ window: String, _ resume: Bool) -> Void)?
     var heldModuleEvents: [String] = [] // module events before first pixel (SessionActivation.swift)
     var protocolHandlers: [[String: String]] = ExactEnv.appMetadata["ExactProtocolHandlers"] as? [[String: String]] ?? []
     private var textPressure: DispatchSourceMemoryPressure?
@@ -525,6 +535,9 @@ public final class ExactSession {
         webviews = WebViews()
         frames = Frames()
         presenter.session = self; RowReuse.adopt(self)
+        #if os(iOS)
+        runtime.useFlatNodes(ProcessInfo.processInfo.environment["EXACT_FLAT_NODES"] != "0")
+        #endif
         canvases.session = self
         webviews.session = self
         natives.session = self
@@ -694,7 +707,7 @@ public final class ExactSession {
             if batch.frameWorkTiming != nil { batch.frameWorkTiming?.landed = began }
             if case .advance = next.kind { applyUnlessEmpty(batch) } else if !(changesNothing(batch) && clockUnchanged(batch)) {
                 apply(batch)
-            }
+            } else { logSkipped(batch) }
             #if DEBUG
             onLandForTests?(next.kind, batch)
             #endif
@@ -753,7 +766,7 @@ public final class ExactSession {
             // A report inside the built window commits nothing: while a list
             // moves that is most frames. Skip the presenter's finalization
             // pass for it, unless the clock or the motion it reports is news.
-            if changesNothing(batch) && clockUnchanged(batch) { return workEnded() }
+            if changesNothing(batch) && clockUnchanged(batch) { logSkipped(batch); return workEnded() }
             apply(batch)
         }
         presenter.onClose = { [unowned self] id in apply(runtime.dialogClose(id, now: now())) }
@@ -921,6 +934,8 @@ public final class ExactSession {
         if batch.error == nil { tellTime(); refuseUnheardLaunch(); ExactLaunch.shared.treeApplied(self, path: "baked") }
         // A fresh runner must receive the view's current viewport and insets.
         if batch.error == nil { view?.rebooted() }
+        // Pictures decoded while the boot applied paint in its first frame.
+        if batch.error == nil { rasters.bootPass() }
         applyMs = (CACurrentMediaTime() - tApply) * 1000
         bootMs = ExactEnv.wall()
         ExactEnv.stamp("first frame applied")
@@ -1071,7 +1086,7 @@ public final class ExactSession {
         guard !fillInFlight, !tickInFlight, !advanceInFlight, !canvasInFlight, noticesInFlight == 0, changesNothing(batch) else { apply(batch); return }
         updateTimerState(batch)
         // Its transactions are reported once (LLP 1079 D3): account for them, at no presentation cost.
-        sampler?.batch(batch.seq, ms: 0); logAlerts(batch.alerts); logJournal(batch.journal)
+        sampler?.batch(batch.seq, ms: 0); logSkipped(batch); relayStore(batch)
         if let q = batch.seq { natives.hatchClock.seq = q.1 } // its commits are the hatches' latest
         timerDue = batch.timerDueMs; timerLanding = batch.landing
         scheduleClock(due: batch.timerDueMs)
@@ -1104,7 +1119,7 @@ public final class ExactSession {
             let batch = runtime.viewScheme(id, dark: dark)
             // Appearance already changed natively; retain its transaction accounting without rescheduling.
             if !ownerInFlight, changesNothing(batch), clockUnchanged(batch) {
-                sampler?.batch(batch.seq, ms: 0)
+                sampler?.batch(batch.seq, ms: 0); logSkipped(batch)
                 if let q = batch.seq { natives.hatchClock.seq = q.1 }
             } else { apply(batch) }
         }
@@ -1112,6 +1127,10 @@ public final class ExactSession {
 
     #if DEBUG
     var onLandForTests: ((Published, Batch) -> Void)?
+    /// Tests: the reply pumps this session has asked for (`pumpReplies`).
+    var replyPumpsForTests = 0
+    /// Tests: a skipped batch's alerts and journal lines as `logSkipped` writes them.
+    var onSkippedLogForTests: (([String], [String]) -> Void)?
     var onApplyForTests: ((Batch) -> Void)?
     /// Tests: a tick's slice the owner published, not yet landed.
     func publishTickForTests(_ batch: Batch) { tickInFlight = true; publish(.tick, RuntimeCompletion(lease: runtime.completionLease, batch: batch)) }
@@ -1144,7 +1163,7 @@ public final class ExactSession {
         applying = true
         // What applying it cost, with its transactions, for the next sampled frame (LLP 1079 D3), told to the sampler there was when it began while the session keeps it: a recording the batch starts makes a new one, and one it stops lets a production bake's go.
         let timed = sampler, began = CACurrentMediaTime()
-        defer { if let timed, timed === sampler { timed.batch(batch.seq, ms: outermost ? (CACurrentMediaTime() - began) * 1000 : 0) }; if let q = batch.seq { natives.hatchClock.seq = q.1 }; logAlerts(batch.alerts); logJournal(batch.journal) }
+        defer { if let timed, timed === sampler { timed.batch(batch.seq, ms: outermost ? (CACurrentMediaTime() - began) * 1000 : 0) }; if let q = batch.seq { natives.hatchClock.seq = q.1 }; logAlerts(batch.alerts); logJournal(batch.journal); relayStore(batch) }
         defer { if outermost { recordFrameHealthApply(batch, began: began) } }
         if batch.facts { app.scheduleStatus() } // the app's own `setMode` or `setRootFontSize` (LLP 1122 D4)
         if let must = batch.mustFinish { finishHold.moved(must) }
@@ -1176,7 +1195,7 @@ public final class ExactSession {
         // Each presenter takes its boot's table, a second one with the same too.
         ThemeRoles.apply(batch, root: presenter.root); if batch.ops.contains(where: { $0.op == .roles }) { presenter.applyThemeTint() }
         let orientationChanged = presenter.orientationChangesScreen(batch)
-        ThemeRoles.within(presenter.root) { presenter.apply(batch) }; Tambers.moved(self) // bindings' places (LLP 1121 D12)
+        ThemeRoles.within(presenter.root) { presenter.apply(batch) }; Formas.moved(self) // bindings' places (LLP 1121 D12)
         drainCanvasCaptures(batch)
         if !batch.canvasImages.isEmpty { presenter.canvas2d.load(batch.canvasImages) }
         AnimatedRasters.shared.poke()

@@ -162,6 +162,22 @@ fn css_text_in(
                     );
                 }
             }
+            // @ref LLP 1013.001 D1 — a route's entrance and exit: custom
+            // properties shared.js reads as the route change happens, its
+            // `none` written as itself (the author's cut). The rules they
+            // name are in the page's stylesheet, as `animation`'s.
+            (StyleId::ViewTransitionNew | StyleId::ViewTransitionOld, RowValue::Animations(a)) => {
+                if let Some(link) = crate::link::linked().animations {
+                    let name = match id {
+                        StyleId::ViewTransitionNew => "--exact-view-transition-new",
+                        _ => "--exact-view-transition-old",
+                    };
+                    match a.0.is_empty() {
+                        true => push_text!(&mut out, "{}:none;", name),
+                        false => push_text!(&mut out, "{}:{};", name, (link.list)(a, false)),
+                    }
+                }
+            }
             // @ref LLP 1057.003 D2 — a drag timeline is no timeline the
             // browser runs: custom properties the page's drag code
             // (motion-glue.js) reads. A bound consumer's animations are
@@ -304,7 +320,12 @@ fn css_text_in(
             // @ref LLP 1077 D8 — `rotate` is the angle and its axis, and
             // `translate` x, y and z: one declaration each.
             (StyleId::Rotate, RowValue::Number(n)) if style.rotate_axis.0 != [0.0, 0.0, 1.0] => {
-                push_text!(&mut out, "rotate:{} ", style.rotate_axis.css());
+                push_text!(
+                    &mut out,
+                    "--exact-rotate-axis:{};rotate:{} ",
+                    style.rotate_axis.css(),
+                    style.rotate_axis.css()
+                );
                 num_into(&mut out, *n as f32);
                 out.push_str("deg;");
             }
@@ -559,7 +580,7 @@ pub fn keyframes_name(a: &exact_motion::animation::Animation, press: bool) -> St
 /// each `scale` keyframe into `--exact-scale`: its important `scale`
 /// composition wins over the animation's own.
 pub fn keyframes_css(a: &exact_motion::animation::Animation, press: bool) -> String {
-    let text = a.keyframes.css();
+    let text = rotation_keyframes_css(&a.keyframes);
     if !press_rule(a, press) {
         return text;
     }
@@ -574,6 +595,18 @@ pub fn keyframes_css(a: &exact_motion::animation::Animation, press: bool) -> Str
     }
     out.push_str(rest);
     out
+}
+
+/// Bare angles use the node's axis; explicit keyframe axes stay in CSS rotate.
+pub fn rotation_keyframes_css(frames: &exact_motion::Keyframes) -> String {
+    frames.css_values(|p, v| {
+        let text = exact_motion::animation::value_css(p, v);
+        if p == Property::Rotate && [v.y, v.z, v.w] == [0.0; 3] {
+            format!("var(--exact-rotate-axis,z) {text}")
+        } else {
+            text
+        }
+    })
 }
 
 /// Send each `@keyframes` rule `style`'s animations name, and its exit's,
@@ -769,6 +802,8 @@ fn spell_property(out: &mut String, id: StyleId) {
         StyleId::TintColor => return out.push_str("--exact-tint"),
         // @ref LLP 1104 D3 — `::placeholder`'s colour, read by index.html.
         StyleId::PlaceholderColor => return out.push_str("--exact-placeholder-color"),
+        // @ref LLP 1035.001 D11 — `::backdrop`'s colour, read by neutral.css.
+        StyleId::BackdropColor => return out.push_str("--exact-backdrop-color"),
         // The tint of a glass material, read by index.html's glass rule.
         StyleId::GlassTint => return out.push_str("--exact-glass-tint"),
         // @ref LLP 1061 D7 — the pressed paint: custom properties input-glue.js
@@ -985,7 +1020,7 @@ pub fn transition_css(t: &Transitions) -> (String, bool) {
                     // sides as their shorthand.
                     TransitionProperty::All => Property::ALL
                         .into_iter()
-                        .chain([Property::D])
+                        .chain(Property::TRANSITION_ONLY)
                         .filter(|p| !p.springs() && *p != Property::ShadowColor)
                         .map(|p| match p {
                             Property::BorderTopColor => "border-color",
@@ -1169,6 +1204,7 @@ mod writer_tests {
             "opacity 1s steps(4, jump-both), height 200ms linear 50ms",
             "opacity 1s linear(0, 0.2, 0.6 60%, 0.8, 1), translate 1s linear(0 0% 20%, 1 80% 100%)",
             "translate -exact-spring(180, 12, 1)",
+            "filter 400ms ease, opacity 1s",
         ] {
             let t = Transitions::parse(text).unwrap();
             assert_eq!(transition_css(&t), transition_joined(&t), "{text}");
@@ -1192,6 +1228,8 @@ mod writer_tests {
             transition_css(&t),
             (format!("background-color {curve}"), false)
         );
+        let t = Transitions::parse("filter -exact-spring(180, 12, 1) 0s 100ms").unwrap();
+        assert_eq!(transition_css(&t), (format!("filter {curve}"), false));
         let t = Transitions::parse("opacity 1s, all -exact-spring(180, 12, 1) 0s 100ms").unwrap();
         let (text, skipped) = transition_css(&t);
         assert!(skipped, "the compositor rows' spring is the host's");
@@ -1203,7 +1241,7 @@ mod writer_tests {
             names.join(" "),
             "opacity 1s ease 0s,all 0s ease 0s,stroke-dashoffset r color background-color fill stroke cx cy x y \
              rx ry border-color --exact-tint box-shadow font-weight font-stretch \
-             font-variation-settings d "
+             font-variation-settings d filter "
         );
     }
 }

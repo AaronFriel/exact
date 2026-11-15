@@ -310,17 +310,46 @@ fn unnamed(package: &str) -> String {
 }
 
 /// Where the app's design is (LLP 1121 D2): the file `app.json`'s
-/// `"tamber"` names, else `app.tamber` beside the app's `app.contract`.
+/// `"forma"` names, else `app.forma` beside the app's `app.contract`.
 pub fn design_path(root: &Path) -> Option<PathBuf> {
     let dir = root.parent()?;
     let named = std::fs::read_to_string(dir.join("app.json"))
         .ok()
         .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
-        .and_then(|app| app.get("tamber")?.as_str().map(|p| dir.join(p)));
+        .and_then(|app| app.get("forma")?.as_str().map(|p| dir.join(p)));
     named.or_else(|| {
-        let beside = dir.join("app.tamber");
+        let beside = dir.join("app.forma");
         (root.file_name()? == "app.contract" && beside.is_file()).then_some(beside)
     })
+}
+
+/// A former design name must not silently leave an app without its design.
+pub fn design_name_error(root: &Path) -> Option<String> {
+    let dir = root.parent()?;
+    let dir = if dir.as_os_str().is_empty() {
+        Path::new(".")
+    } else {
+        dir
+    };
+    let mut former: Vec<_> = std::fs::read_dir(dir)
+        .ok()?
+        .filter_map(Result::ok)
+        .filter(|e| e.file_type().is_ok_and(|t| t.is_file() || t.is_symlink()))
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|e| e == "tamber"))
+        .collect();
+    former.sort();
+    if let Some(path) = former.first() {
+        return Some(format!(
+            "rename {} to {}",
+            path.file_name()?.to_string_lossy(),
+            path.with_extension("forma").file_name()?.to_string_lossy()
+        ));
+    }
+    let manifest: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(dir.join("app.json")).ok()?).ok()?;
+    manifest.get("tamber")?;
+    Some("rename app.json's tamber key to forma".into())
 }
 
 std::thread_local! {
@@ -389,9 +418,33 @@ fn design(
     root: &Path,
     sources: &mut Sources,
 ) -> Result<Option<contract_syntax::DesignSource>, CompileError> {
+    if let Some(message) = design_name_error(root) {
+        return Err(CompileError {
+            pass: "use",
+            id: "forma-name".into(),
+            message,
+            span: Span::default(),
+            file: Some(root.into()),
+            related: Box::new([]),
+        });
+    }
     let Some(path) = design_path(root) else {
         return Ok(None);
     };
+    if path.extension().is_some_and(|e| e == "tamber") {
+        return Err(CompileError {
+            pass: "use",
+            id: "forma-name".into(),
+            message: format!(
+                "rename {} to {}",
+                path.display(),
+                path.with_extension("forma").display()
+            ),
+            span: Span::default(),
+            file: Some(path.into()),
+            related: Box::new([]),
+        });
+    }
     let key = path.canonicalize().unwrap_or_else(|_| path.clone());
     let scrubbed = DESIGN_TEXT.with(|t| {
         t.borrow()
@@ -401,7 +454,7 @@ fn design(
     let read = scrubbed.map_or_else(|| std::fs::read_to_string(&path), Ok);
     let text = read.map_err(|e| CompileError {
         pass: "use",
-        id: "tamber-unreadable".into(),
+        id: "forma-unreadable".into(),
         message: format!("the app's design `{}`: {e}", path.display()),
         span: Span::default(),
         file: Some(path.clone().into()),

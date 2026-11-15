@@ -16,7 +16,7 @@
     },
     "preload": {
       "type": "object",
-      "description": "Named requests sent at process start by hosts that support them (LLP 1162.000 D2). Strings in url, header values and body may use {secret:NAME} for a secret.keep grant; {{ writes a literal brace. Checked and parsed at bake, with present secrets filled in on the device.",
+      "description": "Named requests sent at process start by hosts that support them (LLP 1162.000 D2). Strings in url, header values and body may use {secret:NAME} for a secret.keep grant or {env:NAME} for a declared setting with a build value; {{ writes a literal brace. Fixed settings are written in at bake; launch settings and present secrets are filled on the device. Android and the web use build settings.",
       "maxProperties": 8,
       "propertyNames": { "pattern": "^[a-z][a-z0-9-]*$" },
       "additionalProperties": {
@@ -845,8 +845,8 @@
               "type": "array",
               "items": {
                 "type": "string",
-                "pattern": "^(?!(remote-notification|fetch|processing)$).*$",
-                "description": "remote-notification is refused: a visible push and ActivityKit update tokens need no background mode, and a data-only push is refused (LLP 1133.004 §9 P8). fetch and processing come from the grant lines device.background-sync and device.periodic-background-sync (LLP 1133.017 D14)."
+                "pattern": "^(?!(remote-notification|fetch|processing|bluetooth-central)$).*$",
+                "description": "remote-notification is refused: a visible push and ActivityKit update tokens need no background mode, and a data-only push is refused (LLP 1133.004 §9 P8). fetch and processing come from the grant lines device.background-sync and device.periodic-background-sync (LLP 1133.017 D14). bluetooth-central comes from device.bluetooth-background beside device.bluetooth."
               }
             },
             "associatedDomains": {
@@ -1029,7 +1029,7 @@
           "additionalProperties": false
         },
         "android": {
-          "description": "Android: the package `id` (default app.id), the painter, `minimumOS` (default 12), `certificates` for the origin's `assetlinks.json`, and `maven` libraries for the app's Kotlin.",
+          "description": "Android: the package `id` (default app.id), the painter, `minimumOS` (default 12), `notificationChannels`, `certificates` for the origin's `assetlinks.json`, and `maven` libraries for the app's Kotlin.",
           "type": "object",
           "properties": {
             "id": {
@@ -1044,6 +1044,22 @@
             "minimumOS": {
               "description": "The oldest Android the app runs on, as \"12\"; never below 10. Below 12 the APK carries the reader's Android 10 and 11 code (host/android/README.md, \"Android 10 and 11\"); at 12 or later it carries none.",
               "enum": ["10", "11", "12", "13", "14", "15", "16"]
+            },
+            "notificationChannels": {
+              "description": "The app's notification channels (LLP 1133.004.000 D1), made by the host after the first frame and when the app is updated; valid only with `device.notifications` granted. Android keeps a channel's importance and sound once made and the person may change them, so a changed importance needs a new id. `id` `default` names and tunes the channel a post without `android.channelId` takes.",
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["id", "name"],
+                "properties": {
+                  "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$", "description": "The NotificationChannel id, an Android resource name." },
+                  "name": { "type": "string", "description": "A strings key (LLP 1060): the channel's name in Settings." },
+                  "description": { "type": "string", "description": "A strings key: the channel's description in Settings." },
+                  "importance": { "enum": ["min", "low", "default", "high"], "description": "The platform's IMPORTANCE_* name; `default` when absent. `high` shows a post heads-up." },
+                  "sound": { "type": "string", "pattern": "\\.(ogg|mp3|wav|OGG|MP3|WAV)$", "description": "An .ogg, .mp3 or .wav file in the app's directory, `assets/alert.wav`, which the channel plays; the platform's sound when absent." }
+                },
+                "additionalProperties": false
+              }
             },
             "maven": {
               "description": "Pinned group:artifact:version coordinates on Google's Maven or Maven Central for the app's Kotlin in modules/android. Like a package implementation's maven array, these join the APK's locked, checksum-verified Gradle graph (LLP 1133.008 D8 item 5; host/android/README.md).",
@@ -1145,7 +1161,7 @@
           "additionalProperties": { "type": "boolean" }
         },
         "store": {
-          "description": "Per platform (web, macos, ios, linux), whether an installed app has an update store: \"0\" links none, so every change ships as a new binary; \"A\" links the store, so signed plans and assets update over the air (LLP 1030 D4). `exact new` writes the web's; a native verb writes its platform's the first time it runs (LLP 1153 D1). Signed TypeScript and Rust module delivery isn't implemented.",
+          "description": "Per platform (web, macos, ios, linux, windows, android), whether an installed app has an update store: \"0\" links none, so every change ships as a new binary; \"A\" links the store, so signed plans and assets update over the air (LLP 1030 D4). The web host links none, so its can only be \"0\". Android's reads \"0\" when absent (every other native platform's reads \"A\"); at \"A\" the APK links the store and takes signed plans, assets and TypeScript modules, never native code (LLP 1030.006). `exact new` writes the web's; a native verb writes its platform's the first time it runs (LLP 1153 D1). Signed TypeScript and Rust module delivery isn't implemented.",
           "type": "object",
           "additionalProperties": {
             "type": "string",
@@ -1323,6 +1339,31 @@
               ],
               "additionalProperties": false,
               "description": "The portable logic-wrapper cdylib package exporting the Exact logic ABI. One explicit replacement unit; data/helper crates remain ordinary Cargo dependencies."
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "crate": {
+                  "type": "string",
+                  "pattern": "^[a-zA-Z0-9_-]+$",
+                  "description": "The Cargo package of the data crate, a crate beside app.json."
+                },
+                "type": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z_][A-Za-z0-9_]*(::[A-Za-z_][A-Za-z0-9_]*)+$",
+                  "description": "The DataSource type, by its path from the crate's library: `pinapp_data::Pins`."
+                },
+                "source": {
+                  "type": "string",
+                  "description": "The constructor when it is not `<type>::default()`: the type itself (a unit struct), or `<type>::new(…)` with literal arguments."
+                }
+              },
+              "required": [
+                "crate",
+                "type"
+              ],
+              "additionalProperties": false,
+              "description": "The Rust data crate that answers the app's sources (LLP 1153.003 D2). The host crates link it and bake the first frame through it; with app.ts beside it, it answers the sources its RUST_SOURCES names and TypeScript the rest."
             }
           },
           "additionalProperties": false
@@ -1357,9 +1398,9 @@
         }
       }
     },
-    "tamber": {
+    "forma": {
       "type": "string",
-      "description": "The app's design (LLP 1121 D2): a `.tamber` file, relative to app.json. Without it, `app.tamber` beside app.contract is the design when there is one."
+      "description": "The app's design (LLP 1121 D2): a `.forma` file, relative to app.json. Without it, `app.forma` beside app.contract is the design when there is one."
     },
     "purchases": {
       "type": "object",

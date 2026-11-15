@@ -85,6 +85,7 @@ pub mod paint;
 pub mod picker;
 mod placement;
 // Asked only on Linux: elsewhere this host refuses the document pickers.
+mod forma;
 #[cfg_attr(any(not(unix), target_os = "android"), allow(dead_code))]
 mod portal;
 pub mod presence_secrets;
@@ -94,7 +95,6 @@ mod scroll_anchor;
 mod sound;
 mod surface_haptics;
 mod surfaces;
-mod tamber;
 pub mod teardown;
 pub mod text;
 #[cfg(any(target_os = "android", test))]
@@ -203,4 +203,33 @@ fn test_compile(source: &str) -> Vec<u8> {
     let plan = contract::compile_path(&path);
     let _ = std::fs::remove_dir_all(&dir);
     plan.unwrap().encode()
+}
+
+/// An empty directory `<name>-<pid>` under the temp dir, removed when dropped.
+#[cfg(test)]
+pub(crate) struct TestDir(std::path::PathBuf);
+
+#[cfg(test)]
+impl TestDir {
+    pub(crate) fn new(name: &str) -> TestDir {
+        let dir = std::env::temp_dir().join(format!("{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        TestDir(dir)
+    }
+}
+
+#[cfg(test)]
+impl Drop for TestDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+#[cfg(test)]
+impl std::ops::Deref for TestDir {
+    type Target = std::path::Path;
+    fn deref(&self) -> &std::path::Path {
+        &self.0
+    }
 }

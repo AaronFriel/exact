@@ -12,7 +12,6 @@ use std::fmt::Write as _;
 
 #[path = "text_style.rs"]
 mod text_style;
-
 impl Em<'_> {
     /// Clock ticks format cached instants without evaluating app code.
     pub(super) fn live_time(
@@ -179,6 +178,8 @@ impl Em<'_> {
             .is_some_and(|t| style::can_be(plan, plan.code(t.expr), &|s| !clock(s)));
         let id = StyleId::from_bit(b.id as u32).ok_or("unknown style row")?;
         let kind = NodeType::from_wire(row.node_type).ok_or("unknown node type")?;
+        let checked_animation = self.svg_animation(i, id, e, f, scope)?;
+        let f = checked_animation.as_deref().unwrap_or(f);
         // @ref LLP 1115.002 D6 — a metric the binding may name is its value
         // in the web's column before the row's own map sees it.
         let metric = style::metric_map(plan, plan.code(b.expr))
@@ -319,9 +320,9 @@ impl Em<'_> {
             // @ref LLP 1077 D8 — the `rotate` and `translate` attributes bind
             // these with the same value: the angle's and xy's declaration
             // writes the author's whole text.
-            StyleId::RotateAxis | StyleId::TranslateZ | StyleId::TranslatePercent => {
-                let pair = if id == StyleId::RotateAxis { StyleId::Rotate } else { StyleId::Translate };
-                if binding(pair).is_some_and(|o| plan.code(o.expr) == plan.code(b.expr)) {
+            StyleId::RotateAxis => one("--exact-rotate-axis", Some("v=>{const w=String(v??'').trim().split(/\\s+/);if(w.length===2)return w.find(x=>/^[xyz]$/i.test(x))||'z';return w.length===4?w.slice(0,3).join(' '):'z'}".into())),
+            StyleId::TranslateZ | StyleId::TranslatePercent => {
+                if binding(StyleId::Translate).is_some_and(|o| plan.code(o.expr) == plan.code(b.expr)) {
                     return Ok(());
                 }
                 return refuse("a dynamic 3D part without its `rotate` or `translate`");
@@ -365,6 +366,7 @@ impl Em<'_> {
             StyleId::LineClamp if parts.props.contains_key("data-button-style") => vec![
                 ("--exact-button-clamp".into(), String::new(), Some("v=>v>0?v:null".into())),
                 ("--exact-button-title-display".into(), String::new(), Some("v=>v>0?\"-webkit-box\":null".into())),
+                ("--exact-button-title-overflow".into(), String::new(), Some("v=>v>0?\"hidden\":null".into())),
             ],
             StyleId::LineClamp => {
                 let display = parts.css.split(';').find_map(|d| d.strip_prefix("display:"));
@@ -387,6 +389,7 @@ impl Em<'_> {
                     ("overflow".into(), String::new(), when("\"hidden\"")),
                     ("--exact-button-clamp".into(), String::new(), Some("v=>v==null?null:v>0?v:0".into())),
                     ("--exact-button-title-display".into(), String::new(), Some("v=>v==null?null:v>0?\"-webkit-box\":\"block\"".into())),
+                    ("--exact-button-title-overflow".into(), String::new(), Some("v=>v==null?null:v>0?\"hidden\":\"clip\"".into())),
                 ]
             }
             // @ref LLP 1077 D14 — host-owned, as `-exact-press-scale`: the custom
@@ -466,6 +469,7 @@ impl Em<'_> {
             // On a pressed node an animation of `scale` plays its rule's
             // `-exact-press` copy, and `scale` transitions as `--exact-scale`
             // (css.rs `keyframes_name`, `css_text`).
+            StyleId::Scale if press => one("--exact-scale", None),
             StyleId::Animation if press => {
                 let names: Vec<String> = self.press_keyframes.clone();
                 let names = serde_json::to_string(&names).unwrap();
@@ -492,6 +496,14 @@ impl Em<'_> {
                 let values = crate::presence::exit_animations(plan, plan.code(b.expr), press);
                 let (say, view) = (self.uses.rt("say"), self.uses.rt("viewId"));
                 one("--exact-exit-animation", Some(crate::presence::declaration_map(&values, &format!("{view}({e})"), &say, "exit-animation")))
+            }
+            // @ref LLP 1013.001 D1 — a route's entrance and exit, read by
+            // shared.js from the route's own style as the change happens.
+            StyleId::ViewTransitionNew | StyleId::ViewTransitionOld => {
+                let values = crate::presence::route_parts(plan, plan.code(b.expr), id);
+                let (say, view) = (self.uses.rt("say"), self.uses.rt("viewId"));
+                let name = crate::presence::route_part_property(id);
+                one(name, Some(crate::presence::declaration_map(&values, &format!("{view}({e})"), &say, &name[2..])))
             }
             // A side is the author's when they wrote it or the other of its
             // pair (css.rs `unsaid_side`): only a side the sheet alone sets mirrors.
@@ -832,6 +844,9 @@ pub(super) fn presence_decls(css: &mut String) -> String {
         if [
             "--exact-layout-transition:",
             "--exact-exit-animation:",
+            // A route's entrance and exit (LLP 1013.001), which shared.js reads.
+            "--exact-view-transition-new:",
+            "--exact-view-transition-old:",
             "--exact-drag-timeline:",
             "--exact-animation-timeline:",
             // A synced animation's clock (LLP 1055.002), read the same way.

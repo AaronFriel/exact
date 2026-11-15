@@ -347,7 +347,7 @@ fn sources(path: &Path) -> Result<(Model, ModelSources), String> {
             }
         }
         for skin in &mut model.skins {
-            for matrix in skin.inverse_binds.chunks_exact_mut(16) {
+            for matrix in skin.inverse_binds.as_chunks_mut::<16>().0 {
                 for value in &mut matrix[12..15] {
                     *value *= scale;
                 }
@@ -367,7 +367,7 @@ fn sources(path: &Path) -> Result<(Model, ModelSources), String> {
     let (mut lo, mut hi) = (Vec3::splat(f32::INFINITY), Vec3::splat(f32::NEG_INFINITY));
     for (node, offset) in model.nodes.iter().zip(offsets) {
         if let Some(mesh) = node.mesh {
-            for p in model.meshes[mesh as usize].positions.chunks_exact(3) {
+            for p in model.meshes[mesh as usize].positions.as_chunks::<3>().0 {
                 let p = offset.transform_point3(Vec3::from_slice(p));
                 lo = lo.min(p);
                 hi = hi.max(p);
@@ -804,6 +804,26 @@ mod stem_tests {
 #[cfg(test)]
 mod png_kind_tests {
     use super::*;
+
+    /// Removes its directory when dropped, so a failing test leaves nothing behind.
+    struct TempDir(std::path::PathBuf);
+    impl std::ops::Deref for TempDir {
+        type Target = std::path::Path;
+        fn deref(&self) -> &std::path::Path {
+            &self.0
+        }
+    }
+    impl AsRef<std::path::Path> for TempDir {
+        fn as_ref(&self) -> &std::path::Path {
+            &self.0
+        }
+    }
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
     #[test]
     fn pngs_under_textures_and_data_bake_as_filtered_repeating_material_textures() {
         let art = Path::new("/game/art");
@@ -819,7 +839,9 @@ mod png_kind_tests {
             PngKind::Rgbm
         );
         assert_eq!(PngKind::of(art, &art.join("data/rgbm.png")), PngKind::Data);
-        let dir = std::env::temp_dir().join(format!("exact-bake-png-kind-{}", std::process::id()));
+        let dir = TempDir(
+            std::env::temp_dir().join(format!("exact-bake-png-kind-{}", std::process::id())),
+        );
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("soil.png");
         let mut image = image::RgbaImage::new(8, 8);

@@ -62,17 +62,21 @@ pub extern "C" fn m_observe(
     px: f64,
     py: f64,
     scale: f64,
-    rotate: f64,
+    rotate_len: u32,
     opacity: f64,
     supplied: u32,
     vx: f64,
     vy: f64,
     now: f64,
 ) -> u32 {
+    let text = unsafe { String::from_utf8_lossy(&IO[..rotate_len as usize]).into_owned() };
+    let rotation = exact_motion::rotation::parse(&text).unwrap_or(Value::ZERO);
     state()
         .observe(
             node as u64,
-            [x, y, px, py, scale, rotate, opacity],
+            [
+                x, y, px, py, scale, rotation.x, opacity, rotation.y, rotation.z, rotation.w,
+            ],
             (supplied != 0).then(|| Value::new(vx, vy)),
             now,
         )

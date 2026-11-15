@@ -158,8 +158,8 @@ fn region(
             };
             new_frame.region = Some(r.region.0);
             let arm_id = plan.region(r.region).arms.iter().nth(i);
-            if let Some(id) = arm_id.filter(|id| plan.slots.iter().any(|s| s.owner == Some(*id))) {
-                let slots: RowSlots = Rc::new(RefCell::new(BTreeMap::new()));
+            if let Some(id) = arm_id.filter(|id| super::region::owns_slots(plan, *id)) {
+                let slots: RowSlots = crate::vm::Owned::shared();
                 new_frame.region = Some(r.region.0);
                 new_frame.row = Some(slots.clone());
                 init_owned(u, id, &slots, &with_frame(frames, new_frame.clone()))?;

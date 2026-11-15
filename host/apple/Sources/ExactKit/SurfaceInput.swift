@@ -150,6 +150,9 @@ extension Agent {
         let offset = continuing ? nil : (request["at"] as? [Double]).flatMap { $0.count == 2 && $0.allSatisfy(\.isFinite) ? CGPoint(x: b.minX + $0[0], y: b.minY + $0[1]) : nil }
         if !continuing, request["at"] != nil, offset == nil { return ["error": "tap at needs two finite numbers"] }
         let start = offset ?? contact ?? CGPoint(x: b.midX, y: b.midY)
+        if let scale = request["pinch"] as? Double, phase == nil {
+            return node.isSurfaceControl ? nil : canvasPinch(node, scale: scale, focal: start, in: window)
+        }
         let point = CGPoint(x: request["x"] as? Double ?? start.x + (request["dx"] as? Double ?? 0),
                             y: request["y"] as? Double ?? start.y + (request["dy"] as? Double ?? 0))
         guard point.x.isFinite, point.y.isFinite else { return ["error": "pointer needs finite coordinates"] }
@@ -239,6 +242,51 @@ extension Agent {
         default: return ["error": "unknown pointer phase \(phase!)"]
         }
         return ["phase": phase!, "at": at, "delivery": "recognized"]
+    }
+
+    /// `tap <canvas> pinch <scale> [at <x> <y>]`: two fingers, as UIKit reports
+    /// a real pinch to `CanvasInputHost`: both contacts go down together, both
+    /// move in every event, both lift. They lie level about the focal point and
+    /// spread from 0.3 of the canvas's shorter side to that times the scale in
+    /// 8 moves 16 ms apart, the pinch the web driver gives Chrome (agent-web.mjs).
+    private func canvasPinch(_ node: NodeView, scale: Double, focal: CGPoint, in window: UIWindow) -> [String: Any] {
+        guard scale.isFinite, scale > 0 else { return ["malformed": true, "error": "pinch: expected a positive finite scale"] }
+        guard contact == nil else { return ["error": "a contact is already down; up or cancel it first"] }
+        let vp = session.presenter.viewport
+        let b = box(node), d = max(8, min(b.width, b.height) * 0.3)
+        func fingers(_ k: Double) -> [CGPoint] {
+            [-1.0, 1.0].map { vp.convert(CGPoint(x: focal.x + $0 * d * k / 2 + vp.pageOrigin.x, y: focal.y + vp.pageOrigin.y), to: nil) }
+        }
+        for (q, page) in zip(fingers(1), [-1.0, 1.0].map { CGPoint(x: focal.x + $0 * d / 2, y: focal.y) }) where window.hitTest(q, with: nil) !== node {
+            return ["error": "pinch: a finger at (\(Agent.r2(page.x)), \(Agent.r2(page.y))) lands beside the canvas or on what covers it"]
+        }
+        guard node.focusSurfacePointer() else { return ["error": "surface refused pointer"] }
+        var last = fingers(1).map(node.local), time = CACurrentMediaTime()
+        func send(_ phase: String, _ points: [CGPoint]) -> Bool {
+            let ok = points.indices.allSatisfy { i in
+                let p = points[i], from = phase == "move" ? last[i] : p
+                return session.canvases.input(node, ["t": "pointer", "phase": phase, "id": i + 1, "x": p.x, "y": p.y, "dx": p.x - from.x, "dy": p.y - from.y,
+                                                     "kind": "touch", "buttons": phase == "up" || phase == "cancel" ? 0 : 1], timestamp: time)
+            }
+            if ok { last = points }
+            return ok
+        }
+        // On the platform's clock the run loop turns between samples, as for a timed move.
+        func pace() {
+            time += 0.016
+            if session.clock == nil { RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.016)) }
+        }
+        var delivered = send("down", last)
+        for i in 1...8 where delivered {
+            pace()
+            delivered = send("move", fingers(1 + (scale - 1) * Double(i) / 8).map(node.local))
+        }
+        if delivered { pace(); delivered = send("up", last) }
+        guard delivered else {
+            _ = send("cancel", last)
+            return ["error": "surface refused pointer"]
+        }
+        return ["tapped": node.id, "pinch": scale, "at": [Agent.r2(focal.x), Agent.r2(focal.y)], "delivery": "recognized"]
     }
 }
 #endif

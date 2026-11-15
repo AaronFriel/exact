@@ -385,8 +385,10 @@ impl<D: DataSource> Presenter<D> {
             self.queue_collections();
         }
         self.land_cold_share();
-        if let Some(u) = self.updates.as_mut() {
-            u.boot_succeeded();
+        if !self.reader_blesses {
+            if let Some(u) = self.updates.as_mut() {
+                u.boot_succeeded();
+            }
         }
         self.sync_delivery();
     }

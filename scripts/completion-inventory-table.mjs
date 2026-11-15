@@ -1,3 +1,4 @@
+import { helperClassifications } from './completion-inventory-helpers.mjs';
 // Ownership and protocol inferences for LLP 1172.019 §3 and LLP 1172.005 E11–E12.
 // Concrete symbols are intentional: a new declaration cannot inherit a classification by name pattern.
 function group(family, protocol, lifetime, kind, evidence, sites, durableWhen) {
@@ -57,7 +58,7 @@ export const classifications = [
     ["painted:host/painted/src/presenter/window.rs", "Presenter::chrome Presenter::set_window"],
     ["painted:host/painted/src/scale.rs", "Host::apply_live Host::set_display_scale Host::set_modes Host::set_root_font_size Host::set_view"],
     ["painted:host/painted/src/surfaces.rs", "Presenter::sync_surfaces_with_canvas_tick"],
-    ["painted:host/painted/src/tamber.rs", "Host::tamber_json"],
+    ["painted:host/painted/src/forma.rs", "Host::forma_json"],
     ["runner:runner/src/orientation.rs", "Runner::orientation_session Runner::set_orientation_applied"],
     ["runner:runner/src/runner.rs", "Runner::report_flow_skipped"],
     ["runner:runner/src/runner/box_resize.rs", "Runner::resize_box"],
@@ -304,7 +305,7 @@ export const classifications = [
       "exact_measure_work_later exact_placement_box exact_plan_covers_viewport exact_plan_digest exact_preloads_begin exact_preloads_count exact_preloads_launched " +
       "exact_preloads_mark exact_preloads_name exact_preloads_opened exact_press_face exact_protocol_location_of exact_radio_group exact_reads_on_line " +
       "exact_refresh_entry exact_region_request exact_regions exact_role_keys exact_root_tabs exact_row_reuse exact_scheme exact_screen exact_select_options " +
-      "exact_stack_split exact_svg_islands exact_tamber exact_titlebar_area exact_trim exact_view exact_view_scheme"],
+      "exact_stack_split exact_svg_islands exact_forma exact_titlebar_area exact_trim exact_view exact_view_scheme"],
     ["apple:runner/src/frame_health.rs",
       "exact_frame_health_applied exact_frame_health_capture exact_frame_health_context exact_frame_health_create exact_frame_health_destroy " +
       "exact_frame_health_distribution exact_frame_health_history_status exact_frame_health_hitch exact_frame_health_record exact_frame_health_requested_period " +
@@ -320,7 +321,7 @@ export const classifications = [
       "Java_dev_exact_canvas_Native_animating Java_dev_exact_canvas_Native_chrome Java_dev_exact_canvas_Native_colocate Java_dev_exact_canvas_Native_colors " +
       "Java_dev_exact_canvas_Native_fastCores Java_dev_exact_canvas_Native_fastThread Java_dev_exact_canvas_Native_fds Java_dev_exact_canvas_Native_fields " +
       "Java_dev_exact_canvas_Native_hintSession Java_dev_exact_canvas_Native_inputHint Java_dev_exact_canvas_Native_nextDue Java_dev_exact_canvas_Native_scrollers " +
-      "Java_dev_exact_canvas_Native_surface Java_dev_exact_canvas_Native_tamber Java_dev_exact_canvas_Native_under"],
+      "Java_dev_exact_canvas_Native_surface Java_dev_exact_canvas_Native_forma Java_dev_exact_canvas_Native_under"],
     ["painted:host/painted/src/canvas/jni_extensions.rs",
       "Java_dev_exact_canvas_Native_appFile Java_dev_exact_canvas_Native_appRoot Java_dev_exact_canvas_Native_hidden Java_dev_exact_canvas_Native_now " +
       "Java_dev_exact_canvas_Native_sensorInput Java_dev_exact_canvas_Native_surfaceHas Java_dev_exact_canvas_Native_underAgent"],
@@ -330,7 +331,7 @@ export const classifications = [
     ["painted:host/painted/src/canvas/journal.rs", "CanvasHost::echo_journal"],
     ["painted:host/painted/src/canvas/refine.rs", "CanvasHost::scale"],
     ["painted:host/painted/src/canvas/surface.rs", "CanvasHost::acquire_fd CanvasHost::surface"],
-    ["painted:host/painted/src/canvas/tamber.rs", "CanvasHost::tamber_json"],
+    ["painted:host/painted/src/canvas/forma.rs", "CanvasHost::forma_json"],
     ["painted:host/painted/src/content_region/host.rs", "Host::content_region_appearance Host::content_region_fd Host::content_region_paint_scale"],
     ["painted:host/painted/src/content_region/presenter.rs", "Presenter::content_region_fd Presenter::last_frame_ms Presenter::last_frame_succeeded Presenter::paint_frame"],
     ["painted:host/painted/src/doc_watch.rs", "DocWatch::new DocWatch::sync"],
@@ -393,8 +394,8 @@ export const classifications = [
     ["painted:host/painted/src/transform_binding.rs", "Host::discover_transform_handles Host::transform_bindings Host::transform_path_ready"],
     ["runner:runner/src/head.rs", "Runner::head Runner::inactive"],
     ["runner:runner/src/runner.rs",
-      "Runner::data_ref Runner::derive Runner::failed_resources Runner::grants Runner::handlers Runner::handlers_of Runner::is_poisoned Runner::journal " +
-      "Runner::journal_start Runner::kernel Runner::last_instance_work Runner::log Runner::now_ms Runner::resource Runner::resource_draws_entropy Runner::roots " +
+      "Runner::data_ref Runner::derive Runner::failed_resources Runner::grants Runner::handlers Runner::handlers_of Runner::is_poisoned " +
+      "Runner::kernel Runner::last_instance_work Runner::log Runner::now_ms Runner::resource Runner::resource_draws_entropy Runner::roots " +
       "Runner::site_of Runner::slot"],
     ["runner:runner/src/runner/checkpoint.rs", "Runner::document_checkpoint"],
     ["runner:runner/src/runner/document.rs", "Runner::document_tree"],
@@ -407,7 +408,7 @@ export const classifications = [
       "Runner::measure_unless_production Runner::moved Runner::seq Runner::seq_range Runner::take_alerts Runner::take_journal"],
     ["runner:runner/src/runner/query.rs", "Runner::bake_warnings"],
     ["runner:runner/src/runner/resource_inspection.rs", "Runner::inspection_digest"],
-    ["runner:runner/src/runner/tamber.rs", "Runner::tamber"],
+    ["runner:runner/src/runner/forma.rs", "Runner::forma"],
     ["runner:runner/src/runner/text_axes.rs", "Runner::text_axes_settle_ms"],
     ["runner:runner/src/runner/trace.rs", "Runner::trace_commits"],
     ["runner:runner/src/runner/writes.rs", "Runner::shown_resource Runner::writes"],
@@ -602,10 +603,10 @@ export const classifications = [
       "exact_boot exact_boot_entry exact_boot_plan exact_check_prepared exact_commit_plan exact_create exact_destroy exact_discard_plan exact_in " +
       "exact_on_document_forgotten exact_out exact_prepare_plan"],
     ["painted:host/painted/src/activation.rs", "Host::data_pending"],
-    ["painted:host/painted/src/canvas.rs", "CanvasHost::boot"],
+    ["painted:host/painted/src/canvas/boot.rs", "CanvasHost::boot"],
     ["painted:host/painted/src/canvas/jni.rs",
-      "Java_dev_exact_canvas_Native_adopt Java_dev_exact_canvas_Native_attachBuffers Java_dev_exact_canvas_Native_attachSurface Java_dev_exact_canvas_Native_configure " +
-      "Java_dev_exact_canvas_Native_detachSurface Java_dev_exact_canvas_Native_start Java_dev_exact_canvas_Native_startAsync Java_dev_exact_canvas_Native_window"],
+      "Java_dev_exact_canvas_Native_attachBuffers Java_dev_exact_canvas_Native_attachSurface Java_dev_exact_canvas_Native_configure " +
+      "Java_dev_exact_canvas_Native_detachSurface Java_dev_exact_canvas_Native_window"],
     ["painted:host/painted/src/canvas/reader.rs", "CanvasHost::adopt CanvasHost::attach_window CanvasHost::detach_window"],
     ["painted:host/painted/src/content_region/presenter.rs", "Presenter::boot_with_content_region"],
     ["painted:host/painted/src/host.rs", "Host::boot Host::boot_at Host::boot_at_with_region Host::boot_with Host::runner_mut"],
@@ -816,7 +817,7 @@ export const classifications = [
     ["painted:host/painted/src/ink/images.rs", "Images::begin Images::bitmap Images::pin Images::pixmap Images::unpin"],
     ["painted:host/painted/src/ink/stats.rs", "counter_state Ink::statistics StatisticsReader::read"],
     ["painted:host/painted/src/paint.rs",
-      "bbox content_size object_fit PaintedBox::center PaintedBox::contains PaintedBox::surface Painter::backend Painter::flow_failures Painter::last_frame_ms " +
+      "bbox content_size object_fit PaintedBox::center PaintedBox::surface Painter::backend Painter::flow_failures Painter::last_frame_ms " +
       "Painter::new Painter::paint Painter::replace_backend Painter::retiring_text_residency Painter::take_notes rgba text_spec"],
     ["painted:host/painted/src/paint/backend.rs", "Painter::trim WindowLayer::into_pixels"],
     ["painted:host/painted/src/paint/border.rs", "border_fills border_fills_styled PathOp::points pattern_fills reduced rounded_rect shape_path Shape::within shaped_rect"],
@@ -1240,7 +1241,6 @@ export const classifications = [
     ["runner:runner/src/instance/document.rs", "Tree::document#kept:1"],
     ["runner:runner/src/instance/region.rs", "RegionInst::update#2:1"],
     ["runner:runner/src/request_preload.rs", "Preload::fill#headers:1"],
-    ["runner:runner/src/runner.rs", "Runner::boot_inner#timers:1"],
     ["runner:runner/src/runner/faults.rs", "Faults::take#left:1"],
     ["runner:runner/src/runner/kept_wait.rs", "Runner::carry_waiting_in#waiting:1"],
     ["runner:runner/src/runner/lists.rs", "Runner::update_ops#store_bytes_copied:1"],
@@ -1288,197 +1288,5 @@ export const classifications = [
     ["runner:runner/src/runner/outstanding.rs", "Outstanding::is_clear Outstanding::json"],
     ["runner:runner/src/tools.rs", "check sends"],
   ], "durable for a retained effectful/background ticket; holds() also accepts those tickets (reply.rs:27-33)."),
-  group("runner helpers", ["one-shot"], "synchronous invocation, evaluator state or caller-owned value; no independent completion", "UI-owned",
-    "The named runner source evaluates, encodes, compares or constructs caller-owned values. These public helpers have no independently delivered outcome or persisted operation identity.", [
-    ["runner:runner/src/compare.rs", "changed_fields equal equivalent equivalent_all equivalent_opt same shared"],
-    ["runner:runner/src/failure.rs", "Failure::error Failure::exposed_code Failure::of FailureCode::from_name FailureCode::name FailureCode::of_kind FailureCode::seam_error"],
-    ["runner:runner/src/fetch_template.rs", "argument encode expand graphql_error pointer"],
-    ["runner:runner/src/format/mod.rs", "formatting"],
-    ["runner:runner/src/held.rs", "Held::compiled Held::decoded Held::equivalent Held::get Held::is_compiled Held::new Held::read Held::released Held::same"],
-    ["runner:runner/src/lists.rs", "concat flat flat_len index_of position slice sort_by sum"],
-    ["runner:runner/src/machine.rs", "equal equal_items exec Machine::new run step"],
-    ["runner:runner/src/program.rs", "Program::new"],
-    ["runner:runner/src/rows.rs", "repeated"],
-    ["runner:runner/src/stdlib.rs", "assembled calendar_diff call format_number format_time join js_max js_min js_round native_props parse_number push_number"],
-    ["runner:runner/src/strings.rs", "index_of order pieces replace_all slice split"],
-    ["runner:runner/src/vm.rs", "decode eval Frame::row_of instructions intern is_literal Strings::get Strings::is_empty Strings::len Strings::new Strings::of transitive_instructions Trap::bound"],
-    ["runner:runner/src/vm/column.rs", "Column::get Column::is_empty Column::iter Column::len Column::to_vec"],
-  ]),
-  group("delivery", ["durable operation"], "installed app/update stream; session application is synchronous", "durable",
-    "The named public runner-crate source is the delivery API or its value/admission helper. runner/src/runner/delivery.rs exposes the app delivery state; host delivery synchronization applies persisted stream facts to the current session.", [
-    ["runner:runner/src/delivery.rs", "Delivery::field Delivery::with_compat production refuse_analysis"],
-  ]),
-  group("UI facts", ["one-shot"], "current session, viewport, page or rendered geometry", "UI-owned",
-    "The named public runner-crate source is the UI facts API or its value/admission helper. runner/src/runner/viewport.rs and page.rs settle facts of the live session; these entries carry no app/account operation identity.", [
-    ["runner:runner/src/design.rs", "batch digest Edit::json Edit::parse notice Scrub::older shape snapshot structure tokens"],
-    ["runner:runner/src/desktop.rs", "buttons dock_menu presents status_items"],
-    ["runner:runner/src/geometry.rs",
-      "GeometryAnswer::of GeometryAnswer::value GeometryEnv::new GeometryEnv::read GeometryLinks::ahead GeometryLinks::new GeometryLinks::with_range_frame " +
-      "Scrolled::note Scrolled::place Scrolled::shown Scrolled::top_layer Scrolled::top_layer_frames"],
-    ["runner:runner/src/geometry/modal.rs", "Scrolled::top_layer_backdrop"],
-    ["runner:runner/src/head.rs", "Head::fields"],
-    ["runner:runner/src/orientation.rs", "conflict_line Lock::json session Session::lock types"],
-    ["runner:runner/src/page.rs", "Page::bits Page::field Page::from_bits Page::gpu_tier Page::in_background Page::navigation_type Page::visibility_state"],
-    ["runner:runner/src/runner/resize.rs", "ResizeRect::parse ResizeRect::value"],
-    ["runner:runner/src/runner/tamber.rs", "Tamber::color Tamber::dark Tamber::font Tamber::get Tamber::has Tamber::inputs Tamber::length Tamber::measures_json Tamber::number Tamber::tuple Token::new"],
-    ["runner:runner/src/store.rs", "Store::clock_ms Store::entropy_draws Store::observe_entropy Store::set_clock_ms"],
-    ["runner:runner/src/time.rs", "agent_seed launching launching_with Place::field Place::launched Place::validate posix_locales WallTime::field WallTime::validate without_launch_time"],
-    ["runner:runner/src/viewport_reads.rs", "Media::holds Reads::any Reads::key Reads::media Reads::of Reads::reads"],
-    ["runner:runner/src/viewport.rs",
-      "Contrast::keyword DisplayMode::keyword even_segments Fold::validate Gamut::keyword Geometry::field Geometry::of Geometry::restore Hover::keyword " +
-      "Pointer::keyword Posture::from_bits Posture::from_keyword Posture::keyword Preferences::bits Preferences::color_scheme Preferences::from_bits Update::keyword " +
-      "Viewport::field Viewport::sized Viewport::validate"],
-    ["runner:runner/src/wakelock.rs", "bound bound_prop holders"],
-  ]),
-  group("picker results", ["one-shot"], "current picker/share request and its app file roots", "UI-owned",
-    "The named public runner-crate source is the picker results API or its value/admission helper. host/painted/src/picker.rs configures app file roots and copies/selects paths for the current picker/share. Persistent copies are separate from the UI continuation receiving them.", [
-    ["runner:runner/src/file_pickers.rs", "answer_paths arm Kind::capability Kind::command Kind::of Picker::from_args Picker::summary request"],
-    ["runner:runner/src/runner/picker.rs", "accepts answer_paths delivered_type extension extension_for mime_for Picked::line Picked::payload Picked::payload_under PickerRequest::json"],
-    ["runner:runner/src/save_file.rs", "arm chosen_name covered request SaveFile::from_args SaveFile::summary"],
-  ]),
-  group("fills", ["one-shot"], "collection/view generation, window and fill token", "UI-owned",
-    "The named public runner-crate source is the fills API or its value/admission helper. runner/src/runner/collection.rs validates feedback/fill against the current collection; instance/collection/index.rs versions rows and into_view.rs versions reveal requests.", [
-    ["runner:runner/src/instance/collection/api.rs",
-      "CollectionFeedback::decode CollectionFeedback::decode_with_fill CollectionFeedback::encode CollectionFeedback::encode_with CollectionSnapshot::json " +
-      "CollectionSnapshot::write_json ListAxis::name snapshots_json"],
-    ["runner:runner/src/instance/collection/into_view.rs", "Align::parse Tree::into_view_json"],
-    ["runner:runner/src/instance/collection/mod.rs", "set_bootstrap_extent set_lead_scale"],
-    ["runner:runner/src/instance/collection/nest.rs", "Tree::kept_positions_json"],
-    ["runner:runner/src/instance/collection/reorder_api.rs", "ReorderEnding::name ReorderGeometry::decode ReorderGeometry::encode ReorderPhase::name ReorderStep::from_key ReorderToken::list ReorderToken::serial"],
-    ["runner:runner/src/instance/collection/shown.rs", "RowsShown::extend"],
-    ["runner:runner/src/instance/collection/traversal.rs", "Tree::collection Tree::collection_data Tree::collection_mounted Tree::collections Tree::collections_bounded Tree::collections_shallow"],
-  ]),
-  group("sockets and listens", ["subscription"], "source stream/watch and pending subscription in a session", "UI-owned",
-    "The named public runner-crate source is the sockets and listens API or its value/admission helper. runner/src/runner/sockets.rs and listen.rs associate reader facts with source requests; retirement of the source removes the UI observer.", [
-    ["runner:runner/src/listen.rs", "admitting EndReason::name grant_prefix grant_refusal Listen::refusal Standing::name under unix_path"],
-    ["runner:runner/src/request_socket.rs", "Request::check_protocols Request::protocols Request::protocols_refusal"],
-    ["runner:runner/src/request.rs", "Answer::stream Outcome::messages Request::listen Request::listen_refusal Request::long_poll Request::long_poll_refusal Request::socket"],
-    ["runner:runner/src/store/socket.rs",
-      "Socket::buffered_amount Socket::close Socket::is_open Socket::new Socket::resource Socket::send Socket::send_binary Socket::send_text Socket::ticket " +
-      "Store::end_socket_call Store::note_socket_overload Store::set_socket_call Store::set_socket_open Store::socket Store::socket_call Store::socket_open " +
-      "Store::socket_overload"],
-  ]),
-  group("module announcements", ["subscription"], "bound source/module and its active readers in this session", "UI-owned",
-    "The named public runner-crate source is the module announcements API or its value/admission helper. runner/src/runner/time.rs changed/apply_announced settle source watches; modules/events.rs raises events into the live module bindings. No durable outcome record is provided.", [
-    ["runner:runner/src/local_network.rs", "fact launch launch_once prompts Reach::refusal Reach::static_risk report State::parse State::word"],
-    ["runner:runner/src/runner/source.rs", "Interrupt::trigger Native::changed Native::on_changed"],
-  ]),
-  group("media and sensors", ["subscription"], "current MIDI/sound/sensor session, device handle or scheduled sample", "UI-owned",
-    "The named public runner-crate source is the media and sensors API or its value/admission helper. runner/src/runner/modules/samples.rs and runner/src/midi.rs number live sensor/device work; sound.rs owns voice/haptic IDs. No persisted operation record is created.", [
-    ["runner:runner/src/midi.rs",
-      "Access::from_word Access::word batch_op coalesce hex length messages Midi::clock Midi::field Midi::new Midi::open Midi::ports Midi::received Midi::recorded " +
-      "Midi::sent Midi::take Midi::waiting Port::named Port::state Ports::connected_input Ports::connected_output Ports::from_json Ports::none Sent::state Sent::tick " +
-      "split"],
-    ["runner:runner/src/runner/midi.rs", "MidiMessage::value"],
-    ["runner:runner/src/sound.rs", "By::word Haptic::state Sounds::evicted Sounds::haptics Sounds::live Sounds::take Sounds::voices Sounds::waiting Voice::state"],
-    ["runner:runner/src/transport.rs",
-      "Answer::field Segment::beat_at Segment::time State::word Transport::answer Transport::beat_at Transport::ended_due Transport::issued_to Transport::new " +
-      "Transport::playing Transport::segments Transport::sequence Transport::wake_due"],
-    ["runner:runner/src/transport/clock.rs", "Follow::last_tick Follow::position Follow::tempo Follow::window Transport::clock_input Transport::follower"],
-  ]),
-  group("presence storage", ["durable operation"], "app/account secret generation and backend queue", "durable",
-    "The named public runner-crate source is the presence storage API or its value/admission helper. runner/src/presence.rs Backend serializes secret operations by name/generation; module presence installation adopts its occupancy. This class applies to backend storage, not a retired unlock continuation.", [
-    ["runner:runner/src/presence.rs",
-      "Backend::cancel Backend::checked Backend::checking Backend::enqueue Backend::generation Backend::new Backend::occupancies Backend::occupancy " +
-      "Backend::plain_value Backend::pump Backend::snapshot_entries Backend::take_log MemoryVault::memory Occupancy::from_word Occupancy::locked Occupancy::word"],
-    ["runner:runner/src/store/presence.rs",
-      "Store::adopt_occupancy Store::call_snapshot Store::has Store::locked Store::occupancy Store::opened_locked Store::presence_capable Store::presence_names " +
-      "Store::presence_of Store::set_presence_capable Store::take_locked_read"],
-  ]),
-  group("presence storage", ["durable operation"], "app/account secret generation and backend queue", "durable",
-    "runner/src/presence.rs Backend serializes secret operations by name/generation; module presence installation adopts its occupancy. This class applies to backend storage, not a retired unlock continuation.", [
-    ["runner:runner/src/presence.rs", "Backend::pump#reconcile_at:1 Backend::refused#retry:1 Backend::wait_move#retry_at:1 Backend::write#retry_at:1"],
-  ]),
-  group("replies", ["one-shot", "subscription", "durable operation"], "pending ticket and source turn; UI target by default", "UI-owned",
-    "The named public runner-crate source is the replies API or its value/admission helper. runner/src/runner/reply.rs:27-88 checks pending, background, tool and module-work tickets; reply.rs:309 preserves effectful reply writes. Ordinary resource/then ownership is inferred from PendingReq.target in commit.rs:960.", [
-    ["runner:runner/src/request.rs", "Reply::message Reply::new Reply::send Reply::stream"],
-    ["runner:runner/src/upload.rs", "Message::sent Message::upload_progress Message::upload_start Message::upload_started Request::upload_progress Request::upload_progress_refusal"],
-  ], "durable when the ticket names background/tool work or retained effectful module work; see reply.rs:70-88 and module_work.rs. Not all tool handlers survive session teardown."),
-  group("storage", ["durable operation"], "app store contents; inspection/adoption is synchronous", "durable",
-    "The named public runner-crate source is the storage API or its value/admission helper. runner/src/runner/kept.rs adopts stored values and retries store readers; runner/src/runner.rs take_store_writes drains committed writes. Stored effects are distinct from UI settlement (reply.rs:309).", [
-    ["runner:runner/src/request.rs", "Request::storage"],
-    ["runner:runner/src/store.rs",
-      "Store::check_exclusive Store::copied_bytes Store::forget Store::forget_durable Store::get Store::granted Store::module_mirror Store::names Store::new " +
-      "Store::new_linked Store::observe_external_read Store::observe_topic Store::read Store::reads Store::runner_owned Store::set Store::set_durable " +
-      "Store::set_socket_buffered Store::snapshot Store::socket_buffered Store::stage_answer_socket Store::stage_socket Store::staged_sockets " +
-      "Store::take_answer_sockets Store::take_sockets Store::take_topics Store::take_writes Store::unparsed Store::with_grants"],
-  ]),
-  group("wakes", ["durable operation"], "app action/wake invocation until expiration or end", "durable",
-    "The named public runner-crate source is the wakes API or its value/admission helper. runner/src/runner/modules/wakes.rs raises and expires action/wake invocations independently of a mounted view; declared/wake_list.rs allocates their references. Persistence after process exit is not established here.", [
-    ["runner:runner/src/request.rs", "Request::wake"],
-  ]),
-  group("UI input", ["one-shot"], "current mounted view, action binding or interaction", "UI-owned",
-    "The named public runner-crate source is the UI input API or its value/admission helper. runner/src/runner/event.rs dispatches through a mounted view and its action binding; no independent operation identity is supplied.", [
-    ["runner:runner/src/runner/event.rs",
-      "ActionBinding::retained_utf8_bytes Event::checked_payload Event::focus_payload Event::height_release_payload Event::key Event::pan_payload " +
-      "Event::pan_release_payload Event::press Event::pressed Event::record Event::scroll_payload Event::transform_geometry_payload Event::transform_release_payload " +
-      "KeyModifiers::held KeyModifiers::split"],
-    ["runner:runner/src/runner/event/frame_navigation.rs", "FrameNavigation::parse FrameNavigation::value other"],
-    ["runner:runner/src/runner/event/keyboard.rs", "KeyboardEvent::chord KeyboardEvent::parse KeyboardEvent::value"],
-    ["runner:runner/src/runner/field.rs", "Event::edit_payload Event::field_payload FieldSelection::at_end FieldSelection::caret FieldSelection::clamped FieldSelection::parse SelectionDirection::name SelectionDirection::of utf16_len"],
-    ["runner:runner/src/runner/host_kinds.rs", "Event::clipboard_payload Event::media_payload Event::of_host_kind Event::paste_files_payload Event::selection_change_payload Event::selection_payload"],
-    ["runner:runner/src/runner/modules/declared/desktop.rs", "chord_refusal"],
-    ["runner:runner/src/runner/pointer.rs",
-      "AtomEvent::parse AtomEvent::value DropEvent::parse DropEvent::parse_point DropEvent::value Event::contextmenu_payload Event::pointer_payload MouseEvent::parse " +
-      "MouseEvent::value PointerEvent::parse PointerEvent::value WheelEvent::parse WheelEvent::value"],
-    ["runner:runner/src/runner/reorder_codec.rs", "Event::reorder_drop_bytes Event::reorder_drop_payload"],
-  ]),
-  group("timer fires", ["subscription"], "session timer generation/deadline or one frame task", "UI-owned",
-    "runner/src/runner/native_timers.rs fire_native_timer checks timer index/generation; gates.rs changes generations when task ownership changes. Advance/frame can also pump replies and deferred thens.", [
-    ["runner:runner/src/runner/live_time.rs", "refresh#due:1 refresh#due:2"],
-    ["runner:runner/src/runner/waits.rs", "Runner::fire_timer#k:1"],
-  ]),
-  group("native callbacks", ["one-shot", "subscription"], "module instance and granted handle or anchored invocation", "UI-owned",
-    "The named public runner-crate source is the native callbacks API or its value/admission helper. runner/src/runner/modules/invoke.rs:1-22 anchors callbacks to handles/pending sends; Running::drop answers AbortError on session replacement. Final handlers may temporarily retain their anchor.", [
-    ["runner:runner/src/runner/modules/admit.rs", "CallOrigin::word"],
-  ]),
-  group("wakes", ["durable operation"], "app action/wake invocation until expiration or end", "durable",
-    "runner/src/runner/modules/wakes.rs raises and expires action/wake invocations independently of a mounted view; declared/wake_list.rs allocates their references. Persistence after process exit is not established here.", [
-    ["runner:runner/src/runner/modules/declared/wake_list.rs", "Runner::wake_entry_ended#not_before:1 Runner::wake_entry_ended#not_before:2"],
-  ]),
-  group("presence", ["one-shot"], "outstanding presence call and secret generation", "UI-owned",
-    "The named public runner-crate source is the presence API or its value/admission helper. runner/src/runner/modules/presence.rs:224-249 drops a check whose call was let go. The authentication continuation is session-owned even though the keystore value is durable.", [
-    ["runner:runner/src/runner/modules/presence.rs", "PresenceAsk::json"],
-  ]),
-  group("holds", ["one-shot"], "held request/node until answer, cancellation or node retirement", "UI-owned",
-    "runner/src/runner/device.rs:1-12 retires holds with the requesting node or ticket and refuses duplicate answers; the agent hold is not an executor request.", [
-    ["runner:runner/src/runner/modules/sheet.rs", "Runner::sheet_call#asking:1"],
-  ]),
-  group("shared tokens", ["one-shot"], "share token in the live router; copying may outlive the initiating view", "UI-owned",
-    "The named public runner-crate source is the shared tokens API or its value/admission helper. runner/src/runner/picker/shared.rs:596-630 updates only a token accepted by router.share. Copied files can survive, but this completion targets the current router token.", [
-    ["runner:runner/src/runner/picker/shared.rs", "Claimed::copy Claimed::copy_with Claims::claim Claims::new is_token location Pending::from_json received_line shared_path SharedFiles::value ShareTarget::from_json token"],
-  ]),
-  group("module lifecycle", ["one-shot"], "module binding, source instance or session configuration", "UI-owned",
-    "The named public runner-crate source is the module lifecycle API or its value/admission helper. runner/src/runner/modules/bound.rs binds live module instances; runner/src/runner/kept.rs data_ready reconciles the current source/store before settlement.", [
-    ["runner:runner/src/runner/retirement.rs", "ModuleIdentity::instance ModuleIdentity::retire ModuleInstance::failure"],
-    ["runner:runner/src/runner/source.rs",
-      "Interrupt::new Native::handler Native::host Native::host_call Native::hosted Native::hosted_call Native::set Native::sync Native::synced PreloadWake::ask " +
-      "PreloadWake::set Target::mutation Target::text"],
-  ]),
-  group("navigation", ["one-shot"], "current router, visit, tab or navigation operation", "UI-owned",
-    "The named public runner-crate source is the navigation API or its value/admission helper. runner/src/runner/router.rs validates visits against the live router; replacement/retirement changes that owner.", [
-    ["runner:runner/src/runner/router.rs", "launch_matches RouterChange::location routing"],
-    ["runner:runner/src/runner/split.rs", "press_writes_router"],
-  ]),
-  group("timer fires", ["one-shot"], "session timer generation/deadline or one frame task", "UI-owned",
-    "The named public runner-crate source is the timer fires API or its value/admission helper. runner/src/runner/native_timers.rs fire_native_timer checks timer index/generation; gates.rs changes generations when task ownership changes. Advance/frame can also pump replies and deferred thens.", [
-    ["runner:runner/src/runner/waits.rs", "frame_at_or_after IdleObservation::allows virtual_frame WaitKinds::from_bits WaitKinds::union Waits::next_check"],
-  ]),
-  group("share results", ["one-shot"], "share-sheet request or command until reported completion/cancellation", "UI-owned",
-    "The named public runner-crate source is the share results API or its value/admission helper. host/apple/src/abi/exports.rs exact_share/ exact_share_land and host/painted/src/presenter/requests.rs associate share UI with its pending command; this is separate from incoming router share tokens.", [
-    ["runner:runner/src/share.rs", "arm request Share::from_args Share::from_json Share::summary"],
-  ]),
-  group("region and text", ["one-shot"], "text request/source, font recipe, paint context and current paragraph/cache residency", "UI-owned",
-    "The named public runner-crate source is the region and text API or its value/admission helper. host/painted/src/text.rs and text/transfer.rs prepare and adopt text for its request, source and paint context; text cache and layout helpers retain those presentation values, not app outcomes.", [
-    ["runner:runner/src/surface_record.rs", "answer decode decode_published keep_signature oversize surface_name"],
-  ]),
-  group("media and sensors", ["subscription"], "current MIDI/sound/sensor session, device handle or scheduled sample", "UI-owned",
-    "runner/src/runner/modules/samples.rs and runner/src/midi.rs number live sensor/device work; sound.rs owns voice/haptic IDs. No persisted operation record is created.", [
-    ["runner:runner/src/transport.rs", "Transport::fill#refill_due:1 Transport::fill#skip:1"],
-    ["runner:runner/src/transport/clock.rs", "Follow::feed#held:1 Follow::feed#spp:1 Transport::follow#clock_to:1"],
-  ]),
-  group("presentation helpers", ["one-shot"], "current painted frame, geometry, style, ink cache or painter", "UI-owned",
-    "host/web-js/module.mjs buildMarkdown emits alloc, pieces and output for one loaded Markdown capability. The exports allocate caller bytes, render Markdown pieces and expose the retained output buffer; they deliver no runner completion.", [
-    ["web-js:host/web-js/module.mjs", "alloc output pieces"],
-  ]),
+  ...helperClassifications(group),
 ];

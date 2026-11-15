@@ -50,6 +50,7 @@ import { Cdp, open } from './agent.mjs';
 import { chromium, quitBrowser } from './agent-launch.mjs';
 import { childFailure as failure, failureSummary } from './agent-build.mjs';
 import { fileURLToPath } from 'node:url';
+import { gateMetric } from './gate.mjs';
 
 const t0 = Date.now();
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -177,7 +178,7 @@ const sizedApps = () => {
   return apps;
 };
 // Only the web bytes, in the working tree (LLP 1047.002 D5): seconds once the compiler is built, so the async
-// lane files a VIOLATION in the minute after the commit, and a person measures a cut before landing it.
+// lane files a VIOLATION at its hourly run.
 if (process.argv.includes('--web-bytes')) {
   mkdirSync(resolve(ROOT, 'target/metrics-bytes'), { recursive: true });
   const t = Date.now(), measured = Object.fromEntries(sizedApps().map(([name, target]) => [name, jsTargetBytes(name, target)]));
@@ -812,29 +813,20 @@ await step('macos-boot', () => {
 // swift), then the budget row "touch one line, rebuild that crate" for the
 // host crate — and the startup again on the fresh binary.
 if (long) {
-  // The loop's own budgets, in this captured checkout's warm cache: the six
-  // checks exactly as AGENTS.md states them (the second pass is the warm
-  // one), then one kernel source touched and its tests rebuilt and run.
+  // Measure the blocking command itself, then the kernel's build and tests separately.
   await step('loop', () => {
     // A developer's environment: none of this fixture's EXACT_* overrides.
-    // (The sixth check's build scripts run Bun: app.mjs has put this one first on PATH.)
+    // app.mjs has put the pinned Bun first on PATH for Cargo build scripts.
     const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('EXACT_')));
     const timed = (command, args, name = args[0]) => {
       const t = Date.now();
       const r = spawnSync(command, args, { cwd: ROOT, env, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 });
-      return { name, s: (Date.now() - t) / 1000, ok: r.status === 0 };
+      return { name, s: (Date.now() - t) / 1000, ok: r.status === 0, log: `${r.stdout ?? ''}${r.stderr ?? ''}` };
     };
     const gate = () => {
-      const checks = [
-        timed('cargo', ['build', '--all-targets', '--keep-going']),
-        timed('cargo', ['test', '--tests', '--no-fail-fast']),
-        timed('cargo', ['clippy', '--all-targets', '--keep-going', '--', '-D', 'warnings']),
-        timed('cargo', ['fmt', '--all', '--', '--check']),
-        timed(process.execPath, ['scripts/caps.mjs'], 'caps'),
-        timed(process.execPath, ['scripts/boot.mjs'], 'boot'),
-        timed('cargo', ['check', '--workspace', '--all-targets', '--keep-going'], 'workspace'),
-      ];
-      return { s: checks.reduce((sum, c) => sum + c.s, 0), failed: checks.filter(c => !c.ok).map(c => c.name) };
+      const result = timed(process.execPath, ['scripts/gate.mjs'], 'gate');
+      if (!result.ok) console.error(result.log);
+      return { s: result.s, failed: result.ok ? [] : ['gate'] };
     };
     out.gate_first_s = gate().s;
     const warm = gate();
@@ -1144,7 +1136,9 @@ if (Number.isFinite(out.macos_paint_ms)) rows.push(
 if (rebuild) rows.push([`edit → ${out.web_target === 'js' ? 'JS target' : 'wasm'} rebuilt (no driver)`, ms(out.rebuild_ms), out.rebuild_note ?? 'the cold path: cargo build of the app crate']);
 if (long) {
   const s = (v) => (Number.isFinite(v) ? `${v.toFixed(1)} s` : 'n/a');
-  rows.push(['blocking gate (the six checks, warm)', s(out.gate_s), `${out.gate_failed?.length ? `failing: ${out.gate_failed.join(', ')}; ` : ''}first pass ${s(out.gate_first_s)}; budget ${budget('Blocking gate')}`]);
+  const gateRow = gateMetric(out.gate_s, Number.parseFloat(budget('Blocking gate')), out.gate_failed);
+  gateRow[2] += `; first pass ${s(out.gate_first_s)}`;
+  rows.push(gateRow);
   rows.push(['kernel: touch one line, rebuild', s(out.touch_kernel_s), `kernel/src/lib.rs; budget ${budget('Touch one line')}`]);
   rows.push(['kernel: test what you changed', s(out.test_kernel_s), `cargo test -p exact-kernel${out.test_kernel_ok === false ? ' (failing)' : ''}; budget ${budget('Test what you changed')}`]);
   rows.push(['macOS: initial captured build', out.macos_build_failed ? 'FAILED' : s(out.macos_build_s), out.macos_build_failed ?? `cargo ${s(out.macos_build_cargo_s)} · swift ${s(out.macos_build_swift_s)}; budget ${budget('Full build')}`]);

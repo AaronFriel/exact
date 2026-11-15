@@ -469,7 +469,7 @@ fn a_document_whose_ids_nobody_keeps_is_the_settled_tree_projected() {
 
 #[test]
 fn a_page_is_the_shell_around_the_document() {
-    let r = at(Post::Soon, Duration::from_secs(5));
+    let mut r = at(Post::Soon, Duration::from_secs(5));
     let shell =
         std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../web/index.html"))
             .unwrap();
@@ -492,7 +492,13 @@ fn a_page_is_the_shell_around_the_document() {
     assert!(html.find(&capture) < html.find("<body").or(html.find("<div id=\"exact-root\"")));
     assert!(scripts[1].starts_with("<script type=\"application/vnd.exact.checkpoint\""));
     assert!(scripts[2].starts_with("<script type=\"module\" src=\"./glue.js\">"));
-    assert!(exact_render::capture().len() <= 1024);
+    assert!(exact_render::capture().len() <= 1536);
+    assert!(!html.contains("<meta name=\"exact-scheme\""));
+    r.chooses_scheme = true;
+    let chosen = exact_render::page(&shell, &r).unwrap();
+    let meta = "<meta name=\"exact-scheme\" content=\"exact.state.#scheme\">";
+    assert!(chosen.contains(meta));
+    assert!(chosen.find(meta) < chosen.find(&capture));
     assert_eq!(html.matches("<meta name=\"viewport\"").count(), 1);
     // An idle page's runtime downloads with the document (LLP 1048.000 D3).
     assert!(html.contains("<link rel=\"preload\" href=\"./app.wasm\" as=\"fetch\" crossorigin>"));
@@ -765,6 +771,34 @@ fn a_route_lists_its_pages_with_its_source() {
         exact_web::document::build_locations(&plan).unwrap(),
         vec![("/".to_string(), false)]
     );
+}
+
+/// A worker-placed source (a lone `Placed`, one ordered set, LLP 1027.002
+/// Change 2) lists its pages too: the enumerator parses each turn's reply
+/// before it dispatches the next, so it never meets `Dispatch::Held`.
+#[test]
+fn a_worker_placed_pages_source_is_never_held() {
+    struct Listed;
+    impl DataSource for Listed {
+        fn query(&mut self, source: &str, _: &[Value]) -> Result<Value, DataError> {
+            Err(DataError::UnknownSource(source.into()))
+        }
+        fn answer(&mut self, _: &mut Store, _: &str, _: &[Value]) -> Result<Answer, DataError> {
+            Ok(Answer::Now(Value::list(vec![Value::str("1")])))
+        }
+    }
+    let plan = contract::compile(
+        "routes nav\n  tab home \"/\" render=build\n    post \"/post/:post\" render=build pages=posts(\"public\")\ncomponent A\n  view\n    text \"a\"\n",
+    )
+    .unwrap();
+    let row = plan
+        .routes
+        .iter()
+        .find(|r| plan.str(r.name) == "post")
+        .unwrap();
+    let worker = exact_data::Placed::new(Listed, exact_runner::Placement::Worker);
+    let listed = exact_render::pages(&plan, worker, row, Duration::from_secs(5));
+    assert_eq!(listed.unwrap(), ["/post/1"]);
 }
 
 /// A `pages=` source that is re-asked without end (`Dispatch::Again` gets
@@ -1080,4 +1114,20 @@ component App
     assert_eq!(status, 200, "{body}");
     assert!(body.contains(">2.3.4 (56)<"), "{body}");
     assert!(!body.contains("type=\"module\""), "activate=never: {body}");
+}
+
+/// A dist directory, removed when dropped.
+struct Dist(std::path::PathBuf);
+
+impl Drop for Dist {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+impl std::ops::Deref for Dist {
+    type Target = Path;
+    fn deref(&self) -> &Path {
+        &self.0
+    }
 }

@@ -167,6 +167,10 @@ fn mixed_bake_reads_rust_identity_and_own_grants_without_executing_it() {
         Some("fs.read app:/data/rust")
     );
     assert!(super::mixed_grants(&serde_json::json!({"appId":"wrong"}), Some(&Rust)).is_err());
+    assert_eq!(
+        super::mixed_grants(&javascript, Some(&())).unwrap(),
+        Some("")
+    );
 }
 
 #[test]

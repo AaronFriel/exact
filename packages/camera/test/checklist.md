@@ -3,6 +3,12 @@
 What no tool can do here: grant the camera on a Mac, open a phone's camera,
 and look. Each step says what to run and what you should see.
 
+Android's `takePhoto(android.shutterSound=false)` suppresses the sound only on
+API 33 or later when [`MediaActionSound.mustPlayShutterSound()`](https://developer.android.com/reference/android/media/MediaActionSound#mustPlayShutterSound())
+returns false. Earlier Android versions cannot report the regional requirement,
+so the shutter sound stays on. `ShutterSoundTest` checks the capture path on
+API 31, 32 and 33; a phone run must still check the audible cue.
+
 ## macOS, the conformance suite with a grant
 
 1. `bun packages/camera/test/apple.mjs macos --ask`

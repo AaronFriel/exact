@@ -91,6 +91,8 @@ abstract class ExactExtension(val context: ExtensionContext) {
 
     /** The view's node is gone. */
     open fun destroyView(view: android.view.View) {}
+    /** The hosted view's activity lifecycle, separate from the session's foreground fact (LLP 1133.021). */
+    open fun viewLifecycle(view: android.view.View, event: ViewLifecycle, state: android.os.Bundle?) {}
 
     /**
      * View [id] of [session] was displayed or hidden, by the origin of the commit that did it (`app`, `tool` or
@@ -296,6 +298,18 @@ class ExtensionContext internal constructor(val application: Context, private va
 
     fun log(line: String) { Log.i("exact", line) }
 
+    /** A line for the session's journal, which the agent's `logs` reads. Main thread. */
+    fun journal(line: String) = Exact.journal(line)
+
+    /**
+     * The intent a tap on what this extension posts starts (a notification's content intent or action, LLP 1133.004
+     * D6; LLP 1133.004.000 D4): the app's unexported alias, which comes forward and opens [navigate] as a link's
+     * location, or, without one, raises the interface's event [event] with [args] with a person's origin, once the
+     * session can hear it. A `PendingIntent` made from it is the app's alone to send.
+     */
+    fun activation(event: String, args: JSONArray, navigate: String? = null): android.content.Intent =
+        Activations.intent(application, name, event, args, navigate)
+
     /**
      * The platform's dialog for [permissions], in one request (`Activity.requestPermissions`), then [done], on the main
      * thread: when the result comes, or when the activity resumes without it (a result lost to recreation, LLP 1133.002
@@ -375,6 +389,24 @@ class ExtensionContext internal constructor(val application: Context, private va
     companion object {
         /** The embedder's decision on leaving the app ([leave]); null lets every URL go. */
         @JvmStatic var leaving: ((String, String) -> Boolean)? = null
+
+        /** [ExtensionContext.activation] for extension [extension] with no session: a receiver's, which posts what an
+         * extension scheduled while the app was not running. */
+        @JvmStatic fun activation(context: Context, extension: String, event: String, args: JSONArray, navigate: String? = null): android.content.Intent =
+            Activations.intent(context, extension, event, args, navigate)
+
+        /**
+         * The intent a notification's action starts (LLP 1133.004 stage 2): [event] of [extension] with [args], the
+         * name of [action] (a declared action's record) and the reply written into `args[chosen]`, raised only while
+         * the plan declares [action]; the notification [tag], [id] is closed. Activities only: Android shows a
+         * background action in the foreground (LLP 1133.004.000 D5). An action with a text field reads its reply
+         * under [Activations.REPLY].
+         */
+        @JvmStatic fun action(context: Context, extension: String, event: String, args: JSONArray, chosen: Int, action: JSONObject, tag: String, id: Int): android.content.Intent =
+            Activations.action(context, extension, event, args, chosen, action, tag, id)
+
+        /** The `RemoteInput` key of an action's text field. */
+        const val REPLY = Activations.REPLY
     }
 
     /** [requestPermissions] for [name], keeping the history [permission] reads. */
@@ -648,6 +680,9 @@ internal object Extensions {
         }
         override fun update(view: android.view.View, props: JSONObject) { extension(name)?.update(view, props) }
         override fun events(view: android.view.View, emit: (String, String) -> Unit) { emits[view] = emit }
+        override fun lifecycle(view: android.view.View, event: ViewLifecycle, state: android.os.Bundle?) {
+            extension(name)?.viewLifecycle(view, event, state)
+        }
         override fun destroy(view: android.view.View) { emits.remove(view); extension(name)?.destroyView(view) }
     }
 

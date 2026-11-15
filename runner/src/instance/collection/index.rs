@@ -75,7 +75,12 @@ struct RowHeight {
 pub(crate) struct Anchor {
     order: Rc<[Rc<str>]>,
     row: Option<usize>,
+    /// How far the port's top was into the row; for an anchor at the
+    /// port's bottom, how far the port's bottom was past the row's end.
     within: f64,
+    /// Held by the last visible row's end and the port's bottom
+    /// ([`SizeIndex::capture_bottom_anchor`]) rather than the first's top.
+    pub(super) bottom: bool,
     follows_end: bool,
     /// How far past the end the port was (a rubber band under a finger or a
     /// fling): kept past the end, an end it follows included, so a
@@ -695,9 +700,46 @@ impl SizeIndex {
             order: Rc::clone(&self.order),
             row,
             within,
+            bottom: false,
             follows_end,
             beyond: (raw - max).max(0.0),
             raw,
+        })
+    }
+
+    /// @ref LLP 1168.000 D1.2 — the anchor of a list that opens at its end
+    /// when an update puts rows before its window: the last row the port
+    /// shows, by key, and the distance from that row's end to the port's
+    /// bottom. It is taken at a zero offset too, where the first visible row
+    /// would anchor nothing, so a page that lands above a reader at the top
+    /// of the loaded window leaves them where they were reading; a leading
+    /// row or a separator that moves with the page cannot take them along.
+    /// A port below the rows (in the padding after them) holds the last row
+    /// with a height.
+    /// An end it follows wins, as in [`Self::capture_anchor`].
+    pub(crate) fn capture_bottom_anchor(
+        &self,
+        raw: f64,
+        viewport: f64,
+        follow_end: bool,
+    ) -> Result<Anchor, IndexError> {
+        let anchor = self.capture_anchor(raw, viewport, follow_end)?;
+        if anchor.follows_end {
+            return Ok(anchor);
+        }
+        // The port's bottom where the port is, in the padding before the
+        // rows too (`capture_anchor` has refused a bad offset or port).
+        let bottom = raw.min(self.max_offset(viewport)).max(-self.leading) + viewport;
+        // Below the rows, the last row with a height: a zero-height tail
+        // shows nothing to keep.
+        let row =
+            (self.tree.find(bottom, true)).or_else(|| self.tree.find(self.tree.total(), true));
+        let within = row.map_or(0.0, |i| bottom - self.tree.prefix(i + 1));
+        Ok(Anchor {
+            row,
+            within,
+            bottom: row.is_some(),
+            ..anchor
         })
     }
 
@@ -724,6 +766,11 @@ impl SizeIndex {
                 None => return Ok(anchors),
             }
         }
+    }
+
+    /// The position, in the order it was taken on, of the row an anchor holds.
+    pub(crate) fn anchor_row(anchor: &Anchor) -> Option<usize> {
+        anchor.row
     }
 
     /// The key of the row an anchor holds.
@@ -766,6 +813,7 @@ impl SizeIndex {
             order: Rc::clone(&self.order),
             row: Some(self.position(key)?),
             within,
+            bottom: false,
             follows_end: false,
             beyond: 0.0,
             raw: 0.0,
@@ -782,7 +830,7 @@ impl SizeIndex {
     pub(crate) fn kept_row(&self, anchor: &Anchor, viewport: f64) -> bool {
         !anchor.follows_end
             && self
-                .anchor_position(anchor)
+                .anchor_position(anchor, viewport)
                 .is_some_and(|offset| (-self.leading..=self.max_offset(viewport)).contains(&offset))
     }
 
@@ -790,16 +838,19 @@ impl SizeIndex {
     /// only after structural edits (which already permit an index rebuild).
     /// Drop/recapture the anchor after applying the correction; retaining many old
     /// anchors would retain their old O(N) key snapshots too.
-    fn anchor_position(&self, anchor: &Anchor) -> Option<f64> {
+    fn anchor_position(&self, anchor: &Anchor, viewport: f64) -> Option<f64> {
         let old = anchor.row?;
-        self.position(&anchor.order[old])
-            .or_else(|| {
-                anchor.order[old + 1..]
-                    .iter()
-                    .chain(anchor.order[..old].iter().rev())
-                    .find_map(|key| self.position(key))
-            })
-            .map(|i| self.tree.prefix(i) + anchor.within)
+        let row = self.position(&anchor.order[old]).or_else(|| {
+            anchor.order[old + 1..]
+                .iter()
+                .chain(anchor.order[..old].iter().rev())
+                .find_map(|key| self.position(key))
+        })?;
+        Some(if anchor.bottom {
+            self.tree.prefix(row + 1) + anchor.within - viewport
+        } else {
+            self.tree.prefix(row) + anchor.within
+        })
     }
 
     /// Ported to the JS target as `host/web-js/list.js` `restoreAnchor`.
@@ -815,9 +866,11 @@ impl SizeIndex {
             }
             return self.clamp_offset(anchor.raw, viewport);
         }
-        Ok(self.anchor_position(anchor).map_or(0.0, |offset| {
-            offset.max(-self.leading).min(max) + anchor.beyond
-        }))
+        Ok(self
+            .anchor_position(anchor, viewport)
+            .map_or(0.0, |offset| {
+                offset.max(-self.leading).min(max) + anchor.beyond
+            }))
     }
 
     fn band(&self, start: f64, end: f64) -> Range<usize> {

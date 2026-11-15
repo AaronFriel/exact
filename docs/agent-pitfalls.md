@@ -21,6 +21,25 @@ This list holds what the [agent guide](contract-for-agents.md)'s rules don't mak
 
 ## Layout
 
+- **A video placed with `inset=0` does not fill its box.** An absolutely
+  positioned `video` with `inset=0` and no `width` or `height` is 300×150 until
+  its metadata arrives, then the stream's natural size, and an adaptive stream's
+  picture grows and shrinks with each rendition. Cause: CSS sizes a replaced
+  element whose width and height are auto by its natural size, and opposing
+  insets do not stretch it (CSS 2.1 §10.3.8, §10.6.5; an `image` likewise).
+  Chrome and iOS agree. Fix: `width="100%" height="100%"` with `object-fit`.
+  **Candidate diagnostic** (an absolutely positioned `video` or `image` with
+  opposing insets and an auto size on that axis). (expo/exact#648, web and iOS
+  simulator, 2026-11-15.)
+
+- **Inline runs with nothing between them never wrap apart.** Chips written as
+  adjacent runs (`text "one" padding="4px 8px" margin-right=6`, then `text
+  "two" …`) stay on one line and run off the edge. Cause: CSS breaks a line
+  only at a soft wrap opportunity, and two inline boxes with no white space
+  between them have none (CSS Text 3 §5), so the runs are one word; the web
+  does the same, and the margins still apply. Fix: a `text " "` run between
+  each pair. (expo/exact#649, web and iOS simulator, 2026-11-15.)
+
 - **A search field pushes a header button off a phone.** Under `--chrome agent`,
   the authored header lays out in the page. A search field with no width constraint
   can keep its intrinsic width even when the heading has `flex=1`. Give the field
@@ -156,6 +175,12 @@ This list holds what the [agent guide](contract-for-agents.md)'s rules don't mak
   deliberately light-only design, write `color-scheme="light"` on the root, which
   holds the whole app in light as `overrideUserInterfaceStyle` does. (Shelf port,
   2026-10-09.)
+- **A menu opens white on a dark page.** Cause: `scheme=fixed` tokens colour the
+  boxes they are written on, but the app's scheme is still the device's, so the
+  platform's menus, sheets and alerts stay light. Fix: an always-dark design says
+  `"userInterfaceStyle": "dark"` in `app.json` (or `color-scheme="dark"` on the
+  root); a menu in the brand's colours writes `background-color` and `color` on its
+  `popover` column, which the web draws and its rows take. (#552, 2026-11-14.)
 
 - **The app is wider than the window, and its tests still pass.** A box with
   `width="100%"` and padding is wider than its parent by the padding (`content-box`, as
@@ -534,7 +559,7 @@ This list holds what the [agent guide](contract-for-agents.md)'s rules don't mak
   Cause: a brand written as hex on a page, a card or text (`#f3f5f1`, `#ffffff`,
   `#18392d`); it stays the same in dark mode while the platform's text and controls
   turn dark. Four of round 4's five hex-heavy bake-off apps broke so. Fix: write no
-  colour (the accent is the platform's blue; a brand is an `app.tamber`); surfaces and text
+  colour (the accent is the platform's blue; a brand is an `app.forma`); surfaces and text
   are roles (`-exact-label`) or unsaid. Look in both schemes: `"prefer prefers-color-scheme dark"` as a drive's
   first op, or `prefer prefers-color-scheme dark` before a test's first
   observation. A later `prefer prefers-color-scheme light` switches back.
@@ -924,17 +949,22 @@ price: answers arrive `Later`, outside the action's transaction (LLP 1027.002 D1
   `macos`, `ios` and `wasm32` arms, built for wasm32, ran the `wasm32` one;
   2026-11-12.)
 
-- **App resources belong in the root component.** A child can declare a reserved
-  viewport reader, but an app source there fails with `type-child-resource`.
-  Declare the resource in the root and pass the value the child needs as a prop.
+- **A row cannot own a request.** A component that declares a resource or a
+  mutation, used under a `for` over data or in a virtualized `list`, fails with
+  `type-child-resource`; it may own them as a screen, a tab or an `if` arm.
+  Declare the root's resource over the list, or the mutation in the root, and
+  pass each row its answer or an action that sends it.
 
-- **A send reads a derive from before the action's writes.** An action's writes
-  commit together; reading a derive after assigning one of its inputs still reads
-  the previous commit's derive. Build the next record explicitly for the send,
-  for example `DepartureState(current, at=current.at + 600000, status="Delayed")`,
-  and assign local state in the same action. Caltrain's activity update sent
-  "On time" after incrementing its delay until it built that next record
-  (`apps/caltrain/app.contract`, LLP 1126.001 WP9).
+- **A derive read after the action assigns its input is the old value, with no
+  warning.** With `derive count = items.length`, `items = next` then `found =
+  count` reads the old list's count. A derive read in an action is the starting
+  state's, as a state's read is, but only the state's read is warned of
+  (`analyze-read-after-assign`; a derive is a settled value, LLP 1089 D3). Read
+  what you assigned (`found = next.length`), and build the next record
+  explicitly for a send, for example `DepartureState(current, at=current.at +
+  600000, status="Delayed")`. Caltrain's activity update sent "On time" after
+  incrementing its delay until it built that next record
+  (`apps/caltrain/app.contract`, LLP 1126.001 WP9; expo/exact#649, 2026-11-15).
 
 - **A name refused as reserved.** `none`, `some`, `true`, `false` and the expression
   words (`if`, `for`, `match`, `and`, …) cannot name a state, a parameter or a `let`
@@ -993,6 +1023,18 @@ price: answers arrive `Later`, outside the action's transaction (LLP 1027.002 D1
   that reads the authorization step's `Location` therefore works natively only:
   a web build sends that request from a server (`docs/contract-for-agents.md`,
   "An app's own sign-in screens").
+
+- **An error listener's later fetch reaches the server from the web build
+  only.** A fetch that a data module's `error` or `unhandledrejection` listener
+  makes after an `await`, in a `.then`, or in its report's reply is sent on the
+  web build, where the listener is the page's. Natively, only a plain HTTP fetch
+  made in the listener itself is sent. The later one is refused with a line in
+  `logs`: `fetch() called outside an answer: it was never run`, or `fetch()
+  called after an error event's listener returned` (LLP 1175 D3, D7). On the
+  web the listener also hears the whole page, and a request of its own that
+  fails uncaught calls it again. Fix: fetch in the listener itself, before any
+  `await`, and catch the failure ([recipe](recipes/report-errors.md)).
+  (Scratch app under `agent macos` and `agent web`, 2026-11-14.)
 
 - **`Date.now()` in a data module passes its Bun tests and fails on the
   device.** Since 2026-10-05 the build refuses a direct use by file and line
@@ -1498,6 +1540,11 @@ price: answers arrive `Later`, outside the action's transaction (LLP 1027.002 D1
   before `screenshot`. (Authoring bench, LLP 1087, t5-pomodoro, 2026-10-07:
   about 5 minutes and a probe script to find.)
 
+- **A macOS viewport screenshot omits a box's 3D rotation.** Both a static
+  `rotate="-45deg x"` and a sampled axis keyframe can look unrotated in the
+  default capture. Use `screenshot out.png window` to read the composited
+  window; `layout` also reports the transformed bounds. (#609, 2026-11-14.)
+
 - **A macOS `screenshot` shows no focus ring on a native field or button.** AppKit
   draws its focus ring only in the key window of the active app, and the driver's
   window is never key; nor is the ring in any picture a process can make of its own
@@ -1869,8 +1916,8 @@ price: answers arrive `Later`, outside the action's transaction (LLP 1027.002 D1
 
 - **The web build refuses every brand token (`color="ink.light"` is not a valid
   `color`) that `contract build` accepted a moment ago.** Cause: a later line
-  in `app.tamber` was refused (here `color-mix(in oklab, AccentColor 16%,
-  transparent)`, `tamber-residual`), and the web build reports the tokens the
+  in `app.forma` was refused (here `color-mix(in oklab, AccentColor 16%,
+  transparent)`, `forma-residual`), and the web build reports the tokens the
   design would have defined, not the design's refusal. Run `bun exact.mjs
   contract build app.contract --json`, which names the design's line. Also:
   a token's name is identifiers joined by dots (`hue.rose`, never `hue.1`).
@@ -1884,7 +1931,7 @@ price: answers arrive `Later`, outside the action's transaction (LLP 1027.002 D1
   ancestor box's `color` (a token on `fill` itself draws black on the web).
   (Harmony, 2026-10-21.)
 
-- **`bun exact.mjs tamber check .` in an app outside the checkout says each icon's
+- **`bun exact.mjs forma check .` in an app outside the checkout says each icon's
   SVG under `assets/` is missing though it is there.** The check resolves
   `assets/<path>` from the process's working directory, which `exact.mjs`
   moves to the checkout; the app's build finds the files. Trust

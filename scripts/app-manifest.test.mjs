@@ -226,15 +226,15 @@ test('an iOS app lists the schemes canOpenURL may ask about, and a malformed or 
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('readManifest admits the app\'s design, `tamber` (LLP 1121 D2)', async () => {
+test('readManifest admits the app\'s design, `forma` (LLP 1121 D2)', async () => {
   const { readManifest } = await import('./app.mjs');
   const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs');
   const { tmpdir } = await import('node:os');
-  const dir = mkdtempSync(resolve(tmpdir(), 'tamber-manifest-'));
+  const dir = mkdtempSync(resolve(tmpdir(), 'forma-manifest-'));
   try {
     writeFileSync(resolve(dir, 'app.contract'), 'component App\n  view\n    text "a"\n');
-    writeFileSync(resolve(dir, 'app.json'), JSON.stringify({ name: 'D', app: { id: 'com.example.d', name: 'D' }, tamber: 'design/app.tamber' }));
-    assert.equal(readManifest(dir, 'd').tamber, 'design/app.tamber');
+    writeFileSync(resolve(dir, 'app.json'), JSON.stringify({ name: 'D', app: { id: 'com.example.d', name: 'D' }, forma: 'design/app.forma' }));
+    assert.equal(readManifest(dir, 'd').forma, 'design/app.forma');
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -248,6 +248,26 @@ test('manifest colours follow the web and retired launch and alias keys are refu
     assert.throws(() => read({ ...manifest, background_color_dark: '#123456' }), /background_color_dark/);
     assert.throws(() => read({ ...manifest, launch: { background: '#fff' } }), /launch/);
     assert.throws(() => read({ ...manifest, typescript: { aliases: { '@/*': './*' } } }), /aliases/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('former design files and manifest keys name the required rename', async () => {
+  const { readManifest } = await import('./app.mjs');
+  const { designPath } = await import('./forma-design-path.mjs');
+  const dir = mkdtempSync(resolve(tmpdir(), 'forma-name-'));
+  try {
+    writeFileSync(resolve(dir, 'app.tamber'), '');
+    for (const read of [() => readManifest(dir, 'test'), () => designPath(dir)]) {
+      assert.throws(read, /rename app.tamber to app.forma/);
+    }
+    writeFileSync(resolve(dir, 'app.forma'), 'forma app\n');
+    assert.throws(() => readManifest(dir, 'test'), /rename app.tamber to app.forma/);
+    rmSync(resolve(dir, 'app.tamber'));
+    writeFileSync(resolve(dir, 'app.json'), '{"tamber":"app.forma"}');
+    assert.throws(() => readManifest(dir, 'test'), /rename app.json's tamber key to forma/);
+    assert.throws(() => designPath(dir), /rename app.json's tamber key to forma/);
+    rmSync(resolve(dir, 'app.json'));
+    assert.equal(designPath(dir), resolve(dir, 'app.forma'));
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 

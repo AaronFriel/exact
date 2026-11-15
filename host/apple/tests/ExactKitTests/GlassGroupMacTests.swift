@@ -62,12 +62,15 @@ final class GlassGroupMacTests: XCTestCase {
         f.window.displayIfNeeded()
         let glass = try XCTUnwrap(f.presenter.views.values.first { $0.props["backgroundMaterial"] == "glass" })
         XCTAssertEqual(glass.appliedMaterial, "NSGlassEffectView(.regular)")
-        let picture = try XCTUnwrap(Capture.picture(of: f.presenter.navigation.split.agentRoot))
-        let scale = CGFloat(picture.pixelsWide) / picture.size.width
-        let red = try XCTUnwrap(picture.paintedColorAt(x: Int(100 * scale), y: Int(50 * scale))?.usingColorSpace(.sRGB))
-        XCTAssertGreaterThan(red.redComponent, 0.9)
-        XCTAssertLessThan(red.greenComponent, 0.3)
-        XCTAssertLessThan(red.blueComponent, 0.3)
+        let root = f.presenter.navigation.split.agentRoot
+        for capture in [{ Capture.picture(of: root) }, { Capture.bitmap(of: root, scale: root.pixelScale ?? 2) }] {
+            let picture = try XCTUnwrap(capture())
+            let scale = CGFloat(picture.pixelsWide) / picture.size.width
+            let red = try XCTUnwrap(picture.paintedColorAt(x: Int(100 * scale), y: Int(50 * scale))?.usingColorSpace(.sRGB))
+            XCTAssertGreaterThan(red.redComponent, 0.9)
+            XCTAssertLessThan(red.greenComponent, 0.3)
+            XCTAssertLessThan(red.blueComponent, 0.3)
+        }
     }
 
     /// LLP 1053.000.000.000 D2: an auto group's spacing is the points the

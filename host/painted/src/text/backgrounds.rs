@@ -17,6 +17,11 @@ pub(crate) struct InlineBackground {
     /// character and its last (`NodeRef::inline_background_reach`): its
     /// padding and border, which the background covers (CSS 2 §14.2).
     pub reach: exact_kernel::InlineEdges,
+    /// How far its padding box stands above and below its text's content
+    /// area (`NodeRef::inline_background_block_reach`), which the background
+    /// covers and the line does not make room for (CSS 2 §10.6.1).
+    pub above: f32,
+    pub below: f32,
     /// The boxes around it with backgrounds of their own, nearest first,
     /// which paint under it.
     pub outer: Vec<InlineBackground>,
@@ -80,6 +85,8 @@ impl Paragraph {
         if !edged
             && !backgrounds.iter().flatten().any(|b| {
                 !b.reach.is_empty()
+                    || b.above != 0.0
+                    || b.below != 0.0
                     || !b.outer.is_empty()
                     || b.radii.iter().any(|d| match d {
                         Dimension::Auto => false,
@@ -277,11 +284,12 @@ impl Paragraph {
                 let right = edge.right == i && if rtl { edge.start } else { edge.end };
                 let kept = [left, right, right, left];
                 let (ascent, descent, _) = metrics[piece.run];
+                let (above, below) = (ascent + background.above, descent + background.below);
                 let rect = (
                     piece.lo,
-                    line.line_y - ascent,
+                    line.line_y - above,
                     piece.hi - piece.lo,
-                    ascent + descent,
+                    above + below,
                 );
                 let radii = std::array::from_fn(|i| {
                     if kept[i] {

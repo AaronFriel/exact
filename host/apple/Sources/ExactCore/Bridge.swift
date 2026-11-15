@@ -29,6 +29,9 @@ public struct Batch {
     public var timerDueMs: Double? = nil
     /// A data module's timer continuation an advance released is still out: the agent's jump waits for it.
     public var landing = false
+    /// A store write this batch's commits made has landed: the app's other sessions refresh (LLP 1030.004 D2).
+    public var stored = false
+    public var announced: [String] = []
     /// Store refresh acknowledged no runner commit; keep the current timers.
     public var unchanged = false
     public var storeReadPending = false
@@ -272,6 +275,9 @@ package final class Runtime {
     /// resets what it keeps by view on each `renew`.
     package func useRowReuse(_ on: Bool) {
         self.on { () -> Void in _ = exact_row_reuse(rt, on ? 1 : 0) }
+    }
+    package func useFlatNodes(_ enabled: Bool) {
+        on { () -> Void in _ = exact_flat_nodes(rt, enabled ? 1 : 0) }
     }
     /// The wake for a request's reply (LLP 1016 D2), on the executor's thread.
     package func setWake(_ wake: ExactWakeFn?, ctx: UnsafeMutableRawPointer?) {
@@ -780,6 +786,10 @@ package final class Runtime {
         return on { read(exact_host_back_to(rt, source, destination, now)) }
     }
     package func launch(_ location: String) { on { () -> Void in let n = write(location); _ = exact_set_launch_location(rt, n) } }
+    package func launchWindow(_ name: String, rooted: Bool) { on { () -> Void in let n = write(name); _ = exact_set_launch_window(rt, n, rooted ? 1 : 0) } }
+    /// `rtl` nil: the strings table's direction.
+    package func launchDirection(rtl: Bool?) { on { () -> Void in _ = exact_set_launch_direction(rt, rtl.map { $0 ? 1 : 0 } ?? 2) } }
+    package func naturalText(_ natural: Bool) { on { () -> Void in _ = exact_set_natural_text(rt, natural ? 1 : 0) } }
     package func navigate(_ view: UInt32, _ location: String, now: Double) -> Batch {
         return on {
             let n = write(location)
@@ -790,6 +800,9 @@ package final class Runtime {
     package func hostBack(_ key: String, now: Double) -> Batch? {
         guard let id = UInt64(key) else { return nil }
         return on { read(exact_host_back(rt, id, now)) }
+    }
+    package func hostRoot(_ location: String, now: Double) -> Batch {
+        on { read(exact_host_root(rt, write(location), now)) }
     }
     package func hostGo(_ location: String, now: Double) -> Batch {
         on { read(exact_host_go(rt, write(location), now)) }
@@ -1058,6 +1071,13 @@ package final class Runtime {
         let rt = rt
         Owner.shared.notify {
             topic.withUnsafeBytes { exact_app_changed(rt, $0.bindMemory(to: UInt8.self).baseAddress, topic.count) }
+        }
+    }
+    /// Another session of the app announced a topic (LLP 1030.004 D2): a notification.
+    package func peerChanged(_ topic: String) {
+        let rt = rt, bytes = Array(topic.utf8)
+        Owner.shared.notify {
+            bytes.withUnsafeBufferPointer { exact_peer_changed(rt, $0.baseAddress, $0.count) }
         }
     }
     /// A notification (LLP 1072 T5): queued to the owner, never waited for,

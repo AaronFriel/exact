@@ -498,7 +498,8 @@ extension NodeView {
             frame = rects.reduce(frame) { $0.union($1) }
         }
         if start == end, !frame.isNull {
-            let x = leading != (spec.direction == 1) ? frame.minX : frame.maxX
+            let rtl = paragraphLayout()?.insets.rtl(at: start) ?? (spec.direction == 1)
+            let x = leading != rtl ? frame.minX : frame.maxX
             return CGRect(x: x, y: frame.minY, width: 0, height: frame.height)
         }
         return frame.isNull ? nil : frame

@@ -67,7 +67,7 @@ internal class Requests(private val activity: ExactActivity) {
         if (sound == null && (0 until ops.length()).any { ops.getJSONObject(it).getInt("kind") == 1 }) {
             val info = activity.packageManager.getApplicationInfo(activity.packageName, android.content.pm.PackageManager.GET_META_DATA)
             val policy = SoundPolicy.of(info.metaData?.getString("dev.exact.audioSession") ?: "ambient")
-            sound = SoundOutput(activity, policy).also { if (!foreground) it.foreground(false) }
+            sound = SoundOutput(activity, { AssetRoot.of(activity) }, policy).also { if (!foreground) it.foreground(false) }
         }
         sound?.apply(body)
     }
@@ -116,6 +116,7 @@ internal class Requests(private val activity: ExactActivity) {
                     SURFACE_HAPTIC -> (haptics ?: SurfaceHaptics(activity, paused).also { haptics = it }).told(words[body], string(words, body + 1).first)
                     SOUND -> sounds(string(words, body).first)
                     FILES -> files(id, words, body)
+                    ASSETS -> { sound?.reroot(); activity.assetsMoved() }
                 }
             } catch (e: RuntimeException) {
                 // The platform refused (no activity to start from, a full clipboard transaction): the app goes on.
@@ -323,6 +324,7 @@ internal class Requests(private val activity: ExactActivity) {
         const val AUTH = 17
         const val AUTH_END = 19
         const val FILES = 18
+        const val ASSETS = 20
         /** How long after the activity is in front again a share sheet's choice is still waited for. */
         private const val DISMISSED_MS = 500L
     }

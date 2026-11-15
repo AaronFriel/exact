@@ -164,7 +164,7 @@ impl DocTree {
                 && n.props.str(PropId::SemanticTag) == Some("header")
                 && up.is_some_and(|p| p.props.get(PropId::NavigationKey).is_some())
                 || alert(n)
-                || up.is_some_and(&alert) && !button(n)
+                || up.is_some_and(alert) && !button(n)
                 || surface(n)
         };
         let mut at = Some(node);
@@ -476,6 +476,16 @@ impl Build<'_> {
                         }
                         Ok(StyleId::ExitAnimation) => {
                             self.sites.keyframes.resolve(&mut patch.rare.exit_animation);
+                        }
+                        Ok(StyleId::ViewTransitionNew) => {
+                            self.sites
+                                .keyframes
+                                .resolve(&mut patch.rare.view_transition_new);
+                        }
+                        Ok(StyleId::ViewTransitionOld) => {
+                            self.sites
+                                .keyframes
+                                .resolve(&mut patch.rare.view_transition_old);
                         }
                         Ok(_) => {}
                         // A value its row refuses is unset, its declaration's

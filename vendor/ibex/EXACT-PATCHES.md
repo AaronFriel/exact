@@ -22,10 +22,28 @@ receipt-listed archive, header, compiler and ICU filter against its digest,
 independently of the selected Intl data tier. Android’s JSI, Boost and base ICU archives
 must be present in the manifest.
 
+## Android certificate verification
+
+HTTP and WebSocket TLS share `transport/tls.rs`. Android uses
+`rustls-platform-verifier`, initialized with the application's JVM context before
+network work starts. The local Kotlin companion in `crates/ibex2/android` uses
+`AndroidCAStore` for the phone's system and user-installed roots unless the base
+APK's manifest declares a network security configuration; it makes that trust
+manager again after `KeyChain.ACTION_TRUST_STORE_CHANGED`, because a manager
+over an explicit keystore copies its anchors once. With that declaration,
+it initializes the default trust manager with a null keystore to honor the app's
+anchors and exclusions. Both paths pass the hostname to
+`X509TrustManagerExtensions`. The Rust crate is pinned to the companion's JNI
+interface. The Canvas reader compiles these
+classes and keeps them through R8. Other Android consumers must compile these
+classes instead of the published Android AAR and call
+`transport::initialize_android` before TLS; an uninitialized consumer receives
+an error.
+
 ## Distrusted emSign keys
 
-The portable transports trust what `webpki-roots` compiles in when the system
-has no roots, and verify with `rustls-webpki`. Both locks, like Exact's root
+Off Android, the portable transports trust what `webpki-roots` compiles in when
+the system has no roots, and verify with `rustls-webpki`. Both locks, like Exact's root
 lock, hold `webpki-roots` 1.0.12, without the emSign roots Mozilla removed
 (RUSTSEC-2026-0381), and `rustls-webpki` 0.103.17, which refuses a path holding
 the distrusted emSign intermediate keys (RUSTSEC-2026-0382). Exact's
@@ -200,14 +218,20 @@ snapshot. Exact's render and non-Apple executors consume that portable path.
 
 Patch 9's app interface stays Exact's and is replayed on a refresh:
 `bindings/storage.d.ts` declares `compressImage(from, to, {maxDimension,
-maxBytes, type})` resolving to `{path, type, size, width, height}`, as Exact's docs
+maxBytes, quality, type})` resolving to `{path, type, size, width, height}`, as Exact's docs
 give it, and Exact's prelude (`js/src/prelude.js`) adapts that to upstream's
 positional binding (`compressImage(from, to, maxDimension, maxBytes)`, replying
 `width\theight\tsize`). Exact adds a fifth positional argument, the media type
 (exact2 LLP 1069.002 A1.11, 2026-10-20): `boundary_abi.rs` reads it into
 `fs_image::ImageRequest::format` (`ImageFormat::Jpeg` when absent, `Png`; any
-other value is an invalid argument), and the codec is Exact's. Replay both on a
-refresh. The October 13 refresh replaced the declaration with
+other value is an invalid argument), and the codec is Exact's. The fourth,
+`maxBytes`, may be undefined or null (exact2 LLP 1069.002 A1.12, 2026-11-14):
+`ImageRequest::max_bytes` is an `Option`, `None` for no byte target, and the
+codec's output is then bounded by the service's `max_output_bytes`
+(`ImageJob::prepare`, `execute`); the call's `quality` rides in patch 9a's
+options JSON, which the codec reads.
+`fs_image.rs`'s `a_compression_without_a_byte_target_is_bounded_by_the_service`
+pins it. Replay all three on a refresh. The October 13 refresh replaced the declaration with
 the positional form; `contract/cli/tests/it/typescript.rs` now pins it. Upstream
 now preserves Exact's app error branches: a source over the read cap is
 `compressImage: too-large:`, and a trial deadline before publication is
@@ -521,6 +545,17 @@ putting them in place, and `fork` runs with every signal blocked until the
 child's handlers are defaults. A `PATH` lookup skips relative entries.
 On macOS a group's member list uses libproc's PID count to size its buffer
 and retries a full buffer, so growth cannot silently truncate the list.
+Exit observation uses `waitid(WNOWAIT)`, leaving the leader's identity
+reserved until the supervisor and quit finish signalling, then `wait`
+reaps it. `try_observe_exit` polls without waiting or reaping. Group liveness
+and member lists exclude zombies on both platforms; Linux checks a zombie
+leader's remaining threads. Failed inspection leaves liveness unknown and
+is treated as alive for signalling and escalation. On Linux, membership is
+`getpgid`'s answer, so a process outside the group that `/proc`'s
+`hidepid` makes unreadable does not fail the scan (`process/scan.rs`).
+`signal_process_if` replaces `signal_process`: it signals a pid only if a
+test holds for it, and on Linux holds the process by a pidfd across the
+test, so a pid reused after the test is not signalled.
 `stdlib/fs.rs` resolves `home:/` and `bundle:/` (the namespaces `grant.rs`
 reads) against roots the host sets (`set_roots`), the bundle read only,
 each path admitted as spelt and run from its root's retained descriptor
@@ -979,6 +1014,32 @@ since `LIBSQLITE3_FLAGS` also reaches an iOS build's host dependencies.
 
 Recheck every filesystem probe when updating the amalgamation. Replay the
 bundled dependency, C replacement and build driver together on a refresh.
+
+## Local patch 44, the events binding's engine hooks for an embedder
+
+`InstallOptions::events_hooks` names a global through which the installer
+publishes the events binding's engine hooks (`reportException`, `onUnhandled`,
+`onHandled`, `configure`), frozen, as it publishes the other bootstrap outputs.
+Exact's data module reads them before its code runs (exact2 LLP 1175).
+Installed so, the binding reads no clock, since that realm refuses one to its
+code: `Event.timeStamp` is 0. `configure({ report, result, during })`, allowed
+once, makes the embedder hear every report with whether a listener cancelled
+it, in place of `nativeReport`; hear each listener's and `on…` handler's
+return value; and run the host's own dispatches of `error`,
+`unhandledrejection` and `rejectionhandled` inside `during`. `reportException`
+and `onUnhandled` return whether a listener cancelled. Without the option the
+binding behaves as upstream's. `js/tests/it/error_events.rs` covers it. Offer
+upstream; replay on a refresh until it lands.
+
+## Local patch 45, ibex2 takes Exact's private copy of ureq
+
+`ibex2` depends on `ureq = { package = "exact-ureq", path = "../../../ureq" }`,
+ureq 3.4.0 vendored under another name (`vendor/ureq/EXACT-PATCHES.md`): the
+portable transport implements ureq's `unversioned` traits, which change
+between minor releases, and an app's own `ureq` must resolve apart from it
+(LLP 1153.003 D6.5). `hermes-lean-sys` and its installer call only `ureq::get`
+and require `"3"`. The atomics call `try_update`, Rust's current name for the
+deprecated `fetch_update`. Replay on a refresh.
 
 ## Terminal heap exhaustion
 

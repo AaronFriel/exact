@@ -7,6 +7,7 @@
 //   exact install <app>          a real .app in ~/Applications, plus a shim
 //   exact uninstall <app>        take both away again
 //   exact release <app>          sign for distribution, notarise, staple, package
+//   exact appstore <app>         the Mac App Store's .pkg (--ad-hoc: its configuration, to open here)
 //   exact list                   the apps this repo has, and what is installed
 //   exact new <path> [--update]  an app outside this repo, ready to run
 //   exact new <path> --game      a game outside this repo, ready to run
@@ -52,6 +53,7 @@ import { basename, delimiter, dirname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { grantAdvice } from './grant-advice.mjs';
 import { installIn } from './package-manager.mjs';
+import { builtContract, contractTool, launch, toolEnv } from './tools.mjs';
 export { grantAdvice, grantLines } from './grant-advice.mjs';
 const { cargoEnvironment, appleExecutableName, HERMES_INSTALLER, hermesBundle, hermesTarget, pathFrom, resolveApp, WEB_TOOLCHAIN, webToolchainEnv } = await import('./app.mjs');
 const { applyPattern, createApp, createGame, patternList, rustApp, UNCACHED_CRATES, wireSnapback } = await import('../game/new.mjs');
@@ -63,7 +65,7 @@ const { builtAppMatches, jsTargetBuild } = await import('../host/web/serve.mjs')
 const { signRelease } = await import('../host/apple/assets.mjs');
 const { appleCrossReport, CROSS_IOS_ROWS, hasCrossSdk, iosSimulatorTarget } = await import('../host/apple/sdk.mjs');
 const { chromium } = await import('./agent-launch.mjs');
-const { androidLockCommand, androidSdk, androidSdkPackages, androidSdkFix, androidJavaEnv, androidJavaFix, androidToolchainEnv } = await import('./agent-android.mjs');
+const { androidLockCommand, androidSdk, androidSdkPackages, androidSdkFix, androidJavaEnv, androidJavaFix, androidJavaRisk, androidToolchainEnv } = await import('./agent-android.mjs');
 const { hermesAndroidBundle } = await import('./hermes-android.mjs');
 const { guardFlags, helpText } = await import('./help.mjs');
 const { backendOrigin, literalBackendOrigin } = await import('../js/bake/src/typescript.mjs');
@@ -156,12 +158,12 @@ function refuseForeignBundle(app, bundle) {
   assertAppleIdentity(app, executableIn(bundle, app));
 }
 /** Build the app's macOS bundle. Cargo and SwiftPM decide what is stale; this always asks them. */
-function build(app, { quiet = false, distribution = false, identity = null } = {}) {
-  const r = spawnSync(process.execPath, [resolve(ROOT, 'host/apple/build.mjs'), app.crate('apple'), '--bundle', ...(distribution ? ['--distribution'] : [])], {
+function build(app, { quiet = false, distribution = false, identity = null, appstore = null } = {}) {
+  const r = spawnSync(process.execPath, [resolve(ROOT, 'host/apple/build.mjs'), app.crate('apple'), '--bundle', ...(appstore ? ['--appstore', ...(appstore.adHoc ? ['--ad-hoc'] : [])] : distribution ? ['--distribution'] : [])], {
     cwd: ROOT,
     stdio: quiet ? ['inherit', 'ignore', 'inherit'] : 'inherit',
     // What is distributed bakes production trust (host/apple/build.mjs); a local build, development.
-    env: { ...(distribution ? {} : { EXACT_UPDATE_TRUST: 'development' }), ...process.env, ...(identity ? { EXACT_DEVELOPER_ID: identity, EXACT_RUST_SIGN_IDENTITY: identity } : {}) },
+    env: { ...(distribution || appstore ? {} : { EXACT_UPDATE_TRUST: 'development' }), ...process.env, ...(identity ? { [appstore ? 'EXACT_APPSTORE_ID' : 'EXACT_DEVELOPER_ID']: identity, EXACT_RUST_SIGN_IDENTITY: identity } : {}) },
   });
   if (r.status !== 0) process.exit(r.status ?? 1);
   const bundle = bundleOf(app);
@@ -248,13 +250,10 @@ function release(app) {
   const symbols = resolve(out, `${app.displayName}.dSYM`);
   sh('/usr/bin/ditto', [`${appleArtifacts(app, { trust: 'production' }).binary}.dSYM`, symbols]);
   console.log(`symbols: ${symbols}`);
-
-  // Sign inside out, with the hardened runtime and a timestamp. Both are
-  // notarisation's requirements, not preferences: a build without them is
-  // rejected at submission rather than at launch. The entitlements come from
-  // the bake receipt inside the bundle: the app carries those its `device.*`
-  // and `runtime.* app` grants derive (LLP 1069.008 D4, D9), a helper a
-  // `runtime.* <path>` grant names carries its own, and other nested code none.
+  // Sign inside out, with the hardened runtime and a timestamp, which notarisation
+  // requires: a build without them is rejected at submission rather than at launch.
+  // The entitlements come from the bake receipt inside the bundle (`signRelease`:
+  // the app's grants derive its own, LLP 1069.008 D4, D9; an extension keeps its own).
   const built = JSON.parse(readFileSync(resolve(bundle, 'Contents/Resources/receipt.json'), 'utf8'));
   signRelease(staged, { compat: built.build?.compat, manifest: app.manifest, identity, id: app.id, scratch: out });
   sh('codesign', ['--verify', '--deep', '--strict', '--verbose=1', staged]);
@@ -421,6 +420,7 @@ export async function setup({check = false, platform = null, device = false} = {
   }
   const rows = sdkReport(process.env, { only: platform, device });
   const report = [...(platform ? (await platformReport(platform, rows, { device })).map(row => ({ ...row, required: true })) : rows), cratesRow()];
+  if (platform === 'android') report.push(...rows.filter(row => row.name === 'Android JDK JIT'));
   printReport(report);
   const missing = report.filter(row => row.required && !row.ok);
   if (missing.length) throw new Error(`${missing.map(row => row.name).join(', ')} ${missing.length === 1 ? 'is' : 'are'} missing or differ; run exact setup (it installs what it can and names the rest)`);
@@ -598,6 +598,8 @@ export function sdkReport(env = process.env, { only = null, device = false, tv =
   if (only === 'android' || !only && existsSync(androidSdk(env))) {
     const java = androidJavaEnv(env);
     rows.push(row('Android JDK', java ? java.JAVA_HOME ?? 'java and javac on PATH' : '', 'JDK 17 or newer', !!java, java ? '' : androidJavaFix(env), 'Android'));
+    const risk = java && androidJavaRisk(java);
+    if (risk) rows.push(row('Android JDK JIT', java.JAVA_HOME ?? 'java on PATH', 'JDK without JDK-8335662', false, risk, 'Android'));
     let ndk = '', fault = '';
     try { ndk = androidToolchainEnv(env).ANDROID_NDK_HOME; } catch (error) { fault = error.message; }
     rows.push(row('Android NDK', ndk, 'NDK with the aarch64 toolchain', !!ndk, fault, 'Android'));
@@ -627,17 +629,13 @@ export function printReport(rows, {onlyMissing = false} = {}) {
     console.log(`${mark} ${row.name}: ${row.have} (SDK ${row.want})${row.need ? ` — for ${row.need}` : ''}${row.ok ? '' : `\n          ${row.fix}`}`);
   }
 }
-/** `exact contract …` — this checkout's compiler, from anywhere (LLP 1086 D4).
- * Debug, as the guides use it; the pinned toolchain whatever rustup would pick
- * from the caller's directory; exact2's own target/, never an inherited one
- * (an app's, or another checkout's). */
 /** Cargo with the pinned toolchain, in this checkout's own target, on the Contract compiler: `run` or `build`. */
 function compilerCargo(verb, env = process.env) {
   const pin = Bun.TOML.parse(readFileSync(resolve(ROOT, 'rust-toolchain.toml'), 'utf8')).toolchain.channel;
   const clean = cargoEnvironment(env);
   delete clean.RUSTUP_TOOLCHAIN;
   delete clean.CARGO_TARGET_DIR;
-  return { pin, args: [`+${pin}`, verb, '-q', '--manifest-path', resolve(ROOT, 'Cargo.toml'), '-p', 'contract'], env: clean };
+  return { pin, args: [`+${pin}`, verb, '-q', '--manifest-path', resolve(ROOT, 'Cargo.toml'), '-p', 'contract'], env: toolEnv(clean) };
 }
 const COMPILER = resolve(ROOT, 'target/debug', process.platform === 'win32' ? 'contract.exe' : 'contract');
 /** `exact new` starts the compiler's build apart from this shell, so the builder's first `contract vocab` or
@@ -650,21 +648,24 @@ function prebuildCompiler() {
   if (!existsSync(COMPILER)) console.log(`\nBuilding the Contract compiler in the background (pid ${child.pid}), so \`contract\` answers at once when you need it.`);
 }
 
-export function contract(args, env = process.env) {
-  const cargo = compilerCargo('run', env), binary = COMPILER;
-  if (!existsSync(binary)) console.error('exact contract: building the Contract compiler once (about a minute on a cold checkout; `exact new` starts it in the background)…');
+/** `exact contract …` — this checkout's compiler, from anywhere (LLP 1086 D4), in LLP 1174 D5's order: its debug build
+ * (as the guides use it) while fresh, a tool set's, or Cargo: the pinned toolchain whatever rustup would pick from the
+ * caller's directory, in exact2's own target/, never an inherited one (an app's, or another checkout's). */
+export async function contract(args, env = process.env) {
   // `build --json` is one JSON array on stdout and nothing on stderr: the compiler's diagnostics, then app.ts's.
   const json = args[0] === 'build' && args.includes('--json');
-  const result = spawnSync('cargo', [...cargo.args, '--', ...args], {stdio: ['inherit', json ? 'pipe' : 'inherit', 'inherit'], env: cargo.env, encoding: 'utf8', maxBuffer: 1 << 26});
-  if (result.error) throw new Error(`cargo: ${result.error.message} (install rustup from https://rustup.rs)`);
-  // Cargo's own failures exit 101; one that is not rustup's refuses `+<pin>` before the compiler runs.
-  if (result.status === 101) { const fault = cargoProxyFault(cargo.pin, cargo.env); if (fault) console.error(`exact contract: ${fault}`); }
   // A build of an app's `app.contract` refreshes the types its `app.ts` imports (LLP 1116.001 D4.5); of unsaved text
   // (`--stdin`), whose types no file holds, neither refreshes them nor type-checks app.ts.
   const input = args[0] === 'build' && !args.includes('--stdin') ? args.slice(1).find((arg, i, rest) => !arg.startsWith('-') && rest[i - 1] !== '-o') : null;
+  const cargo = compilerCargo('run', env), tool = await contractTool({ cmd: 'cargo', pre: [...cargo.args, '--'], env: cargo.env }, { env, json, file: input ?? '' });
+  if (!tool) return 1;
+  const result = spawnSync(tool.cmd, [...tool.pre, ...args], {stdio: ['inherit', json ? 'pipe' : 'inherit', 'inherit'], env: tool.env, encoding: 'utf8', maxBuffer: 1 << 26});
+  if (result.error) throw new Error(`${tool.cmd}: ${result.error.message}${tool.cmd === 'cargo' ? ' (install rustup from https://rustup.rs)' : ''}`);
+  // Cargo's own failures exit 101; one that is not rustup's refuses `+<pin>` before the compiler runs.
+  if (result.status === 101 && tool.cmd === 'cargo') { const fault = cargoProxyFault(cargo.pin, cargo.env); if (fault) console.error(`exact contract: ${fault}`); }
   if (result.status === 0 && input && basename(input) === 'app.contract') {
     const dir = dirname(resolve(input));
-    refreshTypes(dir, binary, {quiet: json});
+    refreshTypes(dir, tool.cmd === 'cargo' ? launch(COMPILER) : tool, {quiet: json});
     // `--errors-only` leaves out the check's warnings in either form: captured, then said without them.
     const errorsOnly = args.includes('--errors-only'), checked = checkTypes(dir, {capture: json || errorsOnly});
     if (!json && errorsOnly) process.stderr.write(checked.report.split(/(?<=\n)/).filter((line) => !line.startsWith('warning: ') && !/^.+:\d+:\d+ warning \[[\w-]+\] /.test(line)).join(''));
@@ -725,8 +726,9 @@ export function typeDiagnostics(report, dir) {
   const found = [], at = (file) => relative(process.cwd(), resolve(dir, file));
   for (const line of report.split(/\r?\n/)) {
     if (line.startsWith('warning: ') || /^.+:\d+:\d+ warning \[[\w-]+\] /.test(line)) continue;
-    const backend = /^error \[backend-selection\]: (.*)$/.exec(line);
-    if (backend) { found.push({id: 'backend-selection', severity: 'error', message: backend[1], file: at('app.ts'), line: 0, col: 0, end_col: 0, related: []}); continue; }
+    // A refusal that is not the check's own (`backend-selection`, `rust-missing`) keeps its id.
+    const refusal = /^error \[([\w-]+)\]: (.*)$/.exec(line);
+    if (refusal) { found.push({id: refusal[1], severity: 'error', message: refusal[2], file: at('app.ts'), line: 0, col: 0, end_col: 0, related: []}); continue; }
     const m = /^(.+?)\((\d+),(\d+)\): error (TS\d+): (.*)$/.exec(line);
     if (m) found.push({id: `typescript-${m[4]}`, severity: 'error', message: m[5], file: at(m[1]), line: Number(m[2]), col: Number(m[3]), end_col: Number(m[3]), related: []});
     else if (line.trim() && !/^error: .*: app\.ts failed the type check/.test(line)) {
@@ -751,11 +753,11 @@ export function checkWarnings(report, dir) {
  * only when they changed: when a source's signature did (LLP 1116.001 D4.5). The web build and
  * the native development bake write the same file the same way, so a builder never runs the
  * step. Reports a rewrite in one line on stderr, so `--json` stays the build's reply;
- * returns whether it wrote. */
-export function refreshTypes(dir, binary = resolve(ROOT, 'target/debug', process.platform === 'win32' ? 'contract.exe' : 'contract'), {quiet = false} = {}) {
+ * returns whether it wrote. `tool` (`launch`): by default this checkout's debug build, or a tool set's. */
+export function refreshTypes(dir, tool = builtContract(), {quiet = false} = {}) {
   const ts = resolve(dir, 'app.ts'), out = resolve(dir, 'app.contract.d.ts');
-  if (!existsSync(ts) || !existsSync(binary)) return false;
-  const types = spawnSync(binary, ['types', resolve(dir, 'app.contract')], {encoding: 'utf8', maxBuffer: 1 << 26});
+  if (!existsSync(ts) || !tool || !existsSync(tool.cmd)) return false;
+  const types = spawnSync(tool.cmd, [...tool.pre, 'types', resolve(dir, 'app.contract')], {encoding: 'utf8', maxBuffer: 1 << 26, env: tool.env});
   if (types.status !== 0) return false;
   const text = types.stdout;
   const before = existsSync(out) ? readFileSync(out, 'utf8') : null;
@@ -774,7 +776,7 @@ async function newApp(path, {update = false, without = null, with: platforms = [
       console.log(wireSnapback(path, {artifactOnly:true}));
     // A file names what it uses (LLP 1091 D1): an app written before module
     // scope gets the `use` lines its files lack, as `contract fmt --uses` writes them.
-    if (contract(['fmt', '--uses', resolve(path, 'app.contract')]) !== 0)
+    if (await contract(['fmt', '--uses', resolve(path, 'app.contract')]) !== 0)
       console.log('The `use` lines above that no rule writes are the author\'s; `bun exact.mjs contract build app.contract` names them.');
     return;
   }
@@ -794,9 +796,9 @@ async function newApp(path, {update = false, without = null, with: platforms = [
   const note = created.indexOf(`\n${UNCACHED_CRATES}`);
   console.log(note < 0 ? created : created.slice(0, note));
   if (!noRust) prebuildCompiler();
-  // A Rust app's lock, resolved from this checkout's (scripts/app-rust.mjs): its builds run Cargo --locked. Its
-  // first line and app-cli's note on the GPU module, not each version it chose; the app stands either way, so a
-  // failure says what to run.
+  // A Rust app's generated workspace, written now so that cargo and an editor work in data/ before the first build
+  // (LLP 1153.003 D1.7); its lock stays exact2's until data/ needs a version exact2's lacks. The first line and
+  // app-cli's note on the GPU module; the app stands either way, so a failure says what to run.
   if (rust) {
     try {
       const said = (await (await import('./app-cli.mjs')).lockApp(resolve(path))).split('\n');
@@ -826,6 +828,7 @@ const USAGE = `exact — run an Exact app from the command line (macOS)
   exact run <app> [file …]     build and launch it here; ^C ends it
   exact install <app>          put it in ~/Applications and its name on PATH
   exact release <app>          sign with a Developer ID, notarise, staple, package
+  exact appstore <app>         the Mac App Store's .pkg; --ad-hoc: signed ad hoc, to open here
   exact uninstall <app>        take both away
   exact setup [--check [--platform <host> [--device]]]
                               install pinned Rust, wasm-bindgen, Binaryen and
@@ -864,18 +867,18 @@ const USAGE = `exact — run an Exact app from the command line (macOS)
                                with paths relative to where you run it
   exact docs <heading words>   the one section of the guides and recipes with
                                that heading, with its path and line
-  exact tamber check|eval|ir|fmt <app>  the app's design (app.tamber): checked,
+  exact forma check|eval|ir|fmt <app>  the app's design (app.forma): checked,
                                its tokens in one mode (eval --mode dark-style=dim),
-                               its IR, tamber.json (ir -o <file>), or its layout (fmt)
-  exact tamber serve <app>     the design server alone (development only): /__tamber
-  exact tamber op <url> <request JSON>|subscribe  its scripted client
-  exact tamber pair <url> --scope read|propose|write [--name <n>]  a pairing code for a remote client
-  exact tamber tool [<app>] [--via <dev url>]  the design tool, at http://127.0.0.1:7740/__tamber/tool/
-  exact tamber import css <stylesheet> [--app <app>]  its custom properties into app.tamber, between
+                               its IR, forma.json (ir -o <file>), or its layout (fmt)
+  exact forma serve <app>     the design server alone (development only): /__forma
+  exact forma op <url> <request JSON>|subscribe  its scripted client
+  exact forma pair <url> --scope read|propose|write [--name <n>]  a pairing code for a remote client
+  exact forma tool [<app>] [--via <dev url>]  the design tool, at http://127.0.0.1:7740/__forma/tool/
+  exact forma import css <stylesheet> [--app <app>]  its custom properties into app.forma, between
                                markers a later import of the same file rewrites
-  exact tamber import shadcn|tailwind|dtcg|pen|astryx <source> <url> --app <app>  a theme as held proposals
+  exact forma import shadcn|tailwind|dtcg|pen|astryx <source> <url> --app <app>  a theme as held proposals
                                (astryx: bun scripts/astryx-tokens.mjs resolves its pinned package first)
-  exact tamber export dtcg <app> [-o <file>]  the design as DTCG 2025.10; its baseline in .exact/
+  exact forma export dtcg <app> [-o <file>]  the design as DTCG 2025.10; its baseline in .exact/
 
 An app is a directory under apps/ (or EXACT_APP_DIR for one outside this repo).
 EXACT_BIN_DIR names where a shim goes; the default is the first of ~/.local/bin,
@@ -1361,9 +1364,9 @@ export function docs(words, say = console.log) {
   const also = units.slice(1, 9).map(u => `${at(u.f, u.h.from)} ${u.h.title}`);
   say(`${at(f, from)}${where}\n${f.lines.slice(from, end).join('\n').trimEnd()}${cut}${also.length ? `\nAlso: ${also.join(' · ')}` : ''}`);
 }
-
 async function main(argv) {
   const [verb, name, ...rest] = argv;
+  if (verb === 'tamber') { console.error('exact: rename the tamber verb to forma: use `exact forma`'); return process.exit(2); }
   if (!verb || verb === '--help' || verb === '-h' || verb === 'help') return console.log(USAGE);
   // Help before any work (`setup --help` installed, `new --help` wrote an app); the compiler answers its own.
   if (verb !== 'contract' && argv.some(arg => arg === '--help' || arg === '-h')) return console.log(helpText(verb) ?? USAGE);
@@ -1387,18 +1390,18 @@ async function main(argv) {
   }
   if (verb === 'list') return list();
   // The compiler parses its own flags; its help is printed here, so asking compiles nothing (LLP 1116 D4).
-  if (verb === 'contract') return process.exit(argv.includes('--help') || argv.includes('-h') ? (console.log(helpText('contract')), 0) : contract(argv.slice(1)));
-  // An app's design on its own (LLP 1121 D2): the compiler's `tamber` verbs.
-  if (verb === 'tamber' && (argv.includes('--help') || argv.includes('-h'))) return console.log(helpText('tamber'));
+  if (verb === 'contract') return process.exit(argv.includes('--help') || argv.includes('-h') ? (console.log(helpText('contract')), 0) : await contract(argv.slice(1)));
+  // An app's design on its own (LLP 1121 D2): the compiler's `forma` verbs.
+  if (verb === 'forma' && (argv.includes('--help') || argv.includes('-h'))) return console.log(helpText('forma'));
   // The design server's wire and its scripted client (LLP 1121 D13): development only.
-  if (verb === 'tamber' && name === 'serve') return import('./tamber-server.mjs').then(m => m.serveAlone(rest)).then(code => process.exit(code));
-  // A stylesheet's custom properties written into app.tamber (LLP 1153 D6): the compiler's, with no server.
-  if (verb === 'tamber' && name === 'import' && rest[0] === 'css') return process.exit(contract(['tamber', ...argv.slice(1)]));
-  if (verb === 'tamber' && name === 'import') return import('./tamber-server.mjs').then(m => m.importTheme(rest)).then(code => process.exit(code));
-  if (verb === 'tamber' && name === 'op') return import('./tamber-server.mjs').then(m => m.op(rest)).then(code => process.exit(code));
-  if (verb === 'tamber' && name === 'pair') return import('./tamber-pairing.mjs').then(m => m.pairCode(rest)).then(code => process.exit(code));
-  if (verb === 'tamber' && name === 'tool') return import('./tamber-server.mjs').then(m => m.toolCommand(rest)).then(code => process.exit(code));
-  if (verb === 'tamber') return process.exit(contract(['tamber', ...argv.slice(1)]));
+  if (verb === 'forma' && name === 'serve') return import('./forma-server.mjs').then(m => m.serveAlone(rest)).then(code => process.exit(code));
+  // A stylesheet's custom properties written into app.forma (LLP 1153 D6): the compiler's, with no server.
+  if (verb === 'forma' && name === 'import' && rest[0] === 'css') return process.exit(await contract(['forma', ...argv.slice(1)]));
+  if (verb === 'forma' && name === 'import') return import('./forma-server.mjs').then(m => m.importTheme(rest)).then(code => process.exit(code));
+  if (verb === 'forma' && name === 'op') return import('./forma-server.mjs').then(m => m.op(rest)).then(code => process.exit(code));
+  if (verb === 'forma' && name === 'pair') return import('./forma-pairing.mjs').then(m => m.pairCode(rest)).then(code => process.exit(code));
+  if (verb === 'forma' && name === 'tool') return import('./forma-server.mjs').then(m => m.toolCommand(rest)).then(code => process.exit(code));
+  if (verb === 'forma') return process.exit(await contract(['forma', ...argv.slice(1)]));
   if (verb === 'hatch') return hatch(guardFlags('hatch', argv.slice(1)));
   if (verb === 'add') return add(guardFlags('add', argv.slice(1)));
   if (verb === 'pattern') return pattern(guardFlags('pattern', argv.slice(1)));
@@ -1456,7 +1459,7 @@ async function main(argv) {
     await snapbackDevice.devicePreflight(app, nextOrigin ? [nextOrigin] : []);
     return;
   }
-  if (!['run', 'install', 'uninstall', 'release'].includes(verb)) { console.error(`exact: no verb ${verb}\n\n${USAGE}`); process.exit(2); }
+  if (!['run', 'install', 'uninstall', 'release', 'appstore'].includes(verb)) { console.error(`exact: no verb ${verb}\n\n${USAGE}`); process.exit(2); }
   if (!name) { console.error(`exact ${verb}: name an app (exact list)`); process.exit(2); }
   // An app outside the repository (EXACT_APP_DIR, or a path): a bare `run` of one that names no native platform runs
   // its web loop, on any OS; otherwise the Mac is named the first time (LLP 1153 D1.2).
@@ -1482,6 +1485,7 @@ async function main(argv) {
   if (verb === 'run') return run(app, rest);
   // `--release` on `install` is the same path, since that is what it is for.
   if (verb === 'release' || (verb === 'install' && rest.includes('--release'))) return release(app);
+  if (verb === 'appstore') return (await import('../host/apple/appstore.mjs')).appstore(app, { adHoc: rest.includes('--ad-hoc'), out: resolve(app.target, 'dist', `${app.name}-appstore`), build: (app, { adHoc, identity }) => build(app, { appstore: { adHoc }, identity }) });
   if (verb === 'install') return install(app, build(app));
   return uninstall(app);
 }

@@ -539,6 +539,9 @@ fn one_text(name: &str, shown: &mut Shown) -> bool {
         ) {
             println!("  how motion is written, and what animates: `contract vocab motion` (docs/recipes/motion.md)");
         }
+        if name == "direction" {
+            println!("  one box's direction; an app in a right-to-left language takes the page's from its strings table: `contract vocab rtl`");
+        }
         if name == "-exact-fit" {
             println!("  on a `text`: \"shrink\" draws a line too wide for its box smaller until it fits, down to half its size, as UIKit's adjustsFontSizeToFitWidth (a timer's readout at the largest text size); with `white-space=\"nowrap\"` the whole line fits, else its longest word (LLP 1116.001 D1.4)");
         }
@@ -845,7 +848,7 @@ fn command_text(name: &str) -> String {
         "requestMIDIAccess" | "sendMIDI" => "; `sendMIDI` to an output that is not connected drops the message; to `\"\"`, no output, it reaches no device and `exactMIDI().sent` lists it, with no access needed (`contract vocab exactMIDI`); MIDI answers only under the grant `device.midi purpose.midi` (a line of app.ts's `export const grants`), whose second word is a strings key: `\"purpose.midi\": \"…\"` in strings/en.json, the text the person is shown when asked (apps/metronome)",
         "setRangeText" =>"; `setRangeText(id, text[, start, end[, selectionMode]])`: web/macOS/iOS/Linux plain text field replacement, and on web/macOS/iOS the Markdown editor's, over its source; UTF-16 offsets, selectionMode preserve (default), select, start or end; one input (InputEvent.inputType insertReplacementText); no undo step on a plain field, one undo step each on the Markdown editor (LLP 1045 D1). Markdown on Linux, Windows, Android and terminal are not supported yet (LLP 1069.001)",
         "startTrace_EXPERIMENTAL" | "stopTrace_EXPERIMENTAL" => "; experimental: `startTrace_EXPERIMENTAL()` records each display-link callback from now, in any build; `stopTrace_EXPERIMENTAL()` ends the recording and puts its trace on the clipboard as JSON: on iOS each drag and glide of an element's scroller, a route's page or the document with an estimate of its hitch time ratio, and each late frame with what the main thread did in it; `stopTrace_EXPERIMENTAL(maxBytes)` copies it cut to that many bytes, the frames late the longest first, for a conversation that limits a message (a budget too small for its totals copies a note naming the size that fits them). Apple hosts (tvOS, with no clipboard, only saves the file); the web and Linux refuse it in the journal",
-        "setMode" => "; `setMode(\"dark-style\", \"dim\")` sets one of the window's app modes, an axis of the app's design (`app.tamber`) and one of its values; a subtree pins its own with `-exact-mode` (LLP 1121 D5)",
+        "setMode" => "; `setMode(\"dark-style\", \"dim\")` sets one of the window's app modes, an axis of the app's design (`app.forma`) and one of its values; a subtree pins its own with `-exact-mode` (LLP 1121 D5)",
         "setPageZoom" => "; `setPageZoom(factor)` sets the window's page zoom, as View ▸ Zoom In does and Electron's `webContents.setZoomFactor`: CSS px per point, so the viewport, media queries, `px` and `rem` all follow (`setPageZoom(1)` is Actual Size). The Mac's own; iOS, Linux, Windows and the web refuse it in the journal (LLP 1021 §5.3.1)",
         "exitFullscreen" => "; `exitFullscreen()`: the document leaves full screen, as the web's `document.exitFullscreen()`; on the Mac the session's window leaves its full-screen space (a video's own full screen is `requestFullscreen(id)`'s). iOS, Linux and Windows refuse it in the journal (LLP 1069.010)",
         "setWindowOpacity" => "; `setWindowOpacity(opacity)` draws the session's window at that opacity, 0 (unseen, still key and still hearing keys) to 1, as Electron's `BrowserWindow.setOpacity`: what an app's own quit hold does before it quits. The Mac's; iOS, Linux, Windows and the web refuse it in the journal (LLP 1069.010)",
@@ -913,6 +916,8 @@ const TRANSCRIPT_END: &str = "on a `list virtualized=true` (a grouped list never
 /// tab it was on.
 const NAVIGATE: &str = "on the navigation root: a location from outside the running app (a link, a protocol handler's or a notification's URL, the web's Back and Forward), whose action chooses the verb (LLP 1038 D8). `go` pops to the location when the selected stack holds it, selects the tab whose top it is, and otherwise pushes it on the selected tab, whatever tab declares its route. `open(nav, url)` lands in the route's declared tab, that tab's stack its declared chain. A cold launch's location is no event: it opens there, as `open` does";
 
+const PLAYING: &str = "on video or audio, with no payload: playback is ready to start after a pause or delay for media data (WHATWG: https://html.spec.whatwg.org/multipage/media.html#event-media-playing). The web forwards the browser's event. Apple waits until the item's timebase advances, then reports once per start or resumption; calling play alone does not fire it. Use playing to hand over a feed's volume; timeupdate remains a periodic position report (250 ms on Apple). This is not a guarantee that a speaker has produced sound. Android and the painted hosts do not currently deliver this event (LLP 1042).";
+
 /// What `metadata=` takes (LLP 1098 D1): the Media Session's record.
 const METADATA: &str = "MediaMetadata(title=, artist=, album=, artwork=), each a string";
 
@@ -925,7 +930,7 @@ const SEARCH_TYPE: &str = "on an `input`, HTML's (`number`, `date`, `checkbox`, 
 /// `contract vocab color-scheme` (LLP 1034 §8): what it fixes, and the
 /// app's own scheme, which is `setScheme`'s (the euxy port's Theme row
 /// guessed at `prefersColorScheme`).
-const COLOR_SCHEME: &str = "`light` or `dark` fixes the node and its subtree in that scheme (`light-dark()`, platform colours, glass); left off, it follows the surrounding scheme. `normal`, `light dark` and `only` are refused, written or as a branch of a computed value. A Theme setting of Auto, Light and Dark is the app's own scheme: `setScheme(\"system\" | \"light\" | \"dark\")` in the action that chooses it (and a `mount` task, for a kept choice), which the bars, sheets and windows follow. `exactViewport().prefersColorScheme` is the system's scheme beneath `setScheme` and any subtree's, a fact to read, not one to paint by (`lower-scheme-color`)";
+const COLOR_SCHEME: &str = "`light` or `dark` fixes the node and its subtree in that scheme (`light-dark()`, platform colours, glass); left off, it follows the surrounding scheme. `normal`, `light dark` and `only` are refused, written or as a branch of a computed value. A Theme setting of Auto, Light and Dark is the app's own scheme: `setScheme(\"system\" | \"light\" | \"dark\")` in the action that chooses it, which the bars, sheets and windows follow; the choice is kept across launches and shown from the first frame. `exactViewport().prefersColorScheme` is the system's scheme beneath `setScheme` and any subtree's, a fact to read, not one to paint by (`lower-scheme-color`)";
 const APPEARANCE: &str = "Explicit none on a header or root tablist keeps the authored bar; on a header button it keeps only that button authored in place while the rest of the header projects. A title button keeps its contents; an authored Back replaces UIKit Back. Search or a header tablist can opt out on that element; a tab button alone keeps its parent segmented. Tabs retain their panels and navigation stacks. Auto restores platform projection.";
 
 /// Where an attribute is admitted, if not on every tag.
@@ -1061,6 +1066,9 @@ fn attr_json(name: &str, a: &AttrTarget) -> Value {
             }
             if name == "navigate" {
                 doc["note"] = NAVIGATE.into();
+            }
+            if name == "playing" {
+                doc["note"] = PLAYING.into();
             }
         }
         AttrTarget::Surface => {}
@@ -1262,6 +1270,9 @@ fn attr_detail(name: &str, a: &AttrTarget) -> Vec<String> {
             if matches!(name, "grid-template-columns" | "grid-template-rows") {
                 lines.push(GRID_TRACKS.into());
             }
+            if name == "mix-blend-mode" {
+                lines.push("SVG elements blend with the backdrop inside the same svg on iOS/tvOS (Core Graphics) and Android (tiny-skia before the reader). Include the background shapes in that svg. macOS uses its public Core Animation layer blend, including the backdrop outside the SVG. Canvas 2D globalCompositeOperation, including multiply, also draws on iOS and Android; draw both inks into one canvas. On iOS and Android neither route blends with boxes or another surface outside it".into());
+            }
             if name == "font-family" {
                 lines.push("CSS family list: literal lists and literal choices work on every host; a string from state or data names installed or generic families on web, macOS, iOS and Linux. Invalid lists leave the row unset. Bundled faces use a `font` declaration".into());
             }
@@ -1324,6 +1335,9 @@ fn attr_detail(name: &str, a: &AttrTarget) -> Vec<String> {
         }
         AttrTarget::Handler(event) if name == "navigate" => {
             vec![format!("event {event}"), NAVIGATE.into()]
+        }
+        AttrTarget::Handler(event) if name == "playing" => {
+            vec![format!("event {event}"), PLAYING.into()]
         }
         // The action's signature first: the scroll port guessed one
         // `ScrollEvent` parameter, and `moved(x, y)` was a later bullet.

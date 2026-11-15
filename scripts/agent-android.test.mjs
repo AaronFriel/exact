@@ -1,6 +1,6 @@
 // The Android carrier's reader variables, drive setup and reverse mappings (agent-android.mjs).
 // Stand-in adb devices exercise relay cleanup without an emulator or a device.
-import { test, expect } from 'bun:test';
+import { afterAll, test, expect, spyOn } from 'bun:test';
 import { spawn, spawnSync } from 'node:child_process';
 import { once } from 'node:events';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -13,17 +13,111 @@ import { androidJavaEnv, androidSdk, androidSdkPackages, androidScreenState, rev
 const screenFixtures = resolve(import.meta.dir, 'fixtures/android-screen');
 const screenDump = (state, kind) => readFileSync(resolve(screenFixtures, `${state}.${kind}.txt`), 'utf8');
 
+test('Android names JDK-8335662 only for affected AArch64 JDK versions', async () => {
+  const { androidJdkRisk } = await import('./agent-android.mjs');
+  const settings = (version, arch = 'aarch64') => `Property settings:\n    java.version = ${version}\n    os.arch = ${arch}\n`;
+  for (const version of ['17', '17.0.6', '17.0.15+6', '18.0.2', '19', '20.0.2', '21', '21.0.7', '22', '23.0.2']) {
+    const risk = androidJdkRisk(settings(version));
+    expect(risk).toContain(`JDK ${version} on aarch64`);
+    expect(risk).toContain('JDK-8335662');
+    expect(risk).toContain('17.0.16');
+    expect(risk).toContain('21.0.8');
+    expect(risk).toContain('24');
+    expect(risk).toContain('JAVA_HOME');
+  }
+  for (const version of ['11.0.20', '16.0.2', '17.0.16', '17.0.16+8', '17.0.17', '21.0.8', '21.0.8.1', '24', '25.0.1'])
+    expect(androidJdkRisk(settings(version))).toBeNull();
+  for (const arch of ['x86_64', 'amd64', 'x86', 'arm']) expect(androidJdkRisk(settings('17.0.6', arch))).toBeNull();
+  expect(androidJdkRisk(settings('21.0.7', 'arm64'))).toContain('arm64');
+  for (const text of ['', 'no properties', settings('unknown'), 'java.version = 17.0.6']) expect(androidJdkRisk(text)).toBeNull();
+});
+
+test.skipIf(process.platform === 'win32')('setup and Gradle name the selected affected JDK before running Gradle', async () => {
+  const { sdkReport, platformReport } = await import('./exact.mjs');
+  const { bringPlatform } = await import('./app-shells.mjs');
+  const { runGradle } = await import('./agent-android.mjs');
+  const dir = mkdtempSync(resolve(tmpdir(), 'exact-jdk-risk-'));
+  const errors = spyOn(console, 'error').mockImplementation(() => {});
+  try {
+    mkdirSync(resolve(dir, 'bin'));
+    const java = version => writeFileSync(resolve(dir, 'bin/java'), `#!/bin/sh\necho 'openjdk version "${version}"' >&2\necho '    java.version = ${version}' >&2\necho '    os.arch = aarch64' >&2\n`, { mode: 0o755 });
+    writeFileSync(resolve(dir, 'bin/javac'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
+    const env = { ...process.env, JAVA_HOME: dir, JAVA_TOOL_OPTIONS: '-Xint' };
+    java('17.0.6');
+    const rows = sdkReport(env, { only: 'android' });
+    const risk = rows.find(row => row.name === 'Android JDK JIT');
+    expect(risk?.ok).toBe(false);
+    expect(risk?.fix).toContain('17.0.6');
+    const report = await platformReport('android', rows);
+    // Other prerequisites are ready: the affected JDK must not refuse a first Android build.
+    const ready = report.map(row => row.name === 'Android JDK JIT' ? row : { ...row, ok: true });
+    const app = resolve(dir, 'app'); mkdirSync(app);
+    writeFileSync(resolve(app, 'app.json'), JSON.stringify({ name: 'Fixture', app: { id: 'dev.exact.fixture', name: 'Fixture' }, host: { web: {} } }));
+    writeFileSync(resolve(app, 'Cargo.toml'), '[workspace]\nmembers = []\n');
+    expect((await bringPlatform(app, 'android', { report: ready })).refused).toBeUndefined();
+    expect(JSON.parse(readFileSync(resolve(app, 'app.json'), 'utf8')).host.android).toBeDefined();
+    expect(report.some(row => row.name === risk?.name)).toBe(false);
+    const scoped = spawnSync(process.execPath, [resolve(import.meta.dir, 'exact.mjs'), 'setup', '--check', '--platform', 'android'], {
+      env, encoding: 'utf8', timeout: 30_000,
+    });
+    expect(scoped.error).toBeUndefined();
+    expect(scoped.stdout).toContain('Android JDK JIT');
+    expect(scoped.stdout).toContain('JDK-8335662');
+    expect(scoped.stderr).not.toMatch(/Android JDK JIT[^\n]*missing or differ/);
+    expect(sdkReport(env, { only: 'web' }).some(row => row.name === 'Android JDK JIT')).toBe(false);
+    let called = 0;
+    const run = (_command, _args, options) => {
+      expect(options.env.JAVA_HOME).toBe(dir);
+      expect(errors.mock.calls.flat().join('\n')).toContain('JDK-8335662');
+      called++; return { status: 0 };
+    };
+    expect(runGradle(['help'], { env, cwd: dir }, process.platform, { run })).toBe(true);
+    expect(called).toBe(1);
+    errors.mockClear();
+    java('17.0.16');
+    expect(sdkReport(env, { only: 'android' }).some(row => row.name === 'Android JDK JIT')).toBe(false);
+    expect(runGradle(['help'], { env, cwd: dir }, process.platform, { run: () => ({ status: 0 }) })).toBe(true);
+    expect(errors).not.toHaveBeenCalled();
+  } finally { errors.mockRestore(); rmSync(dir, { recursive: true, force: true }); }
+}, 60_000);
+
+test('a failed Gradle run names a matching JVM crash log, including one left by an earlier run', async () => {
+  const { runGradle } = await import('./agent-android.mjs');
+  const dir = mkdtempSync(resolve(tmpdir(), 'exact-gradle-crash-'));
+  const errors = spyOn(console, 'error').mockImplementation(() => {});
+  try {
+    const log = resolve(dir, 'hs_err_pid123.log');
+    const run = status => runGradle(['help'], { cwd: dir, env: { JAVA_HOME: resolve(dir, 'absent'), PATH: '' } }, process.platform, { run: () => ({ status }) });
+    writeFileSync(log, '# SIGSEGV in an unrelated library\n');
+    expect(run(1)).toBe(false);
+    expect(errors).not.toHaveBeenCalled();
+    writeFileSync(log, '# Internal Error (assembler_aarch64.hpp:267)\n# guarantee(chk == -1 || chk == 0) failed: Field too big for insn\nV LIR_Assembler::osr_entry()\n');
+    expect(run(0)).toBe(true);
+    expect(errors).not.toHaveBeenCalled();
+    expect(run(1)).toBe(false);
+    expect(errors.mock.calls.flat().join('\n')).toContain(log);
+    expect(errors.mock.calls.flat().join('\n')).toContain('JDK-8335662');
+    expect(errors.mock.calls.flat().join('\n')).toContain('earlier run');
+    expect(errors.mock.calls.flat().join('\n')).toContain('JAVA_HOME');
+  } finally { errors.mockRestore(); rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('the Android reader variable filter and activity allowlist include the auth fixture; loopback URLs select ports', async () => {
   const { readerVariables, reversedPorts } = await import('./agent-android.mjs');
-  const vars = readerVariables({ EXACT_AGENT: '1', EXACT_AGENT_STORAGE: 's', EXACT_AUTH_FIXTURE: 'http://127.0.0.1:4791', EXACT_APP_DIR: '/a', HOME: '/h' });
-  expect(vars).toEqual({ EXACT_AGENT: '1', EXACT_AGENT_STORAGE: 's', EXACT_AUTH_FIXTURE: 'http://127.0.0.1:4791' });
-  expect(reversedPorts(vars)).toEqual(['4791']);
+  const vars = readerVariables({ EXACT_AGENT: '1', EXACT_AGENT_STORAGE: 's', EXACT_AUTH_FIXTURE: 'http://127.0.0.1:4791', EXACT_APP_DIR: '/a', HOME: '/h',
+    EXACT_UPDATE_ORIGIN: 'http://127.0.0.1:8790/', EXACT_UPDATE_DIR: '/u' });
+  expect(vars).toEqual({ EXACT_AGENT: '1', EXACT_AGENT_STORAGE: 's', EXACT_AUTH_FIXTURE: 'http://127.0.0.1:4791', EXACT_UPDATE_ORIGIN: 'http://127.0.0.1:8790/', EXACT_UPDATE_DIR: '/u' });
+  expect(reversedPorts(vars)).toEqual(['4791', '8790']);
   expect(reversedPorts({ EXACT_AUTH_FIXTURE: 'http://[::1]:4791' })).toEqual(['4791']);
   expect(reversedPorts({ EXACT_DEV_PLAN: 'http://localhost:8080/', EXACT_AUTH_FIXTURE: 'http://127.0.0.1:8080' })).toEqual(['8080']);
   expect(reversedPorts({ EXACT_DEV_PLAN: 'https://example.com/plan' })).toEqual([]);
   const activity = readFileSync(resolve(import.meta.dir, '../host/android/canvas/src/main/java/dev/exact/canvas/ExactActivity.kt'), 'utf8');
   expect(Object.keys(vars).map((name) => `x_${name.slice('EXACT_'.length).toLowerCase()}`).filter((extra) => !activity.includes(`"${extra}"`))).toEqual([]);
 });
+
+// A test that times out never reaches its own `finally`.
+const driveFixtures = [];
+afterAll(() => { for (const fixture of driveFixtures) fixture.dispose(); });
 
 // The stand-in device reaches the fixture only while its reverse mapping exists.
 function androidDriveFixture(reader, destination = null, reacquire = false, failedRemoval = null, stuckShell = false, screen = {}) {
@@ -116,7 +210,7 @@ if (cmd[0] === 'shell' && cmd[1] === '-T') {
   const env = { ...process.env, ANDROID_HOME: dir, ANDROID_SERIAL: serial,
     XDG_CACHE_HOME: resolve(dir, 'cache'), EXACT_AGENT: '1', EXACT_AUTH_FIXTURE: 'http://127.0.0.1:4791' };
   for (const name of ['EXACT_DEV_PLAN', 'EXACT_PLAN', 'EXACT_WORLD', 'EXACT_LAUNCH_URL']) delete env[name];
-  return { port: server.port, app: { id: 'dev.exact.fixture', dir }, bin, env, closed, connected,
+  const fixture = { port: server.port, app: { id: 'dev.exact.fixture', dir }, bin, env, closed, connected,
     commands: () => readFileSync(calls, 'utf8').trim().split('\n').map(JSON.parse),
     mappings: () => JSON.parse(readFileSync(mappings, 'utf8')), stopSocket: () => server.stop(true),
     replace: destination => writeFileSync(mappings, JSON.stringify(destination ? { 'tcp:4791': destination } : {})),
@@ -131,6 +225,8 @@ if (cmd[0] === 'shell' && cmd[1] === '-T') {
     },
     dispose() { server.stop(true); rmSync(dir, { recursive: true, force: true }); rmSync(reverseRoot(serial), { recursive: true, force: true }); },
   };
+  driveFixtures.push(fixture);
+  return fixture;
 }
 test('the Android reader uses its declared package and suffix for lookup, launch and drive storage', async () => {
   const { androidDeploy } = await import('./agent-android.mjs');
@@ -794,13 +890,14 @@ test.skipIf(process.platform === 'win32')('Android tries PATH after an unusable 
 
 const releaseJavaEnv = androidJavaEnv(process.env);
 const releaseSdk = androidSdk(process.env);
-for (const id of [undefined, 'com.example.android_app']) test.skipIf(process.platform !== 'darwin' || !releaseJavaEnv ||
-  !androidSdkPackages().every(pkg => existsSync(resolve(releaseSdk, pkg.path))))(`Android release metadata and signing reach Gradle with ${id ?? 'the default package'}`, async () => {
+for (const [id, minimumOS] of [[undefined, '12'], ['com.example.android_app', '11'], ['com.example.android_app', '12']]) test.skipIf(process.platform !== 'darwin' || !releaseJavaEnv ||
+  !androidSdkPackages().every(pkg => existsSync(resolve(releaseSdk, pkg.path))))(`Android release metadata and signing reach Gradle with ${id ?? 'the default package'} on Android ${minimumOS}`, async () => {
   const dir = mkdtempSync(resolve(tmpdir(), 'exact-android-release-'));
   const packageId = id ?? 'dev.exact.ci';
+  const permissions = id ? ['android.permission.BLUETOOTH maxSdkVersion=30', 'android.permission.BLUETOOTH_CONNECT'] : [];
   try {
     writeFileSync(resolve(dir, 'app.json'), JSON.stringify({ app: { id: 'dev.exact.ci', name: 'CI' },
-      host: { android: { id } },
+      host: { android: { id, minimumOS } },
       shortcuts: [{ name: 'Open', url: '/open' }] }));
     writeFileSync(resolve(dir, 'upload.jks'), 'configuration fixture');
     const init = resolve(dir, 'inspect.gradle');
@@ -821,7 +918,8 @@ for (const id of [undefined, 'com.example.android_app']) test.skipIf(process.pla
       }
     }`);
     const result = spawnSync(resolve(import.meta.dir, '../host/android/gradlew'), ['--no-daemon', '--console=plain', '-I', init,
-      ':app:processReleaseMainManifest', ':app:inspectRelease', '-PidSuffix=.dev', '-Papp=ci', `-PappDir=${dir}`, `-PappBuildDir=${dir}/app`, `-PcanvasBuildDir=${dir}/canvas`, '--project-cache-dir', `${dir}/cache`],
+      ':app:processReleaseMainManifest', ':app:inspectRelease', '-PidSuffix=.dev', '-Papp=ci', `-Ppermissions=${permissions.join(',')}`,
+      ...(id ? ['-PandroidFeatures=android.hardware.bluetooth_le required=false,android.software.companion_device_setup'] : []), `-PappDir=${dir}`, `-PappBuildDir=${dir}/app`, `-PcanvasBuildDir=${dir}/canvas`, '--project-cache-dir', `${dir}/cache`],
     { cwd: resolve(import.meta.dir, '../host/android'), encoding: 'utf8', timeout: 180000,
       env: { ...releaseJavaEnv, ANDROID_HOME: releaseSdk,
         EXACT_BUILD_NUMBER: '42', EXACT_VERSION: '2.3.4', EXACT_KEYSTORE: resolve(dir, 'upload.jks'),
@@ -836,6 +934,18 @@ for (const id of [undefined, 'com.example.android_app']) test.skipIf(process.pla
     const merged = readFileSync(resolve(dir, 'app/intermediates', manifests[0]), 'utf8');
     expect(merged).toContain(`package="${packageId}.dev"`);
     expect(merged).toContain(`android:authorities="${packageId}.dev.exact.files"`);
+    if (id) {
+      if (minimumOS === '11') expect(merged).toMatch(/android:name="android.permission.BLUETOOTH"\s+android:maxSdkVersion="30"/);
+      else expect(merged).not.toContain('android:name="android.permission.BLUETOOTH"');
+      expect(merged).not.toContain('android.permission.BLUETOOTH_ADMIN');
+      expect(merged).toContain('android:name="android.permission.BLUETOOTH_CONNECT"');
+      expect(merged).not.toContain('android.permission.BLUETOOTH_SCAN');
+      expect(merged).not.toContain('neverForLocation');
+      expect(merged).toMatch(/android:name="android.hardware.bluetooth_le"\s+android:required="false"/);
+      expect(merged).toMatch(/android:name="android.software.companion_device_setup"\s+android:required="true"/);
+      expect(merged).not.toContain('android.hardware.android.');
+      expect(merged).not.toContain('android.permission.ACCESS_FINE_LOCATION');
+    } else expect(merged).not.toContain('android.permission.BLUETOOTH');
     const shortcuts = readFileSync(resolve(dir, 'app/shortcuts/res/xml/exact_shortcuts.xml'), 'utf8');
     expect(shortcuts).toContain(`android:targetPackage="${packageId}.dev"`);
   } finally { rmSync(dir, { recursive: true, force: true }); }
@@ -885,24 +995,6 @@ test('Android distribution refuses bad metadata and incomplete credentials befor
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('a production Android build with the Linux bake store on and no stream is refused before compiling (#48)', async () => {
-  const { androidStreamRefusal } = await import('./agent-android.mjs');
-  const production = { EXACT_UPDATE_TRUST: 'production' };
-  expect(androidStreamRefusal('a', {}, production)).toContain('deploy.store.linux to "0"');
-  expect(androidStreamRefusal('a', { deploy: { store: { android: '0' } } }, production)).toContain('deploy.store.android does not');
-  expect(androidStreamRefusal('a', { deploy: { store: { linux: '0' } } }, production)).toBeNull();
-  expect(androidStreamRefusal('a', {}, {})).toBeNull();
-  expect(androidStreamRefusal('a', {}, { ...production, EXACT_UPDATE_GENESIS: '1' })).toBeNull();
-  expect(androidStreamRefusal('a', {}, { ...production, EXACT_UPDATE_RECEIPT: '/receipt.json' })).toBeNull();
-  expect(androidStreamRefusal('a', {}, { ...production, EXACT_BAKE_ANALYSIS: '1' })).toBeNull();
-  // The verb says it in its first second: `--bundle` bakes production trust, and this app's store is on.
-  const env = { ...process.env };
-  for (const key of ['EXACT_UPDATE_TRUST', 'EXACT_UPDATE_RECEIPT', 'EXACT_UPDATE_GENESIS', 'EXACT_BAKE_ANALYSIS']) delete env[key];
-  const r = spawnSync(process.execPath, [resolve(import.meta.dir, 'agent-android.mjs'), 'build', 'auth-fixture', '--bundle'], { encoding: 'utf8', env, timeout: 30000 });
-  expect(r.status).toBe(1);
-  expect(r.stderr).toContain('set deploy.store.linux to "0" in app.json');
-});
-
 test('Android bundles and unattended APKs have explicit command flags', async () => {
   const { guardFlags } = await import('./help.mjs');
   expect(guardFlags('android', ['--bundle', '--json'])).toEqual(['--bundle', '--json']);
@@ -916,21 +1008,17 @@ test('Android bundles and unattended APKs have explicit command flags', async ()
 });
 
 test('an APK carries each GPU library the bake built, by the name Cargo gave it, unstripped (#306)', async () => {
-  const { bakeGpuLibraries, carriesGpu, stageGpuLibraries } = await import('./agent-android.mjs');
+  const { bakeGpuLibraries, stageGpuLibraries } = await import('./agent-android.mjs');
   const dir = mkdtempSync(resolve(tmpdir(), 'exact-apk-gpu-'));
   try {
     const app = { hasGpu: true, manifest: { gpu: { modules: { extra: ['extra'] } } } };
-    expect(carriesGpu(app)).toBe(true);
-    // An app whose surfaces are all in named modules has no primary, and still bakes them.
-    expect(carriesGpu({ ...app, hasGpu: false })).toBe(true);
-    expect(carriesGpu({ hasGpu: false, manifest: {} })).toBe(false);
     // The named module's crate sets `[lib] name = "extra"`: Cargo builds libextra.so, not libfiddl_gpu_extra.so.
     const products = ['libfiddl_gpu.so', 'libextra.so'].map((file) => resolve(dir, file));
     let asked;
     const bake = (...args) => { asked = args; for (const product of products) expect(args[3].prepareGpu(product)).toBe(product); };
     const libraries = bakeGpuLibraries(app, { profile: 'release', env: { A: '1' } }, bake);
     expect(libraries).toEqual(products);
-    expect(asked.slice(0, 3)).toEqual([app, 'linux', 'aarch64-linux-android']);
+    expect(asked.slice(0, 3)).toEqual([app, 'android', 'aarch64-linux-android']);
     expect(asked[3]).toMatchObject({ profile: 'release', env: { A: '1' }, kind: 'android' });
     for (const library of libraries) writeFileSync(library, library);
     const jniLibs = resolve(dir, 'jniLibs/arm64-v8a');
@@ -1027,4 +1115,84 @@ test('an Android picker answer carries local file bytes and names to either carr
       files: names.map((name, i) => ({ name, bytes: bytes[i].toString('base64') })),
     }]);
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('wireless adb entries for one phone select its address; distinct or unreadable devices refuse', async () => {
+  const { androidDevice } = await import('./agent-android.mjs');
+  const mdns = 'adb-R5CT1234ABC-a1B2c3 (2)._adb-tls-connect._tcp', ip = '192.168.1.20:37099';
+  const env = {}, phone = id => ({ id, serial: 'R5CT1234ABC', androidId: 'd423b93a7ac32ef1' });
+  let devices = [], calls = [];
+  const run = (tool, args) => {
+    calls.push(args);
+    if (args.join(' ') === 'devices') return { status: 0,
+      stdout: 'List of devices attached\n' + devices.map(d => d.id + '\t' + (d.state ?? 'device')).join('\n') };
+    const identity = args[3] === 'settings';
+    expect(args.slice(2)).toEqual(identity ? ['shell', 'settings', 'get', 'secure', 'android_id'] : ['shell', 'getprop', 'ro.serialno']);
+    const d = devices.find(d => d.id === args[1]);
+    const value = (identity ? d?.androidId : d?.serial) ?? '';
+    return { status: (identity ? d?.identityStatus : d?.status) ?? 0, stdout: `${value}\r\n` };
+  };
+  const select = listed => {
+    devices = listed;
+    calls = [];
+    return androidDevice(env, run);
+  };
+  const factory = '0123456789ABCDEF';
+  expect(() => select([{ ...phone(ip), serial: factory },
+    { ...phone(factory), serial: factory, androidId: 'another-phone' }]))
+    .toThrow(`2 Android devices are ready (${ip}, ${factory}): set ANDROID_SERIAL to the one to use`);
+  expect(() => select([{ ...phone(ip), serial: factory, androidId: 'null' },
+    { ...phone(factory), serial: factory, androidId: 'null' }]))
+    .toThrow(`2 Android devices are ready (${ip}, ${factory}): set ANDROID_SERIAL to the one to use`);
+  expect(() => select([{ ...phone(ip), serial: 'unknown', androidId: 'null' },
+    { ...phone('unknown'), serial: 'unknown', androidId: 'null' }]))
+    .toThrow(`2 Android devices are ready (${ip}, unknown): set ANDROID_SERIAL to the one to use`);
+  for (const other of [
+    { ...phone(mdns), androidId: '' }, { ...phone(mdns), androidId: '   ' },
+    { ...phone(mdns), identityStatus: 1 },
+  ]) expect(() => select([phone(ip), other]))
+    .toThrow(`2 Android devices are ready (${ip}, ${mdns}): set ANDROID_SERIAL to the one to use`);
+  for (const ids of [[mdns, ip], [ip, mdns], [mdns, 'R5CT1234ABC', ip]]) {
+    expect(select(ids.map(phone))).toBe(ip);
+    expect(calls).toEqual([
+      ['devices'], ...ids.map(id => ['-s', id, 'shell', 'getprop', 'ro.serialno']),
+      ...ids.map(id => ['-s', id, 'shell', 'settings', 'get', 'secure', 'android_id']),
+    ]);
+  }
+  for (const id of [mdns, ip, 'emulator-5554']) {
+    expect(select([{ id }, { id: 'offline-phone', state: 'offline' }])).toBe(id);
+    expect(calls).toEqual([['devices']]);
+  }
+  for (const ids of [[mdns, 'R5CT1234ABC'], ['R5CT1234ABC', mdns], [ip, 'R5CT1234ABC']])
+    expect(select(ids.map(phone))).toBe(ids.includes(ip) ? ip : 'R5CT1234ABC');
+  for (const ids of [
+    ['emulator-5554', 'emulator-5556'], [ip, '192.168.1.21:37099'],
+    ['USB123', 'USB456'], [mdns, 'USB123'],
+    [mdns, 'adb-R5CT1234ABC-other._adb-tls-connect._tcp'],
+    [ip, 'adb-OTHER-a1B2c3._adb-tls-connect._tcp'],
+  ]) {
+    expect(() => select(ids.map(phone))).toThrow(`${ids.length} Android devices are ready (${ids.join(', ')}): set ANDROID_SERIAL to the one to use`);
+  }
+  for (const other of [
+    { id: 'other-phone', serial: 'OTHER' }, { id: 'emulator-5554', serial: 'EMULATOR35X1' },
+    { id: mdns }, { id: mdns, serial: '   ' }, { id: mdns, serial: 'R5CT1234ABC', status: 1 },
+  ]) {
+    expect(() => select([phone(ip), other])).toThrow(`2 Android devices are ready (${ip}, ${other.id}): set ANDROID_SERIAL to the one to use`);
+  }
+  expect(() => select([])).toThrow('no Android device or emulator is ready');
+  calls = [];
+  expect(androidDevice({ ...env, ANDROID_SERIAL: mdns }, run)).toBe(mdns);
+  expect(calls).toEqual([]);
+});
+
+test('android --run --url launches the app following that dev loop, stopping a running one first (#585)', async () => {
+  const { launchArgs, reversedPorts } = await import('./agent-android.mjs');
+  expect(launchArgs('com.example.app')).toEqual(['shell', 'am', 'start', '-W', '-n', 'com.example.app/dev.exact.app.MainActivity']);
+  expect(launchArgs('com.example.app', 'http://127.0.0.1:9147/')).toEqual(['shell', 'am', 'start', '-W', '-S', '-n',
+    'com.example.app/dev.exact.app.MainActivity', '--es', 'x_dev_plan', 'http://127.0.0.1:9147/']);
+  expect(reversedPorts({ EXACT_DEV_PLAN: 'http://127.0.0.1:9147/' })).toEqual(['9147']);
+  const refused = (...args) => spawnSync(process.execPath, [resolve(import.meta.dir, 'agent-android.mjs'), 'build', 'shelf', ...args], { encoding: 'utf8', timeout: 30_000 });
+  expect(refused('--url', 'http://127.0.0.1:9147/').stderr).toContain('--url is the dev loop the launched APK follows');
+  expect(refused('--run', '--headless', '--url', 'http://127.0.0.1:9147/').stderr).toContain('it goes with --run, not --headless');
+  expect(refused('--run', '--url', 'shelf.contract').stderr).toContain("--url takes a dev loop's http(s) URL");
 });

@@ -35,6 +35,8 @@ fn background(id: u32) -> Option<InlineBackground> {
         id,
         radii: [const { Dimension::Points(3.0) }; 4],
         reach: exact_kernel::InlineEdges::default(),
+        above: 0.0,
+        below: 0.0,
         outer: Vec::new(),
     })
 }
@@ -506,6 +508,35 @@ fn a_background_covers_its_padding_and_not_its_margin() {
     let m = margined[0].rect;
     assert!((m.0 - b.0 - 3.0).abs() < 0.05, "{b:?} {m:?}");
     assert!((m.2 - b.2).abs() < 0.05, "{b:?} {m:?}");
+}
+
+/// Above and below its text a box's background covers its padding and
+/// border too, which move no line (CSS 2 §10.6.1): Chrome paints
+/// `<span style="padding:3px 0 12px;background:#ddd">code</span>` 15 px
+/// taller than its font's content area, from 3 px above it. A square box
+/// with block padding alone still paints its padded rect.
+#[test]
+fn a_background_covers_its_block_padding() {
+    let mut e = engine();
+    let p = e.paragraph(&spec(&["a ", "code", " b"]), None);
+    let bare = fills(&p, &[None, background(1), None])[0].rect;
+    let padded = background(1).map(|b| InlineBackground {
+        above: 3.0,
+        below: 12.0,
+        ..b
+    });
+    let tall = fills(&p, &[None, padded.clone(), None]);
+    assert_eq!(tall.len(), 1);
+    let t = tall[0].rect;
+    assert!((t.1 - (bare.1 - 3.0)).abs() < 0.05, "{bare:?} {t:?}");
+    assert!((t.3 - (bare.3 + 15.0)).abs() < 0.05, "{bare:?} {t:?}");
+    assert_eq!((t.0, t.2), (bare.0, bare.2), "no wider: {bare:?} {t:?}");
+    let square = padded.map(|b| InlineBackground {
+        radii: [const { Dimension::Points(0.0) }; 4],
+        ..b
+    });
+    let s = fills(&p, &[None, square, None])[0].rect;
+    assert_eq!(s, t, "{s:?} {t:?}");
 }
 
 /// Boxes inside one another each paint their own background into their own

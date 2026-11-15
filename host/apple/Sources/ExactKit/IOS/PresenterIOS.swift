@@ -1,5 +1,5 @@
 // The UIKit presenter (LLP 1008 §9): a viewport scroll view over a content-sized
-// document, one `NodeView` per kernel node, host batches, keyboard insets and
+// document, with eligible list-row wrappers omitted, host batches, keyboard insets and
 // field reveal, owned by one session (LLP 1031 D1).
 #if os(iOS) || os(tvOS)
 import UIKit
@@ -73,7 +73,7 @@ package final class Presenter {
     /// Shared elements in flight, by the arriver's id (LLP 1013.000, `FlightsIOS.swift`).
     var flights: [UInt32: Flight] = [:]
     private(set) var chrome = ChromeIndex()
-    func propsChanged(_ view: NodeView) { chrome.note(view.id, props: view.props); DragLink.installed?.updateReorderGesture(view); view.updateRefresh(); view.relook() }
+    func propsChanged(_ view: NodeView) { chrome.note(view.id, props: view.props); AriaCarriers.note(view, of: self); DragLink.installed?.updateReorderGesture(view); view.updateRefresh(); view.relook() }
     package func carrying(_ key: String) -> [NodeView] { chrome.ids(key).sorted().compactMap { views[$0] } }
     func takeChangedNames() -> Set<String> { chrome.takeChangedNames() }
     var scrollers: Set<UInt32> = []
@@ -353,6 +353,7 @@ package final class Presenter {
         views.values.forEach { $0.forget() }
         root.subviews.forEach { $0.removeFromSuperview() }
         chrome = ChromeIndex()
+        AriaCarriers.forget(presenter: self)
         views.removeAll()
         inlineOwners.removeAll()
         scrollers.removeAll(); pendingScrolls.removeAll(); materialNodes.removeAll(); contextNodes.removeAll()
@@ -990,6 +991,21 @@ package final class Presenter {
                 if let f = flights[id] { landFlight(f) }
             case .rank:
                 if let rank = op.payload["rank"] as? NSNumber { flats.rank(id, rank.int64Value) }
+            case .layoutHits:
+                if flats.isFlat(id) { flats.promote(id) }
+                if let owner = views[id] {
+                    let before = owner.layoutHits?.bounds ?? []
+                    owner.layoutHits = LayoutHits(owner, op.payload)
+                    if owner.layoutHits?.bounds ?? [] != before { flats.boundsChanged(id) }
+                }
+            case .layoutHitsWithdrawn:
+                if let owner = views[id], let ids = op.payload["ids"] as? [NSNumber] {
+                    let before = owner.layoutHits?.bounds ?? []
+                    owner.layoutHits = owner.layoutHits?.without(Set(ids.map(\.uint32Value)))
+                    if owner.layoutHits?.bounds ?? [] != before { flats.boundsChanged(id) }
+                }
+            case .layoutPromote:
+                placedAnew.append(contentsOf: promoteLayoutBox(id, op.payload))
             case .sticky:
                 if flats.isFlat(id) { flats.promote(id) }
                 stickies.apply(id, op.payload)
@@ -1034,7 +1050,7 @@ package final class Presenter {
                 case "translate": v.translatePx = CGPoint(x: x, y: CGFloat(op.y)); v.translatePercent = CGPoint(x: CGFloat(op.w), y: CGFloat(op.h)); v.applyTransform()
                 case "layout": v.layoutOffset = CGPoint(x: x, y: CGFloat(op.y)); v.layoutResize = CGSize(width: CGFloat(op.w), height: CGFloat(op.h)); v.applyTransform(); v.applySurface()
                 case "scale": v.scale = x; v.applyTransform()
-                case "rotate": v.rotate = x; v.applyTransform()
+                case "rotate": v.rotate = x; v.rotationAxis = [op.y, op.w, op.h]; v.applyTransform()
                 case "opacity": v.presentOpacity(x)
                 case "flight": presentFlight(id, x)
                 default: break
@@ -1071,6 +1087,7 @@ package final class Presenter {
             }
             if animating { moveOrPlace(kind == .create ? nil : views[id] ?? leaving[id]?.view) { applyOp(op, kind, id) } } else { applyOp(op, kind, id) }
         }
+        for id in placedAnew[anewFrom...] { views[id]?.promotedLayoutHit?.finishTransfers() }
         schemes.end(); regridMoved() // every override and move made: the traits before anything reads them
         #if os(iOS)
         // A reference changes default corners and shadow even when the material stays the same.

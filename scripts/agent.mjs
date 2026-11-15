@@ -152,8 +152,10 @@ export async function main(argv, injected = {}) {
     return 2;
   }
   if (flags.live) {
-    if (!['macos', 'mac'].includes(host) || flags.test)
-      throw new Error('--live requires a macOS drive without --test');
+    if (!['macos', 'mac', 'ios'].includes(host) || flags.test)
+      throw new Error('--live requires a macOS or iOS simulator drive without --test');
+    // A phone's carrier forces agent mode, and a real drag there needs an XCTest runner on the phone.
+    if (flags.device) throw new Error('--live drives the iOS simulator, not a phone');
     if (flags.timing && flags.timing !== 'platform')
       throw new Error('--live keeps the platform clock; --timing agent is incompatible');
     flags.timing = 'platform';

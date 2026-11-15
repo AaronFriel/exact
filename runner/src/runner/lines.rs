@@ -6,6 +6,28 @@
 use crate::request::Request;
 use exact_num::text;
 
+impl<D: super::DataSource> super::Runner<D> {
+    /// The retained journal lines, oldest first.
+    pub fn journal(&self) -> impl Iterator<Item = &str> {
+        self.journal.iter().map(String::as_str)
+    }
+
+    /// The index (since boot) of the first retained journal line: how many
+    /// were dropped by the ring.
+    pub fn journal_start(&self) -> usize {
+        self.journal_start
+    }
+
+    /// The retained journal lines not yet echoed by the host, marked through
+    /// the current end. Lines dropped by the ring are skipped.
+    pub fn journal_echo(&self) -> impl Iterator<Item = &str> {
+        let from = self.journal_echoed.get().max(self.journal_start);
+        self.journal_echoed
+            .set(self.journal_start + self.journal.len());
+        self.journal().skip(from - self.journal_start)
+    }
+}
+
 /// A line as the journal keeps it: stamped with the clock.
 pub(super) fn stamped(now_ms: f64, line: &str) -> String {
     text!("t={} {}", crate::agent::num(now_ms), line)

@@ -40,6 +40,7 @@ mod arrive;
 mod back;
 pub mod bars;
 mod build_channel;
+mod checks;
 pub mod clipboard;
 mod clock;
 mod collection;
@@ -203,7 +204,14 @@ pub struct Presenter<D: DataSource> {
     dev: Option<crate::fetch::Poller>,
     pending_dev: Option<crate::fetch::Generation>,
     pending_update: bool,
+    /// When the store checks its stream, with one attached (LLP 1030.006 D5).
+    update_checks: Option<checks::Checks>,
+    /// The boot is good when a reader drew it ([`Presenter::reader_drew`]),
+    /// not at first pixel; and whether it has (LLP 1030.006 D5).
+    reader_blesses: bool,
+    blessed: bool,
     text: Shared,
+    make_text: fn(&Plan, &Assets) -> Shared,
     /// A touch down's press, to lay out ahead (`ahead.rs`).
     ahead: Option<ahead::Ahead>,
     pub(crate) brush: Painter,
@@ -219,6 +227,8 @@ pub struct Presenter<D: DataSource> {
     /// when another replaces the one it measured (LLP 1079 D3).
     pub(crate) hosts: u64,
     pub(crate) focus: Option<ViewId>,
+    /// What was typed into a menu in its last half second (`tabs.rs`).
+    type_ahead: exact_kernel::TypeAhead,
     /// Last connected path from the focused node, for a removal commit.
     focus_out: Vec<(ViewId, Event)>,
     /// The current pointer press may yield its focus to a newly mounted field.
@@ -429,6 +439,7 @@ impl<D: DataSource> Presenter<D> {
             scale,
             assets,
             painter,
+            TextEngine::shared_for_assets,
             Some(delivery),
             launch,
             region,
@@ -446,6 +457,7 @@ impl<D: DataSource> Presenter<D> {
         scale: f32,
         assets: Assets,
         painter: PainterBoot,
+        make_text: fn(&Plan, &Assets) -> Shared,
         delivery: Option<exact_runner::Delivery>,
         launch: &str,
         region: Option<crate::content_region::ContentRegionRegistration>,
@@ -471,9 +483,7 @@ impl<D: DataSource> Presenter<D> {
         crate::app::boot_phase(c"plan-ready");
         #[cfg(windows)]
         let preparing = painter.prepare_direct();
-        let text = crate::traced(c"boot fonts", || {
-            TextEngine::shared_for_assets(&decoded, &assets)
-        });
+        let text = crate::traced(c"boot fonts", || make_text(&decoded, &assets));
         if let Some(reason) = assets.take_refusal() {
             return Err(HostError::Asset(reason));
         }
@@ -511,6 +521,7 @@ impl<D: DataSource> Presenter<D> {
                 .map_err(HostError::Painter)?,
             None => opened.expect("synchronous painter"),
         };
+        host.flights.enabled = backend.name() == "canvas";
         if assets.is_selected() {
             if let Some(error) = error {
                 return Err(HostError::Layout(error));
@@ -550,6 +561,7 @@ impl<D: DataSource> Presenter<D> {
             group: None,
             brush: Painter::new(text.clone(), scale, backend),
             text,
+            make_text,
             ahead: None,
             viewport,
             scroll: BTreeMap::new(),
@@ -560,6 +572,7 @@ impl<D: DataSource> Presenter<D> {
             compat: String::new(),
             hosts: 0,
             focus: None,
+            type_ahead: Default::default(),
             focus_out: Vec::new(),
             autofocus_from: None,
             disabled_blur: Vec::new(),
@@ -636,6 +649,9 @@ impl<D: DataSource> Presenter<D> {
             dev: None,
             pending_dev: None,
             pending_update: false,
+            update_checks: None,
+            reader_blesses: false,
+            blessed: false,
             last_frame_succeeded: false,
             display: display_frame::State::default(),
             choice,
@@ -660,6 +676,10 @@ impl<D: DataSource> Presenter<D> {
         };
         p.read_ranges();
         p.set_system_scheme(false);
+        // The scheme the app chose at an earlier launch, in the first frame
+        // whenever the host runs the boot's commands.
+        let kept = preferences::app_dark(p.host.runner().asked().scheme.as_ref());
+        p.app_scheme(kept);
         let e = p.after_commit();
         p.booting = false;
         if let Some(reason) = p.assets.take_refusal() {
@@ -691,7 +711,7 @@ impl<D: DataSource> Presenter<D> {
         let module = module.or_else(|| self.module.clone());
         let decoded = Plan::decode(plan).map_err(HostError::Plan)?;
         // Preserve live font state until the candidate runner boots successfully.
-        let candidate_text = TextEngine::shared_for_assets(&decoded, &self.assets);
+        let candidate_text = (self.make_text)(&decoded, &self.assets);
         if let Some(reason) = self.assets.take_refusal() {
             return Err(HostError::Asset(reason));
         }
@@ -735,7 +755,9 @@ impl<D: DataSource> Presenter<D> {
         self.surfaces
             .commit_shaders(shaders)
             .map_err(HostError::Asset)?;
+        let faults = self.host.runner().faults().clone();
         self.host = host;
+        self.host.runner_mut().share_faults(&faults);
         // The old executor lets go of everything, then says which uploads had
         // begun to go out; the rest never left (LLP 1016.000 D10).
         self.executor.forget(|_| false);
@@ -996,13 +1018,15 @@ impl<D: DataSource> Presenter<D> {
             .runner_mut()
             .publish_sockets(|batch| executor.socket(batch));
         let commands = self.host.take_commands();
-        if let Some(activation) = (self.host.router_op())
-            .map(|op| op.activation)
-            .filter(|a| *a > self.fragment_seen)
-        {
-            self.fragment_anchor = None;
-            self.fragment_seen = activation;
-            self.fragment_armed = Some((activation, self.person_scrolls));
+        if let Some(op) = self.host.router_op() {
+            if op.activation == 0 {
+                self.fragment_anchor = None;
+                self.fragment_armed = None;
+            } else if op.activation > self.fragment_seen {
+                self.fragment_anchor = None;
+                self.fragment_seen = op.activation;
+                self.fragment_armed = Some((op.activation, self.person_scrolls));
+            }
         }
         if !commands.is_empty() {
             self.commands.extend(commands);
@@ -1172,7 +1196,7 @@ impl<D: DataSource> Presenter<D> {
         self.boxes
             .iter()
             .find(|b| b.id == id && self.display.allows(self.host.kernel(), id))
-            .copied()
+            .cloned()
             .or_else(|| {
                 self.inline_box(id)
                     .filter(|_| self.display.allows(self.host.kernel(), id))
@@ -1232,21 +1256,21 @@ impl<D: DataSource> Presenter<D> {
             .map(|id| self.inline_hit(id, x, y).unwrap_or(id))
     }
 
-    /// The deepest box of the latest paint under a point, as [`Self::hit`]
-    /// finds it once the boxes are fresh and the page takes a press.
+    /// Hit-test the latest paint; [`Self::hit`] refreshes its boxes first.
     pub(super) fn painted_hit(&self, x: f32, y: f32, current: bool) -> Option<ViewId> {
         self.boxes
             .iter()
             .rev()
             .filter(|b| {
                 self.alert_allows(b.id)
+                    && !self.host.flying(b.id)
                     && (b.contains(x, y) && crate::paint::hits(self.host.kernel(), b, x, y)
                         || crate::paint::slop_hits(self.host.kernel(), b, x, y))
                     && !self.host.route_visibility(b.id).1
                     && self.display.allows(self.host.kernel(), b.id)
             })
             .find_map(|b| {
-                let mut hit = *b;
+                let mut hit = b.clone();
                 if current && !self.brush.region_blocks_action(b.id) {
                     let node = self.host.kernel().node(b.id)?;
                     hit.pointer_hit = node
@@ -1342,6 +1366,7 @@ impl<D: DataSource> Presenter<D> {
             || self.focus.is_some()
             || self.brush.moving()
             || self.bars_ripple_moving()
+            || self.surface_ripple_moving()
             || self.stage_moving();
         let (layout, paint) = self.host.tick_effects(now_ms);
         if layout {
@@ -1386,3 +1411,6 @@ fn attached(kernel: &exact_kernel::Kernel, id: ViewId) -> bool {
     }
     false
 }
+
+#[cfg(test)]
+mod fixtures;

@@ -495,8 +495,7 @@ mod tests {
         }
         let (head, reports) = run_batch(&cases, &work_dir(), "lowering-land-test").unwrap();
         assert!(head.is_empty(), "{head:?}");
-        for pair in reports.chunks_exact(2) {
-            let [good, broken] = pair else { unreachable!() };
+        for [good, broken] in reports.as_chunks::<2>().0 {
             assert!(!good.boot_refused && !broken.boot_refused);
             assert!(good.sum[0] > 0);
             assert!(good.lines.is_empty(), "{:?}", good.lines);

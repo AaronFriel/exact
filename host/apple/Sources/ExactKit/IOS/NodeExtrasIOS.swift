@@ -51,6 +51,7 @@ final class NodeAside {
     var translatePx = CGPoint.zero, translatePercent = CGPoint.zero
     var scale: CGFloat = 1
     var rotate: CGFloat = 0
+    var rotationAxis: [Double] = [0, 0, 0]
     var content = CGSize.zero
     var fitContentHeight: CGFloat?
     var image: UIImage?
@@ -248,6 +249,7 @@ extension NodeView {
     var translatePx: CGPoint { get { aside?.translatePx ?? .zero } set { if newValue != .zero || aside != nil { asideMade.translatePx = newValue } } }
     var translatePercent: CGPoint { get { aside?.translatePercent ?? .zero } set { if newValue != .zero || aside != nil { asideMade.translatePercent = newValue } } }
     package var scale: CGFloat { get { aside?.scale ?? 1 } set { if newValue != 1 || aside != nil { asideMade.scale = newValue } } }
+    var rotationAxis: [Double] { get { aside?.rotationAxis ?? [0, 0, 0] } set { if newValue != [0, 0, 0] || aside != nil { asideMade.rotationAxis = newValue } } }
     package var rotate: CGFloat { get { aside?.rotate ?? 0 } set { if newValue != 0 || aside != nil { asideMade.rotate = newValue } } }
     /// A scroll container's content extent (the `content` op), before the
     /// axes that do not scroll are held to the box.
@@ -491,9 +493,10 @@ extension NodeView {
         if clipsOneAxis { return oneAxisClipContains(point) }
         let uniform = number("border_width")
         let widths = ["top", "right", "bottom", "left"].map { number("border_width_" + $0, uniform) }
-        if x && y { return innerOutline(widths, in: bounds).contains(point) }
-        return x ? point.x >= bounds.minX + widths[3] && point.x <= bounds.maxX - widths[1]
-            : point.y >= bounds.minY + widths[0] && point.y <= bounds.maxY - widths[2]
+        let box = surface?.frame ?? bounds
+        if x && y { return innerOutline(widths, in: box).contains(point) }
+        return x ? point.x >= box.minX + widths[3] && point.x <= box.maxX - widths[1]
+            : point.y >= box.minY + widths[0] && point.y <= box.maxY - widths[2]
     }
     /// Its scroll view's frame: its bounds, and the band past them.
     package var scrollFrame: CGRect { bounds.inset(by: UIEdgeInsets(top: -pageBand.top, left: 0, bottom: -pageBand.bottom, right: 0)) }

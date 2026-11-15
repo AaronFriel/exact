@@ -11,26 +11,20 @@ use std::io::{Read, Write};
 use std::net::{Shutdown, TcpStream};
 #[cfg(test)]
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use ureq::unversioned::transport::{
     Buffers, ConnectionDetails, Connector, Either, LazyBuffers, NextTimeout,
     Transport as WireTransport,
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Roots {
-    System(usize),
-    CompiledIn,
-}
-impl std::fmt::Display for Roots {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::System(n) => write!(f, "the system's trust store ({n} roots)"),
-            Self::CompiledIn => write!(f, "no system trust store; the compiled-in roots"),
-        }
-    }
-}
+#[cfg(test)]
+static RESOLVER_CALLS: AtomicUsize = AtomicUsize::new(0);
+
+use super::tls::tls_config;
+pub use super::tls::Roots;
+#[cfg(test)]
+use super::tls::{tls_config_from, NATIVE_CERT_LOADS};
 
 #[derive(Default)]
 struct Current {
@@ -170,46 +164,6 @@ fn agent_config(tls: bool, proxy: Option<ureq::Proxy>) -> ureq::config::Config {
     }
 }
 
-// Every transport in the process shares the one trust-store read. Keeping the
-// config out of `new` also keeps constructing an unused host endowment cheap.
-// @ref LLP 0068#5-open-questions — native roots are loaded lazily and once per process
-fn tls_config() -> &'static (ureq::tls::TlsConfig, Roots) {
-    static TLS_CONFIG: OnceLock<(ureq::tls::TlsConfig, Roots)> = OnceLock::new();
-    TLS_CONFIG.get_or_init(|| {
-        #[cfg(test)]
-        NATIVE_CERT_LOADS.fetch_add(1, Ordering::SeqCst);
-        tls_config_from(rustls_native_certs::load_native_certs().unwrap_or_default())
-    })
-}
-
-#[cfg(test)]
-static NATIVE_CERT_LOADS: AtomicUsize = AtomicUsize::new(0);
-#[cfg(test)]
-static RESOLVER_CALLS: AtomicUsize = AtomicUsize::new(0);
-
-fn tls_config_from(
-    certs: Vec<rustls::pki_types::CertificateDer<'static>>,
-) -> (ureq::tls::TlsConfig, Roots) {
-    let mut store = rustls::RootCertStore::empty();
-    let mut certificates = Vec::new();
-    for cert in certs {
-        if store.add(cert.clone()).is_ok() {
-            certificates.push(ureq::tls::Certificate::from_der(cert.as_ref()).to_owned());
-        }
-    }
-    let (root_certs, roots) = if certificates.is_empty() {
-        (ureq::tls::RootCerts::WebPki, Roots::CompiledIn)
-    } else {
-        let count = certificates.len();
-        (certificates.into(), Roots::System(count))
-    };
-    (
-        ureq::tls::TlsConfig::builder()
-            .root_certs(root_certs)
-            .build(),
-        roots,
-    )
-}
 struct Lease {
     slot: Option<Slot>,
     pool: Arc<Pool>,
@@ -714,6 +668,9 @@ impl Transport for RustlsHttpTransport {
         // This precedes leasing (and therefore TLS setup), DNS, and connection.
         let proxy = self.proxy_for(req.uri())?;
         let tls = needs_tls(req.uri().scheme_str() == Some("https"), proxy);
+        if tls {
+            super::tls::ensure_available()?;
+        }
         let started = Instant::now();
         // The request's whole time, its own timeout or the agent's global limit
         let limit = request.timeout.unwrap_or(GLOBAL_TIMEOUT);
@@ -862,9 +819,13 @@ mod tests {
     fn trust_uses_platform_certificates_and_falls_back_only_when_none_are_usable() {
         let _guard = tls_test_lock();
         let roots = tls_config().1;
-        assert!(matches!(roots, Roots::System(n) if n > 0) || roots == Roots::CompiledIn);
+        if cfg!(target_os = "android") {
+            assert_eq!(roots, Roots::PlatformVerifier);
+        } else {
+            assert!(matches!(roots, Roots::System(n) if n > 0) || roots == Roots::CompiledIn);
+        }
         for certs in [vec![], vec![vec![0, 1, 2].into()]] {
-            let (tls, roots) = tls_config_from(certs);
+            let (tls, roots) = tls_config_from(false, || certs);
             assert_eq!(roots, Roots::CompiledIn);
             assert!(matches!(tls.root_certs(), ureq::tls::RootCerts::WebPki));
         }

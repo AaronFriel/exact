@@ -25,6 +25,7 @@ use winit::{
 mod edit_menu;
 mod frames;
 mod lifecycle;
+mod tray;
 use frames::{next_frame_deadline, presentation_resumes, FrameSchedule};
 
 struct App<D: DataSource> {
@@ -83,6 +84,7 @@ struct App<D: DataSource> {
     hidden: bool,
     /// The app's one instance, which later launches reach.
     instance: Option<crate::instance::Instance>,
+    tray: Option<tray::Tray>,
 }
 
 impl<D: DataSource> Drop for App<D> {
@@ -330,6 +332,7 @@ pub(super) fn run<D: DataSource + Default + 'static>(
         keep_running: opening.keep_running,
         hidden: false,
         instance,
+        tray: None,
     };
     if let Err(e) = event_loop.run_app(&mut state) {
         eprintln!("exact-windows: {e}");
@@ -599,7 +602,7 @@ impl<D: DataSource + Default + 'static> App<D> {
                     height
                 ));
             }
-            for (out, pixel) in buffer.iter_mut().zip(frame.data().chunks_exact(4)) {
+            for (out, pixel) in buffer.iter_mut().zip(frame.data().as_chunks::<4>().0) {
                 *out =
                     (u32::from(pixel[0]) << 16) | (u32::from(pixel[1]) << 8) | u32::from(pixel[2]);
             }
@@ -955,6 +958,7 @@ impl<D: DataSource + Default + 'static> ApplicationHandler<crate::accessibility:
                     eprintln!("exact-windows: {warning}");
                 }
                 self.presenter = Some(p);
+                self.tray_start();
                 self.hidden = self.launches_hidden();
                 let hidden = self.hidden;
                 self.tell_page(|page| page.hidden = hidden);
@@ -1309,10 +1313,12 @@ impl<D: DataSource + Default + 'static> ApplicationHandler<crate::accessibility:
     }
     fn about_to_wait(&mut self, events: &ActiveEventLoop) {
         self.handed_launches();
+        self.tray_input(events);
         self.unshown_first_pixel();
         self.wait(events, |p| {
             (p.painter_retry_deadline(), p.painter_present_deadline())
         });
+        self.tray_sync();
     }
 }
 

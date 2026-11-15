@@ -161,12 +161,13 @@ pub struct Placed {
     pub policy: bool,
 }
 
-/// The motion properties that change stacking while they animate (D3).
+/// The motion properties that change stacking while they animate (D3):
+/// `filter` too, whose `none` end stacks nothing (LLP 1003.002 D9).
 fn stacking_property(p: exact_motion::Property) -> bool {
     use exact_motion::Property as P;
     matches!(
         p,
-        P::Translate | P::Scale | P::Rotate | P::Opacity | P::Layout
+        P::Translate | P::Scale | P::Rotate | P::Opacity | P::Layout | P::Filter
     )
 }
 
@@ -566,6 +567,19 @@ mod tests {
         z: false,
         level0: false,
     };
+
+    /// LLP 1003.002 D9: a `blur()` → `none` run stacks until it ends.
+    #[test]
+    fn a_transition_covering_filter_stacks_at_rest() {
+        let covering = |text: &str| {
+            let mut s = crate::StyleProps::default();
+            s.transition = exact_motion::Transitions::parse(text).unwrap();
+            s.mask.set(StyleId::Transition);
+            motion_stacks(&s)
+        };
+        assert!(covering("filter 1s"));
+        assert!(!covering("color 1s"));
+    }
 
     #[test]
     fn a_sticky_header_over_plain_rows_is_not_lifted_under_them() {

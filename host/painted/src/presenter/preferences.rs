@@ -123,6 +123,7 @@ impl<D: DataSource> Presenter<D> {
         }) {
             eprintln!("exact: page: {error}");
         }
+        self.update_foreground(!hidden);
         true
     }
 
@@ -410,6 +411,16 @@ pub fn scrub_frame_drawn() {
         .partition(|l| now.duration_since(l.4) > FRAME_WAIT);
     write_scrub(&late, Some(None));
     write_scrub(&fresh, Some(Some(turned)));
+}
+
+/// The app's `setScheme` argument as what a `light-dark()` colour resolves to
+/// here (LLP 1034 D2): dark, light, or, for `system`, no override.
+pub(crate) fn app_dark(scheme: Option<&exact_plan::Value>) -> Option<bool> {
+    match scheme.and_then(exact_plan::Value::as_str) {
+        Some("dark") => Some(true),
+        Some("light") => Some(false),
+        _ => None,
+    }
 }
 
 #[cfg(test)]

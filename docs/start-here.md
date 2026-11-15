@@ -13,8 +13,8 @@ The only required reading; the rest is lookup. A website reads [Start here: a we
    colour or size names a role (`-exact-secondary-label`, `font="-exact-footnote"`; `bun
    <exact2>/scripts/no-tells.mjs .` lists literals). Leave the accent unsaid: it is the
    platform's blue, and a filled button keeps its white label (a pale accent under
-   it is warned, `tamber-contrast`). A brand is an `app.tamber`; a colour names a role or
-   one of its tokens, `color="ink"` or `color="var(--ink)"` (`recipes/tamber.md`). A card
+   it is warned, `forma-contrast`). A brand is an `app.forma`; a colour names a role or
+   one of its tokens, `color="ink"` or `color="var(--ink)"` (`recipes/forma.md`). A card
    is `-exact-secondary-background` (`-exact-secondary-grouped-background` on a grouped page).
 3. **Design your content:** a focal point (big type, a fill, a shape), a hierarchy in
    rows, an empty state with its next step in the list's place. A labelled entry or settings
@@ -83,6 +83,17 @@ when its source signatures change. `test` and `agent` build and refresh it on
 Rust/TypeScript apps with a composer (such as Fieldnotes), which also refresh the
 editor copy before type-checking. `contract build` reports a refresh on stderr.
 `contract types --check app.contract` checks freshness without writing.
+Committed launcher, schema and guide paths are relative to the app. An app first
+created inside a linked git worktree keeps its default checkout path
+relative to the app's location in the main worktree, including when that folder does
+not exist there yet. Its launcher works before and after the app is merged.
+`app.json`'s `$schema`, guide paths, Snapback readme and game-notes paths use that
+same main-tree location, so scaffolding and updates write identical committed
+bytes in either tree. An editor opened inside a worktree at a different depth
+may not resolve those paths; open the main-tree file or use `bun exact.mjs docs`
+for the guides. The launcher's Git fallback finds the checkout for running from
+the nested worktree. `update` refreshes the paths when the checkout moves.
+
 `bun exact.mjs update` refreshes scaffold files and absolute `@exact/*` package paths for the
 checkout it runs from. It reports when `exact.mjs`'s default checkout path changes, including in a linked worktree. Run `bun install` when it reports changed package paths. An older Android
 scaffold moves `canvas_jni!` to `exact-painted`; an authored dependency form gets the manual
@@ -184,11 +195,13 @@ For EAS Build, use [iOS](recipes/eas-ios.md) or [Android](recipes/eas-android.md
 |a release build for a phone: the commands, signing, where the artifact lands|`mobile-build`|
 |a metronome, drum machine, sequencer or MIDI app: sound, MIDI, a transport (built in; write no native audio module)|`sequencer`; ["Sound, MIDI and media"](contract-for-agents.md#sound-midi-and-media); `apps/metronome`|
 |transitions, keyframes, exit and layout animation|`motion`|
-|brand colours, light and dark, icon tokens|`theme`, `tamber`|
+|brand colours, light and dark, icon tokens|`theme`, `forma`|
 |an icon: in a button, a tab, beside a label (a symbol, never a character such as ▦ ☏ ★ or an emoji)|`symbols`|
 |a module in Swift that `app.ts` asks (a resource that reads `native.available` or calls `native.call` keeps its answer across launches); a value a launch gives is a setting, not a module (`contract vocab env`)|`native-module`|
-|a canvas drawn in Rust on the GPU (a `Surface`); Rust of the app's own, in its own Cargo workspace|`gpu-module`|
+|a canvas drawn in Rust on the GPU (a `Surface`): a crate beside app.json, in a workspace exact2 generates|`gpu-module`|
+|data answered in Rust instead of `app.ts` (`exact new --rust`, app.json's `rust.data`)|`bun exact.mjs docs Rust data sources`|
 |app.json keys, `assets/`, the `modules` folder|`app-json`|
+|labels in Arabic, Hebrew, Persian or Urdu, laid out right to left; a second language|`rtl`|
 |an action Siri, Shortcuts or a browser's agent calls (a `tool` line and its face)|`tools`|
 |a phone manifest: orientation, appearance, HTTP, a public setting|`phone-manifest`|
 |a section of the long guides, whole, by its heading|`bun exact.mjs docs <heading words>`|
@@ -314,8 +327,8 @@ a shaped domain refusal for its action to handle
 ([fetch with loading, error and retry](recipes/fetch-loading-error.md)). The clock and
 randomness are refused there; time comes as an argument. A date from a value
 works (`new Date(ms)`, `Intl.DateTimeFormat`). `console.log` appears in the agent’s
-`logs`, its last lines in a failed test’s notes, and the device’s log, in a release build too
-(Android: a development build only), where anyone with the device can read it: keep tokens and personal data out of it. It imports its own `.ts`/`.js` and pure-JS npm
+`logs`, its last lines in a failed test’s notes, and the device’s log, in a release build too,
+where anyone with the device can read it: keep tokens and personal data out of it. It imports its own `.ts`/`.js` and pure-JS npm
 packages (ESM or CommonJS, a `browser` build first); one needing Node (`fs`, `Buffer`), the DOM or a native
 addon is refused by name. Type an untyped one with `@types/<name>` or `declare module '<name>';` in a `.d.ts`.
 

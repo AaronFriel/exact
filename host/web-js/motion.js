@@ -28,8 +28,8 @@ export async function engine({ clock, wall, views, viewId, hooks, say, inflight 
       const [kind, id, p] = [f[i], f[i + 1], PROPS[f[i + 2]]];
       if (kind === 2) { out.push({ op: 'animate', id, property: p, delay: 0, duration: 0, values: [] }); i += 3; continue; }
       const k = f[i + 6], values = [];
-      // Four numbers a frame: translate's lengths, then its percentages.
-      for (let j = 0, at = i + 7; j < k; j++, at += 4) values.push(p === 'translate' ? (f[at + 2] || f[at + 3] ? [f[at], f[at + 1], f[at + 2], f[at + 3]] : [f[at], f[at + 1]]) : f[at]);
+      // Four numbers per frame: translation lengths/percentages or rotation angle/axis.
+      for (let j = 0, at = i + 7; j < k; j++, at += 4) values.push(p === 'translate' ? (f[at + 2] || f[at + 3] ? [f[at], f[at + 1], f[at + 2], f[at + 3]] : [f[at], f[at + 1]]) : p === 'rotate' ? [f[at], f[at + 1], f[at + 2], f[at + 3]] : f[at]);
       out.push({ op: 'animate', id, property: p, at: f[i + 3] * 1000, delay: f[i + 4] * 1000, duration: f[i + 5] * 1000, values });
       i += 7 + 4 * k;
     }
@@ -42,7 +42,7 @@ export async function engine({ clock, wall, views, viewId, hooks, say, inflight 
   const ended = serial => { const view = holds.get(serial); holds.delete(serial); if (!held(view)) authored.delete(view); };
   // `[translate, scale, rotate, opacity, transition, velocity]` as the plan binds them:
   // translate is one or two lengths in px or percentages of the box (kernel
-  // `space::translate`), rotate degrees; a value the row refuses is the
+  // `space::translate`), rotate angle and axis; a value the row refuses is the
   // row's initial one.
   const num = (v, d) => { const n = typeof v === 'number' ? v : parseFloat(v); return Number.isFinite(n) ? n : d; };
   const observe = (id, [tr, scale, rotate, opacity, transition, velocity]) => {
@@ -57,7 +57,7 @@ export async function engine({ clock, wall, views, viewId, hooks, say, inflight 
     const cleared = velocity == null || typeof velocity === 'string' && (!velocity.trim() || velocity.trim().toLowerCase() === 'unset');
     if (!cleared && !supplied && n.velocity !== velocity) say(`motion: -exact-translate-velocity ${JSON.stringify(velocity)} refused`);
     n.velocity = velocity;
-    if (!w.m_observe(id, x, y, px, py, num(scale, 1), num(rotate, 0), num(opacity, 1), supplied ? 1 : 0, supplied ? speed[0] : 0, supplied ? speed[1] : 0, now() / 1000)) say(`motion: targets for #${id} refused`);
+    if (!w.m_observe(id, x, y, px, py, num(scale, 1), put(String(rotate ?? 0)), num(opacity, 1), supplied ? 1 : 0, supplied ? speed[0] : 0, supplied ? speed[1] : 0, now() / 1000)) say(`motion: targets for #${id} refused`);
   };
   const ops = list => ({ ops: list, timers: false });
   const applyBatch = batch => {

@@ -49,6 +49,8 @@ const MAX_HEADERS: usize = 64 << 10;
 
 type Work = Box<dyn FnOnce() -> Outcome + Send>;
 type Wake = Box<dyn Fn() + Send + Sync>;
+#[cfg(test)]
+type ScheduledRetry = (u32, u64, String);
 struct Job {
     ticket: u64,
     request: Request,
@@ -59,6 +61,8 @@ struct Job {
     charge: usize,
     /// Request buffers in the backlog, excluding a preload waiter's reply reservation.
     waiting_charge: usize,
+    /// A hold's end must not let later hits take this read's room (LLP 1162.000 D1).
+    waited_for_preload: bool,
     /// The ceiling: request buffers plus the response allowance.
     limit: usize,
     /// The runner no longer wants its reply (`Core::forget`).
@@ -92,7 +96,7 @@ struct Running {
     read: bool,
     overlap: bool,
     class: RequestClass,
-    /// The asynchronous core's (LLP 1120 D3, D5); workers leave them be.
+    /// The asynchronous core's lifecycle (LLP 1120 D3, D5).
     /// The outcome is published.
     terminal: bool,
     /// Physical work still running: hops on the wire, a reader.
@@ -110,6 +114,7 @@ struct Running {
     cache_exchange: Option<cache::Exchange>,
     cache_barrier: bool,
     cache_replacing: Option<cache::Key>,
+    refresh: Option<preload::Refresh>,
     invalidates: Option<(String, bool)>,
 }
 struct Completed {
@@ -228,6 +233,9 @@ struct Shared {
     /// Long polls waiting to ask again, by stream ticket (LLP 1016.000 D8;
     /// `longpoll.rs`): the attempt, when it asks, and what failed.
     retrying: Mutex<std::collections::HashMap<u64, (u32, std::time::Instant, String)>>,
+    fetch_fault: Mutex<Option<exact_runner::runner::faults::FetchFault>>,
+    #[cfg(test)]
+    retry_scheduled: Mutex<Option<std::sync::mpsc::Sender<ScheduledRetry>>>,
     /// What upload streams hold in memory (LLP 1016.000 D10; `stream.rs`).
     uploads: stream::Uploads,
     /// This, for a path that frees room uploads wait for holding only a
@@ -433,6 +441,9 @@ impl Core {
             before_stream_release: Mutex::default(),
             sockets: Mutex::default(),
             retrying: Mutex::default(),
+            fetch_fault: Mutex::default(),
+            #[cfg(test)]
+            retry_scheduled: Mutex::default(),
             uploads: stream::Uploads::default(),
             me: me.clone(),
             processes: process::Processes::new(),
@@ -701,7 +712,7 @@ impl Core {
             let mut state = self.shared.state.lock().unwrap();
             state.retired = true;
             if let Some(cache) = state.cache.as_mut() {
-                preload::cancel_all(cache);
+                preload::close(cache);
             }
             state.cache = None;
             for run in &mut state.running {
@@ -1376,7 +1387,11 @@ fn execute(
     } else {
         result
     }
-    .and_then(|r| body_to::receive(r, staged, limit, within));
+    .and_then(|r| {
+        body_to::receive(r, staged, limit, within, || {
+            body_to::admit(cache_job.0, cache_job.1, abort, deadline.as_ref())
+        })
+    });
     match result {
         Ok(r) => {
             let mut response = Response {

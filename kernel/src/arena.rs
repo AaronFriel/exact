@@ -102,6 +102,7 @@ pub struct NodeArena {
     /// host says and its next commit applies.
     pub(crate) bold_text: bool,
     pub(crate) bold_text_next: Option<bool>,
+    pub(crate) natural_text: bool, // `Kernel::set_natural_text` (LLP 1060.000 D3)
     /// Which font stacks are the system's, by id, as the plan says.
     pub(crate) system_stacks: Vec<bool>,
     /// Scrollable overflow from the last layout: the content's extent in the
@@ -198,6 +199,7 @@ impl Clone for NodeArena {
             display_scale_next: self.display_scale_next,
             bold_text: self.bold_text,
             bold_text_next: self.bold_text_next,
+            natural_text: self.natural_text,
             system_stacks: self.system_stacks.clone(),
             contents: self.contents.clone(),
             insets: self.insets.clone(),
@@ -657,7 +659,9 @@ impl NodeArena {
                 self.copy_inherited(slot, rows, take)
             });
         paragraph.markup = self.markup(slot);
-        // Bold Text, as its runs are (LLP 1115.000 D12.3).
+        paragraph.natural = crate::text::natural::is_natural(self, slot)
+            && paragraph.markup != crate::text::Markup::Markdown; // its source is not what it shows
+                                                                  // Bold Text, as its runs are (LLP 1115.000 D12.3).
         self.embolden(slot, &mut paragraph.strut);
         if scale != 1.0 {
             paragraph.strut = paragraph.strut.scaled(scale);

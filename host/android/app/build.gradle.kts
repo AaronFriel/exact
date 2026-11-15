@@ -93,6 +93,9 @@ android {
     // The icon and banner agent-android.mjs makes from the manifest's `icons` (LLP 1163 D6).
     sourceSets["main"].res.directories.add(out.resolve("icons/res").path)
     sourceSets["main"].res.directories.add(out.resolve("launch/res").path)
+    // The notification channels, their strings and sounds, and the small icon, for an app that grants notifications
+    // (agent-android.mjs `androidNotificationResources`, LLP 1133.004.000 D1, D3).
+    sourceSets["main"].res.directories.add(out.resolve("notify/res").path)
     sourceSets["main"].kotlin.directories.add(if (compose) "src/compose/java" else "src/nocompose/java")
     // The app's Kotlin hatches and module roster (LLP 1115.001.000 D4) in its `modules/android`; -PmodulesDir lets a
     // component fixture compile the app's actual provider without copying its Kotlin.
@@ -107,7 +110,7 @@ android {
     // app's activity, scripts/share-target.mjs, LLP 1133.024 D5), merged into the shell's manifest from the release source set's: an app that grants no device asks
     // for none, and one that uses no such package runs nothing beyond the shell's activity.
     val fragment = providers.gradleProperty("manifestFragment").orNull?.let { file(it).readText() }?.takeIf { it.isNotBlank() }
-    // The hardware a grant line uses where present (`-PandroidFeatures`, LLP 1133.037 D17), never required.
+    // Hardware and software features from grant lines (`-PandroidFeatures`, LLP 1133.022 D18, LLP 1133.037 D17).
     val lineFeatures = providers.gradleProperty("androidFeatures").orNull?.split(',')?.filter { it.isNotBlank() }.orEmpty()
     (providers.gradleProperty("permissions").orNull?.split(',')?.filter { it.isNotEmpty() } ?: emptyList())
         .takeIf { it.isNotEmpty() || fragment != null || lineFeatures.isNotEmpty() }?.let { names ->
@@ -115,11 +118,17 @@ android {
         permissions.parentFile.mkdirs()
         // CAMERA implies the back camera and autofocus as required features, which would filter the app from a
         // device without them; each is declared not required (LLP 1133.008 D6).
-        val features = (if ("android.permission.CAMERA" in names) listOf("camera.any", "camera", "camera.autofocus", "camera.flash") else emptyList()) + lineFeatures
-        // A permission a later API retired names its last level (`<name> maxSdkVersion=32`, LLP 1133.019 D4).
+        val features = (if ("android.permission.CAMERA" in names) listOf("camera.any", "camera", "camera.autofocus", "camera.flash").map { "android.hardware.$it required=false" } else emptyList()) + lineFeatures
+        // A retired permission is needed only when the app runs on an API that still uses it.
         val permission = { line: String ->
-            val (name, last) = line.split(' ').let { it[0] to it.getOrNull(1)?.removePrefix("maxSdkVersion=") }
-            "    <uses-permission android:name=\"$name\"${last?.let { " android:maxSdkVersion=\"$it\"" } ?: ""} />\n"
+            val parts = line.split(' ')
+            val attributes = parts.drop(1).joinToString("") {
+                val (key, value) = it.split('=', limit = 2)
+                require(key == "maxSdkVersion") { "Unknown permission attribute: $key" }
+                " android:$key=\"$value\""
+            }
+            val lastApi = parts.drop(1).firstOrNull { it.startsWith("maxSdkVersion=") }?.substringAfter('=')?.toInt()
+            if (lastApi != null && minimumApi > lastApi) "" else "    <uses-permission android:name=\"${parts[0]}\"$attributes />\n"
         }
         // The reader's foreground services the lines declare (`-PforegroundServices`, `{kind: {purpose, types}}`, LLP
         // 1133.033 D2), each with every type its lines give it: a type the manifest lacks throws at `startForeground`.
@@ -142,7 +151,11 @@ android {
         }
         permissions.writeText("<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\" xmlns:tools=\"http://schemas.android.com/tools\">\n" +
             names.joinToString("") { permission(it) } +
-            features.joinToString("") { "    <uses-feature android:name=\"android.hardware.$it\" android:required=\"false\" />\n" } +
+            features.joinToString("") {
+                val parts = it.split(' ')
+                require(parts.size == 1 || (parts.size == 2 && parts[1] == "required=false")) { "Invalid feature: $it" }
+                "    <uses-feature android:name=\"${parts[0]}\" android:required=\"${parts.size == 1}\" />\n"
+            } +
             manifestChildren(fragment, services.entries.joinToString("") { service(it.key, it.value) }) + "</manifest>\n")
         sourceSets["release"].manifest.srcFile(permissions)
     }
@@ -219,8 +232,8 @@ android {
         } + "</symbols>\n")
         sourceSets["main"].res.directories.add(res.path)
     }
-    // The token names `bun exact.mjs tamber gen kotlin` wrote (LLP 1121 D12; never committed).
-    appDir.resolve(".exact/tamber/TamberTokens.kt").takeIf { it.isFile }?.let { sourceSets["main"].kotlin.directories.add(it.parent) }
+    // The token names `bun exact.mjs forma gen kotlin` wrote (LLP 1121 D12; never committed).
+    appDir.resolve(".exact/forma/FormaTokens.kt").takeIf { it.isFile }?.let { sourceSets["main"].kotlin.directories.add(it.parent) }
     if (app == "shelf") sourceSets["test"].kotlin.directories.addAll(listOf(
         "../../../packages/quick-actions/android", "../../../packages/quick-actions/test/android",
     ))

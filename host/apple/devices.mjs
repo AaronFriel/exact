@@ -230,6 +230,13 @@ export const simulatorChildEnv = (env = process.env) =>
  * (LLP 1153.002 D2). */
 export const simulatorLaunch = (extra = {}, env = process.env) => ({ ...simulatorChildEnv(env), ...forwardedEnv(env), ...extra });
 
+/** The installed app's bundle or data directory, outside the checkout's macOS privacy protections. */
+export function simulatorAppContainer(udid, id, kind, run = read) {
+  const r = run('xcrun', ['simctl', 'get_app_container', udid, id, kind]);
+  if (r.status !== 0 || !r.stdout?.trim()) throw new Error(`simctl get_app_container: ${r.stderr || 'no container returned'}`);
+  return r.stdout.trim();
+}
+
 /** A page capture (`path`) whose area holds glass or a blur, its pixels then the display's there too: the app names
  *  that area only then (`r.materials`: x, y, width and height in window points), and `window(p)` takes a window
  *  capture into `p` through `withDisplay`. Where that capture's pixels are the display's, the page's area is cut from

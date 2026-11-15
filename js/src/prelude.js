@@ -43,6 +43,10 @@
     function (line) {
       if (global.console) global.console.error(line);
     };
+  // An uncancelled error event's line for the platform's log alone (console.js, LLP 1175 D5); a browser realm's
+  // console prints its own.
+  var uncaught = global.__exact_uncaught;
+  delete global.__exact_uncaught;
   // The runtime's own journal line (LLP 1097 D8): a failed storage
   // operation, an unhandled rejection. Natively it is the runner's journal
   // (`logs`) as it is; a realm without that door writes it to its console.
@@ -79,23 +83,38 @@
       return "(an error that cannot be read)";
     }
   }
-  // An answer's own timers, on the runner's clock (op 21), and the timer
-  // Hermes's rejection tracker asks for (time.js `timers`). Every
-  // unhandled rejection in the module reaches the journal, as a page's
-  // `unhandledrejection` reaches its console (LLP 1097 D8).
-  // The tracker's report is the timer it arms from inside its rejection
-  // hook (Hermes's `Promise._C`), told by that place, not by its name alone.
-  var reporting = 0,
-    hooked = false;
+  // The global's error events (errors.js, LLP 1175), natively from Ibex's events binding, and Hermes's rejection
+  // tracker: every unhandled rejection in the module reaches the journal, as a page's reaches its console (LLP 1097
+  // D8). A browser realm has its own events.
+  var errors = global.__exact_errors({
+    hooks: global.__exact_ibex2_events_hooks,
+    tracker: tracker,
+    journal: journal,
+    runtimeLine: runtimeLine,
+    uncaught: uncaught,
+    errorText: errorText,
+    leftOpen: function () {
+      leftOpen();
+    },
+    swap: function (call) {
+      var before = currentCall;
+      currentCall = call;
+      return before;
+    },
+  });
+  delete global.__exact_errors;
+  delete global.__exact_ibex2_events_hooks;
+  // The shim takes it at hardening (shim.cc): what the module's evaluation threw is reported before the load fails.
+  if (tracker) global.__exact_evaluation_threw = errors.evaluationThrew;
+  // An answer's own timers, on the runner's clock (op 21), and the timer the tracker's report asks for (time.js
+  // `timers`, `errors.report`).
   var timers = time.timers(
     timerOwner,
     function () {
       return host(21, "", "");
     },
-    journal,
-    function (callback) {
-      return (reporting > 0 || !hooked) && callback.name === "bound onUnhandled";
-    },
+    errors.report,
+    errors.raise,
     function (signal) {
       try {
         return abortHooks ? abortHooks.own(signal).sources : null;
@@ -104,27 +123,10 @@
       }
     }
   );
-  if (tracker && typeof tracker.enablePromiseRejectionTracker === "function") {
-    tracker.enablePromiseRejectionTracker({
-      allRejections: true,
-      onUnhandled: function (id, error) {
-        journal("data: unhandled rejection: " + errorText(error));
-        leftOpen();
-      },
-      onHandled: function () {},
-    });
-    var reject = global.Promise._C;
-    if (typeof reject === "function") {
-      hooked = true;
-      global.Promise._C = function (promise, error) {
-        reporting++;
-        try {
-          return reject.call(this, promise, error);
-        } finally {
-          reporting--;
-        }
-      };
-    }
+  // The checkpoint after a turn's microtasks: the tracker's reports, then the rejections handled since (D2).
+  function checkpoint() {
+    var ran = timers.checkpoint();
+    return errors.checkpoint() || ran;
   }
   // A browser realm (the wasm host's module realm) reports its own rejections (module-glue.js).
   if (!tracker && typeof global.addEventListener === "function")
@@ -202,6 +204,10 @@
   var pending = new Map(),
     // the answer a fetch belongs to
     currentCall = null,
+    // the id of the answer whose turn the engine runs (an id, so that no ended call's value is kept alive by it), and
+    // whether the turn is a module turn delivering a report's reply (LLP 1175 D3)
+    turnId = 0,
+    reportTurn = false,
     // a socket's mapper answering a frame (D7)
     mapping = null,
     // any mapper call
@@ -399,8 +405,23 @@
     Response: Response,
     FetchError: FetchError,
     conflict: SOCKET_AND_FETCH,
+    errors: errors,
     current: function () {
       return currentCall;
+    },
+    // Whether `call` is the answer whose turn the engine runs now (`__exact_call`, `__exact_turn`).
+    inTurn: function (call) {
+      return call !== null && call.id === turnId && turnId !== 0;
+    },
+    moving: function () {
+      return moving;
+    },
+    initializing: function () {
+      return initializing;
+    },
+    // A module turn that delivers a report's reply (LLP 1175 D3).
+    afterReport: function () {
+      return reportTurn;
     },
     mapping: function () {
       return mapping;
@@ -741,6 +762,7 @@
     };
     var result;
     currentCall = call;
+    turnId = call.id;
     work.setTurn(call);
     calls.set(call.id, call);
     try {
@@ -896,7 +918,7 @@
   global.__exact_ready = global.__exact_waiting_answers(calls, pending, work, headOwner);
   delete global.__exact_waiting_answers;
   global.__exact_settle = function (id, final) {
-    timers.checkpoint();
+    checkpoint();
     currentCall = null;
     var call = calls.get(Number(id));
     if (call) call.ran = false;
@@ -1132,7 +1154,7 @@
   // background's, and what landed and failed.
   global.__exact_background = function () {
     // Reporting can read an app's error getters after the last drain (LLP 1162 D3).
-    if (timers.checkpoint()) readyAll();
+    if (checkpoint()) readyAll();
     currentCall = null;
     return JSON.stringify({
       head: headOwner() === background,
@@ -1299,6 +1321,8 @@
   global.__exact_turn = function (id) {
     var t = id === "module" ? work.MODULE : id ? calls.get(Number(id)) || null : null;
     currentCall = t === work.MODULE ? null : t;
+    turnId = currentCall ? currentCall.id : 0;
+    reportTurn = false;
     work.setTurn(t);
   };
   global.__exact_module_discarded = function () {
@@ -1342,11 +1366,19 @@
     currentCall = p.module ? null : p.call;
     // an adopted fetch's: its let-go call's steps run as it (the async helper), a plain reaction as no answer
     if (p.module) work.landed();
+    // A report's: its listener's continuation reads the reply, and its failure is quiet (LLP 1175 D4).
+    if (p.report) {
+      fetches.reportLanded();
+      reportTurn = true;
+    }
     // Its `AbortSignal.timeout`'s deadline passed on the host: the signal aborts.
     if (o.failed && o.failed.kind === "Timeout" && p.timed) timers.expire(p.signal);
     // A reply delivered after the signal aborts still rejects with that signal's reason.
     if (p.signal && p.signal.aborted) p.reject(p.signal.reason);
-    else if (o.failed) p.reject(new FetchError(launchRefusal(o.failed, p.url)));
+    else if (o.failed) {
+      var failure = new FetchError(launchRefusal(o.failed, p.url));
+      p.reject(p.report ? errors.quietReason(failure) : failure);
+    }
     else p.resolve(hostReply(o.response, p.bodyTo, p.head));
   };
 })(globalThis);

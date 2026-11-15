@@ -44,7 +44,8 @@ pub(crate) fn csp(grants: &str, dist: &Path) -> String {
     // that one; and the script a boot document's page removes it with (LLP
     // 1048.005).
     let mut scripts = format!(
-        "'self' 'wasm-unsafe-eval' 'sha256-{}' 'sha256-{}' 'sha256-{}' 'sha256-{}'",
+        "'self' 'wasm-unsafe-eval' 'sha256-{}' 'sha256-{}' 'sha256-{}' 'sha256-{}' 'sha256-{}'",
+        hash(include_str!("../../web/scheme.js").trim_end().as_bytes()),
         hash(crate::page::capture().as_bytes()),
         hash(crate::page::capture_js().as_bytes()),
         hash(crate::page::scroll_document_js().as_bytes()),

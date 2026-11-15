@@ -8,9 +8,7 @@
 // Animation cannot say still draws through `draw(_:)`: borders that differ by
 // side in colour or width (unless square and one colour), radii that differ
 // by corner, a radius past half the shorter side, a tinted or unevenly
-// clipped image, a paragraph without a raster, a canvas, a web view, and
-// a capture of a box whose layer paint `cacheDisplay` does not show as the
-// window does (`captureShowsLayerPaint`).
+// clipped image, a paragraph without a raster, a canvas or a web view.
 #if os(macOS)
 import AppKit
 
@@ -148,15 +146,9 @@ extension NodeView {
         return p
     }
 
-    /// Whether a capture (`cacheDisplay`, which composites the layer tree)
-    /// shows this box's layer paint as the window does, so `draw(_:)` must
-    /// not paint the box again: a translucent fill painted twice came out
-    /// doubled (spreadsheet F18: a 12 % selection captured as 20 %). Its
-    /// renderer ignores a corner mask, so a box rounded at some corners only
-    /// is drawn, as are a gradient and a box an inset shadow paints over
-    /// (its fill sublayers hidden, `Capture.hideBoxFills`), and so is an
-    /// image's rounded fill: a capture draws the picture in `draw(_:)`, under
-    /// every sublayer, so a fill sublayer left showing covered it (podcast F7).
+    /// Whether direct offscreen drawing also includes the box's layer paint.
+    /// Gradients, inset shadows and drawn images need their fill drawn with
+    /// them so their ink stays above it.
     var captureShowsLayerPaint: Bool {
         guard layerBoxEligible, hasBoxPaint, insetCaster == nil, style["background_image"] == nil, !(capturesPixels && boxFill != nil) else { return false }
         let p = boxPlan
@@ -339,8 +331,7 @@ extension NodeView {
         return (shown, unit, radius, cornerMask(radii))
     }
 
-    /// An image whose pixels are a sublayer the capture hides, so that
-    /// `draw(_:)` paints them into the shot (`Capture.hideBoxFills`).
+    /// An image whose pixels normally come from a sublayer.
     var capturesPixels: Bool { kind == "image" && !hasSymbolLeaf && raster?.image != nil && imageLayer != nil }
 
     /// The image's pixels onto a sublayer, or none (`draw(_:)` paints them).

@@ -174,6 +174,10 @@ test('the relaunch keeps a test\'s pinned date, zone, locale and seed', () => {
   const dark = { ...defaults, media: { 'prefers-color-scheme': 'dark', 'prefers-reduced-motion': 'reduce' } };
   assert.equal(pinnedLaunch(test(dark), defaults), true);
   assert.deepEqual(relaunchFacts(test(dark)).media, dark.media);
+  assert.equal(pinnedLaunch(test({ ...defaults, permissions: {} }), defaults), false);
+  const allowed = { ...defaults, permissions: { 'permission.notifications': 'granted' } };
+  assert.equal(pinnedLaunch(test(allowed), defaults), true);
+  assert.deepEqual(relaunchFacts(test(allowed)).permissions, allowed.permissions);
 
   assert.equal(pinnedLaunch({ name: 'saves', end: { keep: true } }, defaults), false); // a test run without launch facts
 
@@ -216,9 +220,9 @@ test('the compiler\'s warnings: a group before the tests, by rule as findings ar
   assert.equal(many.exit, 0);
 });
 
-// `tamber-unreachable` names where the platform's own look stands: said, never counted (LLP 1121 D9, 2026-10-30).
+// `forma-unreachable` names where the platform's own look stands: said, never counted (LLP 1121 D9, 2026-10-30).
 test('a compiler warning that is information is said apart and not counted', () => {
-  const note = 'app.contract:32:62 warning [tamber-unreachable] accent-color on macOS switches: NSSwitch draws the system accent (the first at line 34; LLP 1121 D9)';
+  const note = 'app.contract:32:62 warning [forma-unreachable] accent-color on macOS switches: NSSwitch draws the system accent (the first at line 34; LLP 1121 D9)';
   const r = report({ host: 'web', built: null, compiler: [note], tested: { passed: 2, failed: 0, results: [] }, checks: runs(() => []), shots: [], ms: 4000 });
   assert.deepEqual(r.lines.slice(0, 2), ['compiler: 1 note, not counted (the platform\'s own look stands there; LLP 1121 D9)', `  ${note}`]);
   assert.equal(r.lines.at(-1), 'verify: clean in 4.0 s');
@@ -915,6 +919,61 @@ test('the largest text size: its findings once each with the screens they were o
   assert.equal(both.lines.at(-1), 'verify: 4 problems (1 finding, 3 at the largest text size; the tests passed) in 2.0 s');
   const web = report({ host: 'web', built: null, tested: { passed: 1, failed: 0, results: [] }, checks: [], large: [{ screen: 'first screen', size: [390, 844], rootFontSize: 53, lines: [] }], shots: [], ms: 2000 });
   assert.equal(web.lines[1], 'largest text size (root font size 53 px at 390x844, iOS\'s body at its largest), 1 screen: nothing spills');
+});
+
+test('the largest text pass leaves native menu substitutes out of page scrolling', async () => {
+  const { largestText } = await import('./verify.mjs');
+  const revealed = [];
+  const nodes = [
+    { id: 1, type: 'View', props: { testId: 'page' } },
+    { id: 9, type: 'View', props: { testId: 'menu' }, children: [10] },
+    { id: 10, type: 'Button', props: { testId: 'menu-row' } },
+    { id: 11, type: 'Text', props: { testId: 'below-fold' } },
+  ];
+  const observation = { viewport: { w: 390, h: 844 }, items: [{ id: 1 }], advice: [{ kind: 'menu', id: 9 }] };
+  const s = { host: 'web', resize: async () => {}, prefer: async () => {}, clock: async () => {},
+    op: async req => req.op === 'tree' ? { nodes } : observation,
+    carrier: { reveal: async id => { revealed.push(id); return { scrolled: false }; } } };
+  const result = await largestText(s, 'menu open');
+  assert.equal(result.error, undefined);
+  assert.deepEqual(revealed, [11], 'only unmeasured page content is revealed');
+});
+
+test('check judges and saves the capture taken with menu substitutes hidden', async () => {
+  const { checkOp } = await import('./agent-check.mjs');
+  const { encodePng, decodePng } = await import('./png.mjs');
+  const dir = mkdtempSync(resolve(tmpdir(), 'check-menu-'));
+  try {
+    const path = resolve(dir, 'check.png');
+    const data = Buffer.alloc(200 * 200 * 4, 0);
+    for (let i = 3; i < data.length; i += 4) data[i] = 255;
+    const png = encodePng({ width: 200, height: 200, data });
+    const obs = { viewport: { w: 200, h: 200 }, scheme: 'light', target: 44,
+      capture: { w: 200, h: 200, scale: 1, window: true }, advice: [{ kind: 'menu', id: 9 }],
+      items: [{ id: 2, x: 20, y: 20, w: 60, h: 20, text: 'Page', fg: [255, 255, 255, 1], size: 17, weight: 400 }] };
+    let hidden = false, fail = false, captures = 0;
+    const session = { host: 'ios', op: async req => {
+      if (req.capture) hidden = true;
+      if (req.release) hidden = false;
+      return req.op === 'check' ? obs : { nodes: [] };
+    }, tagged: x => x,
+      carrier: { screenshot: async (path, window) => {
+        captures++;
+        assert.equal(hidden, true, 'substitutes stay hidden throughout carrier composition');
+        assert.equal(window, true, 'the carrier includes materials and the keyboard');
+        if (fail) throw new Error('display failed');
+        writeFileSync(path, png);
+        return { scale: 1 };
+      } } };
+    const result = await checkOp(session, [], { shots: () => path });
+    assert.deepEqual(result.check[0].findings, []);
+    assert.equal(decodePng(readFileSync(path)).data[0], 0, 'the saved evidence is the page that was judged');
+    assert.equal(captures, 1);
+    assert.equal(hidden, false);
+    fail = true;
+    await assert.rejects(checkOp(session), /display failed/);
+    assert.equal(hidden, false, 'a failed carrier capture restores the menu');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
 // Round 21's event-rsvp at the largest text size: a centred caption wider than its column runs past both of its sides and

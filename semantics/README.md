@@ -17,7 +17,8 @@ tested against it, differentially and at random.
 | `Contract/SortFacts.lean` | That order proved: a strict total order on keys, and the sort's answer a permutation, sorted by key, stable (below). Kept apart from `Sort.lean`, which the VM model imports and the extracted VM builds at another Lean. |
 | `Contract/Eval.lean` | Operational semantics of expressions: the interpreter `eval`. |
 | `Contract/Tabs.lean` | Navigation tab eligibility and selection, shared by the flat and component interpreters. |
-| `Contract/Runtime.lean` | Operational semantics of programs: statements, actions as transactions, settlement of derives and resources, rendering with keyed rows, timers (gated by `when` and `key=`), queued sends, events. |
+| `Contract/Settle.lean` | Run-time value checks (`conforms`, `typed`), the data seam (`Oracle`), and settlement of derives and resources. |
+| `Contract/Runtime.lean` | Operational semantics of programs: statements, actions as transactions, rendering with keyed rows, a child's requests and sends, timers (gated by `when` and `key=`), queued sends, events. |
 | `Contract/Big.lean` | The same semantics as inductive big-step relations, with proofs that the interpreter is sound and complete for them and that they are deterministic. |
 | `Contract/Axiomatic.lean` | An axiomatic semantics: a Hoare logic for action bodies, proved sound against the operational semantics, plus the transaction laws (a refused action changes nothing, reads see the pre-state, the last write wins). |
 | `Contract/Invariant.lean` | Invariants of runs: the configurations a program reaches from boot by any events (`Reachable`), and the rules that prove a property of all of them (`Reachable.invariant`, `Reachable.slotIn`). |
@@ -721,7 +722,9 @@ own slots, settlement, actions and timers are `Contract.Runtime`'s
 (`rootProgram`). Each child's `exactViewport()` and `exactPage()` resources
 live in that root environment under `name@Component`, shared by all its
 instances. Reads, status queries and refreshes in the child's frame resolve
-to those resources.
+to those resources. A child's other resources are its instance's own
+requests (`csettleOwned`, as the flat `settleOwned` below), held in the
+instance's store beside its states.
 
 **The expander** (`Contract.Expand`) transcribes inline.rs and its
 submodules step for step, numbering and spelling included: capture-avoiding
@@ -733,6 +736,9 @@ each `children` node under that node's region arms, props and injects captured a
 parameters `@capture:n:i`, tail calls resolved (`p@ck`, `x@bk`, `p@tailk`; the
 `@check:` statement the flat embedding drops is not emitted). Device resources
 are hoisted once per declaration, including unused components, in file order.
+A child's other resources are lifted per use as `x#n`, their arguments and
+gate substituted after its derives, with the use's owner, after the root's
+and the device resources.
 Their value reads and refresh targets are renamed; same-named function calls
 keep their heads. Style names, surface names and positional syntax words stay
 unchanged; only a conditional `class`'s condition and a surface's arguments
@@ -758,8 +764,8 @@ component-level semantics of the unexpanded file against the flat
 semantics of Rust's expansion over the case's script, the oracle the
 runner's transcript. It compares outcomes and configurations, omitting commit
 traces (`ran …`), which the component-level semantics does not emit, and the
-slots the expansion lifts out of children (`slot name#n …`), which it keeps
-per instance. A disagreement is kept under
+slots and resources the expansion lifts out of children (`slot name#n …`,
+`resource name#n …`), which it keeps per instance. A disagreement is kept under
 `target/difftest/expansion/`, its script shrunk.
 
 **What is proved** (no `sorry`, no axioms beyond Lean's own):
@@ -796,7 +802,7 @@ per instance. A disagreement is kept under
 - `ExpandMap.use_prop`, `use_state`: the same of the expander's own
   substitution for a use (`Expand.baseMap`, `withDerives`, which
   `inlineNode` builds it with), for a component whose props, injects,
-  states, actions, derives and device resources have distinct names: a
+  states, actions, derives and resources have distinct names: a
   prop's replacement is its argument substituted at the use site (`map_prop`),
   a state's its lifted name (`map_state`).
 
@@ -995,7 +1001,7 @@ is armed, due at the commit's time, by every commit that stood in which a
 send into the mutation was answered (here every answer is synchronous,
 `armThens`; arming again moves the due time); it runs as its own commit
 at the next advance or `land`, before any timer due at or after its time, ties by
-the mutations' order. A frame task is the runner's virtual display while
+the mutations' order, then an instance's (below, "A child's sends"). A frame task is the runner's virtual display while
 the host presents no frames (the harness never does): due at
 `virtualFrame 0 k = k·1000/60` for k = 1, 2, …; presented frames
 (`Runner::frame`) are not modelled. One advance makes at most 4096 fires,
@@ -1120,6 +1126,81 @@ What it does not carry:
   `current` is false: answers here are synchronous. The runner's tests
   (`contract/cli/tests/it/when.rs`, `current.rs`) and the conformance plan
   (`host/web-js/conformance/gate.contract`) check these.
+
+## A child's requests (LLP 1035.005.004)
+
+A child component's resource other than a device fact is a request each
+instance owns. The expansion lifts it per use as `x#n`
+(`ResourceDecl.owner`: the region arm whose instances own it; `late` for
+a use outside every region). Root settlement holds an owned one idle at
+its type's zero and never reads it. Each arm instance settles its own in
+the render that makes or updates it (`Runtime.settleOwned`), after its
+states, its gate and arguments read with the instance's slots and locals:
+kept while its arguments are those its value answers, asked of the oracle
+otherwise, idle with its value and no arguments while its gate is closed.
+Passes repeat while one changes, so a request whose arguments read
+another's answer asks on that answer, in the same render. The value and
+its arguments (`x@args`) are the instance's row slots; in the instance's
+rows `Env.withOwned` shows the value as a resource, current while it has
+arguments. A refresh in an action forgets the arguments of the request in
+the action's own instance, so the next render asks again
+(`refreshOwned`). A `late` resource is a root resource whose settlement
+waits for the late slots: boot settles once more after `lateSlots` when
+there is one (`settle`'s `lateReady`). Neither side prints a `resource`
+line for an arm-owned row, which has a value per instance.
+
+Rendering stays safe (`render_good`) without typing a request's arguments
+in its arm's scope: `settleOwned` keeps its slots only where each conforms
+to its slot type and refuses the render on an evaluation error. The corpus
+has `resources/owned`.
+
+What it does not carry:
+
+- An answer in flight: every owned answer here is synchronous, so the
+  runner's later render of an immediate answer is this render's next pass.
+  An `else` placeholder (the semantics holds the type's zero, as for a
+  gated root resource) and an owned request with a placeholder row
+  (`x#n#else`) are outside it.
+
+## A child's sends (LLP 1035.005.004 D6)
+
+Each instance of a component that declares a mutation sends it on its own.
+The expansion lifts the mutation per use as `x#n` (`MutationDecl.owner`:
+the region arm whose instances send it; `late` for a use outside every
+region, a root mutation), with its `then`'s arguments (`thenArgs`: the props
+the lifted action captures, read where the use stands). An arm-owned
+mutation's answer is a slot of the instance's row, `none` until it sends
+(`armSlots`); its root slot stays `none`, and neither side prints a `slot`
+line for it. A send from an action lands in the innermost row in force that
+the owner's region made (`sendInstance`, as `applyRowWrites` finds a row
+slot), before the action's writes, as the root's answers do. A send outside
+that row refuses the commit.
+
+The configuration keeps the runner's rows for these sends (`SendRow`): made
+at an instance's first send of a mutation, after the declared mutations'
+rows, in the order made, reusing a row a destroyed instance let go. A commit
+that stood arms each such send's `then` on its row, and the rows of
+instances its render destroyed are let go, their `then`s unarmed
+(`landSends`, `letGo`). An armed row's `then` runs at the next advance or
+`land` (`ownedThen`): in the instance's rows, its arguments read with the
+locals its elements were rendered with. `then`s due at the same time run
+in the order their mutations are declared, the root's before those lifted
+from children, and one mutation's by row (`sendOrder`). A late mutation's `then` reads its
+arguments at the root (`thenCommit`). The corpus has `mutations/owned`.
+
+What it does not carry:
+
+- A send in flight, and leaving before an answer: every answer here is
+  synchronous, so it lands in the sending commit. The runner's
+  (`runner/tests/it/owned_sends.rs`) and the JS target's tests check these.
+- A child's `queue` mutation: its send is outside the semantics (an
+  `unsupported` refusal).
+- A child mutation's `refreshes`: a refreshed request asks again with the
+  same arguments, which the oracle answers as before, as for a root
+  mutation's.
+- The component-level semantics (`Contract.CompSem`) refuses a child's
+  mutations, so `difftest expansion` compares such a file's expansion
+  (`Contract.Expand` lifts them as inline.rs does) but not its meaning.
 
 ## Persisted state (LLP 1116 D5)
 

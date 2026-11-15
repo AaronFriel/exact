@@ -155,8 +155,8 @@ pub fn typescript_exporting(
            function openAuthSession(url: string, options: { callback: string; state: string; ephemeral?: boolean; message?: string }): Promise<string>;\n\
            /** This carrier's auth callback, known before PAR (LLP 1069.006 D2). */\n\
            function authCallback(): string;\n\
-           /** The kept bitmap of the one mounted 2D canvas of `surface`, what its host has drawn, written as a straight-alpha sRGB PNG at device pixels to the `app:/` file `path` under `fs.write` (LLP 1056 D9). Rejects with a DOMException: `NotFoundError` (none mounted), `InvalidStateError` (several, or its size refused), `IndexSizeError` (no bitmap), `QuotaExceededError` (over 8192² px), `NotSupportedError` (`display-p3` or `float16`, or a host that cannot), `NotAllowedError` (the path), `EncodingError`. */\n\
-           function captureCanvas(surface: string, path: string): Promise<{ readonly path: string; readonly width: number; readonly height: number; readonly scale: number }>;\n\
+           /** The kept bitmap of the one mounted 2D canvas of `surface`, what its host has drawn, written as an sRGB image at device pixels to the `app:/` file `path` under `fs.write` (LLP 1056 D9). `type` and `quality` are `toBlob`'s: a straight-alpha PNG by default, `image/jpeg` on every host (over opaque black, `quality` 0 to 1, 0.92 by default), another type where the host's system encoder writes it, else a PNG; `type` in the answer is the one written. Rejects with a DOMException: `NotFoundError` (none mounted), `InvalidStateError` (several, or its size refused), `IndexSizeError` (no bitmap), `QuotaExceededError` (over 8192² px), `NotSupportedError` (`display-p3` or `float16`, or a host that cannot), `NotAllowedError` (the path), `EncodingError`. */\n\
+           function captureCanvas(surface: string, path: string, type?: string, quality?: number): Promise<{ readonly path: string; readonly width: number; readonly height: number; readonly scale: number; readonly type: string }>;\n\
          }\n\
          export interface NativeModule { readonly available: boolean; call(request: Record<string, unknown>): Record<string, unknown>; later(request: Record<string, unknown>): Promise<Record<string, unknown>>; watch(topic: string): void }\n\
          /** A resource-owned WebSocket, for TypeScript on the web JS target and native hosts (LLP 1016.000 D7). Methods are synchronous-mutation-only; refresh or disposal invalidates it. */\n\
@@ -254,7 +254,7 @@ fn language_model_tools(plan: &Plan, out: &mut String) {
 /// `contract`, when it has a design that lists them (LLP 1121 D7).
 pub fn design_exports(contract: &std::path::Path) -> Option<Vec<String>> {
     let path = crate::design_path(contract)?;
-    let design = exact_tamber::parse(&std::fs::read_to_string(path).ok()?).ok()?;
+    let design = exact_forma::parse(&std::fs::read_to_string(path).ok()?).ok()?;
     Some(design.exports?.into_iter().map(|e| e.value).collect())
 }
 
@@ -282,13 +282,13 @@ fn tokens(plan: &Plan, exports: Option<&[String]>, out: &mut String) {
             // A role override by the role's spelling, as a row writes it and
             // the generators name it (`CanvasText`, `-exact-secondary-label`).
             let name = role.unwrap_or(plan.str(row.name));
-            // A component's param is every binding's (D15), as `tamber gen` names it
+            // A component's param is every binding's (D15), as `forma gen` names it
             // (stage 7 D, over A's leaving it out: a data module may return one).
             let exported = name.starts_with(contract_lower::params::PREFIX)
                 || exports.is_none_or(|lines| {
                     lines
                         .iter()
-                        .any(|line| exact_tamber::exports_names(line, name, role))
+                        .any(|line| exact_forma::exports_names(line, name, role))
                 });
             if exported && !name.contains('(') && !names.contains(&name) {
                 names.push(name);
@@ -312,18 +312,31 @@ fn tokens(plan: &Plan, exports: Option<&[String]>, out: &mut String) {
 /// The file's top (LLP 1116.006 D7): what `app.ts` writes, one line each, so a builder reads
 /// these lines and not the declarations below. Each source the data module implements with its
 /// arguments and answer, then each named shape those carry, as TypeScript types; comments only.
+/// The sources app.ts answers beside a Rust data source owning `rust_sources`: the plan's, but those the runner, a
+/// module or a fetch answers.
+fn typescript_rows<'a>(
+    plan: &'a Plan,
+    rust_sources: &'a [String],
+) -> impl Iterator<Item = &'a exact_plan::SourcesRow> {
+    plan.sources.iter().filter(|row| {
+        let name = plan.str(row.name);
+        !exact_plan::runner_owned_source(name)
+            && plan.module_named(name).is_none()
+            && plan.fetch_named(name).is_none()
+            && !rust_sources.iter().any(|source| source == name)
+    })
+}
+
+/// The names of the sources app.ts answers beside a Rust data source owning `rust_sources`: what a mixed host's
+/// composition gives the TypeScript module (`exact_data::Mixed::new`).
+pub fn typescript_sources(plan: &Plan, rust_sources: &[String]) -> Vec<String> {
+    typescript_rows(plan, rust_sources)
+        .map(|row| plan.str(row.name).to_string())
+        .collect()
+}
+
 fn summary(plan: &Plan, rust_sources: &[String], out: &mut String) {
-    let sources: Vec<_> = plan
-        .sources
-        .iter()
-        .filter(|row| {
-            let name = plan.str(row.name);
-            !exact_plan::runner_owned_source(name)
-                && plan.module_named(name).is_none()
-                && plan.fetch_named(name).is_none()
-                && !rust_sources.iter().any(|source| source == name)
-        })
-        .collect();
+    let sources: Vec<_> = typescript_rows(plan, rust_sources).collect();
     if sources.is_empty() {
         return;
     }

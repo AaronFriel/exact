@@ -8,7 +8,7 @@ import UIKit
 /// reach `apply`, as fills and list feedback already skip theirs, and the
 /// next timer is armed for its deadline. A batch with ops, an error, a
 /// control's viewless contents (`controls`, LLP 1069.011 §9), new motion,
-/// moved page facts, diagnostics, a wake lock or word on work the app must finish still applies. The flag crosses the wire
+/// moved page facts, a wake lock or word on work the app must finish still applies; alerts and journal lines are logged. The flag crosses the wire
 /// as `"controls":true`. A published batch that shows nothing new is not outstanding work either.
 final class IdleTickTests: XCTestCase {
     /// A published batch (a reply's, a frame's tick's) that shows nothing new
@@ -144,16 +144,27 @@ final class IdleTickTests: XCTestCase {
         wakelock.wakelock = false
         var finish = Batch(ops: [], timers: true, motion: false, clock: nil, error: nil, timerDueMs: due)
         finish.mustFinish = false
-        var journal = Batch(ops: [], timers: true, motion: false, clock: nil, error: nil, timerDueMs: due)
-        journal.journal = ["late preload"]
-        var alert = Batch(ops: [], timers: true, motion: false, clock: nil, error: nil, timerDueMs: due)
-        alert.alerts = ["preload failed"]
-        for batch in [controls, failed, moving, ops, facts, wakelock, finish, journal, alert] {
+        for batch in [controls, failed, moving, ops, facts, wakelock, finish] {
             XCTAssertFalse(session.changesNothing(batch))
             let count = session.appliedBatches
             session.applyUnlessEmpty(batch)
             XCTAssertEqual(session.appliedBatches, count + 1)
         }
+        // Alerts and journal lines are no change: the skip writes them to the log and takes no pass (LLP 1171 D1).
+        var logged: [[String]] = []
+        session.onSkippedLogForTests = { alerts, journal in logged.append(alerts + journal) }
+        defer { session.onSkippedLogForTests = nil }
+        var journal = Batch(ops: [], timers: true, motion: false, clock: nil, error: nil, timerDueMs: due)
+        journal.journal = ["late preload"]
+        var alert = Batch(ops: [], timers: true, motion: false, clock: nil, error: nil, timerDueMs: due)
+        alert.alerts = ["preload failed"]
+        for batch in [journal, alert] {
+            XCTAssertTrue(session.changesNothing(batch))
+            let count = session.appliedBatches
+            session.applyUnlessEmpty(batch)
+            XCTAssertEqual(session.appliedBatches, count, "no pass")
+        }
+        XCTAssertEqual(logged, [["late preload"], ["preload failed"]], "each logged once")
     }
 
     /// A slice the owner published before an empty scroll batch lands

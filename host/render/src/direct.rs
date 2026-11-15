@@ -266,6 +266,7 @@ pub(crate) fn render_js<D: DataSource + 'static, F: Fn() -> D>(
             activate,
             wake,
             runtime_form: true,
+            chooses_scheme: exact_runner::uses::chooses_scheme(plan),
             drew,
         },
         body,

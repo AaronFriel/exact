@@ -71,6 +71,8 @@ pub use native::NativeKind;
 mod order;
 mod placed;
 mod presented;
+mod shared;
+pub use shared::{SharedElement, SharedState};
 mod region;
 pub mod rows;
 mod shadow;
@@ -320,7 +322,7 @@ type ProjectiveHit = ([f32; 9], Rect4, Option<Rect4>, [[f32; 3]; 2]);
 /// A node's box as painted: its transformed bounding box in viewport
 /// points, the clip it was painted under (viewport points, axis-aligned),
 /// and its scroll offset when it is a scroll container.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct PaintedBox {
     /// The node.
     pub id: ViewId,
@@ -332,6 +334,7 @@ pub struct PaintedBox {
     pub scroll: Option<(f32, f32)>,
     /// Generic pointer eligibility of this painted scene, including inheritance.
     pub(crate) pointer_hit: bool,
+    shape_clips: Vec<shape::HitClip>,
     projective: Option<ProjectiveHit>,
     affine: Option<(Transform, Rect4)>,
     press: f32,
@@ -364,32 +367,6 @@ impl PaintedBox {
             self.rect.1 + self.rect.3 / 2.,
         )
     }
-
-    /// Whether a point (viewport points) is inside the box and its clip.
-    pub fn contains(&self, x: f32, y: f32) -> bool {
-        let inside = |r: Rect4| x >= r.0 && x < r.0 + r.2 && y >= r.1 && y < r.1 + r.3;
-        let (local_x, local_y) = self
-            .projective
-            .map_or((x, y), |(inv, ..)| crate::placement::map(&inv, x, y));
-        let affine_hit = self.affine.is_none_or(|(ts, rect)| {
-            ts.invert().is_some_and(|inverse| {
-                let mut point = tiny_skia::Point::from_xy(local_x, local_y);
-                inverse.map_point(&mut point);
-                point.x >= rect.0
-                    && point.x < rect.0 + rect.2
-                    && point.y >= rect.1
-                    && point.y < rect.1 + rect.3
-            })
-        });
-        affine_hit
-            && inside(self.rect)
-            && self.clip.is_none_or(inside)
-            && self.projective.is_none_or(|(inv, rect, clip, planes)| {
-                let (x, y) = crate::placement::map(&inv, x, y);
-                let inside = |r: Rect4| x >= r.0 && x < r.0 + r.2 && y >= r.1 && y < r.1 + r.3;
-                inside(rect) && clip.is_none_or(inside) && crate::placement::accepts(&planes, x, y)
-            })
-    }
 }
 
 /// What a frame is painted from.
@@ -404,6 +381,8 @@ pub struct Scene<'a> {
     pub presented: &'a dyn Fn(ViewId) -> Presented,
     /// A path's `d` while a transition moves it (LLP 1055.000 D15).
     pub paths: &'a dyn Fn(ViewId) -> Option<exact_motion::PathValue>,
+    /// A `filter` while a transition moves it (LLP 1003.002 D8).
+    pub filters: &'a dyn Fn(ViewId) -> Option<exact_motion::FilterValue>,
     /// Scroll offsets of scroll containers (host state, LLP 1010).
     pub scroll: &'a BTreeMap<ViewId, (f32, f32)>,
     /// The page's scroll offset: the window is a viewport over a document.
@@ -472,6 +451,7 @@ pub struct Painter {
     cpu_ms: Option<f64>,
     /// What a reorder lifts: a row in its list, or a ghost over everything.
     pub(crate) lift: Lift,
+    pub(crate) shared: SharedState,
     // Accepted owners retain their paragraph leases while a subsequent backend frame fails.
     accepted_text: BTreeMap<exact_kernel::NodeKey, Rc<Paragraph>>,
     pub(crate) field_text: HashMap<ViewId, Rc<field::PaintedField>>,
@@ -567,8 +547,11 @@ impl Painter {
 
     pub(crate) fn replaced(&mut self) {
         self.native_session = native::new_session();
-        // A fresh kernel can reuse both epochs and node keys.
+        // A fresh kernel can reuse both epochs and node keys: a row kept by
+        // key would replay the old tree's drawing.
         self.paint_epoch = None;
+        self.discard_rows();
+        self.shared = SharedState::default();
         self.svg_warned.clear();
         // The old tree's presses: its view ids are another tree's now.
         self.ripples.clear();
@@ -595,6 +578,7 @@ impl Painter {
             ranks: Rc::default(),
             accepted_text: BTreeMap::new(),
             lift: Lift::default(),
+            shared: SharedState::default(),
             region_picture: None,
             region_frame: None,
             damage: Default::default(),
@@ -839,12 +823,15 @@ impl Painter {
             self.svg_warned
                 .retain(|key| scene.kernel.node_by_key(*key).is_some());
             self.refresh_ranks(scene.kernel);
+            self.order_shared(scene);
             self.paint_epoch = Some(scene.kernel.epoch());
             #[cfg(test)]
             {
                 self.rank_passes += 1;
             }
         }
+        self.drop_unrendered_flights(scene);
+        self.backend.shared_frame(&self.shared);
         let mut walk = Walk {
             scene,
             boxes: Vec::with_capacity(self.boxes_hint),
@@ -917,7 +904,7 @@ impl Painter {
         })
     }
 
-    fn node_at(
+    fn node_content(
         &mut self,
         walk: &mut Walk<'_, '_>,
         id: ViewId,
@@ -1005,7 +992,9 @@ impl Painter {
         // `revealed` (LLP 1094): the wrapper's inherited hidden shows, and
         // a node that sets its own hidden does not.
         let visible = paints(walk.scene.kernel, id, walk.reveal);
+        let hit_start = walk.boxes.len();
         walk.boxes.push(PaintedBox {
+            shape_clips: Vec::new(),
             id,
             pointer_hit: node
                 .computed_row(exact_kernel::StyleId::PointerEvents, |s| s.pointer_events)
@@ -1041,11 +1030,12 @@ impl Painter {
             self.backend.push_mask(&Shape::rect((x, y, w, h)), ts);
         }
         // @ref LLP 1043.000 §3 D7 — polygon demo ink and exclusion share an outline.
-        let path_clip = !node.style.rare.clip_path.commands().is_empty()
-            && self
-                .backend
-                .push_css_clip(&node.style.rare.clip_path, ts.pre_translate(x, y));
+        let (sx, sy, sw, sh) = p.surface((x, y, w, h));
+        let css = node.style.rare.clip_path.resolved(sw, sh);
+        let clip_ts = ts.pre_translate(sx, sy);
+        let path_clip = css.has_path() && self.backend.push_css_clip(&css, clip_ts);
         self.box_content(walk, &node, (x, y, w, h), ts, offset, clip_rect);
+        shape::clip_hits(&mut walk.boxes[hit_start..], &css, clip_ts);
         self.dark = previous;
         if path_clip {
             self.backend.pop_clip();
@@ -1090,9 +1080,11 @@ impl Painter {
             paint.background = [0; 4];
         }
         self.clipped = Some((node.id, paint.background));
-        let geometry = paint.geometry(rect);
+        let mut geometry = paint.geometry(rect);
         // @ref LLP 1063 — a layout transition's size is the surface's alone.
-        let surface = paint.geometry(shown.surface(rect));
+        let mut surface = paint.geometry(shown.surface(rect));
+        self.flight_geometry(node, &mut geometry);
+        self.flight_geometry(node, &mut surface);
         // A hidden box paints none of its own chrome. Children still do,
         // and a text node still walks its runs so a visible inline paints.
         if paints_self {

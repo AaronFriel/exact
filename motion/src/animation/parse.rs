@@ -336,6 +336,11 @@ impl Keyframes {
     /// The body as CSS (percentages, CSS units), for a web host's
     /// `@keyframes name { … }`.
     pub fn css(&self) -> String {
+        self.css_values(value_css)
+    }
+
+    /// Serialize values through a host's CSS spelling.
+    pub fn css_values(&self, value: impl Fn(Property, Value) -> String) -> String {
         let mut out = String::new();
         for frame in self.0.iter() {
             let _ = write!(out, "{}%{{", Shortest(frame.offset * 100.0));
@@ -383,7 +388,7 @@ impl Keyframes {
                             colour(Property::ShadowColor, shade)
                         )
                     }
-                    _ => value_css(*p, *v),
+                    _ => value(*p, *v),
                 };
                 let _ = write!(out, "{}:{};", p.css_name(), text);
             }
@@ -404,7 +409,7 @@ pub fn value_css(property: Property, v: Value) -> String {
             };
             format!("{} {}", axis(v.x, v.z), axis(v.y, v.w))
         }
-        Property::Rotate => format!("{}deg", Shortest(v.x)),
+        Property::Rotate => crate::rotation::css(v),
         Property::R
         | Property::Height
         | Property::Cx
@@ -779,10 +784,7 @@ fn keyframe_value(property: Property, value: &str) -> Result<Value, ParseError> 
             };
             Value::four(x, y, px, py)
         }
-        Property::Rotate => {
-            let n = word::strip_unit(value, "deg").unwrap_or(value);
-            Value::scalar(exact_num::parse_f64(n.trim()).map_err(|_| bad())?)
-        }
+        Property::Rotate => crate::rotation::parse(value).ok_or_else(bad)?,
         Property::Scale | Property::Opacity => {
             let v = match value.strip_suffix('%') {
                 Some(n) => exact_num::parse_f64(n.trim()).map_err(|_| bad())? / 100.0,

@@ -287,6 +287,11 @@ void exact_textflow_free(uint64_t handle);
 size_t exact_text_line_breaks(const uint8_t *utf8, size_t len,
     const uint32_t *words, size_t word_count, uint32_t *out, size_t cap);
 
+/* LLP 1060.000 D3: natural text's base direction per paragraph (UAX #9 P2, P3 at its
+ * paragraph separators; `fallback` where one has no strong character): 0 ltr, 1 rtl.
+ * Writes min(count,cap) to out (null is a query); returns count, 0 for invalid UTF-8. */
+size_t exact_text_paragraph_bases(const uint8_t *utf8, size_t len, uint8_t fallback, uint8_t *out, size_t cap);
+
 typedef struct ExactMeasureRequest {
     uint32_t view, node_index, node_generation;
     uint64_t revision;
@@ -314,6 +319,8 @@ typedef struct ExactMeasureRequest {
     uint8_t text_wrap_style; /* CSS text-wrap-style: 0 auto, 1 balance (LLP 1001 §6) */
     const uint8_t *atoms; size_t atoms_len; /* LLP 1045.000 D2: a Markdown paragraph's `atoms` JSON, UTF-8; 0 length for none */
     const uint8_t *faces; size_t faces_len; /* its `atomFaces` JSON */
+    uint8_t natural;       /* 1: natural text (LLP 1060.000 D3): each paragraph's base is
+                              exact_text_paragraph_bases's, `direction` its fallback and alignment's */
 } ExactMeasureRequest;
 
 /* LLP 1045 D3/D4. Markdown source into display pieces, the same for measure and paint. */
@@ -366,6 +373,8 @@ typedef void (*ExactRegionReleaseFn)(void *owner);
 uint32_t exact_text_ready(ExactRuntime rt, uint32_t index, uint32_t generation, uint64_t revision);
 uint32_t exact_region_request(ExactRuntime rt, uint64_t request, uint64_t known_source);
 uint32_t exact_region_complete(ExactRuntime rt, uint64_t request, ExactMetrics metrics, void *owner, ExactRegionReleaseFn release);
+/* A current incomplete flow returns the registration to native layout. */
+uint32_t exact_region_fallback(ExactRuntime rt, uint64_t request);
 
 typedef ExactMetrics (*ExactMeasureFn)(void *ctx, const ExactMeasureRequest *request);
 
@@ -493,13 +502,18 @@ void exact_set_fonts(ExactRuntime rt, ExactFontsFn fonts, void *ctx);
  * exactly once, from any thread, with exact_app_reply: status 200 carries
  * the JSON answer, any other status a refusal message. call(ctx, body, len,
  * slot) is a native.call on the source's thread: the host answers it on the
- * main thread with exact_app_answer before returning. exact_app_changed
+ * main thread with exact_app_answer before returning. An interim status 102
+ * reports library-load seconds as UTF-8 before the final answer (LLP 1067.000.001 D7).
+ * exact_app_changed
  * announces a device topic (LLP 1016.002), on the main thread. */
 typedef void (*ExactAppLaterFn)(void *ctx, const uint8_t *body, size_t len, void *reply);
 typedef void (*ExactAppCallFn)(void *ctx, const uint8_t *body, size_t len, void *slot);
 void exact_set_app_module(ExactRuntime rt, ExactAppLaterFn later, ExactAppCallFn call, void *ctx);
 void exact_app_answer(void *slot, uint32_t status, const uint8_t *bytes, size_t len);
 void exact_app_changed(ExactRuntime rt, const uint8_t *topic, size_t len);
+/* Another session of the app announced a topic after a durable write
+ * (LLP 1030.004 D2); this session's watching answers are asked again. */
+void exact_peer_changed(ExactRuntime rt, const uint8_t *topic, size_t len);
 void exact_app_reply(void *reply, uint32_t status, const uint8_t *bytes, size_t len);
 
 /* A document the app kept was forgotten by the app (LLP 1069.010.000 D5):
@@ -604,6 +618,9 @@ void exact_module_invoke(ExactRuntime rt, size_t len, ExactInvokeReply reply, vo
  * authored Back control under a root with no `navigate` handler: the
  * router's `back` as a commit of its own. A batch. */
 uint32_t exact_host_back(ExactRuntime rt, uint64_t id, double now_ms);
+/* LLP 1030.004 D2: the UTF-8 location in exact_in as a rooted window's only
+ * visit, one commit. A batch. */
+uint32_t exact_host_root(ExactRuntime rt, size_t len, double now_ms);
 /* The runner's own go to the UTF-8 location in exact_in, a batch. */
 uint32_t exact_host_go(ExactRuntime rt, size_t len, double now_ms);
 /* Native Forward at the navigation root, a batch. */
@@ -772,6 +789,12 @@ uint32_t exact_header_shape(const uint32_t *words, size_t count, uint32_t flags,
  * navigationBar="none", 2 its header is the bar's, 4 it is pushed, 8 the
  * platform's bar has a Back button. */
 uint32_t exact_route_bar(uint32_t facts);
+/* LLP 1013.001 D1: the ::view-transition-new (exit 0) or ::view-transition-old
+ * (exit 1) part route `view` declares, posed for a box width by height points,
+ * as JSON in exact_out: {"seconds", "poses": [[opacity, x, y, scale, degrees],
+ * ...]} at even steps, each about the box's centre, no pose for `none`; `null`
+ * where it declares none or may play none (a sheet, a zoom). Returns its length. */
+uint32_t exact_route_part(ExactRuntime rt, uint32_t view, uint32_t exit, double width, double height);
 /* The pan contact's release velocity where the platform measures none (AppKit,
  * the iOS agent's recognized contact; LLP 1057 §10.6, 1057.001 §3): the engine's
  * tracker, one per runtime. A sample is the pointer in viewport CSS px at t
@@ -799,6 +822,8 @@ uint32_t exact_native_timers(ExactRuntime rt, uint32_t enabled);
  * Each of its views is said `renew` before its props and style: the
  * presenter drops what it keeps by view, as a new view has none of it. */
 uint32_t exact_row_reuse(ExactRuntime rt, uint32_t on);
+/* Subsequent boots omit layout-only boxes inside quiet collection rows (LLP 1171 D4). */
+uint32_t exact_flat_nodes(ExactRuntime rt, uint32_t on);
 /* Deliver only this timer instance. A cancelled generation cannot fire a replacement. */
 uint32_t exact_fire_native_timer(ExactRuntime rt, uint32_t index, uint64_t generation, double now_ms);
 uint32_t exact_advance(ExactRuntime rt, double now_ms, uint32_t mode);
@@ -834,6 +859,19 @@ uint32_t exact_set_launch_time(ExactRuntime rt, double epoch_at_zero, double utc
  * seed, then optionally NUL formatLocale), for the next boot or candidate; the running runner is not told.
  * Returns zero when accepted, otherwise an error batch length; keeps the last valid fact. */
 uint32_t exact_set_launch_place(ExactRuntime rt, size_t len);
+/* LLP 1030.004 D2: the window's name (UTF-8 in exact_in), which the page's
+ * `name` reads, and whether its router launches rooted (`rooted` nonzero),
+ * for every boot from here. Not a batch. */
+uint32_t exact_set_launch_window(ExactRuntime rt, size_t len, uint32_t rooted);
+/* The platform's layout direction for every boot from here, where it governs
+ * a direction the author left unsaid (AppKit's process direction): 0 left to
+ * right, 1 right to left, anything else the strings table's. Not a batch. */
+uint32_t exact_set_launch_direction(ExactRuntime rt, uint32_t direction);
+/* LLP 1060.000 D3: whether text whose direction is unsaid takes each
+ * paragraph's base direction from its first strong character, as AppKit's
+ * natural writing direction does (`on` nonzero), for every boot from here.
+ * Not a batch. */
+uint32_t exact_set_natural_text(ExactRuntime rt, uint32_t on);
 /* Beside the date: the locale and IANA time zone, as locale NUL timeZone input,
  * then optionally NUL seed NUL formatLocale. */
 uint32_t exact_set_place(ExactRuntime rt, size_t len);
@@ -876,7 +914,7 @@ uint32_t exact_design_rows(ExactRuntime rt, size_t len);
  * plan lacks or a value that is no colour (the binding keeps its fallback).
  * `inputs` moves when anything the answer read does. A view that is not live,
  * or names that are not strings, answer {"error"}. Not a batch. */
-uint32_t exact_tamber(ExactRuntime rt, size_t len);
+uint32_t exact_forma(ExactRuntime rt, size_t len);
 /* The design digest the running app runs (its plan's, or the live table's
  * applied since), UTF-8 in exact_out, length 0 before boot. Not a batch. */
 uint32_t exact_design_digest(ExactRuntime rt);

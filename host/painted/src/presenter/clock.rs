@@ -64,6 +64,12 @@ impl<D: DataSource> Presenter<D> {
         if !self.timers_hidden && self.needs_animation_frame() {
             self.tick(now);
         }
+        // A stopped reader presents no frame, a flight's included.
+        if live && !self.timers_hidden {
+            self.dirty |= self.host.present_reader_frame(now);
+        }
+        // Asked on every turn: a replaced reader ends flights with no tick after.
+        self.focus_landed();
         date_error.or(error)
     }
 
@@ -177,6 +183,8 @@ impl<D: DataSource> Presenter<D> {
 
     pub(super) fn give_clock(&mut self) {
         self.clock_generation = self.clock_generation.wrapping_add(1);
+        self.host.flights.enabled = self.brush.backend() == "canvas";
+        self.host.reader_frame_clock(self.live_clock.is_some());
         self.host.runner_mut().use_native_timers(self.native_timers);
         let wall = self.live_clock.clone();
         let sample = wall.map(|wall| Box::new(move || wall()) as Box<dyn FnMut() -> f64>);

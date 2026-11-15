@@ -66,6 +66,7 @@ pub mod hardened;
 pub mod head;
 pub mod held;
 pub mod instance;
+pub mod launch_env;
 pub mod listen;
 pub mod lists;
 pub mod local_network;
@@ -78,6 +79,7 @@ mod program;
 pub use program::Program;
 pub mod request;
 pub mod runner;
+pub mod sandbox;
 pub mod save_file;
 /// The picker's helpers a host shares (LLP 1069.002): types by name,
 /// `accept` matching, the HEIC rule, a `type @t` answer's paths.
@@ -136,21 +138,21 @@ pub use runner::{
     Geometry, GeometryLink, Hold, HoldAnswer, InFlight, InputDetails, Interrupt, Intersection,
     KeyModifiers, KeyboardEvent, Limits, ListTextPolicy, ListTextPosition, MouseEvent, Native,
     NativeCall, NativeHandler, Overlaid, Picked, PickerLinks, PickerRequest, PointerEvent,
-    PreloadWake, ResizeRect, RouterChange, RouterLink, Routing, Runner, RunnerError, RunnerLinks,
-    ScrollEvent, SelectionDirection, SnapshotModule, SocketReader, SocketState, StackSplit,
-    StreamCount, SurfaceAnswer, Target, Timed, UploadEnd, UploadMark, WheelEvent, Write,
-    BACKGROUND, JOURNAL_RING, MAX_CLOCK_MS, PICKED, QUEUE_BOUND, RESIZE_UNDELIVERED,
-    TIMER_FIRE_LIMIT, VIRTUAL_FRAME_MS,
+    PreloadWake, Report, Reporter, ResizeRect, RouterChange, RouterLink, Routing, Runner,
+    RunnerError, RunnerLinks, ScrollEvent, SelectionDirection, SnapshotModule, SocketReader,
+    SocketState, StackSplit, StreamCount, SurfaceAnswer, Target, Timed, UploadEnd, UploadMark,
+    WheelEvent, Write, BACKGROUND, JOURNAL_RING, MAX_CLOCK_MS, PICKED, QUEUE_BOUND,
+    RESIZE_UNDELIVERED, TIMER_FIRE_LIMIT, VIRTUAL_FRAME_MS,
 };
-pub use runner::{AppState, LiveApplied, LiveRefusal, Place, Tamber};
+pub use runner::{AppState, Forma, LiveApplied, LiveRefusal, Place};
 pub use runner::{CallHow, WakeHow};
 pub use runner::{ModuleIdentity, ModuleInstance};
 pub use upload::{UPLOAD_PROGRESS, UPLOAD_SENDING};
-/// The binding core's names (LLP 1121 D12): what `contract tamber gen rust`
+/// The binding core's names (LLP 1121 D12): what `contract forma gen rust`
 /// writes (`pub const SURFACE_CARD: Token<Color>`) and resolves.
-pub mod tamber {
+pub mod forma {
     pub use crate::runner::{
-        ColorKind as Color, Font, Kind, LengthKind as Length, NumberKind as Number, Place, Tamber,
+        ColorKind as Color, Font, Forma, Kind, LengthKind as Length, NumberKind as Number, Place,
         Token, TypeKind as Type,
     };
 }
@@ -164,3 +166,30 @@ pub use vm::Trap;
 pub use runner::{
     frame_at_or_after, Admitted, IdleObservation, NativeTimer, TaskTiming, Wait, WaitKinds, Waits,
 };
+
+/// A test's directory, removed when dropped, so a test that fails or panics
+/// leaves nothing in the system temp directory.
+#[cfg(test)]
+pub(crate) struct TempDir(pub(crate) std::path::PathBuf);
+
+#[cfg(test)]
+impl std::ops::Deref for TempDir {
+    type Target = std::path::Path;
+    fn deref(&self) -> &std::path::Path {
+        &self.0
+    }
+}
+
+#[cfg(test)]
+impl AsRef<std::path::Path> for TempDir {
+    fn as_ref(&self) -> &std::path::Path {
+        &self.0
+    }
+}
+
+#[cfg(test)]
+impl Drop for TempDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}

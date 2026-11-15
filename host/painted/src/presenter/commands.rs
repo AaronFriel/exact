@@ -37,7 +37,7 @@ impl<D: DataSource> Presenter<D> {
         self.orientation_unavailable();
         self.package_turn();
         self.run_queued_commands();
-        if self.pending_update {
+        if self.pending_update && !self.activation_deferred() {
             self.pending_update = false;
             match self.activate_update(data()) {
                 Ok(true) => {}
@@ -92,13 +92,7 @@ impl<D: DataSource> Presenter<D> {
                 } else {
                     "relaunch refused: process relaunch is unsupported on Linux"
                 }),
-                // The app's chosen appearance is what a `light-dark()` colour
-                // resolves to here (LLP 1034 D2); `system` is no override.
-                "setScheme" => self.app_scheme(match c.args.first() {
-                    Some(v) if v.as_str() == Some("dark") => Some(true),
-                    Some(v) if v.as_str() == Some("light") => Some(false),
-                    _ => None,
-                }),
+                "setScheme" => self.app_scheme(super::preferences::app_dark(c.args.first())),
                 // The shell's haptic engine (LLP 1077 D14); desktop Linux has
                 // none, and there is nothing to feel there.
                 "haptic" => {

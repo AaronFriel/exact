@@ -14,36 +14,8 @@
 use super::{CanvasHost, Section, GROUPS};
 #[cfg(target_os = "android")]
 use crate::presenter::PAGE;
+#[cfg(target_os = "android")]
 use exact_runner::DataSource;
-
-fn module_under<D: DataSource>(
-    p: &mut crate::presenter::Presenter<D>,
-    x: f32,
-    y: f32,
-    scale: f32,
-) -> [i32; 10] {
-    let module = p.hit(x / scale, y / scale).filter(|id| {
-        p.host().kernel().node(*id).is_some_and(|node| {
-            node.node_type == exact_kernel::NodeType::NativeView
-                && p.host().retained_action_eligible(node.key)
-        })
-    });
-    let rect = module.and_then(|id| p.rect_of(id)).unwrap_or_default();
-    let key = module.and_then(|id| p.host().kernel().node(id).map(|node| node.key));
-    let bits = |value: f32| (value * scale).to_bits() as i32;
-    [
-        module.unwrap_or(0) as i32,
-        bits(rect.0),
-        bits(rect.1),
-        bits(rect.2),
-        bits(rect.3),
-        key.map_or(0, |key| key.index as i32),
-        key.map_or(0, |key| key.generation as i32),
-        p.long_presses() as i32,
-        p.brush.native_session as i32,
-        (p.brush.native_session >> 32) as i32,
-    ]
-}
 
 #[cfg(target_os = "android")]
 impl<D: DataSource + Default> CanvasHost<D> {
@@ -51,11 +23,11 @@ impl<D: DataSource + Default> CanvasHost<D> {
     /// what a drag from there is: the scrollers, innermost first, and the
     /// axes the presenter's own gestures claim
     /// ([`crate::presenter::Presenter::reader_under`] has the words); then
-    /// the module under it (ten words), and each of those scrollers'
+    /// the module under it (thirteen words), and each of those scrollers'
     /// snap ([`crate::presenter::Presenter::reader_snaps`]).
     pub fn under(&mut self, x: f32, y: f32) -> Vec<i32> {
         let mut words = self.p.reader_under(x, y, self.scale);
-        words.extend(module_under(&mut self.p, x, y, self.scale));
+        words.extend(self.p.reader_module(x, y, self.scale));
         let ids: Vec<_> = (0..words[1] as usize)
             .map(|k| words[3 + 11 * k] as exact_kernel::ViewId)
             .collect();
@@ -165,7 +137,6 @@ impl<D: DataSource + Default> CanvasHost<D> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::presenter::{PainterChoice, Presenter};
 
     fn props(p: &mut Presenter<()>) -> serde_json::Value {
@@ -204,8 +175,8 @@ mod tests {
         assert!(error.is_none(), "{error:?}");
         p.brush.native_session = 0x1234_5678_fedc_ba98;
         let before = props(&mut p);
-        let hit = module_under(&mut p, 20., 20., 2.);
-        let token = |words: [i32; 10]| words[8] as u32 as u64 | ((words[9] as u32 as u64) << 32);
+        let hit = p.reader_module(20., 20., 2.);
+        let token = |words: [i32; 13]| words[8] as u32 as u64 | ((words[9] as u32 as u64) << 32);
         assert_ne!(hit[0], 0);
         assert_eq!(hit[5] as u32 as u64, before["slot"].as_u64().unwrap());
         assert_eq!(hit[6] as u32 as u64, before["generation"].as_u64().unwrap());
@@ -216,7 +187,7 @@ mod tests {
             .unwrap()
             .is_none());
         let after = props(&mut p);
-        let next = module_under(&mut p, 20., 20., 2.);
+        let next = p.reader_module(20., 20., 2.);
         assert_eq!(hit[..8], next[..8]);
         for key in ["module", "slot", "generation"] {
             assert_eq!(before[key], after[key]);

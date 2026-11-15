@@ -198,6 +198,23 @@ impl<D: DataSource> Runner<D> {
                 (checkpoint.answers.iter().enumerate()).filter(|(_, (n, s, args, _))| {
                     n == name && s == source && args.len() == row.args.len as usize
                 });
+            // A child's resource: the answers of the instances the render
+            // made, which the boot's instances take by their arguments
+            // (LLP 1035.005.004 D8).
+            if row.owner.is_some() && i < self.plan.resources.len() {
+                let ty = row.ty;
+                let answers = (answers.filter(|(_, (.., value))| self.conforms(value, ty)))
+                    .map(|(k, (_, _, args, value))| PageAnswer {
+                        args: args.clone(),
+                        value: value.clone(),
+                        again: asks(k),
+                        reads: reads(k),
+                    })
+                    .collect();
+                self.resources[i].page_answers =
+                    Some(Box::new(PageAnswers::new(answers, self.store.revision())));
+                continue;
+            }
             if self.is_family(i) {
                 let element_type = self.plan.types[row.ty.0 as usize]
                     .elem
@@ -253,8 +270,17 @@ impl<D: DataSource> Runner<D> {
         if checkpoint.logic.as_deref() != self.data.revision() {
             return "checkpoint: other logic answered it; its answers are asked again".into();
         }
-        let elements: usize = (self.resources.iter_mut())
-            .filter_map(|row| row.page_answers.take())
+        // A child's held answers wait for the first frame's instances
+        // (`boot_owned`).
+        let owned = |i: usize| {
+            self.plan
+                .resources
+                .get(i)
+                .is_some_and(|r| r.owner.is_some())
+        };
+        let lists: Vec<usize> = (0..self.resources.len()).filter(|i| !owned(*i)).collect();
+        let elements: usize = (lists.into_iter())
+            .filter_map(|i| self.resources[i].page_answers.take())
             .map(|page| page.taken())
             .sum();
         let taken = seeded.iter().filter(|s| **s).count() + elements;

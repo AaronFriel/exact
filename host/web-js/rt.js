@@ -13,7 +13,7 @@ import { rt as Link } from './rt-link.js';
 export { liveTime } from './live-time.js';
 import { liveById, installFits } from './navigation.js';
 // synced animations (LLP 1055.002, emit.rs `clocks`)
-export { animationClocks, launchLocation } from './navigation.js';
+export { animationClocks, launchLocation, launchVisits } from './navigation.js';
 export { fontFamily } from './font-family.js';
 import { Head, markDocument, projectRoots, openTabs, unopened, tp } from './document.js';
 export { Head, unopened, tp };
@@ -441,7 +441,8 @@ export function commit(f, what = 'commit', finished) {
   const was = Now.v,
     undo = [],
     saved = Resources.map(r => r.save()),
-    held = Mutations.map(m => [m.ticket, m.tickets, m.concluded]),
+    // by mutation: an instance's come and go with it (each.js `ownMut`)
+    held = Mutations.map(m => [m, m.ticket, m.tickets, m.concluded]),
     store = Store.save(),
     queued = Sched?.save(),
     writes = Ov.save();
@@ -488,9 +489,7 @@ export function commit(f, what = 'commit', finished) {
     }
     // new list members end through their refusal callbacks (each.js)
     Resources.forEach((r, k) => k < saved.length && r.restore(saved[k]));
-    Mutations.forEach((m, k) => {
-      [m.ticket, m.tickets, m.concluded] = held[k];
-    });
+    for (const [m, ...h] of held) [m.ticket, m.tickets, m.concluded] = h;
     Sched?.restore(queued);
     Ov.restore(writes);
     Store.restore(store);
@@ -513,7 +512,7 @@ export function commit(f, what = 'commit', finished) {
     }
   }
   const [out, cmds, landed, finishes] = [Out, Commands, Landed, Finishes],
-    changed = Sched?.changed(queued), invocation = Invocation.id;
+    changed = Sched?.changed(queued), invocation = Invocation.id, origin = Origin.now();
   // A key handler's preventDefault/stopPropagation act on its event before the dispatch ends, a tree update a view
   // transition defers too (review C3).
   if (KeyEvent || Propagating)
@@ -582,11 +581,12 @@ export function commit(f, what = 'commit', finished) {
       Input?.arrive();
     }
     // An answer's `then` is armed, due now, once however many land: the next advance runs it as its own commit
-    // (LLP 1016.001 D3).
+    // (LLP 1016.001 D3), under its answer's invocation and origin (LLP 1133.002 D12).
     for (const m of landed)
       if (m.then) {
         m.due = armedAt();
         m.thenInvocation = invocation;
+        m.thenOrigin = origin;
         if (!clock.agent) drive();
       }
     Sched?.scan(true, changed); // a free queue's waiting send is due (LLP 1092 D3)
@@ -875,6 +875,22 @@ export const Store = {
         if (k.startsWith(p)) this.map.set(k.slice(p.length), localStorage.getItem(k));
       }
     } catch {}
+    // Another tab of the app wrote or removed a key, or cleared the store (LLP 1030.004 D2).
+    globalThis.addEventListener?.('storage', e => {
+      if (e.storageArea !== globalThis.localStorage) return;
+      if (e.key == null) for (const k of [...this.map.keys()]) this.peer(k, null);
+      else if (e.key.startsWith(p)) this.peer(e.key.slice(p.length), e.newValue);
+    });
+  },
+  /** Another tab's write of key `k` (`v`, or null removed): taken, unless this tab's own write of it is owed, and the
+   * store's readers asked again, as after a write outside a commit (the runner's `store_changed`). */
+  peer(k, v) {
+    if (this.pending.has(k) || this.writes.some(w => w[0] === k) || (this.map.get(k) ?? null) === v) return;
+    if (v == null) this.map.delete(k);
+    else this.map.set(k, v);
+    Rev++;
+    lateReaders();
+    recommit(lateIdle, "another tab's store write");
   },
 };
 // A release build's DEVELOPMENT_STORE is null: it inspects nothing, and its bundle drops the inspection's code.
@@ -904,4 +920,4 @@ export * from './router.js';
 import { routerValid } from './router.js';
 export { queues, gated } from './schedule.js'; // queued sends and gated tasks (LLP 1092), their own file
 export { timerWaits } from './timer-waits.js';
-export { resEach } from './each.js';
+export { resEach, owned, own, ownedMut, ownMut, keptOwned, rowPath } from './each.js';

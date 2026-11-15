@@ -60,7 +60,7 @@ pub(crate) fn grid_tokens(a: &Attr, rows: &[StyleId]) -> Option<Attr> {
                     let unit = before.ends_with(|c: char| c.is_ascii_digit() || c == '.');
                     out.push_str(before);
                     match crate::theme::measure_written(&word[..end]).filter(|_| !unit) {
-                        Some((exact_tamber::Kind::Length, values)) if values.len() == 1 => {
+                        Some((exact_forma::Kind::Length, values)) if values.len() == 1 => {
                             out.push_str(&values[0]);
                             *changed = true;
                         }
@@ -218,7 +218,7 @@ pub(crate) fn describe(e: &StyleValueError) -> String {
         StyleValueError::OutOfRange { .. } => "out of the row's range".into(),
         StyleValueError::BadColor { .. } => "a color is a CSS colour: hex, `rgb()`, `hsl()`, `hwb()`, a named colour, `transparent`, or one in its own space: `color(display-p3 1 0 0)`, `oklch()`, `oklab()`, `lab()`, `lch()` (LLP 1100) — `light-dark(a, b)` of two, a role (`\"-exact-secondary-label\"`, `\"CanvasText\"`: LLP 1095, LLP 1081), or `-exact-platform-color(ios <name>Color, …, <fallback>)` written whole as a string literal".into(),
         StyleValueError::BadShapeOutside { .. } => "expected none, circle(), ellipse(), inset() with one round radius, or polygon() with at most 64 vertices; lengths are points/px or percentages".into(),
-        StyleValueError::BadClipPath { .. } => "expected none or path() with explicit absolute M/L/Q/C/Z commands and separated finite coordinates".into(),
+        StyleValueError::BadClipPath { .. } => "expected none, polygon(), inset() with optional round radii, circle(), ellipse() (px or %), path() with valid SVG path data in CSS pixels, or url(#id) on an SVG element".into(),
         StyleValueError::BadAspectRatio { .. } => "expected auto, a ratio (`16 / 9`, or a number), or both (`auto 4 / 3`); numbers are nonnegative".into(),
         StyleValueError::BadBackgroundImage { .. } => "expected none, or up to four of linear-gradient(…), radial-gradient(…) and conic-gradient(…)".into(),
         StyleValueError::BadMaskImage { .. } => "expected none, or one linear-gradient(…), radial-gradient(…) or conic-gradient(…)".into(),
@@ -557,9 +557,22 @@ fn style_value(
             {
                 return err("lower-flex-basis", format!("CSS flex-basis `{v}` requires intrinsic basis sizing; exact2 dimension rows represent auto, lengths and percentages, and do not implement that intrinsic sizing mode. Use auto for a basis taken from the main-size property"), span);
             }
+            const SIZES: [StyleId; 6] = [
+                StyleId::Width,
+                StyleId::Height,
+                StyleId::MinWidth,
+                StyleId::MaxWidth,
+                StyleId::MinHeight,
+                StyleId::MaxHeight,
+            ];
+            if rows.iter().any(|row| SIZES.contains(row))
+                && matches!(v.trim(), "min-content" | "max-content" | "fit-content")
+            {
+                return err("lower-attr-value", format!("`{}=\"{v}\"` is an intrinsic size, which exact2 dimension rows (auto, lengths and percentages) do not represent. An `auto` size that nothing stretches is the content's: a child of a flex row, or of a flex column with `align-self=\"flex-start\"`", a.name), span);
+            }
             if rows.contains(&StyleId::Transition) {
                 if let Err(reason) = exact_motion::Transitions::parse(v) {
-                    let supported = "translate, scale, rotate, opacity; color, background-color, border-color (and each side), -exact-tint-color, box-shadow; SVG fill, stroke, stroke-dashoffset, r, cx, cy, x, y, rx, ry, d; numeric height on admitted height owners";
+                    let supported = "translate, scale, rotate, opacity; color, background-color, border-color (and each side), -exact-tint-color, box-shadow, filter; font-weight, font-stretch, font-variation-settings; SVG fill, stroke, stroke-dashoffset, r, cx, cy, x, y, rx, ry, d; numeric height on admitted height owners";
                     let why = match reason {
                         exact_motion::ParseError::UnknownProperty(property) => {
                             crate::motion::layout_property_refusal(&property, supported).unwrap_or_else(|| format!("`{property}` is not a supported transition property: transitions animate {supported}"))
@@ -1017,6 +1030,18 @@ pub(crate) fn bool_words(prop: PropId) -> Option<(&'static str, &'static str)> {
         _ => None,
     }
 }
+/// Whether a literal `target` is HTML's (empty, or `_blank`, `_self`,
+/// `_parent`, `_top`, matched ASCII case-insensitively) or a name an author
+/// may give a window: not starting with `_`, and not `window-<n>`.
+fn target_literal(s: &str) -> bool {
+    if let Some(rest) = s.strip_prefix('_') {
+        return ["blank", "self", "parent", "top"]
+            .iter()
+            .any(|k| rest.eq_ignore_ascii_case(k));
+    }
+    !s.strip_prefix("window-")
+        .is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+}
 /// A prop attribute's value by the prop's type: text for most, a bool for
 /// `disabled`, a whole number for `aria-level`, either for [`bool_words`].
 pub(crate) fn check_prop_value(
@@ -1036,16 +1061,19 @@ pub(crate) fn check_prop_value(
     {
         return Ok(());
     }
-    // An app's browsing contexts are its window and new ones: `_parent` and
-    // `_top` name frames an app does not have, a name one it cannot open.
-    if prop == PropId::Target
-        && matches!(value, Expr::Str(s, _) if !matches!(s.as_str(), "_blank" | "_self"))
-    {
-        return err(
-            "lower-attr-value",
-            "`target` takes \"_blank\" or \"_self\"",
-            span,
-        );
+    // @ref LLP 1030.004 D1 — HTML's keywords, in any case, or a window's
+    // name. `window-<n>` is the agent's label for an unnamed window.
+    if let (PropId::Target, Expr::Str(s, _)) = (prop, value) {
+        if !target_literal(s) {
+            return err(
+                "lower-attr-value",
+                format!(
+                    "`target` accepts {}; given \"{s}\"",
+                    vocab::accepts(prop).unwrap()
+                ),
+                span,
+            );
+        }
     }
     if prop == PropId::StatusBarStyle
         && matches!(value, Expr::Str(s, _) if !matches!(s.as_str(), "light-content" | "dark-content" | "auto"))
