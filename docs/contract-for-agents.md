@@ -2442,6 +2442,7 @@ lists any literal colour, font size or weight an app's `.contract` files still w
 | a pushed route with no such `header` | a bar holding the system Back button alone (LLP 1115.000 D5.2) |
 | a route with `navigationBar="none"` | no navigation bar: a full-bleed screen that draws its own way back; the edge swipe still goes back |
 | a route with `navigationPresentation="modal"` | a sheet |
+| a route pushed while a sheet is on top, with no `navigationPresentation` of its own | pushed inside the sheet, with the system Back; the sheet's swipe down, or a tap behind a `closedby="any"` one, closes the sheet with every route pushed inside it |
 
 What lies over the page beneath a modal `dialog` is the platform's dim:
 UIKit's beneath a sheet or the top layer, the web's and the painted hosts'
@@ -3756,8 +3757,8 @@ main navigationKey=`${top(nav).id}` navigationBack="close" navigate=follow displ
   is on top is shown inside that sheet, which keeps its detents (on iOS and macOS
   in its own navigation stack, on the web and Android in the sheet's box, on
   desktop Linux in the box the sheet's route was laid out in); Back returns to
-  the route before it in the sheet, and on Android dismissing the sheet closes
-  them all. Over a `fullscreen` route a push is a page of its own. On Android a
+  the route before it in the sheet, and on iOS and Android dismissing the sheet
+  closes them all. Over a `fullscreen` route a push is a page of its own. On Android a
   modal route is Material's bottom sheet at its detents, over a scrim, dragged
   between them or down to dismiss; pushes and pops cross on Material's shared
   axis, and Back is previewed from Android 14 (`host/android/README.md`, "Sheets

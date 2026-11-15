@@ -493,18 +493,18 @@ final class ModalHost: NSObject, UIAdaptivePresentationControllerDelegate {
     }
     func dismissByBackdrop(_ id: UInt32) {
         guard canDismissByBackdrop(id), let route = layers.last?.route else { return }
-        presenter.navigation.invokeBack(from: route)
+        presenter.navigation.sheetBack(from: route)?()
     }
     /// The agent's `back` on the top sheet (LLP 1116.006 D4): its swipe
     /// down, refused as UIKit's is (`presentationControllerShouldDismiss`)
-    /// and ending as a completed one does (`invokeBack`). nil with no sheet
+    /// and ending as a completed one does (`sheetBack`). nil with no sheet
     /// up; "" when it went, else why not.
     func agentDismiss() -> String? {
         guard let route = layers.last?.route else { return nil }
         if inTransition { return "the sheet is still moving: `clock settle` first" }
         if NavigationRules.modalRefusesDismissal(closedby: route.props["closedby"]) { return "its closedby is \"none\"" }
         if refusesDismissal(of: route) { return presenter.navigation.backRefusal }
-        presenter.navigation.invokeBack(from: route)
+        presenter.navigation.sheetBack(from: route)?()
         return ""
     }
 
@@ -821,8 +821,8 @@ final class ModalHost: NSObject, UIAdaptivePresentationControllerDelegate {
     }
 
     private func refusesDismissal(of route: NodeView) -> Bool {
-        presenter.views[route.id] !== route || presenter.navigation.isInactiveRoute(containing: route) ||
-            NavigationRules.modalRefusesDismissal(closedby: route.props["closedby"]) || !presenter.navigation.canInvokeBack
+        presenter.views[route.id] !== route || NavigationRules.modalRefusesDismissal(closedby: route.props["closedby"]) ||
+            presenter.navigation.sheetBack(from: route) == nil
     }
 
     func presentationControllerShouldDismiss(_ presentationController: UIPresentationController) -> Bool {
@@ -859,8 +859,9 @@ final class ModalHost: NSObject, UIAdaptivePresentationControllerDelegate {
         // owner before dispatch, so an action may safely keep the same route.
         DispatchQueue.main.async { [weak self, layer] in
             guard let self, layers.last === layer else { return }
+            let back = presenter.navigation.sheetBack(from: layer.route)
             closeTop(animated: false, refit: false)
-            presenter.navigation.invokeBack(from: layer.route)
+            back?()
             presenter.navigation.modalDidDismiss()
             fit()
         }
