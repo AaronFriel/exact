@@ -1431,4 +1431,16 @@ fn a_package_component_owns_requests_to_its_own_packages_sources() {
         "{}",
         e.message
     );
+    // Nor is it the package's to send to (D6).
+    comments(
+        &dir,
+        "use commentsLoad, Thread from \"@scratch/comments\"\ncomponent Comments\n  props\n    post: string\n  mutation posted as shape Thread\n  action post\n    send posted = appPost(post)\n  view\n    button press=post\n      text \"Post\"\n",
+    );
+    let e = contract::compile_path(&root).unwrap_err();
+    assert_eq!(e.id, "type-package-source", "{e}");
+    assert!(
+        e.message.starts_with("`Comments` comes from the package `@scratch/comments`, and its `send posted` asks `appPost`"),
+        "{}",
+        e.message
+    );
 }

@@ -139,10 +139,20 @@ impl<D: DataSource> Runner<D> {
     /// so: the caller renders again. (A `refresh` is the commit's own
     /// settlement's, which settles every row.)
     pub(super) fn reconcile_owned(&mut self) -> Result<bool, RunnerError> {
-        if !self.plan.resources.iter().any(|r| r.owner.is_some()) {
+        let requests = self.plan.resources.iter().any(|r| r.owner.is_some());
+        if !requests && !self.sends_live() {
             return Ok(false);
         }
         let owners = self.tree.as_ref().map(Tree::owners).unwrap_or_default();
+        // A destroyed instance's sends go with it (D6); nothing a live
+        // instance shows reads them.
+        if self.sends_live() {
+            let live: Vec<_> = owners.iter().map(|o| o.storage.clone()).collect();
+            self.reconcile_sends(&live);
+        }
+        if !requests {
+            return Ok(false);
+        }
         let mut changed = false;
         let mut live = Vec::new();
         for owner in &owners {

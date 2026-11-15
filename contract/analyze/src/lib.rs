@@ -295,14 +295,17 @@ fn check_mutation_then(c: &Component) -> Vec<AnalyzeError> {
                     *span,
                 );
             };
-            if !a.params.is_empty() {
+            // A child's lifted action takes its captured props (`@capture:…`),
+            // which its `then` passes (LLP 1035.005.004 D6).
+            let declared = a.params.iter().filter(|p| !p.name.starts_with('@')).count();
+            if declared > 0 {
                 return err(
                     "analyze-handler-arity",
                     format!(
                         "`{}` takes {} parameter(s); an answer passes none (read it from `{}`)",
-                        a.name,
-                        a.params.len(),
-                        m.name
+                        contract_syntax::inline::calls::shown(&a.name),
+                        declared,
+                        contract_syntax::inline::calls::shown(&m.name)
                     ),
                     *span,
                 );

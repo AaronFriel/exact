@@ -3,13 +3,14 @@
 use super::*;
 
 /// The component's names that a read takes as a value: its states, derives,
-/// resources, and props and injects that are not actions.
+/// resources, mutations, and props and injects that are not actions.
 fn value_names(c: &Component) -> BTreeSet<String> {
     c.states
         .iter()
         .chain(&c.derives)
         .map(|b| b.name.clone())
         .chain(c.resources.iter().map(|r| r.name.clone()))
+        .chain(c.mutations.iter().map(|m| m.name.clone()))
         .chain(
             c.props
                 .iter()
@@ -254,7 +255,14 @@ fn prepare_use(node: &Node, subst: &mut Subst<'_, Expr>, ctx: &mut Ctx<'_>) -> O
         child_subst.insert(r.name.clone(), Expr::Ident(lifted.clone(), *span));
         names.insert(r.name.clone(), lifted);
     }
-    if !owned.is_empty() {
+    // And its mutations (D6): each instance sends, waits and runs its `then`
+    // on its own.
+    for m in &c.mutations {
+        let lifted = lifted(&m.name, n);
+        child_subst.insert(m.name.clone(), Expr::Ident(lifted.clone(), *span));
+        names.insert(m.name.clone(), lifted);
+    }
+    if !owned.is_empty() || !c.mutations.is_empty() {
         ctx.owned_uses.push(OwnedUse {
             component: name.clone(),
             instance,
@@ -394,6 +402,27 @@ fn prepare_use(node: &Node, subst: &mut Subst<'_, Expr>, ctx: &mut Ctx<'_>) -> O
             instance,
         ));
     }
+    // A `then` runs its lifted action with the captured props a handler
+    // would pass, read where the instance was made.
+    let then_args: Vec<Expr> = captures.iter().map(|(_, value, _)| value.clone()).collect();
+    for m in &c.mutations {
+        let lift = |name: &String| names.get(name).cloned().unwrap_or_else(|| name.clone());
+        ctx.extra_mutations.push((
+            MutationDecl {
+                name: names[&m.name].clone(),
+                refreshes: m.refreshes.iter().map(|(r, s)| (lift(r), *s)).collect(),
+                then: m.then.as_ref().map(|(a, s)| (lift(a), *s)),
+                ..m.clone()
+            },
+            owner,
+            instance,
+            if m.then.is_some() {
+                then_args.clone()
+            } else {
+                Vec::new()
+            },
+        ));
+    }
     for st in &c.states {
         ctx.extra_states.push((
             Binding {
@@ -427,6 +456,9 @@ fn prepare_use(node: &Node, subst: &mut Subst<'_, Expr>, ctx: &mut Ctx<'_>) -> O
         }
         for r in &owned {
             action_subst.insert(r.name.clone(), Expr::Ident(names[&r.name].clone(), r.span));
+        }
+        for m in &c.mutations {
+            action_subst.insert(m.name.clone(), Expr::Ident(names[&m.name].clone(), m.span));
         }
         let resolved: Vec<Expr> = {
             let mut base = Subst::new(&action_subst, records).with_value_only(&value_names);

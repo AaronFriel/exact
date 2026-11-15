@@ -259,7 +259,8 @@ def substStmts (s : Subst) (names : List (String × String)) : List Stmt → Lis
     -- does not emit).
     | .call a args =>
       .call ((names.find? (·.1 == a)).map (·.2) |>.getD a) (substList s args) :: substStmts s names rest
-    | .send t src args => .send t src (substList s args) :: substStmts s names rest
+    | .send t src args =>
+      .send ((names.find? (·.1 == t)).map (·.2) |>.getD t) src (substList s args) :: substStmts s names rest
     | .refresh t =>
       let target := match s.get t with
         | .some (.name n) | .some (.expr (.var n)) => n
@@ -304,6 +305,8 @@ structure Ctx where
   extraActions : List ActionDecl := []
   /-- Each use's requests, renamed apart, in the order of the uses. -/
   extraResources : List ResourceDecl := []
+  /-- Each use's mutations, renamed apart, in the order of the uses. -/
+  extraMutations : List MutationDecl := []
   deriving Inhabited
 
 abbrev ExM := StateT Ctx (Except String)
@@ -870,19 +873,20 @@ def injectArgs (provides : List (String × Expr)) (c : CComponent) :
     | .none => .error s!"`{c.name}` injects `{pd.name}`, and no component above this use provides it"
 
 /-- The first part of a use's substitution (inline.rs `child_subst`): its
-props, injects, states and requests as `x#n`, and device resources as
-`x@Component`. -/
+props, injects, states, requests and mutations as `x#n`, and device
+resources as `x@Component`. -/
 def baseMap (s : Subst) (c : CComponent) (args provides : List (String × Expr)) (n : Nat) :
     Except String SMap := do
   let pa ← propArgs s c args
   let ia ← injectArgs provides c
   let m := insertAll (insertAll (insertAll [] pa) ia) (c.states.map fun st => (st.name, .var (lifted st.name n)))
   let m := insertAll m (c.ownedResources.map fun r => (r.name, .var (lifted r.name n)))
+  let m := insertAll m (c.mutations.map fun md => (md.name, .var (lifted md.name n)))
   pure (insertAll m (c.deviceResources.map fun r => (r.name, .var (hoisted c.name r.name))))
 
 /-- Value bindings leave same-named function calls intact. -/
 def valueNames (c : CComponent) : List String :=
-  c.states.map (·.name) ++ c.resources.map (·.name) ++
+  c.states.map (·.name) ++ c.resources.map (·.name) ++ c.mutations.map (·.name) ++
     ((c.props ++ c.injects).filter (!·.action)).map (·.name)
 
 /-- The derives, each resolved expression substituted against `m`, inserted
@@ -1046,7 +1050,8 @@ def inlineNode (p : CProgram) : Nat → Subst → CNode → ExM (List Node)
       let names : List (String × String) :=
         c.states.map (fun st => (st.name, lifted st.name n)) ++
         c.actions.map (fun a => (a.name, lifted a.name n)) ++
-        c.ownedResources.map (fun r => (r.name, lifted r.name n))
+        c.ownedResources.map (fun r => (r.name, lifted r.name n)) ++
+        c.mutations.map (fun md => (md.name, lifted md.name n))
       let nameOf := fun (x : String) => ((names.find? (·.1 == x)).map (·.2)).getD x
       let mut child : SMap ← match baseMap s c args ctx.provides n with
         | .ok m => pure m
@@ -1087,6 +1092,13 @@ def inlineNode (p : CProgram) : Nat → Subst → CNode → ExM (List Node)
         modify fun ctx => { ctx with extraResources := ctx.extraResources ++
           [{ r with name := nameOf r.name, args := r.args.map (substExpr cs),
                     gate := r.gate.map (substExpr cs), owner := owner', late := owner == .instance }] }
+      -- Each instance sends its mutations on its own (D6); a `then` runs
+      -- its lifted action with the captured props a handler would pass.
+      for md in c.mutations do
+        modify fun ctx => { ctx with extraMutations := ctx.extraMutations ++
+          [{ md with name := nameOf md.name, refreshes := md.refreshes.map nameOf,
+                     andThen := md.andThen.map nameOf, owner := owner', late := owner == .instance,
+                     thenArgs := if md.andThen.isSome then captures.map (·.2.1) else [] }] }
       for st in c.states do
         modify fun ctx => { ctx with extraStates := ctx.extraStates ++
           [{ name := nameOf st.name, ty := st.ty, init := substExpr cs st.init, owner := owner',
@@ -1101,6 +1113,8 @@ def inlineNode (p : CProgram) : Nat → Subst → CNode → ExM (List Node)
           act := act.insert r.name (.var (hoisted c.name r.name))
         for r in c.ownedResources do
           act := act.insert r.name (.var (nameOf r.name))
+        for md in c.mutations do
+          act := act.insert md.name (.var (nameOf md.name))
         let mut asub := withDerives p.records (valueNames c) act derives
         for (q, _) in a.params do
           asub := { asub with map := asub.map.erase q }
@@ -1145,7 +1159,8 @@ def expand (p : CProgram) : Except String Program := do
   let (actions, _) ← (hygiene p.records actions).run 0
   pure { shapes := p.shapes, fns := p.fns,
          states := routerState ++ p.localeStates ++ root.states ++ ctx.extraStates,
-         derives := root.derives, resources := p.resources ctx.extraResources, mutations := root.mutations,
+         derives := root.derives, resources := p.resources ctx.extraResources,
+         mutations := root.mutations ++ ctx.extraMutations,
          actions, tasks := root.tasks, view, routes := p.routes, router := p.router,
          strings := p.strings, locale := p.locale }
 

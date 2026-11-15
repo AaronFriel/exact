@@ -51,7 +51,7 @@ impl<D: DataSource> Runner<D> {
     }
 
     pub(super) fn check_send_arguments(&self, m: usize, args: &[Value]) -> Result<(), RunnerError> {
-        check_arguments(self.plan.str(self.plan.mutations[m].name), args)
+        check_arguments(self.mutation_name(m), args)
     }
 
     pub(super) fn query(&mut self, i: usize, args: &[Value]) -> Result<Answer, RunnerError> {

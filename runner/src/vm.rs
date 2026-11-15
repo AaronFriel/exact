@@ -75,6 +75,9 @@ pub struct Owned {
     pub slots: BTreeMap<u32, Value>,
     /// Its requests, one per resource its arm owns, in plan order.
     pub requests: Vec<OwnedRequest>,
+    /// The runner's row for each mutation its arm owns that it has sent,
+    /// by the plan's mutation (LLP 1035.005.004 D6).
+    pub sends: Vec<(u32, usize)>,
 }
 
 impl Owned {
@@ -86,6 +89,15 @@ impl Owned {
     /// What resource `resource` shows in this instance.
     pub fn request(&self, resource: u32) -> Option<&OwnedRequest> {
         self.requests.iter().find(|r| r.resource == resource)
+    }
+
+    /// The runner's row for this instance's sends to `mutation`, once it
+    /// has sent one.
+    pub fn send(&self, mutation: u32) -> Option<usize> {
+        self.sends
+            .iter()
+            .find(|(m, _)| *m == mutation)
+            .map(|(_, row)| *row)
     }
 }
 
@@ -204,6 +216,17 @@ fn owned(env: &Env<'_>, i: usize, pc: usize) -> Result<Option<OwnedRequest>, Tra
         .and_then(|r| r.borrow().request(i as u32).cloned())
         .map(Some)
         .ok_or(Trap::BadScope { pc, depth: 0 })
+}
+
+/// The runner's row for mutation `i` as read in `env`'s frames (LLP
+/// 1035.005.004 D6): `i` itself for the root's, the instance's own row for
+/// a child's, or `None` before that instance has sent it.
+fn mutation_row(env: &Env<'_>, i: usize) -> Option<usize> {
+    let Some(arm) = env.plan.mutations.get(i).and_then(|m| m.owner) else {
+        return Some(i);
+    };
+    let region = env.plan.arm(arm).region.0;
+    Frame::row_of(env.frames, region).and_then(|r| r.borrow().send(i as u32))
 }
 
 /// Take `n` list steps, or trap at `pc`.
@@ -1012,17 +1035,14 @@ impl Host<Value> for Run<'_, '_> {
 
     #[inline]
     fn mutation_failed(&self, i: u64) -> bool {
-        self.env
-            .failed_mutations
-            .get(i as usize)
+        mutation_row(self.env, i as usize)
+            .and_then(|m| self.env.failed_mutations.get(m))
             .is_some_and(Option::is_some)
     }
 
     fn mutation_failure(&mut self, i: u64, pc: usize) -> Result<Value, Trap> {
-        let Some(why) = self
-            .env
-            .failed_mutations
-            .get(i as usize)
+        let Some(why) = mutation_row(self.env, i as usize)
+            .and_then(|m| self.env.failed_mutations.get(m))
             .and_then(Option::as_ref)
         else {
             return Ok(Value::Option(None));
@@ -1042,9 +1062,8 @@ impl Host<Value> for Run<'_, '_> {
     }
 
     fn pending_mutation(&self, i: u64) -> bool {
-        self.env
-            .pending_mutations
-            .get(i as usize)
+        mutation_row(self.env, i as usize)
+            .and_then(|m| self.env.pending_mutations.get(m))
             .copied()
             .unwrap_or(false)
     }

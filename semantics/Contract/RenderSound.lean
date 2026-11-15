@@ -187,27 +187,40 @@ theorem armSlots_good {p : Program} (hp : WellTyped p) {E : Err → Prop}
   rw [render.armSlots]
   split
   · next s hs => exact hst.find hs
-  refine (GoodW.bind (forIn_goodW (RowsOK p) _ _ _ RowsOK.nil ?_) fun s hs => hs)
-  intro st hmem s hs
-  rw [henv.prog] at hmem
+  refine (GoodW.bind (forIn_goodW (RowsOK p) _ _ _ RowsOK.nil ?_) fun s hs => ?_)
+  · intro st hmem s hs
+    rw [henv.prog] at hmem
+    dsimp only
+    split
+    · next ho =>
+      have ho' : st.owner = .some owner := by simpa using ho
+      obtain ⟨t, ht, hle⟩ := hinit st hmem ho'
+      refine GoodW.bind (eval_sound_E hfn hE ((henv.withRows hs).envOKE' hp hE hc) hl ht) fun v hv => ?_
+      split
+      · simp only [bind, Except.bind, throw, throwThe, MonadExceptOf.throw, GoodW]
+        rw [henv.prog, unfit_typed (typed_of_valTy v (ValTy.mono hv hle))]
+        exact hE _ trivial (by simp)
+      · next hc =>
+        simp only [pure, Except.pure, GoodW, ForInStep.value]
+        refine hs.append fun x w hx => ?_
+        simp only [List.mem_singleton, Prod.mk.injEq] at hx
+        obtain ⟨rfl, rfl⟩ := hx
+        rw [slotTy_state hp.names hmem]
+        rw [henv.prog] at hc
+        simpa using hc
+    · exact hs
+  -- A child's mutations start with no answer, where their slot type admits it.
+  refine GoodW.bind (forIn_goodW (RowsOK p) _ _ _ hs ?_) fun s hs => hs
+  intro m _ s hs
   dsimp only
   split
-  · next ho =>
-    have ho' : st.owner = .some owner := by simpa using ho
-    obtain ⟨t, ht, hle⟩ := hinit st hmem ho'
-    refine GoodW.bind (eval_sound_E hfn hE ((henv.withRows hs).envOKE' hp hE hc) hl ht) fun v hv => ?_
-    split
-    · simp only [bind, Except.bind, throw, throwThe, MonadExceptOf.throw, GoodW]
-      rw [henv.prog, unfit_typed (typed_of_valTy v (ValTy.mono hv hle))]
-      exact hE _ trivial (by simp)
-    · next hc =>
-      simp only [pure, Except.pure, GoodW, ForInStep.value]
-      refine hs.append fun x w hx => ?_
-      simp only [List.mem_singleton, Prod.mk.injEq] at hx
-      obtain ⟨rfl, rfl⟩ := hx
-      rw [slotTy_state hp.names hmem]
-      rw [henv.prog] at hc
-      simpa using hc
+  · next hm =>
+    simp only [pure, Except.pure, GoodW, ForInStep.value]
+    refine hs.append fun x w hx => ?_
+    simp only [List.mem_singleton, Prod.mk.injEq] at hx
+    obtain ⟨rfl, rfl⟩ := hx
+    simp only [Bool.and_eq_true] at hm
+    rw [← henv.prog]; exact hm.2
   · exact hs
 
 /-! ## A child's requests -/

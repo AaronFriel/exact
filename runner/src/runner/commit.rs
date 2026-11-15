@@ -42,6 +42,8 @@ pub(super) struct Checkpoint {
     origins: super::modules::OriginsSaved,
     /// The arguments refused a child's resource (LLP 1133.007 D13).
     refused_args: super::modules::Refused,
+    /// What sends had written into instances before it (LLP 1035.005.004 D6).
+    send_undo: usize,
 }
 
 /// What a settlement publishes that a refusal after it — the gate step
@@ -108,6 +110,7 @@ impl<D: DataSource> Runner<D> {
             origins: self.origins_saved(),
             refused_args: self.refused_saved(),
             letting: self.letting_len(),
+            send_undo: self.send_undo.len(),
         }
     }
 
@@ -124,6 +127,7 @@ impl<D: DataSource> Runner<D> {
         self.conclude_router(refused);
         match result {
             Ok(_) => {
+                self.send_undo.truncate(c.send_undo);
                 self.module_work.standing = None;
                 self.module_work.reply_reader = None;
                 self.persist_slots();
@@ -134,6 +138,7 @@ impl<D: DataSource> Runner<D> {
                 self.invocations_let_go();
             }
             Err(e) if self.poisoned && !was_poisoned => {
+                self.send_undo.truncate(c.send_undo);
                 self.samples_refused();
                 self.restore_store_refused(c.store);
                 self.refuse_batches(c.sockets, &crate::failure::Failure::of(e).message);
@@ -161,6 +166,7 @@ impl<D: DataSource> Runner<D> {
                 }
                 self.uploads = c.uploads;
                 self.failed_mut = c.failed_mut;
+                self.undo_sends(c.send_undo);
                 self.refresh_next = c.refresh_next;
                 if kept {
                     self.ask_failed_readers(None);
@@ -189,6 +195,8 @@ impl<D: DataSource> Runner<D> {
                 self.origins_restore(c.origins);
                 self.refused_restore(c.refused_args);
                 self.queues.restore(c.queues);
+                // A child's send rows this commit made stay, idle.
+                self.pad_mutation_rows();
                 self.timers = c.timers;
                 if let Some(p) = c.published {
                     self.settled = p.settled;
@@ -293,7 +301,7 @@ impl<D: DataSource> Runner<D> {
     /// what it causes, and a refused `then` leaves the answer standing.
     pub(super) fn arm_then(&mut self, stood: bool) {
         for m in std::mem::take(&mut self.landed) {
-            if stood && self.plan.mutations[m].then.is_some() {
+            if stood && self.mutation_row(m).then.is_some() {
                 self.then_due[m] = self.armed_at();
                 self.note_then(m);
             }
@@ -405,7 +413,7 @@ impl<D: DataSource> Runner<D> {
         // its turn (LLP 1092 D2). A parallel one's is always asked, as its
         // own target (LLP 1161.000 D2, D5).
         let mut later: Vec<Later> = Vec::new();
-        let mut answered: Vec<(u32, Value)> = Vec::new();
+        let mut answered: Vec<(usize, usize, Value)> = Vec::new();
         let mut asked: Vec<usize> = Vec::new();
         let mut landed_now: Vec<usize> = Vec::new();
         let mut failed_now = Vec::new();
@@ -421,8 +429,15 @@ impl<D: DataSource> Runner<D> {
         // is ready (LLP 1092 D2).
         let mut unsent: Vec<Unsent> = Vec::new();
         for (m, source, sargs) in &outcome.sends {
-            let m = *m as usize;
-            let mode = self.plan.mutations[m].mode;
+            // A child's send goes to its instance's row (LLP 1035.005.004 D6).
+            let m = match self.send_row(*m as usize, frames) {
+                Ok(m) => m,
+                Err(e) => {
+                    self.discard_later(&later);
+                    return Err(e);
+                }
+            };
+            let mode = self.mutation_row(m).mode;
             let queue = mode == MutationMode::Queue;
             if mode == MutationMode::Parallel {
                 let more = (later.iter().map(|l| l.0)).chain(unsent.iter().map(|u| u.0));
@@ -459,7 +474,7 @@ impl<D: DataSource> Runner<D> {
             asked.push(m);
             match self.ask_send(target, source, sargs, write) {
                 Ok(super::queue::Asked::Now(slot, v)) => {
-                    answered.push((slot as u32, v));
+                    answered.push((m, slot, v));
                     self.landed.push(m);
                     landed_now.push(m);
                     // It replaces an earlier send of this action still to go
@@ -517,6 +532,12 @@ impl<D: DataSource> Runner<D> {
                 return Err(refusal);
             }
         }
+        // An answer given at once lands before the action's own writes, so
+        // an assignment in the same action wins; a child's lands in its
+        // instance.
+        for (m, slot, value) in answered {
+            self.land_send(m, slot, value);
+        }
         // Row writes land in their rows now, remembered for a rollback.
         let mut row_undo: Vec<(RowSlots, u32, Option<Value>)> = Vec::new();
         for (slot, value, rows) in outcome.row_writes {
@@ -524,10 +545,18 @@ impl<D: DataSource> Runner<D> {
             row_undo.push((rows, slot, old));
         }
         let first_command = self.commands.len();
-        for (slot, value) in answered {
-            self.slots[slot as usize] = value;
-        }
         let written: Vec<u32> = outcome.writes.iter().map(|(s, _)| *s).collect();
+        // The mutation rows whose slot the action assigned: a root slot, or
+        // a child's in the instance whose action ran.
+        let written_rows: Vec<usize> = (0..self.mutation_rows())
+            .filter(|&m| {
+                if m < self.plan.mutations.len() && self.plan.mutations[m].owner.is_none() {
+                    written.contains(&self.plan.mutations[m].slot.0)
+                } else {
+                    self.assigned_in(m, &row_undo)
+                }
+            })
+            .collect();
         for (slot, value) in outcome.writes {
             self.slots[slot as usize] = value;
         }
@@ -545,13 +574,11 @@ impl<D: DataSource> Runner<D> {
         // a refused assignment did not change what reply the view wants.
         // A queue's or a parallel mutation's assignment forgets nothing:
         // every reply still lands (LLP 1092 D4, LLP 1161.000 D4).
-        let assigned: Vec<usize> = (0..self.plan.mutations.len())
-            .filter(|m| written.contains(&self.plan.mutations[*m].slot.0) && self.newest_wins(*m))
+        let assigned: Vec<usize> = (written_rows.iter().copied())
+            .filter(|m| self.newest_wins(*m))
             .collect();
-        for m in 0..self.plan.mutations.len() {
-            if written.contains(&self.plan.mutations[m].slot.0) {
-                self.failed_mut[m] = None;
-            }
+        for &m in &written_rows {
+            self.failed_mut[m] = None;
         }
         for m in asked.iter().chain(assigned.iter()) {
             if !failed_now.contains(m) {
@@ -662,10 +689,8 @@ impl<D: DataSource> Runner<D> {
         for (rows, slot, _) in &row_undo {
             self.row_writes.record(frames, rows, *slot);
         }
-        for m in 0..self.plan.mutations.len() {
-            if written.contains(&self.plan.mutations[m].slot.0) {
-                self.failed_mut[m] = None;
-            }
+        for &m in &written_rows {
+            self.failed_mut[m] = None;
         }
         for m in asked.iter().chain(assigned.iter()) {
             if !failed_now.contains(m) {
@@ -694,9 +719,7 @@ impl<D: DataSource> Runner<D> {
             .map(|u| of(u.0))
             .filter(|m| !assigned.contains(m))
         {
-            self.log(super::lines::unsent(
-                self.plan.str(self.plan.mutations[m].name),
-            ));
+            self.log(super::lines::unsent(self.mutation_name(m)));
         }
         self.take_set_modes(first_command);
         // A module's sends that answer nothing (LLP 1133.004 D5): the
@@ -807,20 +830,23 @@ impl<D: DataSource> Runner<D> {
     /// Recheck the plan relation at the write boundary instead of trusting
     /// that a decoded plan is the only possible caller.
     pub(super) fn mutation_slot(&self, mutation: usize) -> Result<usize, RunnerError> {
-        let mutation = MutationsId(mutation as u32);
+        let mutation = MutationsId(self.mutation_site(mutation) as u32);
         self.plan
             .validate_mutation_slot(mutation)
             .map_err(RunnerError::Plan)?;
         Ok(self.plan.mutation(mutation).slot.0 as usize)
     }
 
-    /// The resources mutation `m` declares it refreshes.
+    /// The resources mutation row `m` declares it refreshes: a child's
+    /// send, its instance's requests for them.
     pub(super) fn declared_refreshes(&self, m: usize) -> Vec<usize> {
-        let range = self.plan.mutations[m].refreshes;
-        self.plan.mutation_refreshes[range.start as usize..(range.start + range.len) as usize]
+        let range = self.mutation_row(m).refreshes;
+        let declared = self.plan.mutation_refreshes
+            [range.start as usize..(range.start + range.len) as usize]
             .iter()
             .map(|row| row.resource.0 as usize)
-            .collect()
+            .collect();
+        self.refreshed_rows(m, declared)
     }
 
     /// Ask resource `r` again, forced, at the next settlement that can.

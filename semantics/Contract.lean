@@ -9,6 +9,7 @@ import Contract.Route
 import Contract.Sort
 import Contract.SortFacts
 import Contract.Eval
+import Contract.Settle
 import Contract.Runtime
 import Contract.Observe
 import Contract.Big

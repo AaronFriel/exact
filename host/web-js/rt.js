@@ -441,7 +441,8 @@ export function commit(f, what = 'commit', finished) {
   const was = Now.v,
     undo = [],
     saved = Resources.map(r => r.save()),
-    held = Mutations.map(m => [m.ticket, m.tickets, m.concluded]),
+    // by mutation: an instance's come and go with it (each.js `ownMut`)
+    held = Mutations.map(m => [m, m.ticket, m.tickets, m.concluded]),
     store = Store.save(),
     queued = Sched?.save(),
     writes = Ov.save();
@@ -488,9 +489,7 @@ export function commit(f, what = 'commit', finished) {
     }
     // new list members end through their refusal callbacks (each.js)
     Resources.forEach((r, k) => k < saved.length && r.restore(saved[k]));
-    Mutations.forEach((m, k) => {
-      [m.ticket, m.tickets, m.concluded] = held[k];
-    });
+    for (const [m, ...h] of held) [m.ticket, m.tickets, m.concluded] = h;
     Sched?.restore(queued);
     Ov.restore(writes);
     Store.restore(store);
@@ -939,4 +938,4 @@ export * from './router.js';
 import { routerValid } from './router.js';
 export { queues, gated } from './schedule.js'; // queued sends and gated tasks (LLP 1092), their own file
 export { timerWaits } from './timer-waits.js';
-export { resEach, owned, own, keptOwned, rowPath } from './each.js';
+export { resEach, owned, own, ownedMut, ownMut, keptOwned, rowPath } from './each.js';

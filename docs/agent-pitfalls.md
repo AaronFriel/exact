@@ -930,9 +930,11 @@ price: answers arrive `Later`, outside the action's transaction (LLP 1027.002 D1
   `macos`, `ios` and `wasm32` arms, built for wasm32, ran the `wasm32` one;
   2026-11-12.)
 
-- **App resources belong in the root component.** A child can declare a reserved
-  viewport reader, but an app source there fails with `type-child-resource`.
-  Declare the resource in the root and pass the value the child needs as a prop.
+- **A row cannot own a request.** A component that declares a resource or a
+  mutation, used under a `for` over data or in a virtualized `list`, fails with
+  `type-child-resource`; it may own them as a screen, a tab or an `if` arm.
+  Declare the root's resource over the list, or the mutation in the root, and
+  pass each row its answer or an action that sends it.
 
 - **A send reads a derive from before the action's writes.** An action's writes
   commit together; reading a derive after assigning one of its inputs still reads

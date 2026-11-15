@@ -30,6 +30,8 @@ pub(crate) mod lower;
 mod markdown;
 #[path = "motion.rs"]
 mod motion;
+#[path = "mutations.rs"]
+mod mutations;
 #[path = "named_records.rs"]
 mod named_records;
 #[path = "pages.rs"]
@@ -391,28 +393,12 @@ pub fn emit(plan: &Plan, site_attrs: bool, dev_reload: bool) -> Result<Output, S
             &mut em.uses,
         )?);
     }
-    for (i, m) in plan.mutations.iter().enumerate() {
-        let refreshes: Vec<String> = m
-            .refreshes
-            .iter()
-            .map(|x| format!("r_{}", plan.mutation_refreshes[x.0 as usize].resource.0))
-            .collect();
-        let mt = em.uses.rt("mut");
-        // A queue's sends wait their turn (LLP 1092 D6; schedule.js); a
-        // parallel one's run together (LLP 1161.000 D6).
-        let _ = write!(
-            body,
-            "const m_{i}={mt}({},s_{},[{}],{}{});",
-            serde_json::to_string(plan.str(m.name)).unwrap(),
-            m.slot.0,
-            refreshes.join(","),
-            serde_json::to_string(&type_code(plan, m.ty)).unwrap(),
-            match m.mode {
-                exact_plan::MutationMode::Newest => "",
-                exact_plan::MutationMode::Queue => ",1",
-                exact_plan::MutationMode::Parallel => ",2",
-            }
-        );
+    // A child's mutation used outside every region answers into a late
+    // slot: declared after it (LLP 1035.005.004 D6).
+    let (late_mutations, early_mutations): (Vec<usize>, Vec<usize>) = (0..plan.mutations.len())
+        .partition(|&i| plan.slots[plan.mutations[i].slot.0 as usize].late);
+    for i in early_mutations {
+        body.push_str(&mutations::declaration(plan, i, &mut em.uses));
     }
     // A child's state used outside every region: initialized as the root
     // instance renders, after the derives and resources (LLP 1017 P4c).
@@ -430,6 +416,9 @@ pub fn emit(plan: &Plan, site_attrs: bool, dev_reload: bool) -> Result<Output, S
             dev_reload,
             &mut em.uses,
         )?);
+    }
+    for i in late_mutations {
+        body.push_str(&mutations::declaration(plan, i, &mut em.uses));
     }
     for (i, r) in plan.actions.iter().enumerate() {
         // An action that touches row slots takes the row in force first.
@@ -487,10 +476,8 @@ pub fn emit(plan: &Plan, site_attrs: bool, dev_reload: bool) -> Result<Output, S
             let _ = write!(body, "const a_{i}={act}({f},[{}]{tail});", types.join(","));
         }
     }
-    for (i, m) in plan.mutations.iter().enumerate() {
-        if let Some(a) = m.then {
-            let _ = write!(body, "m_{i}.then=a_{};", a.0);
-        }
+    for i in 0..plan.mutations.len() {
+        body.push_str(&mutations::root_then(plan, i, &top, &mut em.uses)?);
     }
     em.out.clear();
     em.node(sites.root, "$R", &top)?;

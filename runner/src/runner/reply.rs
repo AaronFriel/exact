@@ -266,7 +266,7 @@ impl<D: DataSource> Runner<D> {
         let failed_end = matches!(outcome, Outcome::Failed { .. });
         let ty = match p.target {
             Target::Resource(i) => self.resource_row(i).ty,
-            Target::Mutation(m) | Target::Sent(m, _) => self.plan.mutations[m].ty,
+            Target::Mutation(m) | Target::Sent(m, _) => self.mutation_row(m).ty,
         };
         self.store.take_topics();
         self.snapshot_sockets();
@@ -498,7 +498,7 @@ impl<D: DataSource> Runner<D> {
                 // leaves the slot and the failure (LLP 1161.000 D4).
                 if self.conclude_send(p.target) {
                     self.failed_mut[m] = None;
-                    self.slots[slot] = Value::some(value);
+                    self.land_send(m, slot, Value::some(value));
                 }
                 self.landed.push(m);
                 // The reply landed: what the mutation changed is asked again

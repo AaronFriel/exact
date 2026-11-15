@@ -407,6 +407,9 @@ pub struct Update<'a> {
     /// Resources a child declares whose request in some instance shows
     /// something new since the last update (LLP 1035.005.004 D2).
     pub owned: Vec<usize>,
+    /// Mutations a child declares whose `pending` or failure in some
+    /// instance changed since the last update (D6).
+    pub owned_sends: Vec<usize>,
     /// Inputs changed since the tree last updated; `None` outside
     /// [`Tree::update`], where everything is stale.
     changed: Option<Bits>,
@@ -480,6 +483,7 @@ impl<'a> Update<'a> {
             full: false,
             rows: RowWrites::default(),
             owned: Vec::new(),
+            owned_sends: Vec::new(),
             changed: None,
             dirty_frames: 0,
             dirty_fields: 0,
@@ -1276,6 +1280,9 @@ impl Tree {
         let mut changed = u.sites.data.deps.changed(&self.seen, &u.env);
         for &i in &u.owned {
             u.sites.data.deps.mark_resource(&mut changed, i);
+        }
+        for &i in &u.owned_sends {
+            u.sites.data.deps.mark_mutation(&mut changed, i);
         }
         u.changed = Some(changed);
         let roots = update_all(u, &mut self.children, &[]);

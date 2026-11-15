@@ -36,7 +36,7 @@ theorem results_shape : ∀ m ∈ ["tsResult", "rustResult", "rustExecutorResult
     simp only [List.mem_cons, List.mem_nil_iff, or_false] at hm
     rcases hm with rfl | rfl | rfl <;> decide
   refine Reachable.slotIn ?_ (fun _ _ _ _ _ _ _ _ _ _ _ _ => .of_noAssign hn fun v => .inr ⟨v, rfl⟩)
-    (fun _ _ _ _ => .of_noAssign hn fun v => .inr ⟨v, rfl⟩)
+    (fun _ _ _ _ _ _ => .of_noAssign hn fun v => .inr ⟨v, rfl⟩)
   rintro v (⟨st, hst, hname, -⟩ | ⟨_, -, -, rfl⟩ | ⟨hr, -⟩)
   · simp only [updateLab, List.mem_cons, List.mem_nil_iff, or_false] at hst
     simp only [List.mem_cons, List.mem_nil_iff, or_false] at hm
@@ -147,7 +147,7 @@ zero, a negative number or infinity, however many times `increment` runs:
 past `2^53` adding one rounds back (ties to even). -/
 theorem counter_always : ∀ c, Reachable updateLab c → SlotIn "counter" CounterOK c.slots :=
   Reachable.slotIn counter_boot (fun _ _ _ _ _ _ _ _ _ hc _ _ => counter_keeps hc)
-    (fun _ _ _ hc => counter_keeps hc)
+    (fun _ _ _ _ _ hc => counter_keeps hc)
 
 /-- **The counter is at least one**, in the IEEE order the program's `<`
 and `>=` compare with. -/

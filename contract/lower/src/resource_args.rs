@@ -69,6 +69,56 @@ impl Lowerer<'_> {
         Ok(())
     }
 
+    /// A child's mutations (LLP 1035.005.004 D6): an arm-owned one's slot
+    /// and row name the arm, and a use outside every region's slot is
+    /// `late`; each one's `then` arguments, its lifted action's captured
+    /// props, read in the scope its instance was made in.
+    pub(crate) fn owned_mutations(
+        &mut self,
+        root: &Component,
+        ex: &contract_syntax::Expanded,
+        scope: &Scope,
+    ) -> Result<(), LowerError> {
+        for (i, m) in root.mutations.iter().enumerate() {
+            let owner = ex.mutation_owners.get(i).copied().unwrap_or(Owner::Root);
+            let (arm, scope) = match owner {
+                Owner::Root => continue,
+                Owner::Instance => {
+                    self.b.set_slot_late(self.mutation_slots[i]);
+                    (None, scope.clone())
+                }
+                Owner::Arm { tag, arm } => {
+                    let (id, arm_scope) =
+                        self.arm_scopes
+                            .get(&(tag, arm))
+                            .cloned()
+                            .ok_or_else(|| LowerError {
+                                id: "lower-row-slot",
+                                message: format!(
+                                    "mutation `{}` names a region that was not lowered",
+                                    m.name
+                                ),
+                                span: m.span,
+                            })?;
+                    self.b.set_slot_owner(self.mutation_slots[i], id);
+                    self.b.set_mutation_owner(self.mutations[i], id);
+                    (Some(id), arm_scope)
+                }
+            };
+            let args = ex.mutation_then_args.get(i).map_or(&[][..], Vec::as_slice);
+            if args.is_empty() {
+                continue;
+            }
+            self.sharing.instance = ex.mutation_instances[i];
+            self.sharing.arm = arm;
+            let codes: Result<Vec<_>, _> =
+                args.iter().map(|a| self.expr_code(a, &scope, 0)).collect();
+            self.sharing.arm = None;
+            self.b.set_mutation_then_args(self.mutations[i], &codes?);
+        }
+        Ok(())
+    }
+
     fn one_resource_args(
         &mut self,
         i: usize,

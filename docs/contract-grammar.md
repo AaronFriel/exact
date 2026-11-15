@@ -386,12 +386,17 @@ component's rules hold for its members wherever they are written: a child's
 members file declares no mutation or task.
 
 There is one `props`, `inject`, `provide`, `slot`, and `view` section at most in
-a component. Only the root may own mutations and tasks. Any component may own
-resources (LLP 1035.005.004): each instance of a child asks for its own, after
-the render that makes it, and lets go when the render destroys it. A child's
-resource is not a resource over a list, and a child that owns one is used where
-its instances are bounded: outside every region, under `if` and `match`, or in a
-row of `stack(nav)`, `t.stack` or `nav.tabs`, never under another `for` or in a
+a component. Only the root may own tasks. Any component may own resources and
+mutations (LLP 1035.005.004): each instance of a child asks for its own
+resources, after the render that makes it, and lets go when the render destroys
+it. Each instance sends its own mutations: its own `pending`, failure, queue and
+answer, and its `then` runs in that instance, where it may call an action prop.
+A child's `refreshes` names its own resources. A send in flight when the render
+destroys the instance stays sent, but its answer changes nothing and its `then`
+does not run, and its waiting sends are dropped. A child's resource is not a
+resource over a list, and a child that owns requests is used where its instances
+are bounded: outside every region, under `if` and `match`, or in a row of
+`stack(nav)`, `t.stack` or `nav.tabs`, never under another `for` or in a
 virtualized list (`type-child-resource`). Its state initializers do not read its
 own resources (`type-state-reads-request`). The device's facts,
 `exactViewport()` and `exactPage()` with no arguments (`EmptyState` reads
@@ -3100,9 +3105,9 @@ Syntax is only the first layer. In particular:
   called `name(x)`, as it is declared) but not take a declared shape's constructor name.
 - Action reads see the starting snapshot. Writes land together. Locals are
   immutable and cannot shadow visible names or escape their block.
-- Resources/mutations/tasks are root-owned, but a child may read the device's
-  facts (`exactViewport()`, `exactPage()`, no arguments). A child may own
-  ordinary state, derives, and actions. An action writes only its own admitted slots.
+- Tasks are root-owned. A child may own ordinary state, derives, actions,
+  resources and mutations, each instance its own, where its instances are
+  bounded (`type-child-resource`). An action writes only its own admitted slots.
 - A `then` handler takes no parameters and must not send its own mutation.
 - A state's initializer reads only props, injects and the states above it; a
   resource, derive, mutation, action or later state it names is

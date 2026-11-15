@@ -663,6 +663,8 @@ impl PlanBuilder {
             refreshes: MutationRefreshesRange { start: 0, len: 0 },
             then: None,
             mode: MutationMode::Newest,
+            owner: None,
+            then_args: ArgsRange { start: 0, len: 0 },
         });
         MutationsId(self.plan.mutations.len() as u32 - 1)
     }
@@ -670,6 +672,19 @@ impl PlanBuilder {
     /// The action run after each of `mutation`'s answers lands.
     pub fn set_mutation_then(&mut self, mutation: MutationsId, action: ActionsId) {
         self.plan.mutations[mutation.0 as usize].then = Some(action);
+    }
+
+    /// Make a mutation owned by an arm's instance (LLP 1035.005.004 D6):
+    /// each instance sends on its own.
+    pub fn set_mutation_owner(&mut self, mutation: MutationsId, arm: ArmsId) {
+        self.plan.mutations[mutation.0 as usize].owner = Some(arm);
+    }
+
+    /// The arguments `mutation`'s `then` action takes, read in the frames
+    /// of the instance whose send answered (LLP 1035.005.004 D6).
+    pub fn set_mutation_then_args(&mut self, mutation: MutationsId, args: &[Code]) {
+        let range = self.args(args);
+        self.plan.mutations[mutation.0 as usize].then_args = range;
     }
 
     /// `mutation … queue` (LLP 1092 D1), whose sends wait their turn, or

@@ -3,8 +3,8 @@
 // row is: an element that joins makes one, which asks, unless the boot makes it from a page that answered it
 // (`keptMember`); one that leaves lets only its own ticket go, once the commit that dropped it stands; the others go
 // on. `r` reads their values as `S[]` in the list's order, pending or failed when any element's is.
-import { res, memo, scope, end, untracked, sig, write, eq, say, stood, restoring, owner, onEnd, Resources, Invocation, Refusal, checkpoint, booting, equal, conforms } from "./rt.js";
-import { join, forget } from "./overlay.js";
+import { res, memo, scope, end, untracked, sig, write, eq, say, stood, restoring, owner, onEnd, Resources, Mutations, Invocation, Refusal, checkpoint, booting, equal, conforms } from "./rt.js";
+import { join, forget, drop } from "./overlay.js";
 
 /** The page's answer for an element of list `name` at its arguments `args()`, while the runtime boots (LLP 1048.000
  * D6): an answer at those arguments that still fits. Elements with equal arguments make the same request, so each
@@ -127,6 +127,42 @@ export function own(g, make, path) {
     if (k >= 0) Resources.splice(k, 1);
   });
   untracked(m);
+  return m;
+}
+
+/** A child's mutation row (LLP 1035.005.004 D6): each instance of its arm sends on its own (`ownMut`), under the name
+ * its component declares. */
+export function ownedMut(name) {
+  return { declared: name.split("#")[0], live: new Set() };
+}
+
+/** Row `g`'s mutation for the instance being built: `make(name)` in its scope, after the instance's state and
+ * requests, its `then` the instance's (`then`, run in the instance's frames). The instance's end lets it go: its
+ * tickets are forgotten (a send already made stays made, and its reply changes nothing), its waiting sends and their
+ * writes are dropped, and its `then` does not run (D4). */
+export function ownMut(g, make, then) {
+  const m = make(g.declared);
+  if (m.queue) {
+    m.wait = [];
+    m.stall = null;
+  }
+  m.then = then || null;
+  g.live.add(m);
+  onEnd(() => {
+    g.live.delete(m);
+    for (const t of m.ticket ? [m.ticket] : m.tickets) {
+      Invocation.letGo(t, true);
+      say(`forget ticket ${t.id} (${m.name})`);
+    }
+    const n = m.wait?.length ?? 0;
+    if (n) say(`forgot ${n} waiting send${n === 1 ? "" : "s"} (${m.name})`);
+    Object.assign(m, { ticket: null, tickets: [], wait: m.queue ? [] : m.wait, stall: null, then: null, due: Infinity, next: Infinity });
+    drop(m);
+    const k = Mutations.indexOf(m);
+    if (k >= 0) Mutations.splice(k, 1);
+    // the agent's `mutationRequests` counts every send made, as the runner's does
+    Mutations.retired = (Mutations.retired ?? 0) + m.requests;
+  });
   return m;
 }
 

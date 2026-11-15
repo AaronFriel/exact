@@ -693,7 +693,10 @@ impl<D: DataSource> Runner<D> {
                         .as_ref()
                         .filter(|_| self.member(i).is_none() && want.is_none() && !waking)
                         .filter(|_| self.unchanged(&self.sites.deps().resource_args[i], &now))
-                        .map(|s| s.resource_args[i].clone());
+                        .map(|s| s.resource_args[i].clone())
+                        // A `late` row the last settlement left alone, before
+                        // its slots existed, kept no arguments to reuse.
+                        .filter(|a| a.len() == row.args.len as usize);
                     let evaluated = kept_args.is_none() && want.is_none();
                     for (k, a) in row.args.iter().filter(|_| evaluated).enumerate() {
                         let code = self.plan.arg(a).expr;

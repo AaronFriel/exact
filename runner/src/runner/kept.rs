@@ -894,7 +894,7 @@ impl<D: DataSource> Runner<D> {
         let m = target
             .mutation()
             .expect("a send's target names its mutation");
-        let name = self.plan.str(self.plan.mutations[m].name).to_string();
+        let name = self.mutation_name(m).to_string();
         let answer = self
             .check_send_arguments(m, &args)
             .map_err(|e| format!("{e:?}"))
@@ -918,7 +918,7 @@ impl<D: DataSource> Runner<D> {
                 answer.map_err(|e| format!("{e:?}"))
             });
         let refused = match answer {
-            Ok(super::Answer::Now(value)) if self.conforms(&value, self.plan.mutations[m].ty) => {
+            Ok(super::Answer::Now(value)) if self.conforms(&value, self.mutation_row(m).ty) => {
                 match self.mutation_slot(m) {
                     Ok(slot) => {
                         if self.newest_wins(m) {

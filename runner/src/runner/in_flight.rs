@@ -61,7 +61,7 @@ impl<D: DataSource> Runner<D> {
         for row in &mut self.resources {
             row.pending = false;
         }
-        self.pending_mut = vec![false; self.plan.mutations.len()];
+        self.pending_mut = vec![false; self.mutation_rows()];
         // A stream is pending until its first value commits (LLP 1016.000 D1).
         for p in self.pending.iter().filter(|p| p.in_flight()) {
             match p.target {
@@ -94,9 +94,7 @@ impl<D: DataSource> Runner<D> {
                 crate::agent::declared_name(self.plan.str(self.resource_row(i).name)).to_string()
             }
             Target::Resource(i) => self.plan.str(self.resource_row(i).name).to_string(),
-            Target::Mutation(m) | Target::Sent(m, _) => {
-                self.plan.str(self.plan.mutations[m].name).to_string()
-            }
+            Target::Mutation(m) | Target::Sent(m, _) => self.mutation_name(m).to_string(),
         }
     }
 

@@ -178,7 +178,12 @@ impl Em<'_> {
             .filter(|(_, r)| r.owner.is_some_and(|a| a.0 == arm))
             .map(|(i, _)| i)
             .collect();
-        if self.answers.slots(arm).is_empty() && requests.is_empty() {
+        // And its mutations (D6).
+        let sends: Vec<usize> = (plan.mutations.iter().enumerate())
+            .filter(|(_, m)| m.owner.is_some_and(|a| a.0 == arm))
+            .map(|(i, _)| i)
+            .collect();
+        if self.answers.slots(arm).is_empty() && requests.is_empty() && sends.is_empty() {
             return self.unsettled(Some(arm), scope);
         }
         let mut decl = match &scope.rows {
@@ -232,6 +237,16 @@ impl Em<'_> {
                 i,
                 name,
                 &path,
+                scope,
+                &mut self.uses,
+            )?);
+        }
+        // Made after its requests, which its sends refresh.
+        for i in sends {
+            decl.push_str(&super::mutations::owned(
+                plan,
+                i,
+                name,
                 scope,
                 &mut self.uses,
             )?);

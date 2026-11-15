@@ -104,3 +104,99 @@ fn a_plan_without_owners_names_no_instances() {
     assert!(!js.contains("$q"), "{js}");
     assert!(!js.contains("rowPath"), "{js}");
 }
+
+/// Each book screen owns its detection, whose `then` hands the lines to the
+/// root's action, and a queued save that refreshes its own notes
+/// (runner/tests/it/owned_sends.rs).
+const BOOKS: &str = "routes nav
+  list \"/\"
+  book \"/book/:id\"
+
+shape Lines
+  lines: string[]
+
+component App
+  state shown = \"\"
+  action showLines(lines: string[])
+    shown = lines.join(\",\")
+  view
+    main
+      text shown testId=\"shown\"
+      for e in stack(nav) key=e.id
+        if e.name == \"book\"
+          Book(id=e.params.id, show=showLines)
+        else
+          text \"List\"
+
+component Book
+  props
+    id: string
+    show: action
+  resource notes = notes(id) as shape Lines else empty()
+  mutation detected as shape Lines then got
+  mutation saved as shape Lines queue refreshes notes
+  action detect
+    send detected = detect(id)
+  action got
+    match detected
+      case some(d)
+        show(d.lines)
+      case none
+        show([])
+  action save
+    send saved = save(id)
+  view
+    column
+      text (pending(detected) ? \"detecting\" : \"idle\") testId=`state-${id}`
+      button press=detect testId=`detect-${id}`
+        text \"Detect\"
+      button press=save testId=`save-${id}`
+        text \"Save\"
+";
+
+/// A child's mutation is a stub at the root; each instance makes its own,
+/// after its state and requests, its slot, refreshes and `then` its own.
+#[test]
+fn each_instance_makes_its_own_mutations() {
+    let js = crate::emit::emit(&contract::compile(BOOKS).unwrap(), false, false)
+        .unwrap()
+        .js;
+    assert!(js.contains("const m_0=ownedMut(\"detected#1\")"), "{js}");
+    assert!(js.contains("const m_1=ownedMut(\"saved#1\")"), "{js}");
+    assert!(!js.contains("m_0.then"), "{js}");
+    // Its `then` takes the instance and reads the captured `id` there.
+    assert!(
+        js.contains(".m0=ownMut(m_0,n=>mut(n,$a1[2],[],\"{[s}\"),()=>a_2($a1,"),
+        "{js}"
+    );
+    // The queue refreshes the instance's own notes.
+    assert!(
+        js.contains(".m1=ownMut(m_1,n=>mut(n,$a1[3],[$a1.r0],\"{[s}\",1),0)"),
+        "{js}"
+    );
+    assert!(js.contains("M($r.m0,\"detect\""), "{js}");
+    assert!(js.contains("$a1.m0.p()"), "{js}");
+}
+
+/// A use outside every region answers into a late root slot: its mutation is
+/// the root's, declared after that slot, its `then` reading the root.
+#[test]
+fn a_use_outside_every_region_sends_as_the_root() {
+    let source = BOOKS.replace(
+        "      for e in stack(nav) key=e.id
+        if e.name == \"book\"
+          Book(id=e.params.id, show=showLines)
+        else
+          text \"List\"
+",
+        "      Book(id=\"9\", show=showLines)\n",
+    );
+    let plan = contract::compile(&source).unwrap();
+    let js = crate::emit::emit(&plan, false, false).unwrap().js;
+    assert!(!js.contains("ownMut"), "{js}");
+    let slot = plan.mutations[0].slot.0;
+    let declared = js.find(&format!("const s_{slot}=")).expect("the late slot");
+    let made = js.find("const m_0=mut(\"detected#1\"").expect(&js);
+    assert!(declared < made, "{js}");
+    assert!(js.contains("m_0.then=()=>a_2(\"9\");"), "{js}");
+}

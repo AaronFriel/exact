@@ -156,7 +156,7 @@ theorem subst_get_nil {m : SMap} {records valueOnly : List String} {k : String} 
   simp [Subst.get]
 
 /-- Distinct names across a component's props, injects, states, actions,
-derives and resources (the checker refuses duplicate names). -/
+derives, resources and mutations (the checker refuses duplicate names). -/
 structure Distinct (c : CComponent) : Prop where
   props : (c.props.map (·.name)).Nodup
   states : (c.states.map (·.name)).Nodup
@@ -168,6 +168,8 @@ structure Distinct (c : CComponent) : Prop where
   sd : ∀ x ∈ c.states.map (·.name), x ∉ c.derives.map (·.name)
   pr : ∀ x ∈ c.props.map (·.name), x ∉ c.resources.map (·.name)
   sr : ∀ x ∈ c.states.map (·.name), x ∉ c.resources.map (·.name)
+  pm : ∀ x ∈ c.props.map (·.name), x ∉ c.mutations.map (·.name)
+  sm : ∀ x ∈ c.states.map (·.name), x ∉ c.mutations.map (·.name)
 
 /-- **A prop's replacement** in the expander's substitution for a use: its
 argument substituted at the use site, typed by the declaration when a
@@ -198,6 +200,10 @@ theorem map_prop {records : List String} {s : Subst} {c : CComponent}
           simp only [List.mem_map] at hp; obtain ⟨r, hr, rfl⟩ := hp
           simp only at hpk
           exact hd.pr _ hpn (hpk ▸ List.mem_map_of_mem (List.mem_filter.mp hr).1))]
+      rw [get?_insertAll_not _ _ (fun p hp hpk => by
+          simp only [List.mem_map] at hp; obtain ⟨md, hmd, rfl⟩ := hp
+          simp only at hpk
+          exact hd.pm _ hpn (hpk ▸ List.mem_map_of_mem hmd))]
       rw [get?_insertAll_not _ _ (fun p hp hpk => by
           simp only [List.mem_map] at hp; obtain ⟨r, hr, rfl⟩ := hp
           simp only at hpk
@@ -239,6 +245,10 @@ theorem map_state {records : List String} {s : Subst} {c : CComponent}
           simp only [List.mem_map] at hp; obtain ⟨r, hr, rfl⟩ := hp
           simp only at hpk
           exact hd.sr _ hsn (hpk ▸ List.mem_map_of_mem (List.mem_filter.mp hr).1))]
+      rw [get?_insertAll_not _ _ (fun p hp hpk => by
+          simp only [List.mem_map] at hp; obtain ⟨md, hmd, rfl⟩ := hp
+          simp only at hpk
+          exact hd.sm _ hsn (hpk ▸ List.mem_map_of_mem hmd))]
       rw [get?_insertAll_not _ _ (fun p hp hpk => by
           simp only [List.mem_map] at hp; obtain ⟨r, hr, rfl⟩ := hp
           simp only at hpk

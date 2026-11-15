@@ -145,7 +145,14 @@ def advanceTrace (p : Program) (o : Oracle) (c : Config) (t : F64) : (Config × 
         | (c, out) => ((c, out), [⟨"queue", m, out⟩])
       | .some (.andThen m w a) =>
         let c := { c with armed := c.armed.filter (·.1 != m), now := if c.now < w then w else c.now }
-        match runAction p o c a [] [] with
+        match thenCommit p o c a (thenArgsOf p m) [] [] with
+        | (c, .ok) =>
+          let (result, ran) := go n c
+          (result, ⟨"then", a, .ok⟩ :: ran)
+        | (c, out) => ((c.armNexts p, out), [⟨"then", a, out⟩])
+      | .some (.owned i w a) =>
+        let c := { c with sendRows := disarm c.sendRows i, now := if c.now < w then w else c.now }
+        match ownedThen p o c i a with
         | (c, .ok) =>
           let (result, ran) := go n c
           (result, ⟨"then", a, .ok⟩ :: ran)
@@ -191,7 +198,14 @@ def land (p : Program) (o : Oracle) (c : Config) : (Config × Outcome) × List R
         | (c, out) => ((c, out), [⟨"queue", m, out⟩])
       | .some (.andThen m _ a) =>
         let c := { c with armed := c.armed.filter (·.1 != m) }
-        match runAction p o c a [] [] with
+        match thenCommit p o c a (thenArgsOf p m) [] [] with
+        | (c, .ok) =>
+          let (result, ran) := go n c
+          (result, ⟨"then", a, .ok⟩ :: ran)
+        | (c, out) => ((c.armNexts p, out), [⟨"then", a, out⟩])
+      | .some (.owned i _ a) =>
+        let c := { c with sendRows := disarm c.sendRows i }
+        match ownedThen p o c i a with
         | (c, .ok) =>
           let (result, ran) := go n c
           (result, ⟨"then", a, .ok⟩ :: ran)
@@ -224,7 +238,10 @@ def lines (p : Program) (label : String) (c : Config) (out : Outcome) (commandsB
   | _ =>
     if c.poisoned then head else
     head ++
-    ((c.slots.filter fun (x, _) => p.locale != .some x && x != Format.formatSlot).map fun (x, v) =>
+    -- A child's mutation has an answer per instance: its root slot holds
+    -- none, and is not printed.
+    ((c.slots.filter fun (x, _) => p.locale != .some x && x != Format.formatSlot &&
+        !isOwnedMutation p x).map fun (x, v) =>
       "slot " ++ x ++ " " ++ value v) ++
     ((p.states.filter (·.persist)).filterMap fun st => (lookup st.name c.slots).map fun v =>
       "store " ++ st.name ++ " " ++ value v) ++
@@ -342,6 +359,7 @@ deriving instance Repr for TabInfo
 deriving instance Repr for Settled
 deriving instance Repr for VNode
 deriving instance Repr for Timer
+deriving instance Repr for SendRow
 deriving instance Repr for Config
 deriving instance Repr for Outcome
 

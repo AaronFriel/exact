@@ -207,6 +207,7 @@ impl<D: DataSource> Runner<D> {
         update: impl FnOnce(&mut Tree, &mut Update<'_>) -> Result<(), crate::instance::InstanceError>,
     ) -> Result<UpdateOps, RunnerError> {
         let owned = self.sync_owned();
+        let owned_sends = self.sync_sends();
         let mut tree = self.tree.take().expect("booted");
         let mut ids = std::mem::take(&mut self.ids);
         let rows = std::mem::take(&mut self.row_writes);
@@ -225,6 +226,7 @@ impl<D: DataSource> Runner<D> {
             u.discard = self.kernel.is_detached();
             u.rows = rows;
             u.owned = owned;
+            u.owned_sends = owned_sends;
             u.reuse = self.reuse;
             update(&mut tree, &mut u)
                 .map(|_| (u.ops, u.surfaces, u.notes, u.renewed, u.shown, u.work))

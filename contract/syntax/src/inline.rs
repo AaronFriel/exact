@@ -15,7 +15,8 @@
 //! with its own state (owned by the arm around that `children`).
 
 use crate::ast::{
-    Action, Attr, Binding, Component, Expr, File, Node, Param, ResourceDecl, Stmt, TypeExpr,
+    Action, Attr, Binding, Component, Expr, File, MutationDecl, Node, Param, ResourceDecl, Stmt,
+    TypeExpr,
 };
 use crate::notfound::{implicit_notfound, implicit_notfound_view};
 use crate::parser::SyntaxError;
@@ -102,6 +103,15 @@ pub struct Expanded {
     pub resource_owners: Vec<Owner>,
     /// For each of `root.resources`, the instance whose component declared it.
     pub resource_instances: Vec<u32>,
+    /// For each of `root.mutations`, what owns it, as for a resource
+    /// (LLP 1035.005.004 D6).
+    pub mutation_owners: Vec<Owner>,
+    /// For each of `root.mutations`, the instance whose component declared it.
+    pub mutation_instances: Vec<u32>,
+    /// For each of `root.mutations`, the arguments its `then` action takes:
+    /// a child's lifted action's captured props, read in the use site's
+    /// scope; empty for the root's.
+    pub mutation_then_args: Vec<Vec<Expr>>,
     /// Every use of a component that declares a request, with the repetition
     /// around it a request may not be under (D1): what the type check refuses.
     pub owned_uses: Vec<OwnedUse>,
@@ -364,6 +374,7 @@ fn expand_with_sites(
         extra_states: Vec::new(),
         extra_actions: Vec::new(),
         extra_resources: Vec::new(),
+        extra_mutations: Vec::new(),
         owned_uses: Vec::new(),
         repeats: Vec::new(),
         router_rows: Vec::new(),
@@ -421,6 +432,15 @@ fn expand_with_sites(
         resource_owners.push(owner);
         resource_instances.push(instance);
     }
+    let mut mutation_owners = vec![Owner::Root; root.mutations.len()];
+    let mut mutation_instances = vec![0; root.mutations.len()];
+    let mut mutation_then_args = vec![Vec::new(); root.mutations.len()];
+    for (m, owner, instance, then_args) in ctx.extra_mutations {
+        root.mutations.push(m);
+        mutation_owners.push(owner);
+        mutation_instances.push(instance);
+        mutation_then_args.push(then_args);
+    }
     calls::resolve(&mut root.actions, &records, &mut ctx.errors);
     let mut errors = called_errors;
     errors.append(&mut ctx.errors);
@@ -434,6 +454,9 @@ fn expand_with_sites(
         action_instances,
         resource_owners,
         resource_instances,
+        mutation_owners,
+        mutation_instances,
+        mutation_then_args,
         owned_uses: ctx.owned_uses,
     };
     (expanded, errors)
@@ -477,6 +500,9 @@ struct Ctx<'a> {
     /// The children's requests lifted into the root, with their owners and
     /// the instance that declared them (LLP 1035.005.004 D1).
     extra_resources: Vec<(ResourceDecl, Owner, u32)>,
+    /// The children's mutations lifted into the root, with their owners, the
+    /// instance that declared them and their `then`'s arguments (D6).
+    extra_mutations: Vec<(MutationDecl, Owner, u32, Vec<Expr>)>,
     owned_uses: Vec<OwnedUse>,
     /// The data-sized repetitions around the current site, outermost first.
     repeats: Vec<Repeat>,

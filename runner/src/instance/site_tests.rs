@@ -34,6 +34,7 @@ fn reused_frames_preserve_nested_scopes_and_release_rows_on_error() {
     let owned = |v: f64| crate::vm::Owned {
         slots: BTreeMap::from([(0, Value::Number(v))]),
         requests: Vec::new(),
+        sends: Vec::new(),
     };
     let outer = Rc::new(RefCell::new(owned(7.0)));
     let inner = Rc::new(RefCell::new(owned(9.0)));

@@ -872,13 +872,22 @@ ask, refresh and answer apart, even with equal arguments. A state initializer
 does not read its own component's resources (`type-state-reads-request`); a
 derive or the view does.
 
-A component that owns a resource is used where its instances are bounded:
-outside every region, under `if` and `match`, or in a row of `stack(nav)`,
-`t.stack` or `nav.tabs`. Under any other `for`, or in a virtualized `list`, it is
-refused (`type-child-resource`): declare the root's resource over the list
-(`resource feeds = load(id) for id in ids key=id`) and pass each row its answer.
-Mutations and tasks stay the root's: pass the child the actions that send them
-(`add=addWork`), and name what they refresh in the root. Data two features read
+A component may own a mutation the same way (LLP 1035.005.004 D6). Each
+instance sends it on its own, with its own `pending`, failure, queue and answer,
+and its `refreshes` names the component's own resources. Its `then` runs in the
+instance that sent it and may call an action prop, which is how the answer
+reaches the root: Shelf's `BookScreen` owns `mutation quoted … then detected`,
+and `detected` calls `showQuote(lines)`, passed as `showQuote=showQuote(e.params.id)`.
+Leaving the screen forgets what it sent: a reply after that changes nothing, its
+`then` does not run, and a queued send not yet asked is dropped.
+
+A component that owns a resource or a mutation is used where its instances are
+bounded: outside every region, under `if` and `match`, or in a row of
+`stack(nav)`, `t.stack` or `nav.tabs`. Under any other `for`, or in a virtualized
+`list`, it is refused (`type-child-resource`): declare the root's resource over
+the list (`resource feeds = load(id) for id in ids key=id`) and pass each row its
+answer, or declare the mutation in the root and pass each row an action that
+sends it (`add=addWork`). Tasks stay the root's. Data two features read
 belongs to the root, which passes it down; name its declarations with the
 feature's prefix (`historyDays`), since the root and its members files share one
 set of names.
@@ -5832,7 +5841,7 @@ that restates a constant is weaker evidence than the user's actual sequence.
 | `for t in tokens` with an offset `tokens.slice(0, tokens.indexOf(t))…` in the row, or a `fn` that walks the list it is passed: each row's work grows with the list, and past 65,536 steps that binding is unset (`lower-row-own-list`) | Count it once in the data module: the source gives each token the field it reads (`at`) |
 | `RoundButton(label="Start quiz", …)`, cut to "Start q…" in its 80-point circle (`lower-round-button-label`) | The circle is for a word (Start, Stop, Lap); a screen's main action of more words is `button buttonStyle="filled"` with its `text` (`recipes/content-design.md`) |
 | `now = performanceNow()`, then `now` read in the same action (`analyze-read-after-assign`) | Bind it and read the local: `let stamp = performanceNow()`, `now = stamp`, then `stamp` |
-| Child `resource`, `mutation`, or `task` | Root-owned declaration and props/injections |
+| A child `task`, or a child `resource` or `mutation` used under a `for` over data (`type-child-resource`) | The task in the root; for a row, the root's resource over the list or its mutation, passed down as an answer or an action |
 | `fontSize`, `radius`, `resizeMode` | `font-size`, `border-radius`, `object-fit` |
 | `width=20px` | `width=20` or `width="20px"` |
 | Unbounded `scroll` | Real height/max-height or flex in a bounded layout |

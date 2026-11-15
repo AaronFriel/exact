@@ -45,9 +45,10 @@ inductive CNode where
   | children (id : Nat)
   deriving Repr, Inhabited
 
-/-- A component. Only the root holds mutations and tasks. A child's
-resource is a device fact, which the root holds once for the component,
-or a request each instance owns (LLP 1035.005.004 D1). -/
+/-- A component. Only the root holds tasks. A child's resource is a
+device fact, which the root holds once for the component, or a request
+each instance owns (LLP 1035.005.004 D1); each instance sends a child's
+mutations on its own (D6). -/
 structure CComponent where
   name : String
   props : List PropDecl := []

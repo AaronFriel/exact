@@ -302,6 +302,16 @@
           "name": "mode",
           "codec": "enum:MutationMode",
           "_comment": "How its sends overlap. `newest`: a send forgets the one in flight (LLP 1016 §4). `queue` (@ref LLP 1092 D1, D2): one send in flight; a later send waits, with its send-time arguments, until the one before it is answered or let go and its `then` has run. `parallel` (@ref LLP 1161.000 D2-D4): every send is asked when it is made, each its own target at the data seam, and its reply lands whatever else is out."
+        },
+        {
+          "name": "owner",
+          "codec": "opt:arms",
+          "_comment": "@ref LLP 1035.005.004 D6: a child's mutation, owned by the arm whose instance holds its slot (`slot`'s owner is the same arm). Each instance sends on its own: its own `pending`, failure, ticket, queue, written-through overlay and `then`, which runs in the instance's frames. Destroying the instance forgets its sends: a send already made stays made, its reply changes nothing, its `then` does not run, and its waiting sends are dropped. None: the root's, or a child's used outside every region, whose slot is `late`."
+        },
+        {
+          "name": "then_args",
+          "codec": "range:args",
+          "_comment": "@ref LLP 1035.005.004 D6: the arguments `then` takes, read in the frames of the instance whose send answered (the root's for a mutation without `owner`): a child's lifted action takes its captured props, as a handler passes them. Empty for the root's own mutation."
         }
       ]
     },

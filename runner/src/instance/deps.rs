@@ -489,6 +489,12 @@ impl Deps {
         bits.set(layout.failed_resource(i));
     }
 
+    /// Mark mutation `i`'s pending flag and failure changed in `bits`.
+    pub(crate) fn mark_mutation(&self, bits: &mut Bits, i: usize) {
+        let layout = self.layout.expect("built from a plan");
+        bits.set(layout.pending_mutation(i));
+    }
+
     /// The inputs that differ between what the tree last showed and `env`.
     pub(crate) fn changed(&self, seen: &Seen, env: &Env<'_>) -> Bits {
         let layout = self.layout.expect("built from a plan");
@@ -540,10 +546,13 @@ impl Deps {
                 bits.set(layout.pending_resource(i));
             }
         }
+        // A child's sends have rows after the declared ones, whose readers
+        // the runner names (`mark_mutation`, LLP 1035.005.004 D6).
         for (i, (old, new)) in seen
             .pending_mutations
             .iter()
             .zip(env.pending_mutations)
+            .take(layout.mutations)
             .enumerate()
         {
             if old != new || seen.failed_mutations.get(i) != env.failed_mutations.get(i) {

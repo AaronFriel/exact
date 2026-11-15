@@ -847,6 +847,7 @@ fn lower_body(
         return Err(Vec::new());
     }
     l.owned_resource_args(root, ex, &scope)?;
+    l.owned_mutations(root, ex, &scope)?;
     // Child state (LLP 1017 P4c): each lifted state is initialized where its
     // instance is created — in its owning arm's scope, now that the arms
     // exist, or, for a use outside every region, at the boot render.

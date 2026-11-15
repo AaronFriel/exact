@@ -233,12 +233,29 @@ fn a_childs_state_may_not_start_from_its_own_request() {
 }
 
 #[test]
-fn a_childs_mutation_is_named_with_its_prefix_and_not_gated() {
-    let src = "component A\n  view\n    Composer()\ncomponent Composer\n  mutation sent as shape string\n  view\n    text \"x\"\n";
-    let e = contract::compile(src).unwrap_err();
+fn a_child_owns_its_mutation_except_where_data_sizes_its_uses() {
+    // In a screen: each instance sends on its own, and its `then` names its
+    // own action, which takes its captured props (LLP 1035.005.004 D6).
+    let screen = "routes nav\n  list \"/\"\n  book \"/book/:id\"\ncomponent A\n  state shown = \"\"\n  action show(s: string)\n    shown = s\n  view\n    column\n      for e in stack(nav) key=e.id\n        if e.name == \"book\"\n          Composer(id=e.params.id, done=show)\ncomponent Composer\n  props\n    id: string\n    done: action\n  mutation sent as shape string then ended\n  action send\n    send sent = save(id)\n  action ended\n    done(id)\n  view\n    button press=send\n      text (pending(sent) ? \"…\" : \"Send\")\n";
+    let plan = contract::compile(screen).unwrap_or_else(|e| panic!("{e}"));
+    let m = &plan.mutations[0];
+    let owner = m.owner.expect("the arm's");
+    assert_eq!(plan.slots[m.slot.0 as usize].owner, Some(owner));
+    assert_eq!(m.then_args.len, 1, "the captured `id`");
+    // Outside every region it is the root's, its slot late.
+    let one = "component A\n  view\n    Composer()\ncomponent Composer\n  mutation sent as shape string\n  action send\n    send sent = save()\n  view\n    button press=send\n      text \"Send\"\n";
+    let plan = contract::compile(one).unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(plan.mutations[0].owner, None);
+    assert!(plan.slots[plan.mutations[0].slot.0 as usize].late);
+    // Under a `for` over data, each row would send on its own.
+    let rows = "component A\n  state ids = [\"a\"]\n  view\n    for id in ids key=id\n      Composer()\ncomponent Composer\n  mutation sent as shape string\n  view\n    text \"x\"\n";
+    let e = contract::compile(rows).unwrap_err();
     assert_eq!(e.id, "type-child-resource");
-    assert!(e.message.contains("(`composerSent`)"), "{}", e.message);
-    assert!(!e.message.contains("when nav.tab"), "{}", e.message);
+    assert_eq!(e.message, "`Composer` declares `mutation sent`, and this use is under a `for` over data (line 4): each row would send `sent` and run its `then` on its own. A component that owns requests is used where its instances are tabs, screens or `if` arms. Declare the mutation in `A` (`mutation composerSent as shape …`) and pass each row an action that sends it (docs/contract-for-agents.md, \"A feature's requests\")");
+    // Its `refreshes` names its own component's resources only.
+    let theirs = "shape S\n  id: string\ncomponent A\n  resource s = s() as shape S\n  view\n    Composer()\ncomponent Composer\n  mutation sent as shape string refreshes s\n  view\n    text \"x\"\n";
+    let e = contract::compile(theirs).unwrap_err();
+    assert_eq!(e.id, "type-refreshes-not-resource", "{e}");
 }
 
 #[test]

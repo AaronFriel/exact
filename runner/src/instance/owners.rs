@@ -1,9 +1,10 @@
-//! The instances that own requests (LLP 1035.005.004 D1), found after each
-//! render with the frames their requests' gates and arguments read.
+//! The instances that own requests (LLP 1035.005.004 D1, D6), found after
+//! each render with the frames their requests' gates and arguments read,
+//! and the frames a send's `then` runs in.
 
 use super::*;
 
-/// One live instance that owns requests.
+/// One live instance that owns requests or has sent.
 pub struct OwnerInst {
     /// Its storage, holding what its requests show.
     pub storage: RowSlots,
@@ -15,7 +16,7 @@ pub struct OwnerInst {
 }
 
 impl Tree {
-    /// Every instance that owns a request, in tree order. A virtualized
+    /// Every instance that owns a request or has sent, in tree order. A virtualized
     /// list holds none (the compiler refuses one there), so its rows are
     /// not walked.
     pub fn owners(&self) -> Vec<OwnerInst> {
@@ -83,7 +84,10 @@ fn visit(
     path: &mut String,
     out: &mut Vec<OwnerInst>,
 ) {
-    if let Some(storage) = storage.filter(|s| !s.borrow().requests.is_empty()) {
+    if let Some(storage) = storage.filter(|s| {
+        let s = s.borrow();
+        !s.requests.is_empty() || !s.sends.is_empty()
+    }) {
         out.push(OwnerInst {
             storage: storage.clone(),
             frames: frames.clone(),

@@ -17,7 +17,8 @@ tested against it, differentially and at random.
 | `Contract/SortFacts.lean` | That order proved: a strict total order on keys, and the sort's answer a permutation, sorted by key, stable (below). Kept apart from `Sort.lean`, which the VM model imports and the extracted VM builds at another Lean. |
 | `Contract/Eval.lean` | Operational semantics of expressions: the interpreter `eval`. |
 | `Contract/Tabs.lean` | Navigation tab eligibility and selection, shared by the flat and component interpreters. |
-| `Contract/Runtime.lean` | Operational semantics of programs: statements, actions as transactions, settlement of derives and resources, rendering with keyed rows, timers (gated by `when` and `key=`), queued sends, events. |
+| `Contract/Settle.lean` | Run-time value checks (`conforms`, `typed`), the data seam (`Oracle`), and settlement of derives and resources. |
+| `Contract/Runtime.lean` | Operational semantics of programs: statements, actions as transactions, rendering with keyed rows, a child's requests and sends, timers (gated by `when` and `key=`), queued sends, events. |
 | `Contract/Big.lean` | The same semantics as inductive big-step relations, with proofs that the interpreter is sound and complete for them and that they are deterministic. |
 | `Contract/Axiomatic.lean` | An axiomatic semantics: a Hoare logic for action bodies, proved sound against the operational semantics, plus the transaction laws (a refused action changes nothing, reads see the pre-state, the last write wins). |
 | `Contract/Invariant.lean` | Invariants of runs: the configurations a program reaches from boot by any events (`Reachable`), and the rules that prove a property of all of them (`Reachable.invariant`, `Reachable.slotIn`). |
@@ -1000,7 +1001,7 @@ is armed, due at the commit's time, by every commit that stood in which a
 send into the mutation was answered (here every answer is synchronous,
 `armThens`; arming again moves the due time); it runs as its own commit
 at the next advance or `land`, before any timer due at or after its time, ties by
-the mutations' order. A frame task is the runner's virtual display while
+the mutations' order, then an instance's (below, "A child's sends"). A frame task is the runner's virtual display while
 the host presents no frames (the harness never does): due at
 `virtualFrame 0 k = k·1000/60` for k = 1, 2, …; presented frames
 (`Runner::frame`) are not modelled. One advance makes at most 4096 fires,
@@ -1160,6 +1161,46 @@ What it does not carry:
   An `else` placeholder (the semantics holds the type's zero, as for a
   gated root resource) and an owned request with a placeholder row
   (`x#n#else`) are outside it.
+
+## A child's sends (LLP 1035.005.004 D6)
+
+Each instance of a component that declares a mutation sends it on its own.
+The expansion lifts the mutation per use as `x#n` (`MutationDecl.owner`:
+the region arm whose instances send it; `late` for a use outside every
+region, a root mutation), with its `then`'s arguments (`thenArgs`: the props
+the lifted action captures, read where the use stands). An arm-owned
+mutation's answer is a slot of the instance's row, `none` until it sends
+(`armSlots`); its root slot stays `none`, and neither side prints a `slot`
+line for it. A send from an action lands in the innermost row in force that
+the owner's region made (`sendInstance`, as `applyRowWrites` finds a row
+slot), before the action's writes, as the root's answers do. A send outside
+that row refuses the commit.
+
+The configuration keeps the runner's rows for these sends (`SendRow`): made
+at an instance's first send of a mutation, after the declared mutations'
+rows, in the order made, reusing a row a destroyed instance let go. A commit
+that stood arms each such send's `then` on its row, and the rows of
+instances its render destroyed are let go, their `then`s unarmed
+(`landSends`, `letGo`). An armed row's `then` runs at the next advance or
+`land` (`ownedThen`): in the instance's rows, its arguments read with the
+locals its elements were rendered with. `then`s due at the same time run
+in the order their mutations are declared, the root's before those lifted
+from children, and one mutation's by row (`sendOrder`). A late mutation's `then` reads its
+arguments at the root (`thenCommit`). The corpus has `mutations/owned`.
+
+What it does not carry:
+
+- A send in flight, and leaving before an answer: every answer here is
+  synchronous, so it lands in the sending commit. The runner's
+  (`runner/tests/it/owned_sends.rs`) and the JS target's tests check these.
+- A child's `queue` mutation: its send is outside the semantics (an
+  `unsupported` refusal).
+- A child mutation's `refreshes`: a refreshed request asks again with the
+  same arguments, which the oracle answers as before, as for a root
+  mutation's.
+- The component-level semantics (`Contract.CompSem`) refuses a child's
+  mutations, so `difftest expansion` compares such a file's expansion
+  (`Contract.Expand` lifts them as inline.rs does) but not its meaning.
 
 ## Persisted state (LLP 1116 D5)
 

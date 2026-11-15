@@ -114,6 +114,7 @@ mod media_session;
 pub mod outstanding;
 mod overrun;
 mod owned;
+mod owned_sends;
 mod page;
 mod parallel;
 mod perf;
@@ -464,6 +465,15 @@ pub struct Runner<D: DataSource> {
     then_due: Vec<f64>,
     /// `queue` mutations' waiting sends, `next`s and stalls (LLP 1092).
     queues: queue::Queues,
+    /// Each mutation row's instance: `None` for a declared row, a child's
+    /// send for a row after them (LLP 1035.005.004 D6, `owned_sends.rs`).
+    owned_sends: Vec<Option<owned_sends::OwnedSend>>,
+    /// What this commit's sends wrote into instances, to put back if it is refused.
+    send_undo: Vec<(
+        std::rc::Weak<std::cell::RefCell<vm::Owned>>,
+        u32,
+        Option<Value>,
+    )>,
     next_ticket: u64,
     /// The module's background work's round, when one is out (LLP 1097 D5).
     background: background::Background,
@@ -909,6 +919,8 @@ impl<D: DataSource> Runner<D> {
             unsent: Vec::new(),
             then_due: Vec::new(),
             queues: Default::default(),
+            owned_sends: Vec::new(),
+            send_undo: Vec::new(),
             next_ticket: 1,
             background: Default::default(),
             module_work: Default::default(),
@@ -1047,6 +1059,7 @@ impl<D: DataSource> Runner<D> {
         runner.pending_mut = vec![false; runner.plan.mutations.len()];
         runner.then_due = vec![f64::INFINITY; runner.plan.mutations.len()];
         runner.queues = queue::Queues::new(runner.plan.mutations.len());
+        runner.owned_sends = vec![None; runner.plan.mutations.len()];
         // A carried boot never takes compiled data: it was baked for the
         // initial state, and the carried state is not that.
         runner.settle(carried.is_none())?;

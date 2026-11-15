@@ -185,6 +185,16 @@ structure MutationDecl where
   /-- `queue` (LLP 1092 D1): a send waits while an earlier one of this
   mutation waits, and is asked by an `advance`'s drain. -/
   queue : Bool := false
+  /-- A child's mutation (LLP 1035.005.004 D6): the region arm whose every
+  instance sends it on its own, its answer the instance's row slot and its
+  `then` run in the instance's rows; `none` for the root's. -/
+  owner : Option (Nat × Nat) := .none
+  /-- A child's mutation used outside every region: a root mutation whose
+  `then` arguments are read at the root. -/
+  late : Bool := false
+  /-- The `then` action's arguments, read where it runs: the props a
+  child's lifted action captures (`@capture:n:i`); none for the root's. -/
+  thenArgs : List Expr := []
   deriving Repr, Inhabited
 
 structure ActionDecl where
