@@ -482,7 +482,7 @@
           "file": "$APP/app.contract",
           "id": "lower-asset-path",
           "line": 14,
-          "message": "image source `Assets/d.png` spells the assets/ folder in another case, which a case-sensitive file system (Linux, a web server) does not find; write it \"assets/…\" in lowercase",
+          "message": "image source `Assets/d.png` spells the assets/ folder in another case, which a case-sensitive file system (Linux, a web server) does not find; write it \"assets/\u2026\" in lowercase",
           "related": [],
           "severity": "error"
         },
@@ -847,6 +847,887 @@
           "id": "lower-colour-one-scheme",
           "line": 4,
           "message": "these 4 colours stay the same in dark mode while the platform's text and controls change, so a light card keeps its colour under the platform's white text: name a role for each literal (each token's line says its own repair) or leave it unsaid. Leave the accent unsaid (the platform's; a brand is an `app.forma`), or write it as a role or one `light-dark(light, dark)` pair on `accent-color`. A forced `color-scheme` is no repair: the app then has no dark mode (docs/contract-for-agents.md, \"Colours: say a role, not a value\")",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking3-scroll-arms",
+      "files": {
+        "app.contract": "component App\n  state xs = [1, 2]\n  state maybe: option<string> = some(\"x\")\n  view\n    column height=400\n      column flex=1\n        if true\n          scroll flex=1\n            text \"first\"\n        else\n          scroll flex=1\n            text \"second\"\n      column flex=1 min-height=0\n        scroll flex=1\n          text \"fixed\"\n      column flex=1\n        match maybe\n          case some(x)\n            scroll flex=1\n              text x\n          case none\n            scroll flex=1\n              text \"empty\"\n"
+      },
+      "baseline": "69fe371519b80d2781dfc66db7ab6bb85ed95f51",
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 7,
+          "end_col": 13,
+          "file": "$APP/app.contract",
+          "id": "lower-scroll-grows",
+          "line": 6,
+          "message": "this `column` is at least as tall as its content, so the `scroll` at line 8 inside it is too and never scrolls: a flex item's minimum height is its content's unless it scrolls itself (CSS `min-height: auto`). Write `min-height=0` on this `column`",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 7,
+          "end_col": 13,
+          "file": "$APP/app.contract",
+          "id": "lower-scroll-grows",
+          "line": 16,
+          "message": "this `column` is at least as tall as its content, so the `scroll` at line 19 inside it is too and never scrolls: a flex item's minimum height is its content's unless it scrolls itself (CSS `min-height: auto`). Write `min-height=0` on this `column`",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking3-scroll-classes",
+      "files": {
+        "app.contract": "style Grow\n  flex=1\nstyle Fixed\n  min-height=0\ncomponent App\n  state xs = [1, 2]\n  state maybe: option<string> = some(\"x\")\n  view\n    column height=400\n      column class=Grow\n        for x in xs key=x\n          scroll flex=1\n            text `${x}`\n      column class=(true ? Grow : Fixed)\n        scroll flex=1\n          text \"uncertain\"\n"
+      },
+      "baseline": "69fe371519b80d2781dfc66db7ab6bb85ed95f51",
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 7,
+          "end_col": 13,
+          "file": "$APP/app.contract",
+          "id": "lower-scroll-grows",
+          "line": 10,
+          "message": "this `column` is at least as tall as its content, so the `scroll` at line 12 inside it is too and never scrolls: a flex item's minimum height is its content's unless it scrolls itself (CSS `min-height: auto`). Write `min-height=0` on this `column`",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking3-width-ancestry",
+      "files": {
+        "app.contract": "component App\n  state xs = [1, 2]\n  state maybe: option<string> = some(\"x\")\n  view\n    column\n      column width=\"100%\" padding=20\n      row\n        column width=\"100%\" padding=20\n      if true\n        column width=\"100%\" border=\"1px solid red\"\n      else\n        column width=\"100%\" padding=20 box-sizing=\"border-box\"\n      match maybe\n        case some(x)\n          column width=\"100%\" padding=20\n        case none\n          column width=\"100%\" padding=20\n"
+      },
+      "baseline": "69fe371519b80d2781dfc66db7ab6bb85ed95f51",
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 7,
+          "end_col": 13,
+          "file": "$APP/app.contract",
+          "id": "lower-width-padding",
+          "line": 6,
+          "message": "`width=\"100%\"` with padding is wider than its parent by the padding (the width is of the content, as in CSS's `content-box`), so it runs past its parent and, on a phone, past the screen's right side: drop the width (a block or a stretched flex item fills its parent; give a `flex=1` field `min-width=0`) or say `box-sizing=\"border-box\"`",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 9,
+          "end_col": 15,
+          "file": "$APP/app.contract",
+          "id": "lower-width-padding",
+          "line": 10,
+          "message": "`width=\"100%\"` with padding is wider than its parent by the padding (the width is of the content, as in CSS's `content-box`), so it runs past its parent and, on a phone, past the screen's right side: drop the width (a block or a stretched flex item fills its parent; give a `flex=1` field `min-width=0`) or say `box-sizing=\"border-box\"`",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 11,
+          "end_col": 17,
+          "file": "$APP/app.contract",
+          "id": "lower-width-padding",
+          "line": 15,
+          "message": "`width=\"100%\"` with padding is wider than its parent by the padding (the width is of the content, as in CSS's `content-box`), so it runs past its parent and, on a phone, past the screen's right side: drop the width (a block or a stretched flex item fills its parent; give a `flex=1` field `min-width=0`) or say `box-sizing=\"border-box\"`",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 11,
+          "end_col": 17,
+          "file": "$APP/app.contract",
+          "id": "lower-width-padding",
+          "line": 17,
+          "message": "`width=\"100%\"` with padding is wider than its parent by the padding (the width is of the content, as in CSS's `content-box`), so it runs past its parent and, on a phone, past the screen's right side: drop the width (a block or a stretched flex item fills its parent; give a `flex=1` field `min-width=0`) or say `box-sizing=\"border-box\"`",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 29,
+          "end_col": 35,
+          "file": "$APP/app.contract",
+          "id": "lower-colour-one-scheme",
+          "line": 10,
+          "message": "`red` on `border` stays the same in dark mode while the platform's text and controls change: name a role (`-exact-separator`) or leave it unsaid. Leave the accent unsaid (the platform's; a brand is an `app.forma`), or write it as a role or one `light-dark(light, dark)` pair on `accent-color`. A forced `color-scheme` is no repair: the app then has no dark mode (docs/contract-for-agents.md, \"Colours: say a role, not a value\")",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking3-text-postorder",
+      "files": {
+        "app.contract": "component App\n  state xs = [1, 2]\n  state maybe: option<string> = some(\"x\")\n  view\n    column\n      column width=120\n        column width=100\n          text \"large\" width=48 font-size=\"-exact-body\"\n        text \"fixed\" width=48 font-size=16\n      column width=99\n        text \"next\" font-size=\"-exact-body\"\n"
+      },
+      "baseline": "69fe371519b80d2781dfc66db7ab6bb85ed95f51",
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 11,
+          "end_col": 15,
+          "file": "$APP/app.contract",
+          "id": "lower-text-px-width",
+          "line": 8,
+          "message": "this box's absolute `width` keeps its width bounded while its text can grow at accessibility sizes and may overrun it: express the width and its bounds in `rem` (for example, `width=\"3rem\"`) so they follow the root font, or let the content determine the width. Native Apple controls use the Apple control font, which can scale with Dynamic Type; web controls inherit, and Linux control defaults are fixed",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 9,
+          "end_col": 15,
+          "file": "$APP/app.contract",
+          "id": "lower-text-px-width",
+          "line": 7,
+          "message": "this box's absolute `width` keeps its width bounded while its text can grow at accessibility sizes and may overrun it: express the width and its bounds in `rem` (for example, `width=\"3rem\"`) so they follow the root font, or let the content determine the width. Native Apple controls use the Apple control font, which can scale with Dynamic Type; web controls inherit, and Linux control defaults are fixed",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 7,
+          "end_col": 13,
+          "file": "$APP/app.contract",
+          "id": "lower-text-px-width",
+          "line": 6,
+          "message": "this box's absolute `width` keeps its width bounded while its text can grow at accessibility sizes and may overrun it: express the width and its bounds in `rem` (for example, `width=\"3rem\"`) so they follow the root font, or let the content determine the width. Native Apple controls use the Apple control font, which can scale with Dynamic Type; web controls inherit, and Linux control defaults are fixed",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 7,
+          "end_col": 13,
+          "file": "$APP/app.contract",
+          "id": "lower-text-px-width",
+          "line": 10,
+          "message": "this box's absolute `width` keeps its width bounded while its text can grow at accessibility sizes and may overrun it: express the width and its bounds in `rem` (for example, `width=\"3rem\"`) so they follow the root font, or let the content determine the width. Native Apple controls use the Apple control font, which can scale with Dynamic Type; web controls inherit, and Linux control defaults are fixed",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking3-text-contexts",
+      "files": {
+        "app.contract": "component App\n  state xs = [1, 2]\n  state maybe: option<string> = some(\"x\")\n  view\n    column\n      column font-size=16\n        text \"fixed\" width=50\n        if true\n          text \"large\" width=50 font-size=\"-exact-body\"\n        else\n          text \"inherit\" width=50\n      svg width=100 height=100\n        defs\n          text \"hidden\" font-size=\"-exact-body\"\n        foreignObject width=50 height=50\n          column width=20\n            text \"web\" font-size=\"-exact-body\"\n      column display=\"none\" width=10\n        text \"hidden\" font-size=\"-exact-body\"\n"
+      },
+      "baseline": "69fe371519b80d2781dfc66db7ab6bb85ed95f51",
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 11,
+          "end_col": 15,
+          "file": "$APP/app.contract",
+          "id": "lower-text-px-width",
+          "line": 9,
+          "message": "this box's absolute `width` keeps its width bounded while its text can grow at accessibility sizes and may overrun it: express the width and its bounds in `rem` (for example, `width=\"3rem\"`) so they follow the root font, or let the content determine the width. Native Apple controls use the Apple control font, which can scale with Dynamic Type; web controls inherit, and Linux control defaults are fixed",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 11,
+          "end_col": 17,
+          "file": "$APP/app.contract",
+          "id": "lower-text-px-width",
+          "line": 16,
+          "message": "this box's absolute `width` keeps its width bounded while its text can grow at accessibility sizes and may overrun it: express the width and its bounds in `rem` (for example, `width=\"3rem\"`) so they follow the root font, or let the content determine the width. Native Apple controls use the Apple control font, which can scale with Dynamic Type; web controls inherit, and Linux control defaults are fixed",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking3-state-reverse",
+      "files": {
+        "app.contract": "component App\n  state xs = [1, 2]\n  state maybe: option<string> = some(\"x\")\n  view\n    column\n      column\n        column\n          :active\n            opacity=0.5\n          text \"first\"\n        if true\n          column\n            :disabled\n              opacity=0.5\n        else\n          column\n            :checked\n              opacity=0.5\n      column\n        :active\n          opacity=0.5\n        text \"last\"\n"
+      },
+      "baseline": "69fe371519b80d2781dfc66db7ab6bb85ed95f51",
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 11,
+          "end_col": 18,
+          "file": "$APP/app.contract",
+          "id": "lower-state-dead",
+          "line": 21,
+          "message": "`:active` never holds here: the node writes no `press`, so its rows never show (LLP 1121 D8)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 15,
+          "end_col": 22,
+          "file": "$APP/app.contract",
+          "id": "lower-state-dead",
+          "line": 18,
+          "message": "`:checked` never holds here: the node writes no `checked` or `aria-checked` or `aria-selected` or `aria-pressed`, so its rows never show (LLP 1121 D8)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 15,
+          "end_col": 22,
+          "file": "$APP/app.contract",
+          "id": "lower-state-dead",
+          "line": 14,
+          "message": "`:disabled` never holds here: the node writes no `disabled`, so its rows never show (LLP 1121 D8)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 13,
+          "end_col": 20,
+          "file": "$APP/app.contract",
+          "id": "lower-state-dead",
+          "line": 9,
+          "message": "`:active` never holds here: the node writes no `press`, so its rows never show (LLP 1121 D8)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking3-geometry-import",
+      "files": {
+        "app.contract": "use Body from \"./body.contract\"\ncomponent App\n  state h=0\n  action probe\n    h=frame(\"missing\").height\n  view\n    column\n      button press=probe\n        text \"Probe\"\n      column testId=\"missing\"\n      Body()\n",
+        "body.contract": "component Body\n  view\n    column id=\"other\"\n"
+      },
+      "baseline": "69fe371519b80d2781dfc66db7ab6bb85ed95f51",
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 13,
+          "end_col": 22,
+          "file": "$APP/app.contract",
+          "id": "lower-geometry-id",
+          "line": 5,
+          "message": "`frame(\"missing\")` names no element: nothing in the view has `id=\"missing\"`, so the read answers `unavailable` on every host, as it does before the first layout; `testId=\"missing\"` names an element for tests and the agent, not for a geometry read: give that element `id=\"missing\"` as well",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking3-geometry-dynamic",
+      "files": {
+        "app.contract": "component App\n  state h=0\n  action probe\n    h=frame(\"missing\").height\n  view\n    column\n      button press=probe\n        text \"Probe\"\n      column testId=\"missing\"\n      column id=(true ? \"a\" : \"b\")\n"
+      },
+      "baseline": "69fe371519b80d2781dfc66db7ab6bb85ed95f51",
+      "status": 0,
+      "diagnostics": []
+    },
+    {
+      "name": "checking3-transform-arms",
+      "files": {
+        "app.contract": "component App\n  state n=0\n  action geo(bw: number, bh: number, pw: number, ph: number)\n    n=1\n  action release(x: number, y: number, scale: number, vx: number, vy: number, vs: number)\n    n=2\n  view\n    column overflow=\"hidden\"\n      column id=\"photo\" width=\"100%\" height=\"100%\"\n        if true\n          column transformDragFor=\"photo\" transformgeometry=geo transformrelease=release\n        else\n          column transformDragFor=\"photo\" transformgeometry=geo transformrelease=release\n"
+      },
+      "baseline": "69fe371519b80d2781dfc66db7ab6bb85ed95f51",
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 7,
+          "end_col": 13,
+          "file": "$APP/app.contract",
+          "id": "lower-transform-drag-ineligible",
+          "line": 9,
+          "message": "`transformDragFor=\"photo\"` cannot bind: target `photo` needs a border box; write `box-sizing=\"border-box\"`",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking3-transform-classes",
+      "files": {
+        "app.contract": "style Clip\n  overflow=\"hidden\"\nstyle Other\n  overflow=\"visible\"\ncomponent App\n  state n=0\n  action geo(bw: number, bh: number, pw: number, ph: number)\n    n=1\n  action release(x: number, y: number, scale: number, vx: number, vy: number, vs: number)\n    n=2\n  view\n    column class=(true ? Clip : Other)\n      column id=\"photo\" width=\"100%\" height=\"100%\"\n        if true\n          column transformDragFor=\"photo\" transformgeometry=geo transformrelease=release\n        else\n          column transformDragFor=\"photo\" transformgeometry=geo transformrelease=release\n"
+      },
+      "baseline": "69fe371519b80d2781dfc66db7ab6bb85ed95f51",
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 7,
+          "end_col": 13,
+          "file": "$APP/app.contract",
+          "id": "lower-transform-drag-ineligible",
+          "line": 13,
+          "message": "`transformDragFor=\"photo\"` cannot bind: target `photo` needs a border box; write `box-sizing=\"border-box\"`",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking3-rows-nested",
+      "files": {
+        "app.contract": "shape Item\n  id: string\ncomponent App\n  state items = [Item(id=\"a\"), Item(id=\"b\")]\n  state others = [Item(id=\"c\")]\n  state maybe: option<string> = some(\"x\")\n  view\n    column\n      for row, i in items key=i\n        input value=row.id\n        text `${others.filter(o => o.id == row.id).length}`\n        for other in others key=other.id\n          text other.id\n"
+      },
+      "baseline": "69fe371519b80d2781dfc66db7ab6bb85ed95f51",
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 24,
+          "end_col": 30,
+          "file": "$APP/app.contract",
+          "id": "lower-row-lookup",
+          "line": 11,
+          "message": "each row of `items` searches `others` (`.filter`), so an update walks every row times every item (1,000 \u00d7 1,000 is about 100 ms on a Mac): join it in the data module, giving each row the field it reads",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 9,
+          "end_col": 12,
+          "file": "$APP/app.contract",
+          "id": "lower-row-lookup",
+          "line": 12,
+          "message": "each row of `items` searches `others` (a nested `for`), so an update walks every row times every item (1,000 \u00d7 1,000 is about 100 ms on a Mac): join it in the data module, giving each row the field it reads",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 31,
+          "end_col": 32,
+          "file": "$APP/app.contract",
+          "id": "lower-key-position",
+          "line": 9,
+          "message": "this key reads `i`, the row's position: after a row is inserted or removed before others, their keys name other records, so what a row holds (its state, a field's focus or text, its motion) follows the position; key by something the record keeps, such as its id",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking3-rows-shadowing",
+      "files": {
+        "app.contract": "shape Item\n  id: string\ncomponent App\n  state items = [Item(id=\"a\"), Item(id=\"b\")]\n  state others = [Item(id=\"c\")]\n  state maybe: option<string> = some(\"x\")\n  view\n    column\n      for row, i in items key=i\n        if true\n          text `${items.slice(0, i).length}`\n          match maybe\n            case some(items)\n              text items\n            case none\n              text `${items.slice(0, i).length}`\n        for items in others key=items.id\n          text items.id\n        column\n          :active\n            opacity=0.5\n"
+      },
+      "baseline": "69fe371519b80d2781dfc66db7ab6bb85ed95f51",
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 9,
+          "end_col": 12,
+          "file": "$APP/app.contract",
+          "id": "lower-row-lookup",
+          "line": 17,
+          "message": "each row of `items` searches `others` (a nested `for`), so an update walks every row times every item (1,000 \u00d7 1,000 is about 100 ms on a Mac): join it in the data module, giving each row the field it reads",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 25,
+          "end_col": 30,
+          "file": "$APP/app.contract",
+          "id": "lower-row-own-list",
+          "line": 11,
+          "message": "each row of `items` walks `items` (`.slice`), so a row's work grows with the list: an update walks every row times every item, and past 65,536 list steps the row's binding is unset; count what a row needs once, in the data module, giving each row the field it reads (an offset, a position)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 29,
+          "end_col": 34,
+          "file": "$APP/app.contract",
+          "id": "lower-row-own-list",
+          "line": 16,
+          "message": "each row of `items` walks `items` (`.slice`), so a row's work grows with the list: an update walks every row times every item, and past 65,536 list steps the row's binding is unset; count what a row needs once, in the data module, giving each row the field it reads (an offset, a position)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 13,
+          "end_col": 20,
+          "file": "$APP/app.contract",
+          "id": "lower-state-dead",
+          "line": 21,
+          "message": "`:active` never holds here: the node writes no `press`, so its rows never show (LLP 1121 D8)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking3-keys-held-and-plain",
+      "files": {
+        "app.contract": "shape Item\n  id: string\ncomponent App\n  state items = [Item(id=\"a\"), Item(id=\"b\")]\n  state others = [Item(id=\"c\")]\n  state maybe: option<string> = some(\"x\")\n  view\n    column\n      for row, i in items key=i\n        column\n          if true\n            input value=row.id\n      for row, i in items key=i\n        text row.id\n"
+      },
+      "baseline": "69fe371519b80d2781dfc66db7ab6bb85ed95f51",
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 31,
+          "end_col": 32,
+          "file": "$APP/app.contract",
+          "id": "lower-key-position",
+          "line": 9,
+          "message": "this key reads `i`, the row's position: after a row is inserted or removed before others, their keys name other records, so what a row holds (its state, a field's focus or text, its motion) follows the position; key by something the record keeps, such as its id",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking3-invalid-scroll",
+      "files": {
+        "app.contract": "component App\n  state xs = [1, 2]\n  state maybe: option<string> = some(\"x\")\n  view\n    column definitelyUnknown=1 height=400\n      column flex=1\n        if true\n          scroll flex=1\n            text \"first\"\n        else\n          scroll flex=1\n            text \"second\"\n      column flex=1 min-height=0\n        scroll flex=1\n          text \"fixed\"\n      column flex=1\n        match maybe\n          case some(x)\n            scroll flex=1\n              text x\n          case none\n            scroll flex=1\n              text \"empty\"\n"
+      },
+      "baseline": "69fe371519b80d2781dfc66db7ab6bb85ed95f51",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 12,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-unknown-attr",
+          "line": 5,
+          "message": "`column` has no attribute `definitelyUnknown`",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 7,
+          "end_col": 13,
+          "file": "$APP/app.contract",
+          "id": "lower-scroll-grows",
+          "line": 6,
+          "message": "this `column` is at least as tall as its content, so the `scroll` at line 8 inside it is too and never scrolls: a flex item's minimum height is its content's unless it scrolls itself (CSS `min-height: auto`). Write `min-height=0` on this `column`",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 7,
+          "end_col": 13,
+          "file": "$APP/app.contract",
+          "id": "lower-scroll-grows",
+          "line": 16,
+          "message": "this `column` is at least as tall as its content, so the `scroll` at line 19 inside it is too and never scrolls: a flex item's minimum height is its content's unless it scrolls itself (CSS `min-height: auto`). Write `min-height=0` on this `column`",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking3-invalid-width",
+      "files": {
+        "app.contract": "component App\n  state xs = [1, 2]\n  state maybe: option<string> = some(\"x\")\n  view\n    column definitelyUnknown=1\n      column width=\"100%\" padding=20\n      row\n        column width=\"100%\" padding=20\n      if true\n        column width=\"100%\" border=\"1px solid red\"\n      else\n        column width=\"100%\" padding=20 box-sizing=\"border-box\"\n      match maybe\n        case some(x)\n          column width=\"100%\" padding=20\n        case none\n          column width=\"100%\" padding=20\n"
+      },
+      "baseline": "69fe371519b80d2781dfc66db7ab6bb85ed95f51",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 12,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-unknown-attr",
+          "line": 5,
+          "message": "`column` has no attribute `definitelyUnknown`",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 7,
+          "end_col": 13,
+          "file": "$APP/app.contract",
+          "id": "lower-width-padding",
+          "line": 6,
+          "message": "`width=\"100%\"` with padding is wider than its parent by the padding (the width is of the content, as in CSS's `content-box`), so it runs past its parent and, on a phone, past the screen's right side: drop the width (a block or a stretched flex item fills its parent; give a `flex=1` field `min-width=0`) or say `box-sizing=\"border-box\"`",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 9,
+          "end_col": 15,
+          "file": "$APP/app.contract",
+          "id": "lower-width-padding",
+          "line": 10,
+          "message": "`width=\"100%\"` with padding is wider than its parent by the padding (the width is of the content, as in CSS's `content-box`), so it runs past its parent and, on a phone, past the screen's right side: drop the width (a block or a stretched flex item fills its parent; give a `flex=1` field `min-width=0`) or say `box-sizing=\"border-box\"`",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 11,
+          "end_col": 17,
+          "file": "$APP/app.contract",
+          "id": "lower-width-padding",
+          "line": 15,
+          "message": "`width=\"100%\"` with padding is wider than its parent by the padding (the width is of the content, as in CSS's `content-box`), so it runs past its parent and, on a phone, past the screen's right side: drop the width (a block or a stretched flex item fills its parent; give a `flex=1` field `min-width=0`) or say `box-sizing=\"border-box\"`",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 11,
+          "end_col": 17,
+          "file": "$APP/app.contract",
+          "id": "lower-width-padding",
+          "line": 17,
+          "message": "`width=\"100%\"` with padding is wider than its parent by the padding (the width is of the content, as in CSS's `content-box`), so it runs past its parent and, on a phone, past the screen's right side: drop the width (a block or a stretched flex item fills its parent; give a `flex=1` field `min-width=0`) or say `box-sizing=\"border-box\"`",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 29,
+          "end_col": 35,
+          "file": "$APP/app.contract",
+          "id": "lower-colour-one-scheme",
+          "line": 10,
+          "message": "`red` on `border` stays the same in dark mode while the platform's text and controls change: name a role (`-exact-separator`) or leave it unsaid. Leave the accent unsaid (the platform's; a brand is an `app.forma`), or write it as a role or one `light-dark(light, dark)` pair on `accent-color`. A forced `color-scheme` is no repair: the app then has no dark mode (docs/contract-for-agents.md, \"Colours: say a role, not a value\")",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking3-invalid-text",
+      "files": {
+        "app.contract": "component App\n  state xs = [1, 2]\n  state maybe: option<string> = some(\"x\")\n  view\n    column definitelyUnknown=1\n      column width=120\n        column width=100\n          text \"large\" width=48 font-size=\"-exact-body\"\n        text \"fixed\" width=48 font-size=16\n      column width=99\n        text \"next\" font-size=\"-exact-body\"\n"
+      },
+      "baseline": "69fe371519b80d2781dfc66db7ab6bb85ed95f51",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 12,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-unknown-attr",
+          "line": 5,
+          "message": "`column` has no attribute `definitelyUnknown`",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 11,
+          "end_col": 15,
+          "file": "$APP/app.contract",
+          "id": "lower-text-px-width",
+          "line": 8,
+          "message": "this box's absolute `width` keeps its width bounded while its text can grow at accessibility sizes and may overrun it: express the width and its bounds in `rem` (for example, `width=\"3rem\"`) so they follow the root font, or let the content determine the width. Native Apple controls use the Apple control font, which can scale with Dynamic Type; web controls inherit, and Linux control defaults are fixed",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 9,
+          "end_col": 15,
+          "file": "$APP/app.contract",
+          "id": "lower-text-px-width",
+          "line": 7,
+          "message": "this box's absolute `width` keeps its width bounded while its text can grow at accessibility sizes and may overrun it: express the width and its bounds in `rem` (for example, `width=\"3rem\"`) so they follow the root font, or let the content determine the width. Native Apple controls use the Apple control font, which can scale with Dynamic Type; web controls inherit, and Linux control defaults are fixed",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 7,
+          "end_col": 13,
+          "file": "$APP/app.contract",
+          "id": "lower-text-px-width",
+          "line": 6,
+          "message": "this box's absolute `width` keeps its width bounded while its text can grow at accessibility sizes and may overrun it: express the width and its bounds in `rem` (for example, `width=\"3rem\"`) so they follow the root font, or let the content determine the width. Native Apple controls use the Apple control font, which can scale with Dynamic Type; web controls inherit, and Linux control defaults are fixed",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 7,
+          "end_col": 13,
+          "file": "$APP/app.contract",
+          "id": "lower-text-px-width",
+          "line": 10,
+          "message": "this box's absolute `width` keeps its width bounded while its text can grow at accessibility sizes and may overrun it: express the width and its bounds in `rem` (for example, `width=\"3rem\"`) so they follow the root font, or let the content determine the width. Native Apple controls use the Apple control font, which can scale with Dynamic Type; web controls inherit, and Linux control defaults are fixed",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking3-invalid-state",
+      "files": {
+        "app.contract": "component App\n  state xs = [1, 2]\n  state maybe: option<string> = some(\"x\")\n  view\n    column definitelyUnknown=1\n      column\n        column\n          :active\n            opacity=0.5\n          text \"first\"\n        if true\n          column\n            :disabled\n              opacity=0.5\n        else\n          column\n            :checked\n              opacity=0.5\n      column\n        :active\n          opacity=0.5\n        text \"last\"\n"
+      },
+      "baseline": "69fe371519b80d2781dfc66db7ab6bb85ed95f51",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 12,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-unknown-attr",
+          "line": 5,
+          "message": "`column` has no attribute `definitelyUnknown`",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 11,
+          "end_col": 18,
+          "file": "$APP/app.contract",
+          "id": "lower-state-dead",
+          "line": 21,
+          "message": "`:active` never holds here: the node writes no `press`, so its rows never show (LLP 1121 D8)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 15,
+          "end_col": 22,
+          "file": "$APP/app.contract",
+          "id": "lower-state-dead",
+          "line": 18,
+          "message": "`:checked` never holds here: the node writes no `checked` or `aria-checked` or `aria-selected` or `aria-pressed`, so its rows never show (LLP 1121 D8)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 15,
+          "end_col": 22,
+          "file": "$APP/app.contract",
+          "id": "lower-state-dead",
+          "line": 14,
+          "message": "`:disabled` never holds here: the node writes no `disabled`, so its rows never show (LLP 1121 D8)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 13,
+          "end_col": 20,
+          "file": "$APP/app.contract",
+          "id": "lower-state-dead",
+          "line": 9,
+          "message": "`:active` never holds here: the node writes no `press`, so its rows never show (LLP 1121 D8)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking3-invalid-geometry",
+      "files": {
+        "app.contract": "component App\n  state h=0\n  action probe\n    h=frame(\"missing\").height\n  view\n    column definitelyUnknown=1\n      button press=probe\n        text \"Probe\"\n      column testId=\"missing\"\n"
+      },
+      "baseline": "69fe371519b80d2781dfc66db7ab6bb85ed95f51",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 12,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-unknown-attr",
+          "line": 6,
+          "message": "`column` has no attribute `definitelyUnknown`",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 13,
+          "end_col": 22,
+          "file": "$APP/app.contract",
+          "id": "lower-geometry-id",
+          "line": 4,
+          "message": "`frame(\"missing\")` names no element: nothing in the view has `id=\"missing\"`, so the read answers `unavailable` on every host, as it does before the first layout; `testId=\"missing\"` names an element for tests and the agent, not for a geometry read: give that element `id=\"missing\"` as well",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking3-invalid-transform",
+      "files": {
+        "app.contract": "component App\n  state n=0\n  action geo(bw: number, bh: number, pw: number, ph: number)\n    n=1\n  action release(x: number, y: number, scale: number, vx: number, vy: number, vs: number)\n    n=2\n  view\n    column definitelyUnknown=1 overflow=\"hidden\"\n      column id=\"photo\" width=\"100%\" height=\"100%\"\n        if true\n          column transformDragFor=\"photo\" transformgeometry=geo transformrelease=release\n        else\n          column transformDragFor=\"photo\" transformgeometry=geo transformrelease=release\n"
+      },
+      "baseline": "69fe371519b80d2781dfc66db7ab6bb85ed95f51",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 12,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-unknown-attr",
+          "line": 8,
+          "message": "`column` has no attribute `definitelyUnknown`",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 7,
+          "end_col": 13,
+          "file": "$APP/app.contract",
+          "id": "lower-transform-drag-ineligible",
+          "line": 9,
+          "message": "`transformDragFor=\"photo\"` cannot bind: target `photo` needs a border box; write `box-sizing=\"border-box\"`",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking3-invalid-rows",
+      "files": {
+        "app.contract": "shape Item\n  id: string\ncomponent App\n  state items = [Item(id=\"a\"), Item(id=\"b\")]\n  state others = [Item(id=\"c\")]\n  state maybe: option<string> = some(\"x\")\n  view\n    column definitelyUnknown=1\n      for row, i in items key=i\n        column\n          if true\n            input value=row.id\n      for row, i in items key=i\n        text row.id\n"
+      },
+      "baseline": "69fe371519b80d2781dfc66db7ab6bb85ed95f51",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 12,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-unknown-attr",
+          "line": 8,
+          "message": "`column` has no attribute `definitelyUnknown`",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 31,
+          "end_col": 32,
+          "file": "$APP/app.contract",
+          "id": "lower-key-position",
+          "line": 9,
+          "message": "this key reads `i`, the row's position: after a row is inserted or removed before others, their keys name other records, so what a row holds (its state, a field's focus or text, its motion) follows the position; key by something the record keeps, such as its id",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking3-imported-repeated-widths",
+      "files": {
+        "app.contract": "use Body from \"./body.contract\"\ncomponent App\n  view\n    column\n      Body()\n      Body()\n",
+        "body.contract": "component Body\n  view\n    column width=\"100%\" padding=20\n      text \"scaled\" width=40 font-size=\"-exact-body\"\n"
+      },
+      "baseline": "69fe371519b80d2781dfc66db7ab6bb85ed95f51",
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 5,
+          "end_col": 11,
+          "file": "$APP/body.contract",
+          "id": "lower-width-padding",
+          "line": 3,
+          "message": "`width=\"100%\"` with padding is wider than its parent by the padding (the width is of the content, as in CSS's `content-box`), so it runs past its parent and, on a phone, past the screen's right side: drop the width (a block or a stretched flex item fills its parent; give a `flex=1` field `min-width=0`) or say `box-sizing=\"border-box\"`",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 7,
+          "end_col": 11,
+          "file": "$APP/body.contract",
+          "id": "lower-text-px-width",
+          "line": 4,
+          "message": "this box's absolute `width` keeps its width bounded while its text can grow at accessibility sizes and may overrun it: express the width and its bounds in `rem` (for example, `width=\"3rem\"`) so they follow the root font, or let the content determine the width. Native Apple controls use the Apple control font, which can scale with Dynamic Type; web controls inherit, and Linux control defaults are fixed",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking3-invalid-rows-nested",
+      "files": {
+        "app.contract": "shape Item\n  id: string\ncomponent App\n  state items = [Item(id=\"a\"), Item(id=\"b\")]\n  state others = [Item(id=\"c\")]\n  state maybe: option<string> = some(\"x\")\n  view\n    column definitelyUnknown=1\n      for row, i in items key=i\n        input value=row.id\n        text `${others.filter(o => o.id == row.id).length}`\n        for other in others key=other.id\n          text other.id\n"
+      },
+      "baseline": "69fe371519b80d2781dfc66db7ab6bb85ed95f51",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 12,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-unknown-attr",
+          "line": 8,
+          "message": "`column` has no attribute `definitelyUnknown`",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 24,
+          "end_col": 30,
+          "file": "$APP/app.contract",
+          "id": "lower-row-lookup",
+          "line": 11,
+          "message": "each row of `items` searches `others` (`.filter`), so an update walks every row times every item (1,000 \u00d7 1,000 is about 100 ms on a Mac): join it in the data module, giving each row the field it reads",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 9,
+          "end_col": 12,
+          "file": "$APP/app.contract",
+          "id": "lower-row-lookup",
+          "line": 12,
+          "message": "each row of `items` searches `others` (a nested `for`), so an update walks every row times every item (1,000 \u00d7 1,000 is about 100 ms on a Mac): join it in the data module, giving each row the field it reads",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 31,
+          "end_col": 32,
+          "file": "$APP/app.contract",
+          "id": "lower-key-position",
+          "line": 9,
+          "message": "this key reads `i`, the row's position: after a row is inserted or removed before others, their keys name other records, so what a row holds (its state, a field's focus or text, its motion) follows the position; key by something the record keeps, such as its id",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "checking3-invalid-rows-shadowing",
+      "files": {
+        "app.contract": "shape Item\n  id: string\ncomponent App\n  state items = [Item(id=\"a\"), Item(id=\"b\")]\n  state others = [Item(id=\"c\")]\n  state maybe: option<string> = some(\"x\")\n  view\n    column definitelyUnknown=1\n      for row, i in items key=i\n        if true\n          text `${items.slice(0, i).length}`\n          match maybe\n            case some(items)\n              text items\n            case none\n              text `${items.slice(0, i).length}`\n        for items in others key=items.id\n          text items.id\n        column\n          :active\n            opacity=0.5\n"
+      },
+      "baseline": "69fe371519b80d2781dfc66db7ab6bb85ed95f51",
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 12,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-unknown-attr",
+          "line": 8,
+          "message": "`column` has no attribute `definitelyUnknown`",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 9,
+          "end_col": 12,
+          "file": "$APP/app.contract",
+          "id": "lower-row-lookup",
+          "line": 17,
+          "message": "each row of `items` searches `others` (a nested `for`), so an update walks every row times every item (1,000 \u00d7 1,000 is about 100 ms on a Mac): join it in the data module, giving each row the field it reads",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 25,
+          "end_col": 30,
+          "file": "$APP/app.contract",
+          "id": "lower-row-own-list",
+          "line": 11,
+          "message": "each row of `items` walks `items` (`.slice`), so a row's work grows with the list: an update walks every row times every item, and past 65,536 list steps the row's binding is unset; count what a row needs once, in the data module, giving each row the field it reads (an offset, a position)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 29,
+          "end_col": 34,
+          "file": "$APP/app.contract",
+          "id": "lower-row-own-list",
+          "line": 16,
+          "message": "each row of `items` walks `items` (`.slice`), so a row's work grows with the list: an update walks every row times every item, and past 65,536 list steps the row's binding is unset; count what a row needs once, in the data module, giving each row the field it reads (an offset, a position)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 13,
+          "end_col": 20,
+          "file": "$APP/app.contract",
+          "id": "lower-state-dead",
+          "line": 21,
+          "message": "`:active` never holds here: the node writes no `press`, so its rows never show (LLP 1121 D8)",
           "related": [],
           "severity": "warning"
         }

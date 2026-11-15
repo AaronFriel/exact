@@ -146,7 +146,7 @@ pub(crate) fn with_text_styles(
     out.extend(root_replace::router(checked));
     out.extend(counts::count_plural(checked));
     // @ref LLP 1116.016 D4 — a row that searches another data list; LLP 1017.003 D3, its own; LLP 1142 D6, a key by position.
-    out.extend(rows::row_lookup(checked));
+    out.extend(rows::row_lookup(&checking));
     // @ref LLP 1116.020 D1 — a `delete=` no list row holds.
     out.extend(crate::swipe_rows::unplaced(
         &root.view,
@@ -159,19 +159,19 @@ pub(crate) fn with_text_styles(
     // @ref LLP 1116.021 D7 — a summary card in a grouped list's card.
     out.extend(parts::summary_card_in_list(checked));
     // @ref LLP 1121 D8 — a node's own state part it never meets.
-    states::dead(&root.view, &mut out);
+    states::dead(&checked_view, &mut out);
     performance_now(root, &checked.file.fns, &mut out);
     sounds::undeclared(checked, &mut out);
-    geometry::unnamed(checked, &mut out);
+    geometry::unnamed(&checking, &mut out);
     navigation_back::unnamed(checked, &mut out);
     transform::owners(checked, &mut out);
-    transform_drag::check(&root.view, &checked.file.styles, &mut out);
+    transform_drag::check(&checked_view, &checked.file.styles, &mut out);
     // @ref LLP 1027.005 D6 — an identifying argument of the launch's own.
     launch::launch_identity(root, &checked.file.fns, &mut out);
-    width::width_padding(&root.view, &checked.file.styles, &mut out);
-    scroll_bound::scroll_grows(&root.view, &checked.file.styles, &mut out);
+    width::width_padding(&checked_view, &checked.file.styles, &mut out);
+    scroll_bound::scroll_grows(&checked_view, &checked.file.styles, &mut out);
     container::flex_on_block(&checked_view, &checked.file.styles, &mut out);
-    width::text_px_width(&root.view, &checked.file.styles, lowered, &mut out);
+    width::text_px_width(&checked_view, &checked.file.styles, lowered, &mut out);
     svg::use_foreign_object(&root.view, &mut out);
     out.extend(
         contract_analyze::warnings(checked)

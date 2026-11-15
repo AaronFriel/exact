@@ -23,9 +23,13 @@ impl Body {
             _ => return,
         };
         let segments: Vec<_> = path.segments.iter().map(|s| s.ident.to_string()).collect();
-        let shared = segments
-            .windows(2)
-            .any(|pair| pair[0] == "Node" && matches!(pair[1].as_str(), "walk" | "walk_with"));
+        let shared = segments.windows(2).any(|pair| {
+            pair[0] == "Node"
+                && matches!(
+                    pair[1].as_str(),
+                    "walk" | "walk_with" | "walk_reverse" | "walk_events_with"
+                )
+        });
         if !shared {
             if let Some(name) = segments.last() {
                 self.calls.insert(name.clone());
@@ -220,7 +224,7 @@ fn recursive_view_walks_do_not_grow() {
     let walks = census(root);
     // Conservative candidates include transformations and same-name call edges.
     // LLP 1172.019 §2 item 4 requires this ceiling to fall as checks migrate.
-    const CEILING: usize = 308;
+    const CEILING: usize = 293;
     eprintln!(
         "{} compiler hand walks (ceiling {CEILING}):\n{}",
         walks.len(),
@@ -278,6 +282,8 @@ fn census_finds_direct_mutual_and_iterative_walks_but_not_shared_traversal() {
         fn shared(nodes: &[Node]) { for n in Node::walk(nodes) { check(n); } }
         fn walk(nodes: &[Node]) { for n in Node::walk(nodes) { check(n); } }
         fn walk_with(nodes: &[Node]) { Node::walk_with(nodes, (), |_, _| [Some(()), Some(())]); }
+        fn walk_reverse(nodes: &[Node]) { for n in Node::walk_reverse(nodes) { check(n); } }
+        fn walk_events_with(nodes: &[Node]) { Node::walk_events_with(nodes, (), |_, _| [Some(()), Some(())]); }
     "#).unwrap();
     let mut functions = Functions::default();
     functions.visit_file(&file);
