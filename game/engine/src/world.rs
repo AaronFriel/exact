@@ -645,6 +645,11 @@ impl World {
             .downcast_mut::<Storage<C>>()?
             .remove(e.index as usize)
     }
+    /// Resolve a component column once for repeated row reads (LLP 1172.022.004 F3).
+    /// The handle borrows this world; values and row-borrow checks remain live.
+    pub fn components<C: Component>(&self) -> Components<'_, C> {
+        Components::new(self)
+    }
     /// Test membership without borrowing the component's values.
     pub fn has<C: Component>(&self, e: Entity) -> bool {
         self.sim_reads::<C>();
@@ -663,15 +668,9 @@ impl World {
         self.get_mut_at(target, Location::caller())
     }
     pub(crate) fn get_at<C: Component>(&self, target: impl Target, at: At) -> Option<Ref<'_, C>> {
-        self.sim_reads::<C>();
-        let e = target.entity(self)?;
-        if !self.contains(e) {
-            return None;
-        }
-        let (s, i) = (self.storage::<C>()?, e.index as usize);
-        s.get(i, &self.leases, at)
-            .unwrap_or_else(|_| self.refuse(s.row_conflict(i, false, &self.leases, at)))
+        self.components::<C>().get_at(target, at)
     }
+
     pub(crate) fn get_mut_at<C: Component>(
         &self,
         target: impl Target,
@@ -1475,3 +1474,6 @@ pub use builders::{PropBuilder, SpriteBuilder};
 
 mod storages;
 use storages::Storages;
+
+mod components;
+pub use components::Components;
