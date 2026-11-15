@@ -99,6 +99,23 @@ final class BatchDecodeTests: XCTestCase {
                 XCTAssertEqual(a.title, expected["title"] as? String, file: file, line: line)
                 XCTAssertEqual(a.edited, expected["edited"] as? Bool, file: file, line: line)
                 XCTAssertTrue(a.payload.isEmpty, file: file, line: line)
+            } else if a.op == .fieldContent {
+                XCTAssertEqual(a.contentRect, b.contentRect, file: file, line: line)
+                XCTAssertEqual(a.contentPadding, b.contentPadding, file: file, line: line)
+                XCTAssertEqual(a.fieldCell, expected["cell"] as? Bool, file: file, line: line)
+                XCTAssertTrue(a.payload.isEmpty, file: file, line: line)
+            } else if a.op == .layoutHits {
+                XCTAssertEqual(a.layoutBoxes, b.layoutBoxes, file: file, line: line)
+                XCTAssertTrue(a.payload.isEmpty, file: file, line: line)
+            } else if a.op == .layoutHitsWithdrawn {
+                XCTAssertEqual(a.withdrawnIDs, (expected["ids"] as? [NSNumber])?.map(\.uint32Value), file: file, line: line)
+                XCTAssertTrue(a.payload.isEmpty, file: file, line: line)
+            } else if a.op == .layoutPromote {
+                XCTAssertEqual(a.layoutParent, (expected["parent"] as? NSNumber)?.uint32Value, file: file, line: line)
+                XCTAssertEqual(a.layoutFrame, b.layoutFrame, file: file, line: line)
+                XCTAssertEqual(a.layoutKeep, (expected["keep"] as? [NSNumber])?.map(\.uint32Value), file: file, line: line)
+                XCTAssertEqual(a.layoutChildren, b.layoutChildren, file: file, line: line)
+                XCTAssertTrue(a.payload.isEmpty, file: file, line: line)
             } else {
                 XCTAssertTrue(NSDictionary(dictionary: a.payload).isEqual(to: expected), file: file, line: line)
             }
@@ -412,6 +429,39 @@ final class BatchDecodeTests: XCTestCase {
         XCTAssertNil(duplicate.ops[0].rank)
         XCTAssertNil(duplicate.ops[1].title)
         XCTAssertNil(duplicate.ops[1].edited)
+    }
+
+    func testGeometryAdaptersKeepFoundationCastsInEitherFieldOrder() throws {
+        let rows = [
+            #"{"op":"fieldContent","id":7,"rect":[-1.25,2,30,40],"padding":[null,true,3,"auto"],"cell":1}"#,
+            #"{"op":"fieldContent","rect":[true,2,3,4],"padding":[1,2,3],"cell":"ignored"}"#,
+            #"{"op":"fieldContent","rect":null,"padding":null,"cell":null}"#,
+            #"{"op":"layoutHits","boxes":[[null,[1,2,3,4],5],[true,[false,2,3,4],4294967297,7,"ignored"],[9,[1,2],4],[]]}"#,
+            #"{"op":"layoutHits","boxes":[[null,[1,2,3,4],null]]}"#,
+            #"{"op":"layoutHits","boxes":[false]}"#,
+            #"{"op":"layoutHits","boxes":[]}"#,
+            #"{"op":"layoutHitsWithdrawn","ids":[false,-1,4294967297,1.75]}"#,
+            #"{"op":"layoutHitsWithdrawn","ids":[1,null]}"#,
+            #"{"op":"layoutHitsWithdrawn","ids":[]}"#,
+            #"{"op":"layoutPromote","parent":true,"frame":[0,1,2,3],"children":[[4,[1,2,3,4]],[5,[true,2,3,4]],[],[6,[1,2,3,4],7]],"keep":[false,-1]}"#,
+            #"{"op":"layoutPromote","parent":"ignored","frame":[0,1,2],"children":[false],"keep":[1,null]}"#
+        ]
+        for kind in ["fieldContent", "layoutHits", "layoutHitsWithdrawn", "layoutPromote"] {
+            _ = try compare("{\"ops\":[{\"op\":\"\(kind)\"}]}")
+        }
+        for row in rows {
+            _ = try compare("{\"ops\":[\(row)]}")
+            let comma = try XCTUnwrap(row.firstIndex(of: ","))
+            let head = row[row.index(after: row.startIndex)..<comma]
+            let tail = row[row.index(after: comma)..<row.index(before: row.endIndex)]
+            _ = try compare("{\"ops\":[{\(tail),\(head)}]}")
+        }
+        let duplicate = Batch.decode(Data(#"{"ops":[{"op":"fieldContent","rect":[1,2,3,4],"rect":null,"padding":[1,2,3,4],"padding":null,"cell":true,"cell":null},{"op":"layoutHits","boxes":[[null,[0,0,1,1],2]],"boxes":null}]}"#.utf8))
+        XCTAssertNil(duplicate.error)
+        XCTAssertNil(duplicate.ops[0].contentRect)
+        XCTAssertNil(duplicate.ops[0].contentPadding)
+        XCTAssertNil(duplicate.ops[0].fieldCell)
+        XCTAssertNil(duplicate.ops[1].layoutBoxes)
     }
 
     func testGeneratedInlineStyleDispatchAndDeferredHeight() throws {

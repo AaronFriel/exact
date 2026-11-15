@@ -5466,7 +5466,22 @@
         }
       },
       {
-        "name": "fieldContent"
+        "name": "fieldContent",
+        "typedPayload": true,
+        "fields": {
+          "rect": {
+            "member": "contentRect",
+            "codec": "adapterRect"
+          },
+          "padding": {
+            "member": "contentPadding",
+            "codec": "adapterPadding"
+          },
+          "cell": {
+            "member": "fieldCell",
+            "codec": "adapterBool"
+          }
+        }
       },
       {
         "name": "flow"
@@ -5559,13 +5574,46 @@
         }
       },
       {
-        "name": "layoutHits"
+        "name": "layoutHits",
+        "typedPayload": true,
+        "fields": {
+          "boxes": {
+            "member": "layoutBoxes",
+            "codec": "layoutBoxes"
+          }
+        }
       },
       {
-        "name": "layoutHitsWithdrawn"
+        "name": "layoutHitsWithdrawn",
+        "typedPayload": true,
+        "fields": {
+          "ids": {
+            "member": "withdrawnIDs",
+            "codec": "adapterIDs"
+          }
+        }
       },
       {
-        "name": "layoutPromote"
+        "name": "layoutPromote",
+        "typedPayload": true,
+        "fields": {
+          "parent": {
+            "member": "layoutParent",
+            "codec": "adapterID"
+          },
+          "frame": {
+            "member": "layoutFrame",
+            "codec": "adapterNumberRect"
+          },
+          "children": {
+            "member": "layoutChildren",
+            "codec": "layoutChildren"
+          },
+          "keep": {
+            "member": "layoutKeep",
+            "codec": "adapterIDs"
+          }
+        }
       },
       {
         "name": "sticky"
@@ -5801,7 +5849,52 @@
           "default": 1
         }
       }
-    }
+    },
+    "arrays": [
+      {
+        "codec": "layoutBoxes",
+        "type": "LayoutBoxRecord",
+        "minimum": 3,
+        "nonempty": true,
+        "fields": {
+          "before": {
+            "index": 0,
+            "codec": "adapterID"
+          },
+          "frame": {
+            "index": 1,
+            "codec": "adapterNumberRect",
+            "required": true
+          },
+          "id": {
+            "index": 2,
+            "codec": "adapterID",
+            "required": true
+          },
+          "end": {
+            "index": 3,
+            "codec": "adapterID"
+          }
+        }
+      },
+      {
+        "codec": "layoutChildren",
+        "type": "LayoutChildRecord",
+        "count": 2,
+        "fields": {
+          "id": {
+            "index": 0,
+            "codec": "adapterID",
+            "required": true
+          },
+          "frame": {
+            "index": 1,
+            "codec": "adapterNumberRect",
+            "required": true
+          }
+        }
+      }
+    ]
   },
   "symbols": [
     [
