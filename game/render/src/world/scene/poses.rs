@@ -1,18 +1,29 @@
 use super::decompose;
 use exact_game::{Components, Entity, Globals, Offset, Parent, Transform, Visible, World};
 
+#[cfg(test)]
+thread_local! {
+    static RESOLUTIONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+#[cfg(test)]
+pub(crate) fn resolution_count() -> usize {
+    RESOLUTIONS.with(|n| n.get())
+}
+
 // One feed resolves columns once; each row read still observes live leases.
 // LLP 1172.022.004 F3.
 pub(crate) struct PoseRows<'w> {
     world: &'w World,
-    parents: Components<'w, Parent>,
-    transforms: Components<'w, Transform>,
-    offsets: Components<'w, Offset>,
+    pub(super) parents: Components<'w, Parent>,
+    pub(super) transforms: Components<'w, Transform>,
+    pub(super) offsets: Components<'w, Offset>,
     visible: Components<'w, Visible>,
     globals: Globals<'w>,
 }
 impl<'w> PoseRows<'w> {
     pub(crate) fn new(world: &'w World) -> Self {
+        #[cfg(test)]
+        RESOLUTIONS.with(|n| n.set(n.get() + 1));
         Self {
             world,
             parents: world.components(),
@@ -138,6 +149,13 @@ impl<'w> PoseRows<'w> {
             }
         }
         Some(decompose(global))
+    }
+    /// A changed parent edge resets only its own subtree's interpolation.
+    pub(crate) fn snap_in(&self, e: Entity, chains: Option<&super::ParentChanges>) -> bool {
+        match chains {
+            Some(chains) => chains.get(self.world, e),
+            None => self.snap(e, false),
+        }
     }
     // Bounded even if tools edit a cycle before propagation.
     pub(crate) fn snap(&self, mut e: Entity, parent_changed: bool) -> bool {
