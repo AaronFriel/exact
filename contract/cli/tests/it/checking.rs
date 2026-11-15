@@ -1,5 +1,5 @@
 //! Baseline compiler diagnostics, including imported and related locations.
-//! Captured with 939dd84f2's binary, before the checking representation.
+//! Each batch is captured before migration; the fixture records its baseline.
 //! @ref LLP 1172.019 §2 item 4.
 
 use crate::scratch::Scratch;
@@ -18,7 +18,9 @@ fn checking_preserves_baseline_acceptance_and_diagnostic_provenance() {
         ));
         let root = dir.canonicalize().unwrap();
         for (path, text) in case["files"].as_object().unwrap() {
-            std::fs::write(root.join(path), text.as_str().unwrap()).unwrap();
+            let path = root.join(path);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, text.as_str().unwrap()).unwrap();
         }
         let output = Command::new(env!("CARGO_BIN_EXE_contract"))
             .args([

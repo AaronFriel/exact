@@ -428,6 +428,448 @@
           "severity": "warning"
         }
       ]
+    },
+    {
+      "name": "assets-branches-and-wrappers",
+      "files": {
+        "app.contract": "component App\n  state on = true\n  state item: option<string> = none\n  view\n    column\n      if on\n        image (on ? \"public/a.png\" : \"assets/ok.png\")\n      else\n        video `media/b.mp4` poster=\"public/poster.png\"\n      for x in [1, 2] key=x\n        audio \"audio/c.wav\"\n      match item\n        case some(value)\n          image \"Assets/d.png\"\n        case none\n          image \"../e.png\"\n"
+      },
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 21,
+          "end_col": 35,
+          "file": "$APP/app.contract",
+          "id": "lower-asset-path",
+          "line": 7,
+          "message": "image source `public/a.png` is outside assets/, the folder every host ships the app's pictures and media from; move the file under assets/ and write \"assets/a.png\"",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 15,
+          "end_col": 28,
+          "file": "$APP/app.contract",
+          "id": "lower-asset-path",
+          "line": 9,
+          "message": "video source `media/b.mp4` is outside assets/, the folder every host ships the app's pictures and media from; move the file under assets/ and write \"assets/b.mp4\"",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 36,
+          "end_col": 55,
+          "file": "$APP/app.contract",
+          "id": "lower-asset-path",
+          "line": 9,
+          "message": "video poster `public/poster.png` is outside assets/, the folder every host ships the app's pictures and media from; move the file under assets/ and write \"assets/poster.png\"",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 15,
+          "end_col": 28,
+          "file": "$APP/app.contract",
+          "id": "lower-asset-path",
+          "line": 11,
+          "message": "audio source `audio/c.wav` is outside assets/, the folder every host ships the app's pictures and media from; move the file under assets/ and write \"assets/c.wav\"",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 17,
+          "end_col": 31,
+          "file": "$APP/app.contract",
+          "id": "lower-asset-path",
+          "line": 14,
+          "message": "image source `Assets/d.png` spells the assets/ folder in another case, which a case-sensitive file system (Linux, a web server) does not find; write it \"assets/…\" in lowercase",
+          "related": [],
+          "severity": "error"
+        },
+        {
+          "col": 17,
+          "end_col": 27,
+          "file": "$APP/app.contract",
+          "id": "lower-asset-path",
+          "line": 16,
+          "message": "image source `../e.png` is outside assets/, the folder every host ships the app's pictures and media from; move the file under assets/ and write \"assets/e.png\"",
+          "related": [],
+          "severity": "error"
+        }
+      ]
+    },
+    {
+      "name": "assets-imported-repeated",
+      "files": {
+        "app.contract": "use Picture from \"./media.contract\"\ncomponent App\n  view\n    column\n      Picture()\n      Picture()\n",
+        "media.contract": "component Picture\n  view\n    image \"public/picture.png\"\n"
+      },
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 11,
+          "end_col": 31,
+          "file": "$APP/media.contract",
+          "id": "lower-asset-path",
+          "line": 3,
+          "message": "image source `public/picture.png` is outside assets/, the folder every host ships the app's pictures and media from; move the file under assets/ and write \"assets/picture.png\"",
+          "related": [],
+          "severity": "error"
+        }
+      ]
+    },
+    {
+      "name": "assets-accepted-paths",
+      "files": {
+        "app.contract": "component App\n  view\n    column\n      image \"assets/a.png\"\n      image \"deck/a.png\"\n      image \"symbol:heart\"\n      image \"https://example.invalid/a.png\"\n      video \"https://example.invalid/a.mp4\" poster=\"assets/poster.png\"\n"
+      },
+      "status": 0,
+      "diagnostics": []
+    },
+    {
+      "name": "assets-invalid-svg-linux",
+      "files": {
+        "app.contract": "component App\n  view\n    image \"assets/broken.svg\"\n",
+        "app.json": "{\"app\": {\"id\": \"dev.test.oracle\", \"name\": \"Oracle\"}, \"host\": {\"linux\": {}}}",
+        "assets/broken.svg": "<svg>\n<g>\n</svg>"
+      },
+      "status": 1,
+      "diagnostics": [
+        {
+          "col": 11,
+          "end_col": 30,
+          "file": "$APP/app.contract",
+          "id": "lower-image-svg",
+          "line": 3,
+          "message": "image source `assets/broken.svg` on native hosts: the SVG parser refuses this file: line 3: `</svg>` closes `<g>` from line 2. To fix it, correct the SVG or use a raster image",
+          "related": [],
+          "severity": "error"
+        }
+      ]
+    },
+    {
+      "name": "assets-svg-drops-linux",
+      "files": {
+        "app.contract": "component App\n  view\n    image \"assets/drops.svg\"\n",
+        "app.json": "{\"app\": {\"id\": \"dev.test.oracle\", \"name\": \"Oracle\"}, \"host\": {\"linux\": {}}}",
+        "assets/drops.svg": "<svg><script>x</script><image href=\"https://example.invalid/a.png\"/></svg>"
+      },
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 11,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-image-svg",
+          "line": 3,
+          "message": "image source `assets/drops.svg` on native hosts: line 1: `<script>` does not run in an image. To fix it, rewrite the named construct as static SVG shapes or use a raster image; use inline SVG for animation",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 11,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-image-svg",
+          "line": 3,
+          "message": "image source `assets/drops.svg` on native hosts: line 1: `<image>` is dropped from an SVG image (an external reference): the file still draws. To fix it, rewrite the named construct as static SVG shapes or use a raster image; use inline SVG for animation",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "assets-invalid-svg-web",
+      "files": {
+        "app.contract": "component App\n  view\n    image \"assets/broken.svg\"\n",
+        "app.json": "{\"app\": {\"id\": \"dev.test.oracle\", \"name\": \"Oracle\"}, \"host\": {\"web\": {}}}",
+        "assets/broken.svg": "<svg>\n<g>\n</svg>"
+      },
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 11,
+          "end_col": 30,
+          "file": "$APP/app.contract",
+          "id": "lower-image-svg",
+          "line": 3,
+          "message": "image source `assets/broken.svg` on native hosts: the SVG parser refuses this file: line 3: `</svg>` closes `<g>` from line 2. To fix it, correct the SVG or use a raster image",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "assets-svg-drops-web",
+      "files": {
+        "app.contract": "component App\n  view\n    image \"assets/drops.svg\"\n",
+        "app.json": "{\"app\": {\"id\": \"dev.test.oracle\", \"name\": \"Oracle\"}, \"host\": {\"web\": {}}}",
+        "assets/drops.svg": "<svg><script>x</script><image href=\"https://example.invalid/a.png\"/></svg>"
+      },
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 11,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-image-svg",
+          "line": 3,
+          "message": "image source `assets/drops.svg` on native hosts: line 1: `<script>` does not run in an image. To fix it, rewrite the named construct as static SVG shapes or use a raster image; use inline SVG for animation",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 11,
+          "end_col": 29,
+          "file": "$APP/app.contract",
+          "id": "lower-image-svg",
+          "line": 3,
+          "message": "image source `assets/drops.svg` on native hosts: line 1: `<image>` is dropped from an SVG image (an external reference): the file still draws. To fix it, rewrite the named construct as static SVG shapes or use a raster image; use inline SVG for animation",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "flex-block-imported-branches",
+      "files": {
+        "app.contract": "use Block from \"./blocks.contract\"\ncomponent App\n  state on = true\n  state value: option<string> = none\n  view\n    column\n      Block()\n      Block()\n      if on\n        view gap=4\n      else\n        view grid-template-columns=\"1fr 1fr\"\n      for x in [1, 2] key=x\n        button \"Bare\" appearance=\"none\" flex-direction=\"row\"\n      match value\n        case some(s)\n          view justify-content=\"center\"\n        case none\n          view align-items=\"center\"\n",
+        "blocks.contract": "component Block\n  view\n    view align-items=\"center\"\n"
+      },
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 5,
+          "end_col": 9,
+          "file": "$APP/blocks.contract",
+          "id": "lower-flex-on-block",
+          "line": 3,
+          "message": "`align-items` does nothing on this `view`: it is `display: block`, as in CSS, and they lay out the children of a flex or grid container only; write `column` (children stacked) or `row` in place of `view`, or `display=\"flex\"` (a row unless `flex-direction` says otherwise)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 9,
+          "end_col": 13,
+          "file": "$APP/app.contract",
+          "id": "lower-flex-on-block",
+          "line": 10,
+          "message": "`gap` does nothing on this `view`: it is `display: block`, as in CSS, and they lay out the children of a flex or grid container only; write `column` (children stacked) or `row` in place of `view`, or `display=\"flex\"` (a row unless `flex-direction` says otherwise)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 9,
+          "end_col": 13,
+          "file": "$APP/app.contract",
+          "id": "lower-flex-on-block",
+          "line": 12,
+          "message": "`grid-template-columns` does nothing on this `view`: it is `display: block`, as in CSS, and they lay out the children of a flex or grid container only; write `display=\"grid\"`",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 9,
+          "end_col": 15,
+          "file": "$APP/app.contract",
+          "id": "lower-flex-on-block",
+          "line": 14,
+          "message": "`flex-direction` does nothing on this `button`: it is `display: block`, as in CSS, and they lay out the children of a flex or grid container only; write `display=\"flex\"` (a row unless `flex-direction` says otherwise), and `text-align=\"left\"` where its text should not be centred, as a button's is",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 11,
+          "end_col": 15,
+          "file": "$APP/app.contract",
+          "id": "lower-flex-on-block",
+          "line": 17,
+          "message": "`justify-content` does nothing on this `view`: it is `display: block`, as in CSS, and they lay out the children of a flex or grid container only; write `column` (children stacked) or `row` in place of `view`, or `display=\"flex\"` (a row unless `flex-direction` says otherwise)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 11,
+          "end_col": 15,
+          "file": "$APP/app.contract",
+          "id": "lower-flex-on-block",
+          "line": 19,
+          "message": "`align-items` does nothing on this `view`: it is `display: block`, as in CSS, and they lay out the children of a flex or grid container only; write `column` (children stacked) or `row` in place of `view`, or `display=\"flex\"` (a row unless `flex-direction` says otherwise)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "flex-block-class-exemptions",
+      "files": {
+        "app.contract": "style Flex\n  display=\"flex\"\n  align-items=\"center\"\nstyle Block\n  gap=4\ncomponent App\n  state on = true\n  view\n    column\n      view class=Block\n      view class=Flex\n      view display=(on ? \"block\" : \"flex\") gap=4\n      view column-count=2 gap=4\n      view display=\"grid\" grid-template-columns=\"1fr 1fr\"\n"
+      },
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 7,
+          "end_col": 11,
+          "file": "$APP/app.contract",
+          "id": "lower-flex-on-block",
+          "line": 10,
+          "message": "`gap` does nothing on this `view`: it is `display: block`, as in CSS, and they lay out the children of a flex or grid container only; write `column` (children stacked) or `row` in place of `view`, or `display=\"flex\"` (a row unless `flex-direction` says otherwise)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "control-accent-inheritance",
+      "files": {
+        "app.contract": "style Accent\n  accent-color=\"accent.brand\"\nstyle Plain\n  opacity=1\ncomponent App\n  state on = true\n  state item: option<string> = none\n  action changed(value: bool)\n    on = value\n  view\n    column\n      column accent-color=\"accent.brand\"\n        input type=\"checkbox\" switch checked=on change=changed aria-label=\"Parent\"\n        if on\n          column accent-color=\"auto\"\n            input type=\"checkbox\" switch checked=on change=changed aria-label=\"Cleared\"\n        else\n          column class=(on ? Accent : Plain)\n            input type=\"checkbox\" switch checked=on change=changed aria-label=\"Conditional\"\n        for x in [1, 2] key=x\n          input type=\"checkbox\" switch checked=on change=changed aria-label=\"Row\"\n        match item\n          case some(s)\n            input type=\"checkbox\" switch checked=on change=changed aria-label=\"Some\"\n          case none\n            input type=\"checkbox\" switch checked=on change=changed aria-label=\"None\"\n      input type=\"checkbox\" switch checked=on change=changed aria-label=\"Sibling\"\n",
+        "app.json": "{\"app\": {\"id\": \"dev.test.oracle\", \"name\": \"Oracle\"}, \"host\": {\"macos\": {}, \"ios\": {}, \"web\": {}}}",
+        "app.forma": "forma t\n\ntheme\n  accent.brand = #e0218a\n"
+      },
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 14,
+          "end_col": 26,
+          "file": "$APP/app.contract",
+          "id": "forma-unreachable",
+          "line": 12,
+          "message": "accent-color on macOS switches: NSSwitch draws the system accent (the first at line 13; LLP 1121 D9). The app ships macos (app.json `host.macos`); not shipping it? delete those keys",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 3,
+          "end_col": 15,
+          "file": "$APP/app.forma",
+          "id": "lower-colour-one-scheme",
+          "line": 4,
+          "message": "`accent.brand` is the same colour in light and dark (`#e0218aff`): give it a `light-dark(light, dark)` pair, or mark it `scheme=fixed` in the design if one colour is deliberate (an ink on a fixed fill, a ground under media)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "control-conditional-class",
+      "files": {
+        "app.contract": "style Accent\n  accent-color=\"accent.brand\"\nstyle Plain\n  opacity=1\ncomponent App\n  state on = true\n  state item: option<string> = none\n  action changed(value: bool)\n    on = value\n  view\n    column\n      column class=(on ? Accent : Plain)\n        input type=\"checkbox\" switch checked=on change=changed aria-label=\"Parent\"\n        if on\n          column accent-color=\"auto\"\n            input type=\"checkbox\" switch checked=on change=changed aria-label=\"Cleared\"\n        else\n          column class=(on ? Accent : Plain)\n            input type=\"checkbox\" switch checked=on change=changed aria-label=\"Conditional\"\n        for x in [1, 2] key=x\n          input type=\"checkbox\" switch checked=on change=changed aria-label=\"Row\"\n        match item\n          case some(s)\n            input type=\"checkbox\" switch checked=on change=changed aria-label=\"Some\"\n          case none\n            input type=\"checkbox\" switch checked=on change=changed aria-label=\"None\"\n      input type=\"checkbox\" switch checked=on change=changed aria-label=\"Sibling\"\n",
+        "app.json": "{\"app\": {\"id\": \"dev.test.oracle\", \"name\": \"Oracle\"}, \"host\": {\"macos\": {}, \"ios\": {}, \"web\": {}}}",
+        "app.forma": "forma t\n\ntheme\n  accent.brand = #e0218a\n"
+      },
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 3,
+          "end_col": 15,
+          "file": "$APP/app.contract",
+          "id": "forma-unreachable",
+          "line": 2,
+          "message": "accent-color on macOS switches: NSSwitch draws the system accent (the first at line 13; LLP 1121 D9). The app ships macos (app.json `host.macos`); not shipping it? delete those keys",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 3,
+          "end_col": 15,
+          "file": "$APP/app.forma",
+          "id": "lower-colour-one-scheme",
+          "line": 4,
+          "message": "`accent.brand` is the same colour in light and dark (`#e0218aff`): give it a `light-dark(light, dark)` pair, or mark it `scheme=fixed` in the design if one colour is deliberate (an ink on a fixed fill, a ground under media)",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    },
+    {
+      "name": "control-field-role-exemptions",
+      "files": {
+        "app.contract": "component App\n  state value = \"\"\n  action changed(s: string)\n    value = s\n  view\n    column\n      input value=value input=changed aria-label=\"Own\" color=\"red\" background-color=\"white\"\n      input value=value input=changed aria-label=\"Role\"\n",
+        "app.json": "{\"app\": {\"id\": \"dev.test.oracle\", \"name\": \"Oracle\"}, \"host\": {\"macos\": {}, \"ios\": {}, \"web\": {}}}",
+        "app.forma": "forma t\n\ntheme\n  Field = #ffffff\n  FieldText = #111111\n  placeholder = #444444\n"
+      },
+      "status": 0,
+      "diagnostics": [
+        {
+          "col": 3,
+          "end_col": 3,
+          "file": "$APP/app.forma",
+          "id": "forma-unreachable",
+          "line": 4,
+          "message": "Field on macOS fields: AppKit's bezeled NSTextField draws its own ground; an authored background-color paints Exact's box (the first at line 8; LLP 1121 D9). The app ships macos (app.json `host.macos`); not shipping it? delete those keys",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 3,
+          "end_col": 8,
+          "file": "$APP/app.forma",
+          "id": "lower-colour-one-scheme",
+          "line": 4,
+          "message": "`Field` is the same colour in light and dark (`#ffffffff`): give it a `light-dark(light, dark)` pair, or mark it `scheme=fixed` in the design if one colour is deliberate (an ink on a fixed fill, a ground under media)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 3,
+          "end_col": 12,
+          "file": "$APP/app.forma",
+          "id": "lower-colour-one-scheme",
+          "line": 5,
+          "message": "`FieldText` is the same colour in light and dark (`#111111ff`): give it a `light-dark(light, dark)` pair, or mark it `scheme=fixed` in the design if one colour is deliberate (an ink on a fixed fill, a ground under media)",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 56,
+          "end_col": 61,
+          "file": "$APP/app.contract",
+          "id": "lower-colour-one-scheme",
+          "line": 7,
+          "message": "`red` on `color` stays the same in dark mode: name a role (`-exact-label`, `-exact-secondary-label`, `AccentColor`) or leave it unsaid",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 68,
+          "end_col": 84,
+          "file": "$APP/app.contract",
+          "id": "lower-colour-one-scheme",
+          "line": 7,
+          "message": "`white` on `background-color` stays the same in dark mode: name a role (`-exact-secondary-grouped-background`, `-exact-fill`, `AccentColor`) or leave it unsaid",
+          "related": [],
+          "severity": "warning"
+        },
+        {
+          "col": 3,
+          "end_col": 8,
+          "file": "$APP/app.forma",
+          "id": "lower-colour-one-scheme",
+          "line": 4,
+          "message": "these 4 colours stay the same in dark mode while the platform's text and controls change, so a light card keeps its colour under the platform's white text: name a role for each literal (each token's line says its own repair) or leave it unsaid. Leave the accent unsaid (the platform's; a brand is an `app.forma`), or write it as a role or one `light-dark(light, dark)` pair on `accent-color`. A forced `color-scheme` is no repair: the app then has no dark mode (docs/contract-for-agents.md, \"Colours: say a role, not a value\")",
+          "related": [],
+          "severity": "warning"
+        }
+      ]
+    }
+  ],
+  "batches": [
+    {
+      "baseline": "a229c1bead763d3008c6baeba3b40ef48f207bfd",
+      "cases": [
+        "assets-branches-and-wrappers",
+        "assets-imported-repeated",
+        "assets-accepted-paths",
+        "assets-invalid-svg-linux",
+        "assets-svg-drops-linux",
+        "assets-invalid-svg-web",
+        "assets-svg-drops-web",
+        "flex-block-imported-branches",
+        "flex-block-class-exemptions",
+        "control-accent-inheritance",
+        "control-conditional-class",
+        "control-field-role-exemptions"
+      ]
     }
   ]
 }
