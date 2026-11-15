@@ -98,23 +98,36 @@ func input(_ pid: pid_t, _ numbers: [Double]) throws -> [String: Any] {
         e.setIntegerValueField(.mouseEventClickState, value: 1)
         e.post(tap: .cghidEventTap)
     }
+    return try gesture(numbers, event: event)
+}
+
+func gesture(_ numbers: [Double], event: (CGEventType, CGPoint) throws -> Void,
+             wait: (Double) -> Void = { Thread.sleep(forTimeInterval: $0) }) throws -> [String: Any] {
+    let start = CGPoint(x: numbers[0], y: numbers[1])
+    let drag = numbers.count == 5
+    let duration = drag ? numbers[4] / 1000 : 0.06
     let began = Date().timeIntervalSince1970 * 1000
     let clock = ProcessInfo.processInfo.systemUptime
     var last = start
     try event(.mouseMoved, start)
     try event(.leftMouseDown, start)
-    defer { try? event(.leftMouseUp, last) }
     let steps = drag ? max(2, Int(ceil(duration * 60))) : 1
-    for step in 1...steps {
-        let progress = Double(step) / Double(steps)
-        // The delay defines the gesture's trajectory, not an observation wait.
-        let remaining = clock + duration * progress - ProcessInfo.processInfo.systemUptime
-        if remaining > 0 { Thread.sleep(forTimeInterval: remaining) }
-        if drag {
-            last = CGPoint(x: start.x + numbers[2] * progress, y: start.y + numbers[3] * progress)
-            try event(.leftMouseDragged, last)
+    do {
+        for step in 1...steps {
+            let progress = Double(step) / Double(steps)
+            // The delay defines the gesture's trajectory, not an observation wait.
+            let remaining = clock + duration * progress - ProcessInfo.processInfo.systemUptime
+            if remaining > 0 { wait(remaining) }
+            if drag {
+                last = CGPoint(x: start.x + numbers[2] * progress, y: start.y + numbers[3] * progress)
+                try event(.leftMouseDragged, last)
+            }
         }
+    } catch {
+        try? event(.leftMouseUp, last)
+        throw error
     }
+    try event(.leftMouseUp, last)
     return ["delivery": "CGEvent/HID", "start": began, "end": Date().timeIntervalSince1970 * 1000,
             "from": [start.x, start.y], "to": [last.x, last.y], "moves": drag ? steps : 0]
 }

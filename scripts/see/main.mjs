@@ -38,32 +38,58 @@ function delivered(reply, phase) {
 
 export async function internalInput(session, action) {
   if (action.kind === 'tap') return delivered(await session.tap(action.target), 'tap');
-  let down, move, up;
+  let down, move, up, contact = false, failure;
   try {
-    down = delivered(await session.tap(action.target, {down: true}), 'drag/down');
+    down = await session.tap(action.target, {down: true});
+    // Settlement can fail after the down has booked a contact.
+    contact = !!down && down.delivery !== 'unsupported' && down.error == null && down.contact !== false;
+    delivered(down, 'drag/down');
     move = delivered(await session.pointer('move', {dx: action.dx, dy: action.dy, ms: action.ms, virtual: true}), 'drag/move');
-  } finally { up = delivered(await session.pointer('up'), 'drag/up'); }
+  } catch (error) { failure = error; }
+  if (contact) {
+    try { up = delivered(await session.pointer('up'), 'drag/up'); }
+    catch (error) { failure ??= error; }
+  }
+  if (failure) throw failure;
   return {down, move, up};
 }
 
 export async function setupInput(session, targets) {
   for (const target of targets) {
     await internalInput(session, {kind: 'tap', target});
-    await session.clock('settle');
+    delivered(await session.clock('settle'), 'setup/settle');
   }
 }
 
-export async function platformInput(observer, action, before) {
+export async function platformInput(observer, action, before, record = {}) {
   if (!before.outside || !before.outsideAfter || digest(before.outside) !== digest(before.outsideAfter))
     throw new Error('outside observation changed or was missing across the checkpoint; platform input refused');
-  const outside = await observer.tree();
-  if (!outside || outside.error || outside.errors?.length || outside.truncated || outside.frontmost === false)
-    throw new Error('fresh outside observation is incomplete or inactive; platform input refused');
-  if (digest(outside) !== digest(before.outsideAfter))
-    throw new Error('outside observation changed after the checkpoint; platform input refused');
-  const aim = targetPoint(outside, action.target, before.model ?? {});
-  const input = delivered(await observer.input(action, aim.point, outside), 'platform/input');
-  return {aim, input, inputObservation: outside};
+  const observation = {source: 'platform/accessibility', identity: observer.identity, start: Date.now()};
+  record.inputObservation = observation;
+  try {
+    const outside = await observer.tree();
+    observation.result = outside;
+    observation.end = Date.now();
+    if (!outside || outside.error || outside.errors?.length || outside.truncated || outside.frontmost === false)
+      throw new Error('fresh outside observation is incomplete or inactive; platform input refused');
+    if (digest(outside) !== digest(before.outsideAfter))
+      throw new Error('outside observation changed after the checkpoint; platform input refused');
+    const aim = targetPoint(outside, action.target);
+    const input = delivered(await observer.input(action, aim.point, outside), 'platform/input');
+    return {aim, input, inputObservation: observation};
+  } catch (error) {
+    observation.end ??= Date.now();
+    observation.error = error.message;
+    throw error;
+  }
+}
+
+export function inputOutcome(checkpoint) {
+  const state = modelState(checkpoint?.state);
+  delete state.focus;
+  return {model: modelElements(checkpoint?.model ?? {}), state,
+    outside: externalElements(checkpoint?.outside ?? {}).map(e =>
+      Object.fromEntries(['identifier', 'label', 'type', 'enabled', 'selected', 'value'].filter(k => k in e).map(k => [k, e[k]])))};
 }
 
 export async function run(options) {
@@ -102,7 +128,7 @@ export async function run(options) {
           const start = Date.now();
           try {
             if (leg === 'driver') result.input = await internalInput(session, options.action);
-            else Object.assign(result, await platformInput(observer, options.action, before));
+            else Object.assign(result, await platformInput(observer, options.action, before, result));
           } catch (error) { result.findings.push(blind(`${leg}/input`, error.message)); }
           result.inputMs = Date.now() - start;
           result.after = await checkpoint(session, observer, resolve(directory, leg, 'after'));
@@ -117,15 +143,12 @@ export async function run(options) {
     }
     if (options.action) {
       const [a, b] = report.sessions;
-      const equivalent = checkpoint => ({model: modelElements(checkpoint?.model ?? {}),
-        state: modelState(checkpoint?.state), outside: externalElements(checkpoint?.outside ?? {}).map(e =>
-          Object.fromEntries(['identifier', 'label', 'type', 'enabled', 'selected', 'value'].filter(k => k in e).map(k => [k, e[k]])))});
-      if (!a.before || !b.before || digest(equivalent(a.before)) !== digest(equivalent(b.before)))
+      if (!a.before || !b.before || digest(inputOutcome(a.before)) !== digest(inputOutcome(b.before)))
         report.findings.push(blind('input-comparison', 'initial conditions differ or were not observed'));
       else {
         const incomplete = !a.after || !b.after || [a, b].some(s => s.findings.length || ['before', 'after'].some(k => s[k].report.status === 'inconclusive'));
         if (incomplete) report.findings.push(blind('input-comparison', 'delivery or a checkpoint was inconclusive'));
-        if (a.after && b.after && digest(equivalent(a.after)) !== digest(equivalent(b.after)))
+        if (a.after && b.after && digest(inputOutcome(a.after)) !== digest(inputOutcome(b.after)))
           report.findings.push({kind: 'input-outcome', provisional: incomplete, reason: 'driver and platform input produced different sampled outcomes'});
       }
     }

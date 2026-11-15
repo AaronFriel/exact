@@ -53,7 +53,8 @@ every differing comparable field on a uniquely joined identifier. Raw roles
 remain platform-specific; no web geometry oracle or guessed role equivalence
 is used. Anonymous structural nodes are retained as evidence but excluded from
 semantic claims. A missing identifier does not justify a guessed match: a
-unique exact label may establish a weaker name-only join, recorded as such.
+unique exact label may establish a weaker name-only join only when neither
+element has an identifier. The join is recorded as such.
 These are instrument disagreements, not automatically accessibility defects.
 
 Pictures are compared only at the same pixel size and with an explicit region
@@ -79,17 +80,21 @@ Evidence and timings stay local in the output directory.
 driver sessions with the same launch facts and setup (`--setup-tap <test-id>`,
 repeatable). One dispatches through the existing driver, the other uses
 CGEvent or XCTest. Both resolve the same semantic target. Platform coordinates
-come from the outside tree; ambiguity or absence refuses that leg. A drag is
-target-relative, requested in platform points and wall milliseconds. The input
+come from the outside tree through an exact identifier match; ambiguity or
+absence refuses that leg. Labels never substitute for a missing identifier.
+A drag is target-relative, requested in platform points and wall milliseconds.
+The input
 receipt interval is recorded: CGEvent's posting interval, or XCTest's request
 interval including its waits. Neither measures the app's received event times
 or establishes release velocity in the app.
 
 Platform input requires matching outside observations across the checkpoint
 and a fresh read immediately before posting. A changed or incomplete read
-refuses input; the fresh read supplies the coordinates and is saved in the
-report. Setup taps and each drag phase must report successful delivery and
-landing. A failed drag still releases the pointer.
+refuses input; the fresh read supplies the coordinates. Its source, identity,
+read interval and raw result or refusal are saved even when input is refused.
+Setup taps, their settlement and each drag phase must report success. A drag
+releases its own accepted contact on failure, preserving the original error
+if cleanup also fails. A Mac gesture reports success only after mouse-up posts.
 
 The before checkpoints must agree on their comparable model and outside tree
 before outcomes are compared. Differing initial conditions, a failed delivery,
@@ -98,7 +103,9 @@ outcome proves no more than the sampled state and tree; it does not prove the
 target received the event. Raw input receipts and pictures remain available.
 The outside outcome comparison uses identifiers, labels, roles, values, enabled
 and selected states; absolute window positions and keyboard focus are omitted
-because relaunch and physical input can change them independently. Differing
+because relaunch and physical input can change them independently. Model focus
+is also omitted between legs, while checkpoint stability still includes it.
+Keyboard visibility remains part of the outcome comparison. Differing
 outcomes with incomplete evidence remain provisional findings.
 
 ## Scope and removal

@@ -6,7 +6,7 @@ import {spawnSync} from 'node:child_process';
 import {encodePng} from '../png.mjs';
 import {checkpoint} from './checkpoint.mjs';
 import {blind, comparePixels, compareTrees, imageFacts, modelElements, targetPoint, verdict} from './compare.mjs';
-import {internalInput, parse, platformInput, setupInput} from './main.mjs';
+import {inputOutcome, internalInput, parse, platformInput, setupInput} from './main.mjs';
 import {mainWindow} from './platform.mjs';
 
 const picture = () => ({width: 2, height: 1, data: new Uint8Array([0, 0, 0, 255, 255, 255, 255, 255])});
@@ -76,7 +76,7 @@ test('failed tap and setup receipts abort before proceeding', async () => {
   }
 });
 
-test('drag rejects every failing phase and always releases the pointer', async () => {
+test('drag rejects every failing phase and releases accepted contacts', async () => {
   const action = {kind: 'drag', target: 'ok', dx: 0, dy: 100, ms: 300};
   for (const phase of ['down', 'move', 'up']) for (const failure of [
     {error: 'blocked'}, {delivery: 'unsupported', reason: 'not supported'}, {settled: false}, {landError: 'landing failed'},
@@ -85,18 +85,154 @@ test('drag rejects every failing phase and always releases the pointer', async (
     const reply = async name => { calls.push(name); return name === phase ? failure : {delivery: 'recognized'}; };
     const session = {tap: () => reply('down'), pointer: reply};
     await expect(internalInput(session, action)).rejects.toThrow(phase);
-    expect(calls).toEqual(phase === 'down' ? ['down', 'up'] : ['down', 'move', 'up']);
+    const noContact = phase === 'down' && (failure.error || failure.delivery === 'unsupported');
+    expect(calls).toEqual(noContact ? ['down'] : phase === 'down' ? ['down', 'up'] : ['down', 'move', 'up']);
   }
   for (const phase of ['down', 'move']) {
     const calls = [];
     const reply = async name => { calls.push(name); if (name === phase) throw new Error('transport closed'); return {delivery: 'recognized'}; };
     await expect(internalInput({tap: () => reply('down'), pointer: reply}, action)).rejects.toThrow('transport closed');
-    expect(calls).toEqual(phase === 'down' ? ['down', 'up'] : ['down', 'move', 'up']);
+    expect(calls).toEqual(phase === 'down' ? ['down'] : ['down', 'move', 'up']);
   }
   const receipt = {delivery: 'recognized'};
   expect(await internalInput({tap: async () => receipt, pointer: async () => receipt}, action)).toEqual(
     {down: receipt, move: receipt, up: receipt});
 });
+
+test('missing outside identifiers never aim through a model label, even when unique', async () => {
+  for (const duplicate of [false, true]) {
+    const model = {nodes: [{props: {testId: 'missing', text: 'Save'}},
+      ...(duplicate ? [{props: {testId: 'present', text: 'Save'}}] : [])]};
+    const outside = {elements: [{identifier: 'present', label: 'Save', frame: [10, 20, 30, 40]}]};
+    let posts = 0;
+    const observer = {tree: async () => outside, input: async () => { posts++; return {}; }};
+    await expect(platformInput(observer, {kind: 'tap', target: 'missing'},
+      {model, outside, outsideAfter: outside})).rejects.toThrow('0 matches');
+    expect(posts).toBe(0);
+  }
+});
+
+test('name joins require both elements to lack identifiers', () => {
+  for (const [inside, outside] of [
+    [[{identifier: 'a', label: 'Save'}], [{identifier: 'b', label: 'Save'}]],
+    [[{identifier: 'a', label: 'Save'}], [{label: 'Save'}]],
+    [[{label: 'Save'}], [{identifier: 'b', label: 'Save'}]],
+  ]) {
+    const result = compareTrees(inside, outside);
+    expect(result.joins).toEqual([]);
+    expect(result.findings.map(f => f.kind)).toEqual(['inside-only', 'outside-only']);
+  }
+  const result = compareTrees([{identifier: 'a', label: 'Save'}, {label: 'Save'}],
+    [{identifier: 'a', label: 'Save'}, {label: 'Save'}]);
+  expect(result.joins.map(j => j.via)).toEqual(['identifier', 'name-only']);
+  expect(result.findings).toEqual([]);
+  expect(compareTrees([{label: 'Save'}, {label: 'Save'}], [{label: 'Save'}]).joins).toEqual([]);
+});
+
+test('failed setup settlement aborts before the next tap', async () => {
+  for (const failure of [{settled: false, reason: 'work refused'}, {error: 'clock failed'}, {landError: 'landing failed'}]) {
+    const calls = [];
+    const session = {tap: async target => { calls.push(target); return {delivery: 'recognized'}; },
+      clock: async () => { calls.push('settle'); return failure; }};
+    await expect(setupInput(session, ['first', 'second'])).rejects.toThrow('setup/settle');
+    expect(calls).toEqual(['first', 'settle']);
+  }
+});
+
+test('drag cleanup owns its contact and preserves the original phase failure', async () => {
+  const action = {kind: 'drag', target: 'ok', dx: 0, dy: 100, ms: 300};
+  for (const failure of [{delivery: 'unsupported', reason: 'no held contact'}, {error: 'down failed'}, new Error('down transport failed')]) {
+    const calls = [];
+    const session = {tap: async () => { calls.push('down'); if (failure instanceof Error) throw failure; return failure; },
+      pointer: async phase => { calls.push(phase); throw new Error('released another contact'); }};
+    await expect(internalInput(session, action)).rejects.toThrow(/drag\/down|down transport failed/);
+    expect(calls).toEqual(['down']);
+  }
+  const calls = [];
+  const session = {tap: async () => ({delivery: 'recognized'}),
+    pointer: async phase => { calls.push(phase); throw new Error(`${phase} transport failed`); }};
+  await expect(internalInput(session, action)).rejects.toThrow('move transport failed');
+  expect(calls).toEqual(['move', 'up']);
+});
+
+test('cross-leg outcomes omit focus but retain keyboard and checkpoint focus stability', async () => {
+  const dir = mkdtempSync(resolve(tmpdir(), 'see-focus-'));
+  try {
+    const {session, observer} = displayFixture();
+    session.state = async () => ({navigation: '/', focus: {logical: 12}, keyboard: {visible: false}});
+    const first = await checkpoint(session, observer, resolve(dir, 'first'));
+    session.state = async () => ({navigation: '/', focus: {logical: 47, events: ['resign']}, keyboard: {visible: false}});
+    const second = await checkpoint(session, observer, resolve(dir, 'second'));
+    expect(first.report.status).toBe('agreement');
+    expect(second.report.status).toBe('agreement');
+    expect(inputOutcome(first)).toEqual(inputOutcome(second));
+    expect(inputOutcome({...second, state: {...second.state, keyboard: {visible: true}}})).not.toEqual(inputOutcome(first));
+    let focus = 0;
+    session.state = async () => ({focus: {logical: focus++}});
+    const changing = await checkpoint(session, observer, resolve(dir, 'changing'));
+    expect(changing.report.status).toBe('inconclusive');
+    expect(changing.report.findings).toContainEqual(expect.objectContaining({source: 'driver/state', kind: 'blind-spot'}));
+  } finally { rmSync(dir, {recursive: true, force: true}); }
+});
+
+test('fresh input observations retain identity, read interval and raw evidence on refusal', async () => {
+  const outside = {pid: 12, elements: [{identifier: 'ok', frame: [10, 20, 30, 40]}]};
+  for (const fresh of [{...outside, pid: 13}, {...outside, truncated: true}, {error: 'AX failed'}, new Error('AX transport failed'), outside]) {
+    const record = {};
+    const observer = {identity: {host: 'macos', pid: 12},
+      tree: async () => { if (fresh instanceof Error) throw fresh; return fresh; }, input: async () => ({delivery: 'CGEvent/HID'})};
+    const start = Date.now();
+    try { await platformInput(observer, {kind: 'tap', target: 'ok'}, {outside, outsideAfter: outside}, record); }
+    catch {}
+    const observation = JSON.parse(JSON.stringify(record)).inputObservation;
+    expect(observation).toMatchObject({source: 'platform/accessibility', identity: observer.identity});
+    expect(observation.start).toBeGreaterThanOrEqual(start);
+    expect(observation.end).toBeGreaterThanOrEqual(observation.start);
+    expect(observation.end).toBeLessThanOrEqual(Date.now());
+    if (!(fresh instanceof Error)) expect(observation.result).toEqual(fresh);
+    if (fresh !== outside) expect(observation.error).toBeString();
+    else expect(observation.error).toBeUndefined();
+  }
+});
+
+test.skipIf(process.platform !== 'darwin')('Mac gesture refuses a failed release and preserves a failed move', () => {
+  const dir = mkdtempSync(resolve(tmpdir(), 'see-release-'));
+  try {
+    const source = readFileSync(resolve(import.meta.dir, 'Mac.swift'), 'utf8').split('\ndo {')[0];
+    const harness = `
+var cases: [[String: Any]] = []
+for failure in ["none", "down", "move", "up"] {
+    var events: [String] = []
+    do {
+        let receipt = try gesture([0, 0, 1, 1, 1], event: { kind, _ in
+            let name = kind == .leftMouseDown ? "down" : kind == .leftMouseDragged ? "move" : kind == .leftMouseUp ? "up" : "position"
+            events.append(name)
+            if name == failure || failure == "move" && name == "up" { throw Refusal(reason: "injected \\(name) failure") }
+        }, wait: { _ in })
+        cases.append(["case": failure, "events": events, "receipt": receipt])
+    } catch {
+        cases.append(["case": failure, "events": events, "error": (error as? Refusal)?.reason ?? String(describing: error)])
+    }
+}
+print(String(data: try JSONSerialization.data(withJSONObject: cases), encoding: .utf8)!)
+`;
+    const file = resolve(dir, 'main.swift'), binary = resolve(dir, 'gesture-tests');
+    writeFileSync(file, source + harness);
+    const compile = spawnSync('xcrun', ['swiftc', file, '-o', binary], {encoding: 'utf8', timeout: 20000});
+    expect(compile.stderr).toBe('');
+    expect(compile.status).toBe(0);
+    const run = spawnSync(binary, [], {encoding: 'utf8', timeout: 5000});
+    expect(run.status).toBe(0);
+    const [success, down, move, up] = JSON.parse(run.stdout);
+    expect(success.receipt.delivery).toBe('CGEvent/HID');
+    expect(success.events.at(-1)).toBe('up');
+    expect(down).toMatchObject({error: 'injected down failure', events: ['position', 'down']});
+    expect(move.error).toBe('injected move failure');
+    expect(move.events.at(-1)).toBe('up');
+    expect(up.error).toBe('injected up failure');
+    expect(up.receipt).toBeUndefined();
+  } finally { rmSync(dir, {recursive: true, force: true}); }
+}, 30000);
 
 test('capture motion and failed correlation cannot pass even when all sampled pixels match', async () => {
   const dir = mkdtempSync(resolve(tmpdir(), 'see-signals-'));

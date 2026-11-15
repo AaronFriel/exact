@@ -25,9 +25,9 @@ export function compareTrees(inside, outside) {
   const findings = [], joins = [], used = new Set();
   for (const a of inside) {
     const exact = a.identifier ? outside.filter(b => b.identifier === a.identifier) : [];
-    const byName = !exact.length && a.label ? outside.filter(b => b.label === a.label) : [];
+    const byName = !a.identifier && a.label ? outside.filter(b => !b.identifier && b.label === a.label) : [];
     const choices = exact.length ? exact : byName;
-    const ownCount = inside.filter(b => exact.length ? b.identifier === a.identifier : b.label === a.label).length;
+    const ownCount = inside.filter(b => exact.length ? b.identifier === a.identifier : !b.identifier && b.label === a.label).length;
     if (choices.length > 1 || choices.length === 1 && ownCount > 1) {
       findings.push(blind('tree', `ambiguous ${exact.length ? 'identifier' : 'name'}: ${a.identifier ?? a.label}`));
       continue;
@@ -78,20 +78,13 @@ export function comparePixels(a, b, source) {
     bounds: [minX, minY, maxX - minX + 1, maxY - minY + 1]}] : [];
 }
 
-export function targetPoint(tree, target, model) {
-  const elements = externalElements(tree);
-  let found = elements.filter(e => e.identifier === target);
-  let via = 'identifier';
-  if (!found.length) {
-    const named = modelElements(model).filter(e => e.identifier === target);
-    if (named.length === 1 && named[0].label) found = elements.filter(e => e.label === named[0].label);
-    via = 'name-only';
-  }
+export function targetPoint(tree, target) {
+  const found = externalElements(tree).filter(e => e.identifier === target);
   if (found.length !== 1) throw new Error(`outside target ${target}: ${found.length} matches`);
   const e = found[0], f = e.frame;
   if (!f || f.length !== 4 || !f.every(Number.isFinite) || f[2] <= 0 || f[3] <= 0 || e.enabled === false)
     throw new Error(`outside target ${target}: no enabled, nonempty frame`);
-  return {point: [f[0] + f[2] / 2, f[1] + f[3] / 2], element: e, via};
+  return {point: [f[0] + f[2] / 2, f[1] + f[3] / 2], element: e, via: 'identifier'};
 }
 
 export function stableFindings(before, after, source) {
