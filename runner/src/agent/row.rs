@@ -31,6 +31,7 @@ pub fn row_json(row: StyleId, v: RowValue<'_>, out: &mut String) {
             quote(&format!("{}{}", num(n as f64), unit.name()), out)
         }
         RowValue::Dimension(Dimension::Auto) => out.push_str("\"auto\""),
+        RowValue::Dimension(Dimension::Keyword(k)) => quote(k.css(), out),
         RowValue::Dimension(Dimension::Points(p)) => {
             let _ = write!(out, "{}", num(p as f64));
         }

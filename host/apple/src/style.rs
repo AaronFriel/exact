@@ -544,6 +544,12 @@ fn push_length(out: &mut String, d: Dimension, env: Option<&exact_kernel::Env>) 
 fn push_dimension(out: &mut String, d: Dimension) {
     match d {
         Dimension::Auto => out.push_str("\"auto\""),
+        // A size keyword crosses as its CSS, which Swift reads as no length.
+        Dimension::Keyword(k) => {
+            out.push('"');
+            out.push_str(k.css());
+            out.push('"');
+        }
         Dimension::Points(p) => push_num(out, p),
         Dimension::Percent(p) => {
             out.push_str("{\"pct\":");

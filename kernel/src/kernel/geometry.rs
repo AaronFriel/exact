@@ -233,8 +233,8 @@ impl Kernel {
             height: Dimension::auto(),
         };
         outer.min_size = taffy::geometry::Size {
-            width: LengthPercentageAuto::auto(),
-            height: LengthPercentageAuto::auto(),
+            width: Dimension::auto(),
+            height: Dimension::auto(),
         };
         outer.max_size = outer.min_size;
         outer.margin = taffy::geometry::Rect {
@@ -298,7 +298,12 @@ impl Kernel {
             });
         let env = self.arena.env_of(key.index);
         let mut minimum = style.min_width.at_basis(&env, basis).max(0.0);
-        if style.box_sizing == crate::generated::BoxSizing::ContentBox {
+        if matches!(style.min_width, crate::Dimension::Keyword(_)) {
+            // A keyword minimum has no points without measuring: the used
+            // width keeps the placement from narrowing below what layout
+            // gave it (LLP 1001.001 D5).
+            minimum = laid.size.width;
+        } else if style.box_sizing == crate::generated::BoxSizing::ContentBox {
             let (left, _, right, _) = self.resolved_padding(key).unwrap_or_default();
             let [_, br, _, bl] = style.border_widths_in(&env);
             minimum += left + right + bl + br;

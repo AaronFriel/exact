@@ -1133,6 +1133,7 @@ pub(crate) fn dimension(out: &mut String, d: Dimension) {
         // CSS's own `min()`, `max()` and `clamp()`: the browser resolves
         // them, the insets with the rest (LLP 1001 §2, 2026-10-07).
         Dimension::Compare(c) => exact_kernel::style::env::browser_css(c, out),
+        Dimension::Keyword(k) => out.push_str(k.css()),
     }
 }
 

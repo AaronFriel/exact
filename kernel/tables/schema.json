@@ -2941,6 +2941,7 @@
       "terminal": "cell",
       "codec": "dimension",
       "admitsAuto": true,
+      "sizeKeywords": "size",
       "layout": true,
       "default": "auto"
     },
@@ -2952,6 +2953,7 @@
       "terminal": "cell",
       "codec": "dimension",
       "admitsAuto": true,
+      "sizeKeywords": "size",
       "layout": true,
       "default": "auto"
     },
@@ -2963,6 +2965,7 @@
       "terminal": "cell",
       "codec": "dimension",
       "admitsAuto": true,
+      "sizeKeywords": "size",
       "layout": true,
       "default": "auto"
     },
@@ -2974,6 +2977,7 @@
       "terminal": "cell",
       "codec": "dimension",
       "admitsAuto": true,
+      "sizeKeywords": "size",
       "layout": true,
       "default": "auto"
     },
@@ -2985,6 +2989,7 @@
       "terminal": "cell",
       "codec": "dimension",
       "admitsAuto": true,
+      "sizeKeywords": "size",
       "layout": true,
       "default": "auto"
     },
@@ -2996,6 +3001,7 @@
       "terminal": "cell",
       "codec": "dimension",
       "admitsAuto": true,
+      "sizeKeywords": "size",
       "layout": true,
       "default": "auto"
     },
@@ -3169,6 +3175,7 @@
       "terminal": "cell",
       "codec": "dimension",
       "admitsAuto": true,
+      "sizeKeywords": "basis",
       "layout": true,
       "default": "auto"
     },

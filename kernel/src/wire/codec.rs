@@ -8,7 +8,7 @@
 use crate::error::DecodeError;
 use crate::generated::{StyleId, StyleMask, STYLE_MASK_WORDS};
 use crate::style::{
-    Color, ColorValue, Dimension, Edge, GridPlacement, GridTracks, Transitions, Vec2,
+    Color, ColorValue, Dimension, Edge, GridPlacement, GridTracks, SizeKeyword, Transitions, Vec2,
 };
 use exact_motion::easing::MAX_LINEAR_STOPS;
 use exact_motion::{
@@ -210,6 +210,14 @@ impl<'a> Reader<'a> {
                 Dimension::Compare(crate::style::Comparison::decode(self, style)?)
             }
             24 => return Err(DecodeError::InvalidComparison),
+            // A size keyword (LLP 1001.001 D2) after a zero `f32`.
+            26..=29 if value.to_bits() == 0 => {
+                let keyword = SizeKeyword::ALL[(kind - 26) as usize];
+                if !style.admits_size_keyword(keyword) {
+                    return Err(DecodeError::KeywordNotAdmitted { style });
+                }
+                Dimension::Keyword(keyword)
+            }
             other => return Err(DecodeError::UnknownDimensionKind(other)),
         };
         if kind != 0 && !dim.is_finite() {
@@ -567,6 +575,10 @@ impl Writer {
                 self.f32(0.0);
                 c.encode(self);
             }
+            Dimension::Keyword(k) => {
+                self.u8(26 + k as u8);
+                self.f32(0.0);
+            }
         }
     }
 
@@ -739,7 +751,7 @@ mod tests {
         // schema. The literal makes an accidental removal of that coupling a
         // test failure whenever the byte snapshot above is intentionally moved.
         // Recomputed when the schema changes; the digest test prints the value.
-        assert_eq!(SCHEMA_DIGEST, 0xfd028ccf7224cacd);
+        assert_eq!(SCHEMA_DIGEST, 0xfcc2236ad5670e36);
     }
 
     #[test]
@@ -795,7 +807,38 @@ mod tests {
                 Ok(Dimension::Env(*edge, i as f32 * 1.5))
             );
         }
-        let mut r = Reader::new(&[26u8, 0, 0, 0, 0]);
+        let mut r = Reader::new(&[30u8, 0, 0, 0, 0]);
+        assert_eq!(
+            r.dimension(StyleId::Width, true),
+            Err(DecodeError::UnknownDimensionKind(30))
+        );
+    }
+
+    #[test]
+    fn size_keywords_round_trip_on_the_rows_that_take_them() {
+        for (i, keyword) in SizeKeyword::ALL.into_iter().enumerate() {
+            let mut w = Writer::new();
+            w.dimension(Dimension::Keyword(keyword));
+            let bytes = w.into_vec();
+            assert_eq!(bytes, [26 + i as u8, 0, 0, 0, 0]);
+            let decode = |style| Reader::new(&bytes).dimension(style, true);
+            assert_eq!(decode(StyleId::FlexBasis), Ok(Dimension::Keyword(keyword)));
+            let on_width = if keyword == SizeKeyword::Content {
+                Err(DecodeError::KeywordNotAdmitted {
+                    style: StyleId::Width,
+                })
+            } else {
+                Ok(Dimension::Keyword(keyword))
+            };
+            assert_eq!(decode(StyleId::Width), on_width);
+            assert_eq!(
+                decode(StyleId::PaddingTop),
+                Err(DecodeError::KeywordNotAdmitted {
+                    style: StyleId::PaddingTop
+                })
+            );
+        }
+        let mut r = Reader::new(&[26u8, 0, 0, 0x80, 0x3f]);
         assert_eq!(
             r.dimension(StyleId::Width, true),
             Err(DecodeError::UnknownDimensionKind(26))

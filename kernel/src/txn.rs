@@ -387,6 +387,9 @@ fn validate(arena: &NodeArena, ops: &[Op]) -> Result<capacity::Batch, ApplyError
                         StyleDomainError::PercentNotAdmitted(style) => {
                             ApplyError::PercentNotAdmitted { op_index, style }
                         }
+                        StyleDomainError::KeywordNotAdmitted(style) => {
+                            ApplyError::KeywordNotAdmitted { op_index, style }
+                        }
                         StyleDomainError::TooManyTracks { style, count } => {
                             ApplyError::TooManyTracks {
                                 op_index,

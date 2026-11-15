@@ -72,6 +72,11 @@ struct StyleRow {
     codec: String,
     #[serde(rename = "admitsAuto", default)]
     admits_auto: bool,
+    /// Which size keywords a dimension row takes: `"size"` (`min-content`,
+    /// `max-content`, `fit-content`; CSS Box Sizing 3 §3.2) or `"basis"`
+    /// (those and `content`; CSS Flexbox 1 §7.2.3).
+    #[serde(rename = "sizeKeywords", default)]
+    size_keywords: Option<String>,
     /// A dimension row CSS gives no percentage (`column-width`).
     #[serde(rename = "refusesPercent", default)]
     refuses_percent: bool,
@@ -800,6 +805,7 @@ fn generate(schema: &Schema, digest: u64) -> String {
         }
         writeln!(w, "    }}").unwrap();
     }
+    write_admits_size_keyword(w, schema);
     writeln!(w, "}}").unwrap();
     let idents: Vec<String> = schema.styles.iter().map(|r| pascal(&r.field)).collect();
     let rows: Vec<(&str, &str)> = idents

@@ -271,10 +271,10 @@ pub(crate) fn apply(arena: &NodeArena, slot: u32, s: &mut taffy::style::Style) {
     let edges = s.padding.resolve_or_zero(basis, resolve_calc)
         + s.border.resolve_or_zero(basis, resolve_calc);
     let content_box = s.box_sizing == BoxSizing::ContentBox;
-    let ceiling = |most: f32, edges: f32, own: Lpa, basis: f32| {
+    let ceiling = |most: f32, edges: f32, own: taffy::Dimension, basis: f32| {
         let most = (most - if content_box { edges } else { 0.0 }).max(0.0);
         let own = own.maybe_resolve(Some(basis), resolve_calc);
-        Lpa::length(own.map_or(most, |own: f32| own.min(most)))
+        taffy::Dimension::length(own.map_or(most, |own: f32| own.min(most)))
     };
     let unplaced = |inset: &mut Lpa, margin: &mut Lpa| {
         *inset = Lpa::auto();
