@@ -4419,6 +4419,7 @@
     {
       "bit": 176,
       "field": "position_area",
+      "terminal": "admit",
       "codec": "enum:PositionArea",
       "_comment": "@ref LLP 1021 D2: CSS physical position-area on an invoker-anchored popover. Painted Apple layers align the margin box and apply authored flip fallbacks; centred axes use CSS anchor-center overflow alignment, and a box no option fits is shifted inside the window as CSS shifts it. No anchor-name or position-anchor.",
       "cold": true
@@ -4663,6 +4664,7 @@
     {
       "bit": 206,
       "field": "position_try_fallbacks",
+      "terminal": "admit",
       "codec": "position-try-fallbacks",
       "cold": true,
       "_comment": "@ref LLP 1021 D2: ordered comma-separated attempts of flip-block, flip-inline and flip-start on invoker popovers; none by default. Each attempt transforms the base area and margins by its flips in the order written. flip-x, flip-y and named rules are refused."

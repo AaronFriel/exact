@@ -2321,18 +2321,22 @@ fallbacks. In a right-to-left document the diagonal runs from the top-right
 corner. With no fitting option, CSS shifts the box back into the window. A
 popover with an authored `position` is absolute in the top layer and is held
 only at the page's start edges (the top, and the left, or the right in a
-right-to-left document), so it can run past the others. The web and painted Apple layers implement these flips; an authored
-fallback row selects painted placement on macOS for a non-menu popover, including
-when added while open. Removing the row restores platform presentation; focus
-and text selection survive either change. Native
-menus and confirmations keep platform placement. Physical areas also accept
+right-to-left document), so it can run past the others. The web, painted Apple
+layers, Linux, Windows and the full-screen terminal implement these flips; an
+authored fallback row selects painted placement on macOS for a non-menu
+popover, including when added while open. Removing the row restores platform
+presentation; focus and text selection survive either change. Native menus and confirmations keep platform placement. Physical areas also accept
 `top span-left`, `bottom span-left`, `left`/`right` with `span-top`,
 `span-bottom` or `span-all`, and the four `top|bottom left|right` corners.
 Logical areas, `flip-x`, `flip-y`, named rules and area-dependent sizing are
 not implemented. Use zero insets and default self-alignment for native parity.
-Painted Apple popovers are sized in each option's region. Flips transform
-margins before percentages resolve there; `flip-start` also exchanges
-`width`/`height`, `min-width`/`min-height` and `max-width`/`max-height`.
+Painted Apple, Linux, Windows and full-screen terminal invoker popovers are
+sized in each option's region. An authored `position-area="none"` keeps the
+viewport block; an authored `position="sticky"` keeps its ordinary layout.
+Scrolling moves the selected option without changing its sizing region until
+another option wins. Flips transform margins before percentages resolve there;
+`flip-start` also exchanges `width`/`height`,
+`min-width`/`min-height` and `max-width`/`max-height`.
 
 A route with `navigationPresentation="modal"` is the same sheet on the Mac
 (LLP 1115.002 D7.4), as large as its content (an authored `width` or `height`
