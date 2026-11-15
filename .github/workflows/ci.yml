@@ -1,5 +1,5 @@
-# The only blocking command is scripts/gate.mjs. Cold hosted setup is outside
-# its warm 30 s budget; full verification belongs to the hourly fleet lane.
+# The only blocking command is scripts/gate.mjs; only failed parts fail CI.
+# Cold compilation may exceed its 30 s warm budget. Full verification runs hourly.
 name: ci
 
 on:

@@ -9,23 +9,21 @@ export async function bisectFailures(commits, failures, probe) {
   const out = {};
   for (const failure of failures) {
     let good = 0, bad = commits.length - 1;
-    const first = (await at(commits[good]))[failure];
-    if (first === 'fail') { out[failure] = { preexisting: commits[good] }; continue; }
-    if (first !== 'pass') { out[failure] = { unresolved: 'baseline probe did not finish', good: null, bad: commits[bad] }; continue; }
     if ((await at(commits[bad]))[failure] !== 'fail') {
       out[failure] = { unresolved: 'tip failure did not reproduce', good: commits[good], bad: commits[bad] };
       continue;
     }
     let obstruction;
-    while (bad - good > 1) {
-      const mid = Math.floor((good + bad) / 2), status = (await at(commits[mid]))[failure];
-      if (status === 'fail') bad = mid;
-      else if (status === 'pass') good = mid;
-      else { obstruction = commits[mid]; break; }
+    // Failures can be repaired and reintroduced. Every commit after the boundary must still fail.
+    for (let i = bad - 1; i >= 0; i--) {
+      const status = (await at(commits[i]))[failure];
+      if (status === 'pass') { good = i; break; }
+      if (status !== 'fail') { obstruction = commits[i]; break; }
+      bad = i;
     }
     out[failure] = obstruction
       ? { unresolved: `probe did not finish at ${obstruction}`, good: commits[good], bad: commits[bad] }
-      : { commit: commits[bad], parent: commits[good] };
+      : bad === 0 ? { preexisting: commits[0] } : { commit: commits[bad], parent: commits[good] };
   }
   return out;
 }
@@ -34,7 +32,7 @@ export async function bisectFailures(commits, failures, probe) {
 export function probeOutcomes(result, wanted) {
   return Object.fromEntries(wanted.map(f => {
     const check = result.checks[f.split(': ', 1)[0]];
-    return [f, result.failures.includes(f) ? 'fail' : check && !check.skipped && check.complete && check.status === 0 ? 'pass' : 'unknown'];
+    return [f, result.failures.includes(f) ? 'fail' : check && !check.skipped && check.complete ? 'pass' : 'unknown'];
   }));
 }
 

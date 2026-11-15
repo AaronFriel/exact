@@ -51,6 +51,7 @@ import { Cdp, open } from './agent.mjs';
 import { chromium, quitBrowser } from './agent-launch.mjs';
 import { childFailure as failure, failureSummary } from './agent-build.mjs';
 import { fileURLToPath } from 'node:url';
+import { gateMetric } from './gate.mjs';
 
 const t0 = Date.now();
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -1146,7 +1147,9 @@ if (Number.isFinite(out.macos_paint_ms)) rows.push(
 if (rebuild) rows.push([`edit → ${out.web_target === 'js' ? 'JS target' : 'wasm'} rebuilt (no driver)`, ms(out.rebuild_ms), out.rebuild_note ?? 'the cold path: cargo build of the app crate']);
 if (long) {
   const s = (v) => (Number.isFinite(v) ? `${v.toFixed(1)} s` : 'n/a');
-  rows.push(['blocking gate (warm)', s(out.gate_s), `${out.gate_failed?.length ? `VIOLATION: ${out.gate_failed.join(', ')}; ` : ''}first pass ${s(out.gate_first_s)}; budget ${budget('Blocking gate')}`]);
+  const gateRow = gateMetric(out.gate_s, Number.parseFloat(budget('Blocking gate')), out.gate_failed);
+  gateRow[2] += `; first pass ${s(out.gate_first_s)}`;
+  rows.push(gateRow);
   rows.push(['kernel: touch one line, rebuild', s(out.touch_kernel_s), `kernel/src/lib.rs; budget ${budget('Touch one line')}`]);
   rows.push(['kernel: test what you changed', s(out.test_kernel_s), `cargo test -p exact-kernel${out.test_kernel_ok === false ? ' (failing)' : ''}; budget ${budget('Test what you changed')}`]);
   rows.push(['macOS: initial captured build', out.macos_build_failed ? 'FAILED' : s(out.macos_build_s), out.macos_build_failed ?? `cargo ${s(out.macos_build_cargo_s)} · swift ${s(out.macos_build_swift_s)}; budget ${budget('Full build')}`]);

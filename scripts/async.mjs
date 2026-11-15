@@ -15,7 +15,7 @@
  * Both tiers coalesce commits once an hour in their own worktree and target directory.
  */
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, openSync, closeSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, openSync, closeSync, readFileSync, writeFileSync, writeSync } from 'node:fs';
 import { availableParallelism, loadavg } from 'node:os';
 import { basename, resolve } from 'node:path';
 import { Graph, LANE_DISTS, PARITY, Repo, WEB_APPS, commands, gameAppleLeg, parityLeg, select, stepEnv, suites } from './affected.mjs';
@@ -39,10 +39,22 @@ const git = (args, cwd = ROOT) => {
   return r.stdout.trim();
 };
 
-function checkout(sha) {
-  const dirty = git(['status', '--porcelain', '--untracked-files=no'], WT);
-  if (dirty) throw new Error(`${WT} has tracked edits; refusing to switch commits. Review them first:\n${dirty}`);
-  git(['checkout', '--detach', sha], WT);
+function refuseTrackedEdits(root) {
+  const dirty = git(['status', '--porcelain', '--untracked-files=no'], root);
+  if (dirty) throw new Error(`${root} has tracked edits; refusing to switch commits. Review them first:\n${dirty}`);
+}
+export function checkout(sha, root = WT) {
+  refuseTrackedEdits(root);
+  git(['checkout', '--detach', sha], root);
+}
+
+/** Restore the tracked inputs lane commands edit, including when a killed child cannot run its finally. */
+export async function withLaneEdits(root, action) {
+  refuseTrackedEdits(root);
+  const paths = git(['ls-files', '-z', '--', 'game/app/shells.lock', 'apps/caltrain/app.contract',
+    'apps/realworld/app.contract', 'apps/realworld/app.ts'], root).split('\0').filter(Boolean);
+  try { return await action(); }
+  finally { if (paths.length) git(['restore', '--source=HEAD', '--staged', '--worktree', '--', ...paths], root); }
 }
 
 /** Test names marked for this lane; libtest ORs several filters. */
@@ -145,12 +157,16 @@ export function extraChecks(hits, glue, repo) {
     const s = hit.suite;
     if (s.kind !== 'app' && !(s.kind === 'xctest' && s.host === 'macos')) continue;
     const named = s.kind === 'app' ? `app:${s.app}:${s.host}` : 'macos';
+    const first = out.length;
     if (s.kind === 'app') {
       if (s.host === 'web') out.push([`build-${named}`, 'bun', ['host/web/build.mjs', s.app]]);
       else if (s.host === 'macos' || s.host === 'ios') out.push([`build-${named}`, 'bun', ['host/apple/build.mjs', ...(s.host === 'ios' ? ['--ios'] : []), s.app]]);
+      else if (s.host === 'android') out.push([`build-${named}`, 'bun', ['scripts/agent-android.mjs', 'build', s.app]]);
+      else if (s.host === 'windows') out.push([`build-${named}`, 'bun', ['host/windows/build.mjs', s.app]]);
       else out.push([`build-${named}`, 'cargo', ['build', '--profile', 'host-dev', '-p', repo.packageAt.get(`${repo.appNames.get(s.app)}/${s.host}`).name]]);
     }
     for (const [i, [cmd, ...args]] of commands([hit]).entries()) out.push([`${named}${s.kind === 'app' ? `:${i}` : ''}`, cmd, args]);
+    if (s.kind === 'app' && s.host === 'windows') for (const step of out.slice(first)) step[3] = { platform: 'win32' };
   }
   return out;
 }
@@ -388,7 +404,10 @@ export function retainSkippedFailures(previous, result, owners = {}, steps = TIE
     if (found.has(f) || !(steps.has(name) || name === 'other-glue' || name === 'bundle-fixture' || name === 'macos' || name.startsWith('app:') || name.startsWith('build-app:'))) continue;
     // What ran it again: its check whole, or the part of it that holds its suites (one it cannot name: any part).
     const ran = check && !check.skipped && check.complete !== false && (!check.covers || (owner?.length && owner.every(o => check.covers.includes(o))));
-    if (ran) continue;
+    const defaults = result.checks['default-test'];
+    const defaultPass = name === 'test' && defaults && !defaults.skipped && defaults.complete && defaults.status === 0
+      && owner?.length && owner.every(o => defaults.covers?.includes(o));
+    if (ran || defaultPass) continue;
     result.failures.push(f);
     found.add(f);
     if (owner) (result.owners ??= {})[f] = owner;
@@ -486,7 +505,11 @@ export function failures(name, log, status) {
 const HANG_MS = 2 * 60 * 60 * 1000;
 /** How often the first lane runs every suite, whatever changed. */
 const FULL_EVERY_MS = 24 * 60 * 60 * 1000;
-function run(command, args, env, fd) {
+export function run(command, args, env, fd, { platform } = {}) {
+  if (platform && platform !== process.platform) {
+    writeSync(fd, `UNAVAILABLE: requires a ${platform} worker; this worker is ${process.platform}\n`);
+    return Promise.resolve({ status: 77, hung: false });
+  }
   return new Promise((done) => {
     const child = spawn(command, args, { cwd: WT, env, stdio: ['ignore', fd, fd], detached: true });
     let hung = false;
@@ -512,10 +535,14 @@ function prune() {
 /** Check `sha`: on a full run every suite, else those that the files changed since `base` (the last commit checked)
  * affect. */
 async function check(sha, since, { base, full, selection: given, only, probe = false, overrides = {} }) {
+  checkout(sha);
+  return withLaneEdits(WT, () => checkAt(sha, since, { base, full, selection: given, only, probe, overrides }));
+}
+
+async function checkAt(sha, since, { base, full, selection: given, only, probe, overrides }) {
   const dir = resolve(STATE_DIR, sha.slice(0, 12), ...(probe ? ['bisect'] : []));
   mkdirSync(dir, { recursive: true });
   prune();
-  checkout(sha);
   const env = laneEnv(process.env);
   const installStart = performance.now(), installLoad = loadavg()[0];
   const installed = spawnSync('bun', ['install', '--frozen-lockfile'], { cwd: WT, env, encoding: 'utf8' });
@@ -541,7 +568,7 @@ async function check(sha, since, { base, full, selection: given, only, probe = f
     if (only && !only.has(name)) continue;
     const ran = { command: [command, ...args].join(' ') };
     let gated = null;
-    if (opts && !probe) {
+    if (opts?.inputs && !probe) {
       const start = performance.now();
       gated = await decide(store, inputs ??= semanticsInputs(), name, command, args, opts);
       Object.assign(ran, gated.error ? { gateError: gated.error } : { fingerprint: gated.fp.digest, changed: gated.changed },
@@ -553,12 +580,12 @@ async function check(sha, since, { base, full, selection: given, only, probe = f
     }
     const logPath = resolve(dir, `${name.replaceAll(/[^a-zA-Z0-9_.-]/g, '_')}.log`), fd = openSync(logPath, 'w');
     const load = loadavg()[0], start = performance.now();
-    const r = await run(command, args, opts?.env ?? env, fd);
+    const r = await run(command, args, opts?.env ?? env, fd, opts);
     closeSync(fd);
     const seconds = (performance.now() - start) / 1000, log = readFileSync(logPath, 'utf8');
     const part = covers(name, selection);
     result.checks[name] = { ...ran, status: r.status, seconds, load, ...(r.hung ? { hung: true } : {}), ...(part ? { covers: part } : {}) };
-    const outcome = gated && outcomeOf(r.status, r.hung);
+    const outcome = outcomeOf(r.status, r.hung);
     if (gated?.fp) store.record(name, gated.fp, outcome, { sha });
     // A check that could not run here found nothing.
     if (outcome !== 'unavailable') {
