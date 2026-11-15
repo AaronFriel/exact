@@ -156,3 +156,46 @@ fn structural_regions_keep_source_order_and_distinguish_copied_sites() {
         .collect();
     assert_eq!(pruned, [3, 4, 8, 9]);
 }
+
+#[test]
+fn region_contexts_share_sibling_updates_but_isolate_choice_arms() {
+    use std::{cell::Cell, rc::Rc};
+    let file = contract_syntax::parse("component App\n  state value: option<number> = some(1)\n  view\n    column\n      text \"before\"\n      match value\n        case some(x)\n          text `${x}`\n          text \"sibling\"\n        case none\n          text \"none\"\n      text \"after\"\n").unwrap();
+    let checked = contract_types::check(&file, |_| false).unwrap();
+    let checking = Checking::new(&checked);
+    let mut found = Vec::new();
+    for _ in
+        checking
+            .authored(0)
+            .structure()
+            .walk_regions_with(Rc::new(Cell::new(0)), |node, count| {
+                if node.is_choice() {
+                    assert_eq!(node.bindings()[0].iter().collect::<Vec<_>>(), ["x"]);
+                    assert!(node.bindings()[1].is_empty());
+                    return [
+                        Some(Rc::new(Cell::new(count.get()))),
+                        Some(Rc::new(Cell::new(count.get()))),
+                    ];
+                }
+                if node.element().is_some_and(|(tag, _, _)| tag == "text") {
+                    found.push((node.span().line, count.get()));
+                    count.set(count.get() + 1);
+                }
+                [Some(count.clone()), None]
+            })
+    {}
+    assert_eq!(found, [(5, 0), (8, 1), (9, 2), (11, 1), (12, 1)]);
+    let pruned: Vec<_> = checking
+        .authored(0)
+        .structure()
+        .walk_regions_with((), |node, _| {
+            if node.is_choice() {
+                [None, Some(())]
+            } else {
+                [Some(()), None]
+            }
+        })
+        .map(|(node, ())| node.span().line)
+        .collect();
+    assert_eq!(pruned, [4, 5, 6, 11, 12]);
+}
