@@ -117,8 +117,10 @@ export function rustFunctions(file, source) {
     let args = generics(i + 2);
     while (args < t.length && !['(', ';', '{'].includes(t[args].value)) args++;
     if (t[args]?.value !== '(') continue;
-    let body = paired.get(args) + 1;
+    const afterArgs = paired.get(args) + 1;
+    let body = afterArgs, returnEnd;
     while (body < t.length && !['{', ';'].includes(t[body].value)) {
+      if (t[body].value === 'where') returnEnd ??= body;
       if (['(', '['].includes(t[body].value)) body = paired.get(body);
       body++;
     }
@@ -135,7 +137,7 @@ export function rustFunctions(file, source) {
       cExport: /\bextern(?: "(?:C(?:-unwind)?|system)"|$)/.test(prefix) && /\b(?:no_mangle|export_name)\b/.test(prefix),
       jni: prefix.includes('extern "system"'),
       signature: source.slice(t[i].at, t[body]?.at ?? source.length).trim(),
-      returnType: words(paired.get(args) + 1, body),
+      returnType: t[afterArgs]?.value === '->' ? words(afterArgs + 1, returnEnd ?? body) : '',
       code: words(body + 1, end), start: i, end, body });
   }
   return { functions, t, macros, ignored };
@@ -145,6 +147,28 @@ function files(dir, extension = '.rs') {
   return readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))
     .flatMap(e => e.isDirectory() && !['target', 'node_modules', 'tests', 'fixtures'].includes(e.name)
       ? files(join(dir, e.name), extension) : e.isFile() && e.name.endsWith(extension) ? [join(dir, e.name)] : []);
+}
+
+export function swiftCExports(root = ROOT) {
+  const exports = [];
+  for (const path of files(join(root, 'host/apple'), '.swift')) {
+    const source = readFileSync(path, 'utf8');
+    if (!/@\s*_cdecl/.test(source)) continue;
+    const t = tokens(source), file = relative(root, path);
+    for (let i = 0; i < t.length - 4; i++) {
+      if (t[i].value !== '@' || t[i + 1].value !== '_cdecl' || t[i + 2].value !== '(') continue;
+      const literal = t[i + 3];
+      const name = JSON.parse(source.slice(literal.at, literal.end));
+      let fn = i + 5;
+      while (fn < t.length && t[fn].value !== 'func') fn++;
+      let body = fn;
+      while (body < t.length && t[body].value !== '{') body++;
+      if (body === t.length) throw new Error(`${file}:${t[i].line}: @_cdecl without a function body`);
+      exports.push({ file, name, line: t[i].line,
+        signature: source.slice(t[fn].at, t[body].at).trim() });
+    }
+  }
+  return exports;
 }
 
 export function discover(root = ROOT) {
@@ -246,23 +270,7 @@ export function discover(root = ROOT) {
       }
     }
   }
-  for (const path of files(join(root, 'host/apple'), '.swift')) {
-    const source = readFileSync(path, 'utf8');
-    if (!/@\s*_cdecl/.test(source)) continue;
-    const t = tokens(source), file = relative(root, path);
-    for (let i = 0; i < t.length - 4; i++) {
-      if (t[i].value !== '@' || t[i + 1].value !== '_cdecl' || t[i + 2].value !== '(') continue;
-      const literal = t[i + 3];
-      const name = JSON.parse(source.slice(literal.at, literal.end));
-      let fn = i + 5;
-      while (fn < t.length && t[fn].value !== 'func') fn++;
-      let body = fn;
-      while (body < t.length && t[body].value !== '{') body++;
-      if (body === t.length) throw new Error(`${file}:${t[i].line}: @_cdecl without a function body`);
-      add('apple', 'Swift C ABI export', { file, name, line: t[i].line,
-        signature: source.slice(t[fn].at, t[body].at).trim() });
-    }
-  }
+  for (const f of swiftCExports(root)) add('apple', 'Swift C ABI export', f);
   const seen = new Set();
   return entries.sort((a, b) => a.id.localeCompare(b.id)).map(e => {
     if (seen.has(e.id)) throw new Error(`duplicate inventory identity: ${e.id}`);

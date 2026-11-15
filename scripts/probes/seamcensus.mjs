@@ -103,7 +103,6 @@ export function seamCensus({ root = 'host/apple', args = [], countsOnly = false 
         let start = j;
         while (start > body + 1 && ts[start - 1].line === ts[j].line) start--;
         const prefix = ts.slice(start, j).map(t => t.text).join(' ');
-        if (/\b(static|class|override)\b/.test(prefix)) continue;
         let end = j + 2;
         while (end < close) {
           if (ts[j].text === 'func') {
@@ -114,9 +113,13 @@ export function seamCensus({ root = 'host/apple', args = [], countsOnly = false 
         const header = ts.slice(j, end).map(t => t.text).join(' ');
         const stored = ts[j].text !== 'func' && (ts[end]?.text !== '{' ||
           ['didSet', 'willSet'].includes(ts[end + 1]?.text) || header.includes(' = '));
+        if (stored && /\b(static|class|override)\b/.test(prefix)) continue;
         // A closure-valued property is stored; computed getters have no initializer.
-        const returnArrow = ts.slice(j, end).some(t => t.text === '->' && t.parent === body);
-        const returns = ts[j].text === 'func' && returnArrow && !/->\s*(Void|\(\s*\))\s*$/.test(header);
+        const declaration = ts.slice(j, end);
+        const returnArrow = declaration.findIndex(t => t.text === '->' && t.parent === body);
+        const where = declaration.findIndex((t, k) => k > returnArrow && t.text === 'where' && t.parent === body);
+        const returnType = returnArrow < 0 ? '' : declaration.slice(returnArrow + 1, where < 0 ? undefined : where).map(t => t.text).join(' ');
+        const returns = ts[j].text === 'func' && returnType !== '' && !/^(Void|\(\s*\))$/.test(returnType);
         const names = [ts[j + 1].text];
         if (stored) {
           for (let k = j + 2; k < end; k++) {
@@ -124,7 +127,8 @@ export function seamCensus({ root = 'host/apple', args = [], countsOnly = false 
           }
         }
         found.push({ path, owner, names, line: ts[j].line, start: ts[start].at, at: ts[j].at,
-          prefix, stored, returns, header, async: ts.slice(j, end).some(t => t.text === 'async' && t.parent === body) });
+          prefix, stored, returns, header, async: declaration.slice(0, returnArrow < 0 ? undefined : returnArrow)
+            .some(t => t.text === 'async' && t.parent === body) });
       }
     }
     return found;

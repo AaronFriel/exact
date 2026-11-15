@@ -8,13 +8,13 @@
 // ExactCore/Bridge.swift only, not inferred returns or Runtime extensions elsewhere.
 // Rust uses the inventory's structural parser, not macro expansion or type checking.
 // Receipt aliases beyond CommitReceipt/Advanced/Dispatched/Timed can escape. Count
-// Apple C ABI source exports (including imported runner macros) once per definition;
+// Apple C ABI source exports (Rust, Swift @_cdecl and imported runner macros) once per definition;
 // generated exports without source definitions, linker aliases and cfg_attr exports
 // can escape. A macro with a computed API name is refused by the Rust parser.
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { seamCensus } from './probes/seamcensus.mjs';
-import { rustFunctions } from './completion-inventory.mjs';
+import { rustFunctions, swiftCExports } from './completion-inventory.mjs';
 
 const ROOT = resolve(import.meta.dir, '..');
 const CEILINGS = 'scripts/seam-ceilings.json';
@@ -67,17 +67,19 @@ export function census(root = ROOT) {
       sites.appleAbiExports.push(...m.functions.map(rustSite));
     }
   }
+  sites.appleAbiExports.push(...swiftCExports(root).map(rustSite));
   for (const k of categories) sites[k].sort((a, b) => a.id.localeCompare(b.id) || a.line - b.line);
   return sites;
 }
 
-export function ceilingFor(sites, baseline) {
-  return { baseline, counts: Object.fromEntries(categories.map(k => [k,
+export function ceilingFor(sites, baseline, probe) {
+  return { baseline, ...(probe ? { probe } : {}), counts: Object.fromEntries(categories.map(k => [k,
     { ceiling: sites[k].length, sites: sites[k].map(s => s.id) }])) };
 }
 
 export function compare(sites, ceiling) {
   const lines = [], grown = [], fallen = [];
+  if (ceiling.probe) lines.push(`Probe ${ceiling.probe.commit}: informational comparison only.`);
   for (const k of categories) {
     const saved = ceiling.counts?.[k];
     if (!saved || !Number.isInteger(saved.ceiling) || saved.ceiling < 0 ||
@@ -85,7 +87,9 @@ export function compare(sites, ceiling) {
       lines.push(`${k}: invalid or missing ceiling and site inventory`); grown.push(k); continue;
     }
     const count = sites[k].length, delta = count - saved.ceiling;
-    lines.push(`${k}: ${count} / ${saved.ceiling}${delta > 0 ? `; GREW by ${delta}` : delta < 0 ? `; fell by ${-delta}` : ''}`);
+    const probe = ceiling.probe?.counts?.[k], probeDelta = count - probe;
+    const info = Number.isInteger(probe) && probe >= 0 ? `; vs probe ${probe}: ${probeDelta >= 0 ? '+' : ''}${probeDelta}` : '';
+    lines.push(`${k}: ${count} / ${saved.ceiling}${delta > 0 ? `; GREW by ${delta}` : delta < 0 ? `; fell by ${-delta}` : ''}${info}`);
     if (delta > 0) {
       grown.push(k);
       const remaining = new Map();
@@ -107,7 +111,7 @@ export function check({ root = ROOT, lower = false, report = console.log } = {})
   const sites = census(root), result = compare(sites, ceiling);
   result.lines.forEach(line => report(line));
   if (lower && !result.grown.length && result.fallen.length) {
-    writeFileSync(path, JSON.stringify(ceilingFor(sites, ceiling.baseline), null, 2) + '\n');
+    writeFileSync(path, JSON.stringify(ceilingFor(sites, ceiling.baseline, ceiling.probe), null, 2) + '\n');
     report(`Lowered ${result.fallen.join(', ')} in ${CEILINGS}; commit it with the source change.`);
     return 0;
   }
