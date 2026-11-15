@@ -218,7 +218,8 @@ export function storedTexts(state) {
  * amount, a form the app refused with its error), so their values are left out of the comparison; and `saved`, the fields that
  * showed a value the app kept and now show another. A field is compared like any text only when the app kept what it showed and
  * the reloaded field shows something it did not keep: focus-timer's settings reloaded with 25 and 5 over the saved 30 and 10.
- * What the app kept is what its state and resources hold both before and after the reload (`storedTexts` of each); a field that
+ * A field marked invalid is a draft even if another saved record holds the same text. Otherwise, what the app kept is what
+ * its state and resources hold both before and after the reload (`storedTexts` of each); a field that
  * shows what is kept after the reload (the water tracker's refused 0, then its saved goal) is the app doing as it should. */
 function typedFields(before, after, touched, states) {
   const was = storedTexts(states?.before), now = storedTexts(states?.after);
@@ -228,7 +229,7 @@ function typedFields(before, after, touched, states) {
   const drafts = new Set(), saved = [];
   for (const id of ids) {
     const there = (before ?? []).find((n) => field(n, id)), here = (after ?? []).find((n) => field(n, id));
-    if (!(has(value(there)) && (!here || !has(value(here))))) drafts.add(id);
+    if (['true', 'grammar', 'spelling'].includes(there.props?.accessibilityInvalid) || !(has(value(there)) && (!here || !has(value(here))))) drafts.add(id);
     else if (here) saved.push({ kind: 'field', id, was: value(there), now: value(here) });
   }
   return { drafts, saved };

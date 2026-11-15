@@ -40,10 +40,10 @@ every screen its own ids; tap a tab before reading in it.
 
 ## Before you call it done
 
-`verify` (`verify ios`) runs these tests, then `check`s the first screen and each test's end
-screen, light and dark at two widths; on the web it reloads each end screen (a saved value that
-comes back changed is a finding), then relaunches on a test's storage and checks what it stored
-came back. Screenshots: `.exact/verify/`. A clean `verify` is
+`verify` (`verify ios`) runs the tests, then `check`s the first screen and test ends,
+light and dark at two widths. On the web it reloads each end: a changed saved value is a
+finding; a field marked invalid by `aria-invalid` is a draft. It then relaunches on a test's
+storage and checks what came back. Screenshots: `.exact/verify/`. A clean `verify` is
 done; a screen no test ends on is not checked, so end a test there. A finding that is the design
 is listed, not counted, with `"verify": {"accept": [{"finding": "contrast", "node": "<testId>",
-"why": "…"}]}` in app.json. Drive by hand to see why a step fails (`agent web --storage s1 …`).
+"why": "…"}]}` in app.json. Investigate a failed step with `agent web --storage s1 …`.
