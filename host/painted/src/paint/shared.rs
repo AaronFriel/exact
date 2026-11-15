@@ -150,10 +150,13 @@ impl Painter {
         // The reader draws that rectangle upright, so an image rotated, skewed or
         // scaled by a negative factor (by its own transform or an ancestor's)
         // keeps its live drawing, which carries the transform; the raster would
-        // fly upright in the bounding box and turn at landing.
+        // fly upright in the bounding box and turn at landing. An image still
+        // loading has no live drawing, so it takes the raster whatever its
+        // transform: the reader draws the leaver's image there until this
+        // one's arrives (LLP 1013.000 D4 item 4).
         let upright =
             transform.kx == 0.0 && transform.ky == 0.0 && transform.sx > 0.0 && transform.sy > 0.0;
-        let plain_image = upright
+        let plain_image = (upright || image.is_none())
             && painted
             && node.node_type == NodeType::Image
             && !node
