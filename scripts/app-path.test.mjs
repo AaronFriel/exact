@@ -196,3 +196,37 @@ test('an app\'s authored tests are app.test.contract, then each other *.test.con
     expect(authoredTests(dir)).toEqual(['app', 'a', 'b'].map((n) => join(dir, `${n}.test.contract`)));
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+test('pathFrom refuses a missing Windows drive or UNC share instead of walking forever', () => {
+  const dir = mkdtempSync(resolve(ROOT, 'target/app-path-windows-'));
+  const file = resolve(dir, 'windows.test.mjs');
+  const script = `
+    import { expect, mock, test } from 'bun:test';
+    import * as fs from 'node:fs';
+    import * as path from 'node:path';
+    const exists = fs.existsSync, windows = path.win32, visited = [];
+    mock.module('node:path', () => ({ ...path, ...windows }));
+    mock.module('node:fs', () => ({ ...fs, existsSync(p) {
+      if (p.startsWith('Z:') || p.startsWith(String.fromCharCode(92, 92))) {
+        visited.push(p);
+        return false;
+      }
+      return exists(p);
+    } }));
+    const { pathFrom } = await import(${JSON.stringify(resolve(ROOT, 'scripts/app.mjs'))});
+    test('walks to each unavailable Windows root and stops', () => {
+      for (const from of ['Z:/apps/notes', '//missing/share/apps/notes']) {
+        visited.length = 0;
+        expect(() => pathFrom(from, 'C:/exact')).toThrow(/no existing ancestor.*drive or share unavailable/);
+        expect(visited).toEqual([
+          windows.resolve(from), windows.dirname(windows.resolve(from)), windows.parse(from).root.replaceAll('/', String.fromCharCode(92)),
+        ]);
+      }
+    });
+  `;
+  try {
+    writeFileSync(file, script);
+    const result = spawnSync(process.execPath, ['test', file], { cwd: ROOT, encoding: 'utf8', timeout: 10_000 });
+    expect(result.status, result.stdout + result.stderr + (result.error ?? '')).toBe(0);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});

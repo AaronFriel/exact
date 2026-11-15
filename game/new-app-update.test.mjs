@@ -1,12 +1,13 @@
 import { test } from 'bun:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, resolve } from 'node:path';
+import { dirname, isAbsolute, resolve } from 'node:path';
 import { applyPattern, createApp } from './new.mjs';
 import { dependencyTables, updateManifests, updateScaffold } from './update-manifests.mjs';
 import { ensureShells } from '../scripts/app-shells.mjs';
+import { pathWithin } from '../scripts/paths.mjs';
 import { pathFrom, resolveApp } from '../scripts/app.mjs';
 
 const root = resolve(import.meta.dir, '..');
@@ -388,3 +389,62 @@ test('package path updates accept JSONC and leave unparseable files while updati
     }
   } finally { rmSync(parent, { recursive: true, force: true }); }
 }, 60_000);
+
+test.each([['topic', true], ['nested/trees/topic', false]])('an app first created inside worktree %s keeps its checkout paths when merged', (location, sameDepth) => {
+  const parent = mkdtempSync(resolve(root, 'target/new-in-worktree-'));
+  const main = resolve(parent, 'main'), worktree = resolve(parent, location);
+  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !['EXACT', 'EXACT2'].includes(key) && !key.startsWith('GIT_')));
+  const git = (cwd, ...args) => {
+    const result = spawnSync('git', ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.com', '-c', 'commit.gpgsign=false', ...args], { cwd, env, encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+    return result.stdout.trim();
+  };
+  try {
+    mkdirSync(main);
+    git(main, 'init', '-q');
+    git(main, 'commit', '--allow-empty', '-qm', 'Create the fixture\n\nCo-Authored-By: GPT-6 Astra <noreply@openai.com>\nCo-Authored-By: GPT-6.1 Sol <noreply@openai.com>');
+    git(main, 'worktree', 'add', '-qb', 'topic', worktree);
+    const app = resolve(worktree, 'packages/nested/notes');
+    createApp(app);
+    const before = readFileSync(resolve(app, 'exact.mjs'), 'utf8');
+    const schema = JSON.parse(readFileSync(resolve(app, 'app.json'), 'utf8')).$schema;
+    const mainApp = resolve(main, 'packages/nested/notes');
+    assert.equal(schema, pathWithin(mainApp, resolve(root, 'scripts/app.schema.json')));
+    assert.equal(existsSync(resolve(app, schema)), sameDepth);
+    const loadSchema = at => JSON.parse(readFileSync(resolve(at, schema), 'utf8'));
+    const expectedSchema = JSON.parse(readFileSync(resolve(root, 'scripts/app.schema.json'), 'utf8'));
+    if (sameDepth) assert.deepEqual(loadSchema(app), expectedSchema);
+    const guides = (at, readable) => {
+      const notes = readFileSync(resolve(at, 'AGENTS.md'), 'utf8');
+      const paths = [...notes.matchAll(/[^\s`]+\/docs\/start-here(?:-site)?\.md/g)].map(match => match[0]);
+      assert.equal(paths.length, 2);
+      for (const path of paths) {
+        assert.equal(isAbsolute(path), false);
+        assert.equal(path, pathWithin(mainApp, resolve(root, 'docs', path.split('/').at(-1))));
+        if (readable) assert.match(readFileSync(resolve(at, path), 'utf8'), /^# /);
+      }
+    };
+    guides(app, sameDepth);
+    const launcher = spawnSync(process.execPath, [resolve(app, 'exact.mjs'), '--help'], { env, encoding: 'utf8' });
+    assert.equal(launcher.status, 0, launcher.stderr);
+    git(worktree, 'add', '-A');
+    git(worktree, 'commit', '-qm', 'Create the app\n\nCo-Authored-By: GPT-6 Astra <noreply@openai.com>\nCo-Authored-By: GPT-6.1 Sol <noreply@openai.com>');
+    git(main, 'merge', '-q', '--ff-only', 'topic');
+    const merged = resolve(main, 'packages/nested/notes');
+    const launched = spawnSync(process.execPath, [resolve(merged, 'exact.mjs'), '--help'], { env, encoding: 'utf8' });
+    assert.equal(launched.status, 0, launched.stderr);
+    guides(merged, true);
+    assert.equal(JSON.parse(readFileSync(resolve(merged, 'app.json'), 'utf8')).$schema, schema);
+    assert.deepEqual(loadSchema(merged), expectedSchema);
+    createApp(app, { update: true });
+    assert.equal(readFileSync(resolve(app, 'exact.mjs'), 'utf8'), before);
+    assert.equal(JSON.parse(readFileSync(resolve(app, 'app.json'), 'utf8')).$schema, schema);
+    guides(app, sameDepth);
+    createApp(merged, { update: true });
+    assert.equal(git(worktree, 'status', '--porcelain'), '');
+    assert.equal(git(main, 'status', '--porcelain'), '');
+    for (const file of ['AGENTS.md', 'app.json', 'exact.mjs']) {
+      assert.equal(readFileSync(resolve(app, file), 'utf8'), readFileSync(resolve(merged, file), 'utf8'), file);
+    }
+  } finally { rmSync(parent, { recursive: true, force: true }); }
+});

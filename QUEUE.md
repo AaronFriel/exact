@@ -1,4 +1,5 @@
 # Queue
+- **Authored will-change**: branch `issues/543` at `75d79531b` (built and reviewed five rounds; #543 landed as automatic promotion; open question: native backdrop root).
 - **Markdown Stress's macOS content-region trial is refused under the agent** (2026-11-14). `EXACT_CONTENT_REGION=1048576 bun scripts/agent.mjs macos --app markdown-stress "clock settle" logs` logs `content-region: stale or malformed region request` and stays on "Preparing exact content…": the Swift snapshot names a request the Rust side no longer has pending. Same at 2556e2fac, before the flowed-text work.
 - **A nested scroll view inside an Apple content region does not clip the raster's text** (2026-11-14, `host/apple/src/content_region/host.rs`). The raster clips to the owner and its scroll port only; text inside an inner `overflow: scroll` box draws past it.
 - **The dev server re-reads its native build receipts for every generation** (2026-11-14, `host/web/dev.mjs` `nativePrograms`). Each generation and each native envelope request reads and serializes the receipts again: about 23 ms for one receipt on a loaded Mac, perhaps 4 ms idle. Cache them by file metadata.

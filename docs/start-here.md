@@ -83,6 +83,17 @@ when its source signatures change. `test` and `agent` build and refresh it on
 Rust/TypeScript apps with a composer (such as Fieldnotes), which also refresh the
 editor copy before type-checking. `contract build` reports a refresh on stderr.
 `contract types --check app.contract` checks freshness without writing.
+Committed launcher, schema and guide paths are relative to the app. An app first
+created inside a linked git worktree keeps its default checkout path
+relative to the app's location in the main worktree, including when that folder does
+not exist there yet. Its launcher works before and after the app is merged.
+`app.json`'s `$schema`, guide paths, Snapback readme and game-notes paths use that
+same main-tree location, so scaffolding and updates write identical committed
+bytes in either tree. An editor opened inside a worktree at a different depth
+may not resolve those paths; open the main-tree file or use `bun exact.mjs docs`
+for the guides. The launcher's Git fallback finds the checkout for running from
+the nested worktree. `update` refreshes the paths when the checkout moves.
+
 `bun exact.mjs update` refreshes scaffold files and absolute `@exact/*` package paths for the
 checkout it runs from. It reports when `exact.mjs`'s default checkout path changes, including in a linked worktree. Run `bun install` when it reports changed package paths. An older Android
 scaffold moves `canvas_jni!` to `exact-painted`; an authored dependency form gets the manual

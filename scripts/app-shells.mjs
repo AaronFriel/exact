@@ -10,9 +10,10 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
-import { basename, dirname, relative, resolve, sep } from 'node:path';
+import { basename, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { cargoEnvironment, lockedMetadata, pathFrom, patchLines } from './app.mjs';
+import { pathWithin } from './paths.mjs';
 import { nativePackages } from './package-libraries.mjs';
 import { MEMBER_OF, appCrates, authoredWorkspace, gpuShellsDir, notAMember, shellsDir } from './cargo-check.mjs';
 import { APPLE_BUILD_SCRIPT, appleBuildScript } from './linked-plan.mjs';
@@ -449,12 +450,6 @@ export const authoredCrate = (dir, kind, name, title) =>
  * (LLP 1153 D1.4) whose script is still the first gets the second from `update` (game/new.mjs). */
 export const copiedBuildScripts = () => Object.fromEntries(Object.values(PLATFORMS).concat('web').filter((kind, i, all) => all.indexOf(kind) === i)
   .map(kind => [kind, ['../../..', '..'].map(app => crateFiles(kind, { name: 'app', title: 'App', app, dep: () => '' })['build.rs'])]));
-
-/** How a generated workspace at `from` names a path in this checkout: always relative, with `/`. Unlike an authored
- * workspace's (`pathFrom`), it is rewritten when the app or the checkout moves (its stamp names both), and a deploy's
- * capture keeps the two trees' relative places, where a path into the live checkout would leave the capture. */
-const pathWithin = (from, to) =>
-  (relative(realpathSync(from), existsSync(to) ? realpathSync(to) : resolve(to)) || '.').split(sep).join('/');
 
 const titleOf = name => name.split('-').map(w => w[0].toUpperCase() + w.slice(1)).join(' ');
 const stampOf = (shells) => { try { return JSON.parse(readFileSync(resolve(shells, '.stamp.json'), 'utf8')); } catch { return null; } };
