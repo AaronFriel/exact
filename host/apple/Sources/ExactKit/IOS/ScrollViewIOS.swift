@@ -137,6 +137,9 @@ package class ScrollView: UIScrollView {
             let translation = panGestureRecognizer.translation(in: self)
             if !admitsPan(velocity: velocity, translation: translation, start: CGPoint(x: location.x - translation.x, y: location.y - translation.y)) { return false }
         }
+        #if os(iOS)
+        if gesture === pinchGestureRecognizer, !admitsPinch(at: gesture.location(in: self)) { return false }
+        #endif
         return super.gestureRecognizerShouldBegin(gesture)
     }
     /// The pan's own check, apart from UIKit's: `touch-action` intersected
@@ -158,6 +161,21 @@ package class ScrollView: UIScrollView {
         if let owner = scrollingNode, !owner.allowsTouchPan(direction) { return false }
         return !handsOff(direction)
     }
+    #if os(iOS)
+    /// A zoomable scroller's pinch (LLP 1057.001.000 §3): rule 2, where
+    /// `touch-action` from the node under the fingers through this container
+    /// allows `pinch-zoom`, and never over a surface that owns its input.
+    func admitsPinch(at point: CGPoint) -> Bool {
+        var view = hitTest(point, with: nil)
+        if CanvasInputs.owns(view) { return false }
+        while let current = view {
+            if let node = current as? NodeView, !node.allowsTouchPinch { return false }
+            if current === self { break }
+            view = current.superview
+        }
+        return scrollingNode?.allowsTouchPinch ?? true
+    }
+    #endif
     /// CSS's scroll chaining at a gesture's start (LLP 1070 G1, Q4 as ruled
     /// provisionally): under `overscroll-behavior: auto`, a drag that begins
     /// at this view's edge and pushes outward belongs to the enclosing
@@ -279,6 +297,8 @@ extension Presenter {
             // Settle that layout before restoring or authoring an offset.
             if node.groupedOwner { node.scrollView?.layoutIfNeeded() }
             if !collections.owns(node.id) { node.restoreScrollPosition(authored: authored.contains { $0.isDescendant(of: node) }) }
+            // The zoom before the batch's offsets, which then land in its extent (LLP 1057.001.000 D2).
+            node.settleZoom()
             if let material = node.materialView { node.sendSubviewToBack(node.glassSlot ?? material) }
         }
         // Every capture is restored before any authored offset lands: a

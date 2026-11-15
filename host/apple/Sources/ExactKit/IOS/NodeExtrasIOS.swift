@@ -97,6 +97,10 @@ final class NodeExtras {
     var layoutOffset: CGPoint = .zero
     /// How far its scroller's scroll moves a sticky box (LLP 1083, `Sticky.swift`).
     var stickyOffset: CGPoint = .zero
+    /// A zoomable scroller's zoom, and the scale and shift its zoom draws its child at (`ScrollZoomIOS.swift`).
+    var zoom: ScrollZoom?
+    var zoomFactor: CGFloat = 1
+    var zoomShift: CGPoint = .zero
     var keyboardLift: CGFloat = 0
     /// How far its surface's size stands from the laid-out size (LLP 1063).
     var layoutResize: CGSize = .zero
@@ -184,6 +188,8 @@ final class NodeExtras {
     var glassSlot: GlassSlot?
     var pendingScrollLeft: Double?
     var pendingScrollTop: Double?
+    /// A `scrollZoom` written and not yet applied (`ScrollZoomIOS.swift`).
+    var pendingZoom: Double?
     var pendingScrollTransfer = false
     /// A collapsing title's scroller (LLP 1075.003 Stage 3): its expanded
     /// title's inset, where `scrollTop` 0 rests; 0 for every other scroller.
@@ -307,6 +313,8 @@ extension NodeView {
     var clipBox: PlainView? { get { extras?.clipBox } set { if newValue != nil || extras != nil { more.clipBox = newValue } } }
     var layoutOffset: CGPoint { get { extras?.layoutOffset ?? .zero } set { if newValue != .zero || extras != nil { more.layoutOffset = newValue } } }
     var stickyOffset: CGPoint { get { extras?.stickyOffset ?? .zero } set { if newValue != .zero || extras != nil { more.stickyOffset = newValue } } }
+    var zoomFactor: CGFloat { get { extras?.zoomFactor ?? 1 } set { if newValue != 1 || extras != nil { more.zoomFactor = newValue } } }
+    var zoomShift: CGPoint { get { extras?.zoomShift ?? .zero } set { if newValue != .zero || extras != nil { more.zoomShift = newValue } } }
     var authoredAccentTint: UIColor? { get { extras?.authoredAccentTint } set { if newValue != nil || extras != nil { more.authoredAccentTint = newValue } } }
     /// How far a keyboard toolbar rides up with the keyboard (KeyboardToolbarIOS).
     var keyboardLift: CGFloat { get { extras?.keyboardLift ?? 0 } set { if newValue != 0 || extras != nil { more.keyboardLift = newValue } } }

@@ -729,6 +729,8 @@ pub fn attr(name: &str) -> Option<AttrTarget> {
         "color-type" => AttrTarget::Prop(p("colorType")),
         "scrollTop" => AttrTarget::Prop(p("scrollTop")),
         "scrollLeft" => AttrTarget::Prop(p("scrollLeft")),
+        // @ref LLP 1057.001.000 D2 — a zoomable container's zoom, as `scrollTop` is its offset.
+        "scrollZoom" => AttrTarget::Prop(p("scrollZoom")),
         "swipeContent" => AttrTarget::Prop(p("swipeContent")),
         "swipeLeading" => AttrTarget::Prop(p("swipeLeading")),
         "swipeTrailing" => AttrTarget::Prop(p("swipeTrailing")),

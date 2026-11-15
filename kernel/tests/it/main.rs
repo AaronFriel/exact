@@ -8,6 +8,7 @@ mod browser_columns;
 mod browser_controls;
 mod browser_flex;
 mod browser_host_block;
+mod browser_intrinsic;
 mod browser_paint_order;
 mod browser_position;
 mod browser_ratio;

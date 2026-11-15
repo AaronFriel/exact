@@ -1,6 +1,6 @@
 // Inline client rectangles: an empty run, a small run in a tall line, a wrapped run,
-// and two runs' border boxes (InlineFrameMacTests, InlineFrameIOSTests). Compiled by
-// build.mjs --test.
+// and three runs' border boxes, one of them empty (InlineFrameMacTests,
+// InlineFrameIOSTests). Compiled by build.mjs --test.
 component App
   view
     column padding=24 gap=12
@@ -24,3 +24,7 @@ component App
           text "ab" padding-left=3 margin-left=2
           text "cd" padding-right=4
         text " x"
+      text width=260 font-size=16 font-family="Arial" line-height="20px" testId="padded-empty-paragraph"
+        text "Hi"
+        text "" id="paddedEmpty" testId="padded-empty" padding="3px 5px" border-width=2 border-style="solid" background-color="#dddddd"
+        text " there"

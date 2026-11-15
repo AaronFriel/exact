@@ -1,5 +1,5 @@
 {
-  "baseline": "504a8a11fb3c70f3d8718a620db8c3b1b64f1422",
+  "baseline": "1f24dc2826a752af0261269bc926e3ab1656f00f",
   "probe": {
     "commit": "ade624d144ac4d86ee69d3eb104226e28686e1bf",
     "originalCounts": {
@@ -19,7 +19,7 @@
   },
   "counts": {
     "nodeViewCasts": {
-      "ceiling": 635,
+      "ceiling": 645,
       "sites": [
         "host/apple/Sources/ExactDrag/MouseHeightDragMac.swift: current as? NodeView",
         "host/apple/Sources/ExactDrag/MouseReorderMac.swift: current as? NodeView",
@@ -155,6 +155,7 @@
         "host/apple/Sources/ExactKit/IOS/AgentIOS.swift: hit as? NodeView",
         "host/apple/Sources/ExactKit/IOS/AgentIOS.swift: if (v as? NodeView",
         "host/apple/Sources/ExactKit/IOS/AgentIOS.swift: n as? NodeView",
+        "host/apple/Sources/ExactKit/IOS/AgentIOS.swift: next as? NodeView",
         "host/apple/Sources/ExactKit/IOS/AgentIOS.swift: next as? NodeView",
         "host/apple/Sources/ExactKit/IOS/AgentIOS.swift: node as? NodeView",
         "host/apple/Sources/ExactKit/IOS/AgentIOS.swift: return [\"tapped\": Int((hit as? NodeView",
@@ -376,11 +377,19 @@
         "host/apple/Sources/ExactKit/IOS/ScrollViewIOS.swift: (superview as? NodeView",
         "host/apple/Sources/ExactKit/IOS/ScrollViewIOS.swift: current as? NodeView",
         "host/apple/Sources/ExactKit/IOS/ScrollViewIOS.swift: current as? NodeView",
+        "host/apple/Sources/ExactKit/IOS/ScrollViewIOS.swift: current as? NodeView",
         "host/apple/Sources/ExactKit/IOS/ScrollViewIOS.swift: superview as? NodeView",
         "host/apple/Sources/ExactKit/IOS/ScrollViewIOS.swift: superview as? NodeView",
         "host/apple/Sources/ExactKit/IOS/ScrollViewIOS.swift: superview as? NodeView",
         "host/apple/Sources/ExactKit/IOS/ScrollViewIOS.swift: superview?.superview as? NodeView",
         "host/apple/Sources/ExactKit/IOS/ScrollViewIOS.swift: view as? NodeView",
+        "host/apple/Sources/ExactKit/IOS/ScrollZoomIOS.swift: (at?.superview as? NodeView",
+        "host/apple/Sources/ExactKit/IOS/ScrollZoomIOS.swift: (current.superview as? NodeView",
+        "host/apple/Sources/ExactKit/IOS/ScrollZoomIOS.swift: (current.superview as? NodeView",
+        "host/apple/Sources/ExactKit/IOS/ScrollZoomIOS.swift: current as? NodeView",
+        "host/apple/Sources/ExactKit/IOS/ScrollZoomIOS.swift: scroller.superview as? NodeView",
+        "host/apple/Sources/ExactKit/IOS/ScrollZoomIOS.swift: scroller.superview as? NodeView",
+        "host/apple/Sources/ExactKit/IOS/ScrollZoomIOS.swift: sv.superview as? NodeView",
         "host/apple/Sources/ExactKit/IOS/SearchScopeIOS.swift: ($0 as? NodeView",
         "host/apple/Sources/ExactKit/IOS/SearchScopeIOS.swift: $0 as? NodeView",
         "host/apple/Sources/ExactKit/IOS/SearchScopeIOS.swift: $0 as? NodeView",
@@ -541,6 +550,7 @@
         "host/apple/Sources/ExactKit/Mac/ReorderPartsMac.swift: current as? NodeView",
         "host/apple/Sources/ExactKit/Mac/RouteSheetMac.swift: $0 as? NodeView",
         "host/apple/Sources/ExactKit/Mac/ScrollDragMac.swift: superview as? NodeView",
+        "host/apple/Sources/ExactKit/Mac/ScrollZoomMac.swift: $0 as? NodeView",
         "host/apple/Sources/ExactKit/Mac/SegmentsMac.swift: $0 as? NodeView",
         "host/apple/Sources/ExactKit/Mac/ShortcutsMac.swift: ($0 as? NodeView",
         "host/apple/Sources/ExactKit/Mac/ShortcutsMac.swift: $0 as? NodeView",
@@ -659,7 +669,7 @@
       ]
     },
     "treeWalks": {
-      "ceiling": 632,
+      "ceiling": 645,
       "sites": [
         "host/apple/Sources/ExactDrag/MouseHeightDragMac.swift: ancestor = current.superview",
         "host/apple/Sources/ExactDrag/MouseReorderMac.swift: ancestor = current.superview",
@@ -800,7 +810,7 @@
         "host/apple/Sources/ExactKit/IOS/AgentIOS.swift: var up = hit.superview",
         "host/apple/Sources/ExactKit/IOS/AgentIOS.swift: while let cur = n, !((cur as? NodeView)?.handlers.contains(\"hover\") ?? false) { n = cur.superview }",
         "host/apple/Sources/ExactKit/IOS/AgentIOS.swift: while let u = up, !(u is NodeView) { up = u.superview }",
-        "host/apple/Sources/ExactKit/IOS/AgentIOS.swift: while let view = next, !((view as? NodeView).map { presenter.transformBindings[$0.id]?.target != nil } ?? false) { next = view.superview }",
+        "host/apple/Sources/ExactKit/IOS/AgentIOS.swift: while let view = next, !((view as? NodeView).map { presenter.transformBindings[$0.id]?.target != nil || $0.extras?.zoom != nil } ?? false) { next = view.superview }",
         "host/apple/Sources/ExactKit/IOS/AgentMotionIOS.swift: at = v.superview",
         "host/apple/Sources/ExactKit/IOS/AgentMotionIOS.swift: pending.append(contentsOf: v.subviews)",
         "host/apple/Sources/ExactKit/IOS/AgentNativeIOS.swift: for sub in v.subviews { visit(sub, d + 1, parent: v, owner: nextOwner) }",
@@ -1038,6 +1048,19 @@
         "host/apple/Sources/ExactKit/IOS/ScrollViewIOS.swift: var scrollingNode: NodeView? { (superview as? NodeView) ?? (self as? Viewport)?.documentNode }",
         "host/apple/Sources/ExactKit/IOS/ScrollViewIOS.swift: var up = superview",
         "host/apple/Sources/ExactKit/IOS/ScrollViewIOS.swift: view = current.superview",
+        "host/apple/Sources/ExactKit/IOS/ScrollViewIOS.swift: view = current.superview",
+        "host/apple/Sources/ExactKit/IOS/ScrollZoomIOS.swift: at = current.superview",
+        "host/apple/Sources/ExactKit/IOS/ScrollZoomIOS.swift: guard !CanvasInputs.owns(view), let scroller = proxy.superview else { return false }",
+        "host/apple/Sources/ExactKit/IOS/ScrollZoomIOS.swift: guard at != nil, let owner = scroller.superview as? NodeView else { return false }",
+        "host/apple/Sources/ExactKit/IOS/ScrollZoomIOS.swift: guard g.state == .ended, let scroller = proxy.superview, let owner = scroller.superview as? NodeView else { return }",
+        "host/apple/Sources/ExactKit/IOS/ScrollZoomIOS.swift: guard g.state == .ended, let scroller = proxy.superview, let owner = scroller.superview as? NodeView else { return }",
+        "host/apple/Sources/ExactKit/IOS/ScrollZoomIOS.swift: guard let sv = at as? ScrollView, let owner = sv.superview as? NodeView, let zoom = owner.extras?.zoom, zoom.doubleTapAdmits(hit) else { return nil }",
+        "host/apple/Sources/ExactKit/IOS/ScrollZoomIOS.swift: guard let zoom = (at?.superview as? NodeView)?.extras?.zoom, zoom.doubleTap?.isEnabled == true, !isZoomControl,",
+        "host/apple/Sources/ExactKit/IOS/ScrollZoomIOS.swift: var at = superview",
+        "host/apple/Sources/ExactKit/IOS/ScrollZoomIOS.swift: while let current = at, !(current is ScrollView && (current.superview as? NodeView)?.extras?.zoom != nil) { at = current.superview }",
+        "host/apple/Sources/ExactKit/IOS/ScrollZoomIOS.swift: while let current = at, !(current is ScrollView && (current.superview as? NodeView)?.extras?.zoom != nil) { at = current.superview }",
+        "host/apple/Sources/ExactKit/IOS/ScrollZoomIOS.swift: while let current = at, !(current is ScrollView && (current.superview as? NodeView)?.extras?.zoom != nil) { at = current.superview }",
+        "host/apple/Sources/ExactKit/IOS/ScrollZoomIOS.swift: while let current = at, !(current is ScrollView && (current.superview as? NodeView)?.extras?.zoom != nil) { at = current.superview }",
         "host/apple/Sources/ExactKit/IOS/SearchScopeIOS.swift: let kids = c.node.container.subviews.compactMap { $0 as? NodeView }",
         "host/apple/Sources/ExactKit/IOS/SearchScopeIOS.swift: let members = list.container.subviews.compactMap { $0 as? NodeView }.filter { $0.style[\"display\"]?.string != \"none\" }",
         "host/apple/Sources/ExactKit/IOS/SearchScopeIOS.swift: let tabs = list.map { $0.container.subviews.compactMap { $0 as? NodeView }.filter { $0.style[\"display\"]?.string != \"none\" } } ?? []",
@@ -1434,7 +1457,7 @@
       ]
     },
     "runnerReceiptMethods": {
-      "ceiling": 75,
+      "ceiling": 76,
       "sites": [
         "runner/src/runner/activities.rs: Runner::link_activities",
         "runner/src/runner/activities.rs: Runner::set_activities",
@@ -1456,6 +1479,7 @@
         "runner/src/runner/collection.rs: Runner::collection_feedback_filled",
         "runner/src/runner/collection.rs: Runner::collection_shown",
         "runner/src/runner/commit.rs: Runner::act",
+        "runner/src/runner/completion.rs: Runner::deliver",
         "runner/src/runner/delivery.rs: Runner::set_delivery",
         "runner/src/runner/delivery.rs: Runner::set_delivery_from_compat",
         "runner/src/runner/event.rs: Runner::dispatch",

@@ -211,6 +211,13 @@ extension InlineStyle {
                 run.background = try a.map(BatchFields.number); darkBackground = run.background
             }
             guard run.background?.count == 4, darkBackground?.count == 4 else { throw BatchReader.Invalid.wire }
+        case "border_color_top", "border_color_right", "border_color_bottom", "border_color_left":
+            let i = ["border_color_top", "border_color_right", "border_color_bottom", "border_color_left"].firstIndex(of: key)!
+            borderColors[i] = value
+            if value.isSchemeColor { paired = true }
+        case "border_style_top", "border_style_right", "border_style_bottom", "border_style_left":
+            let i = ["border_style_top", "border_style_right", "border_style_bottom", "border_style_left"].firstIndex(of: key)!
+            borderStyles[i] = try BatchFields.string(value)
         case "border_radius_top_left", "border_radius_top_right", "border_radius_bottom_right", "border_radius_bottom_left":
             let corners = ["border_radius_top_left", "border_radius_top_right", "border_radius_bottom_right", "border_radius_bottom_left"]
             if run.backgroundRadii.isEmpty { run.backgroundRadii = Array(repeating: InlineRadius(), count: 4) }

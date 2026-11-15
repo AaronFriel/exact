@@ -141,6 +141,58 @@ final class InlineEdgesTests: XCTestCase {
         XCTAssertEqual(nested[1].rect, rect)
     }
 
+    /// A box's border paints on each of its fragments, on its border box,
+    /// over its background (CSS 2 §8.6, Appendix E): its top and bottom on
+    /// every line, its start side on its first fragment and its end side on
+    /// its last (`box-decoration-break: slice`), left and right the other way
+    /// about under `rtl`. A box with a border and no background paints none.
+    func testABorderIsSlicedAcrossItsFragments() throws {
+        let red: [Double] = [255, 0, 0, 255]
+        for direction in [0, 1] {
+            var boxed = run("alpha beta gamma delta")
+            boxed.backgroundBox = 9
+            boxed.border = InlineBorder(widths: [1, 2, 3, 4], colors: Array(repeating: red, count: 4),
+                                        styles: Array(repeating: "dashed", count: 4))
+            var s = spec([run("x "), boxed, run(" y")])
+            s.direction = direction
+            let p = engine.paragraph(s, width: 120)
+            XCTAssertGreaterThan(p.lines.count, 1, "the box wraps")
+            // Each line's widest fragment: under `rtl` a line's hanging space paints a sliver too.
+            let fills = p.lines.map { TextLinePaint.backgrounds($0, at: .zero) }.filter { !$0.isEmpty }
+                .map { $0.max { $0.rect.width < $1.rect.width }! }
+            XCTAssertEqual(fills.count, p.lines.count, "a fragment a line: \(fills)")
+            for (i, fill) in fills.enumerated() {
+                let border = try XCTUnwrap(fill.border)
+                let (first, last) = (i == 0, i == fills.count - 1)
+                let (left, right) = direction == 0 ? (first, last) : (last, first)
+                XCTAssertEqual(border.widths, [1, right ? 2 : 0, 3, left ? 4 : 0], "line \(i), direction \(direction)")
+                XCTAssertEqual(border.styles, Array(repeating: "dashed", count: 4))
+                XCTAssertEqual(fill.color.alpha, 0, "no background")
+            }
+        }
+    }
+
+    /// A run with no text and padding is a box in its line, as Chrome lays
+    /// `Hi<span style="padding:0 5px;border:2px solid;background:#ddd"></span> there`
+    /// out: its padding and border take room after "Hi", where its background
+    /// and its border paint, 14 wide, starting and ending there.
+    func testAnEmptyRunPaintsItsBox() throws {
+        var empty = run("", start: 7, end: 7)
+        empty.background = [242, 242, 247, 255]; empty.backgroundBox = 9
+        (empty.backgroundBefore, empty.backgroundAfter) = (7, 7)
+        empty.border = InlineBorder(widths: [2, 2, 2, 2], colors: Array(repeating: [255, 0, 0, 255], count: 4),
+                                    styles: Array(repeating: "solid", count: 4))
+        let plain = engine.paragraph(spec([run("Hi"), run(" there")]), width: .infinity)
+        let boxed = engine.paragraph(spec([run("Hi"), empty, run(" there")]), width: .infinity)
+        XCTAssertEqual(boxed.width, plain.width + 14, accuracy: 0.05)
+        let fills = TextLinePaint.backgrounds(boxed.lines[0], at: .zero)
+        XCTAssertEqual(fills.count, 1, "\(fills)")
+        let fill = try XCTUnwrap(fills.first)
+        XCTAssertEqual(fill.rect.minX, x(plain, 2), accuracy: 0.05)
+        XCTAssertEqual(fill.rect.width, 14, accuracy: 0.05)
+        XCTAssertEqual(fill.border?.widths, [2, 2, 2, 2], "both its ends")
+    }
+
     /// Boxes inside one another each paint their own background into their
     /// own padding, the inner over the outer (CSS 2 Appendix E), as Chrome
     /// paints `<span style="padding:0 2px;background:A;border-radius:4px">p

@@ -10,6 +10,9 @@ plugins { id("com.android.application") }
 // D1-D2; `agent-android.mjs` reads the plan's uses). Without it the framework's dialogs show, and Compose is not linked.
 val compose = providers.gradleProperty("compose").orNull == "1"
 if (compose) apply(plugin = "org.jetbrains.kotlin.plugin.compose")
+// -Pvideo=1: the plan has a `video` or an `audio`, or the build is a development one, and Media3's player (`:video`) is
+// linked (LLP 1042.001 D2). Without it the APK carries none of Media3.
+val video = providers.gradleProperty("video").orNull == "1"
 
 val app = providers.gradleProperty("app").get()
 val appDir = providers.gradleProperty("appDir").orNull?.let { file(it) } ?: rootDir.resolve("../../apps/$app")
@@ -97,6 +100,7 @@ android {
     // (agent-android.mjs `androidNotificationResources`, LLP 1133.004.000 D1, D3).
     sourceSets["main"].res.directories.add(out.resolve("notify/res").path)
     sourceSets["main"].kotlin.directories.add(if (compose) "src/compose/java" else "src/nocompose/java")
+    sourceSets["main"].kotlin.directories.add(if (video) "src/video/java" else "src/novideo/java")
     // The app's Kotlin hatches and module roster (LLP 1115.001.000 D4) in its `modules/android`; -PmodulesDir lets a
     // component fixture compile the app's actual provider without copying its Kotlin.
     val modulesDir = providers.gradleProperty("modulesDir").orNull?.let { file(it) } ?: appDir.resolve("modules/android")
@@ -269,6 +273,7 @@ if (maven.isNotEmpty()) {
 dependencies {
     maven.forEach { implementation(it) }
     implementation(project(":canvas"))
+    if (video) implementation(project(":video"))
     testImplementation(libs.junit)
     testImplementation(libs.robolectric)
     if (compose) {

@@ -791,7 +791,7 @@ pub(crate) fn apply_margins(arena: &NodeArena, slot: u32, s: &mut taffy::style::
         if let crate::style::Dimension::Calc(percent, points) = arena.style(slot).max_width {
             if !written.has(StyleId::MaxWidth) {
                 s.max_size.width = crate::style::Dimension::Calc(percent, points - by)
-                    .floor_lpa(&arena.env_of(slot));
+                    .floor_taffy(&arena.env_of(slot));
             }
         }
     } else if !content && !control && !written.has(StyleId::PaddingLeft) {

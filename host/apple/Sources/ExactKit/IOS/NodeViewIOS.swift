@@ -772,9 +772,12 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
         let inset = sv.adjustedContentInset, port = scrollPort(sv).size
         let range = CGSize(width: max(0, sv.contentSize.width + inset.right - sv.bounds.width),
                            height: max(0, sv.contentSize.height + inset.bottom - sv.bounds.height + top))
-        let event = [point.x, point.y + top, port.width + range.width, port.height + range.height, port.width, port.height].map(Double.init)
+        // A zoomable scroller adds its zoom (LLP 1057.001.000 D2).
+        let zoom = extras?.zoom, event = ([point.x, point.y + top, port.width + range.width, port.height + range.height, port.width, port.height]
+            + (zoom != nil ? [sv.zoomScale] : [])).map(Double.init)
         // a new port with the same offset is news too: a keyboard that leaves changes only the port.
         guard event != lastScrollEvent else { return }
+        if let zoom { zoom.reported.append(event[6]) }
         lastScrollEvent = event; dispatchingScrollEvent = true
         defer { dispatchingScrollEvent = false }
         presenter?.scroll(id, event)
@@ -1077,6 +1080,7 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
         if let raw = set["scrollLeft"], let left = Double(raw), left.isFinite { pendingScrollLeft = left }
         if clear.contains("scrollTop") { pendingScrollTop = nil }
         if let raw = set["scrollTop"], let top = Double(raw), top.isFinite { pendingScrollTop = top }
+        if let raw = set["scrollZoom"], let zoom = Double(raw), zoom.isFinite, zoom > 0 { more.pendingZoom = zoom }
         // One assignment: `props` tells the presenter of each.
         var next = props
         for k in clear { next.removeValue(forKey: k) }
@@ -1325,7 +1329,7 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
         guard let sv = scroll else { return }
         // Ending where its last edge is drawn, from this box's place on the
         // pixel grid, so the furthest offset is a whole pixel and reaches it (`PixelGridIOS.swift`).
-        let s = presenter?.gridScale ?? 1, o = grid?.origin ?? .zero
+        let s = presenter?.gridScale ?? 1, o = grid?.origin ?? .zero, content = zoomExtent ?? self.content
         let size = CGSize(width: sv.scrollsX ? max(PixelGrid.length(content.width, from: o, vertical: false, scale: s), sv.bounds.width) : sv.bounds.width,
                           height: sv.scrollsY ? max(PixelGrid.length(content.height, from: o, vertical: true, scale: s), scrollFloor(sv)) : sv.bounds.height)
         if sv.contentSize != size { sv.contentSize = size }

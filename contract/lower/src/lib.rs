@@ -102,6 +102,7 @@ pub mod warning_rank;
 pub use shorthands::style_values;
 pub mod vocab;
 mod warnings;
+mod zoom;
 
 pub use dataset::{data_words, hatch_words};
 pub use error::LowerError;

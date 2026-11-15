@@ -907,6 +907,8 @@ const OVERFLOW_WRAP: &str = "text wraps between words by default; at a large tex
 const TRANSLATE: &str = "one or two lengths, x then y, and an optional z in px, as CSS's `translate`: each of x and y px, a percentage of the box's own border box, or a `calc()` of the two (`translate=\"calc(50% - 12px) 0\"`); transitions and keyframes interpolate the px and the percentage separately, as CSS does a `calc()`. A `rem`, viewport or `env()` length is refused";
 /// Charlie, 2026-11-10 (issues/20261021-scroll-drag-events-and-hit-slop.md).
 const HIT_SLOP: &str = "not CSS: how far past its box a pointer still reaches the node, one to four nonnegative lengths as `padding` takes them (React Native's `hitSlop`): `-exact-hit-slop=\"8px\"` on a 28px icon button takes a tap 8px outside it. Layout, paint and accessibility never see it, and `tap <target>` still aims at the box's middle. Where boxes overlap the front one takes the pointer, slop and all; an `overflow` other than `visible` on the node or an ancestor clips it. On the web a positioned pseudo-element is the slop: it reaches from the padding edge, so a border's width comes off it, and a node that says no `position` becomes `position: relative`. An `image`, `input` or other replaced element refuses it (`lower-hit-slop`): give the slop to the box or button that holds it";
+/// LLP 1057.001.000 D1–D4.
+const ZOOM: &str = "not CSS (`@viewport`'s `min-zoom` and `max-zoom`, on an element): on a scroll container that scrolls both ways and holds one element, the range a pinch zooms that child through, a number or percentage above 0, each 1 by default; `-exact-max-zoom=4` alone zooms from the laid-out size to four times it. The child keeps its layout and is drawn scaled, the extent grows with it, and it is centred while smaller than the port, so rows that align it are refused (`lower-zoom-align`). The pinch, the bounce and the double tap are the platform's (`touch-action=\"manipulation\"` turns the double tap off). `scrollZoom` on the scroll is the zoom, written as `scrollTop` is and read as `ScrollEvent.scrollZoom`";
 const REACH_MARGIN: &str = "reach-margin on a `list virtualized=true`: how far ahead of an edge `reachstart` and `reachend` fire, a literal one or two nonnegative px or % lengths (before, after; a % is of the list's port along its axis), default one port, \"100%\". \"200%\" fires `reachend` when the last row is two ports away (LLP 1145 D4). While the list scrolls toward an end, that end's margin grows by the lead the list's window takes for the scroll, a quarter second of travel up to two ports, so a fling's edge fires as the window loads ahead for it";
 /// What VoiceOver needs to move from a transcript's first message to its last.
 const KEEP_MOUNTED: &str = "keep-mounted on a `list virtualized=true`: the keys of rows it keeps mounted wherever its window is, a list of up to 64 keys as the `for`'s `key=` gives them (an `option` of one too, `none` naming no row): `keep-mounted=[first(ids), ids.at(-1)]` keeps a transcript's first and last message in the accessibility tree, so VoiceOver moves from one to the other; a playing row keeps its player. A key the list does not hold is passed over; another value keeps none and says so in the journal (LLP 1010 §6.11)";
@@ -1294,6 +1296,9 @@ fn attr_detail(name: &str, a: &AttrTarget) -> Vec<String> {
             }
             if name.starts_with("-exact-hit-slop") {
                 lines.push(HIT_SLOP.into());
+            }
+            if matches!(name, "-exact-min-zoom" | "-exact-max-zoom") {
+                lines.push(ZOOM.into());
             }
             if name == "transform" {
                 lines.push(vocab::BOX_TRANSFORM_REFUSAL.into());

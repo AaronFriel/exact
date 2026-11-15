@@ -573,6 +573,7 @@ extension NodeView {
     /// list's scroll, with its delegate detached while it resets.
     func recycleScroll() {
         guard let sv = scroll else { return }
+        dropZoom()
         let delegate = sv.delegate
         sv.delegate = nil
         sv.setContentOffset(.zero, animated: false)
@@ -601,7 +602,7 @@ extension NodeView {
         // UIKit's setters are not free, even to the same value.
         if isHidden { isHidden = false }
         if alpha != 1 || boxFilter != nil { presentOpacity(1) }
-        translatePx = .zero; translatePercent = .zero; layoutOffset = .zero; layoutResize = .zero; endSurface(); scale = 1; rotate = 0; rotationAxis = [0, 0, 0]; stopPressEase(); press = PressFeedback(); dropPressPaint()
+        translatePx = .zero; translatePercent = .zero; layoutOffset = .zero; zoomFactor = 1; zoomShift = .zero; layoutResize = .zero; endSurface(); scale = 1; rotate = 0; rotationAxis = [0, 0, 0]; stopPressEase(); press = PressFeedback(); dropPressPaint()
         if !transform.isIdentity { transform = .identity }
         if !isUserInteractionEnabled { isUserInteractionEnabled = true }
         // With assistive technology's runtime loaded every accessibility

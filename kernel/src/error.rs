@@ -22,6 +22,7 @@ pub enum StyleDomainError {
     NonFinite(StyleId),
     AutoNotAdmitted(StyleId),
     PercentNotAdmitted(StyleId),
+    KeywordNotAdmitted(StyleId),
     TooManyTracks { style: StyleId, count: usize },
     InvalidGridTrack(StyleId),
     InvalidGridSpan(StyleId),
@@ -140,6 +141,8 @@ pub enum DecodeError {
     /// A percentage, alone or in a calculation, was encoded on a row CSS
     /// gives none.
     PercentNotAdmitted { style: StyleId },
+    /// A size keyword was encoded on a row that does not take it.
+    KeywordNotAdmitted { style: StyleId },
     /// A dimension kind byte is not auto/points/percent.
     UnknownDimensionKind(u8),
     /// A `min()`/`max()`/`clamp()` length's tree is malformed: an unknown
@@ -298,6 +301,8 @@ pub enum ApplyError {
     /// A percentage, alone or in a calculation, was supplied for a row CSS
     /// gives none.
     PercentNotAdmitted { op_index: usize, style: StyleId },
+    /// A size keyword was supplied for a row that does not take it.
+    KeywordNotAdmitted { op_index: usize, style: StyleId },
     /// A grid template exceeded the closed grammar's track bound.
     TooManyTracks {
         op_index: usize,
@@ -425,6 +430,9 @@ impl From<StyleDomainError> for DecodeError {
             StyleDomainError::PercentNotAdmitted(style) => {
                 DecodeError::PercentNotAdmitted { style }
             }
+            StyleDomainError::KeywordNotAdmitted(style) => {
+                DecodeError::KeywordNotAdmitted { style }
+            }
             StyleDomainError::TooManyTracks { count, .. } => DecodeError::TooManyTracks(count),
             StyleDomainError::InvalidGridTrack(_) => DecodeError::InvalidGridTrack,
             StyleDomainError::InvalidGridSpan(_) => DecodeError::InvalidGridSpan,
@@ -493,6 +501,11 @@ pub enum StyleValueError {
     },
     /// `auto` on a row that does not admit it.
     AutoNotAdmitted {
+        style: StyleId,
+    },
+    /// A size keyword on a row that does not take it (`content` off
+    /// `flex-basis`, or any keyword off the size rows).
+    KeywordNotAdmitted {
         style: StyleId,
     },
     /// The number does not fit the row's integer codec.

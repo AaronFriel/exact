@@ -59,6 +59,7 @@ impl<D: DataSource> Presenter<D> {
         // A hot key's press, the host's to raise (LLP 1133.025 D11 item 3).
         crate::desktop::raise(self.host.runner_mut());
         self.modules_in();
+        self.agent_reader_turn();
     }
 
     /// `postMessage(text, name)` into the named surface's canvas, stamped now

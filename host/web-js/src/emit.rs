@@ -1160,7 +1160,9 @@ impl Em<'_> {
                     || b.id == PropId::Tip as u16
                     || b.id == PropId::TipMessage as u16
                     || b.id == PropId::TipImage as u16
-                    || b.id == PropId::TipDone as u16)
+                    || b.id == PropId::TipDone as u16
+                    // The web draws no zoom yet (LLP 1057.001.000 §8 step 4).
+                    || b.id == PropId::ScrollZoom as u16)
             {
                 continue;
             }

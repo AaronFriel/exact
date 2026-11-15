@@ -67,6 +67,7 @@ mod hatch;
 mod history;
 pub mod ime;
 mod layout_json;
+mod media;
 mod number;
 mod painter;
 mod pan_release;
@@ -169,7 +170,7 @@ pub use painter::{set_custom_painter, PainterChoice, PainterFactory, PainterInfo
 pub(crate) use palette::reported_accent;
 pub use palette::{material, ContrastPalette, Material, Palette, MATERIAL_ROLES};
 pub use pointer::PointerKind;
-pub use requests::{Haptic, Pick, Request};
+pub use requests::{AgentTurn, Haptic, Pick, Request};
 pub use scrollers::{Scroller, Under, PAGE};
 pub use stage::SHEET_HANDLE;
 pub use window::{Chrome, Window};
@@ -180,6 +181,8 @@ pub struct Presenter<D: DataSource> {
     /// [`Presenter::set_deferred_collections`]), with whether input moved the
     /// acknowledged offset; `None` when turns run at once.
     deferred_collections: Option<Vec<(ViewId, bool)>>,
+    /// What the reader's media players last reported (`presenter/media.rs`).
+    media: media::Players,
     pub(crate) host: Host<D>,
     /// The scroller the last wheel moved.
     last_wheel: Option<ViewId>,
@@ -620,6 +623,7 @@ impl<D: DataSource> Presenter<D> {
             dirty: true,
             image_paint_pending: false,
             deferred_collections: None,
+            media: Default::default(),
             live_clock: None,
             native_timers: false,
             timers_hidden: false,

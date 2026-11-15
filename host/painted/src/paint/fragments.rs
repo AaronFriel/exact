@@ -141,12 +141,8 @@ impl Painter {
                             Some(b)
                         })
                         .collect();
-                    for (mut shape, color) in
-                        shown.inline_backgrounds(&backgrounds, &kernel.env_of(node.id))
-                    {
-                        shape.rect.0 += origin.0;
-                        shape.rect.1 += origin.1;
-                        painter.backend.fill(&shape, color, ts);
+                    for paint in shown.inline_backgrounds(&backgrounds, &kernel.env_of(node.id)) {
+                        inline::paint_inline(&mut *painter.backend, &paint, origin, ts);
                     }
                 }
                 inline_opacity::Paint::Text(range) => painter.text_paint(

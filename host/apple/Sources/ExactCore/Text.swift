@@ -78,7 +78,9 @@ package struct Run: Hashable {
     package var backgroundBefore: CGFloat = 0, backgroundAfter: CGFloat = 0
     /// How far it stands above and below the run's content area, which the line makes no room for (CSS 2 §10.6.1). Paint.
     package var backgroundAbove: CGFloat = 0, backgroundBelow: CGFloat = 0
-    /// The boxes around that one with backgrounds of their own, nearest first. Paint.
+    /// That box's border, which paints over its background. Paint.
+    package var border: InlineBorder?
+    /// The boxes around that one with backgrounds or borders of their own, nearest first. Paint.
     package var outerBackgrounds: [OuterBackground] = []
     /// CSS visibility hides ink without changing shaping or descendant visibility.
     package var hidden = false
@@ -116,7 +118,7 @@ package struct Run: Hashable {
               lhs.hidden == rhs.hidden, lhs.fixedInk == rhs.fixedInk, lhs.background == rhs.background, lhs.backgroundBox == rhs.backgroundBox,
               lhs.backgroundRadii == rhs.backgroundRadii, lhs.shadow == rhs.shadow, lhs.stroke == rhs.stroke,
               lhs.backgroundBefore == rhs.backgroundBefore, lhs.backgroundAfter == rhs.backgroundAfter,
-              lhs.backgroundAbove == rhs.backgroundAbove, lhs.backgroundBelow == rhs.backgroundBelow, lhs.outerBackgrounds == rhs.outerBackgrounds,
+              lhs.backgroundAbove == rhs.backgroundAbove, lhs.backgroundBelow == rhs.backgroundBelow, lhs.border == rhs.border, lhs.outerBackgrounds == rhs.outerBackgrounds,
               lhs.indent == rhs.indent, lhs.hang == rhs.hang, lhs.box == rhs.box, lhs.atomIcon == rhs.atomIcon,
               lhs.inlineStart == rhs.inlineStart, lhs.inlineEnd == rhs.inlineEnd else { return false }
         // CoreText's ranges address the original UTF16 source. Swift String's
@@ -157,6 +159,7 @@ package struct Run: Hashable {
         hasher.combine(backgroundAfter)
         hasher.combine(backgroundAbove)
         hasher.combine(backgroundBelow)
+        hasher.combine(border)
         hasher.combine(outerBackgrounds)
         hasher.combine(hidden)
         hasher.combine(fixedInk)
@@ -888,7 +891,7 @@ package final class TextEngine {
         // their text once, then assign UTF-16 spans, instead of allocating and
         // appending an attributed string for every run.
         let s = NSMutableAttributedString(string: spec.runs.map(\.text).joined())
-        var offset = 0
+        var offset = 0, empties: [EmptyRun] = []
         for (index, r) in spec.runs.enumerated() {
             var a: [NSAttributedString.Key: Any] = [.font: font(r)]
             if r.letterSpacing != 0 { a[.kern] = r.letterSpacing }
@@ -896,6 +899,7 @@ package final class TextEngine {
             if let box = r.box { TextEngine.boxAttributes(box, font: font(r) as CTFont, index: index, scale: lineScale, into: &a) }
             let length = r.text.utf16.count
             if length > 0 { s.setAttributes(a, range: NSRange(location: offset, length: length)) }
+            else if r.box == nil { empties.append(EmptyRun(offset: offset, attributes: a, past: spec.roomPast(index))) }
             offset += length
         }
         if spec.lineClamp > 0, s.length > 0, var block = spec.strut ?? spec.runs.first {
@@ -907,7 +911,7 @@ package final class TextEngine {
         }
         TextEngine.kernInlineEdges(s, runs: spec.runs)
         TextEngine.setBaseDirection(s, direction: spec.direction, natural: spec.natural)
-        presentation?.finish(s)
+        presentation?.finish(s, empties: empties)
         if spec.preserves, s.string.contains("\t"), let first = spec.strut ?? spec.runs.first {
             setTabStops(s, run: first)
         }

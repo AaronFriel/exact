@@ -116,7 +116,7 @@ enum Payload {
     Svg(Rc<exact_kernel::svg::Scene>),
 }
 enum TextCommand {
-    Begin(f32, Vec<(Shape, [u8; 4])>),
+    Begin(f32, Vec<crate::text::backgrounds::InlinePaint>),
     Ink(super::text_shadow::TextInk),
     End(f32),
 }
@@ -894,11 +894,13 @@ impl<'a> Replay<'a> {
                                         if *alpha < 1. {
                                             painter.backend.push_opacity(*alpha);
                                         }
-                                        for (shape, color) in fills {
-                                            let mut shape = *shape;
-                                            shape.rect.0 += g.content.0;
-                                            shape.rect.1 += g.content.1;
-                                            painter.backend.fill(&shape, *color, parent);
+                                        for paint in fills {
+                                            super::inline::paint_inline(
+                                                &mut *painter.backend,
+                                                paint,
+                                                (g.content.0, g.content.1),
+                                                parent,
+                                            );
                                         }
                                     }
                                     TextCommand::Ink(ink) => painter.paint_text_ink(

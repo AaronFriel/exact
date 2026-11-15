@@ -84,6 +84,24 @@ impl<D: DataSource + Default> CanvasHost<D> {
             .reader_module_event(id, key, session, kind, payload, now);
     }
 
+    /// A media element's event or state (LLP 1042.001 D7), only for the
+    /// session and allocation whose element the reader still holds.
+    #[allow(clippy::too_many_arguments)]
+    pub fn media(
+        &mut self,
+        id: u32,
+        key: exact_kernel::NodeKey,
+        session: u64,
+        event: &str,
+        payload: &str,
+        state: &str,
+    ) {
+        let now = self.now();
+        self.force |= self
+            .p
+            .reader_media(id, key, session, event, payload, state, now);
+    }
+
     /// The reader's answer to request `id`, or its cancellation (`None`).
     pub fn answer(&mut self, id: u32, answer: Option<&str>) {
         self.p.answer_request(id, answer);

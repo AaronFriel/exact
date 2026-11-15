@@ -686,8 +686,11 @@ impl<D: DataSource> Presenter<D> {
     #[cfg(any(target_os = "android", test))]
     pub(crate) fn reader_module(&mut self, x: f32, y: f32, scale: f32) -> [i32; 13] {
         let module = self.hit(x / scale, y / scale).filter(|id| {
+            // A video with `controls` takes its gestures as a module's view does (LLP 1042.001 D4).
             self.host.kernel().node(*id).is_some_and(|node| {
-                node.node_type == NodeType::NativeView
+                (node.node_type == NodeType::NativeView
+                    || (node.node_type == NodeType::Video
+                        && node.props.bool(PropId::Controls) == Some(true)))
                     && self.host.retained_action_eligible(node.key)
             })
         });

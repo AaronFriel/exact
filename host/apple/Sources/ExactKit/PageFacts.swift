@@ -112,7 +112,7 @@ package enum PageFacts {
         #if os(macOS)
         if NSApp.isHidden { return true }
         let windows = NSApp.windows.filter { $0.isVisible || $0.isMiniaturized || closeHid.contains($0) || unshown.contains($0) }
-        return !windows.isEmpty && windows.allSatisfy { !$0.isVisible || $0.isMiniaturized || !$0.occlusionState.contains(.visible) }
+        return !windows.isEmpty && windows.allSatisfy { !$0.isVisible || $0.isMiniaturized || !$0.screenOcclusionState.contains(.visible) }
         #else
         return AppBackground.now
         #endif

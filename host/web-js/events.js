@@ -316,6 +316,7 @@ export const onScroll = (e, kind, f, l) => {
       e.clientWidth,
       e.clientHeight,
       ...(e.$list?.scrollAnchor() ?? [null, 0]),
+      e.$zoom ?? 1,
     ]);
   });
 };

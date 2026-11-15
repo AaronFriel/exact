@@ -1028,7 +1028,13 @@ virtual clock by those milliseconds (a game's ticks), except under
 `tap "id" pinch <scale> [at x y]` is the driver's pinch: `scale` greater than 0,
 about the node's middle or about `at` in its box. A canvas that takes raw input
 receives it as a real pinch arrives there: two touch contacts on the web and iOS,
-a Control-held wheel on macOS.
+a Control-held wheel on macOS. A zoomable scroll (`-exact-max-zoom`, LLP
+1057.001.000) is left zoomed as the platform's pinch leaves it at rest, its
+`scrollZoom` times `scale` within its range; the iOS agent's `--touch platform`
+plays it as two real fingers, which UIKit's own recognizer reads. The agent's
+`tap <t> dblclick touch` is a finger's double tap rather than a mouse's: on iOS
+it zooms a zoomable scroll where no `dblclick` handler takes it (two real taps
+under `--touch platform`), and the other carriers answer it unsupported.
 `tap "id" wheel <dx> <dy>` is the driver's wheel (the agent's `tap <t> wheel
 dx dy`) at the node's middle, in points (CSS pixels on the web): a positive `dy`
 scrolls on toward the content's end, so its offset grows, and a negative one back
@@ -1974,7 +1980,8 @@ recently started playing owns the session (else the latest mounted).
 `scroll` appends left then top offsets, and to an action that takes one more
 parameter a `ScrollEvent`: the scroller's own `scrollLeft`, `scrollTop`,
 `scrollWidth`, `scrollHeight`, `clientWidth` and `clientHeight` as the event
-fires, what a web handler reads off `event.target`. "At the end" is the web's
+fires, what a web handler reads off `event.target`, and `scrollZoom`, a
+zoomable scroller's zoom (1 on any other; LLP 1057.001.000). "At the end" is the web's
 arithmetic, on every host and on a virtualized list too (chat F4, a
 jump-to-latest pill); a native host's `scrollHeight` is its port plus the range
 it clamps to:

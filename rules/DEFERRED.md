@@ -1752,6 +1752,17 @@ browser as the oracle, the same shape layout already has. In exchange, not in v1
   (F4). Unblocks moving cards on a board without a hand-built drag. Take:
   none offered. Still out: reorder on row and nested lists (LLP 1094 §7),
   drags into or out of the app, multi-item drags, grids, a gesture arena.
+  **Expanded (Charlie's panel on expo/exact#666, unanimous, 2026-11-15; LLP
+  1057.001.000):** a zoomable scroll container, `-exact-min-zoom` and
+  `-exact-max-zoom` on a scroller with one child and its `scrollZoom`, zoomed
+  by UIKit's scroll view on iOS and AppKit's magnification on macOS and
+  emulated on the web and the painted hosts, with its precedence read from
+  the existing table. Consumers: #666's app and the photo-zoom workload
+  (LLP 1041 §8.5). Unblocks pinch to zoom a photo, a diagram or a board with
+  the platform's bounce, extent and double tap. Take: none named; Charlie to
+  name one or waive it (LLP 1057.001.000 §11 Q3). The photo binding gains no
+  bounds, bounce or extent of its own. Still out: a fit keyword, a touch pinch
+  on Linux, a gesture arena.
   **Expanded (Charlie, 2026-10-11; reads lane):** action-only
   `elementsFromPoint(x, y)` lists own ids under a point, front to back,
   including hit ancestors, for the T3 theme editor Inspect overlay. It

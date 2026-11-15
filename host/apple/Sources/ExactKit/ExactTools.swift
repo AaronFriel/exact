@@ -160,7 +160,7 @@ public enum ExactTools {
         #if os(iOS)
         return UIApplication.shared.applicationState == .background
         #elseif os(macOS)
-        return !NSApp.windows.contains { $0.isVisible && $0.occlusionState.contains(.visible) }
+        return !NSApp.windows.contains { $0.isVisible && $0.screenOcclusionState.contains(.visible) }
         #else
         return false
         #endif

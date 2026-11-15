@@ -804,6 +804,7 @@ impl<D: DataSource> Presenter<D> {
             height: (port.1 + max.1) as f64,
             client_width: port.0 as f64,
             client_height: port.1 as f64,
+            zoom: 1.0,
         })
     }
 

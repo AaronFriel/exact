@@ -11,6 +11,9 @@
 // FFI to the JNI, jnigraphics and AHardwareBuffer APIs.
 #![allow(unsafe_code)]
 
+#[path = "jni_agent.rs"]
+pub mod jni_agent;
+
 #[path = "jni_bytes.rs"]
 mod byte_arrays;
 pub use byte_arrays::{bytes, utf8};
@@ -400,7 +403,7 @@ macro_rules! canvas_jni {
                 line: $crate::canvas::jni_sys::jbyteArray,
             ) -> $crate::canvas::jni_sys::jbyteArray {
                 let line = $crate::canvas::jni::utf8(env, line);
-                let reply = with(|h| h.agent(&line));
+                let reply = with(|h| $crate::canvas::jni::jni_agent::run(env, h, &line));
                 let reply = reply.unwrap_or_else(|| r#"{"error":"no host on this thread"}"#.into());
                 $crate::canvas::jni::bytes(env, reply.as_bytes())
             }
@@ -593,6 +596,30 @@ macro_rules! canvas_jni {
                     generation: generation as u32,
                 };
                 with(|h| h.module_event(id as u32, key, session as u64, &kind, payload));
+            }
+
+            /// A media element's event, or (an empty `event`) its state (LLP 1042.001 D7).
+            #[no_mangle]
+            #[allow(clippy::too_many_arguments)]
+            pub unsafe extern "system" fn Java_dev_exact_canvas_Native_media(
+                env: *mut JNIEnv,
+                _class: jclass,
+                id: jint,
+                slot: jint,
+                generation: jint,
+                session: jlong,
+                event: jstring,
+                payload: jstring,
+                state: jstring,
+            ) {
+                let event = string(env, event);
+                let payload = string(env, payload);
+                let state = string(env, state);
+                let key = $crate::canvas::ModuleKey {
+                    index: slot as u32,
+                    generation: generation as u32,
+                };
+                with(|h| h.media(id as u32, key, session as u64, &event, &payload, &state));
             }
 
             $crate::canvas_jni_scroll!();

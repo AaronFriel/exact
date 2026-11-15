@@ -485,10 +485,10 @@ pub(crate) fn android_linked(
     })
 }
 
-/// The plan's capabilities by name, as the APK's build reads them
+/// What the APK links for the plan, by name, as its build reads it
 /// (`contract::native::android_reach`).
 pub(crate) fn android_uses(plan: &exact_plan::Plan) -> Vec<&'static str> {
-    exact_runner::uses(plan).iter().map(|c| c.name()).collect()
+    contract::native::android_uses(plan)
 }
 
 /// The package extensions the plan's modules, views and events name, sorted.

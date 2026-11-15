@@ -422,7 +422,10 @@ fn a_loop_or_return_in_an_action_names_the_form_to_write() {
 }
 
 #[test]
-fn an_intrinsic_size_keyword_names_the_auto_size_that_is_the_contents() {
+fn size_keywords_compile_and_their_neighbours_are_refused_by_name() {
+    let source = |name: &str, value: &str| {
+        format!("component App\n  view\n    column\n      text \"a\" {name}=\"{value}\"\n")
+    };
     for name in [
         "width",
         "height",
@@ -430,19 +433,37 @@ fn an_intrinsic_size_keyword_names_the_auto_size_that_is_the_contents() {
         "max-width",
         "min-height",
         "max-height",
+        "flex-basis",
     ] {
-        for keyword in ["min-content", "max-content", "fit-content"] {
-            let e = contract::compile(&format!(
-                "component App\n  view\n    column\n      text \"a\" {name}=\"{keyword}\"\n"
-            ))
-            .unwrap_err();
-            assert_eq!(e.id, "lower-attr-value", "{e}");
-            assert!(
-                e.message
-                    .starts_with(&format!("`{name}=\"{keyword}\"` is an intrinsic size"))
-                    && e.message.contains("`align-self=\"flex-start\"`"),
-                "{e}"
-            );
+        for keyword in ["min-content", "max-content", "fit-content", "Fit-Content"] {
+            contract::compile(&source(name, keyword)).unwrap();
         }
+        let refused = |value: &str, says: &str| {
+            let e = contract::compile(&source(name, value)).unwrap_err();
+            assert_eq!(e.id, "lower-attr-value", "{e}");
+            assert!(e.message.contains(says), "{name}={value}: {e}");
+        };
+        refused("fit-content(10rem)", "only in a grid track");
+        refused("stretch", "`stretch` (CSS Box Sizing 4) is not implemented");
+        refused(
+            "-webkit-fill-available",
+            "`stretch` (CSS Box Sizing 4) is not implemented",
+        );
+        refused("-webkit-max-content", "write `max-content`");
+        refused("calc-size(auto, size)", "`calc-size()`");
     }
+    // `fit-content()` names its three-row equivalent where there is one.
+    let e = contract::compile(&source("width", "fit-content(10rem)")).unwrap_err();
+    assert!(
+        e.message
+            .contains("`width=\"max-content\" min-width=\"min-content\" max-width=\"<length>\"`"),
+        "{e}"
+    );
+    // `content` is `flex-basis`'s alone.
+    contract::compile(&source("flex-basis", "content")).unwrap();
+    let e = contract::compile(&source("width", "content")).unwrap_err();
+    assert!(
+        e.message.contains("`content` is a `flex-basis` value"),
+        "{e}"
+    );
 }

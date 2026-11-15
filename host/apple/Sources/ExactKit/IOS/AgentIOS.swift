@@ -691,6 +691,10 @@ extension Agent {
                     return ["tapped": Int(run.id), "event": event, "injected": true, "at": at]
                 }
             }
+            // A finger's double tap (`dblclick touch`) on a zoomable scroller zooms where no authored `dblclick` takes it.
+            if event == "dblclick", req["touch"] as? Bool == true, let zoomed = NodeView.zoomDoubleTap(hit, at: p) {
+                return ["tapped": Int(zoomed.id), "dblclick": "touch", "delivery": "recognized", "scrollZoom": Double(zoomed.scroll?.zoomScale ?? 1), "at": at]
+            }
             selection = presenter.agentSelect(hit, at: p, event: event)
             #endif
             // Delivered (a handler heard it, or it selected): a long press or a double tap lets a hold where it landed go (HeldState.swift).
@@ -721,7 +725,11 @@ extension Agent {
         if let scale = req["pinch"] as? Double {
             // UIKit synthesizes no pinch: the recognized scale (LLP 1057.001 §5).
             var next: UIView? = v
-            while let view = next, !((view as? NodeView).map { presenter.transformBindings[$0.id]?.target != nil } ?? false) { next = view.superview }
+            while let view = next, !((view as? NodeView).map { presenter.transformBindings[$0.id]?.target != nil || $0.extras?.zoom != nil } ?? false) { next = view.superview }
+            if let port = next as? NodeView, port.extras?.zoom != nil {
+                let focal = (req["at"] as? [Double]).flatMap { $0.count == 2 ? v.convert(CGPoint(x: $0[0], y: $0[1]), to: nil) : nil } ?? p
+                return delivered(port.recognizedZoomPinch(scale, focal: focal).merging(["at": at]) { a, _ in a }, hit)
+            }
             guard let handle = next as? NodeView, let clipID = presenter.transformBindings[handle.id]?.clip, let clip = presenter.views[clipID] else {
                 return ["error": "no photo binding (transformDragFor) at view \(v.id)"]
             }

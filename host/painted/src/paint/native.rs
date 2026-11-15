@@ -69,23 +69,47 @@ impl Painter {
         let p = node.props;
         let flag = |id| p.bool(id) == Some(true);
         let (kind, props) = match node.node_type {
-            NodeType::Video => (
-                NativeKind::Video,
-                serde_json::json!({
-                    "src": p.str(PropId::Src),
-                    "autoplay": flag(PropId::Autoplay),
-                    "loop": flag(PropId::Loop),
-                    "muted": flag(PropId::Muted),
-                    "paused": flag(PropId::Paused),
-                    "fit": match node.style.object_fit {
-                        ObjectFit::Contain => "contain",
-                        ObjectFit::Cover => "cover",
-                        ObjectFit::None => "none",
-                        ObjectFit::ScaleDown => "scale-down",
-                        ObjectFit::Fill => "fill",
-                    },
-                }),
-            ),
+            // @ref LLP 1042.001 D3, D5 — every prop the player maps; an
+            // unset `paused` or `currentTime` is null, so the player knows
+            // whether the author binds it.
+            NodeType::Video => {
+                let number = |id| {
+                    p.get(id)
+                        .and_then(|v| v.as_float().or(v.as_int().map(|i| i as f64)))
+                };
+                (
+                    NativeKind::Video,
+                    serde_json::json!({
+                        "src": p.str(PropId::Src),
+                        "autoplay": flag(PropId::Autoplay),
+                        "loop": flag(PropId::Loop),
+                        "muted": flag(PropId::Muted),
+                        "paused": p.bool(PropId::Paused),
+                        "controls": flag(PropId::Controls),
+                        "preload": p.str(PropId::Preload),
+                        "controlslist": p.str(PropId::Controlslist),
+                        "volume": number(PropId::Volume),
+                        "playbackRate": number(PropId::PlaybackRate),
+                        "currentTime": number(PropId::CurrentTime),
+                        "preservesPitch": p.bool(PropId::PreservesPitch),
+                        "preferredMaximumResolution": p.str(PropId::PreferredMaximumResolution),
+                        "preferredPeakBitRate": number(PropId::PreferredPeakBitRate),
+                        "preventsDisplaySleepDuringVideoPlayback": p.bool(PropId::PreventsDisplaySleepDuringVideoPlayback),
+                        "audio": p.str(PropId::SemanticTag) == Some("audio"),
+                        "label": p.str(PropId::AccessibilityLabel),
+                        "fit": match node.style.object_fit {
+                            ObjectFit::Contain => "contain",
+                            ObjectFit::Cover => "cover",
+                            ObjectFit::None => "none",
+                            ObjectFit::ScaleDown => "scale-down",
+                            ObjectFit::Fill => "fill",
+                        },
+                        "generation": node.key.generation,
+                        "slot": node.key.index,
+                        "session": self.native_session,
+                    }),
+                )
+            }
             NodeType::WebView => (
                 NativeKind::WebView,
                 serde_json::json!({

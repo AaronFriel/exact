@@ -724,7 +724,7 @@ representation. These calculations use the reader's list and call budgets;
 a trap belongs to the reader. They are not cached. A root derive evaluates
 once per settlement, so put a calculation there when its result should be
 shared across readers. Action-body reads, action calls and `fn` calls still
-expand in place. The web build reports `app.js` bytes and each component's
+expand in place. The web build reports its entry's bytes and each component's
 own plan instructions and compiled instance count. Shared bodies count per
 use; a `for` is one compiled instance regardless of its runtime item count.
 
@@ -2209,6 +2209,23 @@ roots near the projection (iOS, macOS; on Android around its offset when a touch
 lands and around the projection at the release), from their measured or
 estimated sizes, and an unmounted `always` row between the release and the rest
 holds it; descendants and layout-dependent displacement need mounted rows.
+
+To let a person pinch to zoom a photo, a diagram or a board, put it alone in a
+`scroll` and write `-exact-max-zoom` (and `-exact-min-zoom` below 1 to zoom a
+large child out; each defaults to 1) on the scroll: `scroll
+-exact-max-zoom=4` holding one `image width="100%" height="100%"
+object-fit="contain"` is a photo viewer (LLP 1057.001.000). The child keeps its
+layout and is drawn scaled; the scroll's extent grows with it and centres it
+while it is smaller than the port, so do not align it (`align-items`,
+`justify-content`, an `auto` margin and the like are `lower-zoom-align`). The
+pinch, the bounce at the limits and the double tap are the platform's;
+`touch-action="manipulation"` turns the double tap off, and on a double-tap path
+a `press` on content that is not a control waits for the second tap. `scrollZoom`
+is the zoom as `scrollTop` is the offset: write it for Fit and 2× buttons (with
+`scroll-behavior="smooth"` it animates), and read it as `e.scrollZoom` on the
+`scroll` event's `ScrollEvent`; mirroring every `scroll` into the state you
+bind is safe. Not built yet on every host: `contract vocab -exact-max-zoom`
+says where.
 
 `reorderdrop` belongs only on a vertical `list virtualized=true`
 (each row's handle names it with `reorderFor`); the compiler refuses it on any
@@ -6950,10 +6967,18 @@ components retain the supported defaults. Color/style/thickness extensions are
 refused by name. Linux paints solid lines with UA metrics and diagnoses its
 missing underline skip-ink behavior in the driver log.
 
-A flex shorthand's grow/shrink factors must be adjacent. Intrinsic flex-basis
-keywords (content/min-content/max-content/fit-content) are CSS values, but the
-current dimension representation cannot size that mode; the diagnostic names
-this limit. `auto` takes the basis from the authored main-size property.
+A flex shorthand's grow/shrink factors must be adjacent. `width`, `height`,
+their minimums and maximums take `min-content`, `max-content` and
+`fit-content`, and `flex-basis` (and `flex`'s basis: `flex="max-content"` is
+`1 1 max-content`) takes those and `content`, laid out as Chrome lays them out
+on every host (LLP 1001.001). `width="fit-content"` is as wide as the content,
+up to the space the box has and no narrower than its longest word: a badge or a
+card that hugs its text without a flex row around it. `max-content` is the
+content on one line, `min-content` as narrow as its longest word, and
+`max-width="max-content"` caps a stretched box at its content. A keyword height
+is the content's height, but a flex or grid item with one no longer stretches.
+`fit-content(<length>)` (Chrome takes it only in a grid track), `stretch`, the
+`-webkit-` aliases and `calc-size()` are refused by name.
 
 Font lists distinguish quoted local names from unquoted CSS generics. The eight
 mapped generics are system-ui, ui-sans-serif, sans-serif, ui-serif, serif,

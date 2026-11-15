@@ -106,6 +106,61 @@ pub(crate) struct BoxReach {
 }
 
 impl Paragraph {
+    /// Where the run `run`, which has no text, stands: its line and the x of
+    /// its content edge, inside the room `run_edges` gave it before the
+    /// character after it, else after the one before it, and whether that
+    /// character is right to left. The runs after it at the same place have
+    /// their room past it.
+    pub(super) fn empty_run_place(
+        &self,
+        ownership: &Ownership,
+        run: usize,
+    ) -> Option<(usize, f32, bool)> {
+        let runs = &self.source.spec.runs;
+        let at = ownership.runs.get(run)?.0.start;
+        // The room after its own, before the character after it: the runs
+        // with no text there, then the next one's start.
+        let mut leads = 0.;
+        for (r, owned) in runs.iter().zip(&ownership.runs).skip(run + 1) {
+            if owned.0.start != at {
+                break;
+            }
+            leads += r.edges.start;
+            if !r.text.is_empty() {
+                break;
+            }
+            leads += r.edges.end;
+        }
+        let end = runs[run].edges.end;
+        let mut after = None;
+        for (i, line) in self.layout_runs().enumerate() {
+            let base = ownership.base(self, &line);
+            for g in line.glyphs {
+                let range = g.range();
+                let rtl = g.level % 2 == 1;
+                if base + range.start == at && !range.is_empty() {
+                    let x = if rtl {
+                        g.x + g.w + leads + end
+                    } else {
+                        g.x - leads - end
+                    };
+                    return Some((i, x, rtl));
+                }
+                if base + range.end == at && !range.is_empty() {
+                    // At the end of its line's text, the runs after it have
+                    // no character to stand before: their room is past its own.
+                    let x = if rtl {
+                        g.x + leads + end
+                    } else {
+                        g.x + g.w - leads - end
+                    };
+                    after = Some((i, x, rtl));
+                }
+            }
+        }
+        after
+    }
+
     pub(crate) fn inline_metrics(&self, style: exact_kernel::TextStyle) -> (f32, f32) {
         let (ascent, descent, _) = self
             .source
@@ -234,6 +289,21 @@ impl Paragraph {
             }
         }
         if start == end {
+            // A run with no text: its border box around its place.
+            let place = runs
+                .clone()
+                .last()
+                .and_then(|run| self.empty_run_place(&ownership, run));
+            if let Some(((i, x, rtl), line)) =
+                place.and_then(|p| Some((p, self.layout_runs().nth(p.0)?)))
+            {
+                let (before, after) = if rtl {
+                    (reach.sides.end, reach.sides.start)
+                } else {
+                    (reach.sides.start, reach.sides.end)
+                };
+                return vec![(i, rect(x - before, line.line_y, before + after))];
+            }
             return insertion.or(previous).into_iter().collect();
         }
         out

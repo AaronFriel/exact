@@ -4,12 +4,15 @@ use super::{
     Paragraph,
 };
 use crate::paint::{border::resolve_radii, Shape};
-use exact_kernel::{Dimension, Direction, Env, ViewId};
+use exact_kernel::{BorderStyle, Dimension, Direction, Env, ViewId};
 use std::collections::BTreeMap;
 use std::ops::Range;
 
+/// An inline box's `background-color` and border, which paint on each of its
+/// fragments (CSS 2 §8.6, §14.2).
 #[derive(Clone, Debug)]
 pub(crate) struct InlineBackground {
+    /// Clear for a box with a border and no background.
     pub color: [u8; 4],
     pub id: ViewId,
     pub radii: [Dimension; 4],
@@ -22,9 +25,43 @@ pub(crate) struct InlineBackground {
     /// covers and the line does not make room for (CSS 2 §10.6.1).
     pub above: f32,
     pub below: f32,
+    pub border: Option<InlineBorder>,
     /// The boxes around it with backgrounds of their own, nearest first,
     /// which paint under it.
     pub outer: Vec<InlineBackground>,
+}
+
+/// An inline box's border, top, right, bottom and left: the widths its line
+/// makes room for (`NodeRef::inline_border_widths`), its colours and styles.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct InlineBorder {
+    pub widths: [f32; 4],
+    pub colors: [[u8; 4]; 4],
+    pub styles: [BorderStyle; 4],
+}
+
+/// One fragment's paint, in paint order.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) enum InlinePaint {
+    /// Its background.
+    Fill(Shape, [u8; 4]),
+    /// Its border on its border box; a side the box is sliced at has no width.
+    Border(Shape, InlineBorder),
+}
+
+impl InlinePaint {
+    pub(crate) fn shape(&self) -> &Shape {
+        match self {
+            InlinePaint::Fill(shape, _) | InlinePaint::Border(shape, _) => shape,
+        }
+    }
+
+    pub(crate) fn translated(mut self, dx: f32, dy: f32) -> Self {
+        let (InlinePaint::Fill(shape, _) | InlinePaint::Border(shape, _)) = &mut self;
+        shape.rect.0 += dx;
+        shape.rect.1 += dy;
+        self
+    }
 }
 
 impl InlineBackground {
@@ -73,12 +110,14 @@ fn endpoints_in(
 impl Paragraph {
     /// CSS 2 §8.6 and `box-decoration-break: slice`: a box's first and last
     /// characters select lines; the paragraph direction selects each line's
-    /// outermost piece for the start and end corners. Breaks stay open.
+    /// outermost piece for the start and end corners and borders. Breaks
+    /// stay open. Each box paints its background, then its border, outer
+    /// boxes first (CSS 2 Appendix E).
     pub(crate) fn inline_backgrounds(
         &self,
         backgrounds: &[Option<InlineBackground>],
         env: &Env,
-    ) -> Vec<(Shape, [u8; 4])> {
+    ) -> Vec<InlinePaint> {
         // The room beside a box (`Run::edges`) is no glyph's ink: only its
         // own boxes' reach covers it, read by character.
         let edged = self.source.spec.runs.iter().any(|r| !r.edges.is_empty());
@@ -87,6 +126,7 @@ impl Paragraph {
                 !b.reach.is_empty()
                     || b.above != 0.0
                     || b.below != 0.0
+                    || b.border.is_some()
                     || !b.outer.is_empty()
                     || b.radii.iter().any(|d| match d {
                         Dimension::Auto => false,
@@ -104,7 +144,8 @@ impl Paragraph {
                         .collect::<Vec<_>>(),
                 )
                 .into_iter()
-                .map(|(rect, color)| (Shape::rect(rect), color))
+                .filter(|(_, color)| color[3] != 0)
+                .map(|(rect, color)| InlinePaint::Fill(Shape::rect(rect), color))
                 .collect();
         }
         // Built only for rounded paint, never part of the paragraph's shape key.
@@ -152,10 +193,44 @@ impl Paragraph {
         endpoints.sort_unstable();
         let metrics = &self.source.data.run_metrics;
         let rtl = self.source.spec.direction == Direction::Rtl;
+        // The runs with no text, where they stand (`empty_run_place`).
+        let empties: Vec<_> = runs
+            .iter()
+            .filter(|(range, run)| {
+                range.is_empty()
+                    && self.source.spec.runs[*run].inline.is_none()
+                    && backgrounds.get(*run).is_some_and(Option::is_some)
+            })
+            .filter_map(|&(_, run)| Some((run, self.empty_run_place(&ownership, run)?)))
+            .collect();
         let mut out = Vec::new();
         for (index, line) in self.layout_runs().enumerate() {
             let mut edges = BTreeMap::<ViewId, Edges>::new();
             let mut spans = Vec::new();
+            // A box with no characters is its reach either side of its place,
+            // starting and ending there.
+            for &(run, (_, x, glyph_rtl)) in empties.iter().filter(|(_, p)| p.0 == index) {
+                let background = backgrounds[run].as_ref().expect("filtered");
+                for (depth, layer) in background.layers().enumerate() {
+                    if boxes.contains_key(&layer.id) {
+                        continue;
+                    }
+                    let (before, after) = if glyph_rtl {
+                        (layer.reach.end, layer.reach.start)
+                    } else {
+                        (layer.reach.start, layer.reach.end)
+                    };
+                    let edge = edges.entry(layer.id).or_default();
+                    (edge.start, edge.end) = (true, true);
+                    spans.push(Span {
+                        lo: x - before,
+                        hi: x + after,
+                        run,
+                        layer,
+                        depth,
+                    });
+                }
+            }
             let base = if flow.is_some() {
                 0
             } else {
@@ -298,10 +373,23 @@ impl Paragraph {
                         Dimension::Points(0.0)
                     }
                 });
-                out.push((
-                    Shape::elliptical(rect, resolve_radii(radii, env, rect.2, rect.3)),
-                    background.color,
-                ));
+                let shape = Shape::elliptical(rect, resolve_radii(radii, env, rect.2, rect.3));
+                if background.color[3] != 0 {
+                    out.push(InlinePaint::Fill(shape, background.color));
+                }
+                if let Some(border) = background.border {
+                    let [top, r, bottom, l] = border.widths;
+                    let widths = [
+                        top,
+                        if right { r } else { 0.0 },
+                        bottom,
+                        if left { l } else { 0.0 },
+                    ];
+                    out.push(InlinePaint::Border(
+                        shape,
+                        InlineBorder { widths, ..border },
+                    ));
+                }
             }
         }
         out

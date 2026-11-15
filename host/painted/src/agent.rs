@@ -255,18 +255,8 @@ fn answer_line<D: DataSource>(p: &mut Presenter<D>, line: &str) -> String {
                         ",\"paint\":{{\"ms\":{paint},\"readbackMs\":{readback}}}"
                     ));
                 }
-                // A `video` or `audio` (LLP 1042 §5, §8): this host has no
-                // decoder and no audio output, so each is reported as an
-                // element that never plays would read, and says why.
-                let media: Vec<_> = p
-                    .host()
-                    .kernel()
-                    .rows(None)
-                    .unwrap_or_default()
-                    .iter()
-                    .filter(|r| r.node_type == exact_kernel::NodeType::Video)
-                    .map(|r| serde_json::json!({"id": r.id, "state": {"unavailable": "no media decoder or audio output on this host", "paused": true, "currentTime": 0, "duration": null, "readyState": 0}}))
-                    .collect();
+                // A `video` or `audio` (LLP 1042 §8, LLP 1042.001 D7): as its player reports it.
+                let media = p.media_json();
                 s.push_str(&format!(",\"media\":{}", serde_json::json!(media)));
                 // The media session's record; nothing is published (LLP 1098 D9).
                 let session = crate::media_session::state(p);
@@ -1311,15 +1301,14 @@ fn clock_stepped<D: DataSource>(
 }
 
 /// Pump the executor and packages until no polled module source's ask is in flight, or the
-/// deadline. Not on Android's reader, whose extensions answer on its main thread:
-/// `agent-android.mjs` waits there.
+/// deadline. The reader hands requests to its UI thread and takes answers on this thread.
 fn wait_for_polls<D: DataSource>(p: &mut Presenter<D>, deadline: std::time::Instant) {
     let asking = |p: &Presenter<D>| {
         p.host()
             .agent("{\"op\":\"polls\"}")
             .contains("\"asking\":true")
     };
-    while !crate::reader_driven() && asking(p) && std::time::Instant::now() < deadline {
+    while asking(p) && std::time::Instant::now() < deadline {
         p.package_turn();
         std::thread::sleep(std::time::Duration::from_millis(5));
         if let Some(e) = p.pump(p.host().now()) {

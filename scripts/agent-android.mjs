@@ -317,8 +317,8 @@ const READER = resolve(import.meta.dir, '../host/android');
  * so builds of two apps at once neither mix outputs nor wait on one project's locks. */
 export function apkDirs(app) {
   const own = !within(resolve(READER, '../..'), app.dir), root = resolve(app.target, 'android');
-  return own ? { app: resolve(root, 'app'), canvas: resolve(root, 'canvas'), cache: resolve(root, 'gradle'), kotlin: resolve(root, 'kotlin') }
-    : { app: resolve(READER, 'app/build', app.name), canvas: resolve(READER, 'canvas/build', app.name), cache: resolve(READER, '.gradle/apps', app.name), kotlin: resolve(READER, '.kotlin/apps', app.name) };
+  return own ? { app: resolve(root, 'app'), canvas: resolve(root, 'canvas'), video: resolve(root, 'video'), cache: resolve(root, 'gradle'), kotlin: resolve(root, 'kotlin') }
+    : { app: resolve(READER, 'app/build', app.name), canvas: resolve(READER, 'canvas/build', app.name), video: resolve(READER, 'video/build', app.name), cache: resolve(READER, '.gradle/apps', app.name), kotlin: resolve(READER, '.kotlin/apps', app.name) };
 }
 /** Where `build <app> --apk` writes the shell's build: the roster it generates (`extensions/`), the merged manifests
  * (`intermediates/`) and the APK (`outputs/apk/`). `app` is a name or a directory, resolved as the build resolves it. */
@@ -332,7 +332,7 @@ export function apkRecord(app, apk = readerApk(app)) {
   try { return JSON.parse(readFileSync(resolve(dirname(apk), 'exact-build.json'), 'utf8')); } catch { return null; }
 }
 /** The reader's own sources, which every APK compiles. */
-export const READER_SOURCES = ['canvas/src', 'app/src', 'soundarm', '../apple/soundarm'].map((d) => resolve(READER, d));
+export const READER_SOURCES = ['canvas/src', 'video/src', 'app/src', 'soundarm', '../apple/soundarm'].map((d) => resolve(READER, d));
 
 // A reader failure whose cleanup succeeded.
 const RELAY_CLEANED_ERROR = 70;
@@ -655,13 +655,6 @@ async function relay([serial, id, vars, encodedLease]) {
     socket.on('error', () => done(1));
     const answer = () => ready.length ? Promise.resolve(ready.shift()) : new Promise((r) => waiting.push(r));
     const say = (line) => process.stdout.write(line + '\n');
-    const pollsLanded = async () => {
-      for (const end = Date.now() + 2000; Date.now() < end;) {
-        socket.write('{"op":"polls"}\n');
-        if (!JSON.parse(await answer()).asking) return;
-        await new Promise((r) => setTimeout(r, 10));
-      }
-    };
     say(await answer()); // the app's `ready`
     connected = true;
     let pending = '';
@@ -672,9 +665,6 @@ async function relay([serial, id, vars, encodedLease]) {
       if (req?.op !== 'screenshot') {
         socket.write(line + '\n');
         const reply = await answer();
-        // A jump's asks of polled module sources land before its reply is given (LLP 1133.009 D10 item 7). The
-        // reader's extensions answer on its main thread, which takes their asks between requests, so the wait is here.
-        if (req?.op === 'clock' && !req.settle) await pollsLanded();
         return say(reply);
       }
       if (req.film) return say(JSON.stringify({ error: 'the reader carrier films nothing: its picture is a screencap of the device' }));
@@ -1061,6 +1051,9 @@ export function buildApk(app, env, profile, writeLocks = false, bundle = false) 
   // A date or time control's picker is Compose Material 3's, linked only for a plan that has one (LLP 1115.001.000 D2).
   const compose = uses.includes('dates') ? ['-Pcompose=1'] : [];
   const development = JSON.parse(readFileSync(resolve(out, 'compat.json'), 'utf8')).embedded?.trust !== 'production';
+  // A `video` or `audio` plays on Media3, linked for a plan that makes one, and for every development build, whose
+  // plan may gain one and has no fallback (LLP 1042.001 D2).
+  const video = uses.includes('video') || development ? ['-Pvideo=1'] : [];
   // The token names its hatches read (LLP 1121 D12), beside them in the build.
   if (existsSync(resolve(app.dir, 'modules/android'))) writeFormaNames(app, 'kotlin');
   const graph = mavenGraph(app, writeLocks, maven, env);
@@ -1072,8 +1065,8 @@ export function buildApk(app, env, profile, writeLocks = false, bundle = false) 
     // outlive the home.
     assembled = runGradle(['--no-watch-fs', ...(env.CI || graph.env.GRADLE_USER_HOME ? ['--no-daemon'] : []), bundle ? ':app:bundleRelease' : ':app:assembleRelease', `-Papp=${app.name}`, `-PappDir=${app.manifest.game ? app.workspace : app.dir}`,
       `-PexactDevelopment=${development ? '1' : '0'}`,
-      `-PappBuildDir=${dirs.app}`, `-PcanvasBuildDir=${dirs.canvas}`, `-PndkPath=${env.ANDROID_NDK_HOME}`, '--project-cache-dir', dirs.cache, `-Pkotlin.project.persistent.dir=${dirs.kotlin}`,
-      ...gpuArgs, ...(icons.icon ? [`-PappIcon=${icons.icon}`] : []), ...(icons.banner ? [`-PappBanner=${icons.banner}`] : []), ...(launch ? [`-PappTheme=${launch}`] : []), ...compose, ...extensionArgs(app, out, config, bound, firebase), ...graph.args], { env: { ...env, ANDROID_HOME: androidSdk(env), ...graph.env } }, process.platform, { lockAdvice: maven.length && !writeLocks ? `${app.name}: Gradle locks or verification metadata do not match its dependencies; for an intended graph change, run ${androidLockCommand(app)}, then review and commit gradle.lockfile and gradle-verification.xml` : null });
+      `-PappBuildDir=${dirs.app}`, `-PcanvasBuildDir=${dirs.canvas}`, `-PvideoBuildDir=${dirs.video}`, `-PndkPath=${env.ANDROID_NDK_HOME}`, '--project-cache-dir', dirs.cache, `-Pkotlin.project.persistent.dir=${dirs.kotlin}`,
+      ...gpuArgs, ...(icons.icon ? [`-PappIcon=${icons.icon}`] : []), ...(icons.banner ? [`-PappBanner=${icons.banner}`] : []), ...(launch ? [`-PappTheme=${launch}`] : []), ...compose, ...video, ...extensionArgs(app, out, config, bound, firebase), ...graph.args], { env: { ...env, ANDROID_HOME: androidSdk(env), ...graph.env } }, process.platform, { lockAdvice: maven.length && !writeLocks ? `${app.name}: Gradle locks or verification metadata do not match its dependencies; for an intended graph change, run ${androidLockCommand(app)}, then review and commit gradle.lockfile and gradle-verification.xml` : null });
     if (assembled) graph.kept();
   } finally {
     graph.done();

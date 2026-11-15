@@ -243,6 +243,16 @@ extension Agent {
                 "ry": r2(max(0, document.height + i.top + i.bottom - visible.height))]
     }
 
+    /// A zoomable scroller's offsets and ranges in zoomed points, and its
+    /// zoom and range (LLP 1057.001.000 §6).
+    static func zoomed(_ v: NodeView, _ sv: NSScrollView) -> [String: Any] {
+        let clip = sv.contentView, i = sv.contentInsets, z = sv.magnification, o = clip.bounds.origin
+        let document = sv.documentView?.frame.size ?? .zero, port = clip.frame.size
+        return ["sx": r2(o.x * z + i.left), "sy": r2(o.y * z + i.top),
+                "rx": r2(max(0, i.left + document.width * z + i.right - port.width)), "ry": r2(max(0, i.top + document.height * z + i.bottom - port.height)),
+                "scrollZoom": Double(z), "minZoom": Double(v.zoomRange?.lowerBound ?? 1), "maxZoom": Double(v.zoomRange?.upperBound ?? 1)]
+    }
+
     /// The same, for a live scroller.
     static func overscroll(of sv: NSScrollView) -> (CGFloat, CGFloat) {
         overscroll(origin: sv.contentView.bounds.origin,
@@ -267,6 +277,7 @@ extension Agent {
                 n["sx"] = Agent.r2(o.x)
                 n["sy"] = Agent.r2(o.y)
                 n.merge(Agent.range(of: sv)) { _, new in new }
+                if sv.zoom != nil { n.merge(Agent.zoomed(v, sv)) { _, new in new } }
                 // How far past its own ends this scroller currently sits.
                 // A stretched rubber band is a real state a driver could not
                 // otherwise see: the offset alone reads as an ordinary
@@ -1354,9 +1365,32 @@ extension NSWindow.Level {
     /// its pictures are of this window alone (`CGWindowListCreateImage`), with
     /// canvas readbacks composited in place of Metal layers in either occlusion state,
     /// and page visibility is the driver's (`PageFacts.hidden`). A live frame
-    /// observation (`liveFrames`) lifts it while it records, and an iframe
-    /// guest, whose WebKit page is not on that clock, while the session holds one.
+    /// observation (`liveFrames`) lifts it while it records. WebKit reads
+    /// `ExactAgentWindow.occlusionState` to keep a mounted guest live at this level.
     public static let agentBehind = NSWindow.Level(rawValue: NSWindow.Level.normal.rawValue - 1)
+}
+
+/// WebKit reads this public AppKit property when deciding whether to run a
+/// page's frames and timers. At the driver's reserved level, a covered window
+/// and its sheets still have live pages; their window-server order never changes.
+open class ExactAgentWindow: NSWindow {
+    public override var occlusionState: NSWindow.OcclusionState {
+        let actual = super.occlusionState
+        var parent: NSWindow = self
+        while let over = parent.sheetParent { parent = over }
+        guard parent.level == .agentBehind, isVisible, !isMiniaturized, !NSApp.isHidden else { return actual }
+        return actual.union(.visible)
+    }
+
+    fileprivate var physicalOcclusionState: NSWindow.OcclusionState { super.occlusionState }
+}
+
+extension NSWindow {
+    /// Rendering and frame measurements need the physical state: Metal cannot
+    /// present to a covered window even when WebKit is told its page is visible.
+    public var screenOcclusionState: NSWindow.OcclusionState {
+        (self as? ExactAgentWindow)?.physicalOcclusionState ?? occlusionState
+    }
 }
 
 extension Agent {

@@ -200,8 +200,11 @@ extension NodeView {
         let start = spec.source.collapsed(run.range.location), end = spec.source.collapsed(NSMaxRange(run.range))
         let fit = props["fitScale"].flatMap(Float.init) ?? 1
         let r = run.lightRun
+        // A run with no text: the room kerned after its place (`Spec.roomPast`).
+        let past = run.range.length == 0 ? inlineText.filter(\.paints).firstIndex { $0.id == run.id }
+            .flatMap { spec.runs.indices.contains($0) ? spec.roomPast($0) : nil } : nil
         return shapedRects(start, end, empty: run.range.length == 0, font: text.font(run.run(dark: drawsDark).scaled(fit)) as CTFont,
-                           reach: (r.backgroundBefore, r.backgroundAfter, r.backgroundAbove, r.backgroundBelow))
+                           reach: (r.backgroundBefore, r.backgroundAfter, r.backgroundAbove, r.backgroundBelow), past: past ?? 0)
     }
 
     /// The fragments of the shaped text `start..<end` as the paragraph lays it
@@ -211,9 +214,11 @@ extension NodeView {
     /// WebKit's `getClientRects` answers: its first and last characters'
     /// glyphs stand `before` and `after` out from its padding, its end
     /// leaving out the room kerned after its last glyph (`exactEdgeRoom`),
-    /// and every slice `above` and `below` its content area.
+    /// and every slice `above` and `below` its content area. An empty
+    /// range's box stands either side of its place, `past` before the end of
+    /// the room kerned on the character before it.
     func shapedRects(_ start: Int, _ end: Int, empty: Bool, font: CTFont, line onlyLine: Int? = nil,
-                     reach: (before: CGFloat, after: CGFloat, above: CGFloat, below: CGFloat)? = nil) -> [CGRect] {
+                     reach: (before: CGFloat, after: CGFloat, above: CGFloat, below: CGFloat)? = nil, past: CGFloat = 0) -> [CGRect] {
         guard let paragraph = paragraphLayout() else { return [] }
         let spec = paragraphSpec(), box = paragraphBox()
         let (ascent, descent) = CSSLineBox.content(font, scale: paragraph.lineScale)
@@ -236,8 +241,12 @@ extension NodeView {
             let y = TextEngine.paintedLine(paragraph.baselines[index], top: box.minY, scale: scale, lineScale: paragraph.lineScale) - above
             let spans: [ClosedRange<CGFloat>]
             if empty {
-                let caret = CTLineGetOffsetForStringIndex(line, lo, nil)
-                spans = [caret...caret]
+                // After the glyph before it, whose advance has its room, as the painter places it.
+                let anchor = lo > range.location ? Self.glyph(line, at: lo - 1) : nil
+                let rtl = anchor?.rtl == true
+                let place = anchor.map { rtl ? $0.lo + past : $0.hi - past } ?? CTLineGetOffsetForStringIndex(line, lo, nil)
+                let (before, after) = rtl ? (reach?.after ?? 0, reach?.before ?? 0) : (reach?.before ?? 0, reach?.after ?? 0)
+                spans = [place - before...place + after]
             } else { spans = TextEngine.selectionSpans(line, range: NSRange(location: lo, length: hi - lo)) }
             // Where the box starts and ends on this line, from its glyphs.
             // Each is the x of the glyph it is placed by, the edge's x, and

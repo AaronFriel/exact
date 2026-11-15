@@ -16,6 +16,7 @@ impl<D: DataSource> Presenter<D> {
         let Presenter {
             // The tree's, made anew here.
             deferred_collections,
+            media,
             last_wheel,
             idle_timer_retry,
             ahead,
@@ -161,6 +162,7 @@ impl<D: DataSource> Presenter<D> {
         *ahead = None;
         scroll.clear();
         *scroll_end = Default::default();
+        *media = Default::default();
         // Kept by view id, as where a wheel left a scroller and the area it
         // last rested on.
         wheel_free.clear();

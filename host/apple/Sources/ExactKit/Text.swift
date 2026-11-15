@@ -78,25 +78,28 @@ final class PresentedText: TextPresentation {
             a[.strikethroughStyle] = NSUnderlineStyle.single.rawValue
             if !r.decoration.contains("line-through"), let c = r.strikeColor { a[.strikethroughColor] = TextEngine.color(c) }
         }
-        if !r.hidden, let fill = r.background.map(TextEngine.color), fill.cgColor.alpha > 0 {
+        let fill = r.background.map { TextEngine.color($0).cgColor }.flatMap { $0.alpha > 0 ? $0 : nil }
+        if !r.hidden, fill != nil || r.border != nil {
             let f = a[.font] as! PlatformFont
             let (ascent, descent) = CSSLineBox.content(f as CTFont, scale: scale)
             let outer = r.outerBackgrounds.map {
                 InlineBackground(color: TextEngine.color($0.color).cgColor, ascent: ascent, descent: descent, box: $0.box, radii: $0.radii,
-                                 reach: ($0.before, $0.after, $0.above, $0.below), opacity: $0.opacity)
+                                 reach: ($0.before, $0.after, $0.above, $0.below), border: $0.border, opacity: $0.opacity)
             }
-            a[.exactBackground] = InlineBackground(color: fill.cgColor, ascent: ascent, descent: descent,
+            a[.exactBackground] = InlineBackground(color: fill ?? CGColor(gray: 0, alpha: 0), ascent: ascent, descent: descent,
                                                    box: r.backgroundBox, radii: r.backgroundRadii,
                                                    reach: (r.backgroundBefore, r.backgroundAfter, r.backgroundAbove, r.backgroundBelow),
-                                                   outer: outer, opacity: r.backgroundOpacity)
+                                                   border: r.border, outer: outer, opacity: r.backgroundOpacity)
         }
     }
     /// Every inline box's extent in the paragraph, once its runs are set,
     /// where any box is rounded, reaches past its text, stands in another or
     /// beside an inline box's room: one table that all of its backgrounds
     /// share, so runs of one colour and font stay one CTRun, as they were
-    /// measured, and the painter tells boxes apart by character.
-    func finish(_ string: NSMutableAttributedString) {
+    /// measured, and the painter tells boxes apart by character. A box
+    /// with no characters (a run with no text, `EmptyRun`) is an empty
+    /// extent where it stands, on the character before it (`EmptyBoxes`).
+    func finish(_ string: NSMutableAttributedString, empties: [EmptyRun]) {
         let all = NSRange(location: 0, length: string.length)
         var boxes: [InlineBoxes.Box] = [], at: [UInt32: Int] = [:]
         // The room kerned beside a box is no glyph's: its own boxes' reach
@@ -105,20 +108,32 @@ final class PresentedText: TextPresentation {
         string.enumerateAttribute(.exactEdgeRoom, in: all) { value, _, stop in
             if value != nil { tabled = true; stop.pointee = true }
         }
-        string.enumerateAttribute(.exactBackground, in: all) { value, range, _ in
-            guard let inner = value as? InlineBackground, inner.box != 0 else { return }
-            // Its boxes, outermost first, each as deep as the boxes around it.
+        // Its boxes, outermost first, each as deep as the boxes around it;
+        // the indices of those it adds.
+        @discardableResult func add(_ inner: InlineBackground, _ range: NSRange) -> [Int] {
+            var added: [Int] = []
             for (depth, fill) in ([inner] + inner.outer).reversed().enumerated() {
-                tabled = tabled || !fill.radii.isEmpty || fill.reach != (0, 0, 0, 0) || !inner.outer.isEmpty
+                tabled = tabled || !fill.radii.isEmpty || fill.reach != (0, 0, 0, 0) || fill.border != nil || !inner.outer.isEmpty
                 if let i = at[fill.box] {
-                    boxes[i].extent = NSUnionRange(boxes[i].extent, range)
+                    if range.length > 0 { boxes[i].extent = NSUnionRange(boxes[i].extent, range) }
                 } else {
                     at[fill.box] = boxes.count
+                    added.append(boxes.count)
                     boxes.append(InlineBoxes.Box(extent: range, radii: fill.radii, color: fill.color, depth: depth,
                                                  before: fill.reach.before, after: fill.reach.after,
-                                                 above: fill.reach.above, below: fill.reach.below, opacity: fill.opacity))
+                                                 above: fill.reach.above, below: fill.reach.below, border: fill.border, opacity: fill.opacity))
                 }
             }
+            return added
+        }
+        string.enumerateAttribute(.exactBackground, in: all) { value, range, _ in
+            guard let inner = value as? InlineBackground, inner.box != 0 else { return }
+            add(inner, range)
+        }
+        // A run with no text after a character: the boxes no character is in.
+        let anchored = empties.compactMap { empty -> (EmptyRun, InlineBackground, [Int])? in
+            guard empty.offset > 0, let inner = empty.attributes[.exactBackground] as? InlineBackground, inner.box != 0 else { return nil }
+            return (empty, inner, add(inner, NSRange(location: empty.offset, length: 0)))
         }
         guard !boxes.isEmpty else { return }
         let rtl = (string.attribute(.paragraphStyle, at: 0, effectiveRange: nil) as? NSParagraphStyle)?.baseWritingDirection == .rightToLeft
@@ -126,6 +141,12 @@ final class PresentedText: TextPresentation {
         string.enumerateAttribute(.exactBackground, in: all) { value, range, _ in
             guard let fill = value as? InlineBackground, fill.box != 0 else { return }
             string.addAttribute(.exactBackground, value: fill.sharing(table), range: range)
+        }
+        guard let table else { return }
+        for (offset, group) in Dictionary(grouping: anchored, by: { $0.0.offset }) {
+            let range = (string.string as NSString).rangeOfComposedCharacterSequence(at: offset - 1)
+            string.addAttribute(.exactEmptyBoxes, value: group.map { EmptyBoxes(fill: $0.1.sharing(table), boxes: $0.2, past: $0.0.past) },
+                                range: range)
         }
     }
 }
@@ -229,7 +250,7 @@ extension TextEngine {
             // A background's block padding paints past its line's ink, by as
             // much as any box's (`Run.backgroundAbove`).
             var above: CGFloat = 0, below: CGFloat = 0
-            for run in spec.runs where run.background != nil {
+            for run in spec.runs where run.background != nil || run.border != nil {
                 above = run.outerBackgrounds.reduce(max(above, run.backgroundAbove)) { max($0, $1.above) }
                 below = run.outerBackgrounds.reduce(max(below, run.backgroundBelow)) { max($0, $1.below) }
             }
@@ -250,15 +271,15 @@ extension TextEngine {
     #endif
 }
 
-/// An inline box's `background-color`, carried on the attributed source so
-/// that the main thread's paint and a worker's raster read the same value.
-/// The content area is the run's own font's, as the web's inline box is.
-/// `box`, `radii` and `reach` are the run's box, its `border-radius` and
-/// how far its padding box stands out from its text (`before` its first
-/// character, `after` its last, `above` and `below` its content area,
-/// which moves no line), and `outer` the boxes around it with
-/// backgrounds, nearest first, until `PresentedText.finish` puts the
-/// paragraph's table of boxes in their place.
+/// An inline box's `background-color` (clear for none) and border, carried
+/// on the attributed source so that the main thread's paint and a worker's
+/// raster read the same value. The content area is the run's own font's, as
+/// the web's inline box is. `box`, `radii` and `reach` are the run's box,
+/// its `border-radius` and how far its padding box stands out from its text
+/// (`before` its first character, `after` its last, `above` and `below` its
+/// content area, which moves no line), and `outer` the boxes around it with
+/// backgrounds or borders, nearest first, until `PresentedText.finish` puts
+/// the paragraph's table of boxes in their place.
 final class InlineBackground: NSObject, @unchecked Sendable {
     let color: CGColor
     let ascent: CGFloat
@@ -266,14 +287,17 @@ final class InlineBackground: NSObject, @unchecked Sendable {
     let box: UInt32
     let radii: [InlineRadius]
     let reach: (before: CGFloat, after: CGFloat, above: CGFloat, below: CGFloat)
+    let border: InlineBorder?
     let outer: [InlineBackground]
     let boxes: InlineBoxes?
     let opacity: [InlineOpacity]
     init(color: CGColor, ascent: CGFloat, descent: CGFloat, box: UInt32 = 0, radii: [InlineRadius] = [],
-         reach: (before: CGFloat, after: CGFloat, above: CGFloat, below: CGFloat) = (0, 0, 0, 0), outer: [InlineBackground] = [], boxes: InlineBoxes? = nil, opacity: [InlineOpacity] = []) {
+         reach: (before: CGFloat, after: CGFloat, above: CGFloat, below: CGFloat) = (0, 0, 0, 0), border: InlineBorder? = nil,
+         outer: [InlineBackground] = [], boxes: InlineBoxes? = nil, opacity: [InlineOpacity] = []) {
         self.opacity = opacity
         self.color = color; self.ascent = ascent; self.descent = descent
-        self.box = box; self.radii = radii.contains { !$0.isZero } ? radii : []; self.reach = reach; self.outer = outer; self.boxes = boxes
+        self.box = box; self.radii = radii.contains { !$0.isZero } ? radii : []; self.reach = reach; self.border = border
+        self.outer = outer; self.boxes = boxes
     }
     func sharing(_ boxes: InlineBoxes?) -> InlineBackground {
         InlineBackground(color: color, ascent: ascent, descent: descent, boxes: boxes, opacity: opacity)
@@ -281,20 +305,22 @@ final class InlineBackground: NSObject, @unchecked Sendable {
     override func isEqual(_ object: Any?) -> Bool {
         guard let other = object as? InlineBackground else { return false }
         return color == other.color && ascent == other.ascent && descent == other.descent && box == other.box
-            && opacity == other.opacity && radii == other.radii && reach == other.reach && outer == other.outer && boxes == other.boxes
+            && opacity == other.opacity && radii == other.radii && reach == other.reach && border == other.border
+            && outer == other.outer && boxes == other.boxes
     }
     override var hash: Int { color.hashValue ^ ascent.hashValue ^ descent.hashValue ^ box.hashValue }
 }
 
-/// A paragraph's inline boxes with backgrounds (`PresentedText.finish`):
-/// each box's range of characters, its `border-radius`, its colour, how
-/// many boxes with backgrounds it stands in and its reach
-/// (`InlineBackground.reach`), and the paragraph's direction, which says
-/// which side a box starts on.
+/// A paragraph's inline boxes with backgrounds or borders
+/// (`PresentedText.finish`): each box's range of characters, its
+/// `border-radius`, its colour, how many such boxes it stands in, its reach
+/// (`InlineBackground.reach`) and its border, and the paragraph's
+/// direction, which says which side a box starts on.
 final class InlineBoxes: NSObject {
     struct Box: Equatable {
         var extent: NSRange; let radii: [InlineRadius]; let color: CGColor; let depth: Int
         var before: CGFloat = 0, after: CGFloat = 0, above: CGFloat = 0, below: CGFloat = 0
+        var border: InlineBorder?
         var opacity: [InlineOpacity] = []
     }
     let boxes: [Box]
@@ -307,9 +333,19 @@ final class InlineBoxes: NSObject {
     override var hash: Int { boxes.count }
 }
 
+/// The boxes of a run with no text (`EmptyRun`), carried by the character
+/// before it: its own background, for its content area and the table, the
+/// boxes no character is in, outermost first, and the room kerned after
+/// its place (`Spec.roomPast`).
+final class EmptyBoxes: NSObject, @unchecked Sendable {
+    let fill: InlineBackground, boxes: [Int], past: CGFloat
+    init(fill: InlineBackground, boxes: [Int], past: CGFloat) { self.fill = fill; self.boxes = boxes; self.past = past }
+}
+
 extension NSAttributedString.Key {
     static let exactOpacity = NSAttributedString.Key("ExactInlineOpacity")
     static let exactBackground = NSAttributedString.Key("ExactInlineBackground")
+    static let exactEmptyBoxes = NSAttributedString.Key("ExactInlineEmptyBoxes")
 }
 
 /// One line's paint into a y-down context, shared by every Apple painter.
@@ -323,10 +359,7 @@ enum TextLinePaint {
     static func draw(_ line: CTLine, at origin: CGPoint, in ctx: CGContext, scale: CGFloat = 1, pass: Pass = .all) {
         if drawOpacity(line, at: origin, in: ctx, scale: scale, pass: pass) { return }
         ctx.saveGState()
-        for fill in backgrounds(line, at: origin) where pass.paintsBackgrounds {
-            ctx.setFillColor(fill.color)
-            if let path = fill.path { ctx.addPath(path); ctx.fillPath() } else { ctx.fill(fill.rect) }
-        }
+        for fill in backgrounds(line, at: origin) where pass.paintsBackgrounds { fill.paint(in: ctx) }
         guard pass.paintsGlyphs else { ctx.restoreGState(); return }
         // The text matrix is not graphics state; put the caller's back.
         let matrix = ctx.textMatrix
@@ -342,9 +375,34 @@ enum TextLinePaint {
         ctx.restoreGState()
     }
 
-    /// One background fragment: its rect, its outline where a corner is
-    /// rounded, and its colour.
-    struct Fill { let rect: CGRect; let path: CGPath?; let color: CGColor; var opacity: [InlineOpacity] = [] }
+    /// A glyph run's left and right, its advances included, and whether it
+    /// runs right to left.
+    static func glyphSpan(_ run: CTRun) -> (CGFloat, CGFloat, Bool)? {
+        let count = CTRunGetGlyphCount(run)
+        guard count > 0 else { return nil }
+        var positions = [CGPoint](repeating: .zero, count: count), advances = [CGSize](repeating: .zero, count: count)
+        CTRunGetPositions(run, CFRange(), &positions)
+        CTRunGetAdvances(run, CFRange(), &advances)
+        let xs = zip(positions, advances).flatMap { [$0.x, $0.x + $1.width] }
+        return (xs.min()!, xs.max()!, CTRunGetStatus(run).contains(.rightToLeft))
+    }
+
+    /// One box's fragment: its border box, its outline where a corner is
+    /// rounded, its background colour, and its border with no width where
+    /// the box is sliced, which paints over the background.
+    struct Fill {
+        let rect: CGRect; let path: CGPath?; let color: CGColor; var opacity: [InlineOpacity] = []
+        var border: (widths: [CGFloat], colors: [CGColor], styles: [String], radii: [CGSize])?
+        func paint(in ctx: CGContext) {
+            if color.alpha > 0 {
+                ctx.setFillColor(color)
+                if let path { ctx.addPath(path); ctx.fillPath() } else { ctx.fill(rect) }
+            }
+            if let border {
+                BorderPaint.paint(ctx, box: rect, widths: border.widths, colors: border.colors, radii: border.radii, styles: border.styles)
+            }
+        }
+    }
 
     /// CSS: an inline box's background covers each of its line fragments,
     /// its glyphs' advance across and its font's content area down, and its
@@ -359,6 +417,8 @@ enum TextLinePaint {
     /// the leftmost piece of the line that holds its first character and
     /// the end on the rightmost of the line that holds its last; under
     /// `rtl` the other way about. Percentages resolve against each piece.
+    /// Its border's start and end sides are sliced the same way, and its
+    /// top and bottom are on every piece.
     static func backgrounds(_ line: CTLine, at origin: CGPoint) -> [Fill] {
         struct Piece { var lo: CGFloat, hi: CGFloat; let box: Int?; let color: CGColor; let fill: InlineBackground }
         var spans: [Piece] = []
@@ -375,6 +435,18 @@ enum TextLinePaint {
         }
         for run in runs {
             let attributes = CTRunGetAttributes(run) as NSDictionary
+            // The boxes of runs with no text after this one's last character:
+            // each its reach either side of its place, starting and ending there.
+            for empty in attributes[NSAttributedString.Key.exactEmptyBoxes] as? [EmptyBoxes] ?? [] {
+                guard let (lo, hi, backwards) = Self.glyphSpan(run), let table = empty.fill.boxes else { continue }
+                let place = backwards ? lo + empty.past : hi - empty.past
+                for b in empty.boxes {
+                    let box = table.boxes[b]
+                    let (before, after) = backwards ? (box.after, box.before) : (box.before, box.after)
+                    spans.append(Piece(lo: place - before, hi: place + after, box: b, color: box.color, fill: empty.fill))
+                    starts.insert(b); ends.insert(b)
+                }
+            }
             guard let fill = attributes[NSAttributedString.Key.exactBackground] as? InlineBackground else { continue }
             let count = CTRunGetGlyphCount(run)
             guard count > 0 else { continue }
@@ -457,12 +529,18 @@ enum TextLinePaint {
             let piece = merged[i], fill = piece.fill, box = piece.box.flatMap { fill.boxes?.boxes[$0] }
             let above = fill.ascent + (box?.above ?? 0), below = fill.descent + (box?.below ?? 0)
             let rect = CGRect(x: origin.x + piece.lo, y: origin.y - above, width: piece.hi - piece.lo, height: above + below)
-            guard let b = piece.box, let radii = fill.boxes?.boxes[b].radii, !radii.isEmpty else { return Fill(rect: rect, path: nil, color: piece.color, opacity: piece.box.flatMap { fill.boxes?.boxes[$0].opacity } ?? fill.opacity) }
-            let corners = zip(radii, kept[i]).map { radius, kept in
+            let corners = zip(box?.radii ?? [], kept[i]).map { radius, kept in
                 kept ? CGSize(width: radius.length(basis: rect.width), height: radius.length(basis: rect.height)) : .zero
             }
-            guard corners.contains(where: { $0 != .zero }) else { return Fill(rect: rect, path: nil, color: piece.color, opacity: piece.box.flatMap { fill.boxes?.boxes[$0].opacity } ?? fill.opacity) }
-            return Fill(rect: rect, path: BorderPaint.roundedRect(rect, BorderPaint.reduced(corners, in: rect)), color: piece.color, opacity: fill.boxes?.boxes[b].opacity ?? fill.opacity)
+            let rounded = corners.contains { $0 != .zero }
+            var out = Fill(rect: rect, path: rounded ? BorderPaint.roundedRect(rect, BorderPaint.reduced(corners, in: rect)) : nil,
+                           color: piece.color, opacity: box?.opacity ?? fill.opacity)
+            if let border = box?.border {
+                let w = border.widths
+                out.border = ([w[0], kept[i][1] ? w[1] : 0, w[2], kept[i][0] ? w[3] : 0], border.colors.map { TextEngine.color($0).cgColor },
+                              border.styles, rounded ? corners : Array(repeating: .zero, count: 4))
+            }
+            return out
         }
     }
 }

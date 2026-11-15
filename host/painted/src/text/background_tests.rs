@@ -1,4 +1,7 @@
-use super::{backgrounds::InlineBackground, *};
+use super::{
+    backgrounds::{InlineBackground, InlinePaint},
+    *,
+};
 use crate::paint::Shape;
 use exact_kernel::{Dimension, Direction, Env, StyleProps, WhiteSpace};
 
@@ -37,6 +40,7 @@ fn background(id: u32) -> Option<InlineBackground> {
         reach: exact_kernel::InlineEdges::default(),
         above: 0.0,
         below: 0.0,
+        border: None,
         outer: Vec::new(),
     })
 }
@@ -44,9 +48,23 @@ fn background(id: u32) -> Option<InlineBackground> {
 fn fills(p: &Paragraph, backgrounds: &[Option<InlineBackground>]) -> Vec<Shape> {
     p.inline_backgrounds(backgrounds, &Env::default())
         .into_iter()
-        .map(|(s, c)| {
-            assert_eq!(c, GRAY);
-            s
+        .map(|paint| match paint {
+            InlinePaint::Fill(s, c) => {
+                assert_eq!(c, GRAY);
+                s
+            }
+            InlinePaint::Border(..) => panic!("no border: {paint:?}"),
+        })
+        .collect()
+}
+
+/// Each paint as (shape, colour), a border's in its top colour.
+fn paints(p: &Paragraph, backgrounds: &[Option<InlineBackground>]) -> Vec<(Shape, [u8; 4])> {
+    p.inline_backgrounds(backgrounds, &Env::default())
+        .into_iter()
+        .map(|paint| match paint {
+            InlinePaint::Fill(s, c) => (s, c),
+            InlinePaint::Border(s, b) => (s, b.colors[0]),
         })
         .collect()
 }
@@ -287,7 +305,7 @@ fn inline_background_zero_radius_keeps_the_square_path() {
     let expected: Vec<_> = p
         .run_backgrounds(&[Some(GRAY), Some(GRAY)])
         .into_iter()
-        .map(|(r, c)| (Shape::rect(r), c))
+        .map(|(r, c)| InlinePaint::Fill(Shape::rect(r), c))
         .collect();
     assert_eq!(actual, expected);
     assert_eq!(actual.len(), 1);
@@ -583,9 +601,10 @@ fn nested_boxes_each_paint_their_own_padding() {
         outer: vec![outer.clone()],
         ..background(9).unwrap()
     };
-    let shapes = e
-        .paragraph(&s, None)
-        .inline_backgrounds(&[None, Some(outer), Some(inner), None], &Env::default());
+    let shapes = paints(
+        &e.paragraph(&s, None),
+        &[None, Some(outer), Some(inner), None],
+    );
     assert_eq!(shapes.len(), 2, "{shapes:?}");
     let (o, i) = (shapes[0].0.rect, shapes[1].0.rect);
     assert_eq!(shapes[0].1, GRAY, "the outer box paints first");
