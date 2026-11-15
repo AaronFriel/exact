@@ -136,7 +136,7 @@ impl Emitter<'_> {
         }
         let mut ids = 0usize;
         let view = self.cnodes(&c.view, &mut ids)?;
-        let resources = self.resources_list(c, ct)?;
+        let resources = self.resources_list(c, ct, &[])?;
         let (mutations, tasks) = if k == 0 {
             (self.mutations_list(c, ct), self.tasks_list(c)?)
         } else {

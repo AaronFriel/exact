@@ -104,9 +104,9 @@ def dispatchTrace (p : Program) (o : Oracle) (c : Config) (target : String) (eve
     | .some (_, a, args) =>
       if payload.isSome && n.control.isSome then
         ((c, .refused (.unsupported s!"a payload for a `{n.control.getD ""}` control")), []) else
-      let env : Env := { prog := p, slots := c.slots, derives := c.settled.derives,
-                         resources := c.settled.resources, rows := rowSlots c.store n.rows,
-                         now := c.now, idle := c.settled.idle }
+      let env : Env := ({ prog := p, slots := c.slots, derives := c.settled.derives,
+                          resources := c.settled.resources, rows := rowSlots c.store n.rows,
+                          now := c.now, idle := c.settled.idle } : Env).withOwned
       match evalList fuel env false n.locals args with
       | .error e => ((c, .refused e), [⟨"handler", a, .refused (.refused ("arguments refused: " ++ why e))⟩])
       | .ok vs =>
@@ -230,7 +230,8 @@ def lines (p : Program) (label : String) (c : Config) (out : Outcome) (commandsB
       "store " ++ st.name ++ " " ++ value v) ++
     (p.derives.filterMap fun d => (lookup d.name c.settled.derives).map fun v =>
       "derive " ++ d.name ++ " " ++ value v) ++
-    (p.resources.filterMap fun r => (lookup r.name c.settled.resources).map fun v =>
+    -- A child's resource has a value per instance, which the view shows.
+    ((p.resources.filter (·.owner.isNone)).filterMap fun r => (lookup r.name c.settled.resources).map fun v =>
       "resource " ++ r.name ++ " " ++ value v) ++
     ((p.mutations.filter (·.queue)).map fun m =>
       "queued " ++ m.name ++ " " ++ toString ((c.queued.filter (·.1 == m.name)).length)) ++

@@ -210,6 +210,55 @@ theorem armSlots_good {p : Program} (hp : WellTyped p) {E : Err → Prop}
       simpa using hc
   · exact hs
 
+/-! ## A child's requests -/
+
+/-- An instance's requests read as resources keep the environment good:
+each holds a value of its resource's type. -/
+theorem EnvGood.withOwned {p : Program} {env : Env} (h : EnvGood p env) : EnvGood p env.withOwned := by
+  refine ⟨h.prog, h.slots, h.present, h.rows, h.settled.1, fun x v hx => ?_⟩
+  simp only [Env.withOwned] at hx
+  rcases List.mem_append.mp hx with hx | hx
+  · obtain ⟨_, hany⟩ := List.mem_filter.mp hx
+    obtain ⟨r, hr, hr'⟩ := List.any_eq_true.mp hany
+    simp only [Bool.and_eq_true, beq_iff_eq] at hr'
+    rw [h.prog] at hr
+    exact ⟨r, hr, hr'.1.1, by rw [← h.prog]; exact hr'.2⟩
+  · exact h.settled.2 x v hx
+
+theorem lookup_isSome_of_suffix {x : String} :
+    ∀ (l₁ l₂ : List (String × Value)), (lookup x l₂).isSome = true → (lookup x (l₁ ++ l₂)).isSome = true
+  | [], _, h => h
+  | (y, v) :: l, l₂, h => by
+    simp only [List.cons_append, lookup]
+    split
+    · rfl
+    · exact lookup_isSome_of_suffix l l₂ h
+
+/-- Reading an instance's requests leaves every resource settled. -/
+theorem Complete.withOwned {p : Program} {env : Env}
+    (h : Complete p { derives := env.derives, resources := env.resources }) :
+    Complete p { derives := env.withOwned.derives, resources := env.withOwned.resources } :=
+  ⟨h.1, fun r hr => lookup_isSome_of_suffix _ _ (h.2 r hr)⟩
+
+/-- An instance's requests settle into slots its slot types admit, or
+the render is refused. -/
+theorem settleOwned_good {p : Program} {E : Err → Prop}
+    (hE : ∀ e, Legit e → e ≠ .pending → E e) {fuel o env ls owner slots} (henv : env.prog = p) :
+    GoodW E (RowsOK p) (settleOwned fuel o env ls owner slots) := by
+  unfold settleOwned
+  dsimp only
+  split
+  · split
+    · next hall =>
+      intro x v hx
+      have := List.all_eq_true.mp hall (x, v) hx
+      rw [henv] at this
+      exact this
+    · exact hE _ trivial (by simp)
+  · exact hE _ trivial (by simp)
+  · exact hE _ trivial (by simp)
+  · exact hE _ trivial (by simp)
+
 /-! ## Rendering -/
 
 /-- **Rendering is safe.** A well-typed view rendered in a well-typed
@@ -298,8 +347,11 @@ theorem render_good {p : Program} (hp : WellTyped p) {E : Err → Prop}
           exact ⟨hv1.append hv2, hs2⟩
     · intro cx Γ ls tag arm body live henv hcm hst hlive hl hinit hbody
       unfold render.renderArm
-      refine GoodW.bind (armSlots_good hp hE henv hcm hst hl hinit) fun slots hslots => ?_
-      exact ihR (henv.withRows hslots) hcm hst (hlive.append (StoreOK.single hslots)) hl hbody
+      refine GoodW.bind (armSlots_good hp hE henv hcm hst hl hinit) fun _ _ => ?_
+      refine GoodW.bind (settleOwned_good hE henv.prog) fun slots hslots => ?_
+      exact ihR (henv.withRows hslots).withOwned
+        (hcm.imp_left fun h => Complete.withOwned (env := { cx.env with rows := slots ++ cx.env.rows }) h)
+        hst (hlive.append (StoreOK.single hslots)) hl hbody
     · intro cx Γ ls tag x ix key body items i seen live a k henv hcm hst hlive hl hitems hk hinit hbody
       cases items with
       | nil => simp only [render.renderRows, GoodW]; exact ⟨ViewOK.nil, hlive⟩
@@ -309,8 +361,11 @@ theorem render_good {p : Program} (hp : WellTyped p) {E : Err → Prop}
         have hl' := hl.each (x := x) (ix := ix) hitem i
         refine GoodW.bind (eval_sound_E hfn hE (henv.envOKE' hp hE hcm) hl' hk) fun kv _ => ?_
         refine GoodW.bind (rowKey_good hE kv) fun key' _ => ?_
-        refine GoodW.bind (armSlots_good hp hE henv hcm hst hl' hinit) fun slots hslots => ?_
-        refine GoodW.bind (ihR (henv.withRows hslots) hcm hst (hlive.append (StoreOK.single hslots)) hl' hbody)
+        refine GoodW.bind (armSlots_good hp hE henv hcm hst hl' hinit) fun _ _ => ?_
+        refine GoodW.bind (settleOwned_good hE henv.prog) fun slots hslots => ?_
+        refine GoodW.bind (ihR (henv.withRows hslots).withOwned
+            (hcm.imp_left fun h => Complete.withOwned (env := { cx.env with rows := slots ++ cx.env.rows }) h)
+            hst (hlive.append (StoreOK.single hslots)) hl' hbody)
           fun ⟨vs, l1⟩ ⟨hv1, hs1⟩ => ?_
         refine GoodW.bind (ihW henv hcm hst hs1 hl hitems.2 hk hinit hbody) fun ⟨more, l2⟩ ⟨hv2, hs2⟩ => ?_
         exact ⟨hv1.append hv2, hs2⟩

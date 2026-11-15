@@ -167,6 +167,13 @@ structure ResourceDecl where
   /-- `when cond` (LLP 1161.002 D1): asked only while `cond` holds, idle
   while it does not. A resource over a list has none. -/
   gate : Option Expr := .none
+  /-- A child's resource (LLP 1035.005.004 D1): the region arm whose every
+  instance owns a request of its own, asked in the render that makes or
+  updates the instance (`Runtime.settleOwned`); `none` for the root's. -/
+  owner : Option (Nat × Nat) := .none
+  /-- A child's resource used outside every region: a root resource, asked
+  once the late slots are initialized (D2). -/
+  late : Bool := false
   deriving Repr, Inhabited
 
 /-- `mutation name as shape ty`: a slot of type `option<ty>`. -/

@@ -157,7 +157,7 @@ theorem render_handlers : ∀ fuel,
     · intro cx ls tag arm body live vs live' h
       unfold render.renderArm at h
       simp only [Except.bind_ok_iff] at h
-      obtain ⟨_, _, h⟩ := h
+      obtain ⟨_, _, _, _, h⟩ := h
       exact ihR h
     · intro cx ls tag x ix key body items i seen live vs live' h
       cases items with
@@ -165,7 +165,7 @@ theorem render_handlers : ∀ fuel,
       | cons item items =>
         unfold render.renderRows at h
         simp only [Except.bind_ok_iff] at h
-        obtain ⟨_, _, _, _, _, _, ⟨vs1, l1⟩, h1, ⟨vs2, l2⟩, h2, h⟩ := h
+        obtain ⟨_, _, _, _, _, _, _, _, ⟨vs1, l1⟩, h1, ⟨vs2, l2⟩, h2, h⟩ := h
         simp only [Except.pure_ok_iff, Prod.mk.injEq] at h
         obtain ⟨rfl, -⟩ := h
         exact (ihR h1).append (ihW h2)

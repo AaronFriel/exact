@@ -721,7 +721,9 @@ own slots, settlement, actions and timers are `Contract.Runtime`'s
 (`rootProgram`). Each child's `exactViewport()` and `exactPage()` resources
 live in that root environment under `name@Component`, shared by all its
 instances. Reads, status queries and refreshes in the child's frame resolve
-to those resources.
+to those resources. A child's other resources are its instance's own
+requests (`csettleOwned`, as the flat `settleOwned` below), held in the
+instance's store beside its states.
 
 **The expander** (`Contract.Expand`) transcribes inline.rs and its
 submodules step for step, numbering and spelling included: capture-avoiding
@@ -733,6 +735,9 @@ each `children` node under that node's region arms, props and injects captured a
 parameters `@capture:n:i`, tail calls resolved (`p@ck`, `x@bk`, `p@tailk`; the
 `@check:` statement the flat embedding drops is not emitted). Device resources
 are hoisted once per declaration, including unused components, in file order.
+A child's other resources are lifted per use as `x#n`, their arguments and
+gate substituted after its derives, with the use's owner, after the root's
+and the device resources.
 Their value reads and refresh targets are renamed; same-named function calls
 keep their heads. Style names, surface names and positional syntax words stay
 unchanged; only a conditional `class`'s condition and a surface's arguments
@@ -758,8 +763,8 @@ component-level semantics of the unexpanded file against the flat
 semantics of Rust's expansion over the case's script, the oracle the
 runner's transcript. It compares outcomes and configurations, omitting commit
 traces (`ran …`), which the component-level semantics does not emit, and the
-slots the expansion lifts out of children (`slot name#n …`), which it keeps
-per instance. A disagreement is kept under
+slots and resources the expansion lifts out of children (`slot name#n …`,
+`resource name#n …`), which it keeps per instance. A disagreement is kept under
 `target/difftest/expansion/`, its script shrunk.
 
 **What is proved** (no `sorry`, no axioms beyond Lean's own):
@@ -796,7 +801,7 @@ per instance. A disagreement is kept under
 - `ExpandMap.use_prop`, `use_state`: the same of the expander's own
   substitution for a use (`Expand.baseMap`, `withDerives`, which
   `inlineNode` builds it with), for a component whose props, injects,
-  states, actions, derives and device resources have distinct names: a
+  states, actions, derives and resources have distinct names: a
   prop's replacement is its argument substituted at the use site (`map_prop`),
   a state's its lifted name (`map_state`).
 
@@ -1120,6 +1125,41 @@ What it does not carry:
   `current` is false: answers here are synchronous. The runner's tests
   (`contract/cli/tests/it/when.rs`, `current.rs`) and the conformance plan
   (`host/web-js/conformance/gate.contract`) check these.
+
+## A child's requests (LLP 1035.005.004)
+
+A child component's resource other than a device fact is a request each
+instance owns. The expansion lifts it per use as `x#n`
+(`ResourceDecl.owner`: the region arm whose instances own it; `late` for
+a use outside every region). Root settlement holds an owned one idle at
+its type's zero and never reads it. Each arm instance settles its own in
+the render that makes or updates it (`Runtime.settleOwned`), after its
+states, its gate and arguments read with the instance's slots and locals:
+kept while its arguments are those its value answers, asked of the oracle
+otherwise, idle with its value and no arguments while its gate is closed.
+Passes repeat while one changes, so a request whose arguments read
+another's answer asks on that answer, in the same render. The value and
+its arguments (`x@args`) are the instance's row slots; in the instance's
+rows `Env.withOwned` shows the value as a resource, current while it has
+arguments. A refresh in an action forgets the arguments of the request in
+the action's own instance, so the next render asks again
+(`refreshOwned`). A `late` resource is a root resource whose settlement
+waits for the late slots: boot settles once more after `lateSlots` when
+there is one (`settle`'s `lateReady`). Neither side prints a `resource`
+line for an arm-owned row, which has a value per instance.
+
+Rendering stays safe (`render_good`) without typing a request's arguments
+in its arm's scope: `settleOwned` keeps its slots only where each conforms
+to its slot type and refuses the render on an evaluation error. The corpus
+has `resources/owned`.
+
+What it does not carry:
+
+- An answer in flight: every owned answer here is synchronous, so the
+  runner's later render of an immediate answer is this render's next pass.
+  An `else` placeholder (the semantics holds the type's zero, as for a
+  gated root resource) and an owned request with a placeholder row
+  (`x#n#else`) are outside it.
 
 ## Persisted state (LLP 1116 D5)
 

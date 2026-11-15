@@ -126,7 +126,8 @@ theorem counter_keeps {c name args rows} (hc : SlotIn "counter" CounterOK c.slot
     cases hv with
     | binop h₁ h₂ h₃ =>
       rw [EvalR.var_global (by simp [actionLocals, lookup])] at h₁
-      simp only [Env.global, actionEnv, updateLab, List.find?, beq_self_eq_true] at h₁
+      simp only [Env.global, actionEnv, Env.withOwned_prog, Env.withOwned_slots, updateLab, List.find?,
+        beq_self_eq_true] at h₁
       cases hl : lookup "counter" c.slots with
       | none => rw [hl] at h₁; cases h₁
       | some w =>

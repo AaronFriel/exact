@@ -293,7 +293,11 @@ impl Emitter<'_> {
         }
         let _ = writeln!(o, "  states := [{}],", states.join(",\n    "));
         let _ = writeln!(o, "  derives := {},", self.derives_list(root, ct)?);
-        let _ = writeln!(o, "  resources := {},", self.resources_list(root, ct)?);
+        let _ = writeln!(
+            o,
+            "  resources := {},",
+            self.resources_list(root, ct, &self.checked.expanded.resource_owners)?
+        );
         let _ = writeln!(o, "  mutations := {},", self.mutations_list(root, ct));
         let _ = writeln!(o, "  actions := {},", self.actions_list(&root.actions, ct)?);
         let _ = writeln!(o, "  tasks := {},", self.tasks_list(root)?);
@@ -524,10 +528,13 @@ impl Emitter<'_> {
         Ok(format!("[{}]", derives.join(",\n    ")))
     }
 
+    /// `owners` is the expansion's `resource_owners` for the expanded root,
+    /// empty for a component as declared.
     fn resources_list(
         &self,
         root: &Component,
         ct: &contract_types::ComponentTypes,
+        owners: &[contract_syntax::Owner],
     ) -> Result<String, CompileError> {
         let mut resources = Vec::new();
         for (i, r) in root.resources.iter().enumerate() {
@@ -549,8 +556,17 @@ impl Emitter<'_> {
                 Some(g) => format!(", gate := .some ({})", self.expr(g)?),
                 None => String::new(),
             };
+            // A child's resource (LLP 1035.005.004 D1): the arm whose
+            // instances own it, or `late` for a use outside every region.
+            let owner = match owners.get(i).copied() {
+                Some(contract_syntax::Owner::Arm { tag, arm }) => {
+                    format!(", owner := .some ({tag}, {arm})")
+                }
+                Some(contract_syntax::Owner::Instance) => ", late := true".into(),
+                Some(contract_syntax::Owner::Root) | None => String::new(),
+            };
             resources.push(format!(
-                "{{ name := {}, ty := {}, source := {}, args := {}{each}{gate} }}",
+                "{{ name := {}, ty := {}, source := {}, args := {}{each}{gate}{owner} }}",
                 string(&r.name),
                 ty(&ct.resources[i]),
                 string(&r.source),
@@ -1059,7 +1075,7 @@ impl Emitter<'_> {
                 self.nodes(none)?
             ),
             Node::Use { name, span, .. } => {
-                return Err(refuse(format!("`{name}` was not expanded"), *span))
+                return Err(refuse(format!("`{name}` was not expanded"), *span));
             }
             Node::Children { span } => return Err(refuse("`children` was not expanded", *span)),
         })

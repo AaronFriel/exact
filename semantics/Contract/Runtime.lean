@@ -390,9 +390,15 @@ answered keeps that value and asks nothing, unless the commit refreshes it
 A resource whose `when` is false is idle (LLP 1161.002 D2): its arguments
 are not read and nothing is asked, even when the commit refreshes it; it
 keeps its previous value, or its type's zero, with no arguments, so the
-settlement that opens the gate asks again (D3). -/
+settlement that opens the gate asks again (D3).
+
+A child's resource (LLP 1035.005.004 D1) is asked in the render, by each
+instance (`settleOwned`): here it is idle, so the root holds its type's
+zero, which no root name reads. A late one, a child's used outside every
+region, is idle until `lateReady`: at boot, until the late slots it reads
+are initialized (D2). -/
 def settle (p : Program) (o : Oracle) (slots : List (String × Value)) (now : F64)
-    (prev : Settled := {}) (force : List String := []) : Result Settled :=
+    (prev : Settled := {}) (force : List String := []) (lateReady : Bool := true) : Result Settled :=
   let rec pass : Nat → Settled → Result Settled
     | 0, _ => .error (.refused "settlement did not converge")
     | n + 1, st => do
@@ -425,7 +431,7 @@ def settle (p : Program) (o : Oracle) (slots : List (String × Value)) (now : F6
           | .error .pending => waiting := true
           | .error err => throw err
         | .none =>
-        match gateOpen env r with
+        match (if r.owner.isSome || (r.late && !lateReady) then Except.ok false else gateOpen env r) with
         | .error .pending => waiting := true
         | .error e => throw e
         | .ok false =>
@@ -455,6 +461,89 @@ def settle (p : Program) (o : Oracle) (slots : List (String × Value)) (now : F6
       if !progress then throw (.refused "a cycle among derives and resources")
       pass n st
   pass (p.derives.length + p.resources.length + 2) {}
+
+/-! ## A child's requests (LLP 1035.005.004) -/
+
+/-- The name an instance keeps a request's arguments under, beside its
+value: absent while the request is idle (D2). No authored name has an `@`. -/
+def ownedArgs (x : String) : String := x ++ "@args"
+
+/-- Set `x` in an instance's slots, adding it when absent. -/
+def putSlot (s : List (String × Value)) (x : String) (v : Value) : List (String × Value) :=
+  if (lookup x s).isSome then s.map (fun (y, w) => if x == y then (y, v) else (y, w)) else s ++ [(x, v)]
+
+/-- Whether `x` is a child's resource, one each instance owns. -/
+def isOwned (p : Program) (x : String) : Bool :=
+  p.resources.any fun r => r.name == x && r.owner.isSome
+
+/-- An environment in an instance's rows: each request its rows' instances
+own reads as a resource, holding its value where its type admits it,
+current unless idle. -/
+def Env.withOwned (env : Env) : Env :=
+  let own := env.rows.filter fun (x, v) =>
+    env.prog.resources.any fun r => r.name == x && r.owner.isSome && conforms env.prog v r.ty
+  { env with
+    resources := own ++ env.resources,
+    idle := (own.filter fun (x, _) => (lookup (ownedArgs x) env.rows).isNone).map (·.1) ++
+      env.idle.filter fun x => !isOwned env.prog x }
+
+@[simp] theorem Env.withOwned_prog (env : Env) : env.withOwned.prog = env.prog := rfl
+@[simp] theorem Env.withOwned_slots (env : Env) : env.withOwned.slots = env.slots := rfl
+@[simp] theorem Env.withOwned_derives (env : Env) : env.withOwned.derives = env.derives := rfl
+@[simp] theorem Env.withOwned_rows (env : Env) : env.withOwned.rows = env.rows := rfl
+@[simp] theorem Env.withOwned_now (env : Env) : env.withOwned.now = env.now := rfl
+
+/-- The requests an arm instance owns, settled in its scope (D2): each
+child resource whose owner is the arm, in declaration order, its `when`
+and arguments read with the instance's slots and locals. A request keeps
+its value while its arguments are those the value answers; one asked anew
+asks the oracle, whose every answer is synchronous; a closed `when` keeps
+the value (its type's zero before any), idle, with no arguments, so the
+render that opens it asks again. Passes repeat while a request changes, so
+one whose arguments read another's answer asks on that answer.
+
+Its slots are kept only where each holds a value its slot type admits (a
+request's name is no state's, so any), as `armSlots` checks a fresh slot.
+An evaluation that fails, as a gate or argument reading a pending root
+resource, refuses the render: the semantics models every owned answer as
+synchronous (D2), and nothing here waits. -/
+def settleOwned (fuel : Nat) (o : Oracle) (env : Env) (ls : Locals) (owner : Nat × Nat)
+    (slots : List (String × Value)) : Result (List (String × Value)) :=
+  let rs := env.prog.resources.filter (·.owner == Option.some owner)
+  let rec go : Nat → List (String × Value) → Result (List (String × Value))
+    | 0, _ => .error (.refused "an instance's requests did not settle")
+    | n + 1, slots => do
+      let mut s := slots
+      let mut changed := false
+      for r in rs do
+        let env' := ({ env with rows := s ++ env.rows } : Env).withOwned
+        let isOpen ← match r.gate with
+          | .none => pure true
+          | .some g => do pure ((← eval fuel env' false ls g) matches .bool true)
+        if !isOpen then
+          let v := (lookup r.name s).getD (zeroOf env.prog.shapes (env.prog.shapes.length + 1) r.ty)
+          if !conforms env.prog v r.ty then throw (.refused s!"resource `{r.name}` of the wrong shape")
+          if (lookup r.name s).isNone || (lookup (ownedArgs r.name) s).isSome then changed := true
+          s := (putSlot s r.name v).filter (·.1 != ownedArgs r.name)
+        else
+          let args ← evalList fuel env' false ls r.args
+          let kept := match lookup r.name s, lookup (ownedArgs r.name) s with
+            | .some _, .some (.list old) => argsEq old args
+            | _, _ => false
+          if !kept then
+            let v ← o.ask r.source args r.name
+            if !conforms env.prog v r.ty then throw (.refused s!"resource `{r.name}` of the wrong shape")
+            s := putSlot (putSlot s r.name v) (ownedArgs r.name) (.list args)
+            changed := true
+      if !changed then return s
+      go n s
+  match go (rs.length + 2) slots with
+  | .ok s =>
+    if s.all fun (x, v) => conforms env.prog v (slotTy env.prog x) then .ok s
+    else .error (.refused "an instance's request in a slot of another type")
+  | .error (.unsupported m) => .error (.unsupported m)
+  | .error (.refused m) => .error (.refused m)
+  | .error _ => .error (.refused "an instance's request did not evaluate")
 
 /-! ## Rendering -/
 
@@ -503,6 +592,8 @@ structure RenderCx where
   store : RowStore
   rows : List RowId := []
   tabs : TabCx := {}
+  /-- What the instances' requests ask (LLP 1035.005.004 D2). -/
+  oracle : Oracle := {}
 
 /-- An element's text: the first positional argument, displayed, of a tag
 whose positional is its text (`text`, `tspan`, `option`). -/
@@ -599,8 +690,9 @@ where
     | fuel + 1, cx, ls, tag, arm, body, live => do
       let id : RowId := (cx.rows.head?.getD []) ++ [(tag, Value.num (F64.ofNat arm), 0)]
       let slots ← armSlots fuel cx ls id (tag, arm)
+      let slots ← settleOwned fuel cx.oracle cx.env ls (tag, arm) slots
       let cx' : RenderCx := { cx with
-        env := { cx.env with rows := slots ++ cx.env.rows }, rows := id :: cx.rows,
+        env := Env.withOwned { cx.env with rows := slots ++ cx.env.rows }, rows := id :: cx.rows,
         tabs := cx.tabs.enter (.num (F64.ofNat arm)) }
       render fuel cx' ls body (live ++ [(id, slots)])
   /-- The rows of an `each`, in list order. `seen` holds the keys of the
@@ -620,8 +712,9 @@ where
       -- The row's slots: kept, or initialized from their initializers in
       -- the row's own scope (an initializer may read the item).
       let slots ← armSlots fuel cx ls' id (tag, 0)
+      let slots ← settleOwned fuel cx.oracle cx.env ls' (tag, 0) slots
       let cx' : RenderCx := { cx with
-        env := { cx.env with rows := slots ++ cx.env.rows },
+        env := Env.withOwned { cx.env with rows := slots ++ cx.env.rows },
         rows := id :: cx.rows, tabs := cx.tabs.enter k dup }
       let (vs, live) ← render fuel cx' ls' body (live ++ [(id, slots)])
       let (more, live) ← renderRows fuel cx ls tag x ix key body items (i + 1) (seen ++ [k]) live
@@ -762,6 +855,20 @@ def applyRowWrites (p : Program) (store : RowStore) (rows : List RowId)
         if (RowStore.find [(i, s)] id).isSome then (i, setSlot s x v) else (i, s)
     | .none => store) store
 
+/-- An action's `refresh` of a child's resource reaches only the instance
+whose action ran (LLP 1035.005.004 D5): that request forgets its
+arguments, so the render asks again. An idle one has none to forget. -/
+def refreshOwned (p : Program) (store : RowStore) (rows : List RowId) (names : List String) :
+    RowStore :=
+  names.foldl (fun store x =>
+    match (p.resources.find? (·.name == x)).bind (·.owner) with
+    | .none => store
+    | .some (tag, _) =>
+      match rows.find? (fun id => (id.getLast?.map (·.1)) == Option.some tag) with
+      | .some id => store.map fun (i, s) =>
+          if (RowStore.find [(i, s)] id).isSome then (i, s.filter (·.1 != ownedArgs x)) else (i, s)
+      | .none => store) store
+
 /-- Settle and render against new slots. -/
 def update (p : Program) (o : Oracle) (slots : List (String × Value)) (store : RowStore)
     (now : F64) (prev : Settled := {}) (force : List String := []) (view : List VNode := []) :
@@ -769,7 +876,7 @@ def update (p : Program) (o : Oracle) (slots : List (String × Value)) (store : 
   let st ← settle p o slots now prev force
   let env : Env := { prog := p, slots, derives := st.derives, resources := st.resources, now, idle := st.idle }
   .ok (st, renderTabs fuel
-    { env, store, tabs := { opened := Tabs.visited (tabIndex view), every := o.everyTab } })
+    { env, store, tabs := { opened := Tabs.visited (tabIndex view), every := o.everyTab }, oracle := o })
 
 /-- Whether the router slot, if the program has one, holds a valid router
 (`Route.routerOf`). -/
@@ -993,8 +1100,8 @@ def runAction (p : Program) (o : Oracle) (c : Config) (name : String) (args : Li
     if a.params.length != args.length then refuse (.refused "arity") else
     if !((a.params.zip args).all fun (q, v) => argOk p q v) then
       refuse (.refused "an argument of the wrong type") else
-    let env : Env := { prog := p, slots := c.slots, derives := c.settled.derives,
-                       resources := c.settled.resources, rows := rowSlots c.store rows, now := c.now, idle := c.settled.idle }
+    let env : Env := ({ prog := p, slots := c.slots, derives := c.settled.derives,
+                        resources := c.settled.resources, rows := rowSlots c.store rows, now := c.now, idle := c.settled.idle } : Env).withOwned
     let ls : Locals := ((a.params.map (·.1)).zip args).reverse
     match exec fuel env ls a.body {} with
     | .error e => refuse e
@@ -1020,7 +1127,7 @@ def runAction (p : Program) (o : Oracle) (c : Config) (name : String) (args : Li
         -- The router slot must hold a valid router after every commit (the
         -- runner's `router_change`): a forged value is refused.
         if !routerValid p slots then refuse (.refused "an invalid router value") else
-        let store := applyRowWrites p c.store rows fx.rowWrites
+        let store := refreshOwned p (applyRowWrites p c.store rows fx.rowWrites) rows fx.refreshes
         match update p o slots store c.now c.settled fx.refreshes c.view with
         | .error e => refuse e
         | .ok (st, r) =>
@@ -1183,17 +1290,22 @@ def boot (p : Program) (o : Oracle) : Config × Outcome :=
     match startTimers p slots with
     | .error e => (empty, .refused e)
     | .ok timers =>
-      match settle p o slots 0 with
+      match settle p o slots 0 (lateReady := false) with
       | .error e => (empty, .refused e)
       | .ok st =>
       match lateSlots p st slots with
       | .error e => (empty, .refused e)
       | .ok slots =>
+      -- A late resource reads the late slots just made: settle again
+      -- (LLP 1035.005.004 D2), as the runner does only when there is one.
+      match (if p.resources.any (·.late) then settle p o slots 0 st else Except.ok st) with
+      | .error e => (empty, .refused e)
+      | .ok st =>
       match gateStep p slots st 0 timers with
       | .error e => (empty, .refused e)
       | .ok timers =>
       let env : Env := { prog := p, slots, derives := st.derives, resources := st.resources, now := 0, idle := st.idle }
-      match renderTabs fuel { env, store := [], tabs := { every := o.everyTab } } with
+      match renderTabs fuel { env, store := [], tabs := { every := o.everyTab }, oracle := o } with
       | .ok (view, live) =>
         ({ slots, settled := st, store := live, view, now := 0, timers }, .ok)
       -- A view that fails to render at boot fails the boot: there is no
@@ -1225,9 +1337,9 @@ def dispatch (p : Program) (o : Oracle) (c : Config) (target : String) (event : 
     | .some (_, a, args) =>
       if payload.isSome && n.control.isSome then
         (c, .refused (.unsupported s!"a payload for a `{n.control.getD ""}` control")) else
-      let env : Env := { prog := p, slots := c.slots, derives := c.settled.derives,
-                         resources := c.settled.resources, rows := rowSlots c.store n.rows,
-                         now := c.now, idle := c.settled.idle }
+      let env : Env := ({ prog := p, slots := c.slots, derives := c.settled.derives,
+                          resources := c.settled.resources, rows := rowSlots c.store n.rows,
+                          now := c.now, idle := c.settled.idle } : Env).withOwned
       match evalList fuel env false n.locals args with
       | .error e => (c, .refused e)
       | .ok vs => runAction p o c a (vs ++ payload.toList) n.rows

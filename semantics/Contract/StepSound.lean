@@ -120,10 +120,13 @@ theorem ConfigOK.armNexts {p : Program} {c : Config} (hc : ConfigOK p c) : Confi
 
 /-- The environment an action or a handler's arguments evaluate in. -/
 theorem ConfigOK.envGood {p : Program} {c : Config} (hc : ConfigOK p c) (hpres : SlotsPresent p c.slots)
-    (rows : List RowId) :
-    EnvGood p { prog := p, slots := c.slots, derives := c.settled.derives,
-                resources := c.settled.resources, rows := rowSlots c.store rows, now := c.now, idle := c.settled.idle } :=
-  ⟨rfl, hc.slots, hpres, hc.store.rowSlots rows, hc.settled.1, hc.settled.2⟩
+    (rows : List RowId) : EnvGood p (actionEnv p c rows) :=
+  EnvGood.withOwned ⟨rfl, hc.slots, hpres, hc.store.rowSlots rows, hc.settled.1, hc.settled.2⟩
+
+/-- Every resource is settled in the environment an action reads. -/
+theorem Complete.actionEnv {p : Program} {c : Config} (h : Complete p c.settled) (rows : List RowId) :
+    Complete p { derives := (actionEnv p c rows).derives, resources := (actionEnv p c rows).resources } :=
+  Complete.withOwned ⟨h.1, h.2⟩
 
 /-! ## Pieces of a commit -/
 
@@ -138,6 +141,28 @@ theorem agree_of_conforms {p : Program} (hp : WellTyped p) :
     exact .cons (argOk_valTy hp.shapes hc.1 (hcomp (x, t) (by simp)))
       (agree_of_conforms hp (by simpa using hl) hc.2 fun q hq => hcomp q (by simp [hq]))
   | [], _ :: _, hl, _, _ | _ :: _, [], hl, _, _ => by simp at hl
+
+/-- Forgetting a request's arguments keeps every row's slots typed. -/
+theorem StoreOK.refreshOwned {p : Program} {rows : List RowId} {store : RowStore} {names : List String}
+    (h : StoreOK p store) : StoreOK p (Contract.refreshOwned p store rows names) := by
+  unfold Contract.refreshOwned
+  induction names generalizing store with
+  | nil => exact h
+  | cons x names ih =>
+    simp only [List.foldl_cons]
+    apply ih
+    split
+    · exact h
+    · split
+      · intro i s hm
+        simp only [List.mem_map] at hm
+        obtain ⟨⟨i', s'⟩, hm', he⟩ := hm
+        split at he
+        · simp only [Prod.mk.injEq] at he; obtain ⟨rfl, rfl⟩ := he
+          exact fun y w hy => h _ _ hm' y w (List.mem_filter.mp hy).1
+        · simp only [Prod.mk.injEq] at he; obtain ⟨rfl, rfl⟩ := he
+          exact h _ _ hm'
+      · exact h
 
 theorem StoreOK.applyRowWrites {p : Program} {rows : List RowId} :
     ∀ {store : RowStore} {ws : List (String × Value)}, StoreOK p store →
@@ -187,7 +212,7 @@ theorem update_good {p : Program} (hp : WellTyped p) {o slots store now prev for
   unfold update
   cases hst : settle p o slots now prev force with
   | error e =>
-    have := settle_strict (o := o) (now := now) (force := force) N.resources
+    have := settle_strict (o := o) (now := now) (force := force) (lateReady := true) N.resources
       (settleEnvOK hp (hpres.of _) (fun _ _ hx _ => hs.valTy hp hx)) hprev
     rw [hst] at this; exact this
   | ok st =>
@@ -276,8 +301,9 @@ theorem runAction_sound {p : Program} (hp : WellTyped p) {o c name args rows c' 
   have hloc : LocalsOK p a.params.reverse ((a.params.map (·.1)).zip args).reverse :=
     (Agree.reverse (agree_of_conforms hp (by simpa using hlen) (by simpa using hconf)
       (hp.params a ham))).localsOK
-  have hexec := exec_sound_E (n := fuel) hfn (fun _ h hn => ⟨h, hn⟩) hp.actions ((hc.envGood hpres rows).envOKE hp hcomp) hloc
+  have hexec := exec_sound_E (n := fuel) hfn (fun _ h hn => ⟨h, hn⟩) hp.actions ((hc.envGood hpres rows).envOKE hp (hcomp.actionEnv rows)) hloc
     (hp.actions a ham)
+  unfold actionEnv at hexec
   split at h
   · next e he => rw [he] at hexec; exact keep h hexec
   next fx hx =>
@@ -338,7 +364,7 @@ theorem runAction_sound {p : Program} (hp : WellTyped p) {o c name args rows c' 
         simpa using hconf
     · exact hw w (List.mem_append_left _ hw')
   have hup := update_good (view := c.view) (o := o) (now := c.now) (force := fx.refreshes) hp hok hpres'
-    (hc.store.applyRowWrites (rows := rows) hrow) hc.settled
+    (StoreOK.refreshOwned (rows := rows) (names := fx.refreshes) (hc.store.applyRowWrites (rows := rows) hrow)) hc.settled
   split at h
   · next e he => rw [he] at hup; exact keep h hup
   next st r hu =>
@@ -360,7 +386,7 @@ theorem runAction_sound {p : Program} (hp : WellTyped p) {o c name args rows c' 
   | error e =>
     simp only [Prod.mk.injEq] at h
     obtain ⟨rfl, rfl⟩ := h
-    exact ⟨⟨hok, .inl ⟨hpres', hcm⟩, hst, hc.store.applyRowWrites hrow, hc.view, hc.timers⟩,
+    exact ⟨⟨hok, .inl ⟨hpres', hcm⟩, hst, StoreOK.refreshOwned (hc.store.applyRowWrites hrow), hc.view, hc.timers⟩,
       Legitimate.of_strict hr⟩
 
 /-! ## A queued send's commit -/
@@ -440,7 +466,7 @@ theorem handler_args_good {p : Program} (hp : WellTyped p) {c : Config} {n : VNo
   obtain ⟨a, ha, Γ, ts, hl, hts, hle⟩ := hc.view n hn h hh
   have hfn : ProgOK p := ⟨hp.fns, hp.routeShapes⟩
   exact ⟨a, ha, ts, hle, fun hpres hcomp =>
-    evalList_sound_E hfn (fun _ h hn => ⟨h, hn⟩) ((hc.envGood hpres n.rows).envOKE hp hcomp) hl hts⟩
+    evalList_sound_E hfn (fun _ h hn => ⟨h, hn⟩) ((hc.envGood hpres n.rows).envOKE hp (hcomp.actionEnv n.rows)) hl hts⟩
 
 theorem VNode.In.ne_nil {n : VNode} {vs : List VNode} (h : VNode.In n vs) : vs ≠ [] := by
   cases h <;> simp
@@ -798,6 +824,15 @@ theorem boot_configOK {p : Program} (hp : WellTyped p) (o : Oracle) : ConfigOK p
     rw [hg, hk]; exact hp.taskGates t htk
   split at hb
   · exact empty hb
+  next st₂ hst₂ =>
+  have hst₂' : SettledOK p st₂ ∧ Complete p st₂ := by
+    split at hst₂
+    · exact ⟨settle_settledOK N.resources hsettled hst₂, settle_complete hst₂⟩
+    · cases hst₂; exact ⟨hsettled, hcomp⟩
+  clear hsettled hcomp
+  obtain ⟨hsettled, hcomp⟩ := hst₂'
+  split at hb
+  · exact empty hb
   next timers' ht' =>
   have htimers : TimersOK p timers' := htimers₀.gateStep ht'
   dsimp only at hb
@@ -806,8 +841,8 @@ theorem boot_configOK {p : Program} (hp : WellTyped p) (o : Oracle) : ConfigOK p
     simp only [Prod.mk.injEq] at hb
     obtain ⟨rfl, -⟩ := hb
     have hrender := renderTabs_good hp (E := Legit) (fun _ h _ => h) fuel
-      (cx := { env := { prog := p, slots, derives := st.derives, resources := st.resources, now := 0, idle := st.idle },
-               store := [], tabs := { every := o.everyTab } })
+      (cx := { env := { prog := p, slots, derives := st₂.derives, resources := st₂.resources, now := 0, idle := st₂.idle },
+               store := [], tabs := { every := o.everyTab }, oracle := o })
       ⟨rfl, hs, hpres, RowsOK.nil, hsettled.1, hsettled.2⟩ (.inr trivial) StoreOK.nil
     rw [hr] at hrender
     exact ⟨hs, .inl ⟨hpres, hcomp⟩, hsettled, hrender.2, hrender.1, htimers⟩
