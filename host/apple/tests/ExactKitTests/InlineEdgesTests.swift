@@ -111,6 +111,36 @@ final class InlineEdgesTests: XCTestCase {
         XCTAssertEqual(margined.width, bare.width, accuracy: 0.05)
     }
 
+    /// Above and below its text a box's background covers its padding and
+    /// border too, which move no line (CSS 2 §10.6.1): Chrome paints
+    /// `<span style="padding:3px 0 12px;background:#ddd">code</span>` 15 px
+    /// taller than its font's content area, from 3 px above it. A box around
+    /// it paints its own, not the inner box's.
+    func testABackgroundCoversItsBlockPadding() throws {
+        let gray: [Double] = [242, 242, 247, 255], red: [Double] = [255, 0, 0, 255]
+        var bare = run("code"), padded = bare
+        bare.background = gray; bare.backgroundBox = 9
+        padded.background = gray; padded.backgroundBox = 9; (padded.backgroundAbove, padded.backgroundBelow) = (3, 12)
+        func fills(_ runs: [Run]) -> (Paragraph, [TextLinePaint.Fill]) {
+            let p = engine.paragraph(spec(runs), width: .infinity)
+            return (p, TextLinePaint.backgrounds(p.lines[0], at: .zero))
+        }
+        let (plain, b) = fills([run("a "), bare, run(" b")]), (tall, t) = fills([run("a "), padded, run(" b")])
+        let short = try XCTUnwrap(b.first?.rect), rect = try XCTUnwrap(t.first?.rect)
+        XCTAssertEqual(rect.minY, short.minY - 3, accuracy: 0.05)
+        XCTAssertEqual(rect.height, short.height + 15, accuracy: 0.05)
+        XCTAssertEqual(rect.width, short.width, accuracy: 0.05, "no wider")
+        XCTAssertEqual(tall.height, plain.height, "the line is as tall")
+        var inner = padded
+        inner.outerBackgrounds = [OuterBackground(color: red, box: 8, radii: [], before: 0, after: 0, above: 1, below: 2)]
+        let nested = fills([run("a "), inner, run(" b")]).1
+        XCTAssertEqual(nested.count, 2, "\(nested)")
+        guard nested.count == 2 else { return }
+        XCTAssertEqual(nested[0].rect.minY, short.minY - 1, accuracy: 0.05, "the outer box's own")
+        XCTAssertEqual(nested[0].rect.height, short.height + 3, accuracy: 0.05)
+        XCTAssertEqual(nested[1].rect, rect)
+    }
+
     /// Boxes inside one another each paint their own background into their
     /// own padding, the inner over the outer (CSS 2 Appendix E), as Chrome
     /// paints `<span style="padding:0 2px;background:A;border-radius:4px">p

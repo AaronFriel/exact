@@ -278,12 +278,20 @@ impl<D: DataSource> Host<D> {
                     );
                 }
                 // How far its padding box stands out from its text: what its
-                // background covers beside its glyphs.
+                // background covers beside its glyphs, and above and below
+                // them ("start end above below").
                 let reach = run.inline_background_reach();
-                if !reach.is_empty() {
+                let (over, under) = run.inline_background_block_reach();
+                if !reach.is_empty() || over != 0.0 || under != 0.0 {
                     props.insert(
                         "inlinePad",
-                        format!("{} {}", style::num(reach.start), style::num(reach.end)),
+                        format!(
+                            "{} {} {} {}",
+                            style::num(reach.start),
+                            style::num(reach.end),
+                            style::num(over),
+                            style::num(under)
+                        ),
                     );
                 }
                 // A run painting an inherited `color` that moves (LLP 1062 D5).

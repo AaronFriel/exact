@@ -76,6 +76,8 @@ package struct Run: Hashable {
     package var backgroundRadii: [InlineRadius] = []
     /// How far that box's padding box stands out from its first and last characters: its background covers it. Paint.
     package var backgroundBefore: CGFloat = 0, backgroundAfter: CGFloat = 0
+    /// How far it stands above and below the run's content area, which the line makes no room for (CSS 2 §10.6.1). Paint.
+    package var backgroundAbove: CGFloat = 0, backgroundBelow: CGFloat = 0
     /// The boxes around that one with backgrounds of their own, nearest first. Paint.
     package var outerBackgrounds: [OuterBackground] = []
     /// CSS visibility hides ink without changing shaping or descendant visibility.
@@ -113,7 +115,8 @@ package struct Run: Hashable {
               lhs.strikeColor == rhs.strikeColor, lhs.href == rhs.href,
               lhs.hidden == rhs.hidden, lhs.fixedInk == rhs.fixedInk, lhs.background == rhs.background, lhs.backgroundBox == rhs.backgroundBox,
               lhs.backgroundRadii == rhs.backgroundRadii, lhs.shadow == rhs.shadow, lhs.stroke == rhs.stroke,
-              lhs.backgroundBefore == rhs.backgroundBefore, lhs.backgroundAfter == rhs.backgroundAfter, lhs.outerBackgrounds == rhs.outerBackgrounds,
+              lhs.backgroundBefore == rhs.backgroundBefore, lhs.backgroundAfter == rhs.backgroundAfter,
+              lhs.backgroundAbove == rhs.backgroundAbove, lhs.backgroundBelow == rhs.backgroundBelow, lhs.outerBackgrounds == rhs.outerBackgrounds,
               lhs.indent == rhs.indent, lhs.hang == rhs.hang, lhs.box == rhs.box, lhs.atomIcon == rhs.atomIcon,
               lhs.inlineStart == rhs.inlineStart, lhs.inlineEnd == rhs.inlineEnd else { return false }
         // CoreText's ranges address the original UTF16 source. Swift String's
@@ -152,6 +155,8 @@ package struct Run: Hashable {
         hasher.combine(backgroundRadii)
         hasher.combine(backgroundBefore)
         hasher.combine(backgroundAfter)
+        hasher.combine(backgroundAbove)
+        hasher.combine(backgroundBelow)
         hasher.combine(outerBackgrounds)
         hasher.combine(hidden)
         hasher.combine(fixedInk)

@@ -82,11 +82,13 @@ final class PresentedText: TextPresentation {
             let f = a[.font] as! PlatformFont
             let (ascent, descent) = CSSLineBox.content(f as CTFont, scale: scale)
             let outer = r.outerBackgrounds.map {
-                InlineBackground(color: TextEngine.color($0.color).cgColor, ascent: ascent, descent: descent, box: $0.box, radii: $0.radii, reach: ($0.before, $0.after), opacity: $0.opacity)
+                InlineBackground(color: TextEngine.color($0.color).cgColor, ascent: ascent, descent: descent, box: $0.box, radii: $0.radii,
+                                 reach: ($0.before, $0.after, $0.above, $0.below), opacity: $0.opacity)
             }
             a[.exactBackground] = InlineBackground(color: fill.cgColor, ascent: ascent, descent: descent,
                                                    box: r.backgroundBox, radii: r.backgroundRadii,
-                                                   reach: (r.backgroundBefore, r.backgroundAfter), outer: outer, opacity: r.backgroundOpacity)
+                                                   reach: (r.backgroundBefore, r.backgroundAfter, r.backgroundAbove, r.backgroundBelow),
+                                                   outer: outer, opacity: r.backgroundOpacity)
         }
     }
     /// Every inline box's extent in the paragraph, once its runs are set,
@@ -107,13 +109,14 @@ final class PresentedText: TextPresentation {
             guard let inner = value as? InlineBackground, inner.box != 0 else { return }
             // Its boxes, outermost first, each as deep as the boxes around it.
             for (depth, fill) in ([inner] + inner.outer).reversed().enumerated() {
-                tabled = tabled || !fill.radii.isEmpty || fill.reach.before != 0 || fill.reach.after != 0 || !inner.outer.isEmpty
+                tabled = tabled || !fill.radii.isEmpty || fill.reach != (0, 0, 0, 0) || !inner.outer.isEmpty
                 if let i = at[fill.box] {
                     boxes[i].extent = NSUnionRange(boxes[i].extent, range)
                 } else {
                     at[fill.box] = boxes.count
                     boxes.append(InlineBoxes.Box(extent: range, radii: fill.radii, color: fill.color, depth: depth,
-                                                 before: fill.reach.before, after: fill.reach.after, opacity: fill.opacity))
+                                                 before: fill.reach.before, after: fill.reach.after,
+                                                 above: fill.reach.above, below: fill.reach.below, opacity: fill.opacity))
                 }
             }
         }
@@ -223,8 +226,15 @@ extension TextEngine {
             TextLinePaint.draw(line, at: origin, in: ctx, pass: pass)
         }
         if let dirty {
-            p.inkBounds().forEachLine(from: dirty.minY - bounds.minY,
-                                     through: dirty.maxY - bounds.minY, paint)
+            // A background's block padding paints past its line's ink, by as
+            // much as any box's (`Run.backgroundAbove`).
+            var above: CGFloat = 0, below: CGFloat = 0
+            for run in spec.runs where run.background != nil {
+                above = run.outerBackgrounds.reduce(max(above, run.backgroundAbove)) { max($0, $1.above) }
+                below = run.outerBackgrounds.reduce(max(below, run.backgroundBelow)) { max($0, $1.below) }
+            }
+            p.inkBounds().forEachLine(from: dirty.minY - bounds.minY - below,
+                                     through: dirty.maxY - bounds.minY + above, paint)
         } else {
             for index in p.lines.indices { paint(index) }
         }
@@ -245,7 +255,8 @@ extension TextEngine {
 /// The content area is the run's own font's, as the web's inline box is.
 /// `box`, `radii` and `reach` are the run's box, its `border-radius` and
 /// how far its padding box stands out from its text (`before` its first
-/// character, `after` its last), and `outer` the boxes around it with
+/// character, `after` its last, `above` and `below` its content area,
+/// which moves no line), and `outer` the boxes around it with
 /// backgrounds, nearest first, until `PresentedText.finish` puts the
 /// paragraph's table of boxes in their place.
 final class InlineBackground: NSObject, @unchecked Sendable {
@@ -254,12 +265,12 @@ final class InlineBackground: NSObject, @unchecked Sendable {
     let descent: CGFloat
     let box: UInt32
     let radii: [InlineRadius]
-    let reach: (before: CGFloat, after: CGFloat)
+    let reach: (before: CGFloat, after: CGFloat, above: CGFloat, below: CGFloat)
     let outer: [InlineBackground]
     let boxes: InlineBoxes?
     let opacity: [InlineOpacity]
     init(color: CGColor, ascent: CGFloat, descent: CGFloat, box: UInt32 = 0, radii: [InlineRadius] = [],
-         reach: (before: CGFloat, after: CGFloat) = (0, 0), outer: [InlineBackground] = [], boxes: InlineBoxes? = nil, opacity: [InlineOpacity] = []) {
+         reach: (before: CGFloat, after: CGFloat, above: CGFloat, below: CGFloat) = (0, 0, 0, 0), outer: [InlineBackground] = [], boxes: InlineBoxes? = nil, opacity: [InlineOpacity] = []) {
         self.opacity = opacity
         self.color = color; self.ascent = ascent; self.descent = descent
         self.box = box; self.radii = radii.contains { !$0.isZero } ? radii : []; self.reach = reach; self.outer = outer; self.boxes = boxes
@@ -283,7 +294,7 @@ final class InlineBackground: NSObject, @unchecked Sendable {
 final class InlineBoxes: NSObject {
     struct Box: Equatable {
         var extent: NSRange; let radii: [InlineRadius]; let color: CGColor; let depth: Int
-        var before: CGFloat = 0, after: CGFloat = 0
+        var before: CGFloat = 0, after: CGFloat = 0, above: CGFloat = 0, below: CGFloat = 0
         var opacity: [InlineOpacity] = []
     }
     let boxes: [Box]
@@ -443,8 +454,9 @@ enum TextLinePaint {
             if rtl ? starts.contains(b) : ends.contains(b) { kept[right][1] = true; kept[right][2] = true }
         }
         return merged.indices.map { i in
-            let piece = merged[i], fill = piece.fill
-            let rect = CGRect(x: origin.x + piece.lo, y: origin.y - fill.ascent, width: piece.hi - piece.lo, height: fill.ascent + fill.descent)
+            let piece = merged[i], fill = piece.fill, box = piece.box.flatMap { fill.boxes?.boxes[$0] }
+            let above = fill.ascent + (box?.above ?? 0), below = fill.descent + (box?.below ?? 0)
+            let rect = CGRect(x: origin.x + piece.lo, y: origin.y - above, width: piece.hi - piece.lo, height: above + below)
             guard let b = piece.box, let radii = fill.boxes?.boxes[b].radii, !radii.isEmpty else { return Fill(rect: rect, path: nil, color: piece.color, opacity: piece.box.flatMap { fill.boxes?.boxes[$0].opacity } ?? fill.opacity) }
             let corners = zip(radii, kept[i]).map { radius, kept in
                 kept ? CGSize(width: radius.length(basis: rect.width), height: radius.length(basis: rect.height)) : .zero

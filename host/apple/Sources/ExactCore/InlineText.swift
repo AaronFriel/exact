@@ -46,9 +46,10 @@ package struct InlineText {
         if let edges = props["inlineEdges"]?.split(separator: " ").compactMap({ Float($0) }), edges.count == 2 {
             value.inlineStart = CGFloat(edges[0]); value.inlineEnd = CGFloat(edges[1])
         }
-        // Its padding box's reach past its text, which its background covers.
-        if let pad = props["inlinePad"]?.split(separator: " ").compactMap({ Float($0) }), pad.count == 2 {
+        // Its padding box's reach past its text, which its background covers ("start end above below").
+        if let pad = props["inlinePad"]?.split(separator: " ").compactMap({ Float($0) }), pad.count == 4 {
             value.backgroundBefore = CGFloat(pad[0]); value.backgroundAfter = CGFloat(pad[1])
+            value.backgroundAbove = CGFloat(pad[2]); value.backgroundBelow = CGFloat(pad[3])
         }
         // An image in the text is its box, with no ink or paint of its own (LLP 1011.002).
         boxShown = props["inlineBoxHidden"] != "true"
@@ -96,16 +97,20 @@ public struct InlineOpacity: Hashable {
 
 /// A box with a background around a run's own (`Run.background`), which
 /// paints under it: its colour, node, `border-radius` and padding box's
-/// reach past its first and last characters, as the run's own fields.
+/// reach past its first and last characters and above and below its text,
+/// as the run's own fields.
 package struct OuterBackground: Hashable {
     package var opacity: [InlineOpacity] = []
     package var color: [Double]
     package var box: UInt32
     package var radii: [InlineRadius]
     package var before: CGFloat, after: CGFloat
-    package init(color: [Double], box: UInt32, radii: [InlineRadius], before: CGFloat, after: CGFloat, opacity: [InlineOpacity] = []) {
+    package var above: CGFloat = 0, below: CGFloat = 0
+    package init(color: [Double], box: UInt32, radii: [InlineRadius], before: CGFloat, after: CGFloat,
+                 above: CGFloat = 0, below: CGFloat = 0, opacity: [InlineOpacity] = []) {
         self.opacity = opacity
         self.color = color; self.box = box; self.radii = radii; self.before = before; self.after = after
+        self.above = above; self.below = below
     }
 }
 
