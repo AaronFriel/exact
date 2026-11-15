@@ -223,6 +223,7 @@ impl<D: DataSource> Runner<D> {
         request.reach = self.reach_of(self.ticket_origin(ticket));
         let p = &mut self.pending[pos];
         p.ticket = next;
+        p.completion = None;
         p.continuation = request.continuation;
         p.fetch = None;
         p.keepable = None;

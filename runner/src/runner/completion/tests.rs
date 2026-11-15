@@ -1,5 +1,7 @@
 use super::*;
-use crate::{Answer, DataError, FailureKind, Request, Response, Store, SurfaceOutcome, Value};
+use crate::{
+    Answer, DataError, FailureKind, InFlight, Request, Response, Store, SurfaceOutcome, Value,
+};
 use exact_kernel::{Kernel, NodeType};
 use exact_plan::{asm::Asm, builder::PlanBuilder, Plan, TypeKind};
 
@@ -7,6 +9,8 @@ use exact_plan::{asm::Asm, builder::PlanBuilder, Plan, TypeKind};
 struct Source {
     parses: usize,
     stream: bool,
+    race: bool,
+    landed: Vec<(u64, Outcome)>,
 }
 
 impl DataSource for Source {
@@ -18,7 +22,8 @@ impl DataSource for Source {
         if args == [Value::Number(0.)] {
             return Ok(Answer::Now(Value::Number(0.)));
         }
-        let request = Request::get("https://example.test/answer");
+        let mut request = Request::get("https://example.test/answer");
+        request.wake_ms = self.race.then_some(10);
         Ok(if self.stream {
             Answer::stream(request)
         } else {
@@ -40,6 +45,25 @@ impl DataSource for Source {
             }
             _ => Answer::Now(Value::Number(self.parses as f64)),
         })
+    }
+
+    fn timer_before_reply(
+        &mut self,
+        _: &Store,
+        _: InFlight<'_>,
+        _: Option<u64>,
+    ) -> Option<(u64, Request)> {
+        self.race.then(|| (7, Request::continuation(8)))
+    }
+
+    fn module_landed(
+        &mut self,
+        _: &mut Store,
+        token: u64,
+        outcome: Outcome,
+    ) -> Result<(), DataError> {
+        self.landed.push((token, outcome));
+        Ok(())
     }
 }
 
@@ -192,6 +216,59 @@ fn each_continuation_gets_authority_for_its_new_request() {
         .unwrap();
     assert_eq!(r.data().parses, 2);
     assert!(!r.has_pending());
+}
+
+#[test]
+fn timer_race_refusal_keeps_the_continuation_and_adopted_fetch_authorities_apart() {
+    for hand_out in [false, true] {
+        let mut r = Runner::boot(
+            plan(),
+            Source {
+                race: true,
+                ..Default::default()
+            },
+            Kernel::with_monospace(),
+            Default::default(),
+            "/",
+        )
+        .unwrap();
+        let fetch = request(&mut r);
+        assert_eq!(r.data_timer_due_ms(), Some(10.));
+        r.advance(10.).unwrap();
+        let next = r
+            .pending()
+            .into_iter()
+            .find(|(name, _)| name == "answer")
+            .unwrap()
+            .1;
+        assert_ne!(next, fetch.ticket);
+        if hand_out {
+            let continuation = request(&mut r);
+            assert_eq!(continuation.ticket, next);
+            assert_eq!(continuation.request.continuation, Some(8));
+        }
+        r.fulfill_measured(
+            next,
+            Outcome::Failed {
+                kind: FailureKind::Refused,
+                message: "continuation refused".into(),
+            },
+            None,
+        )
+        .unwrap()
+        .unwrap();
+        assert!(!r.holds(next), "the refusal settles the continuation");
+        assert!(r.holds(fetch.ticket), "the fetch still runs as module work");
+        assert!(r.data().landed.is_empty());
+        assert_eq!(r.data().parses, 1);
+        assert_eq!(r.resource("answer"), Some(&Value::Number(1.)));
+
+        r.deliver(capability(&fetch), completion(response("late")))
+            .unwrap();
+        assert_eq!(r.data().landed, vec![(7, response("late"))]);
+        assert!(!r.holds(fetch.ticket));
+        assert!(!r.has_pending());
+    }
 }
 
 #[test]
