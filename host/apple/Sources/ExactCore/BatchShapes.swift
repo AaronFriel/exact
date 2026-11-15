@@ -166,3 +166,35 @@ extension BatchValue {
     package var adapterString: String? { any as? String }
     package var adapterBool: Bool? { any as? Bool }
 }
+
+// Foundation's numeric adapter casts accept booleans; a field's `[Double]`
+// rectangle does not. Keep those wire semantics (LLP 1172.001 §4 step 4).
+extension BatchValue {
+    package var adapterNumber: Double? {
+        switch self {
+        case .number(let n): return n
+        case .bool(let b): return b ? 1 : 0
+        default: return nil
+        }
+    }
+    package var adapterID: UInt32? { adapterNumber.map { NSNumber(value: $0).uint32Value } }
+    package var adapterIDs: [UInt32]? {
+        guard let values = array else { return nil }
+        let ids = values.compactMap(\.adapterID)
+        return ids.count == values.count ? ids : nil
+    }
+    package var adapterPadding: [CGFloat?]? {
+        guard let values = array, values.count == 4 else { return nil }
+        return values.map { $0.adapterNumber.map { CGFloat($0) } }
+    }
+    package var adapterRect: CGRect? { Self.rectangle(numbers) }
+    package var adapterNumberRect: CGRect? {
+        guard let values = array else { return nil }
+        let numbers = values.compactMap(\.adapterNumber)
+        return numbers.count == values.count ? Self.rectangle(numbers) : nil
+    }
+    private static func rectangle(_ values: [Double]?) -> CGRect? {
+        guard let values, values.count == 4 else { return nil }
+        return CGRect(x: values[0], y: values[1], width: values[2], height: values[3])
+    }
+}

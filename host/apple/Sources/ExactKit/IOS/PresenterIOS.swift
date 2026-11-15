@@ -996,17 +996,17 @@ package final class Presenter {
                 if flats.isFlat(id) { flats.promote(id) }
                 if let owner = views[id] {
                     let before = owner.layoutHits?.bounds ?? []
-                    owner.layoutHits = LayoutHits(owner, op.payload)
+                    owner.layoutHits = LayoutHits(owner, op.layoutBoxes)
                     if owner.layoutHits?.bounds ?? [] != before { flats.boundsChanged(id) }
                 }
             case .layoutHitsWithdrawn:
-                if let owner = views[id], let ids = op.payload["ids"] as? [NSNumber] {
+                if let owner = views[id], let ids = op.withdrawnIDs {
                     let before = owner.layoutHits?.bounds ?? []
-                    owner.layoutHits = owner.layoutHits?.without(Set(ids.map(\.uint32Value)))
+                    owner.layoutHits = owner.layoutHits?.without(Set(ids))
                     if owner.layoutHits?.bounds ?? [] != before { flats.boundsChanged(id) }
                 }
             case .layoutPromote:
-                placedAnew.append(contentsOf: promoteLayoutBox(id, op.payload))
+                placedAnew.append(contentsOf: promoteLayoutBox(id, op))
             case .sticky:
                 if flats.isFlat(id) { flats.promote(id) }
                 stickies.apply(id, op.payload)
@@ -1035,7 +1035,7 @@ package final class Presenter {
             case .frame, .content, .fieldContent:
                 if flats.isFlat(id) {
                     if kind == .frame { flats.frame(id, CGRect(x: op.x, y: op.y, width: op.w, height: op.h)) }
-                    if kind == .fieldContent { flats.content(id, op.payload) }
+                    if kind == .fieldContent { flats.content(id, op) }
                     return
                 }
                 if kind == .frame { pool.framed(id) }

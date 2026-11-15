@@ -309,9 +309,8 @@ final class FlatLeaves {
         leaf.layer.opacity = leaf.opacity
     }
 
-    func content(_ id: UInt32, _ payload: [String: Any]) {
-        let r = payload["rect"] as? [Double]
-        leaves[id]?.content = r.flatMap { $0.count == 4 ? (CGRect(x: $0[0], y: $0[1], width: $0[2], height: $0[3]), NodeView.sentPadding(payload)) : nil }
+    func content(_ id: UInt32, _ op: BatchOp) {
+        leaves[id]?.content = op.contentRect.map { ($0, op.contentPadding) }
     }
 
     func frame(_ id: UInt32, _ rect: CGRect) {

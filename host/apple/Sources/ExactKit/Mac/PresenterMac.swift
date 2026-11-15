@@ -1261,7 +1261,7 @@ package final class Presenter {
                 guard let v = views[id] else { continue }
                 applyFrame(v, NSRect(x: op.x, y: op.y, width: op.w, height: op.h))
             case .fieldContent:
-                views[id]?.applyFieldContent(op.payload)
+                views[id]?.applyFieldContent(op)
             case .content:
                 if let v = views[id] {
                     v.content = CGSize(width: op.w, height: op.h)

@@ -2,6 +2,7 @@ import Foundation
 import CoreText
 // Independent Foundation oracle, never linked into the app.
 @testable import ExactKit
+@testable import ExactCore
 // @ref LLP 1044.000 §6 S8 — decode the existing Apple JSON wire once, before
 // presentation. Style names/values still come from kernel/tables/schema.json;
 // this is a consumer of that wire, not another declaration table.
@@ -57,6 +58,7 @@ extension CodingUserInfoKey {
 struct OracleBatchOp: Decodable {
     enum Kind: String {
         case create, props, style, children, paragraph, frame, content, present, roots, destroy
+        case layoutHits, layoutHitsWithdrawn, layoutPromote
         case fieldContent, flow, surface, command, hold, collections, region, router, title, language, unknown
         case svg, animations, canvas2d, reorder, exit, rank, roles
         case sound // LLP 1096 D8, as Batch's: a real session's boot sends its voice table's files
@@ -393,5 +395,48 @@ extension NodeView {
     /// `border` (`contentOp`), for a view a test makes without a presenter
     func applyContentBox(padding: [Double], border: [Double] = [0, 0, 0, 0]) {
         applyFieldContent(contentOp(Int(id), bounds.width, bounds.height, padding: padding, border: border))
+    }
+}
+
+// Preserve the pre-record Foundation conversions independently of the schema.
+extension OracleBatchOp {
+    var contentRect: CGRect? {
+        guard let r = payload["rect"] as? [Double], r.count == 4 else { return nil }
+        return CGRect(x: r[0], y: r[1], width: r[2], height: r[3])
+    }
+    var contentPadding: [CGFloat?]? {
+        guard let sides = payload["padding"] as? [Any], sides.count == 4 else { return nil }
+        return sides.map { ($0 as? NSNumber).map { CGFloat($0.doubleValue) } }
+    }
+    var layoutBoxes: [LayoutBoxRecord]? {
+        guard let boxes = payload["boxes"] as? [[Any]], !boxes.isEmpty else { return nil }
+        return boxes.compactMap { box in
+            guard box.count >= 3, let f = box[1] as? [NSNumber], f.count == 4, let id = box[2] as? NSNumber else { return nil }
+            return LayoutBoxRecord(before: (box[0] as? NSNumber)?.uint32Value,
+                frame: CGRect(x: f[0].doubleValue, y: f[1].doubleValue, width: f[2].doubleValue, height: f[3].doubleValue),
+                id: id.uint32Value, end: box.count > 3 ? (box[3] as? NSNumber)?.uint32Value : nil)
+        }
+    }
+    var layoutFrame: CGRect? {
+        guard let f = payload["frame"] as? [NSNumber], f.count == 4 else { return nil }
+        return CGRect(x: f[0].doubleValue, y: f[1].doubleValue, width: f[2].doubleValue, height: f[3].doubleValue)
+    }
+    var layoutChildren: [LayoutChildRecord]? {
+        guard let children = payload["children"] as? [[Any]] else { return nil }
+        return children.compactMap { pair in
+            guard pair.count == 2, let id = pair[0] as? NSNumber,
+                  let f = pair[1] as? [NSNumber], f.count == 4 else { return nil }
+            return LayoutChildRecord(id: id.uint32Value,
+                frame: CGRect(x: f[0].doubleValue, y: f[1].doubleValue, width: f[2].doubleValue, height: f[3].doubleValue))
+        }
+    }
+}
+
+extension NodeView {
+    func applyFieldContent(_ payload: [String: Any]) {
+        var object = payload
+        object["op"] = "fieldContent"
+        let data = try! JSONSerialization.data(withJSONObject: ["ops": [object]])
+        applyFieldContent(Batch.decode(data).ops[0])
     }
 }

@@ -4,6 +4,11 @@ import { fileURLToPath } from 'node:url';
 
 const codecs = {
   inlineStyle: ['InlineStyle', 'InlineStyle()', 'inlineStyle()'],
+  adapterRect: ['CGRect?', 'nil', 'value().adapterRect'],
+  adapterNumberRect: ['CGRect?', 'nil', 'value().adapterNumberRect'],
+  adapterPadding: ['[CGFloat?]?', 'nil', 'value().adapterPadding'],
+  adapterID: ['UInt32?', 'nil', 'value().adapterID'],
+  adapterIDs: ['[UInt32]?', 'nil', 'value().adapterIDs'],
   adapterRank: ['Int64?', 'nil', 'value().adapterRank'],
   adapterString: ['String?', 'nil', 'value().adapterString'],
   adapterBool: ['Bool?', 'nil', 'value().adapterBool'],
@@ -154,12 +159,39 @@ function runPaintDispatch(rows) {
   return lines.join('\n');
 }
 
+function arrayReaders(arrays) {
+  const lines = [];
+  for (const array of arrays) {
+    const fields = Object.entries(array.fields);
+    lines.push(`package struct ${array.type}: Equatable {`);
+    for (const [name, field] of fields) {
+      const type = codecs[field.codec][0];
+      lines.push(`    package let ${name}: ${field.required ? type.replace(/\?$/, '') : type}`);
+    }
+    lines.push('}', '', 'extension BatchValue {',
+      `    package var ${array.codec}: [${array.type}]? {`,
+      `        guard let rows = self.array, rows.allSatisfy({ $0.array != nil })${array.nonempty ? ', !rows.isEmpty' : ''} else { return nil }`,
+      '        return rows.compactMap { row in',
+      `            guard let values = row.array, values.count ${array.count ? '== ' + array.count : '>= ' + array.minimum} else { return nil }`);
+    for (const [name, field] of fields) {
+      const value = `values[${field.index}].${field.codec}`;
+      lines.push(field.required ? `            guard let ${name} = ${value} else { return nil }`
+        : `            let ${name} = values.count > ${field.index} ? ${value} : nil`);
+    }
+    lines.push(`            return ${array.type}(${fields.map(([name]) => `${name}: ${name}`).join(', ')})`,
+      '        }', '    }', '}', '');
+  }
+  return lines.join('\n');
+}
+
 export function appleBatchReader(schema) {
   const records = schema.appleBatch.records;
+  const arrays = schema.appleBatch.arrays ?? [];
+  const readers = { ...codecs, ...Object.fromEntries(arrays.map(a => [a.codec, [`[${a.type}]?`, 'nil', `value().${a.codec}`]])) };
   const members = new Map();
   for (const record of records) for (const field of Object.values(record.fields ?? {})) {
-    if (!codecs[field.codec]) throw new Error(`unknown Apple batch codec: ${field.codec}`);
-    const [type, empty] = codecs[field.codec];
+    if (!readers[field.codec]) throw new Error(`unknown Apple batch codec: ${field.codec}`);
+    const [type, empty] = readers[field.codec];
     const declaration = `${type} = ${field.default === undefined ? empty : quoted(field.default)}`;
     if (members.has(field.member) && members.get(field.member) !== declaration) throw new Error(`conflicting Apple batch member: ${field.member}`);
     members.set(field.member, declaration);
@@ -192,7 +224,7 @@ export function appleBatchReader(schema) {
     '        case (_, "id"): op.nodeID = try id()',
   ];
   for (const record of records) for (const [key, field] of Object.entries(record.fields ?? {})) {
-    lines.push(`        case (.${identifier(record.name)}, ${quoted(key)}): op.${field.member} = ${field.codec === 'handlers' ? '' : 'try '}${codecs[field.codec][2]}`);
+    lines.push(`        case (.${identifier(record.name)}, ${quoted(key)}): op.${field.member} = ${field.codec === 'handlers' ? '' : 'try '}${readers[field.codec][2]}`);
   }
   lines.push('        default: if op.isTypedPayload { _ = try value() } else { try skip() }', '        }', '    }', '}', '',
     'extension BatchFields {',
@@ -210,15 +242,15 @@ export function appleBatchReader(schema) {
         number: `number(${q}) ?? ${quoted(field.default ?? 0)}`, optionalNumber: `number(${q})`,
         props: `strings(${q})`, style: `CalculatedLength.decode(object(${q}))`, values: `object(${q})`,
         strings: `array(${q}, Self.string)`, handlers: `Set(try array(${q}, Self.string))`,
-        adapterRank: `value(${q})?.adapterRank`, adapterString: `value(${q})?.adapterString`, adapterBool: `value(${q})?.adapterBool`,
+        ...Object.fromEntries([...Object.keys(codecs).filter(c => c.startsWith('adapter')), ...arrays.map(a => a.codec)].map(c => [c, `value(${q})?.${c}`])),
         ids: `array(${q}, Self.id)`, inline: `array(${q}) { try Self(Self.object($0)).inline(colorChannels: colorChannels) }`,
       };
-      lines.push(`            op.${field.member} = ${field.codec === 'handlers' || field.codec.startsWith('adapter') ? '' : 'try '}${reads[field.codec]}`);
+      lines.push(`            op.${field.member} = ${field.codec === 'handlers' || field.codec.startsWith('adapter') || arrays.some(a => a.codec === field.codec) ? '' : 'try '}${reads[field.codec]}`);
     }
   }
   lines.push('        default: op.payload = fields.mapValues(\\.any)',
     '        }', '        return op', '    }', '}', '');
-  return lines.join('\n') + '\n' + envelopeReader(schema.appleBatch.envelope) + '\n' + nativeTimerReader(schema.appleBatch.nativeTimer) + '\n' + inlineReaders(schema.appleBatch.inline, schema.styles) + '\n' + inlineStyleDispatch(schema.styles) + '\n' + runPaintDispatch(schema.styles);
+  return lines.join('\n') + '\n' + arrayReaders(arrays) + '\n' + envelopeReader(schema.appleBatch.envelope) + '\n' + nativeTimerReader(schema.appleBatch.nativeTimer) + '\n' + inlineReaders(schema.appleBatch.inline, schema.styles) + '\n' + inlineStyleDispatch(schema.styles) + '\n' + runPaintDispatch(schema.styles);
 }
 
 export function writeAppleBatchReader() {

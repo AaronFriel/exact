@@ -4,9 +4,9 @@
 import UIKit
 
 extension Presenter {
-    func promoteLayoutBox(_ id: UInt32, _ payload: [String: Any]) -> [UInt32] {
-        guard let parent = (payload["parent"] as? NSNumber).flatMap({ views[$0.uint32Value] }),
-              let box = views[id], let rect = payload["frame"] as? [NSNumber], rect.count == 4 else { return [] }
+    func promoteLayoutBox(_ id: UInt32, _ op: BatchOp) -> [UInt32] {
+        guard let parent = op.layoutParent.flatMap({ views[$0] }),
+              let box = views[id], let rect = op.layoutFrame else { return [] }
         var token: LayoutHit?
         var above: UIView? = parent
         while let view = above {
@@ -19,15 +19,10 @@ extension Presenter {
         box.promotedLayoutHit = token
         var moved = [id]
         // Restore the previous geometry even when new layout is withheld.
-        func frame(_ values: [NSNumber]) -> CGRect {
-            CGRect(x: values[0].doubleValue, y: values[1].doubleValue, width: values[2].doubleValue, height: values[3].doubleValue)
-        }
-        applyFrame(box, frame(rect))
-        let keep = Set((payload["keep"] as? [NSNumber] ?? []).map(\.uint32Value))
-        for pair in payload["children"] as? [[Any]] ?? [] {
-            guard pair.count == 2, let number = pair[0] as? NSNumber,
-                  let values = pair[1] as? [NSNumber], values.count == 4 else { continue }
-            let id = number.uint32Value, rect = frame(values)
+        applyFrame(box, rect)
+        let keep = Set(op.layoutKeep ?? [])
+        for record in op.layoutChildren ?? [] {
+            let id = record.id, rect = record.frame
             guard let child = views[id] else { flats.frame(id, rect); continue }
             moved.append(id)
             let move: () -> Void = {
@@ -152,18 +147,16 @@ final class LayoutHits {
         return kept.isEmpty ? nil : LayoutHits(owner, boxes: kept.map(\.0), ends: kept.map(\.1))
     }
 
-    init?(_ owner: NodeView, _ payload: [String: Any]) {
-        guard let boxes = payload["boxes"] as? [[Any]], !boxes.isEmpty else { return nil }
+    init?(_ owner: NodeView, _ boxes: [LayoutBoxRecord]?) {
+        guard let boxes else { return nil }
         self.owner = owner
         let previous = Dictionary(owner.layoutTokens.map { ($0.id, $0) }, uniquingKeysWith: { old, _ in old })
         var ends: [UInt32?] = []
-        self.boxes = boxes.compactMap { box in
-            guard box.count >= 3, let f = box[1] as? [NSNumber], f.count == 4, let id = box[2] as? NSNumber else { return nil }
-            let token = previous[id.uint32Value] ?? LayoutHit(id.uint32Value, owner: owner)
+        self.boxes = boxes.map { box in
+            let token = previous[box.id] ?? LayoutHit(box.id, owner: owner)
             token.adopt(owner)
-            ends.append(box.count > 3 ? (box[3] as? NSNumber)?.uint32Value : nil)
-            return ((box[0] as? NSNumber)?.uint32Value,
-                    CGRect(x: f[0].doubleValue, y: f[1].doubleValue, width: f[2].doubleValue, height: f[3].doubleValue), token)
+            ends.append(box.end)
+            return (box.before, box.frame, token)
         }
         self.ends = ends
     }

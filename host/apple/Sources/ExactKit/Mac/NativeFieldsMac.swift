@@ -210,11 +210,10 @@ extension NodeView {
         }
         applyTextChecking(editor)
     }
-    func applyFieldContent(_ payload: [String: Any]) {
-        let r = payload["rect"] as? [Double]
-        let box = r.flatMap { $0.count == 4 ? NSRect(x: $0[0], y: $0[1], width: $0[2], height: $0[3]) : nil }
-        applyKernelContentBox(box, padding: NodeView.sentPadding(payload))
-        let cell = box != nil && payload["cell"] as? Bool == true
+    func applyFieldContent(_ op: BatchOp) {
+        let box = op.contentRect
+        applyKernelContentBox(box, padding: op.contentPadding)
+        let cell = box != nil && op.fieldCell == true
         if cell != fieldInCell {
             fieldInCell = cell
             styleNativeField()
