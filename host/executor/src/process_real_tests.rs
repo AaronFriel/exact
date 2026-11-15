@@ -67,6 +67,7 @@ fn core_in(grants: &str, dir: &std::path::Path) -> (Core, Receiver<()>) {
 
 fn request(ticket: u64, body: serde_json::Value, stream: bool) -> RequestOut {
     RequestOut {
+        completion: None,
         class: exact_runner::RequestClass::Ordered,
         ticket,
         target: "server".into(),

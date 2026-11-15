@@ -1336,6 +1336,7 @@ mod tests {
         let mut extra = Batch::new();
         extra.surface_work(
             &RequestOut {
+                completion: None,
                 class: exact_runner::RequestClass::Ordered,
                 ticket: 7,
                 target: "continue".into(),
@@ -1351,6 +1352,7 @@ mod tests {
         let mut refused = Batch::new();
         refused.surface_work(
             &RequestOut {
+                completion: None,
                 class: exact_runner::RequestClass::Ordered,
                 ticket: 8,
                 target: "save".into(),

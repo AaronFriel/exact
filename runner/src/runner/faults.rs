@@ -313,6 +313,7 @@ mod tests {
                 _ => {}
             }
             let out = RequestOut {
+                completion: None,
                 ticket: 1,
                 target: "live".into(),
                 request,

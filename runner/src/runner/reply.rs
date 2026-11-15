@@ -53,6 +53,27 @@ impl<D: DataSource> Runner<D> {
         outcome: Outcome,
         timing: Option<crate::CompletionTiming>,
     ) -> Result<Option<CommitReceipt>, RunnerError> {
+        let completion = Completion::Reply { outcome, timing };
+        let capability = self
+            .pending
+            .iter()
+            .find(|p| p.ticket == ticket)
+            .and_then(|p| p.completion.as_ref())
+            .and_then(CompletionReply::take);
+        match capability {
+            Some(capability) => self.deliver(capability, completion),
+            // Streams, retained work and replies whose records are already gone
+            // keep their integer protocol during carry (LLP 1172.019 §2 item 1).
+            None => self.deliver_reply(ticket, completion),
+        }
+    }
+
+    pub(super) fn deliver_reply(
+        &mut self,
+        ticket: u64,
+        completion: Completion,
+    ) -> Result<Option<CommitReceipt>, RunnerError> {
+        let Completion::Reply { outcome, timing } = completion;
         // A let-go request's reply: it has ended, and an abort names it no more.
         self.retired_fetches.retain(|r| r.1 != ticket);
         let answering = std::mem::replace(&mut self.churn.answering, true);

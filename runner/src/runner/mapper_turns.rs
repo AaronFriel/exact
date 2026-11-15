@@ -149,6 +149,7 @@ impl<D: DataSource> Runner<D> {
         behind.out = Some((ticket, held));
         behind.fetch = request.fetch;
         self.requests.push(RequestOut {
+            completion: None,
             class: crate::RequestClass::Ordered,
             ticket,
             target: name,

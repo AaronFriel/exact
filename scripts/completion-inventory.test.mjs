@@ -30,6 +30,18 @@ test('every source entry has exactly one ownership inference with evidence', () 
   assert.ok(text.includes('durable when the ticket names'));
 }, 60_000);
 
+test('every public Runner receipt entry is enumerated and classified', () => {
+  const result = inventory();
+  const entries = result.entries.filter(e => e.host === 'runner' &&
+    e.symbol.startsWith('Runner::') && (e.returnsReceipt || e.returnsCommitAggregate));
+  const listing = entries.map(e => `${e.id}: ${e.family ?? 'UNCLASSIFIED'}`).join('\n');
+  assert.ok(entries.some(e => e.symbol === 'Runner::deliver'), listing);
+  for (const entry of entries) {
+    assert.ok(entry.family && entry.protocol?.length && entry.lifetime && entry.class && entry.evidence, listing);
+  }
+  assert.deepEqual(result.errors, [], `${listing}\n${result.errors.join('\n')}`);
+}, 60_000);
+
 test('new runner APIs, host exports, adapters and mint sites cannot pass unclassified', () => {
   const root = mkdtempSync(join(tmpdir(), 'exact-completion-inventory-'));
   try {

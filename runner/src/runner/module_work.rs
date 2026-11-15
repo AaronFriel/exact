@@ -165,6 +165,7 @@ impl<D: DataSource> Runner<D> {
                 self.module_work.fetches.insert(fetch, ticket);
             }
             self.requests.push(RequestOut {
+                completion: None,
                 class: RequestClass::Ordered,
                 ticket,
                 target: NAME.into(),
@@ -359,6 +360,7 @@ impl<D: DataSource> Runner<D> {
                             .tickets
                             .insert(next, (token, authority.clone()));
                         r.requests.push(RequestOut {
+                            completion: None,
                             class: crate::RequestClass::Ordered,
                             ticket: next,
                             target: NAME.into(),

@@ -781,6 +781,7 @@ impl Executing {
 }
 fn read(ticket: u64, request: Request) -> exact_runner::RequestOut {
     exact_runner::RequestOut {
+        completion: None,
         ticket,
         target: "feed".into(),
         request,
