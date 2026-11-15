@@ -21,6 +21,7 @@
 //! - [`transition`] — the declaration, and CSS's rules for starting,
 //!   interrupting, and reversing a transition.
 //! - [`path`] — a path's `d` as a value, and when two interpolate.
+//! - [`length`] — `translate` as px plus a percentage, `calc()` included.
 //! - [`color`] — CSS colours as premultiplied values (LLP 1055.000 D6).
 //! - [`animation`] — CSS `@keyframes` and `animation`, sampled in closed form
 //!   (LLP 1055 D5).
@@ -45,6 +46,7 @@ pub mod easing;
 pub mod engine;
 pub mod filter;
 pub mod gesture;
+pub mod length;
 pub mod math;
 pub mod parse;
 pub mod path;

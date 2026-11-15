@@ -2,7 +2,7 @@
 //! `translate`'s z, and `perspective`. The `rotate` attribute sets angle
 //! and axis rows together; the motion seam joins them into one rotation.
 
-use super::{parse_pixel_length, StyleId, StyleValueError, Vec2};
+use super::{parse_pixel_length, Dimension, StyleId, StyleValueError, Vec2};
 
 #[cfg(target_arch = "wasm32")]
 type Parsers = (
@@ -115,39 +115,57 @@ fn axis_only(text: &str) -> Option<[f32; 3]> {
     }
 }
 
-/// `translate`'s x and y: each a length in px (unitless zero allowed) or a
-/// percentage of the node's own border box, as `(lengths, percentages)` —
-/// an axis is one or the other, the other part zero. `none` is deliberately
-/// not zero: CSS gives the two different containing-block and stacking
-/// semantics. A third length is z, its own row (LLP 1077 D8); `calc()` is
-/// refused.
+/// `translate`'s x and y: each a `<length-percentage>` of the node's own
+/// border box (CSS Transforms 2 §5.1), as `(lengths, percentages)`: a
+/// length in px (unitless zero allowed), a percentage, or a math function
+/// that simplifies to px plus a percentage (`calc(50% - 12px)`), the used
+/// value their sum. `none` is deliberately not zero: CSS gives the two
+/// different containing-block and stacking semantics. A third length is z,
+/// its own row (LLP 1077 D8).
 pub fn translate(text: &str) -> Option<(Vec2, Vec2)> {
-    // CSS whitespace is TAB, LF, FF, CR and SPACE; ASCII VT is not included.
-    let mut parts = text
-        .split(['\t', '\n', '\u{c}', '\r', ' '])
-        .filter(|s| !s.is_empty());
-    let axis = |token: &str| match token.strip_suffix('%') {
-        Some(n) => parse_pixel_length(&format!("{n}px")).map(|p| (0.0, p)),
-        None => parse_pixel_length(token).map(|l| (l, 0.0)),
-    };
-    let (x, px) = axis(parts.next()?)?;
-    let (y, py) = parts.next().map_or(Some((0.0, 0.0)), axis)?;
-    if parts
-        .next()
-        .is_some_and(|z| parse_pixel_length(z).is_none())
-        || parts.next().is_some()
-    {
-        return None;
+    let parts = super::sides::values(text);
+    let (x, px) = translate_axis(parts.first()?)?;
+    let (y, py) = parts
+        .get(1)
+        .map_or(Some((0.0, 0.0)), |p| translate_axis(p))?;
+    match parts[..] {
+        [_] | [_, _] => {}
+        [_, _, z] if translate_length(z).is_some() => {}
+        _ => return None,
     }
     Some((Vec2 { x, y }, Vec2 { x: px, y: py }))
 }
 
+/// One axis of `translate` as its px and its percentage.
+fn translate_axis(token: &str) -> Option<(f32, f32)> {
+    if let Some(n) = token.strip_suffix('%') {
+        return parse_pixel_length(&format!("{n}px")).map(|p| (0.0, p));
+    }
+    match parse_pixel_length(token) {
+        Some(l) => Some((l, 0.0)),
+        None => match Dimension::parse_calc(token)? {
+            Dimension::Points(l) => Some((l, 0.0)),
+            Dimension::Percent(p) => Some((0.0, p)),
+            Dimension::Calc(p, l) => Some((l, p)),
+            _ => None,
+        },
+    }
+}
+
+/// `translate`'s z: a length in px, or a math function of px alone (CSS
+/// takes no percentage there).
+fn translate_length(token: &str) -> Option<f32> {
+    parse_pixel_length(token).or_else(|| match Dimension::parse_calc(token)? {
+        Dimension::Points(l) => Some(l),
+        _ => None,
+    })
+}
+
 /// `translate`'s z: its third length, 0 when it has two or fewer.
 pub fn translate_z(text: &str) -> Option<f32> {
-    let words: Vec<&str> = text.split_ascii_whitespace().collect();
-    match words[..] {
+    match super::sides::values(text)[..] {
         [_] | [_, _] => Some(0.0),
-        [_, _, z] => parse_pixel_length(z),
+        [_, _, z] => translate_length(z),
         _ => None,
     }
 }
@@ -205,9 +223,10 @@ pub(crate) fn f32_row(
             || wrong("an angle, and optionally an axis: `x`, `y`, `z` or three numbers"),
             Ok,
         ),
-        (StyleId::TranslateZ, StyleValue::Text(t)) => {
-            translate_z(t).map_or_else(|| wrong("up to three lengths in px"), Ok)
-        }
+        (StyleId::TranslateZ, StyleValue::Text(t)) => translate_z(t).map_or_else(
+            || wrong("a z length in px, or a calc() of px, after x and y"),
+            Ok,
+        ),
         // `translate: -50%` has no z.
         (StyleId::TranslateZ, StyleValue::Percent(p)) if p.is_finite() => Ok(0.0),
         (StyleId::Perspective, StyleValue::Text(t)) => {
@@ -304,5 +323,45 @@ mod tests {
         assert_eq!(perspective("none"), Some(0.0));
         assert_eq!(perspective("800px"), Some(800.0));
         assert_eq!(perspective("-1px"), None);
+    }
+
+    #[test]
+    fn translate_takes_math_functions_of_px_and_a_percentage() {
+        let v = |x, y| Vec2 { x, y };
+        let t = |text| translate(text);
+        assert_eq!(
+            t("calc(50% - 12px) calc(-100% + 4px)"),
+            Some((v(-12.0, 4.0), v(50.0, -100.0)))
+        );
+        assert_eq!(t("calc(10px * 2) 50%"), Some((v(20.0, 0.0), v(0.0, 50.0))));
+        assert_eq!(
+            t("calc((50% + 1in) / 2)"),
+            Some((v(48.0, 0.0), v(25.0, 0.0)))
+        );
+        assert_eq!(t("max(4px, 2px)"), Some((v(4.0, 0.0), v(0.0, 0.0))));
+        assert_eq!(
+            t("calc(50%) 0 calc(2px + 3px)"),
+            Some((v(0.0, 0.0), v(50.0, 0.0)))
+        );
+        assert_eq!(translate_z("calc(50%) 0 calc(2px + 3px)"), Some(5.0));
+        // What two rows of px and a percentage cannot hold, and z's percentage.
+        for refused in [
+            "calc(1rem + 50%)",
+            "calc(10vw)",
+            "max(10px, 50%)",
+            "env(safe-area-inset-top)",
+            "calc(50% * 50%)",
+            "0 0 calc(10% + 1px)",
+            "0 0 0 0",
+        ] {
+            assert_eq!(t(refused), None, "{refused}");
+        }
+        let mut s = crate::StyleProps::default();
+        s.set_dynamic(
+            crate::StyleId::TranslatePercent,
+            &crate::StyleValue::Text("calc(50% - 12px) 0".into()),
+        )
+        .unwrap();
+        assert_eq!(s.translate_percent, v(50.0, 0.0));
     }
 }

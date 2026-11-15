@@ -6094,11 +6094,13 @@ routes or not. Elsewhere the area is undefined, so give it a fallback (`contract
 (write `0px`, not `0`), a `var()` naming neither a design token nor one of those four, more than 32 values or 32 levels (LLP 1001 §2,
 "Comparisons").
 
-`translate` takes one or two lengths, each in px or a percentage of the box's own
-border box, as CSS's does: `left="50%" top="50%" translate="-50% -50%"` on an
-absolute box centres it, a percentage follows the box's size, and transitions and
-keyframes interpolate the two parts as CSS does a `calc()`. `calc()` itself is
-refused.
+`translate` takes one or two lengths, each in px, a percentage of the box's own
+border box, or a `calc()` of the two, as CSS's does: `left="50%" top="50%"
+translate="-50% -50%"` on an absolute box centres it, a percentage follows the box's
+size, and `translate="calc(50% - 12px) 0"` adds a px offset to it. Transitions and
+keyframes interpolate the px and the percentage separately, as CSS interpolates a
+`calc()`, so any two values interpolate. A `rem`, viewport or `env()` length, or a
+`min()`/`max()` that does not simplify to px plus a percentage, is refused.
 
 Transitions animate translate/scale/rotate/opacity, box paint (color,
 background-color, border colors, -exact-tint-color, box-shadow), SVG paint/geometry

@@ -617,7 +617,7 @@ impl StyleValue<'_> {
                     .map(|(px, pct)| if style == StyleId::Translate { px } else { pct })
                     .ok_or(StyleValueError::WrongKind {
                         style,
-                        expected: "one or two lengths in px or percentages of the box (unitless zero allowed)",
+                        expected: "one or two lengths, each px (unitless zero allowed), a percentage of the box, or a calc() of px and a percentage such as calc(50% - 12px), then an optional z length in px",
                     })
             }
             // `translate: -50%`: one percentage, the x's, which the

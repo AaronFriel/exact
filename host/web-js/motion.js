@@ -41,16 +41,14 @@ export async function engine({ clock, wall, views, viewId, hooks, say, inflight 
   const held = view => [...holds.values()].includes(view);
   const ended = serial => { const view = holds.get(serial); holds.delete(serial); if (!held(view)) authored.delete(view); };
   // `[translate, scale, rotate, opacity, transition, velocity]` as the plan binds them:
-  // translate is one or two lengths in px or percentages of the box (kernel
-  // `space::translate`), rotate angle and axis; a value the row refuses is the
-  // row's initial one.
+  // translate is lengths in px and percentages of the box, `calc()` included
+  // (`exact_motion::length`), rotate angle and axis; a value the row refuses
+  // is the row's initial one.
   const num = (v, d) => { const n = typeof v === 'number' ? v : parseFloat(v); return Number.isFinite(n) ? n : d; };
   const observe = (id, [tr, scale, rotate, opacity, transition, velocity]) => {
     let n = nodes.get(id);
     if (!n) nodes.set(id, n = {});
-    const parts = typeof tr === 'string' ? tr.trim().split(/\s+/) : [];
-    const axis = p => p.endsWith('%') ? [0, num(p.slice(0, -1), 0)] : [num(p, 0), 0];
-    const [[x, px], [y, py]] = [axis(parts[0] ?? '0'), axis(parts[1] ?? '0')];
+    const [x, y, px, py] = typeof tr === 'string' && w.m_translate(put(tr)) ? [0, 1, 2, 3].map(i => w.m_scratch(i)) : [0, 0, 0, 0];
     if (n.transition !== transition) { n.transition = transition; if (!w.m_transitions(id, put(transition ?? '')) && transition) say(`motion: transition ${JSON.stringify(transition)} refused`); }
     const speed = typeof velocity === 'string' ? velocity.trim().split(/\s+/).map(v => /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(v) ? Math.fround(Number(v)) : NaN) : [];
     const supplied = speed.length === 2 && speed.every(Number.isFinite);

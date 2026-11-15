@@ -895,6 +895,7 @@ component App
       view testId="aliases" transform="translateX(3px) rotateZ(0.5turn) scale(2, 2)"
       view testId="y" transform="translateY(-4px)"
       view testId="percent" transform="translate(-50%, 8px) scale(80%)"
+      view testId="calc" transform="translateY(calc(-100% + 4px))"
       text "Moved" testId="text" transform="translate(2px, 3px)"
       button testId="button" transform="scale(1.2)"
         text "Move"
@@ -931,6 +932,7 @@ component App
         ("aliases", ((3.0, 0.0), (0.0, 0.0), 180.0, 2.0)),
         ("y", ((0.0, -4.0), (0.0, 0.0), 0.0, 1.0)),
         ("percent", ((0.0, 8.0), (-50.0, 0.0), 0.0, 0.8)),
+        ("calc", ((0.0, 4.0), (0.0, -100.0), 0.0, 1.0)),
         ("text", ((2.0, 3.0), (0.0, 0.0), 0.0, 1.0)),
         ("button", ((0.0, 0.0), (0.0, 0.0), 0.0, 1.2)),
         ("class", shifted),

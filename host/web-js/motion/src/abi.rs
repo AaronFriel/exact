@@ -51,6 +51,18 @@ pub extern "C" fn m_transitions(node: f64, len: u32) -> u32 {
     state().transitions(node as u64, &text) as u32
 }
 
+/// A bound `translate`, the input's `len` bytes of CSS text, as its lengths
+/// and its percentages of the box in the scratch: 1 when it is one, else 0.
+#[no_mangle]
+pub extern "C" fn m_translate(len: u32) -> u32 {
+    let text = unsafe { String::from_utf8_lossy(&IO[..len as usize]).into_owned() };
+    let Some(v) = exact_motion::length::translate(&text, true) else {
+        return 0;
+    };
+    unsafe { SCRATCH = [v.x, v.y, v.z, v.w] };
+    1
+}
+
 /// A node's four targets after a commit at `now` seconds: translate as its
 /// lengths and its percentages of the box.
 #[no_mangle]
