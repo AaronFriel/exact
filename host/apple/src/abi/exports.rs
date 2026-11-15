@@ -645,6 +645,11 @@ macro_rules! host {
             let retained = ::std::rc::Rc::new($crate::content_region::NativeRegionOwner::new(owner, release));
             $crate::abi::with_runtime(&EXACT_RUNTIMES, rt, false, |b, _| b.region_complete(id, metrics, retained), |n| n)
         }
+        /// Return only a current worker request to native layout.
+        #[no_mangle]
+        pub extern "C" fn exact_region_fallback(rt: u32, id: u64) -> u32 {
+            $crate::abi::with_runtime(&EXACT_RUNTIMES, rt, false, |b, _| b.region_fallback(id), |n| n)
+        }
 
         /// Process one frozen paired transform packet from exact_in.
         #[no_mangle]

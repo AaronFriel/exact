@@ -1,5 +1,5 @@
 //! @ref LLP 1043.000 §3 D5–D7 — CoreText advances into the shared walker.
-//! Handles are thread-confined, never reused; stale/null handles are harmless.
+//! Handles are process-wide, never reused; stale/null handles are harmless.
 //! Pointer buffers are borrowed only during a call. Non-null pointers must name
 //! valid, aligned buffers of the stated length, as with the measure callback.
 #![allow(unsafe_code)]

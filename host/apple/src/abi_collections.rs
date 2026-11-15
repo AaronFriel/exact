@@ -181,6 +181,15 @@ impl<D: DataSource> Bridge<D> {
             .unwrap_or_else(not_booted);
         self.emit(text)
     }
+    /// Return a current incomplete flow to native layout.
+    pub fn region_fallback(&mut self, id: u64) -> u32 {
+        let text = self
+            .host
+            .as_mut()
+            .map(|h| h.fallback_region_text(id))
+            .unwrap_or_else(not_booted);
+        self.emit(text)
+    }
     /// Deliver one native retained artifact; even stale/not-booted takes ownership.
     pub fn region_complete(
         &mut self,

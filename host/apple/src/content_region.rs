@@ -188,10 +188,7 @@ impl RegionState {
     }
 }
 pub(crate) fn same(a: &RegionTextRequest, b: &RegionTextRequest) -> bool {
-    a.ticket() == b.ticket()
-        && a.stamp() == b.stamp()
-        && a.offer() == b.offer()
-        && a.catalog() == b.catalog()
+    a == b
 }
 fn unique(kernel: &Kernel, name: &str) -> Result<NodeKey, String> {
     if name.is_empty() {

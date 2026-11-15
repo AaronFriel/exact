@@ -26,6 +26,7 @@ use exact_motion::Property;
 use std::fmt::Write as _;
 
 mod axes;
+pub(crate) use axes::{font_axes_json, font_features_json};
 #[cfg(test)]
 mod crossing_tests;
 #[cfg(test)]

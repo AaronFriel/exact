@@ -133,6 +133,7 @@ enum ResetGate {
         "surfaceRecord(_:_:)": "an old canvas publisher released during teardown: its release must not clear a kept launch answer, and the new publishers record their own",
         "canvasPerformanceRecord(_:_:)": "an old canvas publisher's performance sample or release; the new publishers report their own metrics",
         "regionComplete(_:)": "an old generation's region artifact: `RegionController` drops one from another generation before it is told, and the new tree asks its own",
+        "regionFallback(_:)": "an old generation's flow fallback: `RegionController` checks generation and the current request before it is told",
         "fulfillSurface(_:kind:body:now:)": "an old-tree surface completing as its view goes: `completeSurface` drops a completion from another generation before it is told",
         // Told again before the reset returns (Session `presentCommitted`, `applyTogether`): moot.
         "setPreferences(_:)": "the person's preferences: `tellTime` tells the new runtime them again (`tellPreferences`)",

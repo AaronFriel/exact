@@ -52,6 +52,7 @@ final class RegionTextSource: Sendable {
     let rasterFormat: (space: CGColorSpace, headroom: Float, deep: Bool)
     let strut: RegionFont?
     let strutExplicit: Bool
+    let flowFontSize: CGFloat
     let align: Int
     let direction: Int
     let lineClamp: Int
@@ -61,6 +62,7 @@ final class RegionTextSource: Sendable {
     let language: String
     let hyphenated: Bool
     let emergencyBreaks: [Int]
+    let emergencyHyphens: Bool
     /// CSS `text-wrap-style: balance` (`Spec.balance`).
     let balance: Bool
     /// CSS `white-space` (`Spec.whiteSpace`): what of a line's trailing spaces
@@ -112,9 +114,11 @@ final class RegionTextSource: Sendable {
         rasterFormat = TextRasterJob.format(paints)
         let base = spec.strut ?? spec.runs.first
         strut = base.map(font); strutExplicit = base?.lineHeight != nil
+        flowFontSize = base?.size ?? 0
         align = spec.align; direction = spec.direction; lineClamp = spec.lineClamp; overflowWrap = spec.overflowWrap
         textIndent = spec.firstLineIndent; hyphens = spec.hyphens; language = spec.language
         hyphenated = !spec.source.inserted.isEmpty; emergencyBreaks = spec.emergencyBreaks
+        emergencyHyphens = spec.emergencyHyphens
         textBox = (spec.textBoxTrim, spec.textBoxOver, spec.textBoxUnder)
         balance = spec.balance
         whiteSpace = spec.whiteSpace

@@ -231,4 +231,7 @@ extension Runtime {
                 }))
         }
     }
+    func regionFallback(_ request: UInt64) -> Batch {
+        on { read(exact_region_fallback(rt, request)) }
+    }
 }
