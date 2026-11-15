@@ -1610,6 +1610,45 @@ is `true` in a binary baked with production trust (for example, Apple's
 `--release`, `--distribution`, or `exact release`) and `false` in a development
 build.
 
+## Install a development build beside the release one (variants)
+
+A variant is the app under another identity, so a development or staging build installs beside the store's
+build instead of replacing it and its data (LLP 1030.008). Declare it in `app.json`:
+
+```json
+"env": ["API_BASE_URL"],
+"variants": {
+  "dev": {
+    "idSuffix": ".dev",
+    "name": "Shelf Dev",
+    "icons": [{ "src": "assets/icon-dev.png", "sizes": "1024x1024", "type": "image/png", "purpose": "any" }],
+    "env": { "API_BASE_URL": "https://staging.example" }
+  }
+}
+```
+
+and select it with `--variant dev` (or `EXACT_VARIANT=dev`; the flag wins): `bun exact.mjs ios --variant dev
+--run`, `bun exact.mjs android --variant dev --run`, `bun exact.mjs mac --variant dev --run`, and the same on
+`web`, `test`, `agent` and `verify`. No build selects a variant unless asked.
+
+- `idSuffix` (required) is appended to `app.id`, and to `host.android.id` when declared. Every id derived from
+  them follows: bundle and extension ids, App Groups, the Android package, data directories, the update store
+  and the compatibility id. An App Clip id under `app.id` moves with it.
+- `name` (required) is the launcher label, the home-screen and menu-bar name, and the executable's name. Two
+  variants may not share a suffix, and no variant's name may install under the app's or a sibling's.
+- `icons` replace every icon source, `color_scheme_dark.icons` and Icon Composer's `host.ios.icon` and
+  `host.macos.icon` included. Without them the variant keeps the app's icons.
+- `env` gives values to settings the manifest's `env` declares. The order is the environment, the variant's
+  `env`, `.env.local`, then `.env`.
+
+A data source that names its own id (a Rust `fn app_id`, an app.ts `appId`) keeps naming the base app; the
+build admits it as the variant's. A device build needs a signing profile for each of the variant's ids, as for
+the app's; a Mac development build with extensions needs a team for them (`EXACT_IDENTITY=-` builds without
+them). `deploy` and `push` take `--variant` and publish the variant's own update streams from the app's
+deploy policy, never the web root or the association files, which list the app alone. `exact run`, `install`,
+`uninstall`, `release` and `appstore`, `share`, and the Windows build take no variant. URL schemes, the
+sign-in callback and the app's own document types are shared by both installs.
+
 ## Apple bundle metadata
 
 Exact writes Info.plist keys and entitlements from grants, named manifest fields,

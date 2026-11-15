@@ -65,6 +65,16 @@ viewport by default, saying how far ahead of an end `reachstart` and
 lead, as LLP 1027.004 D3 has it, so a fling that the window preloads for also
 fires the edge event. Take: none offered; waived by Charlie.
 
+**Expanded (Charlie, 2026-11-15, #651; LLP 1030.008):** app.json `variants`: the
+app under another identity (`idSuffix`, `name`, optional `icons` and setting
+values), selected by `--variant` or `EXACT_VARIANT` and never by default, so a
+development build installs beside the release one on Android, iOS and macOS,
+with its own data, settings and update stream. Charlie's panel ruled it
+unanimously. The consumer is the reporter's app. Take: `ORG_GRADLE_PROJECT_idSuffix`
+and its build and drive plumbing are deleted, and Android's knob does not grow
+per host. Still out: variants for games, on Windows, for `exact install` and
+its siblings, for `share`, and in the association files.
+
 **Expanded (Charlie, 2026-10-11, events ruling):** `keycapture=` admits DOM
 capture-phase key dispatch for the coding-agent desktop app's early shortcuts;
 `focusin`/`focusout` admit bubbling subtree focus observation for the clipped
