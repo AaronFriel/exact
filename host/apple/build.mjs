@@ -3,7 +3,7 @@ import { writePrivacyManifest } from './privacy.mjs';
 // Build the macOS app — or, with --ios, the iOS app: the app's static
 // library (cargo), then the presenter (swift build) linked against
 // it. Usage:
-//   bun host/apple/build.mjs [crate=caltrain-apple] [--run]                 macOS (--run assembles and launches the .app)
+//   bun host/apple/build.mjs [crate=caltrain-apple] [--run] [--sandbox]     macOS (--run assembles and launches the .app; --sandbox signs the App Sandbox)
 //   bun host/apple/build.mjs [crate] --test [--only <Class,…>]               the Swift host tests, or only the classes named
 //   bun host/apple/build.mjs [crate] --test --ios [--sim <udid|name>] [--only <Class,…>]  the tests compiled for UIKit, or only the classes named, on a simulator
 //   bun host/apple/build.mjs --ios [crate] [--run] [--sim <udid|name>]        iOS, on a simulator
@@ -909,7 +909,7 @@ async function main(args, lockHeld = false) {
   const bakedCompat = buildReceipt.compat;
   // What only a macOS provisioning profile authorizes (LLP 1133.010 D7), resolved with the widgets' signing: one
   // profile, one team, the identity of that team.
-  const signing = ios ? null : macSigning(app, bakedCompat, { current: sha1, widgets: macWidgets, release: production || distribution, distribution, store: appstore ? 'appstore' : null });
+  const signing = ios ? null : macSigning(app, bakedCompat, { current: sha1, widgets: macWidgets, release: production || distribution, distribution, store: appstore ? 'appstore' : null, sandboxed: args.includes('--sandbox') });
   const provisioning = signing?.provisioning ?? null;
   if (signing) { sha1 = signing.sha1; macWidgets = signing.widgets; widgets = !!macWidgets; }
   // What this Apple destination derives from the grants: the bake's, less what tvOS has not, and the host events its signed grants let packages take (LLP 1133.001.000 D2).
@@ -1337,7 +1337,7 @@ async function main(args, lockHeld = false) {
 
   const bundleTools = {runApple,appleArtifacts, macInfoPlist, copyAppleStaticTrees, writeUsageStrings, receipt, shippedReceipt, assertAppleIdentity, placeAppleArtifact, infoPlist, distributionKeys, copyAppleGpuProducts, entitlements, appClip};
   if (!ios) {
-    const bundlePath = assembleMac({intents, shared, library, moduleLibraries, serviceDylibs, macWidgets, shareTeam: signing.shareTeam, shareProfile: signing.shareProfile, provisioning, triple: moduleTripleFor(app, ios, device, tv), appleReach, hasWeb, webLoadName, args, app, paths, binDir, libDir, bin, loadName, hasGpu, dylib, moduleDylibs, looseArms, hasSvg, svgLoadName, modulesLoadName, modulesBuilt, svgBuilt, canvasGpuLoadName, canvasGpuBuilt, sha1, linkRoot, swiftc, buildReceipt, development, bakedCompat, rosterKeys, production, distribution, stampSdk, products, composition, sdk, bakedPlan, cleanup}, bundleTools);
+    const bundlePath = assembleMac({intents, shared, library, moduleLibraries, serviceDylibs, macWidgets, shareTeam: signing.shareTeam, shareProfile: signing.shareProfile, sandbox: signing.sandbox, provisioning, triple: moduleTripleFor(app, ios, device, tv), appleReach, hasWeb, webLoadName, args, app, paths, binDir, libDir, bin, loadName, hasGpu, dylib, moduleDylibs, looseArms, hasSvg, svgLoadName, modulesLoadName, modulesBuilt, svgBuilt, canvasGpuLoadName, canvasGpuBuilt, sha1, linkRoot, swiftc, buildReceipt, development, bakedCompat, rosterKeys, production, distribution, stampSdk, products, composition, sdk, bakedPlan, cleanup}, bundleTools);
     publishProducts();
     release();
     rmSync(webBuildDir, { recursive: true, force: true });

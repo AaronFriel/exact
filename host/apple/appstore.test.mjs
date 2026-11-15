@@ -77,6 +77,12 @@ test('a line the sandbox cannot take refuses the store build, every one named', 
   expect(() => sandboxEntitlements(compat)).toThrow(/^grant-sandbox: the Mac App Store sandbox cannot take these lines \(LLP 1030\.005 D2\); a Developer ID build keeps them:\n  `process\.spawn path:t3`: .*\n  `env\.read login:PATH`/);
   expect(() => macSigning({ ...app, manifest: {} }, compat, { current: SHA, distribution: true, store: 'appstore' })).toThrow(/^grant-sandbox/);
   expect(sandboxEntitlements({ reach: { sandboxEntitlements: ['com.apple.security.app-sandbox'], sandboxRefusals: [] } })).toEqual({ 'com.apple.security.app-sandbox': true });
+  // `mac --sandbox` refuses the same lines, and signs the dev server's connection besides, ad hoc and with no profile.
+  expect(() => macSigning({ ...app, manifest: {} }, compat, { current: '-', sandboxed: true })).toThrow(/^grant-sandbox/);
+  const development = macSigning({ ...app, manifest: {} }, { inputs: { grantCeiling: '' }, reach: { profileEntitlements: [], sandboxEntitlements: ['com.apple.security.app-sandbox'], sandboxRefusals: [] } },
+    { current: '-', sandboxed: true, log: () => {} });
+  expect(development.sandbox).toEqual({ 'com.apple.security.app-sandbox': true, 'com.apple.security.network.client': true });
+  expect(development.provisioning).toBeNull();
 });
 
 // Synthetic App Store and Developer ID profiles of one team; the Developer ID ones live longer, so only the method

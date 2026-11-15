@@ -2,6 +2,7 @@ import { MalformedOperation, inputJSON } from './agent-keys.mjs';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { renderAx } from './agent-ax.mjs';
 import { decodePng, encodePng, shrink } from './png.mjs';
@@ -860,8 +861,12 @@ export async function pidTrace(pid, dest, run = spawnSync, timeout = 10000) {
     if (container.status !== 0) throw new Error(`trace --pid ${pid}: ${container.stderr.trim() || 'simctl get_app_container failed'}`);
     dir = resolve(container.stdout.trim(), 'tmp');
   } else {
-    // A Mac app here is unsandboxed: its temporary directory is this user's.
-    dir = run('getconf', ['DARWIN_USER_TEMP_DIR'], { encoding: 'utf8' }).stdout?.trim();
+    // A sandboxed app's temporary directory is its container's (`mac --sandbox`, LLP 1030.005 D4); another's, this user's.
+    const app = exe.match(/^(.*?\.app)\/Contents\/MacOS\//)?.[1];
+    const signed = app ? run('codesign', ['-d', '--entitlements', '-', '--xml', app], { encoding: 'utf8' }).stdout ?? '' : '';
+    const id = /<key>com\.apple\.security\.app-sandbox<\/key>\s*<true\/>/.test(signed)
+      && run('plutil', ['-extract', 'CFBundleIdentifier', 'raw', resolve(app, 'Contents/Info.plist')], { encoding: 'utf8' }).stdout?.trim();
+    dir = id ? resolve(homedir(), 'Library/Containers', id, 'Data/tmp') : run('getconf', ['DARWIN_USER_TEMP_DIR'], { encoding: 'utf8' }).stdout?.trim();
   }
   const ready = resolve(dir, `exact-trace-${pid}.ready`), started = Date.parse(ps('lstart'));
   if (!existsSync(ready) || (Number.isFinite(started) && statSync(ready).mtimeMs < started - 1000)) {

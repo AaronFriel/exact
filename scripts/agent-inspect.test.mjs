@@ -1,9 +1,9 @@
 // `state <name>` (agent-inspect.mjs `stateOp`, LLP 1116.007 D3.9): a state, derive or resource (or a field of the record)
 // reads by name, down a dotted path, as `expect state` does, even where a view carries the name; a plain view's is the record.
 import { test, expect } from 'bun:test';
-import { render, renderTrace, renderFrameHealthReport, renderFrameHealthMetrics, perfOp, readTrack, renderPerf, stateOp, tapRefusal, nextCommitTasks, settleBound, planLocators, perfDelta } from './agent-inspect.mjs';
+import { render, renderTrace, renderFrameHealthReport, renderFrameHealthMetrics, perfOp, readTrack, renderPerf, stateOp, tapRefusal, nextCommitTasks, settleBound, planLocators, perfDelta, pidTrace } from './agent-inspect.mjs';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { open } from './agent-session.mjs';
 import { launchFacts } from './agent-launch.mjs';
@@ -521,4 +521,12 @@ test("a world's perf prints its counters; only `state <canvas> draws` is a draw 
   expect(render('state', perf, { name: 'world.0.perf' }).split('\n')).toEqual(['wallClock true', 'pixels [1280,720]', 'draws 15', 'instances 11', 'triangles 5425']);
   const draws = { tick: 4, hash: '0x1', draws: [{ pass: 'opaque', draw: 'mesh', winding: 'ccw', writes: 'color' }] };
   expect(render('state', draws, { name: 'world', look: true })).toBe('tick 4 · hash 0x1\nopaque        · mesh · ccw · writes color');
+});
+
+test('trace --pid looks for a sandboxed Mac app\'s marker in its container (LLP 1030.005 D4)', async () => {
+  const sandbox = '<plist><dict><key>com.apple.security.app-sandbox</key><true/></dict></plist>';
+  const run = (signed) => (cmd, args) => ({ stdout: cmd === 'ps' ? (args[1] === 'comm=' ? '/b/Probe.app/Contents/MacOS/Probe\n' : 'Sat Nov 14 19:00:00 2026\n')
+    : cmd === 'codesign' ? signed : cmd === 'plutil' ? 'com.example.probe\n' : cmd === 'getconf' ? '/var/folders/x/T/\n' : '' });
+  await expect(pidTrace(4242, () => '/nowhere', run(sandbox))).rejects.toThrow(`no ${join(homedir(), 'Library/Containers/com.example.probe/Data/tmp/exact-trace-4242.ready')}`);
+  await expect(pidTrace(4242, () => '/nowhere', run('<plist><dict/></plist>'))).rejects.toThrow('no /var/folders/x/T/exact-trace-4242.ready');
 });

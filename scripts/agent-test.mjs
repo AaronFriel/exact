@@ -12,6 +12,7 @@ import { open } from './agent.mjs';
 import { duringOp } from './agent-drag.mjs';
 import { perfDelta } from './agent-inspect.mjs';
 import { driveStore, faultSpecOf, launchFacts } from './agent-launch.mjs';
+import { macSandboxed } from './agent-build.mjs';
 import { resolveApp, webDist as defaultWebDist } from './app.mjs';
 import { onThisMachine, serverUrl } from './app-server.mjs';
 import { backendOrigin, backendOriginSelection, literalBackendOrigin, staticFacts } from '../js/bake/src/typescript.mjs';
@@ -169,9 +170,10 @@ export const pickHint = (host) => host === 'web'
   : '; first tap a button whose action calls showPicker("<input id>"); the file input needs id as well as testId';
 
 /** Where a native host keeps a drive's scratch stores (host/apple and host/painted `configure_storage`), or
- * null where the driver cannot reach them: an iOS simulator's are in its app container and go with the app. */
-export function storeBase(appId, host, env = process.env, home = homedir()) {
-  if (host === 'macos' || host === 'mac') return resolve(home, 'Library/Caches/exact', appId, 'agent');
+ * null where the driver cannot reach them: an iOS simulator's are in its app container and go with the app; a
+ * sandboxed Mac build's (`sandboxed`: `mac --sandbox`, LLP 1030.005 D4) are in its container, whose HOME it takes. */
+export function storeBase(appId, host, env = process.env, home = homedir(), sandboxed = false) {
+  if (host === 'macos' || host === 'mac') return resolve(home, ...(sandboxed ? ['Library/Containers', appId, 'Data'] : []), 'Library/Caches/exact', appId, 'agent');
   if (host === 'linux') return resolve(env.XDG_CACHE_HOME?.startsWith('/') ? env.XDG_CACHE_HOME : resolve(home, '.cache'), 'exact', appId, 'agent');
   return null;
 }
@@ -676,7 +678,7 @@ export async function runTests({ host, browser, file, plan, app, size, env, webD
   // Where the host keeps its stores, as it will see its environment (a drive's env overrides the driver's).
   const launched = { ...process.env, ...(env ?? {}) };
   const id = selected.id, chrome = host === 'web' && (browser ?? launched.EXACT_WEB_BROWSER ?? 'chrome') === 'chrome';
-  const base = device ? null : chrome ? driveStore(selected, storage, env).base : host === 'web' ? null : storeBase(id, host, launched, launched.HOME || homedir());
+  const base = device ? null : chrome ? driveStore(selected, storage, env).base : host === 'web' ? null : storeBase(id, host, launched, launched.HOME || homedir(), (host === 'macos' || host === 'mac') && macSandboxed(selected));
   // A run's own names where the driver can remove them; a simulator's (one drive at a time: a launch ends the
   // last) reuse one store a test, emptied at launch, so they cannot pile up in its app container.
   // Android's stores are on the device, out of the driver's reach, but a run's names stay its own there too (LLP 1107).

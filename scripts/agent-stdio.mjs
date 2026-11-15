@@ -1,12 +1,13 @@
 // Native desktop and phone carriers over the agent JSON-lines wire.
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
-import { basename, dirname, resolve } from 'node:path';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { basename, dirname, extname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { appleRunBinary, appleArtifacts, assertAppleIdentity } from '../host/apple/build.mjs';
 import { phone, phoneBridge, phoneStartupFailure, forwardedEnv, crashReports } from '../host/apple/devices.mjs';
 import { resolveApp, executableName, linuxBinary, bakeOutput, bakeTarget } from './app.mjs';
-import { linuxRebuild, nativeBuild, ownVerb, planOverride, rebuildCommand, refuseBuild } from './agent-build.mjs';
+import { linuxRebuild, macSandboxed, nativeBuild, ownVerb, planOverride, rebuildCommand, refuseBuild } from './agent-build.mjs';
 import { refuseStale, refuseBackendOrigin, refuseBinaryBackend, proofProductChanges, unchecked, packagedBuildChanges, depInfoChanges, depInfoNewer, newerThan, bakedSettingChanges } from './agent-launch.mjs';
 import { androidBinary, androidDeploy, apkRecord } from './agent-android.mjs';
 import { nativeKey, mouseContact } from './agent-keys.mjs';
@@ -158,10 +159,13 @@ export async function openStdio({ host, plan, world, size, app, env: extra = {},
         return r;
       },
       async screenshot(path, window = false, film = false) {
-        const remote = device ? `${ready.container}/tmp/exact-agent.png` : droid ? droid.shot : path;
+        // A sandboxed Mac app writes only in its container (`mac --sandbox`, LLP 1030.005 D4); the driver moves the file out.
+        const contained = macBuild && macSandboxed(a) ? resolve(homedir(), 'Library/Containers', a.id, 'Data/tmp', `exact-agent-${process.pid}${extname(path)}`) : null;
+        const remote = device ? `${ready.container}/tmp/exact-agent.png` : droid ? droid.shot : contained ?? path;
         const r = await ask({ op: 'screenshot', path: remote, window, ...(film ? { film } : {}) });
         if (r.error) throw new Error(r.error);
         if (droid) { droid.pull(path); r.screenshot = path; }
+        if (contained) { mkdirSync(dirname(resolve(path)), { recursive: true }); copyFileSync(contained, path); rmSync(contained, { force: true }); r.screenshot = path; }
         if (device) {
           const copied = spawnSync('xcrun', ['devicectl', 'device', 'copy', 'from', '--quiet', '--device', ph.udid,
             '--domain-type', 'appDataContainer', '--domain-identifier', a.id, '--source', 'tmp/exact-agent.png', '--destination', resolve(path)], { encoding: 'utf8', timeout: 20000 });
