@@ -7,16 +7,14 @@
 //! `var()` whose name data completes is the name it makes; a fallback is
 //! warned once; a token of another kind is refused as its name is.
 
-use std::path::PathBuf;
+use crate::scratch::Scratch;
 
-fn app(name: &str, files: &[(&str, &str)]) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("exact2-var-{name}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+fn app(name: &str, files: &[(&str, &str)]) -> Scratch {
+    let dir = Scratch::new(format!("exact2-var-{name}-{}", std::process::id()));
     for (file, text) in files {
         std::fs::write(dir.join(file), text).unwrap();
     }
-    dir.join("app.contract")
+    dir.at("app.contract")
 }
 
 const DESIGN: &str = "forma t\n\naxes\n  density = regular | compact\n\ntheme\n  ink = light-dark(#111111, #eeeeee)\n    when density=compact: light-dark(#222222, #dddddd)\n  paper = #ffffff  scheme=fixed\n  space.row = 12px\n    when density=compact: 8px\n  card.min = 9.5rem\n  faded: number = 0.5\n  type.body = -exact-body/1.35 \"InterVariable\"\n  face = \"InterVariable\", system-ui\n  shadow.card: box-shadow = 0 1px 3px ink\n  glow: text-shadow = 0 0 2px #ff0000\n  duration.fast = 150ms\n  easing.standard = cubic-bezier(0.2, 0, 0, 1)\n";

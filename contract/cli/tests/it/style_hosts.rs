@@ -4,20 +4,17 @@
 //! target; `best-effort` says nothing; a value that leaves the row unset
 //! is not judged.
 
-use std::path::PathBuf;
+use crate::scratch::Scratch;
 
-fn app(name: &str, targets: &str, view: &str) -> PathBuf {
-    let dir =
-        std::env::temp_dir().join(format!("exact2-style-hosts-{name}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+fn app(name: &str, targets: &str, view: &str) -> Scratch {
+    let dir = Scratch::new(format!("exact2-style-hosts-{name}-{}", std::process::id()));
     std::fs::write(
         dir.join("app.json"),
         format!("{{\"app\": {{\"id\": \"dev.test.styles\", \"name\": \"Styles\"}}, \"host\": {{{targets}}}}}"),
     )
     .unwrap();
     std::fs::write(dir.join("app.contract"), view).unwrap();
-    dir.join("app.contract")
+    dir.at("app.contract")
 }
 
 /// The `style-undrawn` messages, in source order.

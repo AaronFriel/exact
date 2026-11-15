@@ -876,9 +876,7 @@ fn types_check_is_read_only_and_build_reports_only_changed_declarations() {
 #[test]
 #[ignore = "async lane: typechecks the design's token union with tsc; bun scripts/async.mjs runs it"]
 fn a_data_module_returning_an_unknown_token_fails_tsc() {
-    let dir = std::env::temp_dir().join(format!("exact-types-tokens-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = crate::scratch::Scratch::new(format!("exact-types-tokens-{}", std::process::id()));
     std::fs::write(
         dir.join("app.forma"),
         "forma t\n\ntheme\n  brand = #c8102e\n  surface.card = #ffffff\n  space.row = 12px\n",

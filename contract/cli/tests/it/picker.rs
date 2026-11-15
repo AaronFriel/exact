@@ -2,6 +2,7 @@
 //! `multiple`; `showPicker` is a host command; `change` carries a
 //! `Picked[]` and `cancel` nothing; `accept` is bounded at bake.
 
+use crate::scratch::Scratch;
 use exact_kernel::{Kernel, NodeType, PropId};
 use exact_runner::{ControlValue, DataError, DataSource, Event, Picked, Runner, Value};
 
@@ -190,8 +191,7 @@ fn literal_show_picker_targets_need_a_file_input_id_not_a_test_id() {
 
 #[test]
 fn declared_audio_and_xhtml_types_compile_and_accept_agent_picks() {
-    let dir = std::env::temp_dir().join(format!("exact-picker-types-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = Scratch::new(format!("exact-picker-types-{}", std::process::id()));
     let result = std::panic::catch_unwind(|| {
         for (mime, name) in [
             ("audio/mpeg", "song.mp3"),

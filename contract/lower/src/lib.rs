@@ -187,6 +187,19 @@ use exact_plan::{
 use std::collections::BTreeMap;
 use std::path::Path;
 
+/// A test's file or directory, removed when dropped (on a panic too).
+#[cfg(test)]
+pub(crate) struct TestPath(pub std::path::PathBuf);
+
+#[cfg(test)]
+impl Drop for TestPath {
+    fn drop(&mut self) {
+        if std::fs::remove_dir_all(&self.0).is_err() {
+            let _ = std::fs::remove_file(&self.0);
+        }
+    }
+}
+
 /// A row the compiler implies, which no author wrote (LLP 1115.000 D2): a
 /// tag's fixed row, a heading's style, a sheet's row, one derived from
 /// another. Whether a row is written is said where it is emitted, never

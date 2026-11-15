@@ -4,6 +4,7 @@
 //! keyframes, computed times and `for` positions — proven on the rows the
 //! runner resolves after boot, and on what the compiler refuses.
 
+use crate::scratch::Scratch;
 use exact_kernel::{Kernel, StyleId};
 use exact_motion::{Animations, Direction, Easing, FillMode, Property, Value};
 use exact_plan::{Plan, Value as PlanValue};
@@ -655,8 +656,7 @@ fn a_colour_keyframe_takes_the_designs_tokens() {
     let from = &row.0[0].keyframes.0[0];
     assert_eq!(get(&from.values, Property::Color), Some([255, 0, 0, 255]));
     assert_eq!(get(&from.dark, Property::Color), Some([255, 255, 255, 255]));
-    let dir = std::env::temp_dir().join(format!("keyframe-token-axis-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = Scratch::new(format!("keyframe-token-axis-{}", std::process::id()));
     std::fs::write(
         dir.join("app.forma"),
         "forma t\n\naxes\n  tone = calm | loud\n\ntheme\n  c.chip = #cfced4\n    when tone=loud: #ff0000\n",

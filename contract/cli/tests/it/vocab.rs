@@ -1,6 +1,7 @@
 //! LLP 1086 D3: `contract vocab` lists what the compiler admits, from its
 //! own lookups, and refuses a name as the compiler would.
 
+use crate::scratch::Scratch;
 use serde_json::Value;
 use std::process::{Command, Output};
 
@@ -889,8 +890,7 @@ fn every_content_part_ends_with_one_working_call() {
         .filter_map(|l| l.strip_prefix("component "))
         .collect();
     assert_eq!(parts.len(), 9, "{parts:?}");
-    let dir = std::env::temp_dir().join(format!("exact-parts-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = Scratch::new(format!("exact-parts-{}", std::process::id()));
     let path = dir.join("app.contract");
     let mut failures = Vec::new();
     for part in &parts {
@@ -1053,8 +1053,7 @@ fn every_concepts_code_compiles_and_its_names_are_its_own() {
             names.push(n);
         }
     }
-    let dir = std::env::temp_dir().join(format!("exact-concepts-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = Scratch::new(format!("exact-concepts-{}", std::process::id()));
     let path = dir.join("app.contract");
     let mut failures = Vec::new();
     for name in [

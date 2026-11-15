@@ -1173,6 +1173,7 @@ mod tests {
     #[test]
     fn a_changed_font_file_leaves_font_rows_to_the_build() {
         let file = std::env::temp_dir().join(format!("exact-rows-font-{}", std::process::id()));
+        let _cleanup = crate::TestPath(file.clone());
         std::fs::write(&file, b"static").unwrap();
         let m = std::fs::metadata(&file).unwrap();
         let fonts = [(
@@ -1238,6 +1239,7 @@ mod tests {
     #[test]
     fn a_retargeted_font_link_leaves_font_rows_to_the_build() {
         let dir = std::env::temp_dir().join(format!("exact-rows-link-{}", std::process::id()));
+        let _cleanup = crate::TestPath(dir.clone());
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let (old, new, link) = (
