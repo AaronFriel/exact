@@ -1263,10 +1263,7 @@ fn clock_settle_waits_for_background_storage_and_a_jump_names_it() {
 /// scheme left as it is; an axis or value the design lacks is refused.
 #[test]
 fn prefer_mode_sets_the_apps_modes() {
-    let dir =
-        std::env::temp_dir().join(format!("exact-painted-prefer-mode-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = crate::TestDir::new("exact-painted-prefer-mode");
     std::fs::write(
         dir.join("app.forma"),
         "forma t\n\naxes\n  dark-style = black | dim\n\ntheme\n  page = #000000\n    when dark-style=dim: #161e27\n",

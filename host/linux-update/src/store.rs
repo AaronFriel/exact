@@ -66,6 +66,7 @@ impl Updates {
     pub fn open(compat: &str, plan: &[u8], assets: &Path) -> Result<Updates, String> {
         let base = exact_painted::picker::xdg_base("XDG_DATA_HOME", ".local/share");
         let client = Client::open(base.as_deref(), assets, compat, plan)?;
+        ibex2::process::wait_at_exit(exact_update::client::remove_agent_store);
         Updates::from_client(client)
     }
 
@@ -372,10 +373,10 @@ mod tests {
         });
         let compat = compat.to_string();
         for block_head in [true, false] {
-            let base = std::env::temp_dir().join(format!(
+            let base = crate::TempDir(std::env::temp_dir().join(format!(
                 "exact-linux-stalled-{}-{block_head}",
                 std::process::id()
-            ));
+            )));
             let _ = std::fs::remove_dir_all(&base);
             let plan = caltrain::build().unwrap().encode();
             let mut client =
@@ -481,8 +482,9 @@ mod tests {
 
     #[test]
     fn boot_refusal_refreshes_the_cached_delivery_stream() {
-        let base =
-            std::env::temp_dir().join(format!("exact-linux-refusal-cache-{}", std::process::id()));
+        let base = crate::TempDir(
+            std::env::temp_dir().join(format!("exact-linux-refusal-cache-{}", std::process::id())),
+        );
         let _ = std::fs::remove_dir_all(&base);
         let client = Client::open_at(&base, &base, COMPAT, b"embedded plan", Some(ORIGIN)).unwrap();
         let (tx, lines) = channel();

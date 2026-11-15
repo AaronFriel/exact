@@ -135,7 +135,9 @@ fn an_analysis_boot_refuses_before_touching_an_attached_selection() {
     let candidate = contract::compile("component App\n  view\n    text \"selected\"\n")
         .unwrap()
         .encode();
-    let dir = std::env::temp_dir().join(format!("exact-linux-analysis-{}", std::process::id()));
+    let dir = crate::TempDir(
+        std::env::temp_dir().join(format!("exact-linux-analysis-{}", std::process::id())),
+    );
     let client = stage(&dir, &baked, &candidate, &[]);
     let record = client.dir().join("record.json");
     let before = std::fs::read(&record).unwrap();
@@ -205,8 +207,9 @@ fn a_partial_initial_dev_plan_falls_back_without_counting_the_store() {
     let update = contract::compile("component App\n  view\n    text \"selected\"\n")
         .unwrap()
         .encode();
-    let dir =
-        std::env::temp_dir().join(format!("exact-linux-dev-precedence-{}", std::process::id()));
+    let dir = crate::TempDir(
+        std::env::temp_dir().join(format!("exact-linux-dev-precedence-{}", std::process::id())),
+    );
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let compat = UPDATE_COMPAT;
@@ -286,10 +289,10 @@ fn a_second_instance_boots_the_update_the_first_runs() {
     let selected = contract::compile("component App\n  view\n    text \"selected\"\n")
         .unwrap()
         .encode();
-    let dir = std::env::temp_dir().join(format!(
+    let dir = crate::TempDir(std::env::temp_dir().join(format!(
         "exact-linux-second-instance-{}",
         std::process::id()
-    ));
+    )));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let staged = stage(&dir, &baked, &selected, &[]);
@@ -324,8 +327,9 @@ fn a_selected_image_loads_from_its_verified_generation() {
         "/../../apps/caltrain/assets/caltrain.png"
     ))
     .unwrap();
-    let dir =
-        std::env::temp_dir().join(format!("exact-linux-selected-asset-{}", std::process::id()));
+    let dir = crate::TempDir(
+        std::env::temp_dir().join(format!("exact-linux-selected-asset-{}", std::process::id())),
+    );
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let client = stage(&dir, &baked, &selected, &[("assets/mark.png", png)]);
@@ -362,8 +366,9 @@ fn a_selected_font_loads_from_its_verified_generation() {
         "/../../scripts/fixtures/fonts/assets/DejaVuSans.ttf"
     ))
     .unwrap();
-    let dir =
-        std::env::temp_dir().join(format!("exact-linux-selected-font-{}", std::process::id()));
+    let dir = crate::TempDir(
+        std::env::temp_dir().join(format!("exact-linux-selected-font-{}", std::process::id())),
+    );
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let client = stage(&dir, &baked, &selected, &[("assets/DejaVuSans.ttf", font)]);
@@ -394,10 +399,10 @@ fn an_absent_selected_asset_tombstones_the_embedded_file() {
         contract::compile("component App\n  view\n    image \"assets/caltrain.png\" width=96\n")
             .unwrap()
             .encode();
-    let dir = std::env::temp_dir().join(format!(
+    let dir = crate::TempDir(std::env::temp_dir().join(format!(
         "exact-linux-selected-tombstone-{}",
         std::process::id()
-    ));
+    )));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let client = stage(&dir, &baked, &selected, &[]);
@@ -427,10 +432,10 @@ fn a_corrupt_selected_asset_falls_back_before_first_pixel() {
         contract::compile("shape Delivery\n  seq: number\ncomponent App\n  resource delivery = exactDelivery() as shape Delivery\n  view\n    column\n      if delivery.seq > 0\n        image \"assets/mark.png\" width=96\n      else\n        text \"embedded\"\n")
             .unwrap()
             .encode();
-    let dir = std::env::temp_dir().join(format!(
+    let dir = crate::TempDir(std::env::temp_dir().join(format!(
         "exact-linux-corrupt-selected-asset-{}",
         std::process::id()
-    ));
+    )));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let client = stage(
@@ -473,12 +478,15 @@ fn activation_refuses_carried_layout_without_advancing_then_commits_after_repair
     )
     .unwrap()
     .encode();
-    let dir = std::env::temp_dir().join(format!("exact-linux-activation-{}", std::process::id()));
+    let dir = crate::TempDir(
+        std::env::temp_dir().join(format!("exact-linux-activation-{}", std::process::id())),
+    );
     std::fs::create_dir_all(&dir).unwrap();
     let client = checked(&dir, &baked, &candidate, &[], true);
     let record = client.dir().join("record.json");
     let (mut presenter, error) =
-        exact_painted::Presenter::boot(&baked, Named, (390.0, 844.0), 1.0, dir.clone()).unwrap();
+        exact_painted::Presenter::boot(&baked, Named, (390.0, 844.0), 1.0, dir.to_path_buf())
+            .unwrap();
     assert!(error.is_none(), "{error:?}");
     assert!(presenter.set_delivery_from_compat(UPDATE_COMPAT).is_none());
     presenter.set_updates(Some(Box::new(Updates::from_client(client).unwrap())));
@@ -554,10 +562,10 @@ fn verified_launch_refusals_are_demoted_after_failed_launches() {
         ("decode", b"EXPL".as_slice()),
         ("layout", bad_layout.as_slice()),
     ] {
-        let dir = std::env::temp_dir().join(format!(
+        let dir = crate::TempDir(std::env::temp_dir().join(format!(
             "exact-linux-bad-launch-{label}-{}",
             std::process::id()
-        ));
+        )));
         std::fs::create_dir_all(&dir).unwrap();
         let client = stage(&dir, &baked, candidate, &[]);
         let record = client.dir().join("record.json");
@@ -620,10 +628,10 @@ fn a_crash_during_selected_app_construction_is_counted_before_it_happens() {
     let selected = contract::compile("component App\n  view\n    text \"selected\"\n")
         .unwrap()
         .encode();
-    let dir = std::env::temp_dir().join(format!(
+    let dir = crate::TempDir(std::env::temp_dir().join(format!(
         "exact-linux-crash-before-return-{}",
         std::process::id()
-    ));
+    )));
     std::fs::create_dir_all(&dir).unwrap();
     let client = stage(&dir, &baked, &selected, &[]);
     let record = client.dir().join("record.json");
@@ -762,10 +770,10 @@ fn a_refused_initial_layout_releases_no_network_requests() {
         .unwrap()
         .encode();
     let source = "shape Reply\n  value: string\nshape Delivery\n  seq: number\ncomponent App\n  resource delivery = exactDelivery() as shape Delivery\n  resource reply = ping(delivery.seq) as shape Reply\n  view\n    text \"x\" font-size=SIZE\n";
-    let dir = std::env::temp_dir().join(format!(
+    let dir = crate::TempDir(std::env::temp_dir().join(format!(
         "exact-linux-refused-network-{}",
         std::process::id()
-    ));
+    )));
     let result = std::panic::catch_unwind(|| {
         let seed = contract::bake(
             // @ref LLP 1038 D5 — bake a placeholder keyed to this candidate's
@@ -884,7 +892,9 @@ fn signed_rust_pair_is_deferred_and_failed_live_replacement_keeps_the_old_genera
         .unwrap()
         .encode();
     let receipt = br#"{"module":{"file":"app.module.wasm"}}"#.to_vec();
-    let dir = std::env::temp_dir().join(format!("exact-linux-rust-pair-{}", std::process::id()));
+    let dir = crate::TempDir(
+        std::env::temp_dir().join(format!("exact-linux-rust-pair-{}", std::process::id())),
+    );
     std::fs::create_dir_all(&dir).unwrap();
     let client = stage(
         &dir,
@@ -950,10 +960,10 @@ fn corrupt_or_disabled_signed_rust_pair_falls_back_before_booting_its_plan() {
         .unwrap()
         .encode();
     for corrupt in [false, true] {
-        let dir = std::env::temp_dir().join(format!(
+        let dir = crate::TempDir(std::env::temp_dir().join(format!(
             "exact-linux-rust-refused-{corrupt}-{}",
             std::process::id()
-        ));
+        )));
         std::fs::create_dir_all(&dir).unwrap();
         let client = stage(
             &dir,
@@ -1015,10 +1025,10 @@ fn failed_post_pixel_rust_activation_does_not_bless_the_selected_bundle() {
     let plan = contract::compile("component App\n  view\n    text \"candidate\"\n")
         .unwrap()
         .encode();
-    let dir = std::env::temp_dir().join(format!(
+    let dir = crate::TempDir(std::env::temp_dir().join(format!(
         "exact-linux-rust-activation-failure-{}",
         std::process::id()
-    ));
+    )));
     std::fs::create_dir_all(&dir).unwrap();
     let client = stage(
         &dir,

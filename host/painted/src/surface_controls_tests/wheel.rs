@@ -101,7 +101,7 @@ const SOURCE: &str = r#"component Wheels
       box width=100 height=300
 "#;
 
-fn scroll_fixture(source: &str) -> (Presenter<()>, PathBuf) {
+fn scroll_fixture(source: &str) -> (Presenter<()>, Probe) {
     let (path, compat) = super::super::tests::fixture();
     let plan = contract::compile(source).unwrap();
     let (mut p, _) = Presenter::boot(

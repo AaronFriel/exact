@@ -123,3 +123,30 @@ impl Store for Updates {
 
 #[cfg(test)]
 mod app_tests;
+
+/// A test's directory, removed when dropped, so a test that fails or panics
+/// leaves nothing in the system temp directory.
+#[cfg(test)]
+pub(crate) struct TempDir(pub(crate) std::path::PathBuf);
+
+#[cfg(test)]
+impl std::ops::Deref for TempDir {
+    type Target = std::path::Path;
+    fn deref(&self) -> &std::path::Path {
+        &self.0
+    }
+}
+
+#[cfg(test)]
+impl AsRef<std::path::Path> for TempDir {
+    fn as_ref(&self) -> &std::path::Path {
+        &self.0
+    }
+}
+
+#[cfg(test)]
+impl Drop for TempDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}

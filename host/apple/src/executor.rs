@@ -415,7 +415,9 @@ mod resource_tests {
 
     #[test]
     fn the_declared_resources_are_the_bundle_folder_beside_the_executable() {
-        let app = std::env::temp_dir().join(format!("exact-resources-{}.app", std::process::id()));
+        let app = crate::TempDir(
+            std::env::temp_dir().join(format!("exact-resources-{}.app", std::process::id())),
+        );
         let _ = std::fs::remove_dir_all(&app);
         std::fs::create_dir_all(&app).unwrap();
         let executable = Some(app.join("App"));
