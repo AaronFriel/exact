@@ -115,7 +115,8 @@ style         = "style" IDENT block(style-line | part) ;
 decoration    = "decoration" IDENT ( style-line | block(style-line) ) ;
 atom          = "atom" IDENT style-line [ block(style-line | state) ] ;
 style-line    = { FIELD "=" style-literal } NL ;
-part          = "::" "placeholder" NL block(style-line) ;
+part          = "::" ( "placeholder" | "backdrop" | "view-transition-new"
+                     | "view-transition-old" ) NL block(style-line) ;
 style-literal = STRING | NUMBER | "-" NUMBER | "true" | "false" ;
 keyframes     = "keyframes" IDENT block(keyframe-line) ;
 keyframe-line = selector { "," selector } { FIELD "=" frame-value } NL ;
@@ -149,18 +150,32 @@ or event props. In a conditional class, each prop must be set in both styles or
 neither, unless the node supplies its own value. Each arm's literal is checked
 as a direct attribute would be.
 
-A part is CSS's pseudo-element as a block: `::placeholder` or `::backdrop`,
-then its declarations indented beneath it, in a `style` (literal) or under its
-element before its children (where a value may compute, as the element's own
-attributes do). `::placeholder`, under an `input` or `textarea`, admits `color`
-alone (CSS `::placeholder { color }`, LLP 1104 D3); `::backdrop`, under a
-`dialog`, admits `background-color` alone (CSS `::backdrop { background-color
-}`, LLP 1035.001 D11: what lies over the page beneath the modal dialog, fading
-in and out with it). Each colour's alpha is its own; the element's own block
-wins over its class's, and without one the platform's colour or dim stays.
-Another property in it is `lower-unknown-attr`; on another element
-`lower-attr-tag`; `::before` and `::after` are `syntax-part` (Contract has no
-generated box: write a child), as is any other part. `placeholder-color` and
+A part is CSS's pseudo-element as a block: `::placeholder`, `::backdrop`,
+`::view-transition-new` or `::view-transition-old`, then its declarations
+indented beneath it, in a `style` (literal) or under its element before its
+children (where a value may compute, as the element's own attributes do).
+`::placeholder`, under an `input` or `textarea`, admits `color` alone (CSS
+`::placeholder { color }`, LLP 1104 D3); `::backdrop`, under a `dialog`, admits
+`background-color` alone (CSS `::backdrop { background-color }`, LLP 1035.001
+D11: what lies over the page beneath the modal dialog, fading in and out with
+it). Each colour's alpha is its own; the element's own block wins over its
+class's, and without one the platform's colour or dim stays. Another property
+in either is `lower-unknown-attr`; on another element `lower-attr-tag`.
+
+On a route (an element with `navigationKey`), `::view-transition-new` is its
+entrance, when a push or a full-screen presentation adds it, and
+`::view-transition-old` its exit, when a pop or the dismissal removes it (CSS
+View Transitions' pseudo-elements, LLP 1013.001 D1). Each admits the
+`animation` shorthand alone, naming keyframes that move only `opacity`,
+`translate`, `scale` and `rotate`; it must end (not `infinite` or `paused`),
+and each arm of a computed value is a literal. `none` cuts, and a part left
+unset keeps the platform's transition. A sheet's route, a route with a literal
+`navigationSource`, and an element that is no route refuse them
+(`lower-route-part`); the other `::view-transition-*` parts have nothing to
+style.
+
+`::before` and `::after` are `syntax-part` (Contract has no generated box:
+write a child), as is any other part. `placeholder-color` and
 `-exact-placeholder-color` are refused with the block to write.
 
 A state part is a block of one state's rows (LLP 1121 D8): `:active`, `:hover`,
