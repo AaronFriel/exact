@@ -768,6 +768,11 @@ impl SizeIndex {
         }
     }
 
+    /// The position, in the order it was taken on, of the row an anchor holds.
+    pub(crate) fn anchor_row(anchor: &Anchor) -> Option<usize> {
+        anchor.row
+    }
+
     /// The key of the row an anchor holds.
     pub(crate) fn anchor_key(anchor: &Anchor) -> Option<&str> {
         anchor.row.map(|i| anchor.order[i].as_ref())

@@ -292,6 +292,22 @@ impl Harness {
         root.collection().unwrap()
     }
 }
+/// LLP 1168.000 D1.2: only a list that opens at its end keeps what its
+/// start asked; no other list's anchor reads it.
+#[test]
+fn only_a_list_that_opens_at_its_end_keeps_what_its_start_asked() {
+    let mut h = Harness::new(100, false, false);
+    let Child::Node(root) = &mut h.tree.children[0] else {
+        panic!()
+    };
+    let c = root.collection_mut().unwrap();
+    assert!(!c.opens_at_end);
+    c.disarm_edge(0);
+    assert!(!c.start_asked, "a list that opens at its start");
+    c.opens_at_end = true;
+    c.disarm_edge(0);
+    assert!(c.start_asked, "a list that opens at its end");
+}
 #[test]
 fn bounded_bootstrap_twenty_traversals_release_row_slots_and_kernel_views() {
     for n in [1_000, 25_000] {

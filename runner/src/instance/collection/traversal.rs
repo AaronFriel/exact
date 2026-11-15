@@ -416,6 +416,11 @@ impl Tree {
                 _ => unreachable!("collection edge"),
             };
             collection.edge_armed[index] = true;
+            // Nothing was asked: an unanswered `reachstart` is not left
+            // behind to take an edit for its page.
+            if index == 0 {
+                collection.start_asked = false;
+            }
         }
     }
     /// Consume the second candidate after the runner established a pure no-op.

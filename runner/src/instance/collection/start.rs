@@ -10,6 +10,8 @@ pub(super) struct BottomAnchor {
     anchor: index::Anchor,
     /// The first row the port showed, and where it was.
     first: Option<(usize, Rc<str>)>,
+    /// Where the last row it showed was.
+    last: usize,
 }
 
 impl Collection {
@@ -84,7 +86,12 @@ impl Collection {
             .row_at(offset.clamp(0.0, self.index.max_offset(g.port_main).max(0.0)))
             .map_err(index_error)?
             .and_then(|p| Some((p, self.index.shared_key(p)?.clone())));
-        Ok(Some(BottomAnchor { anchor, first }))
+        let last = SizeIndex::anchor_row(&anchor).unwrap_or(0);
+        Ok(Some(BottomAnchor {
+            anchor,
+            first,
+            last,
+        }))
     }
     /// The anchor an update to a list that opens at its end restores: the
     /// last visible row's (`bottom`) when the update put rows before the
@@ -92,7 +99,10 @@ impl Collection {
     /// when the first row the port showed is kept further down (with `old`
     /// the keys before the update), or, at the list's start, when a page
     /// landed there ([`Collection::page_before_start`]: after a leading row
-    /// that stays first too). An edit inside the window moves none of that.
+    /// that stays first too), or, while a `reachstart` is unanswered, rows
+    /// landed after a leading run there (a "Loading" row, then a day's
+    /// separator that stays). An edit inside the window moves none of that
+    /// unless it is taken for that page.
     pub(super) fn end_list_anchor(
         &self,
         old: &[Rc<str>],
@@ -102,12 +112,21 @@ impl Collection {
         let Some(BottomAnchor {
             anchor,
             first: Some((was, key)),
+            last,
         }) = bottom
         else {
             return ordinary;
         };
         let before = self.index.position(&key).is_some_and(|now| now > was)
-            || (was == 0 && self.page_before_start(old));
+            || (was == 0 && self.page_before_start(old))
+            || (was == 0
+                && self.start_asked
+                && reach::page_after_leading_run(
+                    old,
+                    last,
+                    |k| self.index.position(k),
+                    |i| self.index.key(i),
+                ));
         if before {
             Some(anchor)
         } else {

@@ -333,6 +333,7 @@ impl Collection {
             edge_armed: [true; 2],
             edge_fired: [None, None],
             start_owed: false,
+            start_asked: false,
             pending: false,
             parent: None,
             nested,
