@@ -700,8 +700,6 @@ fn artifact_graph(
             json!(crate::compat::plan_extensions(plan)),
         );
     }
-    // A purpose's text is in the installed binary's Info.plist: a bundle
-    // whose purposes differ is a binary release (LLP 1069.008 D5).
     // What a TypeScript module may ask of the binary's prelude (compat.rs
     // `TYPESCRIPT_RUNTIME`): an older cohort's prelude would ignore it
     // silently (`exactBodyFrom` sent as an empty body), so it takes no bundle.
@@ -711,8 +709,13 @@ fn artifact_graph(
             inputs["typescriptRuntime"].clone(),
         );
     }
-    if inputs.get("grantPurposes").is_some() {
-        requires.insert("grantPurposes".into(), inputs["grantPurposes"].clone());
+    // A purpose's text and the bundle's languages are in the installed
+    // binary's Info.plist: a bundle whose purposes or tables differ is a
+    // binary release (LLP 1069.008 D5).
+    for key in ["grantPurposes", "localizations"] {
+        if inputs.get(key).is_some() {
+            requires.insert(key.into(), inputs[key].clone());
+        }
     }
     let rust = assets
         .iter()

@@ -1406,3 +1406,52 @@ fn a_mac_app_store_build_links_no_update_store() {
     assert_eq!(store_level_of(&manifest, "ios", true), "A");
     let _ = std::fs::remove_dir_all(dir);
 }
+
+/// The Apple bundle lists the strings tables as its localizations, so adding
+/// or dropping one moves the Apple ids (expo/exact#664). A translation's text
+/// does not, nor does a single table, nor any other platform.
+#[test]
+fn the_apple_bundles_languages_are_in_the_id() {
+    let dir = app("localizations");
+    let m = Manifest::read(&dir).unwrap();
+    let ids = || {
+        let compat = |platform| {
+            super::compatibility_id(&dir, platform, "aarch64-apple-ios", &m, Some("")).unwrap()
+        };
+        let (ios, macos, web) = (compat("ios"), compat("macos"), compat("web"));
+        assert_eq!(
+            ios.inputs.get("localizations"),
+            macos.inputs.get("localizations")
+        );
+        assert!(web.inputs.get("localizations").is_none());
+        (ios.id, ios.inputs.get("localizations").cloned(), web.id)
+    };
+    let tables = |list: &[(&str, &str)]| {
+        let _ = std::fs::remove_dir_all(dir.join("strings"));
+        std::fs::create_dir_all(dir.join("strings")).unwrap();
+        for (locale, text) in list {
+            std::fs::write(dir.join(format!("strings/{locale}.json")), text).unwrap();
+        }
+        ids()
+    };
+    let (bare, _, web) = ids();
+    let one = tables(&[("en", r#"{"t": "T"}"#)]);
+    assert_eq!(
+        one,
+        (bare, None, web.clone()),
+        "one table keeps the id it had"
+    );
+    let (two, inputs, two_web) = tables(&[("en", r#"{"t": "T"}"#), ("fr", r#"{"t": "Titre"}"#)]);
+    assert_eq!(
+        inputs,
+        Some(serde_json::json!({"base": "en", "locales": ["en", "fr"]}))
+    );
+    assert_ne!(two, one.0);
+    assert_eq!(two_web, web);
+    let edited = tables(&[("en", r#"{"t": "T"}"#), ("fr", r#"{"t": "Le titre"}"#)]);
+    assert_eq!(edited.0, two, "a translation edit is an update");
+    let three = tables(&[("en", "{}"), ("fr", "{}"), ("de", "{}")]);
+    assert_ne!(three.0, two);
+    assert_eq!(three.2, web);
+    std::fs::remove_dir_all(dir).unwrap();
+}

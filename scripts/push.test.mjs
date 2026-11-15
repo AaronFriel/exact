@@ -553,7 +553,7 @@ test.each(['native', 'tiered'])('an unchanged macOS %s candidate reuses its auth
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
-test.each(['minimumOS', 'grantPurposes', 'orientation', 'shortcuts', null])('a snapshot candidate derives current inputs without an Apple build (changed: %s)', async changed => {
+test.each(['minimumOS', 'grantPurposes', 'localizations', 'orientation', 'shortcuts', null])('a snapshot candidate derives current inputs without an Apple build (changed: %s)', async changed => {
   const target = resolve(import.meta.dir, '..', process.env.CARGO_TARGET_DIR || 'target', 'debug');
   const bake = resolve(target, `exact-js-bake${EXE}`), graphTool = resolve(target, `exact-bake${EXE}`);
   const { root, app, cohort, streamCandidates } = harness(classifyArtifacts, 4, { bake, graphTool });
@@ -593,14 +593,15 @@ test.each(['minimumOS', 'grantPurposes', 'orientation', 'shortcuts', null])('a s
       if (changed === 'orientation') app.manifest.orientation = 'landscape';
       else delete app.manifest.shortcuts;
       fs.writeFileSync(resolve(root, 'app.json'), JSON.stringify(app.manifest));
-    } else if (changed) fs.writeFileSync(resolve(root, 'strings/en.json'), JSON.stringify({ 'purpose.eye': 'Photograph your receipt.' }));
+    } else if (changed === 'localizations') fs.writeFileSync(resolve(root, 'strings/fr.json'), JSON.stringify({ 'purpose.eye': 'Prendre une photo.' }));
+    else if (changed) fs.writeFileSync(resolve(root, 'strings/en.json'), JSON.stringify({ 'purpose.eye': 'Photograph your receipt.' }));
     const snapshot = { bundle, compat: cohort.compat, graph: { artifacts: [] } };
     const [update] = await streamCandidates(app, origin, [{ stream, head: { assets: [] }, cohort, platform: 'ios' }], env, { snapshot });
     const check = classifyArtifacts(update.build, cohort, { id: 'test', public: raw });
     expect(check.binary).toBe(changed !== null);
     if (changed) expect(update.build.pendingInputs).toContain(changed);
     else expect(update.build.pendingInputs).toEqual([]);
-    if (changed === 'grantPurposes') expect(check.bundle).toBe(false);
+    if (changed === 'grantPurposes' || changed === 'localizations') expect(check.bundle).toBe(false);
     const table = await classify({ app, origin, opts: {}, channel: 'prod', snapshot: { dirty: false, changes: [] }, release: 'changed', bundle,
       compat: {}, builds: {}, platforms: ['ios'], wantOrigin: false, candidates: new Map([[stream.compatibilityId, update]]) });
     expect(table.rows.some(row => row.action === 'binary' && row.reason.includes(changed))).toBe(changed !== null);

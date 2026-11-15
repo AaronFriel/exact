@@ -408,6 +408,7 @@ pub fn compatibility_id_pinned(
         }
     }
     crate::reach::derive(app_dir, platform, plan.as_ref(), &mut compat)?;
+    localizations(platform, &mut compat);
     crate::sandbox::derive(app_dir, platform, plan.as_ref(), &mut compat);
     if target.contains("android") {
         crate::channels::derive(app_dir, &manifest.json, &mut compat)?;
@@ -554,6 +555,21 @@ fn source_scopes(compat: &mut Compat, javascript: &str, rust: &str) {
     compat.inputs["javascriptGrants"] = serde_json::Value::String(javascript.into());
     compat.inputs["rustGrants"] = serde_json::Value::String(rust.into());
     compat.id = compatibility_digest(&compat.inputs);
+}
+
+/// The Apple bundle lists the strings tables as its localizations
+/// (`localizationKeys` in `host/apple/build.mjs`), and the system and
+/// `SessionFacts.viewerLocale` choose the app's table from that list, so the
+/// tables' names are in the id there (LLP 1030 D3a); their text is not. An
+/// app with one table records nothing, so its id did not move when this was
+/// added.
+fn localizations(platform: &str, compat: &mut Compat) {
+    let tables = compat.reach["locales"].as_array().map_or(0, Vec::len);
+    if tables > 1 && matches!(platform, "ios" | "macos") {
+        compat.inputs["localizations"] =
+            serde_json::json!({"base": compat.reach["base"], "locales": compat.reach["locales"]});
+        compat.id = compatibility_digest(&compat.inputs);
+    }
 }
 
 pub(crate) fn compatibility_digest(inputs: &serde_json::Value) -> String {

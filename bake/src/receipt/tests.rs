@@ -500,6 +500,26 @@ fn a_plan_requires_the_typescript_runtime_its_inputs_carry() {
     assert_eq!(requires(json!({})), Value::Null);
 }
 
+/// A plan requires the purposes and the languages the installed Info.plist
+/// names, so a bundle that changes either waits for a binary that has them.
+#[test]
+fn a_plan_requires_the_plist_strings_its_inputs_carry() {
+    let plan = exact_plan::builder::PlanBuilder::new(0, 0)
+        .finish()
+        .unwrap();
+    let requires = |inputs: Value| {
+        let graph = artifact_graph(&plan, &inputs, &[], false, "aarch64-apple-ios").unwrap();
+        graph["artifacts"][0]["requires"].clone()
+    };
+    let languages = json!({"base": "en", "locales": ["en", "fr"]});
+    let both = requires(json!({"grantPurposes": "ab", "localizations": languages}));
+    assert_eq!(both["grantPurposes"], "ab");
+    assert_eq!(both["localizations"], languages);
+    let neither = requires(json!({}));
+    assert_eq!(neither["grantPurposes"], Value::Null);
+    assert_eq!(neither["localizations"], Value::Null);
+}
+
 /// A TypeScript module pair requires exactly the binary's TypeScript grants
 /// and its prelude's runtime, as a Rust module requires its own.
 #[test]

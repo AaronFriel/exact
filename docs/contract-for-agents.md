@@ -4924,7 +4924,9 @@ under no written `direction` takes each paragraph's base direction from its
 first letter, as an `NSTextField` does, so an Arabic sentence in a left-to-right
 window keeps its full stop at its own end and stays aligned to the start.
 Writing `direction` fixes the base of all text under it, so do not write it to
-move a full stop (Markdown text keeps the layout direction).
+move a full stop (Markdown text keeps the layout direction). Because the Apple
+binary lists its languages, adding or dropping a table other than an app's only
+one is a new binary there; editing a translation still ships as an update.
 
 #### Folds on iOS
 
