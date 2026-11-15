@@ -466,9 +466,13 @@ function renderStorage(owner) {
   };
   return Object.freeze({ fs: Object.freeze({ directories: DIRECTORIES, ...fs, watch }), sqlite: Object.freeze({ open: refuse('storage.sqlite.open()') }), work: promise => Promise.resolve(promise) });
 }
+// False in a production page whose sources hold no `fs.read`, `fs.write` or `sqlite.open` grant (build.mjs
+// `storageGrants`, LLP 1047.002 D3): its bundle keeps the refusals below and drops what only a grant reaches, the
+// adapters, the SQLite handles and the topics a write tells the app's other tabs.
+const STORAGE_GRANTED = true;
 function storageOf(grants) {
   const ordinary = start => answering.ordinary(start, true);
-  const admitted = ['fs-read', 'fs-write', 'sqlite-open'].some(kind => hasGrant(grants, kind));
+  const admitted = STORAGE_GRANTED && ['fs-read', 'fs-write', 'sqlite-open'].some(kind => hasGrant(grants, kind));
   let fs, sqlite;
   const key = () => import('./storage-environment.js').then(({ storageKey, agentStorageRefusal }) => {
     const k = appId ? storageKey(appId) : null;
@@ -506,7 +510,8 @@ function storageOf(grants) {
   const image = (method, from, to, options, limits) => {
     const out = imageOptions(method, from, to, options, limits);
     if (out instanceof Error) return Promise.reject(out);
-    return (admitted ? queued(`${method} ${from}`, () => files().then(f => f[method](from, to, out))) : denied(`fs.${method}`)).catch(refused)
+    if (!admitted) return denied(`fs.${method}`).catch(refused);
+    return queued(`${method} ${from}`, () => files().then(f => f[method](from, to, out))).catch(refused)
       .then(written => { shared.relay(fileTopics(written?.path ?? to)); return written; });
   };
   const compressImage = (from, to, options) => {
@@ -536,9 +541,11 @@ function storageOf(grants) {
         const wrongExpect = expectRefusal(m, args);
         if (wrongExpect) return Promise.reject(wrongExpect);
         const captured = structuredClone(args);
+        // With no storage grant no tab of the app writes a file, so a refused call watches no topic and tells none.
+        if (!admitted) return denied(`fs.${m}`, isDocument(captured) && !copiesIn(m, captured)).catch(refused);
         const run = () => copiesIn(m, captured) ? documents().then(files).then(f => globalThis.exact.documents.copyFile(captured[0], captured[1], grants, f))
           : isDocument(captured) ? documents().then(f => f[m](...captured)) : files().then(f => f[m](...captured), orEmpty(m, captured[0]));
-        const done = (admitted ? queued(`${m}${typeof args[0] === 'string' ? ` ${args[0]}` : ''}`, run) : denied(`fs.${m}`, isDocument(captured) && !copiesIn(m, captured))).catch(refused);
+        const done = queued(`${m}${typeof args[0] === 'string' ? ` ${args[0]}` : ''}`, run).catch(refused);
         const topics = [...(m === 'copyFile' ? [] : fileTopics(captured[0])), ...(/^(rename|copyFile)$/.test(m) ? fileTopics(captured[1]) : [])];
         if (!FILE_WRITES.test(m)) { shared.watch(topics); return done; }
         return done.then(v => { shared.relay(topics); return v; });
