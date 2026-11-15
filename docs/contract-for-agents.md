@@ -4783,12 +4783,14 @@ media preferences, page facts,
 and capability state rather than suffixing files by platform. Preference facts
 inform authored policy; the engine does not automatically remove all motion.
 
-`frozen: bool` means the host has backgrounded the app and will stop its ordinary
-work, until execution resumes. Gate a feed with `when not page.frozen`: the runner
-lets its resource or stream go in the commit that turns `frozen` true, without
-waiting for an authored cleanup handler. A sequence stops in that commit too
-(LLP 1125 D4). This is a dynamic execution fact, not a phone or desktop label:
-`visibilityState` can be hidden while `frozen` stays false.
+`frozen: bool` means the host has entered a lifecycle state in which ordinary
+work is subject to stopping until execution resumes. The runner immediately
+applies the transitions defined for that fact. Gate a feed with `when not
+page.frozen`: its resource or stream goes in the commit that turns `frozen`
+true, without waiting for an authored cleanup handler. A sequence stops in that
+commit too (LLP 1125 D4). The fact is not itself a process pause, and it is not a
+phone or desktop label: `visibilityState` can be hidden while `frozen` stays
+false.
 
 | Host | `frozen` producer |
 |---|---|
@@ -4804,8 +4806,11 @@ waiting for an authored cleanup handler. A sequence stops in that commit too
 A browser promises nothing after `hidden`: it may stop or discard a page without
 a `freeze` event. False does not promise continued execution. Persist data as it
 changes; do not depend on a final asynchronous cleanup. The bake and an agent
-launch answer false; `prefer frozen true` substitutes the transition, and
-`prefer frozen false` resumes it. See the [feed recipe](recipes/suspending-feed.md).
+launch answer false; `prefer frozen true` substitutes the fact and its defined
+transitions, and `prefer frozen false` resumes them. The drive's clock and host
+pump continue: timers, replies, hatch callbacks and native announcements can
+still run. Qualify process suspension on a real host, outside a drive. See the
+[feed recipe](recipes/suspending-feed.md).
 
 Leave navigation presentation to the host first: a root `tablist` becomes UIKit's
 tab bar on iOS and a sidebar on macOS, and `navigationPresentation` chooses a

@@ -1807,13 +1807,14 @@ none set, `formatLocale` is the locale),
 normalizes POSIX names to BCP 47 (`C`/`POSIX` use `en-US`), and reads the zone from
 `TZ` when it names a zoneinfo entry, otherwise the system's IANA zone (UTC fallback).
 
-A drive asserts backgrounding with the `prefer` name/value pair `visibility-state hidden`
+A drive changes visibility with the `prefer` name/value pair `visibility-state hidden`
 (`"prefer visibility-state hidden"`), and returns with `"prefer visibility-state visible"`.
-This changes page visibility and the runner's background fact, which it already treats as
-the app leaving. Real OS backgrounding stays outside the drive: suspending a phone freezes
-its reporting carrier, and hiding a Mac app does not suspend it. A substituted background
-is not yet a frozen process: timers, replies, hatch callbacks and module announcements
-can still run ([open issue](../issues/20261113-a-substituted-background-does-not-behave.md)).
+The hidden step commits page visibility and the runner's background fact. `prefer frozen true`
+separately commits `exactPage().frozen` and its defined transitions, such as stopping a
+transport sequence. Neither preference suspends the driven process. A later clock step still
+fires due timers, hatch frames and `after` callbacks, and replies and native-topic announcements
+keep the host's ordinary pumping. Use these facts to test authored reactions; qualify process
+suspension, coalesced delivery and waking on a real host outside the drive (LLP 1012 §1).
 
 `bun scripts/agent.mjs trace --pid <pid> --out snapshot.json` asks a running development
 Mac or simulator app to save its trace without taking ownership of the process.

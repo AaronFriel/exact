@@ -322,7 +322,7 @@ export async function main(argv, injected = {}) {
             'resize <w> <h> (the window: web, macOS, Linux)',
             "close (the window's close button, asking its beforeunload: web, macOS)",
             "back (the platform's Back: an open dialog's cancel, else the top sheet dismissed, else the pushed route popped)",
-            'prefer <media feature, page fact, posture folded|continuous, segments <cols>x<rows> [gap <points>]> […]',
+            'prefer <media feature, page fact, posture folded|continuous, segments <cols>x<rows> [gap <points>]> […] (visibility-state and frozen substitute facts; neither suspends the driven process)',
             'prefer extension <extension>.<source>=<JSON>|clear (the source of a native module, LLP 1124 D7)',
             "prefer permission.<name> granted|denied|prompt (the permission of a module; --permission <name>=<state> sets it at launch, --bind <extension> answers it from its implementation on Apple and Android; its tickets are `tap @t allow|deny|cancel` and `type @t <value>`, LLP 1133.002 §6; a module's listed entry, `state.notifications`, is `tap @ref`, and --notification '<entry>' hands a relaunch one, LLP 1133.004 §7)",
             'fail fetch <url-prefix> [times <n>]',

@@ -358,6 +358,13 @@ This list holds what the [agent guide](contract-for-agents.md)'s rules don't mak
   its action: that misses a return which lands before the hide's timer has fired
   (`prefer visibility-state hidden` then `visible` with no clock step between).
   (Web and iOS simulator, 2026-10-06.)
+- **A hidden or frozen page fact under a drive is not a suspended process.**
+  `prefer visibility-state hidden` changes visibility and the background fact;
+  `prefer frozen true` applies the runner transitions defined for `frozen`, such
+  as stopping a transport sequence. A later `clock +N` still runs every due
+  timer and hatch callback, and replies and native announcements can land. Gate
+  authored work on the fact it follows. Test OS suspension and its coalescing or
+  wake behavior on a real host, outside the drive.
 - **A jump gated on the tab that shows runs again on every return to it.** A
   tab's panel and its list stay mounted while another tab shows, so the list
   keeps the reader's place, as a `UITabBarController`'s tabs and SwiftUI's
