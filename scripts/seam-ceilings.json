@@ -1,5 +1,5 @@
 {
-  "baseline": "eaf94b9b1395ca0b86da39d58021a656c472390b",
+  "baseline": "7cf5168f4649a142b2da49e9d6bd5c1b8de7bdbf",
   "probe": {
     "commit": "ade624d144ac4d86ee69d3eb104226e28686e1bf",
     "originalCounts": {
@@ -19,7 +19,7 @@
   },
   "counts": {
     "nodeViewCasts": {
-      "ceiling": 652,
+      "ceiling": 656,
       "sites": [
         "host/apple/Sources/ExactDrag/MouseHeightDragMac.swift: current as? NodeView",
         "host/apple/Sources/ExactDrag/MouseReorderMac.swift: current as? NodeView",
@@ -112,6 +112,10 @@
         "host/apple/Sources/ExactKit/HeldState.swift: ($0 as! NodeView",
         "host/apple/Sources/ExactKit/HeldState.swift: ($0 as? NodeView",
         "host/apple/Sources/ExactKit/HostLog.swift: view as? NodeView",
+        "host/apple/Sources/ExactKit/InspectionGeometry.swift: if (view as? NodeView",
+        "host/apple/Sources/ExactKit/InspectionGeometry.swift: if (view as? NodeView",
+        "host/apple/Sources/ExactKit/InspectionGeometry.swift: view as? NodeView",
+        "host/apple/Sources/ExactKit/InspectionGeometry.swift: view as? NodeView",
         "host/apple/Sources/ExactKit/IntoView.swift: (clip.superview?.superview as? NodeView",
         "host/apple/Sources/ExactKit/IntoView.swift: (collection.superview as? NodeView",
         "host/apple/Sources/ExactKit/IntoView.swift: (sv.superview as? NodeView",
