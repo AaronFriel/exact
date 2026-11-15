@@ -17,7 +17,7 @@ import java.io.File
 @Config(sdk = [31], manifest = Config.NONE)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class NativesFrameTest {
-    private fun natives() = Natives(RuntimeEnvironment.getApplication(), File("."), emptyMap())
+    private fun natives() = Natives(RuntimeEnvironment.getApplication(), { File(".") }, emptyMap())
 
     private fun props(sandbox: String? = null): String = JSONObject().put("src", "https://example.com/")
         .put("sandbox", sandbox ?: JSONObject.NULL).toString()
