@@ -1,5 +1,5 @@
 {
-  "baseline": "1f24dc2826a752af0261269bc926e3ab1656f00f",
+  "baseline": "eaf94b9b1395ca0b86da39d58021a656c472390b",
   "probe": {
     "commit": "ade624d144ac4d86ee69d3eb104226e28686e1bf",
     "originalCounts": {
@@ -19,7 +19,7 @@
   },
   "counts": {
     "nodeViewCasts": {
-      "ceiling": 645,
+      "ceiling": 652,
       "sites": [
         "host/apple/Sources/ExactDrag/MouseHeightDragMac.swift: current as? NodeView",
         "host/apple/Sources/ExactDrag/MouseReorderMac.swift: current as? NodeView",
@@ -590,6 +590,7 @@
         "host/apple/Sources/ExactKit/Mac/TextSelectionMac.swift: view as? NodeView",
         "host/apple/Sources/ExactKit/Mac/TextSelectionMac.swift: view as? NodeView",
         "host/apple/Sources/ExactKit/Mac/TextSelectionMac.swift: view as? NodeView",
+        "host/apple/Sources/ExactKit/Mac/TextSelectionMac.swift: view as? NodeView",
         "host/apple/Sources/ExactKit/Mac/TitleBarAreaMac.swift: $0 as? NodeView",
         "host/apple/Sources/ExactKit/Mac/ToolbarMac.swift: $0 as? NodeView",
         "host/apple/Sources/ExactKit/Mac/ToolbarMac.swift: view as? NodeView",
@@ -650,6 +651,12 @@
         "host/apple/Sources/ExactKit/SvgScene.swift: layer.delegate as? NodeView",
         "host/apple/Sources/ExactKit/SystemColor.swift: $0 as? NodeView",
         "host/apple/Sources/ExactKit/TabFace.swift: $0 as? NodeView",
+        "host/apple/Sources/ExactKit/TableAccessibility.swift: $0 as? NodeView",
+        "host/apple/Sources/ExactKit/TableAccessibility.swift: $0 as? NodeView",
+        "host/apple/Sources/ExactKit/TableAccessibility.swift: $0 as? NodeView",
+        "host/apple/Sources/ExactKit/TableAccessibility.swift: return (next as? NodeView",
+        "host/apple/Sources/ExactKit/TableAccessibility.swift: view as? NodeView",
+        "host/apple/Sources/ExactKit/TableAccessibility.swift: view as? NodeView",
         "host/apple/Sources/ExactKit/TextSelectable.swift: view as? NodeView",
         "host/apple/Sources/ExactKit/TextSelectable.swift: view as? NodeView",
         "host/apple/Sources/ExactKit/ThemeRoles.swift: (view as? NodeView",
@@ -669,7 +676,7 @@
       ]
     },
     "treeWalks": {
-      "ceiling": 645,
+      "ceiling": 654,
       "sites": [
         "host/apple/Sources/ExactDrag/MouseHeightDragMac.swift: ancestor = current.superview",
         "host/apple/Sources/ExactDrag/MouseReorderMac.swift: ancestor = current.superview",
@@ -1241,9 +1248,10 @@
         "host/apple/Sources/ExactKit/Mac/TextCursorMac.swift: next = view.superview",
         "host/apple/Sources/ExactKit/Mac/TextSelectionMac.swift: ancestor = view.superview",
         "host/apple/Sources/ExactKit/Mac/TextSelectionMac.swift: ancestor = view.superview",
+        "host/apple/Sources/ExactKit/Mac/TextSelectionMac.swift: ancestor = view.superview",
         "host/apple/Sources/ExactKit/Mac/TextSelectionMac.swift: ancestor = wrapper.superview",
         "host/apple/Sources/ExactKit/Mac/TextSelectionMac.swift: at = view.superview",
-        "host/apple/Sources/ExactKit/Mac/TextSelectionMac.swift: for child in view.subviews { texts(in: child, found) }",
+        "host/apple/Sources/ExactKit/Mac/TextSelectionMac.swift: for child in view.subviews { texts(in: child, withinList: withinList, found) }",
         "host/apple/Sources/ExactKit/Mac/TitleBarAreaMac.swift: let node = hit.flatMap { sequence(first: $0, next: \\.superview).lazy.compactMap { $0 as? NodeView }.first }",
         "host/apple/Sources/ExactKit/Mac/ToolbarMac.swift: ancestor = view.superview",
         "host/apple/Sources/ExactKit/Mac/ToolbarMac.swift: node.container.subviews.compactMap { $0 as? NodeView }",
@@ -1302,6 +1310,14 @@
         "host/apple/Sources/ExactKit/SpaceTransform.swift: while v !== top, let sup = v.superview {",
         "host/apple/Sources/ExactKit/SurfaceInput.swift: ancestor = view.superview",
         "host/apple/Sources/ExactKit/SystemColor.swift: sequence(first: self as UIView, next: { [weak presenter] in presenter?.authoredParent(of: $0) ?? $0.superview })",
+        "host/apple/Sources/ExactKit/TableAccessibility.swift: next = view.superview",
+        "host/apple/Sources/ExactKit/TableAccessibility.swift: next = view.superview",
+        "host/apple/Sources/ExactKit/TableAccessibility.swift: node.container.subviews.compactMap { $0 as? NodeView }.allSatisfy { child in",
+        "host/apple/Sources/ExactKit/TableAccessibility.swift: stack += node.container.subviews.compactMap { $0 as? NodeView }",
+        "host/apple/Sources/ExactKit/TableAccessibility.swift: var next = superview",
+        "host/apple/Sources/ExactKit/TableAccessibility.swift: var stack = container.subviews.compactMap { $0 as? NodeView }",
+        "host/apple/Sources/ExactKit/TableAccessibility.swift: while let view = next, view.superview !== container { next = view.superview }",
+        "host/apple/Sources/ExactKit/TableAccessibility.swift: while let view = next, view.superview !== container { next = view.superview }",
         "host/apple/Sources/ExactKit/TextSelectable.swift: current = presenter?.eventParent(of: view) ?? view.superview",
         "host/apple/Sources/ExactKit/TextSelectable.swift: current = presenter?.eventParent(of: view) ?? view.superview",
         "host/apple/Sources/ExactKit/TextSelectable.swift: if current !== view.superview { crossed = true }",
@@ -1378,7 +1394,7 @@
         "host/apple/Sources/ExactCore/Bridge.swift: func landThen ( ) -> Batch",
         "host/apple/Sources/ExactCore/Bridge.swift: func landThenFirst ( ) -> Batch",
         "host/apple/Sources/ExactCore/Bridge.swift: func listIndex ( _ view : UInt32 , key : String ) -> Int ?",
-        "host/apple/Sources/ExactCore/Bridge.swift: func listText ( _ view : UInt32 , first : ( String , Int , Int ) ? , last : ( String , Int , Int ) ? ) -> String",
+        "host/apple/Sources/ExactCore/Bridge.swift: func listText ( _ view : UInt32 , first : ( String , Int , Int , Bool ? ) ? , last : ( String , Int , Int , Bool ? ) ? ) -> String",
         "host/apple/Sources/ExactCore/Bridge.swift: func load ( _ view : UInt32 , now : Double ) -> Batch",
         "host/apple/Sources/ExactCore/Bridge.swift: func location ( of href : String ) -> String",
         "host/apple/Sources/ExactCore/Bridge.swift: func locationAhead ( ) -> String ?",
@@ -1538,7 +1554,7 @@
       ]
     },
     "appleAbiExports": {
-      "ceiling": 291,
+      "ceiling": 295,
       "sites": [
         "host/apple/activityarm/ActivityArm.swift: exact_activity_close",
         "host/apple/activityarm/ActivityArm.swift: exact_activity_open",
@@ -1578,6 +1594,7 @@
         "host/apple/src/abi/exports.rs: exact_canvas_snapshotted",
         "host/apple/src/abi/exports.rs: exact_check_prepared",
         "host/apple/src/abi/exports.rs: exact_collection_feedback",
+        "host/apple/src/abi/exports.rs: exact_collection_fixed_size",
         "host/apple/src/abi/exports.rs: exact_collection_snap",
         "host/apple/src/abi/exports.rs: exact_collection_snap_stop",
         "host/apple/src/abi/exports.rs: exact_color_references",
@@ -1775,6 +1792,9 @@
         "host/apple/src/raster_exports.rs: exact_raster_session_budget",
         "host/apple/src/raster_exports.rs: exact_raster_session_control",
         "host/apple/src/raster_exports.rs: exact_raster_session_create",
+        "host/apple/src/raster_exports.rs: exact_raster_session_retire_generation",
+        "host/apple/src/raster_exports.rs: exact_raster_session_trim",
+        "host/apple/src/raster_exports.rs: exact_raster_session_trim_generation",
         "host/apple/src/raster_exports.rs: exact_raster_stats",
         "host/apple/src/raster_exports.rs: exact_raster_status",
         "host/apple/src/raster_exports.rs: exact_raster_take_ready",
