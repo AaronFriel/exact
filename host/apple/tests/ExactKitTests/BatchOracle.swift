@@ -59,6 +59,7 @@ struct OracleBatchOp: Decodable {
         case create, props, style, children, paragraph, frame, content, present, roots, destroy
         case fieldContent, flow, surface, command, hold, collections, region, router, title, language, unknown
         case svg, animations, canvas2d, reorder, exit, rank, roles
+        case sound // LLP 1096 D8, as Batch's: a real session's boot sends its voice table's files
         case heightDrag = "height-drag", transformDrag = "transform-drag", retireMotion = "retire-motion"
     }
     let op: Kind
