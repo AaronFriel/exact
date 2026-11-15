@@ -2,9 +2,10 @@ import { expect, test } from 'bun:test';
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { categories, census, ceilingFor, check, compare } from './seam-ratchets.mjs';
+import { categories, census, ceilingFor, check as checkSeams, compare } from './seam-ratchets.mjs';
 import { gateParts } from './gate.mjs';
 import { seamCensus } from './probes/seamcensus.mjs';
+import { discover } from './completion-inventory.mjs';
 
 function fixture(run) {
   const root = mkdtempSync(join(tmpdir(), 'exact-seam-ratchets-'));
@@ -18,16 +19,21 @@ function fixture(run) {
     ['ExactCore/Bridge.swift', 'Runtime'],
   ]) write(`host/apple/Sources/${file}`, `class ${owner} {}`);
   write('runner/src/runner.rs', 'impl<D> Runner<D> {}');
-  write('host/apple/src/lib.rs', '');
-  const save = () => write('scripts/seam-ceilings.json', JSON.stringify(ceilingFor(census(root), 'fixture')));
-  try { run({ root, write, save }); }
+  for (const host of ['apple', 'render', 'painted', 'web']) write(`host/${host}/src/lib.rs`, '');
+  let table = [];
+  const save = () => {
+    table = [{ ids: discover(root).map(e => e.id) }];
+    write('scripts/seam-ceilings.json', JSON.stringify(ceilingFor(census(root), 'fixture')));
+  };
+  const check = options => checkSeams({ table, ...options });
+  try { run({ root, write, save, check }); }
   finally { rmSync(root, { recursive: true, force: true }); }
 }
 
 const path = 'host/apple/Sources/ExactKit/Casts.swift';
 const original = 'func old(_ view: Any) { let node = view as? NodeView }';
 
-test('an added cast fails, names its site, and passes after removing it', () => fixture(({ root, write, save }) => {
+test('an added cast fails, names its site, and passes after removing it', () => fixture(({ root, write, save, check }) => {
   write(path, original); save();
   write(path, original + '\nfunc added(_ view: Any) { let node = view as! NodeView }');
   const lines = [];
@@ -38,14 +44,14 @@ test('an added cast fails, names its site, and passes after removing it', () => 
   expect(check({ root, report: () => {} })).toBe(0);
 }));
 
-test('a cast at file scope cannot escape the count', () => fixture(({ root, write, save }) => {
+test('a cast at file scope cannot escape the count', () => fixture(({ root, write, save, check }) => {
   save();
   write(path, 'let node = view as? NodeView');
   expect(check({ root, report: () => {} })).toBe(1);
   expect(census(root).nodeViewCasts).toHaveLength(1);
 }));
 
-test('a fall requires lowering in the same commit, and --lower cannot raise any ceiling', () => fixture(({ root, write, save }) => {
+test('a fall requires lowering in the same commit, and --lower cannot raise any ceiling', () => fixture(({ root, write, save, check }) => {
   write(path, original); save();
   write(path, '');
   const lines = [];
@@ -60,7 +66,7 @@ test('a fall requires lowering in the same commit, and --lower cannot raise any 
   expect(readFileSync(join(root, 'scripts/seam-ceilings.json'), 'utf8')).toBe(saved);
 }));
 
-test('all five counts grow independently; comments, literals, visibility and nested signatures are parsed', () => fixture(({ root, write, save }) => {
+test('all five counts grow independently; comments, literals, visibility and nested signatures are parsed', () => fixture(({ root, write, save, check }) => {
   save();
   write(path, `
     /* /* nested */ as? NodeView .superview */
@@ -113,7 +119,7 @@ test('all five counts grow independently; comments, literals, visibility and nes
   expect(lines.filter(s => s.includes('GREW'))).toHaveLength(5);
 }));
 
-test('site matching survives shifted lines and names a duplicate cast added on the same line', () => fixture(({ root, write, save }) => {
+test('site matching survives shifted lines and names a duplicate cast added on the same line', () => fixture(({ root, write, save, check }) => {
   write(path, original); save();
   write(path, '\n\n' + original);
   expect(check({ root, report: () => {} })).toBe(0);
@@ -135,7 +141,7 @@ test('invalid ceilings fail closed and a decrease never hides growth in another 
   expect(compare(empty, saved).grown).toEqual(['treeWalks']);
 });
 
-test('bridge closures return values even when their result is Void or unit', () => fixture(({ root, write, save }) => {
+test('bridge closures return values even when their result is Void or unit', () => fixture(({ root, write, save, check }) => {
   save();
   write('host/apple/Sources/ExactCore/Bridge.swift', `final class Runtime {
     func asyncCallback() -> (Int) async -> Void { { _ in } }
@@ -156,7 +162,7 @@ test('bridge closures return values even when their result is Void or unit', () 
   expect(check({ root, report: () => {} })).toBe(1);
 }));
 
-test('static bridge methods count while static stored model properties stay excluded', () => fixture(({ root, write, save }) => {
+test('static bridge methods count while static stored model properties stay excluded', () => fixture(({ root, write, save, check }) => {
   save();
   write('host/apple/Sources/ExactCore/Bridge.swift', `final class Runtime {
     package static func extra() -> Batch { fatalError() }
@@ -173,13 +179,14 @@ test('static bridge methods count while static stored model properties stay excl
   expect(check({ root, report: () => {} })).toBe(1);
 }));
 
-test('receipt constraints do not turn a unit or unrelated return into a receipt', () => fixture(({ root, write, save }) => {
+test('receipt constraints do not turn a unit or unrelated return into a receipt', () => fixture(({ root, write, save, check }) => {
   save();
   write('runner/src/runner.rs', `impl<D> Runner<D> {
     pub fn observe<F>(&self, f: F) where F: FnOnce(CommitReceipt) {}
     pub fn explicit_unit<F>(&self, f: F) -> () where F: FnOnce(Advanced) {}
     pub fn unrelated<F>(&self, f: F) -> bool where F: FnOnce(Dispatched) { true }
   }`);
+  save();
   expect(census(root).runnerReceiptMethods).toHaveLength(0);
   expect(check({ root, report: () => {} })).toBe(0);
   write('runner/src/extra.rs', `impl<D> Runner<D> {
@@ -189,7 +196,7 @@ test('receipt constraints do not turn a unit or unrelated return into a receipt'
   expect(check({ root, report: () => {} })).toBe(1);
 }));
 
-test('Swift ABI exports count in Sources and optional arms, excluding comments, strings and tests', () => fixture(({ root, write, save }) => {
+test('Swift ABI exports count in Sources and optional arms, excluding comments, strings and tests', () => fixture(({ root, write, save, check }) => {
   save();
   write('host/apple/webarm/WebArm.swift', `
     // @_cdecl("comment") func fake() {}
@@ -207,7 +214,7 @@ test('Swift ABI exports count in Sources and optional arms, excluding comments, 
   expect(lines.join('\n')).toContain('exact_new_export');
 }));
 
-test('probe deltas are informational and survive lowering the enforcement ceilings', () => fixture(({ root, write, save }) => {
+test('probe deltas are informational and survive lowering the enforcement ceilings', () => fixture(({ root, write, save, check }) => {
   write(path, original); save();
   const file = 'scripts/seam-ceilings.json';
   const saved = JSON.parse(readFileSync(join(root, file), 'utf8'));
@@ -222,7 +229,7 @@ test('probe deltas are informational and survive lowering the enforcement ceilin
   expect(JSON.parse(readFileSync(join(root, file), 'utf8')).probe).toEqual(probe);
 }));
 
-test('Swift strings without new seams leave the census and gate unchanged', () => fixture(({ root, write, save }) => {
+test('Swift strings without new seams leave the census and gate unchanged', () => fixture(({ root, write, save, check }) => {
   const file = 'host/apple/soundarm/SoundArm.swift';
   const exported = '@_cdecl("exact_existing") public func callback() {}';
   write(file, exported); save();
@@ -240,7 +247,7 @@ test('Swift strings without new seams leave the census and gate unchanged', () =
   expect(check({ root, report: () => {} })).toBe(0);
 }));
 
-test('Swift export names decode raw, multiline and Unicode literals', () => fixture(({ root, write, save }) => {
+test('Swift export names decode raw, multiline and Unicode literals', () => fixture(({ root, write, save, check }) => {
   save();
   write('host/apple/soundarm/SoundArm.swift', String.raw`
     @_cdecl(#"exact_raw"#) public func raw() {}
@@ -263,7 +270,7 @@ test('Swift export names decode raw, multiline and Unicode literals', () => fixt
   expect(lines.join('\n')).toContain('exact_multi');
 }));
 
-test('optional-binding blocks keep edges outside the block in their enclosing member', () => fixture(({ root, write, save }) => {
+test('optional-binding blocks keep edges outside the block in their enclosing member', () => fixture(({ root, write, save, check }) => {
   for (const binding of ['if', 'while']) {
     const source = `class Control {
       var row: NodeView? {
@@ -286,7 +293,7 @@ test('optional-binding blocks keep edges outside the block in their enclosing me
   }
 }));
 
-test('bridge modifiers and attributes apply across lines without leaking between declarations', () => fixture(({ root, write, save }) => {
+test('bridge modifiers and attributes apply across lines without leaking between declarations', () => fixture(({ root, write, save, check }) => {
   const file = 'host/apple/Sources/ExactCore/Bridge.swift';
   write(file, `class Runtime {
     private func secret() -> Int { 0 }
@@ -317,7 +324,7 @@ test('bridge modifiers and attributes apply across lines without leaking between
   expect(census(root).synchronousBridgeReturns).toHaveLength(0);
 }));
 
-test('parenthesized conditional and forced NodeView casts count with their complete expressions', () => fixture(({ root, write, save }) => {
+test('parenthesized conditional and forced NodeView casts count with their complete expressions', () => fixture(({ root, write, save, check }) => {
   save();
   write(path, `func parent(_ view: UIView) {
     let node = view.superview as? (NodeView)
@@ -330,6 +337,23 @@ test('parenthesized conditional and forced NodeView casts count with their compl
   ]);
   expect(census(root).treeWalks).toHaveLength(1);
   expect(check({ root, report: () => {} })).toBe(1);
+}));
+
+test('unclassified entries fail with every site and the table to edit even without ceiling growth', () => fixture(({ root, write, save, check }) => {
+  const file = 'host/painted/src/lib.rs';
+  const known = 'pub fn known() {}';
+  write(file, known); save();
+  write(file, known + '\npub fn new_completion() {}\npub fn another_completion() {}');
+  const lines = [];
+  expect(check({ root, report: line => lines.push(line) })).toBe(1);
+  expect(lines.some(line => line.includes('GREW'))).toBe(false);
+  for (const [symbol, line] of [['new_completion', 2], ['another_completion', 3]]) {
+    expect(lines).toContain(`unclassified: painted:${file}:${symbol} (${file}:${line}); classify it in scripts/completion-inventory-table.mjs`);
+  }
+  expect(check({ root, lower: true, report: () => {} })).toBe(1);
+  expect(check({ root, table: [{ ids: discover(root).map(e => e.id) }], report: () => {} })).toBe(0);
+  write(file, known);
+  expect(check({ root, report: () => {} })).toBe(0);
 }));
 
 test('the blocking gate runs the census and these tests', () => {

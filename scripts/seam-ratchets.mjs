@@ -14,22 +14,18 @@
 // Apple C ABI source exports (Rust, Swift @_cdecl and imported runner macros) once per definition;
 // generated exports without source definitions, linker aliases and cfg_attr exports
 // can escape. A macro with a computed API name is refused by the Rust parser.
-import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { seamCensus } from './probes/seamcensus.mjs';
-import { rustFunctions, swiftCExports } from './completion-inventory.mjs';
+import { discover } from './completion-inventory.mjs';
+import { classifications } from './completion-inventory-table.mjs';
 
 const ROOT = resolve(import.meta.dir, '..');
 const CEILINGS = 'scripts/seam-ceilings.json';
+const TABLE = 'scripts/completion-inventory-table.mjs';
 export const categories = ['nodeViewCasts', 'treeWalks', 'synchronousBridgeReturns', 'runnerReceiptMethods', 'appleAbiExports'];
 
-function rustFiles(dir) {
-  return readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))
-    .flatMap(e => e.isDirectory() && !['tests', 'fixtures'].includes(e.name) ? rustFiles(join(dir, e.name))
-      : e.isFile() && e.name.endsWith('.rs') ? [join(dir, e.name)] : []);
-}
-
-export function census(root = ROOT) {
+export function census(root = ROOT, entries = discover(root)) {
   const swift = seamCensus({ root: join(root, 'host/apple'), countsOnly: true });
   const sites = Object.fromEntries(categories.map(k => [k, []]));
   const sources = new Map();
@@ -43,34 +39,14 @@ export function census(root = ROOT) {
   sites.treeWalks = swift.walks.map(r => swiftSite(r));
   sites.synchronousBridgeReturns = swift.inventory.filter(r => r.owner === 'Runtime' && !r.async)
     .map(r => swiftSite(r, r.header));
-  const runner = rustFiles(join(root, 'runner/src')).flatMap(path => {
-    const file = relative(root, path);
-    const source = readFileSync(path, 'utf8');
-    return /Runner|macro_rules/.test(source) ? [{ file, ...rustFunctions(file, source) }] : [];
-  });
-  function rustSite(f) {
-    const text = `${f.owner ? f.owner + '::' : ''}${f.exportName ?? f.name}`;
-    return { id: `${f.file}: ${text}`, path: f.file, line: f.line, text };
+  function entrySite(e) {
+    const text = e.symbol.replace(/#definition:\d+$/, '');
+    return { id: `${e.file}: ${text}`, path: e.file, line: e.line, text };
   }
-  sites.runnerReceiptMethods = runner.flatMap(r => r.functions)
-    .filter(f => f.owner === 'Runner' && f.public && /\b(?:CommitReceipt|Advanced|Dispatched|Timed)\b/.test(f.returnType))
-    .map(rustSite);
-  const imported = runner.flatMap(r => r.macros.map(m => ({ ...m,
-    functions: r.functions.filter(f => f.cExport && m.start < f.start && f.end < m.end),
-  }))).filter(m => m.functions.length);
-  const seen = new Set();
-  for (const path of rustFiles(join(root, 'host/apple/src'))) {
-    const file = relative(root, path), source = readFileSync(path, 'utf8');
-    if (!/no_mangle|export_name/.test(source) && !imported.some(m => source.includes(m.name))) continue;
-    const { functions, t } = rustFunctions(file, source);
-    sites.appleAbiExports.push(...functions.filter(f => f.cExport).map(rustSite));
-    for (const m of imported) {
-      if (seen.has(m.name) || !t.some((v, i) => v.value === m.name && t[i + 1]?.value === '!')) continue;
-      seen.add(m.name);
-      sites.appleAbiExports.push(...m.functions.map(rustSite));
-    }
-  }
-  sites.appleAbiExports.push(...swiftCExports(root).map(rustSite));
+  sites.runnerReceiptMethods = entries.filter(e => e.host === 'runner' && e.kind === 'public runner method' && e.symbol.startsWith('Runner::') &&
+    (e.returnsReceipt || e.returnsCommitAggregate)).map(entrySite);
+  sites.appleAbiExports = entries.filter(e => e.host === 'apple' &&
+    ['C ABI export', 'Swift C ABI export'].includes(e.kind)).map(entrySite);
   for (const k of categories) sites[k].sort((a, b) => a.id.localeCompare(b.id) || a.line - b.line);
   return sites;
 }
@@ -109,21 +85,24 @@ export function compare(sites, ceiling) {
   return { lines, grown, fallen, status: grown.length || fallen.length ? 1 : 0 };
 }
 
-export function check({ root = ROOT, lower = false, report = console.log } = {}) {
+export function check({ root = ROOT, lower = false, report = console.log, table = classifications } = {}) {
   const path = join(root, CEILINGS), ceiling = JSON.parse(readFileSync(path, 'utf8'));
-  const sites = census(root), result = compare(sites, ceiling);
+  const entries = discover(root), sites = census(root, entries), result = compare(sites, ceiling);
+  const classified = new Set(table.flatMap(row => row.ids));
+  const unclassified = entries.filter(e => !classified.has(e.id));
   result.lines.forEach(line => report(line));
+  for (const e of unclassified) report(`unclassified: ${e.id} (${e.file}:${e.line}); classify it in ${TABLE}`);
   if (lower && !result.grown.length && result.fallen.length) {
     writeFileSync(path, JSON.stringify(ceilingFor(sites, ceiling.baseline, ceiling.probe), null, 2) + '\n');
     report(`Lowered ${result.fallen.join(', ')} in ${CEILINGS}; commit it with the source change.`);
-    return 0;
+    return unclassified.length ? 1 : 0;
   }
-  return result.status;
+  return result.status || (unclassified.length ? 1 : 0);
 }
 
 if (import.meta.main) {
   const args = process.argv.slice(2);
-  if (args.includes('--help')) console.log('bun scripts/seam-ratchets.mjs [--lower]\nFails on growth or an unlowered ceiling. --lower only writes when no count has grown.');
+  if (args.includes('--help')) console.log('bun scripts/seam-ratchets.mjs [--lower]\nFails on growth, an unlowered ceiling or an unclassified completion entry. --lower only writes when no count has grown.');
   else if (args.some(a => a !== '--lower')) { console.error('Unknown option; use --help'); process.exitCode = 1; }
   else {
     try { process.exitCode = check({ lower: args.includes('--lower') }); }
