@@ -3107,9 +3107,24 @@ opens: reduced by `location_of` to the app's own location whatever its scheme
 or origin, never through the app's `protocol_handlers`. Nothing else of the
 payload is read and no event is raised; without `navigate` the app only comes
 forward. A server writes that string, so a route must not act on being opened.
-No app code runs when a push arrives: `content-available` does nothing (the
-`remote-notification` background mode is refused), and `mutable-content`
-changes nothing (no service extension is built).
+Exact runs no Contract or TypeScript when a push arrives: `content-available`
+does nothing and the `remote-notification` background mode is refused. An iOS
+or iPadOS app may instead put one app-authored Swift
+`UNNotificationServiceExtension` subclass named `NotificationService` under
+`modules/apple/notification-service/`. The build packages it as
+`PlugIns/ExactNotificationService.appex`, with bundle id `<app id>.notifications`,
+when the app grants both notification lines above. It carries no Exact runtime.
+The source tree ignores dot-prefixed entries and `target/`; every selected file is
+part of binary compatibility and is checked again immediately before compilation.
+The folder remains ordinary app source to generic freshness, watches, captures and
+scanners; its recorded inventory governs only packaging and changed-member naming.
+Apple invokes it only for a visible alert with `"mutable-content": 1`; if it
+does not return changed content before the time limit, the original alert is
+shown. See Apple's
+[`UNNotificationServiceExtension`](https://developer.apple.com/documentation/usernotifications/unnotificationserviceextension)
+and [content-modification guide](https://developer.apple.com/documentation/usernotifications/modifying-content-in-newly-delivered-notifications).
+The [recipe](recipes/notification-service-extension.md) gives the folder,
+privacy manifest and device-profile rules.
 
 `aps.category` names one of the categories the app declares with
 `@exact/notifications`' `actions=` (above), by its actions' names joined by
@@ -3188,10 +3203,14 @@ Run on an iOS 27 simulator: the real prompt; a registration the simulator
 answered with a token; a relaunch that only reads `pushSubscription()`
 answering the same token; the entitlement in the built app; pushes sent with
 `xcrun simctl push` shown and their taps opening `navigate`, with the app in
-front, from the Home Screen and at launch. Not yet run: delivery through
-APNs, the entitlement signed against a profile with Push Notifications, and a
-production build. `packages/push/test/checklist.md` is those checks; until
-they pass, nothing here is claimed for a device.
+front, from the Home Screen and at launch. On 2026-11-14, Xcode's iOS 27.0
+simulator accepted a `mutable-content: 1` push for the extension fixture but
+did not launch its service extension or write its App Group marker. The direct
+reference separately constructed requests and called the handler's receipt and
+expiry methods with a controlled download callback. Not yet run: delivery through APNs, the
+entitlement and extension signed against device profiles, and a production
+build. `packages/push/test/checklist.md` is those checks; until they pass,
+nothing here is claimed for a device.
 
 ### A newer binary from the store (`@exact/store-update`)
 

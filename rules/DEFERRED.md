@@ -914,8 +914,9 @@ names no take; `:focus-within` remains out.
   nothing is claimed for a device until that run. Not built: push on macOS (the
   row is omitted there) and on the web
   (Declarative Web Push or a host worker). Still refused: push-to-start; a
-  notification service extension; an event raised by a push, but for a
-  declared action the person chose (below).
+  notification service extension except for the app-owned Swift form admitted
+  below; an event raised by a push, but for a declared action the person chose
+  (below).
   **Expanded (Charlie, 2026-11-14, "admit", on LLP 1172.016 Q1 after a
   three-seat panel split two to one for admitting):** a data-only push as a
   wake's trigger (`content-available`, the `remote-notification` background
@@ -952,6 +953,19 @@ names no take; `:focus-within` remains out.
   owed: a registration with a Firebase project and delivery through FCM. A
   data message as a wake (admitted above, on LLP 1172.016 Q1) waits for
   Android's headless session; until then it is journaled.
+  **Expanded (the 2026-11-14 panel, two to one, under Charlie's delegation and
+  direction to build the ideal end state; LLP 1133.004 §9 P6, P8):** an app's
+  own Swift `UNNotificationServiceExtension`, packaged by default in iOS and
+  iPadOS builds, may change a visible alert whose payload has
+  `mutable-content: 1`.
+  It runs no Contract, data module, Exact runtime or UI, and raises no arrival
+  event. Consumer: the builder whose ordinary build replaced the extension.
+  Unblocks decryption, downloaded media and rewritten alert text without a
+  post-build patch. Take: waived under the delegation. Still refused:
+  push-to-start; an event raised by a visible push except for the person's
+  declared action above; a notification content extension; Contract or
+  TypeScript on a visible-alert arrival; filtering and critical-alert
+  entitlements; and payload keys Exact reads beyond `navigate`.
 
 **Components** — roughly 15 built-in tags, not 40; roughly 12 Facet components, not 47.
 

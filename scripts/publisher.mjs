@@ -18,6 +18,7 @@ import { Refusal, refuse, assetIndex, canonicalBytes, canonicalJson, envelopeByt
 import { admitHead, binaryInputFile, cohortReceipt, keepRecord, latestRecord, nextSeq } from './deploy-heads.mjs';
 import { bakedEntryAssets, buildBake, classifyArtifacts, nativeManifestMetadata } from './app.mjs';
 import { directoryInputNames, watchOutput } from './cargo-dep-info.mjs';
+import { notificationServiceInputChanges, notificationServiceSourceRoot } from './notification-service.mjs';
 import { appleAssetCatalogInventory, launchImageInventory, nativeResourceInventory } from '../host/apple/assets.mjs';
 import { buildRust, publishedSignature, rustBundle, rustPackage, tieredNative } from './rust.mjs';
 import { blobPath, sha256, streamPath } from './origin.mjs';
@@ -208,15 +209,19 @@ async function evidenceOf(origin, cohort, build, head) {
 
 /** Compare a native build's source evidence with this source. Native SDKs and generated products are not needed to
  * read it. */
-function binaryInputChanges(bytes, app, compat, appleIcons) {
+function binaryInputEvidence(bytes) {
   const evidence = JSON.parse(bytes);
   if (evidence.version !== 1) refuse('the cohort binary input receipt has an unsupported version');
+  return evidence;
+}
+
+export function binaryInputChanges(bytes, app, compat, appleIcons, evidence = binaryInputEvidence(bytes)) {
   const platform = compat.inputs.platform, apple = ['ios', 'macos'].includes(platform);
   const assetApp = { ...app, appleIcons, manifest: { host: app.manifest.host } };
   const appleAssetCatalogs = apple ? appleAssetCatalogInventory(assetApp, compat.target.includes('-tvos') ? 'tvos' : platform) : [];
   const launchImage = platform === 'ios' ? launchImageInventory(app) : null;
   const nativeResources = apple ? nativeResourceInventory(app, null, platform) : [];
-  const metadata = { ...(appleAssetCatalogs.length ? { appleAssetCatalogs } : {}), ...(launchImage ? { launchImage } : {}), ...(nativeResources.length ? { nativeResources } : {}),
+  const metadata = { ...(appleAssetCatalogs.length ? { appleAssetCatalogs } : {}), ...(launchImage ? { launchImage } : {}), ...(nativeResources.length ? { nativeResources } : {}), ...(apple && evidence.metadata.appleExtensions !== undefined ? { appleExtensions: evidence.metadata.appleExtensions } : {}),
     ...nativeManifestMetadata(app.manifest, platform), delivery: compat.delivery, store: compat.inputs.store, keys: compat.inputs.keys };
   const keys = new Set([...Object.keys(metadata), ...Object.keys(evidence.metadata)]);
   const changed = [...keys].filter(key => canonicalJson(metadata[key] ?? null) !== canonicalJson(evidence.metadata[key] ?? null));
@@ -233,6 +238,11 @@ function binaryInputChanges(bytes, app, compat, appleIcons) {
   check(evidence.directories, (path, row) => canonicalJson(directoryInputNames(path, skip)) === canonicalJson(row.names));
   check(evidence.absent, path => !existsSync(path));
   check(evidence.links, (path, row) => sha256(Buffer.from(readlinkSync(path))) === row.sha256);
+  for (const row of evidence.inventories ?? []) {
+    if (!Object.hasOwn(roots, row.root)) refuse(`the binary input receipt names an unknown source root ${row.root}`);
+    if (row.kind !== 'notification-service') refuse(`the binary input receipt names an unknown inventory ${row.kind}`);
+    changed.push(...notificationServiceInputChanges(resolve(roots[row.root], row.path), row.identity).map(name => name === notificationServiceSourceRoot ? `${row.root}/${row.path}` : `${row.root}/${row.path}/${name}`));
+  }
   return changed;
 }
 
@@ -308,7 +318,10 @@ export async function streamCandidates(app, origin, found, env, { baker = null, 
       let built = variants.get(cohort.compat.target) ?? variants.values().next().value;
       // Without a snapshot's bake the grants are the cohort's: a module's are checked by its own receipt, and a data
       // crate's are its native code, which `dataCrate` covers.
-      const compat = snapshotCompat(tools.graph, app, cohort, snapshot?.compat ? snapshot : { compat: cohort.compat }, built, env);
+      const evidenceBytes = await evidenceOf(origin, cohort, binary, head);
+      const evidence = evidenceBytes === null ? null : binaryInputEvidence(evidenceBytes);
+      const compatEnv = evidence?.metadata.appleExtensions !== undefined ? { ...env, EXACT_APPLE_EXTENSIONS: evidence.metadata.appleExtensions.join(',') } : env;
+      const compat = snapshotCompat(tools.graph, app, cohort, snapshot?.compat ? snapshot : { compat: cohort.compat }, built, compatEnv);
       const graph = planGraph(tools.graph, app, built.plan, compat, env, built.entries);
       const inputs = cohort.compat.inputs;
       // Plans check their required raster renditions. Native packaging owns
@@ -324,9 +337,8 @@ export async function streamCandidates(app, origin, found, env, { baker = null, 
       // Without a module, the data crate runs in the binary and baked the plan's first frame (LLP 1030.007 D5).
       nativeData = superseded.filter(key => key === 'dataCrate');
       // The native files and manifest metadata the binary's evidence names, which the compatibility id does not all encode.
-      const evidence = await evidenceOf(origin, cohort, binary, head);
       const unchecked = evidence === null;
-      const pendingInputs = [...superseded, ...(unchecked ? [] : binaryInputChanges(evidence, app, compat, graph.appleIcons))];
+      const pendingInputs = [...superseded, ...(unchecked ? [] : binaryInputChanges(evidenceBytes, app, compat, graph.appleIcons, evidence))];
       // The named entries are this bake's, in place of the last generation's whole.
       const entries = [...built.entries].map(([name, bytes]) => ({ name, bytes, sha256: sha256(bytes) }));
       const staticAssets = snapshot
@@ -500,4 +512,3 @@ export async function publishStream({ origin, row, bundle, compat, app, signer, 
     return { ...row, action: 'published', seq, changes, head: { seq, sha256: originDigest, entryDigest, release }, previous: previousDigest };
   });
 }
-

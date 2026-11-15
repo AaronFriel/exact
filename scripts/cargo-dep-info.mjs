@@ -169,7 +169,7 @@ export function swiftTargetInputs(description, packageRoot, product, add) {
 
 /** Source-owned binary inputs, relocated by root instead of the builder's
  * absolute paths. Generated products and registry caches stay with the bake. */
-export function binarySourceInputs({files, directories, absent, links, metadata}, roots, outputs) {
+export function binarySourceInputs({files, directories, absent, links, inventories = [], metadata}, roots, outputs) {
   const skip = watchOutput(outputs);
   const located = path => {
     if (skip(path)) return null;
@@ -186,6 +186,7 @@ export function binarySourceInputs({files, directories, absent, links, metadata}
     directories: capture([...directories.values()], dir => dir.path, dir => ({ names: dir.names })),
     absent: capture([...absent.values()], path => path, () => ({})),
     links: capture([...links.values()], link => link.path, link => ({ sha256: createHash('sha256').update(link.target).digest('hex') })),
+    inventories: capture(inventories, inventory => inventory.path, inventory => ({ kind: inventory.kind, identity: inventory.identity })),
   };
 }
 

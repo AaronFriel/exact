@@ -5,6 +5,7 @@ import { appleImplementations } from '../js/bake/src/typescript.mjs';
 import { webHostFiles, hostModuleSources, MODULE_PRELUDE } from '../host/web-js/glue.mjs';
 export { webHostFiles } from '../host/web-js/glue.mjs';
 import { compilerPaths, unitDepInfo, cargoBakeInputs, bakeSourceInputs, pendingSourceInputs, inputProducts, inputHashes, sourcePath, packageDirectories, directoryInputNames, buildInputCollector, binarySourceInputs, swiftTargetInputs, watchOutput } from './cargo-dep-info.mjs';
+import { notificationServiceBuildInventory, notificationServiceInputChanges, notificationServiceSourceRoot } from './notification-service.mjs';
 export { compilerPaths, unitDepInfo } from './cargo-dep-info.mjs';
 import { LIBRARY_CACHE, directDependencies, prepareLibrary } from './package-libraries.mjs';
 import { ensureBun } from './bun.mjs';
@@ -1033,6 +1034,7 @@ function completeBuild(app, platform, target, graph, messages, roots, env, prepa
     if (declarer) return outsideName(path, declarer);
     throw new Error(`compiler input has no captured source identity: ${path}`);
   };
+  const inventories = notificationServiceBuildInventory(app.dir, compat.inputs.notificationService, nameOf);
   const hashes = inputHashes(app, env), optionalInputs = new Set();
   const watchOutputs = [...buildOutputs(app, graph, env), env.OUT_DIR, baked, ...scripts.map(script => script.out_dir)].filter(Boolean).map(path => resolve(path));
   const {inputs, absent, directories, links, add} = buildInputCollector({outputs:watchOutputs, nameOf, hashes, replaced});
@@ -1117,7 +1119,7 @@ function completeBuild(app, platform, target, graph, messages, roots, env, prepa
     }
     const swift=JSON.parse(readFileSync(described,'utf8'));
     swiftTargetInputs(swift,packageRoot,platform==='ios'?'ExactIOS':'ExactMac',add);
-    add(resolve(packageRoot,'Package.swift'));add(resolve(packageRoot,'webarm/WebArm.swift'));add(resolve(packageRoot,'webarm/FrameBrowser.swift'));add(resolve(packageRoot,'webarm/FrameWindows.swift'));add(resolve(packageRoot,'webarm/FrameCapture.swift'));add(resolve(packageRoot,'webarm/FramePDF.swift'));add(resolve(packageRoot,'webarm/FrameAutomation.swift'));add(resolve(packageRoot,'webarm/FrameFiles.swift'));add(resolve(packageRoot,'webarm/FrameInspector.swift'));add(resolve(packageRoot,'webarm/FramePrint.swift'));add(resolve(packageRoot,'videoarm/VideoArm.swift'));add(resolve(packageRoot,'videoarm/PictureInPicture.swift'));add(resolve(packageRoot,'build.mjs'));add(resolve(packageRoot,'assets.mjs'));add(resolve(packageRoot,'bundle.mjs'));add(resolve(packageRoot,'widgets.mjs'));
+    add(resolve(packageRoot,'Package.swift'));add(resolve(packageRoot,'webarm/WebArm.swift'));add(resolve(packageRoot,'webarm/FrameBrowser.swift'));add(resolve(packageRoot,'webarm/FrameWindows.swift'));add(resolve(packageRoot,'webarm/FrameCapture.swift'));add(resolve(packageRoot,'webarm/FramePDF.swift'));add(resolve(packageRoot,'webarm/FrameAutomation.swift'));add(resolve(packageRoot,'webarm/FrameFiles.swift'));add(resolve(packageRoot,'webarm/FrameInspector.swift'));add(resolve(packageRoot,'webarm/FramePrint.swift'));add(resolve(packageRoot,'videoarm/VideoArm.swift'));add(resolve(packageRoot,'videoarm/PictureInPicture.swift'));add(resolve(packageRoot,'build.mjs'));add(resolve(packageRoot,'assets.mjs'));add(resolve(packageRoot,'bundle.mjs'));add(resolve(packageRoot,'extensions.mjs'));add(resolve(packageRoot,'widgets.mjs'));
     const entries=platform==='ios'&&(app.manifest.widgets?.length||app.manifest.live_activities?.length); if(entries)add(resolve(packageRoot,'widget'),true); if(entries||env.EXACT_WIDGET_GALLERY==='1')add(resolve(packageRoot,'Sources/ExactSnapshot'),true);
   }
   if(platform==='web') {
@@ -1144,7 +1146,7 @@ function completeBuild(app, platform, target, graph, messages, roots, env, prepa
   // The launch screen's picture: its bytes are the binary's, and packaging draws the ones recorded.
   const launchImage = platform === 'ios' ? launchImageInventory(app) : null;
   if (launchImage) add(resolve(app.dir, launchImage.src));
-  const metadata={...(appleAssetCatalogs.length ? {appleAssetCatalogs} : {}),...(launchImage ? {launchImage} : {}),...(nativeResources.length ? {nativeResources} : {}),...nativeManifestMetadata(app.manifest, platform),delivery:compat.delivery,store:compat.inputs.store,keys:compat.inputs.keys};
+  const metadata={...(appleAssetCatalogs.length ? {appleAssetCatalogs} : {}),...(launchImage ? {launchImage} : {}),...(nativeResources.length ? {nativeResources} : {}),...(env.EXACT_APPLE_EXTENSIONS!==undefined?{appleExtensions:env.EXACT_APPLE_EXTENSIONS.split(',').filter(Boolean)}:{}),...nativeManifestMetadata(app.manifest, platform),delivery:compat.delivery,store:compat.inputs.store,keys:compat.inputs.keys};
   const configuration={target,units:orderedBuild([...new Map(units.map(u=>[canonicalBuild(u),u])).values()]),builders:orderedBuild([...new Map(builders.map(u=>[canonicalBuild(u),u])).values()]),rustc:buildCommand('rustc',['-vV'],app,env).stdout,flags:{...Object.fromEntries(['RUSTFLAGS','CARGO_ENCODED_RUSTFLAGS','MACOSX_DEPLOYMENT_TARGET','IPHONEOS_DEPLOYMENT_TARGET','TVOS_DEPLOYMENT_TARGET','WATCHOS_DEPLOYMENT_TARGET'].map((k)=>[k,env[k]??null])),...(env.EXACT_WEB_LINK?{EXACT_WEB_LINK:env.EXACT_WEB_LINK}:{}),...(env.EXACT_WEB_SIZE?{EXACT_WEB_SIZE:env.EXACT_WEB_SIZE}:{})}};
   for (const captured of privacyManifests) {
     const name = nameOf(captured.path); inputs.delete(name); absent.delete(name);
@@ -1155,9 +1157,9 @@ function completeBuild(app, platform, target, graph, messages, roots, env, prepa
     directories:orderedBuild([...directories].map(([name, {names}]) => ({name, names}))),
     links:orderedBuild([...links.values()].map(({name, target}) => ({name, target}))),
     files:files.map(({name, sha256}) => ({name, sha256})),
-    absent:[...absent.keys()].sort(), configuration, metadata,
+    absent:[...absent.keys()].sort(), inventories:inventories.map(({name,kind,identity})=>({name,kind,identity})), configuration, metadata,
   };
-  const sourceInputsRecord = binarySourceInputs({files, directories, absent, links, metadata}, [
+  const sourceInputsRecord = binarySourceInputs({files, directories, absent, links, inventories, metadata}, [
     {name:'app',path:app.dir}, {name:'exact',path:ROOT}, {name:'workspace',path:graph.metadata.workspace_root},
     ...packages.filter(pkg => pkg.source === null).map(pkg => ({name:'workspace',path:graph.metadata.workspace_root, contains:dirname(pkg.manifest_path)})),
   ], watchOutputs);
@@ -1165,7 +1167,7 @@ function completeBuild(app, platform, target, graph, messages, roots, env, prepa
     .concat(generatedInputs.products);
   hashes.save();
   const sourceRecord = platform === 'windows' ? {sourceInputs:bakeSourceInputs(app, sourceInputs, watchOutputs)} : {};
-  return {version:1,backendOrigin,...sourceRecord,watchedDirectories:[...packageDirectories([...sourceInputs],watchOutputs), ...generatedInputs.watchedDirectories],...(env.EXACT_RUST_BUNDLE?{rust:resolve(baked,'rust')}:{}),...(optionalInputs.size?{optionalInputs:[...optionalInputs].sort()}:{}),...(baked!==rootOutput?{linkedPlan:baked,linkedInputs:linkedInputs(baked)}:{}),...bakedSettings(baked,app.dir),trust:env.EXACT_UPDATE_TRUST??'development',compat,graph:bundleGraph,binary:{sourceInputs:sourceInputsRecord,...(privacyManifests.length ? {privacyManifests} : {}),...(assetCatalogApp ? {assetCatalogApp} : {}),...(nativeResources.length ? {nativeResourceApp:{dir:app.dir,manifest:app.manifest,platform}} : {}),sha256:buildHash(canonicalBuild(fingerprint)),...fingerprint,inputs:files,watchOutputs,links:[...links.values()],directories:[...directories.values()],missing:[...absent.values()]},products};
+  return {version:1,backendOrigin,...sourceRecord,watchedDirectories:[...packageDirectories([...sourceInputs],watchOutputs), ...generatedInputs.watchedDirectories],...(env.EXACT_RUST_BUNDLE?{rust:resolve(baked,'rust')}:{}),...(optionalInputs.size?{optionalInputs:[...optionalInputs].sort()}:{}),...(baked!==rootOutput?{linkedPlan:baked,linkedInputs:linkedInputs(baked)}:{}),...bakedSettings(baked,app.dir),trust:env.EXACT_UPDATE_TRUST??'development',compat,graph:bundleGraph,binary:{sourceInputs:sourceInputsRecord,...(privacyManifests.length ? {privacyManifests} : {}),...(assetCatalogApp ? {assetCatalogApp} : {}),...(nativeResources.length ? {nativeResourceApp:{dir:app.dir,manifest:app.manifest,platform}} : {}),sha256:buildHash(canonicalBuild(fingerprint)),...fingerprint,inventories,inputs:files,watchOutputs,links:[...links.values()],directories:[...directories.values()],missing:[...absent.values()]},products};
 }
 // The permanent companion inode owns exclusion; the JSON claim is only its diagnostic record.
 export function claimBuildOutput(app, path) {
@@ -1413,6 +1415,7 @@ export function pendingBuildInputs(build, { includeSources = false, launch } = {
   for (const link of build.binary.links ?? []) {
     try { if (readlinkSync(link.path) !== link.target) changed.push(link.path); } catch { changed.push(link.path); }
   }
+  for (const inventory of build.binary.inventories ?? []) for (const name of notificationServiceInputChanges(inventory.path, inventory.identity)) changed.push(name===notificationServiceSourceRoot?inventory.name:`${inventory.name}/${name}`);
   if (includeSources) changed.push(...pendingSourceInputs(build.sourceInputs));
   return changed;
 }

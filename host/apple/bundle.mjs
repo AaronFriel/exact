@@ -3,7 +3,7 @@ import { writePrivacyManifest } from './privacy.mjs';
 // @ref LLP 1126 D2/D8 — an extension is packaged inside its app's cohort.
 import { packageActivityArm, assertActivityRefusals } from './activities.mjs';
 import { packageWidgets, packageAlarmExtension, widgetId, entryProfiles, activityEntries, platformWidgetEntries, macWidgetGroup, macWidgetEntitlements, widgetGroup, widgetAppKeys } from './widgets.mjs';
-import { packageShareExtension, shareInfo, shareId, macShareEntitlements } from './extensions.mjs';
+import { packageNotificationService, packageShareExtension, notificationServiceEntitlements, notificationServiceProfile, shareInfo, shareId, macShareEntitlements } from './extensions.mjs';
 import { createHash } from 'node:crypto';
 import { spawnSync } from './toolchain.mjs';
 import { resolve, basename, dirname } from 'node:path';
@@ -13,7 +13,7 @@ import { webRefusal, browserEntitlements } from './documents.mjs';
 import { memoryEntitlements, alarmKeys } from './plist.mjs';
 import { listAssets } from '../web/serve.mjs';
 import { appIcon, buildInfo, iosAssets, appleAssets, copyNativeResources, IOS_RESOURCE_ROOT, iosBundleGrants, iosExecutableRefusal, shareIosResources, iconFiles, signingOrder, helperEntitlements, wrapFramework, assertArchiveFrameworks, plistFile } from './assets.mjs';
-import { allows, profile, identity, embeddedProfile } from './devices.mjs';
+import { allows, profile, identity, embeddedProfile, installedProfiles } from './devices.mjs';
 import { grantEntitlements, macHostIdentity } from './presence.mjs';
 import { stripForDistribution, stripProductionExecutable } from './link.mjs';
 import { assertLibraryNames, placeLibrary } from '../../scripts/package-libraries.mjs';
@@ -223,7 +223,7 @@ export function placeMacLibraries(frameworks, { library, moduleLibraries = [] },
   });
 }
 
-export function assembleIOS({intents, shared, library, moduleLibraries = [], packageLibraries = [], serviceDylibs, triple, app, paths, binDir, bin, clipBin, device, development, appleReach, tv, bakedCompat, bakedPlan, ipa, linkRoot, swiftc, buildReceipt, rosterKeys, sdkName, production, distribution, stampSdk, libDir, gpuArtifacts, looseArms, modulesBuilt, modulesLoadName, hasSvg, svgBuilt, svgLoadName, svgFilterBuilt, svgFilterLibraryName, canvasGpuBuilt, canvasGpuLoadName, args, unsigned, prof, ph, sha1, composition, destination, target, sdk, hasGpu, dylib, alarm = null, watch = false}, {runApple, appleArtifacts, macInfoPlist, copyAppleStaticTrees, writeUsageStrings, receipt, shippedReceipt, assertAppleIdentity, placeAppleArtifact, infoPlist, distributionKeys, copyAppleGpuProducts, entitlements, appClip}) {
+export function assembleIOS({intents, shared, library, moduleLibraries = [], packageLibraries = [], serviceDylibs, triple, app, paths, binDir, bin, clipBin, device, development, appleReach, tv, bakedCompat, bakedPlan, ipa, linkRoot, swiftc, buildReceipt, rosterKeys, sdkName, production, distribution, stampSdk, libDir, gpuArtifacts, looseArms, modulesBuilt, modulesLoadName, hasSvg, svgBuilt, svgLoadName, svgFilterBuilt, svgFilterLibraryName, canvasGpuBuilt, canvasGpuLoadName, args, unsigned, prof, ph, sha1, composition, destination, target, sdk, hasGpu, dylib, alarm = null, notification = null, watch = false}, {runApple, appleArtifacts, macInfoPlist, copyAppleStaticTrees, writeUsageStrings, receipt, shippedReceipt, assertAppleIdentity, placeAppleArtifact, infoPlist, distributionKeys, copyAppleGpuProducts, entitlements, appClip}) {
   assertLibraryNames([library, ...moduleLibraries, ...packageLibraries, shared && { placed: shared.framework }].filter(Boolean));
   // The bundle, assembled from scratch (new inodes, see above), with the app's assets (a phone reads no other
   // machine's paths); ad-hoc signed for a simulator, signed with the team's identity, profile, and entitlements for a phone.
@@ -354,6 +354,16 @@ export function assembleIOS({intents, shared, library, moduleLibraries = [], pac
       sign: (extension, ent) => run('codesign', ['--force', '--sign', signingIdentity, '--timestamp=none', ...(device ? ['--entitlements', ent] : []), extension], { stdio: 'ignore' }) });
     if (watch && kind === 'app') embedWatch(app, { parent: assembled, namespace: paths.namespace, device, production, symbols: resolve(keptSymbols ?? linkRoot, 'Watch'),
       signing: appProfile ? { identity: signingIdentity, profiles: companion } : null, runApple, receipt });
+    if (notification && kind === 'app') {
+      const appEntitlements = JSON.parse(runApple('plutil', ['-convert', 'json', '-o', '-', ent], { read: true }).stdout);
+      const serviceEntitlements = notificationServiceEntitlements(notification, appEntitlements);
+      const serviceProfile = device && !unsigned ? notificationServiceProfile({ service: notification, appProfile: signingProfile, udid: ph?.udid,
+        entitlements: serviceEntitlements, installed: installedProfiles() }) : null;
+      packageNotificationService({ service: notification, identity: bakedCompat.inputs.notificationService, app, bundle: assembled, directory: linkRoot, sdk, triple, device, runApple,
+        production: production || distribution, symbols: keptSymbols ?? linkRoot, profile: serviceProfile,
+        entitlements: serviceEntitlements,
+        sign: (extension, serviceEntitlementPath) => run('codesign', ['--force', '--sign', signingIdentity, '--timestamp=none', ...(device ? ['--entitlements', serviceEntitlementPath] : []), extension], { stdio: 'ignore' }) });
+    }
     // Swift frameworks are stripped before signing. Rust modules and prebuilt frameworks keep their linker output:
     // Xcode's strip can make Rust dylibs unloadable. GPU frameworks keep their authenticated bytes too.
     // An App Clip's frameworks are the app's bytes: the same dSYMs.

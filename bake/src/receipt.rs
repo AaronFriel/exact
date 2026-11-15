@@ -8,7 +8,7 @@ use exact_update::{gpu_code_digest as code_digest, Baked, Envelope};
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 
-mod watch;
+pub(crate) mod watch;
 
 /// A development bake's map from plan node to Contract source (LLP 1035.002
 /// D6; LLP 1012.001.000 D6), `OUT_DIR/app.plan.map.json`: beside the plan,
