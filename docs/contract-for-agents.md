@@ -4685,6 +4685,15 @@ overrides out of a shipped binary, and an over-the-air update cannot change it.
 Gate a developer-only control on it, and gate what that control reads as well, so
 a production build never asks for it:
 `resource overrides = loadOverrides() when not build.production as shape Overrides`.
+
+A TypeScript-only update currently removes the plan's source-shape requirement
+when it pairs the plan with its module. If that update first reads a field of a
+reserved source that the installed binary predates, delivery can admit the plan
+although the binary cannot answer the field. Release a new native binary and
+cohort before pushing the first use of a new reserved-source field. This applies
+to every reserved source; a C ABI bump alone does not make the paired plan
+require that ABI.
+
 `exactViewport().displayMode` is a string: the current CSS display
 mode on the web, `fullscreen`, `window-controls-overlay` (the tall title row
 `display_override` asks for) or `standalone` on macOS, `standalone` on other

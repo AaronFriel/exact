@@ -474,6 +474,27 @@ test('a Contract-only deploy checks new source shapes against the installed nati
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
+test('a TypeScript pair currently removes the plan source-shape requirement', async () => {
+  const shape = { params: [], result: '{ frozen: Bool }' };
+  const { root, app, cohort, streamCandidates } = harness(classifyArtifacts, 4, {
+    planRequires: { sources: { exactPage: shape } },
+  });
+  try {
+    fs.writeFileSync(resolve(root, 'app.ts'), '');
+    const stream = { channel: 'prod', compatibilityId: cohort.compat.id };
+    const [update] = await streamCandidates(
+      app,
+      {},
+      [{ stream, head: { assets: [] }, cohort, platform: 'ios' }],
+      { EXACT_UPDATE_TRUST: 'production', EXACT_GAME_PROOF_PROFILE: 'release' },
+    );
+    const plan = update.build.graph.artifacts.find(artifact => artifact.name === 'app.plan');
+    expect(plan.requires.sources).toBeUndefined();
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test.each([
   { scope: null, moduleGrants: '', allowed: false },
   { scope: null, moduleGrants: 'net.fetch https://api.example', allowed: true },
