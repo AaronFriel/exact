@@ -2306,9 +2306,10 @@ are in [Pitfalls when writing Exact games](game-pitfalls.md).
   Resources keep their previous value on failure. Gate account views while the
   account is pending or failed, and render rows only when their answer's principal
   matches the current principal. Throw `refused(page.denied)` on a query denial.
-  The complete online password example in `snapback4/README.md` demonstrates this
-  alongside reload, logout and sign-in tests; an empty successful list would hide
-  an authentication failure.
+  An empty successful list would hide an authentication failure. Where a checkout
+  has the Snapback client, its accompanying `snapback4/README.md` demonstrates this
+  in the complete online password example alongside reload, logout and sign-in
+  tests. That guide is not in this repository.
 
 
 - **A picker path can contain spaces.** Use `pick "attachment" "my photo.png"`

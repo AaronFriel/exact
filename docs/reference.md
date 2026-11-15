@@ -103,9 +103,11 @@ Cargo pins the device and its client to the matching release source commit
 the undici 0.4.33 pins with 8.12.2, the version 0.4.43 pins, for the eight
 advisories on 8.11.2 (among them
 [GHSA-qrxm-fqhp-jwvm](https://github.com/nodejs/undici/security/advisories/GHSA-qrxm-fqhp-jwvm));
-a pin at 0.4.43 or later drops the override. `snapback4/` is one client for an
-app's Rust and TypeScript on every host ([its README](../snapback4/README.md)):
-the protocol in Rust without I/O, the native device, the web's wasm, and the
+a pin at 0.4.43 or later drops the override. The Snapback client is not included in
+this repository. Where a checkout has it at `snapback4/`, its accompanying
+`snapback4/README.md` covers wiring and device rebuilds. It is one client for an
+app's Rust and TypeScript on every host: the protocol in Rust without I/O,
+the native device, the web's wasm, and the
 TypeScript driver an app mounts with `typescript.sources`. The client is its
 own Cargo workspace, `snapback4/`, with its own lock. Direct Cargo commands use
 `--manifest-path snapback4/Cargo.toml`; apps depend on `snapback4/` by path.

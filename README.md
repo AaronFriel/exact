@@ -74,9 +74,17 @@ The design record is a separate, private repository of numbered documents (LLPs)
 README and the guides cite it by number (`LLP 1115 D7`). The guides under [`docs/`](docs)
 are the public documentation.
 
-Upgrade note (2026-10-16): Snapback mutation replies with `ok: false` now throw
-`refused(why)` and expose `failure(slot)`; see the
-[before/after and inherited-app commands](snapback4/README.md#updating-an-inherited-app).
+To upgrade an inherited app, run these commands from its directory:
+
+```sh
+bun exact.mjs update
+bun exact.mjs contract migrate app.contract
+bun exact.mjs lock
+bun exact.mjs contract build app.contract --json --errors-only
+```
+
+For the Snapback mutation refusal rewrite, see the
+[upgrade note in start-here](docs/start-here.md#upgrading-an-inherited-app).
 
 ## Contents
 
@@ -848,4 +856,5 @@ The Snapback client (`snapback4/`) is not in this repository, and Exact works wi
 in a checkout without it, `exact new --snapback` and `bun exact.mjs snapback` refuse,
 naming the missing client. A checkout that has it there uses published **0.4.33** with
 the matching immutable Rust source revision `3653cae823145170df3e720f5e321bd1b5b4d79d`,
-and [its guide](snapback4/README.md) covers wiring and device rebuilds.
+and its guide, `snapback4/README.md`, comes with that client and covers wiring
+and device rebuilds. The guide is absent from a clean Exact checkout.

@@ -5764,8 +5764,8 @@ This test goes with the complete example above. A test opens with its launch
 lines — `size 1200x800`, `epoch "2026-09-21T12:00:00Z"`, `time-zone
 "America/New_York"`, `locale "fr-FR"`, `seed 7`, the driver's flags of those
 names, and `fresh` (the Snapback dev server emptied first, `fresh
-"seed.json"` seeded from a file; snapback4/README.md) — written first in the
-test or, for every test, at the top of the file.
+"seed.json"` seeded from a file; [Snapback tests](recipes/snapback-tests.md)) —
+written first in the test or, for every test, at the top of the file.
 
 `prefer prefers-color-scheme dark` sets a media preference before the first
 observation. It can lead the test or the file, or appear later to change the

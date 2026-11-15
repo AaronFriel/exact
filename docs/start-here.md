@@ -98,9 +98,7 @@ the nested worktree. `update` refreshes the paths when the checkout moves.
 checkout it runs from. It reports when `exact.mjs`'s default checkout path changes, including in a linked worktree. Run `bun install` when it reports changed package paths. An older Android
 scaffold moves `canvas_jni!` to `exact-painted`; an authored dependency form gets the manual
 edit in the report. `update` also reports lock drift; `bun exact.mjs lock` refreshes it.
-`contract migrate app.contract` rewrites retired Contract syntax;
-[the Snapback upgrade note](../snapback4/README.md#updating-an-inherited-app) covers
-mutation refusals too.
+
 Keep scratch files in `.exact/` and helper scripts you commit (a screenshot comparer) in
 `tools/`: neither makes the build stale. Other files you add may (a Python helper under
 `scripts/`, a JSON file `app.ts` imports). Nothing the app reads belongs in `tools/`: an edit
@@ -113,6 +111,30 @@ the two differ, and draws `home.diff.png`, so neither picture needs viewing. On 
 
 `agent ios` is the app as a person sees it, UIKit's bars included, with screenshots a pixel a
 point (`--scale 3`: the device's): no other simulator tool is needed ([driving iOS](recipes/ios-driving.md)).
+
+## Upgrading an inherited app
+
+To upgrade an inherited app, run these commands from its directory (`contract migrate`
+rewrites retired Contract syntax):
+
+```sh
+bun exact.mjs update
+bun exact.mjs contract migrate app.contract
+bun exact.mjs lock
+bun exact.mjs contract build app.contract --json --errors-only
+```
+
+Since 2026-10-16, Snapback mutation sources with a bool `ok` field return
+`{ok: true}` on success. Replace `return {ok: false}` replies with
+`throw refused({code: 'FULL', message: 'No room'})`, importing `refused` from
+`./snapback4/snapback.ts`. Return a literal `{ok: true, ...}` on success; for a
+shared helper, annotate its return type as `Result<'source'>` (using the mutation's
+source name and importing `Result` from `./app.contract.d.ts`), or preserve the
+literal with `ok: true as const`.
+
+Render the refusal by extracting the option:
+`match failure(slot) { case some(f) => f.code, case none => "" }` (use `f.message`
+for its explanation). The mutation's `then` runs only on success.
 
 ## Platform checks
 
