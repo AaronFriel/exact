@@ -471,8 +471,9 @@ for (const [name, html, files, expectCode, expect] of [
   const assetBody = Buffer.alloc(56 * 1024 * 1024, 7);
   const assetHash = sha256(assetBody);
   const card = name => ({ url: origin + name, bytes: body.length, sha256: sha256(body) });
-  // Every tree the server captures is a name the client admits; an activity schema is one.
-  const assets = Array.from({ length: 5 }, (_, i) => i === 3 ? 'activities/3.json' : `assets/${i}.txt`).map(name => ({ name, url: origin + name, bytes: assetBody.length, sha256: assetHash }));
+  // Every tree the server captures is a name the client admits. Shaders and activity schemas are read with the
+  // generation; assets/ and deck/ files are read when the page asks for them (host/web/tests/dev-assets.test.mjs).
+  const assets = Array.from({ length: 5 }, (_, i) => i === 3 ? 'activities/3.json' : `shaders/${i}.wgsl`).map(name => ({ name, url: origin + name, bytes: assetBody.length, sha256: assetHash }));
   const module = Object.fromEntries(['native', 'receipt', 'web'].map(key => [key, card(key)]));
   const canonical = { assets: assets.map(({ name, bytes, sha256 }) => ({ bytes, name, sha256 })).sort((a, b) => a.name < b.name ? -1 : 1),
     module: Object.fromEntries(['native', 'receipt', 'web'].map(key => [key, { bytes: body.length, sha256: sha256(body) }])),
@@ -489,7 +490,7 @@ for (const [name, html, files, expectCode, expect] of [
       if (url === origin + 'assets.json') return new Response(index);
       count++;
       return await new Promise(resolve => {
-        pending.push(() => resolve(new Response(corrupt && url === origin + 'web' ? 'damaged' : /\/(assets|activities)\//.test(url) ? assetBody : body)));
+        pending.push(() => resolve(new Response(corrupt && url === origin + 'web' ? 'damaged' : /\/(shaders|activities)\//.test(url) ? assetBody : body)));
         peak = Math.max(peak, pending.length);
         wake();
       });
@@ -518,14 +519,14 @@ for (const [name, html, files, expectCode, expect] of [
   const good = await run();
   // The live generation's unchanged assets are not fetched again; a changed one is.
   const live = new Map(good.value?.assets);
-  live.set('assets/4.txt', { ...live.get('assets/4.txt'), sha256: '0'.repeat(64) });
+  live.set('shaders/4.wgsl', { ...live.get('shaders/4.wgsl'), sha256: '0'.repeat(64) });
   const again = await run(live), refetched = count - 8;
   corrupt = true;
   const bad = await run();
   result('a 280 MiB dev asset generation fetches within four slots, reuses unchanged assets and refuses bad integrity',
     good.first === 4 && peak === 4 && refetched === 4 && count === 20 && good.value?.assets.size === 5 && good.value?.module
-      && again.value?.assets.get('assets/0.txt').bytes === good.value.assets.get('assets/0.txt').bytes
-      && again.value.assets.get('assets/4.txt').bytes !== good.value.assets.get('assets/4.txt').bytes
+      && again.value?.assets.get('shaders/0.wgsl').bytes === good.value.assets.get('shaders/0.wgsl').bytes
+      && again.value.assets.get('shaders/4.wgsl').bytes !== good.value.assets.get('shaders/4.wgsl').bytes
       && bad.error?.message.includes('payload integrity failed: module web'),
     JSON.stringify({first:good.first,peak,count,refetched,goodError:good.error?.message,againError:again.error?.message,badError:bad.error?.message,assets:good.value?.assets.size}));
 }
