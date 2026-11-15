@@ -1058,6 +1058,23 @@ extension NavigationHost {
         return appearance
     }()
 
+    /// A drawn bar item (`ChipFace`, `BadgeFace`) is an image for one
+    /// appearance: a new colour scheme or contrast projects each live
+    /// stack's bars again, and only an item whose face changed is drawn
+    /// again. The change is heard in the Exact view's own trait change,
+    /// before UIKit has given the views under it their new traits, which the
+    /// faces read; the window's `updateTraitsIfNeeded` gives them theirs now,
+    /// with its callbacks sent synchronously (UIView.h). A stack still
+    /// showing an ended route (a sheet going away) is left alone.
+    func appearanceChanged() {
+        for nav in allNavigations {
+            let routes = nav.stackRoutes.compactMap { $0 as? RouteController }
+            guard !routes.isEmpty, routes.allSatisfy({ controllers[$0.node.id] === $0 }) else { continue }
+            nav.viewIfLoaded?.window?.updateTraitsIfNeeded()
+            prepareRoutes(routes, in: nav)
+        }
+    }
+
     /// Keep the primary owner in the root's authored scroller. For a route's
     /// replacement, register it before its first native layout, preserving Back.
     func scrollBackendChanged(_ node: NodeView) {
