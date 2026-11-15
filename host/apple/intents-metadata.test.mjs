@@ -84,7 +84,8 @@ for (const platform of ['ios', 'watchos']) {
   test.skipIf(!xcode)(`widget configuration metadata matches Xcode's extractor (${platform})`, () => {
     const dir = mkdtempSync(resolve(tmpdir(), 'exact-widget-intents-')), keep = process.env.EXACT_REFERENCE_OUT;
     const run = (command, args) => {
-      const r = spawnSync(command, args, { encoding: 'utf8', timeout: 90000 });
+      // `swiftc` leaves a `TemporaryDirectory.*` in TMPDIR each run: the children's TMPDIR is this test's directory, removed after.
+      const r = spawnSync(command, args, { encoding: 'utf8', timeout: 90000, env: { ...process.env, TMPDIR: dir } });
       if (r.status !== 0) throw new Error(`${command}: ${r.error?.message ?? ''}\n${r.stdout}\n${r.stderr}`);
       return r.stdout.trim();
     };

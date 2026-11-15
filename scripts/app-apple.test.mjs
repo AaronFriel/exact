@@ -1374,7 +1374,7 @@ for (const [moduleDirectory, staleDirectory] of [['', null], ['Modules', null], 
   if (process.platform !== 'darwin') return;
   const { sharedWidgetCore } = await import('../host/apple/widgets.mjs');
   const dir = mkdtempSync(resolve(tmpdir(), 'exact-core-recopy-'));
-  const run = (command, args) => { const r = spawnSync(command, args, { encoding: 'utf8' }); assert.equal(r.status, 0, r.stderr); return r; };
+  const run = (command, args) => { const r = spawnSync(command, args, { encoding: 'utf8', env: { ...process.env, TMPDIR: dir } }); assert.equal(r.status, 0, r.stderr); return r; }; // swiftc leaves a TemporaryDirectory.* in its TMPDIR
   try {
     const bin = resolve(dir, 'bin'), base = resolve(dir, 'core'); mkdirSync(bin);
     const triple = moduleTripleFor({ manifest: {} }, false);
