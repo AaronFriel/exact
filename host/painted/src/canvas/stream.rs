@@ -28,7 +28,7 @@ pub(super) fn keep(ops: Option<Vec<u32>>) {
 pub(super) fn reader_replaced() {
     FINISHED.with(|f| *f.borrow_mut() = None);
     streams().clear();
-    pending().clear();
+    with_pending(|p| p.clear());
 }
 
 pub(super) fn next_stream() -> Option<Vec<u32>> {
@@ -858,11 +858,11 @@ component App
         recorder.ops = vec![IMAGE, 1, 0, 0, 1, 1];
         recorder.finish_stream().unwrap();
         assert!(waiting());
-        assert!(pending().contains_key(&1));
+        assert!(with_pending(|p| p.contains_key(&1)));
         reader_replaced();
         assert!(!waiting());
         assert!(FINISHED.with(|f| f.borrow().is_none()));
-        assert!(pending().is_empty());
+        assert!(with_pending(|p| p.is_empty()));
 
         let new = Picture::Canvas(Arc::new(Pixmap::new(2, 1).unwrap()));
         let mut recorder = Recorder::new();
@@ -870,7 +870,7 @@ component App
         recorder.finish_stream().unwrap();
         let newest = FINISHED.with(|f| f.borrow_mut().take());
         assert_eq!(after_turn(newest), Some(vec![IMAGE_DEF, 1, 2, 1]));
-        assert_eq!(pending().remove(&1).unwrap().key(), new.key());
+        assert_eq!(with_pending(|p| p.remove(&1)).unwrap().key(), new.key());
         assert!(next_stream().is_none());
     }
 }

@@ -263,11 +263,25 @@ thread_local! {
 /// Pictures the reader has not fetched yet, by id: one map for the process,
 /// as a reader may fetch them on its own thread while the host runs on
 /// another (LLP 1072 on Android).
+#[cfg(not(test))]
 static PENDING: std::sync::Mutex<std::collections::BTreeMap<u32, Picture>> =
     std::sync::Mutex::new(std::collections::BTreeMap::new());
 
-fn pending() -> std::sync::MutexGuard<'static, std::collections::BTreeMap<u32, Picture>> {
-    PENDING.lock().unwrap_or_else(|e| e.into_inner())
+#[cfg(test)]
+thread_local! {
+    // Each test has its own reader, whose image ids start at one.
+    static PENDING: RefCell<std::collections::BTreeMap<u32, Picture>> = const { RefCell::new(std::collections::BTreeMap::new()) };
+}
+
+fn with_pending<T>(f: impl FnOnce(&mut std::collections::BTreeMap<u32, Picture>) -> T) -> T {
+    #[cfg(not(test))]
+    {
+        f(&mut PENDING.lock().unwrap_or_else(|e| e.into_inner()))
+    }
+    #[cfg(test)]
+    {
+        PENDING.with(|p| f(&mut p.borrow_mut()))
+    }
 }
 
 /// The recording backend.
@@ -526,7 +540,7 @@ impl Backend for Recorder {
         for (k, id) in dead {
             self.images.remove(&k);
             self.ops.extend([IMAGE_FREE, id]);
-            pending().remove(&id);
+            with_pending(|p| p.remove(&id));
         }
     }
 
@@ -688,9 +702,13 @@ impl Backend for Recorder {
         true
     }
 
+    fn supports_blend(&self) -> bool {
+        false
+    }
+
     fn island_image(&mut self, pixels: Arc<Pixmap>, dst: Rect4, ts: Transform, mode: u8) {
         if mode != 0 {
-            undrawn("`mix-blend-mode`");
+            undrawn("`mix-blend-mode` with a backdrop outside its SVG; put the backdrop inside the same SVG or Canvas 2D surface");
         }
         self.canvas(&pixels, dst, &[], ts);
     }
@@ -1378,14 +1396,15 @@ impl<D: DataSource + Default> CanvasHost<D> {
 
 /// The pictures announced and not yet fetched: id, width, height.
 pub fn pending_pictures() -> Vec<[u32; 3]> {
-    pending()
-        .iter()
-        .map(|(id, p)| [*id, p.width(), p.height()])
-        .collect()
+    with_pending(|p| {
+        p.iter()
+            .map(|(id, p)| [*id, p.width(), p.height()])
+            .collect()
+    })
 }
 
 /// A picture announced by `IMAGE_DEF`, once (premultiplied RGBA rows).
 #[cfg(target_os = "android")]
 fn image(id: u32) -> Option<Picture> {
-    pending().remove(&id)
+    with_pending(|p| p.remove(&id))
 }

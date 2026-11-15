@@ -1106,6 +1106,9 @@ fn filter_moves(engine: &Engine, a: &exact_kernel::NodeRef<'_>) -> bool {
 /// animations each frame, so what is inside it lowers as anywhere else.
 fn in_picture(kernel: &Kernel, engine: &Engine, n: &exact_kernel::NodeRef<'_>, live: bool) -> bool {
     use exact_kernel::svg::filter::FilterFn;
+    if exact_kernel::svg::in_blended_scene(kernel, n) {
+        return true;
+    }
     let followed = |f: &exact_kernel::svg::filter::FilterList| {
         live && !f.0.iter().any(|x| matches!(x, FilterFn::Url(_)))
     };

@@ -491,7 +491,7 @@ impl<D: DataSource> Host<D> {
         // move: transforms do not apply to non-replaced inline boxes (CSS Transforms 1 §3).
         if self.flat.nodes.contains(&view)
             || self.inline_runs.contains_key(&view)
-            || self.svg.presented(view)
+            || self.svg.presented(self.runner.kernel(), view)
         {
             return;
         }

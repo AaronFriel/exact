@@ -1270,6 +1270,9 @@ fn attr_detail(name: &str, a: &AttrTarget) -> Vec<String> {
             if matches!(name, "grid-template-columns" | "grid-template-rows") {
                 lines.push(GRID_TRACKS.into());
             }
+            if name == "mix-blend-mode" {
+                lines.push("SVG elements blend with the backdrop inside the same svg on iOS/tvOS (Core Graphics) and Android (tiny-skia before the reader). Include the background shapes in that svg. macOS uses its public Core Animation layer blend, including the backdrop outside the SVG. Canvas 2D globalCompositeOperation, including multiply, also draws on iOS and Android; draw both inks into one canvas. On iOS and Android neither route blends with boxes or another surface outside it".into());
+            }
             if name == "font-family" {
                 lines.push("CSS family list: literal lists and literal choices work on every host; a string from state or data names installed or generic families on web, macOS, iOS and Linux. Invalid lists leave the row unset. Bundled faces use a `font` declaration".into());
             }

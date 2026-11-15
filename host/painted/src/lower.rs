@@ -148,6 +148,31 @@ impl<D: DataSource> Host<D> {
                 self.lowered_epoch += 1;
             }
         }
+        // A sibling can make an unchanged animation part of a rasterized SVG.
+        // Return ownership without replacing its play or restarting its phase.
+        let reclaim: Vec<_> = self
+            .lowered
+            .keys()
+            .copied()
+            .filter(|node| {
+                let props: Vec<_> = self
+                    .engine
+                    .animation_plays(*node)
+                    .iter()
+                    .flat_map(|p| p.animation.keyframes.properties())
+                    .collect();
+                self.runner
+                    .kernel()
+                    .node_by_key(exact_kernel::motion::node_key(*node))
+                    .is_none_or(|n| !playable(self.runner.kernel(), &n, &props))
+            })
+            .collect();
+        for node in reclaim {
+            self.engine.set_node_sampled(node, true);
+            self.lowered.remove(&node);
+            self.lowered_epoch += 1;
+            self.lowered_changed.insert(node, self.lowered_epoch);
+        }
         for (node, animations) in &sync.animations {
             let key = NodeKey {
                 index: *node as u32,
@@ -164,7 +189,7 @@ impl<D: DataSource> Host<D> {
                 && !self.engine.timeline_bound(*node)
                 && self.runner.kernel().node_by_key(key).is_some_and(|n| {
                     n.props.str(exact_kernel::PropId::SharedElement).is_none()
-                        && playable(&n, &props)
+                        && playable(self.runner.kernel(), &n, &props)
                 });
             self.engine.set_node_sampled(*node, !playable);
             let mask = if playable { mask(&props) } else { 0 };
@@ -204,9 +229,8 @@ impl<D: DataSource> Host<D> {
             return;
         }
         let now = self.engine.now();
-        // Reclaim tracks when the painter needs their sampled values: a
-        // spatial box has no compositor layer, and a press or look composes
-        // with the node's own presentation (LLP 1121 D8).
+        // Reclaim tracks when a blend, spatial box, press or look needs
+        // the engine's sampled presentation (LLP 1121 D8).
         for (node, t) in &self.played {
             let Some(n) = self
                 .runner
@@ -216,7 +240,8 @@ impl<D: DataSource> Host<D> {
                 continue;
             };
             for (property, _) in t {
-                if !playable(&n, &[*property]) || self.spatial_rotation(*node) {
+                if !playable(self.runner.kernel(), &n, &[*property]) || self.spatial_rotation(*node)
+                {
                     self.engine.reclaim_played(*node, *property);
                 }
             }
@@ -267,7 +292,7 @@ impl<D: DataSource> Host<D> {
             let key = exact_kernel::motion::node_key(node);
             let layered = self.runner.kernel().node_by_key(key).is_some_and(|n| {
                 n.props.str(exact_kernel::PropId::SharedElement).is_none()
-                    && playable(&n, &[property])
+                    && playable(self.runner.kernel(), &n, &[property])
                     && recolors(&n, property)
             });
             if !layered {
@@ -722,10 +747,17 @@ fn easing(out: &mut Vec<u32>, e: Option<&Easing>) {
 /// Whether the reader can show these animated properties of `n` as CSS
 /// does: a box's transform and opacity; an SVG element's opacity; a filled
 /// circle's radius as a scale about its centre.
-fn playable(n: &exact_kernel::NodeRef<'_>, props: &[Property]) -> bool {
+fn playable(
+    kernel: &exact_kernel::Kernel,
+    n: &exact_kernel::NodeRef<'_>,
+    props: &[Property],
+) -> bool {
     // What the host paints over the node's own (a press, a look: LLP 1061 D7,
     // LLP 1121 D8) is composed where the engine samples, so it stays there.
     if props.iter().any(|p| crate::host::press::paints_over(n, *p)) {
+        return false;
+    }
+    if exact_kernel::svg::in_blended_scene(kernel, n) {
         return false;
     }
     let s = n.style;

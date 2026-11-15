@@ -438,47 +438,148 @@ fn a_looks_color_leaves_the_colour_track_to_the_reader() {
 /// backdrop to blend with, so the engine samples its animation. The same
 /// element unblended is the reader's.
 #[test]
-fn a_blended_svg_element_is_sampled_not_the_readers() {
+fn a_blended_svg_backdrop_is_sampled_not_the_readers() {
     for (blend, clip, played) in [
         ("normal", "none", true),
         ("multiply", "none", false),
         ("normal", "path('M0 0H50V100H0Z')", false),
     ] {
-        let source = format!(
-            r##"component App
+        for backdrop in [false, true] {
+            let foreground_blend = if backdrop { "normal" } else { blend };
+            let sibling_blend = if backdrop { blend } else { "normal" };
+            let source = format!(
+                r##"component App
   state o = 1
   action go
     o = 0.2
   view
     box width=400 height=500
       svg width=100 height=100
-        circle testId="target" cx=50 cy=50 r=40 fill="#3366cc" opacity=o transition="opacity 1s linear" mix-blend-mode="{blend}" clip-path="{clip}"
+        circle testId="target" cx=50 cy=50 r=40 fill="#3366cc" opacity=o transition="opacity 1s linear" mix-blend-mode="{foreground_blend}" clip-path="{clip}"
+        circle cx=70 cy=50 r=20 fill="#cc6633" mix-blend-mode="{sibling_blend}"
       button testId="go" press=go
         text "Go"
 "##
-        );
-        let (mut h, error) = Host::boot(
-            &contract::compile(&source).unwrap().encode(),
-            (),
-            Box::new(MonospaceMeasurer::default()),
-            400.,
-            500.,
-        )
-        .unwrap();
-        assert!(error.is_none(), "{error:?}");
-        h.lowering = true;
-        let target = h.kernel().find_by_test_id("target")[0];
-        let go = h.kernel().find_by_test_id("go")[0];
-        let go = h.kernel().node_by_key(go).unwrap().id;
-        assert!(h.dispatch_at(go, Event::Press, 0.).is_none());
-        let node = motion_node(target);
-        assert_eq!(
-            h.engine.is_played(node, Property::Opacity),
-            played,
-            "{blend}"
-        );
-        let mask = if played { LOWER_OPACITY } else { 0 };
-        assert_eq!(h.lowered_mask(target), mask, "{blend}");
+            );
+            let (mut h, error) = Host::boot(
+                &contract::compile(&source).unwrap().encode(),
+                (),
+                Box::new(MonospaceMeasurer::default()),
+                400.,
+                500.,
+            )
+            .unwrap();
+            assert!(error.is_none(), "{error:?}");
+            h.lowering = true;
+            let target = h.kernel().find_by_test_id("target")[0];
+            let go = h.kernel().find_by_test_id("go")[0];
+            let go = h.kernel().node_by_key(go).unwrap().id;
+            assert!(h.dispatch_at(go, Event::Press, 0.).is_none());
+            let node = motion_node(target);
+            assert_eq!(
+                h.engine.is_played(node, Property::Opacity),
+                played,
+                "{blend}"
+            );
+            let mask = if played { LOWER_OPACITY } else { 0 };
+            assert_eq!(h.lowered_mask(target), mask, "{blend}");
+        }
+    }
+}
+
+#[test]
+fn a_new_blend_reclaims_a_running_backdrop_without_restarting_it() {
+    for reference in 0..3 {
+        for animation in [false, true] {
+            let motion = if animation {
+                "animation=motion"
+            } else {
+                "opacity=o transition=\"opacity 1s linear\""
+            };
+            let definition = if reference == 1 {
+                "      svg width=0 height=0\n        defs\n          rect id=\"ink\" width=50 height=50 fill=\"#fd2f7c\" mix-blend-mode=blend"
+            } else {
+                ""
+            };
+            let foreground = if reference == 1 {
+                "use href=\"#ink\""
+            } else {
+                "rect width=50 height=50 fill=\"#fd2f7c\" mix-blend-mode=blend"
+            };
+            let mut source = format!(
+                r##"keyframes fade
+  from opacity=1
+  to opacity=0.2
+component App
+  state o = 1
+  state motion = "none"
+  state blend = "normal"
+  action go
+    o = 0.2
+    motion = "fade 1s linear infinite"
+  action overprint
+    blend = "multiply"
+  view
+    column
+{definition}
+      svg width=100 height=100
+        rect testId="target" width=100 height=100 fill="#34f1ec" {motion}
+        {foreground}
+      button testId="go" press=go
+        text "Go"
+      button testId="blend" press=overprint
+        text "Blend"
+"##
+            );
+            if reference == 2 {
+                source = source.replace("rect testId=\"target\"", "rect id=\"ink\" testId=\"target\"")
+                    .replace("        rect width=50 height=50 fill=\"#fd2f7c\" mix-blend-mode=blend",
+                        "      svg width=100 height=100\n        rect width=100 height=100 fill=\"#34f1ec\"\n        use href=\"#ink\" mix-blend-mode=blend");
+            }
+            let (mut h, error) = Host::boot(
+                &contract::compile(&source).unwrap().encode(),
+                (),
+                Box::new(MonospaceMeasurer::default()),
+                200.,
+                200.,
+            )
+            .unwrap();
+            assert!(error.is_none(), "{error:?}");
+            h.lowering = true;
+            h.engine.set_lowered_properties(&LOWERED);
+            let target = h.kernel().find_by_test_id("target")[0];
+            let id = h.kernel().node_by_key(target).unwrap().id;
+            let node = motion_node(target);
+            let go = h
+                .kernel()
+                .node_by_key(h.kernel().find_by_test_id("go")[0])
+                .unwrap()
+                .id;
+            assert!(h.dispatch_at(go, Event::Press, 0.).is_none());
+            assert_eq!(h.lowered_mask(target), LOWER_OPACITY);
+            h.tick(250.);
+            let epoch = h.lowered_epoch;
+            let blend = h
+                .kernel()
+                .node_by_key(h.kernel().find_by_test_id("blend")[0])
+                .unwrap()
+                .id;
+            assert!(h.dispatch_at(blend, Event::Press, 250.).is_none());
+            assert_eq!(h.lowered_mask(target), 0);
+            assert!(!h.engine.is_played(node, Property::Opacity));
+            assert!(h.lowered_changed[&node] > epoch);
+            assert!((h.presented(id).opacity - 0.8).abs() < 0.01);
+            h.tick(500.);
+            assert!((h.presented(id).opacity - 0.6).abs() < 0.01);
+            if animation {
+                assert!(h.engine.node_sampled(node));
+                h.tick(1250.);
+                assert!((h.presented(id).opacity - 0.8).abs() < 0.01);
+            } else {
+                h.tick(1000.);
+                assert!((h.presented(id).opacity - 0.2).abs() < 0.01);
+            }
+        }
     }
 }
 

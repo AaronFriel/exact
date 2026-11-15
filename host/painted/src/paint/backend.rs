@@ -222,6 +222,10 @@ pub trait Backend {
     /// Whether this backend places a CPU island: the walk makes none it
     /// would not (a text stroke's band).
     fn supports_island_image(&self) -> bool;
+    /// Whether an island can blend with previously painted pixels.
+    fn supports_blend(&self) -> bool {
+        true
+    }
     /// An SVG island's pixels over `dst` in `ts`'s space, blended by `mode`.
     fn island_image(&mut self, pixels: Arc<Pixmap>, dst: Rect4, ts: Transform, mode: u8);
     /// Draw through a row-major projective matrix until `plane_end`. A backend

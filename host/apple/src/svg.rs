@@ -175,7 +175,7 @@ impl SvgState {
                 self.dirty.insert(id);
                 true
             }
-            Some(t) if t.is_svg_element() => self.presented(id),
+            Some(t) if t.is_svg_element() => self.presented(kernel, id),
             _ => false,
         }
     }
@@ -247,7 +247,14 @@ impl SvgState {
     }
 
     /// A presented value moved on an element: its scene is rebuilt.
-    pub(crate) fn presented(&mut self, id: ViewId) -> bool {
+    pub(crate) fn presented(&mut self, kernel: &Kernel, id: ViewId) -> bool {
+        if self.elements.contains_key(&id) {
+            for root in self.sent.keys() {
+                if exact_kernel::svg::scene_sources(kernel, *root).contains(&id) {
+                    self.dirty.insert(*root);
+                }
+            }
+        }
         match self.elements.get(&id) {
             Some(root) => {
                 self.dirty.insert(*root);

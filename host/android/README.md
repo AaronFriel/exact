@@ -1594,10 +1594,11 @@ The cut was the smallest one. Left in the reader:
 
 ## Not done
 
-- **`mix-blend-mode`.** The stream has no blend, so a blended SVG element draws over what is below it; the recorder
-  says so once on the log and the schema's row records it (LLP 1159.000). The pictures the paint walk rasterises itself
-  (SVG filters, `text-shadow`, `-webkit-text-stroke`, `background-clip: text`) are placed as a canvas's is: seen on an
-  emulator, and what an animated one costs is not measured (`QUEUE.md`, "Android's island pictures").
+- **Blending outside one SVG.** Put the ink and its backdrop inside the same `svg`: the shared CPU painter
+  composites them before the Android stream records one picture. A blend cannot read a box or another surface
+  outside that SVG. If its picture cannot be composited, the SVG draws unblended with a `style-undrawn` note.
+  Canvas 2D's `globalCompositeOperation = "multiply"` also blends within its own surface. Animated island
+  costs on an Android device remain unmeasured (`QUEUE.md`, "Android's island pictures").
 - **Most of LLP 1115.001.** The controls have the desktop painter's shapes, and a sheet or a chooser is refused.
   What is built of it:
   - *The reader answers accessibility services* (D13): the section above, with what was and was not seen of

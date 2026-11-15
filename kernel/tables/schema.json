@@ -4127,8 +4127,8 @@
       "codec": "enum:MixBlendMode",
       "_comment": "@ref LLP 1055.000 D19, §8 ruling 6: mix-blend-mode and isolation on SVG elements.",
       "hosts": [
-        { "host": "ios", "fidelity": "none", "why": "UIKit has no public blend on a layer, so the element draws unblended (LLP 1055.000 §8 ruling 6)" },
-        { "host": "android", "fidelity": "none", "why": "the reader's stream has no blend, so the element draws unblended (the recorder's `island_image`)" }
+        { "host": "ios", "on": "box", "fidelity": "none", "why": "blending with a backdrop outside the SVG is not drawn; put all overlapping artwork inside one svg, or use Canvas 2D globalCompositeOperation (including multiply) inside one canvas" },
+        { "host": "android", "on": "box", "fidelity": "none", "why": "blending with a backdrop outside the SVG is not drawn; put all overlapping artwork inside one svg, or use Canvas 2D globalCompositeOperation (including multiply) inside one canvas" }
       ],
       "cold": true
     },

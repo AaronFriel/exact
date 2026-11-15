@@ -6346,15 +6346,22 @@ own `color`, `background-color` (or `background`) or `::placeholder color`
 wins over the role, so it is not judged.
 
 A style a native host does not draw as written is recorded on its row in the
-schema (`hosts`), and `contract vocab <name>` prints it (`ios: not drawn: UIKit
-has no public blend on a layer, so the element draws unblended`). A style
-with no such line has no gap on record, which is not a measurement. For each
-target the app ships, a style you set that the host there does not draw at
-all is said once, naming every such target (`style-undrawn: \`mix-blend-mode\`
-is not drawn on ios (app.json \`host.ios\`): …`): the node draws there as if the
-style were unset. It is information, as `forma-unreachable` is. tvOS reads
-iOS's entries; a host that draws a style differently (`differs`) is said by
-`vocab` alone.
+schema (`hosts`), and `contract vocab <name>` prints it. A style with no such
+line has no gap on record, which is not a measurement. For each target the
+app ships, an undrawn style is named once by `style-undrawn`, with the
+unsupported scope and a supported route where one exists. It is information,
+as `forma-unreachable` is. tvOS reads iOS's entries; a host that draws a style
+differently (`differs`) is said by `vocab` alone.
+
+For overprint with `mix-blend-mode="multiply"`, put the background and all
+crossing shapes inside one `svg`. iOS and tvOS composite that SVG in Core
+Graphics; Android rasterizes it with tiny-skia before sending the picture to
+its reader. macOS keeps its public Core Animation layer blend, including the
+backdrop outside the SVG. The other CSS blend modes are supported there too. Blending with
+boxes or a different surface outside that SVG remains unsupported on iOS and
+Android. Canvas 2D's `globalCompositeOperation = "multiply"` also draws on both:
+draw the backdrop and foreground into the same canvas. It does not blend the
+canvas with the page beneath it.
 
 A background, border or radius makes it your own box, as in a browser;
 `appearance="none"` says so explicitly. This is decided once after classes

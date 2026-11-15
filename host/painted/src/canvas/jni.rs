@@ -1290,18 +1290,19 @@ pub unsafe fn canvas_buffer(env: *mut JNIEnv, view: u32) -> jobject {
 /// # Safety
 /// `env` is the JNI call's.
 pub unsafe fn image_buffer(env: *mut JNIEnv, id: u32) -> jobject {
-    let mut pending = super::pending();
-    let Some(super::Picture::Bitmap(bitmap)) = pending.get(&id) else {
-        return std::ptr::null_mut();
-    };
-    let Some(buffer) = bitmap.hardware() else {
-        return std::ptr::null_mut();
-    };
-    let object = AHardwareBuffer_toHardwareBuffer(env, buffer);
-    if !object.is_null() {
-        pending.remove(&id);
-    }
-    object
+    super::with_pending(|pending| {
+        let Some(super::Picture::Bitmap(bitmap)) = pending.get(&id) else {
+            return std::ptr::null_mut();
+        };
+        let Some(buffer) = bitmap.hardware() else {
+            return std::ptr::null_mut();
+        };
+        let object = AHardwareBuffer_toHardwareBuffer(env, buffer);
+        if !object.is_null() {
+            pending.remove(&id);
+        }
+        object
+    })
 }
 
 /// Picture `id` into the `HardwareBuffer` `buffer` (RGBA_8888, CPU-writable):

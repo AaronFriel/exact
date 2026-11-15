@@ -662,9 +662,7 @@ component StageNine
       circle cx=30 cy=40 r=24 fill="#ffffff" filter="url(#matte)"
       rect x=64 y=16 width=48 height=48 rx=10 fill="#be123c" filter="url(#shine)"
 
-// Stage 10c: mix-blend-mode and isolation (LLP 1055.000 D19). Not drawn
-// blended on iOS (§8 ruling 6), so the smoke leaves this tile to the other
-// hosts there.
+// The backdrop stays inside the SVG for native blending (LLP 1055.000 D19).
 component StageTenBlend
   view
     svg testId="fx-mix" class=Tile viewBox="0 0 120 80"
