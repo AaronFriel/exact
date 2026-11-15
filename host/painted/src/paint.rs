@@ -1,15 +1,8 @@
-//! The painter: the kernel tree is the display list.
+//! @ref LLP 1015 §2; LLP 1014 D4 — the kernel tree is the painter's display list.
 //!
-//! @ref LLP 1015 §2; LLP 1014 D4 (a host that paints has the exact
-//! invalidation answer because it *is* the display list)
-//!
-//! One preorder walk emits each node to a [`Backend`]: its background and
-//! per-corner radii, borders, image by `object-fit`, paragraph as measured
-//! by [`crate::text`], input value or placeholder and caret, then children.
-//! Children inherit overflow clips and scroll offsets. Motion supplies a
-//! transform about `transform-origin` and group opacity (a layer when not 1).
-//! The walk records transformed bounding boxes in viewport points with
-//! their clips; the agent's `layout` and hit-testing share this geometry.
+//! One preorder walk paints node chrome, replaced content and measured text through [`Backend`].
+//! Children inherit overflow clips and scroll offsets; motion supplies `transform-origin`
+//! transforms and group opacity layers. Viewport boxes and clips serve agent layout and hit-testing.
 //!
 //! Backends: [`crate::gpu`] (vello), [`crate::ink`] (instanced geometry),
 //! and [`crate::raster`] (the CPU fallback and pixel oracle).

@@ -211,8 +211,8 @@ export const classifications = [
     ["runner:runner/src/runner/module_work.rs", "Runner::module_work_landed#next_ticket:1"],
   ]),
   group("fills", ["one-shot"], "collection/view generation, window and fill token", "UI-owned",
-    "runner/src/runner/collection.rs validates feedback/fill against the current collection; instance/collection/index.rs versions rows and into_view.rs versions reveal requests.", [
-    ["apple:host/apple/src/abi/exports.rs", "exact_collection_feedback exact_collection_snap exact_collection_snap_stop exact_into_view exact_list_index exact_list_text"],
+    "runner/src/runner/collection.rs validates feedback/fill against the current collection; instance/collection/index.rs versions rows and into_view.rs versions reveal requests. Collection.swift fixedMeasurements reads exact_collection_fixed_size through Bridge.swift for the current fixed-region view/epoch measurements.", [
+    ["apple:host/apple/src/abi/exports.rs", "exact_collection_feedback exact_collection_fixed_size exact_collection_snap exact_collection_snap_stop exact_into_view exact_list_index exact_list_text"],
     ["painted:host/painted/src/canvas/jni.rs", "Java_dev_exact_canvas_Native_ahead Java_dev_exact_canvas_Native_feed Java_dev_exact_canvas_Native_owed Java_dev_exact_canvas_Native_refine"],
     ["painted:host/painted/src/canvas/refine.rs", "CanvasHost::ahead CanvasHost::feed CanvasHost::owed CanvasHost::refine CanvasHost::refine_pending CanvasHost::refine_slice"],
     ["painted:host/painted/src/host.rs", "Host::collection Host::collection_feedback Host::collection_feedback_filled Host::collection_mounted Host::collection_shown Host::collections Host::collections_shallow Host::scroll_into_view"],
@@ -422,13 +422,13 @@ export const classifications = [
     ["web:host/web/src/abi/mode.rs", "exact_design_rows"],
   ]),
   group("media and sensors", ["subscription"], "current MIDI/sound/video/sensor session, element allocation, device handle or scheduled sample", "UI-owned",
-    "runner/src/runner/modules/samples.rs and runner/src/midi.rs number live sensor/device work; sound.rs owns voice/haptic IDs. Android Natives.kt posts player events/state through Native.media and CanvasHost::media; presenter/media.rs reader_media accepts only the current native session and video node key. No persisted operation record is created.", [
+    "runner/src/runner/modules/samples.rs and runner/src/midi.rs number live sensor/device work; sound.rs owns voice/haptic IDs. Android Natives.kt posts player events/state through Native.media and CanvasHost::media; presenter/media.rs reader_media accepts only the current native session and video node key. commands.rs routes media commands to live video keys; content_region/presenter.rs calls sync_media to dirty changed player rows and retire missing keys. No persisted operation record is created.", [
     ["apple:host/apple/src/abi/exports.rs", "exact_midi"],
     ["apple:host/apple/src/executor.rs", "exact_local_network_report"],
     ["painted:host/painted/src/canvas/jni.rs", "Java_dev_exact_canvas_Native_media"],
     ["painted:host/painted/src/canvas/requests.rs", "CanvasHost::media"],
     ["painted:host/painted/src/midi.rs", "Host::drain_outputs Host::extension_agent Host::midi_agent Host::midi_host"],
-    ["painted:host/painted/src/presenter/media.rs", "Presenter::reader_media"],
+    ["painted:host/painted/src/presenter/media.rs", "Presenter::media_command Presenter::reader_media Presenter::sync_media"],
     ["painted:host/painted/src/presenter/preferences.rs", "Presenter::extension_agent Presenter::midi_agent"],
     ["runner:runner/src/midi.rs", "Midi::push#next:1 Midi::retract_seq#next:1 Midi::ticks#next:1"],
     ["runner:runner/src/runner/midi.rs", "Runner::midi Runner::midi_agent Runner::midi_host Runner::midi_input Runner::midi_inputs Runner::set_midi Runner::take_midi"],
@@ -549,10 +549,11 @@ export const classifications = [
     ["web-js:host/web-js/motion/src/abi.rs", "m_gesture m_in m_out m_scratch m_translate"],
   ]),
   group("raster decodes", ["one-shot"], "raster session, decode request and retained lease", "UI-owned",
-    "host/apple/src/raster_exports.rs exposes session/request handles, cancellation and lease release. A completed decode belongs to those consumer leases, not an app operation.", [
+    "host/apple/src/raster_exports.rs exposes session/request handles, cancellation and lease release. RasterBackend.swift trims cold pictures by session/source generation and retires evicted sources while surviving leases keep their backing charges. A completed decode belongs to those consumer leases, not an app operation.", [
     ["apple:host/apple/src/raster_exports.rs",
       "exact_raster_cancel exact_raster_charge_release exact_raster_complete exact_raster_fail exact_raster_is_cancelled exact_raster_lease_release " +
-      "exact_raster_next_decode exact_raster_request exact_raster_session_budget exact_raster_session_control exact_raster_session_create exact_raster_stats " +
+      "exact_raster_next_decode exact_raster_request exact_raster_session_budget exact_raster_session_control exact_raster_session_create " +
+      "exact_raster_session_retire_generation exact_raster_session_trim exact_raster_session_trim_generation exact_raster_stats " +
       "exact_raster_status exact_raster_take_ready exact_raster_wake_sequence"],
   ]),
   group("region and text", ["one-shot"], "layout region or text revision in a live session", "UI-owned",
@@ -827,7 +828,7 @@ export const classifications = [
     ["painted:host/painted/src/ink/images.rs", "Images::begin Images::bitmap Images::pin Images::pixmap Images::unpin"],
     ["painted:host/painted/src/ink/stats.rs", "counter_state Ink::statistics StatisticsReader::read"],
     ["painted:host/painted/src/paint.rs",
-      "bbox content_size object_fit PaintedBox::center PaintedBox::surface Painter::backend Painter::flow_failures Painter::last_frame_ms " +
+      "bbox content_size object_fit Painter::backend Painter::flow_failures Painter::last_frame_ms " +
       "Painter::new Painter::paint Painter::replace_backend Painter::retiring_text_residency Painter::take_notes rgba text_spec"],
     ["painted:host/painted/src/paint/backend.rs", "Painter::trim WindowLayer::into_pixels"],
     ["painted:host/painted/src/paint/border.rs", "border_fills border_fills_styled PathOp::points pattern_fills reduced rounded_rect shape_path Shape::within shaped_rect"],
@@ -835,7 +836,7 @@ export const classifications = [
     ["painted:host/painted/src/paint/dialog_shadow.rs", "DialogShadow::matches DialogShadow::new DialogShadow::rect"],
     ["painted:host/painted/src/paint/field.rs", "effective_overflow"],
     ["painted:host/painted/src/paint/look.rs", "page_color"],
-    ["painted:host/painted/src/paint/presented.rs", "PaintValues::color PaintValues::is_empty PaintValues::set PaintValues::value Presented::from_style Presented::translate_at"],
+    ["painted:host/painted/src/paint/presented.rs", "PaintedBox::center PaintedBox::surface PaintValues::color PaintValues::is_empty PaintValues::set PaintValues::value Presented::from_style Presented::translate_at"],
     ["painted:host/painted/src/paint/rows.rs", "Dirty::commit Dirty::layout Dirty::node"],
     ["painted:host/painted/src/paint/scrollbar.rs", "Bar::coordinate Bar::destination Bar::length Bar::scroll_offset Bar::start State::ink State::look"],
     ["painted:host/painted/src/paint/shadow.rs", "ShadowPaint::blurred ShadowPaint::capture ShadowPaint::fills ShadowPaint::inset ShadowPaint::lifted ShadowPaint::over"],
@@ -1057,7 +1058,7 @@ export const classifications = [
     ["painted:host/painted/src/presenter/still.rs", "Presenter::still"],
   ]),
   group("UI input", ["one-shot"], "current mounted view, action binding or interaction", "UI-owned",
-    "The named painted adapter reads or updates the current Presenter through the runner or its Host forwarding API. runner/src/runner/event.rs dispatches through a mounted view and its action binding; no independent operation identity is supplied.", [
+    "The named painted adapter reads or updates the current Presenter through the runner or its Host forwarding API. runner/src/runner/event.rs dispatches through a mounted view and its action binding; no independent operation identity is supplied. contact.rs feedback_contains checks the live node's tracking shape for contact_press, pointer_moved feedback and pointer_lift activation.", [
     ["painted:host/painted/src/presenter/access.rs",
       "Presenter::access_bar_node Presenter::access_bottom Presenter::access_control Presenter::access_emit Presenter::access_hint Presenter::access_inline_words " +
       "Presenter::access_key Presenter::access_label Presenter::access_name Presenter::access_top Presenter::access_words"],
@@ -1076,7 +1077,7 @@ export const classifications = [
     ["painted:host/painted/src/presenter/back.rs", "Presenter::back_key_down"],
     ["painted:host/painted/src/presenter/bars.rs", "Presenter::bar_button Presenter::content_scroller Presenter::read_bars"],
     ["painted:host/painted/src/presenter/contact.rs",
-      "Presenter::canvas_input_live Presenter::contact_down Presenter::depth Presenter::focus_on_down Presenter::input_live Presenter::mouse_click_target " +
+      "Presenter::canvas_input_live Presenter::contact_down Presenter::depth Presenter::feedback_contains Presenter::focus_on_down Presenter::input_live Presenter::mouse_click_target " +
       "Presenter::pointer_lift Presenter::pointer_moved Presenter::retire_acknowledged_pointer Presenter::retire_pointer"],
     ["painted:host/painted/src/presenter/control.rs", "Presenter::click_control Presenter::dispatch_control_press Presenter::menu_geometry Presenter::menu_press Presenter::set_control_value Presenter::size_controls"],
     ["painted:host/painted/src/presenter/edit_menu.rs", "Presenter::make_edit_menu Presenter::menu_field"],
@@ -1227,7 +1228,7 @@ export const classifications = [
     ["runner:runner/src/stream_timing.rs", "committed decoded entered received report start"],
   ]),
   group("identity bookkeeping", ["one-shot"], "local cursor, metric, cache generation or diagnostic count; not a request ticket", "UI-owned",
-    "The named source arithmetic write advances an interpreter/parser cursor, diagnostic count or presentation/cache state. It is enumerated conservatively so an allocator cannot hide behind a field name.", [
+    "The named source arithmetic write advances an interpreter/parser cursor, diagnostic count or presentation/cache state. Tree::collections_bounded counts fixed roots for snapshot wire admission before allocating; Runner::collections_bounded forwards the host's projection limits. It is enumerated conservatively so an allocator cannot hide behind a field name.", [
     ["runner:runner/src/agent/tree.rs", "request#depth:1"],
     ["runner:runner/src/file_pickers.rs", "Picker::from_args#multiple:1"],
     ["runner:runner/src/format/mod.rs", "Big::shr#0:1"],
@@ -1246,7 +1247,7 @@ export const classifications = [
     ["runner:runner/src/instance/collection/index.rs", "SizeIndex::resize#height:1 SumTree::set#zeros:1"],
     ["runner:runner/src/instance/collection/rekey.rs", "Collection::rekey_shared#index:1 Collection::rekey_shared#item:1"],
     ["runner:runner/src/instance/collection/start.rs", "Collection::leave_end_if_moved#end_travel:1"],
-    ["runner:runner/src/instance/collection/traversal.rs", "Tree::collections_bounded#0:1 Tree::collections_bounded#1:1"],
+    ["runner:runner/src/instance/collection/traversal.rs", "Tree::collections_bounded#0:1 Tree::collections_bounded#1:1 Tree::collections_bounded#2:1"],
     ["runner:runner/src/instance/deps.rs", "scan#opaque:1"],
     ["runner:runner/src/instance/document.rs", "Tree::document#kept:1"],
     ["runner:runner/src/instance/region.rs", "RegionInst::update#2:1"],
