@@ -274,12 +274,44 @@ test('a release keeps what the build signed under its profile, and nothing else 
     const bin = join(dir, 'true'), ent = join(dir, 'e.plist');
     copyFileSync('/usr/bin/true', bin);
     const kept = { 'com.apple.application-identifier': 'T.com.example', 'com.apple.developer.team-identifier': 'T',
-      'com.apple.developer.aps-environment': 'production', 'keychain-access-groups': ['T.com.example'] };
+      'com.apple.developer.aps-environment': 'production', 'keychain-access-groups': ['T.com.example'],
+      'com.apple.developer.applesignin': ['Default'], 'com.apple.developer.in-app-payments': ['merchant.com.example'] };
     writeFileSync(ent, plistFile({ ...kept, 'com.apple.security.app-sandbox': true }));
     expect(Bun.spawnSync(['codesign', '--force', '--sign', '-', '--entitlements', ent, bin]).exitCode).toBe(0);
     expect(profileEntitlements(bin)).toEqual(kept);
     expect(profileEntitlements(bin, '')).toEqual({});
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('the Mac signs Sign in with Apple and Apple Pay from its profile, Developer ID and store builds alike (LLP 1030.005 §6 piece 4)', async () => {
+  const { macProfileEntitlements } = await import('./presence.mjs');
+  const signIn = 'com.apple.developer.applesignin', pay = 'com.apple.developer.in-app-payments';
+  const compat = { inputs: { grantCeiling: 'auth.apple com.example.web\npayment.apple-pay merchant.com.example.lock' },
+    reach: { profileEntitlements: [], auth: { signIn: { apple: ['com.example.web'] } }, payments: { merchantIds: ['merchant.com.example.lock'] } } };
+  const needs = macProfileNeeds(compat);
+  expect(needs).toEqual([
+    { entitlement: signIn, lines: 'auth.apple com.example.web', mandatory: false, effect: expect.stringContaining('NotSupportedError') },
+    { entitlement: pay, lines: 'payment.apple-pay merchant.com.example.lock', mandatory: false, effect: expect.stringContaining('canMakePayment() is false') },
+  ]);
+  // A synthetic profile of each distribution kind: one allowing both is chosen, one lacking Apple Pay is not.
+  const profile = (method, entitlements, name = method) => ({ name, team: 'TEAM', prefix: 'TEAM', appId: `TEAM.${app.id}`, path: `/p/${name}`,
+    platforms: ['OSX'], devices: [], dev: false, method, expires: new Date(Date.now() + 864e7), entitlements, keychain: [], groups: [] });
+  for (const method of ['developerid', 'appstore']) {
+    const both = profile(method, [signIn, pay]), lacking = profile(method, [signIn], `${method}-no-pay`);
+    const find = (a, required, options) => macProfile(a, required, { ...options, installed: [lacking, both], named: null, team: undefined });
+    const signed = macProvisioning(app, compat, { release: true, method, find, log: () => {} });
+    expect(signed.profile).toBe(both);
+    expect(signed.entitlements[signIn]).toEqual(['Default']);
+    expect(signed.entitlements[pay]).toEqual(['merchant.com.example.lock']);
+    expect(macProfile(app, [signIn, pay], { method, installed: [lacking], named: null, team: undefined })).toBeNull();
+  }
+  // Without a profile neither is signed, and a release still ships, saying what the app reports.
+  const said = [];
+  expect(macProvisioning(app, compat, { release: true, method: 'appstore', find: none, log: (l) => said.push(l) })).toBeNull();
+  expect(said).toEqual([expect.stringMatching(/^auth\.apple com\.example\.web: this build signs no com\.apple\.developer\.applesignin, since no App Store macOS/),
+    expect.stringMatching(/^payment\.apple-pay merchant\.com\.example\.lock: this build signs no com\.apple\.developer\.in-app-payments/)]);
+  expect(macProfileEntitlements(app, { prefix: 'P', team: 'T', dev: false }, needs, compat)).toEqual({ 'com.apple.application-identifier': 'P.com.example.lock',
+    'com.apple.developer.team-identifier': 'T', [signIn]: ['Default'], [pay]: ['merchant.com.example.lock'] });
 });
 
 test('the Mac sample host takes the app\'s id under its profile, and a second identity without one (#396)', async () => {

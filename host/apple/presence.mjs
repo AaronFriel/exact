@@ -2,7 +2,8 @@
 // TN3125; LLP 1133.010 D7): the device rows' Mac entitlements (push, App
 // Attest, the Declared Age Range, Group Activities), the keychain group a locked secret is kept
 // in (a Mac keeps one only in the data-protection keychain, whose access
-// groups the signature names, TN3137), and a passkey's associated domains.
+// groups the signature names, TN3137), a passkey's associated domains, and
+// Sign in with Apple's and Apple Pay's entitlements (LLP 1030.005 §6 piece 4).
 // The build picks a macOS profile for the app that allows them all, signs
 // with that profile's team's identity and embeds it. With none, a
 // development build signs none of them and says what each feature then
@@ -20,6 +21,7 @@ export function presenceLines(ceiling = '') {
 }
 
 const KEYCHAIN = 'keychain-access-groups', DOMAINS = 'com.apple.developer.associated-domains';
+const SIGN_IN = 'com.apple.developer.applesignin', PAY = 'com.apple.developer.in-app-payments';
 /** Each device row's Mac profile entitlement (`reach.profileEntitlements`, runner/src/device.rs): its line, what the
  * app reports while it is not signed, and whether a release without it is refused. A Mac release without push ships,
  * reporting it unavailable, as Android and the web do (LLP 1133.004 §9 P7), and so does one without SharePlay, whose
@@ -58,6 +60,13 @@ export function macProfileNeeds(compat) {
   const passkeys = passkeyLines(ceiling);
   if (passkeys.length) needs.push({ entitlement: DOMAINS, lines: passkeys.map((rp) => `auth.passkey ${rp}`).join(', '), mandatory: true,
     effect: 'getClientCapabilities().available is false and create and get fail NotSupportedError' });
+  // Both report unavailable unsigned (packages/sign-in, packages/payments), so a release without them ships.
+  const clients = compat?.reach?.auth?.signIn?.apple ?? [];
+  if (clients.length) needs.push({ entitlement: SIGN_IN, lines: clients.map((id) => `auth.apple ${id}`).join(', '), mandatory: false,
+    effect: 'getIdentityCapabilities() reports Apple inactive and an Apple identity request fails NotSupportedError' });
+  const merchants = compat?.reach?.payments?.merchantIds ?? [];
+  if (merchants.length) needs.push({ entitlement: PAY, lines: merchants.map((id) => `payment.apple-pay ${id}`).join(', '), mandatory: false,
+    effect: 'Apple Pay reads unavailable: canMakePayment() is false' });
   return needs;
 }
 
@@ -71,7 +80,7 @@ export function macAllows(p, app, name) {
 
 const signingChoice = method => method === 'developerid'
   ? 'set EXACT_DEVELOPER_ID=<sha1> to choose a Developer ID Application identity'
-  : 'set DEVELOPMENT_TEAM=<team-id> or EXACT_IDENTITY=<sha1> to choose an Apple Development identity, or EXACT_IDENTITY=- to sign ad hoc (drops Mac extensions, leaves push, App Attest, age range, SharePlay, keychain-access groups and passkeys unsigned, and makes stored login-keychain items prompt after rebuilds)';
+  : 'set DEVELOPMENT_TEAM=<team-id> or EXACT_IDENTITY=<sha1> to choose an Apple Development identity, or EXACT_IDENTITY=- to sign ad hoc (drops Mac extensions, leaves push, App Attest, age range, SharePlay, keychain-access groups, passkeys, Sign in with Apple and Apple Pay unsigned, and makes stored login-keychain items prompt after rebuilds)';
 const teamSelectedByEnvironment = (team, method) => method === 'development' && !process.env.EXACT_IDENTITY && team === process.env.DEVELOPMENT_TEAM?.trim();
 
 /** The macOS profile a build of `app` signs `required` under: for its id or the team's wildcard, unexpired, of the
@@ -101,13 +110,15 @@ export function macProfile(app, required, { method = 'development', installed = 
 }
 
 /** The entitlements `profile` signs `app` with for `needs`: its application identifier and team, each row's (an
- * environment as the profile signs it, LLP 1133.028 D15 item 1), the app's own keychain group, and the bake's
- * associated domains. */
+ * environment as the profile signs it, LLP 1133.028 D15 item 1), the app's own keychain group, the bake's
+ * associated domains, Sign in with Apple's `Default` and the bake's merchant IDs. */
 export function macProfileEntitlements(app, profile, needs, compat) {
   const out = { 'com.apple.application-identifier': `${profile.prefix}.${app.id}`, 'com.apple.developer.team-identifier': profile.team };
   for (const { entitlement } of needs) {
     if (entitlement === KEYCHAIN) out[KEYCHAIN] = [`${profile.prefix}.${app.id}`];
     else if (entitlement === DOMAINS) out[DOMAINS] = associatedDomains(compat?.reach?.auth, profile.dev);
+    else if (entitlement === SIGN_IN) out[SIGN_IN] = ['Default'];
+    else if (entitlement === PAY) out[PAY] = compat?.reach?.payments?.merchantIds ?? [];
     else out[entitlement] = entitlement.endsWith('-environment') ? signedEnvironment(profile.dev) : true;
   }
   return out;
