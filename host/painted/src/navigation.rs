@@ -181,6 +181,10 @@ pub(crate) struct Navigation {
     /// as windows): a press on an invoker is then the presenter's to act on
     /// (`presenter/top.rs`), not refused here.
     pub(crate) top_layer: bool,
+    /// The host places `-exact-menu="status"` buttons outside the window
+    /// (LLP 1133.025 D4: Windows' notification area), so they take no room
+    /// in the page (`bars.rs`).
+    pub(crate) status_items: bool,
     /// What a shell's bars are made from (LLP 1115.001 D11; `bars.rs`),
     /// and the nodes a bar stands for: a header its top bar replaces, a
     /// tablist its navigation bar replaces. Those are neither painted nor

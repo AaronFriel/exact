@@ -370,18 +370,40 @@ impl Painter {
     /// content box of `css` points, painted by a painter of its own at
     /// `scale` device pixels per point into a transparent pixmap of
     /// `css × scale` pixels, as an island is, so the picture and the same
-    /// content inlined never differ on this host.
+    /// content inlined never differ on this host. Its colours take their
+    /// `dark` forms.
     pub(crate) fn svg_picture(
         text: crate::text::Shared,
         scene: &exact_kernel::svg::Scene,
         css: (f32, f32),
         scale: f32,
+        dark: bool,
     ) -> Result<tiny_skia::Pixmap, String> {
         let mut painter = Painter::new(text, scale, Box::new(crate::raster::Raster::transparent()));
+        painter.dark = dark;
         painter.viewport = css;
         painter.backend.begin(css.0, css.1, scale);
         let rect: Rect4 = (0.0, 0.0, css.0, css.1);
         painter.paint_svg(scene, scene.clip, Shape::rect(rect), Transform::identity());
+        painter.backend.finish()
+    }
+
+    /// A symbol (`symbol:`'s role or icon token) alone, filling a square of
+    /// `side` points in `colour`, at `scale` device pixels per point, into a
+    /// transparent pixmap: a status item's image (LLP 1133.025 D4).
+    pub(crate) fn symbol_picture(
+        text: crate::text::Shared,
+        role: &str,
+        style: &exact_kernel::StyleProps,
+        side: f32,
+        scale: f32,
+        colour: [u8; 4],
+    ) -> Result<tiny_skia::Pixmap, String> {
+        let mut painter = Painter::new(text, scale, Box::new(crate::raster::Raster::transparent()));
+        painter.viewport = (side, side);
+        painter.backend.begin(side, side, scale);
+        let rect: Rect4 = (0.0, 0.0, side, side);
+        painter.symbol_face(role, style, rect, colour, Transform::identity());
         painter.backend.finish()
     }
 
