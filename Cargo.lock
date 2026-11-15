@@ -3252,6 +3252,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "interaction-gallery-android"
+version = "0.1.0"
+dependencies = [
+ "contract",
+ "exact-bake",
+ "exact-painted",
+ "interaction-gallery-data",
+]
+
+[[package]]
 name = "interaction-gallery-apple"
 version = "0.1.0"
 dependencies = [
