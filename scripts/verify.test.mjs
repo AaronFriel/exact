@@ -1378,6 +1378,9 @@ test.each(['ios', 'windows'])('verify %s captures a fresh server after replay', 
     const cp=await import('node:child_process'), spawn=cp.spawn;
     mock.module('node:child_process',()=>({...cp,spawn:()=>spawn(process.execPath,['-e','console.log("[]")'])}));
     mock.module(at('agent-build.mjs'),()=>({...build,buildFirst:async()=>0,windowsBuildFirst:async()=>0,windowsBuild:()=>({bin:'unused'})}));
+    // Seeding a native build takes an OS file lock, which under the win32 this preload claims is Win32's LockFileEx.
+    const webBuild=await real('web-build.mjs');
+    mock.module(at('web-build.mjs'),()=>({...webBuild,privateNativeBuild:(...args)=>({...webBuild.privateNativeBuild(...args),seed:async()=>{}})}));
     let rows=[],used=false,passes=0;
     const reset=async()=>{rows=[];used=false;};
     mock.module(at('app-server.mjs'),()=>({...server,appServer:()=>({entry:'server.ts',args:[],url:'http://127.0.0.1:1',port:1,database:false}),answering:async()=>false,
