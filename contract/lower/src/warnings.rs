@@ -64,81 +64,79 @@ pub(crate) fn with_text_styles(
     mut out: Vec<LowerError>,
 ) -> Vec<LowerError> {
     let root = &checked.expanded.root;
-    let controlled = roles::controlled(checked);
     routeless_header::check(checked, &mut out);
     // Track the navigation root (the outermost `navigationKey`) and its `navigationBack`.
     let checking = contract_checking::Checking::new(checked);
     let checked_view = checking.expanded();
+    let controlled = roles::controlled(&checked_view);
     crate::menu_rows::notes(&checked_view, &mut out);
     crate::symbols::tints(&root.view, checked.file, lowered, &mut out);
-    let mut stack: Vec<(&Node, bool, Option<&str>)> =
-        root.view.iter().rev().map(|n| (n, false, None)).collect();
+    // Unmigrated helpers still read syntax; both iterators use the same preorder.
+    // LLP 1172.019 §2 item 4 keeps converted helpers behind checking's boundary.
+    let visits = checked_view.walk_with((false, None), |node, &(in_root, back)| {
+        if let Some((_, _, attrs)) = node.element() {
+            let keyed = has(attrs, "navigationKey");
+            let back = if keyed && !in_root {
+                literal(attrs, "navigationBack").filter(|name| !name.is_empty())
+            } else {
+                back
+            };
+            (in_root || keyed, back)
+        } else {
+            (in_root, back)
+        }
+    });
     let (mut seen, mut platform) = (BTreeSet::new(), Vec::new());
-    while let Some((node, in_root, back)) = stack.pop() {
-        let (children, in_root, back): (Vec<&Node>, bool, Option<&str>) = match node {
-            Node::Element {
-                tag,
-                positional,
-                attrs,
-                children,
-                ..
-            } => {
-                // A component used twice is inlined twice: one line for its source.
-                let span = node.span();
-                let fresh = seen.insert((span.source_id, span.line, span.col, span.end_col));
-                // @ref LLP 1116.007 D3.1 — a symbol by another spelling than its role.
-                if let (true, "image", Some(source)) = (fresh, tag.as_str(), positional.first()) {
-                    out.extend(crate::symbols::image_source(source, &mut platform));
-                }
-                out.extend(roles::button(tag, attrs, children, span).filter(|_| fresh));
-                out.extend(roles::dialog_role(tag, attrs, span).filter(|_| fresh));
-                out.extend(roles::level_without_heading(tag, attrs, span).filter(|_| fresh));
-                out.extend(roles::keys(attrs, children, span, &controlled).filter(|_| fresh));
-                if fresh {
-                    line_height::multiplier(attrs, &mut out);
-                }
-                let keyed = has(attrs, "navigationKey");
-                // @ref LLP 1116.010 D5 — a name or a key that meets nothing.
-                miswiring::swipe(attrs, children, fresh, &mut out);
-                if tag == "image" {
-                    miswiring::image_source(positional.first(), fresh, &mut out);
-                }
-                if keyed && !in_root {
-                    let declared = checked.file.routes.as_ref().map(|r| r.span);
-                    miswiring::navigation_keys(attrs, children, declared, fresh, &mut out);
-                }
-                miswiring::navigation_split(tag, attrs, keyed, keyed && !in_root, fresh, &mut out);
-                let route = in_root && keyed && !has(attrs, "navigationBack");
-                // A route that says it has no bar (LLP 1115.000 D5.2) draws its header as written.
-                let no_bar = literal(attrs, "navigationBar") == Some("none");
-                if route && !no_bar {
-                    header_bar::route_header(children, &[], &mut out);
-                    nested_header::nested_header(children, &mut out);
-                    fixed_beside::fixed_beside((tag, attrs), children, &mut out);
-                }
-                if let (true, Some(name)) = (route, back) {
-                    drawn_back(attrs, children, name, &mut out);
-                }
-                if literal(attrs, "role") == Some("tablist") {
-                    tabs::single_tab(node, &mut out);
-                    tabs::search_tab(node, &mut out);
-                }
-                let back = if keyed && !in_root {
-                    literal(attrs, "navigationBack").filter(|name| !name.is_empty())
-                } else {
-                    back
-                };
-                (children.iter().collect(), in_root || keyed, back)
+    for ((visit, (in_root, back)), node) in visits.zip(Node::walk(&root.view)) {
+        if let Node::Element {
+            tag,
+            positional,
+            attrs,
+            children,
+            ..
+        } = node
+        {
+            // A component used twice is inlined twice: one line for its source.
+            let span = node.span();
+            let fresh = seen.insert((span.source_id, span.line, span.col, span.end_col));
+            // @ref LLP 1116.007 D3.1 — a symbol by another spelling than its role.
+            if let (true, "image", Some(source)) = (fresh, tag.as_str(), positional.first()) {
+                out.extend(crate::symbols::image_source(source, &mut platform));
             }
-            Node::When {
-                then, otherwise, ..
-            } => (then.iter().chain(otherwise).collect(), in_root, back),
-            Node::Each { body, .. } => (body.iter().collect(), in_root, back),
-            Node::Match { some, none, .. } => (some.1.iter().chain(none).collect(), in_root, back),
-            Node::Use { children, .. } => (children.iter().collect(), in_root, back),
-            Node::Children { .. } => (Vec::new(), in_root, back),
-        };
-        stack.extend(children.into_iter().rev().map(|n| (n, in_root, back)));
+            out.extend(roles::button(tag, attrs, visit, span).filter(|_| fresh));
+            out.extend(roles::dialog_role(tag, attrs, span).filter(|_| fresh));
+            out.extend(roles::level_without_heading(tag, attrs, span).filter(|_| fresh));
+            out.extend(roles::keys(attrs, visit, span, &controlled).filter(|_| fresh));
+            if fresh {
+                line_height::multiplier(attrs, &mut out);
+            }
+            let keyed = has(attrs, "navigationKey");
+            // @ref LLP 1116.010 D5 — a name or a key that meets nothing.
+            miswiring::swipe(attrs, children, fresh, &mut out);
+            if tag == "image" {
+                miswiring::image_source(positional.first(), fresh, &mut out);
+            }
+            if keyed && !in_root {
+                let declared = checked.file.routes.as_ref().map(|r| r.span);
+                miswiring::navigation_keys(attrs, children, declared, fresh, &mut out);
+            }
+            miswiring::navigation_split(tag, attrs, keyed, keyed && !in_root, fresh, &mut out);
+            let route = in_root && keyed && !has(attrs, "navigationBack");
+            // A route that says it has no bar (LLP 1115.000 D5.2) draws its header as written.
+            let no_bar = literal(attrs, "navigationBar") == Some("none");
+            if route && !no_bar {
+                header_bar::route_header(children, &[], &mut out);
+                nested_header::nested_header(children, &mut out);
+                fixed_beside::fixed_beside(visit, &mut out);
+            }
+            if let (true, Some(name)) = (route, back) {
+                drawn_back(attrs, children, name, &mut out);
+            }
+            if literal(attrs, "role") == Some("tablist") {
+                tabs::single_tab(node, &mut out);
+                tabs::search_tab(node, &mut out);
+            }
+        }
     }
     (checked.file.styles.iter()).for_each(|s| line_height::multiplier(&s.attrs, &mut out));
     out.extend(screens::screen_by_state(checked));
@@ -153,17 +151,17 @@ pub(crate) fn with_text_styles(
         &checked.file.styles,
     ));
     // @ref LLP 1116.011 D2.1 — a RoundButton label of more than a word.
-    out.extend(parts::round_button_label(checked));
+    out.extend(parts::round_button_label(&checking));
     // @ref LLP 1116.020 D5 — an empty state drawn as a list's row.
-    out.extend(parts::empty_state_in_list(checked));
+    out.extend(parts::empty_state_in_list(&checking));
     // @ref LLP 1116.021 D7 — a summary card in a grouped list's card.
-    out.extend(parts::summary_card_in_list(checked));
+    out.extend(parts::summary_card_in_list(&checking));
     // @ref LLP 1121 D8 — a node's own state part it never meets.
     states::dead(&checked_view, &mut out);
     performance_now(root, &checked.file.fns, &mut out);
-    sounds::undeclared(checked, &mut out);
+    sounds::undeclared(&checking, &mut out);
     geometry::unnamed(&checking, &mut out);
-    navigation_back::unnamed(checked, &mut out);
+    navigation_back::unnamed(&checked_view, &mut out);
     transform::owners(checked, &mut out);
     transform_drag::check(&checked_view, &checked.file.styles, &mut out);
     // @ref LLP 1027.005 D6 — an identifying argument of the launch's own.
@@ -172,7 +170,7 @@ pub(crate) fn with_text_styles(
     scroll_bound::scroll_grows(&checked_view, &checked.file.styles, &mut out);
     container::flex_on_block(&checked_view, &checked.file.styles, &mut out);
     width::text_px_width(&checked_view, &checked.file.styles, lowered, &mut out);
-    svg::use_foreign_object(&root.view, &mut out);
+    svg::use_foreign_object(&checked_view, &mut out);
     out.extend(
         contract_analyze::warnings(checked)
             .into_iter()

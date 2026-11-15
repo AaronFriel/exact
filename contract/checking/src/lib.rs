@@ -1,5 +1,5 @@
 //! Checking views retain the exact typed expansion and authored provenance.
-//! No view or visit exposes an AST node or its children to a checking pass.
+//! Structural regions expose only checking visits through the shared traversal.
 //! @ref LLP 1172.019 §2 item 4; LLP 1172.013 E1, §4 step 4.
 
 #![forbid(unsafe_code)]
@@ -55,6 +55,34 @@ impl<'a> Checking<'a> {
             component: &self.checked.file.components[index],
             types: &self.checked.types.components[index],
         }
+    }
+
+    /// Declared sound paths, in source order.
+    pub fn sounds(&self) -> impl Iterator<Item = &'a str> {
+        self.checked
+            .file
+            .sounds
+            .iter()
+            .map(|sound| sound.source.as_str())
+    }
+
+    /// Expanded root states, derives and providers, in that order.
+    pub fn root_bindings(&self) -> impl Iterator<Item = &'a contract_syntax::Binding> {
+        let root = &self.checked.expanded.root;
+        root.states
+            .iter()
+            .chain(&root.derives)
+            .chain(&root.provides)
+    }
+
+    /// Expanded root resource declarations, which contain no view tree.
+    pub fn resources(&self) -> &'a [contract_syntax::ResourceDecl] {
+        &self.checked.expanded.root.resources
+    }
+
+    /// Expanded root sequence declarations, which contain no view tree.
+    pub fn sequences(&self) -> &'a [contract_syntax::Sequence] {
+        &self.checked.expanded.root.sequences
     }
 
     /// Function and record types shared with expression inference.
@@ -156,6 +184,14 @@ impl<'a> View<'a> {
         &self.scope
     }
 
+    /// Structural facts without assigning a new lexical scope.
+    pub fn structure(&self) -> Structure<'a> {
+        Structure {
+            nodes: self.nodes,
+            declarations: self.declarations,
+        }
+    }
+
     /// Every node, in source order, without inferring region subjects.
     /// Structural checks must also see arms whose subject could not be typed.
     pub fn walk(&self) -> impl Iterator<Item = Visit<'a>> {
@@ -168,22 +204,14 @@ impl<'a> View<'a> {
     pub fn walk_with<C: Clone>(
         &self,
         context: C,
-        mut descend: impl FnMut(Visit<'a>, &C) -> C,
+        descend: impl FnMut(Visit<'a>, &C) -> C,
     ) -> impl Iterator<Item = (Visit<'a>, C)> {
-        let declarations = self.declarations;
-        Node::walk_with(self.nodes, context, move |node, context| {
-            let child = descend(Visit { node, declarations }, context);
-            [Some(child.clone()), Some(child)]
-        })
-        .map(|(node, context)| (Visit { node, declarations }, context))
+        self.structure().walk_with(context, descend)
     }
 
     /// Preorder with roots, siblings and arms in reverse source order.
     pub fn walk_reverse(&self) -> impl Iterator<Item = Visit<'a>> {
-        Node::walk_reverse(self.nodes).map(|node| Visit {
-            node,
-            declarations: self.declarations,
-        })
+        self.structure().walk_reverse()
     }
 
     /// Enter and leave each node, with inherited facts and optional pruning.
@@ -191,14 +219,9 @@ impl<'a> View<'a> {
     pub fn events<C: Clone>(
         &self,
         context: C,
-        mut descend: impl FnMut(Visit<'a>, &C) -> Option<C>,
+        descend: impl FnMut(Visit<'a>, &C) -> Option<C>,
     ) -> impl Iterator<Item = (Visit<'a>, C, bool)> {
-        let declarations = self.declarations;
-        Node::walk_events_with(self.nodes, context, move |node, context| {
-            let child = descend(Visit { node, declarations }, context);
-            [child.clone(), child]
-        })
-        .map(|(node, context, entering)| (Visit { node, declarations }, context, entering))
+        self.structure().events(context, descend)
     }
 
     /// Scoped descent with one fact per arm; inference stays in the shared
@@ -243,7 +266,75 @@ impl<'a> View<'a> {
     }
 }
 
-/// A single node's facts, never the tree beneath it.
+/// A structural region with private nodes. It carries no invented lexical scope;
+/// expression inference uses `View::scoped` or `View::scoped_with`.
+#[derive(Clone, Copy)]
+pub struct Structure<'a> {
+    nodes: &'a [Node],
+    declarations: &'a BTreeMap<&'a str, usize>,
+}
+
+impl<'a> Structure<'a> {
+    /// Direct members in source order, without entering their subtrees.
+    pub fn roots(self) -> impl DoubleEndedIterator<Item = Visit<'a>> {
+        self.nodes.iter().map(move |node| Visit {
+            node,
+            declarations: self.declarations,
+        })
+    }
+
+    /// Every node, in source order, without inferring region subjects.
+    /// Structural checks must also see arms whose subject could not be typed.
+    pub fn walk(self) -> impl Iterator<Item = Visit<'a>> {
+        self.walk_with((), |_, _| ()).map(|(visit, ())| visit)
+    }
+
+    /// One inherited fact per subtree, with sibling and arm isolation.
+    /// O(nodes) descent, O(depth) heap frames, no recursive Rust calls.
+    /// `descend` runs before yielding the parent and selects its children's fact.
+    pub fn walk_with<C: Clone>(
+        self,
+        context: C,
+        mut descend: impl FnMut(Visit<'a>, &C) -> C,
+    ) -> impl Iterator<Item = (Visit<'a>, C)> {
+        let declarations = self.declarations;
+        Node::walk_with(self.nodes, context, move |node, context| {
+            let child = descend(Visit { node, declarations }, context);
+            [Some(child.clone()), Some(child)]
+        })
+        .map(|(node, context)| (Visit { node, declarations }, context))
+    }
+
+    /// Preorder with roots, siblings and arms in reverse source order.
+    pub fn walk_reverse(self) -> impl Iterator<Item = Visit<'a>> {
+        Node::walk_reverse(self.nodes).map(|node| Visit {
+            node,
+            declarations: self.declarations,
+        })
+    }
+
+    /// Enter and leave each node, with inherited facts and optional pruning.
+    /// The boolean is true on entry. Leave retains the incoming facts.
+    pub fn events<C: Clone>(
+        self,
+        context: C,
+        mut descend: impl FnMut(Visit<'a>, &C) -> Option<C>,
+    ) -> impl Iterator<Item = (Visit<'a>, C, bool)> {
+        let declarations = self.declarations;
+        Node::walk_events_with(self.nodes, context, move |node, context| {
+            let child = descend(Visit { node, declarations }, context);
+            [child.clone(), child]
+        })
+        .map(|(node, context, entering)| (Visit { node, declarations }, context, entering))
+    }
+}
+
+/// Node identity within one borrowed checking expansion, including copies
+/// with the same authored span and component instance.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Site(usize);
+
+/// A single node's facts, with structural queries over its private regions.
 #[derive(Clone, Copy)]
 pub struct Visit<'a> {
     node: &'a Node,
@@ -251,6 +342,38 @@ pub struct Visit<'a> {
 }
 
 impl<'a> Visit<'a> {
+    /// Identity for facts computed by a traversal of this expansion.
+    pub fn site(self) -> Site {
+        Site(self.node as *const Node as usize)
+    }
+
+    /// This node and its descendants, retaining expansion identity.
+    pub fn subtree(self) -> Structure<'a> {
+        Structure {
+            nodes: std::slice::from_ref(self.node),
+            declarations: self.declarations,
+        }
+    }
+
+    /// Direct regions in source order. A choice has two arms, a repetition
+    /// one body and an empty second region; elements and uses hold children.
+    pub fn regions(self) -> [Structure<'a>; 2] {
+        self.node.child_lists().map(|nodes| Structure {
+            nodes,
+            declarations: self.declarations,
+        })
+    }
+
+    /// Direct members of all regions in source order.
+    pub fn children(self) -> impl DoubleEndedIterator<Item = Visit<'a>> {
+        self.regions().into_iter().flat_map(Structure::roots)
+    }
+
+    /// Whether this node chooses between two conditional regions.
+    pub fn is_choice(self) -> bool {
+        matches!(self.node, Node::When { .. } | Node::Match { .. })
+    }
+
     /// Authored source identity and token range.
     pub fn span(self) -> Span {
         self.node.span()
