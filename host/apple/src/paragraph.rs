@@ -147,6 +147,8 @@ impl<D: DataSource> Host<D> {
         if self.mirror.remove(&id).is_some() {
             batch.destroy(id);
         }
+        // A view made for it again is ranked as a new one.
+        self.ranks.remove(&id);
         self.create(id, &events, batch);
         self.emit_children(id, batch);
         true

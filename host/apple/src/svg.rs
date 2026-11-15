@@ -241,6 +241,11 @@ impl SvgState {
         }
     }
 
+    /// Whether `id` is an SVG element: its scene paints it, and it has no view.
+    pub(crate) fn is_element(&self, id: ViewId) -> bool {
+        self.elements.contains_key(&id)
+    }
+
     /// A presented value moved on an element: its scene is rebuilt.
     pub(crate) fn presented(&mut self, id: ViewId) -> bool {
         match self.elements.get(&id) {

@@ -295,6 +295,10 @@ impl<D: DataSource> Host<D> {
     }
 
     /// LLP 1083.000 D4: publish ranks independently of geometry, including zero.
+    /// Only a view has one: an inline run, an SVG element and an option's
+    /// content are painted by their paragraph, scene or control, so a
+    /// paragraph of a hundred runs sends no rank when an earlier node comes
+    /// or goes.
     pub(super) fn emit_ranks(&mut self, batch: &mut Batch) {
         let order = self
             .flat
@@ -302,7 +306,11 @@ impl<D: DataSource> Host<D> {
             .take()
             .unwrap_or_else(|| self.runner.kernel().paint_order());
         for (id, placed) in order {
-            if self.flat.nodes.contains(&id) {
+            if self.flat.nodes.contains(&id)
+                || self.inline_runs.contains_key(&id)
+                || self.svg.is_element(id)
+                || self.option_part(id)
+            {
                 continue;
             }
             if self.ranks.insert(id, placed.rank) != Some(placed.rank) {
@@ -1257,5 +1265,100 @@ mod tests {
             "{:?}",
             grows(&batch)
         );
+    }
+
+    /// No rank goes to an inline run, an SVG element or a button's title, at
+    /// boot or when an earlier node comes or goes: none is a view.
+    #[test]
+    fn no_rank_goes_to_a_node_without_a_view() {
+        let plan = contract::compile(
+            r#"component App
+  state shown = false
+  action flip()
+    shown = not shown
+  view
+    column
+      if shown
+        box height=10
+      text testId="paragraph"
+        for i in range(20) key=i
+          text `w${i} ` opacity=0.5
+      svg width=20 height=20 testId="svg"
+        circle cx=10 cy=10 r=5 opacity=0.5
+      button "flip" testId="flip" press=flip
+"#,
+        )
+        .unwrap()
+        .encode();
+        let (mut h, boot) = Host::boot(
+            &plan,
+            NoData,
+            Box::new(exact_kernel::MonospaceMeasurer::default()),
+            390.,
+            844.,
+        )
+        .unwrap();
+        let kernel = h.runner.kernel();
+        let flip = id(&h, "flip");
+        let viewless: Vec<ViewId> = [id(&h, "paragraph"), id(&h, "svg"), flip]
+            .into_iter()
+            .flat_map(|parent| kernel.node(parent).unwrap().children())
+            .collect();
+        assert_eq!(viewless.len(), 22);
+        let ranked = |batch: &str| {
+            let v: serde_json::Value = serde_json::from_str(batch).unwrap();
+            (v["ops"].as_array().cloned().unwrap_or_default().into_iter())
+                .filter(|op| op["op"] == "rank")
+                .filter_map(|op| op["id"].as_u64())
+                .filter(|id| viewless.contains(&(*id as ViewId)))
+                .count()
+        };
+        assert!(boot.contains("\"op\":\"rank\""), "{boot}");
+        assert_eq!(ranked(&boot), 0, "{boot}");
+        for at in [10., 20.] {
+            let batch = h.dispatch_at(flip, exact_runner::Event::Press, at);
+            assert_eq!(ranked(&batch), 0, "{batch}");
+        }
+        // A run taken out of its paragraph is a view, ranked as a new one
+        // each time it becomes one.
+        let column = h
+            .runner
+            .kernel()
+            .node(id(&h, "paragraph"))
+            .unwrap()
+            .parent
+            .unwrap();
+        let outer = h.runner.kernel().node(column).unwrap().children();
+        let runs = viewless[..20].to_vec();
+        let (run, rest) = (runs[0], runs[1..].to_vec());
+        let rank = format!("{{\"op\":\"rank\",\"id\":{run},\"rank\":1}}");
+        for (seq, out) in [(100, true), (101, false), (102, true)] {
+            let (inner, outer) = if out {
+                (rest.clone(), [vec![run], outer.clone()].concat())
+            } else {
+                (runs.clone(), outer.clone())
+            };
+            let paragraph = id(&h, "paragraph");
+            let receipt = h
+                .runner
+                .kernel_mut()
+                .apply(
+                    0,
+                    seq,
+                    &[
+                        Op::SetChildren {
+                            id: paragraph,
+                            children: inner,
+                        },
+                        Op::SetChildren {
+                            id: column,
+                            children: outer,
+                        },
+                    ],
+                )
+                .unwrap();
+            let batch = h.commit(&[Timed { at_ms: 0., receipt }], None);
+            assert_eq!(batch.contains(&rank), out, "{batch}");
+        }
     }
 }
