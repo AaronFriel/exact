@@ -739,7 +739,9 @@ mod tests {
         // schema. The literal makes an accidental removal of that coupling a
         // test failure whenever the byte snapshot above is intentionally moved.
         // Recomputed when the schema changes; the digest test prints the value.
-        assert_eq!(SCHEMA_DIGEST, 0x15b03fc36839354d);
+        // Apple JSON record declarations participate in this digest (LLP 1172.001 E4),
+        // even when the EXWF codec bytes above stay unchanged.
+        assert_eq!(SCHEMA_DIGEST, 0xb06415bed76d5ffc);
     }
 
     #[test]

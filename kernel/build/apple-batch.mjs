@@ -1,0 +1,89 @@
+// @ref LLP 1172.001 E4, §4 step 4 — today's Apple JSON wire, with one declaration.
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+const codecs = {
+  string: ['String', '""', 'string()'],
+  number: ['Double', '0', 'number()'],
+  optionalNumber: ['Double?', 'nil', 'number()'],
+  props: ['[String: String]', '[:]', 'strings()'],
+  style: ['NodeStyle', '[:]', 'style()'],
+  values: ['NodeStyle', '[:]', 'values()'],
+  strings: ['[String]', '[]', 'array { try $0.string() }'],
+  handlers: ['Set<String>', '[]', 'Set(try array { try $0.string() })'],
+  ids: ['[UInt32]', '[]', 'array { try $0.id() }'],
+  inline: ['[InlineText]', '[]', 'array { try $0.inline() }'],
+};
+const identifier = name => name.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
+const quoted = JSON.stringify;
+
+export function appleBatchReader(schema) {
+  const records = schema.appleBatch.records;
+  const members = new Map();
+  for (const record of records) for (const field of Object.values(record.fields ?? {})) {
+    if (!codecs[field.codec]) throw new Error(`unknown Apple batch codec: ${field.codec}`);
+    const [type, empty] = codecs[field.codec];
+    const declaration = `${type} = ${field.default === undefined ? empty : quoted(field.default)}`;
+    if (members.has(field.member) && members.get(field.member) !== declaration) throw new Error(`conflicting Apple batch member: ${field.member}`);
+    members.set(field.member, declaration);
+  }
+  const lines = [
+    '// Generated from kernel/tables/schema.json by kernel/build/apple-batch.mjs. Do not edit.',
+    '// @ref LLP 1172.001 E4, §4 step 4',
+    'import Foundation', '', 'public struct BatchOp {',
+    '    package enum Kind: String {',
+    ...records.map(record => `        case ${identifier(record.name)} = ${quoted(record.name)}`),
+    '        case unknown', '    }',
+    '    package let op: Kind',
+    '    package var nodeID: UInt32?',
+    '    package var id: UInt32 { nodeID ?? 0 }',
+    ...[...members].map(([name, declaration]) => `    package var ${name}: ${declaration}`),
+    '    package var payload: [String: Any] = [:]',
+    '    /// Prepared paint belongs to the owner, outside the wire.',
+    '    package var flat: FlatPaint?',
+    '    package init(op: Kind, nodeID: UInt32? = nil) { self.op = op; self.nodeID = nodeID }',
+    '    package var isAdapter: Bool {', '        switch op {',
+    `        case ${records.filter(r => r.fields).map(r => '.' + identifier(r.name)).join(', ')}: return false`,
+    '        default: return true', '        }', '    }', '}', '',
+    'extension BatchReader {',
+    '    package mutating func recordField(_ op: inout BatchOp, key: String) throws {',
+    '        switch (op.op, key) {',
+    '        case (_, "id"): op.nodeID = try id()',
+  ];
+  for (const record of records) for (const [key, field] of Object.entries(record.fields ?? {})) {
+    lines.push(`        case (.${identifier(record.name)}, ${quoted(key)}): op.${field.member} = ${field.codec === 'handlers' ? '' : 'try '}${codecs[field.codec][2]}`);
+  }
+  lines.push('        default: try skip()', '        }', '    }', '}', '',
+    'extension BatchFields {',
+    '    package func op(colorChannels: ((BatchValue, Bool) -> [Double]?)? = nil) throws -> BatchOp {',
+    '        guard let name = try string("op") else { throw BatchReader.Invalid.wire }',
+    '        var op = BatchOp(op: BatchOp.Kind(rawValue: name) ?? .unknown, nodeID: try id("id"))',
+    '        switch op.op {');
+  for (const record of records.filter(r => r.fields)) {
+    lines.push(`        case .${identifier(record.name)}:`);
+    if (!Object.keys(record.fields).length) lines.push('            break');
+    for (const [key, field] of Object.entries(record.fields)) {
+      const q = quoted(key);
+      const reads = {
+        string: `string(${q}) ?? ${quoted(field.default ?? '')}`,
+        number: `number(${q}) ?? ${quoted(field.default ?? 0)}`, optionalNumber: `number(${q})`,
+        props: `strings(${q})`, style: `CalculatedLength.decode(object(${q}))`, values: `object(${q})`,
+        strings: `array(${q}, Self.string)`, handlers: `Set(try array(${q}, Self.string))`,
+        ids: `array(${q}, Self.id)`, inline: `array(${q}) { try Self(Self.object($0)).inline(colorChannels: colorChannels) }`,
+      };
+      lines.push(`            op.${field.member} = ${field.codec === 'handlers' ? '' : 'try '}${reads[field.codec]}`);
+    }
+  }
+  lines.push('        default: op.payload = fields.mapValues(\\.any)',
+    '        }', '        return op', '    }', '}', '');
+  return lines.join('\n');
+}
+
+export function writeAppleBatchReader() {
+  const schema = JSON.parse(readFileSync(new URL('../tables/schema.json', import.meta.url), 'utf8'));
+  const output = fileURLToPath(new URL('../../host/apple/Sources/ExactCore/GeneratedBatch.swift', import.meta.url));
+  const source = appleBatchReader(schema);
+  if (!existsSync(output) || readFileSync(output, 'utf8') !== source) writeFileSync(output, source);
+}
+
+if (import.meta.main) writeAppleBatchReader();

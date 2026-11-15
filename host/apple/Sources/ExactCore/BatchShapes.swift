@@ -1,5 +1,5 @@
-// The shapes emitted by host/apple/src/batch.rs. This is a consumer, not a
-// second style schema; unknown rows/keys keep their existing meaning.
+// The envelope and inline values on the Apple JSON wire. Operation records
+// come from kernel/tables/schema.json (LLP 1172.001 E4, §4 step 4).
 import Foundation
 
 /// One ordinary task's native timer; generations reject delivery after cancellation.
@@ -174,24 +174,7 @@ extension BatchReader {
             try expect(44)
             let key = try string(); try expect(58)
             if try null() { continue }
-            switch (op.op, key) {
-            case (_, "id"): op.nodeID = try id()
-            case (.create, "kind"): op.kind = try string()
-            case (.create, "props"), (.props, "set"): op.props = try strings()
-            case (.create, "style"), (.style, "style"): op.style = try style()
-            case (.roles, "roles"): op.style = try values()
-            case (.create, "handlers"): op.handlers = Set(try array { try $0.string() })
-            case (.props, "clear"): op.clear = try array { try $0.string() }
-            case (.paragraph, "runs"): op.runs = try array { try $0.inline() }
-            case (.children, "ids"), (.roots, "ids"): op.ids = try array { try $0.id() }
-            case (.frame, "x"), (.content, "x"), (.present, "x"): op.x = try number()
-            case (.frame, "y"), (.content, "y"), (.present, "y"): op.y = try number()
-            case (.frame, "w"), (.content, "w"), (.present, "w"): op.w = try number()
-            case (.frame, "h"), (.content, "h"), (.present, "h"): op.h = try number()
-            case (.content, "fitHeight"): op.fitHeight = try number()
-            case (.frame, "property"), (.content, "property"), (.present, "property"): op.property = try string()
-            default: try skip()
-            }
+            try recordField(&op, key: key)
         }
         depth -= 1
         return op
@@ -229,15 +212,6 @@ extension BatchReader {
         }
         try style.height(height)
         return style
-    }
-}
-
-extension BatchOp {
-    package var isAdapter: Bool {
-        switch op {
-        case .create, .props, .style, .children, .paragraph, .frame, .content, .present, .roots, .destroy, .renew, .roles: return false
-        default: return true
-        }
     }
 }
 
@@ -286,29 +260,6 @@ package struct BatchFields {
         return InlineText(id: id, parent: parent, props: try strings("props"), style: style,
                           handlers: Set(try array("handlers", Self.string)), paints: try bool("paint") ?? false,
                           opacity: try number("opacity") ?? 1)
-    }
-    package func op(colorChannels: ((BatchValue, Bool) -> [Double]?)? = nil) throws -> BatchOp {
-        guard let name = try string("op") else { throw BatchReader.Invalid.wire }
-        var op = BatchOp(op: BatchOp.Kind(rawValue: name) ?? .unknown, nodeID: try id("id"))
-        switch op.op {
-        case .create:
-            op.kind = try string("kind") ?? "view"
-            op.props = try strings("props"); op.style = try CalculatedLength.decode(object("style"))
-            op.handlers = Set(try array("handlers", Self.string))
-        case .props: op.props = try strings("set"); op.clear = try array("clear", Self.string)
-        case .style: op.style = try CalculatedLength.decode(object("style"))
-        case .paragraph: op.runs = try array("runs") { try Self(Self.object($0)).inline(colorChannels: colorChannels) }
-        case .children, .roots: op.ids = try array("ids", Self.id)
-        case .frame, .content, .present:
-            op.x = try number("x") ?? 0; op.y = try number("y") ?? 0
-            op.w = try number("w") ?? 0; op.h = try number("h") ?? 0
-            op.property = try string("property") ?? ""
-            if op.op == .content { op.fitHeight = try number("fitHeight") }
-        case .destroy, .renew: break
-        case .roles: op.style = try object("roles")
-        default: op.payload = fields.mapValues(\.any)
-        }
-        return op
     }
 }
 
