@@ -13,7 +13,7 @@ import { rt as Link } from './rt-link.js';
 export { liveTime } from './live-time.js';
 import { liveById, installFits } from './navigation.js';
 // synced animations (LLP 1055.002, emit.rs `clocks`)
-export { animationClocks, launchLocation } from './navigation.js';
+export { animationClocks, launchLocation, launchVisits } from './navigation.js';
 export { fontFamily } from './font-family.js';
 import { Head, markDocument, projectRoots, openTabs, unopened, tp } from './document.js';
 export { Head, unopened, tp };

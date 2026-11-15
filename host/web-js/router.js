@@ -1,6 +1,6 @@
 // The router on the JS target (LLP 1038; route/src), re-exported by rt.js: the verbs and reads, the route table, and the
 // router slot's changes to the browser's history.
-import { Refusal, effect, After, journal, clock, commit, W, pressFeedback, fact, Hosts, Resources, Assigned, refused, useTraversal } from "./rt.js";
+import { Refusal, effect, After, journal, clock, commit, W, pressFeedback, fact, Hosts, Resources, Assigned, refused, useTraversal, launchVisits } from "./rt.js";
 import { Counting } from "./held.js";
 import { projectRoots } from "./document.js";
 import { canonical, locationOf, fragmentOf, enc, dec, matchPattern } from "./route-pattern.js";
@@ -56,10 +56,12 @@ const copy = r => [r[0], r[1].map(t => [t[0], t[1].slice()]), r[2]];
 /** A launch: the location's chain, else, when no route matches it and no `notfound` route absorbs it (an app with no
  * navigation root, which the compiler writes none for: LLP 1116.009 D2), the first screen's (`/`), the refusal journaled;
  * the runner's `RouterContext::launch` (runner/src/runner/router.rs). The app boots, and its first commit puts `/` in the
- * address bar. */
-export function launch(location) {
-  if (!chain(location).length) { say(`router launch refused: no route matches ${canonical(location)}`); location = "/"; }
-  return open_(["", [], 0], location);
+ * address bar. After a reload the page's earlier visits (`before`), which Back returns to, are beneath it, as the
+ * runner's own `go` to each in turn leaves them; the browser's Back then pops to the visit beneath. */
+export function launch(location, before = launchVisits()) {
+  if (!chain(location).length) { say(`router launch refused: no route matches ${canonical(location)}`); location = "/"; before = []; }
+  const visits = [...before.filter(v => chain(v).length), location];
+  return visits.slice(1).reduce(go_, open_(["", [], 0], visits[0]));
 }
 /** A reload's router carry: keep only a stack the new table still describes; otherwise launch its old top. */
 export function carryRouter(old, location) { const tabs = roots().map(i => Routes[i].name), stacks = old?.[1], valid = Array.isArray(stacks) && stacks.length === tabs.length && stacks.every((t, i) => t?.[0] === tabs[i] && Array.isArray(t[1]) && t[1].every(e => { const m = e?.length === 6 && matchRoute(e[2] ?? ""); return m && Routes[m[0]].name === e[1]; })); if (!valid) return launch(stacks?.find(t => t?.[0] === old?.[0])?.[1]?.at(-1)?.[2] ?? location); const out = copy(old); for (const t of out[1]) for (const e of t[1]) e[4] = matchRoute(e[2])[1]; return out; }

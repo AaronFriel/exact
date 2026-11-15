@@ -2458,7 +2458,9 @@ beneath (`nav = go(nav, url)` pops to it), or, with no handler, the runner pops 
 router itself, as `nav = back(nav)` would (LLP 1115 D5). On the web the browser's
 Forward and a `link` to a declared route do the same with no handler: the runner goes
 there itself, as `nav = go(nav, url)` would (LLP 1115.000 D4.3); a native host's link
-still needs the handler. A declared but disabled
+still needs the handler. A web page reloaded on a deep route launches with the page's
+earlier visits beneath it, as the runner's own `go` to each in turn leaves them, so the
+browser's Back still pops. A declared but disabled
 control refuses them, as does `closedby="none"` on a sheet. Where the app's own Back and
 Forward go less far than its router (a palette open over the page, a history capped at
 so many visits), bind the root's `navigationHistory` to the ways it offers now (`"back
