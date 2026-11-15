@@ -49,10 +49,11 @@ function replaceSpans(text, edits) {
 
 /** Whether a path dependency on another of the checkout's crates (the build script's `contract`, say) points into a
  * checkout: it ends in that crate's place in this one, and what precedes that is gone or is an exact2 checkout (its
- * scripts/app-cli.mjs), so an app's own crate of the same name, even at the same place under the app, stays. */
+ * scripts/app-cli.mjs), so an app's own crate of the same name, even at the same place under the app, stays. A path
+ * that holds `<exact2>` is `exact2Placeholders`' to resolve or name as unresolved. */
 function intoCheckout(path, from, dir) {
   const at = relative(ROOT, dir).split(sep).join('/'), p = path.replace(/\\/g, '/').replace(/\/+$/, '');
-  if (at.startsWith('..') || isAbsolute(at) || !(p + '/').endsWith(`/${at}/`)) return false;
+  if (path.includes('<exact2>') || at.startsWith('..') || isAbsolute(at) || !(p + '/').endsWith(`/${at}/`)) return false;
   const old = resolve(from, p.slice(0, p.length - at.length) || '.');
   return !existsSync(old) || existsSync(resolve(old, 'scripts/app-cli.mjs'));
 }
