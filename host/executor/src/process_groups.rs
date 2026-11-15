@@ -44,11 +44,9 @@ fn records(shared: &Shared) -> Option<PathBuf> {
 
 /// An exclusive lock beside record file `path`, held while it is read and
 /// written: every instance of the app shares the file, and two writers
-/// would each drop the other's entries. `None` where it cannot be had.
+/// would each drop the other's entries. `None` where it cannot be had, as
+/// when the app's cache directory does not exist: only [`remember`] makes it.
 fn lock_records(path: &Path) -> Option<std::fs::File> {
-    if let Some(dir) = path.parent() {
-        let _ = std::fs::create_dir_all(dir);
-    }
     let file = (std::fs::OpenOptions::new()
         .create(true)
         .truncate(false)
@@ -66,9 +64,6 @@ fn read_records(path: &Path) -> Vec<Json> {
 }
 
 fn write_records(path: &Path, entries: &[Json]) {
-    if let Some(dir) = path.parent() {
-        let _ = std::fs::create_dir_all(dir);
-    }
     let tmp = path.with_extension(format!("json.{}.tmp", std::process::id()));
     if std::fs::write(&tmp, Json::Array(entries.to_vec()).to_string()).is_ok() {
         let _ = std::fs::rename(&tmp, path);
@@ -109,6 +104,9 @@ pub(super) fn remember(shared: &Shared, pgid: i32, signal: &str, grace: f64) {
         return;
     };
     let (recorder, recorder_start) = me();
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
     let _guard = RECORDS.lock().unwrap();
     let _file = lock_records(&path);
     let mut entries = read_records(&path);
@@ -176,7 +174,7 @@ pub(super) fn reap_once(shared: &Shared) {
 /// End what the app's crashed launches left (D9), keeping the records of
 /// processes that still run.
 pub(super) fn reap(shared: &Shared) {
-    let Some(path) = records(shared) else {
+    let Some(path) = records(shared).filter(|path| path.exists()) else {
         return;
     };
     let _guard = RECORDS.lock().unwrap();
@@ -290,7 +288,7 @@ fn finish_quit(live: &[(i32, String, f64)], path: Option<&Path>) {
 
 /// Drop this process's entries whose groups have ended.
 fn prune(path: Option<&Path>) {
-    let Some(path) = path else {
+    let Some(path) = path.filter(|path| path.exists()) else {
         return;
     };
     let _guard = RECORDS.lock().unwrap();

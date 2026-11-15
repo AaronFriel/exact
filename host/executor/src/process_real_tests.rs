@@ -14,17 +14,40 @@ use std::time::{Duration, Instant};
 /// one that is never ended fails the wait.
 const BOUND: Duration = Duration::from_secs(30);
 
-fn core(grants: &str) -> (Core, Receiver<()>, std::path::PathBuf) {
-    static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-    let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    core_in(
-        grants,
-        std::env::temp_dir().join(format!("exact-real-{}-{n}", std::process::id())),
-    )
+/// A directory under the system's temporary one, removed when dropped.
+struct Dir(std::path::PathBuf);
+impl Dir {
+    fn new(name: &str) -> Dir {
+        static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let dir = std::env::temp_dir().join(format!("{name}-{}-{n}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        Dir(dir)
+    }
+}
+impl std::ops::Deref for Dir {
+    type Target = std::path::Path;
+    fn deref(&self) -> &std::path::Path {
+        &self.0
+    }
+}
+impl Drop for Dir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+/// A core whose app directories are under a fresh directory, which goes
+/// once the core has.
+fn core(grants: &str) -> (Dir, Core, Receiver<()>) {
+    let dir = Dir::new("exact-real");
+    let (core, woke) = core_in(grants, &dir);
+    (dir, core, woke)
 }
 
 /// A core whose app directories are under `dir`: a relaunch names the same.
-fn core_in(grants: &str, dir: std::path::PathBuf) -> (Core, Receiver<()>, std::path::PathBuf) {
+fn core_in(grants: &str, dir: &std::path::Path) -> (Core, Receiver<()>) {
     let (wake, woke) = channel();
     let core = Core::start(
         None,
@@ -39,7 +62,7 @@ fn core_in(grants: &str, dir: std::path::PathBuf) -> (Core, Receiver<()>, std::p
         std::fs::create_dir_all(root).unwrap();
     }
     core.set_app_roots(roots);
-    (core, woke, dir)
+    (core, woke)
 }
 
 fn request(ticket: u64, body: serde_json::Value, stream: bool) -> RequestOut {
@@ -120,7 +143,7 @@ fn sh(script: &str) -> serde_json::Value {
 
 #[test]
 fn a_real_child_reads_its_stdin_and_streams_its_output_in_order() {
-    let (core, woke, _) = core("process.spawn /bin/sh");
+    let (_dir, core, woke) = core("process.spawn /bin/sh");
     core.run(
         request(
             1,
@@ -150,7 +173,7 @@ fn a_real_child_reads_its_stdin_and_streams_its_output_in_order() {
 
 #[test]
 fn release_ends_the_group_a_grandchild_included() {
-    let (core, woke, _) = core("process.spawn /bin/sh");
+    let (_dir, core, woke) = core("process.spawn /bin/sh");
     core.run(request(1, sh("sleep 120 & echo $!; wait"), true), None)
         .unwrap();
     let out = collect(&core, &woke, |o| o.len() >= 2);
@@ -167,7 +190,7 @@ fn release_ends_the_group_a_grandchild_included() {
 
 #[test]
 fn a_leader_that_exits_first_leaves_no_group_behind() {
-    let (core, woke, _) = core("process.spawn /bin/sh");
+    let (_dir, core, woke) = core("process.spawn /bin/sh");
     // The grandchild keeps the pipe after its leader exits: the drain runs
     // out, the incarnation closes undrained, and the group is ended.
     core.run(request(1, sh("sleep 120 & echo $!; exit 0"), true), None)
@@ -195,7 +218,7 @@ fn a_group_gone_after_its_signal_ends_the_stream_before_the_grace() {
 }
 
 fn group_gone_ends_stream(check_latency: bool) {
-    let (core, woke, _) = core("process.spawn /bin/sh");
+    let (_dir, core, woke) = core("process.spawn /bin/sh");
     // The leader exits and its member holds no pipe, so the signal that
     // ends the group is the last thing the supervisor sees of it.
     let mut body = sh("sleep 60 >/dev/null 2>&1 & exit 0");
@@ -240,7 +263,7 @@ fn until_gone(pgid: i32, what: &str) {
 
 #[test]
 fn a_crash_leaves_a_record_that_the_next_launch_reaps() {
-    let (core, woke, dir) = core("process.spawn /bin/sh");
+    let (dir, core, woke) = core("process.spawn /bin/sh");
     core.run(request(1, sh("sleep 120 & wait"), true), None)
         .unwrap();
     let out = collect(&core, &woke, |o| !o.is_empty());
@@ -250,7 +273,7 @@ fn a_crash_leaves_a_record_that_the_next_launch_reaps() {
     assert!(text.contains(&format!("\"pgid\":{leader}")), "{text}");
     // Another executor of the app in this live process (a plan swap, a
     // second window) keeps the first one's child.
-    let (other, _woke, _) = core_in("process.spawn /bin/sh", dir.clone());
+    let (other, _woke) = core_in("process.spawn /bin/sh", &dir);
     super::super::groups::reap(&other.shared);
     assert!(
         os::group_alive(leader),
@@ -268,7 +291,7 @@ fn a_crash_leaves_a_record_that_the_next_launch_reaps() {
 
 #[test]
 fn a_stale_record_ends_no_group_that_is_not_the_apps() {
-    let (core, _woke, dir) = core("process.spawn /bin/sh");
+    let (dir, core, _woke) = core("process.spawn /bin/sh");
     // Groups this test starts, alive and nobody's child of the app: one
     // whose leader lives, one whose leader has exited and left a member.
     let start = |script: &str| {
@@ -407,7 +430,7 @@ fn quit_ends_every_group(test: &str, check_latency: bool) {
         return;
     }
 
-    let (core, woke, _) = core("process.spawn /bin/sh\nfs.read /");
+    let (dir, core, woke) = core("process.spawn /bin/sh\nfs.read /");
     // A grace past the quit's 5 s: the quit's limit is what ends it.
     // Descendants also ignore SIGTERM; Linux's parent-death signal cannot
     // hide a missed escalation by killing only their leaders at exit.
@@ -433,6 +456,8 @@ fn quit_ends_every_group(test: &str, check_latency: bool) {
         // requires observing the groups before their grace ends.
         assert!(groups.iter().all(|g| os::group_alive(*g)));
     }
+    // `exit` runs no destructors.
+    drop(dir);
     std::process::exit(0);
 }
 
@@ -444,7 +469,7 @@ fn text(v: &serde_json::Value) -> String {
 
 #[test]
 fn exec_file_ends_what_its_child_left_running() {
-    let (core, woke, _) = core("process.spawn /bin/sh");
+    let (_dir, core, woke) = core("process.spawn /bin/sh");
     let body = serde_json::json!({ "kind": "execFile", "program": "/bin/sh",
         "args": ["-c", "sleep 30 >/dev/null 2>&1 & echo $!"], "encoding": "utf8" });
     core.run(request(1, body, false), None).unwrap();
@@ -462,7 +487,7 @@ fn exec_file_ends_what_its_child_left_running() {
 
 #[test]
 fn exec_file_keeps_its_limits() {
-    let (core, woke, _) = core("process.spawn /bin/sh\nprocess.spawn path:sh");
+    let (_dir, core, woke) = core("process.spawn /bin/sh\nprocess.spawn path:sh");
     let body = |r: &Outcome| match r {
         Outcome::Response(r) => serde_json::from_slice::<serde_json::Value>(&r.body).unwrap(),
         other => panic!("{other:?}"),
@@ -535,7 +560,7 @@ fn exec_file_keeps_its_limits() {
 
 #[test]
 fn a_program_the_app_wrote_does_not_run_by_its_name() {
-    let (core, woke, dir) = core("process.spawn path:sh");
+    let (dir, core, woke) = core("process.spawn path:sh");
     // The app writes its own `sh` under `app:/data/bin` and puts that
     // directory first on its child's `PATH`: `path:sh` is still the login
     // shell's `PATH`'s (D7), so `exit 7` runs, not the app's `exit 42`.
@@ -559,7 +584,7 @@ fn a_program_the_app_wrote_does_not_run_by_its_name() {
 #[test]
 fn a_path_name_found_where_the_app_may_write_does_not_run() {
     // Where `path:sh` resolves on the login shell's `PATH`.
-    let (probe, woke, _) = core("process.spawn path:sh");
+    let (_dir, probe, woke) = core("process.spawn path:sh");
     let ask = serde_json::json!({ "kind": "execPath", "program": "path:sh" });
     probe.run(request(1, ask.clone(), false), None).unwrap();
     let path = |out: &[Outcome]| match &out[0] {
@@ -574,7 +599,7 @@ fn a_path_name_found_where_the_app_may_write_does_not_run() {
     // An `fs.write` line over that directory lets the app write what the
     // name finds, so the name runs nothing there and resolves to nothing.
     let grants = format!("process.spawn path:sh\nfs.write {}", dir.display());
-    let (covered, woke, _) = core(&grants);
+    let (_dir, covered, woke) = core(&grants);
     let call =
         serde_json::json!({ "kind": "execFile", "program": "path:sh", "args": ["-c", "exit 7"] });
     covered.run(request(1, call, false), None).unwrap();
@@ -587,25 +612,21 @@ fn a_path_name_found_where_the_app_may_write_does_not_run() {
     let out = collect(&covered, &woke, |o| !o.is_empty());
     assert_eq!(path(&out)["path"], serde_json::Value::Null);
     // A quoted line, its path with a space: here a link to that directory.
-    let spaced = std::env::temp_dir().join(format!("exact real {}", std::process::id()));
-    std::fs::create_dir_all(&spaced).unwrap();
+    let spaced = Dir::new("exact real");
     let link = spaced.join("bin dir");
-    let _ = std::fs::remove_file(&link);
     std::os::unix::fs::symlink(&dir, &link).unwrap();
     let grants = format!("process.spawn path:sh\nfs.write \"{}\"", link.display());
-    let (quoted, woke, _) = core(&grants);
+    let (_dir, quoted, woke) = core(&grants);
     quoted.run(request(1, ask, false), None).unwrap();
     let out = collect(&quoted, &woke, |o| !o.is_empty());
     assert_eq!(path(&out)["path"], serde_json::Value::Null);
-    std::fs::remove_dir_all(&spaced).unwrap();
 }
 
 #[test]
 fn a_path_name_runs_the_file_it_checked_not_a_link_the_app_may_replace() {
     // A `PATH` entry through a link in a directory the app writes: the link
     // leads out of it now, but the app may point it at its own file later.
-    let base = std::env::temp_dir().join(format!("exact-real-on-path-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&base);
+    let base = Dir::new("exact-real-on-path");
     let (writes, person) = (base.join("writes"), base.join("person/bin"));
     std::fs::create_dir_all(&writes).unwrap();
     std::fs::create_dir_all(&person).unwrap();
@@ -614,17 +635,16 @@ fn a_path_name_runs_the_file_it_checked_not_a_link_the_app_may_replace() {
     use std::os::unix::fs::PermissionsExt;
     std::fs::set_permissions(&prog, std::fs::Permissions::from_mode(0o755)).unwrap();
     std::os::unix::fs::symlink(base.join("person"), writes.join("link")).unwrap();
-    let (core, _, _) = core("");
+    let (_dir, core, _) = core("");
     let app = format!("fs.write {}", writes.display());
     let path = writes.join("link/bin").display().to_string();
     let ran = super::on_path(&core.shared, &app, "prog", &path).unwrap();
     assert_eq!(ran, std::fs::canonicalize(&prog).unwrap());
-    std::fs::remove_dir_all(&base).unwrap();
 }
 
 #[test]
 fn an_fs_write_line_that_names_no_directory_here_refuses_a_path_name() {
-    let (core, _, _) = core("");
+    let (_dir, core, _) = core("");
     let out = super::on_path(&core.shared, "fs.write doc:/notes", "sh", "/bin");
     assert!(
         matches!(&out, Err(Outcome::Failed { message, .. }) if message.contains("names no directory here")),
@@ -634,13 +654,11 @@ fn an_fs_write_line_that_names_no_directory_here_refuses_a_path_name() {
 
 #[test]
 fn a_link_out_of_a_granted_directory_is_outside_its_grant() {
-    let dir = std::env::temp_dir().join(format!("exact-real-link-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = Dir::new("exact-real-link");
     let link = dir.join("sh");
-    let _ = std::fs::remove_file(&link);
     std::os::unix::fs::symlink("/bin/sh", &link).unwrap();
-    let real = std::fs::canonicalize(&dir).unwrap();
-    let (core, woke, _) = core(&format!("process.spawn {}", real.display()));
+    let real = std::fs::canonicalize(&*dir).unwrap();
+    let (_dir, core, woke) = core(&format!("process.spawn {}", real.display()));
     let body = serde_json::json!({ "kind": "spawn", "program": format!("{}/sh", real.display()), "args": ["-c", "true"] });
     core.run(request(1, body, true), None).unwrap();
     let out = collect(&core, &woke, ended);
@@ -692,7 +710,7 @@ fn the_login_shell_answers_the_named_variables_between_markers() {
 
 #[test]
 fn writes_to_a_child_that_closed_its_stdin_are_dropped_and_drain() {
-    let (core, woke, _) = core("process.spawn /bin/sh");
+    let (_dir, core, woke) = core("process.spawn /bin/sh");
     core.run(
         request(1, sh("exec 0<&-; echo closed; sleep 120"), true),
         None,
@@ -734,7 +752,7 @@ fn writes_to_a_child_that_closed_its_stdin_are_dropped_and_drain() {
 /// would never answer. The child is ended rather than left to run.
 #[test]
 fn a_child_whose_thread_cannot_start_fails_its_call() {
-    let (core, woke, dir) = core("process.spawn /bin/sh");
+    let (dir, core, woke) = core("process.spawn /bin/sh");
     for (ticket, role) in [(1, "pipe"), (2, "stdin"), (3, "wait")] {
         let mark = dir.join(format!("ran-{role}"));
         let script = format!("sleep 0.2; touch {}", mark.display());

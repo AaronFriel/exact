@@ -166,16 +166,26 @@ impl AgentFacts {
 pub(crate) fn home(processes: &Processes) -> Option<std::path::PathBuf> {
     match &processes.agent {
         Some(facts) => Some(facts.home.clone().unwrap_or_else(|| {
-            static SCRATCH: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
-            (SCRATCH.get_or_init(|| {
+            (SCRATCH_HOME.get_or_init(|| {
                 let dir =
                     std::env::temp_dir().join(format!("exact-agent-home-{}", std::process::id()));
                 let _ = std::fs::create_dir_all(&dir);
+                ibex2::process::wait_at_exit(remove_scratch_home);
                 dir
             }))
             .clone()
         })),
         None => real::home_dir(),
+    }
+}
+
+/// The scratch `home:` of a drive that named none, made at most once per process.
+static SCRATCH_HOME: std::sync::OnceLock<std::path::PathBuf> = std::sync::OnceLock::new();
+
+/// At the process's exit: the scratch `home:` goes with it.
+fn remove_scratch_home() {
+    if let Some(dir) = SCRATCH_HOME.get() {
+        let _ = std::fs::remove_dir_all(dir);
     }
 }
 
