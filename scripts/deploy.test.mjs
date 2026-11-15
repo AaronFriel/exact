@@ -318,7 +318,8 @@ async function rejects(action, matches) {
   JSON.stringify(table));
   rmSync(dir, { recursive: true, force: true });
 }
-// Android has no binary lane in deploy (LLP 1030.006 D6): with no stream, the table names the APK's command.
+// Android's binary is the APK, which its own verb builds (LLP 1030.006 D6, LLP 1030.007 D5): with no stream and no
+// production APK receipt, the table names the APK's command.
 {
   const dir = mkdtempSync(join(tmpdir(), 'exact-android-binary-'));
   const origin = { kind: 'directory', describe: () => dir, get: async () => null, head: async () => null, list: async () => [] };
@@ -328,9 +329,30 @@ async function rejects(action, matches) {
   const updating = await table('A'), fixed = await table('0');
   const rendered = renderTable(updating);
   result('an Android deploy with no stream names the production APK command', updating.rows.length === 1
-    && updating.rows[0].kind === 'binary' && updating.rows[0].reason.includes('bun exact.mjs android --bundle')
-    && updating.rows[0].reason.includes('push.mjs') && fixed.rows[0].reason.startsWith('deploy.store.android is "0"')
-    && rendered.includes('binary needed: android —'), rendered);
+    && updating.rows[0].kind === 'binary' && updating.rows[0].reason.includes('EXACT_UPDATE_TRUST=production bun exact.mjs android --release')
+    && updating.rows[0].reason.includes('EXACT_UPDATE_GENESIS=1') && fixed.rows[0].reason.startsWith('deploy.store.android is "0"')
+    && rendered.includes('new APK needed: android — EXACT_UPDATE_TRUST=production bun exact.mjs android --release'), rendered);
+  rmSync(dir, { recursive: true, force: true });
+}
+// A production APK receipt with no head starts its stream: the row's cohort is that APK's, and a note names the
+// receipt (LLP 1030.007 D4).
+{
+  const dir = mkdtempSync(join(tmpdir(), 'exact-android-start-'));
+  const origin = { kind: 'directory', describe: () => dir, get: async () => null, head: async () => null, list: async () => [] };
+  const id = 'a'.repeat(32), bundle = { plan: { sha256: '1'.repeat(64) }, assets: [] };
+  const apk = fixtureBuild(id, bundle);
+  apk.compat.inputs.platform = 'android';
+  const cohort = cohortReceipt(apk), stream = { channel: 'prod', compatibilityId: id };
+  const table = await classify({ app: { id: 'com.exact.test', displayName: 'Test', dir, manifest: { deploy: { store: { android: 'A' } } } },
+    opts: { platform: [] }, origin, channel: 'prod', snapshot: { commit: '0'.repeat(40), dirty: false, changes: [], repo: dir },
+    release: 'test', web: dir, bundle, builds: {}, compat: {}, platforms: ['android'], wantOrigin: false,
+    knownStreams: [{ stream, head: null, cohort, platform: 'android', build: apk }],
+    candidates: new Map([[id, { build: apk, bundle }]]), anchors: new Map([[id, '/receipts/android-aarch64-linux-android.build.json']]) });
+  const [row] = table.rows;
+  result('a production APK receipt starts its Android stream with that APK as the cohort', table.rows.length === 1
+    && row.kind === 'stream' && row.platform === 'android' && row.action === 'bundle' && row.receipt === cohort && row.head === null
+    && table.notes.some((note) => note === `android stream ${id.slice(0, 8)} starts from the production build receipt /receipts/android-aarch64-linux-android.build.json: binary ${'0'.repeat(12)}`),
+  JSON.stringify(table));
   rmSync(dir, { recursive: true, force: true });
 }
 // A dry-run renders network availability per row, including declared retired
@@ -1278,7 +1300,7 @@ test.each(['new', 'invalid', 'authenticated'])('deploy skips a native bake only 
   try {
     expect(await deploy({ _: ['bundle'], platform: ['ios'], keys: root, yes: true, json: true }, {
       version: 1, run: resolve(root, 'run'), sourceRoot, exactRoot, release: 'update', app,
-      snapshot: { id: 'snapshot', sources: [{ repo: resolve(root, 'live'), roles: ['exact'], commit: 'a'.repeat(40) }] },
+      snapshot: { id: 'snapshot', sources: [{ repo: resolve(root, 'live'), roles: ['exact'], commit: 'a'.repeat(40) }] }, receipts: [],
     })).toBe(0);
     expect(calls).toEqual(state === 'authenticated' ? ['publish'] : ['native bake', 'publish']);
     expect(JSON.parse(output.at(-1)).published[0].seq).toBe(8);

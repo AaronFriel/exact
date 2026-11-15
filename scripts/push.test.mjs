@@ -756,6 +756,56 @@ test('push freezes a cohort whose Hermes bytecode version the module does not ma
   } finally {fs.rmSync(root,{recursive:true,force:true})}
 });
 
+// Without a Rust module, the rust.data crate runs in the binary and baked the plan's first frame: a change to it moves
+// `dataCrate`, which supersedes the cohort in push and withholds its bundle in deploy. Another native source is a note,
+// and the bundle still goes (LLP 1030.007 D3, D5).
+test('a change to the data crate supersedes its cohort, and another native change is a note', async () => {
+  let crate = 'old records';
+  const { root, app, build, cohort, bindings, streams, streamCandidates } = harness(classifyArtifacts, 4, { rustModule: false,
+    computed: c => ({ ...c, inputs: { ...c.inputs, dataCrate: { tree: crate } } }) });
+  try {
+    // The real path: an evidence path read through a link to a tool directory's ancestor is no source.
+    const dir = app.dir = fs.realpathSync(root);
+    app.manifest.app = { id: 'fixture', name: 'Fixture' };
+    const code = resolve(dir, 'native/code.kt');
+    fs.mkdirSync(resolve(dir, 'native'));
+    fs.writeFileSync(code, 'old activity');
+    const { privateKey, publicKey } = generateKeyPairSync('ed25519');
+    const raw = publicKey.export({ type: 'spki', format: 'der' }).subarray(-32).toString('base64');
+    app.manifest.deploy.signing = { key: 'test', keys: { test: raw } };
+    app.manifest.deploy.store = { android: 'A' };
+    Object.assign(cohort.compat.inputs, { platform: 'android', rustMode: 'off', dataCrate: { tree: crate }, keys: { test: raw }, formatVersion: 4, kernelSchema: '0'.repeat(16) });
+    const metadata = { ...nativeManifestMetadata(app.manifest, 'android'), store: cohort.compat.inputs.store, keys: cohort.compat.inputs.keys };
+    build.version = 1;
+    build.binary = { sha256: cohort.binary, sourceInputs: binarySourceInputs({ files: [{ path: code, sha256: sha256(fs.readFileSync(code)) }],
+      directories: new Map(), absent: new Map(), links: new Map(), metadata }, [{ name: 'app', path: dir }], []) };
+    Object.assign(cohort, cohortReceipt(build));
+    const origin = new DirectoryOrigin(resolve(dir, 'origin'));
+    const env = { EXACT_UPDATE_TRUST: 'production', EXACT_GAME_PROOF_PROFILE: 'release' };
+    const signer = { keyId: 'test', sign: head => ({ keyId: 'test', ed25519: sign(null, canonicalBytes(head), privateKey).toString('base64') }) };
+    const [first] = await streamCandidates(app, origin, await streams(origin, app, 'prod', { builds: bindings.readBuilds() }), env);
+    expect(first.superseded).toEqual([]);
+    expect((await publishStream({ ...first, origin, app, signer, release: 'first', snapshot: {}, opts: {}, log() {} })).action).toBe('published');
+    const stream = { channel: 'prod', compatibilityId: cohort.compat.id }, head = (await origin.head(stream)).bytes;
+    const candidate = async () => (await streamCandidates(app, origin, await streams(origin, app, 'prod', { builds: bindings.readBuilds() }), env))[0];
+    const table = async (update) => classify({ app, origin, opts: {}, channel: 'prod', snapshot: { dirty: false, changes: [] }, release: 'edited', bundle: update.bundle,
+      compat: {}, builds: {}, platforms: ['android'], wantOrigin: false, candidates: new Map([[stream.compatibilityId, update]]) });
+    fs.writeFileSync(code, 'new activity');
+    const noted = await candidate();
+    expect([noted.superseded, noted.nativeData, noted.build.pendingInputs]).toEqual([[], [], ['app/native/code.kt']]);
+    const bundled = (await table(noted)).rows;
+    expect(bundled.find(r => r.kind === 'stream').action).toBe('current'); // the head has this plan; nothing withheld
+    expect(bundled.find(r => r.kind === 'binary').reason).toStartWith('native inputs differ from the APK\'s: app/native/code.kt; a new APK: ');
+    fs.writeFileSync(code, 'old activity');
+    crate = 'edited records';
+    const update = await candidate();
+    expect([update.superseded, update.nativeData]).toEqual([['dataCrate'], ['dataCrate']]);
+    const row = (await table(update)).rows.find(r => r.kind === 'stream');
+    expect([row.action, row.reason]).toEqual(['binary', 'its binary predates these native sources: dataCrate; a new APK: EXACT_UPDATE_TRUST=production bun exact.mjs android --release (--bundle for the store)']);
+    expect((await origin.head(stream)).bytes).toEqual(head);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
 test('a cohort signed before binary input evidence takes a bundle and says its native sources are unchecked', async () => {
   const { root, app, cohort, streamCandidates } = harness(classifyArtifacts, 4, { rustModule: false });
   try {
