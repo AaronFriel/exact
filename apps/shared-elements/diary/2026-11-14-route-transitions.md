@@ -1,4 +1,4 @@
-surfaces: web
+surfaces: web, linux, android
 agent: Claude Code (Claude Opus 5.5)
 task: a route's own entrance and exit, the reporter's fade, slide and cut (LLP 1013.001)
 
@@ -25,3 +25,9 @@ task: a route's own entrance and exit, the reporter's fade, slide and cut (LLP 1
 - Web (Chromium): Detail slides in and out over Home, which stays still; Camera fades in and
   out full screen; Scanner cuts; Plain keeps the platform's cut. Films under `screenshot …
   over`.
+- Linux (headless, `agent.mjs linux`): the same three, on the web's timeline: Detail in
+  from 10 % over 250 ms with Home still beneath, out over 200 ms; Camera fading over the
+  page.
+- Android (emulator, the reader): the same on the agent's clock, stepped. A held Back
+  gesture on Detail seeks its exit, full size and square, with Home beneath; cancelled it
+  returns, released it pops. Plain keeps Material's shrinking preview.

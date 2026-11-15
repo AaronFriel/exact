@@ -645,5 +645,44 @@ impl Animations {
     }
 }
 
+/// What a list of animations does to a picture of a box, about the box's
+/// centre. A route's part poses the route's picture so (LLP 1013.001 D1).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Picture {
+    /// Zero to one.
+    pub opacity: f64,
+    /// Points, x then y.
+    pub translate: (f64, f64),
+    /// Uniform; one is the natural size.
+    pub scale: f64,
+    /// Degrees clockwise.
+    pub rotate: f64,
+}
+
+impl Animations {
+    /// The picture of a box `size` large (points) at local time `t`
+    /// (seconds): each property takes the last animation that applies to it
+    /// then, as CSS composites a list, over its initial value; `translate`'s
+    /// percentages are of the box.
+    pub fn picture(&self, t: f64, size: (f64, f64)) -> Picture {
+        let value = |p: Property| {
+            let rest = p.identity().unwrap_or(Value::ZERO);
+            (self.0.iter().rev())
+                .find_map(|a| a.sample(t, p, rest))
+                .unwrap_or(rest)
+        };
+        let translate = value(Property::Translate);
+        Picture {
+            opacity: value(Property::Opacity).x.clamp(0.0, 1.0),
+            translate: (
+                translate.x + translate.z / 100.0 * size.0,
+                translate.y + translate.w / 100.0 * size.1,
+            ),
+            scale: value(Property::Scale).x,
+            rotate: value(Property::Rotate).x,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests;

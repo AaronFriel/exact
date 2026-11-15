@@ -187,6 +187,9 @@ pub(crate) struct Navigation {
     /// hit, as iOS hides the header its bar lifts.
     pub(crate) bars: Projection,
     pub(crate) lifted: BTreeSet<ViewId>,
+    /// The route an authored entrance brings in: inert until it ends
+    /// (LLP 1013.001 D6; `presenter/stage/authored.rs`).
+    pub(crate) arriving: Option<ViewId>,
 }
 
 /// A route whose `header` is its bar (the kernel's rule,
@@ -410,6 +413,7 @@ impl Navigation {
     ) -> (bool, bool) {
         // No route, popover or inert node anywhere: nothing to climb for.
         if self.routes.is_empty()
+            && self.arriving.is_none()
             && (self.lifted.is_empty() || !lifted)
             && !(self.popovers && kernel.has_prop(PropId::Popover))
             && !kernel.has_prop(PropId::Inert)
@@ -432,7 +436,10 @@ impl Navigation {
             // What a shell's bar stands for shows in the bar, not the page.
             let gone = closed || lifted && self.lifted.contains(&id);
             result.0 |= hidden || gone;
-            result.1 |= inert || gone || node.props.bool(PropId::Inert) == Some(true);
+            result.1 |= inert
+                || gone
+                || Some(id) == self.arriving
+                || node.props.bool(PropId::Inert) == Some(true);
             if Some(id) == root {
                 break;
             }

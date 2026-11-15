@@ -16,7 +16,8 @@
 //! twentieth of the width less 8, with its corners rounding, the route it
 //! returns to drawn beneath. A cancel puts it back; the commit is Back
 //! itself, whose pop starts from where the preview left the route. Nothing
-//! commits before the gesture does.
+//! commits before the gesture does. A route whose exit is declared, pushed
+//! or full screen, previews that exit instead (`authored.rs`).
 use super::*;
 
 /// A slop of Android's (`ViewConfiguration`'s touch slop, 8 dp).
@@ -83,7 +84,8 @@ pub(in crate::presenter) struct Preview {
 }
 
 impl Preview {
-    fn shown(&self, now: f64) -> f32 {
+    /// Its progress now, 0 to 1, a cancelled one on its way back.
+    pub(super) fn shown(&self, now: f64) -> f32 {
         self.release
             .map_or(self.progress, |g| g.at(now))
             .clamp(0.0, 1.0)
@@ -156,9 +158,19 @@ impl Preview {
             dx: way * p * (width / 20.0 - 8.0).max(0.0),
             dy: 0.0,
             scale: 1.0 - 0.1 * p,
+            rotate: 0.0,
             origin: (width / 2.0, height / 2.0),
             opacity: 1.0,
             radius: 28.0 * p,
+        }
+    }
+
+    /// How far it had gone when Back committed, where it previews `key`'s
+    /// pop.
+    pub(super) fn progress_for(&self, key: NodeKey) -> Option<f32> {
+        match self.target {
+            Target::Page { outgoing, .. } if outgoing == key => Some(self.progress),
+            _ => None,
         }
     }
 
@@ -549,6 +561,19 @@ impl<D: DataSource> Presenter<D> {
                     outgoing: keys[top],
                     incoming: keys[top - 1],
                     sheet: sheet.map(|i| keys[i]),
+                })
+            }
+            // A full-screen route over a page whose exit is declared.
+            Presented::Over | Presented::Full
+                if top > 0
+                    && sheet_of(&kinds, top - 1).is_none()
+                    && (self.stage.top.as_ref())
+                        .is_some_and(|t| t.key == keys[top] && t.exit.is_some()) =>
+            {
+                Some(Target::Page {
+                    outgoing: keys[top],
+                    incoming: keys[top - 1],
+                    sheet: None,
                 })
             }
             _ => None,

@@ -5629,6 +5629,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "shared-elements-android"
+version = "0.1.0"
+dependencies = [
+ "contract",
+ "exact-bake",
+ "exact-painted",
+ "shared-elements-data",
+]
+
+[[package]]
 name = "shared-elements-apple"
 version = "0.1.0"
 dependencies = [

@@ -6,6 +6,8 @@ use super::super::top::SurfacePainter;
 use super::*;
 use crate::paint::Backend;
 
+#[path = "parts_tests.rs"]
+mod parts;
 #[path = "rules_tests.rs"]
 mod rules;
 
