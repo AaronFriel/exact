@@ -58,8 +58,12 @@ in the background. Running an iOS simulator, including `verify ios` and `agent i
 
 Start from the nearest pattern. The screen `exact new` writes, and its tests in
 `app.test.contract`, are placeholders: replace both. `exact.mjs` runs from any
-directory: a file you name is found where you are, else in the app, and it says
-which it took. Your shell commands have no such help, so keep one directory.
+directory and selects its own app. A file operand is found where you are, else in
+the app, and it says which it took. `pattern` prints its destination before writing;
+an untouched starter is replaced, but an edited or manually emptied file needs
+`--force`. To try another app, create it with `new <path>` and invoke that app's
+`<path>/exact.mjs pattern <name>` (`pattern --help` shows an example).
+Your shell commands have no such help, so keep one directory.
 |`bun exact.mjs …`|What it does|
 |---|---|
 |`contract build app.contract --json --errors-only`|A CI gate: `[]` and exit zero mean no errors (omit `--errors-only` to include warnings); it rewrites the types `app.ts` imports and type-checks it.|

@@ -1235,6 +1235,7 @@ export function pattern(args, say = console.log) {
   const dir = process.env.EXACT_APP_DIR ?? process.cwd();
   // A pattern is a view and its app.ts: beside a Rust data crate it would make the app mixed and drop the view's shapes.
   if (rustApp(dir)) throw new Error('exact pattern: a pattern writes app.ts, and this app\'s data is Rust (data/); read a pattern with `bun exact.mjs pattern` and port its sources to data/src/lib.rs');
+  say(`App: ${resolve(dir)}`);
   const { said, next } = applyPattern(dir, name, { force: args.includes('--force') });
   say(said);
   refreshTypes(dir);

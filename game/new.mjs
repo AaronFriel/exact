@@ -841,10 +841,11 @@ export function applyPattern(dir, pattern, { force = false } = {}) {
 /** What `exact.mjs pattern` with no name prints. */
 export function patternList() {
   const list = patterns(), width = Math.max(...list.map(p => p.name.length));
-  return ['bun exact.mjs pattern <name> [--force]   writes a working, tested starting app here:', '',
+  return ['bun exact.mjs pattern <name> [--force]   writes a working, tested starter in the selected app:', '',
     ...list.map(p => `  ${p.name.padEnd(width)}  ${p.line}`), '',
     'It replaces app.contract, app.ts and app.test.contract (refusing a file you edited unless',
-    '--force), with this app\'s id and name. Then: bun exact.mjs test web.'].join('\n');
+    '--force), with this app\'s id and name. The wrapper selects its own app, even from another',
+    'directory. See pattern --help to try a separate scratch app. Then: bun exact.mjs test web.'].join('\n');
 }
 
 function writeApp(dir, name, { title = titleOf(name), id = newAppId(name) } = {}) {
