@@ -8,9 +8,9 @@ function group(family, protocol, lifetime, kind, evidence, sites, durableWhen) {
 }
 
 export const classifications = [
-  group("replies", ["one-shot"], "issued request and its existing pending target record", "UI-owned",
-    "runner/src/runner/completion.rs mints the capability at take_requests for non-stream pending requests. deliver preserves the existing reply handler; carry does not refuse identities.", [
-    ["runner:runner/src/runner/completion.rs", "Runner::deliver CompletionReply::take"],
+  group("replies", ["one-shot", "subscription"], "issued request or subscription and its existing pending target record", "UI-owned",
+    "runner/src/runner/completion.rs binds authority at take_requests. One-shot replies consume it; streams and long polls retain the original binding through ordered events, mapper turns and their terminal outcome. deliver preserves the existing reply handler; carry does not refuse identities.", [
+    ["runner:runner/src/runner/completion.rs", "Runner::deliver CompletionReply::take CompletionReply::subscription"],
   ]),
   group("timer fires", ["one-shot"], "current Android reader/session and its timer deadlines or held tasks", "UI-owned",
     "host/painted/src/canvas/timers.rs CanvasHost::background calls reader_clock and admit_idle_timer on the current Presenter; canvas/jni_frames.rs forwards the reader callback to it. A stopped activity does not create an independent background round.", [

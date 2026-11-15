@@ -1328,7 +1328,7 @@ pub struct CompletionTiming {
 /// answers, and the request. Taken by [`Runner::take_requests`].
 #[derive(Clone)]
 pub struct RequestOut {
-    /// Runner-issued one-shot authority, shared with the integer-ticket entry until
+    /// Runner-issued reply or subscription authority, shared with the integer-ticket entry until
     /// that entry migrates (LLP 1172.019 §2 item 1). Synthetic host work has none.
     pub completion: Option<crate::runner::CompletionReply>,
     /// Names the reply: [`Runner::fulfill`] takes it back.

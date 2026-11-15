@@ -36,6 +36,10 @@ test('every public Runner receipt entry is enumerated and classified', () => {
     e.symbol.startsWith('Runner::') && (e.returnsReceipt || e.returnsCommitAggregate));
   const listing = entries.map(e => `${e.id}: ${e.family ?? 'UNCLASSIFIED'}`).join('\n');
   assert.ok(entries.some(e => e.symbol === 'Runner::deliver'), listing);
+  const door = entries.find(e => e.symbol === 'Runner::deliver');
+  assert.ok(door.protocol.includes('subscription'), listing);
+  const binding = result.entries.find(e => e.symbol === 'CompletionReply::subscription');
+  assert.ok(binding?.protocol.includes('subscription'), listing);
   for (const entry of entries) {
     assert.ok(entry.family && entry.protocol?.length && entry.lifetime && entry.class && entry.evidence, listing);
   }
