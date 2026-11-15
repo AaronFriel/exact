@@ -19,13 +19,16 @@ mod global_shortcuts;
 #[path = "../../../packages/login-item/windows/lib.rs"]
 mod login_item;
 
+/// A session label and the callback `watch_reserved` was given for it.
+type Watcher = (String, Box<dyn Fn() + Send>);
+
 #[derive(Default)]
 struct Fake {
     said: RefCell<Vec<String>>,
     login: RefCell<Option<bool>>,
     /// Whether the system has given bare Print Screen back.
     print_screen: Cell<bool>,
-    watchers: RefCell<Vec<(String, Box<dyn Fn() + Send>)>>,
+    watchers: RefCell<Vec<Watcher>>,
 }
 
 impl Services for Fake {
