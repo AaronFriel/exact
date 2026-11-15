@@ -1,5 +1,5 @@
 //! Character ownership shared by inline backgrounds and client rectangles.
-use super::{LayoutGlyph, LayoutRun, Paragraph};
+use super::{LayoutGlyph, LayoutRun, Paragraph, RoomKind};
 use crate::paint::Rect4;
 use std::ops::Range;
 
@@ -107,54 +107,39 @@ pub(crate) struct BoxReach {
 
 impl Paragraph {
     /// Where the run `run`, which has no text, stands: its line and the x of
-    /// its content edge, inside the room `run_edges` gave it before the
-    /// character after it, else after the one before it, and whether that
-    /// character is right to left. The runs after it at the same place have
-    /// their room past it.
+    /// its content edge, inside its room (`Run::edges`) as the line draws
+    /// it, its start edge on its paragraph's start side; and whether that
+    /// paragraph is right to left. With no room, before the character after
+    /// it, else after the one before it.
     pub(super) fn empty_run_place(
         &self,
         ownership: &Ownership,
         run: usize,
     ) -> Option<(usize, f32, bool)> {
-        let runs = &self.source.spec.runs;
-        let at = ownership.runs.get(run)?.0.start;
-        // The room after its own, before the character after it: the runs
-        // with no text there, then the next one's start.
-        let mut leads = 0.;
-        for (r, owned) in runs.iter().zip(&ownership.runs).skip(run + 1) {
-            if owned.0.start != at {
-                break;
+        let rtl = self.source.spec.direction == exact_kernel::Direction::Rtl;
+        let edges = self.source.spec.runs.get(run)?.edges;
+        for (i, line) in self.layout_runs().enumerate() {
+            if let Some(room) = line.rooms.iter().find(|r| r.run as usize == run) {
+                let x = if rtl {
+                    room.x + room.w - edges.start
+                } else {
+                    room.x + edges.start
+                };
+                return Some((i, x, rtl));
             }
-            leads += r.edges.start;
-            if !r.text.is_empty() {
-                break;
-            }
-            leads += r.edges.end;
         }
-        let end = runs[run].edges.end;
+        let at = ownership.runs.get(run)?.0.start;
         let mut after = None;
         for (i, line) in self.layout_runs().enumerate() {
             let base = ownership.base(self, &line);
             for g in line.glyphs {
                 let range = g.range();
-                let rtl = g.level % 2 == 1;
+                let glyph_rtl = g.level % 2 == 1;
                 if base + range.start == at && !range.is_empty() {
-                    let x = if rtl {
-                        g.x + g.w + leads + end
-                    } else {
-                        g.x - leads - end
-                    };
-                    return Some((i, x, rtl));
+                    return Some((i, if glyph_rtl { g.x + g.w } else { g.x }, rtl));
                 }
                 if base + range.end == at && !range.is_empty() {
-                    // At the end of its line's text, the runs after it have
-                    // no character to stand before: their room is past its own.
-                    let x = if rtl {
-                        g.x + leads + end
-                    } else {
-                        g.x + g.w - leads - end
-                    };
-                    after = Some((i, x, rtl));
+                    after = Some((i, if glyph_rtl { g.x } else { g.x + g.w }, rtl));
                 }
             }
         }
@@ -191,9 +176,9 @@ impl Paragraph {
             .last()
             .and_then(|i| ownership.runs.get(i))
             .map_or(start, |r| r.0.end);
-        // The room after its last glyph (`TextRun::edges`), which that
-        // glyph's advance includes: its own end reach, its margin, and the
-        // room of the boxes that end with it.
+        let flowed = self.flow.as_ref().is_some_and(|f| !f.incomplete);
+        let paragraph_rtl = self.source.spec.direction == exact_kernel::Direction::Rtl;
+        // Flowed text: the room after its last glyph, which no glyph there has.
         let end_room = runs
             .clone()
             .rev()
@@ -246,13 +231,15 @@ impl Paragraph {
                     continue;
                 }
                 let rtl = g.level % 2 == 1;
-                let first = range.contains(&start);
-                let last = end > start && range.contains(&(end - 1));
+                let first = flowed && range.contains(&start);
+                let last = flowed && end > start && range.contains(&(end - 1));
                 for piece in ownership.cluster_pieces(g, range.clone()) {
                     if !runs.contains(&piece.run) {
                         continue;
                     }
                     let (mut lo, mut hi) = (piece.lo, piece.hi);
+                    // Text flowed around shapes draws only a start room, before
+                    // its run's first glyph.
                     if first {
                         if rtl {
                             hi += reach.sides.start;
@@ -270,6 +257,32 @@ impl Paragraph {
                     }
                     spans.push((lo, hi));
                 }
+            }
+            // The room beside its runs (`Run::edges`), where the line draws it:
+            // its own reach at its start and end, beside its text (a start is
+            // right of its text under `rtl`, an end left of it), and all of the
+            // room of the runs inside it.
+            for room in line.rooms {
+                let run = room.run as usize;
+                let Some((chars, _)) = ownership.runs.get(run).filter(|_| runs.contains(&run))
+                else {
+                    continue;
+                };
+                let w = match room.kind {
+                    RoomKind::Start if chars.start == start => reach.sides.start,
+                    RoomKind::End if chars.end == end => reach.sides.end,
+                    _ => room.w,
+                }
+                .min(room.w);
+                if start == end || w <= 0. {
+                    continue;
+                }
+                let text_left = (room.kind == RoomKind::Start) == paragraph_rtl;
+                let lo = match room.kind {
+                    RoomKind::Start | RoomKind::End if !text_left => room.x + room.w - w,
+                    _ => room.x,
+                };
+                spans.push((lo, lo + w));
             }
             spans.sort_by(|a, b| a.0.total_cmp(&b.0));
             let mut merged: Vec<(f32, f32)> = Vec::new();

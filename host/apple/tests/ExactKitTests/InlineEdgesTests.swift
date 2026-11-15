@@ -220,6 +220,96 @@ final class InlineEdgesTests: XCTestCase {
         XCTAssertNil(inner.path)
     }
 
+    /// An inline box's start and end follow its own direction, its
+    /// paragraph's, whatever the direction of its text, and its first and
+    /// last fragments are in visual order (CSS 2 §8.6, §9.10; CSS Writing
+    /// Modes 3 §2.1): in a right-to-left paragraph its start room is right of
+    /// its text and its end room left of it, as Chrome draws `<p dir=rtl>אב
+    /// <span style="padding:0 3px 0 7px">גדה</span> וז</p>` and the same span
+    /// holding "abc"; in a left-to-right one a Hebrew span's start is left of
+    /// its last letter, its leftmost. Each case: its texts, its direction,
+    /// and the UTF-16 indices of the run's leftmost glyph and of the glyph
+    /// right of the run, with the room each has left of it.
+    func testABoxsRoomsAreOnItsOwnSidesWhateverItsTextsDirection() {
+        for (texts, direction, leftmost, after, rooms) in [
+            (["אב ", "גדה", " וז"], 1, 5, 2, (7, 10)),
+            (["אב ", "abc", " גד"], 1, 3, 2, (7, 10)),
+            (["ab ", "אבג", " cd"], 0, 5, 6, (3, 10)),
+        ] as [([String], Int, Int, Int, (CGFloat, CGFloat))] {
+            var bare = spec(texts.map { run($0) }), padded = spec([run(texts[0]), run(texts[1], start: 3, end: 7), run(texts[2])])
+            bare.direction = direction; padded.direction = direction
+            let plain = engine.paragraph(bare, width: .infinity), boxed = engine.paragraph(padded, width: .infinity)
+            XCTAssertEqual(boxed.width, plain.width + 10, accuracy: 0.05, "\(texts)")
+            XCTAssertEqual(x(boxed, leftmost), x(plain, leftmost) + rooms.0, accuracy: 0.05, "\(texts): room left of the run")
+            XCTAssertEqual(x(boxed, after), x(plain, after) + rooms.1, accuracy: 0.05, "\(texts): room right of it")
+        }
+    }
+
+    /// A right-to-left run that ends its line has its end room left of its
+    /// glyphs, where no glyph is to carry a kern: the line counts it, and a
+    /// left-aligned line starts that much in.
+    func testAnEndRoomLeftOfALinesGlyphsIsCounted() {
+        var bare = spec([run("אב "), run("גד")]), padded = spec([run("אב "), run("גד", start: 3, end: 7)])
+        bare.direction = 1; padded.direction = 1
+        let plain = engine.paragraph(bare, width: .infinity), boxed = engine.paragraph(padded, width: .infinity)
+        XCTAssertEqual(boxed.width, plain.width + 10, accuracy: 0.05)
+        XCTAssertEqual(TextEngine.leftRoom(boxed.lines[0]), 7)
+        XCTAssertEqual(x(boxed, 4), x(plain, 4), accuracy: 0.05, "its leftmost glyph has no room kerned left of it")
+        XCTAssertEqual(boxed.origin(0, align: 0, width: 300), 7, accuracy: 0.05)
+        XCTAssertEqual(boxed.origin(0, align: 2, width: 300), plain.origin(0, align: 2, width: 300) - 3, accuracy: 0.05)
+    }
+
+    /// Each fragment of a wrapped box holds its glyphs, its padding past them
+    /// on its own start and end sides: in a right-to-left paragraph a Hebrew,
+    /// Arabic or Latin box's start border is on its first line's right and
+    /// its end border on its last line's left, its last letter inside it.
+    func testAWrappedBoxsFragmentsHoldItsGlyphsInARightToLeftParagraph() throws {
+        let red: [Double] = [255, 0, 0, 255]
+        for texts in [["מילה ", "טקסט ארוך שעובר בין שורות", " סוף"], ["كلمة ", "نص طويل يمتد عبر السطور", " نهاية"],
+                      ["Wrap ", "a run that wraps across lines", " end"]] {
+            var boxed = run(texts[1], start: 9, end: 9)
+            boxed.backgroundBox = 9; (boxed.backgroundBefore, boxed.backgroundAfter) = (6, 6)
+            boxed.border = InlineBorder(widths: [3, 3, 3, 3], colors: Array(repeating: red, count: 4), styles: Array(repeating: "solid", count: 4))
+            var s = spec([run(texts[0]), boxed, run(texts[2])])
+            s.direction = 1
+            let p = engine.paragraph(s, width: 180)
+            let start = texts[0].utf16.count, end = start + texts[1].utf16.count
+            let mine = p.lines.indices.filter {
+                let r = CTLineGetStringRange(p.lines[$0])
+                return r.location < end && r.location + r.length > start
+            }
+            XCTAssertGreaterThan(mine.count, 1, "\(texts) wraps")
+            for i in mine {
+                let line = p.lines[i]
+                let fill = try XCTUnwrap(TextLinePaint.backgrounds(line, at: .zero).max { $0.rect.width < $1.rect.width }, "\(texts) line \(i)")
+                // The run's glyphs on this line, less the room kerned on them;
+                // a hanging space is left of the pen.
+                var lo = CGFloat.infinity, hi = -CGFloat.infinity
+                for glyphRun in CTLineGetGlyphRuns(line) as! [CTRun] {
+                    let count = CTRunGetGlyphCount(glyphRun)
+                    var indices = [CFIndex](repeating: 0, count: count), positions = [CGPoint](repeating: .zero, count: count)
+                    var advances = [CGSize](repeating: .zero, count: count)
+                    CTRunGetStringIndices(glyphRun, CFRange(), &indices); CTRunGetPositions(glyphRun, CFRange(), &positions)
+                    CTRunGetAdvances(glyphRun, CFRange(), &advances)
+                    let room = (CTRunGetAttributes(glyphRun) as NSDictionary)[NSAttributedString.Key.exactEdgeRoom] as? CGFloat ?? 0
+                    // The room is right of the glyph that reaches furthest.
+                    let reach = (0..<count).max { positions[$0].x + advances[$0].width < positions[$1].x + advances[$1].width }
+                    for g in 0..<count where indices[g] >= start && indices[g] < end && positions[g].x >= 0 {
+                        lo = min(lo, positions[g].x); hi = max(hi, positions[g].x + advances[g].width - (g == reach ? room : 0))
+                    }
+                }
+                let (first, last) = (i == mine.first, i == mine.last)
+                let border = try XCTUnwrap(fill.border)
+                XCTAssertEqual(fill.rect.maxX, hi + (first ? 6 : 0), accuracy: 0.05, "\(texts) line \(i): right")
+                // A trailing space that hangs left of the pen still paints a sliver there.
+                if CTLineGetTrailingWhitespaceWidth(line) == 0 {
+                    XCTAssertEqual(fill.rect.minX, lo - (last ? 6 : 0), accuracy: 0.05, "\(texts) line \(i): left")
+                }
+                XCTAssertEqual(border.widths, [3, first ? 3 : 0, 3, last ? 3 : 0], "\(texts) line \(i)")
+            }
+        }
+    }
+
     /// The kernel's request carries the edges, and the paragraph it measures
     /// is the one painted from the same runs.
     func testTheRequestsEdgesAreThePaintedSpecs() {
