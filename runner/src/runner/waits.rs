@@ -93,6 +93,7 @@ impl<D: DataSource> Runner<D> {
                 },
                 armed: !(t.gated || t.keyed),
                 generation: 0,
+                completion: Default::default(),
                 key: None,
                 base: now,
                 k: 1,

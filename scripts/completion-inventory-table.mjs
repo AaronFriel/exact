@@ -179,7 +179,7 @@ export const classifications = [
     ["painted:host/painted/src/snapshot/jni.rs", "Java_dev_exact_widgets_Native_timeline"],
   ]),
   group("canvas draws", ["subscription"], "canvas lifetime, generation and in-flight draw sequence", "UI-owned",
-    "runner/src/runner/canvas2d.rs:790-805 refuses mismatched generation/sequence and canvas_reply at 1291 accepts that triple; draw/capture work targets those live canvases.", [
+    "runner/src/runner/canvas2d.rs binds a subscription in the existing canvas record at its first draw in a backing-store generation. Async draw replies carry that authority through deliver; integer canvas_reply recovers the same binding. Generation changes reset it. Existing lifetime/generation/sequence and structural checks remain. Capture and presentation callbacks retain their existing paths.", [
     ["apple:host/apple/src/abi/exports.rs", "exact_canvas_defer exact_canvas_display exact_canvas_draw exact_canvas_held exact_canvas_performance_record exact_canvas_performance_requested exact_canvas_snapshotted exact_set_canvas_text"],
     ["painted:host/painted/src/canvas/jni.rs", "Java_dev_exact_canvas_Native_canvasBuffer Java_dev_exact_canvas_Native_canvasFrame"],
     ["painted:host/painted/src/host.rs", "Host::canvas_wants_frame"],
@@ -188,9 +188,10 @@ export const classifications = [
     ["runner:runner/src/runner.rs", "Runner::take_surface_updates"],
     ["runner:runner/src/runner/canvas2d.rs",
       "Canvases::draw#next_seq:1 Canvases::publish#LIFETIMES.fetch_add:1 Canvases::reply#generation:1 Canvases::set_geometry#generation:1 Runner::canvas_bitmap " +
-      "Runner::canvas_describe Runner::canvas_frame Runner::canvas_owed Runner::canvas_reply Runner::canvas_settings Runner::canvas_views Runner::canvas_wants_frame " +
+      "Runner::canvas_describe Runner::canvas_frame Runner::canvas_owed Runner::canvas_settings Runner::canvas_views Runner::canvas_wants_frame " +
       "Runner::draw_canvases Runner::is_canvas_2d Runner::layout_canvases Runner::set_canvas_geometry Runner::set_canvas_limits Runner::set_canvas_text " +
       "Runner::take_canvas_lists"],
+    ["runner:runner/src/runner/canvas2d/completion.rs", "Runner::canvas_draw_completion Runner::canvas_reply"],
     ["runner:runner/src/runner/canvas_performance.rs", "Runner::set_canvas_performance Runner::wants_canvas_performance"],
     ["runner:runner/src/runner/capture.rs", "Runner::canvas_capture Runner::fail_stalled_canvas_capture"],
     ["web:host/web/src/abi.rs", "exact_canvas_performance_record exact_canvas_performance_requested"],
@@ -685,7 +686,7 @@ export const classifications = [
     ["web:host/web/src/abi.rs", "exact_store"],
   ]),
   group("timer fires", ["subscription"], "session timer generation/deadline or one frame task", "UI-owned",
-    "runner/src/runner/native_timers.rs fire_native_timer checks timer index/generation; gates.rs changes generations when task ownership changes. Advance/frame can also pump replies and deferred thens.", [
+    "runner/src/runner/native_timers.rs binds one subscription in each live ordinary timer record at native_timers handoff. Repeats reuse it; gates.rs resets it on rearming. Typed and integer fires retain the original index/generation and clock checks. Frame tasks and other clock entries still use their existing paths. Advance/frame can also pump replies and deferred thens.", [
     ["apple:host/apple/src/abi/exports.rs",
       "exact_admitted_frame exact_advance exact_fire_native_timer exact_frame exact_frame_at exact_native_timers exact_present_frames exact_pump exact_set_live_clock " +
       "exact_start_on_frame exact_tick exact_tick_at exact_timer_waits"],
@@ -715,7 +716,7 @@ export const classifications = [
     ["runner:runner/src/runner/gates.rs",
       "Runner::gate_step#generation:1 Runner::gate_step#next_ms:1 Runner::gate_step#next_ms:2 Runner::gate_step#next_ms:3 Runner::has_timers Runner::tasks " +
       "Runner::timer_due_ms Runner::timer_tolerance_ms Runner::timer_wake_ms Runner::wants_frames"],
-    ["runner:runner/src/runner/native_timers.rs", "Runner::fire_native_timer Runner::native_timers Runner::use_native_timers Runner::uses_native_timers"],
+    ["runner:runner/src/runner/native_timers.rs", "Runner::fire_native_timer Runner::native_timers Runner::native_timer_completion Runner::use_native_timers Runner::uses_native_timers"],
     ["runner:runner/src/runner/overrun.rs", "Runner::hold_overrun_reply#next_ticket:1 Runner::hold_reask#next_ticket:1"],
     ["runner:runner/src/runner/snapshot.rs", "Runner::snapshot_timeline"],
     ["runner:runner/src/runner/waits.rs", "Runner::fire_timer#next_ms:1 Runner::fire_timer#next_ms:2 Runner::hold_waits Runner::release_waits Runner::task_timing Runner::waits"],
@@ -1164,7 +1165,7 @@ export const classifications = [
     ["painted:host/painted/src/presenter/window.rs", "Presenter::env_insets Presenter::fit_view"],
   ]),
   group("timer fires", ["subscription"], "session timer generation/deadline or one frame task", "UI-owned",
-    "The named painted adapter reads or updates the current Presenter through the runner or its Host forwarding API. runner/src/runner/native_timers.rs fire_native_timer checks timer index/generation; gates.rs changes generations when task ownership changes. Advance/frame can also pump replies and deferred thens.", [
+    "The named painted adapter reads or updates the current Presenter through the runner or its Host forwarding API. runner/src/runner/native_timers.rs binds one subscription in each live ordinary timer record at native_timers handoff. Repeats reuse it; gates.rs resets it on rearming. Typed and integer fires retain the original index/generation and clock checks. Frame tasks and other clock entries still use their existing paths. Advance/frame can also pump replies and deferred thens.", [
     ["painted:host/painted/src/presenter/clock.rs", "Presenter::android_clock Presenter::give_clock"],
     ["painted:host/painted/src/presenter/scroll_end.rs", "Presenter::scroll_end_live Presenter::scroll_end_moved Presenter::timer_or_scroll_due_ms"],
   ]),
@@ -1299,7 +1300,7 @@ export const classifications = [
     ["runner:runner/src/instance/theme.rs", "ThemedRow::resolve_in ThemeIndex::faces ThemeIndex::is_empty ThemeIndex::len ThemeIndex::look ThemeIndex::looks ThemeIndex::row ThemeIndex::rows"],
   ]),
   group("canvas draws", ["one-shot"], "canvas lifetime, generation and in-flight draw sequence", "UI-owned",
-    "The named public runner-crate source is the canvas draws API or its value/admission helper. runner/src/runner/canvas2d.rs:790-805 refuses mismatched generation/sequence and canvas_reply at 1291 accepts that triple; draw/capture work targets those live canvases.", [
+    "The named public runner-crate source is the canvas draws API or its value/admission helper. runner/src/runner/canvas2d.rs binds a subscription in the existing canvas record at its first draw in a backing-store generation. Async draw replies carry that authority through deliver; integer canvas_reply recovers the same binding. Generation changes reset it. Existing lifetime/generation/sequence and structural checks remain. Capture and presentation callbacks retain their existing paths.", [
     ["runner:runner/src/canvas_capture.rs", "CanvasCapture::captured CanvasCapture::snapshotted captured_image refused Request::canvas_capture_pending Request::capture_canvas Request::take_canvas_capture"],
     ["runner:runner/src/canvas_performance.rs", "validate"],
     ["runner:runner/src/runner/canvas2d.rs", "DrawReply::from_seam DrawRequest::json engine Limits::native"],

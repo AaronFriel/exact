@@ -74,7 +74,10 @@ impl<D: DataSource> Runner<D> {
     ) -> Result<Option<CommitReceipt>, RunnerError> {
         let (Completion::Reply { outcome, timing }
         | Completion::Subscription { outcome, timing }
-        | Completion::DurableOperation { outcome, timing }) = completion;
+        | Completion::DurableOperation { outcome, timing }) = completion
+        else {
+            unreachable!("callback dispatched by deliver")
+        };
         // A let-go request's reply: it has ended, and an abort names it no more.
         self.retired_fetches.retain(|r| r.1 != ticket);
         let answering = std::mem::replace(&mut self.churn.answering, true);
