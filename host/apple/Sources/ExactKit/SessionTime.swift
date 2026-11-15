@@ -85,11 +85,21 @@ extension ExactSession {
     /// an argument reading the zone's offset or the locale (a kept answer's
     /// identity) is the real one, not a default (or a reload's stale date)
     /// until `tellTime`. A running runner is not told.
+    ///
+    /// On the Mac, the process's layout direction too: AppKit fixes it at
+    /// launch from the system's language, not the bundle's, and draws the
+    /// window's chrome in it, so a direction the author left unsaid is it,
+    /// not the strings table's (an Arabic-only app on an English Mac is left
+    /// to right throughout, as a hand-built one is).
     func primeTime() {
         guard state != .destroyed else { return }
         let date = dateNow()
         runtime.setLaunchTime(epochAtZero: date.epoch, utcOffset: date.offset)
         runtime.setLaunchPlace(locale: launchPlace.locale, timeZone: launchPlace.timeZone, seed: launchPlace.seed, formatLocale: launchPlace.formatLocale)
+        #if os(macOS)
+        runtime.launchDirection(rtl: NSApp.map { $0.userInterfaceLayoutDirection == .rightToLeft })
+        runtime.naturalText(true) // AppKit's text resolves an unsaid base per paragraph (LLP 1060.000 D3)
+        #endif
         runtime.liveClock(clock == nil)
     }
     /// The notices that the place or the date changed, each with the center

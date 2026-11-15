@@ -45,6 +45,7 @@ mod mark_sizes;
 mod motion;
 mod native_buttons;
 mod native_fields;
+mod natural_text;
 mod no_panic;
 mod paint;
 mod paragraph_stamp;

@@ -55,6 +55,8 @@ final class RegionTextSource: Sendable {
     let flowFontSize: CGFloat
     let align: Int
     let direction: Int
+    /// Natural text's paragraph bases (LLP 1060.000 D3); empty, `direction`.
+    let bases: [(start: Int, rtl: Bool)]
     let lineClamp: Int
     let overflowWrap: Int
     let textIndent: CGFloat
@@ -124,6 +126,7 @@ final class RegionTextSource: Sendable {
         whiteSpace = spec.whiteSpace
         lineScale = engine.lineScale
         text = spec.runs.map(\.text).joined()
+        bases = spec.natural ? TextEngine.naturalBases(text, fallback: spec.direction) : []
         tabInterval = spec.preserves && text.contains("\t") ? base.map { TextEngine.tabInterval(font($0).value, letterSpacing: $0.letterSpacing) } : nil
         utf16Count = offset
         sourceUTF8Bytes = spec.runs.reduce(0) { $0 + $1.text.utf8.count }
@@ -135,9 +138,16 @@ final class RegionTextSource: Sendable {
     /// A baseline on the device pixels its line box was rounded to.
     func painted(_ baseline: CGFloat) -> CGFloat { (baseline * lineScale).rounded() / lineScale }
 
+    /// Whether the line that starts at UTF-16 `location` has a right-to-left base.
+    func base(at location: Int) -> Bool {
+        var paragraphs = LineInsets()
+        paragraphs.rtl = direction == 1; paragraphs.bases = bases
+        return paragraphs.rtl(at: location)
+    }
+
     var insets: LineInsets {
         var value = LineInsets()
-        value.textIndent = textIndent; value.rtl = direction == 1
+        value.textIndent = textIndent; value.rtl = direction == 1; value.bases = bases
         value.edgeStarts = LineInsets.edgeStarts(runs.map { (text: $0.text, start: $0.inlineStart) })
         return value
     }
@@ -187,7 +197,7 @@ final class RegionTextSource: Sendable {
             value.append(NSAttributedString(string: run.text, attributes: attributes))
         }
         TextEngine.kernInlineEdges(value, runs: runs.map { (text: $0.text, start: $0.inlineStart, end: $0.inlineEnd) })
-        TextEngine.setBaseDirection(value, direction: direction)
+        TextEngine.setBaseDirection(value, bases: bases.isEmpty ? [(start: 0, rtl: direction == 1)] : bases)
         PresentedText().finish(value)
         if let tabInterval { TextEngine.setTabStops(value, interval: tabInterval) }
         return value

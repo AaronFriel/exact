@@ -1125,6 +1125,15 @@ fn style_json_shown(
         };
     }
     json = crate::looks::with_looks(json, node, env, current);
+    // Natural text (LLP 1060.000 D3): Swift resolves each paragraph's base
+    // where `direction` is the layout direction alone.
+    if node.is_natural_text() {
+        json = if json == "{}" {
+            "{\"direction_natural\":true}".into()
+        } else {
+            "{\"direction_natural\":true,".to_owned() + &json[1..]
+        };
+    }
     // @ref LLP 1053.000.000.000 D2 — an auto glass group's spacing rides the
     // string the host compares, so a gap, direction or display change sends it.
     if let Some(points) = glass_auto_spacing(node) {

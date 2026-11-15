@@ -287,6 +287,11 @@ void exact_textflow_free(uint64_t handle);
 size_t exact_text_line_breaks(const uint8_t *utf8, size_t len,
     const uint32_t *words, size_t word_count, uint32_t *out, size_t cap);
 
+/* LLP 1060.000 D3: natural text's base direction per paragraph (UAX #9 P2, P3 at its
+ * paragraph separators; `fallback` where one has no strong character): 0 ltr, 1 rtl.
+ * Writes min(count,cap) to out (null is a query); returns count, 0 for invalid UTF-8. */
+size_t exact_text_paragraph_bases(const uint8_t *utf8, size_t len, uint8_t fallback, uint8_t *out, size_t cap);
+
 typedef struct ExactMeasureRequest {
     uint32_t view, node_index, node_generation;
     uint64_t revision;
@@ -314,6 +319,8 @@ typedef struct ExactMeasureRequest {
     uint8_t text_wrap_style; /* CSS text-wrap-style: 0 auto, 1 balance (LLP 1001 §6) */
     const uint8_t *atoms; size_t atoms_len; /* LLP 1045.000 D2: a Markdown paragraph's `atoms` JSON, UTF-8; 0 length for none */
     const uint8_t *faces; size_t faces_len; /* its `atomFaces` JSON */
+    uint8_t natural;       /* 1: natural text (LLP 1060.000 D3): each paragraph's base is
+                              exact_text_paragraph_bases's, `direction` its fallback and alignment's */
 } ExactMeasureRequest;
 
 /* LLP 1045 D3/D4. Markdown source into display pieces, the same for measure and paint. */
@@ -848,6 +855,15 @@ uint32_t exact_set_launch_place(ExactRuntime rt, size_t len);
  * `name` reads, and whether its router launches rooted (`rooted` nonzero),
  * for every boot from here. Not a batch. */
 uint32_t exact_set_launch_window(ExactRuntime rt, size_t len, uint32_t rooted);
+/* The platform's layout direction for every boot from here, where it governs
+ * a direction the author left unsaid (AppKit's process direction): 0 left to
+ * right, 1 right to left, anything else the strings table's. Not a batch. */
+uint32_t exact_set_launch_direction(ExactRuntime rt, uint32_t direction);
+/* LLP 1060.000 D3: whether text whose direction is unsaid takes each
+ * paragraph's base direction from its first strong character, as AppKit's
+ * natural writing direction does (`on` nonzero), for every boot from here.
+ * Not a batch. */
+uint32_t exact_set_natural_text(ExactRuntime rt, uint32_t on);
 /* Beside the date: the locale and IANA time zone, as locale NUL timeZone input,
  * then optionally NUL seed NUL formatLocale. */
 uint32_t exact_set_place(ExactRuntime rt, size_t len);

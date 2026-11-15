@@ -214,7 +214,7 @@ extension NodeView {
                 if !empty && spec.whiteSpace != 1 && spec.whiteSpace != 4 {
                     let trailing = CGFloat(CTLineGetTrailingWhitespaceWidth(line))
                     let width = CGFloat(CTLineGetTypographicBounds(line, nil, nil, nil)) - trailing
-                    let left = spec.direction == 1 ? x + trailing : x
+                    let left = paragraph.insets.rtl(at: range.location) ? x + trailing : x
                     let right = left + width
                     let start = max(rect.minX, left), end = min(rect.maxX, right)
                     guard end > start else { return nil }

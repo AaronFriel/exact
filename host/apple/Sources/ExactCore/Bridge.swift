@@ -801,6 +801,9 @@ package final class Runtime {
     }
     package func launch(_ location: String) { on { () -> Void in let n = write(location); _ = exact_set_launch_location(rt, n) } }
     package func launchWindow(_ name: String, rooted: Bool) { on { () -> Void in let n = write(name); _ = exact_set_launch_window(rt, n, rooted ? 1 : 0) } }
+    /// `rtl` nil: the strings table's direction.
+    package func launchDirection(rtl: Bool?) { on { () -> Void in _ = exact_set_launch_direction(rt, rtl.map { $0 ? 1 : 0 } ?? 2) } }
+    package func naturalText(_ natural: Bool) { on { () -> Void in _ = exact_set_natural_text(rt, natural ? 1 : 0) } }
     package func navigate(_ view: UInt32, _ location: String, now: Double) -> Batch {
         return on {
             let n = write(location)

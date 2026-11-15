@@ -211,6 +211,11 @@ impl<'a> NodeRef<'a> {
         self.arena.paragraph(self.slot)
     }
 
+    /// [`crate::text::Paragraph::natural`] alone, without the paragraph.
+    pub fn is_natural_text(&self) -> bool {
+        crate::text::natural::is_natural(self.arena, self.slot)
+    }
+
     /// The nearest explicit HTML spelling-check hint in the logical tree.
     /// Empty means true; missing/invalid values inherit. None leaves the
     /// editor's platform/user default in charge, without changing authored props.

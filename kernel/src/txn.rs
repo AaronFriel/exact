@@ -25,7 +25,7 @@ use crate::wire::Op;
 mod capacity;
 mod defaults;
 mod inherited;
-use inherited::{inherited_changed, propagate_inherited};
+use inherited::{inherited_changed, propagate_inherited, written_direction};
 mod text_style;
 
 /// The deepest a node may sit below the top of its tree (a root is 0). Layout
@@ -906,6 +906,7 @@ pub(crate) fn continue_document(
                         let at = |n: &u32| (*n, crate::grouped::reached(arena, *n));
                         arriving.chain(leaving).map(at).collect()
                     };
+                    let written = written_direction(arena, reached.iter().map(|r| r.0));
                     for o in &old {
                         if !retained.contains(o) {
                             arena.set_parent(*o, None);
@@ -976,7 +977,9 @@ pub(crate) fn continue_document(
                             text_nodes.push(arena.key(orphan));
                         }
                         defaults::changed(arena, layout, orphan, context, touched, receipt);
-                        inherited_after_move(arena, layout, orphan, before, touched, receipt);
+                        inherited_after_move(
+                            arena, layout, orphan, before, &written, touched, receipt,
+                        );
                     }
                     for (m, before, context) in moved {
                         if arena.node_type(m) == NodeType::Image
@@ -986,7 +989,7 @@ pub(crate) fn continue_document(
                             text_nodes.push(arena.key(m));
                         }
                         defaults::changed(arena, layout, m, context, touched, receipt);
-                        inherited_after_move(arena, layout, m, before, touched, receipt);
+                        inherited_after_move(arena, layout, m, before, &written, touched, receipt);
                     }
                 }
                 Op::AttachRoot { id } => {
@@ -1341,6 +1344,7 @@ fn inherited_after_move(
     layout: &mut dyn LayoutMirror,
     slot: u32,
     before: InheritedStyle,
+    written: &[u32],
     touched: &mut Vec<NodeKey>,
     receipt: &mut CommitReceipt,
 ) {
@@ -1352,7 +1356,17 @@ fn inherited_after_move(
     invalidate_text_sources(arena, slot);
     receipt.layout_invalidated |= crate::kernel::owner::moved(arena, layout, slot);
     let after = arena.computed_inherited(slot);
-    let changed = before.changed_mask(&after);
+    let mut changed = before.changed_mask(&after);
+    // Natural text turns on whether a `direction` is authored above, which a
+    // move can change while every value stays (LLP 1060.000 D3).
+    if arena.natural_text
+        && written.contains(&slot)
+            != arena
+                .inherited_source(slot, crate::StyleId::Direction)
+                .is_some()
+    {
+        changed = changed.union(StyleMask::of(crate::StyleId::Direction));
+    }
     if !changed.is_empty() {
         inherited_changed(arena, layout, slot, changed, receipt);
         touched.push(arena.key(slot));

@@ -4846,7 +4846,15 @@ On Apple platforms the tables are the bundle's localizations, base first, so the
 system's own words and the direction of the chrome it draws (bars, the Mac's
 split view, sidebar and toolbar) follow the table it picks. AppKit mirrors a
 window only on a Mac whose system language is right to left, as it does for any
-hand-built app, while the content follows the table everywhere.
+hand-built app, and on the Mac a direction you leave unsaid is the window's: an
+Arabic table on an English Mac is left to right throughout, and `state` reports
+`language.dir` as `ltr`. Elsewhere it is the table's. A `direction` you write
+wins on every host. `language.dir` is the layout direction: on the Mac, text
+under no written `direction` takes each paragraph's base direction from its
+first letter, as an `NSTextField` does, so an Arabic sentence in a left-to-right
+window keeps its full stop at its own end and stays aligned to the start.
+Writing `direction` fixes the base of all text under it, so do not write it to
+move a full stop (Markdown text keeps the layout direction).
 
 #### Folds on iOS
 

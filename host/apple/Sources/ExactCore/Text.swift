@@ -208,6 +208,10 @@ package struct Spec: Hashable {
     package var color: [Double] // r g b a, 0–255
     package var overflowWrap: Int = 0 // CSS: normal, break-word, anywhere
     package var direction: Int = 0 // CSS: ltr, rtl
+    /// Natural text (LLP 1060.000 D3): each paragraph's base is its first
+    /// strong character's (`TextEngine.naturalBases`), `direction` where it
+    /// has none; `direction` alone resolves alignment.
+    package var natural = false
     package var whiteSpace: Int = 0 // CSS: normal, pre-wrap, nowrap, pre-line, pre (runs already collapsed unless pre-wrap or pre)
     /// `white-space-collapse: preserve` (pre-wrap, pre): spaces, tabs and breaks are text.
     package var preserves: Bool { whiteSpace == 1 || whiteSpace == 4 }
@@ -897,7 +901,7 @@ package final class TextEngine {
             s.addAttribute(.exactClampStyle, value: a, range: NSRange(location: 0, length: s.length))
         }
         TextEngine.kernInlineEdges(s, runs: spec.runs)
-        TextEngine.setBaseDirection(s, direction: spec.direction)
+        TextEngine.setBaseDirection(s, direction: spec.direction, natural: spec.natural)
         presentation?.finish(s)
         if spec.preserves, s.string.contains("\t"), let first = spec.strut ?? spec.runs.first {
             setTabStops(s, run: first)
@@ -1446,7 +1450,7 @@ package final class TextEngine {
         var made = Spec(runs: runs, align: Int(request.align), lineClamp: Int(request.line_clamp), color: [0, 0, 0, 255], overflowWrap: Int(request.overflow_wrap), direction: Int(request.direction), whiteSpace: Int(request.white_space), strut: run(request.strut))
         made.textIndent = CGFloat(request.text_indent); made.hyphens = Int(request.hyphens)
         made.textBoxTrim = Int(request.text_box_trim); made.textBoxOver = Int(request.text_box_over); made.textBoxUnder = Int(request.text_box_under)
-        made.balance = request.text_wrap_style == 1
+        made.balance = request.text_wrap_style == 1; made.natural = request.natural != 0
         if made.automaticHyphens, let lang = request.lang {
             made.language = String(decoding: UnsafeBufferPointer(start: lang, count: request.lang_len), as: UTF8.self)
         }

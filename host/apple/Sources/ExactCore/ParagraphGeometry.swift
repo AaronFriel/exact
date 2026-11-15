@@ -216,8 +216,8 @@ extension TextEngine {
     }
 }
 
-/// Where each line of a paragraph starts, from its start edge (which `rtl`
-/// puts on the right): CSS `text-indent` on the first line, and a Markdown
+/// Where each line of a paragraph starts, from its start edge (which a
+/// right-to-left base puts on the right): CSS `text-indent` on the first line, and a Markdown
 /// list item's head indent on each of its lines, the first one's less the
 /// marker hung before it — the `padding-left` and outside marker the web
 /// lays the same item out with (LLP 1045 D4). Measure, layout, paint, hits
@@ -225,6 +225,9 @@ extension TextEngine {
 package struct LineInsets {
     package var textIndent: CGFloat = 0
     package var rtl = false
+    /// Natural text's paragraphs (LLP 1060.000 D3), UTF-16 starts in order,
+    /// each with its own base; empty, every line's base is `rtl`.
+    package var bases: [(start: Int, rtl: Bool)] = []
     /// The indented paragraphs (each ends after its newline), UTF-16
     /// [start, end), in order: the first line's inset and the others'.
     package var heads: [(start: Int, end: Int, first: CGFloat, rest: CGFloat)] = []
@@ -238,6 +241,7 @@ package struct LineInsets {
     package init(_ spec: Spec, marker: (CFRange) -> CGFloat) {
         textIndent = spec.firstLineIndent; rtl = spec.direction == 1
         edgeStarts = Self.edgeStarts(spec.runs)
+        if spec.natural { bases = TextEngine.naturalBases(spec.runs.map(\.text).joined(), fallback: spec.direction) }
         guard spec.runs.contains(where: { $0.indent != 0 }) else { return }
         var open: (start: Int, first: CGFloat, rest: CGFloat)?
         var at = 0
@@ -270,7 +274,15 @@ package struct LineInsets {
         if lo > 0, location < heads[lo - 1].end {
             width += location == heads[lo - 1].start ? heads[lo - 1].first : heads[lo - 1].rest
         }
-        return (rtl ? 0 : width, width)
+        return (rtl(at: location) ? 0 : width, width)
+    }
+
+    /// Whether the line that starts at UTF-16 `location` has a right-to-left
+    /// base: its paragraph's in natural text, else the paragraph's `rtl`.
+    package func rtl(at location: Int) -> Bool {
+        var lo = 0, hi = bases.count
+        while lo < hi { let mid = (lo + hi) / 2; if bases[mid].start <= location { lo = mid + 1 } else { hi = mid } }
+        return lo > 0 ? bases[lo - 1].rtl : rtl
     }
 }
 
@@ -300,8 +312,8 @@ extension Paragraph {
         let flush: CGFloat = align == 1 ? 0.5 : align == 2 ? 1 : 0
         // CSS `text-indent` and a list item's indent: the line aligns in
         // what its inset leaves.
-        let inset = insets.at(CTLineGetStringRange(lines[index]).location)
-        return inset.left + TextEngine.penOffset(lines[index], flush: flush, room: Double(width - inset.width), rtl: insets.rtl,
+        let location = CTLineGetStringRange(lines[index]).location, inset = insets.at(location)
+        return inset.left + TextEngine.penOffset(lines[index], flush: flush, room: Double(width - inset.width), rtl: insets.rtl(at: location),
                                                  whiteSpace: shape?.spec.whiteSpace ?? 0, source: shape?.attributed)
     }
 

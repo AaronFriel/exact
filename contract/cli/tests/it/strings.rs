@@ -490,6 +490,48 @@ fn cldr_direction_follows_the_resolved_script_and_css_overrides_still_win() {
 }
 
 #[test]
+fn a_launch_direction_replaces_the_tables_and_css_overrides_still_win() {
+    let app = AppDir::new("component App\n  view\n    column testId=\"root\"\n      text t(\"title\") testId=\"title\"\n      text \"CSS\" direction=\"rtl\" testId=\"override\"\n", &[
+        ("strings/en.json", EN), ("strings/ar.json", EN),
+    ]);
+    let plan = app.compile().unwrap();
+    for host in [exact_kernel::Direction::Ltr, exact_kernel::Direction::Rtl] {
+        let launch = exact_runner::time::Launch {
+            place: Some(exact_runner::time::Place {
+                locale: "ar".into(),
+                ..Default::default()
+            }),
+            direction: Some(host),
+            ..exact_runner::time::Launch::NONE
+        };
+        let r = exact_runner::time::launching_with(launch, || boot(plan.clone()));
+        assert_eq!(r.resolved_locale(), "ar");
+        assert_eq!(r.direction(), host.name());
+        for id in ["root", "title", "override"] {
+            let node = r
+                .kernel()
+                .node_by_key(r.kernel().find_by_test_id(id)[0])
+                .unwrap();
+            let want = if id == "override" {
+                exact_kernel::Direction::Rtl
+            } else {
+                host
+            };
+            assert_eq!(
+                node.computed_style(exact_kernel::StyleMask::INHERITED)
+                    .direction,
+                want,
+                "{}: {id}",
+                host.name()
+            );
+        }
+        let state = exact_runner::agent::state(&r);
+        let language = format!(r#""language":{{"lang":"ar","dir":"{}"}}"#, host.name());
+        assert!(state.contains(&language), "{state}");
+    }
+}
+
+#[test]
 fn the_default_place_reanswers_resolved_locale_when_its_table_changes() {
     let app = AppDir::new("shape Time\n  resolvedLocale: string\ncomponent App\n  resource time = exactTime() as shape Time\n  view\n    text time.resolvedLocale testId=\"locale\"\n", &[
         ("strings/en.json", EN), ("strings/en-US.json", EN),

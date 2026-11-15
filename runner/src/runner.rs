@@ -552,6 +552,7 @@ pub struct Runner<D: DataSource> {
     live_times: live_time::LiveTimes,
     text_axes: text_axes::TextAxes,
     place: crate::time::Place,
+    host_direction: Option<exact_kernel::Direction>, // the platform's, told at launch ([`Runner::direction`])
     surface_records: exact_kernel::SortedMap<String, String>,
     canvas_performance: exact_kernel::SortedMap<String, String>,
     surface_refusals: exact_kernel::SortedMap<String, String>,
@@ -808,8 +809,7 @@ impl<D: DataSource> Runner<D> {
                         }))
             })
             .collect();
-        // What each carried reader's last ask read (LLP 1069.005 D2): whether
-        // a store change asks it again.
+        // What each carried reader's last ask read (LLP 1069.005 D2): whether a store change asks it again.
         let read_contents: Vec<Option<bool>> = (plan.resources.iter())
             .map(|resource| {
                 let (name, source) = (plan.str(resource.name), plan.str(resource.source));
@@ -941,6 +941,7 @@ impl<D: DataSource> Runner<D> {
             text_axes: Default::default(),
             place: launched_place.clone().unwrap_or_default(),
             window_name: crate::time::launch_window_name(),
+            host_direction: crate::time::launch_direction(),
             surface_records: Default::default(),
             canvas_performance: Default::default(),
             surface_refusals: Default::default(),
@@ -972,8 +973,7 @@ impl<D: DataSource> Runner<D> {
         runner.carry_modes(carried.map_or(&[], |c| &c.modes));
         runner.ask_kept_scheme();
         runner.derives = vec![None; runner.plan.derives.len()];
-        // Resources: carry only the same named source and a value that still
-        // fits the declared shape; a carried value can refuse nothing.
+        // Resources: carry only the same named source and a value that still fits the declared shape; a carried value can refuse nothing.
         let carried_resources = (0..runner.plan.resources.len())
             .map(|i| {
                 let name = runner.plan.str(runner.plan.resources[i].name);

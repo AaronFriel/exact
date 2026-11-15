@@ -210,6 +210,21 @@ impl<D: DataSource> Bridge<D> {
         self.launch_facts.rooted = rooted;
     }
 
+    /// The platform's layout direction for every boot from here
+    /// (`exact_runner::time::Launch::direction`): 0 left to right, 1 right
+    /// to left, anything else none (the strings table's).
+    pub fn set_launch_direction(&mut self, direction: u32) {
+        self.launch_facts.direction = u8::try_from(direction)
+            .ok()
+            .and_then(exact_kernel::Direction::from_wire);
+    }
+
+    /// Whether unsaid text is natural for every boot from here
+    /// (`exact_runner::time::Launch::natural_text`, LLP 1060.000 D3).
+    pub fn set_launch_natural_text(&mut self, on: bool) {
+        self.launch_facts.natural_text = on;
+    }
+
     /// Where the viewer is, for the next boot's first settle, as
     /// `set_place` reads it from the input buffer (`locale NUL timeZone NUL
     /// seed`); the running host is not told. A fact that does not validate

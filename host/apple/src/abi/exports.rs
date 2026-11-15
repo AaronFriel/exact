@@ -894,6 +894,18 @@ macro_rules! host {
             $crate::abi::with_runtime(&EXACT_RUNTIMES, rt, false, |b, _| { b.set_launch_window(len, rooted != 0); 0 }, |n| n)
         }
 
+        /// The platform's layout direction for every boot from here: 0 ltr, 1 rtl, else the strings table's.
+        #[no_mangle]
+        pub extern "C" fn exact_set_launch_direction(rt: u32, direction: u32) -> u32 {
+            $crate::abi::with_runtime(&EXACT_RUNTIMES, rt, false, |b, _| { b.set_launch_direction(direction); 0 }, |n| n)
+        }
+
+        /// Whether unsaid text takes each paragraph's base from its first strong character, for every boot from here. @ref LLP 1060.000 D3
+        #[no_mangle]
+        pub extern "C" fn exact_set_natural_text(rt: u32, on: u32) -> u32 {
+            $crate::abi::with_runtime(&EXACT_RUNTIMES, rt, false, |b, _| { b.set_launch_natural_text(on != 0); 0 }, |n| n)
+        }
+
         /// Where the viewer is (`locale NUL timeZone NUL seed` input) for the next boot or candidate, before it.
         #[no_mangle]
         pub extern "C" fn exact_set_launch_place(rt: u32, len: usize) -> u32 {

@@ -340,8 +340,8 @@ struct TextRasterJob {
             lines[lines.count - 1] = TextEngine.clampedLine(source, range: range, width: Double(width)) ?? lines[lines.count - 1]
         }
         let positions = zip(lines, baselines).map { line, baseline in
-            let inset = insets.at(CTLineGetStringRange(line).location)
-            return CGPoint(x: box.minX + inset.left + TextEngine.penOffset(line, flush: flush, room: Double(box.width - inset.width), rtl: insets.rtl,
+            let location = CTLineGetStringRange(line).location, inset = insets.at(location)
+            return CGPoint(x: box.minX + inset.left + TextEngine.penOffset(line, flush: flush, room: Double(box.width - inset.width), rtl: insets.rtl(at: location),
                                                                            whiteSpace: whiteSpace, source: source),
                            y: TextEngine.paintedLine(baseline, top: box.minY, scale: scale, lineScale: lineScale))
         }

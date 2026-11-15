@@ -791,11 +791,15 @@ if (apple && !device) await httpFrameSmoke({ host, open, check });
   writeFileSync(source, 'shape Time\n  locale: string\n  formatLocale: string\n  resolvedLocale: string\n  timeZone: string\n  seed: number\n  epochAtZero: number\n  utcOffset: number\ncomponent App\n  resource time = exactTime() as shape Time\n  state minute = 0\n  action tick\n    minute = time.epochAtZero + performanceNow()\n  task minutes mount\n    every(60000, tick)\n  view\n    column\n      text `${time.locale}|${time.resolvedLocale}|${time.timeZone}|${time.seed}|${time.formatLocale}` testId="place"\n      text `${time.epochAtZero}|${time.utcOffset}|${minute}` testId="date"\n      text t("greeting") testId="greeting"\n');
   const compiled = spawnSync('cargo', ['run', '-q', '--profile', HOST_DEV, '-p', 'contract', '--', 'build', source, '-o', plan], {cwd:ROOT, encoding:'utf8'});
   check(compiled.status === 0, 'launch facts fixture compiles: ' + compiled.stderr);
+  // The Mac lays out in AppKit's process direction (LLP 1060.000 D1), which a probe process reads as the fixture's would while
+  // the system's settings decide it: the fixture is launched with no `Apple…` arguments.
+  const macDir = host === 'macos' ? spawnSync('xcrun', ['swift', '-'], { input: 'import AppKit; print(NSApplication.shared.userInterfaceLayoutDirection == .rightToLeft ? "rtl" : "ltr")', encoding: 'utf8' }).stdout.trim() : null;
+  if (host === 'macos') check(macDir === 'ltr' || macDir === 'rtl', `the AppKit direction probe answers: ${macDir}`);
   if (compiled.status === 0) for (const options of [{}, {}, {seed:42, locale:'fr-CA', timeZone:'America/Toronto', epoch:'2026-09-21T14:13:20Z'}, {seed:42, locale:'ar-EG', timeZone:'UTC'}, {epoch:'now'}, {locale:'en-US', formatLocale:'en-KR'}]) {
     const launched = Date.now(), f = await openFixture({host, browser: 'chrome', plan, ...options});
     try {
       const lang = options.locale === 'ar-EG' ? 'ar' : options.locale?.startsWith('fr') ? 'fr' : 'en';
-      const dir = lang === 'ar' ? 'rtl' : 'ltr';
+      const dir = macDir ?? (lang === 'ar' ? 'rtl' : 'ltr');
       const expected = `${options.locale ?? 'en-US'}|${lang}|${options.timeZone ?? 'UTC'}|${options.seed ?? 1}|${options.formatLocale ?? options.locale ?? 'en-US'}`; // the Region's format: the drive's, else the locale
       const tree = await f.tree();
       check(byTestId(tree, 'place')?.props.text === expected, `launch facts: expected ${expected}, got ${byTestId(tree, 'place')?.props.text}`);
