@@ -223,11 +223,11 @@ internal class Owner(private val hwbuf: Boolean, private val fast: Boolean, prio
     /** Boot at the size the view is expected to have; [done] on the main thread with whether it booted. An activity
      * made again in this process (LLP 1115.001 D15.1) calls this for its own view: [Native.start] then adopts the host
      * that runs on this thread, which paints everything again for the new reader, and starts no second one. */
-    fun boot(width: Int, height: Int, scale: Float, dir: String, live: Boolean, done: (Boolean) -> Unit) {
+    fun boot(width: Int, height: Int, scale: Float, dir: String, store: String, live: Boolean, done: (Boolean) -> Unit) {
         handler.post {
             android.os.Trace.beginSection("exact boot")
             try { Native.hardwarePictures(hwbuf) } catch (e: UnsatisfiedLinkError) { }
-            val ok = Native.start(width, height, scale, dir, live)
+            val ok = Native.start(width, height, scale, dir, store, live)
             android.os.Trace.endSection()
             if (ok) {
                 // What was published or scrolled for the reader before this one is not this one's.

@@ -199,9 +199,10 @@ class ExactView(context: Context, private val live: Boolean, private val onFirst
             android.os.Trace.endSection()
         } else {
             val dir = context.filesDir.absolutePath
+            val store = context.noBackupFilesDir.absolutePath
             try { Native.hardwarePictures(hwbuf) } catch (e: UnsatisfiedLinkError) { }
             Native.trust(context.applicationContext)
-            started = Native.start(window.first, window.second, Device.scale(context), dir, live)
+            started = Native.start(window.first, window.second, Device.scale(context), dir, store, live)
         }
         // Executor replies and decoded images wake the main looper; poll drains them. A wake with no turn to take
         // still owes the next timer (a dev loop's next poll among them). The GPU module's acquisitions wake it too.

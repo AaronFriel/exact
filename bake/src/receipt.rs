@@ -687,6 +687,19 @@ fn artifact_graph(
     if !marked.is_empty() {
         requires.insert("hatches".into(), json!(marked));
     }
+    // What the APK was composed from (LLP 1030.006 D4a): a plan that uses a
+    // capability or a package extension the installed APK did not link is a
+    // new APK. The classifier compares these as subsets of `androidLinked`.
+    if inputs.get("androidLinked").is_some() {
+        requires.insert(
+            "androidUses".into(),
+            json!(crate::compat::android_uses(plan)),
+        );
+        requires.insert(
+            "androidExtensions".into(),
+            json!(crate::compat::plan_extensions(plan)),
+        );
+    }
     // A purpose's text is in the installed binary's Info.plist: a bundle
     // whose purposes differ is a binary release (LLP 1069.008 D5).
     // What a TypeScript module may ask of the binary's prelude (compat.rs

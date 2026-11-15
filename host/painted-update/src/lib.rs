@@ -10,6 +10,17 @@ use exact_runner::Delivery;
 use std::sync::Arc;
 pub use store::Updates;
 
+/// [`Updates::open`] as the host's [`Opener`](exact_painted::delivery::Opener):
+/// what an Android library at store `"A"` hands `canvas_jni!`.
+pub fn open(
+    compat: &str,
+    plan: &[u8],
+    assets: &std::path::Path,
+    base: Option<&std::path::Path>,
+) -> Result<Box<dyn Store>, String> {
+    Ok(Box::new(Updates::open(compat, plan, assets, base)?))
+}
+
 impl Store for Updates {
     fn prepare_selected(&mut self) -> Option<Selection> {
         let prepared = Updates::prepare_selected(self)?;

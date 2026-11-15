@@ -1161,7 +1161,7 @@
           "additionalProperties": { "type": "boolean" }
         },
         "store": {
-          "description": "Per platform (web, macos, ios, linux, windows, android), whether an installed app has an update store: \"0\" links none, so every change ships as a new binary; \"A\" links the store, so signed plans and assets update over the air (LLP 1030 D4). The web and Android hosts link none, so theirs can only be \"0\". `exact new` writes the web's; a native verb writes its platform's the first time it runs (LLP 1153 D1). Signed TypeScript and Rust module delivery isn't implemented.",
+          "description": "Per platform (web, macos, ios, linux, windows, android), whether an installed app has an update store: \"0\" links none, so every change ships as a new binary; \"A\" links the store, so signed plans and assets update over the air (LLP 1030 D4). The web host links none, so its can only be \"0\". Android's reads \"0\" when absent (every other native platform's reads \"A\"); at \"A\" the APK links the store and takes signed plans, assets and TypeScript modules, never native code (LLP 1030.006). `exact new` writes the web's; a native verb writes its platform's the first time it runs (LLP 1153 D1). Signed TypeScript and Rust module delivery isn't implemented.",
           "type": "object",
           "additionalProperties": {
             "type": "string",

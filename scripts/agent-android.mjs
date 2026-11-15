@@ -970,7 +970,7 @@ export const carriesGpu = (app) => app.hasGpu || gpuModules(app.manifest).length
  * path Cargo gave it: a crate's `[lib] name` names the file, and the bake records that name for the host to open. */
 export function bakeGpuLibraries(app, options, bake = buildBake) {
   const libraries = [];
-  bake(app, 'linux', ANDROID_TARGET, { ...options, kind: 'android', prepareGpu: (product) => { libraries.push(product); return product; } });
+  bake(app, 'android', ANDROID_TARGET, { ...options, kind: 'android', prepareGpu: (product) => { libraries.push(product); return product; } });
   return libraries;
 }
 

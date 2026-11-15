@@ -1686,10 +1686,13 @@ The cut was the smallest one. Left in the reader:
 - **A GPU canvas over children**: a `Composite` surface (Caltrain's sky, `glass`, which refracts the content inside
   it) is given its children's picture (`gpu_texture`) and the page no longer paints them over it; built and unit
   tested on a Mac, not seen on a device.
-- **No update store** and no replaced Rust module: the Canvas host has neither. An app's compatibility record is
-  computed as its Linux crate's is, but with no store (`store.L` is `0`, and `deploy.store.android` can only be
-  `"0"`; absent, it is `"0"`). Its `rustMode` is `off` in every trust (LLP 1030.006 D1): the library links no Rust
-  executor, so no generation's Rust pair is admitted.
+- **An update store only at `"A"`, and no replaced Rust module.** `deploy.store.android` is `"0"` when absent, and
+  the library then links no store. At `"A"` it links `exact-painted-update` (`canvas_jni!`'s `updates =`), whose
+  store is under the reader's `noBackupFilesDir`, and takes signed plans, assets and TypeScript pairs (LLP 1030.006).
+  An app's compatibility record is computed as its Linux crate's is, with platform `android`, and also records what
+  the APK linked (`androidLinked`) and its Hermes bytecode version: a generation needing more is refused. Its
+  `rustMode` is `off` in every trust (D1): the library links no Rust executor, so no generation's Rust pair is
+  admitted.
 - **No picture from a URL.** The Linux host's pictures are files under the asset root (`host/painted/src/image`), on
   every shell it has: Shelf's covers, which Open Library serves, are the grey box behind them in Discover and a gap on
   a book's page. Nothing of this host's is missing for it; the loader has no door for a remote source.

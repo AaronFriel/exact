@@ -309,13 +309,13 @@ open class ExactActivity : Activity() {
             owner.configure(device)
             owner.colors(colors)
             owner.window(size.first, size.second, density, edges)
-            owner.boot(size.first, size.second, density, storage.absolutePath, live) { ok -> view.ownerStarted(ok) }
+            owner.boot(size.first, size.second, density, storage.absolutePath, noBackupFilesDir.absolutePath, live) { ok -> view.ownerStarted(ok) }
             booting = true
         } else if (intent.getStringExtra("asyncboot") != "0") {
             try { Native.hardwarePictures(intent.getStringExtra("hwbuf") != "0") } catch (e: UnsatisfiedLinkError) { }
             Thread({
                 device.tell(); Native.colors(colors); Native.window(size.first, size.second, density, edges)
-                Native.startAsync(size.first, size.second, density, storage.absolutePath, live)
+                Native.startAsync(size.first, size.second, density, storage.absolutePath, noBackupFilesDir.absolutePath, live)
             }, "exact-load").apply { priority = Thread.MAX_PRIORITY }.start()
             booting = true
         } else { device.tell(); Native.colors(colors); Native.window(size.first, size.second, density, edges) }

@@ -25,6 +25,8 @@ mod jni_keys;
 pub mod jni_picture;
 #[path = "jni_scroll.rs"]
 mod jni_scroll;
+#[path = "jni_start.rs"]
+mod jni_start;
 #[path = "jni_pad.rs"]
 mod pad;
 
@@ -32,13 +34,12 @@ mod pad;
 /// compat the app's build script writes to `OUT_DIR` (`app.plan`,
 /// `compat.json`). `hatches = …` is the app's [`crate::hatches::Install`]
 /// when it has hatches (`hatches::install_with_reader`, so the reader's
-/// Kotlin ones hear them too).
+/// Kotlin ones hear them too). `updates = …` is the update store's opener
+/// (`exact_painted_update::open`) when the bake has a store; the reader
+/// passes the store's base at `start` (LLP 1030.006 D3).
 #[macro_export]
 macro_rules! canvas_jni {
-    ($data:ty) => {
-        $crate::canvas_jni!($data, hatches = None);
-    };
-    ($data:ty, hatches = $hatches:expr) => {
+    (@main $data:ty, $hatches:expr, $updates:expr) => {
         #[global_allocator]
         static EXACT_ALLOCATOR: $crate::canvas::jni::Allocator = $crate::canvas::jni::Allocator;
 
@@ -68,6 +69,10 @@ macro_rules! canvas_jni {
 
             fn hatches() -> Option<$crate::hatches::Install> {
                 $hatches
+            }
+
+            fn updates() -> Option<$crate::delivery::Opener> {
+                $updates
             }
 
             /// How long after boot the library's read-only pages are let go of
@@ -137,149 +142,7 @@ macro_rules! canvas_jni {
                 true
             }
 
-            #[no_mangle]
-            pub unsafe extern "system" fn Java_dev_exact_canvas_Native_start(
-                env: *mut JNIEnv,
-                _class: jclass,
-                width: jint,
-                height: jint,
-                scale: jfloat,
-                dir: jstring,
-                live: jboolean,
-            ) -> jboolean {
-                static LOG: std::sync::Once = std::sync::Once::new();
-                LOG.call_once($crate::android::redirect_stdio);
-                // The activity was made again in this process: its reader
-                // adopts the host that runs. Nothing boots, and the
-                // environment, which other threads read by now, is left alone.
-                if adopt_running((width as u32, height as u32), scale) {
-                    return JNI_TRUE;
-                }
-                // The reader hosts the app's text fields (LLP 1115.001 D8).
-                $crate::canvas::field::attach(env, scale);
-                $crate::canvas::legacy::attach(env);
-                $crate::canvas::presence::attach(env);
-                let dir = string(env, dir);
-                pipeline_cache();
-                std::env::set_var("HOME", &dir);
-                std::env::set_var("XDG_DATA_HOME", format!("{dir}/data"));
-                std::env::set_var("EXACT_ASSETS", format!("{dir}/app"));
-                $crate::app::show_material_look();
-                std::env::set_var("EXACT_FONTS", "/system/fonts");
-                std::env::set_var("EXACT_FONT", "Roboto");
-                std::env::set_var("BENCH_LIVE", if live == JNI_TRUE { "1" } else { "0" });
-                match Host::boot(PLAN, COMPAT, (width as u32, height as u32), scale, hatches()) {
-                    Ok(h) => {
-                        HOST.with(|slot| *slot.borrow_mut() = Some(h));
-                        RUNNING.store(true, std::sync::atomic::Ordering::Release);
-                        $crate::android::release_library_pages_after(RELEASE_AFTER);
-                        JNI_TRUE
-                    }
-                    Err(e) => {
-                        $crate::android::log(&format!("exact: boot: {e}"));
-                        JNI_FALSE
-                    }
-                }
-            }
-
-            /// What a booting thread hands the thread that runs the host: the
-            /// host and its first frame. The
-            /// host's `Rc`s move with it whole; nothing on the booting thread
-            /// keeps one (its image and executor threads hold only `Send` state).
-            struct Booted(Host, Option<Vec<u32>>);
-            // SAFETY: see above: the booting thread lets go of all of it.
-            unsafe impl Send for Booted {}
-            static BOOTED: std::sync::Mutex<Option<Result<Booted, String>>> =
-                std::sync::Mutex::new(None);
-            static READY: std::sync::Condvar = std::sync::Condvar::new();
-            thread_local! {
-                /// The first frame a booting thread painted, returned by the next `frame`.
-                static PRIMED: RefCell<Option<Vec<u32>>> = const { RefCell::new(None) };
-            }
-
-            /// `start`, on a thread of its own: the host boots and paints its first
-            /// frame while the reader sets up; `adopt` takes it.
-            #[no_mangle]
-            pub unsafe extern "system" fn Java_dev_exact_canvas_Native_startAsync(
-                env: *mut JNIEnv,
-                _class: jclass,
-                width: jint,
-                height: jint,
-                scale: jfloat,
-                dir: jstring,
-                live: jboolean,
-            ) {
-                static LOG: std::sync::Once = std::sync::Once::new();
-                LOG.call_once($crate::android::redirect_stdio);
-                // A host runs already (the activity was made again): nothing
-                // boots, and `adopt` adopts that one at this size.
-                if RUNNING.load(std::sync::atomic::Ordering::Acquire) {
-                    *ADOPT.lock().unwrap_or_else(|e| e.into_inner()) =
-                        Some((width as u32, height as u32, scale));
-                    return;
-                }
-                $crate::canvas::field::attach(env, scale);
-                $crate::canvas::legacy::attach(env);
-                $crate::canvas::presence::attach(env);
-                // The environment is set here, before any other thread reads it.
-                let dir = string(env, dir);
-                pipeline_cache();
-                std::env::set_var("HOME", &dir);
-                std::env::set_var("XDG_DATA_HOME", format!("{dir}/data"));
-                std::env::set_var("EXACT_ASSETS", format!("{dir}/app"));
-                $crate::app::show_material_look();
-                std::env::set_var("EXACT_FONTS", "/system/fonts");
-                std::env::set_var("EXACT_FONT", "Roboto");
-                std::env::set_var("BENCH_LIVE", if live == JNI_TRUE { "1" } else { "0" });
-                std::thread::Builder::new()
-                    .name("exact-boot".into())
-                    .spawn(move || {
-                        let booted = $crate::android::trace(c"exact boot", || {
-                            Host::boot(PLAN, COMPAT, (width as u32, height as u32), scale, hatches()).map(
-                                |mut h| {
-                                    h.set_borrowed(true);
-                                    let first = $crate::canvas::agent::after_turn(h.frame());
-                                    h.roles_here(false);
-                                    Booted(h, first)
-                                },
-                            )
-                        });
-                        *BOOTED.lock().unwrap_or_else(|e| e.into_inner()) = Some(booted);
-                        READY.notify_all();
-                    })
-                    .expect("boot thread");
-            }
-
-            /// Take the host `startAsync` booted, waiting for it; whether it booted.
-            #[no_mangle]
-            pub unsafe extern "system" fn Java_dev_exact_canvas_Native_adopt(
-                _env: *mut JNIEnv,
-                _class: jclass,
-            ) -> jboolean {
-                let again = ADOPT.lock().unwrap_or_else(|e| e.into_inner()).take();
-                if let Some((width, height, scale)) = again {
-                    return flag(adopt_running((width, height), scale));
-                }
-                let mut slot = BOOTED.lock().unwrap_or_else(|e| e.into_inner());
-                while slot.is_none() {
-                    slot = READY.wait(slot).unwrap_or_else(|e| e.into_inner());
-                }
-                match slot.take().expect("booted") {
-                    Ok(Booted(mut h, first)) => {
-                        h.set_borrowed(false);
-                        h.roles_here(true);
-                        HOST.with(|s| *s.borrow_mut() = Some(h));
-                        RUNNING.store(true, std::sync::atomic::Ordering::Release);
-                        PRIMED.with(|p| *p.borrow_mut() = first);
-                        $crate::android::release_library_pages_after(RELEASE_AFTER);
-                        JNI_TRUE
-                    }
-                    Err(e) => {
-                        $crate::android::log(&format!("exact: boot: {e}"));
-                        JNI_FALSE
-                    }
-                }
-            }
+            $crate::canvas_jni_start!();
 
             /// The device's settings, whole (LLP 1115.001 D3.1): before
             /// `start`, from any thread, and on the host's thread again
@@ -1190,6 +1053,18 @@ macro_rules! canvas_jni {
             }
 
         }
+    };
+    ($data:ty) => {
+        $crate::canvas_jni!(@main $data, None, None);
+    };
+    ($data:ty, hatches = $hatches:expr) => {
+        $crate::canvas_jni!(@main $data, $hatches, None);
+    };
+    ($data:ty, updates = $updates:path) => {
+        $crate::canvas_jni!(@main $data, None, Some($updates));
+    };
+    ($data:ty, hatches = $hatches:expr, updates = $updates:path) => {
+        $crate::canvas_jni!(@main $data, $hatches, Some($updates));
     };
 }
 

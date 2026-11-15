@@ -108,3 +108,35 @@ fn a_rust_binary_refuses_a_typescript_pair_and_boots_entry_zero() {
     drop(presenter);
     std::fs::remove_dir_all(dir).unwrap();
 }
+
+/// A generation needing a capability the APK did not link is refused before
+/// its boot is counted, and entry zero boots (LLP 1030.006 D4a).
+#[test]
+fn a_generation_beyond_the_linked_composition_boots_entry_zero() {
+    let compat = r#"{"id":"fixture00000000","inputs":{"app":"com.exact.fixture","keys":null,"trust":"development","store":{"L":"A"},"rustMode":"off","androidLinked":{"uses":[],"extensions":[],"permissions":[]}},"delivery":{"channel":"prod","origin":"https://updates.example"}}"#;
+    let baked = contract::compile("component App\n  view\n    text \"baked\"\n")
+        .unwrap()
+        .encode();
+    let candidate = contract::compile(
+        "component App\n  state day = \"2026-09-14\"\n  action setDay(value: string)\n    day = value\n  view\n    column gap=8\n      input type=\"date\" value=day change=setDay\n      text \"candidate\"\n",
+    )
+    .unwrap()
+    .encode();
+    let dir = std::env::temp_dir().join(format!("exact-linux-unlinked-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let client = checked_as(compat, &dir, &baked, &candidate, &[], false);
+    let record = client.dir().join("record.json");
+    let mut config = selected_config_as(compat, &dir, &baked, client);
+    assert!(config.entry.is_some());
+    let (presenter, _) = boot_presenter::<Named>(&mut config, (390.0, 844.0)).unwrap();
+    let tree = presenter.host().agent("{\"op\":\"tree\"}");
+    assert!(
+        tree.contains("baked") && !tree.contains("candidate"),
+        "{tree}"
+    );
+    let saved = std::fs::read_to_string(record).unwrap();
+    assert!(saved.contains("\"failures\":0"), "not counted: {saved}");
+    drop(presenter);
+    std::fs::remove_dir_all(dir).unwrap();
+}

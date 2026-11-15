@@ -1,4 +1,4 @@
-use super::{compatibility_with_trust, stored_module, Manifest};
+use super::{compatibility_with_trust, Manifest};
 use std::path::Path;
 
 #[test]
@@ -954,11 +954,12 @@ fn web_receipts_name_the_linked_composition_and_refuse_an_unlinked_store() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
-/// The APK links no update store (host/android/README.md), so its bake
-/// records none, whatever the Linux binary of the same app has, and
-/// production trust asks for no stream.
+/// The Android bake records platform `android` and reads its own store
+/// level: absent is "0" whatever the Linux binary of the same app has, so
+/// production trust asks for no stream; "A" is a store with the keys and
+/// origin every native store needs (LLP 1030.006 D2).
 #[test]
-fn the_android_bake_records_no_updater_and_refuses_one() {
+fn the_android_bake_reads_its_own_store_level() {
     let dir = app("android-store");
     let mut manifest = Manifest::read(&dir).unwrap();
     manifest.json["app"]["origin"] = serde_json::json!("https://updates.example");
@@ -978,6 +979,7 @@ fn the_android_bake_records_no_updater_and_refuses_one() {
             None => serde_json::json!({"linux":"A"}),
         };
         let plain = android(&manifest).unwrap();
+        assert_eq!(plain.inputs["platform"], "android");
         assert_eq!(plain.inputs["store"]["L"], "0");
         assert!(plain.inputs["keys"].is_null());
         assert!(plain.inputs["trust"].is_null());
@@ -985,11 +987,24 @@ fn the_android_bake_records_no_updater_and_refuses_one() {
     }
     let linux =
         compatibility_with_trust(&dir, "linux", "aarch64", &manifest, None, "development").unwrap();
+    assert_eq!(linux.inputs["platform"], "linux");
     assert_eq!(linux.inputs["store"]["L"], "A", "Linux keeps its store");
-    // No Rust executor either (LLP 1030.006 D1), though a Linux binary of the
-    // same app replaces its module.
+    // "A" in production needs keys, as every native store does.
+    manifest.json["deploy"]["store"] = serde_json::json!({"linux":"0","android":"A"});
+    let error = android(&manifest).unwrap_err();
+    assert!(error.contains("deploy.signing.keys"), "{error}");
+    manifest.json["deploy"]["signing"] =
+        serde_json::json!({"key":"k","keys":{"k":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="}});
+    manifest.json["deploy"]["check"] = serde_json::json!({"interval": 60});
+    let stored = android(&manifest).unwrap();
+    assert_eq!(stored.inputs["store"]["L"], "A");
+    assert_eq!(stored.inputs["trust"], "production");
+    assert_eq!(stored.origin.as_deref(), Some("https://updates.example"));
+    let delivery: serde_json::Value = serde_json::from_str(&stored.to_json()).unwrap();
+    assert_eq!(delivery["delivery"]["checkInterval"], 60.0);
+    // No Rust executor in any trust (LLP 1030.006 D1), though a Linux binary
+    // of the same app replaces its module.
     manifest.json["rust"] = serde_json::json!({"module":{"package":"app-logic"}});
-    manifest.json["deploy"]["store"]["linux"] = serde_json::json!("0");
     for trust in ["development", "production"] {
         let linux =
             compatibility_with_trust(&dir, "linux", "aarch64", &manifest, None, trust).unwrap();
@@ -1006,10 +1021,10 @@ fn the_android_bake_records_no_updater_and_refuses_one() {
         assert_eq!(android.inputs["rustMode"], "off", "{trust}");
         assert!(android.inputs["rustAbi"].is_null(), "{trust}");
     }
-    for setting in [serde_json::json!("A"), serde_json::json!(0)] {
+    for setting in [serde_json::json!("B"), serde_json::json!(0)] {
         manifest.json["deploy"]["store"]["android"] = setting;
         let error = android(&manifest).unwrap_err();
-        assert!(error.contains("Android host links no updater"), "{error}");
+        assert_eq!(error, "deploy.store.android must be \"0\" or \"A\"");
     }
     let _ = std::fs::remove_dir_all(dir);
 }
@@ -1172,56 +1187,53 @@ fn stream_bodies_require_a_runtime_that_reads_or_refuses_them() {
 #[test]
 fn a_stored_module_client_pins_its_module_into_the_id() {
     let dir = app("pinned-module");
-    let manifest = Manifest::read(&dir).unwrap();
-    let id = |module| {
+    let mut manifest = Manifest::read(&dir).unwrap();
+    let id = |manifest: &Manifest, target: &str, module: Option<serde_json::Value>| {
         super::compatibility_id_pinned(
             &dir,
             "ios",
-            "aarch64-apple-ios",
-            &manifest,
+            target,
+            manifest,
             Some(""),
             None,
             None,
-            module,
+            module.as_ref(),
             &serde_json::Value::Null,
         )
-        .unwrap()
     };
-    let plain = id(None);
-    let a = id(Some("aa"));
+    let receipt = |sha: &str| Some(serde_json::json!({"module": {"sha256": sha}}));
+    let ios = |manifest: &Manifest, module| id(manifest, "aarch64-apple-ios", module).unwrap();
+    let plain = ios(&manifest, None);
+    let a = ios(&manifest, receipt("aa"));
     assert!(plain.inputs["typescriptModule"].is_null());
     assert_eq!(a.inputs["typescriptModule"], "aa");
     assert_ne!(a.id, plain.id, "the module is in the id");
-    assert_eq!(id(Some("aa")).id, a.id, "the same module, the same cohort");
-    assert_ne!(id(Some("bb")).id, a.id, "another module, another cohort");
+    assert_eq!(
+        ios(&manifest, receipt("aa")).id,
+        a.id,
+        "the same module, the same cohort"
+    );
+    assert_ne!(
+        ios(&manifest, receipt("bb")).id,
+        a.id,
+        "another module, another cohort"
+    );
     assert_eq!(
         a.id,
         super::compatibility_digest(&a.inputs),
         "the id digests the inputs it reports"
     );
-}
-
-#[test]
-fn a_store_pins_the_compiled_module_and_its_hash_is_required_without_one_too() {
-    let dir = app("stored-module");
-    let mut manifest = Manifest::read(&dir).unwrap();
-    let meta = serde_json::json!({"module": {"sha256": "abc"}});
-    // A native platform has an update store by default; the web has none
-    assert_eq!(stored_module(&meta, &manifest, "ios"), Ok(Some("abc")));
-    assert_eq!(stored_module(&meta, &manifest, "web"), Ok(None));
+    // A receipt without the hash is refused, with or without a store.
     for bad in [
         serde_json::json!({}),
         serde_json::json!({"module": {"sha256": 7}}),
     ] {
-        for platform in ["ios", "web"] {
-            assert_eq!(
-                stored_module(&bad, &manifest, platform),
-                Err("missing module hash".to_string())
-            );
-        }
+        let error = id(&manifest, "aarch64-apple-ios", Some(bad)).unwrap_err();
+        assert_eq!(error, "missing module hash");
     }
+    // Without a store nothing is pinned.
     manifest.json["deploy"] = serde_json::json!({"store": {"ios": "0"}});
-    assert_eq!(stored_module(&meta, &manifest, "ios"), Ok(None));
+    assert!(ios(&manifest, receipt("aa")).inputs["typescriptModule"].is_null());
     std::fs::remove_dir_all(dir).unwrap();
 }
 

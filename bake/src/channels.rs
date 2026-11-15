@@ -200,6 +200,7 @@ mod tests {
             channel: String::new(),
             origin: None,
             activate: "next-launch".into(),
+            check_interval: None,
             target: "aarch64-linux-android".into(),
             embedded: Value::Null,
             reach: Value::Null,

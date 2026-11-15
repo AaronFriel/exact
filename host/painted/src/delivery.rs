@@ -50,6 +50,16 @@ pub trait Store {
     fn status_into(&self, delivery: &mut Delivery);
 }
 
+/// Opens a binary's update store from its `compat.json`, baked plan, embedded
+/// asset root and store base, as `exact_painted_update::open` does: what an
+/// Android library at store `"A"` hands `canvas_jni!` (LLP 1030.006 D3).
+pub type Opener = fn(
+    compat: &str,
+    plan: &[u8],
+    assets: &std::path::Path,
+    base: Option<&std::path::Path>,
+) -> Result<Box<dyn Store>, String>;
+
 /// The files a Rust pair's receipt may name.
 const RUST_FILES: [&str; 5] = [
     "app.module.wasm",
@@ -212,6 +222,56 @@ impl Module {
     }
 }
 
+/// Refuse a delivered generation that needs more than the binary was
+/// composed from (LLP 1030.006 D4a): an Android binary's `androidLinked`
+/// names the capabilities, package extensions and permissions its APK
+/// links; the plan's own are recomputed from it, and the permissions only
+/// the module's source shows are in its signed receipt. A binary that
+/// records no composition refuses nothing here.
+pub fn within_linked(plan: &[u8], module: Option<&Module>, compat: &str) -> Result<(), String> {
+    let compat: serde_json::Value = serde_json::from_str(compat).unwrap_or_default();
+    let linked = &compat["inputs"]["androidLinked"];
+    if linked.is_null() {
+        return Ok(());
+    }
+    let plan = exact_plan::Plan::decode(plan).map_err(|e| format!("{e:?}"))?;
+    let uses: Vec<String> = exact_runner::uses(&plan)
+        .iter()
+        .map(|c| c.name().to_string())
+        .collect();
+    let extensions: Vec<String> = plan
+        .modules
+        .iter()
+        .map(|m| m.extension)
+        .chain(plan.views.iter().map(|v| v.extension))
+        .chain(plan.module_events.iter().map(|e| e.extension))
+        .map(|name| plan.str(name).to_string())
+        .collect();
+    let permissions: Vec<String> = module
+        .and_then(|m| serde_json::from_str::<serde_json::Value>(&m.receipt).ok())
+        .and_then(|r| r["androidPermissions"].as_array().cloned())
+        .unwrap_or_default()
+        .iter()
+        .filter_map(|p| p.as_str().map(str::to_string))
+        .collect();
+    for (key, needs) in [
+        ("uses", uses),
+        ("extensions", extensions),
+        ("permissions", permissions),
+    ] {
+        let have = linked[key].as_array();
+        if let Some(missing) = needs
+            .iter()
+            .find(|need| !have.is_some_and(|have| have.iter().any(|h| h == need.as_str())))
+        {
+            return Err(format!(
+                "the generation needs {missing}, which this binary does not link"
+            ));
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -353,6 +413,51 @@ mod tests {
         assert_eq!(
             resolve(&rust, TYPESCRIPT).unwrap_err(),
             "Rust replacement is disabled in this binary"
+        );
+    }
+
+    /// A generation needing a capability, an extension or a permission beyond
+    /// what the APK linked is refused; one needing less is not.
+    #[test]
+    fn a_generation_beyond_the_linked_composition_is_refused() {
+        let plan = crate::test_plan(
+            "component App\n  state day = \"2026-09-14\"\n  action setDay(value: string)\n    day = value\n  view\n    column gap=8\n      input type=\"date\" value=day change=setDay testId=\"day\"\n",
+        );
+        let decoded = exact_plan::Plan::decode(&plan).unwrap();
+        let uses: Vec<&str> = exact_runner::uses(&decoded)
+            .iter()
+            .map(|c| c.name())
+            .collect();
+        assert!(!uses.is_empty(), "the fixture uses a capability");
+        let compat = |uses: &[&str], permissions: &[&str]| {
+            serde_json::json!({"inputs": {"androidLinked": {
+                "uses": uses, "extensions": [], "permissions": permissions
+            }}})
+            .to_string()
+        };
+        let module = |permissions: &[&str]| Module {
+            receipt: serde_json::json!({"androidPermissions": permissions}).to_string(),
+            bytes: Vec::new(),
+        };
+        let calendar = "android.permission.WRITE_CALENDAR";
+        assert_eq!(within_linked(&plan, None, &compat(&uses, &[])), Ok(()));
+        assert_eq!(
+            within_linked(
+                &plan,
+                Some(&module(&[calendar])),
+                &compat(&uses, &[calendar])
+            ),
+            Ok(())
+        );
+        let error = within_linked(&plan, None, &compat(&uses[1..], &[])).unwrap_err();
+        assert!(error.contains(uses[0]), "{error}");
+        let error =
+            within_linked(&plan, Some(&module(&[calendar])), &compat(&uses, &[])).unwrap_err();
+        assert!(error.contains("WRITE_CALENDAR"), "{error}");
+        // A binary that records no composition refuses nothing here.
+        assert_eq!(
+            within_linked(&plan, Some(&module(&[calendar])), "{}"),
+            Ok(())
         );
     }
 }

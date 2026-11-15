@@ -1007,7 +1007,7 @@ test('an APK carries each GPU library the bake built, by the name Cargo gave it,
     const bake = (...args) => { asked = args; for (const product of products) expect(args[3].prepareGpu(product)).toBe(product); };
     const libraries = bakeGpuLibraries(app, { profile: 'release', env: { A: '1' } }, bake);
     expect(libraries).toEqual(products);
-    expect(asked.slice(0, 3)).toEqual([app, 'linux', 'aarch64-linux-android']);
+    expect(asked.slice(0, 3)).toEqual([app, 'android', 'aarch64-linux-android']);
     expect(asked[3]).toMatchObject({ profile: 'release', env: { A: '1' }, kind: 'android' });
     for (const library of libraries) writeFileSync(library, library);
     const jniLibs = resolve(dir, 'jniLibs/arm64-v8a');

@@ -152,7 +152,7 @@ pub fn typescript_runtime_of(bundle: &[u8], grants: &str) -> u32 {
 const DOMAIN: &str = "exact2 compatibility id v1\n";
 
 /// The id and the inputs it digests.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Compat {
     /// 16 bytes of the domain-separated SHA-256 over the canonical inputs, lowercase hex.
     pub id: String,
@@ -166,6 +166,10 @@ pub struct Compat {
     /// When a staged bundle applies (`deploy.activate`): `next-launch` or
     /// `app-decides` — policy the binary's store follows (LLP 1030.000 D4).
     pub activate: String,
+    /// Seconds between foreground checks (`deploy.check.interval`), when the
+    /// manifest names it: what a painted host reads (LLP 1030.006 D5); the
+    /// Apple hosts read it from Info.plist.
+    pub check_interval: Option<serde_json::Number>,
     /// The exact target the binary-producing Cargo bake received.
     pub target: String,
     /// Embedded bundle provenance and its complete static roster, and
@@ -196,11 +200,19 @@ impl Compat {
         canonical(&self.inputs, &mut s);
         s.push_str(",\"delivery\":");
         canonical(
-            &serde_json::json!({
-                "activate": self.activate,
-                "channel": self.channel,
-                "origin": self.origin.clone().map_or(serde_json::Value::Null, serde_json::Value::String),
-            }),
+            &match &self.check_interval {
+                Some(interval) => serde_json::json!({
+                    "activate": self.activate,
+                    "channel": self.channel,
+                    "checkInterval": interval,
+                    "origin": self.origin.clone().map_or(serde_json::Value::Null, serde_json::Value::String),
+                }),
+                None => serde_json::json!({
+                    "activate": self.activate,
+                    "channel": self.channel,
+                    "origin": self.origin.clone().map_or(serde_json::Value::Null, serde_json::Value::String),
+                }),
+            },
             &mut s,
         );
         s.push_str(",\"target\":");
@@ -282,27 +294,17 @@ pub fn compatibility_id_sources_with_entries(
     )
 }
 
-/// The compiled module's sha256 (`module.sha256`) to pin in this platform's
-/// compatibility id when it has a store; none without one. Metadata without
-/// the hash is refused either way. This cohort pin does not prohibit a signed
-/// module pair that the installed executor admits.
-pub fn stored_module<'a>(
-    meta: &'a serde_json::Value,
-    manifest: &Manifest,
-    platform: &str,
-) -> Result<Option<&'a str>, String> {
-    let module = meta["module"]["sha256"]
-        .as_str()
-        .ok_or("missing module hash")?;
-    Ok((manifest.store(platform) != "0").then_some(module))
-}
-
-/// As [`compatibility_id_sources_with_entries`], with an optional compiled-module
-/// pin and the module receipt's `env` settings. When supplied, `module` enters
-/// the id as `typescriptModule`, so changing it changes the baked cohort.
-/// Signed delivery may carry a replacement module
-/// pair within an installed cohort, subject to its runtime, identity, grants
-/// and module policy; this helper does not decide candidate admission.
+/// As [`compatibility_id_sources_with_entries`], with the TypeScript module's
+/// receipt and its `env` settings. With a store, the compiled module's sha256
+/// (`module.sha256`) enters the id as `typescriptModule`, so changing it
+/// changes the baked cohort; a receipt without the hash is refused either
+/// way. Signed delivery may carry a replacement module pair within an
+/// installed cohort, subject to its runtime, identity, grants and module
+/// policy; this helper does not decide candidate admission. An Android
+/// binary also records the module's Hermes bytecode version
+/// (`hermesBytecode`): its engine is part of its cohort, since the device
+/// refuses a pair of another version only after downloading it
+/// (LLP 1030.006 D4).
 #[allow(clippy::too_many_arguments)]
 pub fn compatibility_id_pinned(
     app_dir: &Path,
@@ -312,7 +314,7 @@ pub fn compatibility_id_pinned(
     grants: Option<&str>,
     rust_grants: Option<&str>,
     entries: Option<&std::collections::BTreeMap<String, contract::snapshot::Entry>>,
-    module: Option<&str>,
+    module: Option<&serde_json::Value>,
     settings: &serde_json::Value,
 ) -> Result<Compat, String> {
     // Cargo must rebake even when only the explicit trust selection changes.
@@ -366,8 +368,16 @@ pub fn compatibility_id_pinned(
     if let Some(rust) = rust_grants {
         source_scopes(&mut compat, grants.unwrap_or(""), rust);
     }
-    if let Some(module) = module {
-        compat.inputs["typescriptModule"] = serde_json::Value::String(module.into());
+    if let Some(meta) = module {
+        let sha = meta["module"]["sha256"]
+            .as_str()
+            .ok_or("missing module hash")?;
+        if compat.inputs["store"]["L"] != "0" {
+            compat.inputs["typescriptModule"] = serde_json::Value::String(sha.into());
+        }
+        if target.contains("android") {
+            compat.inputs["hermesBytecode"] = meta["bytecodeVersion"].clone();
+        }
         compat.id = compatibility_digest(&compat.inputs);
     }
     // The origins its declared sources carry are the binary's grants too
@@ -382,6 +392,14 @@ pub fn compatibility_id_pinned(
     crate::reach::derive(app_dir, platform, plan.as_ref(), &mut compat)?;
     if target.contains("android") {
         crate::channels::derive(app_dir, &manifest.json, &mut compat)?;
+        if let Some(plan) = &plan {
+            compat.inputs["androidLinked"] = android_linked(
+                plan,
+                compat.inputs["grantCeiling"].as_str(),
+                &contract::native::app_text(app_dir),
+            );
+            compat.id = compatibility_digest(&compat.inputs);
+        }
     }
     // The plans that ship, each resolved once (the receipt writes the entry
     // plans): an even-odd icon in any moves the id (stage 14 C2,
@@ -424,6 +442,43 @@ pub fn compatibility_id_pinned(
         )?;
     }
     Ok(compat)
+}
+
+/// What an APK is composed from beyond the compatibility inputs' other
+/// fields (LLP 1030.006 D4a): the plan's capabilities (`uses.txt`, which
+/// decides what the reader links), the Android permissions its grant lines
+/// and the source's use of module names derive (`permissions.txt`), and the
+/// package extensions it binds a Kotlin implementation for. A generation
+/// that needs more than this is a new APK; the hatch words are `hatches`.
+pub(crate) fn android_linked(
+    plan: &exact_plan::Plan,
+    ceiling: Option<&str>,
+    source: &str,
+) -> serde_json::Value {
+    serde_json::json!({
+        "uses": android_uses(plan),
+        "permissions": contract::native::android_permissions(plan, ceiling, source),
+        "extensions": plan_extensions(plan),
+    })
+}
+
+/// The plan's capabilities by name, as the APK's build reads them
+/// (`contract::native::android_reach`).
+pub(crate) fn android_uses(plan: &exact_plan::Plan) -> Vec<&'static str> {
+    exact_runner::uses(plan).iter().map(|c| c.name()).collect()
+}
+
+/// The package extensions the plan's modules, views and events name, sorted.
+pub(crate) fn plan_extensions(plan: &exact_plan::Plan) -> Vec<String> {
+    let names = plan
+        .modules
+        .iter()
+        .map(|m| m.extension)
+        .chain(plan.views.iter().map(|v| v.extension))
+        .chain(plan.module_events.iter().map(|e| e.extension));
+    let names: std::collections::BTreeSet<String> =
+        names.map(|name| plan.str(name).to_string()).collect();
+    names.into_iter().collect()
 }
 
 /// The faced tools this platform's binary compiles a door for (LLP 1133.023
@@ -531,22 +586,20 @@ fn compatibility_with_trust(
     {
         return Err("the web host links no updater; deploy.store.web must be \"0\"".into());
     }
-    // Android bakes as Linux (its library is the Linux host's presenter), but
-    // the APK links no update store (host/android/README.md), so its record
-    // says so whatever `deploy.store.linux` says of a Linux binary, and an
-    // absent `deploy.store.android` is "0", not the native default of "A"
-    // (LLP 1030.006 D2).
+    // An Android library bakes through the Linux host's code generation (it
+    // is that host's presenter under the reader's Canvas), so its callers
+    // name `linux`; its record names `android`, whose host settings, hatch
+    // words and store level are its own (LLP 1030.006 D2). An absent
+    // `deploy.store.android` is "0", not the native default of "A": Android
+    // apps shipped binary-only, and "A" asks a production build for keys and
+    // a stream.
     let android = target.contains("android");
-    if android
-        && manifest
-            .json
-            .pointer("/deploy/store/android")
-            .is_some_and(|value| value.as_str() != Some("0"))
-    {
-        return Err("the Android host links no updater; deploy.store.android must be \"0\"".into());
-    }
+    let platform = if android { "android" } else { platform };
     let store = if android {
-        "0".to_string()
+        match manifest.json.pointer("/deploy/store/android") {
+            None => "0".to_string(),
+            Some(value) => value.as_str().unwrap_or("").to_string(),
+        }
     } else {
         manifest.store(platform)
     };
@@ -768,17 +821,18 @@ fn compatibility_with_trust(
         channel,
         origin,
         activate: manifest.activate(),
+        check_interval: manifest
+            .json
+            .pointer("/deploy/check/interval")
+            .and_then(Value::as_number)
+            .filter(|interval| interval.as_f64().is_some_and(|i| i.is_finite() && i > 0.0))
+            .cloned(),
         target: target.into(),
         embedded: json!({ "trust": trust,
             "version": version("EXACT_VERSION", "0.1.0")?,
             "buildNumber": version("EXACT_BUILD_NUMBER", "1")? }),
         reach: serde_json::Value::Null,
-        // Android shells also use the Linux bake; the target names the host.
-        painter: manifest.painter(if target.contains("android") {
-            "android"
-        } else {
-            platform
-        })?,
+        painter: manifest.painter(platform)?,
         game: manifest
             .json
             .get("game")

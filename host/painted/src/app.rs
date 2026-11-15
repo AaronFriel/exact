@@ -580,15 +580,24 @@ pub(crate) fn boot_presenter_with_painter<D: DataSource + Default>(
         booted.0.said_at_boot(dev_said.clone());
         booted
     };
+    let module = config.module.clone();
+    // A selection that needs what the binary does not link is refused
+    // before its boot is counted (LLP 1030.006 D4a).
+    let linked = match (&config.entry, &module) {
+        (Some(_), Ok(module)) => {
+            crate::delivery::within_linked(&config.plan, module.as_ref(), &compat)
+                .map_err(crate::host::HostError::Unlinked)
+        }
+        _ => Ok(()),
+    };
     // The selected bytes passed verification. Record the attempt before
     // app construction or the painter can crash; a returned integrity
     // refusal below durably discards the selection and clears its count.
-    if !config.explicit && config.entry.is_some() {
+    if !config.explicit && config.entry.is_some() && linked.is_ok() {
         if let Some(updates) = updates.as_mut() {
             updates.boot_started();
         }
     }
-    let module = config.module.clone();
     let admitted = crate::traced(c"boot data construction", D::default);
     let source = module
         .as_ref()
@@ -597,8 +606,8 @@ pub(crate) fn boot_presenter_with_painter<D: DataSource + Default>(
             Some(module) => module.replacement(&config.plan, &admitted),
             None => Ok(admitted),
         });
-    let booted = source
-        .map_err(crate::host::HostError::Asset)
+    let booted = linked
+        .and_then(|()| source.map_err(crate::host::HostError::Asset))
         .and_then(|data| {
             let launch = exact_runner::time::Launch {
                 clock: clock(),

@@ -806,14 +806,9 @@ mod tests {
         Compat {
             id: "old".into(),
             inputs: json!({"grantCeiling": grants, "javascriptGrants": grants, "rustGrants": ""}),
-            channel: String::new(),
-            origin: None,
             activate: "next-launch".into(),
             target: "t".into(),
-            embedded: Value::Null,
-            reach: Value::Null,
-            painter: None,
-            game: false,
+            ..Compat::default()
         }
     }
 

@@ -331,6 +331,8 @@ impl<D: DataSource> Presenter<D> {
         let module =
             crate::delivery::Module::resolve(&candidate.assets, &candidate.names, &self.compat)
                 .map_err(HostError::Asset)?;
+        crate::delivery::within_linked(&candidate.plan, module.as_ref(), &self.compat)
+            .map_err(HostError::Unlinked)?;
         let kept = self.focus_place();
         let mut carried = self.host.carry();
         let data = self.prepare_logic(

@@ -377,13 +377,8 @@ impl Store {
             .write(true)
             .open(dir.join("owner.lock"))
             .map_err(|e| format!("cannot open update store lock {}: {e}", dir.display()))?;
-        let reader = match owner.try_lock() {
-            Ok(()) => false,
-            Err(std::fs::TryLockError::WouldBlock) => true,
-            Err(std::fs::TryLockError::Error(e)) => {
-                return Err(format!("cannot lock update store {}: {e}", dir.display()))
-            }
-        };
+        let reader = !disk::try_lock(&owner, true)
+            .map_err(|e| format!("cannot lock update store {}: {e}", dir.display()))?;
         let entries = dir.join("entries");
         std::fs::create_dir_all(&entries)
             .map_err(|e| format!("cannot make {}: {e}", entries.display()))?;

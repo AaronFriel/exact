@@ -288,7 +288,6 @@ fn build_sources(
     }
     let manifest = contract::Manifest::read(app)?;
     let target = std::env::var("TARGET").map_err(|e| e.to_string())?;
-    let module = exact_bake::stored_module(&meta, &manifest, platform)?;
     let compat = exact_bake::compatibility_id_pinned(
         app,
         platform,
@@ -297,7 +296,7 @@ fn build_sources(
         meta["grants"].as_str(),
         mixed_grants(&meta, rust)?,
         Some(&baked.entries),
-        module,
+        Some(&meta),
         &meta["env"],
     )?;
     // A TypeScript app's update carries its module pair (`typescript/`); a
@@ -1268,6 +1267,7 @@ fn bake_in(
             .map_or_else(|| e.to_string(), |map| map.bake_error(&e).to_string())
     })?;
     warnings.extend(deferred_warnings);
+    let android_permissions = android::module_permissions(&plan, &grants, &app);
     let plan = plan.encode();
     let source_map = source_map.map(|map| map.json(&plan));
     let packages = package_code(stage)?.packages;
@@ -1278,7 +1278,7 @@ fn bake_in(
         "typescriptRuntime": exact_bake::compat::typescript_runtime_of(&script, &grants),
         "surfaces": surfaces,
         "rustSources": rust_sources,
-        "bytecodeVersion": exact_js::BYTECODE_VERSION,
+        "bytecodeVersion": exact_js::BYTECODE_VERSION, "androidPermissions": android_permissions,
         "plan": {"file": "app.plan", "sha256": digest(&plan), "bytes": plan.len()},
         "module": {"file": "app.hbc", "sha256": digest(&bytecode), "bytes": bytecode.len()},
         "web": {"file": "app.js", "sha256": digest(&script), "bytes": script.len()},

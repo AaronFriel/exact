@@ -159,7 +159,11 @@ function typescriptBundle(bundle, build, baked, cohort) {
     { name: 'typescript/app.hbc', bytes: baked.bytecode },
   ].map((a) => ({ ...a, sha256: sha256(a.bytes) }));
   const runtimeRequired = runtime !== undefined ? { typescriptRuntime: runtime } : {};
-  const requires = { grantCeiling: meta.grants ?? '', [grantKey]: inputs[grantKey], ...runtimeRequired };
+  // An Android cohort names its Hermes bytecode version and what its APK was composed from (LLP 1030.006 D4, D4a):
+  // a pair of another version, or one whose source derives a permission the APK does not declare, needs a new APK.
+  const android = inputs.hermesBytecode !== undefined ? { hermesBytecode: meta.bytecodeVersion ?? null } : {};
+  if (inputs.androidLinked) android.androidPermissions = meta.androidPermissions ?? [];
+  const requires = { grantCeiling: meta.grants ?? '', [grantKey]: inputs[grantKey], ...runtimeRequired, ...android };
   // A new stream's bake already lists a pair when its widgets or activities need one (bake/src/widgets.rs); this one replaces it.
   const other = (a) => !a.name.startsWith('typescript/');
   const artifacts = build.graph.artifacts.filter(other).map((a) => {

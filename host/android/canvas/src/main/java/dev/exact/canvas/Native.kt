@@ -11,11 +11,12 @@ object Native {
     /** Boot the app's host on the calling thread, in a window of this size in pixels ([window] told its insets);
      * whether it booted. Where a host already runs on this thread (the activity was made again in this process,
      * LLP 1115.001 D15.1) nothing boots: that host is adopted in this window, and paints everything again for the
-     * reader that calls, which has none of the last one's rows, faces or pictures. */
-    @JvmStatic external fun start(width: Int, height: Int, scale: Float, dir: String, live: Boolean): Boolean
+     * reader that calls, which has none of the last one's rows, faces or pictures. `dir` is the app's files
+     * directory; `store` its no-backup directory, where a library with an update store keeps it (LLP 1030.006 D3). */
+    @JvmStatic external fun start(width: Int, height: Int, scale: Float, dir: String, store: String, live: Boolean): Boolean
     /** [start] on a thread of its own; [adopt] takes the host. Where a host already runs in this process nothing
      * boots, and [adopt] adopts that one as [start] does. */
-    @JvmStatic external fun startAsync(width: Int, height: Int, scale: Float, dir: String, live: Boolean)
+    @JvmStatic external fun startAsync(width: Int, height: Int, scale: Float, dir: String, store: String, live: Boolean)
     /** Wait for [startAsync]'s host and run it on this thread from now on; whether it booted. */
     @JvmStatic external fun adopt(): Boolean
     /** The device's settings, whole ([Device], LLP 1115.001 D3.1): before [start], from any thread, so the host boots

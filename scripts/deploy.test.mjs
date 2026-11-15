@@ -393,6 +393,20 @@ async function rejects(action, matches) {
   result('a TypeScript pair goes only to a binary holding exactly its grants',
     !narrower.bundle&&narrower.missing[0].includes('typescript/app.hbc: javascriptGrants')&&!wider.bundle&&exact.bundle,
     JSON.stringify({narrower,wider,exact}));
+  // An Android cohort takes a generation that needs no more than its APK was composed from, and only its own Hermes
+  // bytecode version (LLP 1030.006 D4, D4a).
+  const apk=({...installed,compat:{...installed.compat,inputs:{...installed.compat.inputs,hermesBytecode:96,
+    androidLinked:{uses:['fetch','dates'],permissions:['android.permission.READ_CALENDAR'],extensions:['swatch']}}}});
+  const android=(plan,module)=>{const c=structuredClone(moved);Object.assign(c.graph.artifacts[0].requires,plan);c.graph.artifacts.push({name:'typescript/app.hbc',requires:module});return c;};
+  const less=classifyArtifacts(android({androidUses:['fetch'],androidExtensions:[]},{hermesBytecode:96,androidPermissions:[]}),apk);
+  const capability=classifyArtifacts(android({androidUses:['fetch','camera'],androidExtensions:[]},{hermesBytecode:96,androidPermissions:[]}),apk);
+  const extension=classifyArtifacts(android({androidUses:[],androidExtensions:['pedometer']},{hermesBytecode:96,androidPermissions:[]}),apk);
+  const permission=classifyArtifacts(android({androidUses:[],androidExtensions:[]},{hermesBytecode:96,androidPermissions:['android.permission.WRITE_CALENDAR']}),apk);
+  const engine=classifyArtifacts(android({androidUses:[],androidExtensions:[]},{hermesBytecode:97,androidPermissions:[]}),apk);
+  result('an Android cohort refuses a generation beyond what its APK linked or of another bytecode version, and takes one that needs less',
+    less.bundle&&!capability.bundle&&capability.missing[0].includes('androidUses.camera')&&!extension.bundle&&extension.missing[0].includes('androidExtensions.pedometer')
+    &&!permission.bundle&&permission.missing[0].includes('WRITE_CALENDAR')&&!engine.bundle&&engine.missing[0].includes('Hermes bytecode 97'),
+    JSON.stringify({less,capability,extension,permission,engine}));
   result('artifact graph separates binary changes, compatible older cohorts, and named missing dependencies',
     same.binary&&same.bundle&&old.binary&&old.bundle&&old.warnings[0].includes('will run the old code')
     &&!absent.bundle&&absent.missing[0].includes('sources.camera')&&!unsupported.bundle&&unsupported.missing[0].includes('gpuSurfaces.map')

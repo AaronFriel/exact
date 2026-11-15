@@ -1511,10 +1511,13 @@ submitted to Play. Passwords are passed through the environment, never as
 Gradle command arguments (LLP 1030.003 D6, D8).
 
 `--release` selects optimization. For an APK you will distribute, also set
-`EXACT_UPDATE_TRUST=production`; `--bundle` sets it itself. The APK has no
-update store, so every change ships as a new build: a production build needs
-no update signing keys or receipt, and `deploy.store.android` can only be
-`"0"`.
+`EXACT_UPDATE_TRUST=production`; `--bundle` sets it itself. With
+`deploy.store.android` absent or `"0"` the APK has no update store, so every
+change ships as a new build and a production build needs no update signing
+keys or receipt. At `"A"` it takes signed plans, assets and TypeScript
+modules, never native code (LLP 1030.006), and a production build needs
+`deploy.signing.keys` and `EXACT_UPDATE_RECEIPT` or `EXACT_UPDATE_GENESIS=1`,
+as iOS does.
 
 ### Build an iOS app on a CI machine
 
