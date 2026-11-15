@@ -72,6 +72,7 @@ extension ExactSession {
         #if canImport(UIKit)
         if view?.window?.windowScene?.activationState != .foregroundActive { presenter.supersedePress() }
         #endif
+        if clock == nil { dateChanged() } // (queued ahead of the page's facts, as `tellPage` checks first)
         let bits = PageFacts.bits(pageWindow, page: view?.window, readsOnLine: reads.value)
         let font = PageFacts.rootFontSize, scale = PageFacts.displayScale(presenter.viewport)
         tellSoon([{ $0.setPage(bits) }, { $0.setRootFontSize(font) }, { $0.setDisplayScale(scale) }])

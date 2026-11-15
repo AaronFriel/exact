@@ -404,6 +404,7 @@ extension ExactSession {
         // Keep URLSession running through the bounded close wait in setPage.
         freezeCloseHold.moved(PageFacts.frozen)
         defer { freezeCloseHold.moved(false) }
+        if clock == nil { followOffset() }
         let reads = runtime.readsOnLine()
         readsOnLineKnown = (generation, reads)
         apply(runtime.setPage(PageFacts.bits(pageWindow, page: view?.window, readsOnLine: reads)))

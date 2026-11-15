@@ -145,6 +145,7 @@ enum ResetGate {
         "groupedMargins(_:)": "UIKit's grouped-card margins: the new tree's grouped lists measure and report their own",
         "localInsets(_:)": "content owners' local insets (LLP 1123 D9): the navigation's reset clears what was told, and each route and block reports its own as the new tree lays out",
         "resizeBox(_:width:height:)": "a resize grip's drag on the old tree: a restart takes the size back to the plan's, as a reload does the browser's",
+        "setTime(epochAtZero:utcOffset:)": "the date, told by a check an input the teardown sets off makes (`followOffset`): forgotten when held, so the next check tells it again (boot and the agent tell it outside the hold)",
         // Never reached while held: their entry points wait for the replay first.
         "dataReady()": "never held: `activateData` holds first and is replayed (.activation), which asks it",
         "landShare()": "never held: a cold share lands from `activateData`, which holds first and is replayed",
@@ -157,7 +158,6 @@ enum ResetGate {
         "prepareModule(_:module:token:width:height:letGo:)": "a restart's own preparation, before its reset",
         "commitPlan()": "a restart's own commit, before its reset",
         "startOnFrame(_:at:)": "a setting the session gives at boot, outside the hold",
-        "setTime(epochAtZero:utcOffset:)": "the clock's epoch, told at boot and by the agent, outside the hold",
         "setPlace(locale:timeZone:seed:formatLocale:)": "the place, told at boot, by the agent and when the Region or the hour cycle changes, outside the hold",
         "setLaunchPlace(locale:timeZone:seed:formatLocale:)": "the launch place, told at boot, outside the hold",
     ]

@@ -28,11 +28,27 @@ extension ExactSession {
     /// runner's own threshold). The date moves when the clock is set, and
     /// through a sleep, since the session's clock (`CACurrentMediaTime`,
     /// `mach_absolute_time`) stops while the system sleeps and the date does
-    /// not. Runs before each advance and frame; `dateChanged` runs it on a
-    /// system notice.
+    /// not. Runs before each advance, frame, native task timer, page notice
+    /// and person's input (`applyInput`), so what each reads of the date is
+    /// the date now; `dateChanged` runs it on a system notice.
     func followOffset() {
         guard let date = dateMoved() else { return }
-        apply(runtime.setTime(epochAtZero: date.epoch, utcOffset: date.offset))
+        tellDate(date, soon: false)
+    }
+    /// Tells the runner `date`, or queues it behind the owner's current job
+    /// (`soon`). One the runner refuses (busy, LLP 1072 T5, or held over a
+    /// restart's reset) was not told, so it is forgotten: the next check
+    /// tells the date again rather than wait for it to move by another second.
+    private func tellDate(_ date: (epoch: Double, offset: Double), soon: Bool) {
+        let tell: (Runtime) -> Batch = { $0.setTime(epochAtZero: date.epoch, utcOffset: date.offset) }
+        if soon {
+            if runtime.held { toldEpoch = nil } // (`tellSoon` holds it, and ResetGate's replay tells the page, which checks)
+            tellSoon([tell])
+            return
+        }
+        let batch = tell(runtime)
+        guard !batch.busy, !batch.held else { toldEpoch = nil; return }
+        apply(batch)
     }
     /// `followOffset`'s date, nil when neither moved. `offsetHeld` is the
     /// zone the offset was read in and when to read it again: until then, in
@@ -57,8 +73,7 @@ extension ExactSession {
     /// `formatLocaleChanged` tells the Region.
     func dateChanged() {
         guard booted, state != .destroyed, let date = dateMoved() else { return }
-        let tell: (Runtime) -> Batch = { $0.setTime(epochAtZero: date.epoch, utcOffset: date.offset) }
-        if dataPreparing, !Owner.shared.isServingMain { tellSoon([tell]) } else { apply(tell(runtime)) }
+        tellDate(date, soon: dataPreparing && !Owner.shared.isServingMain)
     }
     /// The machine's date. A test sets it ahead to stand for a sleep, through
     /// which the session's clock (`CACurrentMediaTime`) stops and the date runs.
