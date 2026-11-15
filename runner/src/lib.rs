@@ -133,16 +133,17 @@ pub use request::{
 pub use runner::{
     canvas_engine, launch_matches, press_writes_router, routing, virtual_frame, Advanced, Announce,
     AuthLinks, BackgroundState, BlockPlacement, CallOrigin, CanvasEngine, CanvasLink, CanvasList,
-    Carried, Checkpoint, Command, Console, ControlValue, DataError, DataSource, DataSourceWrapper,
-    DeviceLinks, DrawReply, DrawRequest, Drawn, DropEvent, Event, FieldSelection, FormatLink,
-    Geometry, GeometryLink, Hold, HoldAnswer, InFlight, InputDetails, Interrupt, Intersection,
-    KeyModifiers, KeyboardEvent, Limits, ListTextPolicy, ListTextPosition, MouseEvent, Native,
-    NativeCall, NativeHandler, Overlaid, Picked, PickerLinks, PickerRequest, PointerEvent,
-    PreloadWake, Report, Reporter, ResizeRect, RouterChange, RouterLink, Routing, Runner,
-    RunnerError, RunnerLinks, ScrollEvent, SelectionDirection, SnapshotModule, SocketReader,
-    SocketState, StackSplit, StreamCount, SurfaceAnswer, Target, Timed, UploadEnd, UploadMark,
-    WheelEvent, Write, BACKGROUND, JOURNAL_RING, MAX_CLOCK_MS, PICKED, QUEUE_BOUND,
-    RESIZE_UNDELIVERED, TIMER_FIRE_LIMIT, VIRTUAL_FRAME_MS,
+    Carried, Checkpoint, Command, Completion, CompletionCapability, CompletionReply, Console,
+    ControlValue, DataError, DataSource, DataSourceWrapper, DeviceLinks, DrawReply, DrawRequest,
+    Drawn, DropEvent, Event, FieldSelection, FormatLink, Geometry, GeometryLink, Hold, HoldAnswer,
+    InFlight, InputDetails, Interrupt, Intersection, KeyModifiers, KeyboardEvent, Limits,
+    ListTextPolicy, ListTextPosition, MouseEvent, Native, NativeCall, NativeHandler, Overlaid,
+    Picked, PickerLinks, PickerRequest, PointerEvent, PreloadWake, Report, Reporter, ResizeRect,
+    RouterChange, RouterLink, Routing, Runner, RunnerError, RunnerLinks, ScrollEvent,
+    SelectionDirection, SnapshotModule, SocketReader, SocketState, StackSplit, StreamCount,
+    SurfaceAnswer, Target, Timed, UploadEnd, UploadMark, WheelEvent, Write, BACKGROUND,
+    JOURNAL_RING, MAX_CLOCK_MS, PICKED, QUEUE_BOUND, RESIZE_UNDELIVERED, TIMER_FIRE_LIMIT,
+    VIRTUAL_FRAME_MS,
 };
 pub use runner::{AppState, Forma, LiveApplied, LiveRefusal, Place};
 pub use runner::{CallHow, WakeHow};

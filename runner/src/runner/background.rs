@@ -55,6 +55,7 @@ impl<D: DataSource> Runner<D> {
         self.background.ticket = Some(ticket);
         self.background.module = self.data.module_identity("").map(|m| m.instance());
         self.requests.push(RequestOut {
+            completion: None,
             class: crate::RequestClass::Ordered,
             ticket,
             target: NAME.into(),

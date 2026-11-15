@@ -1002,6 +1002,7 @@ impl<D: DataSource> Runner<D> {
         self.note_send(ticket, &request.body);
         self.presence_noted(ticket, &request);
         self.pending.push(PendingReq {
+            completion: None,
             module: request
                 .module
                 .clone()
@@ -1054,6 +1055,7 @@ impl<D: DataSource> Runner<D> {
         }
         self.requests
             .extend(refusal.is_none().then_some(RequestOut {
+                completion: None,
                 ticket,
                 target: name,
                 class: match target {
@@ -1118,7 +1120,9 @@ impl<D: DataSource> Runner<D> {
         // A request the app aborted before it was handed out is never sent:
         // the next pump answers it aborted.
         requests.retain(|r| !self.module_aborts.contains(&r.ticket));
-        self.hold_data_timers(requests)
+        let mut requests = self.hold_data_timers(requests);
+        self.issue_completions(&mut requests);
+        requests
     }
 
     /// The work behind continuation `token` (LLP 1027.002 D3): a host asks

@@ -237,6 +237,7 @@ impl<D: DataSource> Runner<D> {
         ));
         self.clock.data.landing.push(next);
         self.requests.push(RequestOut {
+            completion: None,
             class: crate::RequestClass::Ordered,
             ticket: next,
             target: name,

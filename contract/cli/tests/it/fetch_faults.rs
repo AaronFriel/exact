@@ -127,6 +127,7 @@ fn a_stream_is_not_matched() {
     r.faults().arm("https://api.test/", None).unwrap();
     let mut r = r;
     let out = exact_runner::RequestOut {
+        completion: None,
         class: exact_runner::RequestClass::Ordered,
         ticket: 99,
         target: "a".into(),
@@ -138,6 +139,7 @@ fn a_stream_is_not_matched() {
         "streams are deferred (D5)"
     );
     let plain = exact_runner::RequestOut {
+        completion: None,
         class: exact_runner::RequestClass::Ordered,
         request: Request::get("https://api.test/recipes/2"),
         ..out

@@ -1326,8 +1326,11 @@ pub struct CompletionTiming {
 
 /// A request the host is to run: its ticket, the resource or mutation it
 /// answers, and the request. Taken by [`Runner::take_requests`].
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone)]
 pub struct RequestOut {
+    /// Runner-issued one-shot authority, shared with the integer-ticket entry until
+    /// that entry migrates (LLP 1172.019 §2 item 1). Synthetic host work has none.
+    pub completion: Option<crate::runner::CompletionReply>,
     /// Names the reply: [`Runner::fulfill`] takes it back.
     pub ticket: u64,
     /// The resource's or mutation's name.
@@ -1338,6 +1341,31 @@ pub struct RequestOut {
     pub class: RequestClass,
     /// The app forced it (`refresh`): the executor bypasses its cache.
     pub forced: bool,
+}
+
+// Authority is separate from the work value: replay and full/incremental
+// comparisons must agree across sessions (LLP 1172.005 E10).
+impl PartialEq for RequestOut {
+    fn eq(&self, other: &Self) -> bool {
+        self.ticket == other.ticket
+            && self.target == other.target
+            && self.request == other.request
+            && self.class == other.class
+            && self.forced == other.forced
+    }
+}
+impl Eq for RequestOut {}
+
+impl std::fmt::Debug for RequestOut {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RequestOut")
+            .field("ticket", &self.ticket)
+            .field("target", &self.target)
+            .field("request", &self.request)
+            .field("class", &self.class)
+            .field("forced", &self.forced)
+            .finish()
+    }
 }
 
 #[cfg(test)]

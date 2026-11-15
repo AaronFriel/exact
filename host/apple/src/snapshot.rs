@@ -219,6 +219,7 @@ impl<D: exact_runner::DataSource> crate::Host<D> {
                         executor
                             .run(
                                 exact_runner::RequestOut {
+                                    completion: None,
                                     class,
                                     ticket: 1,
                                     target: "widget refresh".into(),

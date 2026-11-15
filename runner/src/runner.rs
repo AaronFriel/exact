@@ -16,9 +16,11 @@ mod background;
 mod commit;
 mod console;
 pub use console::Console;
+mod completion;
 mod control;
 mod errors;
 mod reply;
+pub use completion::{Completion, CompletionCapability, CompletionReply};
 #[cfg(test)]
 mod request_set_tests;
 #[cfg(test)]
@@ -259,6 +261,7 @@ enum Seed<'a> {
 /// answers, and the arguments it was asked with (what `parse` sees).
 #[derive(Clone)]
 struct PendingReq {
+    completion: Option<CompletionReply>,
     module: Option<ModuleInstance>,
     inspection_generation: u64,
     refusal: Option<(&'static str, bool)>,
@@ -475,6 +478,7 @@ pub struct Runner<D: DataSource> {
         Option<Value>,
     )>,
     next_ticket: u64,
+    completion_identity: std::cell::OnceCell<completion::Identity>,
     /// The module's background work's round, when one is out (LLP 1097 D5).
     background: background::Background,
     /// Module work's requests in flight (LLP 1146 D2).
@@ -861,6 +865,7 @@ impl<D: DataSource> Runner<D> {
             inspection_digest: std::cell::OnceCell::new(),
             keeps_midi: std::cell::OnceCell::new(),
             action_binding_origin: std::rc::Rc::new(()),
+            completion_identity: Default::default(),
             detached_focus: Vec::new(),
             data,
             kernel,
