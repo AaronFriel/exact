@@ -9,6 +9,7 @@ import { chromium } from '../../../../scripts/agent-launch.mjs';
 import { renderer } from '../../../web-js/render.mjs';
 import { stageHostGlue } from '../../../web-js/glue.mjs';
 import { hostFixtureFile } from '../glue-fixture.mjs';
+import { buildMotion } from '../../../web-js/module.mjs';
 import { decodePng } from '../../../../scripts/png.mjs';
 
 const work = process.argv[2], root = resolve(import.meta.dir, '../../../..');
@@ -16,11 +17,13 @@ const { executable, unavailable } = chromium();
 if (unavailable) throw new Error(unavailable);
 const names = JSON.parse(readFileSync(resolve(work, 'cases.json')));
 const pages = new Map();
+let motion;
 const readIsolation = () => Object.fromEntries([...document.querySelectorAll('[data-testid]')].map(e => [e.dataset.testid, getComputedStyle(e).isolation]));
 const withoutScripts = html => html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, '');
-const server = Bun.serve({ port: 0, hostname: '127.0.0.1', fetch(req) {
+const server = Bun.serve({ port: 0, hostname: '127.0.0.1', async fetch(req) {
   const path = new URL(req.url).pathname;
   if (path === '/favicon.ico') return new Response(null, { status: 204 });
+  if (path.endsWith('/motion.wasm')) return new Response(Bun.file(await (motion ??= buildMotion())));
   if (pages.has(path)) return new Response(pages.get(path), { headers: { 'content-type': 'text/html' } });
   return new Response(Bun.file(resolve(work, '.' + path)));
 } });

@@ -15,6 +15,40 @@ impl DataSource for NoData {
     }
 }
 
+#[test]
+fn a_derive_bound_spring_moves_on_the_native_clock() {
+    let plan = contract::compile(
+        r#"component Repro
+  state open = false
+  derive spring = "translate -exact-spring(140, 10, 1)"
+  action toggle
+    open = not open
+  view
+    column
+      button "Toggle" press=toggle testId="toggle"
+      view width=40 height=40 testId="box" translate=(open ? "100px 0px" : "0px 0px") transition=spring
+"#,
+    ).unwrap().encode();
+    let (mut host, _) = Host::boot(
+        &plan,
+        NoData,
+        Box::new(MonospaceMeasurer::default()),
+        420.,
+        900.,
+    )
+    .unwrap();
+    let node = motion_node(host.runner().kernel().node(id(&host, "box")).unwrap().key);
+    host.dispatch_at(id(&host, "toggle"), Event::Press, 0.);
+    host.advance(50.);
+    let x = host.engine().value(node, Property::Translate).unwrap().x;
+    assert!(x > 0. && x < 100., "{x}");
+    host.advance(10_000.);
+    assert_eq!(
+        host.engine().value(node, Property::Translate).unwrap().x,
+        100.
+    );
+}
+
 const APP: &str = r##"keyframes sweep
   from translate="-24px 0px"
   to translate="64px 8px"

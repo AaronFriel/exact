@@ -91,7 +91,9 @@ impl Em<'_> {
         let spring = binding(StyleId::Transition as u16, BindingKind::Style).is_some_and(|b| {
             match style::literal(plan, plan.code(b.expr)) {
                 Some(v) => v.as_str().is_some_and(|t| t.contains("spring")),
-                None => style::can_be(plan, plan.code(b.expr), &|v| v.contains("spring")),
+                // Settled derives, state and resource answers are opaque here;
+                // any computed transition can select a spring (LLP 1047 D2).
+                None => true,
             }
         });
         let target = self.transforms.contains(&i);
@@ -218,5 +220,26 @@ impl Em<'_> {
         let mh = self.uses.rt("mh");
         let _ = write!(self.out, "{mh}({e},()=>[{}]);", values.join(","));
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn computed_transitions_register_motion_without_guessing_their_values() {
+        for (declarations, transition, motion) in [
+            ("", "\"translate 400ms ease\"", false),
+            ("", "\"none\"", false),
+            ("", "\"translate -exact-spring(140, 10, 1)\"", true),
+            ("  derive spring = \"translate -exact-spring(140, 10, 1)\"\n", "spring", true),
+            ("  state spring = \"none\"\n", "spring", true),
+            ("  derive spring = \"translate -exact-spring(140, 10, 1)\"\n  derive curve = spring\n", "curve", true),
+        ] {
+            let plan = contract::compile(&format!(
+                "component App\n{declarations}  view\n    view translate=\"100px 0px\" transition={transition}\n"
+            )).unwrap();
+            let emitted = crate::emit::emit(&plan, false, false).unwrap();
+            assert_eq!(emitted.motion, motion, "{declarations}{transition}");
+        }
     }
 }
