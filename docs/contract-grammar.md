@@ -1026,7 +1026,9 @@ is down, after the move and before the hold. `press` and `hold` advance the
 virtual clock by those milliseconds (a game's ticks), except under
 `--timing platform`, where the platform's own clock owns the gesture.
 `tap "id" pinch <scale> [at x y]` is the driver's pinch: `scale` greater than 0,
-about the node's middle or about `at` in its box.
+about the node's middle or about `at` in its box. A canvas that takes raw input
+receives it as a real pinch arrives there: two touch contacts on the web and iOS,
+a Control-held wheel on macOS.
 `tap "id" wheel <dx> <dy>` is the driver's wheel (the agent's `tap <t> wheel
 dx dy`) at the node's middle, in points (CSS pixels on the web): a positive `dy`
 scrolls on toward the content's end, so its offset grows, and a negative one back
