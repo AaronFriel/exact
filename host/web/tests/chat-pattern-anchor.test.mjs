@@ -2,8 +2,7 @@
 // them at the list's very top: the window's old first message (`anchorKey`) is back at the port's top. Checked on
 // the JS target in Chrome, from the driver's layout frames and the app's own state. It checks the behaviour, not the
 // mechanism: on the web it also holds without the pattern's `scrollIntoView` (2026-11-14). A page that lands while
-// the list is inside the band but not at its top is the list's own anchor's (D1.2), and is not checked here: there
-// the reader moved 183 px (2026-11-14).
+// the list is inside the band but not at its top is the list's own anchor's (D1.2), and is not checked here.
 import { test, expect } from 'bun:test';
 import { spawnSync } from 'node:child_process';
 import { cpSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
