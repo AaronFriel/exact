@@ -1680,6 +1680,15 @@ are in the generated `app.d.ts`. A callback must carry exactly one `state`,
 equal to the nonempty value supplied to `openAuthSession`. Keep callback URLs
 in data code: they can contain credentials.
 
+On the web, closing the sign-in popup is not reported as cancellation:
+a provider's Cross-Origin-Opener-Policy can make an open popup appear closed.
+The session waits for its callback, supersession, or a ten-minute bound (499
+`cancelled`). Returning focus to the app does not end it. A new sign-in on the
+same request target supersedes the previous one. Offer an enabled Cancel while
+sign-in is pending: assigning `signed = none` to the mutation holding the
+sign-in releases its request and clears `pending(signed)`, so the person can
+retry at once. See `apps/auth-fixture/app.contract`.
+
 **An app's own sign-in screens.** A provider that lets an app sign the person
 in with its own screens (ForgeRock's authentication trees) still issues an
 authorization code. The app sends the authorization request as the provider
