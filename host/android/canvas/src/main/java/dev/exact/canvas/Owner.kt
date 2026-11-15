@@ -679,6 +679,11 @@ internal object Exact {
     fun moduleEvent(id: Int, slot: Int, generation: Int, session: Long, kind: String, payload: String) =
         field { Native.moduleEvent(id, slot, generation, session, kind, payload) }
 
+    /** A media element's event (by HTML's name, [payload] its value) or, with no [event], its observed [state]
+     * (LLP 1042.001 D7), checked against the allocation and session its painted element carries. */
+    fun media(id: Int, slot: Int, generation: Int, session: Long, event: String, payload: String, state: String) =
+        field { Native.media(id, slot, generation, session, event, payload, state) }
+
     fun fieldFocused(id: Int, generation: Int, focused: Boolean) = field { Native.fieldFocused(id, generation, focused) }
     fun fieldEdited(id: Int, generation: Int, seq: Int, value: String, start: Int, end: Int) =
         field { Native.fieldEdited(id, generation, seq, value, start, end) }

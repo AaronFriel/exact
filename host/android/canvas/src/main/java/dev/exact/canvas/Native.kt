@@ -131,6 +131,9 @@ object Native {
     @JvmStatic external fun fieldAction(id: Int, generation: Int, action: Int)
     /** A module event, checked against the session and allocation carried by its painted view. */
     @JvmStatic external fun moduleEvent(id: Int, slot: Int, generation: Int, session: Long, kind: String, payload: String)
+    /** A media element's event ([event] by HTML's name, [payload] its value), or with an empty [event] its observed
+     * [state] for `state.media` (LLP 1042.001 D7); checked as a module event is. */
+    @JvmStatic external fun media(id: Int, slot: Int, generation: Int, session: Long, event: String, payload: String, state: String)
     /** The reader moved scroller [id] by ([dx], [dy]) px, knowing revision [rev] of it. exact2 clamps the move to
      * the scroller's travel, and drops one sent under a revision the app's own scroll has moved on from. */
     @JvmStatic external fun scrolled(id: Int, dx: Float, dy: Float, rev: Int)

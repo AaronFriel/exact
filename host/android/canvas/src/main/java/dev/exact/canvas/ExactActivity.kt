@@ -26,7 +26,7 @@ fun interface Drive {
 open class ExactActivity : Activity() {
     /** The app's native modules (LLP 1024), by name. */
     protected open val modules: Map<String, NativeModule> = emptyMap()
-    /** The app's `video` player ([VideoPlayer]); none for an app without video. */
+    /** The `video` and `audio` elements' player ([VideoPlayer]), where the APK links one (LLP 1042.001 D2). */
     protected open val video: ((Context) -> VideoPlayer)? = null
     private var natives: Natives? = null
 
@@ -581,6 +581,8 @@ open class ExactActivity : Activity() {
         if (reads()) Extensions.stopped(isChangingConfigurations)
         view.running(false, reads())
         natives?.lifecycle?.event(ViewLifecycle.STOP)
+        // Videos pause and let go of their decoders; each keeps its place for the reader made at the next start.
+        natives?.stopMedia()
         // Behind the hide, the pads' release and the stop of the turns (none queued after it), what they and anything
         // since the pause committed is on disk before Android may kill it.
         if (!Exact.drainStore()) android.util.Log.w("exact", "the store's writes did not finish before the stop")

@@ -1,0 +1,161 @@
+//! What the Android reader's media players report (LLP 1042.001 D7): their
+//! events, dispatched as the runner's media events, and their observed state,
+//! kept for the agent's `state.media` and for the node's natural size. A host
+//! with no player has no reports, and `state.media` says why.
+
+use super::*;
+use std::collections::BTreeMap;
+use std::time::Instant;
+
+/// The last state each media node's player reported.
+#[derive(Default)]
+pub(crate) struct Players {
+    rows: BTreeMap<ViewId, Row>,
+}
+
+struct Row {
+    key: exact_kernel::NodeKey,
+    state: serde_json::Value,
+    at: Instant,
+    // Read where a player reports, which is only Android's reader.
+    #[cfg_attr(not(any(target_os = "android", test)), allow(dead_code))]
+    size: Option<(f32, f32)>,
+}
+
+impl<D: DataSource> Presenter<D> {
+    /// A media element's report, only for the session and allocation the
+    /// reader's element carries: an event by HTML's name with its payload,
+    /// handed to the node when it handles it, or (`event` empty) its state.
+    /// Whether anything was dispatched or laid out again.
+    #[cfg(any(target_os = "android", test))]
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn reader_media(
+        &mut self,
+        id: ViewId,
+        key: exact_kernel::NodeKey,
+        session: u64,
+        event: &str,
+        payload: &str,
+        state: &str,
+        now_ms: f64,
+    ) -> bool {
+        let valid = session == self.brush.native_session
+            && self
+                .host
+                .kernel()
+                .node(id)
+                .is_some_and(|node| node.node_type == NodeType::Video && node.key == key);
+        if !valid {
+            return false;
+        }
+        if event.is_empty() {
+            return self.media_state(id, key, state);
+        }
+        if !self
+            .host
+            .runner()
+            .handlers_of(id)
+            .iter()
+            .any(|k| k.name() == event)
+        {
+            return false;
+        }
+        let Some(media) = Event::media_payload(&format!("{event}\n{payload}")) else {
+            eprintln!("exact: video {id}: the player sent {event:?} with {payload:?}, which is not a media event");
+            return false;
+        };
+        if let Some(error) = self.host.dispatch_at(id, media, now_ms) {
+            eprintln!("exact: video: {error}");
+        }
+        if let Some(error) = self.after_commit() {
+            eprintln!("exact: video: {error}");
+        }
+        true
+    }
+
+    /// Keep a player's state; its video's size, once known, is the node's
+    /// natural size (LLP 1042 §2), laid out again when it changes.
+    #[cfg(any(target_os = "android", test))]
+    fn media_state(&mut self, id: ViewId, key: exact_kernel::NodeKey, state: &str) -> bool {
+        let Ok(state) = serde_json::from_str::<serde_json::Value>(state) else {
+            return false;
+        };
+        let size = match (state["videoWidth"].as_f64(), state["videoHeight"].as_f64()) {
+            (Some(w), Some(h)) if w > 0.0 && h > 0.0 => Some((w as f32, h as f32)),
+            _ => None,
+        };
+        let before = self
+            .media
+            .rows
+            .get(&id)
+            .filter(|r| r.key == key)
+            .and_then(|r| r.size);
+        self.media.rows.insert(
+            id,
+            Row {
+                key,
+                state,
+                at: Instant::now(),
+                size,
+            },
+        );
+        if size.is_none() || size == before {
+            return false;
+        }
+        if let Some(error) = self.host.set_intrinsic(id, size) {
+            eprintln!("exact: video {id}: {error}");
+        }
+        self.dirty = true;
+        true
+    }
+
+    /// `state.media`: each mounted media node's row, as its player last
+    /// reported it with the time run on at its rate since, or, where no
+    /// player has reported, an element that never plays, saying why.
+    pub(crate) fn media_json(&self) -> serde_json::Value {
+        let kernel = self.host.kernel();
+        let rows: Vec<_> = kernel
+            .rows(None)
+            .unwrap_or_default()
+            .iter()
+            .filter(|r| r.node_type == NodeType::Video)
+            .map(|r| {
+                let reported = kernel
+                    .node(r.id)
+                    .and_then(|node| self.media.rows.get(&r.id).filter(|row| row.key == node.key));
+                let state = match reported {
+                    Some(row) => moved(row),
+                    None => serde_json::json!({"unavailable": UNAVAILABLE, "paused": true, "currentTime": 0, "duration": null, "readyState": 0}),
+                };
+                serde_json::json!({"id": r.id, "state": state})
+            })
+            .collect();
+        serde_json::Value::Array(rows)
+    }
+}
+
+/// Why a media node never plays where no player reports: the Linux and
+/// Windows hosts have no decoder or audio output (LLP 1042 §8).
+const UNAVAILABLE: &str = "no media decoder or audio output on this host";
+
+/// A reported state with its time advanced by the time since, while playing.
+fn moved(row: &Row) -> serde_json::Value {
+    let mut state = row.state.clone();
+    if state["playing"].as_bool() == Some(true) {
+        if let (Some(time), Some(rate)) = (
+            state["currentTime"].as_f64(),
+            state["playbackRate"].as_f64(),
+        ) {
+            let mut time = time + row.at.elapsed().as_secs_f64() * rate;
+            if let Some(duration) = state["duration"].as_f64() {
+                time = time.min(duration);
+            }
+            state["currentTime"] = serde_json::json!(time);
+        }
+    }
+    state
+}
+
+#[cfg(test)]
+#[path = "media_tests.rs"]
+mod tests;

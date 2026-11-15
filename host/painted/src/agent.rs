@@ -255,18 +255,8 @@ fn answer_line<D: DataSource>(p: &mut Presenter<D>, line: &str) -> String {
                         ",\"paint\":{{\"ms\":{paint},\"readbackMs\":{readback}}}"
                     ));
                 }
-                // A `video` or `audio` (LLP 1042 §5, §8): this host has no
-                // decoder and no audio output, so each is reported as an
-                // element that never plays would read, and says why.
-                let media: Vec<_> = p
-                    .host()
-                    .kernel()
-                    .rows(None)
-                    .unwrap_or_default()
-                    .iter()
-                    .filter(|r| r.node_type == exact_kernel::NodeType::Video)
-                    .map(|r| serde_json::json!({"id": r.id, "state": {"unavailable": "no media decoder or audio output on this host", "paused": true, "currentTime": 0, "duration": null, "readyState": 0}}))
-                    .collect();
+                // A `video` or `audio` (LLP 1042 §8, LLP 1042.001 D7): as its player reports it.
+                let media = p.media_json();
                 s.push_str(&format!(",\"media\":{}", serde_json::json!(media)));
                 // The media session's record; nothing is published (LLP 1098 D9).
                 let session = crate::media_session::state(p);
