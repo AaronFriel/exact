@@ -600,17 +600,20 @@ function contentScroller(route) {
   }
   return null;
 }
-const clearInset = new WeakSet(), clearBars = new WeakMap(), barResized = globalThis.ResizeObserver && new ResizeObserver((entries) => {
-  for (const { target } of entries) {
-    const route = clearBars.get(target);
-    route?.isConnected && clearBar(route);
-  }
-});
+// What keeps a clear bar (`clearBar`, below), which the projection runs once a host hands it over: the wasm host's glue
+// for every plan, the JS target's compiler only for a plan whose route may say `navigationBar="transparent"` (LLP
+// 1047.002 D1).
+let clearing = null;
+export const useClearBars = (clear) => {
+  clearing = clear;
+};
+const clearInset = new WeakSet(), clearBars = new WeakMap();
+let barResized;
 /** A route that says `navigationBar="transparent"` lays its bar over its top, clear (neutral.css), as iOS gives the bar
  * a clear scroll-edge appearance and insets no content (NavigationBarIOS.swift `transparentBar`): the route's top inset,
  * `var(--exact-safe-area-inset-top)`, then includes the bar's height, and the bar is `scrolled` while content is under
  * it. A header iOS makes no bar of keeps its place. */
-function clearBar(route) {
+export function clearBar(route) {
   const header = headerOf(route), clear = !!header && route.getAttribute("data-navigationbar") === "transparent" && viewChildren(route)[0] === header && !asWritten(header);
   if (clearInset.has(route)) {
     clearInset.delete(route);
@@ -628,6 +631,10 @@ function clearBar(route) {
     return;
   }
   if (!clearBars.has(header)) {
+    // The first clear bar starts what follows each one: its height, and whether content has scrolled under it.
+    if (barResized === undefined) {
+      barResized = watchClearBars();
+    }
     clearBars.set(header, route);
     barResized?.observe(header);
   }
@@ -638,6 +645,19 @@ function clearBar(route) {
   barScrolled(route, header);
 }
 const barScrolled = (route, header) => header.setAttribute("data-exact-clear", (contentScroller(route) ?? document.scrollingElement)?.scrollTop > 0 ? "scrolled" : "");
+function watchClearBars() {
+  document.addEventListener("scroll", () => {
+    for (const header of root.querySelectorAll("[data-exact-clear]")) {
+      clearBars.has(header) && barScrolled(clearBars.get(header), header);
+    }
+  }, { capture: true, passive: true });
+  return globalThis.ResizeObserver ? new ResizeObserver((entries) => {
+    for (const { target } of entries) {
+      const route = clearBars.get(target);
+      route?.isConnected && clearBar(route);
+    }
+  }) : null;
+}
 function appBarBack(nav, routes, index, split, shown) {
   const route = routes[index], header = headerOf(route);
   if (!header) {
@@ -939,11 +959,6 @@ export const navigation = {
     }
     // Capture before either target's link listener commits. Early replay before connect has no action-row association.
     document.addEventListener("click", captureRow, true);
-    document.addEventListener("scroll", () => {
-      for (const header of root.querySelectorAll("[data-exact-clear]")) {
-        clearBars.has(header) && barScrolled(clearBars.get(header), header);
-      }
-    }, { capture: true, passive: true });
     document.addEventListener("click", captureLink, true);
     document.addEventListener("dragstart", (event) => {
       if (root.contains(event.target) && event.target.matches?.("img[data-symbol-source], :is(button, a[href], [data-exact-on~=\"press\"]) img")) {
@@ -1229,7 +1244,7 @@ export const navigation = {
           route.style.setProperty("--exact-split", column ? `${split}px` : "");
           framing?.(routes, index, shownIn, inUse);
           appBarBack(nav, routes, index, split > 0, active || covered);
-          clearBar(route);
+          clearing?.(route);
           if (stack === at && index === selected) {
             freshPath(route);
           }

@@ -398,8 +398,9 @@ const clear = page.match(/^<style>[\s\S]*?<\/style>/)[0] + `
   </main>
 </div>
 <script type="module">
-  import { navigation } from './navigation.js';
+  import { navigation, useClearBars, clearBar } from './navigation.js';
   const root = document.getElementById('exact-root');
+  useClearBars(clearBar); // as both web hosts do for a plan whose route can say it
   navigation.connect(root, () => false, () => {});
   window.project = () => navigation.project(root, () => {});
   window.look = () => {
