@@ -3175,6 +3175,92 @@ APNs, the entitlement signed against a profile with Push Notifications, and a
 production build. `packages/push/test/checklist.md` is those checks; until
 they pass, nothing here is claimed for a device.
 
+### A newer binary from the store (`@exact/store-update`)
+
+A binary change the bake cannot carry (a new host, a native module, a raised
+OS floor) reaches an install only through its store. `@exact/store-update`
+(LLP 1133.038; [recipe](recipes/store-update.md)) says what the store has and
+opens it. It is not Exact's own signed updates: those are `exactDelivery()`
+and the update store (LLP 1030), which this package never touches.
+
+`storeUpdateStatus()` is live, announced again on a return to the foreground
+and as a download moves:
+
+- `available`: the store this package asks made this install: Google Play on
+  Android (the installer is `com.android.vending`), the App Store on iOS and
+  macOS (a production receipt; a development, TestFlight or Developer ID
+  build has none). It says who made the install, not whether an update
+  exists.
+- `updateAvailability`: `offered` (Play offers this install a newer binary
+  now), `listed` (the App Store lists a newer version of this platform's
+  binary for the person's storefront; whether it will offer it to this
+  device is unknown), `current`, `in-progress` (Play's flow is running), or
+  `unknown` (not a store install, the store not asked or not answering, or a
+  listing that does not compare).
+- `apple`: the App Store's listing: `lookup` (`found`, `not-found`,
+  `failed`), `version`, `minimumOsVersion`, `releaseNotes`,
+  `currentVersionReleaseDate`.
+- `android`: Play's own fields: `availableVersionCode`, `updatePriority` (0
+  to 5, set when the release is published), `clientVersionStalenessDays`,
+  `flexibleAllowed`, `immediateAllowed`, `installStatus` (`pending`,
+  `downloading`, `downloaded`, `installing`, `installed`, `failed`,
+  `canceled`, ...), `bytesDownloaded`, `totalBytesToDownload` (0 with no
+  download) and `installErrorCode`.
+
+`openStorePage()` leaves the app for the store's page: the App Store app
+(`itms-apps://`), the Mac App Store (`macappstore://`), or Play's store app
+(`market://`). It answers when the store has opened. Apple's page comes from
+the lookup's `trackId`, so an app the lookup does not find (unlisted, a
+Custom App) is refused `NotFoundError`.
+
+On Android only, imported from `@exact/store-update/android`:
+`startStoreUpdate(appUpdateType=, allowAssetPackDeletion=)` shows Play's flow
+over the app: `"flexible"` downloads in the background while the app runs,
+`"immediate"` covers the app until the update installs. It answers `outcome`:
+`accepted`, `canceled` or `failed`. Nothing offered fails `NotFoundError`; a
+type Play does not allow now fails `NotAllowedError`. An immediate flow the
+person left starts again when the app resumes, while Play still reports it in
+progress. `completeStoreUpdate()` installs a downloaded flexible update and
+restarts the app; with none downloaded it fails `InvalidStateError`.
+
+The App Store lookup is the package's own request to
+`https://itunes.apple.com` (the bundle id and the storefront's country, no
+identifier of the person), made only in a store install and kept a minute.
+Both tier 1 names answer only under a `net.fetch` line, and the line to write
+is that one:
+
+```ts
+export const grants = 'net.fetch https://itunes.apple.com';
+```
+
+```
+use storeUpdateStatus, openStorePage, StoreUpdateStatus from "@exact/store-update"
+use startStoreUpdate, completeStoreUpdate, StoreUpdateResult from "@exact/store-update/android"
+  resource store = storeUpdateStatus() as shape StoreUpdateStatus else empty()
+  mutation started as shape StoreUpdateResult
+  action update
+    send started = startStoreUpdate(appUpdateType="immediate")
+```
+
+| Host | Answer |
+| --- | --- |
+| Android | Play Core `app-update:2.1.0`. An install Play did not make (`adb`) answers `available: false` and Play is not asked. An error from Play answers `unknown` with `installErrorCode`. |
+| iOS, macOS | The iTunes Search API lookup for the bundle id in the storefront's country (StoreKit's `Storefront`). Only this platform's record compares: a universal purchase's one record is the iOS binary's, so the Mac answers `unknown` there. A listing above this OS's `minimumOsVersion` is `current`. Play's sends fail `NotSupportedError`. |
+| web, Linux, Windows, tvOS | Declared default: `available: false`, `updateAvailability: "unknown"`; every send fails `NotSupportedError`. |
+
+Under the agent no store is asked: the status is a store install with nothing
+newer, and `prefer extension store-update.storeUpdateStatus={…}` lays the
+status a drive needs. `startStoreUpdate` holds a `store-update` ticket the
+drive taps `accepted`, `canceled` or `failed`; the implementation then
+refuses as Play would against the laid status. `openStorePage` and
+`completeStoreUpdate` journal what they would have done.
+
+Play's flows are tested against Play's `FakeAppUpdateManager`. They have not
+run against a Play listing: Play offers an update only to an install from
+Play, of a release with a higher `versionCode` (`EXACT_BUILD_NUMBER`) on a
+track the device can see; internal app sharing is the quickest way to try
+one. The App Store page has not been opened from a store install.
+
 ### Local network
 
 Services on the local network are found by DNS-SD through `@exact/local-network`

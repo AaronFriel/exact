@@ -1286,6 +1286,17 @@ reading. Nothing that isn't HTML is added by it.
   a receipt-validation or entitlement server of exact2's, and relaying the
   stores' server notifications; and the Windows, tvOS, visionOS and
   watchOS cells.
+- **Expanded (Charlie's issue panel on expo/exact#638, 2026-11-15; LLP
+  1133.038):** a newer binary from the store, `@exact/store-update`:
+  `storeUpdateStatus()` and `openStorePage()` on iOS, macOS (a Mac App
+  Store install) and Android, and Play's in-app update flows on Android
+  (`startStoreUpdate`, `completeStoreUpdate`, from
+  `@exact/store-update/android`). It is not Exact's own signed updates
+  (LLP 1030). Consumer: a gatehouse app on Android (expo/exact#638).
+  Unblocks a binary the bake cannot carry reaching an install, offered by
+  the store, without app Kotlin. Take: pending Charlie (LLP 1133.038 §13
+  item 1). Still out: an in-app install on Apple, the App Store's sheet,
+  the Microsoft Store and Flatpak cells, and the store distribution lanes.
 - **Expanded (Charlie, 2026-10-26, "Accept r5, build (Recommended)",
   waived; LLP 1133.034 §13 question 9):** payment for physical goods and
   services by Payment Request's names (`showPaymentRequest`,
