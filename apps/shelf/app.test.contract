@@ -180,7 +180,9 @@ test "discover shows an error, then tries again"
   clock data
   expect tree missing "discover-error"
 
-test "Scan Barcode opens the scan screen inside the add sheet, and Cancel goes back"
+// Scanning needs the platform's barcode detector. A browser has one or not by
+// its OS (Chrome's on macOS, none on Linux), so the web runs neither test.
+test "Scan Barcode opens the scan screen inside the add sheet, and Cancel goes back" on macos, ios
   tap "add-book"
   clock settle
   perf
@@ -196,6 +198,12 @@ test "Scan Barcode opens the scan screen inside the add sheet, and Cancel goes b
   expect perf query lookup == 0
   expect state current.name == "add"
   expect state scanTrack == ""
+
+test "with no barcode detector, the add sheet offers no Scan Barcode" on linux, windows
+  tap "add-book"
+  clock settle
+  expect tree has "add-title"
+  expect tree missing "scan-barcode"
 
 test "the web reads no text from a photo, so a book offers no Add Quote from Photo" on web, linux, windows
   tap "book-seed-2"
