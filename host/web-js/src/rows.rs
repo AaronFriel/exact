@@ -468,6 +468,7 @@ impl Em<'_> {
             // On a pressed node an animation of `scale` plays its rule's
             // `-exact-press` copy, and `scale` transitions as `--exact-scale`
             // (css.rs `keyframes_name`, `css_text`).
+            StyleId::Scale if press => one("--exact-scale", None),
             StyleId::Animation if press => {
                 let names: Vec<String> = self.press_keyframes.clone();
                 let names = serde_json::to_string(&names).unwrap();

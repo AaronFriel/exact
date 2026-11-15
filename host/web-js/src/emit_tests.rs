@@ -1407,3 +1407,26 @@ fn a_record_field_named_proto_is_an_own_descriptor_field() {
         );
     }
 }
+
+#[test]
+fn a_pressed_nodes_bound_scale_reaches_its_composed_presentation() {
+    let plan = contract::compile(
+        r#"component App
+  state shown = false
+  action toggle
+    shown = not shown
+  view
+    column
+      view scale=(shown ? 1 : 0.01) press=toggle -exact-press-scale=0.92 transition="scale 200ms ease"
+      view scale=(shown ? 1 : 0.01)
+"#,
+    )
+    .unwrap();
+    let output = crate::emit::emit(&plan, false, false).unwrap();
+    assert!(
+        output.js.contains(",\"--exact-scale\",\"\",()=>"),
+        "{}",
+        output.js
+    );
+    assert!(output.js.contains(",\"scale\",\"\",()=>"), "{}", output.js);
+}
