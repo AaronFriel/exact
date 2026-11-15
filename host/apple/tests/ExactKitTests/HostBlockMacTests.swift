@@ -203,7 +203,9 @@ final class HostBlockMacTests: XCTestCase {
         XCTAssertEqual(detail.frame, NSRect(origin: .zero, size: right.bounds.size))
         XCTAssertEqual(p.blocks.used[list.id], left.bounds.size)
         // A percentage and an absolutely positioned child are the pane's.
-        XCTAssertEqual(half.frame, NSRect(x: 0, y: 0, width: right.bounds.width / 2, height: 100))
+        // Half the pane, on the window's device pixels: exact at 2x, a whole point on a 1x display (a headless Mac's).
+        let device = { (v: CGFloat) in (v * window.backingScaleFactor).rounded() / window.backingScaleFactor }
+        XCTAssertEqual(half.frame, NSRect(x: 0, y: 0, width: device(right.bounds.width / 2), height: 100))
         XCTAssertEqual(badge.frame, NSRect(x: right.bounds.width - 50, y: 350, width: 40, height: 40))
         XCTAssertEqual(scroller.frame.width, 280)
         XCTAssertEqual(behind.map(\.frame), pageFrames, "the page around them is laid out as it was")
@@ -219,7 +221,7 @@ final class HostBlockMacTests: XCTestCase {
         XCTAssertEqual(left.bounds.width, 200)
         XCTAssertEqual(list.frame, NSRect(origin: .zero, size: left.bounds.size))
         XCTAssertEqual(detail.frame, NSRect(origin: .zero, size: right.bounds.size))
-        XCTAssertEqual(half.frame.width, right.bounds.width / 2)
+        XCTAssertEqual(half.frame.width, device(right.bounds.width / 2))
         XCTAssertEqual(badge.frame.origin.x, right.bounds.width - 50)
         XCTAssertEqual(scroller.frame.width, 200)
         XCTAssertTrue(try node("field").field === field)
