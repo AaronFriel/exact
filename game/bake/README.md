@@ -123,3 +123,41 @@ in the manifest. JSON remains readable through agent asset state after delivery.
 The geometry allowlist accepts glTF `COLOR_0` (RGB becomes RGBA with alpha one).
 Colours remain linear multipliers through `MeshData.colors`; an empty array means
 white. Tangents and additional UV/colour sets retain their existing refusal rules.
+
+## Compressed and quantized glTF
+
+The bake accepts `EXT_meshopt_compression` and `KHR_mesh_quantization`, including
+GLBs written by glTF-Transform's default `optimize`. It decodes meshopt views before
+importing images or geometry, then reads signed/unsigned 8- and 16-bit attributes
+with their declared normalization and stride. Node and texture transforms retain
+their glTF meaning. Tangents remain omitted because the shader derives them.
+No decoder or additional asset format is linked into a game.
+
+Meshopt supports vertex codecs v0/v1, triangle and index-sequence codecs, and
+`OCTAHEDRAL`, `QUATERNION` and `EXPONENTIAL` filters. Invalid streams, unsupported
+modes or filters, and missing fallback data refuse with the extension and view
+named. A decoded view is limited to 256 MiB. The port retains meshoptimizer's
+[MIT notice](src/meshopt/LICENSE.md).
+
+`tests/fixtures/meshopt/optimized.glb` is the existing cube fixture, with its
+material removed, passed through `optimize`. `buffers.json` records compressed
+inputs and expected bytes from npm `meshoptimizer@0.25.0`; Rust tests read those
+committed bytes and need no JavaScript packages or network. They cover both vertex
+versions, all three filters, both index widths, block boundaries and malformed
+streams. Filter arithmetic matches npm's WASM SIMD decoder (`f32`, ties-to-even),
+which can differ by one integer from its JavaScript reference decoder.
+
+To regenerate from the repository root, install the tools in an isolated directory
+with its own package manifest, then run the retained generator:
+
+```sh
+mkdir -p target/meshopt-tools
+printf '{"private":true}\n' > target/meshopt-tools/package.json
+bun add --cwd target/meshopt-tools @gltf-transform/cli@4.2.1 @gltf-transform/core@4.5.1 @gltf-transform/extensions@4.5.1 @gltf-transform/functions@4.5.1 meshoptimizer@0.25.0
+bun game/bake/tests/fixtures/meshopt/generate.mjs target/meshopt-tools/node_modules
+cargo test --manifest-path game/Cargo.toml --locked -p exact-game-bake
+```
+
+The CLI version is 4.2.1; its core, extensions and functions packages are 4.5.1
+(the version stamped in the GLB). Review regenerated expectations independently
+of the Rust implementation; never regenerate them to make a failing test pass.
