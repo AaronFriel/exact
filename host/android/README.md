@@ -26,6 +26,10 @@ AppCompat or Material library.
 An `iframe` with `sandbox`, including `sandbox=""`, is refused before a WebView is created or navigated. The log
 names `iframe <id>: sandbox is unsupported on Android`. Adding `sandbox` destroys the frame's existing WebView.
 
+A frame whose renderer ends, by a crash or because Android reclaimed it, keeps the app running: its WebView is
+destroyed and a new one loads its `src`, with no event, as Apple's hosts re-serve a frame whose content process ended
+(LLP 1020 D2). The log names `iframe <id>: the page's renderer crashed; loading its src again`.
+
 ## Where it came from
 
 The benchmark lane wrote it outside this repository. These are the files of

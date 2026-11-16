@@ -1,5 +1,7 @@
 package dev.exact.canvas
 
+import android.os.Looper
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebView
 import org.json.JSONObject
 import org.junit.Assert.*
@@ -90,6 +92,52 @@ class NativesFrameTest {
         assertTrue(web.settings.javaScriptEnabled)
         assertEquals("https://example.com/", shadowOf(web).lastLoadedUrl)
         assertEquals(mapOf("Referer" to "https://exact.invalid/"), shadowOf(web).lastAdditionalHttpHeaders)
+        natives.destroyAll()
+    }
+
+    private fun gone(web: WebView): Boolean = shadowOf(web).webViewClient.onRenderProcessGone(web, object : RenderProcessGoneDetail() {
+        override fun didCrash() = true
+        override fun rendererPriorityAtExit() = WebView.RENDERER_PRIORITY_IMPORTANT
+    })
+
+    /** A frame outlives its renderer, as on Apple (LLP 1020 D2): the dead view goes and a new one loads `src`. */
+    @Test fun aFrameWhoseRendererEndsLoadsItsSourceInANewView() {
+        val natives = natives()
+        natives.ensure(1, 1, 100, 50, props(), 0)
+        val web = natives.getChildAt(0) as WebView
+        assertTrue(gone(web))
+        assertTrue(shadowOf(web).wasDestroyCalled())
+        assertEquals(1, natives.childCount)
+        val fresh = natives.getChildAt(0) as WebView
+        assertNotSame(web, fresh)
+        assertEquals(100, fresh.layoutParams.width)
+        assertNull(shadowOf(fresh).lastLoadedUrl)
+        shadowOf(Looper.getMainLooper()).idle()
+        assertEquals("https://example.com/", shadowOf(fresh).lastLoadedUrl)
+        assertEquals(mapOf("Referer" to "https://exact.invalid/"), shadowOf(fresh).lastAdditionalHttpHeaders)
+        assertTrue(ShadowLog.getLogsForTag("exact").any { it.msg == "iframe 1: the page's renderer crashed; loading its src again" })
+        // A new `src` before the reload is loaded once, and the old one not after it.
+        assertTrue(gone(fresh))
+        val third = natives.getChildAt(0) as WebView
+        natives.ensure(1, 1, 100, 50, JSONObject().put("src", "https://example.org/").put("sandbox", JSONObject.NULL).toString(), 0)
+        shadowOf(Looper.getMainLooper()).idle()
+        assertEquals("https://example.org/", shadowOf(third).lastLoadedUrl)
+        natives.destroyAll()
+    }
+
+    /** A pooled view shares the renderer: it is destroyed, never lent. */
+    @Test fun aPooledViewWhoseRendererEndsIsNotLent() {
+        val natives = natives().apply { lazy = true }
+        natives.ensure(1, 1, 0, 0, props(), 10)
+        natives.near(setOf(10), setOf(10), setOf(10))
+        val web = natives.getChildAt(0) as WebView
+        natives.near(emptySet(), emptySet(), emptySet())
+        assertTrue(gone(web))
+        assertTrue(shadowOf(web).wasDestroyCalled())
+        assertEquals(0, natives.childCount)
+        natives.ensure(2, 1, 0, 0, props(), 20)
+        natives.near(setOf(20), setOf(20), setOf(20))
+        assertNotSame(web, natives.getChildAt(0))
         natives.destroyAll()
     }
 }

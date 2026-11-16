@@ -13,6 +13,7 @@ import android.view.SurfaceHolder
 import android.view.TextureView
 import android.view.View
 import android.view.ViewGroup
+import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -756,17 +757,7 @@ class Natives(
         5 -> hatched?.invoke(id, context)?.also { (it.parent as? android.view.ViewGroup)?.removeView(it) }
         3 -> if (buffered && !refused) View(context) else TextureView(context).apply { isOpaque = false }
         0 -> videoPool.removeLastOrNull() ?: videoView()
-        1 -> webPool.removeLastOrNull()?.apply { settings.javaScriptEnabled = true; onResume() } ?: WebView(context).apply {
-            settings.javaScriptEnabled = true
-            // A guest's navigations stay in its frame, as in a browser's; a file only under the asset root.
-            webViewClient = object : WebViewClient() {
-                override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
-                    !Sources.navigable(request.url.scheme, request.url.path, assets)
-            }
-            isVerticalScrollBarEnabled = false; isHorizontalScrollBarEnabled = false
-            overScrollMode = View.OVER_SCROLL_NEVER
-            setBackgroundColor(Color.WHITE)
-        }
+        1 -> webPool.removeLastOrNull()?.apply { settings.javaScriptEnabled = true; onResume() } ?: webView()
         else -> {
             val name = json.optString("module")
             val module = modules[name]
@@ -777,6 +768,51 @@ class Natives(
                 borrowed ?: module.create(context, moduleProps(json), id)
             }
         }
+    }
+
+    private fun webView(): WebView = WebView(context).apply {
+        settings.javaScriptEnabled = true
+        webViewClient = object : WebViewClient() {
+            // A guest's navigations stay in its frame, as in a browser's; a file only under the asset root.
+            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
+                !Sources.navigable(request.url.scheme, request.url.path, assets)
+
+            // Android ends the app with the renderer unless this answers true.
+            override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
+                rendererGone(view, detail.didCrash())
+                return true
+            }
+        }
+        isVerticalScrollBarEnabled = false; isHorizontalScrollBarEnabled = false
+        overScrollMode = View.OVER_SCROLL_NEVER
+        setBackgroundColor(Color.WHITE)
+    }
+
+    /**
+     * [web]'s renderer ended: it crashed, or Android reclaimed it. The view cannot be used again, so it is destroyed
+     * (https://developer.android.com/reference/android/webkit/WebViewClient#onRenderProcessGone(android.webkit.WebView,%20android.webkit.RenderProcessGoneDetail)).
+     * A frame's page is loaded again from its `src` in a new view, with no event, as Apple's hosts re-serve a frame
+     * whose content process ended (LLP 1020 D2). The app's WebViews share a renderer, so a pooled one is told too.
+     */
+    private fun rendererGone(web: WebView, crashed: Boolean) {
+        removeView(web)
+        val e = byView.remove(web)?.takeIf { elements[it.id] === it && it.view === web }
+        webPool.remove(web)
+        web.destroy()
+        if (e == null) return
+        android.util.Log.w("exact", "iframe ${e.id}: the page's renderer ${if (crashed) "crashed" else "was ended by Android"}; loading its src again")
+        val fresh = webView()
+        addView(fresh, LayoutParams(1, 1))
+        e.view = fresh
+        byView[fresh] = e
+        if (e.paused) fresh.onPause()
+        if (e.w > 0 && e.h > 0) place(e)
+        if (refresh()) frame()
+        val props = e.props
+        e.props = ""
+        // Loaded after every view of the renderer has been told and outside WebView's report of its end. A new
+        // `src`, a park or a release in between takes the frame instead.
+        android.os.Handler(context.mainLooper).post { if (elements[e.id] === e && e.view === fresh && e.props.isEmpty()) { apply(e, props); if (refresh()) frame() } }
     }
 
     private fun create(id: Int, kind: Int, props: String): Element? {
