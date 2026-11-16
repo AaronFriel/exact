@@ -266,6 +266,8 @@ pub(super) struct State {
     inbox: Inbox,
     /// Module calls the shell took, by id, until it answers.
     modules: BTreeMap<u32, exact_runner::Reply>,
+    /// Of those, the tells: calls with no `source` or `send`.
+    tells: std::collections::BTreeSet<u32>,
     /// The packages this binary composes, which answer their extensions'
     /// calls on the loop's thread.
     packages: packages::Packages,
@@ -373,8 +375,20 @@ fn encode(id: u32, request: &Request, out: &mut Vec<i32>) {
     out[at + 2] = (out.len() - at - 3) as i32;
 }
 
-/// The reader's request handoff and queued answers, serviced only on the owner thread.
-pub type AgentTurn = Box<dyn FnMut(f64, Option<Vec<i32>>) -> Vec<(i32, Option<String>)>>;
+/// The reader's request handoff and what it queued for the owner thread,
+/// serviced only on that thread.
+pub type AgentTurn = Box<dyn FnMut(f64, Option<Vec<i32>>) -> Vec<Handed>>;
+
+/// What the reader queued for the owner thread while an agent operation held
+/// it, in the order it was queued: on the wire, `[id, answer]` or the topic.
+#[derive(Debug, Clone, PartialEq, serde::Deserialize)]
+#[serde(untagged)]
+pub enum Handed {
+    /// The answer to request `id`, or its cancellation.
+    Answer(i32, Option<String>),
+    /// A topic an extension announced ([`exact_runner::Native::changed`]).
+    Changed(String),
+}
 
 impl<D: DataSource> Presenter<D> {
     pub(super) fn request_files(&mut self, picker: exact_runner::PickerRequest) {
@@ -401,7 +415,8 @@ impl<D: DataSource> Presenter<D> {
     }
 
     /// Service the reader during an agent operation that holds its owner thread.
-    /// The callback hands requests to the UI thread and takes only queued answers.
+    /// The callback hands requests to the UI thread and takes only what the
+    /// reader queued for this thread: answers and announced topics.
     pub fn set_agent_turn(&mut self, turn: Option<AgentTurn>) -> Option<AgentTurn> {
         std::mem::replace(&mut self.requests.agent_turn, turn)
     }
@@ -410,11 +425,24 @@ impl<D: DataSource> Presenter<D> {
         let Some(mut turn) = self.requests.agent_turn.take() else {
             return;
         };
-        let replies = turn(self.host.now(), self.take_requests());
+        let handed = turn(self.host.now(), self.take_requests());
         self.requests.agent_turn = Some(turn);
-        for (id, answer) in replies {
-            self.answer_request(id as u32, answer.as_deref());
+        for h in handed {
+            match h {
+                Handed::Answer(id, answer) => {
+                    self.answer_request(id as u32, answer.as_deref());
+                }
+                Handed::Changed(topic) => self.host.runner().native_slot().changed(&topic),
+            }
         }
+    }
+
+    /// Whether the shell has a module call to answer that no request in
+    /// flight stands for: a tell (`preferred`, `foreground`, a view's
+    /// `displayed`), which it answers once it has acted on it. What the
+    /// extension announced while acting comes before that answer.
+    pub(crate) fn telling(&self) -> bool {
+        !self.requests.tells.is_empty()
     }
 
     /// A shell takes this presenter's requests from now on: the commands
@@ -538,6 +566,9 @@ impl<D: DataSource> Presenter<D> {
             } else if self.requests.shell {
                 let id = self.queue(Request::Module(String::from_utf8_lossy(&body).into_owned()));
                 self.requests.modules.insert(id, reply);
+                if packages::told(&body) {
+                    self.requests.tells.insert(id);
+                }
                 queued = true;
             } else {
                 crate::package::Reply::new(reply).error("NotSupportedError", None);
@@ -855,6 +886,7 @@ impl<D: DataSource> Presenter<D> {
             eprintln!("exact: answer {id}: {answer:?}");
         }
         if let Some(reply) = self.requests.modules.remove(&id) {
+            self.requests.tells.remove(&id);
             reply.send(match answer {
                 Some(json) => exact_runner::Outcome::Response(exact_runner::Response {
                     status: 200,

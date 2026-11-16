@@ -173,7 +173,7 @@ pub use painter::{set_custom_painter, PainterChoice, PainterFactory, PainterInfo
 pub(crate) use palette::reported_accent;
 pub use palette::{material, ContrastPalette, Material, Palette, MATERIAL_ROLES};
 pub use pointer::PointerKind;
-pub use requests::{AgentTurn, Haptic, Pick, Request};
+pub use requests::{AgentTurn, Handed, Haptic, Pick, Request};
 pub use scrollers::{Scroller, Under, PAGE};
 pub use stage::SHEET_HANDLE;
 pub use window::{Chrome, Window};
@@ -1353,9 +1353,11 @@ impl<D: DataSource> Presenter<D> {
         self.images.wake_fd()
     }
 
-    /// Whether a request is in flight.
+    /// Whether a request is in flight, the shell has a tell to answer
+    /// ([`Presenter::telling`]), or a topic an extension announced waits for
+    /// the next pump.
     pub fn pending(&self) -> bool {
-        self.host.runner().has_pending()
+        self.host.runner().has_pending() || self.telling() || self.host.has_announced()
     }
 
     /// Measure the work of every binary but a production one (LLP 1079

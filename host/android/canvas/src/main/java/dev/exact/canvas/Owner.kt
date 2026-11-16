@@ -437,16 +437,22 @@ internal class Owner(private val hwbuf: Boolean, private val fast: Boolean, prio
         handler.post { f(); produce() }
     }
 
-    private val replies = OwnerReplies(::call) { id, answer -> Native.answer(id, answer) }
+    private val replies = OwnerReplies(::call, { topic -> Native.changed(topic) }) { id, answer -> Native.answer(id, answer) }
 
     fun reply(id: Int, answer: String?) = replies.answer(id, answer)
 
-    /** Called from Native.agent on this thread. Return data, never re-enter the borrowed Rust host. */
+    fun changed(topic: String) = replies.changed(topic)
+
+    /** Called from Native.agent on this thread. Return data, never re-enter the borrowed Rust host: each answer as
+     * `[id, answer]` and each topic as itself, in the order they arrived. */
     fun agentTurn(requests: IntArray?): String {
         check(Looper.myLooper() == thread.looper)
         if (requests != null) postMain { asked?.invoke(requests) ?: Requests.detached(requests) }
         return org.json.JSONArray().apply {
-            for ((id, answer) in replies.take()) put(org.json.JSONArray().put(id).put(answer ?: org.json.JSONObject.NULL))
+            for (h in replies.take()) {
+                val id = h.id
+                put(if (id == null) h.value else org.json.JSONArray().put(id).put(h.value ?: org.json.JSONObject.NULL))
+            }
         }.toString()
     }
 
@@ -749,7 +755,7 @@ internal object Exact {
     } ?: Native.invoke(body).also { turned() }
 
     /** What the extensions tell exact2 ([Native.changed], [Native.bindExtensions]): on exact2's thread, in order. */
-    fun changed(topic: String) { val o = owner; if (o != null) o.call { Native.changed(topic) } else Native.changed(topic) }
+    fun changed(topic: String) { val o = owner; if (o != null) o.changed(topic) else Native.changed(topic) }
     /** A person's act on what an extension posted ([Activations]): its event raised with a person's origin, as an
      * input, on exact2's thread; [action] is the declared action's record a notification's action carries. */
     fun activate(extension: String, event: String, args: String, action: String?) {
