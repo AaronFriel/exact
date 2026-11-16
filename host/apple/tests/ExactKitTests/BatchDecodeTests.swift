@@ -116,9 +116,44 @@ final class BatchDecodeTests: XCTestCase {
                 XCTAssertEqual(a.layoutKeep, (expected["keep"] as? [NSNumber])?.map(\.uint32Value), file: file, line: line)
                 XCTAssertEqual(a.layoutChildren, b.layoutChildren, file: file, line: line)
                 XCTAssertTrue(a.payload.isEmpty, file: file, line: line)
-            } else {
-                XCTAssertTrue(NSDictionary(dictionary: a.payload).isEqual(to: expected), file: file, line: line)
-            }
+            } else if a.op == .collections {
+                let items = expected["items"] as? [[String: Any]]
+                let expectedSnapshots = (items ?? []).compactMap(OracleCollectionSnapshot.init)
+                let count = items?.count == expectedSnapshots.count ? expectedSnapshots.count : nil
+                XCTAssertTrue(a.payload.isEmpty, "snapshots do not bridge through Any", file: file, line: line)
+                XCTAssertEqual(a.collections?.count, count, file: file, line: line)
+                for (snapshot, oracle) in zip(a.collections ?? [], expectedSnapshots) {
+                    XCTAssertEqual(snapshot.view, oracle.view, file: file, line: line)
+                    XCTAssertEqual(snapshot.horizontal, oracle.horizontal, file: file, line: line)
+                    XCTAssertEqual(snapshot.parent, oracle.parent, file: file, line: line)
+                    XCTAssertEqual(snapshot.revision, oracle.revision, file: file, line: line)
+                    XCTAssertEqual(snapshot.sequence, oracle.sequence, file: file, line: line)
+                    XCTAssertEqual(snapshot.extent, oracle.extent, file: file, line: line)
+                    XCTAssertEqual(snapshot.count, oracle.count, file: file, line: line)
+                    XCTAssertEqual(snapshot.fixed.map(\.view), oracle.fixed.map(\.view), file: file, line: line)
+                    XCTAssertEqual(snapshot.fixed.map(\.roots), oracle.fixed.map(\.roots), file: file, line: line)
+                    XCTAssertEqual(snapshot.fixed.map(\.size), oracle.fixed.map(\.size), file: file, line: line)
+                    XCTAssertEqual(snapshot.fixed.map(\.epoch), oracle.fixed.map(\.epoch), file: file, line: line)
+                    XCTAssertEqual(snapshot.pending, oracle.pending, file: file, line: line)
+                    XCTAssertEqual(snapshot.seeking, oracle.seeking, file: file, line: line)
+                    XCTAssertEqual(snapshot.waiting, oracle.waiting, file: file, line: line)
+                    XCTAssertEqual(snapshot.request, oracle.request, file: file, line: line)
+                    XCTAssertEqual(snapshot.lastRequest, oracle.lastRequest, file: file, line: line)
+                    XCTAssertEqual(snapshot.correction?.sequence, oracle.correction?.sequence, file: file, line: line)
+                    XCTAssertEqual(snapshot.correction?.offset, oracle.correction?.offset, file: file, line: line)
+                    XCTAssertEqual(snapshot.correction?.from, oracle.correction?.from, file: file, line: line)
+                    XCTAssertEqual(snapshot.correction?.smooth, oracle.correction?.smooth, file: file, line: line)
+                    XCTAssertEqual(snapshot.rows.count, oracle.rows.count, file: file, line: line)
+                    for (row, expectedRow) in zip(snapshot.rows, oracle.rows) {
+                        XCTAssertEqual(row.view, expectedRow.view, file: file, line: line)
+                        XCTAssertEqual(row.root, expectedRow.root, file: file, line: line)
+                        XCTAssertEqual(row.epoch, expectedRow.epoch, file: file, line: line)
+                        XCTAssertEqual(row.index, expectedRow.index, file: file, line: line)
+                        XCTAssertEqual(row.size, expectedRow.size, file: file, line: line)
+                        XCTAssertEqual(row.measured, expectedRow.measured, file: file, line: line)
+                    }
+                }
+            } else { XCTAssertTrue(NSDictionary(dictionary: a.payload).isEqual(to: expected), file: file, line: line) }
             XCTAssertEqual(a.runs.count, b.runs.count, file: file, line: line)
             for (x, y) in zip(a.runs, b.runs) {
                 XCTAssertEqual(x.id, y.id, file: file, line: line)
@@ -313,13 +348,50 @@ final class BatchDecodeTests: XCTestCase {
         for row in rows {
             _ = try compare("{\"ops\":[\(row)],\"timers\":true,\"timer_due_ms\":123.25,\"clock\":-0.0,\"motion\":true,\"pending\":true}")
             // Move op behind all other keys without a JSON round trip changing
-            // number spellings. This exercises the one-pass reordered path.
+            // number spellings. This exercises the reordered path.
             let comma = try XCTUnwrap(row.firstIndex(of: ","))
             let head = row[row.index(after: row.startIndex)..<comma]
             let tail = row[row.index(after: comma)..<row.index(before: row.endIndex)]
             _ = try compare("{\"ops\":[{\(tail),\(head)}]}")
         }
         XCTAssertEqual(compared, rows.count * 2)
+    }
+
+    func testReorderedCollectionsRestoreParserDepth() throws {
+        for op in [#"{"op":"collections","items":[]}"#,
+                   #"{"items":[],"op":"collections"}"#] {
+            let ops = Array(repeating: op, count: 512).joined(separator: ",")
+            let data = Data("{\"ops\":[\(ops)]}".utf8)
+            let batch = try data.withUnsafeBytes {
+                var reader = BatchReader(bytes: $0.bindMemory(to: UInt8.self))
+                let batch = try reader.batch()
+                try reader.end()
+                XCTAssertEqual(reader.depth, 0)
+                return batch
+            }
+            try compare(data, decoded: batch)
+            XCTAssertNil(batch.error)
+            XCTAssertEqual(batch.ops.count, 512)
+            XCTAssertTrue(batch.ops.allSatisfy { $0.op == .collections && $0.collections?.isEmpty == true })
+        }
+    }
+
+    func testCollectionFieldOrderKeepsTheNestingLimit() throws {
+        for count in [509, 510] {
+            let nested = String(repeating: "[", count: count) + "0" + String(repeating: "]", count: count)
+            for op in ["{\"op\":\"collections\",\"items\":[],\"unknown\":\(nested)}",
+                       "{\"items\":[],\"unknown\":\(nested),\"op\":\"collections\"}"] {
+                let batch = Batch.decode(Data("{\"ops\":[\(op)]}".utf8))
+                if count == 509 {
+                    XCTAssertNil(batch.error)
+                    XCTAssertEqual(batch.ops.count, 1)
+                    XCTAssertEqual(batch.ops.first?.collections?.count, 0)
+                } else {
+                    XCTAssertEqual(batch.error, "unreadable batch")
+                    XCTAssertTrue(batch.ops.isEmpty)
+                }
+            }
+        }
     }
 
     func testStylesThatDifferShareTheValuesTheyRepeat() throws {

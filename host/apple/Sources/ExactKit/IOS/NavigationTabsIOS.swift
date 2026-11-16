@@ -796,6 +796,10 @@ extension NavigationHost {
     /// authored tablist's covers.
     func batchApplied(_ batch: Batch, rowsOnly: Bool) {
         if !rowsOnly || syncOwed { sync(batch) }
+        else if batch.ops.isEmpty {
+            // Page facts can carry no ops after UIKit sized an inactive owner.
+            fitOwner()
+        }
         presenter.modals.inheritFromAncestors()
         followAuthoredTablist()
     }

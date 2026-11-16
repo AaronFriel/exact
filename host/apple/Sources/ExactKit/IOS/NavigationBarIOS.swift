@@ -1083,6 +1083,8 @@ extension NavigationHost {
     /// Keep the primary owner in the root's authored scroller. For a route's
     /// replacement, register it before its first native layout, preserving Back.
     func scrollBackendChanged(_ node: NodeView) {
+        presenter.pageGeometryOwed = true
+        presenter.listRowDependencies = nil
         if node === container {
             fitOwner()
             return

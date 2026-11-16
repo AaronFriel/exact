@@ -5509,7 +5509,13 @@
         "name": "hold"
       },
       {
-        "name": "collections"
+        "name": "collections",
+        "fields": {
+          "items": {
+            "member": "collections",
+            "codec": "collectionSnapshots"
+          }
+        }
       },
       {
         "name": "region"

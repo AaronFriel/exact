@@ -75,7 +75,7 @@ public enum BatchValue: Equatable {
         if case .object(let o) = self { return o["cs"] != nil }
         return false
     }
-    /// Only capability/region/collection adapters still take heterogeneous data.
+    /// Only capability/region adapters still take heterogeneous data.
     package var any: Any {
         switch self {
         case .number(let n): return NSNumber(value: n)

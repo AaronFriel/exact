@@ -60,7 +60,8 @@ package final class Presenter {
             rowCells.sync(changed: touchedAndAbove(geometryApplied))
             geometryApplied = []
             segments.sync()
-            controls.sync()
+            // Traits change the projection, not the kernel's button contents.
+            controls.sync(contents: false)
         }
     }
     /// The `aria-modal` view VoiceOver was last moved into, and the views
@@ -82,6 +83,12 @@ package final class Presenter {
     /// Shared elements in flight, by the arriver's id (LLP 1013.000, `FlightsIOS.swift`).
     var flights: [UInt32: Flight] = [:]
     private(set) var chrome = ChromeIndex()
+    var listRowDependencies: ListRowDependencies?
+    #if DEBUG
+    var listRowDependencyBuilds = 0
+    #endif
+    /// A physical scroll backend changed since the last batch's page pass.
+    var pageGeometryOwed = false
     func propsChanged(_ view: NodeView) {
         chrome.note(view.id, props: view.props)
         ScrollMembership.epoch &+= 1
@@ -333,6 +340,7 @@ package final class Presenter {
     /// A restart: every view goes.
     func reset() {
         resetting = true; defer { resetting = false }
+        listRowDependencies = nil
         resetFragments()
         MainActor.assumeIsolated { HeldState.retire(self) } // before its views leave the map (HeldState.swift)
         WakeLock.hold(self, false) // the new host's first batch says it again
@@ -385,6 +393,7 @@ package final class Presenter {
         transformBindings.removeAll()
         transformGeometry.reset(); nativeGeometry.reset()
         videoVisibility?.reset()
+        pageGeometryOwed = false
     }
 
     /// Size the document to its roots and what overflows one that does not clip (`content`), never smaller
@@ -811,7 +820,7 @@ package final class Presenter {
     /// and makes its correction without the presenter's whole finalization
     /// pass, unless work waits on a batch (a focus, a callback, a scroll).
     private func applySnapshots(_ batch: Batch) -> Bool {
-        guard !applying, batch.error == nil, !batch.controls, !batch.ops.isEmpty, batch.ops.allSatisfy({ $0.op == .collections }),
+        guard !applying, !pageGeometryOwed, batch.error == nil, !batch.controls, !batch.ops.isEmpty, batch.ops.allSatisfy({ $0.op == .collections }),
               waiting.isEmpty, pendingScrolls.isEmpty, pendingFocus == nil else { return false }
         collections.beginBatch(batch)
         collections.endBatch()
@@ -844,6 +853,13 @@ package final class Presenter {
             HostPhases.shared.end(phase)
         }
         collections.beginBatch(batch)
+        let rowsOnly = onlyListRows(batch)
+        var rowFill = rowsOnly && onlyRowFill(batch)
+        #if os(iOS)
+        let statusBarOwed = !chrome.ids("statusBarStyle").isEmpty || !chrome.ids("systemBarsHidden").isEmpty
+        #endif
+        if !rowFill { listRowDependencies = nil }
+        defer { if !rowFill { listRowDependencies = nil } }
         if !applying { flats.begin(batch) }
         pool.begin(batch)
         swipeActions.prepare(batch)
@@ -852,8 +868,9 @@ package final class Presenter {
         modals.prepare(batch)
         navigation.prepare(batch)
         anchorChanges.reset()
+        let capturedScrolls = !rowFill
         let anchorFocus = scrollers.isEmpty ? nil : focusedNode
-        for id in scrollers where !collections.owns(id) { views[id]?.captureScrollPosition(focused: anchorFocus) }
+        if capturedScrolls { for id in scrollers where !collections.owns(id) { views[id]?.captureScrollPosition(focused: anchorFocus) } }
         if let e = batch.error { FileHandle.standardError.write(Data("exact: \(e)\n".utf8)) }
         if let text = session?.text {
             // SVG text shapes with the session's fonts (LLP 1055.000 D11).
@@ -871,10 +888,11 @@ package final class Presenter {
         var moved = false // create, frame or content ops: rows may have come or moved (`HeavyLeaves.batchApplied`)
         defer {
             collections.endBatch()
+            if pageGeometryOwed { rowFill = false }
             // Restore and author offsets after collection inset compensation,
             // before deferred callbacks can replace the captured positions.
-            restoreScrollPositions()
-            if moved { for id in scrollers { views[id]?.resnap() } }
+            finishScrollPositions(restoring: capturedScrolls)
+            if moved { for id in scrollers where !rowFill || collections.owns(id) { views[id]?.resnap() } }
             pool.end()
             PaintOrder.end()
             if outermost {
@@ -894,7 +912,7 @@ package final class Presenter {
                 scrollPump.batchApplied()
                 ApplyProfile.time("pass.leaves") { leaves.batchApplied(moved: moved) }
                 #if os(iOS)
-                resolveStatusBar()
+                if !rowFill || statusBarOwed || !chrome.ids("statusBarStyle").isEmpty || !chrome.ids("systemBarsHidden").isEmpty { resolveStatusBar() }
                 textSelection.batchEnded()
                 #endif
                 if moved { session?.natives.refreshWorldGeometry() }
@@ -909,7 +927,6 @@ package final class Presenter {
         let animating = UIView.inheritedAnimationDuration > 0
         if outermost { placedAnew.removeAll(keepingCapacity: true) } // a flat leaf promoted between batches
         let anewFrom = placedAnew.count
-        let rowsOnly = onlyListRows(batch)
         if batch.controls { controls.facesChanged() }
         #if os(iOS)
         var contextReferencesChanged = batch.ops.contains {
@@ -1052,6 +1069,8 @@ package final class Presenter {
                 views[id]?.applyColumns(op.payload)
             case .table: tableGrid.apply(id, op.payload)
             case .destroy:
+                listRowDependencies?.rows.removeValue(forKey: id)
+                listRowDependencies?.rowOwners.removeValue(forKey: id)
                 views[id]?.holdGone()
                 elements.destroyed(id)
                 stickies.forget(id)
@@ -1141,8 +1160,11 @@ package final class Presenter {
         flats.flush()
         // A view the flush promoted and mounted may have moved its children.
         while !gridMoved.isEmpty { regridMoved(); flats.flush() }
-        fitDocument(); reachPageEdges()
-        paintCanvas()
+        if rowFill, pageGeometryOwed || listRowDependencies?.scrollers != scrollers { rowFill = false }
+        if !rowFill {
+            pageGeometryOwed = false
+            fitDocument(); reachPageEdges(); paintCanvas()
+        }
         let first = root.subviews.first as? NodeView
         let widget = first?.props["interactiveWidget"]
         if widget != interactiveWidget {
@@ -1157,7 +1179,9 @@ package final class Presenter {
         geometryApplied = []
         for id in touchedAndAbove(pressChanged) { views[id]?.endPressCrossFade() }
         swipeActions.sync(changed: changed, reshaped: touchedAndAbove(reshapedIDs)); rowCells.sync(changed: changed)
-        groupedLists?.sync(changed: changed); reachPageEdges() // a list mounted now reaches its bands too
+        groupedLists?.sync(changed: changed)
+        if rowFill, pageGeometryOwed || listRowDependencies?.scrollers != scrollers { rowFill = false }
+        if !rowFill { pageGeometryOwed = false; reachPageEdges() } // a list mounted now reaches its bands too
         if !flights.isEmpty { flightsBatchApplied() }
         #if os(tvOS)
         menuKey.sync()
@@ -1193,6 +1217,7 @@ package final class Presenter {
         // What a node's name, state and focus read: not its box (an autofocus waiting for one is indexed).
         let named = touchedAndAbove(batch.ops.compactMap { [.create, .props, .style, .children, .paragraph, .flow].contains($0.op) ? $0.id : nil })
         // Finish controls and frames before UIKit synchronously lays out the destination.
+        if navigation.syncOwed { rowFill = false; listRowDependencies = nil }
         navigation.batchApplied(batch, rowsOnly: rowsOnly)
         #if os(iOS)
         if #available(iOS 27.1, *) { arrangements.sync() }
@@ -1202,8 +1227,9 @@ package final class Presenter {
             guard let self else { return }
             syncAccessibility(changed: named.union(ariaMoved), disabledRoots: disabledRoots); presentTips()
         }
+        if pageGeometryOwed { rowFill = false }
         #if os(iOS)
-        syncScrollsToTop()
+        if !rowFill { syncScrollsToTop() }
         #endif
     }
 
@@ -1215,6 +1241,8 @@ package final class Presenter {
         #if os(iOS)
         if #available(iOS 27.1, *) { arrangements.remove(id) }
         #endif
+        listRowDependencies?.rows.removeValue(forKey: id)
+        listRowDependencies?.rowOwners.removeValue(forKey: id)
         focusEvents.removed(id)
         session?.canvases.destroy(view: id)
         svg.forget(id)

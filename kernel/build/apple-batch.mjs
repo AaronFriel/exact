@@ -34,6 +34,7 @@ const codecs = {
   stringValue: ['String?', 'nil', 'value().string'],
   orientation: ['OrientationRequest?', 'nil', 'batchOrientation()'],
   sequence: ['(UInt64, UInt64)?', 'nil', 'batchSequence()'],
+  collectionSnapshots: ['[CollectionSnapshot]?', 'nil', 'collectionSnapshots()'],
 };
 const identifier = name => name.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
 const quoted = JSON.stringify;
@@ -235,6 +236,11 @@ export function appleBatchReader(schema) {
   for (const record of records.filter(r => r.fields)) {
     lines.push(`        case .${identifier(record.name)}:`);
     if (!Object.keys(record.fields).length) lines.push('            break');
+    // Streaming snapshots are read before the out-of-order fields fallback.
+    if (Object.values(record.fields).some(field => field.codec === 'collectionSnapshots')) {
+      lines.push('            throw BatchReader.Invalid.wire');
+      continue;
+    }
     for (const [key, field] of Object.entries(record.fields)) {
       const q = quoted(key);
       const reads = {

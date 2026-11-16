@@ -32,12 +32,33 @@ extension BatchReader {
     }
 
     package mutating func batchOp() throws -> BatchOp {
+        let start = offset, startDepth = depth
         try enter(123)
         // Rust writes the discriminator first. JSON object order is not part of
-        // the contract: other writers take the typed-value path below, also in
-        // one pass. Only unconverted adapters bridge their payload to Any.
+        // the contract: a reordered op's discriminator is found before its
+        // fields are read. Only unconverted adapters bridge their payload to Any.
         let first = try string(); try expect(58)
         if first != "op" {
+            let fieldsStart = offset
+            offset = start
+            depth = startDepth
+            var discriminator: String?
+            try object { r, key in
+                if key == "op", discriminator == nil { discriminator = try r.string() }
+                else { try r.skip() }
+            }
+            if discriminator == "collections" {
+                offset = start
+                var op = BatchOp(op: .collections)
+                try object { r, key in
+                    if key == "items" { op.collections = try r.collectionSnapshots() }
+                    else if key == "id" { if !(try r.null()) { op.nodeID = try r.id() } }
+                    else { try r.skip() }
+                }
+                return op
+            }
+            offset = fieldsStart
+            depth = startDepth + 1
             var fields = [first: try value()]
             while !take(125) {
                 try expect(44)

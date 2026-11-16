@@ -680,7 +680,7 @@
       ]
     },
     "treeWalks": {
-      "ceiling": 653,
+      "ceiling": 652,
       "sites": [
         "host/apple/Sources/ExactDrag/MouseHeightDragMac.swift: ancestor = current.superview",
         "host/apple/Sources/ExactDrag/MouseReorderMac.swift: ancestor = current.superview",
@@ -922,14 +922,13 @@
         "host/apple/Sources/ExactKit/IOS/KeyboardAvoidanceIOS.swift: while let view = at, view.superview !== list { at = view.superview }",
         "host/apple/Sources/ExactKit/IOS/KeyboardToolbarIOS.swift: if let node = sv.superview as? NodeView, node.scroll === sv, (node.extras?.keyboardInset ?? 0) != keyboard {",
         "host/apple/Sources/ExactKit/IOS/LayoutHitsIOS.swift: at = view.superview",
+        "host/apple/Sources/ExactKit/IOS/ListRowsIOS.swift: || (views[$0].map(projected) == true && views[$0]?.superview !== views[op.id]?.container)",
         "host/apple/Sources/ExactKit/IOS/ListRowsIOS.swift: for case let child as NodeView in node.container.subviews { gather(child) }",
         "host/apple/Sources/ExactKit/IOS/ListRowsIOS.swift: let route = sequence(first: header.superview, next: { $0?.superview }).lazy.compactMap { $0 as? NodeView }.first",
         "host/apple/Sources/ExactKit/IOS/ListRowsIOS.swift: let route = sequence(first: header.superview, next: { $0?.superview }).lazy.compactMap { $0 as? NodeView }.first",
         "host/apple/Sources/ExactKit/IOS/ListRowsIOS.swift: up = u.superview",
         "host/apple/Sources/ExactKit/IOS/ListRowsIOS.swift: var up = list.superview",
-        "host/apple/Sources/ExactKit/IOS/ListRowsIOS.swift: var up = views[id]?.superview",
         "host/apple/Sources/ExactKit/IOS/ListRowsIOS.swift: while let u = up { if let n = u as? NodeView, readsInside(n) { return false }; up = u.superview }",
-        "host/apple/Sources/ExactKit/IOS/ListRowsIOS.swift: while let u = up { if u === list { result = false; break }; up = u.superview }",
         "host/apple/Sources/ExactKit/IOS/ListRowsIOS.swift: while result, let u = up { if let n = u as? NodeView, readsInside(n) { result = false }; up = u.superview }",
         "host/apple/Sources/ExactKit/IOS/MenuRowsIOS.swift: for case let node as NodeView in (view as? NodeView)?.container.subviews ?? view.subviews {",
         "host/apple/Sources/ExactKit/IOS/MenuRowsIOS.swift: for case let node as NodeView in (view as? NodeView)?.container.subviews ?? view.subviews {",

@@ -147,17 +147,26 @@ final class NavigationHost: NSObject, UINavigationControllerDelegate, UIGestureR
     var tabsHeld = false
     /// The press whose commit a deferred sync still owes (PressHandoffIOS).
     private weak var pendingPress: PressHandoff?
-    /// A sync was deferred (a transition ran, or there was no window yet)
-    /// and is still owed, or UIKit moved a stack itself (its back button, a
-    /// swipe) since the last one: the next batch syncs, whatever it holds.
+    /// A deferred projection, a removed owner or UIKit's disagreement with
+    /// the router still owes a sync, whatever the next batch holds.
     var syncOwed: Bool {
-        pendingSync || tabsHeld || changing || windowless || nativeMoved || !settled
-            || ([primaryNavigation].compactMap { $0 } + presentedNavigations).contains { $0.transitionCoordinator != nil }
+        if pendingSync || tabsHeld || changing || windowless || nativeMove == .ownerRemoved || !settled
+            || primaryNavigation?.transitionCoordinator != nil
+            || presentedNavigations.contains(where: { $0.transitionCoordinator != nil }) { return true }
+        if nativeMove == .transition {
+            guard !syncing, !resyncOwed, tapping == nil, !presenter.modals.inTransition,
+                  !routerStacks.contains(where: routesInFlight), restDifference == nil else { return true }
+            // UIKit finished the projected push or restored a cancelled pop.
+            // Check once per transition, not once per row fill.
+            nativeMove = .none
+        }
+        return false
     }
-    /// No window yet; UIKit moved a stack since the last sync; the last
-    /// sync ran to its end (one that stopped early, waiting for the first
-    /// draw, a transition or a presentation it could not make yet, is owed).
-    private var windowless = false, nativeMoved = false, settled = false
+    /// A removed owner needs restoration even when the remaining stacks
+    /// agree. A transition can finish exactly what was already projected.
+    private enum NativeMove { case none, transition, ownerRemoved }
+    private var nativeMove = NativeMove.none
+    private var windowless = false, settled = false
     /// Syncs asked for, for tests.
     private(set) var syncCalls = 0
     /// The root key last journaled as matching no route, so a refusal is one
@@ -416,6 +425,7 @@ final class NavigationHost: NSObject, UINavigationControllerDelegate, UIGestureR
     }
 
     func sync(_ batch: Batch) {
+        presenter.listRowDependencies = nil
         // Installing or moving a controller can synchronously cause layout.
         // That layout must not start another containment handoff inside this one.
         syncCalls += 1
@@ -426,7 +436,7 @@ final class NavigationHost: NSObject, UINavigationControllerDelegate, UIGestureR
         // With no session (a presenter on its own) nothing is projected or owed.
         if presenter.session == nil { settled = true }
         guard window != nil else { return }
-        nativeMoved = false; settled = false
+        nativeMove = .none; settled = false
         syncing = true
         defer {
             #if os(iOS)
@@ -702,7 +712,7 @@ final class NavigationHost: NSObject, UINavigationControllerDelegate, UIGestureR
         presentedNavigations.removeAll { $0 === nav }
         // A presentation gone (UIKit's own dismissal included): the next
         // batch syncs, whatever it holds, so a route still declared returns.
-        nativeMoved = true
+        nativeMove = .ownerRemoved
         retireStack(nav)
         nav.delegate = nil
         if !preserving {
@@ -1010,7 +1020,7 @@ final class NavigationHost: NSObject, UINavigationControllerDelegate, UIGestureR
     private func completeTransition(_ navigationController: UINavigationController,
                                     swipe: Swipe?, cancelled: Bool) {
         guard navigationController === navigation, let viewController = navigationController.topViewController else { return }
-        nativeMoved = true
+        if nativeMove != .ownerRemoved { nativeMove = .transition }
         stopRevealing()
         // The route a pop took away keeps its block until it leaves the stack (LLP 1123 D2)
         defer { presenter.owners.publish() }

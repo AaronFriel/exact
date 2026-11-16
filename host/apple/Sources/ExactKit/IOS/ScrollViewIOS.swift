@@ -308,20 +308,24 @@ final class PaddedRefreshControl: UIRefreshControl {
 #endif
 
 extension Presenter {
-    func restoreScrollPositions() {
-        let ids = scrollers.union(pendingScrolls).union(materialNodes)
-        // What the batch's `scrollIntoView`s will move, and the scrollers it writes `scrollTop` to.
-        let names = Set(session?.pendingElementScrolls ?? [])
-        let authored = (names.isEmpty ? [] : views.values.filter { $0.props["id"].map(names.contains) == true })
-            + ids.compactMap { views[$0] }.filter { $0.pendingScrollTop != nil || $0.pendingScrollLeft != nil }
-        for id in ids {
+    func finishScrollPositions(restoring: Bool) {
+        let ids = restoring ? scrollers.union(pendingScrolls) : pendingScrolls
+        if restoring {
+            // What the batch's `scrollIntoView`s will move, and the scrollers it writes `scrollTop` to.
+            let names = Set(session?.pendingElementScrolls ?? [])
+            let authored = (names.isEmpty ? [] : views.values.filter { $0.props["id"].map(names.contains) == true })
+                + ids.compactMap { views[$0] }.filter { $0.pendingScrollTop != nil || $0.pendingScrollLeft != nil }
+            for id in ids {
+                guard let node = views[id] else { continue }
+                // Navigation can resize a native port after its row projection.
+                // Settle that layout before restoring or authoring an offset.
+                if node.groupedOwner { node.scrollView?.layoutIfNeeded() }
+                if !collections.owns(node.id) { node.restoreScrollPosition(authored: authored.contains { $0.isDescendant(of: node) }) }
+            }
+        }
+        for id in ids { views[id]?.settleZoom() }
+        for id in materialNodes {
             guard let node = views[id] else { continue }
-            // Navigation can resize a native port after its row projection.
-            // Settle that layout before restoring or authoring an offset.
-            if node.groupedOwner { node.scrollView?.layoutIfNeeded() }
-            if !collections.owns(node.id) { node.restoreScrollPosition(authored: authored.contains { $0.isDescendant(of: node) }) }
-            // The zoom before the batch's offsets, which then land in its extent (LLP 1057.001.000 D2).
-            node.settleZoom()
             if let material = node.materialView { node.sendSubviewToBack(node.glassSlot ?? material) }
         }
         // Every capture is restored before any authored offset lands: a
@@ -331,6 +335,7 @@ extension Presenter {
         // would read as having been at its end.
         for id in ids {
             guard let node = views[id] else { continue }
+            if !restoring, node.groupedOwner { node.scrollView?.layoutIfNeeded() }
             if node.pendingScrollTop != nil || node.pendingScrollLeft != nil { collections.userIntent(node.id) }
             node.applyPendingScroll()
         }

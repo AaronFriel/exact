@@ -1307,6 +1307,7 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
         }
         if !scrolls || groupedOwner, let sv = scroll {
             if groupedOwner { retainScrollPosition(from: sv) }
+            dropZoom()
             // Neither axis scrolls any more: the children come back out.
             GlassGroups.moving(in: self) {
                 for child in sv.subviews where child is NodeView { addSubview(child) }

@@ -340,10 +340,10 @@ final class ConfirmationAlertIOSTests: XCTestCase {
         let (p, controller, _) = confirmation(label: "Keep?", texts: ["A message."], actions: ["Keep"], cancel: true, bareLead: ["text_color": tint, "written": ["text_color"]])
         defer {
             dismiss(p, controller)
-            _ = ThemeRoles.apply(wireBatch([["op": "roles", "roles": [String: Any]()]]), root: p.root)
+            _ = ThemeRoles.apply(wireBatch([["op": "roles", "roles": [String: Any]()]]).ops[0], root: p.root)
             p.applyThemeTint()
         }
-        _ = ThemeRoles.apply(wireBatch([["op": "roles", "roles": ["AccentColor": [0, 200, 0, 255]]]]), root: p.root)
+        _ = ThemeRoles.apply(wireBatch([["op": "roles", "roles": ["AccentColor": [0, 200, 0, 255]]]]).ops[0], root: p.root)
         p.applyThemeTint()
         XCTAssertEqual(p.menus.activate(try XCTUnwrap(p.views[1])), true)
         let alert = try XCTUnwrap(controller.presentedViewController as? UIAlertController)

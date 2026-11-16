@@ -460,12 +460,11 @@ public final class ExactSession {
         #endif
         return out
     }
-    private let published = NSLock()
     /// What the owner committed without main waiting.
     enum Published { case fill(UInt32), tick, advance, canvas, notice, reply }
     /// Batches the owner committed without main waiting, in its order: a
     /// slice's (with its list), a frame's tick's and a canvas draw's.
-    private var publishedQueue: [(kind: Published, completion: RuntimeCompletion)] = []
+    private let published = PublishedBatches()
     /// A frame's tick is on the owner (LLP 1072 §7.1): the next one waits.
     var tickInFlight = false
     /// A timer advance is on the owner (LLP 1072.000): the next one waits.
@@ -661,15 +660,18 @@ public final class ExactSession {
 
     /// On the owner: queue a batch for main, in the owner's order.
     func publish(_ kind: Published, _ completion: RuntimeCompletion) {
-        published.lock()
-        publishedQueue.append((kind, completion))
-        published.unlock()
-        DispatchQueue.main.async { [weak self] in self?.landFill() }
+        guard published.append((kind, completion)) else { return }
+        DispatchQueue.main.async { [weak self] in self?.landPublished() }
+    }
+    private func landPublished() {
+        if landing { published.yieldDrain(); return }
+        landFill()
+        if published.finishDrain() { DispatchQueue.main.async { [weak self] in self?.landPublished() } }
     }
 
     /// A published batch waits to land: any, or one that `which` picks.
     private func hasPublished(_ which: (Batch) -> Bool = { _ in true }) -> Bool {
-        published.withLock { publishedQueue.contains { which($0.completion.batch) } }
+        published.contains(which)
     }
 
     /// Apply the slice the owner published, then what it owes and what
@@ -683,10 +685,7 @@ public final class ExactSession {
         // Sizes measured as they applied are reported as it ends, whether its last batch applied or was skipped (`reportMeasured`).
         defer { landing = false; if !applying { reportMeasured() }; workEnded(); if !holdingReports { advanceIfDue() } }
         while true {
-            published.lock()
-            let next = publishedQueue.isEmpty ? nil : publishedQueue.removeFirst()
-            published.unlock()
-            guard let next else { return }
+            guard let next = published.next() else { return }
             let completion = next.completion
             let began = CACurrentMediaTime()
             var submitted = 0.0
@@ -1129,6 +1128,7 @@ public final class ExactSession {
     }
 
     #if DEBUG
+    var publishedDrainCountForTests: Int { published.scheduledDrains }
     var onLandForTests: ((Published, Batch) -> Void)?
     /// Tests: the reply pumps this session has asked for (`pumpReplies`).
     var replyPumpsForTests = 0
@@ -1173,9 +1173,10 @@ public final class ExactSession {
         // Each batch says what its turn left owed; batches apply in the owner's order, so the last one applied is the runner's now.
         canvasOwed = batch.canvasOwed
         if canvasOwed { askCanvasDraw() }
-        for op in batch.ops where op.op == .router { routerOp = op.payload; presenter.armFragment(op.payload["activation"]); NavigationMarks.shared.routerChanged(self, payload: op.payload) } // a scroll to its fragment, which the runner's `scrollToFragment` makes (LLP 1153 D5)
+        let outputs = SessionBatchOps(batch.ops)
+        for op in outputs.routers { routerOp = op.payload; presenter.armFragment(op.payload["activation"]); NavigationMarks.shared.routerChanged(self, payload: op.payload) } // a scroll to its fragment, which the runner's `scrollToFragment` makes (LLP 1153 D5)
         // @ref LLP 1048.003 D1 — the head's title, for the app that owns the chrome.
-        for op in batch.ops where op.op == .title {
+        for op in outputs.titles {
             presenter.headTitle(op.title)
             #if os(macOS)
             presenter.headEdited(op.edited ?? false)
@@ -1184,25 +1185,25 @@ public final class ExactSession {
         #if os(macOS)
         regions.prepare(batch)
         #endif
-        for op in batch.ops where op.op == .activity {
+        for op in outputs.activities {
             if activityOutput == nil { activityOutput = ActivityOutput(self) }
             activityOutput?.enqueue(op.payload)
         }
-        for op in batch.ops where op.op == .surfaceWork { pendingSurfaceWork.append((op.payload, generation)) }
-        if !ExactEnv.agentMode { for op in batch.ops where op.op == .sound || op.op == .midi { if op.op == .sound { sound.apply(op.payload) } else { midi.apply(op.payload) } } } // LLP 1096 D8, LLP 1125 D7: the voice table's and the MIDI queue's ops, never under the agent's clock
+        for op in outputs.surfaces { pendingSurfaceWork.append((op.payload, generation)) }
+        if !ExactEnv.agentMode { for op in outputs.audio { if op.op == .sound { sound.apply(op.payload) } else { midi.apply(op.payload) } } } // LLP 1096 D8, LLP 1125 D7: the voice table's and the MIDI queue's ops, never under the agent's clock
         // Opened once the batch is applied, off this session's window (LLP 1069.006 D3), unless its generation has ended.
-        for op in batch.ops where op.op == .auth || op.op == .presence {
+        for op in outputs.authentication {
             let (payload, auth, issued) = (op.payload, op.op == .auth, SessionLease(self))
             DispatchQueue.main.async { if let session = issued.session { if auth { session.authOp(payload) } else { session.presenceOp(payload, issued: issued) } } }
         }
         // Each presenter takes its boot's table, a second one with the same too.
-        ThemeRoles.apply(batch, root: presenter.root); if batch.ops.contains(where: { $0.op == .roles }) { presenter.applyThemeTint() }
+        ThemeRoles.apply(outputs.roles, root: presenter.root); if outputs.roles != nil { presenter.applyThemeTint() }
         let orientationChanged = presenter.orientationChangesScreen(batch)
         ThemeRoles.within(presenter.root) { presenter.apply(batch) }; Formas.moved(self) // bindings' places (LLP 1121 D12)
         drainCanvasCaptures(batch)
         if !batch.canvasImages.isEmpty { presenter.canvas2d.load(batch.canvasImages) }
         AnimatedRasters.shared.poke()
-        for op in batch.ops where op.op == .reorder { presenter.reorder?.observe(ReorderState(op.payload)); presenter.reorderGroup?.observe(ReorderGroupState(op.payload)) }
+        for op in outputs.reorders { presenter.reorder?.observe(ReorderState(op.payload)); presenter.reorderGroup?.observe(ReorderGroupState(op.payload)) }
         presenter.reorder?.raiseLifted()
         frames.motion = batch.motion
         frames.spatial = batch.spatial
