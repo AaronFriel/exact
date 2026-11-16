@@ -367,3 +367,19 @@ test('the iCloud key-value store signs the application identifier as its value, 
   expect(macProfile(store, [KEY_VALUE_STORE], { installed: [chosen], named: null, udid: 'THIS-MAC', team: null })).toBe(chosen);
   expect(macProfileEntitlements(store, chosen, macProfileNeeds(compat), compat)[KEY_VALUE_STORE]).toBe('PREFIX0000.com.example.notes');
 });
+
+test('Sensitive Content Analysis signs its array on iOS and under a Mac profile, and a Mac release without one is refused (expo/exact#708)', async () => {
+  const { entitlements } = await import('./build.mjs');
+  const { macProfileEntitlements } = await import('./presence.mjs');
+  const { PROFILE_KEYS } = await import('./assets.mjs');
+  const key = 'com.apple.developer.sensitivecontentanalysis.client', value = { [key]: ['analysis'] };
+  const analyzer = { id: 'com.example.safe', manifest: { host: { ios: {} } } };
+  const signed = entitlements(analyzer, null, true, { entitlements: [key], entitlementValues: value }, { simulator: true });
+  expect(signed.replace(/\s+/g, '')).toContain(`<key>${key}</key><array><string>analysis</string></array>`);
+  const compat = { ...bake('device.sensitive-content-analysis', [key]), reach: { profileEntitlements: [key], entitlementValues: value } }, said = [];
+  expect(macProvisioning(analyzer, compat, { find: none, log: (l) => said.push(l) })).toBeNull();
+  expect(said).toEqual([expect.stringMatching(/^device\.sensitive-content-analysis: this build signs no com\.apple\.developer\.sensitivecontentanalysis\.client, since .*: SCSensitivityAnalyzer reports nothing as sensitive\.$/)]);
+  expect(() => macProvisioning(analyzer, compat, { release: true, find: none })).toThrow(/^grant-needs-profile: device\.sensitive-content-analysis: /);
+  expect(macProfileEntitlements(analyzer, { prefix: 'P', team: 'T', dev: true }, macProfileNeeds(compat), compat)[key]).toEqual(['analysis']);
+  expect(PROFILE_KEYS).toContain(key);
+});

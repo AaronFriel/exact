@@ -1,7 +1,7 @@
 // What a Mac build signs that only a provisioning profile authorizes (Apple
 // TN3125; LLP 1133.010 D7): the device rows' Mac entitlements (push, App
 // Attest, the Declared Age Range, Group Activities, the iCloud key-value
-// store), the keychain group a locked secret is kept
+// store, Sensitive Content Analysis), the keychain group a locked secret is kept
 // in (a Mac keeps one only in the data-protection keychain, whose access
 // groups the signature names, TN3137), a passkey's associated domains, and
 // Sign in with Apple's and Apple Pay's entitlements (LLP 1030.005 §6 piece 4).
@@ -29,7 +29,8 @@ export const KEY_VALUE_STORE = 'com.apple.developer.ubiquity-kvstore-identifier'
 /** Each device row's Mac profile entitlement (`reach.profileEntitlements`, runner/src/device.rs): its line, what the
  * app reports while it is not signed, and whether a release without it is refused. A Mac release without push ships,
  * reporting it unavailable, as Android and the web do (LLP 1133.004 §9 P7), and so does one without SharePlay, whose
- * package is not exact2's to name (LLP 1133.001.000 D3); App Attest and the age range are refused (LLP 1133.028 D17). */
+ * package is not exact2's to name (LLP 1133.001.000 D3); App Attest and the age range are refused (LLP 1133.028 D17),
+ * as are the iCloud key-value store and Sensitive Content Analysis, which fail without saying so. */
 const ROW_EFFECTS = {
   'com.apple.developer.aps-environment': ['device.push', 'pushPermissionState().available is false and subscribePush fails NotSupportedError', false],
   'com.apple.developer.devicecheck.appattest-environment': ['device.attestation', 'attestationStatus().available is false and attest fails NotSupportedError', true],
@@ -37,6 +38,8 @@ const ROW_EFFECTS = {
   'com.apple.developer.group-session': ['device.shareplay', 'SharePlay is unavailable to the app', false],
   // Unsigned, the store keeps values on this Mac without saying so, so a release that cannot sign it is refused.
   [KEY_VALUE_STORE]: ['device.icloud-kv', 'NSUbiquitousKeyValueStore keeps its values on this Mac and syncs none', true],
+  // Unsigned, the analyzer finds nothing sensitive (Apple, "com.apple.developer.sensitivecontentanalysis.client").
+  'com.apple.developer.sensitivecontentanalysis.client': ['device.sensitive-content-analysis', 'SCSensitivityAnalyzer reports nothing as sensitive', true],
 };
 
 /** Whether a build signs device grant `line` (`device.<row>`): the bake's ceiling grants it, and on the Mac
@@ -116,7 +119,8 @@ export function macProfile(app, required, { method = 'development', installed = 
 }
 
 /** The entitlements `profile` signs `app` with for `needs`: its application identifier and team, each row's (an
- * environment as the profile signs it, LLP 1133.028 D15 item 1), the app's own keychain group, the bake's
+ * environment as the profile signs it, LLP 1133.028 D15 item 1; a value the bake gives, `reach.entitlementValues`;
+ * otherwise true), the app's own keychain group, the bake's
  * associated domains, Sign in with Apple's `Default` and the bake's merchant IDs. */
 export function macProfileEntitlements(app, profile, needs, compat) {
   const out = { 'com.apple.application-identifier': `${profile.prefix}.${app.id}`, 'com.apple.developer.team-identifier': profile.team };
@@ -126,7 +130,7 @@ export function macProfileEntitlements(app, profile, needs, compat) {
     else if (entitlement === SIGN_IN) out[SIGN_IN] = ['Default'];
     else if (entitlement === PAY) out[PAY] = compat?.reach?.payments?.merchantIds ?? [];
     else if (entitlement === KEY_VALUE_STORE) out[KEY_VALUE_STORE] = out['com.apple.application-identifier'];
-    else out[entitlement] = entitlement.endsWith('-environment') ? signedEnvironment(profile.dev) : true;
+    else out[entitlement] = compat?.reach?.entitlementValues?.[entitlement] ?? (entitlement.endsWith('-environment') ? signedEnvironment(profile.dev) : true);
   }
   return out;
 }

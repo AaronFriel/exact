@@ -3388,6 +3388,13 @@ identifier (`<team prefix>.<bundle id>`, `SIMULATORX.<bundle id>` on a simulator
 tvOS and, under a profile that allows it, on the Mac. Its App Clip and extensions sign none. A
 device build needs a profile with the iCloud capability; a Mac release without one is refused,
 since the store would keep its values on that Mac without saying so.
+`device.sensitive-content-analysis`, for an app module that uses `SCSensitivityAnalyzer`, names
+no purpose (the framework has no usage key; whether it analyses is the person's own setting,
+`analysisPolicy`) and signs `com.apple.developer.sensitivecontentanalysis.client` as
+`["analysis"]` on iOS and, under a profile that allows it, on the Mac (macOS 14 and later); not
+on tvOS, and nothing on Android, Windows, Linux or the web. A device build needs a profile with
+the Sensitive Content Analysis capability; a Mac release without one is refused, since the
+analyzer would report nothing as sensitive.
 
 **Host events.** A call the system makes on a delegate, held by ExactKit until the package
 that takes it drains it, even when it came before the package's module loaded. The list is

@@ -65,9 +65,10 @@ pub struct Device {
     /// iOS signing entitlements the device needs beside its usage strings
     /// (LLP 1069.008.000 D2): HealthKit authorizes nothing without its own.
     pub ios_entitlements: &'static [&'static str],
-    /// The value of each of `ios_entitlements` that is no boolean, by name:
-    /// NFC's reader-session formats are an array (LLP 1133.035 D16 item 2).
-    pub ios_entitlement_values: &'static [(&'static str, &'static [&'static str])],
+    /// The value of each of `ios_entitlements` and `macos_profile` that is no
+    /// boolean, by name: NFC's reader-session formats are an array (LLP
+    /// 1133.035 D16 item 2).
+    pub entitlement_values: &'static [(&'static str, &'static [&'static str])],
     /// A usage key written with this row's text when no granted row writes it
     /// (LLP 1069.008.000 D1): App Store Connect wants both HealthKit keys
     /// beside the entitlement, and iOS shows only the prompt an app asks for.
@@ -120,7 +121,7 @@ pub(crate) const ROW: Device = Device {
     web: None,
     policy: &[],
     ios_entitlements: &[],
-    ios_entitlement_values: &[],
+    entitlement_values: &[],
     companion: None,
     tvos: true,
     keeps_no_answers: false,
@@ -596,6 +597,26 @@ pub const DEVICES: &[Device] = &[
         macos_profile: &["com.apple.developer.ubiquity-kvstore-identifier"],
         ..ROW
     },
+    // Sensitive Content Analysis, for an app's own module that calls
+    // `SCSensitivityAnalyzer` (expo/exact#708): nothing is asked and the
+    // framework has no usage key. The analyzer works only in an app signed
+    // with the client entitlement, an array holding `analysis` (Apple,
+    // "com.apple.developer.sensitivecontentanalysis.client"); whether it
+    // analyses is the person's own setting (`analysisPolicy`). iOS 17, and
+    // macOS 14 under a profile that authorizes it; not on tvOS.
+    Device {
+        name: "sensitive-content-analysis",
+        sandbox: Some(Sandbox::Profile),
+        purpose: false,
+        ios_entitlements: &["com.apple.developer.sensitivecontentanalysis.client"],
+        macos_profile: &["com.apple.developer.sensitivecontentanalysis.client"],
+        entitlement_values: &[(
+            "com.apple.developer.sensitivecontentanalysis.client",
+            &["analysis"],
+        )],
+        tvos: false,
+        ..ROW
+    },
     // App Tracking Transparency (D13): iOS and tvOS alone; Apple lists the
     // key for no Mac.
     Device {
@@ -636,7 +657,7 @@ pub const DEVICES: &[Device] = &[
         ios: &["NFCReaderUsageDescription"],
         android: &["android.permission.NFC"],
         ios_entitlements: &["com.apple.developer.nfc.readersession.formats"],
-        ios_entitlement_values: &[("com.apple.developer.nfc.readersession.formats", &["TAG"])],
+        entitlement_values: &[("com.apple.developer.nfc.readersession.formats", &["TAG"])],
         tvos: false,
         ..ROW
     },
@@ -961,7 +982,7 @@ mod tests {
         let row = rows[0].device;
         assert!(rows[0].purpose.is_empty());
         assert_eq!(row.ios_entitlements, ["com.apple.developer.group-session"]);
-        assert!(row.ios_entitlement_values.is_empty(), "a Boolean");
+        assert!(row.entitlement_values.is_empty(), "a Boolean");
         assert_eq!(row.macos_profile, ["com.apple.developer.group-session"]);
         assert!(!row.tvos && row.ios.is_empty() && row.macos.is_empty() && row.web.is_none());
         let errors = device_grants("device.shareplay purpose.play").unwrap_err();
@@ -977,10 +998,28 @@ mod tests {
         let key = "com.apple.developer.ubiquity-kvstore-identifier";
         assert!(rows[0].purpose.is_empty());
         assert_eq!(row.ios_entitlements, [key]);
-        assert!(row.ios_entitlement_values.is_empty(), "derived at signing");
+        assert!(row.entitlement_values.is_empty(), "derived at signing");
         assert_eq!(row.macos_profile, [key]);
         assert!(row.tvos && row.ios.is_empty() && row.android.is_empty() && row.web.is_none());
         let errors = device_grants("device.icloud-kv purpose.sync").unwrap_err();
+        assert!(errors[0].contains("names no purpose"), "{errors:?}");
+    }
+
+    /// expo/exact#708: Sensitive Content Analysis names no purpose and signs
+    /// its client entitlement, valued `["analysis"]`, on iOS and under a Mac
+    /// profile; not on tvOS.
+    #[test]
+    fn sensitive_content_analysis_signs_the_client_entitlement() {
+        let rows = device_grants("device.sensitive-content-analysis").unwrap();
+        let row = rows[0].device;
+        let key = "com.apple.developer.sensitivecontentanalysis.client";
+        assert!(rows[0].purpose.is_empty());
+        assert_eq!(row.ios_entitlements, [key]);
+        assert_eq!(row.macos_profile, [key]);
+        assert_eq!(row.entitlement_values, [(key, &["analysis"][..])]);
+        assert!(!row.tvos && row.ios.is_empty() && row.macos.is_empty());
+        assert!(row.android.is_empty() && row.web.is_none());
+        let errors = device_grants("device.sensitive-content-analysis purpose.nudity").unwrap_err();
         assert!(errors[0].contains("names no purpose"), "{errors:?}");
     }
 
