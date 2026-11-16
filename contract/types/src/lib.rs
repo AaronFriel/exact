@@ -786,7 +786,7 @@ fn infer_unbounded(e: &Expr, scope: &Scope, shapes: &Shapes) -> Result<Ty, TypeE
         Expr::NamedArg(_, _, span) => {
             return err(
                 "type-named-argument",
-                "named arguments go to a component use, a shape's call (`Row(title=…)`), `empty(…)`, `t(…)`, a canvas `surface=` binding and `share`, `scrollIntoView`; another call's arguments are positional",
+                "named arguments go to a component use, a shape's call (`Row(title=…)`), `empty(…)`, `t(…)`, a canvas `surface=` binding and `share`, `scrollIntoView`, `saveFile` and the file pickers' `startIn=`; another call's arguments are positional",
                 *span,
             )
         }
