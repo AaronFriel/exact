@@ -1300,13 +1300,17 @@ fn first_frame<D: DataSource>(
         "bake-transport-field",
     )?;
     surface::shape(plan)?;
-    let mut runner = Runner::boot(
+    // The bake answers `presented` false: no picture of it was presented.
+    let was = exact_runner::page::set_awaits_present(true);
+    let runner = Runner::boot(
         plan.clone(),
         data,
         Kernel::with_monospace(),
         exact_runner::Viewport::sized(LINT_VIEWPORT.0 as f64, LINT_VIEWPORT.1 as f64),
         "/",
-    )?;
+    );
+    exact_runner::page::set_awaits_present(was);
+    let mut runner = runner?;
     // A binding that traps on the baked answers fails the build, where the
     // runner would unset its row and go on (LLP 1017.003 D3).
     if let Some(line) = runner.journal().find(|l| l.contains(" trapped Trap(")) {

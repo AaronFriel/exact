@@ -67,7 +67,7 @@ pub use easing::{Easing, EasingError, LinearStop, StepPosition};
 pub use engine::{
     AnimationPlay, Change, Engine, EngineError, EngineLinks, HoldEnd, HoldStart, HoldToken,
     NamedTimeline, PlayedCurve, PlayedTransition, Presentation, SpringDescriptor, SpringFrames,
-    TransformHold, TransitionEnds,
+    TransformHold, TransitionEnds, HOLD_DEADLINE,
 };
 pub use filter::{FilterKind, FilterStep, FilterValue};
 pub use parse::ParseError;

@@ -60,7 +60,7 @@ impl<D: DataSource> Host<D> {
         }
         let started = self
             .engine
-            .present_frame(now / 1000.0)
+            .present_frame(now / 1000.0, now / 1000.0)
             .expect("finite frame clock");
         self.reader_started(&started);
         self.present()

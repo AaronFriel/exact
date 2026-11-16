@@ -541,16 +541,14 @@ pub struct Runner<D: DataSource> {
     /// The agent's preferred answers of native modules' sources (LLP 1124 D7).
     extensions: modules::Extensions,
     poisoned: bool,
-    /// Evaluate every site on every update (the incremental update's
-    /// reference; `set_full_evaluation`).
+    /// Evaluate every site on every update (the incremental update's reference; `set_full_evaluation`).
     full: bool,
     /// Row slots actions wrote, for the next update.
     row_writes: crate::instance::RowWrites,
     /// Journal lines an update produced, written once its batch applies.
     notes: Vec<String>,
-    /// This commit's work outside the tree: rows the event's lookup
-    /// compared, derives settled by evaluation, and the store's copied
-    /// bytes when it began.
+    /// This commit's work outside the tree: rows the event's lookup compared, derives settled
+    /// by evaluation, and the store's copied bytes when it began.
     lookup_rows: std::cell::Cell<usize>,
     derives_evaluated: usize,
     copied_at_checkpoint: usize,
@@ -567,7 +565,8 @@ pub struct Runner<D: DataSource> {
     viewport_geometry: crate::viewport::Geometry,
     // @ref LLP 1069.000 D2 — visibility, connectivity, the share sheet.
     page: crate::page::Page,
-    window_name: String, // the page's `name` (LLP 1030.004 D2)
+    presented: crate::page::Presented, // `exactPage().presented` (LLP 1069.000 D2)
+    window_name: String,               // the page's `name` (LLP 1030.004 D2)
     // @ref LLP 1027.000.000 — the date, once the host says it.
     time: crate::time::WallTime,
     live_times: live_time::LiveTimes,
@@ -963,6 +962,7 @@ impl<D: DataSource> Runner<D> {
             viewport,
             viewport_geometry,
             page: Default::default(),
+            presented: crate::page::Presented::at_boot(),
             time: crate::time::launch_time(),
             live_times: Default::default(),
             text_axes: Default::default(),

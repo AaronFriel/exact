@@ -260,7 +260,7 @@ impl Engine {
                 reversing_adjusted_start: adjusted,
             },
         );
-        curve.pending = self.start_on_frame.then_some(now);
+        curve.pending = self.holds().then_some(now);
         if curve.pending.is_some() {
             self.pending.insert(key);
         }

@@ -135,7 +135,7 @@ impl<D: DataSource> Host<D> {
         let Some(frame) = self.presence.frame else {
             return;
         };
-        match self.engine.present_frame(frame) {
+        match self.engine.present_frame(frame, frame) {
             Ok(started) => self.lower_started(&started),
             Err(e) => debug_assert!(false, "a frame instant is finite: {e:?}"),
         }

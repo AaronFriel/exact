@@ -25,6 +25,7 @@ mod clock;
 mod first_frame;
 mod hold;
 mod links;
+pub use first_frame::HOLD_DEADLINE;
 pub use links::EngineLinks;
 mod path;
 mod played;
@@ -276,6 +277,11 @@ pub struct Engine {
     // Curves an author's commit begins wait for the first presented frame
     // (LLP 1003.001): a host whose display drives the clock turns this on.
     start_on_frame: bool,
+    // Nothing will present a frame (the page is hidden or frozen, no surface):
+    // curves start at their commit and nothing is held (LLP 1003.001 D9).
+    unpresentable: bool,
+    // The `carried` of the latest present applied: an earlier one is stale.
+    carried: f64,
     // Keys whose running curve may be pending, for the frame that starts them.
     pending: BTreeSet<(u64, Property)>,
     // Missing means `all 0s`; an empty list is explicit `none`.
@@ -539,7 +545,7 @@ impl Engine {
         }
         let key = (change.node, change.property);
         let now = self.sample_time();
-        let pend = self.start_on_frame.then_some(now);
+        let pend = self.holds().then_some(now);
         // Layout moves only under `-exact-layout-transition`; a spring on a
         // property no spring drives as physics is its curve from rest (LLP
         // 1062 D3).

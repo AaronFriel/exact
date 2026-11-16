@@ -428,7 +428,7 @@ impl Engine {
         // (LLP 1003.001 D6).
         let fling = velocity != Value::ZERO;
         let at = now_s.max(self.shown);
-        let pend = (self.start_on_frame && !fling).then_some(at);
+        let pend = (self.start_on_frame && !self.unpresentable && !fling).then_some(at);
         let mut running = declaration.map(|declaration| {
             let start = if pend.is_some() { at } else { now_s };
             let mut curve = Running::start(
