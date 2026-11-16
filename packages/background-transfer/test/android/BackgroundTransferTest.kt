@@ -6,6 +6,8 @@ import android.os.Looper
 import dev.exact.canvas.ExtensionContext
 import dev.exact.canvas.Extensions
 import dev.exact.canvas.Native
+import exact.app.ExactExtensions
+import exact.backgroundtransfer.Lifecycle.Conditions
 import exact.backgroundtransfer.Lifecycle.Job
 import exact.backgroundtransfer.Lifecycle.JobStarted
 import exact.backgroundtransfer.Lifecycle.JobStopped
@@ -50,11 +52,14 @@ class BackgroundTransferTest {
             var linked = true
             val wakes = mutableListOf<JSONObject>()
             val expired = mutableListOf<String>()
+            /** What the host answered the runner, by request. */
+            val answers = HashMap<Int, String?>()
             @JvmStatic @Implementation fun trust(context: Context) {}
             @JvmStatic @Implementation fun __staticInitializer__() {}
             @JvmStatic @Implementation fun underAgent(name: String) = agent
             @JvmStatic @Implementation fun scratchStorage(): Boolean = if (linked) scratch else throw UnsatisfiedLinkError("scratchStorage")
             @JvmStatic @Implementation fun appRoot(index: Int) = File(root, listOf("data", "cache", "tmp")[index]).path
+            @JvmStatic @Implementation fun answer(id: Int, answer: String?) { answers[id] = answer }
             @JvmStatic @Implementation fun changed(topic: String) {
                 if (topic.startsWith("exact-wake:")) wakes += JSONObject(topic.removePrefix("exact-wake:"))
                 if (topic.startsWith("exact-wake-expired:")) expired += JSONObject(topic.removePrefix("exact-wake-expired:")).getString("id")
@@ -79,7 +84,12 @@ class BackgroundTransferTest {
     private lateinit var transfers: Transfers
     private lateinit var context: ExtensionContext
     private var module: BackgroundTransferModule? = null
+    private var requests = 0
     private val platform = FakePlatform()
+    private companion object {
+        const val NAME = "background-transfer"
+        const val AUTHORITY = "net.fetch https://example.test\nfs.write app:/data"
+    }
     private val main get() = shadowOf(Looper.getMainLooper())
     private val app: Context get() = RuntimeEnvironment.getApplication()
 
@@ -91,6 +101,7 @@ class BackgroundTransferTest {
         Session.linked = true
         Session.wakes.clear()
         Session.expired.clear()
+        Session.answers.clear()
         listOf("data", "cache", "tmp").forEach { File(base, it).mkdirs() }
         transport = FakeTransport(base)
         process()
@@ -107,18 +118,42 @@ class BackgroundTransferTest {
         store = Store(File(base, "private"))
         transfers = Transfers(store, transport::exchange, platform, Sessions, Fixture.inline, Fixture.inline { transfers }, limits)
     }
-    /** The session starts, with an activity that shows it when [visible]. */
+    /**
+     * The session starts, with an activity that shows it when [visible]. The host makes the module from the app's
+     * roster at its first frame, as the interface's `"start": "load"` asks.
+     */
     private fun open(visible: Boolean = true) {
         if (visible) Extensions.started() else Extensions.stopped(false)
-        context = ExtensionContext(app, "background-transfer")
-        context.authority = "net.fetch https://example.test\nfs.write app:/data"
-        module = BackgroundTransferModule(context, { transfers }, transport::exchange, Executor { it.run() })
+        ExactExtensions.process(mapOf(NAME to { made ->
+            context = made
+            BackgroundTransferModule(made, { transfers }, transport::exchange, Executor { it.run() }).also { module = it }
+        }), atLoad = listOf(NAME))
+        Extensions.bind(app)
+        Extensions.firstFrame()
+        context.authority = AUTHORITY
         main.idle()
     }
     private fun close() {
         module?.destroy {}
         module = null
+        ExactExtensions.process()
         main.idle()
+    }
+    /** A request of the runner's, through the host's seam ([Extensions.call]); what the host answered it. */
+    private fun host(body: JSONObject): String? {
+        val id = ++requests
+        Extensions.call(id, body.put("extension", NAME).toString())
+        main.idle()
+        return Session.answers.remove(id)
+    }
+    /**
+     * A start as the runner forwards it to the host: marked [activated] when it comes inside a person's activation
+     * window, and unmarked for a timer's or a resource's call and for one that comes after the window.
+     */
+    private fun forwarded(id: String, activated: Boolean): JSONObject {
+        val args = named(id).put("requests", JSONArray().put(JSONObject().put("url", "https://example.test/$id")))
+        val body = JSONObject().put("send", "backgroundFetch").put("args", args).put("authority", AUTHORITY)
+        return JSONObject(host(if (activated) body.put("userActivation", true) else body)!!)
     }
     private fun call(name: String, args: JSONObject = JSONObject()): JSONObject {
         var answer: JSONObject? = null
@@ -134,7 +169,9 @@ class BackgroundTransferTest {
     private fun key(id: String = "visitor"): Key = transfers.namespaces().firstNotNullOf { transfers.find(it, id) }
     private fun record(key: Key) = store.durable().records[key]!!
     private fun run(key: Key, id: Int) { transfers.feed(JobStarted(key, Run(id, Job.Work), transfers.conditions)); main.idle() }
-    private fun end(wake: JSONObject, outcome: String) { context.ended.remove(wake.getString("id"))!!(outcome); main.idle() }
+    /** The runner tells the wake's end. */
+    private fun end(wake: JSONObject, outcome: String) { host(JSONObject().put("woke", wake.getString("id")).put("outcome", outcome)) }
+    private fun shown(api: Int, visible: Boolean = true) { platform.conditions = Conditions(api, visible, notifications = true) }
 
     @Test fun aStartCapturesItsAuthorityAndKeepsCredentialsOffDisk() {
         open()
@@ -152,11 +189,59 @@ class BackgroundTransferTest {
         assertFalse(kept.toString().contains("token=private") || kept.toString().contains("secret"))
         assertEquals("secret", transport.secrets.values.single().getJSONArray("headers").getJSONObject(0).getString("value"))
         assertEquals(context.authority, transport.secrets.values.single().getString("authority"))
-        // The runtime does not yet say a call is a person's act: a start is a program's, though the app shows.
+        // Nothing marked the call a person's: a start is a program's, though the app shows.
         assertEquals(Lifecycle.Intent.Ordinary, record(key).intent)
         assertEquals(setOf(key to Job.Work), platform.jobs.toSet())
         assertEquals("visitor", call("backgroundFetchRegistration", named()).getJSONObject("exact:answer").getString("id"))
         assertEquals("[\"visitor\"]", call("backgroundFetchIds").getJSONArray("exact:answer").toString())
+    }
+
+    @Test fun aStartInsideAPersonsActivationWindowHoldsAUserInitiatedJob() {
+        shown(api = 34)
+        open()
+        assertEquals("press", forwarded("press", activated = true).getString("id"))
+        assertEquals(Lifecycle.Intent.Person, record(key("press")).intent)
+        assertEquals(setOf(key("press") to Job.UserJob), platform.jobs.toSet())
+        // The mark is each call's own: a timer's, a resource's, or a call after the window carries none.
+        assertEquals("timer", forwarded("timer", activated = false).getString("id"))
+        assertEquals(Lifecycle.Intent.Ordinary, record(key("timer")).intent)
+        assertEquals(Job.Work, record(key("timer")).job)
+    }
+
+    @Test fun aPersonsStartBelowApi34IsWorkThatRunsInTheForegroundUnderAView() {
+        shown(api = 33)
+        open()
+        forwarded("press", activated = true)
+        forwarded("timer", activated = false)
+        assertEquals(Lifecycle.Intent.Person to Job.Work, record(key("press")).let { it.intent to it.job })
+        // The person's work run starts while the activity shows; a program's is never asked.
+        run(key("press"), 1)
+        run(key("timer"), 2)
+        assertEquals(listOf(1), platform.promoted.toList())
+    }
+
+    @Test fun aPersonsWorkThatStartedWithNoViewIsPromotedWhenTheViewShows() {
+        shown(api = 33)
+        // The exchange never answers, so the run is still sending when the view comes back.
+        transfers = Transfers(store, transport::exchange, platform, Sessions, Fixture.inline,
+            { effect, _, body -> if (effect !is Lifecycle.Transmit) body()?.let { transfers.feed(it) } })
+        open()
+        forwarded("press", activated = true)
+        module!!.foreground(false)
+        shown(api = 33, visible = false)
+        run(key("press"), 1)
+        assertTrue("a foreground service does not start from the background", platform.promoted.isEmpty())
+        shown(api = 33)
+        module!!.foreground(true)
+        assertEquals(listOf(1), platform.promoted.toList())
+    }
+
+    @Test fun anActivatedStartWithNoViewIsAPrograms() {
+        shown(api = 34, visible = false)
+        open(visible = false)
+        forwarded("hidden", activated = true)
+        assertEquals(Lifecycle.Intent.Ordinary, record(key("hidden")).intent)
+        assertEquals(setOf(key("hidden") to Job.Work), platform.jobs.toSet())
     }
 
     @Test fun anAbortEndsTheTransferAndARetirementRemovesIt() {

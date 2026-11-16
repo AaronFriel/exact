@@ -27,11 +27,16 @@ the id can be started again once it has answered.
 On Android a transfer runs as WorkManager work that waits for a network.
 An id names one registration until it is retired. Three stops by the system
 or five network failures in a row, with no response kept between them, end
-the transfer as `fetch-error`. A person's transfer, which Android runs as a
-user-initiated job with a notification (API 34; a tap raises
-`backgroundfetchclick`), is built but not reachable: the runtime does not
-yet tell the package that a call is a person's act, so every start is a
-program's.
+the transfer as `fetch-error`.
+
+A start made within five seconds of a person's press or key, while the app
+shows and may post notifications, is that person's transfer; code a timer or
+an answer runs inside those seconds counts, as the web's transient activation
+does. Android 14 and later run it as a user-initiated job with a notification
+(a tap raises `backgroundfetchclick`), which has no time limit. Android 12
+and 13 run it as work in a foreground service while the app shows. The
+system's stops never fail it: after three it waits for the app to be opened.
+Every other start is a program's.
 
 The transfer finishes without the app. Its event is raised in the running
 app; with none it waits for the next launch that shows the app, and it comes

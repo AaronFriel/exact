@@ -1122,7 +1122,7 @@ impl<D: DataSource> Runner<D> {
         let mut args = v.get("args").cloned().unwrap_or(json!({}));
         self.clamp_bounds(&row, &mut args);
         self.resolve_of(&row, &mut args);
-        let origin = self.data_origin();
+        let origin = self.arriving_data_origin();
         let causes = self.data_causes();
         // A send that answers nothing (LLP 1133.004 D5) settles once done,
         // as does one that lists what it answers (`region_list.rs`).

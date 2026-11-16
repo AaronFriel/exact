@@ -39,10 +39,13 @@ above with `bun scripts/agent-android.mjs build <app> --apk` and
 `EXACT_APP_DIR` set to its directory, against a server the phone can reach.
 Record the Android version beside each step.
 
-Every start is a program's until the runtime tells the package that a call
-is a person's act, so each transfer here runs as WorkManager work. A person's
-transfer (a user-initiated job, its notification and the tap that raises
-`backgroundfetchclick`) gets its steps when a start can be one.
+A start within five seconds of a press, while the app shows, is a person's
+transfer: a user-initiated job on Android 14 and later, foreground work on
+Android 12 and 13. Steps 1 to 5 below start theirs from a press unless they
+say a timer does; run each both ways. For a person's transfer also check its
+notification, its progress, the tap that raises `backgroundfetchclick`, that
+it outlasts ten minutes, and that a start a timer makes six seconds after a
+press runs as plain work with no notification.
 
 1. **In front.** Upload, download, a refused origin, a directory as `saveTo`
    and an abort. The upload sent is the file as it was at the start, though

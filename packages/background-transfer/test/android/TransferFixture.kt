@@ -66,6 +66,8 @@ internal class FakePlatform : Platform {
     val jobs: MutableSet<Pair<Key, Job>> = ConcurrentHashMap.newKeySet()
     val finished = CopyOnWriteArrayList<Pair<Int, Boolean>>()
     val acknowledged = CopyOnWriteArrayList<Namespace>()
+    /** The runs asked for foreground execution. */
+    val promoted = CopyOnWriteArrayList<Int>()
     override fun stopped() = stopped
     override fun restarted(namespace: Namespace) = false
     override fun held(namespace: Namespace) = jobs.filter { it.second == Job.UserJob }.map { it.first }.toSet()
@@ -79,7 +81,7 @@ internal class FakePlatform : Platform {
         finished += run to again
         if (!again) jobs.removeAll { it.first == key }
     }
-    override fun promote(key: Key, run: Int, record: JSONObject) {}
+    override fun promote(key: Key, run: Int, record: JSONObject) { promoted += run }
     override fun progress(key: Key, record: JSONObject) {}
     override fun acknowledge(namespace: Namespace) { stopped = false; acknowledged += namespace }
 }

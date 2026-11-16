@@ -141,6 +141,7 @@ class BackgroundTransferModule internal constructor(context: ExtensionContext, m
         // A later call can change the context while this one waits its turn.
         val authority = context.authority
         val origin = context.origin
+        val person = context.userActivation
         if (name == "backgroundFetchStatus") {
             reply(JSONObject().put("available", true).put("state", if (denied) "denied" else "granted"))
             return
@@ -152,7 +153,7 @@ class BackgroundTransferModule internal constructor(context: ExtensionContext, m
                 val key = transfers.find(namespace, args.optString("id"))
                 when (name) {
                     // A start is answered by the lifecycle, once its upload is copied.
-                    "backgroundFetch" -> { start(args, authority, origin, reply); return@execute }
+                    "backgroundFetch" -> { start(args, authority, origin, person, reply); return@execute }
                     "backgroundFetchRegistration" -> JSONObject().put("exact:answer", key?.let(transfers::read) ?: JSONObject.NULL)
                     "backgroundFetchIds" -> JSONObject().put("exact:answer", JSONArray(transfers.ids(namespace)))
                     "abortBackgroundFetch" -> JSONObject().put("exact:answer", key != null && tell(Abort(key)).accepted)
@@ -172,7 +173,8 @@ class BackgroundTransferModule internal constructor(context: ExtensionContext, m
         }
     }
 
-    private fun start(args: JSONObject, authority: String, origin: String, reply: (JSONObject) -> Unit) {
+    /** [person]: the call came inside a person's activation window ([ExtensionContext.userActivation]). */
+    private fun start(args: JSONObject, authority: String, origin: String, person: Boolean, reply: (JSONObject) -> Unit) {
         val id = args.getString("id")
         val list = args.getJSONArray("requests")
         require(id.isNotEmpty() && id.toByteArray().size <= 64 && origin in setOf("app", "tool", "wake"))
@@ -194,8 +196,7 @@ class BackgroundTransferModule internal constructor(context: ExtensionContext, m
         transfers.admit(key, Registrations.Admission(if (args.isNull("title")) id else args.getString("title"), authority, origin,
             requests, total, roots), list)
         replies[key] = reply
-        // The runtime's seam does not yet say whether a call is a person's act, so none is taken as one (LLP 1133.017 D4).
-        val intent = Lifecycle.intent(person = false, conditions)
+        val intent = Lifecycle.intent(person, conditions)
         if (!transfers.feed(Start(key, intent, requests.size, conditions)).accepted) {
             replies.remove(key)
             // The id has a registration the app has not retired.

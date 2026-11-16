@@ -192,6 +192,16 @@ class ExtensionContext internal constructor(val application: Context, private va
     var authority = ""
         internal set
 
+    /**
+     * Whether the call being answered now has a person's activation, read at [ExactExtension.later]'s entry: the app
+     * made it within a few seconds of a press or a key the session heard, HTML's
+     * [transient activation](https://html.spec.whatwg.org/multipage/interaction.html#transient-activation). A timer's
+     * or an answer's code inside that window has it too, as on the web; a tool's or a wake's call never does. It says
+     * nothing of whether an activity shows now ([visible]).
+     */
+    var userActivation = false
+        internal set
+
     /** The number the runner gave the send being answered now, which a later [ExactExtension.cancel] names; null for
      * a source (LLP 1133.016 D15 item 2). */
     var request: Int? = null
@@ -534,21 +544,23 @@ internal object Extensions {
         }
     }
 
-    /** The activity was made: the host binds the names of the extensions the APK carries. */
-    fun bind(activity: Activity) {
+    /** The process's host is set up, by the activity [context] or with none: the host binds the names of the
+     * extensions the APK carries. */
+    fun bind(context: Context) {
+        val app = context.applicationContext
         if (application == null) {
-            val dm = activity.applicationContext.getSystemService(android.hardware.display.DisplayManager::class.java)
+            val dm = app.getSystemService(android.hardware.display.DisplayManager::class.java)
             dm?.registerDisplayListener(displays, android.os.Handler(android.os.Looper.getMainLooper()))
-            told = angle(activity)
+            told = angle(context as? Activity)
+            application = app
         }
-        if (application == null) application = activity.applicationContext
-        Presence.application = activity.applicationContext
-        AudioFocus.application = activity.applicationContext
+        Presence.application = app
+        AudioFocus.application = app
         if (roster.isNotEmpty()) Exact.bindExtensions(roster.keys.joinToString("\n"))
     }
 
     /**
-     * Request [id]'s call, the runner's body: `{"extension", "source"|"send", "args", "preferred"?}`, `{"extension",
+     * Request [id]'s call, the runner's body: `{"extension", "source"|"send", "args", "preferred"?, "userActivation"?}`, `{"extension",
      * "release", "args"?}`, `{"extension", "preferred"}`, `{"extension", "dispose"}`, `{"extension", "foreground"}`, or
      * `{"extension", "view", "displayed"|"bound", "origin"}` (a package view's report, LLP 1133.008 D8 item 2),
      * `{"extension", "surface", "displayed", "origin"}` (a canvas its input feeds, LLP 1133.013 D6),
@@ -602,6 +614,7 @@ internal object Extensions {
                 declared.isNotEmpty() -> {
                     extension.context.origin = request.optString("origin").ifEmpty { "app" }
                     extension.context.authority = request.optString("authority")
+                    extension.context.userActivation = request.optBoolean("userActivation")
                     extension.context.request = if (request.has("request")) request.getInt("request") else null
                     extension.later(declared, request.optJSONObject("args") ?: JSONObject(), request.opt("preferred"), reply)
                 }

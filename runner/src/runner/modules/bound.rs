@@ -248,6 +248,11 @@ impl<D: DataSource> Runner<D> {
                 });
             }
         }
+        // A person's input stands (`admit.rs`): the implementation may take
+        // the call as their act.
+        if self.user_activation(origin) {
+            body["userActivation"] = json!(true);
+        }
         // A send's number, which `cancel` names if it is let go (LLP 1133.016 D15 item 2).
         if row.send {
             self.extensions.requests += 1;
