@@ -388,3 +388,91 @@ fn a_face_is_checked_against_its_tool_and_holds_its_door() {
     );
     assert_eq!(calls[1]["outcome"], "ok", "{calls} {}", logs(&r));
 }
+
+/// LLP 1111.000 D1: `mcp` is a door a face names, never a default. A face
+/// naming it alone keeps the plan's types; naming another door too, it is
+/// held to scalars; the entity and unknown-parameter checks hold on every
+/// face; a `destroys` tool may name it, since the Mac asks the person.
+#[test]
+fn an_mcp_face_keeps_the_plans_types() {
+    let source = r#"shape Item
+  name: string
+  aisle: enum<"produce", "dairy">
+
+component App
+  state items: Item[] = []
+  tool add writes "Add an item." = add
+    returns items
+  tool drop destroys "Remove every item." = drop
+  action add(item: Item, note: option<string>)
+    items = items.concat([item])
+  action drop
+    items = []
+  view
+    text `${items.length}`
+"#;
+    let app = App::new("mcp-faces", source);
+    let write = |tools: Json| {
+        let intents = json!({ "entities": { "book": { "title": "Book" } }, "tools": tools });
+        let manifest =
+            json!({ "app": { "id": "com.exact.mcp", "name": "Mcp" }, "intents": intents });
+        std::fs::write(app.0.join("app.json"), manifest.to_string()).unwrap();
+        contract::compile_path_all(&app.0.join("app.contract"), false).map(|(plan, _)| plan)
+    };
+    let refused = |tools: Json, id: &str| {
+        let errors = format!("{:?}", write(tools).unwrap_err());
+        assert!(errors.contains(id), "{id}: {errors}");
+    };
+    let plan = write(json!({
+        "add": { "title": "Add", "doors": ["mcp"] },
+        "drop": { "title": "Drop", "doors": ["apple", "mcp"] },
+    }))
+    .unwrap_or_else(|e| panic!("{e:?}"));
+    let face = |name: &str| -> Json {
+        let row = (plan.tools.iter())
+            .find(|t| plan.str(t.name) == name)
+            .unwrap();
+        serde_json::from_str(plan.str(row.face)).unwrap()
+    };
+    assert_eq!(face("add")["doors"], json!(["mcp"]));
+    assert_eq!(face("drop")["doors"], json!(["apple", "mcp"]));
+    assert!(
+        !exact_runner::activation::offers_tools(&plan),
+        "no face reaches the web"
+    );
+    let signature = contract::faces::tool_signature(&plan, 0);
+    assert_eq!(
+        signature["parameters"],
+        json!([
+            ["item", r#"Item{name:string,aisle:enum<"produce","dairy">}"#],
+            ["note", "option<string>"]
+        ]),
+        "an enum's cases are in the signature"
+    );
+    assert_eq!(signature["sends"], false);
+
+    refused(
+        json!({ "add": { "title": "Add", "doors": ["mcp", "apple"] } }),
+        "intents-face-type",
+    );
+    refused(
+        json!({ "add": { "title": "Add", "doors": ["mcp", "web"] } }),
+        "intents-face-type",
+    );
+    refused(
+        json!({ "add": { "title": "Add", "doors": ["mcp"], "parameters": { "note": { "entity": "author" } } } }),
+        "intents-face-type",
+    );
+    refused(
+        json!({ "add": { "title": "Add", "doors": ["mcp"], "parameters": { "other": {} } } }),
+        "intents-face-type",
+    );
+    refused(
+        json!({ "add": { "title": "Add", "doors": ["tcp"] } }),
+        "intents-door",
+    );
+    refused(
+        json!({ "drop": { "title": "Drop", "doors": ["mcp", "android"] } }),
+        "intents-destroys-door",
+    );
+}

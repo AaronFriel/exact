@@ -33,7 +33,7 @@ function swiftType(planType, face) {
   const inner = optional ? optional[1] : planType;
   let type;
   if (face?.entity) type = inner === 'string' ? entityType(face.entity) : null;
-  else if (inner === 'string') type = 'String';
+  else if (inner === 'string' || inner.startsWith('enum<')) type = 'String';
   else if (inner === 'bool') type = 'Bool';
   else if (inner === 'number') type = face?.type === 'integer' ? 'Int' : 'Double';
   else type = null;

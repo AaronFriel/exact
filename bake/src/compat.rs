@@ -505,21 +505,23 @@ pub(crate) fn plan_extensions(plan: &exact_plan::Plan) -> Vec<String> {
 }
 
 /// The faced tools this platform's binary compiles a door for (LLP 1133.023
-/// D8): each one's signature and face join the id, so a plan that changes
-/// one is a binary change. tvOS (an `ios` bake for a tvOS target) and the
-/// web compile none.
+/// D8), and on the Mac those its tools helper lists (LLP 1111.000 D1): each
+/// one's signature and face join the id, so a plan that changes one is a
+/// binary change. tvOS (an `ios` bake for a tvOS target) and the web
+/// compile none.
 fn faces(compat: &mut Compat, plan: &exact_plan::Plan, platform: &str, target: &str) {
-    let door = match platform {
+    let doors: &[&str] = match platform {
         _ if target.contains("tvos") => return,
-        "ios" | "macos" => "apple",
-        "android" => "android",
+        "ios" => &["apple"],
+        "macos" => &["apple", "mcp"],
+        "android" => &["android"],
         _ => return,
     };
     let faced: Vec<serde_json::Value> = (0..plan.tools.len())
         .filter_map(|i| {
             let face: serde_json::Value = serde_json::from_str(plan.str(plan.tools[i].face)).ok()?;
-            let doors = face["doors"].as_array()?;
-            doors.iter().any(|d| d == door).then(|| serde_json::json!({ "signature": contract::faces::tool_signature(plan, i), "face": face }))
+            let named = face["doors"].as_array()?;
+            named.iter().any(|d| doors.iter().any(|door| d == door)).then(|| serde_json::json!({ "signature": contract::faces::tool_signature(plan, i), "face": face }))
         })
         .collect();
     if !faced.is_empty() {
@@ -1468,6 +1470,10 @@ pub(crate) fn canonical(v: &serde_json::Value, out: &mut String) {
 #[cfg(test)]
 #[path = "compat_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "compat_faces_tests.rs"]
+mod faces_tests;
 
 #[cfg(test)]
 #[path = "compat_notification_service_tests.rs"]

@@ -625,8 +625,8 @@
               },
               "doors": {
                 "type": "array",
-                "items": { "enum": ["apple", "android", "web"] },
-                "description": "The doors that offer it. Defaults to every door, or apple alone for a destroys tool."
+                "items": { "enum": ["apple", "android", "web", "mcp"] },
+                "description": "The doors that offer it. Defaults to apple, android and web, or apple alone for a destroys tool. mcp, offered only when named, is MCP clients on the same Mac (LLP 1111.000; not built yet), and a face naming only mcp keeps the plan's types."
               }
             }
           }

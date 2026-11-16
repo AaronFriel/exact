@@ -133,6 +133,15 @@ fn catalog(app_root: &Path, at: &Value) -> Result<Value, String> {
 /// The doors a face reaches when it names none (§9's cells).
 const DOORS: [&str; 3] = ["apple", "android", "web"];
 
+/// Every door a face may name: the defaults, and the local agents' door on
+/// the Mac, offered only where named (LLP 1111.000 D1).
+const NAMED: [&str; 4] = ["apple", "android", "web", "mcp"];
+
+/// Whether type text `ty` (`faces::type_text`) is a string, number or bool.
+fn scalar(ty: &str) -> bool {
+    matches!(ty, "string" | "number" | "bool") || ty.starts_with("enum<")
+}
+
 /// Check each of `intents.tools`' faces against its tool and store it on
 /// the tool's row, with the doors it reaches spelled out and its digest.
 fn faces(intents: &Value, plan: &mut Plan) -> Result<(), (&'static str, String)> {
@@ -155,12 +164,19 @@ fn faces(intents: &Value, plan: &mut Plan) -> Result<(), (&'static str, String)>
             None if destroys => vec!["apple".into()],
             None => DOORS.map(str::to_owned).to_vec(),
         };
-        if let Some(door) = doors.iter().find(|d| !DOORS.contains(&d.as_str())) {
-            return Err(("intents-door", format!("tool `{name}`'s face names door `{door}`; the doors are apple, android and web")));
+        if let Some(door) = doors.iter().find(|d| !NAMED.contains(&d.as_str())) {
+            return Err(("intents-door", format!("tool `{name}`'s face names door `{door}`; the doors are apple, android, web and mcp")));
         }
-        if let Some(door) = doors.iter().find(|d| destroys && *d != "apple") {
+        // The Mac draws the mcp door's confirmation (LLP 1111.000 D5).
+        if let Some(door) = doors
+            .iter()
+            .find(|d| destroys && !["apple", "mcp"].contains(&d.as_str()))
+        {
             return Err(("intents-destroys-door", format!("tool `{name}` destroys, and the {door} door has no confirmation the person answers, so its face may not name it (LLP 1133.023 D10)")));
         }
+        // A face reaching only local agents keeps the plan's types; App
+        // Intents, AppFunctions and WebMCP's faces take scalars (LLP 1111.000 D1).
+        let scalars = doors.iter().any(|d| DOORS.contains(&d.as_str()));
         // WebMCP's limits (https://webmachinelearning.github.io/webmcp/);
         // App Intents takes an empty `IntentDescription` and any name. A
         // `tool` line's name is already within WebMCP's characters.
@@ -195,8 +211,8 @@ fn faces(intents: &Value, plan: &mut Plan) -> Result<(), (&'static str, String)>
                     Some("its entity kind is not in intents.entities")
                 }
                 (_, Some(_), _) if ty != "string" => Some("only a string may name an entity"),
-                ("string" | "number" | "bool", _, _) => None,
-                _ => Some("a face's parameter is a string, number or bool"),
+                _ if scalars && !scalar(ty) => Some("a face that names the apple, android or web door takes a string, number or bool; one that names only mcp takes any type"),
+                _ => None,
             };
             if let Some(why) = wrong {
                 return Err((
@@ -212,9 +228,9 @@ fn faces(intents: &Value, plan: &mut Plan) -> Result<(), (&'static str, String)>
         }
         if let Some(ty) = signature["returns"]
             .as_str()
-            .filter(|t| !["string", "number", "bool"].contains(t))
+            .filter(|t| scalars && !scalar(t))
         {
-            return Err(("intents-face-type", format!("tool `{name}` returns {ty}; a face's tool returns a string, number or bool (LLP 1133.023 D5)")));
+            return Err(("intents-face-type", format!("tool `{name}` returns {ty}; the tool of a face that names the apple, android or web door returns a string, number or bool (LLP 1133.023 D5), and one that names only mcp may return any type (LLP 1111.000 D1)")));
         }
         let mut face = face.clone();
         face["doors"] = json!(doors);
