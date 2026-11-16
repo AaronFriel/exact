@@ -3,8 +3,8 @@
 // status and the newest photos are read at launch (`photoAssets` asks
 // permission while `prompt`, so the dialog is the launch's), each photo drawn
 // by its picture and copied when pressed; the last copy can be added back to
-// the library. Show more reads again with a larger limit; Older reads the
-// next page, after the cursor the last answered.
+// the library or made the image call's source. Show more reads again with a
+// larger limit; Older reads the next page, after the cursor the last answered.
 use photoLibraryStatus, photoAssets, copyPhotoAsset, addToPhotoLibrary, managePhotoSelection, PhotoLibraryStatus, PhotoAssetList, PhotoCopy, PhotoAdded from "@exact/photos"
 
 // The image call's record, or its failure, as JSON text.
@@ -64,6 +64,8 @@ component Fixture
           image c.path width=48 alt="The copy" testId="copy-picture"
           button press=addBack(c.path) testId="add"
             text "Add the copy"
+          button press=changeSource(c.path) testId="edit-copy"
+            text "Edit the copy"
         case none
           text "No copy" testId="copied"
       match added

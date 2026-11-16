@@ -94,7 +94,9 @@ if (process.argv.includes('--emulator')) {
     check(where, '1: six pictures', grid(r[4]) === 6, tree(r[4]).slice(0, 400));
     check(where, '1: each picture admitted, asked of the extension, none refused', (r[5]?.photos?.pictures?.admitted ?? 0) >= 6 && !r[5]?.photos?.pictures?.refused
       && r.lines.filter(l => /photos: picture agent-\d at \d+x\d+ cover/.test(l)).length >= 6, JSON.stringify(r[5]?.photos?.pictures));
-    check(where, "1: photo-1 is agent-1's copy, byte for byte", copy?.[1] === 'agent-1' && copy?.[2] === 'app:/tmp/photos/1.jpg' && copy?.[3] === AGENT(1), JSON.stringify(copy));
+    // Each copy has a name of its own, so two never share a file.
+    check(where, "1: photo-1 is agent-1's copy, byte for byte, at a name of its own", copy?.[1] === 'agent-1' && /^app:\/tmp\/photos\/[0-9A-F-]{36}\.jpg$/.test(copy[2])
+      && r[8]?.path === copy[2] && copy?.[3] === AGENT(1), `${JSON.stringify(copy)} ${r[8]?.path}`);
   }
   // 2: a copy added back joins the library as the newest, readable as the app's own.
   {
@@ -123,15 +125,16 @@ if (process.argv.includes('--emulator')) {
       ['keep', 'fixture:every-tag.jpg', 'transform', { metadata: 'keep' }],
       ['no-location', 'fixture:every-tag.jpg', 'transform', { metadata: 'no-location' }],
       ['none', 'fixture:every-tag.jpg', 'transform', { metadata: 'none' }],
-      ['agent-3', 'app:/tmp/photos/1.jpg', 'transform', {}],
-      ['agent-3 top half', 'app:/tmp/photos/1.jpg', 'transform', { crop: { x: 0, y: 0, width: 360, height: 240 } }],
-      ['agent-3 top half at 24', 'app:/tmp/photos/1.jpg', 'transform', { crop: { x: 0, y: 0, width: 360, height: 240 }, resizeWidth: 24 }],
+      ['agent-3', 'copy', 'transform', {}],
+      ['agent-3 top half', 'copy', 'transform', { crop: { x: 0, y: 0, width: 360, height: 240 } }],
+      ['agent-3 top half at 24', 'copy', 'transform', { crop: { x: 0, y: 0, width: 360, height: 240 }, resizeWidth: 24 }],
       ['gain map, a quarter', 'fixture:gainmap-iso.jpg', 'transform', { rotate: 90 }],
       ['gain map, 10°', 'fixture:gainmap-iso.jpg', 'transform', { rotate: 10 }],
     ];
+    // `copy` is photo-3's copy, whose name the drive cannot know: Edit the copy makes it the source.
     const ops = ['clock settle', 'tap photo-3', 'clock settle'];
     for (const [, source, call, options] of cases)
-      ops.push(`type edit-source ${source}`, `type edit-options ${JSON.stringify(options)}`, `tap ${call}`, 'clock settle', 'state edited');
+      ops.push(source === 'copy' ? 'tap edit-copy' : `type edit-source ${source}`, `type edit-options ${JSON.stringify(options)}`, `tap ${call}`, 'clock settle', 'state edited');
     // Under the agent, app storage is a named scratch store's.
     const r = drive({ photos: 'granted' }, [...ops, 'logs'], ['--storage', 'photos-codec']);
     const records = cases.map((_, i) => { try { return JSON.parse(r[3 + i * 5 + 4]?.record ?? 'null'); } catch { return null; } });

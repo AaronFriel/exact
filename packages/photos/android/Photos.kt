@@ -56,7 +56,6 @@ class PhotosModule(context: ExtensionContext) : ExactExtension(context) {
     /** The module's thread: queries, thumbnails, copies and adds. */
     private val work = Executors.newSingleThreadExecutor()
     private val library by lazy { AgentLibrary(app.assets) }
-    private var copies = 0
     /** The status last answered or read, which a resume compares with. */
     private var said: String? = null
     /** The ids whose pictures were drawn, which a narrowed access may revoke. */
@@ -320,8 +319,10 @@ class PhotosModule(context: ExtensionContext) : ExactExtension(context) {
         val row = app.contentResolver.query(uri, columns, null, null, null)?.use { if (it.moveToFirst()) asset(it).put("name", it.getString(10)).put("type", it.getString(9)) else null }
             ?: return error("NotFoundError")
         val name = row.optString("name")
-        val ext = name.substringAfterLast('.', "jpg")
-        val path = args.optString("path").ifEmpty { null }?.let { if (it.endsWith(".$ext")) it else "$it.$ext" } ?: "app:/tmp/photos/${++copies}.$ext"
+        // The file's own extension, else its type's, as Apple's copy takes it.
+        val ext = name.substringAfterLast('.', "").lowercase()
+            .ifEmpty { android.webkit.MimeTypeMap.getSingleton().getExtensionFromMimeType(row.optString("type")) ?: "img" }
+        val path = destination(args, ext)
         val file = context.file(path) ?: return error("NotAllowedError")
         // The original bytes, location kept, where the app holds ACCESS_MEDIA_LOCATION (D4); the owner's are never
         // redacted, so the flag describes another app's photo opened without it.
@@ -338,6 +339,12 @@ class PhotosModule(context: ExtensionContext) : ExactExtension(context) {
             .put("width", row.getInt("width")).put("height", row.getInt("height")).put("duration", JSONObject.NULL)
             .put("android", JSONObject().put("locationRedacted", !original && !own))
     }
+
+    /** Where a copy goes: the app's `path` with [ext], else a name of its own, an uppercase UUID as Apple's copy has,
+     * so no copy replaces another still in use (D2 item 3). */
+    private fun destination(args: JSONObject, ext: String): String =
+        args.optString("path").ifEmpty { null }?.let { if (it.endsWith(".$ext")) it else "$it.$ext" }
+            ?: "app:/tmp/photos/${java.util.UUID.randomUUID().toString().uppercase()}.$ext"
 
     private fun add(args: JSONObject): JSONObject {
         val path = args.optString("path")
@@ -431,8 +438,7 @@ class PhotosModule(context: ExtensionContext) : ExactExtension(context) {
     private fun agentCopy(args: JSONObject): JSONObject {
         val id = args.optString("asset")
         val asset = library.asset(id) ?: return error("NotFoundError")
-        val ext = asset.name.substringAfterLast('.')
-        val path = args.optString("path").ifEmpty { null }?.let { if (it.endsWith(".$ext")) it else "$it.$ext" } ?: "app:/tmp/photos/${++copies}.$ext"
+        val path = destination(args, asset.name.substringAfterLast('.'))
         val file = context.file(path) ?: return error("UnknownError")
         try {
             file.parentFile?.mkdirs()
