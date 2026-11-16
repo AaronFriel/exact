@@ -5,7 +5,8 @@
 // ranges (READ_EXTERNAL_STORAGE ends at 32), ACCESS_MEDIA_LOCATION, no permission for adding; the roster naming the
 // photos extension; the package's Kotlin and the reader's codec compiled in; the agent's six photos carried, byte for
 // byte the package's fixture. `--emulator` then drives the APK on an arm64 emulator (ANDROID_SERIAL, else adb's
-// one device) whose adb can run as root, to read the edits back: under the agent, the library through the reader's
+// one device) whose adb can run as root, to read the edits back (on a Google Play image, which refuses root, drive 4
+// checks only their sizes and says so): under the agent, the library through the reader's
 // picture door, a copy and an add, limited access and a revocation; the image codec's conformance (LLP 1133.019 §11,
 // checklist step 9) through the fixture's `editImage`; and MediaStore itself, the implementation bound and the read
 // granted by `pm grant`, and paged through with Older. Both need an NDK in ANDROID_NDK_HOME and a JDK 17 or newer in JAVA_HOME. checklist.md's
@@ -134,14 +135,18 @@ if (process.argv.includes('--emulator')) {
     // Under the agent, app storage is a named scratch store's.
     const r = drive({ photos: 'granted' }, [...ops, 'logs'], ['--storage', 'photos-codec']);
     const records = cases.map((_, i) => { try { return JSON.parse(r[3 + i * 5 + 4]?.record ?? 'null'); } catch { return null; } });
+    // The files are in the app's private directory, which adb reads only as root: the APK is not debuggable, so
+    // `run-as` refuses, and a Google Play image's adbd refuses root. There the sizes are checked and the files are not.
+    const su = adb('root'), said = `${su.stdout ?? ''}${su.stderr ?? ''}`.trim(), rooted = su.status === 0 && !/cannot run as root/.test(said);
+    const onFile = rooted ? check : () => {};
+    if (rooted) adb('wait-for-device');
+    else console.log(`SKIP ${where} 4: the edits' pixels and metadata, since adb cannot read the app's files here (adb root: ${said || `exit ${su.status}`}); a Google APIs image without Play runs adb as root`);
     // The launch's temporary directory: the newest holding these edits.
-    adb('root');
-    adb('wait-for-device');
-    const dirs = adb('shell', 'ls -dt $(find /data/data/com.exact.photosfixture -type d -name edits)').stdout.toString().trim().split(/\s+/);
+    const dirs = rooted ? adb('shell', 'ls -dt $(find /data/data/com.exact.photosfixture -type d -name edits)').stdout.toString().trim().split(/\s+/) : [];
     const out = resolve(tmpdir(), `photos-android-${process.pid}`);
     mkdirSync(out, { recursive: true });
     const file = (record) => {
-      if (!record?.path?.startsWith('app:/tmp/edits/')) return null;
+      if (!rooted || !record?.path?.startsWith('app:/tmp/edits/')) return null;
       const local = resolve(out, `${api}-${basename(record.path)}`);
       return adb('pull', `${dirs[0]}/${record.path.slice('app:/tmp/edits/'.length)}`, local).status === 0 ? local : null;
     };
@@ -157,30 +162,30 @@ if (process.argv.includes('--emulator')) {
     const img = name => by[name].path && pixels(by[name].path);
     sized('upright', 48, 64);
     const up = img('upright');
-    check(where, '4: upright, blue on the left', up && blue(at(up, 6, 32)) && red(at(up, 41, 32)), up && JSON.stringify([at(up, 6, 32), at(up, 41, 32)]));
-    check(where, '4: upright, orientation 1 and the GPS kept', exif(by.upright.path)?.orientation === 1 && exif(by.upright.path)?.gps, JSON.stringify(exif(by.upright.path)));
+    onFile(where, '4: upright, blue on the left', up && blue(at(up, 6, 32)) && red(at(up, 41, 32)), up && JSON.stringify([at(up, 6, 32), at(up, 41, 32)]));
+    onFile(where, '4: upright, orientation 1 and the GPS kept', exif(by.upright.path)?.orientation === 1 && exif(by.upright.path)?.gps, JSON.stringify(exif(by.upright.path)));
     sized('rotate 90', 64, 48);
     const turned = img('rotate 90');
-    check(where, '4: rotate 90, blue on top', turned && blue(at(turned, 32, 6)) && red(at(turned, 32, 41)), turned && JSON.stringify([at(turned, 32, 6), at(turned, 32, 41)]));
+    onFile(where, '4: rotate 90, blue on top', turned && blue(at(turned, 32, 6)) && red(at(turned, 32, 41)), turned && JSON.stringify([at(turned, 32, 6), at(turned, 32, 41)]));
     const flipped = img('flip');
-    check(where, '4: flip, blue on the right', flipped && red(at(flipped, 6, 32)) && blue(at(flipped, 41, 32)), flipped && JSON.stringify([at(flipped, 6, 32), at(flipped, 41, 32)]));
+    onFile(where, '4: flip, blue on the right', flipped && red(at(flipped, 6, 32)) && blue(at(flipped, 41, 32)), flipped && JSON.stringify([at(flipped, 6, 32), at(flipped, 41, 32)]));
     sized('crop', 24, 64);
     const cut = img('crop');
-    check(where, '4: crop, all blue', cut && [[2, 2], [21, 2], [2, 61], [21, 61], [12, 32]].every(([x, y]) => blue(at(cut, x, y))), cut && JSON.stringify(at(cut, 21, 32)));
+    onFile(where, '4: crop, all blue', cut && [[2, 2], [21, 2], [2, 61], [21, 61], [12, 32]].every(([x, y]) => blue(at(cut, x, y))), cut && JSON.stringify(at(cut, 21, 32)));
     const clear = img('free turn png'), white = img('free turn jpeg');
-    check(where, '4: rotate 30, a PNG\'s corners are clear', clear && at(clear, 0, 0)[3] === 0 && at(clear, clear.width - 1, clear.height - 1)[3] === 0, clear && JSON.stringify(at(clear, 0, 0)));
-    check(where, '4: rotate 30, a JPEG\'s corners are white', white && at(white, 0, 0).slice(0, 3).every(v => v > 240), white && JSON.stringify(at(white, 0, 0)));
+    onFile(where, '4: rotate 30, a PNG\'s corners are clear', clear && at(clear, 0, 0)[3] === 0 && at(clear, clear.width - 1, clear.height - 1)[3] === 0, clear && JSON.stringify(at(clear, 0, 0)));
+    onFile(where, '4: rotate 30, a JPEG\'s corners are white', white && at(white, 0, 0).slice(0, 3).every(v => v > 240), white && JSON.stringify(at(white, 0, 0)));
     sized('compress', 64, 48);
-    check(where, '4: compressImage turns and keeps no metadata', by.compress.path && !exif(by.compress.path), JSON.stringify(by.compress.path && exif(by.compress.path)));
+    onFile(where, '4: compressImage turns and keeps no metadata', by.compress.path && !exif(by.compress.path), JSON.stringify(by.compress.path && exif(by.compress.path)));
     const keep = exif(by.keep.path), bare = exif(by['no-location'].path), none = exif(by.none.path);
-    check(where, '4: keep keeps the GPS, the date, the camera, the rights and the maker note', keep?.gps && keep.date && keep.make && keep.copyright && keep.makerNote, JSON.stringify(keep));
-    check(where, '4: no-location keeps the date, the camera and the rights, and no GPS or maker note', bare && !bare.gps && !bare.makerNote && bare.date && bare.make && bare.copyright, JSON.stringify(bare));
-    check(where, '4: none writes no metadata', by.none.path && !none, JSON.stringify(none));
+    onFile(where, '4: keep keeps the GPS, the date, the camera, the rights and the maker note', keep?.gps && keep.date && keep.make && keep.copyright && keep.makerNote, JSON.stringify(keep));
+    onFile(where, '4: no-location keeps the date, the camera and the rights, and no GPS or maker note', bare && !bare.gps && !bare.makerNote && bare.date && bare.make && bare.copyright, JSON.stringify(bare));
+    onFile(where, '4: none writes no metadata', by.none.path && !none, JSON.stringify(none));
     sized('agent-3', 360, 480);
     sized('agent-3 top half', 360, 240);
     sized('agent-3 top half at 24', 24, 16);
     const half = img('agent-3 top half'), whole = img('agent-3');
-    check(where, '4: agent-3\'s top half is the upright photo\'s', half && whole && [[30, 30], [180, 120], [330, 200]].every(([x, y]) => at(half, x, y).slice(0, 3).every((v, i) => Math.abs(v - at(whole, x, y)[i]) < 24)),
+    onFile(where, '4: agent-3\'s top half is the upright photo\'s', half && whole && [[30, 30], [180, 120], [330, 200]].every(([x, y]) => at(half, x, y).slice(0, 3).every((v, i) => Math.abs(v - at(whole, x, y)[i]) < 24)),
       half && whole && JSON.stringify([at(half, 180, 120), at(whole, 180, 120)]));
     check(where, '4: a free turn of a gain-map photo says hdr false', by['gain map, 10°'].record?.hdr === false, JSON.stringify(by['gain map, 10°'].record));
     // Recorded, not checked: whether API 34 keeps the gain map through a quarter turn (D16).
