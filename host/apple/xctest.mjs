@@ -1,7 +1,7 @@
 // How `build.mjs --test` runs the Swift host tests once they are built:
 // on this Mac, a test class to an `xctest` process; on a simulator, the
 // `.xctestrun` xcodebuild wrote, without the Thread Performance Checker.
-import { spawn, spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from './toolchain.mjs';
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { availableParallelism } from 'node:os';
 import { dirname, resolve } from 'node:path';

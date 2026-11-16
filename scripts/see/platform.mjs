@@ -3,21 +3,22 @@ import {existsSync, mkdirSync, readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {createHash} from 'node:crypto';
+import {spawnSync as appleSpawnSync} from '../../host/apple/toolchain.mjs';
 
 const directory = fileURLToPath(new URL('.', import.meta.url));
-export function command(program, args, timeout = 15000) {
-  const r = spawnSync(program, args, {encoding: 'utf8', timeout});
+export function command(program, args, timeout = 15000, run = spawnSync) {
+  const r = run(program, args, {encoding: 'utf8', timeout});
   if (r.status !== 0) throw new Error(`${program}: ${r.error?.message || r.stderr?.trim() || r.stdout?.trim() || `exit ${r.status}`}`);
   return r.stdout;
 }
 
 export function macHelper() {
   const source = resolve(directory, 'Mac.swift');
-  const key = createHash('sha256').update(readFileSync(source)).update(command('xcrun', ['swiftc', '--version'])).digest('hex').slice(0, 16);
+  const key = createHash('sha256').update(readFileSync(source)).update(command('xcrun', ['swiftc', '--version'], undefined, appleSpawnSync)).digest('hex').slice(0, 16);
   const binary = resolve(directory, '.cache', `mac-${key}`);
   if (!existsSync(binary)) {
     mkdirSync(resolve(directory, '.cache'), {recursive: true});
-    command('xcrun', ['swiftc', '-O', source, '-o', binary], 60000);
+    command('xcrun', ['swiftc', '-O', source, '-o', binary], 60000, appleSpawnSync);
   }
   return binary;
 }
