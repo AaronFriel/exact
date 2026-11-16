@@ -260,7 +260,7 @@ export const classifications = [
     ["painted:host/painted/src/canvas/jni_frames.rs", "Java_dev_exact_canvas_Native_frameIdentity Java_dev_exact_canvas_Native_frameIdle Java_dev_exact_canvas_Native_frameLanded"],
     ["painted:host/painted/src/canvas/surface.rs", "CanvasHost::acquired CanvasHost::display_frame"],
     ["painted:host/painted/src/content_region/presenter.rs", "Presenter::recycle_frame"],
-    ["painted:host/painted/src/presenter/display_frame.rs", "Presenter::display_complete Presenter::display_frame"],
+    ["painted:host/painted/src/presenter/display_frame.rs", "Presenter::display_complete Presenter::display_frame Presenter::display_presented SubmittedFrame::carried"],
   ]),
   group("hatch clocks", ["subscription"], "live hatch attachment and its timer/frame registration", "UI-owned",
     "host/painted/src/presenter/hatch.rs scopes hatches to live nodes, advances registered clocks and retires removed attachments; callbacks can dispatch through the current host.", [
@@ -363,7 +363,7 @@ export const classifications = [
     ["painted:host/painted/src/holds.rs", "Host::retained_input_eligible"],
     ["painted:host/painted/src/host.rs",
       "Host::agent Host::app_roots Host::carry Host::content_region Host::document_value Host::engine Host::executor Host::grants Host::kernel Host::log " +
-      "Host::motion_due_ms Host::now Host::preorder Host::presented Host::project_navigation Host::roots Host::router_op Host::runner Host::size_new_symbols " +
+      "Host::now Host::preorder Host::presented Host::project_navigation Host::roots Host::router_op Host::runner Host::size_new_symbols " +
       "Host::take_commands Host::take_surface_updates Host::viewport Host::wants_frames"],
     ["painted:host/painted/src/lower.rs", "Host::layer_tracks Host::lower_eligibility Host::spinner_tracks"],
     ["painted:host/painted/src/media_session.rs", "handled"],
@@ -690,10 +690,10 @@ export const classifications = [
     "runner/src/runner/native_timers.rs binds one subscription in each live ordinary timer record at native_timers handoff. Repeats reuse it; gates.rs resets it on rearming. Typed and integer fires retain the original index/generation and clock checks. Frame tasks and other clock entries still use their existing paths. Advance/frame can also pump replies and deferred thens.", [
     ["apple:host/apple/src/abi/exports.rs",
       "exact_admitted_frame exact_advance exact_fire_native_timer exact_frame exact_frame_at exact_native_timers exact_present_frames exact_pump exact_set_live_clock " +
-      "exact_start_on_frame exact_tick exact_tick_at exact_timer_waits"],
+      "exact_prefer_presented exact_start_on_frame exact_tick exact_tick_at exact_timer_waits"],
     ["painted:host/painted/src/agent.rs", "clock_within"],
     ["painted:host/painted/src/canvas.rs", "CanvasHost::frame"],
-    ["painted:host/painted/src/canvas/jni.rs", "Java_dev_exact_canvas_Native_frame Java_dev_exact_canvas_Native_timerHeld Java_dev_exact_canvas_Native_timerObservation"],
+    ["painted:host/painted/src/canvas/jni.rs", "Java_dev_exact_canvas_Native_frame Java_dev_exact_canvas_Native_picturePresented Java_dev_exact_canvas_Native_presentToken Java_dev_exact_canvas_Native_timerHeld Java_dev_exact_canvas_Native_timerObservation"],
     ["painted:host/painted/src/canvas/jni_frames.rs", "Java_dev_exact_canvas_Native_frameTurn"],
     ["painted:host/painted/src/canvas/timers.rs", "CanvasHost::held_timer_waits CanvasHost::timer_observation"],
     ["painted:host/painted/src/content_region/presenter.rs", "Presenter::frame"],
@@ -707,7 +707,7 @@ export const classifications = [
       "Presenter::timer_visibility Presenter::use_native_timers"],
     ["painted:host/painted/src/presenter/collection.rs", "Presenter::sync_authored_scroll"],
     ["painted:host/painted/src/presenter/hatch.rs", "Presenter::timer_due_ms"],
-    ["painted:host/painted/src/presenter/painter.rs", "Presenter::screenshot"],
+    ["painted:host/painted/src/presenter/painter.rs", "Presenter::present_statistics Presenter::screenshot"],
     ["painted:host/painted/src/surfaces/window.rs", "Presenter::window_frame"],
     ["runner:runner/src/runner/advance.rs",
       "Runner::advance Runner::advance_timed Runner::advance_until_request Runner::complete_frame_tasks Runner::frame Runner::frame_tasks " +
@@ -722,6 +722,13 @@ export const classifications = [
     ["runner:runner/src/runner/snapshot.rs", "Runner::snapshot_timeline"],
     ["runner:runner/src/runner/waits.rs", "Runner::fire_timer#next_ms:1 Runner::fire_timer#next_ms:2 Runner::hold_waits Runner::release_waits Runner::task_timing Runner::waits"],
     ["web:host/web/src/abi.rs", "exact_advance exact_frame"],
+    ["painted:host/painted/src/canvas/present.rs", "CanvasHost::picture CanvasHost::picture_presented"],
+    ["painted:host/painted/src/first_frame.rs", "Host::hold_from_boot Host::motion_due_ms Host::page_presented Host::prefer_presented"],
+    ["painted:host/painted/src/presenter/present.rs", "Presenter::driven_presented Presenter::picture_carried Presenter::picture_presented Presenter::prefer_presented Presenter::present_wanted Presenter::presents_pictures Presenter::refresh_presentable"],
+    ["runner:runner/src/page.rs", "Presented::value set_awaits_present"],
+    ["runner:runner/src/runner/page.rs", "Runner::page_presented Runner::prefer_presented Runner::presented"],
+    ["web-js:host/web-js/motion/src/abi.rs", "m_present m_presentable m_release_overdue m_start_on_frame"],
+    ["web:host/web/src/abi/clock.rs", "exact_page_presented exact_prefer_presented"],
   ]),
   group("wakes", ["durable operation"], "app action/wake invocation until expiration or end", "durable",
     "runner/src/runner/modules/wakes.rs raises and expires action/wake invocations independently of a mounted view; declared/wake_list.rs allocates their references. Persistence after process exit is not established here.", [
