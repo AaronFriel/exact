@@ -348,7 +348,7 @@ fn a_page_carries_the_permissions_policy_its_grants_derive() {
     );
     assert_eq!(
         policy,
-        "bluetooth=(), microphone=(self), camera=(), geolocation=(), midi=(), accelerometer=(), gyroscope=(), magnetometer=(), serial=(), hid=(), usb=()"
+        "bluetooth=(), microphone=(self), camera=(), geolocation=(), midi=(), accelerometer=(), gyroscope=(), magnetometer=(), window-management=(), serial=(), hid=(), usb=()"
     );
     for (content_type, expected) in [("text/html; charset=utf-8", true), ("text/plain", false)] {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -369,7 +369,7 @@ fn a_page_carries_the_permissions_policy_its_grants_derive() {
         client.read_to_string(&mut received).unwrap();
         assert_eq!(
             received.contains(
-                "\r\nPermissions-Policy: bluetooth=(), microphone=(self), camera=(), geolocation=(), midi=(), accelerometer=(), gyroscope=(), magnetometer=(), serial=(), hid=(), usb=()\r\n"
+                "\r\nPermissions-Policy: bluetooth=(), microphone=(self), camera=(), geolocation=(), midi=(), accelerometer=(), gyroscope=(), magnetometer=(), window-management=(), serial=(), hid=(), usb=()\r\n"
             ),
             expected,
             "{received}"

@@ -547,6 +547,30 @@ pub const DEVICES: &[Device] = &[
         tvos: false,
         ..ROW
     },
+    // @ref LLP 1178 D4 — the displays and the pointer. Only the web asks:
+    // the browser's own prompt, which shows no purpose, behind the
+    // `window-management` policy feature. Natively nothing asks, and the line
+    // is the app's statement that it reads where the displays are.
+    Device {
+        name: "window-management",
+        sandbox: Some(sandbox::NONE),
+        purpose: false,
+        web: Some("window-management"),
+        tvos: false,
+        ..ROW
+    },
+    // @ref LLP 1178 D4 — a still of every display without a picker (LLP
+    // 1133.032 D9's row). macOS asks once (Screen Recording, TCC), which
+    // ScreenCaptureKit needs no sandbox entitlement for; Windows asks nothing.
+    // The web has no standing capture permission, so the row has no policy
+    // feature: `display-capture` is `getDisplayMedia`'s, a row of its own.
+    Device {
+        name: "screen-recording",
+        sandbox: Some(sandbox::NONE),
+        macos: &["NSScreenCaptureUsageDescription"],
+        tvos: false,
+        ..ROW
+    },
     // App Attest and Play Integrity (LLP 1133.028 D6): nothing is shown or
     // asked. The entitlement's value, `development` or `production`, is the
     // build's to choose (`host/apple/build.mjs`); a Mac takes it only with a
@@ -1051,15 +1075,29 @@ mod tests {
         assert!(!permissions_policy("device.local-network purpose.lan").contains("local"));
     }
 
+    /// LLP 1178 D4: the display list's line names no purpose and turns on
+    /// the web's policy feature; the capture's names one and writes the Mac's key.
+    #[test]
+    fn window_management_and_screen_recording_are_desktop_lines() {
+        let all = device_grants("device.window-management").unwrap();
+        assert!(!all[0].device.purpose && !all[0].device.tvos);
+        assert!(permissions_policy("device.window-management").contains("window-management=(self)"));
+        assert!(device_grants("device.window-management purpose.screens").is_err());
+        let all = device_grants("device.screen-recording purpose.shot").unwrap();
+        assert_eq!(all[0].device.macos, ["NSScreenCaptureUsageDescription"]);
+        assert!(all[0].device.web.is_none() && all[0].device.ios.is_empty());
+        assert!(device_grants("device.screen-recording").is_err());
+    }
+
     #[test]
     fn the_policy_allows_what_is_granted_and_denies_the_rest() {
         assert_eq!(
             permissions_policy("device.microphone p\ndevice.speech-recognition q"),
-            "bluetooth=(), microphone=(self), camera=(), geolocation=(), midi=(), accelerometer=(), gyroscope=(), magnetometer=(), serial=(), hid=(), usb=()"
+            "bluetooth=(), microphone=(self), camera=(), geolocation=(), midi=(), accelerometer=(), gyroscope=(), magnetometer=(), window-management=(), serial=(), hid=(), usb=()"
         );
         assert_eq!(
             permissions_policy(""),
-            "bluetooth=(), microphone=(), camera=(), geolocation=(), midi=(), accelerometer=(), gyroscope=(), magnetometer=(), serial=(), hid=(), usb=()"
+            "bluetooth=(), microphone=(), camera=(), geolocation=(), midi=(), accelerometer=(), gyroscope=(), magnetometer=(), window-management=(), serial=(), hid=(), usb=()"
         );
     }
 
