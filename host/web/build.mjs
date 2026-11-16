@@ -219,6 +219,9 @@ const outFlag = process.argv.indexOf('--out');
 const outDir = outFlag < 0 ? null : process.argv.splice(outFlag, 2)[1];
 if (outFlag >= 0 && (!outDir || outDir.startsWith('--'))) { console.error('web-build: --out names a directory'); process.exit(2); }
 const app = resolveApp(process.argv[2]);
+if ((app.manifest.host?.web?.base ?? '/') !== '/' && (target === '--wasm' || bakeOnly || app.manifest.game)) {
+  throw new Error('host.web.base: the wasm target and native update store require /; build a standalone JS site');
+}
 const outRoot = outDir && outPath(outDir);
 /** `--out`'s directory, its links resolved, once it is one the build may replace whole: never the app, this checkout or
  * a directory holding either; inside the app, `dist` or a path under `dist/` or `target/`, which no source scan reads,

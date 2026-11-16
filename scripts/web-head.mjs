@@ -1,3 +1,4 @@
+import { defaultScope } from './links.mjs';
 // app.json's `host.web.head`: the tags the web builds write into every document's `<head>` (LLP 1048.000 D3).
 import { posix } from 'node:path';
 import { webRequestURL } from './origin.mjs';
@@ -134,4 +135,34 @@ export function webCspFile(manifest) {
   if (problems.length) throw new Error(`app.json:\n  ${problems.join('\n  ')}`);
   const said = Object.fromEntries(CSP_KEYS.filter((key) => manifest.host?.web?.[key] !== undefined).map((key) => [key, manifest.host.web[key]]));
   return Object.keys(said).length ? JSON.stringify(said) + '\n' : null;
+}
+
+/** Scope manifest destinations to the build mount; native manifest values remain unchanged. */
+export function webManifestAtBase(web, base) {
+  if (base !== '/') {
+    web = structuredClone(web);
+    const mounted = (value, asset = false) => {
+      if (/^[a-z][a-z0-9+.-]*:|^\/\//i.test(value)) {
+        if (asset) return value;
+        throw new Error('host.web.base: manifest destinations must be app-relative paths');
+      }
+      const path = '/' + value.replace(/^\//, '');
+      const segments = path.split(/[?#]/)[0].split('/');
+      if (/[\\\x00-\x1f]/.test(path) || segments.some(segment => /^\.{1,2}$/.test(segment.replace(/%2e/gi, '.'))))
+        throw new Error('host.web.base: manifest destinations must be canonical paths without dot segments');
+      return base.slice(0, -1) + path;
+    };
+    web.scope = mounted(web.scope ?? defaultScope(web.start_url));
+    web.start_url = mounted(web.start_url);
+    if (web.id !== undefined) web.id = mounted(web.id);
+    if (web.share_target) web.share_target.action = mounted(web.share_target.action);
+    for (const icon of web.icons ?? []) icon.src = mounted(icon.src, true);
+    for (const handler of web.file_handlers ?? []) handler.action = mounted(handler.action);
+    for (const handler of web.protocol_handlers ?? []) handler.url = mounted(handler.url);
+    for (const shortcut of web.shortcuts ?? []) {
+      shortcut.url = mounted(shortcut.url);
+      for (const icon of shortcut.icons ?? []) icon.src = mounted(icon.src, true);
+    }
+  }
+  return web;
 }

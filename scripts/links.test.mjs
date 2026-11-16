@@ -158,3 +158,29 @@ test('a Mac profile signs the links when it can, and a build without one says li
   const signed = macProfileEntitlements(app, { prefix: 'TEAM', team: 'TEAM', dev: false }, needs, { reach: { auth: { associatedDomains: ['webcredentials:notes.example'] } } });
   assert.deepEqual(signed['com.apple.developer.associated-domains'], ['webcredentials:notes.example', 'applinks:notes.example', 'applinks:share.example']);
 });
+
+
+test('a mounted site publishes the same narrowed scope that native link claims use', async () => {
+  const { nativeManifestMetadata, webAppManifest } = await import('./app.mjs');
+  for (const scope of [undefined, '/notes/']) {
+    const manifest = { ...notes, scope, host: { ...notes.host, web: { base: '/app/' } } };
+    const web = webAppManifest(manifest, 'Notes'), claims = linkClaims(manifest);
+    assert.equal(claims[0].scope, web.scope);
+    assert.deepEqual(claims[0].exclude, ['/app/.exact/']);
+    assert.equal(nativeManifestMetadata(manifest, 'android').links[0].pathPrefix, '/app/notes/');
+    assert.deepEqual(appleAssociation(appOf(manifest)).applinks.details[0].components,
+      [{ '/': '/app/.exact/*', exclude: true }, { '/': '/app/notes/*' }]);
+    assert.equal(claims[1].scope, '/');
+  }
+});
+
+test('Android excludes the mounted Exact directory and its descendants', async () => {
+  const { withAppLinks } = await import('./android-manifest.mjs');
+  const manifest = { ...notes, start_url: '/', scope: '/', host: {
+    ...notes.host, web: { base: '/app/' }, android: { ...notes.host.android, minimumOS: '15' },
+  } };
+  const xml = withAppLinks('', androidLinkFilters(manifest));
+  assert.match(xml, /android:allow="false">\s*<data android:pathPrefix="\/app\/\.exact\/"/);
+  assert.doesNotMatch(xml, /android:path="\/app\/\.exact\/"/);
+  assert.match(xml, /<uri-relative-filter-group>\s*<data android:pathPrefix="\/app\/"/);
+});

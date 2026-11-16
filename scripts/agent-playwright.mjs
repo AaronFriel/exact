@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { agentPage, backLayer, builtSettingLines, chromium, launchFacts, listenOn, netOptions, refuseStale, staleError, warnStale, webChanges, withEpoch, withFaults } from './agent-launch.mjs';
 import { deliverClipboard, pasteChord } from './agent-keys.mjs';
 import { pageAim, pagePoint, pageOutside } from './agent-aim.mjs';
-import { builtAppMatches, jsTargetBuild, serveBuildTree, serveStatic } from '../host/web/serve.mjs'; import { bootedGeneration, leaseGeneration } from '../host/web/generations.mjs';
+import { builtAppMatches, jsTargetBuild, serveBuildTree, serveStatic } from '../host/web/serve.mjs'; import { buildBase, bootedGeneration, leaseGeneration } from '../host/web/generations.mjs';
 import { resolveApp, webBuildCommand, webDist as defaultWebDist } from './app.mjs';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -97,7 +97,7 @@ async function files({ plan, pageURL, app, webDist, port, env }) {
   server.once('close', release);
   // `--port`/EXACT_PORT (agent-launch.mjs `webPort`), else a free one.
   await listenOn(server, port ?? 0, '127.0.0.1', undefined, port != null, env);
-  return { js, server, planBuild, url: pageURL ?? `http://127.0.0.1:${server.address().port}/` };
+  return { js, server, planBuild, url: pageURL ?? `http://127.0.0.1:${server.address().port}${js ? buildBase(served) : "/"}` };
 }
 
 const init = `

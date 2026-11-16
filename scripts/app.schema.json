@@ -1147,6 +1147,11 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
+            "base": {
+              "description": "The URL path the JS web build is served under, such as /app/. Defaults to /. Starts and ends with /; use URL-safe path segments, without dot segments. serve reads the base recorded in the build.",
+              "type": "string",
+              "pattern": "^/(?:[A-Za-z0-9_~-]+(?:\\.[A-Za-z0-9_~-]+)*/)*$"
+            },
             "head": {
               "description": "Tags the web build writes into the <head> of every document: the shell, each pre-rendered page and the 404 page. Each entry is one tag, {\"script\": {...}}, {\"link\": {...}} or {\"meta\": {...}}, whose value is its attributes (a string, or true for a bare one such as async); a script's `text` is its content. For what a site says once to the browser (an analytics script, a preconnect, site-wide JSON-LD); a page's own title and metas are the Contract `head` element's. The same on every page and web only.",
               "type": "array",

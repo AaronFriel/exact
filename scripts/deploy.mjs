@@ -1234,6 +1234,7 @@ async function deployCaptured(opts, capsule) {
  * What is captured, and how it is frozen, is unchanged. */
 async function deploy(opts) {
   const locatedApp = resolveApp(opts._[0]);
+  if ((locatedApp.manifest.host?.web?.base ?? "/") !== "/") throw new Error("host.web.base: deploy and the signed update store require /; publish the web-build directory at its configured base with a static host or serve");
   requireReleasePins(locatedApp);
   const target = process.env.CARGO_TARGET_DIR ? canonicalPath(process.env.CARGO_TARGET_DIR) : null;
   if (!target || [locatedApp.dir, ROOT].some((dir) => inside(repoTop(dir), target))) return launch(locatedApp, opts);

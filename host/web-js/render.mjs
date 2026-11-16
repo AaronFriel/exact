@@ -16,10 +16,10 @@ import vm from 'node:vm';
 import { brotliCompressSync, createBrotliCompress, constants } from 'node:zlib';
 import { createDocument, esc } from './dom.js';
 import { cachingFetch, directives, FRESH } from './http-cache.mjs';
-import { canonical } from './route-pattern.js';
+import { canonical, mountedHref, withBase } from './route-pattern.js';
 import { select, tokens } from './page-style.mjs';
 import { buildPageFiles, writeCrawlerFiles } from '../web/crawl.mjs';
-import { generationOf, withGenerationBase } from '../web/generations.mjs';
+import { buildBase, generationOf, withGenerationBase } from '../web/generations.mjs';
 import { lockHeld } from '../web/build-lock.mjs';
 
 const DEADLINE = 3000;
@@ -98,8 +98,9 @@ const UNAVAILABLE = "<title>Unavailable</title>\n<p>This page couldn't be render
 const unesc = s => s.replace(/&(amp|lt|gt|quot);/g, (_, e) => ({ amp: '&', lt: '<', gt: '>', quot: '"' })[e]);
 
 /** `url` if it navigates (document_url.rs `navigable`), made absolute against the manifest's origin (page.rs `absolute`). */
-function crawlable(url, origin) {
+function crawlable(url, origin, base = "/") {
   try { if (!['http:', 'https:', 'mailto:', 'tel:'].includes(new URL(url, 'https://render.invalid/').protocol)) return null; } catch { return null; }
+  if (base !== '/') url = mountedHref(/^[?#]/.test(url) ? '/' + url : url, base);
   if (!origin || /^[a-z0-9+.-]+:/i.test(url) || url.startsWith('//')) return url;
   return origin.replace(/\/+$/, '') + (url.startsWith('/') ? '' : '/') + url;
 }
@@ -159,6 +160,7 @@ export function renderer(dist, { closed = false, read = path => readFileSync(res
   const script = new vm.Script(read('.gen/server.js').toString('utf8'), { filename: 'server.js' });
   let shell;
   try { shell = read('shell.html').toString('utf8'); } catch (error) { if (error.code !== 'ENOENT') throw error; shell = read('index.html').toString('utf8'); }
+  const base = /<base href="([^"]*)">/.exec(shell)?.[1] ?? '/';
   // The rendered head combines the shell's scheme bootstrap with its capture script.
   shell = shell.replace(/<script data-exact-scheme>[\s\S]*?<\/script>\n/, '');
   const capture = (readFileSync(new URL('../web/scheme.js', import.meta.url), 'utf8') + readFileSync(new URL('./capture.js', import.meta.url), 'utf8')).trim();
@@ -171,7 +173,7 @@ export function renderer(dist, { closed = false, read = path => readFileSync(res
   // The head's fields a crawler reads after the title and viewport, as page.rs `page_head` writes them.
   const crawled = (out, location) => {
     const meta = (key, n, v) => `<meta ${key}="${n}" content="${esc(v, true)}">`, title = out.title ?? name;
-    const canonical = out.canonical ? crawlable(out.canonical, out.origin) : null, image = out.image ? crawlable(out.image, out.origin) : null;
+    const canonical = out.canonical ? crawlable(out.canonical, out.origin, base) : null, image = out.image ? crawlable(out.image, out.origin, base) : null;
     const url = canonical ?? (out.origin ? crawlable(location, out.origin) : null);
     return (out.description ? meta('name', 'description', out.description) : '') + (out.robots ? meta('name', 'robots', out.robots) : '')
       + (canonical ? `<link rel="canonical" href="${esc(canonical, true)}">` : '')
@@ -204,7 +206,7 @@ export function renderer(dist, { closed = false, read = path => readFileSync(res
   let rules = null;
   try { rules = JSON.parse(read('.gen/page-style.json').toString('utf8')); } catch (error) { if (error.code !== 'ENOENT') throw error; }
   const sheet = rules ? /<style>[\s\S]*?<\/style>\n?/ : /(?!)/;
-  const rebase = head => generation ? withGenerationBase(head, generation) : head;
+  const rebase = head => generation ? withGenerationBase(head, generation, base) : head;
   // A rendered page paints without the runtime, which only adopts it, so its preloads are low priority (page.rs `push_low`).
   const headOf = (preload, language) => rebase(shell.slice(0, title).replace(/<html[^>]*>/, () => htmlTag(language)) + `<script>${capture}</script>\n`
     + shell.slice(stop, early).replace(/(<link rel="modulepreload" href="[^"]*")>\n/g, preload ? '$1 fetchpriority="low">\n' : '')
@@ -216,8 +218,8 @@ export function renderer(dist, { closed = false, read = path => readFileSync(res
   const realm = () => {
     const document = createDocument(shell);
     // The bake's page facts (runner/src/page.rs): visible, online, focused, no share sheet or pickers. The
-    // base is the shell's `<base href="/">`, against which the runtime checks that a link navigates (rt.js `navigable`).
-    Object.assign(document, { visibilityState: 'visible', hasFocus: () => true, baseURI: 'http://render.invalid/' });
+    // base is the shell's mount, against which the runtime checks that a link navigates (rt.js `navigable`).
+    Object.assign(document, { visibilityState: 'visible', hasFocus: () => true, baseURI: `http://render.invalid${base}` });
     const location = { pathname: '/', search: '', href: 'http://render.invalid/', origin: 'http://render.invalid' };
     // What the render read that another render may not read alike: how long its answers stay fresh for any reader
     // (http-cache.mjs `FRESH`), and whether a source drew a random number (its only other reading the clock and
@@ -344,7 +346,7 @@ export function renderer(dist, { closed = false, read = path => readFileSync(res
         // A page made per request that waits for the reader names its answers past 1 KB rather than holding them: they
         // are needed only once the reader acts, and the capture script fetches them with the runtime (LLP 1048.007 D10).
         const deferred = activate === 'interaction' && (info.policy === 'request' || info.policy === 'cached') && checkpoint.length > 1024;
-        const src = deferred ? ` data-src="/.exact/checkpoint/${deferAnswers(checkpoint)}.json"` : '';
+        const src = deferred ? ` data-src="${base}.exact/checkpoint/${deferAnswers(checkpoint)}.json"` : '';
         const body = late => `${fields}\n${late}${style}${out.hero}<div id="exact-root"${rootAttrs}>${out.root}</div>${shell.slice(root + ROOT[0].length, entry)}`
           + `<script type="application/vnd.exact.checkpoint" data-digest="${digest}" data-activate="${activate}" data-entry="${entryURL}"${wake}${src}>${deferred ? '' : checkpoint.replace(/</g, '\\u003c')}</script>${shell.slice(entryEnd)}`;
         // A complete page marks html and names the preloads in its head; a streamed head has gone already, so the rest
@@ -564,7 +566,7 @@ if (import.meta.main) {
       const files = buildPageFiles(dist, pages, routes);
       let origin = null;
       for (const [i, p] of pages.entries()) {
-        const page = await render(p.location);
+        const page = await render(withBase(p.location, buildBase(dist)));
         docs.push({ location: canonical(p.location), notfound: p.notfound, status: page.status, robots: page.robots });
         origin ??= page.origin;
         const file = files[i];
@@ -574,9 +576,9 @@ if (import.meta.main) {
         for (const failure of page.failed) console.log(`  ${p.location}: resource ${failure}`);
         for (const refused of page.refused) console.log(`  ${p.location}: ${refusedLine(refused)}`);
       }
-      writeCrawlerFiles(dist, docs, origin, routes);
+      writeCrawlerFiles(dist, docs, origin, routes, buildBase(dist));
     } else for (const location of args.slice(1)) {
-      const page = await render(location);
+      const page = await render(withBase(location, buildBase(dist)));
       for (const failure of page.failed) console.error(`${location}: resource ${failure}`);
       process.stdout.write(page.html);
     }

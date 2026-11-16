@@ -307,7 +307,7 @@ export function withProtocolHandlers(fragment, handlers = []) {
 export function withAppLinks(fragment, filters = []) {
   if (!filters.length) return fragment;
   const group = (allow, data) => [`                <uri-relative-filter-group${allow ? '' : ' android:allow="false"'}>`, `                    <data ${data} />`, '                </uri-relative-filter-group>'];
-  const pathData = (p) => p === EXACT_PATHS ? `android:pathPrefix="${escape(p)}"` : `android:path="${escape(p)}"`;
+  const pathData = (p) => p.endsWith(EXACT_PATHS) ? `android:pathPrefix="${escape(p)}"` : `android:path="${escape(p)}"`;
   const lines = filters.flatMap(({ host, pathPrefix, exclude, allow }) => [
     '            <intent-filter android:autoVerify="true">',
     '                <action android:name="android.intent.action.VIEW" />',

@@ -50,8 +50,9 @@ import {
   cdpWheel,
 } from './agent-keys.mjs';
 import { waitAtMost } from './agent-wire.mjs';
+import { withBase } from '../host/web-js/route-pattern.js';
 import { builtAppMatches, jsTargetBuild, serveBuildTree, serveStatic } from '../host/web/serve.mjs';
-import { bootedGeneration, leaseGeneration } from '../host/web/generations.mjs';
+import { buildBase, bootedGeneration, leaseGeneration } from '../host/web/generations.mjs';
 import { resolveApp, webDist as defaultWebDist } from './app.mjs';
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -251,7 +252,7 @@ async function openWebUnlocked({
   const port = server.address().port;
   if (!openWeb.said)
     console.error(
-      `${(openWeb.said = `web: ${selected.name} served at http://127.0.0.1:${port}/`)}${fixed ? '' : ' (--port <n> or EXACT_PORT picks the port)'}`,
+      `${(openWeb.said = `web: ${selected.name} served at http://127.0.0.1:${port}${js ? buildBase(served) : "/"}`)}${fixed ? '' : ' (--port <n> or EXACT_PORT picks the port)'}`,
     );
   const chrome = chromium({ needs: webNeeds(selected) }).executable,
     // LLP 1115.000 D10.3: EXACT_SCALE, the Linux host's variable, launches Chrome at that device scale factor too, its
@@ -448,7 +449,7 @@ async function openWebUnlocked({
     }
     // The page: this carrier's own server over dist/, or a URL the caller
     // named — the dev server, so a drive can watch an edit arrive.
-    const page = agentPage(pageURL ? new URL(pageURL) : new URL(location ?? '/', `http://127.0.0.1:${port}/`), {
+    const page = agentPage(pageURL ? new URL(pageURL) : new URL(withBase(location ?? '/', js ? buildBase(served) : '/'), `http://127.0.0.1:${port}/`), {
       facts,
       storage,
       env,

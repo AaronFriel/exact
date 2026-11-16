@@ -72,7 +72,8 @@ export function linkClaims(manifest, callbacks = []) {
   const own = claimedOrigin(manifest.app.origin);
   if (!own.origin) return [];
   const extensions = (manifest.scope_extensions ?? []).map((e) => claimedOrigin(e.origin)).filter((e) => e.origin);
-  return [{ ...own, scope: effectiveScope(manifest), exclude: [EXACT_PATHS, ...callbackPaths(own.origin, callbacks)] },
+  const base = manifest.host?.web?.base ?? '/', prefix = base.slice(0, -1);
+  return [{ ...own, scope: prefix + effectiveScope(manifest), exclude: [prefix + EXACT_PATHS, ...callbackPaths(own.origin, callbacks)] },
     ...extensions.map((e) => ({ ...e, scope: '/', exclude: callbackPaths(e.origin, callbacks) }))];
 }
 
@@ -81,7 +82,7 @@ export const appleLinkDomains = (manifest) => linkClaims(manifest).map((c) => `a
 
 /** An `apple-app-site-association` `applinks` entry's `components` for `claim`: each excluded path first, then the
  * scope (Apple, "Supporting associated domains": the first matching component decides). */
-export const appleComponents = (claim) => [...claim.exclude.map((p) => ({ '/': p === EXACT_PATHS ? `${p}*` : p, exclude: true })), { '/': `${claim.scope}*` }];
+export const appleComponents = (claim) => [...claim.exclude.map((p) => ({ '/': p.endsWith(EXACT_PATHS) ? `${p}*` : p, exclude: true })), { '/': `${claim.scope}*` }];
 
 /** Android's App Link filters for the claims, each `{ host, pathPrefix, exclude, allow, claimed }`: `pathPrefix` the
  * filter's own path (none for `/`), `exclude` the paths its `uri-relative-filter-group`s leave to the browser before

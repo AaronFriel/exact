@@ -30,7 +30,7 @@ import { designPath, frameOnlyByTool, formaServer } from '../../scripts/forma-se
 import { pluginOnLoopback, remoteArgs } from '../../scripts/forma-remote.mjs'; import { openRemoteCanvas } from '../../scripts/forma-canvas.mjs';
 import { designDigest, patchDesign } from '../../scripts/forma-patch.mjs';
 import { relayChannel, serveCommands, serveReport, streamFrame } from '../../scripts/forma-builds.mjs';
-import { captureAssets, assetCards, alsoOnIPv6Loopback, freeOnIPv6Loopback, listenDelay, applyShaderTreeChange, sendStaticBody, watchLauncher, applyStaticChange, applyStaticTreeChange, builtAppMatches, developmentOpenPage, readDevGenerationAsync, readStaticFileAsync, readWebRequest, readModuleFile, reflectShaderFiles, saveTrace, retainDevGeneration, shaderInterfaceDigests, syncStaticTree, watchStaticTrees, webContentType, webEnvelope, devGenerationDigest, MODULE_FILES, moduleCards } from './serve.mjs';
+import { captureAssets, assetCards, alsoOnIPv6Loopback, freePort, listenDelay, applyShaderTreeChange, sendStaticBody, watchLauncher, applyStaticChange, applyStaticTreeChange, builtAppMatches, developmentOpenPage, readDevGenerationAsync, readStaticFileAsync, readWebRequest, readModuleFile, reflectShaderFiles, saveTrace, retainDevGeneration, shaderInterfaceDigests, syncStaticTree, watchStaticTrees, webContentType, webEnvelope, devGenerationDigest, MODULE_FILES, moduleCards } from './serve.mjs';
 import { fileURLToPath } from 'node:url';
 const argv = guardFlags('web', process.argv.slice(2)); // --help, or a flag it does not take, before anything starts
 const arg = (name, fallback) => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : fallback; };
@@ -39,27 +39,16 @@ const arg = (name, fallback) => { const i = argv.indexOf(name); return i >= 0 ? 
 const buildEnv = {...developmentBuildEnv(),EXACT_UPDATE_TRUST:'development',EXACT_WEB_LINK:'all'};
 let app, appDesign;
 try { app = resolveApp(arg('--app', undefined)); appDesign = designPath(app.dir); } catch (e) { console.error(e.message); process.exit(2); }
+if ((app.manifest.host?.web?.base ?? '/') !== '/') { console.error('host.web.base: the web/native development loop requires /; use web-build --out dist and serve dist, which rebuilds on edits'); process.exit(2); }
 if (app.outside) buildEnv.EXACT_APP_DIR = app.dir;
 if (app.manifest.game) buildEnv.EXACT_GAME_PROOF_PROFILE ??= 'gpu-dev';
 const lan = argv.includes('--lan');
-/** The first of 100 ports from `from` up that `host` can listen on: another app's loop holding 8765 is common.
- * A probe does not reserve it; a loop started at the same moment can still take it, and its listen error says so. */
-async function freePort(from, host) {
-  const range = webPortRange() ?? [from, Math.min(from + 99, 65535)];
-  for (let p = range[0]; p <= range[1]; p++) {
-    const free = await new Promise((ok) => { const t = createServer(); t.once('error', () => ok(false)); t.listen(p, host, () => t.close(() => ok(true))); });
-    // And on [::1], which a localhost URL (the design tool's canvas) reaches.
-    if (free && await freeOnIPv6Loopback(p)) return p;
-  }
-  console.error(`ports ${range[0]}–${range[1]} are all in use; --port <n> picks another`);
-  process.exit(1);
-}
 // An explicit --port (or EXACT_PORT: one variable for every listener the app's commands start) is kept, and fails
 // loudly if taken; the default moves to a free one.
 const named = argv.includes('--port') ? arg('--port') : process.env.EXACT_PORT || null;
 if (named != null && !(Number.isInteger(Number(named)) && Number(named) >= 1 && Number(named) <= 65535)) { console.error(`${argv.includes('--port') ? '--port' : 'EXACT_PORT'} ${named}: a port number, 1–65535`); process.exit(2); }
 let loopClaim; try { loopClaim = argv.includes('--serve-as') ? null : claimDevLoop(app.dir, argv.includes('--wasm') || app.manifest.game !== undefined ? 'wasm' : 'js'); } catch (error) { console.error(error.message); process.exit(1); }
-const port = named != null || argv.includes('--serve-as') ? Number(named ?? 8765) : await freePort(8765, lan ? '0.0.0.0' : '127.0.0.1');
+const port = named != null || argv.includes('--serve-as') ? Number(named ?? 8765) : await freePort(8765, lan ? '0.0.0.0' : '127.0.0.1', webPortRange());
 loopClaim?.url(`http://127.0.0.1:${port}`);
 if (port !== 8765 && named == null && !webPortRange() && !argv.includes('--serve-as')) console.log(`port 8765 is in use; serving on ${port} (--port <n> or EXACT_PORT picks one)`);
 // `--serve-as <port>` (internal): the resident loop's producers behind the

@@ -107,6 +107,7 @@ pub const RECIPES: &[(&str, &str)] = &[
     recipe!("waveform-and-tail"),
     recipe!("web-look"),
     recipe!("website"),
+    recipe!("website-hosting"),
 ];
 
 pub const PATTERNS: &[(&str, &str)] = &[

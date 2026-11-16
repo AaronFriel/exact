@@ -586,7 +586,7 @@ export function readManifest(dir, name) {
 }
 
 import { DOCUMENT_UTIS, ownDocumentType, documentTypeProblems, canonicalizeDocumentExtensions } from './document-utis.mjs';
-import { webCspProblems, webHeadProblems } from './web-head.mjs';
+import { webManifestAtBase, webCspProblems, webHeadProblems } from './web-head.mjs';
 import { appIconProblems, publishedIcons } from './app-icons.mjs';
 import { claimVariant, resolveVariant, selectedVariant, variantProblems } from './variants.mjs';
 import { REMOVED_DOMAINS, appleLinkDomains, androidLinkFilters, linkProblems, rawAppleDomains } from './links.mjs';
@@ -623,7 +623,7 @@ function protocolHandlerProblems({ protocol_handlers = [], host }) {
  * `dir` each icon gets the `sizes` and `type` of its file (LLP 1163 D2). */
 export function webAppManifest(manifest, name, notes = [], dir = null) {
   const keys = ['name', 'short_name', 'description', 'id', 'start_url', 'display', 'display_override', 'theme_color', 'background_color', 'icons', 'lang', 'orientation', 'file_handlers', 'protocol_handlers', 'launch_handler', 'shortcuts', 'categories', 'handle_links', 'scope', 'scope_extensions'];
-  const web = Object.fromEntries(keys.filter((k) => manifest[k] !== undefined).map((k) => [k, manifest[k]]));
+  let web = Object.fromEntries(keys.filter((k) => manifest[k] !== undefined).map((k) => [k, manifest[k]]));
   if (web.file_handlers) web.file_handlers = web.file_handlers.filter((h) => !Object.keys(h.accept ?? {}).includes('inode/directory'));
   if (web.protocol_handlers) web.protocol_handlers = web.protocol_handlers.filter((h) => !isWebScheme(h.protocol));
   // A shortcut's `apple` and `android` words are the native bakes' (LLP 1133.023 D11).
@@ -635,6 +635,7 @@ export function webAppManifest(manifest, name, notes = [], dir = null) {
   for (const key of ['file_handlers', 'protocol_handlers', 'shortcuts']) if (!web[key]?.length) delete web[key];
   web.name ??= name;
   web.start_url ??= '/';
+  web = webManifestAtBase(web, manifest.host?.web?.base ?? '/');
   // The document's language (`<html lang>`, WCAG 3.1.1). Every app here is in
   // English, so an app that declares none is `en`.
   web.lang ??= 'en';
