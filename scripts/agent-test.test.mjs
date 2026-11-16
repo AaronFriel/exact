@@ -4,13 +4,16 @@
 import { afterAll, test, expect } from 'bun:test';
 import { spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { createInterface } from 'node:readline';
+import { Readable } from 'node:stream';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { failureMark, backendFetchPrefixes, churnLines, disabledExpectation, focusedExpectation, nativeFetchOrigins, NO_FAILURES, perfExpectation, pickHint, propertyHolds, testMutationClock, refusalExpectation, refuseDisabled, runTests, stateHolds, serverRequest, testScope, textExpectation, treeExpectation, unarranged } from './agent-test.mjs';
 import { axFindings } from './agent-ax.mjs';
 import { withEpoch } from './agent-launch.mjs';
 import { serveBuildTree } from '../host/web/serve.mjs';
+import { sitePages } from '../host/web-js/render.mjs';
 import { fileURLToPath } from 'node:url';
 // A fixture's build can fail before the `try` that removes its directory.
 const scratches = [];
@@ -308,6 +311,146 @@ export function answer() { return Promise.resolve().then(() => fetch('${url}')).
     expect(result.results.map(t => t.failures)).toEqual([[]]);
     expect([result.passed, result.failed, requests]).toEqual([1, 0, 1]);
   } finally { await new Promise(resolve => server.close(resolve)); }
+}, 180_000);
+
+test.each([['rust', 0, 'chrome'], ['rust', 20 * 1024, 'chrome'], ['rust', 20 * 1024, 'firefox'], ['rust', 20 * 1024, 'webkit'], ['js', 0, 'chrome'], ['rust', 60 * 1024, 'chrome', 'cached'], ['js', 60 * 1024, 'chrome', 'cached']])('%s request rendering keeps %i-byte fixtures local on %s through launch and reload', async (how, padding, browser, policy = 'request') => {
+  const root = fileURLToPath(new URL('..', import.meta.url)), dir = scratch('exact-rust-fixture-');
+  const dist = join(dir, 'dist'), file = join(dir, 'app.test.contract');
+  let requests = 0, configs = 0, renderer, lines, server;
+  const heard = [];
+  let report;
+  const reported = new Promise(resolve => { report = resolve; });
+  const probe = `<script>
+    const present = Object.hasOwn(globalThis, '__exactLaunchFaults');
+    if (top === self) fetch('/report?present=' + present);
+    else parent.postMessage({fixtureProbe: true, present}, '*');
+  </script>`;
+  const backend = Bun.serve({ hostname: '127.0.0.1', port: 0, fetch(req) {
+    if (new URL(req.url).pathname === '/probe') return new Response(probe, {headers: {'content-type': 'text/html'}});
+    if (new URL(req.url).pathname === '/report') { report(new URL(req.url).searchParams.get('present') === 'true'); return new Response('ok'); }
+    if (new URL(req.url).pathname === '/config') { configs++; return Response.json({text: 'Server-only config'}); }
+    requests++; return Response.json({text: 'Live greeting'}, {headers: {'access-control-allow-origin': '*', 'cache-control': 'public, max-age=60'}});
+  } });
+  const prefix = new URL('greeting', backend.url).href;
+  const stop = async () => {
+    if (renderer) { renderer.kill('SIGTERM'); await renderer.exited; renderer = null; }
+    lines?.close();
+    if (server) { await new Promise(resolve => server.close(resolve)); server = null; }
+  };
+  try {
+    writeFileSync(join(dir, 'app.json'), JSON.stringify({ name: 'Rust Fixture', app: {id: 'com.exact.caltrain', name: 'Rust Fixture'}, host: {web: {csp: false}}, rust: false }));
+    writeFileSync(join(dir, 'app.contract'), `routes nav
+  home "/" render=${policy}
+shape Greeting
+  text: string
+source greeting() as shape Greeting
+  url "${prefix}"
+source config() as shape Greeting
+  url "${new URL('config', backend.url).href}"
+component App
+  resource config = config() as shape Greeting
+  resource greeting = greeting() as shape Greeting
+  view
+    column
+      text greeting.text testId="greeting"
+      text config.text testId="config"
+`);
+    const build = async production => {
+      const child = Bun.spawn([process.execPath, 'host/web-js/build.mjs', 'rust-fixture', '--out', dist, '--render', how === 'js' ? 'js' : 'none', ...(production ? ['--production'] : [])], {cwd: root, env: {...process.env, EXACT_APP_DIR: dir}, stdout: 'pipe', stderr: 'pipe'});
+      const [status, stdout, stderr] = await Promise.all([child.exited, new Response(child.stdout).text(), new Response(child.stderr).text()]);
+      expect(status, stdout + stderr).toBe(0);
+    };
+    const start = async () => {
+      if (how === 'js') {
+        const pages = sitePages(dist);
+        server = createServer({maxHeaderSize: 128 * 1024}, (req, res) => serveBuildTree(dist, req, res, {pages}));
+        await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+        return `http://127.0.0.1:${server.address().port}/`;
+      }
+      const binary = join(process.env.CARGO_TARGET_DIR ?? join(root, 'target'), 'host-dev', 'caltrain-render');
+      renderer = Bun.spawn([binary, '--serve', dist, '--port', '0'], {cwd: root, stdout: 'pipe', stderr: 'pipe'});
+      const child = renderer, errors = new Response(child.stderr).text();
+      lines = createInterface({input: Readable.fromWeb(child.stdout)});
+      return new Promise((resolve, reject) => {
+        lines.on('line', line => { heard.push(line); const url = /http:\/\/[^/]+\//.exec(line)?.[0]; if (url) resolve(url); });
+        child.exited.then(async () => reject(new Error(`renderer ended: ${await errors}`)));
+      });
+    };
+    if (how === 'rust') {
+      const child = Bun.spawn(['cargo', 'build', '--profile', 'host-dev', '-p', 'caltrain-linux', '--bin', 'caltrain-render'], {cwd: root, stdout: 'pipe', stderr: 'pipe'});
+      const [status, stdout, stderr] = await Promise.all([child.exited, new Response(child.stdout).text(), new Response(child.stderr).text()]);
+      expect(status, stdout + stderr).toBe(0);
+    }
+    await build(false);
+    mkdirSync(join(dist, '.exact', 'auth'), {recursive: true});
+    writeFileSync(join(dist, '.exact', 'auth', 'probe.html'), probe);
+    const url = await start();
+    expect(await (await fetch(new URL('/.exact/auth/probe.html', url))).text()).toBe(probe);
+    const live = await fetch(url);
+    const html = await live.text();
+    expect(live.status, html + heard.join('\n')).toBe(200);
+    expect(html).toContain('Live greeting');
+    expect(requests).toBe(1);
+    requests = 0;
+    const shell = await fetch(new URL('/?agent=1&failFetch=1', url));
+    expect(shell.status).toBe(400);
+    expect(await shell.text()).not.toContain('<script type="application/vnd.exact.checkpoint"');
+    expect(requests).toBe(0);
+    const response = {status: 200, headers: {'content-type': 'application/json', 'cache-control': 'public, max-age=60'}, body: '{"text":"Rendered fixture"}'};
+    const headers = {'x-exact-faults': Buffer.from([prefix, '-', '-', 0, 1, JSON.stringify(response), 0].join('\t')).toString('base64')};
+    const rendered = await fetch(new URL('/?agent=1&failFetch=1', url), {headers});
+    const renderedHTML = await rendered.text();
+    expect(rendered.status, renderedHTML).toBe(200);
+    expect(rendered.headers.get('cache-control')).toBe('no-store');
+    expect(renderedHTML).toContain('Rendered fixture');
+    expect(renderedHTML).toContain('Server-only config');
+    expect(renderedHTML).toContain('<script type="application/vnd.exact.checkpoint"');
+    expect(requests).toBe(0);
+    const body = JSON.stringify({text: 'Stubbed greeting', padding: 'é&'.repeat(padding / 3)});
+    writeFileSync(file, `test "request fixture at launch and reload"
+  answer fetch "${prefix}" with 200 header "cache-control" "public, max-age=60" ${body}
+  expect text "greeting" == "Stubbed greeting"
+  expect text "config" == "Server-only config"
+  reload
+  expect text "greeting" == "Stubbed greeting"
+  expect text "config" == "Server-only config"
+  answer fetch "${prefix}" with 200 {"text":"Replacement greeting"}
+  reload
+  expect text "greeting" == "Replacement greeting"
+  expect text "config" == "Server-only config"
+`);
+    const result = await runTests({host: 'web', browser, app: dir, file, webDist: dist, url: new URL('/?appQuery=kept#anchor', url).href, env: {XDG_CACHE_HOME: join(dir, 'cache')}, atEnd: async session => {
+      await session.carrier.reset({session: true});
+      await session.clock('data');
+      const text = await session.carrier.evaluate('document.body.textContent');
+      expect(await session.carrier.evaluate('globalThis.__exactLaunchFaults')).toContain('Stubbed greeting');
+      const frames = await session.carrier.evaluate(`Promise.all(${JSON.stringify([new URL('/.exact/auth/probe.html', url).href, new URL('/probe', backend.url).href])}.map(src => new Promise(resolve => {
+        const frame = document.createElement('iframe');
+        const receive = event => {
+          if (event.source !== frame.contentWindow || !event.data.fixtureProbe) return;
+          removeEventListener('message', receive); frame.remove(); resolve(event.data.present);
+        };
+        addEventListener('message', receive); frame.src = src; document.body.append(frame);
+      })))`);
+      await session.carrier.evaluate(`location.assign(${JSON.stringify(new URL('/probe', backend.url).href)})`);
+      return {text, frames, external: await reported};
+    }});
+    expect(result.results.map(t => t.failures)).toEqual([[]]);
+    expect(result.results[0].end.error).toBeUndefined();
+    expect(result.results[0].end.text).toContain('Stubbed greeting');
+    expect([result.results[0].end.frames, result.results[0].end.external]).toEqual([[false, false], false]);
+    expect([result.passed, result.failed, requests]).toEqual([1, 0, 0]);
+    expect(await (await fetch(url)).text()).toContain('Live greeting');
+    expect(configs).toBeGreaterThan(1);
+    if (!padding) {
+      await stop();
+      await build(true);
+      const production = await fetch(new URL('/?agent=1&failFetch=1', await start()), {headers});
+      expect(production.status).toBe(200);
+      expect(await production.text()).toContain('Live greeting');
+      expect(requests).toBe(1);
+    }
+  } finally { await stop(); backend.stop(true); }
 }, 180_000);
 
 test('successful HTTP fixtures do not arrange resource failures', async () => {

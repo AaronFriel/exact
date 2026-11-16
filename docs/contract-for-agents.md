@@ -5925,10 +5925,15 @@ the body set response headers. Use a text body to test malformed JSON.
 An answer replaces a failure or answer at the same prefix; `fail fetch` replaces
 it with a connection failure, and `pass fetch` clears it. The longest live prefix
 decides. Reload carries the current table, and tests start with independent tables.
-On a rendered web page, only answers that fetched a URL matching a table prefix
-are asked again, including a prefix cleared by `pass fetch`. Other rendered
-answers stay settled. A delivered response does not excuse a resource failure
-from `expect no failures`. An injected connection failure remains arranged after
+On the web, the carrier gives the table only to the top-level document on the
+original app origin, excluding child frames and pages on other origins.
+Development render servers apply the fixtures while rendering request and cached
+pages, preserving unrelated server-fetched answers in the checkpoint. Fixture
+renders are not shared or cached between requests. On adoption, only answers that
+fetched a URL matching a table prefix are asked again, including a prefix cleared
+by `pass fetch`. Other rendered answers stay settled. A delivered response does
+not excuse a resource failure from `expect no failures`. An injected connection
+failure remains arranged after
 its prefix is replaced or carried through reload.
 Fixtures keep request validation, file-read grants and upload limits, deadlines,
 response limits and native HTTP caching. Native prefetch and its foreground

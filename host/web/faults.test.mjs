@@ -82,6 +82,17 @@ test('invalid response fixtures leave the existing entry intact, and HEAD has no
   expect(fetchEarly({method: 'GET', url: prefix, headers: []}, set)).toBeNull();
 });
 
+test('response header limits refuse arming without changing the table', () => {
+  const prefix = 'https://api.test/';
+  const response = {status: 200, headers: Object.fromEntries(Array.from({length: 1024}, (_, i) => [`x-${i}`, 'v'])), body: 'ok'};
+  expect(faultOp({answer: prefix, response}).error).toBeUndefined();
+  const before = faultsJson();
+  response.headers['x-excess'] = 'v';
+  expect(faultOp({answer: prefix, response}).malformed).toBe(true);
+  expect(faultsJson()).toEqual(before);
+  expect(() => parseFaults(`${prefix}\t-\t-\t0\t1\t${JSON.stringify(response)}`)).toThrow('headers');
+});
+
 test('the longest live prefix decides, counts run out, pass keeps hits, and lines wait for a journal', () => {
   const lines = [];
   expect(faultOp({ fail: 'https://api.test/' }).faults).toHaveLength(1);
@@ -299,10 +310,17 @@ test('answers that would overflow the reload table leave it unchanged', () => {
 test('an unreadable launch fixture fails instead of opening the live network', () => {
   const previous = globalThis.location;
   const url = new URL('http://localhost/?agent=1');
-  url.searchParams.set('failFetch', 'https://api.test/\t-\t-\t0\t1\t{broken');
+  url.searchParams.set('failFetch', '1');
   globalThis.location = url;
-  try { expect(() => faultsJson()).toThrow(); }
-  finally { if (previous === undefined) delete globalThis.location; else globalThis.location = previous; }
+  try {
+    for (const spec of [undefined, 'https://api.test/\t-\t-\t0\t1\t{broken']) {
+      globalThis.__exactLaunchFaults = spec;
+      expect(() => faultsJson()).toThrow();
+    }
+  } finally {
+    delete globalThis.__exactLaunchFaults;
+    if (previous === undefined) delete globalThis.location; else globalThis.location = previous;
+  }
 });
 
 test('checkpoint fixtures select only matching answers, including passed entries', () => {

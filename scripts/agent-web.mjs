@@ -3,6 +3,7 @@
 import {
   Cdp,
   agentPage,
+  faultSpec,
   browserDiagnosticNoise,
   launchLog,
   launchFailure,
@@ -218,7 +219,7 @@ async function openWebUnlocked({
   const pinned = js ? await bootedGeneration(served) : null,
     release = pinned ? leaseGeneration(served, pinned) : () => {};
   let gone = null;
-  const server = createServer((req, res) => {
+  const server = createServer({ maxHeaderSize: 128 * 1024 }, (req, res) => {
     if (req.url === '/__plan' && plan) {
       res.writeHead(200, { 'content-type': 'application/octet-stream' });
       res.end(readFileSync(plan));
@@ -454,6 +455,29 @@ async function openWebUnlocked({
       storage,
       env,
     });
+    let faultScript, faultHeader = '';
+    const { frameTree } = await call('Page.getFrameTree');
+    cdp.listeners.push(msg => {
+      if (msg.sessionId !== sessionId || msg.method !== 'Fetch.requestPaused') return;
+      const { requestId, request, frameId } = msg.params, url = new URL(request.url);
+      const carried = faultHeader && frameId === frameTree.frame.id && url.origin === page.origin
+        && url.searchParams.has('agent') && url.searchParams.get('failFetch') === '1';
+      const headers = Object.entries(request.headers).filter(([name]) => name.toLowerCase() !== 'x-exact-faults');
+      if (carried) headers.push(['X-Exact-Faults', faultHeader]);
+      call('Fetch.continueRequest', { requestId, headers: headers.map(([name, value]) => ({ name, value })) })
+        .catch(error => hostLines.push(`fixture request: ${error.message}`));
+    });
+    const installFaults = async spec => {
+      if (spec === undefined && faultScript) return;
+      spec = faultSpec(spec ?? '');
+      if (spec && !faultHeader) await call('Fetch.enable', { patterns: [{ resourceType: 'Document', requestStage: 'Request' }] });
+      if (!spec && faultHeader) await call('Fetch.disable');
+      faultHeader = Buffer.from(spec).toString('base64');
+      const source = `if (window === window.top && location.origin === ${JSON.stringify(page.origin)}) globalThis.__exactLaunchFaults = ${JSON.stringify(spec)};`;
+      if (faultScript) await call('Page.removeScriptToEvaluateOnNewDocument', { identifier: faultScript });
+      faultScript = (await call('Page.addScriptToEvaluateOnNewDocument', { source })).identifier;
+    };
+    await installFaults(facts.failFetch);
     // Display preferences are the agent's from launch, never the machine's (LLP 1069.007 D2); `prefer` changes them.
     const emulated = { ...LAUNCH_MEDIA };
     await call('Emulation.setEmulatedMedia', {
@@ -577,6 +601,7 @@ async function openWebUnlocked({
         await evaluate('sessionStorage.clear()');
         if (!keep) await call('Storage.clearDataForOrigin', { origin: page.origin, storageTypes: 'all' });
         const destination = withEpoch(withFaults(keep ? await evaluate('location.href') : page.href, failFetch), epoch);
+        await installFaults(failFetch ?? (keep ? undefined : facts.failFetch ?? ''));
         const previousLoader = documentLoader,
           deadline = Date.now() + 30000;
         hostLines.length = 0;

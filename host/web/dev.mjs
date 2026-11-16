@@ -1468,7 +1468,7 @@ const serve = async (req, res) => {
     sendStaticBody(req, res, body, { 'content-type': webContentType(found.route), ...(index ? { vary: 'Accept' } : {}), 'cache-control': 'no-store' });
   } catch { try { res.writeHead(404); res.end(); } catch { /* mid-write */ } }
 };
-const server = early?.server ?? createServer(serve);
+const server = early?.server ?? createServer({ maxHeaderSize: 128 * 1024 }, serve);
 let six = null; server.on('error', async (e) => { console.error(`cannot listen on ${host}:${port}: ${e.code ?? e.message}${e.code === 'EADDRINUSE' ? ' (another dev loop? --port <n> picks another)' : ''}`); six?.close(); killCompiler(); await forma?.close(); process.exit(1); });
 await readStaticFileAsync(dist, '/index.html'); if (!early) await listenDelay(process.env, firstGeneration); // warm the reader before advertising readiness (a test may wait too)
 // (and on [::1], for a localhost URL: the design tool's canvas)

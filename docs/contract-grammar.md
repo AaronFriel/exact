@@ -1000,9 +1000,9 @@ JSON bodies are sent as `application/json`; a quoted string is sent as
 `text/plain; charset=utf-8`, and an omitted body is empty. An explicit
 `content-type` header overrides that default. The status is 200 through 599,
 excluding redirects 301, 302, 303, 307 and 308. Statuses 204, 205 and 304
-require an empty body. A body is at most 64 KiB; the complete encoded fixture
-table must also fit 64 KiB, including headers and URL prefixes. An answer that exceeds either
-limit is refused before arming. `set-cookie` and `set-cookie2` headers are
+require an empty body. A response has at most 1,024 headers and a body of at most
+64 KiB; the complete encoded fixture table must also fit 64 KiB, including headers
+and URL prefixes. An answer that exceeds a limit is refused before arming. `set-cookie` and `set-cookie2` headers are
 refused because browsers hide them. Request validation, grants, file-body
 preparation, aborts, deadlines and response-size limits still apply. A refused fixture records no hit
 or answered journal line.
@@ -1012,8 +1012,11 @@ an answer, and `pass fetch` clears either at that prefix; a shorter live prefix
 may then match. Long polls ignore answer entries when choosing a failure, so
 a longer answer prefix does not hide a shorter failure. Otherwise the request
 goes to the network. Each test starts with its own table; `reload` keeps the
-current answers and cleared entries. A web launch carrying this table revalidates
-rendered checkpoint answers through the real source.
+current answers and cleared entries. On the web, only the top-level document on
+the original app origin receives the table; child frames and other origins do not.
+Development render servers apply the table before fetching request-time data.
+A web launch revalidates only matching checkpoint answers through the real source;
+unrelated rendered answers stay settled.
 The real source parses the response, so an HTTP error status is a response,
 where `fail fetch` is a rejected connection. These fixtures cover buffered HTTP
 requests, including a worker's; streams, long polls, redirects, `exactBodyTo`,

@@ -994,7 +994,7 @@ es.onmessage=e=>{const m=JSON.parse(e.data);if(m.kind==='forma-batch'||m.kind===
   } catch (e) { console.error(e.message); process.exit(2); }
   // A polled stream (Linux, the resident loop's relay) is told the design to run.
   forma?.channel.greet(() => snapshot && notice(snapshot));
-  const server = createServer(async (req, res) => {
+  const server = createServer({ maxHeaderSize: 128 * 1024 }, async (req, res) => {
     // Every HTML answer is framed by the design tool only (LLP 1122 T2).
     frameOnlyByTool(res);
     // A sandboxed page's (a Figma plugin's) wire request, with --allow-plugin-origin (stage 10b): the wire's, before the gate.

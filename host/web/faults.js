@@ -4,7 +4,7 @@
 // match and fail it as a refused connection; `fetchEarly` (module-glue.js)
 // only declines to start one early, so a request is counted once. The table
 // is the page's, on `globalThis`, because the builds copy these modules; it
-// is armed by the agent's `failFetch` launch parameter and its `faults`
+// is armed by the carrier's startup script and its `faults`
 // operation, and a production bake has neither.
 const AGENT_ADMITTED = true; // false in a production bake (host/web/build.mjs, host/web-js/build.mjs)
 
@@ -13,6 +13,7 @@ export function fixtureResponse(response) {
   if (typeof response.body !== 'string' || new TextEncoder().encode(response.body).length > 64 * 1024) throw new Error('answer fetch: body must be text of at most 64 KiB');
   if ([204, 205, 304].includes(response.status) && response.body) throw new Error('answer fetch: this status takes no body');
   if (!response.headers || typeof response.headers !== 'object' || Array.isArray(response.headers)) throw new Error('answer fetch: headers must be an object of strings');
+  if (Object.keys(response.headers).length > 1024) throw new Error('answer fetch: at most 1024 response headers');
   for (const [name, value] of Object.entries(response.headers)) {
     if (['set-cookie', 'set-cookie2'].includes(name.toLowerCase())) throw new Error('answer fetch: set-cookie and set-cookie2 headers are not exposed on every host');
     if (!/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(name) || typeof value !== 'string' || /[^\t\x20-\x7e\x80-\xff]/.test(value)) throw new Error('answer fetch: invalid header name or value');
@@ -80,7 +81,10 @@ function launchTable() {
   if (!AGENT_ADMITTED) return [];
   const params = new URL(globalThis.performance?.getEntriesByType?.('navigation')[0]?.name ?? globalThis.location?.href ?? 'http://x/').searchParams;
   if (!params.has('agent')) return [];
-  return parseFaults(params.get('failFetch') ?? '');
+  if (!params.has('failFetch')) return [];
+  const spec = globalThis.__exactLaunchFaults;
+  if (typeof spec !== 'string' || !spec) throw new Error('fetch fixtures are missing from the browser carrier');
+  return parseFaults(spec);
 }
 
 const state = () => globalThis.__exactFaults ??= { entries: launchTable(), log: null, pending: [] };

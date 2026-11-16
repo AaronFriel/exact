@@ -54,9 +54,11 @@ fn parse_response(value: &serde_json::Value) -> Result<Response, String> {
     if body.len() > 64 * 1024 || ([204, 205, 304].contains(&status) && !body.is_empty()) {
         return Err(bad());
     }
-    let headers = value["headers"]
-        .as_object()
-        .ok_or_else(bad)?
+    let headers = value["headers"].as_object().ok_or_else(bad)?;
+    if headers.len() > 1024 {
+        return Err("answer fetch: at most 1024 response headers".into());
+    }
+    let headers = headers
         .iter()
         .map(|(name, value)| {
             let value = value.as_str().ok_or_else(bad)?;
@@ -569,6 +571,23 @@ mod tests {
         assert!(faults.answer("https://api.test/a", &escaped).is_err());
         assert_eq!(faults.json(), before);
         assert!(Faults::parse(&faults.spec()).is_ok());
+    }
+
+    #[test]
+    fn response_header_limit_is_checked_before_arming() {
+        let faults = Faults::default();
+        let prefix = "https://api.test/";
+        let headers = (0..1024)
+            .map(|i| (format!("x-{i}"), serde_json::json!("v")))
+            .collect::<serde_json::Map<_, _>>();
+        let mut response = serde_json::json!({"status":200,"headers":headers,"body":"ok"});
+        faults.answer(prefix, &response).unwrap();
+        let before = faults.json();
+        response["headers"]["x-excess"] = serde_json::json!("v");
+        assert!(faults.answer(prefix, &response).is_err());
+        assert_eq!(faults.json(), before);
+        assert!(Faults::parse(&format!("{prefix}\t-\t-\t0\t1\t{response}")).is_err());
+        assert!(faults.lines.lock().unwrap().is_empty());
     }
 
     #[test]

@@ -114,6 +114,7 @@ pub(crate) fn render_js<D: DataSource + 'static, F: Fn() -> D>(
             crate::render_time(),
             delivery,
             paints_boot.then_some(&mut on_boot as &mut dyn FnMut(&mut _)),
+            None,
         )?
     };
     let tree = match page.runner.document_tree() {

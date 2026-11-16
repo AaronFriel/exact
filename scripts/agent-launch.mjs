@@ -725,19 +725,19 @@ export function faultSpec(spec) {
  * off (LLP 1075.003.000.001 §2.6). */
 export function agentPage(address, { facts, storage, env }) {
   address.searchParams.set('agent', '1');
-  for (const [key, value] of Object.entries(facts)) address.searchParams.set(key, value);
+  for (const [key, value] of Object.entries(facts)) if (key !== 'failFetch') address.searchParams.set(key, value);
   if (env?.EXACT_AUTH_FIXTURE) address.searchParams.set('authFixture', env.EXACT_AUTH_FIXTURE);
   if (storage !== undefined) address.searchParams.set('storage', storage);
   if ((env?.EXACT_HATCHES ?? process.env.EXACT_HATCHES) === 'off') address.searchParams.set('hatches', 'off');
-  return address;
+  address.href = withFaults(address.href, facts.failFetch); return address;
 }
 
-/** The page address with the fault table a reload carries (LLP 1103 D3); `undefined` leaves the launch's. */
+/** Mark a carried fault table (LLP 1103 D3); the carrier installs its bytes before page code. `undefined` keeps the marker. */
 export function withFaults(href, failFetch) {
   if (failFetch === undefined) return href;
   failFetch = faultSpec(failFetch);
   const url = new URL(href);
-  if (failFetch) url.searchParams.set('failFetch', failFetch); else url.searchParams.delete('failFetch');
+  if (failFetch) url.searchParams.set('failFetch', '1'); else url.searchParams.delete('failFetch');
   return url.href;
 }
 

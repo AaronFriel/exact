@@ -1845,8 +1845,16 @@ a test file writes them as launch lines (`epoch "2026-09-21T14:13:20Z"`, `time-z
 A drive can fail fetches by URL prefix (LLP 1103): `--fail-fetch <prefix>` (repeatable) arms one before the
 first data load, `fail fetch <prefix> [times <n>]` and `pass fetch <prefix>` arm and clear one mid-drive (a form of `prefer`:
 `{"op":"prefer","faults":{"fail":…,"times":…}}` or `{…{"pass":…}}`), and `state.faults` lists each prefix's `times`, `left`, `hits` and
-`armed`. Native carriers pass the launch table as `EXACT_AGENT_FAIL_FETCH`, web pages as `?failFetch=`, one
-`<prefix>[\t<times>]` line a fault, read only in agent mode; a production build ignores both. `--fail-fetch` with `--test` arms every test.
+`armed`. Native carriers pass the launch table as `EXACT_AGENT_FAIL_FETCH`, one
+`<prefix>[\t<times>]` line a fault. Web carriers put only the marker `?failFetch=1`
+in the URL and install the table before page code, only in the top-level document
+on the original app origin. Child frames and pages on other origins receive no
+table. Carriers also send it as a base64 `X-Exact-Faults` header on the app origin's
+top-level document requests, so development
+render servers can apply it before fetching data. A marked render with a missing or
+invalid table returns 400 without fetching data. Fixture renders preserve unrelated
+answers and route statuses, and are not shared between requests. Production builds
+ignore these inputs. `--fail-fetch` with `--test` arms every test.
 A Mac agent drive never takes the focus: the app is an accessory, never activated (a `type` makes its window key
 without activating it), so AppKit draws its controls as in an inactive app. On the agent's clock its window, and a picture-in-picture
 panel it opens, sit one level below every other app's windows, so they never show over them; `--timing platform` orders them in front. `EXACT_AGENT_ACTIVATE=1`, which only

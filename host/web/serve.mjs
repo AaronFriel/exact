@@ -1279,7 +1279,7 @@ export async function serve(args = process.argv.slice(2), { js = null, sitePages
   const warming = warmCompression(dist, compression, js);
   const pages = js ? (sitePages ?? (await import('../web-js/render.mjs')).sitePages)(dist) : null;
   const rebuild = rebuildOnChange(dist);
-  const server = createServer(async (req, res) => {
+  const server = createServer({ maxHeaderSize: 128 * 1024 }, async (req, res) => {
     const pathname = webRequestURL(req.url)?.pathname, path = pathname && withoutBase(pathname, js ? buildBase(dist) : '/');
     if (rebuild && path !== null && (asksPage(req, path) || (prefersMarkdown(req.headers.accept) && appDocumentPath(path ?? '')))) {
       const failed = await rebuild();

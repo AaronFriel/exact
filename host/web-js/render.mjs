@@ -9,6 +9,7 @@
 //   bun host/web-js/render.mjs <dist> --build                      pages for render=build routes, robots.txt, sitemap.xml
 //   bun host/web-js/render.mjs <dist> <location>…                  print pages
 //   bun host/web-js/render.mjs <dist> --serve [--port 8830]        the site, as `serve` serves it (host/web/serve.mjs)
+import { parseFaults } from '../web/faults.js';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync, mkdirSync, statSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
@@ -314,11 +315,12 @@ export function renderer(dist, { closed = false, read = path => readFileSync(res
     setImmediate(() => { making = false; if (!ahead && render.ahead !== false) ahead = realm(); });
   };
   /** Begin at the page's boot state; `finish` settles its data and composes the document. */
-  async function begin(location, viewport = PAGE) {
+  async function begin(location, viewport = PAGE, faults) {
     const url = new URL(location, 'http://render.invalid');
     const made = ahead ?? realm();
     ahead = null;
     const { ctx, read } = made;
+    if (faults !== undefined) ctx.__exactLaunchFaults = faults;
     Object.assign(made.location, { pathname: url.pathname, search: url.search, href: url.href });
     Object.assign(made.ctx, { innerWidth: viewport.width, innerHeight: viewport.height });
     made.prefers.clear();
@@ -345,7 +347,7 @@ export function renderer(dist, { closed = false, read = path => readFileSync(res
         const style = rules ? `<style data-exact-page>${select(rules, tokens(out.root + shell.slice(root)))}</style>\n` : '';
         // A page made per request that waits for the reader names its answers past 1 KB rather than holding them: they
         // are needed only once the reader acts, and the capture script fetches them with the runtime (LLP 1048.007 D10).
-        const deferred = activate === 'interaction' && (info.policy === 'request' || info.policy === 'cached') && checkpoint.length > 1024;
+        const deferred = faults === undefined && activate === 'interaction' && (info.policy === 'request' || info.policy === 'cached') && checkpoint.length > 1024;
         const src = deferred ? ` data-src="${base}.exact/checkpoint/${deferAnswers(checkpoint)}.json"` : '';
         const body = late => `${fields}\n${late}${style}${out.hero}<div id="exact-root"${rootAttrs}>${out.root}</div>${shell.slice(root + ROOT[0].length, entry)}`
           + `<script type="application/vnd.exact.checkpoint" data-digest="${digest}" data-activate="${activate}" data-entry="${entryURL}"${wake}${src}>${deferred ? '' : checkpoint.replace(/</g, '\\u003c')}</script>${shell.slice(entryEnd)}`;
@@ -376,6 +378,10 @@ export function renderer(dist, { closed = false, read = path => readFileSync(res
   }
   const render = async (location, deadline = DEADLINE) => (await begin(location)).finish(deadline);
   render.begin = begin;
+  // Only explicit development metadata permits request fixtures; standalone bundles have none.
+  render.production = true;
+  try { render.production = JSON.parse(read('app.version.json').toString('utf8')).production; }
+  catch (error) { if (error.code !== 'ENOENT') throw error; }
   render.pages = async ({ name, pattern, source, args }, deadline = DEADLINE) => {
     let made, timer;
     try {
@@ -435,17 +441,28 @@ export function pageServer(dist, render = renderer(dist), log = console.log) {
   return async function page(location, header) {
     // Laid out for the reader's viewport (LLP 1048.006), and kept per viewport.
     const viewport = viewportOf(header), key = `${location} ${JSON.stringify(viewport)}`;
-    const t = performance.now(), hit = cache.get(key);
+    const query = new URL(location, 'http://render.invalid').searchParams;
+    const driven = render.production === false && query.has('agent') && query.get('failFetch') === '1';
+    let faults;
+    if (driven) {
+      const encoded = header('x-exact-faults') ?? '', bytes = Buffer.from(encoded, 'base64');
+      try {
+        faults = new TextDecoder('utf-8', {fatal: true}).decode(bytes);
+        if (!encoded || bytes.length > 65536 || bytes.toString('base64') !== encoded || !faults) throw new Error('missing or invalid fixture header');
+        parseFaults(faults);
+      } catch { return send(header, 'Invalid fetch fixtures.\n', 400, 'no-store'); }
+    }
+    const t = performance.now(), hit = !driven && cache.get(key);
     const asked = directives(header('cache-control')), revalidate = asked.has('no-cache') || asked.has('no-store') || Number(asked.get('max-age')) === 0;
     if (hit && hit.until > Date.now() && !revalidate) return send(header, hit.html, hit.status, hit.cacheControl);
-    const begun = await render.begin(location, viewport);
+    const begun = await render.begin(location, viewport, faults);
     reads = !!begun.readsViewport;
     const keep = page => {
       // Keep a `cached` route's page 60 s and share it, unless its render drew randomness: a draw is the device's (LLP
       // 1069.005 D2), and a shared page gives every reader the same one. Keep a `request` route's page as long as what
       // it was made of (`keep`). Keep nothing for a request that asks no cache to store its response (RFC 9111
       // §5.2.1.5), as the render host does.
-      const ms = page.status !== 200 || asked.has('no-store') ? 0 : shared(page) ? 60000 : page.policy === 'request' ? page.keep : 0;
+      const ms = driven || page.status !== 200 || asked.has('no-store') ? 0 : shared(page) ? 60000 : page.policy === 'request' ? page.keep : 0;
       if (ms > 0) { if (cache.size >= 64) cache.delete(cache.keys().next().value); cache.set(key, { html: page.html, status: page.status, until: Date.now() + ms, cacheControl: shared(page) ? 'public, max-age=0, s-maxage=60' : 'no-store' }); }
       log(`render ${page.location} ${page.status} ${(performance.now() - t).toFixed(1)}ms bytes=${page.html.length}${page.flushed ? ' flushed' : ''}`);
       for (const failure of page.failed) log(`  ${page.location}: resource ${failure}`);
@@ -469,7 +486,7 @@ export function pageServer(dist, render = renderer(dist), log = console.log) {
         try { out.close(); } catch {}
         if (page.error) log(`render ${location} 500 ${page.error.message}`); else keep({ ...page, flushed: true });
       }, cancel() { z?.destroy?.(); } });
-      const headers = varies({ 'content-type': 'text/html; charset=utf-8', 'cache-control': begun.policy === 'request' ? 'no-store' : 'private, no-cache' });
+      const headers = varies({ 'content-type': 'text/html; charset=utf-8', 'cache-control': driven || begun.policy === 'request' ? 'no-store' : 'private, no-cache' });
       if (br) headers['content-encoding'] = 'br';
       return { status: 200, headers, body };
     }
@@ -479,7 +496,7 @@ export function pageServer(dist, render = renderer(dist), log = console.log) {
       return send(header, `<!doctype html>\n${UNAVAILABLE}`, 500, 'no-store');
     }
     keep(page);
-    return send(header, page.html, page.status, shared(page) && page.status === 200 ? 'public, max-age=0, s-maxage=60' : 'no-store');
+    return send(header, page.html, page.status, !driven && shared(page) && page.status === 200 ? 'public, max-age=0, s-maxage=60' : 'no-store');
   };
 }
 
@@ -523,7 +540,7 @@ export function sitePages(dist, { pageServer: makeServer = (read, id) => pageSer
   const pages = async (id, location, header) => {
     // Uncompressed (no `accept-encoding`): `serve` compresses what it sends. Laid out for the viewport the request
     // tells (`viewportOf`, LLP 1048.006), and a navigation's head sent before the render (`sec-fetch-dest`).
-    const asked = name => name === 'cache-control' || name === 'user-agent' || name === 'sec-fetch-dest' || name.startsWith('sec-ch-') || name === 'viewport-width' ? header(name) : undefined;
+    const asked = name => name === 'x-exact-faults' || name === 'cache-control' || name === 'user-agent' || name === 'sec-fetch-dest' || name.startsWith('sec-ch-') || name === 'viewport-width' ? header(name) : undefined;
     try {
       const render = serverOf(id ?? null), page = render && await render(location, asked);
       if (!page) return null;
