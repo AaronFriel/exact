@@ -784,7 +784,7 @@ export const classifications = [
     ["painted:host/painted/src/agent/stdio.rs", "handle handle_for_window"],
     ["painted:host/painted/src/canvas/agent.rs", "after_turn CanvasHost::agent_with_reader next_stream waiting"],
     ["painted:host/painted/src/canvas/jni_agent.rs", "run"],
-    ["painted:host/painted/src/presenter/requests.rs", "Presenter::set_agent_turn"],
+    ["painted:host/painted/src/presenter/requests.rs", "Presenter::agent_reader_turn Presenter::set_agent_turn"],
   ], "durable when the pumped reply names retained effectful/background work; agent dispatch does not change that ownership."),
   group("session lifecycle", ["one-shot"], "host/session setup, boot configuration, platform thread or teardown", "UI-owned",
     "The named host/painted source configures or constructs the current host, platform services or render backend. These entries create no independent durable completion owner.", [
@@ -801,7 +801,7 @@ export const classifications = [
     ["painted:host/painted/src/canvas/presence.rs", "attach"],
     ["painted:host/painted/src/canvas/time.rs", "attach format"],
     ["painted:host/painted/src/com.rs", "ensure_mta ensure_sta"],
-    ["painted:host/painted/src/desktop.rs", "activate install services"],
+    ["painted:host/painted/src/desktop.rs", "activate displays FullScreen::headless install install_displays services"],
     ["painted:host/painted/src/gpu.rs", "Gpu::new"],
     ["painted:host/painted/src/lib.rs", "set_event_waker"],
     ["painted:host/painted/src/raster.rs", "Raster::new"],
@@ -890,7 +890,7 @@ export const classifications = [
     "host/painted/src/package.rs Context exposes a session package instance; canvas/jni_extensions.rs binds the current reader extensions. Session reload replaces the context native slot.", [
     ["painted:host/painted/src/canvas/jni_extensions.rs", "agent bind_later invoked now sensor_input surface_has under_agent"],
     ["painted:host/painted/src/package.rs",
-      "Context::agent Context::cache Context::changed Context::data Context::desktop Context::emit Context::extension Context::foreground Context::label Context::log " +
+      "Context::agent Context::cache Context::changed Context::data Context::desktop Context::displays Context::emit Context::extension Context::foreground Context::label Context::log " +
       "Context::notifier Context::now Context::origin Context::pads Context::request Context::session Context::temporary Entry::of"],
   ]),
   group("region and text", ["one-shot"], "text request/source, font recipe, paint context and current paragraph/cache residency", "UI-owned",
@@ -1342,6 +1342,7 @@ export const classifications = [
     ["runner:runner/src/rows.rs", "repeated"],
     ["runner:runner/src/stdlib.rs", "assembled calendar_diff call format_number format_time join js_max js_min js_round native_props parse_number push_number"],
     ["runner:runner/src/strings.rs", "index_of order pieces replace_all slice split"],
+    ["runner:runner/src/tools.rs", "mcp_tools"],
     ["runner:runner/src/vm.rs", "decode eval eval_accounted Frame::row_of instructions intern is_literal Strings::get Strings::is_empty Strings::len Strings::new Strings::of transitive_instructions Trap::bound"],
     ["runner:runner/src/vm/column.rs", "Column::get Column::is_empty Column::iter Column::len Column::to_vec"],
   ]),

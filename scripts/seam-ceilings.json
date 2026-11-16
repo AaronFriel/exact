@@ -1337,7 +1337,7 @@
       ]
     },
     "synchronousBridgeReturns": {
-      "ceiling": 133,
+      "ceiling": 134,
       "sites": [
         "host/apple/Sources/ExactCore/Bridge.swift: func activities ( _ json : String ) -> Batch",
         "host/apple/Sources/ExactCore/Bridge.swift: func advance ( now : Double , untilRequest : Bool = false ) -> Batch",
@@ -1380,8 +1380,8 @@
         "host/apple/Sources/ExactCore/Bridge.swift: func heightDragUpdate ( _ token : UInt64 , height : Double , now : Double ) -> Batch",
         "host/apple/Sources/ExactCore/Bridge.swift: func historySwipe ( _ view : UInt32 , phase : String , direction : String , amount : Double , client : CGPoint , now : Double ) -> Batch",
         "host/apple/Sources/ExactCore/Bridge.swift: func holdEnd ( _ token : UInt64 , cancel : Bool , measured : Bool = false , vx : Double = 0 , vy : Double = 0 , now : Double ) -> Batch",
-        "host/apple/Sources/ExactCore/Bridge.swift: func holds ( _ caller : String = # function ) -> Bool",
         "host/apple/Sources/ExactCore/Bridge.swift: func holdUpdate ( _ token : UInt64 , x : Double , y : Double , now : Double ) -> Batch",
+        "host/apple/Sources/ExactCore/Bridge.swift: func holds ( _ caller : String = # function ) -> Bool",
         "host/apple/Sources/ExactCore/Bridge.swift: func hostBack ( _ key : String , now : Double ) -> Batch ?",
         "host/apple/Sources/ExactCore/Bridge.swift: func hostBack ( from source : String , to destination : String , now : Double ) -> Batch ?",
         "host/apple/Sources/ExactCore/Bridge.swift: func hostForward ( _ root : UInt32 , now : Double ) -> Batch",
@@ -1420,6 +1420,7 @@
         "host/apple/Sources/ExactCore/Bridge.swift: func planDigest ( ) -> String ?",
         "host/apple/Sources/ExactCore/Bridge.swift: func pointer ( _ view : UInt32 , _ kind : PointerKind , _ sample : PointerSample , now : Double ) -> Batch",
         "host/apple/Sources/ExactCore/Bridge.swift: func preferExtension ( _ json : String ) -> Batch",
+        "host/apple/Sources/ExactCore/Bridge.swift: func preferPresented ( _ value : Bool ? ) -> Batch",
         "host/apple/Sources/ExactCore/Bridge.swift: func prepareModule ( _ plan : Data , module : ExactModule , token : UInt64 = 0 , width : CGFloat , height : CGFloat , letGo : Bool = false ) -> Batch",
         "host/apple/Sources/ExactCore/Bridge.swift: func preparePlan ( _ bytes : Data , width : CGFloat , height : CGFloat , token : UInt64 = 0 ) -> Batch",
         "host/apple/Sources/ExactCore/Bridge.swift: func press ( _ view : UInt32 , held : String = <string> , at client : CGPoint ? = nil , now : Double ) -> Batch",
@@ -1475,7 +1476,7 @@
       ]
     },
     "runnerReceiptMethods": {
-      "ceiling": 76,
+      "ceiling": 78,
       "sites": [
         "runner/src/runner/activities.rs: Runner::link_activities",
         "runner/src/runner/activities.rs: Runner::set_activities",
@@ -1520,12 +1521,14 @@
         "runner/src/runner/modules/wakes.rs: Runner::expire_action",
         "runner/src/runner/modules/wakes.rs: Runner::expire_wake",
         "runner/src/runner/native_timers.rs: Runner::fire_native_timer",
+        "runner/src/runner/page.rs: Runner::page_presented",
+        "runner/src/runner/page.rs: Runner::prefer_presented",
         "runner/src/runner/page.rs: Runner::set_page",
         "runner/src/runner/picker/shared.rs: Runner::set_shared",
-        "runner/src/runner/reorder_group.rs: Runner::reorder_step",
         "runner/src/runner/reorder.rs: Runner::cancel_reorder",
         "runner/src/runner/reorder.rs: Runner::drop_reorder",
         "runner/src/runner/reorder.rs: Runner::finish_reorder",
+        "runner/src/runner/reorder_group.rs: Runner::reorder_step",
         "runner/src/runner/reply.rs: Runner::fulfill",
         "runner/src/runner/reply.rs: Runner::fulfill_measured",
         "runner/src/runner/root_font.rs: Runner::set_bold_text",
@@ -1556,8 +1559,9 @@
       ]
     },
     "appleAbiExports": {
-      "ceiling": 295,
+      "ceiling": 296,
       "sites": [
+        "host/apple/Sources/ExactCore/WidgetContainer.swift: exact_widget_reload",
         "host/apple/activityarm/ActivityArm.swift: exact_activity_close",
         "host/apple/activityarm/ActivityArm.swift: exact_activity_open",
         "host/apple/activityarm/ActivityArm.swift: exact_activity_send",
@@ -1572,7 +1576,6 @@
         "host/apple/soundarm/SoundArm.swift: exact_sound_engine",
         "host/apple/soundarm/SoundArm.swift: exact_sound_op",
         "host/apple/soundarm/SoundArm.swift: exact_sound_open",
-        "host/apple/Sources/ExactCore/WidgetContainer.swift: exact_widget_reload",
         "host/apple/src/abi/exports.rs: exact_activities",
         "host/apple/src/abi/exports.rs: exact_admitted_frame",
         "host/apple/src/abi/exports.rs: exact_advance",
@@ -1670,6 +1673,7 @@
         "host/apple/src/abi/exports.rs: exact_placement_box",
         "host/apple/src/abi/exports.rs: exact_plan_covers_viewport",
         "host/apple/src/abi/exports.rs: exact_plan_digest",
+        "host/apple/src/abi/exports.rs: exact_prefer_presented",
         "host/apple/src/abi/exports.rs: exact_preloads_begin",
         "host/apple/src/abi/exports.rs: exact_preloads_count",
         "host/apple/src/abi/exports.rs: exact_preloads_launched",
