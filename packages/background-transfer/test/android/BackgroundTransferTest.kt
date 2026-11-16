@@ -3,9 +3,12 @@ package exact.backgroundtransfer
 import android.app.ActivityManager
 import android.content.Context
 import android.os.Looper
+import android.os.HandlerThread
+import dev.exact.canvas.Exact
 import dev.exact.canvas.ExtensionContext
 import dev.exact.canvas.Extensions
 import dev.exact.canvas.Native
+import dev.exact.canvas.Owner
 import exact.app.ExactExtensions
 import exact.backgroundtransfer.Lifecycle.Conditions
 import exact.backgroundtransfer.Lifecycle.Job
@@ -33,7 +36,12 @@ import org.robolectric.annotation.LooperMode
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executor
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 /** The module over [Transfers], with [Sessions] as the host: the package's calls, its session's life and its wakes. */
 @RunWith(RobolectricTestRunner::class)
@@ -50,16 +58,36 @@ class BackgroundTransferTest {
             var scratch = false
             /** Whether the library has the entry point that says so. */
             var linked = true
-            val wakes = mutableListOf<JSONObject>()
-            val expired = mutableListOf<String>()
+            val wakes = CopyOnWriteArrayList<JSONObject>()
+            val expired = CopyOnWriteArrayList<String>()
             /** What the host answered the runner, by request. */
-            val answers = HashMap<Int, String?>()
+            val answers = ConcurrentHashMap<Int, String>()
+            /** The hosts booted, and what each was last told of the page: hidden, then whether it may execute. */
+            val boots = AtomicInteger()
+            @Volatile var page: Pair<Boolean, Boolean>? = null
+            /** Whether the store's writes reach the disk when the host waits for them, and what happened in order. */
+            @Volatile var durable = true
+            val order = CopyOnWriteArrayList<String>()
+            @JvmStatic @Implementation fun start(width: Int, height: Int, scale: Float, dir: String, store: String, live: Boolean): Boolean {
+                boots.incrementAndGet()
+                return true
+            }
+            @JvmStatic @Implementation fun fds() = IntArray(0)
+            /** No timer is due. */
+            @JvmStatic @Implementation fun background(applying: Boolean) = -1.0
+            @JvmStatic @Implementation fun hidden(hidden: Boolean, eligible: Boolean) { page = hidden to eligible }
+            @JvmStatic @Implementation fun storeDrain(ms: Int): Boolean { order += "store"; return durable }
+            /** The data module: 1 active, 0 while its image loads, -1 failed to activate. And whether each asking
+             * was of a host no reader takes a frame from. */
+            @Volatile var data = 1
+            val unshown = CopyOnWriteArrayList<Boolean>()
+            @JvmStatic @Implementation fun dataActive(unshown: Boolean): Int { this.unshown += unshown; return data }
             @JvmStatic @Implementation fun trust(context: Context) {}
             @JvmStatic @Implementation fun __staticInitializer__() {}
             @JvmStatic @Implementation fun underAgent(name: String) = agent
             @JvmStatic @Implementation fun scratchStorage(): Boolean = if (linked) scratch else throw UnsatisfiedLinkError("scratchStorage")
             @JvmStatic @Implementation fun appRoot(index: Int) = File(root, listOf("data", "cache", "tmp")[index]).path
-            @JvmStatic @Implementation fun answer(id: Int, answer: String?) { answers[id] = answer }
+            @JvmStatic @Implementation fun answer(id: Int, answer: String?) { answers[id] = answer ?: "" }
             @JvmStatic @Implementation fun changed(topic: String) {
                 if (topic.startsWith("exact-wake:")) wakes += JSONObject(topic.removePrefix("exact-wake:"))
                 if (topic.startsWith("exact-wake-expired:")) expired += JSONObject(topic.removePrefix("exact-wake-expired:")).getString("id")
@@ -102,6 +130,13 @@ class BackgroundTransferTest {
         Session.wakes.clear()
         Session.expired.clear()
         Session.answers.clear()
+        Session.boots.set(0)
+        Session.page = null
+        Session.durable = true
+        Session.data = 1
+        Session.unshown.clear()
+        Session.order.clear()
+        platform.finish = { Session.order += "finish" }
         listOf("data", "cache", "tmp").forEach { File(base, it).mkdirs() }
         transport = FakeTransport(base)
         process()
@@ -110,6 +145,14 @@ class BackgroundTransferTest {
         close()
         Extensions.stopped(false)
         Jobs.visible = null
+        Sessions.application = null
+        Exact.owner?.let { owner ->
+            val thread = Owner::class.java.getDeclaredField("thread").apply { isAccessible = true }.get(owner) as HandlerThread
+            thread.quitSafely(); thread.join(5000)
+        }
+        Exact.owner = null
+        Exact.live = false
+        Exact.hidden(false)
         base.deleteRecursively()
     }
 
@@ -137,6 +180,32 @@ class BackgroundTransferTest {
         module?.destroy {}
         module = null
         ExactExtensions.process()
+        main.idle()
+    }
+    /**
+     * The process died with its session, and Android started another for a job: no activity, no host, the app's
+     * roster, and the transfers over what the last one left.
+     */
+    private fun jobProcess(limits: Limits = Limits()) {
+        close()
+        process(limits)
+        ExactExtensions.process(mapOf(NAME to { made ->
+            context = made
+            BackgroundTransferModule(made, { transfers }, transport::exchange, Executor { it.run() }).also { module = it }
+        }), atLoad = listOf(NAME))
+        Sessions.application = app
+        // The job's entry, as every entrant's.
+        transfers.enter(Lifecycle.Namespace("app"))
+    }
+    /** What the main thread, the host's thread and the sessions' events owe one another has run. */
+    private fun settle() {
+        repeat(4) {
+            main.idle()
+            Exact.owner?.ask { }
+            val reached = CountDownLatch(1)
+            Sessions.events.execute { reached.countDown() }
+            assertTrue(reached.await(5, TimeUnit.SECONDS))
+        }
         main.idle()
     }
     /** A request of the runner's, through the host's seam ([Extensions.call]); what the host answered it. */
@@ -308,7 +377,7 @@ class BackgroundTransferTest {
         start()
         val key = key()
         close()
-        // With no session the host's seam reports each wake expired.
+        // With no session, and no application to boot one for, the host's seam reports each wake expired.
         for (id in 1..3) run(key, id)
         assertTrue(Session.wakes.isEmpty())
         assertEquals(listOf(1 to true, 2 to true, 3 to false), platform.finished.toList())
@@ -328,6 +397,128 @@ class BackgroundTransferTest {
         call("retireBackgroundFetch", named())
         assertFalse(File(base, path.removePrefix("app:/")).exists())
         assertFalse(File(base, "private/app.app/${key.generation}").exists())
+    }
+
+    @Test fun anEndingWithNoSessionRunsItsHandlerInOneBootedWithNoView() {
+        open(visible = false)
+        start()
+        val key = key()
+        jobProcess()
+        run(key, 1)
+        settle()
+        assertEquals("the job's process boots one host", 1, Session.boots.get())
+        assertNull("no activity is made", Exact.reader?.get())
+        assertEquals("the page is hidden and may not execute, as a stopped activity's", true to false, Session.page)
+        val wake = Session.wakes.single()
+        assertEquals("backgroundfetchsuccess", wake.getString("event"))
+        assertEquals("transfer.${key.generation}.1", wake.getString("id"))
+        assertEquals("visitor", wake.getJSONArray("args").getJSONObject(0).getString("id"))
+        assertTrue("the run is held through the handler", platform.finished.isEmpty())
+        assertTrue(Session.order.isEmpty())
+        end(wake, "completed")
+        settle()
+        assertEquals("the handler's writes are on disk before the job is given back", listOf("store", "finish"), Session.order.toList())
+        assertEquals(listOf(1 to true), platform.finished.toList())
+        // The next run's ending is raised in the session that runs: nothing boots again.
+        run(key, 2)
+        settle()
+        assertEquals(1, Session.boots.get())
+        assertEquals("transfer.${key.generation}.2", Session.wakes.last().getString("id"))
+    }
+
+    @Test fun aSessionWithNoViewIsReadyOnceItsDataModuleIsActive() {
+        open(visible = false)
+        start()
+        val key = key()
+        jobProcess()
+        // The module's image is still loading when the host has booted.
+        Session.data = 0
+        run(key, 1)
+        settle()
+        assertEquals(1, Session.boots.get())
+        assertTrue("no pixel waits for the module: it is activated with no frame", Session.unshown.isNotEmpty() && Session.unshown.all { it })
+        assertNull("the package's module is not made before the data module answers", module)
+        assertTrue("and no handler runs", Session.wakes.isEmpty())
+        assertTrue(platform.finished.isEmpty())
+        // The image has loaded, and the host's next turn finds the module active.
+        Session.data = 1
+        Exact.owner!!.call { }
+        settle()
+        assertEquals("transfer.${key.generation}.1", Session.wakes.single().getString("id"))
+    }
+
+    @Test fun aSessionWhoseDataModuleDoesNotActivateExpiresItsWake() {
+        open(visible = false)
+        start()
+        val key = key()
+        jobProcess()
+        Session.data = -1
+        run(key, 1)
+        settle()
+        assertEquals(1, Session.boots.get())
+        assertTrue(Session.wakes.isEmpty())
+        assertEquals("the run is to run again: its ending was not delivered", listOf(1 to true), platform.finished.toList())
+    }
+
+    @Test fun anEndingWithNoViewIsDeliveredThreeTimesThenWaitsForALaunch() {
+        open(visible = false)
+        start()
+        val key = key()
+        jobProcess()
+        for (id in 1..3) {
+            run(key, id)
+            settle()
+            assertEquals("transfer.${key.generation}.$id", Session.wakes.last().getString("id"))
+            end(Session.wakes.last(), "completed")
+            settle()
+        }
+        assertEquals(listOf(1 to true, 2 to true, 3 to false), platform.finished.toList())
+        assertTrue("no job is held for a fourth", platform.jobs.isEmpty())
+        assertEquals(3, Session.wakes.size)
+        // A launch with a view delivers it again.
+        Extensions.started()
+        host(JSONObject().put("foreground", true))
+        settle()
+        assertEquals("transfer.${key.generation}.4", Session.wakes.last().getString("id"))
+    }
+
+    @Test fun aWakeWhoseWritesDidNotReachTheDiskExpires() {
+        process(Limits(completedWakes = 1))
+        open(visible = false)
+        start()
+        val key = key()
+        jobProcess(Limits(completedWakes = 1))
+        run(key, 1)
+        settle()
+        Session.durable = false
+        end(Session.wakes.single(), "completed")
+        settle()
+        assertEquals("the run is to run again: its ending was not delivered", listOf(1 to true), platform.finished.toList())
+        Session.durable = true
+        run(key, 2)
+        settle()
+        end(Session.wakes.last(), "completed")
+        settle()
+        assertEquals(listOf(1 to true, 2 to false), platform.finished.toList())
+    }
+
+    @Test fun aRunStoppedWhileItsSessionBootsExpiresItsWake() {
+        open(visible = false)
+        start()
+        val key = key()
+        jobProcess()
+        // The session is not ready yet: its data module's image is still loading.
+        Session.data = 0
+        run(key, 1)
+        settle()
+        transfers.feed(JobStopped(key, 1, Stop.System))
+        settle()
+        assertTrue(transfers.state().first.waking.isEmpty())
+        Session.data = 1
+        Exact.owner!!.call { }
+        settle()
+        assertTrue("the ending is not raised in the session that was ready afterwards", Session.wakes.isEmpty())
+        assertEquals(Job.Work, record(key).job)
     }
 
     @Test fun aWakesOutcomeReachesTheLifecycle() {
@@ -438,7 +629,7 @@ class BackgroundTransferTest {
 
     @Test fun aLibraryThatCannotSayWhoseStorageItIsMakesNoModule() {
         Session.linked = false
-        val made = ExtensionContext(app, "background-transfer")
+        val made = ExtensionContext(app, NAME)
         // The app's namespace is not the answer to a question the library cannot be asked.
         assertThrows(UnsatisfiedLinkError::class.java) {
             BackgroundTransferModule(made, { transfers }, transport::exchange, Executor { it.run() })

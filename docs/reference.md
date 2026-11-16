@@ -3026,8 +3026,8 @@ grant beside this one: see [Push](#push).
   completion as superseded; a response still awaiting declarations waits for
   the replacement.
 - On Android (LLP 1133.004.000 D5) an action is a button that brings the
-  app forward, with `foreground=false` too: Android has no headless session
-  yet, so no handler could run with the app in the background. Android shows
+  app forward, with `foreground=false` too: an action boots no session with
+  no view yet, so no handler runs with the app closed. Android shows
   three actions; a fourth is dropped there and journaled. A chosen action is
   raised only while the app still declares it as the post wrote it: a button
   posted before an update changed or removed it brings the app forward and
@@ -3252,8 +3252,8 @@ icon. Leave out `icon` and `color`: Firebase honours them for a notification it
 shows. A `tag` replaces a shown notification with that tag, a local one
 included, and `closeNotification(tag)` closes it. Its tap opens `navigate`,
 warm or at launch, as on Apple; the other `data` keys are not read. A data
-message (no `notification`) shows nothing and raises nothing: as a wake it
-waits for Android's headless session.
+message (no `notification`) shows nothing and raises nothing: it is no wake
+on Android yet.
 
 Under the agent nothing reaches APNs or FCM, and `pushSubscription()` reads null
 while the permission is not granted, as on the phone. A subscribe while

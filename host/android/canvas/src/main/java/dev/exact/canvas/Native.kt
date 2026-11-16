@@ -5,7 +5,13 @@ import java.nio.ByteBuffer
 
 /** exact2 on the main thread: layout, shaping and the paint walk, recorded as Canvas ops. */
 object Native {
-    init { System.loadLibrary("exactcanvas") }
+    init {
+        // mimalloc reads its options as the library loads, whichever entrant loads it (an activity, a job, a
+        // receiver). Freed memory goes back at once (decoded pictures otherwise stay held), unless a launch said
+        // otherwise first.
+        android.system.Os.setenv("MIMALLOC_PURGE_DELAY", "0", false)
+        System.loadLibrary("exactcanvas")
+    }
     /** Bind the application JVM before any host starts TLS work. */
     @JvmStatic external fun trust(context: android.content.Context)
     /** Boot the app's host on the calling thread, in a window of this size in pixels ([window] told its insets);
@@ -251,6 +257,11 @@ object Native {
     @JvmStatic external fun open(href: String)
     /** A share given to the running app, `{"target", "share"}` as [Shares.request] writes it (LLP 1133.024 D5). */
     @JvmStatic external fun share(request: String)
+    /** The URL in the launching intent of the first activity made over a host [Headless] booted (LLP 1133.017 D7): its
+     * location is the launch location, as `EXACT_LAUNCH_URL` is at a boot, with no `navigate`. */
+    @JvmStatic external fun launch(href: String)
+    /** The share in that intent, `{"target", "share"}`: claimed as `EXACT_SHARE` is at a boot. */
+    @JvmStatic external fun launchShare(request: String)
     /** What exact2 asks of the platform since this last returned any (LLP 1115.001 D5), or null when it asks
      * nothing: the one channel out, which [Requests] reads and acts on, on the main thread. exact2 queues a request
      * and makes the first of [fds] readable, so the reader comes for it whether or not a frame follows. The words:
@@ -283,6 +294,10 @@ object Native {
     /** The reader drew a frame of the running generation, which makes its boot good (LLP 1030.006 D5); whether to say
      * so again after the next. On the exact thread. */
     @JvmStatic external fun drew(): Boolean
+    /** Whether the host's data module is active: 1, 0 while its image loads, -1 when it failed to activate. With
+     * [unshown], a host no reader takes a frame from activates it now, since no pixel waits for it (LLP 1133.017 D7);
+     * its image may still be loading then, and the host's wake says when it is not. On the host's thread. */
+    @JvmStatic external fun dataActive(unshown: Boolean): Int
     /** Waits up to [ms] for the store's writes, which exact2 makes on a thread of its own: whether every commit handed
      * over was written (a write that failed is tried once more; failing again, it stays pending). Any thread. */
     @JvmStatic external fun storeDrain(ms: Int): Boolean

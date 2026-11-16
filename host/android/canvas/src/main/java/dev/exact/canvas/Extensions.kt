@@ -302,8 +302,9 @@ class ExtensionContext internal constructor(val application: Context, private va
     /**
      * Raise the interface's wake event [event] with [args] for the platform's own [id] (LLP 1133.017 D8): the events
      * of one id are one wake, run with the wake's origin, and [ended] hears its outcome once, on the main thread:
-     * `completed`, `expired`, `superseded`, `refused`, or `unheard` when no handler hears it. Its one channel to the
-     * runner is [changed], as on Apple (`exact-wake:`, `runner/src/runner/modules/wakes.rs`).
+     * `completed`, `expired`, `superseded`, `refused`, or `unheard` when no handler hears it. With no activity
+     * showing, `completed` says the store's writes are on disk too, and a wake whose writes are not is `expired`.
+     * Its one channel to the runner is [changed], as on Apple (`exact-wake:`, `runner/src/runner/modules/wakes.rs`).
      */
     fun wake(event: String, args: JSONArray, id: String, ended: (String) -> Unit = {}) {
         this.ended[id] = ended
@@ -433,6 +434,17 @@ class ExtensionContext internal constructor(val application: Context, private va
 
         /** The `RemoteInput` key of an action's text field. */
         const val REPLY = Activations.REPLY
+
+        /**
+         * The app's session for a platform callback that may run with no activity (a job, a worker, a receiver;
+         * LLP 1133.017 D7, D10): [ready] hears, on the main thread, whether the process's host has booted, its data
+         * module is active and its `"start": "load"` extensions are made. Where no activity has set the process up,
+         * the host boots here with no view, hidden as a stopped activity's is, and an activity made later adopts
+         * it; with no first pixel to wait for, its data module activates at once. A wake raised in it
+         * ([wake]) ends `completed` only once the store's writes are on disk, so the caller may give its job back at
+         * the wake's outcome.
+         */
+        @JvmStatic fun session(context: Context, ready: (Boolean) -> Unit) = Headless.session(context, ready)
     }
 
     /** [requestPermissions] for [name], keeping the history [permission] reads. */
@@ -633,7 +645,11 @@ internal object Extensions {
                     reply(JSONObject())
                 }
                 request.has("woke") -> {
-                    val (woke, outcome) = request.getString("woke") to request.optString("outcome", "completed")
+                    val woke = request.getString("woke")
+                    // With no activity showing, Android may kill the process once the wake's job is given back: what
+                    // the handler committed is on disk first, or the wake did not complete.
+                    val outcome = request.optString("outcome", "completed")
+                        .let { if (it == "completed" && !visible && !Exact.drainStore()) "expired" else it }
                     extension.context.ended.remove(woke)?.invoke(outcome)
                     extension.woke(woke, outcome)
                     reply(JSONObject())

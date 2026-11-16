@@ -68,6 +68,7 @@ internal class Jobs(private val app: Context) : Platform {
             installed ?: context.applicationContext.let { app ->
                 // A scheduler can start this process without an activity to initialize TLS.
                 dev.exact.canvas.Native.trust(app)
+                Sessions.application = app
                 Transfers(Registrations(File(app.noBackupFilesDir, "exact-transfers")), NativeTransfer::exchange, Jobs(app), Sessions,
                     Executors.newSingleThreadExecutor { work -> Thread(work, "exact-transfer-control") }).also { installed = it }
             }

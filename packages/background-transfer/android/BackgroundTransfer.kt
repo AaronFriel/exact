@@ -1,6 +1,7 @@
 package exact.backgroundtransfer
 
 import android.app.ActivityManager
+import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import dev.exact.canvas.ExactExtension
@@ -26,14 +27,19 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * The host's half of a transfer as far as the package can stand in for it (LLP 1133.017 D10). An
- * ending is raised in the live session of its namespace. With none the host would boot a session
- * with no view; Android's host has no such session yet, so the wake is reported expired and the
- * lifecycle delivers the ending again, at last at a launch.
+ * The host's half of a transfer (LLP 1133.017 D10). An ending is raised in the live session of its namespace. With
+ * none the host boots a session with no view ([ExtensionContext.session]), whose module then raises it. The wake's
+ * outcome is the host's: `completed` after the handler and the store's writes, so the lifecycle holds the run until
+ * then. Where no session can be had the wake is reported expired and the lifecycle delivers the ending again, at
+ * last at a launch.
  */
 internal object Sessions : Host {
     private val incarnations = AtomicInteger()
     private val live = ConcurrentHashMap<Namespace, BackgroundTransferModule>()
+    /** The application, from the process's first entrant: what a session with no view is booted for. */
+    @Volatile var application: Context? = null
+    /** The wakes raised with no session, each with how its outcome is told, until it is. */
+    private val owed = ConcurrentHashMap<Pair<Key, Int>, (Outcome) -> Unit>()
 
     /** Where every session's events are fed, one at a time: a session's end is fed before the next one's start. */
     val events: Executor = ThreadPoolExecutor(1, 1, 30, TimeUnit.SECONDS, LinkedBlockingQueue()) { work -> Thread(work, "exact-transfer-calls") }
@@ -45,9 +51,24 @@ internal object Sessions : Host {
     fun ended(namespace: Namespace, module: BackgroundTransferModule) { live.remove(namespace, module) }
 
     override fun raise(key: Key, delivery: Int, ended: (Outcome) -> Unit) {
-        live[key.namespace]?.raise(key, delivery, ended) ?: ended(Outcome.Expired)
+        live[key.namespace]?.let { return it.raise(key, delivery, ended) }
+        val app = application
+        // An agent drive's store is named by its launch: no session can be booted for it.
+        if (app == null || key.namespace.agent) return ended(Outcome.Expired)
+        val wake = key to delivery
+        // Told once: by the wake's outcome, or sooner by the stop of the run that holds it.
+        val told = { outcome: Outcome -> if (owed.remove(wake, ended)) ended(outcome) }
+        owed[wake] = ended
+        ExtensionContext.session(app) {
+            // The module reads the record, so off the main thread.
+            events.execute { live[key.namespace]?.takeIf { owed.containsKey(wake) }?.raise(key, delivery, told) ?: told(Outcome.Expired) }
+        }
     }
-    override fun expire(key: Key, delivery: Int) { live[key.namespace]?.expire(key, delivery) }
+    override fun expire(key: Key, delivery: Int) {
+        val waiting = owed.remove(key to delivery)
+        live[key.namespace]?.expire(key, delivery)
+        waiting?.invoke(Outcome.Expired)
+    }
     override fun answer(key: Key, registered: Boolean, error: String?) { live[key.namespace]?.answer(key, registered, error) }
     override fun changed(namespace: Namespace) { live[namespace]?.changed() }
 }

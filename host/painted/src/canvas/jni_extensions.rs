@@ -251,6 +251,17 @@ macro_rules! canvas_jni_extensions {
             flag(with(|h| h.drew()).unwrap_or(true))
         }
 
+        /// Whether the host's data module is active (`CanvasHost::data_active`):
+        /// 1, 0 while its image loads, -1 when it failed to or no host runs.
+        #[no_mangle]
+        pub unsafe extern "system" fn Java_dev_exact_canvas_Native_dataActive(
+            _env: *mut JNIEnv,
+            _class: jclass,
+            unshown: jboolean,
+        ) -> jint {
+            with(|h| h.data_active(unshown == JNI_TRUE)).unwrap_or(-1)
+        }
+
         /// Waits up to `ms` for the store's writes, which the store's own
         /// thread makes (`host/store_writer.rs`): whether every commit handed
         /// over was written. The activity going to the background. Any thread.

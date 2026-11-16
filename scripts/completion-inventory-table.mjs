@@ -222,9 +222,12 @@ export const classifications = [
     ["apple:host/apple/src/abi/exports.rs", "exact_delivery_api exact_delivery_sync"],
     ["painted:host/painted/src/host.rs", "Host::set_delivery Host::set_delivery_from_compat"],
     ["painted:host/painted/src/presenter.rs", "Presenter::set_delivery_from_compat"],
+    ["painted:host/painted/src/canvas/jni_extensions.rs", "Java_dev_exact_canvas_Native_dataActive"],
+    ["painted:host/painted/src/canvas/requests.rs", "CanvasHost::data_active"],
     ["painted:host/painted/src/presenter/checks.rs", "Checks::activation_allowed"],
     ["painted:host/painted/src/presenter/delivery.rs",
-      "Presenter::activate_update Presenter::activation_error Presenter::check_update Presenter::data_activating Presenter::delivery_pending Presenter::first_pixel " +
+      "Presenter::activate_unshown Presenter::activate_update Presenter::activation_error Presenter::check_update Presenter::data_activating Presenter::data_state " +
+      "Presenter::delivery_pending Presenter::first_pixel " +
       "Presenter::first_pixel_told Presenter::first_pixel_unshown Presenter::module_pending Presenter::poll_development Presenter::poll_update Presenter::prepare_logic " +
       "Presenter::said_at_boot Presenter::set_development Presenter::set_module Presenter::set_updates Presenter::sync_delivery Presenter::tick_development " +
       "Presenter::turn_due_ms Presenter::update_fd Presenter::update_ready"],
@@ -513,12 +516,14 @@ export const classifications = [
       "exact_build_tabs exact_host_back exact_host_back_to exact_host_forward exact_host_go exact_location_ahead exact_location_behind exact_location_beneath " +
       "exact_location_of exact_route_bar exact_route_matches exact_route_one_location exact_set_launch_location exact_set_launch_place exact_set_launch_time " +
       "exact_visit_location"],
-    ["painted:host/painted/src/back.rs", "Host::host_back Host::host_forward"],
-    ["painted:host/painted/src/canvas/jni_keys.rs", "Java_dev_exact_canvas_Native_back Java_dev_exact_canvas_Native_open"],
+    ["painted:host/painted/src/back.rs", "Host::host_back Host::host_forward Host::host_launch"],
+    ["painted:host/painted/src/canvas/jni_keys.rs", "Java_dev_exact_canvas_Native_back Java_dev_exact_canvas_Native_launch Java_dev_exact_canvas_Native_open"],
+    ["painted:host/painted/src/canvas/keys.rs", "CanvasHost::launch"],
     ["painted:host/painted/src/host.rs", "Host::route_hidden_but Host::route_visibility Host::route_visibility_to"],
     ["painted:host/painted/src/presenter/back.rs", "Presenter::back Presenter::navigation_root Presenter::system_forward"],
+    ["painted:host/painted/src/presenter/links.rs", "Presenter::launch_at Presenter::launch_location"],
     ["runner:runner/src/runner/router.rs",
-      "Runner::host_back Runner::host_back_to Runner::host_forward Runner::host_go Runner::location_ahead Runner::location_behind Runner::location_beneath " +
+      "Runner::host_back Runner::host_back_to Runner::host_forward Runner::host_go Runner::host_launch Runner::location_ahead Runner::location_behind Runner::location_beneath " +
       "Runner::resource_args Runner::resource_is_placeholder Runner::route_matches Runner::route_one_location Runner::take_router_change Runner::visit_location"],
     ["runner:runner/src/runner/split.rs", "Runner::press_writes_router Runner::show_split_placeholder Runner::stack_split"],
     ["runner:runner/src/runner/tabs.rs", "Runner::build_every_tab Runner::build_tabs Runner::panels_need_navigation Runner::unopened_tabs"],
@@ -1229,7 +1234,9 @@ export const classifications = [
   ]),
   group("shared tokens", ["one-shot"], "share token in the live router; copying may outlive the initiating view", "UI-owned",
     "The named painted adapter reads or updates the current Presenter through the runner or its Host forwarding API. runner/src/runner/picker/shared.rs:596-630 updates only a token accepted by router.share. Copied files can survive, but this completion targets the current router token.", [
-    ["painted:host/painted/src/presenter/picker/share.rs", "Presenter::land Presenter::land_cold_share Presenter::receive"],
+    ["painted:host/painted/src/canvas/jni_keys.rs", "Java_dev_exact_canvas_Native_launchShare"],
+    ["painted:host/painted/src/canvas/keys.rs", "CanvasHost::launch_share"],
+    ["painted:host/painted/src/presenter/picker/share.rs", "Presenter::land Presenter::land_cold_share Presenter::land_launch_share Presenter::launch_share Presenter::receive"],
   ]),
   group("replies", ["one-shot", "subscription", "durable operation"], "pending ticket and source turn; UI target by default", "UI-owned",
     "The named painted adapter reads or updates the current Presenter through the runner or its Host forwarding API. runner/src/runner/reply.rs:27-88 checks pending, background, tool and module-work tickets; reply.rs:309 preserves effectful reply writes. Ordinary resource/then ownership is inferred from PendingReq.target in commit.rs:960.", [

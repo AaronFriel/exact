@@ -76,9 +76,12 @@ internal class FakePlatform : Platform {
         answers?.add(answer) ?: answer(true)
     }
     override fun cancel(key: Key, job: Job?) { jobs.removeAll { it.first == key && (job == null || it.second == job) } }
+    /** Told of each run given back. */
+    var finish: () -> Unit = {}
     /** A run that is not to run again ends its job. */
     override fun finish(key: Key, run: Int, again: Boolean) {
         finished += run to again
+        finish()
         if (!again) jobs.removeAll { it.first == key }
     }
     override fun promote(key: Key, run: Int, record: JSONObject) { promoted += run }

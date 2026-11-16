@@ -39,13 +39,15 @@ above with `bun scripts/agent-android.mjs build <app> --apk` and
 `EXACT_APP_DIR` set to its directory, against a server the phone can reach.
 Record the Android version beside each step.
 
-A start within five seconds of a press, while the app shows, is a person's
-transfer: a user-initiated job on Android 14 and later, foreground work on
+A start within five seconds of a press or of a tap on one of the app's
+notifications, while the app shows, is a person's transfer: a user-initiated job on Android 14 and later, foreground work on
 Android 12 and 13. Steps 1 to 5 below start theirs from a press unless they
 say a timer does; run each both ways. For a person's transfer also check its
 notification, its progress, the tap that raises `backgroundfetchclick`, that
-it outlasts ten minutes, and that a start a timer makes six seconds after a
-press runs as plain work with no notification.
+it outlasts ten minutes, that a start a timer makes six seconds after a
+press runs as plain work with no notification, and that a start made from a
+`backgroundfetchclick` or `notificationclick` handler, more than five seconds
+after the last touch in the app, is a person's.
 
 1. **In front.** Upload, download, a refused origin, a directory as `saveTo`
    and an abort. The upload sent is the file as it was at the start, though
@@ -74,12 +76,24 @@ press runs as plain work with no notification.
    are not taken for a force-stop. Run this on API 35 or later, where the
    package reads `ApplicationStartInfo.wasForceStopped`, and on an earlier
    one, where it reads a cancelled `PendingIntent`.
-6. **Endings.** Finish a transfer with the app closed: nothing is heard
-   until the app is opened (the host has no session without a view on
-   Android yet), then the event comes, and comes again at each launch until
-   it is retired. Finish one with the app running behind another: the event
-   is heard there. Retire, start the same id again, and see that nothing of
+6. **Endings.** Finish a transfer with the app closed (swiped away, then its
+   process killed with `adb shell am kill`): the server hears the handler's
+   note with no window shown, and the transfer's notification or work stays
+   until then. Open the app: the event has run, and what its handler stored
+   through a data module's call is there. Open it instead from a link or a
+   share within seconds of the note: it opens at that route, and Back from
+   it goes where Back goes after a cold start at the same link. Left unretired, it comes three times in all without the app,
+   then at each launch until it is retired. Open the app while the handler
+   runs: it shows as it was left, and the event is not raised twice. Finish
+   one with the app running behind another: the event is heard there. Retire, start the same id again, and see that nothing of
    the first transfer reaches the second.
 7. **Locked.** A transfer under a locked screen, a restart before the first
    unlock, missing Keystore keys and a corrupt secret file. No credential is
    ever read from plaintext. Staging before the first unlock is not built.
+   A retirement while the secret store cannot be opened rejects with
+   `UnknownError`, the id cannot be started, and the same retirement after
+   the unlock frees it.
+8. **A drive.** With the app holding an unfinished transfer, drive it with
+   `--storage <name> --bind background-transfer`: the drive lists no ids,
+   cannot abort or retire the app's, and may start the same id. End the
+   drive and open the app: its transfer is as it was.
