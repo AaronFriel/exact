@@ -172,6 +172,7 @@ impl Bus {
 pub(crate) fn choose(
     picker: &Picker,
     filters: &[Filter],
+    folder: Option<&std::path::Path>,
     address: Option<&str>,
     timeout: Duration,
 ) -> Outcome {
@@ -186,7 +187,7 @@ pub(crate) fn choose(
             ))
         }
     };
-    match ask(&mut bus, picker, filters) {
+    match ask(&mut bus, picker, filters, folder) {
         Ok(outcome) => outcome,
         Err(e) => Outcome::Refused(e),
     }
@@ -194,7 +195,12 @@ pub(crate) fn choose(
 
 static TOKENS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
-fn ask(bus: &mut Bus, picker: &Picker, filters: &[Filter]) -> Result<Outcome, String> {
+fn ask(
+    bus: &mut Bus,
+    picker: &Picker,
+    filters: &[Filter],
+    folder: Option<&std::path::Path>,
+) -> Result<Outcome, String> {
     // Whether a file chooser is there at all, and which version: a folder
     // needs `directory`, version 3's.
     let version = bus
@@ -233,7 +239,7 @@ fn ask(bus: &mut Bus, picker: &Picker, filters: &[Filter]) -> Result<Outcome, St
     bus.subscribe(&format!(
         "type='signal',sender='{DBUS}',interface='{DBUS}',member='NameOwnerChanged',arg0='{PORTAL}'"
     ))?;
-    let (member, options) = super::request(picker, &token, filters);
+    let (member, options) = super::request(picker, &token, filters, folder);
     let title = super::title(picker.kind);
     let reply = bus
         .call(

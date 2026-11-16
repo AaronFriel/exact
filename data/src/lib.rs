@@ -6,6 +6,7 @@ pub mod crypto;
 pub mod documents;
 pub mod envelope;
 pub mod image;
+pub mod known_folders;
 mod mixed;
 pub mod modules;
 pub mod placed;

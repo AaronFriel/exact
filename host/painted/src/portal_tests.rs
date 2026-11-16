@@ -13,6 +13,7 @@ fn picker(kind: Kind, multiple: bool, suggested_name: &str) -> Picker {
         id: "opened".into(),
         multiple,
         suggested_name: suggested_name.into(),
+        start_in: None,
     }
 }
 
@@ -250,7 +251,7 @@ fn a_message_reads_back_as_it_was_written() {
 fn each_picker_asks_its_own_method_and_options() {
     let filters = declared_filters();
     let offered = offered_filters();
-    let (member, options) = request(&picker(Kind::Open, true, ""), "tok", &filters);
+    let (member, options) = request(&picker(Kind::Open, true, ""), "tok", &filters, None);
     assert_eq!(member, "OpenFile");
     assert_eq!(options.signature(), "a{sv}");
     assert_eq!(options.get("handle_token"), Some(&Value::str("tok")));
@@ -261,14 +262,19 @@ fn each_picker_asks_its_own_method_and_options() {
         options.get("current_filter"),
         Some(&markdown_filter_value())
     );
-    let (member, options) = request(&picker(Kind::Directory, false, ""), "tok", &filters);
+    let (member, options) = request(&picker(Kind::Directory, false, ""), "tok", &filters, None);
     assert_eq!(
         (member, options.get("directory")),
         ("OpenFile", Some(&Value::Bool(true)))
     );
     assert_eq!(options.get("filters"), None);
     assert_eq!(options.get("current_filter"), None);
-    let (member, options) = request(&picker(Kind::Save, false, "notes.md"), "tok", &filters);
+    let (member, options) = request(
+        &picker(Kind::Save, false, "notes.md"),
+        "tok",
+        &filters,
+        None,
+    );
     assert_eq!(
         (member, options.get("current_name")),
         ("SaveFile", Some(&Value::str("notes.md")))
@@ -279,7 +285,7 @@ fn each_picker_asks_its_own_method_and_options() {
         Some(&markdown_filter_value())
     );
 
-    let (_, options) = request(&picker(Kind::Open, false, ""), "tok", &[]);
+    let (_, options) = request(&picker(Kind::Open, false, ""), "tok", &[], None);
     assert_eq!(
         options.get("filters"),
         None,
@@ -289,6 +295,31 @@ fn each_picker_asks_its_own_method_and_options() {
         request_path(":1.42", "tok"),
         "/org/freedesktop/portal/desktop/request/1_42/tok"
     );
+}
+
+/// LLP 1173 D2: `startIn`'s folder is `current_folder`, a NUL-terminated
+/// byte string, on `OpenFile` and `SaveFile` alike.
+#[test]
+fn a_start_folder_is_the_portals_current_folder() {
+    let bytes = |s: &str| {
+        let b = s.bytes().chain([0]).map(Value::Byte).collect();
+        Value::Array("y".into(), b)
+    };
+    let folder = std::path::Path::new("/home/ana/Bilder/Bildschirmfotos");
+    for (kind, member) in [
+        (Kind::Open, "OpenFile"),
+        (Kind::Directory, "OpenFile"),
+        (Kind::Save, "SaveFile"),
+    ] {
+        let (asked, options) = request(&picker(kind, false, "a.png"), "tok", &[], Some(folder));
+        assert_eq!(asked, member);
+        assert_eq!(
+            options.get("current_folder"),
+            Some(&bytes("/home/ana/Bilder/Bildschirmfotos"))
+        );
+        let (_, options) = request(&picker(kind, false, "a.png"), "tok", &[], None);
+        assert_eq!(options.get("current_folder"), None);
+    }
 }
 
 #[test]
@@ -349,18 +380,19 @@ fn a_bus_address_names_its_unix_socket() {
 #[test]
 fn with_no_session_bus_a_pick_is_refused_at_once() {
     let ask = picker(Kind::Open, false, "");
-    let none = choose(&ask, &[], None, Duration::from_secs(1));
+    let none = choose(&ask, &[], None, None, Duration::from_secs(1));
     assert!(
         matches!(&none, Outcome::Refused(r) if r.contains("no session bus")),
         "{none:?}"
     );
     assert!(matches!(
-        choose(&ask, &[], Some(""), Duration::from_secs(1)),
+        choose(&ask, &[], None, Some(""), Duration::from_secs(1)),
         Outcome::Refused(_)
     ));
     let gone = choose(
         &ask,
         &[],
+        None,
         Some("unix:path=/nonexistent/exact-bus"),
         Duration::from_secs(1),
     );
@@ -574,6 +606,7 @@ fn a_pick_is_asked_of_the_portal_and_its_answer_heard() {
     let got = choose(
         &picker(Kind::Open, true, ""),
         &filters,
+        None,
         Some(&address),
         Duration::from_secs(5),
     );
@@ -616,6 +649,7 @@ fn a_pick_is_asked_of_the_portal_and_its_answer_heard() {
         choose(
             &picker(Kind::Save, false, "a.md"),
             &filters,
+            Some(std::path::Path::new("/home/a/Pictures")),
             Some(&address),
             Duration::from_secs(5)
         ),
@@ -628,6 +662,16 @@ fn a_pick_is_asked_of_the_portal_and_its_answer_heard() {
         .unwrap();
     assert_eq!(save.body[2].get("filters"), Some(&offered_filters()));
     assert_eq!(
+        save.body[2].get("current_folder"),
+        Some(&Value::Array(
+            "y".into(),
+            b"/home/a/Pictures\0"
+                .iter()
+                .map(|b| Value::Byte(*b))
+                .collect()
+        ))
+    );
+    assert_eq!(
         save.body[2].get("current_filter"),
         Some(&markdown_filter_value())
     );
@@ -637,6 +681,7 @@ fn a_pick_is_asked_of_the_portal_and_its_answer_heard() {
         choose(
             &picker(Kind::Open, false, ""),
             &[],
+            None,
             Some(&address),
             Duration::from_secs(5)
         ),
@@ -658,6 +703,7 @@ fn a_missing_old_quitting_or_silent_portal_refuses_and_never_waits_on() {
         match choose(
             &picker(kind, false, "a.md"),
             &[],
+            None,
             Some(&address),
             Duration::from_millis(300),
         ) {
@@ -681,6 +727,7 @@ fn a_missing_old_quitting_or_silent_portal_refuses_and_never_waits_on() {
         choose(
             &picker(Kind::Open, false, ""),
             &[],
+            None,
             Some(&address),
             Duration::from_millis(300),
         )
@@ -753,6 +800,7 @@ fn the_element_hears_what_the_portal_answered() {
         picker(Kind::Open, false, ""),
         view,
         None,
+        None,
         Duration::from_secs(1),
     );
     assert_eq!(until(&mut p, "cancels", "0"), "1");
@@ -775,6 +823,7 @@ fn the_element_hears_what_the_portal_answered() {
         picker(Kind::Open, false, ""),
         view,
         None,
+        None,
         Duration::from_secs(1),
     );
     assert_eq!(until(&mut p, "cancels", "1"), "2");
@@ -796,6 +845,7 @@ fn the_element_hears_what_the_portal_answered() {
     p.ask_portal(
         picker(Kind::Directory, false, ""),
         view,
+        None,
         Some(address),
         Duration::from_secs(5),
     );
@@ -812,6 +862,24 @@ fn the_element_hears_what_the_portal_answered() {
         "{:?}",
         journal(&p)
     );
+    // The handle is where a later chooser can open (LLP 1173 D2); one the
+    // session never held opens where the portal would, journalled.
+    let real = std::fs::canonicalize(&folder).unwrap();
+    assert_eq!(
+        p.start_folder("showSaveFilePicker", Some(&opened)),
+        Some(real)
+    );
+    assert_eq!(
+        p.start_folder("showSaveFilePicker", Some("doc:/999999/x")),
+        None
+    );
+    let refused =
+        "showSaveFilePicker: startIn: refused: doc:/999999/x is not a document this session holds";
+    assert!(
+        journal(&p).iter().any(|line| line.ends_with(refused)),
+        "{:?}",
+        journal(&p)
+    );
     std::fs::remove_dir_all(folder).unwrap();
     p.compat = "{}".into();
 
@@ -824,6 +892,7 @@ fn the_element_hears_what_the_portal_answered() {
     p.ask_portal(
         picker(Kind::Open, false, ""),
         view,
+        None,
         Some(address),
         Duration::from_secs(5),
     );
@@ -848,6 +917,7 @@ fn the_element_hears_what_the_portal_answered() {
         p.ask_portal(
             picker(Kind::Open, false, ""),
             view,
+            None,
             None,
             Duration::from_secs(1),
         );

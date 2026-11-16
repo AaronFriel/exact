@@ -167,12 +167,14 @@ fn filter_value(filter: &Filter) -> wire::Value {
 }
 
 /// The portal method `picker` calls, and its `options` (`a{sv}`) under
-/// `token`.
+/// `token`; `folder` is where the chooser opens (`current_folder`, a
+/// NUL-terminated byte string; LLP 1173 D2's `startIn`).
 #[cfg(unix)]
 pub(crate) fn request(
     picker: &Picker,
     token: &str,
     filters: &[Filter],
+    folder: Option<&std::path::Path>,
 ) -> (&'static str, wire::Value) {
     use wire::Value;
     let mut options = vec![("handle_token", Value::str(token))];
@@ -199,6 +201,12 @@ pub(crate) fn request(
             ),
         ));
         options.push(("current_filter", filter_value(&filters[0])));
+    }
+    if let Some(folder) = folder {
+        use std::os::unix::ffi::OsStrExt;
+        let bytes = folder.as_os_str().as_bytes().iter().chain([&0]);
+        let bytes = bytes.map(|b| Value::Byte(*b)).collect();
+        options.push(("current_folder", Value::Array("y".into(), bytes)));
     }
     (member, Value::dict(options))
 }
