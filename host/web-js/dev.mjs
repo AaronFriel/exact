@@ -17,7 +17,7 @@ import { createServer, request } from 'node:http';
 import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, utimesSync, watch, writeFileSync } from 'node:fs';
 import { basename, dirname, relative, resolve } from 'node:path';
 import { acceptsHTML, appDocumentPath, webRequestURL } from '../../scripts/origin.mjs';
-import { appDigest, compilerWarnings, INPUT_TREE, OUTPUT, listenOn, oneScheme } from '../../scripts/agent-launch.mjs';
+import { appDigest, compilerError, compilerWarnings, INPUT_TREE, OUTPUT, listenOn, oneScheme } from '../../scripts/agent-launch.mjs';
 import { builtSettings } from '../../js/bake/src/__exact_env.mjs';
 import { alsoOnIPv6Loopback, appManifestDigest, appSources, buildFileCards, listenDelay, replaceBuild, saveTrace, sendStaticBody, watchLauncher, webContentType } from '../web/serve.mjs';
 import { generationFile, generationPath, servedFile } from '../web/generations.mjs';
@@ -164,7 +164,9 @@ function build(app, dist, keep = () => false, compiler = null, superseded = null
       // The one line a build says when it rewrote the types app.ts imports, built or not (LLP 1116.001 D4.5).
       const types = /^app\.contract\.d\.ts: .*$/m.exec(log)?.[0];
       if (types) console.log(types);
-      if (code !== 0) { rmSync(stage, { recursive: true, force: true }); return done({ packages, error: log.split('\n').filter((l) => l.trim() && !/^\s*(Compiling|Finished|Running|warning)/.test(l) && !compilerWarnings(l).length).slice(-12).join('\n') || `build exited ${code}` }); }
+      // What it said: its last 12 lines, or from the compiler's first error when those leave it out.
+      const said = log.split('\n').filter((l) => l.trim() && !/^\s*(Compiling|Finished|Running|warning)/.test(l) && !compilerWarnings(l).length), first = said.findIndex(compilerError);
+      if (code !== 0) { rmSync(stage, { recursive: true, force: true }); return done({ packages, error: said.slice(first >= 0 ? Math.min(first, said.length - 12) : -12).join('\n') || `build exited ${code}` }); }
       let cargo;
       try { cargo = cargoContractReads(webSourceRoots(app, true), began); }
       catch (error) { rmSync(stage, { recursive: true, force: true }); return done({ packages, error: error.message }); }

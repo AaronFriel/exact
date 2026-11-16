@@ -66,10 +66,14 @@ export function compilerWarnings(text, cwd = process.cwd()) {
   return [...lines];
 }
 
+/** Whether `line` begins one of the compiler's errors as `contract build` prints it, `file:line:col [id] text`: a
+ * surface that shows part of a failed build's output starts at the first, the cause the later ones may follow from. */
+export const compilerError = (line) => /^.+:\d+:\d+ \[[\w-]+\] /.test(line);
+
 /** What a failed JS-target web build (`host/web-js/build.mjs`) said that is the app's to act on, from its stderr: the
- * types app.ts imports when rewritten, warnings, the diagnostics, then the compiler's warnings. Cargo's progress, a
- * rustc warning's excerpt and Bun's trace (a frame and its version line) are left out; with no diagnostic, the last
- * three lines stand for one. */
+ * types app.ts imports when rewritten, warnings, the diagnostics, then the compiler's warnings. Every compiler error is
+ * kept with its quoted line and caret, as `contract build` prints them. Cargo's progress, a rustc warning's excerpt and
+ * Bun's trace (a frame and its version line) are left out; with no diagnostic, the last three lines stand for one. */
 export function webBuildFailure(stderr) {
   const ambientDiagnostic = (l) => /^.+:\d+:\d+: .+ is unavailable in data sources[;:]/.test(l);
   const all = (stderr ?? '').trim().split('\n').filter((l) => ambientDiagnostic(l) || !/^\s*(Compiling|Finished|Running)/.test(l) && !compilerWarnings(l).length);
@@ -79,11 +83,16 @@ export function webBuildFailure(stderr) {
   // refusals of package code (js/bake/src/typescript.mjs `capturedSources`).
   const packageRefusal = (l) => / (?:requires peer|imports Node's built-in|uses the DOM's|uses Node's|loads a module by a computed name|loads code from a string|uses the page's)|, (?:which is not installed|a native addon|which the checked capture did not resolve)|: not an npm package name and version| must be a constant the build reads without running|^(?:Error: )?(?:package declarations: )?two copies of |^(?:Error: )?package (?:declarations exceed|code exceeds) 64 MiB/.test(l);
   const marker = /^(error|[A-Z]\w*Error|E[A-Z]+)\b:?/;
-  const kept = (l) => marker.test(l.trim()) || /\): error TS\d+:|^(?:Error: )?(?:tsconfig: |module outside captured app: |source links are not captured: )|^note: /.test(l) || ambientDiagnostic(l) || packageRefusal(l) || /\bunoptimized$|\bnot on PATH\b|import\.meta\.env/.test(l);
+  const kept = (l) => marker.test(l.trim()) || /\): error TS\d+:|^(?:Error: )?(?:tsconfig: |module outside captured app: |source links are not captured: )|^note: /.test(l) || ambientDiagnostic(l) || compilerError(l) || packageRefusal(l) || /\bunoptimized$|\bnot on PATH\b|import\.meta\.env/.test(l);
   const message = [];
   for (let i = 0; i < lines.length; i++) {
     if (!kept(lines[i])) continue;
     message.push(lines[i]);
+    // Its excerpt (contract/cli/src/excerpt.rs): the source line, then the caret under it.
+    if (compilerError(lines[i])) {
+      if (/^ \d+ \| /.test(lines[i + 1] ?? '')) message.push(...lines.slice(i + 1, i + 3)), i += 2;
+      continue;
+    }
     // A marker with nothing after it says its message below, to the next diagnostic or Bun's trace: wasm-bindgen's
     // schema mismatch is `error: `, a blank line, then paragraphs.
     if (!/^\s*(error|[A-Z]\w*Error|E[A-Z]+)\b:\s*$/.test(lines[i])) continue;

@@ -28,7 +28,7 @@ import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { within } from './paths.mjs';
 import { fileURLToPath } from 'node:url';
 import { appleArtifacts, appleRunBinary } from '../host/apple/build.mjs';
-import { compilerWarnings, warningLines, depInfoInputs, newerThan, notBuildInput, otherHosts, packagedBuildChanges, receiptChanges, refuseBackendOrigin, refuseStale } from './agent-launch.mjs';
+import { compilerError, compilerWarnings, warningLines, depInfoInputs, newerThan, notBuildInput, otherHosts, packagedBuildChanges, receiptChanges, refuseBackendOrigin, refuseStale } from './agent-launch.mjs';
 import { CONFIG_JSON, DECLARATIONS, moduleGraph } from './module-graph.mjs';
 import { bakeOutput, bakeTarget, claimLive, developmentBuildEnv, executableName, resolveApp, shaderWatchRoots } from './app.mjs';
 import { bakeTool, linkedBakeDir } from './linked-plan.mjs';
@@ -130,12 +130,12 @@ export function refuseBuild(host, state, app, { sample = false } = {}) {
 export const buildArgs = (host, app) => [...(host === 'ios' ? ['--ios'] : []), app.crate('apple'), ...(host === 'ios' ? ['--no-install'] : [])];
 
 const errorLine = line => /^error\b|\berror(\[E\d+\])?:/.test(line);
-/** What a failed build said, short: from its first error, at most 30 lines (else
- * its last 20), and its last line. */
+/** What a failed build said, short: from its first error, at most 30 lines (else its last 20, or from the compiler's
+ * first error when those leave it out), and its last line. */
 function failureLines(output) {
   const lines = output.split('\n').filter(line => line.trim());
-  const first = lines.findIndex(errorLine);
-  const shown = first < 0 ? lines.slice(-20) : lines.slice(first, first + 30);
+  const first = lines.findIndex(errorLine), compiler = lines.findIndex(compilerError);
+  const shown = first >= 0 ? lines.slice(first, first + 30) : compiler >= 0 && compiler < lines.length - 20 ? lines.slice(compiler, compiler + 30) : lines.slice(-20);
   if (lines.length && !shown.includes(lines.at(-1))) shown.push('…', lines.at(-1));
   return shown;
 }

@@ -6,13 +6,26 @@ import { resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { captureWebProducts, cargoContractReads, changedContractReads, contractReadReceipt, loopWebDist, privateNativeBuild, privateWebBuild } from './web-build.mjs';
 import { appleArtifacts } from '../host/apple/build.mjs';
-import { buildFirst, nativeBuild, planOverride } from './agent-build.mjs';
+import { buildFirst, failureSummary, nativeBuild, planOverride } from './agent-build.mjs';
+import { webBuildFailure } from './app-cli.mjs';
 import { linkedBakeDir } from './linked-plan.mjs';
 import { resolveApp } from './app.mjs';
 import { webChanges, webInputDigests } from './agent-launch.mjs';
 import { replaceBuild } from '../host/web/serve.mjs';
 let fallbackRoots = [];
 mock.module('../host/web/build.mjs', () => ({ webSourceRoots: () => fallbackRoots }));
+
+// A failed build's summary keeps the compiler's first error, which may be the cause of the rest (#705: the web
+// build said only the last, which blamed another component's action of the same name).
+test("a failed build's summary keeps the compiler's first error", () => {
+  const error = (line, id, text) => [`/app/app.contract:${line}:3 [${id}] ${text}`, ` ${line} |   source ${line}`, '   |   ^^^^^^'].join('\n');
+  const two = [error(6, 'syntax-method-call', '`.replace(…)` is a method call'), error(8, 'type-handler-action', '`follow` is an action of `Pill`')].join('\n');
+  // The web build: every compiler error with its excerpt, in the order said.
+  expect(webBuildFailure(`   Compiling app v0.1.0\n${two}\n`)).toEqual([two]);
+  // A native build: from the first when the tail would leave it out.
+  const many = Array.from({ length: 12 }, (_, i) => error(i + 1, 'type-unknown-name', `unknown name \`n${i}\``)).join('\n');
+  expect(failureSummary(`app: the bake failed:\n${many}\n`, { host: 'macos', code: 1, log: 'x.log' })).toStartWith(error(1, 'type-unknown-name', 'unknown name `n0`'));
+});
 
 test('loops and concurrent checks publish into directories they alone own', () => {
   const dir = mkdtempSync(resolve(tmpdir(), 'exact-web-owners-'));

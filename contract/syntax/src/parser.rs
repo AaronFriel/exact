@@ -921,7 +921,8 @@ impl Parser {
         Ok(ty)
     }
 
-    fn action(&mut self) -> R<Action> {
+    /// An action's line, through its newline: the action with no body yet.
+    fn action_signature(&mut self) -> R<Action> {
         let span = self.expect_word("action")?;
         let name = self.named_ident(span)?;
         let mut params = Vec::new();
@@ -957,11 +958,10 @@ impl Parser {
             );
         }
         self.newline()?;
-        let body = self.block(|p| p.stmt())?;
         Ok(Action {
             name,
             params,
-            body,
+            body: Vec::new(),
             span,
         })
     }
