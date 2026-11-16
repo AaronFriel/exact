@@ -531,6 +531,7 @@ impl<D: DataSource> Presenter<D> {
         for (body, reply) in calls {
             let extension = packages::extension_of(&body).unwrap_or_default();
             if self.requests.packages.serves(&extension) {
+                crate::desktop::surface(self.viewport, self.brush.scale, self.pointer);
                 let now = self.host.now();
                 let inbox = self.requests.inbox.clone();
                 (self.requests.packages).dispatch(&body, reply, now, &inbox, &wake);

@@ -126,6 +126,9 @@ pub fn run_config<D: DataSource + Default>(config: &mut Config, started: Instant
     }
     exact_painted::app::show_neutral_look();
     if config.headless() {
+        // @ref LLP 1178 D6 — the one display is the headless buffer.
+        let screen = exact_painted::desktop::FullScreen::headless();
+        exact_painted::desktop::install_displays(std::rc::Rc::new(screen));
         return exact_painted::app::run_headless::<D>(config, started, None);
     }
     #[cfg(target_os = "linux")]

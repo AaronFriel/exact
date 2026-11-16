@@ -60,6 +60,10 @@ pub struct Display {
     flips: FlipState<SubmittedFrame>,
     width: u32,
     height: u32,
+    /// The connector's name (`eDP-1`), the one display's `label` (LLP 1178 D6).
+    label: String,
+    /// Whether the connector is a built-in panel: `isInternal`.
+    internal: bool,
 }
 
 impl Display {
@@ -99,6 +103,13 @@ impl Display {
             .ok_or_else(|| "no crtc".to_string())?;
         let (w, h) = mode.size();
         let (width, height) = (w as u32, h as u32);
+        let internal = matches!(
+            con.interface(),
+            connector::Interface::EmbeddedDisplayPort
+                | connector::Interface::LVDS
+                | connector::Interface::DSI
+        );
+        let label = con.to_string();
         let mut buffers = Vec::new();
         for _ in 0..2 {
             let db = card
@@ -118,6 +129,8 @@ impl Display {
             flips: FlipState::default(),
             width,
             height,
+            label,
+            internal,
         })
     }
 
@@ -246,6 +259,12 @@ pub fn run<D: DataSource + Default>(config: &mut Config, started: Instant) -> i3
     };
     let (pw, ph) = display.size();
     let viewport = (pw as f32 / config.scale, ph as f32 / config.scale);
+    exact_painted::desktop::install_displays(std::rc::Rc::new(
+        exact_painted::desktop::FullScreen {
+            label: display.label.clone(),
+            internal: display.internal,
+        },
+    ));
     let wall = || started.elapsed().as_secs_f64() * 1000.0;
     config.clock_started = Some(started);
     // Startup timestamps for Observe's launch metrics.

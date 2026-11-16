@@ -900,6 +900,7 @@ impl<D: DataSource> Presenter<D> {
         self.field_reveal |= geometry_changed;
         self.dirty |= geometry_changed;
         self.viewport = (width, height);
+        crate::desktop::surface(self.viewport, self.brush.scale, self.pointer);
         self.images.fit(self.viewport, self.brush.scale);
         if geometry_changed {
             self.collection.advance_all();
