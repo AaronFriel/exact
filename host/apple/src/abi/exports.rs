@@ -83,6 +83,12 @@ macro_rules! host {
             if EXACT_LINKS.io.is_none() { return 0; }
             $crate::launch_preloads::copy_name(index as usize, out, capacity)
         }
+        /// The optional WatchConnectivity adapter's private store callback.
+        #[no_mangle]
+        pub unsafe extern "C" fn exact_watch_store(plan: *const u8, plan_len: usize, input: *const u8, len: usize, seal: Option<$crate::watch_sync::Seal>, reply: $crate::watch_sync::Reply, context: usize) {
+            // SAFETY: the optional adapter holds these buffers through the callback.
+            unsafe { $crate::watch_sync::call(plan, plan_len, input, len, seal, reply, context) }
+        }
         $crate::pan_velocity_exports!();
         $crate::frame_health_exports!();
 
@@ -1197,12 +1203,6 @@ macro_rules! host {
         #[no_mangle]
         pub extern "C" fn exact_colors(rt: u32, len: usize) -> u32 {
             $crate::abi::with_runtime(&EXACT_RUNTIMES, rt, false, |b, _| b.colors(len), |n| n)
-        }
-
-        /// An image loaded (or failed: a size ≤ 0); returns the batch's length.
-        #[no_mangle]
-        pub extern "C" fn exact_intrinsic(rt: u32, view: u32, width: f32, height: f32) -> u32 {
-            $crate::abi::with_runtime(&EXACT_RUNTIMES, rt, false, |b, _| b.intrinsic(view, width, height), |n| n)
         }
 
         /// Several images' intrinsic sizes from the input buffer, one layout;

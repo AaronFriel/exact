@@ -14,6 +14,11 @@ const read = (cmd, args, opts = {}) => spawnSync(cmd, args, { encoding: 'utf8', 
  * Plans embed the current schema digest. App entries need the test app's `appId` to boot. */
 export function compileFixtures(root, run, env, dir, prefix, appId) {
   const contract = args => run(env.EXACT_CONTRACT, ['build', ...args], { env });
+  const watchSync = resolve(dir, 'watch-sync');
+  mkdirSync(watchSync, { recursive: true });
+  writeFileSync(resolve(watchSync, 'app.json'), JSON.stringify({ app: { id: appId, name: 'Watch sync' } }));
+  writeFileSync(resolve(watchSync, 'app.contract'), readFileSync(resolve(root, 'scripts/fixtures/store-refresh.contract')));
+  contract([resolve(watchSync, 'app.contract'), '-o', env[`${prefix}_WATCH_SYNC_PLAN`] = resolve(watchSync, 'app.plan')]);
   contract([resolve(root, 'host/apple/tests/fixtures/layout-only-row.contract'), '-o', env[`${prefix}_LAYOUT_ONLY_ROW_PLAN`] = resolve(dir, 'layout-only-row.plan')]);
   contract([resolve(root, 'host/apple/tests/fixtures/layout-only-paint.contract'), '-o', env[`${prefix}_LAYOUT_ONLY_PAINT_PLAN`] = resolve(dir, 'layout-only-paint.plan')]);
   // Made afresh: a target from before the tamber->forma rename keeps an app.tamber here, which contract refuses.

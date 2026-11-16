@@ -1068,9 +1068,8 @@ uint32_t exact_tick_at(ExactRuntime rt, double now_ms, double frame_ms); /* LLP 
  * pixels wide, as on the web); a width or height ≤ 0 clears it (the load
  * failed, or the source was removed). Lays out again; the batch carries
  * every frame that moved. */
-uint32_t exact_intrinsic(ExactRuntime rt, uint32_t view, float width, float height);
-/* exact_intrinsic for several views under one layout: the input buffer's
- * first len bytes are LE records of (uint32 view, float width, float height). */
+/* The input buffer's first len bytes are LE records of
+ * (uint32 view, float width, float height), applied under one layout. */
 uint32_t exact_intrinsics(ExactRuntime rt, size_t len);
 /* What native containers cover of boxes (LLP 1075.003 §3.5) under one
  * layout: LE records of (uint32 view, uint32 kind — 0 clears, 1 edges,
@@ -1229,6 +1228,9 @@ typedef struct {
 } ExactDeliveryApi;
 const ExactDeliveryApi *exact_delivery_api(void);
 uint32_t exact_delivery_sync(ExactRuntime rt);
+
+// Private callback for the optional watch transport; never a view or agent reply.
+void exact_watch_store(const uint8_t *plan, size_t plan_len, const uint8_t *input, size_t len, void (*seal)(const uint8_t *, size_t, void (*)(const uint8_t *, size_t, size_t), size_t), void (*reply)(const uint8_t *, size_t, size_t), size_t context);
 
 #ifdef __cplusplus
 }

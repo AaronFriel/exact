@@ -1036,8 +1036,64 @@ module sources. The watch bake refuses a TypeScript dependency by name until
 the watch Hermes gate passes (LLP 1126.001 §5 Q3); a mixed bake declares its
 Rust ownership through `build_mixed_with`'s source list. Such an app's complications are still omitted
 with a message, including its Rust refreshes. Rust-only apps' complications
-refresh against the watch's own App Group and store. No account transfer is
-performed.
+refresh against the watch's own App Group and store.
+
+Select phone-owned values explicitly in `watch.sync`:
+
+```json
+"watch": {
+  "source": "watch.contract", "component": "Watch",
+  "sync": { "state": ["liked"], "secrets": ["totp.entries"] }
+}
+```
+
+State names must be root `persist` states with matching types in both entries.
+Watch actions cannot assign them. Secrets require ordinary `secret.keep` grants;
+presence policies, including optional ones, are refused. Watch data sources and complication processes cannot
+write selected secrets or persisted states. Files, databases and kept resource answers do not transfer.
+Changing the selection, or a selected state's type, requires a new binary. The watch rechecks a retained context
+when its selection grows or shrinks, even at an already accepted revision. Removing a selection deletes only
+previously imported names after accepting a snapshot under the new selection.
+Removing the entire selection retires its state replicas the next time the watch app or
+a complication runs, and its secrets the next time the watch app runs, even if the app no
+longer uses storage or WatchConnectivity. Only the app reaches their Keychain group by then.
+
+Open the watch app once to create its device-local Keychain key and send its
+public key to the phone. The phone uses CryptoKit HPKE to seal the secrets before
+placing them in WatchConnectivity's retained application context. State stays
+plaintext; secret plaintext never enters that context. The watch imports secrets
+into its Keychain with `AfterFirstUnlockThisDeviceOnly` accessibility. Reinstalling
+the watch app generates a new key; a replacement pairing needs the new watch to
+run and announce its key. Old encrypted contexts cannot initialize that watch.
+
+The phone sends a complete snapshot at first pixel, after each durable change
+(a session's write, or a launch function's `set_secret` or `forget_secret`) and
+when a watch announces its key. Apple schedules delivery, so submission is not
+acknowledgement and intermediate values may be skipped. A send WatchConnectivity
+refuses is tried again while the app runs, after 1 s and then at doubling waits
+up to 32 s, and at each foreground. A snapshot whose application context would
+exceed 60,000 bytes is not sent: the session log says so once, the watch keeps
+its last copy, and the next change that fits is sent. A snapshot's revision is
+spent only when WatchConnectivity takes it.
+
+At launch the watch activates its session and imports the retained context
+before its readers open; an active scene does not open them earlier. A session
+that cannot activate, or a context for an old key or schema, leaves the last
+accepted store available offline. A failed or partial import keeps readers
+closed. The watch app tries it again while it is active, at the same waits, at
+each foreground and at each later delivery, without restarting. An import that
+lands after the session booted refreshes it. A phone
+edit, deletion or logout reaches it only after delivery and successful import.
+A watch already holding a TOTP seed can keep generating codes until that seed is
+replaced at the service; local logout does not revoke that copy remotely.
+Imports and replica retirement invalidate cached complication timelines and request
+a reload. A complication's refresh waits up to 100 ms for an import that overlaps
+its store read. If the import is still unfinished the refresh is refused without
+asking its source, and the import's end reloads the timeline. An app that selects nothing links
+no WatchConnectivity session or replication crypto path.
+
+See Apple's [application context](https://developer.apple.com/documentation/watchconnectivity/wcsession/updateapplicationcontext(_:))
+and [HPKE](https://developer.apple.com/documentation/cryptokit/hpke) documentation.
 For `accessoryInline`, emit exactly one `text` or `time` leaf plus at most one
 optional image. Only that leaf and image survive the inline archive; a
 container's background and layout do not. The bake evaluates the preview at

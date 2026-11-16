@@ -333,7 +333,7 @@ export const classifications = [
     ["apple:host/apple/src/abi/exports.rs",
       "exact_activities exact_agent exact_baked_compat exact_color_references exact_colors exact_command exact_confirmation_is_alert exact_design_digest " +
       "exact_design_rows exact_entry_timeline exact_evaluates_from_draw exact_field_decorations exact_gesture_constant exact_grouped_list exact_header_shape " +
-      "exact_host_covers exact_intrinsic exact_intrinsics exact_layout_stamp exact_link_activities exact_list_covered exact_log exact_measure_block exact_measure_work " +
+      "exact_host_covers exact_intrinsics exact_layout_stamp exact_link_activities exact_list_covered exact_log exact_measure_block exact_measure_work " +
       "exact_measure_work_later exact_placement_box exact_plan_covers_viewport exact_plan_digest exact_preloads_begin exact_preloads_count exact_preloads_launched " +
       "exact_preloads_mark exact_preloads_name exact_preloads_opened exact_press_face exact_protocol_location_of exact_radio_group exact_reads_on_line " +
       "exact_refresh_entry exact_region_request exact_regions exact_role_keys exact_root_tabs exact_row_reuse exact_scheme exact_screen exact_select_options " +
@@ -690,13 +690,14 @@ export const classifications = [
     ["runner:runner/src/runner/sockets.rs", "Runner::publish_sockets Runner::retrying Runner::set_retry_reader Runner::set_socket_reader Runner::socket_buffered Runner::socket_published Runner::take_socket_sends"],
   ]),
   group("storage", ["durable operation"], "app store contents; inspection/adoption is synchronous", "durable",
-    "runner/src/runner/kept.rs adopts stored values and retries store readers; runner/src/runner.rs take_store_writes drains committed writes. Stored effects are distinct from UI settlement (reply.rs:309).", [
-    ["apple:host/apple/src/abi/exports.rs", "exact_store_changed"],
+    "runner/src/runner/kept.rs adopts stored values and retries store readers; runner/src/runner.rs take_store_writes drains committed writes. Stored effects are distinct from UI settlement (reply.rs:309). watch_sync.rs copies explicitly selected values through a private callback, validates imports and commits durable revision metadata; read_only prevents watch-side writes.", [
+    ["apple:host/apple/src/abi/exports.rs", "exact_store_changed exact_watch_store"],
     ["painted:host/painted/src/activation.rs", "Host::configure_storage"],
     ["painted:host/painted/src/canvas/jni_extensions.rs", "Java_dev_exact_canvas_Native_storeDrain"],
     ["runner:runner/src/runner.rs", "Runner::resource_reads_store Runner::store Runner::store_names Runner::take_store_writes"],
     ["runner:runner/src/runner/kept.rs", "Runner::adopt_store Runner::data_ready Runner::data_ready_after_store Runner::forget_unread_kept Runner::store_changed"],
-    ["runner:runner/src/runner/persist.rs", "Runner::persisted"],
+    ["runner:runner/src/runner/persist.rs", "Runner::persisted Runner::read_only_store"],
+    ["runner:runner/src/store.rs", "Store::read_only"],
     ["web:host/web/src/abi.rs", "exact_store"],
   ]),
   group("timer fires", ["subscription"], "session timer generation/deadline or one frame task", "UI-owned",

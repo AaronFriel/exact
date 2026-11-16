@@ -113,6 +113,25 @@ async function rejects(action, matches) {
     const bytes = Buffer.from(text + '\n');
     return { json: JSON.parse(text), bytes, sha256: createHash('sha256').update(bytes).digest('hex') };
   };
+  for (const [before, after] of [
+    [{state:[],secrets:[]}, {state:['liked'],secrets:['seed']}],
+    [{state:['liked'],secrets:['seed']}, {state:['liked'],secrets:['other']}],
+    [{state:['liked'],secrets:['seed']}, {state:[],secrets:[]}],
+    [{state:['liked'],secrets:[],types:{liked:'Bool'}}, {state:['liked'],secrets:[],types:{liked:'Number'}}],
+  ]) {
+    const installed = signed(head => { head.cohort.compat.inputs.watchSync = before; });
+    const candidate = fixtureBuild(compatibilityId, bundle);
+    candidate.compat.inputs.watchSync = after;
+    candidate.graph.artifacts[0].requires.watchSync = after;
+    const table = await classify({app, opts:{platform:['linux']}, origin:{kind:'directory',describe:()=>dir,
+      get:async name => name===blobPath(streamIndex(bundle).card.sha256)?streamIndex(bundle).bytes:null,
+      head:async()=>found(installed), list:async()=>[]}, channel:stream.channel,
+      snapshot:{commit:'watch-policy',dirty:false,changes:[],repo:dir}, release:'policy', bundle,
+      builds:{linux:candidate}, compat:{linux:candidate.compat}, platforms:['linux'], wantOrigin:false});
+    const row = table.rows.find(row => row.kind === 'stream');
+    result(`deployment requires a new binary for watch policy ${JSON.stringify(before)} to ${JSON.stringify(after)}`,
+      row.action === 'binary' && row.reason.includes('watchSync'), JSON.stringify(row));
+  }
   const valid = signed();
   // The head's asset index, a blob the origin must also serve.
   const index = streamIndex(bundle), indexPath = blobPath(index.card.sha256);
