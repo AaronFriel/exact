@@ -67,7 +67,6 @@ extension NodeView {
             && !clipsToBounds && clipBox == nil && clipPath == nil && scroll == nil && !isAccessibilityElement
     }
 }
-#endif
 
 extension NodeView {
     /// UIKit presents a projected panel's routes elsewhere. Its empty
@@ -79,3 +78,4 @@ extension NodeView {
                 && !container.isAccessibilityElement && container.accessibilityElements?.isEmpty != false)
     }
 }
+#endif
