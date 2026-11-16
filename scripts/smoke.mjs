@@ -1411,6 +1411,9 @@ if ((host === 'web' || apple || host === 'linux') && !argv.includes('--app-only'
       await f.tap('open'); h = await held('open-file');
       await f.tap(`@${h?.ticket}`, { choice: 'cancel' }); await f.clock('settle');
       check(await text('cancels') === '1', `tap @N cancel fires cancel: ${await text('cancels')}`);
+      // `startIn=` (LLP 1173 D2) is in the held picker's summary: a name, or a handle chosen earlier.
+      for (const [button, capability, want] of [['open-pictures', 'open-file', 'pictures'], ['save-beside', 'save-file', await text('folder-value')]]) {
+        await f.tap(button); h = await held(capability); check(h?.device.args.startIn === want, `${button} is held with startIn ${want}: ${JSON.stringify(h)}`); await f.tap(`@${h?.ticket}`, { choice: 'cancel' }); await f.clock('settle'); }
     } catch (error) {
       failures.push(`the pickers fixture stopped: ${error.message}`);
     } finally { await f.close(); }

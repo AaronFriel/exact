@@ -702,14 +702,17 @@ function apply(batch) {
               pending.finally(() => inflight.delete(pending));
             }
           } else if (op.name === "saveFile") {
-            const [id, from, suggestedName, text] = op.args ?? [], r = JSON.parse(readOut(host.wasm.exact_command(writeIn(JSON.stringify({
+            const [id, from, suggestedName, text, startIn] = op.args ?? [], r = JSON.parse(readOut(host.wasm.exact_command(writeIn(JSON.stringify({
               command: "saveFile",
               id,
               from: from ?? undefined,
               suggestedName,
-              text,
+              text: text ?? undefined,
+              startIn: startIn ?? undefined,
               agent: agentMode
-            }))))), chosen = r.present && typeof showSaveFilePicker === "function" ? showSaveFilePicker({ suggestedName: r.suggestedName }) : null;
+            }))))), chosen = r.present && typeof showSaveFilePicker === "function" ? (r.startIn?.startsWith("doc:/")
+              ? documentsGlue().then((m) => m.startIn(r.startIn, "saveFile")).then((at) => showSaveFilePicker({ suggestedName: r.suggestedName, ...(at && { startIn: at }) }))
+              : showSaveFilePicker({ suggestedName: r.suggestedName, ...(r.startIn && { startIn: r.startIn === "screenshots" ? "pictures" : r.startIn }) })) : null;
             // LLP 1069.010 D3: the runner rules; the save picker starts inside the press's activation, else a download
             if (r.present || r.view != null) {
               chosen?.catch(() => {});
@@ -719,11 +722,12 @@ function apply(batch) {
             }
           } else if (/^show(OpenFile|Directory|SaveFile)Picker$/.test(op.name)) {
             // LLP 1069.010 D2: the runner rules; a browser without the picker refuses
-            const [id, second] = op.args ?? [], r = JSON.parse(readOut(host.wasm.exact_command(writeIn(JSON.stringify({
+            const [id, second] = op.args ?? [], directory = op.name === "showDirectoryPicker", r = JSON.parse(readOut(host.wasm.exact_command(writeIn(JSON.stringify({
               command: op.name,
               id,
               multiple: second === true,
-              suggestedName: typeof second === "string" ? second : undefined,
+              suggestedName: !directory && typeof second === "string" ? second : undefined,
+              startIn: op.args?.[directory ? 1 : 2] ?? undefined,
               agent: agentMode,
               available: op.name === "showSaveFilePicker" || typeof globalThis[op.name] === "function"
             })))));
