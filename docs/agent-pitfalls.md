@@ -598,6 +598,14 @@ This list holds what the [agent guide](contract-for-agents.md)'s rules don't mak
   `EXACT_AGENT=1` and `EXACT_AGENT_FAIL_FETCH`, no socket) shows the native bars
   and menus, its fetches still failing. (Signal Clone, builds 5 and 10; Splitter,
   rough 4 and 11; Recipe Finder, round 27.)
+- **A header with more buttons than the bar has room for loses the rest to UIKit's
+  overflow menu.** UIKit shows the first buttons as bar items and lists the others
+  under a More (…) button: a 402-point bar showed a symbol and two worded buttons
+  of 33. Under `--chrome platform` a `tap` on one of the others is refused (`its bar
+  item is in the navigation bar's overflow menu`): the driver does not open that
+  menu. Fix: write only the buttons that fit, and put the rest in one menu button
+  (a `button` with a `popovertarget`). (#738; iPhone 17 Pro and iPad Pro 11-inch
+  simulators, iOS 27.0, 2026-11-16.)
 - **An `EmptyState`'s button sits at the bottom of the screen.** Cause: the part
   takes the free height it is given, so a `button` written after it lands at that
   space's foot. Fix: indent the button under the `EmptyState` call, its slot.
