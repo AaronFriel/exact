@@ -2076,6 +2076,20 @@ says `cancelled: true`, and the journal that the caller left.
   `http://10.0.0.4:<port>`). To try a LAN host, serve it over HTTPS or
   start Chrome with `--unsafely-treat-insecure-origin-as-secure=<origin>`.
 
+An app may also declare its own `AppIntent` in `modules/apple/*.swift` or a module's
+`apple/launch/*.swift`. Apple builds extract those modules' constants and combine their
+metadata with generated faces in the app's `Metadata.appintents`, even with no faced tools.
+An app with native intents links its module library at launch so the system can resolve the
+intent before any view opens. Launch-part extraction uses the target's compilation conditions,
+including `DEBUG` for its debug configuration. On Linux, authored `openAppWhenRun`, `isDiscoverable`,
+introduced iOS/macOS availability and scalar parameter defaults are preserved; defaults that
+cannot be represented exactly and unsupported declarations fail the build.
+Linux builds also refuse more than one App Shortcuts provider across modules and generated faces.
+A launch part can import ExactKit and call the public `ExactTools.call` door (LLP 1133.023 D15).
+The `--extensions` selection applies to native and generated intents alike.
+On Linux, native `IntentFile` content types may use `UTType(importedAs:)` or the constants
+`.image`, `.png`, `.jpeg`, `.heic`, `.heif` and `.data`.
+
 ### File parameters on an Apple face
 
 On a string parameter, declare `"type": "file", "accept": ["image/png", "image/jpeg", "image/heic"]`

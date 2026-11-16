@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { intentsMetadata as metadataPass, intentsSource } from './intents.mjs';
+import { intentsMetadata as metadataPass, intentsSource, buildIntents, nativeIntentModule } from './intents.mjs';
 import { intentsMetadata } from './intents-metadata.mjs';
 
 // Input connections and type-specific metadata are sets and keyed pairs;
@@ -201,5 +201,43 @@ test.skipIf(process.platform !== 'darwin').each(['scalar', 'files', 'helper'])('
       const ran = spawnSync(binary, [resolve(dir, 'picked')], { encoding: 'utf8', env });
       expect(ran.status).toBe(0);
     }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+}, 90000);
+
+test.skipIf(process.platform !== 'darwin').each([false, true])('native module intents join bundle metadata, generated faces: %s', generated => {
+  const dir = mkdtempSync(resolve(tmpdir(), 'exact-native-intents-'));
+  const runApple = (command, args) => {
+    const r = spawnSync(command, args, { encoding: 'utf8', env: { ...process.env, TMPDIR: dir } });
+    if (r.status !== 0) throw new Error(`${command}: ${r.stderr}\n${r.stdout}`);
+    return r.stdout.trim();
+  };
+  try {
+    const sdk = runApple('xcrun', ['--sdk', 'iphonesimulator', '--show-sdk-path']), triple = 'arm64-apple-ios18.0-simulator';
+    const nativeModules = ['ExactAppModules'].map(moduleName => {
+      const file = resolve(dir, moduleName + '.swift'), binary = resolve(dir, moduleName + '.dylib');
+      writeFileSync(file, `import AppIntents
+struct ${moduleName}Action: AppIntent {
+    static let title: LocalizedStringResource = "${moduleName} action"
+    func perform() async throws -> some IntentResult { .result() }
+}
+`);
+      const args = ['--sdk', 'iphonesimulator', 'swiftc', '-parse-as-library', '-emit-library', '-module-name', moduleName,
+        '-target', triple, '-sdk', sdk, file, '-o', binary];
+      runApple('xcrun', args);
+      const input = { moduleName, binary, sources: [file], args, directory: resolve(dir, 'constants'), swiftc: 'test', runApple };
+      const collected = nativeIntentModule(input);
+      expect(nativeIntentModule({ ...input, runApple: () => { throw new Error('cached constants were compiled again'); } })).toEqual(collected);
+      return collected;
+    });
+    const face = { signature: { name: 'generated', description: 'Generated action.', parameters: [], consequence: 'reads' }, face: { doors: ['apple'] } };
+    const built = buildIntents({ app: { manifest: {} }, compat: { inputs: { faces: generated ? [face] : [] } }, nativeModules,
+      directory: resolve(dir, 'built'), sdkName: 'iphonesimulator', sdk, triple, platform: 'ios', deployment: '18.0', swiftc: 'test', runApple });
+    expect(built).not.toBeNull();
+    const bundle = resolve(dir, 'App.app');
+    built.place(bundle);
+    const actions = JSON.parse(readFileSync(resolve(bundle, 'Metadata.appintents/extract.actionsdata'), 'utf8')).actions;
+    expect(actions.ExactAppModulesAction.fullyQualifiedTypeName).toBe('ExactAppModules.ExactAppModulesAction');
+    expect(Object.keys(actions)).toHaveLength(generated ? 2 : 1);
+    if (generated) expect(actions.Generated.fullyQualifiedTypeName).toBe('ExactIntents.Generated');
   } finally { rmSync(dir, { recursive: true, force: true }); }
 }, 90000);

@@ -137,8 +137,8 @@ let executables: [Target] = [
     .executableTarget(name: "ExactMac", dependencies: ["ExactKit", "ExactComposition", "ExactLaunchParts"], path: "Sources/ExactMac"),
     .executableTarget(name: "ExactIOS", dependencies: ["ExactKit", "ExactComposition", "ExactLaunchParts"], path: "Sources/ExactIOS",
                      swiftSettings: launchPartsTarget.map { [.unsafeFlags(["-target", $0])] } ?? []),
-    .executableTarget(name: "ExactHostMac", dependencies: ["ExactKit", "ExactComposition"], path: "Sources/ExactHostMac"),
-    .executableTarget(name: "ExactHostIOS", dependencies: ["ExactKit", "ExactComposition"], path: "Sources/ExactHostIOS"),
+    .executableTarget(name: "ExactHostMac", dependencies: ["ExactKit", "ExactComposition", "ExactLaunchParts"], path: "Sources/ExactHostMac"),
+    .executableTarget(name: "ExactHostIOS", dependencies: ["ExactKit", "ExactComposition", "ExactLaunchParts"], path: "Sources/ExactHostIOS"),
 ]
 
 // Host behaviour no other check can see: a wheel event's routing, asserted
