@@ -38,7 +38,7 @@ enum RasterFailure: Error, CustomStringConvertible, Equatable {
 enum RasterVariant {
     /// 8-bit sRGB (the budget's; this host plans none).
     static let srgb8: UInt32 = 1
-    /// 8-bit in the picture's own colour space.
+    /// 8-bit in the picture's own colour space or its named equivalent.
     static let own8: UInt32 = 2
     /// 16-bit float in the picture's own colour space.
     static let deep: UInt32 = 3
@@ -609,14 +609,11 @@ final class RasterImage: @unchecked Sendable {
         return options as CFDictionary
     }
 
-    /// A decoded frame as Core Animation shares it: a thumbnail at the
-    /// planned size and storage is already the pixels a draw would make, and
-    /// is kept; anything else is drawn into a scratch bitmap and Core
-    /// Graphics' copy of it kept, as ImageIO does for a thumbnail — CG's image
-    /// data is memory Core Animation shares with the render server as it is,
-    /// where a bitmap of ours would be copied again at each first commit.
-    /// BGRA8 or RGBA16F premultiplied: Core Animation's own layouts, which it
-    /// shares without converting.
+    /// Keep an opaque 8-bit thumbnail whose size and storage fit the plan;
+    /// otherwise draw into a scratch bitmap and keep Core Graphics' owned
+    /// copy. ImageIO's backing and that copy can be shared with the render server.
+    /// A named equivalent RGB space avoids Core Animation's colour conversion;
+    /// other RGB profiles keep their colour management (LLP 1171 D19).
     static func normalized(_ thumbnail: CGImage, plan: RasterDecodePlan, adopt: Bool = true) -> CGImage? {
         // An HDR decode in a BT.2100 space is kept as ImageIO made it: Core
         // Animation tone-maps that to the layer's range, which it doesn't do
@@ -627,21 +624,26 @@ final class RasterImage: @unchecked Sendable {
            thumbnail.width <= plan.width + 1, thumbnail.height <= plan.height + 1,
            thumbnail.bytesPerRow * thumbnail.height <= plan.outputBytes { return thumbnail }
         let space = storageSpace(thumbnail.colorSpace, plan: plan)
-        if adopt, isAdoptable(thumbnail, plan: plan, space: space) { return thumbnail }
+        let picture: CGImage
+        if !plan.deep, plan.variant != RasterVariant.hdr,
+           let source = thumbnail.colorSpace, source.model == .rgb, source != space {
+            picture = thumbnail.copy(colorSpace: space) ?? thumbnail
+        } else { picture = thumbnail }
+        if adopt, isAdoptable(picture, plan: plan, space: space) { return picture }
         let bitmap = plan.deep
             ? CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.floatComponents.rawValue | CGBitmapInfo.byteOrder16Little.rawValue
             : CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
         return withScratch(plan.outputBytes, { scratch -> CGImage? in
             guard let context = CGContext(data: scratch, width: plan.width, height: plan.height,
                 bitsPerComponent: plan.deep ? 16 : 8, bytesPerRow: plan.stride, space: space, bitmapInfo: bitmap) else { return nil }
-            context.draw(thumbnail, in: CGRect(x: 0, y: 0, width: plan.width, height: plan.height))
+            context.draw(picture, in: CGRect(x: 0, y: 0, width: plan.width, height: plan.height))
             return context.makeImage()
         })
     }
 
-    /// The colour space a decode is kept in (LLP 1100 D5): an RGB picture's
-    /// own; sRGB for gray; Display P3, which contains print gamuts, for CMYK,
-    /// Lab and the rest (Core Animation shows only RGB contents).
+    /// The colour space a decode is kept in (LLP 1100 D5, LLP 1171 D19): an
+    /// RGB picture's own, or its proven named equivalent at 8 bits; sRGB for
+    /// gray; Display P3 for CMYK, Lab and the rest.
     static func storageSpace(_ source: CGColorSpace?, plan: RasterDecodePlan) -> CGColorSpace {
         let srgb = CGColorSpace(name: CGColorSpace.sRGB)!
         // Extended: light above SDR white and colours outside P3 alike.
@@ -649,7 +651,7 @@ final class RasterImage: @unchecked Sendable {
         guard let source else { return srgb }
         let own: CGColorSpace
         switch source.model {
-        case .rgb: own = source
+        case .rgb: own = plan.deep ? source : RasterProfile.shared.namedSpace(source)
         case .monochrome: own = srgb
         default: own = CGColorSpace(name: CGColorSpace.displayP3)!
         }
