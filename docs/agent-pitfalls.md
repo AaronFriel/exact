@@ -1672,12 +1672,23 @@ price: answers arrive `Later`, outside the action's transaction (LLP 1027.002 D1
   own document. With a `sandbox` on macOS, and always on iOS, it is the child of a
   wrapper page at `http://exact.invalid` (for an `http:` guest) or
   `https://exact.invalid`: the page's first request is a cross-site navigation, and
-  `window.parent`'s origin is the wrapper's. On the web the parent is the app's own
+  `window.parent`'s origin is the wrapper's. Either way its request carries
+  `Referer: http://exact.invalid/` (or `https:`), the parent's origin, as a browser
+  sends it for a cross-origin frame. On the web the parent is the app's own
   page, whose loopback port differs between the dev loop and an `agent web` or
   `test web` run. A server that checks `Origin`, `Referer` or `Sec-Fetch-Site`
   against a fixed list therefore refuses its own page on some hosts. Fix: admit the
   page by a token in the `src` URL the data module builds, and keep the origin check
   for the API requests the page itself makes. (Exact Draw, 2026-10-15.)
+
+- **An embed inside a bundled page gets no `Referer` on Apple.** An `iframe` the
+  app writes is asked for with its parent's origin as `Referer`, which an embed
+  that requires one (YouTube's player, else "Error 153") accepts. An `<iframe>`
+  written in the HTML of a page under `assets/` is not: that page is
+  `exact-app://app/<path>`, and WebKit sends no `Referer` from a custom scheme,
+  whatever its `<meta name="referrer">` says. Fix: put the embed in the app's own
+  `iframe`, or give the player what identifies its embedder in its URL (YouTube's
+  `origin` or `widget_referrer` parameter). (#704, 2026-11-15.)
 
 - **A focus ring never shows in an `agent macos` screenshot.** `type save key Tab`
   moves the focus (`state` reads it in `focus.logical`), yet neither `screenshot`
