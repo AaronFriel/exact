@@ -3835,6 +3835,23 @@ request is not an effect: a drive judges a lock by the orientation the
 window keeps (`layout`'s `screen.orientation` on iOS), and reads `applied`
 for why.
 
+### The displays and the pointer (`@exact/window-management`)
+
+`getScreenDetails()` answers the displays by the Window Management API's
+names (`screens`, `currentScreen`, each `ScreenDetailed`), a live source that
+answers again when the displays or the window's display change;
+`getPointerPosition()`, a send, answers `screenX`, `screenY`, `clientX`,
+`clientY` and the display holding the pointer with its `clientRect` in the
+viewport (LLP 1178). The line is `device.window-management`; only the web
+asks, from a press. [Recipe](recipes/displays.md).
+
+| host | read through |
+| --- | --- |
+| macOS | `NSScreen.screens` flipped at the primary's top, `visibleFrame` for the work area, `CGDisplayIsBuiltin`, `localizedName`; the pointer from `NSEvent.mouseLocation` |
+| web | the browser's `window.getScreenDetails()` (Chromium on the desktop), `screenschange`, `currentscreenchange`; no pointer (`NotSupportedError`); elsewhere `available: false` |
+| Linux | the one display the host fills: the KMS connector (`label` its name, `isInternal` for eDP, LVDS and DSI) or the headless buffer, at the host's scale; the pointer the host draws |
+| Windows, iPadOS, Android | not built: `NotSupportedError` |
+
 ### Pick a file of any type
 
 An `input type="file"` with no `accept` (or `accept="*/*"`) offers any file;

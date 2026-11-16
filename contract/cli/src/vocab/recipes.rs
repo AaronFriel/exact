@@ -39,6 +39,7 @@ pub const RECIPES: &[(&str, &str)] = &[
     recipe!("dates-and-days"),
     recipe!("declared-source"),
     recipe!("device"),
+    recipe!("displays"),
     recipe!("eas-android"),
     recipe!("eas-ios"),
     recipe!("edit-sheet"),
