@@ -299,6 +299,12 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
     var hidesAccessibility: Bool {
         placementHidden || props["inert"] == "true" || props["accessibilityElementsHidden"] == "true"
     }
+    /// The assigned flag before placeholder suppression, for save and restore.
+    var storedAccessibilityElementsHidden: Bool { super.accessibilityElementsHidden }
+    package override var accessibilityElementsHidden: Bool {
+        get { super.accessibilityElementsHidden || isEmptyPanelPlaceholder }
+        set { super.accessibilityElementsHidden = newValue }
+    }
     /// Marked before `becomeFirstResponder` runs: its `focus` handler can
     /// mount an autofocus field, whose pass must see the mark.
     @discardableResult
@@ -1127,7 +1133,7 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
         }
         // UIKit keeps each accessibility property a view is given, an unchanged
         // one too, in an associated object table: so each is set only on change.
-        if accessibilityElementsHidden != hidesAccessibility { accessibilityElementsHidden = hidesAccessibility }
+        if super.accessibilityElementsHidden != hidesAccessibility { super.accessibilityElementsHidden = hidesAccessibility }
         updateKeyboardDismissal()
         updateMaterial()
         applyTextArea()

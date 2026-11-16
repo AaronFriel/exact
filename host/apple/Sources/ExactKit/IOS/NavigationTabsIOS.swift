@@ -100,7 +100,7 @@ extension NavigationHost {
         let owned = askTabContainer(tabs, selected: p.at)
         tabContainerAsked = presenter.session?.natives.hatchesConnected == true
         let holder: UIViewController = owned ?? {
-            let container = UITabBarController()
+            let container = TabController()
             tabProxy.host = self
             if #available(iOS 18.0, tvOS 18.0, *), buildsTabs(tabs) {
                 buildTabs(container, navs, tabs, unsaid: kernel?.unsaid ?? false, selected: p.at)
@@ -220,6 +220,7 @@ extension NavigationHost {
 
     private func hideTabBar(_ container: UITabBarController) {
         if #available(iOS 18.0, tvOS 18.0, *) { container.setTabBarHidden(true, animated: false) } else { container.tabBar.isHidden = true }
+        (container as? TabController)?.syncBarAccessibility()
     }
 
     /// Rows below the panels stay in CSS flow while UIKit's container fills the page: the root's
@@ -268,6 +269,7 @@ extension NavigationHost {
         } else {
             tabs.setTabBarHidden(hidden, animated: animated)
         }
+        (tabs as? TabController)?.syncBarAccessibility()
     }
 
     /// Before installing: a root that gains, loses or changes its tabs gets
@@ -304,7 +306,10 @@ extension NavigationHost {
             if let container = tabController, tabOwner === container, !ExactEnv.authoredChrome {
                 let hidden = authored || tabs.tablist.style["display"]?.string == "none"
                 if #available(iOS 18.0, tvOS 18.0, *) { setTabBarHidden(hidden, in: container, animated: false) }
-                else { container.tabBar.isHidden = hidden }
+                else {
+                    container.tabBar.isHidden = hidden
+                    (container as? TabController)?.syncBarAccessibility()
+                }
                 tablistHidBar = hidden && !authored
             }
         }

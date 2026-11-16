@@ -45,8 +45,30 @@ package class ScrollView: UIScrollView {
     var snapPages = false
     package override func layoutSubviews() {
         super.layoutSubviews()
+        syncIndicators()
         keepPlatformViewsOver()
     }
+    /// UIKit exposes an indicator and its thumb to accessibility even when
+    /// the axis has no range. Keep the requested visibility across resizes
+    /// and content changes, including CSS `none` and native hatch writes.
+    private var horizontalIndicator = true, verticalIndicator = true
+    package override var showsHorizontalScrollIndicator: Bool {
+        get { super.showsHorizontalScrollIndicator }
+        set { horizontalIndicator = newValue; syncIndicators() }
+    }
+    package override var showsVerticalScrollIndicator: Bool {
+        get { super.showsVerticalScrollIndicator }
+        set { verticalIndicator = newValue; syncIndicators() }
+    }
+    private func syncIndicators() {
+        let inset = adjustedContentInset
+        let x = horizontalIndicator && scrollsX && isScrollEnabled && contentSize.width + inset.left + inset.right > bounds.width + 0.5
+        let y = verticalIndicator && scrollsY && isScrollEnabled && contentSize.height + inset.top + inset.bottom > bounds.height + 0.5
+        if super.showsHorizontalScrollIndicator != x { super.showsHorizontalScrollIndicator = x }
+        if super.showsVerticalScrollIndicator != y { super.showsVerticalScrollIndicator = y }
+    }
+    package override var contentSize: CGSize { didSet { if contentSize != oldValue { setNeedsLayout() } } }
+    package override var isScrollEnabled: Bool { didSet { if isScrollEnabled != oldValue { setNeedsLayout() } } }
     /// The offset of a node's scroller or a route's viewport, which UIKit
     /// itself also sets (keeping it at the start as a safe area reaches the
     /// scroller and insets it): inside an animation UIKit has open it moves
@@ -71,6 +93,7 @@ package class ScrollView: UIScrollView {
         let was = keptInset
         keptInset = adjustedContentInset
         super.adjustedContentInsetDidChange()
+        setNeedsLayout()
         // the port is a `scroll` event's (`clientHeight`): one that changes without moving
         // the offset gets no `scrollViewDidScroll`, so its event is sent from here.
         (superview as? NodeView)?.queueScrollEvent()
@@ -113,8 +136,8 @@ package class ScrollView: UIScrollView {
         return false
     }
 
-    package var scrollsX = true
-    package var scrollsY = true
+    package var scrollsX = true { didSet { if scrollsX != oldValue { setNeedsLayout() } } }
+    package var scrollsY = true { didSet { if scrollsY != oldValue { setNeedsLayout() } } }
     #if os(tvOS)
     /// The offset the remote's last step scrolls to, and when it began
     /// (`RemoteTVOS.swift`): a step pressed during that animation goes on
