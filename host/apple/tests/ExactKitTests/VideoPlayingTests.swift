@@ -30,6 +30,115 @@ final class VideoPlayingTests: XCTestCase {
     private typealias Destroy = @convention(c) (UnsafeMutableRawPointer?) -> Void
     private var events: [String] = []
     private var playingTimes: [Double] = []
+    private var messages: [[String: Any]] = []
+
+    func testPlayingARefusedPlaylistDoesNotReportAnotherError() throws {
+        #if os(macOS)
+        _ = NSApplication.shared
+        #endif
+        let library = try XCTUnwrap(VideoArmLibrary.handle)
+        let create = unsafeBitCast(try XCTUnwrap(dlsym(library, "exact_video_create")), to: Create.self)
+        let update = unsafeBitCast(try XCTUnwrap(dlsym(library, "exact_video_update")), to: Update.self)
+        let destroy = unsafeBitCast(try XCTUnwrap(dlsym(library, "exact_video_destroy")), to: Destroy.self)
+        let source = Bundle.module.url(forResource: "ColorFixtures", withExtension: nil)!
+            .appendingPathComponent("master.m3u8").absoluteString
+        for request in ["paused=false", "sessionPlay", "visible autoplay"] {
+            let handle = try XCTUnwrap(create(Unmanaged.passUnretained(self).toOpaque(), { context, bytes, count in
+                let test = Unmanaged<VideoPlayingTests>.fromOpaque(context!).takeUnretainedValue()
+                test.messages.append(try! JSONSerialization.jsonObject(with: Data(bytes: bytes!, count: count)) as! [String: Any])
+            }))
+            defer { destroy(handle) }
+            messages = []
+            var props = ["src": source, "muted": "true", "playsinline": "true", "exactListeners": "error"]
+            var autoplay = OffscreenAutoplay()
+            if request == "visible autoplay" {
+                props["autoplay"] = "true"
+                autoplay.load(autoplay: true)
+                props["paused"] = try XCTUnwrap(autoplay.visible(false)) ? "true" : "false"
+            } else {
+                props["paused"] = request == "paused=false" ? "false" : "true"
+                if request == "sessionPlay" { props["mediaTitle"] = "Local playlist" }
+            }
+            func send() throws {
+                let data = try JSONSerialization.data(withJSONObject: props)
+                data.withUnsafeBytes { update(handle, $0.bindMemory(to: UInt8.self).baseAddress, data.count) }
+            }
+            try send()
+            XCTAssertEqual(messages.filter { $0["event"] as? String == "error" }.count, 1, request)
+            if request == "sessionPlay" {
+                props["exactRemote"] = "1 play"
+                try send()
+                let result = messages.compactMap { $0["remoteResult"] as? [String: String] }.last
+                XCTAssertEqual(result?["status"], "success")
+                XCTAssertTrue(messages.contains { $0["remote"] as? String == "play" })
+            } else if request == "visible autoplay" {
+                props["paused"] = try XCTUnwrap(autoplay.visible(true)) ? "true" : "false"
+                XCTAssertEqual(props["paused"], "false")
+                try send()
+            }
+            waitForMainQueue()
+            let errors = messages.filter { $0["event"] as? String == "error" }
+            XCTAssertEqual(errors.count, 1, request)
+            XCTAssertEqual(errors.first?["payload"] as? String, "src-not-supported", request)
+        }
+    }
+
+    func testLocalPlaylistReportsAnErrorAndCanBeReplaced() throws {
+        #if os(macOS)
+        _ = NSApplication.shared
+        #endif
+        let library = try XCTUnwrap(VideoArmLibrary.handle)
+        let create = unsafeBitCast(try XCTUnwrap(dlsym(library, "exact_video_create")), to: Create.self)
+        let update = unsafeBitCast(try XCTUnwrap(dlsym(library, "exact_video_update")), to: Update.self)
+        let destroy = unsafeBitCast(try XCTUnwrap(dlsym(library, "exact_video_destroy")), to: Destroy.self)
+        let handle = try XCTUnwrap(create(Unmanaged.passUnretained(self).toOpaque(), { context, bytes, count in
+            let test = Unmanaged<VideoPlayingTests>.fromOpaque(context!).takeUnretainedValue()
+            test.messages.append(try! JSONSerialization.jsonObject(with: Data(bytes: bytes!, count: count)) as! [String: Any])
+        }))
+        defer { destroy(handle) }
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("local-playlist-\(UUID())", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let playlist = root.appendingPathComponent("master.m3u8")
+        try "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=100000,RESOLUTION=64x64\nmedia.m3u8\n"
+            .write(to: playlist, atomically: true, encoding: .utf8)
+        let movie = Bundle.module.url(forResource: "ColorFixtures", withExtension: nil)!.appendingPathComponent("sdr.mp4")
+        var props = ["src": playlist.absoluteString, "paused": "true", "muted": "true", "playsinline": "true",
+                     "exactListeners": "error loadedmetadata"]
+        func send() throws {
+            let data = try JSONSerialization.data(withJSONObject: props)
+            data.withUnsafeBytes { update(handle, $0.bindMemory(to: UInt8.self).baseAddress, data.count) }
+        }
+        for tag in ["video", "audio"] {
+            props["semanticTag"] = tag
+            props["src"] = playlist.absoluteString
+            for (request, name) in ["master.m3u8", "master.m3u8", "uppercase.M3U8", "master.m3u"].enumerated() {
+                let url = root.appendingPathComponent(name)
+                if !FileManager.default.fileExists(atPath: url.path) { try FileManager.default.copyItem(at: playlist, to: url) }
+                props["src"] = url.absoluteString
+                messages = []
+                if request == 1 { props["exactLoad"] = tag == "video" ? "1" : "2" }
+                try send()
+                waitFor("a local playlist's error", facts: { "\(self.messages.last ?? [:])" }) {
+                    self.messages.contains { $0["event"] as? String == "error" }
+                }
+                let errors = messages.filter { $0["event"] as? String == "error" }
+                let error = try XCTUnwrap(errors.first)
+                XCTAssertEqual(errors.count, 1)
+                XCTAssertEqual(error["payload"] as? String, "src-not-supported")
+                let state = error["state"] as? [String: Any]
+                XCTAssertEqual(state?["readyState"] as? Int, 0)
+                XCTAssertNotNil(state?["error"] as? String)
+            }
+            messages = []
+            props["src"] = movie.absoluteString
+            try send()
+            waitFor("the replacement movie's metadata") {
+                self.messages.contains { $0["event"] as? String == "loadedmetadata" }
+            }
+            XCTAssertFalse(messages.contains { $0["event"] as? String == "error" })
+        }
+    }
 
     func testARealItemStartsAndResumesWithAnAdvancingClock() throws {
         #if os(macOS)

@@ -346,8 +346,8 @@ private final class VideoArm: NSObject, NowPlayingPlayer {
         guard !invalidated else { return }
         send(["remote": "play"])
         wantsPlay = true
-        if player.currentItem == nil { loadSource() }
-        play()
+        if player.currentItem == nil, lastError == nil { loadSource() }
+        if lastError == nil { play() }
     }
     func sessionPause() { guard !invalidated else { return }; wantsPlay = false; player.pause() }
     func sessionAction(_ name: String, payload: String) { emit(name, payload: payload) }
@@ -483,7 +483,10 @@ private final class VideoArm: NSObject, NowPlayingPlayer {
         }
         if changed("paused"), let value = props["paused"] {
             wantsPlay = value == "false"
-            if wantsPlay { if player.currentItem == nil { loadSource() }; play() } else { player.pause() }
+            if wantsPlay {
+                if player.currentItem == nil, lastError == nil { loadSource() }
+                if lastError == nil { play() }
+            } else { player.pause() }
         }
         if changed("playbackRate") {
             if rate != reportedRate { reportedRate = rate; emit("ratechange") }
@@ -563,6 +566,12 @@ private final class VideoArm: NSObject, NowPlayingPlayer {
         posterDismissed = false; showPoster()
         pendingSeek = props["currentTime"].flatMap(Double.init)
         guard let source = props["src"], !source.isEmpty, let url = URL(string: source) else { return }
+        // AVFoundation leaves local HLS items unknown without reporting an error;
+        // isPlayable also returns true for them on iOS.
+        if url.isFileURL, ["m3u8", "m3u"].contains(url.pathExtension.lowercased()) {
+            fail("src-not-supported", "Local HLS playlists are not supported; use MP4 or an HTTP(S) playlist URL")
+            return
+        }
         makeItem(url)
     }
     /// The source's item, given to the player.

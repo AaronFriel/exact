@@ -3067,7 +3067,9 @@ A media source is the string an `image` takes, `app:/data` files included: an
 episode the data module downloaded with `storage.fs` plays on every host but
 headless Linux, which has no player. An empty `src` fails (`error`
 `src-not-supported`), as HTML's does, so render the element once it has a
-source. A bound `currentTime` seeks when its value changes; to seek to the same
+source. On Apple, a bundled or `app:/` HLS playlist fails with
+`src-not-supported`; use a bundled MP4 or serve the HLS playlist over HTTP(S).
+A bound `currentTime` seeks when its value changes; to seek to the same
 time again (a skip back, "start over", a scrubber let go where it was grabbed)
 call `fastSeek(id, seconds)`, which seeks each time it runs. `load(id)` loads the
 source again: a retry after an `error`, or a file written since. Both name the
