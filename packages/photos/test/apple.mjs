@@ -74,9 +74,10 @@ for (const host of hosts.length ? hosts : ['ios', 'macos']) {
   check(where, 'Info.plist carries the read key with its purpose', plist.NSPhotoLibraryUsageDescription === 'The conformance suite reads the library.', JSON.stringify(plist.NSPhotoLibraryUsageDescription));
   if (host === 'ios') {
     check(where, 'and the add key, and suppresses the limited-access alert', plist.NSPhotoLibraryAddUsageDescription === 'The conformance suite adds a photo.' && plist.PHPhotoLibraryPreventAutomaticLimitedAccessAlert === true, JSON.stringify(plist));
-    const module = join(dirname(join(app, 'target', plistAt)), 'Frameworks/libexact_modules.dylib');
-    check(where, 'the module links PhotosUI, which supplies the limited-picker category',
-      loadedDylibs(module).some(name => name.endsWith('/PhotosUI.framework/PhotosUI')), module);
+    // A package's Swift is a library of its own, loaded at the package's first use (LLP 1067.000.001).
+    const library = join(dirname(join(app, 'target', plistAt)), 'Frameworks/libExactPkg_photos.dylib');
+    check(where, 'the package\'s library links PhotosUI, which supplies the limited-picker category',
+      existsSync(library) && loadedDylibs(library).some(name => name.endsWith('/PhotosUI.framework/PhotosUI')), library);
   }
 
   if (host === 'macos') {
@@ -123,6 +124,7 @@ for (const host of hosts.length ? hosts : ['ios', 'macos']) {
 
   // Full access: read, draw, copy, add, and the change observer.
   privacy('grant', 'photos');
+  let copy;
   s = await open({ host, app: name, bind: 'photos' });
   try {
     const status = await until(s, 'status', (t) => t === 'true granted full granted');
@@ -151,7 +153,9 @@ for (const host of hosts.length ? hosts : ['ios', 'macos']) {
     await s.screenshot(join(dir, 'pictures.png'));
     await s.tap('copy');
     const copied = await until(s, 'copied', (t) => t !== 'none', 20000);
-    check(where, 'copyPhotoAsset writes the newest to app:/tmp/photos/1.jpg, its size the listed one', copied === `app:/tmp/photos/1.jpg image/jpeg true ${size}`, `${copied} ${(await texts(s))['copy-error']}`);
+    // Each copy has a name of its own, so two never share a file.
+    copy = /^app:\/tmp\/(photos\/[0-9A-F-]{36}\.jpg) /.exec(copied ?? '')?.[1];
+    check(where, 'copyPhotoAsset writes the newest to app:/tmp/photos/<uuid>.jpg, its size the listed one', !!copy && copied === `app:/tmp/${copy} image/jpeg true ${size}`, `${copied} ${(await texts(s))['copy-error']}`);
     await s.tap('add');
     const added = await until(s, 'added', (t) => t !== 'none', 20000);
     check(where, 'addToPhotoLibrary adds it and answers its id', !!added && added !== 'none' && added !== 'no id', `${added} ${(await texts(s))['add-error']}`);
@@ -164,8 +168,8 @@ for (const host of hosts.length ? hosts : ['ios', 'macos']) {
     await s.close();
   }
   // The container is read with the app closed: `simctl` waits on a driven app.
-  const file = containerFile('photos/1.jpg'), known = [...fixtures, join(root, 'scripts/fixtures/picker/oriented-gps.jpg')].map(sha);
-  check(where, "the copy is the photo's own file, byte for byte", !!file && known.includes(sha(file)), file ?? 'no tmp/photos/1.jpg in the container');
+  const file = copy && containerFile(copy), known = [...fixtures, join(root, 'scripts/fixtures/picker/oriented-gps.jpg')].map(sha);
+  check(where, "the copy is the photo's own file, byte for byte", !!file && known.includes(sha(file)), file ?? `no tmp/${copy ?? 'photos/<uuid>.jpg'} in the container`);
 
   // Denied: nothing is read, and no picture is asked.
   privacy('revoke', 'photos');
