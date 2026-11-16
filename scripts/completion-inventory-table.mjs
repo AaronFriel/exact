@@ -8,6 +8,11 @@ function group(family, protocol, lifetime, kind, evidence, sites, durableWhen) {
 }
 
 export const classifications = [
+  group("background transfers", ["durable operation"], "registration generation and cancellable attempt handle", "durable",
+    "The import-selected bridge runs file I/O without a session. Closing its handle aborts live I/O; the package owns durable records and admits publication against the current registration generation.", [
+    ["painted:host/painted/src/transfer.rs", "dispatch"],
+    ["painted:host/painted/src/transfer_jni.rs", "call Java_exact_backgroundtransfer_NativeTransfer_call"],
+  ]),
   group("replies", ["one-shot", "subscription", "durable operation"], "issued request and its existing pending, mapper, background, tool or module-work record", "UI-owned",
     "runner/src/runner/completion.rs binds authority at take_requests. Replies and mapper/held turns consume it once; streams and long polls keep their ordered binding. Background/tool rounds, reports and retained effectful module work use process-local durable authority. UI retirement and timer-race adoption transfer the shared binding even after host extraction. deliver preserves the existing handler; carry refuses no identity.", [
     ["runner:runner/src/runner/completion.rs", "Runner::deliver CompletionReply::take CompletionReply::subscription"],

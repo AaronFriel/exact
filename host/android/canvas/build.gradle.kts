@@ -15,6 +15,7 @@ android {
             "../../../packages/barcode-detection/android", "../../../packages/barcode-detection/test",
             "../../../packages/alarms/android", "../../../packages/alarms/test",
             "../../../packages/background/android", "../../../packages/background/test",
+            "../../../packages/background-transfer/android", "../../../packages/background-transfer/test/android",
             "../../../packages/calendar/android", "../../../packages/calendar/test",
             "../../../packages/calls/android", "../../../packages/calls/test",
             "../../../packages/camera/android", "../../../packages/camera/test",
