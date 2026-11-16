@@ -47,6 +47,7 @@ macro_rules! canvas_jni {
         static EXACT_ALLOCATOR: $crate::canvas::jni::Allocator = $crate::canvas::jni::Allocator;
 
         $crate::canvas_jni_tls!();
+        include!(concat!(env!("OUT_DIR"), "/transfers.rs"));
 
         mod exact_canvas_jni {
             #![allow(clippy::missing_safety_doc, unsafe_code)]
