@@ -116,6 +116,11 @@ pub trait Backend {
     fn displayed_process_ms(&self) -> Result<Option<f64>, String> {
         Ok(None)
     }
+    /// The swap chain's present statistics, when the device presents directly.
+    #[cfg(windows)]
+    fn present_statistics(&self) -> Option<exact_ink::device::d3d11::PresentStatistics> {
+        None
+    }
     /// Attach the carrier's owned window when the device can present directly.
     #[cfg(windows)]
     fn attach_window(
@@ -442,6 +447,10 @@ impl super::Painter {
     #[cfg(windows)]
     pub(crate) fn displayed_process_ms(&self) -> Result<Option<f64>, String> {
         self.backend.displayed_process_ms()
+    }
+    #[cfg(windows)]
+    pub(crate) fn present_statistics(&self) -> Option<exact_ink::device::d3d11::PresentStatistics> {
+        self.backend.present_statistics()
     }
     #[cfg(windows)]
     pub(crate) fn attach_window(

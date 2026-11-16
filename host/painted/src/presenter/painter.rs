@@ -596,6 +596,21 @@ impl<D: DataSource> Presenter<D> {
         self.brush.displayed_process_ms()
     }
 
+    /// The swap chain's present statistics, read without waiting (LLP
+    /// 1003.001 D9); `None` without a directly presenting device.
+    #[cfg(windows)]
+    pub fn present_statistics(&self) -> Option<exact_ink::device::d3d11::PresentStatistics> {
+        if let Some((device, _)) = self
+            .surfaces
+            .direct_window
+            .as_ref()
+            .and_then(|d| d.fallback.as_ref())
+        {
+            return device.present_statistics();
+        }
+        self.brush.present_statistics()
+    }
+
     /// The pixels, as a PNG at `path`.
     pub fn screenshot(&mut self, path: &str) -> Result<String, String> {
         let frame = self.frame();

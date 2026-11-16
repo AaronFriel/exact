@@ -29,6 +29,8 @@ mod bars;
 mod content;
 #[path = "host_error.rs"]
 mod error;
+#[path = "first_frame.rs"]
+mod first_frame;
 #[path = "flights.rs"]
 pub(crate) mod flights;
 #[path = "hatches/host.rs"]
@@ -128,6 +130,8 @@ pub struct Host<D: DataSource> {
     /// Whether colour transitions are lowered too (`lower.rs`).
     lower_colors: bool,
     lowered_epoch: u64,
+    /// The engine time the latest picture carried (`first_frame.rs`).
+    carried: Option<f64>,
     /// The epoch each lowered node's plays last changed at.
     lowered_changed: std::collections::HashMap<u64, u64>,
     played: std::collections::HashMap<
@@ -336,6 +340,7 @@ impl<D: DataSource> Host<D> {
             lowered: Default::default(),
             lower_colors: false,
             lowered_epoch: 0,
+            carried: None,
             lowered_changed: Default::default(),
             played: Default::default(),
             preload_wake: Default::default(),
@@ -371,6 +376,7 @@ impl<D: DataSource> Host<D> {
                 host.runner.kernel().motion_sync_node(node.key, &mut sync);
             }
         }
+        host.hold_from_boot();
         let applied = sync.apply(&mut host.engine);
         debug_assert!(applied.is_ok(), "kernel rows are always valid engine input");
         host.lower_eligibility(&sync);
@@ -735,16 +741,6 @@ impl<D: DataSource> Host<D> {
     /// Whether motion is running (the presenter runs frames).
     pub fn motion(&self) -> bool {
         !self.engine.quiescent() || self.press_settle().is_some()
-    }
-
-    /// The next sampled visual change, in the host's milliseconds. A change
-    /// due now needs display callbacks; a later change needs only a timer.
-    pub fn motion_due_ms(&self) -> Option<f64> {
-        if self.press_settle().is_some() {
-            Some(self.now_ms)
-        } else {
-            self.engine.next_change().map(|seconds| seconds * 1000.0)
-        }
     }
 
     /// The roots, in order.

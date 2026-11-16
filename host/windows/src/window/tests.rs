@@ -200,6 +200,7 @@ fn direct_window_blinks_without_a_softbuffer_surface() {
         hidden: false,
         instance: None,
         tray: None,
+        presents: Default::default(),
     };
     assert!(!state.presenter.as_ref().unwrap().dirty());
     state.blink(due).unwrap();
@@ -339,6 +340,7 @@ fn windowless_app(events: &EventLoop<crate::accessibility::Event>, plan: &[u8]) 
         hidden: false,
         instance: None,
         tray: None,
+        presents: Default::default(),
     }
 }
 

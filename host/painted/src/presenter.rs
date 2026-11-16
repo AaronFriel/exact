@@ -73,6 +73,8 @@ mod painter;
 mod pan_release;
 mod picker;
 mod pointer;
+mod present;
+pub use present::Carried;
 mod pump;
 mod radio;
 mod range;
@@ -195,6 +197,8 @@ pub struct Presenter<D: DataSource> {
     snap_rested: BTreeMap<(ViewId, bool), (ViewId, f32)>,
     /// The display's clock while it owns time, given to every host (`clock.rs`)
     live_clock: Option<clock::Wall>,
+    /// Pictures reach a display whose presents the host hears (`present.rs`).
+    presents: bool,
     native_timers: bool,
     timers_hidden: bool,
     clock_generation: u64,
@@ -628,6 +632,7 @@ impl<D: DataSource> Presenter<D> {
             deferred_collections: None,
             media: Default::default(),
             live_clock: None,
+            presents: false,
             native_timers: false,
             timers_hidden: false,
             clock_generation: 0,
@@ -856,7 +861,9 @@ impl<D: DataSource> Presenter<D> {
 
     /// Whether the picture is stale.
     pub fn dirty(&self) -> bool {
-        self.dirty || !self.surfaces.captures.is_empty()
+        // A hold no picture has carried owes one, to carry it to a present
+        // (LLP 1003.001 D9).
+        self.dirty || !self.surfaces.captures.is_empty() || self.host.holds_uncarried()
     }
 
     /// Where the pointer is drawn (`None` draws none).
@@ -1379,6 +1386,7 @@ impl<D: DataSource> Presenter<D> {
             || self.surface_ripple_moving()
             || self.stage_moving();
         let (layout, paint) = self.host.tick_effects(now_ms);
+        self.release_overdue();
         if layout {
             self.hatches.stale = true;
             self.dirty = true;

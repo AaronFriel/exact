@@ -112,6 +112,7 @@ impl<D: DataSource> Presenter<D> {
             // The window's, the device's and the session's.
             make_text: _,
             live_clock: _,
+            presents: _,
             native_timers: _,
             timers_hidden: _,
             timer_observations: _,

@@ -101,6 +101,8 @@ impl<D: DataSource> Presenter<D> {
     /// `hasFocus`, as `exactPage()` answers them: re-answered in one commit.
     pub fn set_page(&mut self, page: exact_runner::Page) -> Option<String> {
         let error = self.host.set_page(page);
+        // Hidden or frozen, nothing presents what a commit begins (LLP 1003.001 D9).
+        self.refresh_presentable();
         if error.is_some() {
             return error;
         }

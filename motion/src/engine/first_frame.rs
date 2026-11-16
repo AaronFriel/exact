@@ -155,6 +155,24 @@ impl Engine {
             .reduce(f64::min)
     }
 
+    /// The latest begin of anything held, or `None` when nothing is: a
+    /// picture produced at or after it carries every hold.
+    pub fn held_latest(&self) -> Option<f64> {
+        let curves = self
+            .pending
+            .iter()
+            .filter_map(|key| self.slots.get(key)?.running()?.pending);
+        let plays = self
+            .animating
+            .iter()
+            .flat_map(|node| &self.animations[node])
+            .filter_map(|play| play.pending);
+        curves
+            .chain(plays)
+            .chain(self.clocks_held().map(|(_, latest)| latest))
+            .reduce(f64::max)
+    }
+
     /// When the earliest hold's present is overdue ([`HOLD_DEADLINE`] after
     /// its begin), or `None` when nothing is held. A host whose loop sleeps
     /// wakes for it with no frame.

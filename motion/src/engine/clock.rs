@@ -246,6 +246,12 @@ impl Engine {
         });
     }
 
+    /// The earliest and latest begins of the clock origins that wait.
+    pub(super) fn clocks_held(&self) -> Option<(f64, f64)> {
+        let begins = self.clocks.pending.values().copied();
+        Some((begins.clone().reduce(f64::min)?, begins.reduce(f64::max)?))
+    }
+
     /// The earliest begin of a clock origin that waits.
     pub(super) fn clock_held_since(&self) -> Option<f64> {
         self.clocks.pending.values().copied().reduce(f64::min)

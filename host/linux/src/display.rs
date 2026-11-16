@@ -251,6 +251,8 @@ pub fn run<D: DataSource + Default>(config: &mut Config, started: Instant) -> i3
     // Startup timestamps for Observe's launch metrics.
     let mut marks = exact_painted::launch_marks::LaunchMarks::new();
     marks.launch_end();
+    // The page is presented at its first picture's present, not its first commit (LLP 1069.000 D2).
+    exact_runner::page::set_awaits_present(true);
     let (mut p, error) = match exact_painted::app::boot_presenter::<D>(config, viewport) {
         Ok(v) => v,
         Err(e) => {
@@ -261,7 +263,9 @@ pub fn run<D: DataSource + Default>(config: &mut Config, started: Instant) -> i3
     if let Some(e) = error {
         eprintln!("exact: {e}");
     }
-    // The display's clock owns time (the timers RFC, D1)
+    // The display's clock owns time (the timers RFC, D1), and a commit's
+    // motion starts at the flip that shows it (LLP 1003.001 D9).
+    p.presents_pictures(true);
     p.set_live_clock(Some(exact_painted::presenter::wall_since(started)));
     let input = Input::open();
     let clock_set = clock_set::ClockSet::open();

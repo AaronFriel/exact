@@ -103,7 +103,9 @@ pub(crate) fn run<D: DataSource>(
                 marks.submitted(first_pixel.is_none());
             }
             match submitted {
-                Ok(Some(frame)) => presented(&mut p, frame, events, &mut first_pixel),
+                // The first picture's synchronous modeset has no flip event:
+                // it is presented when `set_crtc` returns (LLP 1003.001 D9).
+                Ok(Some(frame)) => presented(&mut p, frame, wall(), events, &mut first_pixel),
                 Ok(None) => {}
                 Err(e) => {
                     eprintln!("exact: {e}");
@@ -170,6 +172,13 @@ pub(crate) fn run<D: DataSource>(
         match display.wait(&fds, timeout) {
             Ok(true) => match display.ready() {
                 Ok(Some(frame)) => {
+                    // The flip's kernel timestamp, else when it was heard.
+                    #[cfg(target_os = "linux")]
+                    let at = display
+                        .last_flip()
+                        .map_or_else(wall, |at| monotonic_ms(at, wall()));
+                    #[cfg(not(target_os = "linux"))]
+                    let at = wall();
                     #[cfg(target_os = "linux")]
                     if !marks.done() {
                         if let Some(at) = display.last_flip() {
@@ -181,7 +190,7 @@ pub(crate) fn run<D: DataSource>(
                             );
                         }
                     }
-                    presented(&mut p, frame, events, &mut first_pixel);
+                    presented(&mut p, frame, at, events, &mut first_pixel);
                     let paint = p.last_frame_ms().map(|(ms, _)| ms);
                     if let Some(line) = display
                         .sequence()
@@ -342,15 +351,35 @@ pub(super) fn work_timeout(pending: bool, animation: bool, due: Option<f64>, now
     }
 }
 
+/// A `CLOCK_MONOTONIC` instant (a DRM flip's) on the loop's clock, `wall`
+/// being that clock now: `Instant` reads `CLOCK_MONOTONIC` on Linux.
+#[cfg(target_os = "linux")]
+#[allow(unsafe_code)]
+fn monotonic_ms(at: Duration, wall: f64) -> f64 {
+    let mut now = libc::timespec {
+        tv_sec: 0,
+        tv_nsec: 0,
+    };
+    // SAFETY: `now` is a valid timespec for the call to fill.
+    unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut now) };
+    let now = now.tv_sec as f64 + now.tv_nsec as f64 / 1e9;
+    wall - (now - at.as_secs_f64()) * 1000.0
+}
+
 fn presented<D: DataSource>(
     p: &mut Presenter<D>,
     frame: SubmittedFrame,
+    at: f64,
     events: &mut impl Events<D>,
     first: &mut Option<Instant>,
 ) {
     // Pixels belong to this receipt, even if input/reload changed the live Host.
     events.publish(frame.pixels().clone());
     p.display_complete(&frame);
+    // What the picture carried starts at its present (LLP 1003.001 D9).
+    if let Some(e) = p.display_presented(&frame, at) {
+        eprintln!("exact: {e}");
+    }
     // Its boxes are the ones the pointer rests on now: their hover, and
     // their `:hover` looks (LLP 1121 D8), follow (#139).
     p.follow_pointer();

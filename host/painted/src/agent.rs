@@ -672,6 +672,7 @@ fn prefer<D: DataSource>(p: &mut Presenter<D>, line: &str) -> String {
     let mut root_font_size = None;
     let mut display_scale = None;
     let mut retier = None;
+    let mut presented = None;
     let mut dark = p.scheme.1;
     for (name, value) in media {
         match (name.as_str(), value.as_str().unwrap_or_default()) {
@@ -738,6 +739,8 @@ fn prefer<D: DataSource>(p: &mut Presenter<D>, line: &str) -> String {
             ("iframe-partition", v @ ("true" | "false")) => page.iframe_partition = v == "true",
             ("frozen", v @ ("true" | "false")) => page.frozen = v == "true",
             ("has-focus", v @ ("true" | "false")) => page.has_focus = v == "true",
+            // @ref LLP 1069.000 D6 — held at the value named; no animation moves.
+            ("presented", v @ ("true" | "false")) => presented = Some(v == "true"),
             // @ref LLP 1139.003 D2 — the fact, and the modules' tier: their
             // renderers are made again at the new rung.
             ("gpu-tier", v @ ("high" | "mid" | "low")) => {
@@ -773,6 +776,9 @@ fn prefer<D: DataSource>(p: &mut Presenter<D>, line: &str) -> String {
         p.retier_surfaces(code);
     }
     if let Some(e) = p.set_page(page) {
+        return error(&e);
+    }
+    if let Some(e) = presented.and_then(|v| p.prefer_presented(Some(v))) {
         return error(&e);
     }
     if let Some(px) = root_font_size {
@@ -819,6 +825,7 @@ fn prefer<D: DataSource>(p: &mut Presenter<D>, line: &str) -> String {
         "iframe-partition": page.iframe_partition,
         "has-focus": page.has_focus,
         "frozen": page.frozen,
+        "presented": p.host().runner().presented().value(),
         "root-font-size": p.host().runner().root_font_size(),
         "display-scale": p.host().runner().display_scale(),
         "gpu-tier": page.gpu_tier(),
