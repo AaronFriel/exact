@@ -1215,7 +1215,7 @@ export const classifications = [
     "The named painted adapter reads or updates the current Presenter through the runner or its Host forwarding API. host/painted/src/picker.rs configures app file roots and copies/selects paths for the current picker/share. Persistent copies are separate from the UI continuation receiving them.", [
     ["painted:host/painted/src/presenter/picker.rs",
       "Presenter::answer_document Presenter::answer_save Presenter::ask_portal Presenter::deliver_picker Presenter::documents_chosen Presenter::finish_files " +
-      "Presenter::finish_portal_picks Presenter::is_file_input Presenter::picked_targets"],
+      "Presenter::finish_portal_picks Presenter::is_file_input Presenter::picked_targets Presenter::start_folder"],
   ]),
   group("shared tokens", ["one-shot"], "share token in the live router; copying may outlive the initiating view", "UI-owned",
     "The named painted adapter reads or updates the current Presenter through the runner or its Host forwarding API. runner/src/runner/picker/shared.rs:596-630 updates only a token accepted by router.share. Copied files can survive, but this completion targets the current router token.", [
@@ -1260,7 +1260,7 @@ export const classifications = [
   group("identity bookkeeping", ["one-shot"], "local cursor, metric, cache generation or diagnostic count; not a request ticket", "UI-owned",
     "The named source arithmetic write advances an interpreter/parser cursor, diagnostic count or presentation/cache state. Tree::collections_bounded counts fixed roots for snapshot wire admission before allocating; Runner::collections_bounded forwards the host's projection limits. It is enumerated conservatively so an allocator cannot hide behind a field name.", [
     ["runner:runner/src/agent/tree.rs", "request#depth:1"],
-    ["runner:runner/src/file_pickers.rs", "Picker::from_args#multiple:1"],
+    ["runner:runner/src/file_pickers.rs", "Picker::from_args#multiple:1 Picker::from_args#start_in:1"],
     ["runner:runner/src/format/mod.rs", "Big::shr#0:1"],
     ["runner:runner/src/frame_health.rs",
       "Collector::close_grid#missed_frames:1 Collector::close_grid#requested_slots:1 Collector::frame#active_ns:1 Collector::frame#histogram_overflows:1 " +
@@ -1333,6 +1333,7 @@ export const classifications = [
     "The named runner source evaluates, encodes, compares or constructs caller-owned values. These public helpers have no independently delivered outcome or persisted operation identity. vm.rs eval_accounted returns its result and counters synchronously to semantics/difftest/src/accounting.rs and vm/unsettled_tests.rs.", [
     ["runner:runner/src/compare.rs", "changed_fields equal equivalent equivalent_all equivalent_opt same shared"],
     ["runner:runner/src/failure.rs", "Failure::error Failure::exposed_code Failure::of FailureCode::from_name FailureCode::name FailureCode::of_kind FailureCode::seam_error"],
+    ["runner:runner/src/file_pickers.rs", "start_in_refusal"],
     ["runner:runner/src/fetch_template.rs", "argument encode expand graphql_error pointer"],
     ["runner:runner/src/format/mod.rs", "formatting"],
     ["runner:runner/src/held.rs", "Held::compiled Held::decoded Held::equivalent Held::get Held::is_compiled Held::new Held::read Held::released Held::same"],
