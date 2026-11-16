@@ -5102,9 +5102,12 @@ impl DataSource for Scores {
 `Store` (`store.get`, `store.set`, under `secret.keep <name>`) is for
 **secrets**: a session token, a key. Apple keeps them in the Keychain, Linux
 in a file per secret only the user can read (`0600`, under
-`$XDG_DATA_HOME/exact/<app id>/secrets`; not encrypted), and the web in
-`localStorage`; Windows keeps them in memory for now. The host reads them into a snapshot before boot, so a
-read is synchronous, and a scripted drive never keeps them. A best time is not
+`$XDG_DATA_HOME/exact/<app id>/secrets`; not encrypted), Android in AES-GCM
+files with Android Keystore-wrapped keys, and the web in `localStorage`; Windows
+keeps them in memory for now. Opening Android's secret store deletes legacy
+plaintext files without reading them; only encrypted entries are restored.
+The host reads secrets into a snapshot before boot, so a read is synchronous,
+and a scripted drive never keeps them. A best time is not
 a secret: keep it in app storage. A lease on a secret (`SharedSecrets::acquire`,
 from `configure_secrets`) needs the same grant: on Apple a name the grants do not
 keep reads and writes as `denied: secret.keep`.

@@ -801,6 +801,7 @@ export const classifications = [
     ["painted:host/painted/src/canvas/codec.rs", "attach"],
     ["painted:host/painted/src/canvas/legacy.rs", "attach decode glyph"],
     ["painted:host/painted/src/canvas/presence.rs", "attach"],
+    ["painted:host/painted/src/canvas/secrets.rs", "attach"],
     ["painted:host/painted/src/canvas/time.rs", "attach format"],
     ["painted:host/painted/src/com.rs", "ensure_mta ensure_sta"],
     ["painted:host/painted/src/desktop.rs", "activate displays FullScreen::headless install install_displays services"],
@@ -977,6 +978,7 @@ export const classifications = [
   group("presence storage", ["durable operation"], "app-scoped secret vault/backend and secret generation", "durable",
     "host/painted/src/presence_secrets.rs backend/on_keystore select the app vault; system_support.rs SecretSession seeds and remembers secret records. Stored secret state is separate from a session-owned presence check.", [
     ["painted:host/painted/src/presence_secrets.rs", "backend on_keystore"],
+    ["painted:host/painted/src/secret_files.rs", "EncryptedFiles::new"],
     ["painted:host/painted/src/system_support.rs", "SecretSession::new SecretSession::remember SecretSession::seed"],
   ]),
   group("identity bookkeeping", ["one-shot"], "local cursor, metric, cache generation or diagnostic count; not a request ticket", "UI-owned",

@@ -178,7 +178,8 @@ pub(crate) fn store_root(app_id: &str) -> Result<Option<PathBuf>, DataError> {
 /// the app keeps them in its own data root,
 /// `$XDG_DATA_HOME/exact/<app id>` (`~/.local/share` when unset), as Ibex's
 /// file backends: a file per secret, `0600` in a `0700` directory, written
-/// whole and renamed into place, not encrypted (LLP 1027.007 D13, ibex LLP
+/// whole and renamed into place. Android encrypts them with a Keystore-wrapped
+/// key (LLP 1133.017 D3); the other file backends are not encrypted (LLP 1027.007 D13, ibex LLP
 /// 0069 §3). `None` keeps them in memory: a drive that names no scratch
 /// store, an app with no id, and Windows outside the agent (until its
 /// credential vault).
