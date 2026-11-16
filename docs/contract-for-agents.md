@@ -3298,6 +3298,9 @@ A view or descendant that needs its own pan calls
 request it on down to reserve the pan, as the maps package does. Passing `false`
 allows interception again. The request clears on up or cancel. An unscrollable
 axis and a second pointer before interception stay with the hosted view.
+A `modal` route's sheet takes an up-and-down drag the same way: the view keeps
+it only if it made the request before the crossing move, so a map in a sheet
+pans every way and a button there lets the sheet be dragged by it.
 See the [Android module seam](../host/android/README.md).
 
 ### Native views: accessibility

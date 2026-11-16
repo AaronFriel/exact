@@ -766,6 +766,14 @@ to reserve its pan. A drag on an axis the enclosing page cannot scroll stays wit
 pointer before interception gives it the pinch and the rest of that sequence. A down stops a running fling and
 reaches the hosted view.
 Declining the down leaves the scroller's drag and velocity tracking intact, including when the down stopped a fling.
+A `modal` route's sheet takes an up-and-down drag from a hosted view as a parent intercepts one: Material's
+`BottomSheetBehavior` takes its drag in its `CoordinatorLayout`'s `onInterceptTouchEvent`, which a child's
+[requestDisallowInterceptTouchEvent](https://developer.android.com/reference/android/view/ViewParent#requestDisallowInterceptTouchEvent(boolean))
+forbids. Past touch slop the view gets `ACTION_CANCEL` and the sheet follows the finger, unless the view disallowed
+interception before the crossing move; then the drag is the view's and the sheet stays where it rests, whether or not
+it could move (`closedby="none"` with one detent). The hit reply marks that claim as the sheet's
+(`Presenter::reader_under`, bit 2 of the claims). The sheet decides once, at the crossing move: a view that passes
+`false` later in the sequence keeps the drag. A drag on an axis an Exact gesture claims is still that gesture's.
 A field keeps a selection drag if it disallowed interception before the crossing move; otherwise scrolling gets
 that move first.
 The reader holds events until the hit reply arrives and replays them in order, including subsequent taps; a long press
@@ -1220,7 +1228,8 @@ It slides up as it opens (350 ms, emphasized decelerate) and down as it leaves (
 where it was, its last drawing kept for that (`paint/tape.rs`), so a sheet the app closes slides out too. A drag
 anywhere on it that no scroller of its own takes (its handle, a header, a form's rows) moves it once past the
 system's 8 dp slop, letting go of what the finger pressed; let go, it rests on the detent its speed carries it to,
-or leaves the window. A tap on the scrim dismisses it. Either dismissal closes the sheet whole, with any route
+or leaves the window. A drag that began on a module view that disallowed interception is the view's
+("Pickers and hatches" above). A tap on the scrim dismisses it. Either dismissal closes the sheet whole, with any route
 pushed inside it: a root that hears `navigate` is sent to the location beneath the sheet, else Back goes once for
 each route it holds. `closedby="none"` keeps it: the scrim takes the tap and the sheet does not go below its
 lowest detent. System Back is the route's own (D6), so Back from a route pushed inside a sheet goes to the route
