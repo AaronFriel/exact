@@ -4,6 +4,7 @@
   "private": true,
   "description": "The displays by the Window Management API's names, and where the pointer is (LLP 1178).",
   "exports": {
-    ".": "./exact.json"
+    ".": "./exact.json",
+    "./apple": "./apple/exact.json"
   }
 }
