@@ -380,7 +380,8 @@ fn encode(id: u32, request: &Request, out: &mut Vec<i32>) {
 pub type AgentTurn = Box<dyn FnMut(f64, Option<Vec<i32>>) -> Vec<Handed>>;
 
 /// What the reader queued for the owner thread while an agent operation held
-/// it, in the order it was queued: on the wire, `[id, answer]` or the topic.
+/// it, in the order it was queued: on the wire, `[id, answer]`, the topic,
+/// `{"picture", "revoked"}` or `{"journal"}`.
 #[derive(Debug, Clone, PartialEq, serde::Deserialize)]
 #[serde(untagged)]
 pub enum Handed {
@@ -388,6 +389,19 @@ pub enum Handed {
     Answer(i32, Option<String>),
     /// A topic an extension announced ([`exact_runner::Native::changed`]).
     Changed(String),
+    /// A picture an extension changed or revoked
+    /// ([`Presenter::picture_changed`]).
+    Picture {
+        /// The picture's source, such as `photos:<id>`.
+        picture: String,
+        /// Revoked, rather than changed.
+        revoked: bool,
+    },
+    /// A line for the session's journal.
+    Journal {
+        /// The line.
+        journal: String,
+    },
 }
 
 impl<D: DataSource> Presenter<D> {
@@ -416,7 +430,7 @@ impl<D: DataSource> Presenter<D> {
 
     /// Service the reader during an agent operation that holds its owner thread.
     /// The callback hands requests to the UI thread and takes only what the
-    /// reader queued for this thread: answers and announced topics.
+    /// reader queued for this thread ([`Handed`]).
     pub fn set_agent_turn(&mut self, turn: Option<AgentTurn>) -> Option<AgentTurn> {
         std::mem::replace(&mut self.requests.agent_turn, turn)
     }
@@ -433,6 +447,8 @@ impl<D: DataSource> Presenter<D> {
                     self.answer_request(id as u32, answer.as_deref());
                 }
                 Handed::Changed(topic) => self.host.runner().native_slot().changed(&topic),
+                Handed::Picture { picture, revoked } => self.picture_changed(&picture, revoked),
+                Handed::Journal { journal } => self.host.runner_mut().log(journal),
             }
         }
     }

@@ -62,7 +62,7 @@ pub unsafe fn run<D: DataSource + Default>(
             let json = super::super::field::text(env, text);
             ((**env).DeleteLocalRef.expect("jni"))(env, text);
             serde_json::from_str(&json)
-                .expect("the reader returns answers by request id and announced topics")
+                .expect("the reader returns what it handed the owner (`Handed`)")
         }),
     );
     ((**env).DeleteLocalRef.expect("jni"))(env, class);

@@ -130,13 +130,6 @@ internal class Requests(private val activity: ExactActivity) {
     /** The session's orientation lock (LLP 1133.029 D6), on this activity. */
     private val orientation = Orientation(activity) { w, at -> string(w, at) }
 
-    /** The string at [at]: its bytes' count, then UTF-8 padded to whole words. And the index after it. */
-    private fun string(w: IntArray, at: Int): Pair<String, Int> {
-        val n = w[at]
-        val bytes = ByteArray(n) { k -> (w[at + 1 + k / 4] ushr (8 * (k % 4))).toByte() }
-        return String(bytes, Charsets.UTF_8) to at + 1 + (n + 3) / 4
-    }
-
     /** The pickers that are up, by their requests' ids, and what closes each: none has answered yet. */
     private val picking = HashMap<Int, () -> Unit>()
 
@@ -286,7 +279,8 @@ internal class Requests(private val activity: ExactActivity) {
     }
 
     companion object {
-        /** No activity can open UI, but process-owned waits still receive their cleanup. */
+        /** No activity can open UI, but process-owned waits still receive their cleanup, and the extensions, which
+         * outlive the activity, still answer their calls: one that needs an activity says so in its answer. */
         fun detached(words: IntArray) {
             var i = 0
             while (i + 3 <= words.size) {
@@ -297,8 +291,17 @@ internal class Requests(private val activity: ExactActivity) {
                     FILES -> Exact.answer(id, "file picker: activity unavailable")
                     AUTH -> Exact.answer(id, "cancelled")
                     AUTH_END -> Auth.end(words[body])
+                    MODULE -> Extensions.call(id, string(words, body).first)
+                    PRESENCE -> Presence.check(string(words, body).first)
                 }
             }
+        }
+
+        /** The string at [at]: its bytes' count, then UTF-8 padded to whole words. And the index after it. */
+        private fun string(w: IntArray, at: Int): Pair<String, Int> {
+            val n = w[at]
+            val bytes = ByteArray(n) { k -> (w[at + 1 + k / 4] ushr (8 * (k % 4))).toByte() }
+            return String(bytes, Charsets.UTF_8) to at + 1 + (n + 3) / 4
         }
 
         private const val TAG = "exact"

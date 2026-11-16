@@ -170,14 +170,29 @@ fn a_clock_wait_services_the_readers_requests_and_answers_on_its_owner() {
     }
 }
 
+/// The app's grants: the line the fixture's pictures need.
+#[derive(Default)]
+struct Grants;
+
+impl DataSource for Grants {
+    fn query(&mut self, name: &str, _: &[Value]) -> Result<Value, DataError> {
+        Err(DataError::UnknownSource(name.into()))
+    }
+
+    fn grants(&self) -> &str {
+        "device.photos\n"
+    }
+}
+
 /// `prefer extension` tells the reader's extension, which acts on it on its
-/// own thread: a `clock settle` waits for the tell's answer, and a topic the
-/// extension announced before answering asks its reader again within the
-/// same settle (the photos selection drive, `packages/photos/test/android.mjs`).
+/// own thread: a `clock settle` waits for the tell's answer, and what the
+/// extension handed the owner before answering lands within the same settle:
+/// a topic, which asks its reader again, a picture it revoked, and a journal
+/// line (the photos selection drive, `packages/photos/test/android.mjs`).
 #[test]
-fn a_settle_waits_for_a_tell_and_what_it_announced() {
+fn a_settle_waits_for_a_tell_and_what_the_extension_handed_before_it() {
     let plan = contract::compile(
-        "component App\n  resource value = counted() as shape number\n  view\n    text value.toString()\n",
+        "component App\n  resource value = counted() as shape number\n  view\n    column\n      text value.toString()\n      image \"counter:a\" width=10 height=10 alt=\"a\"\n",
     )
     .unwrap();
     let source = exact_plan::SourcesId(
@@ -195,11 +210,11 @@ fn a_settle_waits_for_a_tell_and_what_it_announced() {
         true,
         "never",
         "",
-        r#"{"default":0,"implementation":true,"agent":{"word":"string"}}"#,
+        r#"{"default":0,"implementation":true,"agent":{"word":"string"},"images":{"scheme":"counter","grants":["device.photos"]}}"#,
     );
     let (mut p, error) = Presenter::boot_with(
         &builder.finish().unwrap().encode(),
-        (),
+        Grants,
         (100., 40.),
         1.,
         std::path::PathBuf::new(),
@@ -209,8 +224,12 @@ fn a_settle_waits_for_a_tell_and_what_it_announced() {
     assert!(error.is_none(), "{error:?}");
     p.serve_requests();
     p.bind_modules(vec![], vec!["counter".into()]);
+    p.bind_pictures();
     // The reader: what a turn hands it is answered 100 ms later, as its UI
-    // thread answers when it gets to it.
+    // thread answers when it gets to it. A picture is answered with pixels
+    // by another door (`Native.picture`), here the test's, between operations.
+    let pictures = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+    let asked = pictures.clone();
     let (mut calls, mut later) = (0, Vec::new());
     let mut due = std::time::Instant::now();
     p.set_agent_turn(Some(Box::new(move |_now, words| {
@@ -232,12 +251,23 @@ fn a_settle_waits_for_a_tell_and_what_it_announced() {
                     .map(|k| (words[at + 4 + k / 4] >> (8 * (k % 4))) as u8)
                     .collect();
                 let body = String::from_utf8(bytes).unwrap();
-                if body.contains("\"source\"") {
+                if body.contains("\"picture\"") {
+                    asked.borrow_mut().push(words[at + 1] as u32);
+                } else if body.contains("\"source\"") {
                     calls += 1;
                     later.push(Handed::Answer(words[at + 1], Some(calls.to_string())));
                 } else {
                     if body.contains("\"preferred\"") {
                         later.push(Handed::Changed("counter.counted".into()));
+                    }
+                    if body.contains("\"word\"") {
+                        later.push(Handed::Picture {
+                            picture: "counter:a".into(),
+                            revoked: true,
+                        });
+                        later.push(Handed::Journal {
+                            journal: "counter: revoked counter:a".into(),
+                        });
                     }
                     later.push(Handed::Answer(words[at + 1], Some("{}".into())));
                 }
@@ -254,6 +284,10 @@ fn a_settle_waits_for_a_tell_and_what_it_announced() {
         p.host().runner().resource("value"),
         Some(&Value::Number(2.))
     );
+    let ids: Vec<u32> = pictures.borrow_mut().drain(..).collect();
+    assert_eq!(ids.len(), 1, "the picture is asked for once");
+    assert!(p.picture_answered(ids[0], Ok(tiny_skia::Pixmap::new(4, 4).unwrap())));
+    assert_eq!(p.images().bitmaps.len(), 1, "the picture is drawn");
     let told = handle(
         &mut p,
         r#"{"op":"prefer","extension":{"counter.word":"x"}}"#,
@@ -265,5 +299,17 @@ fn a_settle_waits_for_a_tell_and_what_it_announced() {
         p.host().runner().resource("value"),
         Some(&Value::Number(3.)),
         "the settle answered before the tell's announced change asked again: {reply}"
+    );
+    assert!(
+        p.images().bitmaps.is_empty(),
+        "the settle answered before the tell's revocation emptied the box: {reply}"
+    );
+    assert!(
+        pictures.borrow().is_empty(),
+        "a revoked picture is not asked for again"
+    );
+    assert!(
+        (p.host().runner().journal()).any(|l| l.ends_with("counter: revoked counter:a")),
+        "the settle answered before the tell's journal line"
     );
 }

@@ -437,22 +437,30 @@ internal class Owner(private val hwbuf: Boolean, private val fast: Boolean, prio
         handler.post { f(); produce() }
     }
 
-    private val replies = OwnerReplies(::call, { topic -> Native.changed(topic) }) { id, answer -> Native.answer(id, answer) }
+    private val replies = OwnerReplies(::call) { h ->
+        when (h) {
+            is OwnerReplies.Handed.Answer -> Native.answer(h.id, h.value)
+            is OwnerReplies.Handed.Changed -> Native.changed(h.topic)
+            is OwnerReplies.Handed.Picture -> Native.pictureChanged(h.source, h.revoked)
+            is OwnerReplies.Handed.Journal -> Native.journal(h.line)
+        }
+    }
 
-    fun reply(id: Int, answer: String?) = replies.answer(id, answer)
+    fun hand(handed: OwnerReplies.Handed) = replies.hand(handed)
 
-    fun changed(topic: String) = replies.changed(topic)
-
-    /** Called from Native.agent on this thread. Return data, never re-enter the borrowed Rust host: each answer as
-     * `[id, answer]` and each topic as itself, in the order they arrived. */
+    /** Called from Native.agent on this thread. Return data, never re-enter the borrowed Rust host: in the order they
+     * arrived, each answer as `[id, answer]`, each topic as itself, each picture as `{"picture", "revoked"}` and each
+     * journal line as `{"journal"}` (`presenter::Handed`). */
     fun agentTurn(requests: IntArray?): String {
         check(Looper.myLooper() == thread.looper)
         if (requests != null) postMain { asked?.invoke(requests) ?: Requests.detached(requests) }
         return org.json.JSONArray().apply {
-            for (h in replies.take()) {
-                val id = h.id
-                put(if (id == null) h.value else org.json.JSONArray().put(id).put(h.value ?: org.json.JSONObject.NULL))
-            }
+            for (h in replies.take()) put(when (h) {
+                is OwnerReplies.Handed.Answer -> org.json.JSONArray().put(h.id).put(h.value ?: org.json.JSONObject.NULL)
+                is OwnerReplies.Handed.Changed -> h.topic
+                is OwnerReplies.Handed.Picture -> org.json.JSONObject().put("picture", h.source).put("revoked", h.revoked)
+                is OwnerReplies.Handed.Journal -> org.json.JSONObject().put("journal", h.line)
+            })
         }.toString()
     }
 
@@ -746,7 +754,7 @@ internal object Exact {
     /** The answer to a request exact2 made ([Native.answer]), or its cancellation (null): on exact2's thread. */
     fun answer(id: Int, answer: String?) {
         val o = owner
-        if (o != null) o.reply(id, answer) else Native.answer(id, answer)
+        if (o != null) o.hand(OwnerReplies.Handed.Answer(id, answer)) else Native.answer(id, answer)
     }
 
     /** A package calls an app handler on the host's thread and publishes what it changed. */
@@ -755,15 +763,15 @@ internal object Exact {
     } ?: Native.invoke(body).also { turned() }
 
     /** What the extensions tell exact2 ([Native.changed], [Native.bindExtensions]): on exact2's thread, in order. */
-    fun changed(topic: String) { val o = owner; if (o != null) o.changed(topic) else Native.changed(topic) }
+    fun changed(topic: String) { val o = owner; if (o != null) o.hand(OwnerReplies.Handed.Changed(topic)) else Native.changed(topic) }
     /** A person's act on what an extension posted ([Activations]): its event raised with a person's origin, as an
      * input, on exact2's thread; [action] is the declared action's record a notification's action carries. */
     fun activate(extension: String, event: String, args: String, action: String?) {
         val o = owner
         if (o != null) { o.input(); o.call { Native.activate(extension, event, args, action) } } else Native.activate(extension, event, args, action)
     }
-    /** A line for the session's journal, on exact2's thread. */
-    fun journal(line: String) { val o = owner; if (o != null) o.call { Native.journal(line) } else Native.journal(line) }
+    /** A line for the session's journal, on exact2's thread, in order with what the extensions tell ([changed]). */
+    fun journal(line: String) { val o = owner; if (o != null) o.hand(OwnerReplies.Handed.Journal(line)) else Native.journal(line) }
     /** A turn on exact2's thread, which asks for a display frame while a canvas input's samples wait. */
     fun wake() { owner?.call {} }
     fun presence(answer: String) { val o = owner; if (o != null) o.call { Native.presence(answer) } else Native.presence(answer) }
@@ -797,9 +805,11 @@ internal object Exact {
         val o = owner
         if (o != null) o.call { Native.picture(id, bitmap, error) } else Native.picture(id, bitmap, error)
     }
+    /** Picture [source] changed or was revoked ([Native.pictureChanged]): on exact2's thread, in order with what the
+     * extensions tell ([changed]). */
     fun pictureChanged(source: String, revoked: Boolean) {
         val o = owner
-        if (o != null) o.call { Native.pictureChanged(source, revoked) } else Native.pictureChanged(source, revoked)
+        if (o != null) o.hand(OwnerReplies.Handed.Picture(source, revoked)) else Native.pictureChanged(source, revoked)
     }
 
     /** Give a GPU canvas its window: on the exact thread, without waiting for it; [done] there with the handle. */
