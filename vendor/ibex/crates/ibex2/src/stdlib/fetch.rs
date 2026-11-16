@@ -689,7 +689,9 @@ pub(crate) fn redirect_step(
     // A redirect to another origin drops the credentials this request
     // carried, as the Fetch standard does for `Authorization`.
     // @ref LLP 0059.000#35-fetch--delegating-capability-bearing — a subdomain grant admits sibling hosts, which must not receive a token meant for the first
-    let drops_credentials = origin_of(next.as_str())? != origin_of(&current.url)?;
+    // A non-HTTP target still reaches admit_hop's URL validation. Computing
+    // an HTTP origin here would fail first for hostless schemes such as file:.
+    let drops_credentials = next.origin() != base.origin();
     Ok(Some(RedirectStep {
         url: next.to_string(),
         drops_body,

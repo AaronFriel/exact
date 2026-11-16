@@ -1096,6 +1096,9 @@ refuses userinfo and non-HTTP schemes. Redirects rewrite POST on 301/302,
 rewrite non-GET/HEAD on 303, and drop body headers when dropping the body,
 as [Fetch's redirect algorithm](https://fetch.spec.whatwg.org/#http-redirect-fetch)
 requires. Authorization remains removed after any origin change.
+Redirect credential stripping compares parsed URL origins, leaving hostless
+and non-HTTP targets to hop admission. Such targets fail URL validation,
+not HTTP-origin extraction, so a carrier never retries them as network faults.
 
 `Request::idle_timeout` lets a portable file transfer outlive the ordinary
 total deadline while bounding DNS (including the wait for a lookup helper)

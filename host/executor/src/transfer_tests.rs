@@ -312,6 +312,9 @@ fn a_denied_or_credentialed_redirect_is_a_fetch_failure_before_the_next_hop() {
         "https://b.test/?secret",
         "https://u:p@a.test/",
         "file:///secret",
+        "mailto:secret@example.test",
+        "ftp://a.test/secret",
+        "http://[invalid",
     ] {
         let (carrier, seen, _) =
             script(vec![reply(302, Some(location))], "net.fetch https://a.test");
@@ -319,7 +322,8 @@ fn a_denied_or_credentialed_redirect_is_a_fetch_failure_before_the_next_hop() {
         let files = Files::new();
         assert_eq!(
             carrier.run(files.transfer(None, None), &AbortSignal::default(), quiet()),
-            Err(Failure::Fetch)
+            Err(Failure::Fetch),
+            "redirect to {location}"
         );
         assert_eq!(seen.lock().unwrap().len(), 1);
         assert_eq!(
