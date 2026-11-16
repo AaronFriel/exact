@@ -1233,6 +1233,20 @@ impl<D: DataSource> Bridge<D> {
         self.emit(out)
     }
 
+    /// `prefer presented`: 0 false, 1 true, else the host's own.
+    pub fn prefer_presented(&mut self, value: u32) -> u32 {
+        let preferred = match value {
+            0 => Some(false),
+            1 => Some(true),
+            _ => None,
+        };
+        let out = self
+            .host
+            .as_mut()
+            .map_or_else(not_booted, |h| h.prefer_presented(preferred));
+        self.emit(out)
+    }
+
     /// The locale and time zone, as `locale NUL timeZone` in the input buffer.
     pub fn set_place(&mut self, len: usize) -> u32 {
         // `locale NUL timeZone`, then `NUL seed` and `NUL formatLocale`.

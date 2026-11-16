@@ -408,6 +408,7 @@ extension ExactSession {
         let reads = runtime.readsOnLine()
         readsOnLineKnown = (generation, reads)
         apply(runtime.setPage(PageFacts.bits(pageWindow, page: view?.window, readsOnLine: reads)))
+        if let presentedHeld { apply(runtime.preferPresented(presentedHeld)) }
         apply(runtime.setRootFontSize(PageFacts.rootFontSize))
         tellDisplayScale()
     }

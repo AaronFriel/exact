@@ -523,7 +523,9 @@ impl<D: DataSource> Host<D> {
             data.configure_secrets(shared)
                 .map_err(|error| HostError::Layout(format!("shared secrets: {error:?}")))?;
         }
-        let mut runner = Runner::boot_with_delivery_linked(
+        // A display presents its pictures: `presented` waits for the first's.
+        let was = exact_runner::page::set_awaits_present(start_on_frame);
+        let runner = Runner::boot_with_delivery_linked(
             links.runner,
             plan,
             data,
@@ -533,8 +535,9 @@ impl<D: DataSource> Host<D> {
             facts,
             viewport,
             launch,
-        )
-        .map_err(HostError::Runner)?;
+        );
+        exact_runner::page::set_awaits_present(was);
+        let mut runner = runner.map_err(HostError::Runner)?;
         // Its own roles from here, not those of the session it replaces (a
         // caller's scope is that one's; LLP 1121 stage 5).
         let _roles = runner.bind_roles();
@@ -1192,8 +1195,22 @@ impl<D: DataSource> Host<D> {
     /// The page's visibility, connectivity and share sheet (LLP 1069.000
     /// D2): re-answer `exactPage` in one commit; the same facts commit nothing.
     pub fn set_page(&mut self, page: exact_runner::Page) -> String {
+        let released = self.page_presentable(page);
         let answer = self.runner.set_page(page);
+        if released && matches!(answer, Ok(None)) {
+            // What a release started (an exit's end, a lowered spec) goes now.
+            let mut batch = Batch::new();
+            self.present(&mut batch, false);
+            return self.finish(batch, None);
+        }
         self.told(answer, "page")
+    }
+
+    /// `prefer presented` (LLP 1069.000 D6): holds `exactPage().presented`
+    /// at a value, or with `None` gives it back. It moves no animation.
+    pub fn prefer_presented(&mut self, preferred: Option<bool>) -> String {
+        let answer = self.runner.prefer_presented(preferred);
+        self.told(answer, "presented")
     }
 
     /// The viewer's locale and zone, beside the date: one commit when it changes.

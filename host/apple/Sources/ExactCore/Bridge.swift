@@ -885,6 +885,8 @@ package final class Runtime {
     } }
     package func setPreferences(_ bits: UInt32) -> Batch { on(layout: true) { read(exact_set_preferences(rt, bits)) } }
     package func setPage(_ bits: UInt32) -> Batch { on(layout: true) { read(exact_set_page(rt, bits)) } }
+    /// `prefer presented` (LLP 1069.000 D6): held at a value, or nil for the host's own.
+    package func preferPresented(_ value: Bool?) -> Batch { on(layout: true) { read(exact_prefer_presented(rt, value.map { $0 ? 1 : 0 } ?? 2)) } }
     /// Whether the running plan reads `onLine`; true when the owner is busy.
     package func readsOnLine() -> Bool { on(busy: true) { exact_reads_on_line(rt) != 0 } }
     package func setRootFontSize(_ px: Double) -> Batch { on(layout: true) { read(exact_set_root_font_size(rt, px)) } }

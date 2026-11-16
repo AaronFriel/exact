@@ -945,6 +945,9 @@ uint32_t exact_set_preferences(ExactRuntime rt, uint32_t bits);
 /* @ref LLP 1069.000 D2: the page's facts, told after boot and on each change —
  * bit 0 hidden, bit 1 offline, bit 2 a share sheet. */
 uint32_t exact_set_page(ExactRuntime rt, uint32_t bits);
+/* @ref LLP 1069.000 D6: `prefer presented` — 0 holds exactPage().presented
+ * false, 1 true, any other value gives it back to the host. */
+uint32_t exact_prefer_presented(ExactRuntime rt, uint32_t value);
 /* 1 when the running plan reads `onLine`, and before boot: only then does
  * the host watch the network. */
 uint32_t exact_reads_on_line(ExactRuntime rt);

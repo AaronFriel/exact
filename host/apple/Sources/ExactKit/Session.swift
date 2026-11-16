@@ -481,6 +481,8 @@ public final class ExactSession {
     var ownerInFlight: Bool { fillInFlight || tickInFlight || advanceInFlight || canvasInFlight || noticesInFlight > 0 || repliesInFlight > 0 }
     /// Whether this generation's plan reads `onLine`, learned by a synchronous `tellPage`.
     var readsOnLineKnown: (generation: Int, value: Bool)?
+    /// `prefer presented` under the agent, told again to each runner (LLP 1069.000 D6).
+    var presentedHeld: Bool?
     private(set) var canvasOwed = false
     private var canvasAsked = false
     private(set) var landing = false

@@ -953,6 +953,13 @@ macro_rules! host {
             $crate::abi::with_runtime(&EXACT_RUNTIMES, rt, false, |b, _| b.set_page(bits), |n| n)
         }
 
+        /// `prefer presented` (LLP 1069.000 D6): 0 holds `exactPage().presented`
+        /// false, 1 true, any other value gives it back to the host.
+        #[no_mangle]
+        pub extern "C" fn exact_prefer_presented(rt: u32, value: u32) -> u32 {
+            $crate::abi::with_runtime(&EXACT_RUNTIMES, rt, false, |b, _| b.prefer_presented(value), |n| n)
+        }
+
         /// 1 when the running plan reads `onLine`, and before boot: only
         /// then does the host watch the network.
         #[no_mangle]

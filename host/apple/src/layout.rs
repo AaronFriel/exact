@@ -106,7 +106,7 @@ impl<D: DataSource> Host<D> {
         let key = repeatable.then(|| self.quiet_collection_key()).flatten();
         let out = batch.finish(
             deadline,
-            !self.engine.quiescent(),
+            !self.engine.quiescent() || self.awaits_present(),
             self.runner.now_ms(),
             error,
         );
@@ -122,7 +122,7 @@ impl<D: DataSource> Host<D> {
         self.state_onto(&mut batch);
         let (timers, motion) = (
             self.route_overflow_due(self.runner.timer_due_ms()),
-            !self.engine.quiescent(),
+            !self.engine.quiescent() || self.awaits_present(),
         );
         batch.finish(timers, motion, self.runner.now_ms(), error.as_deref())
     }

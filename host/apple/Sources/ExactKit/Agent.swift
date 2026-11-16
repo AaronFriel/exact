@@ -700,7 +700,7 @@ public final class Agent {
             }
         }
         var facts = PageFacts.agent
-        var boldText: Bool?
+        var boldText: Bool?, presented: Bool?
         #if os(macOS)
         var keyboardNavigation: Bool?
         #endif
@@ -727,6 +727,8 @@ public final class Agent {
             case ("root-font-size", _) where (Double(value) ?? 0) > 0 && Float(Double(value)!).isFinite: facts.rootFontSize = Double(value)!
             // Bold Text (LLP 1115.000 D12.3), as the person's setting reaches the kernel.
             case ("bold-text", "true"), ("bold-text", "false"): boldText = value == "true"
+            // `exactPage().presented` held at a value; it moves no animation (LLP 1069.000 D6).
+            case ("presented", "true"), ("presented", "false"): presented = value == "true"
             // The display's scale as the kernel is told it (LLP 1115.000 D10.3): layout follows; the display draws at its own.
             case ("display-scale", _) where (Double(value) ?? 0) > 0 && Float(Double(value)!).isFinite: PageFacts.agentDisplayScale = Double(value)!
             default:
@@ -750,6 +752,7 @@ public final class Agent {
         if input != DisplayPreferences.input { DisplayPreferences.agentInput = input }
         if page != nil { PageFacts.agent = facts }
         if let boldText { DisplayPreferences.agentBoldText = boldText }
+        if let presented { session.apply(session.runtime.preferPresented(presented)); session.presentedHeld = presented }
         if let mode {
             // An empty group asks again: the other facts' commits may have run a `setMode`.
             let batch = session.runtime.setModes(mode, check: mode.isEmpty)
@@ -763,7 +766,7 @@ public final class Agent {
                                        "has-focus": PageFacts.hasFocus(session.pageWindow), "root-font-size": PageFacts.rootFontSize,
                                        "display-scale": PageFacts.displayScale(session.presenter.viewport),
                                        "gpu-tier": ["high", "mid", "low", "low"][Int(PageFacts.tier & 3)],
-                                       "bold-text": DisplayPreferences.boldText]
+                                       "bold-text": DisplayPreferences.boldText, "presented": session.presentedHeld ?? true]
         #if os(macOS)
         if let keyboardNavigation { KeyboardNavigation.agent = keyboardNavigation }
         pageFacts["keyboard-navigation"] = KeyboardNavigation.on
