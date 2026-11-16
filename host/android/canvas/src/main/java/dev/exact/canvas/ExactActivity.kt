@@ -695,6 +695,10 @@ open class ExactActivity : Activity() {
         // Rust's `temp_dir` is TMPDIR, else /data/local/tmp, which an app cannot write. API 29 sets none, and a
         // drive with no scratch store keeps its `app:/` files under it (`exact_painted::picker`).
         android.system.Os.setenv("TMPDIR", cacheDir.absolutePath, false)
+        val meta = packageManager.getApplicationInfo(packageName, android.content.pm.PackageManager.GET_META_DATA).metaData
+        // The `protocol_handlers` this APK registers (LLP 1038 D8): exact2 puts a URL of one's scheme at its template's
+        // `%s`, at launch and while the app runs, as the Apple hosts do with `ExactProtocolHandlers`.
+        meta?.getString("dev.exact.protocol_handlers")?.let { android.system.Os.setenv("EXACT_PROTOCOL_HANDLERS", it, true) }
         // The launching intent's URL is the launch location (LLP 1133.023 D15 item 3): the activity is exported, so
         // any app may start it with one, which reaches only what the navigation root routes, as a link does.
         if (arrived) {
@@ -709,9 +713,7 @@ open class ExactActivity : Activity() {
         // The logcat tag of the app's `console` lines, in every build (`host/painted/src/android.rs`, `console`): the
         // package name, as Apple's subsystem is the bundle identifier. A label can be localized and hold spaces.
         android.system.Os.setenv("EXACT_PACKAGE", packageName, true)
-        val development = packageManager.getApplicationInfo(packageName, android.content.pm.PackageManager.GET_META_DATA)
-            .metaData?.getBoolean("dev.exact.development", false) == true
-        if (!development) return
+        if (meta?.getBoolean("dev.exact.development", false) != true) return
         // rows=0: no kept rows, every frame walks every row (exact2's EXACT_ROWS), to compare.
         if (intent.getStringExtra("rows") == "0") android.system.Os.setenv("EXACT_ROWS", "0", true)
         // imgvp=N: keep N viewports of decoded pictures (exact2's EXACT_IMAGE_VIEWPORTS; 12 by default).

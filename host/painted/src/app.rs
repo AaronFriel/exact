@@ -50,7 +50,48 @@ use std::time::{Duration, Instant};
 
 /// The first non-flag path or scheme argument. @ref LLP 1038 D8
 pub fn launch_location(args: impl IntoIterator<Item = String>) -> String {
-    launch_argument(args).map_or_else(|| "/".into(), |href| exact_route::location_of(&href))
+    launch_argument(args).map_or_else(|| "/".into(), |href| incoming_location(&href))
+}
+
+/// A URL from outside the app as its location (LLP 1038 D8): at the
+/// template's `%s` of the `protocol_handlers` entry for its scheme, else its
+/// ordinary location. Only the Android reader registers handlers and names
+/// them here (`EXACT_PROTOCOL_HANDLERS`, from the APK's
+/// `dev.exact.protocol_handlers`), as an Apple bundle's
+/// `ExactProtocolHandlers`; a command-line URL on Linux or Windows has none.
+pub fn incoming_location(href: &str) -> String {
+    static HANDLERS: std::sync::OnceLock<Vec<(String, String)>> = std::sync::OnceLock::new();
+    let handlers = HANDLERS.get_or_init(|| {
+        protocol_handlers(std::env::var("EXACT_PROTOCOL_HANDLERS").ok().as_deref())
+    });
+    location_through(href, handlers)
+}
+
+/// The `[{"protocol", "url"}]` entries the reader registered; none when
+/// absent or malformed.
+fn protocol_handlers(json: Option<&str>) -> Vec<(String, String)> {
+    let Some(serde_json::Value::Array(entries)) = json.and_then(|j| serde_json::from_str(j).ok())
+    else {
+        return Vec::new();
+    };
+    entries
+        .iter()
+        .filter_map(|h| {
+            Some((
+                h.get("protocol")?.as_str()?.to_owned(),
+                h.get("url")?.as_str()?.to_owned(),
+            ))
+        })
+        .collect()
+}
+
+fn location_through(href: &str, handlers: &[(String, String)]) -> String {
+    handlers
+        .iter()
+        .find_map(|(protocol, template)| {
+            exact_route::protocol_location_of(href, protocol, template)
+        })
+        .unwrap_or_else(|| exact_route::location_of(href))
 }
 
 /// The first non-flag argument, as it was given, or `None`. The `hidden`
@@ -1100,6 +1141,32 @@ mod tests {
             );
         }
     }
+    #[test]
+    fn a_registered_handler_puts_the_whole_url_at_its_template() {
+        let handlers = protocol_handlers(Some(
+            r#"[{"protocol":"sscontrol","url":"/open?u=%s"},{"protocol":"web+notes","url":"/n/%s"}]"#,
+        ));
+        for (href, expected) in [
+            (
+                "sscontrol://ficha/7?x=1#top",
+                "/open?u=sscontrol%3A%2F%2Fficha%2F7%3Fx%3D1%23top",
+            ),
+            ("SSCONTROL:/a", "/open?u=SSCONTROL%3A%2Fa"),
+            ("web+notes://n/1", "/n/web%2Bnotes%3A%2F%2Fn%2F1"),
+            // An App Link and an unregistered scheme keep their ordinary location.
+            ("https://links.example/ficha/7", "/ficha/7"),
+            ("other://post/42", "/post/42"),
+            ("/urgencies", "/urgencies"),
+        ] {
+            assert_eq!(location_through(href, &handlers), expected, "{href}");
+        }
+        for json in [None, Some(""), Some("{}"), Some(r#"[{"protocol":"x"}]"#)] {
+            assert!(protocol_handlers(json).is_empty(), "{json:?}");
+        }
+        // No reader named any: every host's ordinary conversion.
+        assert_eq!(location_through("sscontrol://ficha/7", &[]), "/ficha/7");
+    }
+
     #[test]
     fn a_dev_plan_locator_stands_a_persisted_selection_aside() {
         assert!(has_explicit_locator(None, Some("not-produced-yet.plan")));

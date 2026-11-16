@@ -221,9 +221,10 @@ impl<D: DataSource> Presenter<D> {
     /// A URL arriving from outside while the app runs (LLP 1133.023 D15
     /// item 3: Android's `onNewIntent`, a shortcut): its location, as a
     /// link's, goes to the navigation root's `navigate` when the root routes
-    /// it. The refusal, else `None`.
+    /// it, at its scheme's registered `protocol_handlers` template when there
+    /// is one (`app::incoming_location`). The refusal, else `None`.
     pub fn open_location(&mut self, href: &str, now_ms: f64) -> Option<String> {
-        let location = exact_route::location_of(href);
+        let location = crate::app::incoming_location(href);
         if !self.host.runner().route_matches(&location) {
             return Some(format!("open {location}: no route matches it"));
         }
@@ -274,7 +275,7 @@ component App
   action follow(url: string)
     nav = go(nav, url)
   view
-    main navigationKey=`${current.id}` navigationBack="back" navigate=follow width="100%" height="100%"
+    main navigationKey=`${current.id}` navigationBack="back" navigate=follow width="100%" height="100%" testId="root"
       for e in stack(nav) key=e.id
         column navigationKey=`${e.id}` testId=`route-${e.name}` position="absolute" inset=0 padding=10 background-color="#fff"
           text "- [Note](/note/3) and [out](https://example.com) and [inert](ftp://x)" markup="markdown" testId=`reader-${e.name}` font-size=16
@@ -363,6 +364,17 @@ component App
             p.host.kernel().find_by_test_id("route-note").len(),
             notes + 1
         );
+        // The agent's `type <root> <url>` delivers a URL as one from outside.
+        let kernel = p.host.kernel();
+        let root = kernel
+            .node_by_key(kernel.find_by_test_id("root")[0])
+            .unwrap()
+            .id;
+        p.type_text(root, "shelf://note/9").unwrap();
+        assert_eq!(
+            p.host.kernel().find_by_test_id("route-note").len(),
+            notes + 2
+        );
         // A path no route matches is refused, and nothing moves.
         assert_eq!(
             p.open_location("/elsewhere", 30.).as_deref(),
@@ -370,7 +382,7 @@ component App
         );
         assert_eq!(
             p.host.kernel().find_by_test_id("route-note").len(),
-            notes + 1
+            notes + 2
         );
     }
 

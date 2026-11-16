@@ -627,7 +627,9 @@ panels and drops take a declared extension whichever type the Mac gives it.
 
 For URL schemes, `protocol_handlers` in `app.json` uses the Web App Manifest's
 `{ "protocol": "web+notes", "url": "/open?u=%s" }` entries. A native Apple
-bundle registers each declared scheme. `%s` is the complete incoming URL
+bundle registers each declared scheme, and an Android APK each custom one (a
+browsable `VIEW` intent filter on its `singleTask` activity, so a link from
+another app reaches the running app). `%s` is the complete incoming URL
 encoded as a URI component, so the scheme, query, and fragment survive;
 `searchParam(top(nav), "u")` recovers it in the `/open` route. A cold link is
 the launch location; warm links arrive one at a time at the navigation root's
@@ -641,7 +643,9 @@ For packaged-only Apple registration, add `"distribution_only": true` to an
 entry, for example `{"protocol":"notes","url":"/open?u=%s","distribution_only":true}`.
 Archives and `--distribution` builds include it; local builds, including
 `--bundle` and `--release` alone, omit it from both the registered schemes and
-native handler templates. The default is `false`. This option does not filter
+native handler templates. On Android, a production build (`--bundle`, or
+`EXACT_UPDATE_TRUST=production`) includes it and a development build omits it.
+The default is `false`. This option does not filter
 the web manifest or explicit `host.<platform>.urlSchemes`.
 
 `http` and `https` are the web's own schemes. An app declares both or
@@ -656,7 +660,8 @@ the app a web browser:
 | iOS | With `host.ios.webBrowser: true`, registers the pair and signs Apple's managed `com.apple.developer.web-browser` entitlement. Apple must approve it for the app's ID; the selected provisioning profile must grant it. Without the opt-in, registers neither and says so. App Clips, widget extensions and the sample host never inherit the browser role. |
 | tvOS | Registers neither, regardless of the iOS opt-in. |
 | web | dropped from `manifest.json`: HTML's protocol handler safelist has neither. |
-| Linux, Windows, Android | not registered, as no protocol handler is there. |
+| Linux, Windows | not registered, as no protocol handler is there. |
+| Android | not registered: an APK registers custom schemes only. |
 
 With `"distribution_only": true` on both entries, only an archive or a
 `--distribution` build is a browser. A local Mac or opted-in iOS build then registers neither

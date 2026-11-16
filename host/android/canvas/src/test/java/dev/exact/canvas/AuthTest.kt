@@ -332,6 +332,26 @@ class AuthTest {
         }
     }
 
+    @Test fun registeredProtocolHandlersReachExact2AndTheirLinksReachNavigation() {
+        val handlers = "[{\"protocol\":\"sscontrol\",\"url\":\"/open?u=%s\"}]"
+        val info = activity.packageManager.getApplicationInfo(activity.packageName, 0)
+        info.metaData = Bundle().apply { putString("dev.exact.auth.callbacks", "[\"app.test:/cb\"]"); putString("dev.exact.protocol_handlers", handlers) }
+        shadowOf(activity.packageManager).addPackage(android.content.pm.PackageInfo().apply {
+            packageName = activity.packageName; applicationInfo = info
+        })
+        val url = "sscontrol://ficha/7?x=1#top"
+        controller.pause().stop().destroy()
+        Exact.live = false
+        controller = Robolectric.buildActivity(Reader::class.java, intent(url))
+        controller.create().start().resume()
+        // Cold: the handlers and the whole URL, which exact2 puts at the template.
+        assertEquals(handlers, Environment.values["EXACT_PROTOCOL_HANDLERS"])
+        assertEquals(url, Environment.values["EXACT_LAUNCH_URL"])
+        // Warm: the URL as given, to `Exact.open`.
+        controller.newIntent(intent("sscontrol://urgencies"))
+        assertEquals("sscontrol://urgencies", Host.urls.lastOrNull())
+    }
+
     @Test fun aCallbackRecreatesTheActivityWithSavedStateInTheLiveProcess() {
         browser(true)
         Auth.open(activity, 1, "https://login.test/authorize", "app.test:/cb", "s1")

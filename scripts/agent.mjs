@@ -305,7 +305,7 @@ export async function main(argv, injected = {}) {
             'tap hold <ms>',
             'tap up [modifiers <M>]',
             'tap cancel (the target shows pressed until the lift: "tap row down" "screenshot held.png" "tap up"; under --touch platform one real touch at tap up, the holds, reads and clock +<ms> between run inside it; a word a form does not use is refused; a form a carrier cannot deliver answers unsupported)',
-            'type <target> <text…> (a select, date, time, range or checkbox: its value; the navigation root: a path, or a deep link as euxy://p/1, through protocol_handlers on macOS and iOS)',
+            'type <target> <text…> (a select, date, time, range or checkbox: its value; the navigation root: a path, or a deep link as euxy://p/1, through protocol_handlers on macOS, iOS and the Android reader)',
             'type <target> key <Name> [for <ms>]',
             'type <target> copy',
             'cut',
@@ -591,7 +591,7 @@ export async function main(argv, injected = {}) {
       case 'url':
       case 'link':
         throw new MalformedOperation(
-          `${op} is not an op: a link arrives as \`type <root> ${args[0] ?? 'euxy://p/abc'}\`, the root being the node with navigate= (its testId or id, from \`tree\`; LLP 1038 D11); on macOS and iOS a URL with a scheme goes through the app's protocol_handlers as the system delivers it, with no "Open in …?" alert`,
+          `${op} is not an op: a link arrives as \`type <root> ${args[0] ?? 'euxy://p/abc'}\`, the root being the node with navigate= (its testId or id, from \`tree\`; LLP 1038 D11); on macOS, iOS and the Android reader a URL with a scheme goes through the app's protocol_handlers as the system delivers it (on iOS, with no "Open in …?" alert)`,
         );
       default:
         throw new MalformedOperation(

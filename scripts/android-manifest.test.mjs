@@ -313,3 +313,28 @@ test('Android auth filters schemes but retains complete callback endpoints', asy
   assert.match(withShare, /android.intent.action.SEND/);
   assert.equal((withShare.match(/<activity /g) ?? []).length, 1);
 });
+
+test('Android registers each custom protocol_handlers scheme on the one activity (LLP 1038 D8)', async () => {
+  const { androidProtocolHandlers, withProtocolHandlers, withAuthCallbacks, withMetaData } = await import('./android-manifest.mjs');
+  const manifest = { protocol_handlers: [{ protocol: 'SSControl', url: '/open?u=%s' }, { protocol: 'packaged', url: '/p?u=%s', distribution_only: true },
+    { protocol: 'http', url: '/w?u=%s' }, { protocol: 'https', url: '/w?u=%s' }] };
+  // Never the web's pair; a packaged-only scheme only in a production build; schemes lowercased, as Android matches them.
+  assert.deepEqual(androidProtocolHandlers(manifest), [{ protocol: 'sscontrol', url: '/open?u=%s' }]);
+  assert.deepEqual(androidProtocolHandlers(manifest, true).map((h) => h.protocol), ['sscontrol', 'packaged']);
+  assert.equal(withProtocolHandlers('unchanged', []), 'unchanged');
+  const xml = withProtocolHandlers('', androidProtocolHandlers(manifest));
+  assert.equal((xml.match(/<activity /g) ?? []).length, 1);
+  assert.match(xml, /android:launchMode="singleTask"/);
+  assert.match(xml, /<category android:name="android.intent.category.BROWSABLE" \/>\n\s*<data android:scheme="sscontrol" \/>/);
+  assert.doesNotMatch(xml, /android:scheme="http|packaged/);
+  const handlers = xml.match(/dev.exact.protocol_handlers" android:value="([^"]+)"/);
+  assert.deepEqual(JSON.parse(handlers?.[1].replaceAll('&quot;', '"')), [{ protocol: 'sscontrol', url: '/open?u=%s' }]);
+  // A share target, a handler and an auth callback of the same scheme: one activity, the scheme filtered once.
+  const { androidShareActivity } = await import('./share-target.mjs');
+  const all = withAuthCallbacks(withProtocolHandlers(withMetaData('', androidShareActivity({ action: '/share', params: { text: 'text' } })), [{ protocol: 'app.test', url: '/open?u=%s' }]), ['app.test:/cb', 'other.test:/cb']);
+  assert.equal((all.match(/<activity /g) ?? []).length, 1);
+  assert.equal((all.match(/android:scheme="app.test"/g) ?? []).length, 1);
+  assert.match(all, /android:scheme="other.test"/);
+  assert.match(all, /dev.exact.auth.callbacks/);
+  assert.match(all, /android.intent.action.SEND/);
+});
