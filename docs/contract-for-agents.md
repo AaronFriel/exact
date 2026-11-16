@@ -2637,7 +2637,10 @@ no swipe, menu item or mouse button (`contract vocab navigationHistory`). A rout
 with a full-bleed picture says `navigationBar="transparent"`: iOS draws its bar clear at
 the scroller's top and insets nothing, so the picture sits under the bar as under a fixed
 transparent header on the web, and the bar's material comes as the content scrolls.
-Place foreground controls below it with `top="var(--exact-safe-area-inset-top)"`
+At the clear edge, the iOS bar's empty areas let touches reach the page; its title,
+Back and bar items keep their touches. Once scrolled, its material's band takes touches,
+as does a visible background supplied by a native hatch.
+To keep foreground controls below it, use `top="var(--exact-safe-area-inset-top)"`
 or that value as padding on the hero's content. This reads the route's safe area,
 including its bar; `env(safe-area-inset-top)` stays 0 under `viewport-fit="auto"`.
 A route that does not scroll (a game's canvas at `inset=0`, `width="100%" height="100%"`) is
