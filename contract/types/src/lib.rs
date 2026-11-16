@@ -306,6 +306,9 @@ pub struct Shapes {
     /// Call statements refused as ambiguous (LLP 1089 D1): never checked as
     /// host commands too, so their refusal is the only one.
     pub ambiguous: std::collections::BTreeSet<Span>,
+    /// The calls a child writes of a name it holds no action of
+    /// (`contract_syntax::inline::free_calls`): never the root's action.
+    pub free_calls: std::collections::BTreeSet<Span>,
     /// The sounds the app declares, by path (LLP 1096 D1): a literal
     /// `playSound` source names one.
     pub sounds: std::collections::BTreeSet<String>,
@@ -835,7 +838,7 @@ fn infer_unbounded(e: &Expr, scope: &Scope, shapes: &Shapes) -> Result<Ty, TypeE
                 routes::expand_path(args, *span, scope, shapes)?;
                 return Ok(Ty::String);
             }
-            if !shapes.fns.contains_key(name) && strings::is_text_call(name, scope) {
+            if !shapes.fns.contains_key(name) && strings::is_text_call(name, *span, scope, shapes) {
                 return strings::check_call(args, *span, scope, shapes);
             }
             if let Some(t) = failure::check(name, args, *span, scope) {
@@ -872,9 +875,9 @@ fn infer_unbounded(e: &Expr, scope: &Scope, shapes: &Shapes) -> Result<Ty, TypeE
             }
             // @ref LLP 1038 D3 — adding roster names must not capture existing
             // scoped action/prop references, e.g. a reader's `open(path)` handler.
-            if let Some((Ref::Action(_) | Ref::Prop(_), Ty::Action(params))) = scope
-                .lookup(name)
-                .filter(|_| !routes::value_call(name, args, scope, shapes))
+            if let Some((Ref::Action(_) | Ref::Prop(_), Ty::Action(params))) =
+                calls::callee(name, *span, scope, shapes)
+                    .filter(|_| !routes::value_call(name, args, scope, shapes))
             {
                 component::action_call(name, params, args, *span, scope, shapes)?
             } else if let Some(f) = Stdlib::from_name(name).filter(|f| lists::is_list_op(*f)) {
@@ -1312,6 +1315,7 @@ fn check_with_sites(
     // scope, refused before anything expands (LLP 1089 D1).
     let ambiguous = contract_syntax::inline::calls::ambiguous(file);
     shapes.ambiguous = ambiguous.iter().map(|a| a.span).collect();
+    shapes.free_calls = contract_syntax::inline::free_calls(file);
     let mut types = Types {
         shapes,
         components: Vec::new(),

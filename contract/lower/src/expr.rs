@@ -297,7 +297,7 @@ pub(crate) fn compile(
                 return compile(l, asm, &template, scope, locals);
             }
             if !l.fns.contains_key(name.as_str())
-                && contract_types::strings::is_text_call(name, scope)
+                && contract_types::strings::is_text_call(name, *span, scope, &l.types.shapes)
             {
                 return l.text_call(asm, args, *span, scope, locals);
             }

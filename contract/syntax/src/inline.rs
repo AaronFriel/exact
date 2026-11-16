@@ -252,6 +252,87 @@ pub fn hygiene(expanded: &mut Expanded, file: &File) {
     calls::hygiene(&mut expanded.root.actions, &record_constructors(file));
 }
 
+/// The spans of the calls a child writes of a name it declares no action,
+/// `action` prop or injected action of. An action is in its own component's
+/// scope only (LLP 1089 D1), so such a call is a `fn`'s, a standard
+/// function's or the strings' `t`. Inlining lifts it into the root
+/// unchanged, where the root's action of that name would otherwise capture it.
+pub fn free_calls(file: &File) -> BTreeSet<crate::Span> {
+    fn statements<'a>(body: &'a [Stmt], out: &mut Vec<&'a Expr>) {
+        for s in body {
+            match s {
+                Stmt::Let { expr, .. } | Stmt::Assign { expr, .. } => out.push(expr),
+                Stmt::Command { args, .. } | Stmt::Send { args, .. } => out.extend(args),
+                Stmt::If {
+                    cond,
+                    then,
+                    otherwise,
+                    ..
+                } => {
+                    out.push(cond);
+                    statements(then, out);
+                    statements(otherwise, out);
+                }
+                Stmt::Match {
+                    subject,
+                    some,
+                    none,
+                    ..
+                } => {
+                    out.push(subject);
+                    statements(&some.1, out);
+                    statements(none, out);
+                }
+                Stmt::Call { args, body, .. } => {
+                    out.extend(args);
+                    statements(body, out);
+                }
+                Stmt::Refresh { .. } => {}
+            }
+        }
+    }
+    let mut out = BTreeSet::new();
+    // A child declares no `task` or `sequence`, which the type pass refuses.
+    for c in file.components.iter().skip(1) {
+        let mut exprs: Vec<&Expr> = Vec::new();
+        exprs.extend(
+            c.provides
+                .iter()
+                .chain(&c.states)
+                .chain(&c.derives)
+                .map(|b| &b.expr),
+        );
+        for r in &c.resources {
+            exprs.extend(r.args.iter().chain(&r.gate));
+            exprs.extend(r.placeholder.iter().flat_map(|p| &p.args));
+            exprs.extend(
+                r.each
+                    .iter()
+                    .flat_map(|e| std::iter::once(&e.list).chain(&e.key)),
+            );
+        }
+        for a in &c.actions {
+            statements(&a.body, &mut exprs);
+        }
+        exprs.extend(Node::walk(&c.view).flat_map(Node::exprs));
+        let own = |name: &str| {
+            c.actions.iter().any(|a| a.name == name)
+                || c.props
+                    .iter()
+                    .chain(&c.injects)
+                    .any(|p| p.name == name && p.ty.as_ref().is_some_and(is_action))
+        };
+        for e in exprs.into_iter().flat_map(Expr::walk) {
+            if let Expr::Call(name, _, span) = e {
+                if !own(name) {
+                    out.insert(*span);
+                }
+            }
+        }
+    }
+    out
+}
+
 /// The file's record constructors: every declared shape that is not also a
 /// `fn`. A call naming one builds that record ahead of any name in scope
 /// (LLP 1035.005.000 D3), so expansion never replaces such a call's head.

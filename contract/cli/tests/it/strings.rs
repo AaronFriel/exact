@@ -368,6 +368,20 @@ fn a_loop_variable_named_t_leaves_t_callable_in_a_child() {
     assert!(app.compile().is_ok(), "{:?}", app.refusals());
 }
 
+/// The root's action `t` is in the root's scope only (LLP 1089 D1): a
+/// child's `t("hi")` is still the strings call where the root inlines it.
+#[test]
+fn a_roots_action_named_t_leaves_t_callable_in_a_child() {
+    let app = AppDir::new(
+        "component App\n  state n = 0\n  action t(by: number)\n    n = n + by\n  view\n    column\n      button \"+\" press=t(1)\n      Greeting()\ncomponent Greeting\n  view\n    text t(\"hi\") testId=\"hi\"\n",
+        &[("strings/en.json", r#"{"hi": "Hello"}"#)],
+    );
+    let plan = app
+        .compile()
+        .unwrap_or_else(|_| panic!("{:?}", app.refusals()));
+    assert_eq!(text(&boot(plan), "hi"), "Hello");
+}
+
 #[test]
 fn the_default_agent_place_still_selects_its_table_when_the_base_differs() {
     let app = AppDir::new(
