@@ -40,19 +40,25 @@ package struct CollectionFacts: Equatable {
     /// `glimpse`: `limit` bounds the rows of what shows it builds too.
     /// `reading`: flag bits 5 to 7 (`Reading`).
     func encode(view: UInt32, revision: UInt64, sequence: UInt64, velocity: Double = 0, limit: UInt32? = nil, ancestorMoving: Bool = false, createOnly: Bool = false, noBuild: Bool = false, glimpse: Bool = false, reading: Reading = Reading()) -> Data {
-        var bytes = Data()
-        func integer<T: FixedWidthInteger>(_ value: T) {
-            var le = value.littleEndian
-            withUnsafeBytes(of: &le) { bytes.append(contentsOf: $0) }
+        var bytes = Data(count: 100 + measurements.count * 20)
+        bytes.withUnsafeMutableBytes { buffer in
+            var cursor = 0
+            func integer<T: FixedWidthInteger>(_ value: T) {
+                var le = value.littleEndian
+                withUnsafeBytes(of: &le) {
+                    buffer.baseAddress!.advanced(by: cursor).copyMemory(from: $0.baseAddress!, byteCount: $0.count)
+                    cursor += $0.count
+                }
+            }
+            integer(UInt32(4)); integer(view); integer(revision); integer(sequence)
+            for value in [offset, portMain, portCross, cross, paddingStart, paddingEnd] { integer(value.bitPattern) }
+            integer(focus ?? 0); integer(interaction ?? 0)
+            integer((velocity.isFinite ? velocity : 0).bitPattern); integer(limit.map { Swift.min($0, UInt32.max - 1) } ?? UInt32.max)
+            integer(UInt32(ancestorMoving ? 1 : 0) | UInt32(createOnly ? 2 : 0) | UInt32(noBuild ? 4 : 0) | UInt32(glimpse ? 16 : 0)
+                | UInt32(reading.scrolling ? 32 : 0) | UInt32(reading.gesture ? 64 : 0) | UInt32(reading.animating ? 128 : 0))
+            integer(UInt32(measurements.count))
+            for row in measurements { integer(row.view); integer(row.epoch); integer(row.size.bitPattern) }
         }
-        integer(UInt32(4)); integer(view); integer(revision); integer(sequence)
-        for value in [offset, portMain, portCross, cross, paddingStart, paddingEnd] { integer(value.bitPattern) }
-        integer(focus ?? 0); integer(interaction ?? 0)
-        integer((velocity.isFinite ? velocity : 0).bitPattern); integer(limit.map { Swift.min($0, UInt32.max - 1) } ?? UInt32.max)
-        integer(UInt32(ancestorMoving ? 1 : 0) | UInt32(createOnly ? 2 : 0) | UInt32(noBuild ? 4 : 0) | UInt32(glimpse ? 16 : 0)
-            | UInt32(reading.scrolling ? 32 : 0) | UInt32(reading.gesture ? 64 : 0) | UInt32(reading.animating ? 128 : 0))
-        integer(UInt32(measurements.count))
-        for row in measurements { integer(row.view); integer(row.epoch); integer(row.size.bitPattern) }
         return bytes
     }
 }
@@ -247,6 +253,13 @@ struct CollectionSnapshot {
 package final class CollectionHost {
     final class Entry {
         var snapshot: CollectionSnapshot
+        var rowsAdded: UInt64 = 0
+        func added(since before: UInt64) -> Int {
+            rowsAdded >= before ? Int(clamping: rowsAdded - before) : 0
+        }
+        #if os(iOS) || os(tvOS)
+        let records = CollectionRecords()
+        #endif
         var cursor = CollectionCursor()
         var lastFacts: CollectionFacts?
         var lastSequence: UInt64?
@@ -516,6 +529,9 @@ package final class CollectionHost {
     func beginBatch(_ batch: Batch) {
         if batchDepth == 0 { for (view, entry) in entries { entry.batchInsets = portInsets(view); entry.batchStart = geometry(view)?.offset } }
         batchDepth += 1
+        #if os(iOS) || os(tvOS)
+        invalidateRecords(batch)
+        #endif
         for op in batch.ops where op.op == .collections {
             guard let items = op.payload["items"] as? [[String: Any]] else { continue }
             let snapshots = items.compactMap(CollectionSnapshot.init)
@@ -533,15 +549,29 @@ package final class CollectionHost {
                     if snapshot.revision >= entry.snapshot.revision {
                         // A rejected report still owes any measurement the newer snapshot
                         // has not acknowledged at that identity and epoch.
+                        #if os(iOS) || os(tvOS)
+                        entry.records.update(snapshot, entry: entry)
+                        #else
                         if snapshot.revision > entry.snapshot.revision, let sent = entry.lastFacts?.measurements {
                             let rows = Dictionary(snapshot.rows.map { ($0.view, $0) }, uniquingKeysWith: { a, _ in a })
                             if sent.contains(where: { m in
-                                if let row = rows[m.view] { return row.epoch == m.epoch && !Self.acknowledges(row, m) }
-                                return snapshot.fixed.contains { $0.view == m.view && $0.epoch == m.epoch && $0.size != m.size }
+                                rows[m.view].map { $0.epoch == m.epoch && !Self.acknowledges($0, m) } ?? false
                             }) {
                                 entry.owed = true
                             }
                         }
+                        #endif
+                        if snapshot.revision > entry.snapshot.revision, !snapshot.fixed.isEmpty,
+                           let sent = entry.lastFacts?.measurements,
+                           sent.contains(where: { m in
+                               snapshot.fixed.contains { $0.view == m.view && $0.epoch == m.epoch && $0.size != m.size }
+                           }) {
+                            entry.owed = true
+                        }
+                        #if os(macOS)
+                        let prior = Set(entry.snapshot.rows.map(\.view))
+                        for row in snapshot.rows where !prior.contains(row.view) { entry.rowsAdded += 1 }
+                        #endif
                         // A gesture counts against the request it began after: a new one starts with none.
                         // A request that ends or is replaced takes its animation with it, stopped where the
                         // port is (LLP 1070.000 §2.5); a newer one is admitted from the report that follows.
@@ -552,7 +582,13 @@ package final class CollectionHost {
                         } else if !snapshot.underWay { entry.gesture = false }
                         entry.snapshot = snapshot
                     }
-                } else { entries[snapshot.view] = Entry(snapshot) }
+                } else {
+                    let entry = Entry(snapshot)
+                    entries[snapshot.view] = entry
+                    #if os(iOS) || os(tvOS)
+                    entry.records.update(snapshot, entry: entry)
+                    #endif
+                }
                 dirty.insert(snapshot.view)
                 if entries[snapshot.view]!.snapshot.pending { fillPending.insert(snapshot.view) }
                 #if os(macOS)
@@ -565,6 +601,9 @@ package final class CollectionHost {
         if entries.isEmpty { stopTracking?(); stopTracking = nil; interaction = nil }
     }
     func endBatch() {
+        #if os(iOS) || os(tvOS)
+        if batchDepth == 1 { for entry in entries.values { entry.records.endBatch() } }
+        #endif
         // Frames/content have all landed before offsets change; platform methods
         // clamp against this coherent extent and suppress correction notifications.
         for (view, entry) in entries {
@@ -713,14 +752,14 @@ package final class CollectionHost {
             // What shows cannot wait for a slice in flight (T7): land it,
             // then report from the geometry that shows now.
             if filling?() == true { drain?() }
-            let before = bounded == nil ? [] : Set(entry.snapshot.rows.map(\.view)), started = ProcessInfo.processInfo.systemUptime
+            let before = entry.rowsAdded, started = ProcessInfo.processInfo.systemUptime
             rescuing.insert(view)
             flush()
             rescuing.remove(view)
             sliceLimits[view] = nil
             if bounded != nil {
                 glimpsing.remove(view)
-                glimpsed?(view, ProcessInfo.processInfo.systemUptime - started, (entries[view]?.snapshot.rows ?? []).filter { !before.contains($0.view) }.count)
+                glimpsed?(view, ProcessInfo.processInfo.systemUptime - started, entries[view]?.added(since: before) ?? 0)
             }
             if motion != nil { rescued?() }
         }
@@ -744,7 +783,7 @@ package final class CollectionHost {
         }
         fillPending.remove(view)
         guard let entry = entries[view], batchDepth == 0 else { return 0 }
-        let before = Set(entry.snapshot.rows.map(\.view))
+        let before = entry.rowsAdded
         budget.nextTurn()
         dirty.insert(view)
         sliceLimits[view] = limit
@@ -755,7 +794,7 @@ package final class CollectionHost {
         building = nil
         glimpsing.remove(view)
         sliceLimits[view] = nil
-        return (entries[view]?.snapshot.rows ?? []).filter { !before.contains($0.view) }.count
+        return entries[view]?.added(since: before) ?? 0
     }
     /// A slice built off main has been applied (LLP 1072 §5): what it left
     /// owed (rows past the window, an edge) is settled now, on main, by a
@@ -877,27 +916,30 @@ package final class CollectionHost {
             let interactionOwner = owningCollection(interaction)
             // Retire old owners before publishing replacement pins, even when
             // the two-pass budget carries the new owner to a later callback.
-            let retiring = dirty.filter { id in
-                guard let facts = entries[id]?.lastFacts else { return false }
-                return (facts.focus != nil && focusOwner != id) ||
-                    (facts.interaction != nil && interactionOwner != id)
+            var priority = 3
+            var following: UInt32?, wrapped: UInt32?
+            for id in dirty {
+                let facts = entries[id]?.lastFacts
+                let retiring = (facts?.focus != nil && focusOwner != id) ||
+                    (facts?.interaction != nil && interactionOwner != id)
+                let rank = retiring ? 0 : rescuing.contains(id) ? 1 : 2
+                if rank < priority { priority = rank; following = nil; wrapped = nil }
+                guard rank == priority else { continue }
+                if wrapped == nil || id < wrapped! { wrapped = id }
+                if id > lastVisited, following == nil || id < following! { following = id }
             }
-            // Retiring owners first (their pins go before new ones), then a
-            // rescue's list, then any.
-            let rescued = rescue ? dirty.intersection(rescuing) : []
-            let candidates = !retiring.isEmpty ? retiring : !rescued.isEmpty ? rescued : dirty
-            // Round-robin keeps one refining viewport from starving another.
-            let id = candidates.filter { $0 > lastVisited }.min() ?? candidates.min()!
+            let id = (following ?? wrapped)!
             lastVisited = id
             dirty.remove(id)
             let retireLimit = retireOwed.removeValue(forKey: id)
             // Cached geometry permits a hidden previous owner to release its
             // pin. Measurements below still come only from visible live rows.
             var reported = false
-            if let entry = entries[id], var facts = geometry(id) ?? entry.lastFacts {
+            let visibleFacts = geometry(id)
+            if let entry = entries[id], var facts = visibleFacts ?? entry.lastFacts {
                 facts.focus = focusOwner == id ? focus : nil
                 facts.interaction = interactionOwner == id ? interaction : nil
-                if !retiring.isEmpty {
+                if priority == 0 {
                     // Focus and interaction can swap owners together. Clearing
                     // one old pin must not publish the other new pin early.
                     if facts.focus != entry.lastFacts?.focus { facts.focus = nil }
@@ -905,12 +947,16 @@ package final class CollectionHost {
                     if (focusOwner == id && facts.focus != focus) ||
                        (interactionOwner == id && facts.interaction != interaction) { dirty.insert(id) }
                 }
+                #if os(iOS) || os(tvOS)
+                facts.measurements = visibleFacts == nil ? [] : measurements(id, cross: facts.cross)
+                #else
                 let horizontal = entry.snapshot.horizontal
                 facts.measurements = entry.snapshot.rows.compactMap { row in
                     guard let size = size(row.view, horizontal: horizontal), size.isFinite, size >= 0,
                           crossSize(row.view, horizontal: horizontal) == facts.cross else { return nil }
                     return CollectionMeasurement(view: row.view, epoch: row.epoch, size: size)
                 }
+                #endif
                 // The runner rejects a fixed list's report without both
                 // fixed sizes, and a sent report is taken as delivered. The
                 // kernel has no answer while main serves the owner, so the
@@ -924,7 +970,7 @@ package final class CollectionHost {
                     budget.end(reported: free < 0)
                     continue
                 }
-                facts.measurements += fixedSizes
+                if !fixedSizes.isEmpty { facts.measurements += fixedSizes }
                 // A slice builds its limit once; later passes and every
                 // report while moving or owed a continuation only measure
                 // and rescue what shows. At rest a report is unlimited.
@@ -948,8 +994,13 @@ package final class CollectionHost {
                     // runner's measured snapshot acknowledges a height;
                     // invalidated or unacknowledged sizes are sent again.
                     if let previous = entry.lastFacts, previous.cross == facts.cross {
+                        #if os(iOS) || os(tvOS)
+                        report.measurements = visibleFacts == nil ? [] : entry.records.eligibleUnacknowledged
+                        if !fixedSizes.isEmpty { report.measurements += fixedSizes }
+                        #else
                         let known = Dictionary(entry.snapshot.rows.map { ($0.view, $0) }, uniquingKeysWith: { a, _ in a })
                         report.measurements.removeAll { m in known[m.view].map { Self.acknowledges($0, m) } ?? false }
+                        #endif
                     }
                     entry.lastFacts = facts
                     entry.lastReading = reading

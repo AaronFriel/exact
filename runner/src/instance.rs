@@ -1238,6 +1238,8 @@ pub(crate) fn invalid_face(view: ViewId, text: String, then: &str) -> String {
 /// The root of the instance tree: the plan's top-level sites.
 #[derive(Debug)]
 pub struct Tree {
+    #[cfg(test)]
+    pub(crate) collection_walks: usize,
     has_collections: bool,
     children: Vec<Child>,
     last_roots: Vec<ViewId>,
@@ -1252,6 +1254,8 @@ impl Tree {
     pub fn create(u: &mut Update<'_>) -> Result<Tree, InstanceError> {
         let children = realize(u, None, None, &[])?;
         let mut tree = Tree {
+            #[cfg(test)]
+            collection_walks: 0,
             has_collections: u.env.plan.bindings.iter().any(|b| {
                 b.kind == BindingKind::Prop
                     && b.id == exact_kernel::PropId::Virtualized as u16

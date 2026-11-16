@@ -419,6 +419,23 @@ impl Batch {
         self.ops.is_empty()
     }
 
+    pub(crate) fn repeatable(&self) -> bool {
+        self.ops.is_empty()
+            && self.images.is_empty()
+            && self.seq.is_none()
+            && self.alerts.is_empty()
+            && self.journal.is_empty()
+            && self.announced.is_empty()
+            && self.store_status.is_none()
+            && !self.controls
+            && !self.layout_provisional
+            && !self.facts
+            && !self.stored
+            && self.wakelock.is_none()
+            && self.orientationlock.is_none()
+            && self.must_finish.is_none()
+    }
+
     /// Mounted collection metadata from the runner's common JSON array writer.
     /// An empty array clears previously published collections on the presenter.
     pub fn collections(&mut self, items: &str) {

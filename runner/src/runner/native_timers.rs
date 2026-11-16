@@ -202,3 +202,16 @@ pub(super) struct Timer {
     /// … and which virtual frame after it is next.
     pub(super) k: u32,
 }
+
+/// Equal when the timer would fall due at the same time: the reply its
+/// completion is bound to is where a result goes, not when.
+impl PartialEq for Timer {
+    fn eq(&self, other: &Self) -> bool {
+        self.next_ms == other.next_ms
+            && self.armed == other.armed
+            && self.generation == other.generation
+            && self.key == other.key
+            && self.base == other.base
+            && self.k == other.k
+    }
+}

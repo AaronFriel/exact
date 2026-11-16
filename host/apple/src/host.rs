@@ -305,6 +305,15 @@ pub struct Host<D: DataSource> {
     /// The session's wake (`listen`), which a pending activation leaves with the data source.
     preload_wake: exact_runner::PreloadWake,
     doc_watch: Option<crate::doc_watch::DocWatch>,
+    /// Deadline at the last successful finish with no pending resize notifications;
+    /// only a receipt-free collection report can reuse its settled passes.
+    finished_deadline: Option<Option<f64>>,
+    quiet_collection: Option<([u64; 8], String)>,
+    resize_pending: bool,
+    #[cfg(test)]
+    finish_passes: usize,
+    #[cfg(test)]
+    batch_writes: usize,
     /// The update store's last line this host journaled, so a sync after a check writes it once.
     update_line: Option<String>,
     delivery: Option<&'static crate::delivery::Hooks>,
@@ -652,6 +661,13 @@ impl<D: DataSource> Host<D> {
             store_retry_names: Vec::new(),
             preload_wake: Default::default(),
             doc_watch: None,
+            finished_deadline: None,
+            quiet_collection: None,
+            resize_pending: false,
+            #[cfg(test)]
+            finish_passes: 0,
+            #[cfg(test)]
+            batch_writes: 0,
             secrets,
             pending_store_writes: Vec::new(),
             stored: false,
@@ -947,7 +963,7 @@ impl<D: DataSource> Host<D> {
         match self.runner.collection_feedback_bytes(bytes) {
             Ok(mut result) => {
                 if result.receipts.is_empty() && result.error.is_none() {
-                    return self.finish(Batch::new(), None);
+                    return self.finish_collection();
                 }
                 self.now_ms = self.now_ms.max(now_ms);
                 for timed in &mut result.receipts {

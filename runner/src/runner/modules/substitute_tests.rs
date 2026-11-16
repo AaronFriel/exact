@@ -112,6 +112,86 @@ fn parses() -> usize {
 }
 
 #[test]
+fn unchanged_poll_inputs_do_no_discovery_and_every_changed_input_refreshes_it() {
+    let mut b = PlanBuilder::new(exact_kernel::SCHEMA_DIGEST, 1);
+    let string = b.primitive(TypeKind::String);
+    let source = b.source("sample", &[], string);
+    b.module(
+        source,
+        ("test.poll", "@fixture/test.poll"),
+        "sample",
+        false,
+        true,
+        "never",
+        "",
+        r#"{"counts":{},"poll":{"option":"interval","default":250},"default":"x"}"#,
+    );
+    b.node(NodeType::View as u8, None, None, 0, &[], &[], None);
+    let mut r = boot(b.finish().unwrap());
+    r.set_live_clock(Some(Box::new(|| 0.)));
+    let scans = || super::POLL_SCANS.with(|n| n.get());
+    let before = scans();
+    for _ in 0..100 {
+        assert_eq!(r.collection_timer_due_ms(), None);
+    }
+    assert_eq!(scans(), before, "no source has armed a poll");
+    let row = r.plan.modules[0].clone();
+    let key = r.key(&row);
+    r.note_poll(&row);
+    assert_eq!(r.collection_timer_due_ms(), Some(250.));
+    let before = scans();
+    for _ in 0..100 {
+        assert_eq!(r.collection_timer_due_ms(), Some(250.));
+    }
+    assert_eq!(scans(), before, "an unchanged poll does no discovery");
+
+    for input in 0..7 {
+        match input {
+            0 => {
+                r.extensions.polls.insert(key.clone(), 10.);
+            }
+            1 => {
+                r.extensions
+                    .readers
+                    .entry(key.clone())
+                    .or_default()
+                    .insert(0, r#"{"interval":500}"#.into());
+            }
+            2 => {
+                r.extensions.failed.insert(key.clone());
+            }
+            3 => {
+                r.extensions
+                    .within
+                    .entry(key.clone())
+                    .or_default()
+                    .insert(0, false);
+            }
+            4 => {
+                r.extensions.bound.insert("test.poll".into());
+            }
+            5 => {
+                r.extensions.agent.insert("test.poll".into());
+            }
+            6 => r.set_module_target("target-changed"),
+            _ => unreachable!(),
+        }
+        let before = scans();
+        r.collection_timer_due_ms();
+        assert_eq!(scans(), before + 1, "input {input}");
+    }
+    r.extensions.failed.clear();
+    r.extensions.within.clear();
+    assert_eq!(r.collection_timer_due_ms(), Some(510.));
+    // A stale-source deadline remains independently live when no poll is armed.
+    r.extensions.polls.clear();
+    r.extensions
+        .stale
+        .insert(key, r.wall_time().epoch_at_zero + 100.);
+    assert_eq!(r.collection_timer_due_ms(), Some(100.));
+}
+
+#[test]
 fn a_committed_scroll_dispatch_parses_no_substitute_once_read() {
     // The count is the thread's: from zero here, whatever ran on it before.
     SUBSTITUTE_PARSES.with(|n| n.set(0));

@@ -12,6 +12,7 @@ mod inputs;
 /// host's live clock when one owns it (D1; none is a seek clock).
 #[derive(Default)]
 pub(super) struct Clock {
+    pub(super) deadline: std::cell::RefCell<super::gates::Deadline>,
     /// The host presents frames: frame tasks fire only at `frame` (LLP 1073 D4)
     pub(super) presenting: bool,
     pub(super) native_timers: bool,

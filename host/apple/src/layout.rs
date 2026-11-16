@@ -44,13 +44,27 @@ impl<D: DataSource> Host<D> {
         out
     }
 
+    pub(super) fn write(&mut self, batch: Batch, error: Option<&str>) -> String {
+        self.write_batch(batch, error, false)
+    }
+
     /// Writes `batch` for the presenter; every batch with ops is written
     /// here. From a failed layout until one settles, whatever turn made the
     /// batch, its layout geometry is taken out, including what an earlier
     /// pass staged in it, and the settled layout sends it again. The failed
     /// layout's own batch also loses its motion samples; later batches keep
     /// theirs, as nothing would send them again.
-    pub(super) fn write(&mut self, mut batch: Batch, error: Option<&str>) -> String {
+    pub(super) fn write_batch(
+        &mut self,
+        mut batch: Batch,
+        error: Option<&str>,
+        finished: bool,
+    ) -> String {
+        self.quiet_collection = None;
+        #[cfg(test)]
+        {
+            self.batch_writes += 1;
+        }
         if let Some(preloads) = &self.preloads {
             if self.preload_accepted && !self.preload_content.is_empty() {
                 preloads.committed(std::mem::take(&mut self.preload_content), self.runner.seq());
@@ -81,12 +95,25 @@ impl<D: DataSource> Host<D> {
         self.runner.report_views();
         // Every batch's exit, so an owed check is woken by whatever call comes at its deadline.
         self.request_route_overflow();
-        batch.finish(
-            self.route_overflow_due(self.runner.timer_due_ms()),
+        let repeatable = finished && error.is_none() && batch.repeatable();
+        let deadline = self.route_overflow_due(if repeatable {
+            self.runner.collection_timer_due_ms()
+        } else {
+            self.runner.timer_due_ms()
+        });
+        self.finished_deadline =
+            (finished && error.is_none() && !self.resize_pending).then_some(deadline);
+        let key = repeatable.then(|| self.quiet_collection_key()).flatten();
+        let out = batch.finish(
+            deadline,
             !self.engine.quiescent(),
             self.runner.now_ms(),
             error,
-        )
+        );
+        if let Some(key) = key {
+            self.quiet_collection = Some((key, out.clone()));
+        }
+        out
     }
 
     /// An empty batch, which has no geometry to hold: a refusal's.

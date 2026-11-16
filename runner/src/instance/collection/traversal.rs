@@ -378,7 +378,7 @@ impl Tree {
         feedback
             .validate()
             .map_err(|_| invalid("invalid collection feedback"))?;
-        let Some(target) = find_collection(&self.children, feedback.view) else {
+        let Some(target) = find_collection_mut(&mut self.children, feedback.view) else {
             self.last_work = u.work;
             return Ok((false, None));
         };
@@ -390,11 +390,30 @@ impl Tree {
             feedback.focus_view.is_some(),
             feedback.interaction_view.is_some(),
         ];
+        if !categories.into_iter().any(|transfer| transfer) {
+            if let Some(edge) = target.feedback_within(u, &feedback, &by_view, fill)? {
+                self.last_work = u.work;
+                return Ok((false, edge));
+            }
+        }
         let released = if categories.into_iter().any(|transfer| transfer) {
             release_other_pins(&mut self.children, u, &[], feedback.view, categories)?
         } else {
             false
         };
+        if categories.into_iter().any(|transfer| transfer) {
+            if let Some(target) = find_collection_mut(&mut self.children, feedback.view) {
+                if let Some(edge) = target.feedback_within(u, &feedback, &by_view, fill)? {
+                    u.detach_before_destroy();
+                    self.last_work = u.work;
+                    return Ok((released, edge));
+                }
+            }
+        }
+        #[cfg(test)]
+        {
+            self.collection_walks += 1;
+        }
         let (changed, edge) = feedback_walk(&mut self.children, u, &[], &feedback, &by_view, fill)?
             .unwrap_or((false, None));
         u.detach_before_destroy();
