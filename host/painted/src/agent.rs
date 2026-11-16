@@ -22,7 +22,7 @@ use std::io::Write;
 
 /// The host this agent runs on, as a refusal names it: the Windows host and
 /// the Android reader run this code too.
-const HOST_NAME: &str = if cfg!(windows) {
+pub(crate) const HOST_NAME: &str = if cfg!(windows) {
     "Windows"
 } else if cfg!(target_os = "android") {
     "Android"

@@ -50,12 +50,12 @@ component App
   `transition="scale 150ms ease"`; paint and hits grow, layout stays.
 - **Keyframes:** literals or app `fn` on constants.
 - **Exit:** an `if` arm or `for` row leaves layout at once, inert, and must end; siblings use
-  layout transitions. Not in a popped screen or on Linux.
+  layout transitions. Not in a popped screen or on Linux, Windows or Android.
 - **Routes:** a route takes `::view-transition-new` and `::view-transition-old`, its
   entrance and exit: `animation=` alone, keyframes of opacity, translate, scale, rotate.
   `none` cuts; unset is the platform's. Not on a sheet or zoom route.
 - **Layout:** moves/resizes the surface; children jump, unscaled.
-  `sharedElement=` flies on iOS, macOS, Android and web, not Linux.
+  `sharedElement=` flies, not on Linux or Windows.
   Android: in-page only; no native dialogs or zooms.
 - **Expand/collapse:** as above; an `if` row appears full size, siblings slide over.
 - **JS target:** bound exit/layout values must be binding literals.
