@@ -13,6 +13,7 @@
 // - `exactSurface` (LLP 1047 D3; runner/src/surface_record.rs): a GPU
 //   surface's published record, decoded against each reader's shape.
 import { data, Resources, commit, R, Refusal, Kept, say, Sounds } from "./rt.js";
+import * as rt from "./rt.js";
 import { environment, keyboardInset, onKeyboard, displayMode, preferences, UPDATES, updateCode, onPreferences, pageReporter, fold, foldEnv, onFold, preferFold } from "./navigation.js";
 
 const again = (source, why) => () => commit(() => { for (const r of Resources) if (r.source === source) R(r); }, why);
@@ -71,7 +72,7 @@ function shareReporter() {
   if (!facts) return;
   (globalThis.exact ??= {}).page = { prefer: p => { facts.prefer(p); pageChanged(); if (p?.["gpu-tier"]) viewportChanged(); return facts.read(); }, read: () => facts.read() };
 }
-const pageFields = f => ({ visibilityState: f["visibility-state"], frozen: f.frozen, onLine: f.online, canShare: f["can-share"], canShareFiles: f["can-share-files"], canSharePictures: f["can-share-pictures"], canOpenFiles: f["can-open-files"], hasFocus: f["has-focus"], navigationType: f["navigation-type"], persisted: f.persisted, restores: f.restores, iframePartition: f["iframe-partition"] === true, name: windowName() });
+const pageFields = f => ({ visibilityState: f["visibility-state"], frozen: f.frozen, onLine: f.online, canShare: f["can-share"], canShareFiles: f["can-share-files"], canSharePictures: f["can-share-pictures"], canOpenFiles: f["can-open-files"], hasFocus: f["has-focus"], navigationType: f["navigation-type"], persisted: f.persisted, restores: f.restores, iframePartition: f["iframe-partition"] === true, name: windowName(), presented: f.presented === true });
 // `window.name`, an empty one set to `main` the first time it is read, so the tab the person opened is `main` and one a
 // link's `target` opened keeps its name (LLP 1030.004 D2). A render has no window: `main`.
 const windowName = () => typeof window === "object" && typeof window.name === "string" ? (window.name ||= "main") : "main";
@@ -80,11 +81,19 @@ export function page(readers) {
   const facts = reporter();
   (data.reserved ??= {}).exactPage = (_, a, name) => {
     // A render has no page: the bake's answer (runner/src/page.rs `Page::default`).
-    const f = facts ? facts.read() : { "visibility-state": "visible", online: true, "can-share": false, "can-share-files": false, "can-share-pictures": false, "can-open-files": false, "has-focus": true, "navigation-type": "", frozen: false, persisted: false, restores: 0, "iframe-partition": false };
+    const f = facts ? facts.read() : { "visibility-state": "visible", online: true, "can-share": false, "can-share-files": false, "can-share-pictures": false, "can-open-files": false, "has-focus": true, "navigation-type": "", frozen: false, persisted: false, restores: 0, "iframe-partition": false, presented: false };
     return byName(readers, name, pageFields(f));
   };
   if (!facts) return;
   watchPage();
+  // `presented` (LLP 1069.000 D2 r7): true from the first animation frame after the first commit, at which the
+  // browser presents its picture; under the agent from the first commit (the reporter's).
+  let asked = false;
+  if (!facts.agent && typeof requestAnimationFrame === "function") rt.After?.push(() => {
+    if (asked) return;
+    asked = true;
+    requestAnimationFrame(() => { if (facts.presentedNow()) pageChanged(); });
+  });
 }
 
 // Physical output and a sequence need the freeze edge even if the plan reads no page fields.

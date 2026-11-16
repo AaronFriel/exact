@@ -631,6 +631,10 @@ test('page facts: the platform off the agent, the drive\'s values under it (LLP 
   expect(() => agent.prefer({ online: 'maybe', 'can-share': false })).toThrow('prefer: online');
   expect(agent.read()['can-share']).toBe(true); expect(agent.read()['display-scale']).toBe(2); expect(real.displayScale()).toBe(1); agent.prefer({ 'display-scale': 2 }); expect(() => agent.prefer({ 'display-scale': 3 })).toThrow("prefer: display-scale: 3: the page's is 2");
   agent.onChange(() => { throw new Error('agent listened to the platform'); });
+  // `presented` (LLP 1069.000 D2 r7, D6): the page's false until its first picture, then true; the agent's true until
+  // `prefer presented` holds it; neither is a bit.
+  platform.getComputedStyle = () => ({ fontSize: '16px' }); expect(real.read().presented).toBe(false); expect(real.presentedNow()).toBe(true); expect(real.presentedNow()).toBe(false); expect(real.read().presented).toBe(true);
+  expect(agent.read().presented).toBe(true); expect(agent.presentedNow()).toBe(false); agent.prefer({ presented: 'false' }); expect(agent.read().presented).toBe(false); agent.prefer({ presented: true }); expect(agent.read().presented).toBe(true);
 });
 
 test('the app\'s root font size: a rule over the root, read past by the host (LLP 1069.000 D3)', () => { const rules = new Map(), said = [], say = line => said.push(line), document = { documentElement: {}, head: { append: el => rules.set(el.id, el) }, getElementById: id => rules.get(id) ?? null, createElement: () => ({ remove() { rules.delete(this.id); } }) }; const platform = { document, getComputedStyle: () => { const r = [...rules.values()].find(r => !r.disabled); return { fontSize: r ? r.textContent.match(/font-size:([\d.]+)px/)[1] + 'px' : '18px' }; } }, host = pageReporter(false, platform); // the browser's own 18; an enabled rule's `!important` wins

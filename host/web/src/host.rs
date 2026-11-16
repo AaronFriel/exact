@@ -646,7 +646,61 @@ impl<D: DataSource> Host<D> {
         let freeze = page.frozen && !self.runner.page().frozen;
         let answer = self.runner.set_page(page);
         let freeze = freeze && self.runner.page().frozen;
-        self.told_in(Batch::new().freeze(freeze), answer, "page")
+        let mut batch = Batch::new().freeze(freeze);
+        // A hidden or frozen page presents nothing: what waits for the
+        // browser's ready time starts at its commit (LLP 1003.001 D9).
+        let now = self.runner.page();
+        self.springs.set_presentable(!now.hidden && !now.frozen);
+        self.emit_springs(&mut batch, &[], self.now_ms / 1000.0);
+        self.told_in(batch, answer, "page")
+    }
+
+    /// The present of the page's first picture since this runner booted
+    /// (LLP 1069.000 D2 r7): `exactPage().presented` is true from here.
+    pub fn page_presented(&mut self) -> String {
+        let answer = self.runner.page_presented();
+        self.told(answer, "presented")
+    }
+
+    /// `prefer presented` (LLP 1069.000 D6): the fact held at a value, or
+    /// given back to the page.
+    pub fn prefer_presented(&mut self, preferred: Option<bool>) -> String {
+        let answer = self.runner.prefer_presented(preferred);
+        self.told(answer, "presented")
+    }
+
+    /// The browser made a held spring's animation ready at `at_ms` (LLP
+    /// 1003.001 D9, "The web"): the engine's curve starts there, and the
+    /// batch re-emits it pinned at that instant. `None` when it was not held.
+    pub fn present_curve(
+        &mut self,
+        view: ViewId,
+        property: exact_motion::Property,
+        at_ms: f64,
+        now_ms: f64,
+    ) -> Option<String> {
+        let kernel = self.runner.kernel();
+        if !self
+            .springs
+            .present_curve(kernel, view, property, at_ms / 1000.0)
+        {
+            return None;
+        }
+        Some(self.hold_batch(now_ms.max(self.now_ms)))
+    }
+
+    /// What waited [`exact_motion::HOLD_DEADLINE`] by `now_ms` for a ready
+    /// time starts at its commit (LLP 1003.001 D9, "The bound").
+    pub fn release_overdue(&mut self, now_ms: f64) -> String {
+        let now_ms = now_ms.max(self.now_ms);
+        self.springs.release_overdue(now_ms / 1000.0);
+        self.hold_batch(now_ms)
+    }
+
+    /// The first-frame rule on (the page's clock owns time) or off (the
+    /// agent's), for this host's engine (LLP 1003.001 D7, D9).
+    pub fn set_start_on_frame(&mut self, on: bool) {
+        self.springs.set_start_on_frame(on);
     }
 
     /// The root font size `rem` follows (LLP 1069.000 D3): a relayout in one
@@ -1091,6 +1145,24 @@ impl<D: DataSource> Host<D> {
                         property.name(),
                         (delay * 1000.0, duration * 1000.0),
                         &pairs,
+                    );
+                }
+                Lowered::Held {
+                    view,
+                    property,
+                    delay,
+                    duration,
+                    values,
+                    due,
+                } => {
+                    let pairs: Vec<[f64; 4]> =
+                        values.iter().map(|v| [v.x, v.y, v.z, v.w]).collect();
+                    batch.held_spring(
+                        view,
+                        property.name(),
+                        (delay * 1000.0, duration * 1000.0),
+                        &pairs,
+                        due * 1000.0,
                     );
                 }
                 Lowered::Cancel { view, property } => {

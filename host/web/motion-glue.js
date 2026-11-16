@@ -34,7 +34,7 @@ export function motionBytes(facts) {
     for(let i=0;i<6;i++)d.setFloat64(64+i*8,facts.values[i],true);
     d.setFloat64(112,now,true);return bytes;
   }
-  const operations=['begin','move','release','cancel','live','action','height-owner','clear-height-owner','height-begin','height-action','release-measured','gesture','track','pan-sample','pan-velocity'];
+  const operations=['begin','move','release','cancel','live','action','height-owner','clear-height-owner','height-begin','height-action','release-measured','gesture','track','pan-sample','pan-velocity','present','release-overdue'];
   const properties=['translate','scale','rotate','opacity','height'];
   const code=operations.indexOf(op), prop=properties.indexOf(property);
   if(code<0||prop<0) throw Error('invalid motion operation');
@@ -132,7 +132,7 @@ export function motionController({views,now,generation,request,applyBatch,inert,
   // `transition` that keeps a held property from animating, and each held property (`scale` as `--exact-scale` on a
   // pressable, `cssProperty`)
   const overwritten=['z-index','position','transition','translate','scale','--exact-scale','--exact-translate-x','--exact-translate-y','--exact-translate-z','rotate','opacity','height'];
-  const animations=new Map(), held=new Map(), authored=new Map(), drags=new Map();
+  const animations=new Map(), held=new Map(), authored=new Map(), drags=new Map(), waitingShape=new WeakMap();
   const raised=new Set();
   const active=new Map(), heightBindings=new Map(); let reconciling=false;
   const transformBindings=new Map(), geometryDirty=new Set();
@@ -747,7 +747,21 @@ export function motionController({views,now,generation,request,applyBatch,inert,
       el.style.cssText=text; overlay(id);
     },
     animate(op) {
-      const {id,property}=op, k=key(id,property);
+      const {id,property}=op, k=key(id,property), prior=animations.get(k);
+      // The started op for a held spring pins the browser's own animation, which keeps running. Its duration is a
+      // difference of the engine's times, so it can differ from the held op's in the last bits.
+      const near=(a,b)=>Math.abs(a-b)<=1e-6*Math.max(1,Math.abs(a),Math.abs(b));
+      const same=w=>w&&near(w.duration,op.duration)&&w.values.length===op.values.length
+        &&w.values.every((v,i)=>[v].flat().every((x,j)=>near(x,[op.values[i]].flat()[j])));
+      if(!op.held&&Number.isFinite(op.at)&&prior&&same(waitingShape.get(prior))) {
+        waitingShape.delete(prior);
+        const record=followers.get(id);
+        for(const a of [prior,...(record?.driver===prior?record.animations.map(f=>f.animation):[])]) {
+          a.effect.updateTiming({delay:op.delay});
+          a.startTime=performance.now()-now()+op.at;
+        }
+        return;
+      }
       cancelProperty(id,property);
       if(!op.values.length || held.has(k)) return;
       const el=views.get(id); if(!el) return;
@@ -760,6 +774,15 @@ export function motionController({views,now,generation,request,applyBatch,inert,
       // instead.
       if(Number.isFinite(op.at))animation.startTime=performance.now()-now()+op.at;
       animations.set(k,animation);
+      // A spring a commit began waits for the frame that shows it (LLP 1003.001 D9): the browser starts it at its
+      // ready time, which the engine takes as the curve's start, and the started op that follows pins it there. If
+      // none came by `due`, the engine starts it at its commit and says so the same way.
+      if(op.held) {
+        waitingShape.set(animation,{duration:op.duration,values:op.values});
+        const told=t=>{if(animations.get(k)!==animation)return;const r=request({op:'present',view:id,property,x:t,now:now()});if(r.batch)applyBatch(r.batch);};
+        animation.ready.then(a=>{if(a.startTime!==null)told(a.startTime-(performance.now()-now()));},()=>{});
+        if(Number.isFinite(op.due))setTimeout(()=>{if(animations.get(k)!==animation)return;const r=request({op:'release-overdue',view:id,property,now:now()});if(r.batch)applyBatch(r.batch);},Math.max(0,op.due-now())+1);
+      }
       animation.finished.then(()=>{if(animations.get(k)===animation) animations.delete(k);},()=>{});
       if(property==='translate'&&el.style.getPropertyValue('--exact-drag-timeline'))follow(id,el,op,animation);
     },

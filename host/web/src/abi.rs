@@ -922,7 +922,10 @@ impl<D: DataSource> Bridge<D> {
                     None => Ok("{\"accepted\":false}".into()),
                 };
             }
+            // A held spring's ready time (x), and the deadline's release (LLP 1003.001 D9).
             let batch = match op {
+                15 => Ok(Property::ALL.get(property as usize).and_then(|p| host.present_curve(view, *p, value.x, now))),
+                16 => Ok(Some(host.release_overdue(now))),
                 1 => host.update_hold(serial, value, now),
                 2 => host.end_hold(serial, HoldEnd::Release { velocity: value }, now),
                 3 => host.end_hold(serial, HoldEnd::Cancel, now),

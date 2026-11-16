@@ -20,8 +20,20 @@ export async function engine({ clock, wall, views, viewId, hooks, say, inflight 
   // The page's clock: the driver's under the agent, else the runtime's wall.
   const now = () => clock.agent ? clock.now : Math.max(clock.now, wall());
   const PROPS = ['translate', 'scale', 'rotate', 'opacity', 'height'];
+  // A spring a commit begins waits for the browser's ready time, on the
+  // page's clock (LLP 1003.001 D9); none waits while the page is hidden or
+  // frozen, when nothing is presented.
+  if (!clock.agent) {
+    w.m_start_on_frame(1);
+    let frozen = false;
+    const presentable = () => { w.m_presentable(document.visibilityState !== 'hidden' && !frozen ? 1 : 0); applyBatch(ops(lower())); };
+    document.addEventListener('visibilitychange', presentable);
+    for (const name of ['freeze', 'resume']) document.addEventListener(name, () => { frozen = name === 'freeze'; presentable(); });
+    if (document.visibilityState === 'hidden') w.m_presentable(0);
+  }
   // The engine's lowered ops (Motion::lower's numbers) as the wasm host's
-  // batch writes them: a spring's frames (`animate` with `at`, ms), or a cancel.
+  // batch writes them: a spring's frames (`animate` with `at`, ms), a held
+  // spring's (`held`, with its release's `due`, ms), or a cancel.
   const lower = () => {
     const n = w.m_lower(now() / 1000), f = new Float64Array(w.memory.buffer, w.m_out(), n), out = [];
     for (let i = 0; i < n;) {
@@ -30,7 +42,7 @@ export async function engine({ clock, wall, views, viewId, hooks, say, inflight 
       const k = f[i + 6], values = [];
       // Four numbers per frame: translation lengths/percentages or rotation angle/axis.
       for (let j = 0, at = i + 7; j < k; j++, at += 4) values.push(p === 'translate' ? (f[at + 2] || f[at + 3] ? [f[at], f[at + 1], f[at + 2], f[at + 3]] : [f[at], f[at + 1]]) : p === 'rotate' ? [f[at], f[at + 1], f[at + 2], f[at + 3]] : f[at]);
-      out.push({ op: 'animate', id, property: p, at: f[i + 3] * 1000, delay: f[i + 4] * 1000, duration: f[i + 5] * 1000, values });
+      out.push(kind === 3 ? { op: 'animate', id, property: p, held: true, due: f[i + 3] * 1000, delay: f[i + 4] * 1000, duration: f[i + 5] * 1000, values } : { op: 'animate', id, property: p, at: f[i + 3] * 1000, delay: f[i + 4] * 1000, duration: f[i + 5] * 1000, values });
       i += 7 + 4 * k;
     }
     return out;
@@ -126,6 +138,9 @@ export async function engine({ clock, wall, views, viewId, hooks, say, inflight 
       case 'height-owner': case 'clear-height-owner': return { accepted: false };
       case 'transform-geometry': case 'transform-invalidate': case 'transform-begin': case 'transform-move': case 'transform-action': return T.request(facts);
       case 'reorder-begin': case 'reorder-preview': case 'reorder-terminal': case 'reorder-cancel': case 'reorder-rebase': case 'reorder-finish': return A.request(facts);
+      // A held spring's ready time (`x`, ms) and the deadline's release (LLP 1003.001 D9).
+      case 'present': return w.m_present(facts.view, PROPS.indexOf(facts.property), facts.x / 1000) ? { accepted: true, batch: ops(lower()) } : { accepted: false };
+      case 'release-overdue': w.m_release_overdue(facts.now / 1000); return { accepted: true, batch: ops(lower()) };
       case 'pan-sample': w.m_pan_sample(facts.view, facts.token ? 1 : 0, facts.x, facts.y, facts.now); return { accepted: true };
       case 'pan-velocity': w.m_pan_release(facts.view, facts.now); return { vx: w.m_scratch(0), vy: w.m_scratch(1) };
       default: return { error: `${facts.op} is not in the JS target's motion` };

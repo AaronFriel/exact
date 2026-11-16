@@ -240,3 +240,29 @@ pub extern "C" fn m_pan_release(view: u32, ms: f64) {
     let v = state().pan_release(view, ms);
     unsafe { SCRATCH[..2].copy_from_slice(&[v.x, v.y]) };
 }
+
+/// The first-frame rule: 1 on (the page's clock), 0 off (the agent's).
+#[no_mangle]
+pub extern "C" fn m_start_on_frame(on: u32) {
+    let _ = state().start_on_frame(on != 0);
+}
+
+/// 1 while the browser will present anything: not hidden, not frozen.
+#[no_mangle]
+pub extern "C" fn m_presentable(on: u32) {
+    let _ = state().presentable(on != 0);
+}
+
+/// A held spring's animation became ready at `at` seconds: 1 when the
+/// engine held it and starts it there.
+#[no_mangle]
+pub extern "C" fn m_present(node: f64, p: u32, at: f64) -> u32 {
+    let Some(p) = property(p) else { return 0 };
+    state().present(node as u64, p, at).unwrap_or(false) as u32
+}
+
+/// Release what waited past the deadline by `now` seconds for a ready time.
+#[no_mangle]
+pub extern "C" fn m_release_overdue(now: f64) {
+    let _ = state().release_overdue(now);
+}

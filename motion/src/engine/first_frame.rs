@@ -113,6 +113,31 @@ impl Engine {
         self.start_pending(before, None)
     }
 
+    /// Release, at its own begin, everything held but running springs (D9,
+    /// "The web"): the browser presents only the springs a host lowers to
+    /// Web Animations; the CSS transitions and animations it runs itself it
+    /// starts at its own ready time, so the engine's copies start at their
+    /// commit. Returns the nodes whose plays started.
+    pub fn release_held_but_springs(&mut self) -> Result<Vec<u64>, EngineError> {
+        let springs: Vec<(u64, Property)> = (self.pending.iter().copied())
+            .filter(|key| {
+                self.slots
+                    .get(key)
+                    .and_then(|s| s.running())
+                    .is_some_and(|r| {
+                        r.pending.is_some()
+                            && matches!(r.curve, crate::transition::Curve::Spring { .. })
+                    })
+            })
+            .collect();
+        for key in &springs {
+            self.pending.remove(key);
+        }
+        let started = self.release_held(f64::INFINITY);
+        self.pending.extend(springs);
+        started
+    }
+
     /// The earliest begin of anything held, or `None` when nothing is.
     pub fn held_since(&self) -> Option<f64> {
         let curves = self

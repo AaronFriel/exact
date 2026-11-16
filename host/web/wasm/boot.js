@@ -371,6 +371,16 @@ async function bootNow(bytes, assets = host.devAssets, current = () => true, mod
   if (host.wasm.exact_set_page) {
     applyBatch(JSON.parse(readOut(host.wasm.exact_set_page(pageFacts.bits()))));
   }
+  // @ref LLP 1069.000 D2 r7 — the present of this runner's first picture: the first animation frame after its first
+  // commit (under the agent, each frame is presented at its commit, and the runner says so at its boot)
+  if (host.wasm.exact_page_presented && !agentMode) {
+    const incarnation = host.incarnation;
+    requestAnimationFrame(() => {
+      if (host.incarnation === incarnation) {
+        applyBatch(JSON.parse(readOut(host.wasm.exact_page_presented())));
+      }
+    });
+  }
   appRootFontSize("medium");
   if (host.wasm.exact_set_root_font_size) {
     applyBatch(JSON.parse(readOut(host.wasm.exact_set_root_font_size(pageFacts.rootFontSize()))));

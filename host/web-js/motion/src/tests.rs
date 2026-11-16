@@ -313,3 +313,40 @@ fn enabling_a_spring_releases_nonzero_velocity_at_an_unchanged_endpoint() {
         );
     }
 }
+
+/// LLP 1003.001 D9, "The web": on the page's clock a commit's spring is
+/// lowered held (kind 3, its deadline in place of `at`) once, an easing the
+/// browser runs is not held, and the ready time starts and pins it.
+#[test]
+fn a_held_spring_waits_for_its_ready_time() {
+    let mut m = Motion::new();
+    m.start_on_frame(true).unwrap();
+    assert!(m.transitions(7, "translate -exact-spring(180, 12, 1), opacity 300ms"));
+    let at = |m: &mut Motion, x: f64, opacity: f64, now: f64| {
+        let values = [x, 0.0, 0.0, 0.0, 1.0, 0.0, opacity, 0., 0., 0.];
+        m.observe(7, values, None, now).unwrap();
+    };
+    at(&mut m, 0.0, 1.0, 0.0);
+    lowered(&mut m, 0.0);
+    at(&mut m, 100.0, 0.5, 0.1);
+    let ops = lowered(&mut m, 0.1);
+    assert_eq!(ops[..4], [3.0, 7.0, 0.0, 2.1], "held, released by 2.1 s");
+    assert_eq!(
+        m.engine.held_since(),
+        Some(0.1),
+        "the opacity easing is not held"
+    );
+    assert!(lowered(&mut m, 0.12).is_empty(), "lowered once while held");
+    assert!(m.present(7, Property::Translate, 0.14).unwrap());
+    let ops = lowered(&mut m, 0.15);
+    assert_eq!(
+        ops[..5],
+        [1.0, 7.0, 0.0, 0.14, 0.0],
+        "pinned at the ready time"
+    );
+    assert!(!m.present(7, Property::Translate, 0.2).unwrap());
+    // Hidden: the next spring starts at its commit.
+    m.presentable(false).unwrap();
+    at(&mut m, 0.0, 1.0, 0.3);
+    assert_eq!(lowered(&mut m, 0.3)[..4], [1.0, 7.0, 0.0, 0.3]);
+}

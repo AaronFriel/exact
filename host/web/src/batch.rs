@@ -443,6 +443,27 @@ impl Batch {
         );
     }
 
+    /// A held spring's frames (LLP 1003.001 D9, "The web"): as
+    /// [`Batch::animate`] writes them, with `"held":true` and no `at`, so the
+    /// page lets the browser start the animation at its ready time and
+    /// reports it, and `"due":ms`, when the engine releases it at its commit
+    /// if no ready time came.
+    pub fn held_spring(
+        &mut self,
+        id: u32,
+        property: &str,
+        timing: (f64, f64),
+        values: &[[f64; 4]],
+        due_ms: f64,
+    ) {
+        let pair = property == "translate";
+        self.animate_op(None, id, property, timing, values, pair);
+        if let Some(op) = self.ops.last_mut() {
+            op.pop();
+            push_text!(op, ",\"held\":true,\"due\":{}}}", Shortest(due_ms));
+        }
+    }
+
     fn animate_op(
         &mut self,
         at_ms: Option<f64>,
