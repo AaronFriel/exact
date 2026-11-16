@@ -19,6 +19,7 @@ mod auth;
 mod baked_release;
 mod batch2_exports;
 mod blocks;
+mod border_unstyled;
 mod borders;
 mod branch;
 mod browser_automation;

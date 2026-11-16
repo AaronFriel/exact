@@ -102,7 +102,7 @@ This list holds what the [agent guide](contract-for-agents.md)'s rules don't mak
   `flex-basis` of 0 is never smaller than the border), so a calendar's today with
   `border-width=(isToday ? 2 : 0)` is wider and taller than its neighbours and
   the days after it sit off the columns above. Fix: give every cell the border and vary
-  its colour, `border-width=2 border-color=(isToday ? "-exact-label" : "transparent")`.
+  its colour, `border="2px solid" border-color=(isToday ? "-exact-label" : "transparent")`.
   (Bake-off round 28, mood journal: 50.9 points against 47.4 on iOS; Chrome alike, with
   `border-box` too.)
 
@@ -769,6 +769,7 @@ What a port writes from habit, what the compiler says, and what to write (the eu
 | `transform="rotate(-2deg)"` | `lower-attr-tag` | `rotate="-2deg"`, `translate="0px 25px"`, `scale=0.8` |
 | Expo's `NativeTabs.Trigger role="search"`, SwiftUI's `Tab(role: .search)` | `lower-attr-value` on `role="search"` | `rel="search"` on the root tab, written last; `autofocus` on its root's header search field sets it apart on iOS 26 (`contract vocab search`) |
 | a `ScrollView` in a `flex: 1` `View`: `column flex=1` › `scroll flex=1` | `lower-scroll-grows` (warning) | `min-height=0` on the column; the scroller alone needs none |
+| `borderWidth` and `borderColor` without a style (solid in RN) | `lower-border-unstyled` (warning) | `border="1px solid" border-color="…"`, or add `border-style="solid"` to the written width; for one edge use `border-top-style="solid"` so the other sides stay absent |
 | `alignItems`, `justifyContent`, `gap` on a `View` (a flex column in RN) | `lower-flex-on-block` (warning) | `column` or `row`: a `view` is `display: block`, as a `<div>` is |
 | `flexDirection="row"` on a `Pressable` with content | `lower-flex-on-block` (warning) | `button display="flex"`, and `text-align="left"` where its text is not centred: a `button` is a block with centred text, as `<button>` is |
 | `<SFSymbol name="x" size={N}>`, expo-symbols `SymbolView` | nothing; hand-drawn as an `svg`, or as `font-size=N`, the glyph comes out smaller | `image "symbol:sf/x" width=N height=N object-fit="contain"`, its tint as `color` ("Values beside an SF Symbol", below) |
