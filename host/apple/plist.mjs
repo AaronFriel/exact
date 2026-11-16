@@ -190,6 +190,12 @@ export function nfcKeys(ios, tv) {
   };
 }
 
+/** The other names Siri and App Shortcuts' `${applicationName}` answer to, from `host.ios.alternativeNames` or
+ * `host.macos.alternativeNames`: `INAlternativeAppNames`, each name with its optional "sounds like" hint (Apple,
+ * "Specifying synonyms for your app name"). A watch app inherits none of them, so it copies the iPhone app's. */
+export const alternativeNames = (host) => host?.alternativeNames?.length ? { INAlternativeAppNames: host.alternativeNames.map(({ name, pronunciationHint }) =>
+  ({ INAlternativeAppName: name, ...(pronunciationHint ? { INAlternativeAppNamePronunciationHint: pronunciationHint } : {}) })) } : {};
+
 /** The Info.plist keys a package's Apple implementation may declare in its `exact.json` `"plistKeys"`, by name, with
  * the one value each may take and the platforms whose plist takes it, as Android's `METADATA`
  * (scripts/android-manifest.mjs) bounds a manifest fragment's meta-data. Only a named key passes, so a package can set
@@ -332,6 +338,7 @@ export function appleMetadataOwners() {
     [['macos'], ['ExactUserInterfaceStyle']],
     [['ios', 'macos'], ['NSAppTransportSecurity']],
     [['ios'], ['LSApplicationQueriesSchemes']],
+    [['ios', 'macos'], ['INAlternativeAppNames']],
     [['ios'], ['com.apple.developer.nfc.readersession.iso7816.select-identifiers']],
     [['ios'], ['com.apple.developer.nfc.readersession.felica.systemcodes']],
     [['ios'], ['UIBackgroundModes']],

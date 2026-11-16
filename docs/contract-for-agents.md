@@ -4668,6 +4668,16 @@ its schemes in `app.json`: `"host": { "ios": { "queriesSchemes":
 List at most 50 schemes, without `:` or `://`; changing the list requires a
 native rebuild.
 
+An app that was renamed, or whose name Siri mishears, lists the other names Siri
+and App Shortcuts' `${applicationName}` should answer to: `"host": { "ios": {
+"alternativeNames": [{ "name": "Oldname", "pronunciationHint": "old name" }] } }`,
+and `host.macos.alternativeNames` for the Mac. The build writes
+`INAlternativeAppNames`, and copies the iPhone app's into its watch app, which
+inherits none and must list the same. At most three; the hint, optional, is
+written as the name sounds. Apple admits names based on the app's own or ones its
+users commonly call it, never another app's. Changing them requires a native
+rebuild.
+
 Write pressed `background-color`, `color` and absolute `opacity` in a
 `:active` block. `-exact-press-opacity` multiplies the node's presented opacity;
 `-exact-press-scale` multiplies its presented scale. The host applies these

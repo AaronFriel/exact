@@ -29,7 +29,8 @@ export const watchCompanion = (app, say = () => {}) => !!app.manifest.watch || w
 export const watchDestination = device => device
   ? { target: 'aarch64-apple-watchos', triple: `arm64-apple-watchos${WATCH_MINIMUM_OS}`, sdkName: 'watchos', platform: 'WatchOS' }
   : { target: 'aarch64-apple-watchos-sim', triple: `arm64-apple-watchos${WATCH_MINIMUM_OS}-simulator`, sdkName: 'watchsimulator', platform: 'WatchSimulator' };
-/** The companion's own Info.plist, never the iOS app's. A device bundle declares arm64, which leaves out the
+/** The companion's own Info.plist, never the iOS app's, but for the iPhone app's other names, which Siri requires to
+ * be the same on the watch and the watch does not inherit. A device bundle declares arm64, which leaves out the
  * arm64_32 watches watchOS 26 still supports (D7); `toolchain` is a distributed build's DT keys. */
 export function watchInfo(app, { appInfo, group, entries, live, generation, icon = {}, device = false, toolchain = {} }) {
   const { platform, sdkName } = watchDestination(device);
@@ -39,7 +40,8 @@ export function watchInfo(app, { appInfo, group, entries, live, generation, icon
     WKApplication: true, WKCompanionAppBundleIdentifier: app.id, WKRunsIndependentlyOfCompanionApp: true,
     ExactAppGroup: group, ExactAppIdentifier: app.id, ExactWidgetTypeScript: false, ExactWidgetGeneration: generation,
     ExactWatchEntries: entries.map(({ kind, families, title }) => ({ kind, families, title: title ?? kind })),
-    ...(live ? { ExactWatchPlan: 'plans/watch.plan' } : {}), ...icon };
+    ...(live ? { ExactWatchPlan: 'plans/watch.plan' } : {}), ...icon,
+    ...(appInfo.INAlternativeAppNames ? { INAlternativeAppNames: appInfo.INAlternativeAppNames } : {}) };
 }
 /** The profiles a signed device build embeds in the watch app and, with complications, in its widget extension:
  * each for its own App ID, granting the watch's App Group, of the iPhone app's profile's (`like`) team, prefix and

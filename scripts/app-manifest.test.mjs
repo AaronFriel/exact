@@ -226,6 +226,35 @@ test('an iOS app lists the schemes canOpenURL may ask about, and a malformed or 
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+test('an app\'s other names are Siri\'s on iOS, the Mac and its watch app, and a fourth or a blank one is refused (expo/exact#712)', async () => {
+  const { infoPlist, macInfoPlist } = await import('../host/apple/build.mjs');
+  const { watchInfo } = await import('../host/apple/watch.mjs');
+  const { readManifest } = await import('./app.mjs');
+  const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const names = [{ name: 'Oldname', pronunciationHint: 'old name' }, { name: 'Old' }];
+  const written = '<key>INAlternativeAppNames</key><array><dict><key>INAlternativeAppName</key><string>Oldname</string><key>INAlternativeAppNamePronunciationHint</key><string>oldname</string></dict><dict><key>INAlternativeAppName</key><string>Old</string></dict></array>';
+  const app = (host) => ({ id: 'dev.exact.renamed', displayName: 'Renamed', manifest: { host } });
+  assert.ok(infoPlist(app({ ios: { alternativeNames: names } })).replace(/\s+/g, '').includes(written));
+  assert.ok(macInfoPlist(app({ macos: { alternativeNames: names } })).replace(/\s+/g, '').includes(written));
+  for (const plist of [infoPlist(app({})), infoPlist(app({ ios: { alternativeNames: names } }), false, { tv: true }), infoPlist(app({ ios: { alternativeNames: names } }), false, { clip: true }), macInfoPlist(app({ ios: { alternativeNames: names } }))])
+    assert.doesNotMatch(plist, /INAlternativeAppNames/);
+  // Siri wants the watch app's names to be the iPhone app's, and the watch inherits none.
+  const fields = { group: 'g', entries: [], live: true, generation: 'g' }, copied = [{ INAlternativeAppName: 'Old' }];
+  assert.deepEqual(watchInfo(app({}), { ...fields, appInfo: { CFBundleVersion: '1', INAlternativeAppNames: copied } }).INAlternativeAppNames, copied);
+  assert.equal(watchInfo(app({}), { ...fields, appInfo: { CFBundleVersion: '1' } }).INAlternativeAppNames, undefined);
+  const dir = mkdtempSync(resolve(tmpdir(), 'manifest-names-'));
+  try {
+    const save = (alternativeNames) => writeFileSync(resolve(dir, 'app.json'), JSON.stringify({ name: 'Renamed', app: { id: 'dev.exact.renamed', name: 'Renamed' }, host: { ios: { alternativeNames }, macos: { alternativeNames } } }));
+    save(names);
+    assert.deepEqual(readManifest(dir, 'renamed').host.ios.alternativeNames, names);
+    for (const [given, says] of [[[...names, { name: 'A' }, { name: 'B' }], /more than 3 items/], [[{ name: '' }], /alternativeNames\[0\]\.name/], [[{ pronunciationHint: 'x' }], /name/], [[{ name: 'A', hint: 'a' }], /hint/]]) {
+      save(given);
+      assert.throws(() => readManifest(dir, 'renamed'), says, JSON.stringify(given));
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('readManifest admits the app\'s design, `forma` (LLP 1121 D2)', async () => {
   const { readManifest } = await import('./app.mjs');
   const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs');

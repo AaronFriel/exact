@@ -65,7 +65,7 @@ import { appleImplementations } from '../../js/bake/src/typescript.mjs';
 import { composedModule, moduleSeam, moduleLibraryLinkArgs, packageCompiler, rosterProbe, rosterProbeMain } from './compose.mjs';
 import { associatedDomains, entitlementValue, grantEntitlements, macSigning, merchantEntitlement, signInEntitlement, signsGrant } from './presence.mjs';
 import { writeDataKeys } from './data-keys.mjs';
-import { backgroundKeys, firstFrameKeys, declaredOrigin, interfaceStyle, localNetworking, memoryEntitlements, modulePlist, nfcKeys, startLocation, storeKeys, transportSecurity, updateActivation, withPackageKeys } from './plist.mjs';
+import { alternativeNames, backgroundKeys, firstFrameKeys, declaredOrigin, interfaceStyle, localNetworking, memoryEntitlements, modulePlist, nfcKeys, startLocation, storeKeys, transportSecurity, updateActivation, withPackageKeys } from './plist.mjs';
 import { compileFixtures, iosTestRuns, macTests, onlyClasses } from './xctest.mjs';
 import { APPLE_STATIC_TREES, appIcon, appleRefusals, buildInfo, iosAssets, appleAssets, appleAssetCatalogInventory, copyNativeResources, signingOrder, helperEntitlements, plistFile, wrapFramework, signedGpuProduct, assertArchiveFrameworks } from './assets.mjs';
 import { auditLaunchParts, launchModules, launchPartsObjects, launchServices, serviceArgs, writeLaunchParts } from './launch-parts.mjs';
@@ -431,6 +431,7 @@ export const infoPlist = (app, device = false, { executable = appleExecutableNam
   Object.assign(dict, backgroundKeys(ios, reach, id, tv || clip), nfcKeys(ios, tv), startLocation(app), declaredOrigin(app));
   // The schemes `canOpenURL` may ask about; iOS answers false for any other (`UIApplication.canOpenURL(_:)`)
   if (ios.queriesSchemes?.length) dict.LSApplicationQueriesSchemes = ios.queriesSchemes;
+  if (!tv && !clip) Object.assign(dict, alternativeNames(ios));
   // @ref LLP 1096 D8 — the audio session's category, which ExactKit's one owner reads.
   if (app.manifest.audio_session) dict.ExactAudioSession = app.manifest.audio_session;
   // The manifest's `file_handlers`, as on the Mac, opened in place from
@@ -514,6 +515,7 @@ export const macInfoPlist = (app, { development = null, icon = {}, reach = null,
   ...usageKeys(reach), ...localizationKeys(reach), // usage strings for the devices the app's grants name (LLP 1069.008)
   ...(app.manifest.host?.macos?.activationPolicy === 'accessory' ? { LSUIElement: true } : {}), // a menu-bar app (LLP 1133.025 D6)
   ...(app.manifest.host?.macos?.window ? { ExactWindow: app.manifest.host.macos.window } : {}),
+  ...alternativeNames(app.manifest.host?.macos),
   ...(app.manifest.display_override?.length ? { ExactDisplayOverride: app.manifest.display_override } : {}),
   ...transportSecurity(app.manifest.host?.macos, localNetworking({}, reach)),
   ...([...documentTypes(app), ...webPageTypes(app, distributed)].length ? { CFBundleDocumentTypes: [...documentTypes(app), ...webPageTypes(app, distributed)] } : {}),
