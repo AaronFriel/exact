@@ -4850,7 +4850,8 @@ choose an in-window message over a system notification), `persisted` and
 away, from a `pagehide` with `persisted` until the `pageshow`; `restores`
 counts those `pageshow` events, so `task t when page.restores > 0
 key=page.restores` runs once for each return, never at launch; a Mac or Windows
-window a `keepRunning` close hid is put away, a minimized one only hidden). A reminder that should
+window a `keepRunning` close hid is put away, a minimized one only hidden), and
+`presented` (below). A reminder that should
 open a route uses `showNotification(title="Done", navigate="/thread/42")`
 (`@exact/notifications`); its click reaches the navigation root as a warm
 `navigate` event or a cold launch location, and without `navigate=` it is
@@ -4895,6 +4896,19 @@ transitions, and `prefer frozen false` resumes them. The drive's clock and host
 pump continue: timers, replies, hatch callbacks and native announcements can
 still run. Qualify process suspension on a real host, outside a drive. See the
 [feed recipe](recipes/suspending-feed.md).
+
+`presented: bool` is true from the present of the page's first picture: the
+moment a person can first see it, and the moment the animations its first commit
+began start, since every host starts a commit's new animations at the present of
+the first frame that shows them. Time anything else from it, such as a launch
+splash's minimum display time (`task hide when page.presented` running
+`after(600, done)`), not from mount: on an Android cold launch the first frame
+can reach the screen hundreds of milliseconds after the first commit. It stays
+true for the page's world; a dev reload or an activated update starts it false
+again, and hiding, freezing or the back/forward cache never clear it. It is true
+at the first commit under the agent, headless and in the render host, where
+nothing presents; `prefer presented false` holds it false so a drive can watch
+what waits on it, and moves no animation. The bake answers false.
 
 Leave navigation presentation to the host first: a root `tablist` becomes UIKit's
 tab bar on iOS and a sidebar on macOS, and `navigationPresentation` chooses a
