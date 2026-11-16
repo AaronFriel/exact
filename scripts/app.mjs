@@ -575,8 +575,9 @@ export function readManifest(dir, name) {
       : /^background_color_dark: /.test(p) ? 'background_color_dark is now color_scheme_dark.background_color: "color_scheme_dark": { "background_color": "#000000" } (LLP 1163 D2)'
       // Expo's splash keys and a host's own launch colour: the launch is the manifest's one colour on every host.
       : /^((host\.\w+\.)?(splash\w*|windowBackground|backgroundColor|launchColor)): not a known key$/i.test(p) ? `${p.split(':')[0]}: not a known key; what shows before the first frame is background_color, and color_scheme_dark.background_color in a dark scheme, on every host (host.ios.launchImage and host.android.launchImage add a picture)`
+      : /^host\.ios\.associatedDomains: expected array, got boolean$/.test(p) ? REMOVED_DOMAINS[parsed.host.ios.associatedDomains]
       : appleMetadataProblem(p)).filter((p) => !/^host\.web\.(head(\[|: )|csp|cspReportOnly)/.test(p)).concat(webHeadProblems(parsed), webCspProblems(parsed));
-  if (!problems.length) problems.push(...installProblems(parsed), ...gpuModuleProblems(parsed), ...documentTypeProblems(parsed), ...shareTargetProblems(parsed), ...protocolHandlerProblems(parsed), ...appIconProblems(parsed, dir), ...launchImageProblems(parsed, dir), ...variantProblems(parsed, dir));
+  if (!problems.length) problems.push(...installProblems(parsed), ...gpuModuleProblems(parsed), ...documentTypeProblems(parsed), ...shareTargetProblems(parsed), ...protocolHandlerProblems(parsed), ...linkProblems(parsed), ...appIconProblems(parsed, dir), ...launchImageProblems(parsed, dir), ...variantProblems(parsed, dir));
   if (problems.length) throw new Error(`${path} does not conform to scripts/app.schema.json:\n  ${problems.join('\n  ')}`);
   nativeResourceMappings(parsed); nativeResourceMappings(parsed, 'ios');
   const manifest = resolveVariant({ host: {}, deploy: {}, ...parsed }, selectedVariant(dir)); // the selected variant's identity (LLP 1030.008 D2)
@@ -588,6 +589,7 @@ import { DOCUMENT_UTIS, ownDocumentType, documentTypeProblems, canonicalizeDocum
 import { webCspProblems, webHeadProblems } from './web-head.mjs';
 import { appIconProblems, publishedIcons } from './app-icons.mjs';
 import { claimVariant, resolveVariant, selectedVariant, variantProblems } from './variants.mjs';
+import { REMOVED_DOMAINS, appleLinkDomains, androidLinkFilters, linkProblems, rawAppleDomains } from './links.mjs';
 export { DOCUMENT_UTIS, ownDocumentType };
 ;
 
@@ -620,7 +622,7 @@ function protocolHandlerProblems({ protocol_handlers = [], host }) {
  * `color_scheme_dark` keeps only the W3C draft's members, and with the app's
  * `dir` each icon gets the `sizes` and `type` of its file (LLP 1163 D2). */
 export function webAppManifest(manifest, name, notes = [], dir = null) {
-  const keys = ['name', 'short_name', 'description', 'id', 'start_url', 'display', 'display_override', 'theme_color', 'background_color', 'icons', 'lang', 'orientation', 'file_handlers', 'protocol_handlers', 'launch_handler', 'shortcuts', 'categories'];
+  const keys = ['name', 'short_name', 'description', 'id', 'start_url', 'display', 'display_override', 'theme_color', 'background_color', 'icons', 'lang', 'orientation', 'file_handlers', 'protocol_handlers', 'launch_handler', 'shortcuts', 'categories', 'handle_links', 'scope', 'scope_extensions'];
   const web = Object.fromEntries(keys.filter((k) => manifest[k] !== undefined).map((k) => [k, manifest[k]]));
   if (web.file_handlers) web.file_handlers = web.file_handlers.filter((h) => !Object.keys(h.accept ?? {}).includes('inode/directory'));
   if (web.protocol_handlers) web.protocol_handlers = web.protocol_handlers.filter((h) => !isWebScheme(h.protocol));
@@ -638,7 +640,13 @@ export function webAppManifest(manifest, name, notes = [], dir = null) {
   web.lang ??= 'en';
   return web;
 }
-export function nativeManifestMetadata(manifest, platform) { return {app:manifest.app,host:manifest.host?.[platform]??{},icons:manifest.icons??[],...(platform === 'ios' && manifest.color_scheme_dark?.icons ? {dark_icons:manifest.color_scheme_dark.icons} : {}),...(manifest.frame_health ? {frame_health:manifest.frame_health} : {}),...(['macos','ios','android'].includes(platform) && manifest.protocol_handlers?.length ? {protocol_handlers:manifest.protocol_handlers} : {}),...(['ios','android'].includes(platform) && manifest.orientation ? {orientation:manifest.orientation} : {}),...(['macos','ios'].includes(platform) && ['light','dark'].includes(manifest.userInterfaceStyle) ? {userInterfaceStyle:manifest.userInterfaceStyle} : {}),...(['macos','ios'].includes(platform) && manifest.categories ? {categories:manifest.categories} : {})}; }
+export function nativeManifestMetadata(manifest, platform) { return {app:manifest.app,host:manifest.host?.[platform]??{},icons:manifest.icons??[],...(platform === 'ios' && manifest.color_scheme_dark?.icons ? {dark_icons:manifest.color_scheme_dark.icons} : {}),...(manifest.frame_health ? {frame_health:manifest.frame_health} : {}),...(['macos','ios','android'].includes(platform) && manifest.protocol_handlers?.length ? {protocol_handlers:manifest.protocol_handlers} : {}),...(['ios','android'].includes(platform) && manifest.orientation ? {orientation:manifest.orientation} : {}),...(['macos','ios'].includes(platform) && ['light','dark'].includes(manifest.userInterfaceStyle) ? {userInterfaceStyle:manifest.userInterfaceStyle} : {}),...(['macos','ios'].includes(platform) && manifest.categories ? {categories:manifest.categories} : {}),...linkMetadata(manifest, platform)}; }
+/** The link claims a binary bakes in (LLP 1038 D8): Apple's derived `applinks:` as signed, so a changed scope alone
+ * changes only the origin's file; each Android filter's host and path, so a changed scope is a new APK. */
+const linkMetadata = (manifest, platform) => {
+  const links = ['macos', 'ios'].includes(platform) ? appleLinkDomains(manifest) : platform === 'android' ? androidLinkFilters(manifest) : [];
+  return links.length ? { links } : {};
+};
 let cachedSchema = null;
 function schema() {
   return cachedSchema ??= JSON.parse(readFileSync(resolve(ROOT, 'scripts/app.schema.json'), 'utf8'));
@@ -888,17 +896,13 @@ export const appleExecutableName = (app, flat = false) => {
   const name = executableName(app);
   return (flat && inBundleRoot(name) ? `${name} App` : name).normalize('NFD');
 };
+/** The associated domains an iOS or iPadOS build signs from the manifest (LLP 1038 D8): the `applinks:` that
+ * `handle_links` derives, then the raw `host.ios.associatedDomains` list. */
+export const associatedDomains = (app) => [...new Set([...appleLinkDomains(app.manifest), ...rawAppleDomains(app.manifest)])];
 /** The App Clip `host.ios.appClip` declares, or null: its bundle id (`<app id>.Clip`, as Xcode names one), its
  * name (the app's) and the executable's name. An App Clip is an app (LLP 1126 D12): the clip bundle runs the whole
  * app under this second identity, using the same executable target. The web build names its id in the origin's
  * `apple-app-site-association` (LLP 1030). */
-/** The `applinks:` and other associated domains `host.ios.associatedDomains` claims: its list as written, or, when it
- * is `true`, the declared origin's host (LLP 1038 D8). The entitlements sign these, and the origin's association file
- * claims the app only when they name its host. */
-export const associatedDomains = (app) => {
-  const ios = app.manifest.host?.ios ?? {};
-  return Array.isArray(ios.associatedDomains) ? ios.associatedDomains : ios.associatedDomains && app.origin ? [`applinks:${new URL(app.origin).host}`] : [];
-};
 export const appClip = (app) => {
   const clip = app.manifest.host?.ios?.appClip;
   if (!clip) return null;

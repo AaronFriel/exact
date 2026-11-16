@@ -44,7 +44,8 @@ import { ANDROID_PAGE_SIZE, androidCargo } from './cargo-check.mjs';
 import { guardFlags, reportBuilt } from './help.mjs';
 import { androidImplementations, packageConfig } from '../js/bake/src/typescript.mjs';
 import { recordBuiltSettings } from '../js/bake/src/__exact_env.mjs';
-import { androidProtocolHandlers, configMetaData, fragmentPermissions, manifestFragment, withProtocolHandlers, withMetaData, withAuthCallbacks } from './android-manifest.mjs';
+import { androidProtocolHandlers, configMetaData, fragmentPermissions, manifestFragment, withAppLinks, withProtocolHandlers, withMetaData, withAuthCallbacks } from './android-manifest.mjs';
+import { androidLinkFilters, androidLinkNotes } from './links.mjs';
 import { androidShareActivity } from './share-target.mjs';
 import { CHANNELS_RECEIVER, androidNotificationResources, googleServices } from './android-channels.mjs';
 import { pickIcon, placeRgba, readPng, resize } from './app-icons.mjs';
@@ -1322,7 +1323,10 @@ function extensionArgs(app, out, config, bound, firebase, development) {
   // The share target's and the protocol handlers' filters on the app's activity (LLP 1133.024 D5, LLP 1038 D8), inside
   // the same `<application>`. A production build is Android's distribution: it registers `distribution_only` handlers.
   const handlers = androidProtocolHandlers(app.manifest, !development);
-  const fragment = withAuthCallbacks(withProtocolHandlers(withMetaData(manifestFragment(bound, { privacyPolicy: app.manifest?.privacy_policy ?? null }), [...configMetaData(config), ...(androidShareActivity(app.manifest?.share_target) ?? []), ...(notify ? CHANNELS_RECEIVER : [])]), handlers), callbacks), fragmentFile = resolve(apkDirs(app).app, 'manifest-fragment.xml');
+  // The App Links `handle_links` claims (LLP 1038 D8), its https auth callbacks excluded.
+  const links = androidLinkFilters(app.manifest, callbacks);
+  for (const note of androidLinkNotes(app.manifest, links, { signsIn: !!reach?.auth?.sessions || callbacks.some((c) => c.startsWith('https:')) })) console.warn(`${app.name}: ${note}`);
+  const fragment = withAuthCallbacks(withAppLinks(withProtocolHandlers(withMetaData(manifestFragment(bound, { privacyPolicy: app.manifest?.privacy_policy ?? null }), [...configMetaData(config), ...(androidShareActivity(app.manifest?.share_target) ?? []), ...(notify ? CHANNELS_RECEIVER : [])]), handlers), links), callbacks), fragmentFile = resolve(apkDirs(app).app, 'manifest-fragment.xml');
   rmSync(fragmentFile, { force: true });
   if (fragment) { mkdirSync(dirname(fragmentFile), { recursive: true }); writeFileSync(fragmentFile, fragment); }
   return [...(bound.length ? [`-PextensionDirs=${[...bound.flatMap((b) => b.dirs), generated].join(',')}`] : []), ...(permissions.length ? [`-Ppermissions=${permissions.join(',')}`] : []),

@@ -787,7 +787,7 @@ fn compatibility_with_trust(
         "capabilities": {
             "backgroundModes": list("backgroundModes"),
             "urlSchemes": list("urlSchemes"),
-            "associatedDomains": host.get("associatedDomains").and_then(|v| v.as_bool()).map_or(Value::Null, Value::Bool),
+            "associatedDomains": host.get("associatedDomains").filter(|v| v.is_array()).cloned().unwrap_or(Value::Null),
             // @ref LLP 1096 D8 — the Apple audio session, baked into the binary.
             "audioSession": manifest.json.get("audio_session").cloned().unwrap_or(Value::Null),
         },
@@ -815,6 +815,9 @@ fn compatibility_with_trust(
                 inputs["protocolHandlers"] = handlers.clone();
             }
         }
+    }
+    if let Some(links) = crate::links::claims(&manifest.json, platform) {
+        inputs["links"] = links;
     }
     // Linux has no bundle beside the executable. Its portal picker reads the
     // same declared file types from the compatibility metadata the binary

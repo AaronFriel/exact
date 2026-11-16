@@ -667,6 +667,53 @@ With `"distribution_only": true` on both entries, only an archive or a
 `--distribution` build is a browser. A local Mac or opted-in iOS build then registers neither
 scheme, writes no `Web page` type, and does not join this Mac's browser list.
 
+**Verified https links** (LLP 1038 D8). Whether the app's web addresses open
+the installed app is one declaration in Web App Manifest vocabulary:
+
+```json
+"app": { "origin": "https://notes.example" },
+"start_url": "/notes/", "scope": "/notes/", "handle_links": "preferred",
+"scope_extensions": [{ "type": "origin", "origin": "https://share.example" }]
+```
+
+`handle_links: "preferred"` claims `app.origin` narrowed to `scope` (absent:
+`start_url`'s directory, `/` for most apps) and each `scope_extensions` origin
+whole. `"auto"` (what an absent member means) and `"not-preferred"` claim
+nothing natively. Exact's own paths under `/.exact/` (the web's sign-in
+callback page) and an https `auth.callback` on a claimed origin are never
+claimed, so a sign-in that returns there in a browser stays in the browser.
+A link that opens the app arrives as any incoming URL does: its path is the
+launch location, or one `navigate` event while the app runs.
+
+| host | what `"preferred"` does |
+| --- | --- |
+| iOS, iPadOS | signs `applinks:<host>` for each claimed origin beside `host.ios.associatedDomains`, and an App Clip's `appclips:` for each concrete one |
+| macOS | the same entries, signed through the Mac's provisioning profile; a build whose profile cannot sign associated domains says links open in the browser |
+| Android | one `autoVerify` https filter per claimed host on the app's activity, `pathPrefix` the scope; from Android 15 `uri-relative-filter-group`s leave the excluded paths to the browser (under a scope other than `/`, only with `host.android.minimumOS` `"15"`), and where they cannot, the build of an app that signs in names the excluded paths that open the app |
+| web | `manifest.json` copies the three members as written |
+| tvOS, watchOS, Windows, Linux | nothing; the build says so in one line |
+
+The web build (either target) writes `app.origin`'s files into the build:
+`/.well-known/apple-app-site-association`, whose `applinks` `components`
+exclude `/.exact/*` and each callback path before `<scope>*`, and
+`/.well-known/assetlinks.json` with a `delegate_permission/common.handle_all_urls`
+statement beside any passkeys' `get_login_creds` (the JS target writes no
+credential entries). They need `host.ios.team` and `host.android.certificates`;
+the build line names a missing one. For every other origin a claim names, the
+build prints the files it must serve, including each extension origin's
+`/.well-known/web-app-origin-association`, keyed by the manifest's processed
+`id`. The files name the base app, never a variant. Serve each from the path
+itself over HTTPS as `application/json`, with no redirect.
+
+`host.ios.associatedDomains` is the raw Apple list, for what has no web name:
+`webcredentials:`, `appclips:`, a wildcard `applinks:*.example.com`, an
+`applinks:` host outside the claims. An entry that covers a claimed host is
+refused, as is `"not-preferred"` beside any raw `applinks:`. Matching is the
+platforms': Android matches the decoded path and any port, Apple and the web
+the encoded path. Verification itself needs the live domain; without one,
+`adb shell pm set-app-links --package <id> 1 <host>` marks a host verified on
+an emulator.
+
 A file chosen in the app's own picker (`showOpenFilePicker`,
 `showSaveFilePicker`) joins File ▸ Open Recent — a save once it is written —
 and becomes the window's document, as a routed one does. A path from the command line, from Finder, from ⌘O, or from a link inside

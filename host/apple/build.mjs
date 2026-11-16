@@ -345,13 +345,14 @@ export const entitlements = (app, team = null, debuggable = true, reach = null, 
     if (grantEntitlements(app, ['aps-environment']).length && activityEntries(app).some(entry => entry.push === true)) dict['aps-environment'] = entitlementValue('aps-environment', debuggable);
   }
   if (app.manifest.share_target && simulator && !app.widgetTV && !app.widgetHost && !app.clipParent) dict['com.apple.security.application-groups'] ??= [widgetGroup(app)]; // the share inbox (LLP 1133.024 D4)
-  // @ref LLP 1038 D8 — explicit applinks entries, or the declared origin.
-  const domains = claimedDomains(app);
+  // @ref LLP 1038 D8 — `handle_links`' derived applinks, then the raw list; tvOS signs no link claim.
+  const domains = claimedDomains(app).filter((d) => !app.widgetTV || !d.startsWith('applinks:'));
   // @ref LLP 1069.006 D2 — a claimed https auth callback needs `webcredentials:` (the bake's derivation from the `auth.callback` grants, LLP 1069.008).
   const linked = [...domains, ...associatedDomains(reach?.auth, debuggable)];
   // An App Clip is invoked from its `appclips:` domains, which its parent's entitlements list too (Apple,
-  // "Associating your App Clip with your website"): each `applinks:` host, in the clip in place of the `applinks:`.
-  const clips = appClip(app) && !app.widgetTV ? linked.filter((d) => d.startsWith('applinks:')).map((d) => `appclips:${d.slice('applinks:'.length)}`) : [];
+  // "Associating your App Clip with your website"): each concrete `applinks:` host, in the clip in place of the
+  // `applinks:`; `appclips:` takes no wildcard.
+  const clips = appClip(app) && !app.widgetTV ? linked.filter((d) => d.startsWith('applinks:') && !d.startsWith('applinks:*.')).map((d) => `appclips:${d.slice('applinks:'.length)}`) : [];
   const all = [...new Set([...(app.clipParent ? linked.filter((d) => !d.startsWith('applinks:')) : linked), ...clips])];
   if (all.length) dict['com.apple.developer.associated-domains'] = all;
   for (const name of grantEntitlements(app, reach?.entitlements)) dict[name] = reach.entitlementValues?.[name] ?? entitlementValue(name, debuggable, dict['application-identifier']);

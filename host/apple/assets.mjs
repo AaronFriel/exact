@@ -560,7 +560,9 @@ export const macReleaseEntitlements = (compat, widgets = {}) => {
   const names = compat?.reach?.entitlements ?? [];
   // An https auth callback's `webcredentials:` domain (LLP 1069.006 D2),
   // which a Developer ID build signs only with a profile that grants it.
-  const domains = compat?.reach?.auth?.associatedDomains ?? [];
+  // The domains the profile signed (`widgets`: the links' too, LLP 1038 D8) stay, as signed.
+  const signed = widgets['com.apple.developer.associated-domains'] ?? [], named = new Set(signed.map((d) => d.split('?')[0]));
+  const domains = [...signed, ...(compat?.reach?.auth?.associatedDomains ?? []).filter((d) => !named.has(d.split('?')[0]))];
   if (!names.length && !domains.length && !Object.keys(widgets).length) return null;
   return plistFile({ ...widgets, ...Object.fromEntries(names.map((name) => [name, true])),
     ...(domains.length ? { 'com.apple.developer.associated-domains': domains } : {}) });

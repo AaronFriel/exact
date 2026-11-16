@@ -9,6 +9,7 @@ import { spawnSync } from './toolchain.mjs';
 import { resolve, basename, dirname } from 'node:path';
 import { copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { verifyBakeFiles } from '../../scripts/app.mjs';
+import { unclaimedNote } from '../../scripts/links.mjs';
 import { webRefusal, browserEntitlements } from './documents.mjs';
 import { memoryEntitlements, alarmKeys } from './plist.mjs';
 import { listAssets } from '../web/serve.mjs';
@@ -239,6 +240,8 @@ export function assembleIOS({intents, shared, library, moduleLibraries = [], pac
   writeFileSync(resolve(bundle, 'Info.plist'), infoPlist(app, device, { development, distributed: distribution, reach: appleReach, tv }));
   const refused = webRefusal(app, distribution, tv);
   if (refused) console.log(refused);
+  const unclaimed = tv && unclaimedNote(app.manifest, 'tvos');
+  if (unclaimed) console.log(unclaimed);
   // The GPU crate's shaders (LLP 1030 D8): files the presenter registers
   // with the module before a surface is created, never strings in the dylib.
   copyAppleStaticTrees(paths.capture, bundle);

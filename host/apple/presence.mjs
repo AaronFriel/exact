@@ -12,6 +12,7 @@
 import { installedProfiles, decodeProfile, profilesFor, byExpiry, signedEnvironment, allowsEntitlement, profileMisfit, macHardwareID, METHODS, identity, profileIdentity, developmentIdentities } from './devices.mjs';
 import { widgetSigningTeam, macWidgetProfiles, macWidgetSigning, platformWidgetEntries, macWidgetGroup, kindPhrase, identityVariable } from './widgets.mjs';
 import { shareId } from './extensions.mjs';
+import { appleLinkDomains } from '../../scripts/links.mjs';
 
 const POLICIES = ['user-presence', 'biometry-any', 'biometry-current-set', 'device-credential'];
 
@@ -54,7 +55,7 @@ export function signsGrant(line, compat, provisioning) {
 
 /** What a macOS build needs a profile for, from its bake (`compat`): `{ entitlement, lines, effect, mandatory }`
  * each, where a mandatory one refuses a release that cannot sign it. */
-export function macProfileNeeds(compat) {
+export function macProfileNeeds(compat, app = null) {
   const ceiling = compat?.inputs?.grantCeiling ?? '', needs = [];
   for (const name of compat?.reach?.profileEntitlements ?? []) {
     const [lines, effect, mandatory] = ROW_EFFECTS[name] ?? [name, `${name} is not signed`, true];
@@ -69,6 +70,10 @@ export function macProfileNeeds(compat) {
   const passkeys = passkeyLines(ceiling);
   if (passkeys.length) needs.push({ entitlement: DOMAINS, lines: passkeys.map((rp) => `auth.passkey ${rp}`).join(', '), mandatory: true,
     effect: 'getClientCapabilities().available is false and create and get fail NotSupportedError' });
+  // Verified links (LLP 1038 D8) are not mandatory: unsigned, they open in the browser.
+  const links = app?.manifest ? appleLinkDomains(app.manifest) : [];
+  if (links.length) needs.push({ entitlement: DOMAINS, lines: 'handle_links "preferred"', mandatory: false,
+    effect: `links to ${links.map((d) => d.slice('applinks:'.length)).join(', ')} open in the browser` });
   // Both report unavailable unsigned (packages/sign-in, packages/payments), so a release without them ships.
   const clients = compat?.reach?.auth?.signIn?.apple ?? [];
   if (clients.length) needs.push({ entitlement: SIGN_IN, lines: clients.map((id) => `auth.apple ${id}`).join(', '), mandatory: false,
@@ -121,12 +126,13 @@ export function macProfile(app, required, { method = 'development', installed = 
 /** The entitlements `profile` signs `app` with for `needs`: its application identifier and team, each row's (an
  * environment as the profile signs it, LLP 1133.028 D15 item 1; a value the bake gives, `reach.entitlementValues`;
  * otherwise true), the app's own keychain group, the bake's
- * associated domains, Sign in with Apple's `Default` and the bake's merchant IDs. */
+ * associated domains with `handle_links`' `applinks:` (LLP 1038 D8), Sign in with Apple's `Default` and the bake's
+ * merchant IDs. */
 export function macProfileEntitlements(app, profile, needs, compat) {
   const out = { 'com.apple.application-identifier': `${profile.prefix}.${app.id}`, 'com.apple.developer.team-identifier': profile.team };
   for (const { entitlement } of needs) {
     if (entitlement === KEYCHAIN) out[KEYCHAIN] = [`${profile.prefix}.${app.id}`];
-    else if (entitlement === DOMAINS) out[DOMAINS] = associatedDomains(compat?.reach?.auth, profile.dev);
+    else if (entitlement === DOMAINS) out[DOMAINS] = [...new Set([...associatedDomains(compat?.reach?.auth, profile.dev), ...(app.manifest ? appleLinkDomains(app.manifest) : [])])];
     else if (entitlement === SIGN_IN) out[SIGN_IN] = ['Default'];
     else if (entitlement === PAY) out[PAY] = compat?.reach?.payments?.merchantIds ?? [];
     else if (entitlement === KEY_VALUE_STORE) out[KEY_VALUE_STORE] = out['com.apple.application-identifier'];
@@ -141,7 +147,7 @@ export function macProfileEntitlements(app, profile, needs, compat) {
  * the profile's kind: `development`, or `developerid` for a Developer ID release. `reason`: why no profile can sign,
  * where it is not that none fits. */
 export function macProvisioning(app, compat, { release = false, method = 'development', log = console.log, find = macProfile, reason = null, beside = '' } = {}) {
-  const needs = macProfileNeeds(compat);
+  const needs = macProfileNeeds(compat, app);
   // A store build always embeds its profile: TestFlight requires one, whatever TN3125 lets an App Store build omit (LLP 1030.005 D1).
   const always = method === 'appstore' && !reason;
   if (!needs.length && !always) return null;
@@ -215,7 +221,7 @@ export function macSigning(app, compat, { current, widgets = null, release = fal
   const ambiguous = !current && !distribution && new Set(identities().map(id => id.team)).size > 1;
   // Ordinary kept secrets also need a stable certificate signature across rebuilds (LLP 1018 D7).
   if (!current && (ambiguous || wantsWidgets || wantsShare)) {
-    const required = macProfileNeeds(compat).map(n => n.entitlement);
+    const required = [...new Set(macProfileNeeds(compat, app).map(n => n.entitlement))];
     if (wantsWidgets && namedWidgetProfile === undefined) namedWidgetProfile = process.env.EXACT_PROFILE ? decodeProfile(process.env.EXACT_PROFILE) : null;
     const named = wantsWidgets && namedWidgetProfile?.platforms?.includes('OSX')
       ? widgetProfiles({ app, team: namedWidgetProfile.team, ...kind, log, named: namedWidgetProfile,

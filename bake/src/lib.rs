@@ -15,6 +15,7 @@ pub mod compat;
 pub mod host;
 mod icon_rules;
 mod link;
+mod links;
 mod preload;
 mod reach;
 mod receipt;

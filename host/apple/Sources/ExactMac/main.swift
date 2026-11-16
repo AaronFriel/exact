@@ -715,8 +715,14 @@ final class Delegate: NSObject, NSApplicationDelegate {
         for item in buttons.items { buttons.removeItem(item); shortcuts.addItem(item) }
         return shortcuts
     }
-    /// A Spotlight result of the app's index opened (LLP 1133.023 D4).
+    /// A Spotlight result of the app's index opened (LLP 1133.023 D4), or a
+    /// universal link (LLP 1038 D8): before boot, the launch location.
     func application(_ application: NSApplication, continue userActivity: NSUserActivity, restorationHandler: @escaping ([any NSUserActivityRestoring]) -> Void) -> Bool {
+        if userActivity.activityType == NSUserActivityTypeBrowsingWeb, let url = userActivity.webpageURL {
+            let target = frontWindow() ?? openWindow()
+            if target.session.openURL(url) { target.front() }
+            return true
+        }
         guard let location = ExactContentIndex.location(of: userActivity) else { return false }
         (frontWindow() ?? openWindow()).front()
         ExactContentIndex.open(location)

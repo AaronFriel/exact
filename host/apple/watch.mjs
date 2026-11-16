@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, writeFileSync, copyFileSync, cpSync, rmSync } from 'node:fs';
 import { buildBake, bakeOutput, developmentBuildEnv, HOST_DEV, appleExecutableName } from '../../scripts/app.mjs';
 import { appleAssets, plistFile } from './assets.mjs';
+import { unclaimedNote } from '../../scripts/links.mjs';
 import { WATCH_MINIMUM_OS } from './toolchain.mjs';
 import { appleProduction, stripProductionExecutable } from './link.mjs';
 import { reportBuilt } from '../../scripts/help.mjs';
@@ -94,6 +95,8 @@ export function embedWatch(app, { parent, namespace, device = false, production,
     console.log('host/apple: no watch entry and no Rust accessory entries; watch bundle omitted');
     return null;
   }
+  const unclaimed = unclaimedNote(app.manifest, 'watchos');
+  if (unclaimed) console.log(`host/apple: ${unclaimed}`);
   const { target, triple, sdkName } = watchDestination(device);
   if (process.platform === 'linux') ensureWatchSDK(sdkName);
   const profile = production ? 'release' : HOST_DEV;

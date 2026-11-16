@@ -387,7 +387,7 @@ test('Windows packaging and preparation use the selected executable after Cargo 
     const env = { process: { platform: 'win32', argv: [], env: build.env }, guardFlags: () => [], resolveApp: () => app, prepareShaders() {},
       bakeTarget: () => 'x86_64-pc-windows-msvc', pickIcon: () => null, resolve, mkdirSync, developmentBuildEnv: () => build.env,
       copyFileSync, readFileSync, writeFileSync, createHash, windowsFile: () => 'fixture.exe', closeOpened() {}, syncStaticTree() {}, copyShaders() {},
-      writePackagedReceipt() {}, console: { log() {} },
+      writePackagedReceipt() {}, unclaimedNote: () => null, console: { log() {} },
       buildBake(app, kind, target, options) {
         const receipt = { products: [{ path, sha256: createHash('sha256').update('first executable').digest('hex') }], compat: {} };
         options.capture(receipt); writeFileSync(path, 'later executable'); return receipt;

@@ -570,6 +570,41 @@ fn protocol_handler_templates_move_apple_compatibility() {
     std::fs::remove_dir_all(dir).unwrap();
 }
 
+/// LLP 1038 D8: Apple signs the claimed hosts and Android's filters carry
+/// the scope, so a scope edit moves the Android binary alone.
+#[test]
+fn link_claims_move_the_binaries_that_bake_them() {
+    let dir = app("links-identity");
+    let manifest = std::fs::read_to_string(dir.join("app.json")).unwrap();
+    let ids = |links: &str| {
+        let with = format!(r#"{{"handle_links":"preferred","start_url":"/notes/",{links}"#);
+        let with = manifest.replacen('{', &with, 1).replacen(
+            r#"App"}"#,
+            r#"App","origin":"https://n.example"}"#,
+            1,
+        );
+        std::fs::write(dir.join("app.json"), with).unwrap();
+        let m = Manifest::read(&dir).unwrap();
+        let of = |p, t| {
+            compatibility_with_trust(&dir, p, t, &m, Some(""), "development")
+                .unwrap()
+                .id
+        };
+        (
+            of("ios", "aarch64-apple-ios"),
+            of("linux", "aarch64-linux-android"),
+        )
+    };
+    let (first, scoped) = (ids(r#""scope":"/notes/","#), ids(r#""scope":"/","#));
+    assert_eq!(first.0, scoped.0, "a scope is the Apple origin's file");
+    assert_ne!(first.1, scoped.1, "an Android filter carries the scope");
+    let other = r#""scope_extensions":[{"type":"origin","origin":"https://s.example"}],"#;
+    let extended = ids(other);
+    let moved = first.0 != extended.0 && first.1 != extended.1;
+    assert!(moved, "a claimed host is signed and filtered");
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
 #[test]
 fn shortcuts_move_a_native_binary_but_not_the_web() {
     let dir = app("shortcuts-identity");

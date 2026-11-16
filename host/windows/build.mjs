@@ -13,6 +13,7 @@ import { delimiter, dirname, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { bakeTarget, buildBake, copyShaders, developmentBuildEnv, resolveApp, windowsFile } from '../../scripts/app.mjs';
 import { guardFlags, reportBuilt } from '../../scripts/help.mjs';
+import { unclaimedNote } from '../../scripts/links.mjs';
 import { pickIcon, readPng, WINDOWS_ICON_SIZES, windowsIconRes } from '../../scripts/app-icons.mjs';
 import { syncStaticTree } from '../web/serve.mjs';
 
@@ -176,6 +177,8 @@ if (import.meta.main) {
   writeFileSync(resolve(output, 'compat.json'), JSON.stringify(build.compat, null, 2) + '\n');
   writePackagedReceipt(app, build, output);
   console.log(`Windows: ${executable}`);
+  const unclaimed = unclaimedNote(app.manifest, 'windows');
+  if (unclaimed) console.log(`Windows: ${unclaimed}`);
   if (args.includes('--json')) reportBuilt({ path: executable, target: 'windows', trust: build.trust });
   if (args.includes('--run') && remote()) {
     const opened = await openOnDesktop(executable);

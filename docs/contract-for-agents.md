@@ -3618,6 +3618,11 @@ the complete original URL percent-encoded in `u`; read it with
 navigation root with `navigate=`. At cold launch it is the initial location;
 when already running, each link fires one `navigate` event in arrival order.
 An app without `protocol_handlers` keeps ordinary URL-to-location behavior.
+For the app's own web addresses, declare `"handle_links": "preferred"` beside
+`app.origin` (and `scope`, `scope_extensions` to narrow or widen the claim):
+iOS, macOS and Android then open links to them in the app, at the link's path,
+once the origin serves the association files the web build writes or prints
+(reference.md, "Verified https links").
 A drive on macOS, iOS or the Android reader delivers a link as the system would,
 without iOS's "Open in …?" alert: `type <root> "web+notes://auth/callback#done"`.
 For a packaged-only scheme, use

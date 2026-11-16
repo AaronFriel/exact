@@ -51,7 +51,7 @@ import { interfaceStyle, launchBackground, schemeHead, withInterfaceStyle, withL
 import { webIconLinks, webThemeColors } from '../../scripts/app-icons.mjs';
 import { appManifestDigest, appSources, buildFileCards, copyStaticTreeIfPresent, listAssets, hostingNotes, planRouteTable, publicFileCards, replaceBuild, webEnvelope, moduleCards, MODULE_FILES } from './serve.mjs';
 import { foreignBeside } from './generations.mjs';
-import { androidAssociation, writeAppleAssociation } from './association.mjs';
+import { androidAssociation, writeLinkFiles } from './association.mjs';
 import { cargoInputPaths, compilerPaths } from '../../scripts/cargo-dep-info.mjs';
 import { captureWebProducts, contractReadReceipt } from '../../scripts/web-build.mjs';
 
@@ -299,10 +299,9 @@ if (target !== '--wasm' && !game && !bakeOnly) {
     // The colours that stay one in dark mode in one line (`oneScheme`), unless a drive reads these lines
     // (`EXACT_WARNINGS_WHOLE`), which lists each in its file and says the one line itself.
     for (const line of process.env.EXACT_WARNINGS_WHOLE ? compiler : oneScheme(compiler)) console.error(line);
-    for (const line of (js.stderr ?? '').split('\n')) if (/^(warning|app\.contract\.d\.ts): /.test(line)) console.error(line);
-    // The origin's association file, from the manifest's claims (LLP 1030 D1). Its `webcredentials` comes from the
-    // bake's grants, which only the wasm build below runs.
-    writeAppleAssociation(stage, app);
+    for (const line of (js.stderr ?? '').split('\n')) if (/^(warning|app\.contract\.d\.ts|links): /.test(line)) console.error(line);
+    // The JS target writes the origin's link files itself (host/web-js/build.mjs, LLP 1038 D8); the filter above passes
+    // its `links:` lines.
     // The receipt first, since what it records may come from the build's intermediates. `release`: a site to host
     // (`--out`), built again (to the same directory, as a release) when what it was built from changes.
     // `env`: each setting app.ts read, as inlined, and its source (LLP 1153 D4), for the drive's logs and `changedSettings`.
@@ -679,26 +678,21 @@ if (buildLocations.length && renderAt) {
   const late = pages.filter((doc) => doc.settled === false).map((doc) => doc.location);
   documentNote = `${pages.length} document${pages.length === 1 ? '' : 's'}${pages.length && !app.origin ? ' (no origin: no sitemap)' : ''}${late.length ? `; at the deadline, with placeholders: ${late.join(', ')}` : ''}`;
 }
-// The deep-link association file (LLP 1030 D1; 1030.000 D2): generated from
-// the manifest when the iOS host claims the domain and names its team; a
-// static origin file Apple's CDN fetches, never a dev-server claim.
+// The origin's association files (LLP 1030 D1; 1030.000 D2; LLP 1038 D8): one merged file per platform, from the
+// manifest's link claims and the bake's credentials; static origin files the platforms fetch, never a dev-server
+// claim. Every other origin a claim names is printed with its files.
 const ios = app.manifest.host?.ios ?? {};
 // @ref LLP 1069.006 D2 — a claimed https auth callback on Apple needs this
-// origin's `webcredentials` entry too (not `applinks:`, which stays routing).
+// origin's `webcredentials` entry too (and is excluded from its links).
 const authReach = bakedReceipt.reach?.auth ?? {};
 // @ref LLP 1133.011 D6 — an `auth.passkey` RP ID that is the origin's host: this origin serves both platforms' files.
 const originHost = app.origin ? new URL(app.origin).hostname : null;
 const passkeyHere = (authReach.passkeys ?? []).includes(originHost);
 const webcredentials = passkeyHere || (authReach.callbacks ?? []).some((c) => app.origin && c.startsWith(new URL(app.origin).origin + '/'));
-writeAppleAssociation(stage, app, { webcredentials });
-// Android's statement (LLP 1133.011 D6): the package may use this domain's passkeys, for each certificate the app
-// lists. Every other RP ID's two entries are printed, for the domain that serves it.
+for (const line of writeLinkFiles(stage, app, { webcredentials, passkeys: passkeyHere, callbacks: authReach.callbacks ?? [] })) console.error(line);
+// Every other RP ID's two entries are printed, for the domain that serves it.
 const certificates = app.manifest.host?.android?.certificates ?? [];
 const androidStatement = androidAssociation(app.manifest);
-if (passkeyHere && certificates.length) {
-  mkdirSync(resolve(stage, '.well-known'), { recursive: true });
-  writeFileSync(resolve(stage, '.well-known/assetlinks.json'), JSON.stringify([androidStatement], null, 2) + '\n');
-}
 const elsewhere = (authReach.passkeys ?? []).filter((rp) => rp !== originHost && rp !== 'localhost');
 const passkeyNote = (authReach.passkeys ?? []).length ? `; passkeys: ${[
   passkeyHere ? `${originHost}'s association files${ios.team ? '' : ' (no host.ios.team: no apple-app-site-association)'}${certificates.length ? '' : ' (no host.android.certificates: no assetlinks.json)'}` : null,

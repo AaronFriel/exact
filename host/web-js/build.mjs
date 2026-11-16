@@ -1189,6 +1189,13 @@ if (auth) {
   const docs = authClientMetadata({ origin: manifest.app?.origin ?? null, displayName: manifest.app?.name ?? manifest.name, manifest }, callbacks);
   for (const [name, doc] of Object.entries(docs)) writeFileSync(resolve(out, `.exact/auth/${name}.json`), JSON.stringify(doc, null, 2) + '\n');
 }
+// The origin's link files from the manifest (LLP 1038 D8; LLP 1030 D1): no credentials, which only the wasm build's
+// bake derives. Its https auth callbacks are excluded from the claims.
+{
+  const { writeLinkFiles } = await import('../web/association.mjs');
+  const callbacks = [tsGrantSet, rustGrantSet].flatMap((set) => (set.entries ?? []).map(([, source]) => source)).filter((l) => l.startsWith('auth.callback ')).map((l) => trimGrant(l.slice(14)));
+  for (const line of writeLinkFiles(out, { manifest, id: manifest.app.id, origin: manifest.app.origin ?? null }, { callbacks })) console.error(line);
+}
 // The app's GPU module (LLP 1009 D2), built here as the wasm target's build
 // makes it, with the web host's glue: a loaded capability.
 // Built again only when something a module was built from changed (Cargo's

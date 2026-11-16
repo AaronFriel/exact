@@ -32,6 +32,8 @@
 // and asks nothing for; a runtime permission comes only from a grant line, which derives its prompt (LLP 1133.002 D6).
 // There is no `<provider>` but a library's removed one, and no `android:process`.
 
+import { EXACT_PATHS } from './links.mjs';
+
 /** The broadcasts a package's receiver may name: the boot, the package replaced, the clock and zone, the exact-alarm
  * switch (LLP 1133.030 D9). */
 export const RECEIVER_ACTIONS = new Set([
@@ -295,8 +297,34 @@ export function withProtocolHandlers(fragment, handlers = []) {
   return onMainActivity(fragment, filters, [`        <meta-data android:name="dev.exact.protocol_handlers" android:value="${escape(JSON.stringify(handlers))}" />`]);
 }
 
-/** Auth callbacks are custom schemes on Android. HTTPS grants remain available to the web and Apple;
- * Android does not register App Links or loopback callbacks. The runner checks the full endpoint and state. */
+/** The App Links on the app's activity (LLP 1038 D8): for each claimed host (`androidLinkFilters`), an `autoVerify`
+ * https filter, which Android opens in the app once the host's `/.well-known/assetlinks.json` names it, the link's path
+ * its location. From Android 15 (API 35) `<uri-relative-filter-group android:allow="false">` leaves each excluded
+ * path to the browser; earlier releases ignore the element (Android, "<uri-relative-filter-group>"). The groups are
+ * ordered, the first that matches deciding, and a filter with groups matches only a URI a group allows (an emulator on
+ * Android 17 opens nothing without it), so a group allowing the scope comes last. The filter's own `pathPrefix`, where
+ * `androidLinkFilters` gives one, narrows it on every release. */
+export function withAppLinks(fragment, filters = []) {
+  if (!filters.length) return fragment;
+  const group = (allow, data) => [`                <uri-relative-filter-group${allow ? '' : ' android:allow="false"'}>`, `                    <data ${data} />`, '                </uri-relative-filter-group>'];
+  const pathData = (p) => p === EXACT_PATHS ? `android:pathPrefix="${escape(p)}"` : `android:path="${escape(p)}"`;
+  const lines = filters.flatMap(({ host, pathPrefix, exclude, allow }) => [
+    '            <intent-filter android:autoVerify="true">',
+    '                <action android:name="android.intent.action.VIEW" />',
+    '                <category android:name="android.intent.category.DEFAULT" />',
+    '                <category android:name="android.intent.category.BROWSABLE" />',
+    '                <data android:scheme="https" />',
+    `                <data android:host="${escape(host)}" />`,
+    ...(pathPrefix ? [`                <data android:pathPrefix="${escape(pathPrefix)}" />`] : []),
+    ...(exclude.length ? [...exclude.flatMap((p) => group(false, pathData(p))), ...group(true, `android:pathPrefix="${escape(allow)}"`)] : []),
+    '            </intent-filter>',
+  ]);
+  return onMainActivity(fragment, lines);
+}
+
+/** Auth callbacks are custom schemes on Android. HTTPS grants remain available to the web and Apple, and an https
+ * callback on a claimed origin is excluded from the App Links (`withAppLinks`); Android registers no loopback
+ * callback. The runner checks the full endpoint and state. */
 export function withAuthCallbacks(fragment, callbacks = []) {
   const endpoints = [...new Set(callbacks.filter(callback => !['http:', 'https:'].includes(new URL(callback).protocol)))];
   const schemes = [...new Set(endpoints.map(callback => new URL(callback).protocol.slice(0, -1)))];
