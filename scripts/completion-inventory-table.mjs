@@ -247,6 +247,7 @@ export const classifications = [
       "Runner::collection Runner::collection_data Runner::collection_feedback Runner::collection_feedback_bytes Runner::collection_feedback_filled " +
       "Runner::collection_mounted Runner::collection_shown Runner::collections Runner::collections_bounded Runner::collections_json Runner::collections_shallow " +
       "Runner::kept_positions_json"],
+    ["runner:runner/src/runner/gates.rs", "Runner::collection_reply_key"],
     ["runner:runner/src/runner/foresee.rs", "Runner::foresee"],
     ["runner:runner/src/runner/into_view.rs", "Runner::into_view_json Runner::reveal_collection_index Runner::scroll_into_view Runner::scroll_into_view_at Runner::set_list_covered"],
     ["runner:runner/src/runner/lists.rs", "Runner::collection_snap Runner::collection_snap_areas Runner::collection_snap_stop Runner::list_index Runner::list_text"],
@@ -714,7 +715,7 @@ export const classifications = [
     ["runner:runner/src/runner/advance/data_timers.rs", "Runner::data_timer_due_ms Runner::data_timer_landing Runner::data_timer_waits Runner::timer_first#next_ticket:1"],
     ["runner:runner/src/runner/dated.rs", "Runner::resources_reading_clock"],
     ["runner:runner/src/runner/gates.rs",
-      "Runner::gate_step#generation:1 Runner::gate_step#next_ms:1 Runner::gate_step#next_ms:2 Runner::gate_step#next_ms:3 Runner::has_timers Runner::tasks " +
+      "Runner::collection_timer_due_ms Runner::collection_timer_due_ms#generation:1 Runner::gate_step#generation:1 Runner::gate_step#next_ms:1 Runner::gate_step#next_ms:2 Runner::gate_step#next_ms:3 Runner::has_timers Runner::tasks " +
       "Runner::timer_due_ms Runner::timer_tolerance_ms Runner::timer_wake_ms Runner::wants_frames"],
     ["runner:runner/src/runner/native_timers.rs", "Runner::fire_native_timer Runner::native_timers Runner::native_timer_completion Runner::use_native_timers Runner::uses_native_timers"],
     ["runner:runner/src/runner/overrun.rs", "Runner::hold_overrun_reply#next_ticket:1 Runner::hold_reask#next_ticket:1"],
@@ -786,7 +787,7 @@ export const classifications = [
       "release_module_pages_too section_begin section_end start trace"],
     ["painted:host/painted/src/app.rs",
       "boot_presenter boot_presenter_after_layout_device boot_presenter_with_device boot_presenter_with_metal Config::from_env Config::from_env_static Config::headless " +
-      "Config::initial_window_background Config::painter Config::use_updates Config::windowed Config::windowed_from_env launch_argument launch_location " +
+      "Config::initial_window_background Config::painter Config::use_updates Config::windowed Config::windowed_from_env incoming_location launch_argument launch_location " +
       "prepare_environment print_baked_receipt row_reuse_from_env run_headless show_material_look show_neutral_look"],
     ["painted:host/painted/src/canvas/codec.rs", "attach"],
     ["painted:host/painted/src/canvas/legacy.rs", "attach decode glyph"],
@@ -983,7 +984,7 @@ export const classifications = [
     ["runner:runner/src/instance/collection/nest.rs", "Kept::put#clock:1"],
     ["runner:runner/src/instance/collection/rekey.rs", "Collection::rekey_full#rows_keyed:1 Collection::rekey_shared#rows_keyed:1"],
     ["runner:runner/src/instance/collection/reuse.rs", "Collection::rebind#row_rebound:1 Collection::rebind#rows_rebound:1"],
-    ["runner:runner/src/instance/collection/within.rs", "Collection::travel_within#rows_reused:1"],
+    ["runner:runner/src/instance/collection/within.rs", "Collection::feedback_within#size:1 Collection::travel_within#rows_reused:1"],
     ["runner:runner/src/instance/collection/work.rs", "Collection::retire_row#row_retired:1"],
     ["runner:runner/src/instance/region.rs", "RegionInst::update#rows_keyed:1"],
     ["runner:runner/src/midi.rs", "Midi::heard#heard:1 Midi::push#ticks:1"],
