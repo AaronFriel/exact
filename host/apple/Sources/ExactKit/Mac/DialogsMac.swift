@@ -36,7 +36,6 @@ final class DialogHost {
         }
     }
     private(set) var entries: [Entry] = []
-    var onCancel: ((UInt32) -> Void)?
     /// Painted in the page, not AppKit's sheet: the driver's own chrome
     /// (`--chrome agent`), as it paints the header and the tablist. A test
     /// of the painted presentation says so.
@@ -357,16 +356,20 @@ final class DialogHost {
             isARepeat: event.isARepeat, keyCode: event.keyCode) ?? event
     }
 
+    /// Escape, and Command-period, which AppKit gives a sheet's Cancel too:
+    /// the Mac's close request.
+    static func isCloseRequest(_ event: NSEvent) -> Bool {
+        event.keyCode == 53 || event.type == .keyDown && event.characters == "."
+            && event.modifierFlags.intersection([.command, .control, .option, .shift]) == .command
+    }
+
     /// Shared by real key delivery and the agent's direct NSWindow delivery.
     func key(_ event: NSEvent) -> Bool {
         guard let dialog = active, event.window === dialog.window else { return false }
         if let window = dialog.window, !ownsFocus(window) { return false }
         // Composition owns Escape and Tab until the input method commits it.
         if (dialog.window?.firstResponder as? NSTextInputClient)?.hasMarkedText() == true { return false }
-        // Escape, and Command-period, which AppKit gives a sheet's Cancel too.
-        let period = event.type == .keyDown && event.characters == "."
-            && event.modifierFlags.intersection([.command, .control, .option, .shift]) == .command
-        if event.keyCode == 53 || period {
+        if Self.isCloseRequest(event) {
             if event.type == .keyDown, !event.isARepeat, dismissalOwner(of: dialog).props["closedby"] != "none" { dismiss(dialog) }
             return true
         }
@@ -413,10 +416,7 @@ final class DialogHost {
     private func dismiss(_ dialog: NodeView) {
         guard entry(ofRoute: dialog) != nil else {
             close(dialog)
-            if live(dialog), dialog.handlers.contains("cancel") {
-                if let onCancel { onCancel(dialog.id) }
-                else if let session = presenter?.session { session.apply(session.runtime.pickerCancel(dialog.id, now: session.now())) }
-            }
+            if live(dialog), dialog.handlers.contains("cancel") { presenter?.onCancel?(dialog.id) }
             return
         }
         if let refused = presenter?.navigation.dismiss(dialog) { presenter?.session?.log("modal dismissal refused: \(refused)") }

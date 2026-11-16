@@ -4433,6 +4433,11 @@ an action sheet on an iPhone (a popover on an iPad), a dialog a click outside
 closes on the web, a sheet a click on the window behind it closes on the Mac, a
 Material dialog a tap outside cancels on Android.
 `close("<id>")` from an action closes it as its Cancel does.
+Escape (and Command-period on the Mac), Back and a dismissal outside it are
+HTML's close request: the `dialog` hears `cancel`, then `close`. Its Cancel, an action
+and `close("<id>")` fire `close` alone, as a `command="close"` button does in a
+browser. iOS reports a hardware Escape at its alert as the Cancel's tap, so
+there it fires `close` alone.
 
 An alert that only tells ("Couldn't save the note." and OK) is a `text` and its
 one closing button, with no action: iOS's alert with that one button, macOS's

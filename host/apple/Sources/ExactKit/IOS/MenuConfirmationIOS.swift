@@ -77,6 +77,11 @@ extension MenuHost {
         var finishing = false
         var dismissing = false
         var chosen: NodeView?
+        /// Ended by the person's close request (Escape, Back, a tap
+        /// outside), which fires `cancel` at a modal dialog before its
+        /// `close`, as HTML's does. The cancel's button is its authored
+        /// `command="close"`, which fires `close` alone.
+        var closeRequest = false
         /// An action as presented: the node, the title the sheet shows for
         /// it, and whether it could be chosen.
         final class Presented {
@@ -115,11 +120,11 @@ extension MenuHost {
         func adaptivePresentationStyle(for controller: UIPresentationController) -> UIModalPresentationStyle { .none }
         #if !os(tvOS)
         func popoverPresentationControllerDidDismissPopover(_ controller: UIPopoverPresentationController) {
-            host?.cancelled(self)
+            host?.cancelled(self, closeRequest: true)
         }
         #endif
         func presentationControllerDidDismiss(_ presentationController: UIPresentationController) {
-            host?.cancelled(self)
+            host?.cancelled(self, closeRequest: true)
         }
     }
 
@@ -133,7 +138,7 @@ private final class ConfirmationLifetime: UIView {
         guard mounted else { return }
         DispatchQueue.main.async { [weak self] in
             guard let owner = self?.owner, owner.alert.presentingViewController == nil, !owner.finishing else { return }
-            owner.host?.cancelled(owner)
+            owner.host?.cancelled(owner, closeRequest: false)
         }
     }
 }

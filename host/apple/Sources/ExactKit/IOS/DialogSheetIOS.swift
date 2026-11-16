@@ -400,9 +400,6 @@ final class DialogSheets: NSObject, UIAdaptivePresentationControllerDelegate {
     private var entries: [Entry] = []
     /// Still open in the document, waiting for a retiring route's UIKit stack.
     private var resuming: [Entry] = []
-    /// HTML's `cancel` at a dialog a close request closed. Unset, it goes to
-    /// the session's runner; a test without a session sets it.
-    var onCancel: ((UInt32) -> Void)?
 
     init(presenter: Presenter) { self.presenter = presenter }
     fileprivate func geometryChanged() { presenter?.nativeGeometry.changed() }
@@ -677,10 +674,7 @@ final class DialogSheets: NSObject, UIAdaptivePresentationControllerDelegate {
             UIAccessibility.post(notification: .screenChanged, argument: element)
         }
         if cancelled || entry.notifyClose { dialog.queueDialogClose() }
-        if cancelled, live(dialog), dialog.handlers.contains("cancel") {
-            if let onCancel { onCancel(dialog.id) }
-            else if let session = presenter.session { session.applyInput(session.runtime.pickerCancel(dialog.id, now: session.now())) }
-        }
+        if cancelled, live(dialog), dialog.handlers.contains("cancel") { presenter.onCancel?(dialog.id) }
     }
 
     /// A tap on the dimmed page closes only a `closedby="any"` dialog.

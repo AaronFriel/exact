@@ -562,21 +562,24 @@ final class MenuHost {
             button.isEnabled = entry.enabled
         }
     }
-    func cancelled(_ owner: Confirmation) {
+    /// UIKit dismissed it: a tap outside or a swipe (`closeRequest`), or its presenter went.
+    func cancelled(_ owner: Confirmation, closeRequest: Bool) {
         // UIKit also delivers this after a selected action's handler. That
         // notification must not cancel the action awaiting the next turn.
         guard confirmation === owner, !owner.finishing else { return }
         owner.finishing = true
         owner.fields.forEach { $0.end() }
         confirmation = nil
+        if closeRequest, owner.modal { owner.popover?.queueDialogCancel() }
         owner.popover?.queueDialogClose()
         if let pop = owner.popover { presenter?.popoverEvents.changed(pop, open: false) }
         DispatchQueue.main.async { [weak self] in self?.resumeAfterRouteDismissal() }
     }
     /// `chosen` is the selected action, nil for the cancel.
-    private func finish(_ owner: Confirmation, chosen: NodeView?) {
+    private func finish(_ owner: Confirmation, chosen: NodeView?, closeRequest: Bool = false) {
         guard confirmation === owner, !owner.finishing else { return }
         owner.finishing = true
+        owner.closeRequest = closeRequest && chosen == nil
         // A field's `change` before the action's press, as a blur's before a click.
         owner.fields.forEach { $0.end() }
         owner.chosen = chosen
@@ -601,6 +604,7 @@ final class MenuHost {
                 self.resumeAfterRouteDismissal()
                 if let action { self.presenter?.press(action.id) }
             }
+            if owner.closeRequest, owner.modal { owner.popover?.queueDialogCancel() }
             owner.popover?.queueDialogClose()
         }
     }
@@ -1161,8 +1165,9 @@ final class MenuHost {
     }
     /// A sheet action's handler: the action at `index` as presented, nil
     /// for the cancel. Its own entry, never a successor's at that index.
+    /// UIKit runs the cancel's handler for its button, a hardware Escape and a popover's tap outside: only the last is a close request.
     private func select(_ owner: Confirmation, _ index: Int?) {
-        guard let index else { finish(owner, chosen: nil); return }
+        guard let index else { finish(owner, chosen: nil, closeRequest: owner.style == .popover); return }
         guard owner.actions.indices.contains(index), let node = owner.actions[index].node else {
             finish(owner, chosen: nil); return
         }
@@ -1218,7 +1223,7 @@ final class MenuHost {
         if dismissPopover() { return true }
         guard let owner = confirmation else { return nil }
         guard !inTransition, valid(owner) else { return false }
-        finish(owner, chosen: nil)
+        finish(owner, chosen: nil, closeRequest: true)
         return true
     }
 

@@ -704,7 +704,8 @@ package final class Runtime {
     package func dialogClose(_ view: UInt32, now: Double) -> Batch {
         on { read(exact_dispatch(rt, view, 49, write(""), now)) }
     }
-    /// A file input's picker was dismissed: HTML's `cancel` (LLP 1069.002 D2).
+    /// HTML's `cancel`: a file input's picker was dismissed (LLP 1069.002
+    /// D2), or a person's close request closed a dialog.
     package func pickerCancel(_ view: UInt32, now: Double) -> Batch {
         return on {
             let n = write("")
