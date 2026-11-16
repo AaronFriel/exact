@@ -958,7 +958,7 @@ class Natives(
                     // A remote page or the error page reads no file; a pooled view may have shown a local one.
                     web.settings.allowFileAccess = s is Source.Local
                     when (s) {
-                        is Source.Remote -> web.loadUrl(s.url)
+                        is Source.Remote -> web.loadUrl(s.url, Sources.frameHeaders(s.url))
                         is Source.Local -> web.loadUrl(Uri.fromFile(s.file).toString() + s.suffix)
                         is Source.Refused -> {
                             android.util.Log.w("exact", "iframe ${e.id}: ${s.why}")

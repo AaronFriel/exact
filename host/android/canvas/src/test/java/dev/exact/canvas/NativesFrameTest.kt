@@ -32,6 +32,27 @@ class NativesFrameTest {
         assertTrue(ShadowLog.getLogsForTag("exact").any { it.msg == "iframe 1: sandbox is unsupported on Android" })
     }
 
+    /** A remote page is asked for with the origin a browser sends for a frame of a page at `exact.invalid`, in the
+     * page's scheme, at its first load and when its `src` changes; a page that is no web URL is given none. */
+    @Test fun aRemotePageIsAskedForWithItsParentsOriginAsReferer() {
+        val natives = natives()
+        fun src(url: String) = JSONObject().put("src", url).put("sandbox", JSONObject.NULL).toString()
+        natives.ensure(1, 1, 0, 0, src("https://example.com/a?b"), 0)
+        val web = natives.getChildAt(0) as WebView
+        assertEquals("https://example.com/a?b", shadowOf(web).lastLoadedUrl)
+        assertEquals(mapOf("Referer" to "https://exact.invalid/"), shadowOf(web).lastAdditionalHttpHeaders)
+        natives.ensure(1, 1, 0, 0, src("http://example.com/"), 0)
+        assertEquals("http://example.com/", shadowOf(web).lastLoadedUrl)
+        assertEquals(mapOf("Referer" to "http://exact.invalid/"), shadowOf(web).lastAdditionalHttpHeaders)
+        natives.ensure(1, 1, 0, 0, src("//example.com/c"), 0)
+        assertEquals("https://example.com/c", shadowOf(web).lastLoadedUrl)
+        assertEquals(mapOf("Referer" to "https://exact.invalid/"), shadowOf(web).lastAdditionalHttpHeaders)
+        natives.ensure(1, 1, 0, 0, src(""), 0)
+        assertEquals("about:blank", shadowOf(web).lastLoadedUrl)
+        assertEquals(emptyMap<String, String>(), shadowOf(web).lastAdditionalHttpHeaders)
+        natives.destroyAll()
+    }
+
     @Test fun aSandboxOnlyUpdateDestroysTheUnsandboxedPage() {
         val natives = natives()
         natives.ensure(1, 1, 0, 0, props(), 0)
@@ -68,6 +89,7 @@ class NativesFrameTest {
         assertSame(web, natives.getChildAt(0))
         assertTrue(web.settings.javaScriptEnabled)
         assertEquals("https://example.com/", shadowOf(web).lastLoadedUrl)
+        assertEquals(mapOf("Referer" to "https://exact.invalid/"), shadowOf(web).lastAdditionalHttpHeaders)
         natives.destroyAll()
     }
 }

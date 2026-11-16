@@ -1676,7 +1676,8 @@ price: answers arrive `Later`, outside the action's transaction (LLP 1027.002 D1
   `https://exact.invalid`: the page's first request is a cross-site navigation, and
   `window.parent`'s origin is the wrapper's. Either way its request carries
   `Referer: http://exact.invalid/` (or `https:`), the parent's origin, as a browser
-  sends it for a cross-origin frame. On the web the parent is the app's own
+  sends it for a cross-origin frame; Android's frame, a page of its own, is asked
+  for with the same value. On the web the parent is the app's own
   page, whose loopback port differs between the dev loop and an `agent web` or
   `test web` run. A server that checks `Origin`, `Referer` or `Sec-Fetch-Site`
   against a fixed list therefore refuses its own page on some hosts. Fix: admit the
