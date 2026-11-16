@@ -181,6 +181,10 @@ class ExtensionContext internal constructor(val application: Context, private va
     var origin = "app"
         internal set
 
+    /** The calling source's grants, captured before returning from later; retries retain this ceiling. */
+    var authority = ""
+        internal set
+
     /** The number the runner gave the send being answered now, which a later [ExactExtension.cancel] names; null for
      * a source (LLP 1133.016 D15 item 2). */
     var request: Int? = null
@@ -585,6 +589,7 @@ internal object Extensions {
                 }
                 declared.isNotEmpty() -> {
                     extension.context.origin = request.optString("origin").ifEmpty { "app" }
+                    extension.context.authority = request.optString("authority")
                     extension.context.request = if (request.has("request")) request.getInt("request") else null
                     extension.later(declared, request.optJSONObject("args") ?: JSONObject(), request.opt("preferred"), reply)
                 }

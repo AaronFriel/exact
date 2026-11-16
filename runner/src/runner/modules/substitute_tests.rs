@@ -939,3 +939,58 @@ fn binding_recovers_a_data_module_reader_before_its_failed_reply_lands() {
     assert_eq!(r.resource("devices"), Some(&Value::str("back camera")));
     assert!(r.failed_resources().is_empty());
 }
+
+#[test]
+fn a_data_send_carries_the_grants_it_was_admitted_under() {
+    use crate::{Dispatch, Reply, Request, Work};
+    use serde_json::{json, Value as Json};
+    use std::sync::{Arc, Mutex};
+    let mut b = PlanBuilder::new(exact_kernel::SCHEMA_DIGEST, 1);
+    let string = b.primitive(TypeKind::String);
+    for (name, send) in [("devices", false), ("capture", true)] {
+        let source = b.source(&format!("camera.{name}"), &[], string);
+        b.module(
+            source,
+            ("camera", "@fixture/camera"),
+            name,
+            send,
+            false,
+            "never",
+            "",
+            "{}",
+        );
+    }
+    b.node(NodeType::View as u8, None, None, 0, &[], &[], None);
+    let mut r = boot(b.finish().unwrap());
+    let heard: Arc<Mutex<Vec<Json>>> = Default::default();
+    let seen = heard.clone();
+    r.native_slot()
+        .host(Some(Arc::new(move |body: Vec<u8>, reply: Reply| {
+            seen.lock()
+                .unwrap()
+                .push(serde_json::from_slice(&body).unwrap());
+            reply.send(super::response(&json!("done")));
+        })));
+    r.bind_extensions(&["camera"], &[]);
+    let scope = "net.fetch https://source.test";
+    for (verb, name, grants) in [
+        ("send", "capture", Some(scope)),
+        ("send", "capture", None),
+        ("source", "devices", Some(scope)),
+    ] {
+        // What the body claims for itself is never forwarded.
+        let body =
+            json!({"extension": "camera", verb: name, "args": {}, "authority": "net.fetch *"});
+        let mut request = Request::native(body.to_string().into_bytes());
+        request.grants = grants.map(Into::into);
+        match r.native_work(&request) {
+            Dispatch::Run(Work::Later(work)) => work(Reply::new(|_| {})),
+            Dispatch::Run(Work::Now(work)) => drop(work()),
+            _ => panic!("the module request runs"),
+        }
+    }
+    let heard = heard.lock().unwrap();
+    assert_eq!(heard[0]["authority"], scope);
+    assert_eq!(heard[1]["authority"], json!(r.data.grants()));
+    assert_eq!(heard[2].get("authority"), None, "a read starts no work");
+}
