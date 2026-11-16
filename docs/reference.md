@@ -3914,7 +3914,8 @@ asks, from a press. [Recipe](recipes/displays.md).
 | macOS | `NSScreen.screens` flipped at the primary's top, `visibleFrame` for the work area, `CGDisplayIsBuiltin`, `localizedName`; the pointer from `NSEvent.mouseLocation` |
 | web | the browser's `window.getScreenDetails()` (Chromium on the desktop), `screenschange`, `currentscreenchange`; no pointer (`NotSupportedError`); elsewhere `available: false` |
 | Linux | the one display the host fills: the KMS connector (`label` its name, `isInternal` for eDP, LVDS and DSI) or the headless buffer, at the host's scale; the pointer the host draws |
-| Windows, iPadOS, Android | not built: `NotSupportedError` |
+| Windows | `EnumDisplayMonitors` and `GetMonitorInfoW` (`rcMonitor`, `rcWork` for the work area), each scale `GetDpiForMonitor`'s times the Text size setting, laid out into CSS pixels as Chromium lays monitors out, so the numbers are a page's in Chrome on the same machine; `label` (the EDID name, else empty) and `isInternal` from `QueryDisplayConfig` (an LVDS or DSI panel is internal here and not in Chrome); the pointer from `GetCursorPos`; `clientRect`, `clientX` and `clientY` from physical pixels over the window's own scale, which the Text size setting does not change. A run with no window (an agent's session) reports the buffer it paints as its one display, as the Linux host does |
+| iPadOS, Android | not built: `NotSupportedError` |
 
 ### Pick a file of any type
 

@@ -14,6 +14,8 @@ mod clicks;
 pub mod clipboard;
 #[cfg_attr(not(windows), allow(dead_code))]
 mod desktop;
+#[cfg_attr(not(windows), allow(dead_code))]
+mod displays;
 #[cfg(windows)]
 mod edit_menu;
 #[cfg(windows)]

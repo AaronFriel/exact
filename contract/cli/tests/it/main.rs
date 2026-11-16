@@ -314,6 +314,7 @@ mod warnings_screens;
 mod warnings_time;
 mod when;
 mod window_commands;
+mod window_management;
 mod windows_shortcuts;
 
 mod properties;
