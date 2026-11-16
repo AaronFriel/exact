@@ -52,17 +52,21 @@ extension NodeView {
     func decorationChanged(from old: NodeStyle) {
         let lines = style["text_decoration_line"], was = old["text_decoration_line"]
         guard lines != was || (lines != nil && old["text_color"] != style["text_color"]) else { return }
-        var stack: [PlatformView] = subviews
-        while let v = stack.popLast() {
-            if let node = v as? NodeView, node.isParagraph {
-                node.invalidateText()
-                #if os(macOS)
-                node.needsDisplay = true
-                #else
-                node.setNeedsDisplay()
-                #endif
-            }
-            stack.append(contentsOf: v.subviews)
+        Self.visitParagraphs(in: subviews) { node in
+            node.invalidateText()
+            #if os(macOS)
+            node.needsDisplay = true
+            #else
+            node.setNeedsDisplay()
+            #endif
+        }
+    }
+    /// Paragraphs beneath native content holders as well as authored boxes.
+    static func visitParagraphs(in roots: [PlatformView], _ body: (NodeView) -> Void) {
+        var stack = roots
+        while let view = stack.popLast() {
+            if let node = view as? NodeView, node.isParagraph { body(node) }
+            stack.append(contentsOf: view.subviews)
         }
     }
     var paragraphOwner: NodeView { self }
@@ -98,12 +102,15 @@ extension NodeView {
         #else
         setNeedsDisplay()
         layer.setNeedsDisplay()
+        presenter?.noteOwedText(self)
         #endif
     }
 
     func invalidateText() {
         #if os(macOS)
         readerParagraph?.invalidatePaint()
+        #else
+        if let presenter, presenter.applying { presenter.changedText.insert(id) }
         #endif
         cachedTextSpec = nil
         // Keep the previous accepted geometry alive through the next lookup.
@@ -114,7 +121,6 @@ extension NodeView {
         #if os(macOS)
         textRasterPending = false
         #else
-        if let presenter, presenter.applying { presenter.changedText.insert(id) }
         presenter?.requestTextPublication()
         #endif
     }

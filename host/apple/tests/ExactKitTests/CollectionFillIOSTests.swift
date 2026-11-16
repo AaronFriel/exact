@@ -40,6 +40,57 @@ final class CollectionFillIOSTests: XCTestCase {
         return (p, window, scroll)
     }
 
+    /// Advance offsets and slices at 60 Hz, draining owner work between frames.
+    /// The bounds include the final fill and retirement after the reversal.
+    func testScriptedFlingCountsFillsFlushesAndSlices() throws {
+        for asynchronous in [false, true] {
+            let previous = ExactSession.asyncFills
+            ExactSession.asyncFills = asynchronous
+            defer { ExactSession.asyncFills = previous }
+            let session = ExactApp.shared.makeSession(label: "counted-fling")
+            let p = session.presenter
+            let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 400, height: 400))
+            defer { session.destroy(); window.isHidden = true }
+            window.addSubview(p.viewport)
+            p.viewport.frame = window.bounds
+            window.makeKeyAndVisible()
+            XCTAssertNil(session.boot(plan: try fixturePlan("SCROLL_SNAP"), size: window.bounds.size).error)
+            let node = try XCTUnwrap(p.views.values.first { $0.props["testId"] == "strip" })
+            let scroll = try XCTUnwrap(node.scrollView)
+            p.scrollPump.settle()
+            waitForMainQueue("initial list continuations")
+            var time = CACurrentMediaTime()
+            p.scrollPump.clock = { time }
+            let fills = p.scrollPump.fillPasses, flushes = p.collections.flushes, slices = p.collections.slices
+            for frame in 0..<240 {
+                time += 1.0 / 60
+                let step = frame < 120 ? frame + 1 : 239 - frame
+                scroll.contentOffset.x = CGFloat(step * 12)
+                p.scrollPump.pump()
+                session.drainFill()
+                FrameClock.shared.drop(p.scrollPump)
+                waitForMainQueue("frame's queued pump and collection continuation")
+                XCTAssertTrue(p.collections.covers(node.id), "frame \(frame) has every row it shows")
+            }
+            for _ in 0..<20 {
+                time += 1.0 / 60
+                p.scrollPump.pump()
+                session.drainFill()
+                FrameClock.shared.drop(p.scrollPump)
+                waitForMainQueue("final fill and retirement")
+                if p.collections.fillPending.isEmpty { break }
+            }
+            XCTAssertTrue(p.collections.fillPending.isEmpty)
+            XCTAssertEqual(scroll.contentOffset.x, 0, accuracy: 0.001)
+            let counts = [p.scrollPump.fillPasses - fills, p.collections.flushes - flushes, p.collections.slices - slices]
+            // What the host made before frames skipped text discovery, with a
+            // margin of two: unrelated changes to slicing move these by one.
+            let baseline = asynchronous ? [248, 305, 124] : [240, 280, 120]
+            for (count, bound) in zip(counts, baseline) { XCTAssertLessThanOrEqual(count, bound + 2) }
+            print("J fling async=\(asynchronous) frames=240 fills=\(counts[0]) flushes=\(counts[1]) slices=\(counts[2])")
+        }
+    }
+
     // Baseline coverage: callback rationing predates this lane.
     func testCoveredScrollDefersItsReportAndAGapRescuesOnlyWhatShows() throws {
         let (p, window, scroll) = try fixture()
@@ -55,10 +106,16 @@ final class CollectionFillIOSTests: XCTestCase {
         p.collections.fillSlice(1, limit: 5)
         func limit(_ data: Data) -> UInt32 { data.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: 88, as: UInt32.self) } }
         XCTAssertEqual(reports.count, 1)
+        XCTAssertTrue(p.collections.observingTurns)
+        p.scrollPump.reset()
+        XCTAssertTrue(p.scrollPump.observingTurns, "the next native callback reads this turn's elapsed time")
+        XCTAssertTrue(p.collections.observingTurns, "later native input needs a fresh report budget before continuations")
         XCTAssertEqual(limit(try XCTUnwrap(reports.last)), 5)
         scroll.contentOffset.y = 200
         XCTAssertFalse(p.collections.covers(1))
         XCTAssertEqual(reports.count, 2, "a visible gap is rescued in its UIKit callback")
+        p.collections.reset()
+        XCTAssertTrue(p.collections.observingTurns)
         XCTAssertEqual(limit(try XCTUnwrap(reports.last)), 2, "visible rows plus two, rather than a whole window")
         print("D3 scroll callbacks=1000 covered_reports=0 ms=\(milliseconds) slice_limit=5 rescue_limit=2")
     }

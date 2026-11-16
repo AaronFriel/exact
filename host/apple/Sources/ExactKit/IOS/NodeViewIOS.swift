@@ -23,8 +23,8 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
     var boxDrawn = false
     /// The key is set and paints the whole paragraph (not a band of it).
     private(set) var textRasterWhole = false
-    var textRasterReady = false
-    var textRasterFailed = false
+    var textRasterReady = false { didSet { if oldValue != textRasterReady { presenter?.noteOwedText(self) } } }
+    var textRasterFailed = false { didSet { if oldValue != textRasterFailed { presenter?.noteOwedText(self) } } }
     var textLayoutValid = false
     /// Whether a frame has shown it where it is (`Presenter.showed`).
     var shown = Shown.uncopied
@@ -83,6 +83,7 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
         set {
             if newValue != nil || specs != nil { textMore.rasterKey = newValue }
             textRasterWhole = newValue.map { $0.clip == nil } ?? false
+            presenter?.noteOwedText(self)
         }
     }
     package var props: [String: String] = [:] { didSet { presenter?.propsChanged(self) } }
@@ -262,6 +263,9 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
         didSet {
             if clipboardListening { oldValue?.clipboardHandlerCount -= 1; clipboardListening = false }
             trackClipboardHandlers(true)
+            oldValue?.owedText.remove(id)
+            oldValue?.movingText.remove(id)
+            presenter?.noteOwedText(self)
         }
     }
     /// The actual scroll port; a native list supplies its collection view.
@@ -661,7 +665,14 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
         if let presenter, superview === presenter.root { presenter.paintCanvas() }
     }
 
+    package override func willMove(toWindow newWindow: UIWindow?) {
+        if isParagraph { presenter?.movingText.insert(id) }
+        super.willMove(toWindow: newWindow)
+    }
+
     package override func didMoveToWindow() {
+        presenter?.movingText.remove(id)
+        presenter?.noteOwedText(self)
         super.didMoveToWindow()
         if window == nil { pressEpoch &+= 1 }
         // Focused by its autofocus and moved out of the window in the same
@@ -733,30 +744,39 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
 
     /// A scroll under a canvas repaints it (LLP 1014 D4 c).
     package func scrollViewDidScroll(_ scrollView: UIScrollView) {
-        guard scrollView === self.scrollView else { return }
-        let post = Presenter.signposts.beginInterval("scrolled"), phase = HostPhases.shared.begin(.scroll)
-        defer { Presenter.signposts.endInterval("scrolled", post); HostPhases.shared.end(phase) }
+        guard scrollView === self.scrollView, let presenter else { return }
+        let post = Presenter.signpostLog.signpostsEnabled ? Presenter.beginScrollSignpost() : nil
+        #if DEBUG
+        if post != nil { presenter.scrollSignpostIntervals += 1 }
+        #endif
+        let phase = HostPhases.shared.begin(.scroll)
+        defer {
+            if let post { Presenter.endScrollSignpost(post) }
+            HostPhases.shared.end(phase)
+        }
         // The kernel's authored frames already include this content room.
         // Keep the physical UI inset basis, but do not count native padding twice.
         let room = extras?.nativeScrollContentInsets ?? .zero
-        presenter?.onScrolled?(id, Double(scrollView.contentOffset.x + room.left), Double(scrollView.contentOffset.y + room.top + pageBand.top))
-        presenter?.stickies.scrolled(id); presenter?.collections.changed(id, user: true)
+        presenter.onScrolled?(id, Double(scrollView.contentOffset.x + room.left), Double(scrollView.contentOffset.y + room.top + pageBand.top))
+        presenter.stickies.scrolled(id); presenter.collections.changed(id, user: true)
         #if os(iOS)
-        if swipeOwner, scrollView.isTracking { presenter?.swipeActions.painted.scrolled(self) }
+        if swipeOwner, scrollView.isTracking { presenter.swipeActions.painted.scrolled(self) }
         #endif
-        presenter?.transformGeometry.changed(); presenter?.tipsScrolled()
-        presenter?.videoVisibility?.changed()
-        presenter?.reaimFixedGradients()
-        presenter?.scrollPump.scrolled(self)
-        if presenter?.navigation.container === self { presenter?.owners.publish() }
-        FrameSampler.scrolled(scrollView, in: presenter?.session, person: false)
-        presenter?.session?.frameHealth.trackScrolled(scrollView)
+        presenter.transformGeometry.changed()
+        presenter.tipsScrolled()
+        presenter.videoVisibility?.changed(in: scrollView)
+        if presenter.gradientsMove(in: scrollView) { presenter.reaimFixedGradients() }
+        presenter.scrollPump.scrolled(self)
+        if presenter.navigation.container === self { presenter.owners.publish() }
+        let session = presenter.session
+        FrameSampler.scrolled(scrollView, in: session, person: false)
+        session?.frameHealth.trackScrolled(scrollView)
         repaintThrough()
         scrollEndMoved(scrollView)
         // User scrolling is already a coherent position. Deliver before the
         // frame paints so authored scroll-linked geometry cannot lag a frame.
         // Layout-generated offsets still coalesce after the batch completes.
-        if presenter?.applying == false && !dispatchingScrollEvent &&
+        if presenter.applying == false && !dispatchingScrollEvent &&
             (scrollView.isTracking || scrollView.isDecelerating) {
             sendScrollEvent()
         } else { queueScrollEvent() }
@@ -1207,6 +1227,8 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
     package override func didMoveToSuperview() {
         if Self.containerMoves == 0 { pressEpoch &+= 1; cancelPressContact(reparenting: true); presenter?.unshown(self) } // a new parent: shown elsewhere
         super.didMoveToSuperview()
+        Self.textRasterAncestryChanged(self)
+        ScrollMembership.epoch &+= 1
         overflowClipGeometryChanged()
         Self.textGeometry &+= 1
         paintOrderMoved()
@@ -1216,6 +1238,7 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
         if superview != nil, style["color_scheme"] != nil || overrideUserInterfaceStyle != .unspecified { settleColorScheme() }
     }
     func applyStyle(_ s: NodeStyle) {
+        defer { presenter?.noteOwedText(self) }
         defer { video?.update(); layoutContent(); applyCssVisibility(); if columnRecord?.columns.isEmpty == false { layoutColumnRules() } }
         let origin = style["transform_origin"]
         let old = style
@@ -1444,8 +1467,12 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
             // nothing redisplays a row the lead drew off-screen when it
             // scrolls in: draw it now, visible or not.
             if textRaster == nil && (!canRasterText || Capture.capturing || presenter?.textIsVisible(self) == true) {
-                let post = Presenter.signposts.beginInterval("text-draw"), phase = HostPhases.shared.begin(.text)
-                defer { Presenter.signposts.endInterval("text-draw", post); HostPhases.shared.end(phase) }
+                let post = Presenter.signpostLog.signpostsEnabled ? Presenter.signposts.beginInterval("text-draw") : nil
+                let phase = HostPhases.shared.begin(.text)
+                defer {
+                    if let post { Presenter.signposts.endInterval("text-draw", post) }
+                    HostPhases.shared.end(phase)
+                }
                 let spec = paragraphSpec()
                 if let paragraph = paragraphLayout() { eachFragment(ctx) { box, at, lines in
                     drawParagraph(ctx, paragraph: paragraph, spec: spec, in: box, dirty: rect.offsetBy(dx: -at.x, dy: -at.y), lines: lines) } }

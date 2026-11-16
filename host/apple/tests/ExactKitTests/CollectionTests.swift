@@ -139,6 +139,67 @@ final class CollectionTests: XCTestCase {
         XCTAssertTrue(budget.begin())
     }
 
+    func testEachWakeRenewsPinReportsBeforeContinuationsRun() throws {
+        #if canImport(AppKit)
+        _ = NSApplication.shared
+        #endif
+        let p = Presenter()
+        defer { p.reset() }
+        p.viewport.frame = CGRect(x: 0, y: 0, width: 300, height: 200)
+        p.apply(wireBatch([
+            ["op": "create", "id": 1, "kind": "list", "style": ["overflow_y": "scroll"]],
+            ["op": "create", "id": 2, "kind": "view"],
+            ["op": "collections", "items": [["view": 1, "revision": 1, "scrollSequence": 0,
+                "totalExtent": 1000, "rows": [["view": 2, "root": 2, "epoch": 1]]]]],
+            ["op": "children", "id": 1, "ids": [2]], ["op": "roots", "ids": [1]],
+            ["op": "frame", "id": 1, "x": 0, "y": 0, "w": 300, "h": 200],
+            ["op": "frame", "id": 2, "x": 0, "y": 0, "w": 300, "h": 100],
+            ["op": "content", "id": 1, "w": 300, "h": 1000],
+        ]))
+        var reports: [Data] = []
+        p.collections.onFeedback = { reports.append($0) }
+        p.collections.settle()
+        #if os(iOS) || os(tvOS)
+        p.scrollPump.reset()
+        #endif
+        var wakes = 0, armed = false
+        let done = expectation(description: "pin reports on two consecutive wakes")
+        let activities = CFRunLoopActivity.beforeWaiting.rawValue | CFRunLoopActivity.afterWaiting.rawValue
+        let observer = try XCTUnwrap(CFRunLoopObserverCreateWithHandler(nil, activities, true, 1) { _, activity in
+            guard wakes < 2 else { return }
+            if activity == .beforeWaiting {
+                guard !armed else { return }
+                // Spend both passes after this turn's queued continuations.
+                p.collections.pointer(nil)
+                p.collections.fillSlice(1, limit: 0)
+                let before = reports.count
+                p.collections.pointer(2)
+                p.collections.pointer(nil)
+                XCTAssertEqual(reports.count - before, 2)
+                armed = true
+            } else if armed {
+                // Order 1 follows the budget observer, before native input
+                // and the main queue can run on this wake.
+                let before = reports.count
+                let refused = p.collections.budget.refusedSpent
+                p.collections.pointer(2)
+                XCTAssertEqual(reports.count - before, 1, "the input reports its pin synchronously")
+                XCTAssertEqual(p.collections.budget.refusedSpent, refused)
+                XCTAssertEqual(p.collections.entries[1]?.lastFacts?.interaction, 2)
+                armed = false
+                wakes += 1
+                if wakes == 2 { done.fulfill() }
+            }
+        })
+        CFRunLoopAddObserver(CFRunLoopGetMain(), observer, .commonModes)
+        defer { CFRunLoopRemoveObserver(CFRunLoopGetMain(), observer, .commonModes) }
+        wait(for: [done], timeout: 5)
+        XCTAssertEqual(wakes, 2)
+        XCTAssertTrue(p.collections.observingTurns)
+        p.collections.reset()
+        XCTAssertTrue(p.collections.observingTurns)
+    }
+
     /// A rescue is never refused for the turn's passes, only while a pass
     /// runs (a report's batch reentering); each refusal is counted by why.
     func testARescueIsNotRefusedForTheTurnsPasses() {

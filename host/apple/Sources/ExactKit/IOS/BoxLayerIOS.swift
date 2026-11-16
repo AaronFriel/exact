@@ -234,7 +234,7 @@ extension NodeView {
         let fixed = gradientLayered
         guard !cssVisibilityHidden, !drawsPaint || fixed, surface == nil, let gradient = Gradient(style["background_image"], tint: gradientTint), !gradient.needsDrawing else {
             boxGradient?.removeFromSuperlayer(); boxGradient = nil
-            presenter?.fixedGradients.remove(self)
+            presenter?.noteFixedGradient(self, fixed: false)
             return
         }
         CATransaction.begin(); CATransaction.setDisableActions(true)
@@ -260,7 +260,7 @@ extension NodeView {
         }
         gradient.apply(g, bounds: layer.bounds, box: gradientBox, dark: drawsDark, limit: style["dynamic_range_limit"]?.string)
         aimedGradient = nil
-        if fixed { presenter?.fixedGradients.add(self) } else { presenter?.fixedGradients.remove(self) }
+        presenter?.noteFixedGradient(self, fixed: fixed)
     }
 
     /// Repeating linear gradients as patterns Core Animation tiles

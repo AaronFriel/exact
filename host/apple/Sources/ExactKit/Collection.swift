@@ -302,6 +302,9 @@ package final class CollectionHost {
     var correcting = false
     private var dirty = Set<UInt32>()
     private(set) var budget = CollectionTurnBudget()
+    #if DEBUG
+    private(set) var flushes = 0, slices = 0
+    #endif
     /// Lists whose uncovered port a rescue reports first, whatever the
     /// turn has spent (`CollectionTurnBudget.begin(rescue:)`).
     private var rescuing = Set<UInt32>()
@@ -493,6 +496,7 @@ package final class CollectionHost {
         CFRunLoopAddObserver(CFRunLoopGetMain(), observer, .commonModes)
         turnObserver = observer
     }
+    var observingTurns: Bool { turnObserver != nil }
 
     func reset() {
         gestureContact = nil
@@ -727,6 +731,9 @@ package final class CollectionHost {
     /// `glimpse`: a glimpse's slice, which leaves what shows past its rows.
     @discardableResult
     func fillSlice(_ view: UInt32, limit: UInt32, glimpse: Bool = false) -> Int {
+        #if DEBUG
+        slices += 1
+        #endif
         // One slice in flight at a time, and none before the last one's
         // retirement: this one stays owed (LLP 1072 §3.1, §5).
         if filling?() == true { return 0 }
@@ -836,6 +843,9 @@ package final class CollectionHost {
     }
 
     func flush() {
+        #if DEBUG
+        flushes += 1
+        #endif
         guard batchDepth == 0, let onFeedback, !dirty.isEmpty else { return }
         // A slice in flight holds every report until it lands (T4), and its
         // landing flushes again (`landed`). A continuation now would find it

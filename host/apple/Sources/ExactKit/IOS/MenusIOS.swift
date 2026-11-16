@@ -809,6 +809,7 @@ final class MenuHost {
     }
     /// Revisit only the hosts captured at opening, including after UIKit detaches one.
     func rehostPopovers() {
+        guard !agentOpen.isEmpty else { return }
         for entry in agentOpen.values.sorted(by: { $0.order < $1.order }) { lift(entry) }
     }
     func replacePopoverHost(_ old: UIViewController, with controller: UIViewController) {

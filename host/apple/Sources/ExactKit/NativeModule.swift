@@ -433,6 +433,7 @@ final class NativeViews {
     /// and its views and calls work; no hatch is connected or called.
     static let hatchesOff = !ExactEnv.productionBake && ExactEnv.environment["EXACT_HATCHES"] == "off"
     private var entries: [UInt32: NativeEntry] = [:]
+    var isEmpty: Bool { entries.isEmpty }
     private var gateOpen = false
     private var waits: [UInt32: NativeWait] = [:]
     private var nextToken: UInt32 = 1

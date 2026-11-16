@@ -610,7 +610,7 @@
         "host/apple/Sources/ExactKit/NavigationTabs.swift: $0 as? NodeView",
         "host/apple/Sources/ExactKit/NavigationTabs.swift: view as? NodeView",
         "host/apple/Sources/ExactKit/NodeText.swift: return at as? NodeView",
-        "host/apple/Sources/ExactKit/NodeText.swift: v as? NodeView",
+        "host/apple/Sources/ExactKit/NodeText.swift: view as? NodeView",
         "host/apple/Sources/ExactKit/PaintCapture.swift: owner as? NodeView",
         "host/apple/Sources/ExactKit/PaintCapture.swift: owners[ObjectIdentifier(child)] as? NodeView",
         "host/apple/Sources/ExactKit/PaintCapture.swift: owners[ObjectIdentifier(child)] as? NodeView",
@@ -680,7 +680,7 @@
       ]
     },
     "treeWalks": {
-      "ceiling": 654,
+      "ceiling": 653,
       "sites": [
         "host/apple/Sources/ExactDrag/MouseHeightDragMac.swift: ancestor = current.superview",
         "host/apple/Sources/ExactDrag/MouseReorderMac.swift: ancestor = current.superview",
@@ -1272,9 +1272,8 @@
         "host/apple/Sources/ExactKit/NavigationTabs.swift: at = view.superview",
         "host/apple/Sources/ExactKit/NavigationTabs.swift: node.container.subviews.compactMap { $0 as? NodeView }.filter { $0.props[\"navigationKey\"] != nil }",
         "host/apple/Sources/ExactKit/NavigationTabs.swift: var at = node.superview",
-        "host/apple/Sources/ExactKit/NodeText.swift: stack.append(contentsOf: v.subviews)",
+        "host/apple/Sources/ExactKit/NodeText.swift: stack.append(contentsOf: view.subviews)",
         "host/apple/Sources/ExactKit/NodeText.swift: var at = superview",
-        "host/apple/Sources/ExactKit/NodeText.swift: var stack: [PlatformView] = subviews",
         "host/apple/Sources/ExactKit/NodeText.swift: while let v = at, !(v is NodeView) { at = v.superview }",
         "host/apple/Sources/ExactKit/PaintCapture.swift: let viewLayers = Set((owner?.subviews ?? []).map { ObjectIdentifier($0.layer) })",
         "host/apple/Sources/ExactKit/PaintOrder.swift: fileprivate var siblingPaintRank: Int64 { paintPlane ?? (self as? NodeView)?.paintRank ?? (self as? FlightClip)?.subviews.lazy.compactMap { ($0 as? NodeView)?.paintRank }.first ?? 0 }",

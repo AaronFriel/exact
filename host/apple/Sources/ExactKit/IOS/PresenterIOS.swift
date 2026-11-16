@@ -8,7 +8,16 @@ import os
 package final class Presenter {
     var documentLanguage = ""
     var documentDirection = "ltr"
-    static let signposts = OSSignposter(subsystem: "com.exact.host", category: "scroll")
+    // A disabled signposter still allocates interval state; callers check its log first.
+    static let signpostLog = OSLog(subsystem: "com.exact.host", category: .dynamicTracing)
+    static let signposts = OSSignposter(logHandle: signpostLog)
+    // Keep opaque signpost-ID metadata out of the callback while tracing is off.
+    @inline(never) static func beginScrollSignpost() -> OSSignpostIntervalState {
+        signposts.beginInterval("scrolled")
+    }
+    @inline(never) static func endScrollSignpost(_ state: OSSignpostIntervalState) {
+        signposts.endInterval("scrolled", state)
+    }
     var clipboardHandlerCount = 0
     #if DEBUG
     var clipboardAncestryWalks = 0
@@ -73,7 +82,14 @@ package final class Presenter {
     /// Shared elements in flight, by the arriver's id (LLP 1013.000, `FlightsIOS.swift`).
     var flights: [UInt32: Flight] = [:]
     private(set) var chrome = ChromeIndex()
-    func propsChanged(_ view: NodeView) { chrome.note(view.id, props: view.props); AriaCarriers.note(view, of: self); DragLink.installed?.updateReorderGesture(view); view.updateRefresh(); view.relook() }
+    func propsChanged(_ view: NodeView) {
+        chrome.note(view.id, props: view.props)
+        ScrollMembership.epoch &+= 1
+        AriaCarriers.note(view, of: self)
+        DragLink.installed?.updateReorderGesture(view)
+        view.updateRefresh()
+        view.relook()
+    }
     package func carrying(_ key: String) -> [NodeView] { chrome.ids(key).sorted().compactMap { views[$0] } }
     func takeChangedNames() -> Set<String> { chrome.takeChangedNames() }
     var scrollers: Set<UInt32> = []
@@ -97,6 +113,7 @@ package final class Presenter {
     /// Nodes showing a `background-attachment: fixed` gradient (LLP 1066
     /// D7): re-aimed at the viewport when anything scrolls or a batch lands.
     let fixedGradients = NSHashTable<NodeView>.weakObjects()
+    let gradientScrolls = ScrollMembership()
     func reaimFixedGradients() {
         guard fixedGradients.count > 0 else { return }
         for node in fixedGradients.allObjects where node.window != nil { node.reaimFixedGradient() }
@@ -361,6 +378,8 @@ package final class Presenter {
         hoveredInline = nil
         scrollPump.reset()
         textViews.removeAll()
+        owedText.removeAll()
+        movingText.removeAll()
         listViews.removeAll()
         heightBindings.removeAll()
         transformBindings.removeAll()
@@ -618,6 +637,12 @@ package final class Presenter {
     var onScrolled: ((UInt32?, Double, Double) -> Void)?
     var listViews: [UInt32: NodeView] = [:]
     var textViews: [UInt32: NodeView] = [:] { didSet { NodeView.textGeometry &+= 1 } }
+    /// Attached paragraphs that use a raster and lack it whole. Direct drawing owes no raster work.
+    var owedText: Set<UInt32> = []
+    var movingText: Set<UInt32> = []
+    #if DEBUG
+    var textSurfaceBuilds = 0, scrollSignpostIntervals = 0
+    #endif
     let textIndex = TextIndex()
     lazy var scrollPump = ScrollPump(self)
     let textRasters = TextRasterizer()
@@ -702,7 +727,7 @@ package final class Presenter {
     var devPill: PlatformView?
     /// Painted popovers' measures in their regions this batch (`placePainted`).
     var regionMeasures = PositionArea.MeasureCache()
-    /// Paragraphs whose words the batch being applied changed (`paintChangedText`)
+    /// Paragraphs whose text or style the batch invalidated (`paintChangedText`).
     var changedText: Set<UInt32> = []
     private func send(_ id: UInt32, _ f: @escaping () -> Void) {
         guard textHost(id) != nil else { return }
@@ -812,8 +837,12 @@ package final class Presenter {
         defer { applyLanguage(batch); applyWakeLock(batch); applyOrientationLock(batch) }
         if applySnapshots(batch) { return }
         PaintOrder.begin(); let schemes = ColorSchemes.begin(); defer { schemes.end() }
-        let post = Self.signposts.beginInterval("apply"), phase = HostPhases.shared.begin(.apply)
-        defer { Self.signposts.endInterval("apply", post); HostPhases.shared.end(phase) }
+        let post = Self.signpostLog.signpostsEnabled ? Self.signposts.beginInterval("apply") : nil
+        let phase = HostPhases.shared.begin(.apply)
+        defer {
+            if let post { Self.signposts.endInterval("apply", post) }
+            HostPhases.shared.end(phase)
+        }
         collections.beginBatch(batch)
         if !applying { flats.begin(batch) }
         pool.begin(batch)
@@ -850,6 +879,9 @@ package final class Presenter {
             PaintOrder.end()
             if outermost {
                 applying = false
+                for id in changedText {
+                    if let node = textViews[id] { noteOwedText(node) }
+                }
                 reaimFixedGradients()
                 ApplyProfile.time("pass.text") { paintPresentedText() }
                 paintChangedText()
@@ -936,7 +968,7 @@ package final class Presenter {
                 elements.created(v)
                 if v.kind == "video" { leaves.created(v) }
                 if v.kind == "list" { listViews[id] = v }
-                if v.isParagraph { textViews[id] = v }
+                if v.isParagraph { textViews[id] = v; noteOwedText(v) }
             case .paragraph:
                 #if os(iOS)
                 if views[id]?.hasInlineContextPopover == true || op.runs.contains(where: { $0.props["contextPopover"] != nil }) { contextReferencesChanged = true }
@@ -1190,6 +1222,8 @@ package final class Presenter {
         if let view = views[id] { autofocusProcessed.remove(ObjectIdentifier(view)); leaving(view) }
         listViews.removeValue(forKey: id)
         textViews.removeValue(forKey: id)
+        owedText.remove(id)
+        movingText.remove(id)
         scrollPump.forget(id)
         heightBindings.removeValue(forKey: id)
         transformBindings.removeValue(forKey: id)
