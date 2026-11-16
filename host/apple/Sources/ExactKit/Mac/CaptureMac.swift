@@ -69,7 +69,7 @@ extension Capture {
 
     private static func serverImage(_ number: Int) -> CGImage? {
         if let windowImageOverride { return windowImageOverride(number) }
-        return Agent.ownWindowImage(number)
+        return WindowServerPicture.ownWindow(number)
     }
 
     /// AppKit's glass has no CPU representation. Use the compositor's exact
@@ -304,4 +304,38 @@ extension Agent {
     }
 }
 #endif
+/// The window server's pictures of this process's own windows, which a production build's captures use as the agent's do.
+enum WindowServerPicture {
+    /// `CGWindowListCreateImage` of one window of this process, without its
+    /// frame's shadow, at the backing resolution. The SDK marks the call
+    /// unavailable (ScreenCaptureKit replaces it, and asks for Screen
+    /// Recording even for the caller's own windows), so it is looked up at
+    /// run time; the window server still answers it for the caller's own.
+    static func ownWindow(_ number: Int) -> CGImage? {
+        typealias Create = @convention(c) (CGRect, UInt32, UInt32, UInt32) -> Unmanaged<CGImage>?
+        guard let symbol = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "CGWindowListCreateImage") else { return nil } // RTLD_DEFAULT
+        let create = unsafeBitCast(symbol, to: Create.self)
+        // kCGWindowListOptionIncludingWindow; kCGWindowImageBoundsIgnoreFraming | kCGWindowImageBestResolution
+        guard let image = create(.null, 1 << 3, UInt32(number), 1 << 0 | 1 << 3)?.takeRetainedValue(), !isEmpty(image) else { return nil }
+        return image
+    }
+
+    /// Whether the window server's picture holds nothing. A locked screen or
+    /// sleeping display still answers with a transparent picture
+    /// a pixel or two short of the window: no picture, not a wrong one. It
+    /// is read at sixteen places across it, not one: a sheet's corners are
+    /// transparent, and scaled to a single pixel a 460 by 226 sheet read as
+    /// empty and was left out of its window's picture (LLP 1115.002 D7.2).
+    static func isEmpty(_ image: CGImage) -> Bool {
+        let side = 4
+        var pixels = [UInt8](repeating: 0, count: side * side * 4)
+        let drawn = pixels.withUnsafeMutableBytes { bytes -> Bool in
+            guard let few = CGContext(data: bytes.baseAddress, width: side, height: side, bitsPerComponent: 8, bytesPerRow: side * 4,
+                                      space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return false }
+            few.draw(image, in: CGRect(x: 0, y: 0, width: side, height: side))
+            return true
+        }
+        return !drawn || stride(from: 3, to: pixels.count, by: 4).allSatisfy { pixels[$0] == 0 }
+    }
+}
 #endif
