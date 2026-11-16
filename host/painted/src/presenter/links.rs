@@ -224,7 +224,7 @@ impl<D: DataSource> Presenter<D> {
     /// it, at its scheme's registered `protocol_handlers` template when there
     /// is one (`app::incoming_location`). The refusal, else `None`.
     pub fn open_location(&mut self, href: &str, now_ms: f64) -> Option<String> {
-        let location = crate::app::incoming_location(href);
+        let location = crate::app::incoming_location_at(href, self.host.web_mount.as_ref());
         if !self.host.runner().route_matches(&location) {
             return Some(format!("open {location}: no route matches it"));
         }

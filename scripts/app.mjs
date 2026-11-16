@@ -646,7 +646,9 @@ export function nativeManifestMetadata(manifest, platform) { return {app:manifes
  * changes only the origin's file; each Android filter's host and path, so a changed scope is a new APK. */
 const linkMetadata = (manifest, platform) => {
   const links = ['macos', 'ios'].includes(platform) ? appleLinkDomains(manifest) : platform === 'android' ? androidLinkFilters(manifest) : [];
-  return links.length ? { links } : {};
+  const base = manifest.host?.web?.base ?? '/';
+  const webMount = platform !== 'web' && base !== '/' && manifest.app?.origin ? { origin: new URL(manifest.app.origin).origin, base } : null;
+  return { ...(links.length ? { links } : {}), ...(webMount ? { webMount } : {}) };
 };
 let cachedSchema = null;
 function schema() {

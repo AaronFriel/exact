@@ -160,27 +160,60 @@ test('a Mac profile signs the links when it can, and a build without one says li
 });
 
 
-test('a mounted site publishes the same narrowed scope that native link claims use', async () => {
-  const { nativeManifestMetadata, webAppManifest } = await import('./app.mjs');
-  for (const scope of [undefined, '/notes/']) {
-    const manifest = { ...notes, scope, host: { ...notes.host, web: { base: '/app/' } } };
-    const web = webAppManifest(manifest, 'Notes'), claims = linkClaims(manifest);
-    assert.equal(claims[0].scope, web.scope);
-    assert.deepEqual(claims[0].exclude, ['/app/.exact/']);
-    assert.equal(nativeManifestMetadata(manifest, 'android').links[0].pathPrefix, '/app/notes/');
-    assert.deepEqual(appleAssociation(appOf(manifest)).applinks.details[0].components,
-      [{ '/': '/app/.exact/*', exclude: true }, { '/': '/app/notes/*' }]);
-    assert.equal(claims[1].scope, '/');
-  }
+test('root bases keep native claims and other link preferences permit a mounted site', async () => {
+  const { readManifest } = await import('./app.mjs');
+  const dir = mkdtempSync(resolve(tmpdir(), 'exact-link-base-'));
+  try {
+    for (const base of [undefined, '/']) {
+      const manifest = { ...notes, host: { ...notes.host, web: { base } } };
+      writeFileSync(resolve(dir, 'app.json'), JSON.stringify(manifest));
+      assert.deepEqual(linkClaims(readManifest(dir, 'notes')), linkClaims(notes));
+    }
+    for (const handle_links of [undefined, 'auto', 'not-preferred']) {
+      writeFileSync(resolve(dir, 'app.json'), JSON.stringify({ ...notes, handle_links, host: { web: { base: '/app/' } } }));
+      assert.deepEqual(linkClaims(readManifest(dir, 'notes')), []);
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('Android excludes the mounted Exact directory and its descendants', async () => {
+test('Android excludes the Exact directory and its descendants', async () => {
   const { withAppLinks } = await import('./android-manifest.mjs');
   const manifest = { ...notes, start_url: '/', scope: '/', host: {
-    ...notes.host, web: { base: '/app/' }, android: { ...notes.host.android, minimumOS: '15' },
+    ...notes.host, web: { base: '/' }, android: { ...notes.host.android, minimumOS: '15' },
   } };
   const xml = withAppLinks('', androidLinkFilters(manifest));
-  assert.match(xml, /android:allow="false">\s*<data android:pathPrefix="\/app\/\.exact\/"/);
-  assert.doesNotMatch(xml, /android:path="\/app\/\.exact\/"/);
-  assert.match(xml, /<uri-relative-filter-group>\s*<data android:pathPrefix="\/app\/"/);
+  assert.match(xml, /android:allow="false">\s*<data android:pathPrefix="\/\.exact\/"/);
+  assert.doesNotMatch(xml, /android:path="\/\.exact\/"/);
+  assert.match(xml, /<uri-relative-filter-group>\s*<data android:pathPrefix="\/"/);
+});
+
+test('mounted preferred claims publish the scope and exclude the mounted Exact tree', async () => {
+  const { readManifest } = await import('./app.mjs');
+  const dir = mkdtempSync(resolve(tmpdir(), 'exact-mounted-links-'));
+  try {
+    const manifest = { ...notes, host: { ...notes.host, web: { base: '/app/' }, android: { minimumOS: '15' } } };
+    writeFileSync(resolve(dir, 'app.json'), JSON.stringify(manifest));
+    const app = appOf(readManifest(dir, 'notes'));
+    assert.deepEqual(appleAssociation(app).applinks.details[0].components, [{ '/': '/app/.exact/*', exclude: true }, { '/': '/app/notes/*' }]);
+    assert.equal(androidLinkFilters(app.manifest)[0].pathPrefix, '/app/notes/');
+    const { withAppLinks } = await import('./android-manifest.mjs');
+    const whole = { ...app.manifest, start_url: '/', scope: '/' };
+    assert.match(withAppLinks('', androidLinkFilters(whole)), /android:pathPrefix="\/app\/\.exact\/"/);
+    assert.equal(linkClaims(app.manifest)[1].scope, '/');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('native metadata and Apple plists bake the incoming web mount', async () => {
+  const { nativeManifestMetadata } = await import('./app.mjs');
+  const { infoPlist, macInfoPlist } = await import('../host/apple/build.mjs');
+  const manifest = { ...notes, host: { ...notes.host, web: { base: '/app/' } } };
+  const mount = { origin: notes.app.origin, base: '/app/' };
+  for (const platform of ['ios', 'macos', 'android', 'linux', 'windows']) {
+    assert.deepEqual(nativeManifestMetadata(manifest, platform).webMount, mount);
+    assert.equal(nativeManifestMetadata(notes, platform).webMount, undefined);
+  }
+  for (const plist of [infoPlist({ ...appOf(manifest), displayName: 'Notes' }), macInfoPlist({ ...appOf(manifest), displayName: 'Notes' })]) {
+    assert.match(plist, /<key>ExactWebMount<\/key>/);
+    assert.match(plist, /<key>base<\/key>\s*<string>\/app\/<\/string>/);
+  }
 });

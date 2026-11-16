@@ -372,6 +372,7 @@ public final class ExactSession {
     /// `resume` (Settings…, D5): the window forward as it stands, or opened where it last was.
     public var openWindow: ((_ location: String, _ window: String, _ resume: Bool) -> Void)?
     var heldModuleEvents: [String] = [] // module events before first pixel (SessionActivation.swift)
+    var webMount: [String: String] = ExactEnv.appMetadata["ExactWebMount"] as? [String: String] ?? [:]
     var protocolHandlers: [[String: String]] = ExactEnv.appMetadata["ExactProtocolHandlers"] as? [[String: String]] ?? []
     private var textPressure: DispatchSourceMemoryPressure?
     let canvases: Canvases

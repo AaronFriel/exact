@@ -92,7 +92,8 @@ export const transportSecurity = (section, keys = {}, { web = true } = {}) => {
 export const localNetworking = (section, reach) => (section?.localNetworking || reach?.localNetworking ? { NSAllowsLocalNetworking: true } : {});
 
 /** The app's declared origin (`app.origin`), which a link's Copy Link and Share put a path in the app on. */
-export const declaredOrigin = ({ origin }) => (origin ? { ExactOrigin: new URL(origin).origin } : {});
+export const declaredOrigin = ({ origin, manifest }) => (origin ? { ExactOrigin: new URL(origin).origin,
+  ...(manifest?.host?.web?.base && manifest.host.web.base !== '/' ? { ExactWebMount: { origin: new URL(origin).origin, base: manifest.host.web.base } } : {}) } : {});
 
 /** A launch no link started opens at the manifest's `start_url`, as an installed web app does (W3C App Manifest): resolved
  * against the manifest's URL, on the app's declared origin when it has one, and baked when it is a place in the app (on
@@ -350,7 +351,7 @@ export function appleMetadataOwners() {
     [['ios', 'macos'], ['CFBundleURLTypes']],
     [['ios', 'macos'], ['ExactOpenURLSchemes']],
     [['ios', 'macos'], ['ExactDevelopmentURLScheme', 'ExactDevelopmentOrigins', 'ExactDevelopmentToken']],
-    [['ios', 'macos'], ['ExactOrigin']],
+    [['ios', 'macos'], ['ExactOrigin', 'ExactWebMount']],
     [['ios', 'macos'], ['ExactStartURL']],
     [['macos'], ['ExactLaunchMode']],
     [['ios', 'macos'], ['ExactUpdateActivate']],

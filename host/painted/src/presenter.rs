@@ -457,6 +457,7 @@ impl<D: DataSource> Presenter<D> {
             region,
         )?;
         presenter.compat = compat.to_string();
+        presenter.host.web_mount = crate::app::web_mount(compat);
         presenter.measure();
         Ok((presenter, error))
     }

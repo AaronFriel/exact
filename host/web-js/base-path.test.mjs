@@ -263,6 +263,36 @@ test('unsupported renderers, update bakes and authentication refuse a non-root b
   } finally { rmSync(dir, { recursive: true, force: true }); }
 }, 120000);
 
+test('a mounted build publishes preferred native link claims', async () => {
+  const dir = workspace();
+  try {
+    save(dir, 'app.json', JSON.stringify({ ...manifest('/app/'), handle_links: 'preferred' }));
+    save(dir, 'app.contract', source);
+    const made = await build(dir, ['--render', 'none']);
+    expect(made.status, made.output).toBe(0);
+    expect(JSON.parse(readFileSync(resolve(dir, 'dist/manifest.json'), 'utf8'))).toMatchObject({ handle_links: 'preferred', scope: '/app/' });
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+}, 120000);
+
+test.each([' https://example.com/item', '\tht\ntps://example.com/item '])('a bound external link with URL whitespace leaves the mounted app: %j', async destination => {
+  const dir = workspace(); let browser;
+  try {
+    save(dir, 'app.json', JSON.stringify(manifest('/app/')));
+    save(dir, 'app.contract', source.replace('component App\n', `component App\n  state destination = ${JSON.stringify(destination)}\n`)
+      .replace('          head title=e.name', '          link href=destination target="_self" testId="external"\n            text "External"\n          head title=e.name'));
+    const made = await build(dir, ['--render', 'none']); expect(made.status, made.output).toBe(0);
+    await serving(resolve(dir, 'dist'), async origin => {
+      browser = await suiteBrowser(); const page = await browser.newPage();
+      await page.route('https://example.com/**', route => route.fulfill({ contentType: 'text/html', body: '<h1>External page</h1>' }));
+      await page.goto(origin + '/app/');
+      expect(await page.getByTestId('external').getAttribute('href')).toBe('https://example.com/item');
+      await page.getByTestId('external').click();
+      await page.waitForURL('https://example.com/item', { timeout: 5000 });
+      expect(await page.getByRole('heading').textContent()).toBe('External page');
+    });
+  } finally { await browser?.close(); rmSync(dir, { recursive: true, force: true }); }
+}, 120000);
+
 test('an explicit manifest scope and the start URL default stay narrowed under the mount', () => {
   for (const start_url of ['/notes/', '/notes/index.html']) {
     const app = { ...manifest('/app/'), start_url };
@@ -271,10 +301,10 @@ test('an explicit manifest scope and the start URL default stay narrowed under t
   }
 });
 
-test('scope-extension instructions use the published web identity and keep native identities', async () => {
+test('scope-extension instructions use the published web identity without native claims', async () => {
   const dir = workspace();
   try {
-    const app = { ...manifest('/app/'), id: 'notes', start_url: '/notes/', scope: '/notes/', handle_links: 'preferred', scope_extensions: [{ type: 'origin', origin: 'https://other.invalid' }] };
+    const app = { ...manifest('/app/'), id: 'notes', start_url: '/notes/', scope: '/notes/', handle_links: 'auto', scope_extensions: [{ type: 'origin', origin: 'https://other.invalid' }] };
     app.host.ios = { team: 'TESTTEAM' };
     app.host.android = { certificates: ['AB:'.repeat(31) + 'AB'] };
     save(dir, 'app.json', JSON.stringify(app)); save(dir, 'app.contract', 'component App\n  view\n    text "Notes"\n');
@@ -283,18 +313,9 @@ test('scope-extension instructions use the published web identity and keep nativ
     const identity = new URL(published.id, new URL(published.start_url, app.app.origin).origin).href;
     expect(identity).toBe('https://site.invalid/app/notes');
     expect(made.output).toContain(`web-app-origin-association ${JSON.stringify({ [identity]: {} })}`);
-    const apple = JSON.parse(readFileSync(resolve(dir, 'dist/.well-known/apple-app-site-association'), 'utf8'));
-    expect(apple.applinks.details[0].components).toContainEqual({ '/': '/app/notes/*' });
-    expect(made.output).toContain('site.invalid/app/notes/, other.invalid open the app');
-    expect(made.output).toContain('origin root');
-    await serving(resolve(dir, 'dist'), async origin => {
-      for (const file of ['apple-app-site-association', 'assetlinks.json']) {
-        const response = await fetch(origin + '/.well-known/' + file);
-        expect(response.status).toBe(200); expect(await response.json()).toBeTruthy();
-      }
-    });
-    expect(made.output).toContain('TESTTEAM.test.mounted');
-    expect(made.output).toContain('"package_name":"test.mounted"');
+    expect(made.output).not.toContain('open the app');
+    expect(made.output).not.toContain('apple-app-site-association');
+    expect(made.output).not.toContain('assetlinks.json');
   } finally { rmSync(dir, { recursive: true, force: true }); }
 }, 120000);
 
@@ -355,14 +376,15 @@ test.each(['links', 'parameter push'])('the routes corpus keeps %s and browser h
 }, 120000);
 
 
-test.each(['media', 'markdown', 'head', 'one-off'])('mounted URL boundary: %s before activation', async kind => {
+test.each(['media', 'markdown', 'head', 'head-whitespace', 'one-off'])('mounted URL boundary: %s before activation', async kind => {
   const dir = workspace(); let browser;
   try {
     save(dir, 'app.json', JSON.stringify(manifest('/app/')));
     const added = kind === 'media' ? '          image "/assets/pixel.svg" testId="picture"\n          image "./assets/pixel.svg" testId="relative-picture"\n          image "/assets/../assets/pixel.svg" testId="dot-picture"\n          image "/assets/../../outside.svg" testId="escape-picture"\n          video poster="/assets/pixel.svg" testId="movie"\n'
       : kind === 'markdown' ? '          text md markup="markdown"\n          button "Change Markdown" press=changeMarkdown testId=`markdown-${e.name}`\n' : '';
-    save(dir, 'app.contract', source.replace('component App\n', kind === 'markdown' ? 'component App\n  state md = "[Markdown item](/item)"\n  action changeMarkdown\n    md = "[Changed Markdown](/kept)"\n' : 'component App\n').replace('          head title=e.name', added + (kind === 'head'
+    save(dir, 'app.contract', source.replace('component App\n', kind === 'markdown' ? 'component App\n  state md = "[Markdown item](/item)"\n  action changeMarkdown\n    md = "[Changed Markdown](/kept)"\n' : 'component App\n').replace('          head title=e.name', added + (kind.startsWith('head')
       ? '          head title=e.name canonical=(e.name == "home" ? "/item" : e.name == "kept" ? "#part" : "https://else.invalid/item") image=(e.name == "home" ? "/assets/pixel.svg" : e.name == "kept" ? "?version=1" : "https://else.invalid/pixel.svg")' : '          head title=e.name')));
+    if (kind === 'head-whitespace') save(dir, 'app.contract', readFileSync(resolve(dir, 'app.contract'), 'utf8').replace('\"#part\"', '\" \t#part \"').replace('\"?version=1\"', '\" \t?version=1 \"'));
     mkdirSync(resolve(dir, 'assets')); save(dir, 'assets/pixel.svg', '<svg xmlns="http://www.w3.org/2000/svg" width="2" height="2"><rect width="2" height="2" fill="red"/></svg>');
     const made = await build(dir); expect(made.status, made.output).toBe(0);
     const dist = resolve(dir, 'dist'), html = readFileSync(resolve(dist, 'index.html'), 'utf8');
@@ -403,7 +425,7 @@ test.each(['media', 'markdown', 'head', 'one-off'])('mounted URL boundary: %s be
         await page.getByRole('link', { name: 'Changed Markdown' }).click(); await page.waitForURL('**/app/kept', { timeout: 5000 });
         await page.getByTestId('name-kept').waitFor();
       });
-    } else if (kind === 'head') {
+    } else if (kind.startsWith('head')) {
       for (const tag of ['<link rel="canonical" href="https://site.invalid/app/item">', '<meta property="og:url" content="https://site.invalid/app/item">', '<meta property="og:image" content="https://site.invalid/app/assets/pixel.svg">', '<meta name="twitter:image" content="https://site.invalid/app/assets/pixel.svg">']) expect(html).toContain(tag);
       const other = (await renderer(dist)('/app/item')).html;
       expect(other).toContain('href="https://else.invalid/item"');
@@ -438,6 +460,20 @@ test.each([['chrome', undefined], ['chrome', '/item'], ['firefox', undefined], [
 test('mounted destinations retain external URLs and canonicalize paths before adding the mount', () => {
   for (const value of ['https://else.invalid/item', '//else.invalid/item', 'mailto:a@b.invalid', 'data:image/png;base64,AA==', 'blob:https://site.invalid/id', 'app:/picture', 'symbol:star', '#part', '?q=1']) expect(mountedHref(value, '/app/')).toBe(value);
   for (const value of ['/../item', '/a/%2e%2e/item', 'a/../item', '/a\\..\\item']) expect(mountedHref(value + '?q=1#part', '/app/')).toBe('/app/item?q=1#part');
+});
+
+test('mounted destinations normalize URL whitespace before classifying the destination', () => {
+  for (const [value, expected] of [
+    ['\u0000 https://example.com/item \u001f', 'https://example.com/item'],
+    ['h\tt\rt\nps://example.com/item', 'https://example.com/item'],
+    [' \t//example.com/item\r', '//example.com/item'],
+    [' \n#part ', '#part'], [' \t?q=1 ', '?q=1'],
+    [' /it\tem?q=1#part ', '/app/item?q=1#part'],
+    [' java\nscript:alert(1) ', 'javascript:alert(1)'],
+    [' \u0000\r\n\t', ''],
+  ]) expect(mountedHref(value, '/app/')).toBe(expected);
+  expect(mountedHref(null, '/app/')).toBeNull();
+  expect(mountedHref(undefined, '/app/')).toBeUndefined();
 });
 
 test.each(['image "/assets/pixel.svg" srcset="/assets/pixel.svg 1x"', 'form action="/item"'])('unadmitted URL attributes fail compilation: %s', async node => {

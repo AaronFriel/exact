@@ -20,7 +20,7 @@ impl<D: DataSource> Presenter<D> {
             // A path as written; a URL with a scheme as the platform delivers
             // one from outside, as Apple's `typedLocation`.
             let location = if has_scheme(text) {
-                crate::app::incoming_location(text)
+                crate::app::incoming_location_at(text, self.host.web_mount.as_ref())
             } else {
                 text.to_owned()
             };

@@ -5,6 +5,8 @@
 
 /** Exact's own paths (the web's sign-in callback page, `host/web/build.mjs`): never claimed, so a sign-in that returns
  * there in a browser stays in the browser. */
+import { withBase } from '../host/web-js/route-pattern.js';
+
 export const EXACT_PATHS = '/.exact/';
 
 /** `text` as an origin a claim may name, or why it cannot be one. The URL Standard's parser serializes it: the host
@@ -72,8 +74,8 @@ export function linkClaims(manifest, callbacks = []) {
   const own = claimedOrigin(manifest.app.origin);
   if (!own.origin) return [];
   const extensions = (manifest.scope_extensions ?? []).map((e) => claimedOrigin(e.origin)).filter((e) => e.origin);
-  const base = manifest.host?.web?.base ?? '/', prefix = base.slice(0, -1);
-  return [{ ...own, scope: prefix + effectiveScope(manifest), exclude: [prefix + EXACT_PATHS, ...callbackPaths(own.origin, callbacks)] },
+  const base = manifest.host?.web?.base ?? '/';
+  return [{ ...own, scope: withBase(effectiveScope(manifest), base), exclude: [withBase(EXACT_PATHS, base), ...callbackPaths(own.origin, callbacks)] },
     ...extensions.map((e) => ({ ...e, scope: '/', exclude: callbackPaths(e.origin, callbacks) }))];
 }
 

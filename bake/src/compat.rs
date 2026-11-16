@@ -818,6 +818,18 @@ fn compatibility_with_trust(
             }
         }
     }
+    if platform != "web" {
+        let base = manifest
+            .json
+            .pointer("/host/web/base")
+            .and_then(Value::as_str)
+            .unwrap_or("/");
+        if base != "/" {
+            if let Some(origin) = manifest.json.pointer("/app/origin").and_then(Value::as_str) {
+                inputs["webMount"] = serde_json::json!({"origin": origin, "base": base});
+            }
+        }
+    }
     if let Some(links) = crate::links::claims(&manifest.json, platform) {
         inputs["links"] = links;
     }

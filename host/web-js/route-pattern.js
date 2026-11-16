@@ -66,7 +66,9 @@ export const withBase = (location, base = "/") => base === "/" ? location : base
 
 /** An authored app destination. Fragments, query-only references and external URLs keep HTML's meaning. */
 export function mountedHref(value, base = "/") {
-  if (value == null || value === '' || /^[?#]|^[a-z][a-z0-9+.-]*:|^\/\//i.test(value)) return value;
+  if (value == null) return value;
+  value = clean(value);
+  if (value === '' || /^[?#]|^[a-z][a-z0-9+.-]*:|^\/\//i.test(value)) return value;
   const fragment = fragmentOf(value);
   return withBase(canonical(value), base) + (fragment ? '#' + fragment : '');
 }

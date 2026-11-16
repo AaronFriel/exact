@@ -100,6 +100,7 @@ const unesc = s => s.replace(/&(amp|lt|gt|quot);/g, (_, e) => ({ amp: '&', lt: '
 
 /** `url` if it navigates (document_url.rs `navigable`), made absolute against the manifest's origin (page.rs `absolute`). */
 function crawlable(url, origin, base = "/") {
+  url = url.replace(/^[\0- ]+|[\0- ]+$/g, '').replace(/[\t\n\r]/g, '');
   try { if (!['http:', 'https:', 'mailto:', 'tel:'].includes(new URL(url, 'https://render.invalid/').protocol)) return null; } catch { return null; }
   if (base !== '/') url = mountedHref(/^[?#]/.test(url) ? '/' + url : url, base);
   if (!origin || /^[a-z0-9+.-]+:/i.test(url) || url.startsWith('//')) return url;

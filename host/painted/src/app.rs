@@ -49,8 +49,8 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 /// The first non-flag path or scheme argument. @ref LLP 1038 D8
-pub fn launch_location(args: impl IntoIterator<Item = String>) -> String {
-    launch_argument(args).map_or_else(|| "/".into(), |href| incoming_location(&href))
+pub fn launch_location(args: impl IntoIterator<Item = String>, compat: &str) -> String {
+    launch_argument(args).map_or_else(|| "/".into(), |href| incoming_location(&href, compat))
 }
 
 /// A URL from outside the app as its location (LLP 1038 D8): at the
@@ -59,12 +59,23 @@ pub fn launch_location(args: impl IntoIterator<Item = String>) -> String {
 /// them here (`EXACT_PROTOCOL_HANDLERS`, from the APK's
 /// `dev.exact.protocol_handlers`), as an Apple bundle's
 /// `ExactProtocolHandlers`; a command-line URL on Linux or Windows has none.
-pub fn incoming_location(href: &str) -> String {
+pub fn incoming_location(href: &str, compat: &str) -> String {
+    incoming_location_at(href, web_mount(compat).as_ref())
+}
+
+pub(crate) fn incoming_location_at(href: &str, mount: Option<&serde_json::Value>) -> String {
     static HANDLERS: std::sync::OnceLock<Vec<(String, String)>> = std::sync::OnceLock::new();
     let handlers = HANDLERS.get_or_init(|| {
         protocol_handlers(std::env::var("EXACT_PROTOCOL_HANDLERS").ok().as_deref())
     });
-    location_through(href, handlers)
+    location_through(href, handlers, mount)
+}
+
+pub(crate) fn web_mount(compat: &str) -> Option<serde_json::Value> {
+    serde_json::from_str::<serde_json::Value>(compat)
+        .ok()?
+        .pointer("/inputs/webMount")
+        .cloned()
 }
 
 /// The `[{"protocol", "url"}]` entries the reader registered; none when
@@ -85,13 +96,32 @@ fn protocol_handlers(json: Option<&str>) -> Vec<(String, String)> {
         .collect()
 }
 
-fn location_through(href: &str, handlers: &[(String, String)]) -> String {
+fn location_through(
+    href: &str,
+    handlers: &[(String, String)],
+    mount: Option<&serde_json::Value>,
+) -> String {
+    let local = mount.and_then(|mount| {
+        let mut url = url::Url::parse(href).ok()?;
+        let origin = url::Url::parse(mount.get("origin")?.as_str()?).ok()?;
+        if !matches!(url.scheme(), "http" | "https") || url.origin() != origin.origin() {
+            return None;
+        }
+        let base = mount.get("base")?.as_str()?;
+        let path = if url.path() == base.trim_end_matches('/') {
+            "/".to_owned()
+        } else {
+            format!("/{}", url.path().strip_prefix(base)?)
+        };
+        url.set_path(&path);
+        Some(url.to_string())
+    });
     handlers
         .iter()
         .find_map(|(protocol, template)| {
             exact_route::protocol_location_of(href, protocol, template)
         })
-        .unwrap_or_else(|| exact_route::location_of(href))
+        .unwrap_or_else(|| exact_route::location_of(local.as_deref().unwrap_or(href)))
 }
 
 /// The first non-flag argument, as it was given, or `None`. The `hidden`
@@ -372,7 +402,10 @@ impl Config {
             content_region: None,
             // An argument, else `EXACT_LAUNCH_URL`: the Android reader's launching intent's data has no
             // command line to arrive by (LLP 1133.023 D15 item 3).
-            launch: launch_location(std::env::args().skip(1).chain(env("EXACT_LAUNCH_URL"))),
+            launch: launch_location(
+                std::env::args().skip(1).chain(env("EXACT_LAUNCH_URL")),
+                compat,
+            ),
             plan,
             fallback_plan,
             assets: env("EXACT_ASSETS")
@@ -1138,7 +1171,7 @@ mod tests {
             (vec!["hidden"], "/hidden"),
         ] {
             assert_eq!(
-                launch_location(args.into_iter().map(str::to_owned)),
+                launch_location(args.into_iter().map(str::to_owned), "{}"),
                 expected
             );
         }
@@ -1160,13 +1193,16 @@ mod tests {
             ("other://post/42", "/post/42"),
             ("/urgencies", "/urgencies"),
         ] {
-            assert_eq!(location_through(href, &handlers), expected, "{href}");
+            assert_eq!(location_through(href, &handlers, None), expected, "{href}");
         }
         for json in [None, Some(""), Some("{}"), Some(r#"[{"protocol":"x"}]"#)] {
             assert!(protocol_handlers(json).is_empty(), "{json:?}");
         }
         // No reader named any: every host's ordinary conversion.
-        assert_eq!(location_through("sscontrol://ficha/7", &[]), "/ficha/7");
+        assert_eq!(
+            location_through("sscontrol://ficha/7", &[], None),
+            "/ficha/7"
+        );
     }
 
     #[test]
