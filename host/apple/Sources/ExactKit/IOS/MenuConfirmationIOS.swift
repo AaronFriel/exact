@@ -10,6 +10,15 @@ extension MenuHost {
         return drawn.window != nil && !drawn.isHidden && !port.isHidden
     }
 
+    /// Whether `view` is in the confirmation UIKit shows: its alert or action
+    /// sheet is presented over every presentation, so a presentation that
+    /// covers the page the dialog is in leaves it reachable (HTML's topmost
+    /// modal dialog).
+    func confirmationShows(_ view: UIView) -> Bool {
+        guard let owner = confirmation, !owner.finishing, let pop = owner.popover else { return false }
+        return view.isDescendant(of: pop)
+    }
+
     /// An alertdialog-shaped popover has one or more actions and at most one
     /// hide-only cancel: a chooser ("Open in…") is one action per choice.
     /// Retain this owner until native dismissal completes; ids alone are not

@@ -320,11 +320,11 @@ final class ModalHost: NSObject, UIAdaptivePresentationControllerDelegate {
     var presentation: String? { layers.last?.kind }
     var coordinateView: UIView? { layers.last?.controller.viewIfLoaded }
     /// Whether the top presentation, modal as every one is (LLP 1123 D2),
-    /// makes `view` inert: it is neither in it nor in a `dialog`'s sheet,
-    /// which UIKit presents over it (HTML modal dialogs).
+    /// makes `view` inert: it is neither in it nor in a `dialog`'s sheet or
+    /// confirmation, which UIKit presents over it (HTML modal dialogs).
     func inertBehind(_ view: UIView) -> Bool {
         guard let top = coordinateView else { return false }
-        return !view.isDescendant(of: top) && !presenter.menus.sheets.shows(view)
+        return !view.isDescendant(of: top) && !presenter.menus.sheets.shows(view) && !presenter.menus.confirmationShows(view)
     }
     var owner: UIViewController? { layers.last?.controller }
     /// The presentations' navigations, live and retiring, bottom to top.

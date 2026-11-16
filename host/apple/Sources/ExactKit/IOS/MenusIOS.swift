@@ -22,7 +22,7 @@ final class MenuHost {
     /// Native buttons that are pull-downs (`nativeMenu`), by node.
     var nativeMenus: [UInt32: NativeButtonIOS] = [:]
     #endif
-    private var confirmation: Confirmation?
+    private(set) var confirmation: Confirmation?
     /// A press another invoker activates (`activating`): it invokes nothing.
     var invocationOwner: NodeView?
     /// A press whose caller presents what its command opens (a pull-down, a
