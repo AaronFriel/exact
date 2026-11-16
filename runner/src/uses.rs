@@ -316,6 +316,20 @@ impl fmt::Display for Uses {
 /// The capabilities `plan` uses (LLP 1047 D2).
 pub fn uses(plan: &Plan) -> Uses {
     let mut uses = Uses::NONE;
+    if plan.tools.iter().any(|t| {
+        serde_json::from_str::<serde_json::Value>(plan.str(t.face)).is_ok_and(|face| {
+            face["doors"]
+                .as_array()
+                .is_some_and(|doors| doors.iter().any(|d| d == "apple"))
+                && face["parameters"].as_object().is_some_and(|params| {
+                    params
+                        .values()
+                        .any(|p| p.get("type").is_some_and(|t| t == "file"))
+                })
+        })
+    }) {
+        uses = uses.with(Capability::Picker);
+    }
     if !plan.keyframes.is_empty() {
         uses = uses.with(Capability::Animations);
     }

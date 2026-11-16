@@ -7,28 +7,8 @@
 // manifest the web accepts is one every host builds (files diary F12). The
 // common document and image types are here (ledger diary F9), and IANA's
 // generic binary is Apple's generic data (files diary F12: `.bin`, `.dat`).
-export const DOCUMENT_UTIS = {
-  'text/markdown': 'net.daringfireball.markdown',
-  'text/plain': 'public.plain-text',
-  'text/html': 'public.html',
-  'application/xhtml+xml': 'public.xhtml',
-  'audio/mpeg': 'public.mp3',
-  'audio/wav': 'com.microsoft.waveform-audio',
-  'audio/mp4': 'public.mpeg-4-audio',
-  'audio/ogg': 'org.xiph.ogg-audio',
-  'text/csv': 'public.comma-separated-values-text',
-  'text/tab-separated-values': 'public.tab-separated-values-text',
-  'application/json': 'public.json',
-  'application/pdf': 'com.adobe.pdf',
-  'application/zip': 'public.zip-archive',
-  'application/octet-stream': 'public.data',
-  'image/png': 'public.png',
-  'image/jpeg': 'public.jpeg',
-  'image/gif': 'com.compuserve.gif',
-  'image/webp': 'org.webmproject.webp',
-  'image/svg+xml': 'public.svg-image',
-  'inode/directory': 'public.folder',
-};
+import documentUTIs from './document-utis.json' with { type: 'json' };
+export const DOCUMENT_UTIS = documentUTIs;
 
 /** An app's own document format (studio diary R13): a MIME type in IANA's
  * vendor or unregistered trees (`application/vnd.studio.board+json`,

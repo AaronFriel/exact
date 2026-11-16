@@ -202,10 +202,14 @@ fn faces(intents: &Value, plan: &mut Plan) -> Result<(), (&'static str, String)>
             );
             let said = declared.and_then(|d| d.get(pname));
             let entity = said.and_then(|s| s.get("entity")).and_then(Value::as_str);
-            let integer = said.and_then(|s| s.get("type")).and_then(Value::as_str);
-            let wrong = match (ty, entity, integer) {
+            let face_type = said.and_then(|s| s.get("type")).and_then(Value::as_str);
+            let wrong = match (ty, entity, face_type) {
+                ("string", None, Some("file")) => None,
+                (_, _, Some("file")) => {
+                    Some("`type: file` needs a string parameter with no entity")
+                }
                 (_, _, Some(t)) if t != "integer" || ty != "number" => {
-                    Some("`type` may only be `integer`, on a number")
+                    Some("`type` is `integer` on a number, or `file` on a string")
                 }
                 ("string", Some(kind), _) if !kinds.is_some_and(|k| k.contains_key(kind)) => {
                     Some("its entity kind is not in intents.entities")
@@ -218,6 +222,37 @@ fn faces(intents: &Value, plan: &mut Plan) -> Result<(), (&'static str, String)>
                 return Err((
                     "intents-face-type",
                     format!("tool `{name}`'s parameter `{pname}` ({ty}): {why} (LLP 1133.023 D5)"),
+                ));
+            }
+        }
+        for p in declared.into_iter().flat_map(|d| d.values()) {
+            if !p.is_object() {
+                return Err((
+                    "intents-face-type",
+                    format!("tool `{name}`: a face parameter must be an object"),
+                ));
+            }
+            if p.get("type").and_then(Value::as_str) == Some("file") {
+                let types: Value =
+                    serde_json::from_str(include_str!("../../../scripts/document-utis.json"))
+                        .expect("document UTI table");
+                let accepts = p["accept"].as_array();
+                if !accepts.is_some_and(|a| {
+                    !a.is_empty()
+                        && a.iter().all(|v| {
+                            v.as_str()
+                                .is_some_and(|m| m != "inode/directory" && types.get(m).is_some())
+                        })
+                }) {
+                    return Err(("intents-file-accept", format!("tool `{name}`: a file parameter needs a non-empty `accept` list of MIME types in scripts/document-utis.json; directories are not files")));
+                }
+                if let Some(door) = doors.iter().find(|d| *d != "apple") {
+                    return Err(("intents-file-door", format!("tool `{name}`: the {door} door has no file handoff (AppFunctions is not built; WebMCP takes JSON arguments); set this face's `doors` to [\"apple\"]")));
+                }
+            } else if p.get("accept").is_some() {
+                return Err((
+                    "intents-file-accept",
+                    format!("tool `{name}`: `accept` belongs only to a `type: file` parameter"),
                 ));
             }
         }

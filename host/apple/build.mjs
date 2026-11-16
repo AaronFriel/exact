@@ -768,6 +768,7 @@ async function main(args, lockHeld = false) {
   // The target SDK stays in the explicit Swift arguments.
   const launchPartsDir = writeLaunchParts(pkg, app), swiftEnv = (libDir, composition, link = 'all') => withoutSdkRoot({
     ...process.env, ...(launchPartsDir ? { EXACT_LAUNCH_PARTS: launchPartsDir.slice(pkg.length + 1) } : {}),
+    EXACT_APPLE_INTENT_FILES: !tv && Object.values(app.manifest.intents?.tools ?? {}).some(f => (!f.doors || f.doors.includes('apple')) && Object.values(f.parameters ?? {}).some(p => p.type === 'file')) ? '1' : '0',
     EXACT_WIDGET_GALLERY: gallery ? '1' : '0',
     EXACT_APPLE_LINK: link, EXACT_UPDATE_TRUST: cargoEnv.EXACT_UPDATE_TRUST ?? 'development', // LLP 1047.001 D4 (link.mjs); a production build compiles no inspect mode (Package.swift)
     ...(tv ? { TVOS_DEPLOYMENT_TARGET: compiled.ios } : ios ? { IPHONEOS_DEPLOYMENT_TARGET: compiled.ios } : { MACOSX_DEPLOYMENT_TARGET: targets.macos }),

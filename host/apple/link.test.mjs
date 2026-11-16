@@ -1004,6 +1004,8 @@ test('outside production trust the SDK compiles for iOS 17.0, and the app keeps 
   // The native build system (the Linux cross build) gives the launch modules and the executable that imports them
   // the app's own target, so the host keeps the floor.
   assert.deepEqual(compiledTargets(launching, 'development', 'linux'), { ...deploymentTargets(launching), ios: '17.0' });
+  const files = { manifest: { ...app.manifest, intents: { tools: { save: { doors: ['apple'], parameters: { image: { type: 'file', accept: ['image/png'] } } } } } } };
+  assert.deepEqual(compiledTargets(files, 'development'), deploymentTargets(files), 'file content types need the iOS 18 initializer');
 
   // One spelling per version, so apps that write it differently share one Swift scratch (expo/exact-build#94).
   for (const minimumOS of ['18', '18.0', '18.0.0', 18]) assert.equal(deploymentTargets({ manifest: { host: { ios: { minimumOS } } } }).ios, '18.0', String(minimumOS));

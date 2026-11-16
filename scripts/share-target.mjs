@@ -13,7 +13,7 @@ export const EXTENSION_TYPES = {
   '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml',
   '.heic': 'image/heic', '.heif': 'image/heif', '.mp4': 'video/mp4', '.mov': 'video/quicktime', '.m4a': 'audio/mp4', '.mp3': 'audio/mpeg',
 };
-const EXTRA_UTIS = { 'image/heic': 'public.heic', 'image/heif': 'public.heif', 'video/mp4': 'public.mpeg-4', 'video/quicktime': 'com.apple.quicktime-movie', 'audio/mp4': 'public.mpeg-4-audio', 'audio/mpeg': 'public.mp3' };
+const EXTRA_UTIS = { 'video/mp4': 'public.mpeg-4', 'video/quicktime': 'com.apple.quicktime-movie', 'audio/mp4': 'public.mpeg-4-audio', 'audio/mpeg': 'public.mp3' };
 
 const list = accept => [accept].flat();
 /** The MIME type or pattern an `accept` entry names. */

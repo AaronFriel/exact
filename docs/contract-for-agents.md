@@ -2076,6 +2076,23 @@ says `cancelled: true`, and the journal that the caller left.
   `http://10.0.0.4:<port>`). To try a LAN host, serve it over HTTPS or
   start Chrome with `--unsafely-treat-insecure-origin-as-secure=<origin>`.
 
+### File parameters on an Apple face
+
+On a string parameter, declare `"type": "file", "accept": ["image/png", "image/jpeg", "image/heic"]`
+and set the face's `"doors": ["apple"]`. Accepted MIME types come from `scripts/document-utis.json`,
+excluding directories. Set `host.ios.minimumOS` to `"18.0"` or later and `host.macos.minimumOS`
+to `"15.0"` or later: App Intents' `IntentFile` initializer with `supportedContentTypes` needs them.
+
+The accepted MIME types map to UTI identifiers in `scripts/document-utis.json`. A type the
+supported Apple platforms do not declare (Markdown and Ogg audio) is refused at build time.
+The generated action copies the file before calling the tool; only the path crosses the door.
+
+The tool receives an `app:/tmp/picked/…` path, as a file input does. Each file is at most 64 MiB;
+the copy lasts until the next process launch, including after the caller cancels. Read it under
+`fs.read app:/tmp/picked`, or copy it to durable app storage before returning if it must survive.
+WebMCP takes JSON arguments with no file handoff, and AppFunctions' door is not built;
+a file face naming either is refused at build time. The call's existing time bounds stay the same.
+
 ## Views, layout, and interaction
 
 For an attachment of any type, use `input type="file"` with no `accept` (or

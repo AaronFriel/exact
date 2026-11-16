@@ -47,6 +47,8 @@ let capabilities: [(name: String, target: String, define: String)] = [
 // above already uses — so a normal build is unchanged and a test build is
 // quick. `bun host/apple/build.mjs --test` sets it.
 let testing = ProcessInfo.processInfo.environment["EXACT_TESTS"] == "1"
+let intentFiles = testing || ProcessInfo.processInfo.environment["EXACT_APPLE_INTENT_FILES"] == "1"
+let intentFileSettings: [SwiftSetting] = intentFiles ? [.define("EXACT_INTENT_FILES")] : []
 // Inspect mode (LLP 1122 T2c, Inspect.swift) is a development build's: a
 // production one (`EXACT_UPDATE_TRUST=production`) compiles none of it, nor
 // the agent's private API (LLP 1035.003 §3): UIKit's alert views
@@ -110,7 +112,7 @@ let core: [Target] = [
     // session's node model, for WidgetKit's archive. Linked by an app with
     // entries and its extension, never by a presenter.
     .target(name: "ExactSnapshot", dependencies: ["ExactCore", "CExact"], path: "Sources/ExactSnapshot", swiftSettings: [.unsafeFlags(["-application-extension"])]),
-    .target(name: "ExactKit", dependencies: [.target(name: "ExactCore"), .target(name: "CExact"), .target(name: "CExactLaunch")] + (gallery ? [.target(name: "ExactSnapshot")] : []), path: "Sources/ExactKit", exclude: agentSources, swiftSettings: devTools + gallerySettings),
+    .target(name: "ExactKit", dependencies: [.target(name: "ExactCore"), .target(name: "CExact"), .target(name: "CExactLaunch")] + (gallery ? [.target(name: "ExactSnapshot")] : []), path: "Sources/ExactKit", exclude: agentSources + (intentFiles ? [] : ["IntentFiles.swift"]), swiftSettings: devTools + gallerySettings + intentFileSettings),
     .target(name: "ExactUpdates", dependencies: ["ExactKit", "CExact"], path: "Sources/ExactUpdates"),
     .target(name: "ExactGroupedLists", dependencies: ["ExactKit", "CExact"], path: "Sources/ExactGroupedLists", swiftSettings: devTools),
     .target(name: "ExactMarkdown", dependencies: ["ExactKit", "CExact"], path: "Sources/ExactMarkdown", swiftSettings: devTools),

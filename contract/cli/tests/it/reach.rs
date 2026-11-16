@@ -236,6 +236,88 @@ fn shortcuts_are_refused_where_the_platform_has_none() {
     assert!(logs(&r).contains("NotSupportedError"), "{}", logs(&r));
 }
 
+#[test]
+fn a_file_face_keeps_the_tools_string_parameter() {
+    let app = App::new("file-face", "component App\n  state path = \"\"\n  tool save writes closed \"Save a file.\" = save returns path\n  action save(image: string)\n    path = image\n  view\n    main\n      text path\n");
+    let good = json!({"tools": {"save": {"title": "Save", "doors": ["apple"],
+        "parameters": {"image": {"type": "file", "accept": ["image/png", "image/jpeg", "image/heic"]}}}}});
+    let compile = |intents: &Json| {
+        std::fs::write(
+            app.0.join("app.json"),
+            json!({"app": {"id": "com.exact.fileface", "name": "File Face"}, "intents": intents})
+                .to_string(),
+        )
+        .unwrap();
+        contract::compile_path_all(&app.0.join("app.contract"), false).map(|(p, _)| p)
+    };
+    let plan = compile(&good).unwrap_or_else(|e| panic!("{e:?}"));
+    assert!(exact_runner::uses(&plan).has(exact_runner::Capability::Picker));
+    let face: Json = serde_json::from_str(plan.str(plan.tools[0].face)).unwrap();
+    assert_eq!(
+        face["parameters"]["image"]["accept"],
+        good["tools"]["save"]["parameters"]["image"]["accept"]
+    );
+    let selected = exact_runner::uses(&plan);
+    let mut runner = Runner::boot(
+        plan.clone(),
+        NoData,
+        exact_kernel::Kernel::with_monospace(),
+        Default::default(),
+        "/",
+    )
+    .unwrap();
+    runner.set_device_links(exact_runner::DeviceLinks {
+        picker: selected
+            .has(exact_runner::Capability::Picker)
+            .then_some(exact_runner::PickerLinks::LINKED),
+        ..exact_runner::DeviceLinks::CORE
+    });
+    let picked: Json = serde_json::from_str(
+        &exact_runner::agent::answer(&mut runner, r#"{"op":"pickedPath","name":"image.png"}"#)
+            .unwrap()
+            .0,
+    )
+    .unwrap();
+    assert!(picked["path"]
+        .as_str()
+        .unwrap()
+        .starts_with("app:/tmp/picked/"));
+    let mut changed = good.clone();
+    changed["tools"]["save"]["parameters"]["image"]["accept"] = json!(["application/pdf"]);
+    let moved = compile(&changed).unwrap();
+    assert_ne!(plan.str(plan.tools[0].face), moved.str(moved.tools[0].face));
+    for doors in [json!(["web"]), json!(["android"]), Json::Null] {
+        let mut bad = good.clone();
+        bad["tools"]["save"]["doors"] = doors;
+        assert!(format!("{:?}", compile(&bad).unwrap_err()).contains("intents-file-door"));
+    }
+    for accept in [
+        json!([]),
+        json!(["image/unknown"]),
+        json!(["inode/directory"]),
+        Json::Null,
+    ] {
+        let mut bad = good.clone();
+        bad["tools"]["save"]["parameters"]["image"]["accept"] = accept;
+        assert!(format!("{:?}", compile(&bad).unwrap_err()).contains("intents-file-accept"));
+    }
+    let mut entity = good.clone();
+    entity["tools"]["save"]["parameters"]["image"]["entity"] = json!("book");
+    assert!(format!("{:?}", compile(&entity).unwrap_err()).contains("intents-face-type"));
+}
+
+#[test]
+fn a_face_parameter_must_be_an_object() {
+    let app = App::new("bad-face", "component App\n  state path = \"\"\n  tool save writes closed \"Save a file.\" = save returns path\n  action save(image: string)\n    path = image\n  view\n    text path\n");
+    for parameter in [Json::Null, json!(3), json!("file"), json!([])] {
+        std::fs::write(app.0.join("app.json"), json!({"app": {"id": "com.exact.badface", "name": "Bad Face"}, "intents": {"tools": {"save": {"doors": ["apple"], "parameters": {"image": parameter}}}}}).to_string()).unwrap();
+        let errors = contract::compile_path_all(&app.0.join("app.contract"), false)
+            .err()
+            .unwrap();
+        assert!(format!("{errors:?}").contains("intents-face-type"));
+    }
+}
+
 /// LLP 1133.023 D5, D8, D10: `intents.tools` in `app.json` faces a tool. A
 /// face is stored with the doors it reaches and its digest; one naming no
 /// tool, a parameter of another type, a door with no confirmation for a

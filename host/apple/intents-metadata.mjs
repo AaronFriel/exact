@@ -38,15 +38,27 @@ function parameter(p, entities, enums = {}) {
       typeSpecificMetadata: ['LNValueTypeSpecificMetadataKeyDefaultValue', { string: { wrapper: rawDefault } }],
       valueType: { linkEnumeration: { wrapper: { identifier: own } } } };
   }
-  if (id == null && !entity) fail(`unsupported parameter type ${p.type}`);
+  const file = type === 'AppIntents.IntentFile';
+  if (id == null && !entity && !file) fail(`unsupported parameter type ${p.type}`);
   if (p.valueKind !== 'InitCall' || p.value?.type !== `AppIntents.IntentParameter<${p.type}>`) fail(`missing parameter constants for ${p.label}`);
-  const inputTypes = entity ? [] : type === 'Swift.String' ? [primitive(0), { array: { wrapper: { capabilities: 3, memberValueType: primitive(2) } } }, primitive(2)]
+  const fileType = { intents: { wrapper: { typeIdentifier: 12 } } };
+  const inputTypes = file ? [fileType] : entity ? [] : type === 'Swift.String' ? [primitive(0), { array: { wrapper: { capabilities: 3, memberValueType: primitive(2) } } }, primitive(2)]
     : (type === 'Swift.Bool' ? [1] : type === 'Swift.Double' ? [2, 0, 7] : optional ? [7, 0, 2] : [0, 2, 7]).map(primitive);
+  let metadata = [];
+  if (file) {
+    const types = argument(p, 'supportedContentTypes');
+    if (types?.valueKind !== 'Array' || !types.value.length) fail(`missing file content types for ${p.label}`);
+    const elements = types.value.map(t => {
+      if (t.valueKind !== 'InitCall' || t.value?.type !== 'UniformTypeIdentifiers.UTType') fail(`unsupported file content type for ${p.label}`);
+      return { string: { wrapper: raw(argument(t, 'importedAs')) } };
+    });
+    metadata = ['LNValueTypeMetadataKeyFileSupportedTypes', { array: { elements } }];
+  }
   const description = argument(p, 'description'), described = description && description.valueKind !== 'NilLiteral';
   return { capabilities: 0, dynamicOptionsSupport: entity ? 2 : 0, inputConnectionBehavior: 0, isInput: false, isOptional: !!optional,
     name: p.label, ...(described ? { parameterDescription: localized(raw(description)) } : {}),
     resolvableInputTypes: inputTypes.map(valueType => ({ kindValue: 0, valueType })),
-    title: localized(raw(argument(p, 'title'))), typeSpecificMetadata: [], valueType: entity ? entityValue(entity.typeName) : primitive(id) };
+    title: localized(raw(argument(p, 'title'))), typeSpecificMetadata: metadata, valueType: file ? fileType : entity ? entityValue(entity.typeName) : primitive(id) };
 }
 
 function shortcutPhrase(value, action) {
