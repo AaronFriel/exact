@@ -5,9 +5,12 @@
 // library:
 //
 // - iOS: the simulator's library, which `--fill` fills with the package's
-//   six fixture photos (`xcrun simctl addmedia`), and its permissions set
-//   by `xcrun simctl privacy`, the host's own means (§11). The suite reads,
-//   draws, copies and adds there, and watches the change observer.
+//   six fixture photos (`xcrun simctl addmedia`; `--fill <n>` adds n, the
+//   six over and over, each copy's bytes made distinct after the JPEG's end,
+//   so many share a creation date), and its permissions set by `xcrun
+//   simctl privacy`, the host's own means (§11). The suite reads, draws,
+//   pages through every photo, copies and adds there, and watches the change
+//   observer.
 // - macOS: only what holds with no library grant, since only a person can
 //   grant one here and the library would be this Mac's: the status, its
 //   Apple words, and managePhotoSelection's refusal. Nothing that reads or
@@ -19,15 +22,16 @@
 // driven: `simctl addmedia` does not return while the driven app is
 // running, so the change observer is shown by the app's own add.
 //
-// usage: bun packages/photos/test/apple.mjs [ios] [macos] [--sim <udid>] [--fill]
+// usage: bun packages/photos/test/apple.mjs [ios] [macos] [--sim <udid>] [--fill [<n>]]
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { loadedDylibs } from '../../../host/apple/link.mjs';
 import { checker, makeFixture, pkg, root, run, texts, until } from './fixture.mjs';
 
 const argv = process.argv.slice(2), sim = argv.includes('--sim') ? argv[argv.indexOf('--sim') + 1] : process.env.EXACT_SIM;
 const hosts = argv.filter((a, i) => ['macos', 'ios'].includes(a) && argv[i - 1] !== '--sim');
+const fill = argv.includes('--fill') ? Number(/^\d+$/.test(argv[argv.indexOf('--fill') + 1] ?? '') ? argv[argv.indexOf('--fill') + 1] : 6) : 0;
 const { app, id, dir } = makeFixture(), name = app.split('/').pop();
 Object.assign(process.env, { EXACT_APP_DIR: app, EXACT: root, HERMES_LEAN_SYS_OFFLINE: '1', EXACT_IDENTITY: process.env.EXACT_IDENTITY ?? '-' });
 if (sim) process.env.EXACT_SIM = sim;
@@ -46,7 +50,17 @@ const containerFile = (path) => {
 for (const host of hosts.length ? hosts : ['ios', 'macos']) {
   const where = host === 'ios' ? 'ios-simulator' : 'macos';
   if (host === 'ios' && !sim) throw new Error('ios: name a simulator you booted (--sim <udid>); the suite changes its library and its privacy settings');
-  if (host === 'ios' && argv.includes('--fill')) run('xcrun', ['simctl', 'addmedia', sim, ...fixtures], root);
+  if (host === 'ios' && fill) {
+    const copies = join(dir, 'fill');
+    mkdirSync(copies, { recursive: true });
+    const files = Array.from({ length: fill }, (_, i) => {
+      if (i < fixtures.length) return fixtures[i];
+      const file = join(copies, `copy-${i}.jpg`);
+      writeFileSync(file, Buffer.concat([readFileSync(fixtures[i % fixtures.length]), Buffer.from(`copy ${i}`)]));
+      return file;
+    });
+    for (let i = 0; i < files.length; i += 100) run('xcrun', ['simctl', 'addmedia', sim, ...files.slice(i, i + 100)], root);
+  }
   run('bun', [resolve(root, 'host/apple/build.mjs'), ...(host === 'ios' ? ['--ios', '--sim', sim] : ['--bundle']), `${name}-apple`], root);
   // On macOS the drive runs the binary inside the `.app`, so PhotoKit's state is the fixture's own bundle's.
   if (host === 'macos') {
@@ -120,6 +134,15 @@ for (const host of hosts.length ? hosts : ['ios', 'macos']) {
     // The newest, by creation date: a fixture, since `--fill` added them dated 2026.
     const [size, isPicture] = (first['first-size'] ?? '').split(' ');
     check(where, 'newest first, sized, its picture photos:<id>', /^\d+x\d+$/.test(size) && isPicture === 'true', `${first.first} ${first['first-size']}`);
+    // Every page, 500 and then 2 at a time: each photo once, newest first.
+    for (const [button, size] of [['read-all', 500], ['read-all-2', 2]]) {
+      await s.tap(button);
+      const all = await until(s, 'all', (t) => { const [p, n] = (t ?? '').split(' ').map(Number); return p > 0 && n >= count && p === Math.ceil(n / size); }, 120000);
+      const [pages, total, distinct, ordered] = (all ?? '').split(' ');
+      check(where, `photoAssets pages through the library ${size} at a time, each photo once, newest first`,
+        Number(total) >= count && Number(distinct) === Number(total) && Number(pages) === Math.max(1, Math.ceil(Number(total) / size)) && ordered === 'true', all);
+      if (fill > 500 && size === 500) check(where, `more than one page of 500 with ${fill} added`, Number(pages) > 1 && Number(total) >= fill, all);
+    }
     const shown = Math.min(6, count);
     const pictures = await until(s, 'pictures', (t) => Number(t?.split(' ')[0]) >= shown, 20000);
     check(where, `the first ${shown} pictures load, none fails`, Number(pictures?.split(' ')[0]) >= shown && pictures?.split(' ')[1] === '0', pictures);

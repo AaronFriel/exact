@@ -13,7 +13,8 @@
 // - Android has no event for a change in Settings: each resume reads the status again and, when it changed,
 //   announces it, and revokes the pictures it drew that the app may no longer read (D6).
 // - Tier 3 (D9): `queryArgsHatch` sees each `photoAssets` query's `Bundle` after the module's arguments, on the
-//   module's thread; `insertValuesHatch` each add's `ContentValues`, likewise.
+//   module's thread, and a page's key is joined to its selection after; `insertValuesHatch` each add's
+//   `ContentValues`, likewise.
 package exact.photos
 
 import android.Manifest
@@ -192,21 +193,61 @@ class PhotosModule(context: ExtensionContext) : ExactExtension(context) {
     ) + if (Build.VERSION.SDK_INT >= 30) arrayOf(MediaStore.MediaColumns.IS_FAVORITE) else emptyArray()
 
     private fun assets(args: JSONObject): JSONObject {
-        val limit = args.optInt("limit", 60)
+        val limit = args.optInt("limit", 60).coerceIn(1, 500)
+        // The key's numbers: the date taken and the date added, either null, and the row.
+        val after = try {
+            PageCursor.key("mediastore", args.opt("cursor"), 3)?.map { it?.toLong() }
+        } catch (e: IllegalArgumentException) { return PageCursor.refused() }
+        // Newest first: the date taken, else the date added (seconds, so many share one), then the row. A null sorts
+        // last, as SQLite orders it lowest. One row past the page says whether an older page follows.
+        val sort = "${MediaStore.Images.Media.DATE_TAKEN} DESC, ${MediaStore.Images.Media.DATE_ADDED} DESC, ${MediaStore.Images.Media._ID} DESC"
+        val fetched = limit + 1
         val query = Bundle().apply {
-            // Newest first: the date taken, else the date added (seconds, so many share one), then the row.
-            putString(android.content.ContentResolver.QUERY_ARG_SQL_SORT_ORDER,
-                "${MediaStore.Images.Media.DATE_TAKEN} DESC, ${MediaStore.Images.Media.DATE_ADDED} DESC, ${MediaStore.Images.Media._ID} DESC")
-            putInt(android.content.ContentResolver.QUERY_ARG_LIMIT, limit)
+            putString(android.content.ContentResolver.QUERY_ARG_SQL_SORT_ORDER, sort)
+            putInt(android.content.ContentResolver.QUERY_ARG_LIMIT, fetched)
         }
-        queryArgsHatch?.invoke(query)
+        queryArgsHatch?.let { hatch ->
+            hatch(query)
+            if (query.getString(android.content.ContentResolver.QUERY_ARG_SQL_SORT_ORDER) != sort) {
+                say("the queryArgs hatch changed the sort order, which the module owns (LLP 1133.019 D9)")
+                query.putString(android.content.ContentResolver.QUERY_ARG_SQL_SORT_ORDER, sort)
+            }
+            if (query.getInt(android.content.ContentResolver.QUERY_ARG_LIMIT, -1) != fetched) {
+                say("the queryArgs hatch changed the limit, which the module owns (LLP 1133.019 D9)")
+                query.putInt(android.content.ContentResolver.QUERY_ARG_LIMIT, fetched)
+            }
+        }
+        // The page's key joins the app's selection; its values are numbers the cursor held, written as literals, so
+        // the app's selection arguments keep their places.
+        if (after != null) {
+            val keys = listOf(MediaStore.Images.Media.DATE_TAKEN, MediaStore.Images.Media.DATE_ADDED, MediaStore.Images.Media._ID)
+            val ours = olderThan(keys.zip(after))
+            val theirs = query.getString(android.content.ContentResolver.QUERY_ARG_SQL_SELECTION)
+            query.putString(android.content.ContentResolver.QUERY_ARG_SQL_SELECTION, if (theirs.isNullOrBlank()) ours else "($theirs) AND ($ours)")
+        }
         val out = JSONArray()
+        var last: List<Long?>? = null
+        var more = false
         try {
             app.contentResolver.query(IMAGES, columns, query, null)?.use { c ->
-                while (c.moveToNext()) out.put(asset(c))
+                while (c.moveToNext()) {
+                    if (out.length() == limit) { more = true; break }
+                    out.put(asset(c))
+                    last = listOf(if (c.isNull(4)) null else c.getLong(4), if (c.isNull(5)) null else c.getLong(5), c.getLong(0))
+                }
             }
         } catch (e: SecurityException) { return error("NotAllowedError", e.message) }
-        return JSONObject().put("assets", out)
+        val cursor = last?.takeIf { more }?.let { PageCursor.text("mediastore", it.map { v -> v?.toString() }) }
+        return JSONObject().put("assets", out).put("cursor", cursor ?: JSONObject.NULL)
+    }
+
+    /** What sorts after [key] under a sort of its columns, each descending with a null last; the last is never null. */
+    private fun olderThan(key: List<Pair<String, Long?>>): String {
+        val (column, value) = key.first()
+        if (key.size == 1) return "$column < $value"
+        val rest = olderThan(key.drop(1))
+        return if (value == null) "($column IS NULL AND $rest)"
+        else "($column < $value OR $column IS NULL OR ($column = $value AND $rest))"
     }
 
     private fun asset(c: android.database.Cursor): JSONObject {
@@ -330,7 +371,7 @@ class PhotosModule(context: ExtensionContext) : ExactExtension(context) {
     private fun agent(name: String, args: JSONObject, reply: (JSONObject) -> Unit) {
         when (name) {
             "photoLibraryStatus", "managePhotoSelection" -> reply(agentStatus())
-            "photoAssets" -> reply(JSONObject().put("assets", JSONArray(library.newest(args.optInt("limit", 60)).map(::agentAsset))))
+            "photoAssets" -> reply(agentAssets(args))
             "copyPhotoAsset" -> reply(agentCopy(args))
             "addToPhotoLibrary" -> reply(agentAdd(args))
             else -> reply(error("NotSupportedError"))
@@ -360,6 +401,14 @@ class PhotosModule(context: ExtensionContext) : ExactExtension(context) {
     private fun agentStatus() = JSONObject()
         .put("available", true).put("state", "prompt").put("access", library.access).put("addState", "prompt")
         .put("apple", JSONObject.NULL).put("android", JSONObject.NULL)
+
+    private fun agentAssets(args: JSONObject): JSONObject {
+        val after = try { PageCursor.key("agent", args.opt("cursor"), 2) } catch (e: IllegalArgumentException) { return PageCursor.refused() }
+        val created = after?.get(0)?.toDoubleOrNull()
+        val (page, more) = library.page(args.optInt("limit", 60).coerceIn(1, 500), after?.let { (created ?: Double.NEGATIVE_INFINITY) to it[1]!! })
+        val cursor = page.lastOrNull()?.takeIf { more }?.let { PageCursor.text("agent", listOf(it.created.toString(), it.id)) }
+        return JSONObject().put("assets", JSONArray(page.map(::agentAsset))).put("cursor", cursor ?: JSONObject.NULL)
+    }
 
     private fun agentAsset(a: AgentLibrary.Asset) = JSONObject()
         .put("id", a.id).put("mediaType", "image").put("width", a.width).put("height", a.height).put("creationDate", a.created)
@@ -403,5 +452,25 @@ class PhotosModule(context: ExtensionContext) : ExactExtension(context) {
         context.changed("photos.photoAssets")
         // The app reads its own photo whatever its read permission (D6).
         return JSONObject().put("asset", asset.id)
+    }
+}
+
+/** `photoAssets`' cursor (LLP 1133.019 D1), opaque to the app: the sort key of the last photo a page answered, tagged
+ * with the library that sorted it. The next page answers what sorts after the key, so photos added newer do not move
+ * it, and a key whose photo is gone still places it. */
+internal object PageCursor {
+    fun refused(): JSONObject = JSONObject().put("error", "SyntaxError").put("message", "not a cursor photoAssets answered here")
+
+    fun text(library: String, key: List<String?>): String =
+        android.util.Base64.encodeToString((listOf(library) + key.map { it ?: "" }).joinToString("\n").toByteArray(), android.util.Base64.NO_WRAP)
+
+    /** The key's [size] values, an empty one null; null for the first page (no cursor, or an empty one). Throws
+     * [IllegalArgumentException] for a cursor this library did not make. */
+    fun key(library: String, given: Any?, size: Int): List<String?>? {
+        val text = given as? String
+        if (text.isNullOrEmpty()) return null
+        val parts = String(android.util.Base64.decode(text, android.util.Base64.NO_WRAP)).split("\n")
+        require(parts.size == size + 1 && parts[0] == library && parts.last().isNotEmpty())
+        return parts.drop(1).map { it.ifEmpty { null } }
     }
 }

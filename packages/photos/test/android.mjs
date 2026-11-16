@@ -8,12 +8,12 @@
 // one device) whose adb can run as root, to read the edits back: under the agent, the library through the reader's
 // picture door, a copy and an add, limited access and a revocation; the image codec's conformance (LLP 1133.019 §11,
 // checklist step 9) through the fixture's `editImage`; and MediaStore itself, the implementation bound and the read
-// granted by `pm grant`. Both need an NDK in ANDROID_NDK_HOME and a JDK 17 or newer in JAVA_HOME. checklist.md's
+// granted by `pm grant`, and paged through with Older. Both need an NDK in ANDROID_NDK_HOME and a JDK 17 or newer in JAVA_HOME. checklist.md's
 // Android part is what needs a person: the platform's dialogs and what is chosen in them.
 //
 // usage: bun packages/photos/test/android.mjs [--emulator]
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -215,6 +215,37 @@ if (process.argv.includes('--emulator')) {
     const drawn = r[13]?.node?.absolute;
     check(where, '5: the copy drawn by the reader\'s loader is upright', copied && drawn?.w === 48 && Math.abs(drawn.h - 48 * copied.height / copied.width) < 1, JSON.stringify(drawn));
     check(where, '5: the add joins the list', grid(r[11]) === grid(r[3]) + 1, `${grid(r[3])} then ${grid(r[11])}; ${shot}`);
+  }
+  // 6: MediaStore paged (D1): 30 more pushed, the six fixtures' bytes each made distinct after the JPEG's end, so
+  // many share a date taken and a date added; read 12 a page through Older to the oldest, each row once; then removed.
+  {
+    const id = 'com.exact.photosfixture', images = 'content://media/external/images/media';
+    adb('shell', `content delete --uri ${images} --where "_display_name LIKE 'photos-page-%'"`);
+    adb('shell', 'rm -f /sdcard/Pictures/photos-page-*');
+    const out = resolve(tmpdir(), `photos-android-pages-${process.pid}`);
+    mkdirSync(out, { recursive: true });
+    for (let i = 0; i < 30; i++) {
+      const file = resolve(out, `photos-page-${i}.jpg`);
+      writeFileSync(file, Buffer.concat([readFileSync(resolve(here, `../fixture/agent-${1 + i % 6}.jpg`)), Buffer.from(`page ${i}`)]));
+      adb('push', file, '/sdcard/Pictures/');
+    }
+    adb('shell', api >= 30 ? 'content call --method scan_volume --uri content://media --arg external_primary'
+      : `for f in /sdcard/Pictures/photos-page-*; do am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file://$f; done`);
+    adb('shell', 'pm', 'grant', id, `android.permission.${api >= 33 ? 'READ_MEDIA_IMAGES' : 'READ_EXTERNAL_STORAGE'}`);
+    const rows = (adb('shell', `content query --uri ${images} --projection _id`).stdout.toString().match(/^Row:/gm) ?? []).length;
+    const pages = Math.ceil(rows / 12), ops = ['clock +100', 'tap @recent allow', 'clock settle', 'tree'];
+    for (let p = 1; p < pages; p++) ops.push('tap older', 'clock settle', 'tree');
+    const r = drive({}, ops, ['--bind', 'photos']);
+    const trees = r.filter(x => Array.isArray(x?.nodes));
+    const shown = trees.map(t => t.nodes.filter(n => /^photos:/.test(n.props?.imageSource ?? '')).map(n => n.props.imageSource));
+    const all = shown.flat(), ids = trees.map(t => new Set(t.nodes.map(n => n.props?.testId)));
+    check(where, `6: ${rows} rows in ${pages} pages of 12, each once`, trees.length === pages && all.length === rows && new Set(all).size === rows,
+      `${trees.length} pages, ${all.length} shown, ${new Set(all).size} distinct`);
+    check(where, '6: Older on every page but the last, which says the oldest', ids.slice(0, -1).every(t => t.has('older')) && ids.at(-1)?.has('oldest'),
+      JSON.stringify(ids.map(t => [t.has('older'), t.has('oldest')])));
+    // Gone again, so drive 5's list stays under one page.
+    adb('shell', `content delete --uri ${images} --where "_display_name LIKE 'photos-page-%'"`);
+    adb('shell', 'rm -f /sdcard/Pictures/photos-page-*');
   }
 }
 console.log(failed() ? `${failed()} failed` : 'all passed');
