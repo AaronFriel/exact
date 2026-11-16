@@ -670,7 +670,7 @@
           "properties": {
             "title": { "type": "string", "minLength": 1 },
             "text": { "type": "string", "minLength": 1 },
-            "url": { "type": "string", "minLength": 1 },
+            "url": { "type": "string", "minLength": 1, "description": "The parameter a shared link arrives under. On Apple, mapping it also has Safari give the details of a page it shares: `url` is then the page's canonical URL (its location when it names none) and `title` the page's title. A link shared from a page keeps its own URL and title." },
             "files": {
               "type": "array",
               "minItems": 1,
@@ -689,10 +689,11 @@
         },
         "apple": {
           "type": "object",
-          "description": "Apple's words (D6): `NSExtensionActivationRule` beats the derived rule; `postTitle` is a strings key for the compose sheet's post button.",
+          "description": "Apple's words (D6): `NSExtensionActivationRule` beats the derived rule; `postTitle` is the word on the compose sheet's post button; `presentation` is what the extension shows.",
           "properties": {
-            "NSExtensionActivationRule": { "oneOf": [{ "type": "string" }, { "type": "object" }] },
-            "postTitle": { "type": "string" }
+            "NSExtensionActivationRule": { "oneOf": [{ "type": "string" }, { "type": "object" }], "description": "The extension's activation rule, in place of the derived one: Apple's dictionary of keys, or a predicate string. When `url` is mapped, a dictionary gains `NSExtensionActivationSupportsWebPageWithMaxCount` unless it gives that count itself. A predicate is used as written. Safari hands the extension a shared page's details as a property list (`com.apple.property-list`) in place of the page's link." },
+            "postTitle": { "type": "string", "description": "The word on the compose sheet's post button, in place of Post. The button shows it as written: the build looks nothing up in the app's strings." },
+            "presentation": { "enum": ["compose", "confirmation"], "description": "`compose` (the default) shows the compose sheet: the shared text to edit, then Cancel or Post. `confirmation` shows no editor: choosing the app in the share sheet takes the share at once, shows the app's name under a checkmark for a second, and closes. The app receives either the same way, at `action`. `postTitle` names the compose sheet's button, so the build refuses it with `confirmation`." }
           },
           "additionalProperties": false
         },

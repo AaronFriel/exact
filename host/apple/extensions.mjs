@@ -6,7 +6,7 @@ import { relative, resolve } from 'node:path';
 import { mkdirSync, mkdtempSync, writeFileSync, copyFileSync, existsSync, readFileSync, rmSync } from 'node:fs';
 import { plistFile } from './assets.mjs';
 import { stripProductionExecutable } from './link.mjs';
-import { appleActivationRule, appleShareMembers } from '../../scripts/share-target.mjs';
+import { appleActivationRule, applePresentation, appleShareMembers, appleSharePage } from '../../scripts/share-target.mjs';
 import { embeddedProfile } from './devices.mjs';
 import { notificationServiceDirectoryExists, notificationServiceSourceRoot, snapshotNotificationService } from '../../scripts/notification-service.mjs';
 import { fileURLToPath } from 'node:url';
@@ -124,9 +124,12 @@ export const shareInfo = (app, group = null) => app.manifest.share_target
   ? { ExactShareTarget: JSON.stringify(app.manifest.share_target), ExactAppIdentifier: app.id, ...(group ? { ExactShareGroup: group } : {}) }
   : {};
 
-/** The share extension (D4) in `bundle`'s `PlugIns/ExactShare.appex`: the host's one Swift extension, parameterized
- * by its Info.plist (the group, the app's id, the mapped members, each files member's UTIs, the activation rule and
- * the post button's word). `entitlements` is the extension's plist text; `sign(extension, path)` signs it. */
+/** The share extension (D4 and D6, amended 2026-11-15) in `bundle`'s `PlugIns/ExactShare.appex`: the host's one Swift
+ * extension, parameterized by its Info.plist (the group, the app's id, the mapped members, each files member's UTIs,
+ * the activation rule and the post button's word). It holds the one presentation the app declares: that
+ * presentation's source is compiled and its controller is the principal class. For an app that maps `url` it also
+ * holds Exact's page script, which Safari runs in a shared page, and the code that reads its answer. `entitlements`
+ * is the extension's plist text; `sign(extension, path)` signs it. */
 export function packageShareExtension({ app, bundle, directory, sdk, triple, device = false, platform = 'ios', group, entitlements, sign, runApple, production, symbols = directory, profile = null }) {
   const mac = platform === 'macos', contents = mac ? resolve(bundle, 'Contents') : bundle;
   const target = app.manifest.share_target;
@@ -138,23 +141,31 @@ export function packageShareExtension({ app, bundle, directory, sdk, triple, dev
   if (profile) copyFileSync(profile.path, resolve(extensionContents, mac ? 'embedded.provisionprofile' : 'embedded.mobileprovision'));
   const appInfo = JSON.parse(runApple('plutil', ['-convert', 'json', '-o', '-', resolve(contents, 'Info.plist')], { read: true }).stdout);
   const versions = Object.fromEntries(['CFBundleVersion', 'CFBundleShortVersionString', mac ? 'LSMinimumSystemVersion' : 'MinimumOSVersion'].map(key => [key, appInfo[key]]).filter(([, v]) => v !== undefined));
-  const params = target.params ?? {};
+  const params = target.params ?? {}, page = appleSharePage(target);
+  const [principalClass, presentationSource] = applePresentation(target) === 'confirmation'
+    ? ['ExactShareConfirmationViewController', 'ShareConfirmation.swift'] : ['ExactShareViewController', 'ShareViewController.swift'];
   writeFileSync(resolve(extensionContents, 'Info.plist'), plistFile({
     CFBundleIdentifier: shareId(app), CFBundleName: 'ExactShare', CFBundleDisplayName: appInfo.CFBundleDisplayName ?? appInfo.CFBundleName ?? app.displayName,
     CFBundleExecutable: 'ExactShare', CFBundlePackageType: 'XPC!', CFBundleInfoDictionaryVersion: '6.0', ...versions,
     ...(!mac ? { UIDeviceFamily: appInfo.UIDeviceFamily } : {}), CFBundleSupportedPlatforms: mac ? ['MacOSX'] : appInfo.CFBundleSupportedPlatforms,
     ExactAppGroup: group, ExactAppIdentifier: app.id, ExactShareParams: ['title', 'text', 'url'].filter(k => params[k]), ExactShareMembers: appleShareMembers(target),
     ...(target.apple?.postTitle ? { ExactSharePostTitle: target.apple.postTitle } : {}),
-    NSExtension: { NSExtensionPointIdentifier: 'com.apple.share-services', NSExtensionPrincipalClass: 'ExactShareViewController',
-      NSExtensionAttributes: { NSExtensionActivationRule: appleActivationRule(target) } },
+    NSExtension: { NSExtensionPointIdentifier: 'com.apple.share-services', NSExtensionPrincipalClass: principalClass,
+      // The script's name, without `.js`, as Safari looks it up among the extension's resources.
+      NSExtensionAttributes: { NSExtensionActivationRule: appleActivationRule(target), ...(page ? { NSExtensionJavaScriptPreprocessingFile: 'SharePage' } : {}) } },
   }));
+  if (page) {
+    const resources = mac ? resolve(extensionContents, 'Resources') : extension;
+    mkdirSync(resources, { recursive: true });
+    copyFileSync(resolve(root, 'host/apple/share/SharePage.js'), resolve(resources, 'SharePage.js'));
+  }
   mkdirSync(directory, { recursive: true });
   const entitlementPath = resolve(directory, 'share-entitlements.plist');
   writeFileSync(entitlementPath, entitlements);
   runApple('xcrun', ['--sdk', mac ? 'macosx' : device ? 'iphoneos' : 'iphonesimulator', 'swiftc', '-parse-as-library', '-O', ...(production ? ['-g'] : []), ...appexArgs,
-    '-module-name', 'ExactShare', '-target', triple, '-sdk', sdk, '-module-cache-path', extensionModuleCache,
+    ...(page ? ['-D', 'EXACT_SHARE_PAGE'] : []), '-module-name', 'ExactShare', '-target', triple, '-sdk', sdk, '-module-cache-path', extensionModuleCache,
     ...(!device && !mac ? ['-Xlinker', '-sectcreate', '-Xlinker', '__TEXT', '-Xlinker', '__entitlements', '-Xlinker', entitlementPath] : []),
-    resolve(root, 'host/apple/share/ShareInbox.swift'), resolve(root, 'host/apple/share/ShareViewController.swift'), '-o', binary]);
+    resolve(root, 'host/apple/share/ShareInbox.swift'), resolve(root, 'host/apple/share', presentationSource), '-o', binary]);
   stripProductionExecutable(binary, { production, dsym: resolve(symbols, 'ExactShare.appex.dSYM'), sourceDsym: `${binary}.dSYM` });
   writePrivacyManifest(mac ? resolve(extensionContents, 'Resources') : extension, [binary], { mac });
   sign(extension, entitlementPath);

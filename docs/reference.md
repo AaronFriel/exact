@@ -4389,6 +4389,92 @@ The driver: `tap <target> drop <path…>` (files and folders), `tap <target>
 dragenter <path…>` and `tap <target> dragleave`, `type <target> paste --file
 <path…>` and `type <target> paste --image <png>`.
 
+### Shares from other apps (`share_target`)
+
+`share_target` in `app.json` lists the app in other apps' share sheets, in the
+[Web Share Target](https://w3c.github.io/web-share-target/) member's words. A share
+arrives as one location: `action`, a path one of the app's routes matches, with the
+shared members in its query under the names `params` gives them.
+
+```json
+"share_target": {
+  "action": "/share", "method": "POST", "enctype": "multipart/form-data",
+  "params": { "title": "title", "text": "text", "url": "url",
+    "files": [{ "name": "files", "accept": ["image/*", ".pdf"] }] },
+  "apple": { "presentation": "confirmation" }
+}
+```
+
+Read a text member with `searchParam(entry, "text")` and the files with
+`sharedFiles(entry, "files")`
+([grammar](contract-grammar.md#standard-functions-and-intrinsics)). `params.files`
+needs `POST` and `multipart/form-data`. A shared link arrives under `url`, or at the
+end of the text when `url` is not mapped. On Apple it is the first web link the sender
+attached, without any userinfo: `https://name:password@x.test/trip` arrives as
+`https://x.test/trip`. An Apple build derives a share extension
+from the member and an Android build its intent filters; the web's member takes the
+text members only. `apps/fieldnotes` receives text and files this way.
+
+`share_target.apple` holds Apple's words:
+
+- **`presentation`** is what the extension shows. `"compose"`, the default, is the
+  compose sheet: the shared text to edit, then Cancel or Post. `"confirmation"` has no
+  editor, for an app that saves in one tap: choosing the app in the share sheet takes
+  the share at once, shows the app's name under a checkmark for a second, and closes.
+  The share's text is the sender's, unedited; text a sender gives only as an attachment
+  is taken up to 1 MB, and longer text fails the share. If the share cannot be saved, an
+  alert says why and nothing reaches the app; if the person dismisses the sheet while
+  files are still copying, nothing is kept. Either presentation delivers the share the same
+  way, at `action`. A route that keeps what arrives without asking should remember
+  that any link can open `action` with the same query.
+- **`postTitle`** is the word on the compose sheet's post button, in place of Post,
+  shown as written: it is not a key into the app's strings. The build refuses it with
+  `"presentation": "confirmation"`, which has no button to name.
+- **`NSExtensionActivationRule`** replaces the rule the build derives from `params`:
+  Apple's dictionary of keys, or a predicate string, which is used as written.
+
+What does not arrive is left out, and the rest of the share is saved: a link that does
+not load, and a file that does not load, is over 64 MB or that no files member accepts
+(each such file is counted in `dropped`). A share left with no link, text or file is
+not saved, and nothing reaches the app: the confirmation shows its alert, and the
+compose sheet closes with the request cancelled. A title alone is not a share.
+
+**A page shared from Safari.** When `url` is mapped, Safari runs a script of Exact's,
+the same in every app, in the page it shares. The share's `url` is then the page's
+canonical URL (`<link rel="canonical">`), or the page's location when it names none,
+and its `title` is the page's title, cut at 4,096 UTF-16 units. A canonical link that
+is not an http or https URL, that is longer than 4,096 characters, or that would take
+an https page to http, is ignored. The page's `url` carries no userinfo either. An app
+cannot supply its own script, and one that maps no `url` ships none.
+
+A link pressed in a page and shared from its menu arrives as that link. Where a link
+arrives beside the page's details, the details stand only if the link is the page's
+own location. The two are compared as URLs: the scheme and host in either case, a
+default port and an empty path or `/` are the same; a last slash, a query or a
+fragment that differs is not. So a link to another place in the page, or to another
+page, arrives as that link with the sender's title, and a link that is no web link
+leaves the share without a `url`.
+
+For such an app, a link that does not load is left out, and the page's details do not
+stand in for it. Page details too large to read (over 1 MB, which takes a page whose
+own address is about that long) are not read either: the list is then a file like
+another, kept by a files member that accepts it or counted in `dropped`. The share is
+saved with what else it holds, its text and its files. Safari gives a page's title as
+the share's text, so an app that maps `text` then receives the title with no `url`.
+With nothing else, the share is not saved.
+
+Safari hands the extension the page's details as a property list
+(`com.apple.property-list`) in place of the page's link, and Exact reads it. The
+derived rule asks for the page, and an app's own dictionary rule gains
+`NSExtensionActivationSupportsWebPageWithMaxCount` unless it gives that count itself.
+An app's own predicate is used as written. On the iOS 27 simulator, Safari offers a
+page to a predicate that accepts only `public.url` and still hands over the details;
+this has not been run on a phone or a Mac.
+
+A device build leaves the share extension out until the team registers the App Group
+and the extension's App ID, and says so; a Mac build signed ad hoc leaves it out too
+([Mac development signing](#mac-development-signing)).
+
 ### Clipboard images
 
 Data code writes images with [`@exact/clipboard`](contract-grammar.md#clipboard).
