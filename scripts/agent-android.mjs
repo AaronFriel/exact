@@ -978,35 +978,60 @@ const lightColour = (css) => {
   return (y > 0.008856 ? 116 * Math.cbrt(y) - 16 : 903.3 * y) > 49;
 };
 
+/** How much smaller than it shows Android 12's starting window lays its icon drawable out: as an adaptive icon's
+ * 108 dp layer, shown 192 dp wide where no icon background is set (and, on stock Android, cut to a circle that wide).
+ * The documented "288 dp, fit in a 192 dp circle" drew a picture at two thirds of its width; this factor was measured
+ * on an Android 16 emulator, an Android 14 phone (HyperOS, which does not cut it) and an Android 17 emulator. */
+const SPLASH_ICON_SCALE = 108 / 192;
+
 /** The launch window in the app's first-frame background (LLP 1115.001 D3.6): the manifest's `background_color`, and
  * `color_scheme_dark.background_color` in night mode, as the iOS launch screen and the web page's first paint take
  * them (a fixed `userInterfaceStyle` takes its side alone, as there). Written under `res` as `ExactAppLaunch`, the
  * reader's `ExactLaunch` with that colour behind the window and on Android 12's starting window, and the bars' icons
  * dark over a light colour and light over a dark one, until the host says the page's (`ExactActivity.chrome`).
- * Returns the activity's theme: null where the manifest names no colour, which leaves the platform's surface. */
-export function androidLaunch(manifest, res) {
+ * Android 12's starting window shows the launcher icon unless `host.android.launchImage` says otherwise: a picture
+ * (`{ src, width }`) is that icon, laid out at [SPLASH_ICON_SCALE] of its `width`, and before Android 12 it is
+ * centred on the window's background, which has no icon; `false` shows no icon. `dir` is the app's, which the
+ * picture's path is relative to. Returns the activity's theme, null where the manifest says neither, which leaves the
+ * platform's own launch, and the picture's file and digest for the APK's record of its sources. */
+export function androidLaunch(manifest, res, dir = '.') {
   rmSync(res, { recursive: true, force: true });
   const style = manifest.userInterfaceStyle, named = manifest.color_scheme_dark?.background_color;
+  const image = manifest.host?.android?.launchImage;
   let light = manifest.background_color;
-  if (!light) return null;
+  if (!light && image === undefined) return { theme: null, files: [] };
   const dark = style === 'light' ? light : named ?? light;
   if (style === 'dark') light = dark;
-  const write = (dir, body) => {
-    mkdirSync(resolve(res, dir), { recursive: true });
-    writeFileSync(resolve(res, dir, 'exact_launch.xml'), `<?xml version="1.0" encoding="utf-8"?>\n<resources>\n${body}</resources>\n`);
+  const write = (path, body) => {
+    mkdirSync(dirname(resolve(res, path)), { recursive: true });
+    writeFileSync(resolve(res, path), typeof body === 'string' ? `<?xml version="1.0" encoding="utf-8"?>\n${body}` : body);
   };
+  const values = (body) => `<resources>\n${body}</resources>\n`;
   const scheme = (css) => `    <color name="exact_launch">${androidColour(css)}</color>\n    <bool name="exact_launch_light">${lightColour(css)}</bool>\n`;
-  const theme = (splash) => [
-    '    <style name="ExactAppLaunch" parent="ExactLaunch">',
-    '        <item name="android:windowBackground">@color/exact_launch</item>',
-    ...(splash ? ['        <item name="android:windowSplashScreenBackground">@color/exact_launch</item>'] : []),
-    '        <item name="android:windowLightStatusBar">@bool/exact_launch_light</item>',
-    '        <item name="android:windowLightNavigationBar">@bool/exact_launch_light</item>',
+  const files = [], picture = image ? readPng(resolve(dir, image.src)) : null;
+  if (picture) {
+    const source = resolve(dir, image.src);
+    files.push({ file: source, sha256: createHash('sha256').update(readFileSync(source)).digest('hex') });
+    // At up to xxxhdpi's 4 px a dp, never enlarged, its height following its aspect.
+    const px = Math.min(picture.width, Math.round(image.width * 4));
+    write('drawable-nodpi/exact_launch_picture.png', encodePng(resize(picture, px, Math.max(1, Math.round(picture.height * px / picture.width)))));
+    const size = (scale) => `android:width="${+(image.width * scale).toFixed(2)}dp" android:height="${+(image.width * picture.height / picture.width * scale).toFixed(2)}dp"`;
+    const layers = (items) => `<layer-list xmlns:android="http://schemas.android.com/apk/res/android">\n${items}</layer-list>\n`;
+    write('drawable/exact_launch_icon.xml', layers(`    <item ${size(SPLASH_ICON_SCALE)} android:gravity="center" android:drawable="@drawable/exact_launch_picture" />\n`));
+    write('drawable/exact_launch_window.xml', layers(`    <item android:drawable="${light ? '@color/exact_launch' : '?android:attr/colorBackground'}" />\n` +
+      `    <item ${size(1)} android:gravity="center" android:drawable="@drawable/exact_launch_picture" />\n`));
+  }
+  const item = (name, value) => `        <item name="android:${name}">${value}</item>`;
+  const theme = (splash) => ['    <style name="ExactAppLaunch" parent="ExactLaunch">',
+    ...(picture && !splash ? [item('windowBackground', '@drawable/exact_launch_window')] : light ? [item('windowBackground', '@color/exact_launch')] : []),
+    ...(splash && light ? [item('windowSplashScreenBackground', '@color/exact_launch')] : []),
+    ...(splash && image !== undefined ? [item('windowSplashScreenAnimatedIcon', picture ? '@drawable/exact_launch_icon' : '@android:color/transparent')] : []),
+    ...(light ? [item('windowLightStatusBar', '@bool/exact_launch_light'), item('windowLightNavigationBar', '@bool/exact_launch_light')] : []),
     '    </style>', ''].join('\n');
-  write('values', scheme(light) + theme(false));
-  write('values-night', scheme(dark));
-  write('values-v31', theme(true));
-  return '@style/ExactAppLaunch';
+  write('values/exact_launch.xml', values((light ? scheme(light) : '') + theme(false)));
+  if (light) write('values-night/exact_launch.xml', values(scheme(dark)));
+  write('values-v31/exact_launch.xml', values(theme(true)));
+  return { theme: '@style/ExactAppLaunch', files };
 }
 
 /** CI inputs shared by APK and App Bundle builds (LLP 1030.003 D6, D8). Refuse incomplete signing
@@ -1081,7 +1106,7 @@ export function buildApk(app, env, profile, writeLocks = false, bundle = false) 
   let icons;
   try { icons = androidIcons(app.manifest, app.dir, resolve(dirs.app, 'icons/res')); }
   catch (error) { for (const line of error.message.split('\n')) console.error(`${app.name}: ${line}`); return null; }
-  const launch = androidLaunch(app.manifest, resolve(dirs.app, 'launch/res'));
+  const launch = androidLaunch(app.manifest, resolve(dirs.app, 'launch/res'), app.dir);
   // Home-screen widgets for the rows with a `system*` family (LLP 1126.003 D1); accessory-only rows are Apple's alone.
   const androidWidgets = (app.manifest.widgets ?? []).filter((row) => (row.families ?? []).some((family) => family.startsWith('system')));
   if (app.manifest.widgets?.length && !androidWidgets.length) console.warn(`${app.name}: app.json's widgets declare only accessory families, which Android has no counterpart for, so this APK has no widget`);
@@ -1153,7 +1178,7 @@ export function buildApk(app, env, profile, writeLocks = false, bundle = false) 
     assembled = runGradle(['--no-watch-fs', ...(env.CI || graph.env.GRADLE_USER_HOME ? ['--no-daemon'] : []), bundle ? ':app:bundleRelease' : ':app:assembleRelease', `-Papp=${app.name}`, `-PappDir=${app.manifest.game ? app.workspace : app.dir}`,
       `-PexactDevelopment=${development ? '1' : '0'}`, `-PapplicationId=${androidPackageId(app.manifest)}`, `-PappName=${app.displayName}`,
       `-PappBuildDir=${dirs.app}`, `-PcanvasBuildDir=${dirs.canvas}`, `-PvideoBuildDir=${dirs.video}`, `-PndkPath=${env.ANDROID_NDK_HOME}`, '--project-cache-dir', dirs.cache, `-Pkotlin.project.persistent.dir=${dirs.kotlin}`,
-      ...developmentApkArgs(development, profile, bundle), ...gpuArgs, ...(icons.icon ? [`-PappIcon=${icons.icon}`] : []), ...(icons.banner ? [`-PappBanner=${icons.banner}`] : []), ...(launch ? [`-PappTheme=${launch}`] : []), ...compose, ...video, ...widgetArgs, ...extensionArgs(app, out, config, bound, firebase, development), ...graph.args], { env: { ...env, ANDROID_HOME: androidSdk(env), ...graph.env } }, process.platform, { lockAdvice: maven.length && !writeLocks ? `${app.name}: Gradle locks or verification metadata do not match its dependencies; for an intended graph change, run ${androidLockCommand(app)}, then review and commit gradle.lockfile and gradle-verification.xml` : null });
+      ...developmentApkArgs(development, profile, bundle), ...gpuArgs, ...(icons.icon ? [`-PappIcon=${icons.icon}`] : []), ...(icons.banner ? [`-PappBanner=${icons.banner}`] : []), ...(launch.theme ? [`-PappTheme=${launch.theme}`] : []), ...compose, ...video, ...widgetArgs, ...extensionArgs(app, out, config, bound, firebase, development), ...graph.args], { env: { ...env, ANDROID_HOME: androidSdk(env), ...graph.env } }, process.platform, { lockAdvice: maven.length && !writeLocks ? `${app.name}: Gradle locks or verification metadata do not match its dependencies; for an intended graph change, run ${androidLockCommand(app)}, then review and commit gradle.lockfile and gradle-verification.xml` : null });
     if (assembled) graph.kept();
   } finally {
     graph.done();
@@ -1165,7 +1190,7 @@ export function buildApk(app, env, profile, writeLocks = false, bundle = false) 
   const keptSound = keptLibrary(readFileSync(sound), zipEntry(readFileSync(apk), `${bundle ? 'base/' : ''}lib/arm64-v8a/libexact_sound.so`), [dirs.app], 'libexact_sound.so');
   if (keptSound) { console.error(`exact android sound: ${keptSound}`); return null; }
   writeFileSync(resolve(dirname(apk), 'exact-build.json'), JSON.stringify({ started, package: androidPackageId(app.manifest), library: built(crate), workspace: app.workspace ?? app.dir,
-    sources: [...READER_SOURCES, ...[resolve(app.dir, 'modules/android')].filter(existsSync), ...icons.files] }) + '\n');
+    sources: [...READER_SOURCES, ...[resolve(app.dir, 'modules/android')].filter(existsSync), ...icons.files, ...launch.files] }) + '\n');
   // What its bake inlined of each setting (LLP 1153 D4), bound to the APK, for a drive to compare with their sources.
   recordBuiltSettings(apk, app, out);
   return apk;

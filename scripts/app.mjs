@@ -574,7 +574,7 @@ export function readManifest(dir, name) {
       // LLP 1163 D2: the dark launch colour moved into the W3C member.
       : /^background_color_dark: /.test(p) ? 'background_color_dark is now color_scheme_dark.background_color: "color_scheme_dark": { "background_color": "#000000" } (LLP 1163 D2)'
       // Expo's splash keys and a host's own launch colour: the launch is the manifest's one colour on every host.
-      : /^((host\.\w+\.)?(splash\w*|windowBackground|backgroundColor|launchColor)): not a known key$/i.test(p) ? `${p.split(':')[0]}: not a known key; what shows before the first frame is background_color, and color_scheme_dark.background_color in a dark scheme, on every host (host.ios.launchImage adds a picture on iOS)`
+      : /^((host\.\w+\.)?(splash\w*|windowBackground|backgroundColor|launchColor)): not a known key$/i.test(p) ? `${p.split(':')[0]}: not a known key; what shows before the first frame is background_color, and color_scheme_dark.background_color in a dark scheme, on every host (host.ios.launchImage and host.android.launchImage add a picture)`
       : appleMetadataProblem(p)).filter((p) => !/^host\.web\.(head(\[|: )|csp|cspReportOnly)/.test(p)).concat(webHeadProblems(parsed), webCspProblems(parsed));
   if (!problems.length) problems.push(...installProblems(parsed), ...gpuModuleProblems(parsed), ...documentTypeProblems(parsed), ...shareTargetProblems(parsed), ...protocolHandlerProblems(parsed), ...appIconProblems(parsed, dir), ...launchImageProblems(parsed, dir), ...variantProblems(parsed, dir));
   if (problems.length) throw new Error(`${path} does not conform to scripts/app.schema.json:\n  ${problems.join('\n  ')}`);
@@ -591,11 +591,14 @@ import { claimVariant, resolveVariant, selectedVariant, variantProblems } from '
 export { DOCUMENT_UTIS, ownDocumentType };
 ;
 
-// The iOS launch screen's picture (`launchScreen`) must be there; refused when any build reads
-// the manifest, as the icons (scripts/app-icons.mjs) and the file types are.
+// The launch screen's picture must be there; refused when any build reads the manifest, as the
+// icons (scripts/app-icons.mjs) and the file types are. Android's may also be `false`, never `true`.
 function launchImageProblems(manifest, dir) {
-  const launch = manifest.host?.ios?.launchImage?.src;
-  return launch && !existsSync(resolve(dir, launch)) ? [`host.ios.launchImage: ${launch}, the launch screen's picture, does not exist`] : [];
+  return ['ios', 'android'].flatMap((host) => {
+    const launch = manifest.host?.[host]?.launchImage;
+    if (launch === true) return [`host.${host}.launchImage: true is not a picture; false shows no icon, { "src", "width" } a picture`];
+    return launch?.src && !existsSync(resolve(dir, launch.src)) ? [`host.${host}.launchImage: ${launch.src}, the launch screen's picture, does not exist`] : [];
+  });
 }
 
 /** Whether a `protocol_handlers` scheme is the web's own: `http` and
@@ -1125,6 +1128,8 @@ function completeBuild(app, platform, target, graph, messages, roots, env, prepa
   // The launch screen's picture: its bytes are the binary's, and packaging draws the ones recorded.
   const launchImage = platform === 'ios' ? launchImageInventory(app) : null;
   if (launchImage) add(resolve(app.dir, launchImage.src));
+  const androidImage = platform === 'android' ? app.manifest.host?.android?.launchImage?.src : null; // a resource of the APK (`androidLaunch`)
+  if (androidImage) add(resolve(app.dir, androidImage));
   const metadata={...(appleAssetCatalogs.length ? {appleAssetCatalogs} : {}),...(launchImage ? {launchImage} : {}),...(nativeResources.length ? {nativeResources} : {}),...(env.EXACT_APPLE_EXTENSIONS!==undefined?{appleExtensions:env.EXACT_APPLE_EXTENSIONS.split(',').filter(Boolean)}:{}),...nativeManifestMetadata(app.manifest, platform),delivery:compat.delivery,store:compat.inputs.store,keys:compat.inputs.keys};
   const configuration={target,units:orderedBuild([...new Map(units.map(u=>[canonicalBuild(u),u])).values()]),builders:orderedBuild([...new Map(builders.map(u=>[canonicalBuild(u),u])).values()]),rustc:buildCommand('rustc',['-vV'],app,env).stdout,flags:{...Object.fromEntries(['RUSTFLAGS','CARGO_ENCODED_RUSTFLAGS','MACOSX_DEPLOYMENT_TARGET','IPHONEOS_DEPLOYMENT_TARGET','TVOS_DEPLOYMENT_TARGET','WATCHOS_DEPLOYMENT_TARGET'].map((k)=>[k,env[k]??null])),...(env.EXACT_WEB_LINK?{EXACT_WEB_LINK:env.EXACT_WEB_LINK}:{}),...(env.EXACT_WEB_SIZE?{EXACT_WEB_SIZE:env.EXACT_WEB_SIZE}:{})}};
   for (const captured of privacyManifests) {

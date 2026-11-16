@@ -72,8 +72,8 @@ android {
         // shows the shell's plain one (res/drawable/banner.xml).
         manifestPlaceholders["appIcon"] = providers.gradleProperty("appIcon").orNull ?: "@null"
         manifestPlaceholders["appBanner"] = providers.gradleProperty("appBanner").orNull ?: "@drawable/banner"
-        // The launch window in the manifest's `background_color` (agent-android.mjs `androidLaunch`); without one the
-        // reader's, the platform's surface (LLP 1115.001 D3.6).
+        // The launch window in the manifest's `background_color` and with its `host.android.launchImage`
+        // (agent-android.mjs `androidLaunch`); without either the reader's, the platform's (LLP 1115.001 D3.6).
         manifestPlaceholders["appTheme"] = providers.gradleProperty("appTheme").orNull ?: "@style/ExactLaunch"
     }
     val upload = providers.environmentVariable("EXACT_KEYSTORE").orNull?.let { path ->

@@ -476,9 +476,11 @@ This list holds what the [agent guide](contract-for-agents.md)'s rules don't mak
   screen is `host.ios.launchImage` centred on `background_color` (`color_scheme_dark`'s
   `background_color` in dark mode); unset, the platform's background (the grouped grey
   under a first route that scrolls a grouped list). Android's launch window takes the same
-  two colours. It is gone before a screenshot can be taken: record one
-  (`xcrun simctl io <udid> recordVideo launch.mp4`, then `simctl launch`) and read its
-  frames (the euxy port's white launch, 2026-10-21).
+  two colours, with the launcher icon on them from Android 12 unless
+  `host.android.launchImage` names a picture or `false`. It is gone before a screenshot
+  can be taken: record one (`xcrun simctl io <udid> recordVideo launch.mp4`, then `simctl
+  launch`; `adb shell screenrecord` on Android) and read its frames (the euxy port's white
+  launch, 2026-10-21).
 
 - **A sticky child under the bar covers the first row at rest.** Cause: a `top` written
   as the bar's height to clear it (React Conf's day picker, `top=114`). A route's

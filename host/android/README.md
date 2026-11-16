@@ -87,8 +87,8 @@ The build:
    `app/build/<app>/icons/res/`: from a square `maskable` PNG an adaptive icon, with a `monochrome` glyph as its
    themed layer; without one, a legacy icon from a square `any` PNG; and a banner from a 16:9 `any` PNG. A file its
    slot refuses (smaller than the slot, or a glyph with no transparent pixels) fails the build here, before anything
-   compiles; and the launch theme in its `background_color`, where it names one, under `app/build/<app>/launch/res/`
-   ([the launch window](#the-devices-colours-llp-1115001-d4));
+   compiles; and the launch theme in its `background_color` and with its `host.android.launchImage`, where it names
+   either, under `app/build/<app>/launch/res/` ([the launch window](#the-devices-colours-llp-1115001-d4));
 2. builds the app's `android/` crate for `aarch64-linux-android` at `host-dev` (`--release`: at `release` with fat
    LTO, as a production build links, for measuring). The crate is a cdylib whose source is `exact_painted::canvas_jni!(<the data source>, hatches =
    crate::exact_hatches())`, with a build script that bakes the plan and calls `contract::native::android_entry`,
@@ -556,6 +556,16 @@ names a `background_color` launches on it instead, and on `color_scheme_dark.bac
 iOS launch screen and its web page's first paint do: the build writes a theme over `ExactLaunch` with that colour
 behind the window and on Android 12's starting window, and the bars' icons dark over a light colour
 (`agent-android.mjs` `androidLaunch`).
+
+From Android 12 the starting window shows the launcher icon on that colour, as the platform has it; before 12 the
+window has no icon. `host.android.launchImage` replaces the icon with a picture, as iOS's launch screen has one: from
+Android 12 it is the starting window's icon (`windowSplashScreenAnimatedIcon`), a layer list with the picture at
+108/192 of its `width`, because the platform lays the drawable out as an adaptive icon's 108 dp layer and shows that
+layer 192 dp wide, cut to a circle that wide on stock Android (measured on Android 16 and 17 emulators and an Android 14
+phone, whose HyperOS does not cut it; the documented "288 dp within a 192 dp circle" draws it at two thirds of its
+width). Before 12 the picture, at its `width`, is a layer of the window's background. `false` makes the icon
+transparent. The starting window still goes when the first frame is drawn (`ExactActivity` `Splash`): on a phone
+(Android 14) no frame of the colour alone came between the picture and the first frame.
 
 ## The channel out (LLP 1115.001 D5)
 

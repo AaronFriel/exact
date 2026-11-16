@@ -796,10 +796,31 @@ test('a launch colour of a host\'s own or Expo\'s splash is refused for backgrou
   };
   try {
     for (const [extra, key] of [[{ host: { android: { windowBackground: '#000' } } }, 'host.android.windowBackground'], [{ splash: { backgroundColor: '#000' } }, 'splash'], [{ host: { android: { splashScreen: {} } } }, 'host.android.splashScreen']]) {
-      assert.throws(() => read(extra), new RegExp(`${key.replaceAll('.', '\\.')}: not a known key; what shows before the first frame is background_color`));
+      assert.throws(() => read(extra), new RegExp(`${key.replaceAll('.', '\\.')}: not a known key; what shows before the first frame is background_color.*host\\.android\\.launchImage add a picture`));
     }
     assert.equal(read({ background_color: '#102839', color_scheme_dark: { background_color: '#000' } }).background_color, '#102839');
     assert.throws(() => read({ color_scheme_dark: { background_color: 'navy' } }), /color_scheme_dark\.background_color: "navy" does not match/);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('host.android.launchImage takes a PNG in the app up to the starting window\'s 192 dp icon, or false', async () => {
+  const { readManifest, nativeManifestMetadata } = await import('./app.mjs');
+  const dir = mkdtempSync(resolve(tmpdir(), 'manifest-launch-image-'));
+  const read = (launchImage) => {
+    writeFileSync(resolve(dir, 'app.json'), JSON.stringify({ name: 'Launch', app: { id: 'dev.exact.launch', name: 'Launch' }, background_color: '#B50000', host: { android: { launchImage } } }));
+    return readManifest(dir, 'launch');
+  };
+  try {
+    writeFileSync(resolve(dir, 'logo.png'), 'png');
+    const manifest = read({ src: 'logo.png', width: 192 });
+    // A native input: the Android binary's record names it, so an update cannot change it.
+    assert.deepEqual(nativeManifestMetadata(manifest, 'android').host.launchImage, { src: 'logo.png', width: 192 });
+    assert.equal(read(false).host.android.launchImage, false);
+    assert.throws(() => read(true), /host\.android\.launchImage: true is not a picture/);
+    assert.throws(() => read({ src: 'logo.png', width: 200 }), /host\.android\.launchImage\.width: outside the allowed numeric range/);
+    assert.throws(() => read({ src: 'logo.svg', width: 100 }), /host\.android\.launchImage\.src: "logo\.svg" does not match/);
+    assert.throws(() => read({ src: 'logo.png' }), /host\.android\.launchImage: missing required "width"/);
+    assert.throws(() => read({ src: 'gone.png', width: 100 }), /host\.android\.launchImage: gone\.png, the launch screen's picture, does not exist/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 

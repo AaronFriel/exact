@@ -1084,11 +1084,18 @@ What shows before the first frame is `app.json`'s Web App Manifest
 `background_color`, and in a dark scheme `color_scheme_dark.background_color`
 (`#RGB`, `#RRGGBB` or `#RRGGBBAA`); a fixed `userInterfaceStyle` takes its side
 alone. The web page has it until the first frame, the iOS launch screen centres
-`host.ios.launchImage` on it, and the Android launch window (the starting window
-from Android 12) is it, with the bars' icons dark over a light colour. Unset,
-each is the platform's surface: iOS's `systemBackground` (its grouped background
-under a first route that scrolls a grouped list) and Android's `surface`.
-Changing either colour requires a new native build.
+`host.ios.launchImage` on it, and the Android launch window is it, with the bars'
+icons dark over a light colour. Unset, each is the platform's surface: iOS's
+`systemBackground` (its grouped background under a first route that scrolls a
+grouped list) and Android's `surface`.
+
+From Android 12 the launch window (the starting window) shows the launcher icon
+in its middle, as every app's does. `host.android.launchImage` replaces it:
+`{ "src": "<png>", "width": <dp> }` is a picture `width` dp wide, which the
+platform shows within a centred square 192 dp across and, on stock Android, cuts
+to the circle in that square (a `width` above 192 is refused); before Android 12,
+whose launch window has no icon, the picture is centred on the window. `false`
+shows no icon. Changing a colour or a picture requires a new native build.
 
 ### Store category, Game Mode and memory
 

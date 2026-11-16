@@ -1047,6 +1047,16 @@
               "description": "The oldest Android the app runs on, as \"12\"; never below 10. Below 12 the APK carries the reader's Android 10 and 11 code (host/android/README.md, \"Android 10 and 11\"); at 12 or later it carries none.",
               "enum": ["10", "11", "12", "13", "14", "15", "16"]
             },
+            "launchImage": {
+              "description": "What Android 12's starting window shows on `background_color` (or the platform's surface without one) in place of the launcher icon, which it shows unsaid. A picture (iOS's `host.ios.launchImage`; Expo's splash `image` and `imageWidth`) is that icon, `width` dp wide, which the platform shows within a centred square 192 dp across and, on stock Android, cuts to the circle in it; before Android 12, whose launch window has no icon, it is centred on the window's background. `false` shows no icon. A PNG in the app's directory; light and dark alike. Changing it requires a new native build.",
+              "type": ["object", "boolean"],
+              "required": ["src", "width"],
+              "additionalProperties": false,
+              "properties": {
+                "src": { "type": "string", "pattern": "\\.png$", "description": "The PNG, relative to the app's directory." },
+                "width": { "type": "number", "minimum": 1, "maximum": 192, "description": "Its width in the launch window, in dp, up to the icon's 192; its height follows its aspect." }
+              }
+            },
             "notificationChannels": {
               "description": "The app's notification channels (LLP 1133.004.000 D1), made by the host after the first frame and when the app is updated; valid only with `device.notifications` granted. Android keeps a channel's importance and sound once made and the person may change them, so a changed importance needs a new id. `id` `default` names and tunes the channel a post without `android.channelId` takes.",
               "type": "array",
