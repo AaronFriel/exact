@@ -452,8 +452,11 @@ impl<D: DataSource> Host<D> {
                 for &(code, axis) in axes {
                     out.push(code);
                     f(&mut out, play.start);
-                    out.push(play.hold.is_some() as u32);
-                    f(&mut out, play.hold.unwrap_or(0.0));
+                    // A play that waits for its present (LLP 1003.001 D9) holds
+                    // the local time it began at until the present moves it.
+                    let hold = play.hold.or(play.pending.map(|begin| begin - play.start));
+                    out.push(hold.is_some() as u32);
+                    f(&mut out, hold.unwrap_or(0.0));
                     f(&mut out, a.delay);
                     f(&mut out, a.duration);
                     f(&mut out, a.iterations);

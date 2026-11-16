@@ -809,3 +809,33 @@ fn spatial_folds_keep_fades_sampled_and_reclaim_reader_tracks() {
         assert_eq!(c.green(), c.blue());
     }
 }
+
+/// A boot's play waits for the first present, which [`Host::layer_tracks`]
+/// sends the reader as a held track; the present starts it and owes the
+/// reader its running track (LLP 1003.001 D9).
+#[test]
+fn a_boots_play_waits_for_the_present_and_its_start_owes_a_picture() {
+    let previous = exact_runner::page::set_awaits_present(true);
+    let (mut h, error) = Host::boot(
+        &contract::compile(
+            "keyframes enter\n  from opacity=0\n  to opacity=1\ncomponent App\n  view\n    box testId=\"logo\" width=10 height=10 animation=\"enter 400ms linear both\"\n",
+        )
+        .unwrap()
+        .encode(),
+        (),
+        Box::new(MonospaceMeasurer::default()),
+        400.,
+        500.,
+    )
+    .unwrap();
+    exact_runner::page::set_awaits_present(previous);
+    assert!(error.is_none(), "{error:?}");
+    let node = motion_node(h.kernel().find_by_test_id("logo")[0]);
+    let play = |h: &Host<()>| h.engine.animation_plays(node)[0].clone();
+    assert_eq!(play(&h).pending, Some(0.0), "waits for the present");
+    let epoch = h.lowered_epoch;
+    let (paint, _) = h.picture_presented(h.engine.sample_time(), 300.);
+    assert!(paint, "the started play owes the reader its track");
+    assert!(h.lowered_changed[&node] > epoch);
+    assert_eq!((play(&h).pending, play(&h).start), (None, 0.3));
+}

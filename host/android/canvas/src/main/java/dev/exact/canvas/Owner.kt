@@ -75,6 +75,8 @@ internal class Owner(private val hwbuf: Boolean, private val fast: Boolean, prio
         val publication: Long,
         val ops: IntBuffer?, val move: Boolean, val seq: Int, val feed: Int, val scrollers: IntArray?, val fields: IntArray?,
         val bars: IntArray?, val access: IntArray?,
+        /** The picture's token for its present ([Presents]), 0 for none. */
+        val picture: Long = 0L,
     )
 
     /** At the main thread's own priority, not above it ([priority]): its work is ahead of the frame the main thread
@@ -127,6 +129,11 @@ internal class Owner(private val hwbuf: Boolean, private val fast: Boolean, prio
             if (!timerReports.report(view, scrolling, sampling, applied)) return@post
             if (Native.timerObservation(scrolling, sampling, timerReports.applying, false)) produce() else schedule()
         }
+    }
+
+    /** The reader drew picture [token] and it reached the screen at [at] (`System.nanoTime`, [Presents]). */
+    fun presented(token: Long, at: Long) {
+        handler.post { if (Native.picturePresented(token, at)) produce() else schedule() }
     }
 
     private var seq = 0
@@ -478,6 +485,7 @@ internal class Owner(private val hwbuf: Boolean, private val fast: Boolean, prio
         android.os.Trace.beginSection("exact native frame")
         val started = System.nanoTime()
         val fresh = Native.frame()
+        val picture = Native.presentToken()
         late = System.nanoTime() - started > frameNanos
         android.os.Trace.endSection()
         val told = Native.scrollers()
@@ -505,7 +513,7 @@ internal class Owner(private val hwbuf: Boolean, private val fast: Boolean, prio
                 for (k in pics.indices step 3) if (!made.containsKey(pics[k])) made[pics[k]] = makePicture(pics[k], pics[k + 1], pics[k + 2], hwbuf)
                 android.os.Trace.endSection()
             }
-            queue.add(Pub(timerReports.publish(), ints, ints.limit() > 0 && ints.get(0) == 22, seq, Native.feed(), told, fields, bars, access))
+            queue.add(Pub(timerReports.publish(), ints, ints.limit() > 0 && ints.get(0) == 22, seq, Native.feed(), told, fields, bars, access, picture))
             Native.timerObservation(readerScrolling, readerSampling, true, false)
             if (!notifying.getAndSet(true)) postMain { notifying.set(false); published() }
         }

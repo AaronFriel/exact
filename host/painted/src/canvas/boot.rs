@@ -73,6 +73,7 @@ impl<D: DataSource + Default> CanvasHost<D> {
         // Motion lowering reads this after the requested painter has been checked.
         std::env::set_var("EXACT_PAINTER", "canvas");
         (config.scale, config.hatches, config.clock_started) = (scale, hatches, Some(started));
+        super::present::await_present();
         let (mut p, error) =
             crate::app::boot_presenter_with_painter::<D>(&mut config, viewport, painter)?;
         if let Some(e) = error {
@@ -81,6 +82,8 @@ impl<D: DataSource + Default> CanvasHost<D> {
         // The reader opens sounds, videos and pages from the generation that
         // booted (LLP 1030.006 D1); entry zero's are the APK's.
         crate::delivery::set_reader_root(config.entry.as_ref().and(config.selected_dir.clone()));
+        // The reader's frame commits are its presents (LLP 1003.001 D9).
+        p.presents_pictures(true);
         agent::own_time(&mut p, started);
         // A frame recorded here may still crash the reader's Kotlin: the
         // boot is good once the reader drew it (LLP 1030.006 D5).
@@ -140,6 +143,7 @@ impl<D: DataSource + Default> CanvasHost<D> {
             tracks: HashMap::new(),
             feed: None,
             tracks_epoch: 0,
+            presents: Default::default(),
             lead: false,
             painted_once: false,
             gpu_waiting: false,

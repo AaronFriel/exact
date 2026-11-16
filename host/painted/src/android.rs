@@ -351,14 +351,30 @@ pub fn start<D: DataSource + Default + 'static>(launch: Launch) -> Handle {
 struct Vsync {
     requested: Cell<bool>,
     arrived: Cell<bool>,
+    /// The latest vsync's time (`CLOCK_MONOTONIC` ns).
+    at: Cell<i64>,
 }
 
-extern "C" fn on_vsync(_frame_time_nanos: i64, data: *mut c_void) {
+extern "C" fn on_vsync(frame_time_nanos: i64, data: *mut c_void) {
     // SAFETY: `data` is the loop's `Vsync`, alive for the loop's duration,
     // and the callback runs on the loop's own thread inside `pollOnce`.
     let v = unsafe { &*data.cast::<Vsync>() };
     v.requested.set(false);
     v.arrived.set(true);
+    v.at.set(frame_time_nanos);
+}
+
+/// A `CLOCK_MONOTONIC` instant in ns on the loop's clock, `now_ms` being that
+/// clock now (`Instant` reads `CLOCK_MONOTONIC`).
+fn monotonic_ms(at_ns: i64, now_ms: f64) -> f64 {
+    let mut t = libc::timespec {
+        tv_sec: 0,
+        tv_nsec: 0,
+    };
+    // SAFETY: `t` is a valid out pointer for the call's duration.
+    unsafe { libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut t) };
+    let now_ns = t.tv_sec as f64 * 1e9 + t.tv_nsec as f64;
+    now_ms - (now_ns - at_ns as f64) / 1e6
 }
 
 /// Run the calling thread at background priority (nice 10, Android's
@@ -463,6 +479,8 @@ fn run<D: DataSource + Default>(
     let mut config = crate::app::Config::from_env_static(plan, compat);
     config.scale = scale;
     config.clock_started = Some(started);
+    // The page is presented at its first picture's present (LLP 1069.000 D2).
+    exact_runner::page::set_awaits_present(true);
     let booted = trace(c"exact boot", || {
         crate::app::boot_presenter::<D>(&mut config, viewport)
     });
@@ -477,7 +495,9 @@ fn run<D: DataSource + Default>(
     if let Some(e) = error {
         log(&format!("exact: {e}"));
     }
-    // The device's clock owns time (the timers RFC, D1)
+    // The device's clock owns time (the timers RFC, D1), and a commit's
+    // motion starts at the vsync that shows it (LLP 1003.001 D9).
+    p.presents_pictures(true);
     p.set_live_clock(Some(crate::presenter::wall_since(started)));
     if insets.iter().any(|i| *i != 0.0) {
         if let Some(e) = p.set_safe_area(insets.map(|i| i / scale)) {
@@ -516,7 +536,10 @@ fn run<D: DataSource + Default>(
     let vsync = Box::new(Vsync {
         requested: Cell::new(false),
         arrived: Cell::new(true),
+        at: Cell::new(0),
     });
+    // The picture queued to the swap chain, which the next vsync shows.
+    let mut queued: Option<crate::presenter::Carried> = None;
     let vsync_ptr: *const Vsync = &*vsync;
     let center = (viewport.0 / 2.0, viewport.1 / 2.0);
     // `EXACT_DEFER_COLLECTIONS=0` runs a list's turn before its frame.
@@ -576,6 +599,15 @@ fn run<D: DataSource + Default>(
         if let Some(e) = p.follow_local_offset() {
             log(&format!("exact: {e}"));
         }
+        // The vsync after a picture was queued is its present (LLP 1003.001 D9).
+        if vsync.arrived.get() {
+            if let Some(carried) = queued.take() {
+                let at = monotonic_ms(vsync.at.get(), wall());
+                if let Some(e) = p.picture_presented(carried, at) {
+                    log(&format!("exact: {e}"));
+                }
+            }
+        }
         let now = wall();
         // A timer due when a frame is about to paint (a list's live tick in
         // a fling) runs once that frame is out, as a scrolled list's
@@ -604,6 +636,7 @@ fn run<D: DataSource + Default>(
             let frame = trace(c"exact frame", || p.display_frame());
             if let Some(frame) = frame {
                 trace(c"exact complete", || p.display_complete(&frame));
+                queued = Some(frame.carried());
                 frames.fetch_add(1, Ordering::Relaxed);
                 if !first_pixel {
                     first_pixel = true;

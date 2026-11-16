@@ -396,6 +396,7 @@ class ExactView(context: Context, private val live: Boolean, private val onFirst
         ops?.let { main.replay(canvas, it, 0, it.limit()) }
         shared.draw(canvas)
         android.os.Trace.endSection()
+        presents.drew()
         // The first frame after startup counts even with no page ops (an empty page, or only bars).
         // Its mark goes before any turn this frame schedules.
         // Asynchronous: a traversal this frame schedules (rows made on the worker draw at the next) holds posted
@@ -450,7 +451,13 @@ class ExactView(context: Context, private val live: Boolean, private val onFirst
     private val warmer = Warm()
     /** wait=N: a release waits N ms for exact2's answer (Exact.WAIT_MS by default), to compare. */
     internal val releaseWait = (context as Activity).intent.getStringExtra("wait")?.toLongOrNull() ?: Exact.WAIT_MS
+    /** Each picture exact2 asked about, reported when it reaches the screen (LLP 1003.001 D9). */
+    private val presents = Presents(this, { owner?.queue?.isNotEmpty() ?: true }) { t, at ->
+        owner?.presented(t, at) ?: run { if (Native.picturePresented(t, at)) pump() }
+    }
+    override fun onAttachedToWindow() { super.onAttachedToWindow(); presents.attach() }
     override fun onDetachedFromWindow() {
+        presents.detach()
         running(false, host = false)
         removeCallbacks(timer)
         scrolling.stopped()
@@ -482,6 +489,7 @@ class ExactView(context: Context, private val live: Boolean, private val onFirst
             val p = o.queue.poll() ?: break
             any = true
             publication = p.publication
+            presents.ingested(p.picture)
             // The fields first: the stream that came with them draws their nodes.
             p.fields?.let { fields?.told(it) }
             p.bars?.let { bars?.told(it) }
@@ -872,6 +880,7 @@ class ExactView(context: Context, private val live: Boolean, private val onFirst
         val stream = pendingStream ?: run {
             android.os.Trace.beginSection("exact native frame")
             val fresh = Native.frame()
+            presents.ingested(Native.presentToken())
             android.os.Trace.endSection()
             fresh?.order(ByteOrder.LITTLE_ENDIAN)?.asIntBuffer()?.let { b ->
                 val words = IntArray(b.limit()); b.get(words); IntBuffer.wrap(words)

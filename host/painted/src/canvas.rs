@@ -189,6 +189,9 @@ mod plane;
 #[cfg(target_os = "android")]
 #[path = "canvas/presence.rs"]
 pub mod presence;
+#[cfg(any(target_os = "android", test))]
+#[path = "canvas/present.rs"]
+mod present;
 #[cfg(target_os = "android")]
 #[path = "canvas/time.rs"]
 pub mod time;
@@ -1052,6 +1055,8 @@ pub struct CanvasHost<D: DataSource> {
     tracks_epoch: u64,
     /// The reader's window and what it was last told to draw around the page.
     shell: device::Shell,
+    /// Pictures the reader will report presented (LLP 1003.001 D9), by token.
+    presents: present::Pictures,
 }
 
 #[cfg(target_os = "android")]
@@ -1179,6 +1184,8 @@ impl<D: DataSource + Default> CanvasHost<D> {
             p.display_frame()
         }?;
         p.display_complete(&frame);
+        let wanted = p.present_wanted();
+        self.presents.painted(frame.carried(), wanted);
         if p.module_pending() {
             p.first_pixel();
         }
@@ -1356,6 +1363,8 @@ impl<D: DataSource + Default> CanvasHost<D> {
     pub fn roles_here(&mut self, here: bool) {
         let runner = self.p.host_mut().runner_mut();
         if here {
+            // A reload on this thread boots a runner that awaits its present too.
+            present::await_present();
             runner.install_roles();
         } else {
             runner.uninstall_roles();

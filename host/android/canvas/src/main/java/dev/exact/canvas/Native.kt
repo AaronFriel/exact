@@ -72,6 +72,11 @@ object Native {
      * leading toward `velocity` px/s. Bit 0: a paint is wanted; bit 1: rows are left for another slice. */
     @JvmStatic external fun refine(limit: Int, velocity: Float): Int
     @JvmStatic external fun nextDue(): Double
+    /** The token of the picture the last [frame] painted, to report with its present ([Presents]); 0 when exact2 asks
+     * for none. */
+    @JvmStatic external fun presentToken(): Long
+    /** The picture [token] reached the screen at [at] (`System.nanoTime`): whether a turn is now wanted. */
+    @JvmStatic external fun picturePresented(token: Long, at: Long): Boolean
     /** The wake descriptors, -1 where absent: executor replies, decoded images, the GPU module's acquired images
      * ([Wakes.ACQUIRED]) and the update store's finished checks. */
     @JvmStatic external fun fds(): IntArray

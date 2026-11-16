@@ -408,6 +408,29 @@ macro_rules! canvas_jni {
                 $crate::canvas::jni::bytes(env, reply.as_bytes())
             }
 
+            /// The token of the picture the last `frame` painted, which the
+            /// reader reports with its present; 0 when none is wanted (LLP
+            /// 1003.001 D9).
+            #[no_mangle]
+            pub unsafe extern "system" fn Java_dev_exact_canvas_Native_presentToken(
+                _env: *mut JNIEnv,
+                _class: jclass,
+            ) -> jlong {
+                with(|h| h.picture()).unwrap_or(0) as jlong
+            }
+
+            /// The picture `token` was presented at `at` (`System.nanoTime`):
+            /// whether a turn is now wanted.
+            #[no_mangle]
+            pub unsafe extern "system" fn Java_dev_exact_canvas_Native_picturePresented(
+                _env: *mut JNIEnv,
+                _class: jclass,
+                token: jlong,
+                at: jlong,
+            ) -> jboolean {
+                flag(with(|h| h.picture_presented(token as u64, at)).unwrap_or(false))
+            }
+
             #[no_mangle]
             pub unsafe extern "system" fn Java_dev_exact_canvas_Native_nextDue(
                 _env: *mut JNIEnv,

@@ -252,7 +252,10 @@ open class ExactActivity : Activity() {
      * own: an older release never resolves its types. */
     @android.annotation.TargetApi(31)
     private object Splash {
-        fun quick(activity: Activity) = activity.splashScreen.setOnExitAnimationListener { it.remove() }
+        fun quick(activity: Activity) {
+            StartingWindow.shown()
+            activity.splashScreen.setOnExitAnimationListener { it.remove(); StartingWindow.removed() }
+        }
     }
 
     /** Where exact2 keeps the app's files, and the APK's assets are copied: the app's own files directory, which
