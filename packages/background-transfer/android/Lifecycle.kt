@@ -23,8 +23,6 @@ package exact.backgroundtransfer
  *
  * Nothing here names an Android type. The adapter turns platform callbacks into events and
  * effects into platform calls. The host owns the wake a [Raise] asks for.
- *
- * The file is in the test sources until the adapter calls it.
  */
 internal object Lifecycle {
     /**
@@ -124,6 +122,7 @@ internal object Lifecycle {
      * @property waking deliveries whose outcome the host has not reported.
      * @property launch endings a launch with a view has yet to deliver.
      * @property asking schedules the platform has not answered.
+     * @property cleaning retired registrations whose removal has not reported.
      */
     data class Process(
         val crossed: Set<Namespace> = emptySet(), val session: Session? = null,
@@ -131,7 +130,8 @@ internal object Lifecycle {
         val starting: Map<Key, Job> = emptyMap(), val keeping: Set<Key> = emptySet(),
         val copying: Set<Key> = emptySet(), val placing: Set<Key> = emptySet(),
         val draining: Set<Op> = emptySet(), val waking: Map<Key, Int> = emptyMap(),
-        val launch: Set<Key> = emptySet(), val asking: Map<Ask, Pending> = emptyMap(), val asks: Int = 0)
+        val launch: Set<Key> = emptySet(), val asking: Map<Ask, Pending> = emptyMap(), val asks: Int = 0,
+        val cleaning: Set<Key> = emptySet())
 
     sealed interface Event { val namespace: Namespace }
     sealed interface Keyed : Event { val key: Key; override val namespace: Namespace get() = key.namespace }
@@ -162,8 +162,11 @@ internal object Lifecycle {
     data class ResponseComplete(override val key: Key, val attempt: Int, val response: Response) : Keyed
     data class ExchangeFailed(override val key: Key, val attempt: Int, val failure: Failure) : Keyed
     data class Abort(override val key: Key) : Keyed
+    /** Of a registration retired already, it asks again for the removal of what an earlier one left. */
     data class Retire(override val key: Key) : Keyed
     data class Cleaned(override val key: Key) : Keyed
+    /** The removal left something: the record stays retired, its id taken, until a removal succeeds. */
+    data class CleanFailed(override val key: Key) : Keyed
     data class Placed(override val key: Key) : Keyed
     data class PlaceFailed(override val key: Key) : Keyed
     data class WakeEnded(override val key: Key, val delivery: Int, val outcome: Outcome) : Keyed
@@ -294,9 +297,14 @@ internal object Lifecycle {
                 }
                 is Retire -> {
                     val r = get(event.key)
-                    if (!mine(event.key) || r == null || r.phase == Phase.Retired) refuse() else retire(r)
+                    if (!mine(event.key) || r == null) refuse() else if (r.phase == Phase.Retired) clean(event.key) else retire(r)
                 }
-                is Cleaned -> if (get(event.key)?.phase == Phase.Retired) write(Delete(event.key)) else refuse()
+                is Cleaned -> if (event.key !in process.cleaning) refuse() else {
+                    process = process.copy(cleaning = process.cleaning - event.key)
+                    write(Delete(event.key))
+                }
+                is CleanFailed -> if (event.key !in process.cleaning) refuse()
+                    else process = process.copy(cleaning = process.cleaning - event.key)
                 is Placed -> placement(event.key, placed = true)
                 is PlaceFailed -> placement(event.key, placed = false)
                 is WakeEnded -> wakeEnded(event)
@@ -313,12 +321,12 @@ internal object Lifecycle {
                 // A user-initiated job gone with no reboot or update to explain it is one a person stopped.
                 val gone = stopped || (r.job == Job.UserJob && r.key !in e.held && !e.restarted)
                 when (r.phase) {
-                    Phase.Retired -> emit(Clean(r.key))
+                    Phase.Retired -> clean(r.key)
                     Phase.Admitting -> {
                         // A start no process finished: its credentials are incomplete and nobody was answered.
                         put(r.copy(phase = Phase.Retired, job = null))
                         emit(Cancel(r.key, null))
-                        emit(Clean(r.key))
+                        clean(r.key)
                     }
                     Phase.Preparing, Phase.Ready, Phase.Sending -> if (gone) {
                         put(r.copy(phase = Phase.Ended, result = Result.Aborted, job = null, parked = false, wakes = limits.wakes))
@@ -597,8 +605,11 @@ internal object Lifecycle {
             return true
         }
 
+        /** One removal at a time, and none while an operation may still write: what a registration kept is under its id. */
         private fun clean(key: Key) {
-            if (process.draining.none { it.key == key }) emit(Clean(key))
+            if (key in process.cleaning || process.draining.any { it.key == key }) return
+            emit(Clean(key))
+            process = process.copy(cleaning = process.cleaning + key)
         }
 
         private fun end(r: Record, result: Result) {

@@ -37,6 +37,9 @@ android {
             "../../../packages/speech-recognition/android", "../../../packages/speech-recognition/test",
         ))
     }
+    // Robolectric keeps a sandbox for each SDK level and shadow set the tests name, more than
+    // Gradle's default 512 MB worker holds.
+    testOptions { unitTests.all { it.maxHeapSize = "1g" } }
 }
 
 dependencies {
@@ -46,6 +49,8 @@ dependencies {
     testImplementation("com.google.mlkit:barcode-scanning:17.3.0")
     testImplementation("com.google.mlkit:genai-prompt:1.0.0-beta4")
     testImplementation("junit:junit:4.13.2")
+    testImplementation("androidx.work:work-testing:2.12.0")
+    testImplementation("androidx.room:room-runtime:2.7.0")
     testImplementation("com.google.android.gms:play-services-maps:20.1.0")
     testImplementation(libs.robolectric)
     testImplementation("androidx.camera:camera-camera2:1.6.2")

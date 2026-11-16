@@ -799,7 +799,9 @@ the foreground or leaves it, `preferred(values)` for the agent's values, and `re
 again, which is where it reads again what the person changed in Settings, since Android sends no event for it. Its
 `ExtensionContext` gives the application, the activity in front, `agent`, `now()` (the session's clock, the agent's
 under the agent), `label` (`main`, the same at every launch), `data`, `cache` and `temporary` (the directories behind
-`app:/data`, `app:/cache` and `app:/tmp`, the drive's store under the agent), `foreground`, `changed(topic)`, which asks the topic's readers again, `wake(event, args, id,
+`app:/data`, `app:/cache` and `app:/tmp`, the drive's store under the agent), `scratch` (whether they are a drive's
+store, which a drive that binds the package still has: what an implementation keeps outside them it keeps apart from
+the app's by this), `foreground`, `changed(topic)`, which asks the topic's readers again, `wake(event, args, id,
 ended)`, which raises one of the interface's wake events and hears its outcome (LLP 1133.017 D8; `woke(id, outcome)`
 too), and
 `requestPermissions(permissions, done)`: one platform request, answered by `onRequestPermissionsResult`, or by the

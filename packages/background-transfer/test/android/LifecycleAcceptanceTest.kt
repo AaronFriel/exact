@@ -64,11 +64,24 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** The behaviour the state machine must have, a case each, driven through the model. */
-class LifecycleAcceptanceTest {
-    private class Scene(val c: Config = Config()) {
+/**
+ * The behaviour the lifecycle must have, a case each. Each case runs twice:
+ * [LifecycleAcceptanceTest] drives [Lifecycle.step] through the model alone, and
+ * [LifecycleAdapterTest] drives the adapter, where the steps are [Transfers]', the records are
+ * read back from the disk and the operations are the adapter's own.
+ */
+abstract class LifecycleAcceptance(private val adapted: Boolean) {
+    private val roots = ArrayList<java.io.File>()
+    @org.junit.After fun cleanup() { roots.forEach { it.deleteRecursively() } }
+
+    /** A generation the store accepts as a directory name. */
+    private fun generation(n: Int) = "00000000-0000-4000-8000-00000000000$n"
+
+    private inner class Scene(val c: Config = Config()) {
         val sim = Sim(World(), c)
-        val a = Key(app, "a", "g1")
+        private val adapter = if (!adapted) null else
+            LifecycleAdapter(sim, java.nio.file.Files.createTempDirectory("transfer-lifecycle-").toFile().also { roots += it }).also { sim.backend = it }
+        val a = Key(app, "a", generation(1))
         private var mark = 0
         /** Whether each step's effects are performed and each schedule answered before the case goes on. */
         var prompt = true
@@ -90,7 +103,25 @@ class LifecycleAcceptanceTest {
             return step
         }
         fun feed(event: Event): Step = after(sim.feed(event))
-        fun set(world: World) { sim.w = world; LifecycleModel.check(world, c) }
+        fun set(world: World) {
+            adapter?.let {
+                if (world.process == null) it.die() else if (w.process == null) it.boot()
+                assertEquals(it.durable(), world.durable)
+            }
+            sim.w = world
+            LifecycleModel.check(world, c)
+        }
+        /** The process dies after [writes] writes of the step [block] takes. */
+        fun dying(writes: Int, block: () -> Unit) {
+            val before = sim.crashes.size
+            if (adapter == null) {
+                block()
+                return set(sim.crashes[before + writes])
+            }
+            adapter.dying(writes)
+            try { block(); throw AssertionError("the step made fewer than ${writes + 1} writes") } catch (_: LifecycleAdapter.Death) {}
+            set(LifecycleModel.die(w.copy(durable = adapter.durable()), c))
+        }
 
         fun boot() { if (w.process == null) set(LifecycleModel.boot(w, c)) }
         fun enter(namespace: Namespace = app): Step { boot(); return after(sim.enter(namespace)) }
@@ -124,7 +155,8 @@ class LifecycleAcceptanceTest {
             sim.w = w.copy(wakes = w.wakes - key)
             return feed(WakeEnded(key, delivery, outcome))
         }
-        fun cleaned(key: Key = a): Step { sim.w = w.copy(cleans = w.cleans - key); return feed(Cleaned(key)) }
+        fun cleaned(key: Key = a): Step = after(sim.cleaned(key))
+        fun uncleaned(key: Key = a): Step = after(sim.cleaned(key, removed = false))
         /** The platform stops the run. With [reported], the exchange it cut short reports that at once. */
         fun stop(reason: Stop, key: Key = a, reported: Boolean = true): Step {
             val step = after(sim.stop(w.active.entries.single { it.value.first == key }.key, reason))
@@ -169,20 +201,17 @@ class LifecycleAcceptanceTest {
         s.open(); s.ready()
         s.forceStop()
         s.boot()
-        val before = s.sim.crashes.size
-        s.enter()
         // The mark is written and nothing else: the process dies, and a reboot takes the platform's evidence.
-        val marked = s.sim.crashes[before + 1]
-        assertEquals(setOf(app), marked.durable.stopping)
-        assertNull(marked.durable.records.getValue(s.a).result)
-        val t = Scene()
-        t.set(marked.copy(token = false, flag = false))
-        t.boot()
-        assertFalse(t.w.seen)
-        t.enter()
-        assertEquals(Result.Aborted, t.record().result)
-        assertTrue(t.w.durable.stopping.isEmpty())
-        assertTrue(t.effects().of<Schedule>().isEmpty())
+        s.dying(writes = 1) { s.enter() }
+        assertEquals(setOf(app), s.w.durable.stopping)
+        assertNull(s.record().result)
+        s.set(s.w.copy(token = false, flag = false))
+        s.boot(); s.effects()
+        assertFalse(s.w.seen)
+        s.enter()
+        assertEquals(Result.Aborted, s.record().result)
+        assertTrue(s.w.durable.stopping.isEmpty())
+        assertTrue(s.effects().of<Schedule>().isEmpty())
     }
 
     @Test fun theBootBroadcastAfterAForceStopAbortsAndSchedulesNothing() {
@@ -226,7 +255,7 @@ class LifecycleAcceptanceTest {
 
     @Test fun anAbortTakesEffectWhileAnotherTransfersCopyIsInFlight() {
         val s = Scene()
-        val b = Key(app, "b", "g2")
+        val b = Key(app, "b", generation(2))
         s.open(); s.ready(); s.run(); s.effects()
         s.start(key = b); s.kept(b)
         val copy = Task(Op(Kind.Copy, b), started = true)
@@ -288,7 +317,7 @@ class LifecycleAcceptanceTest {
 
     @Test fun eachJobIsHeldUntilItsOwnWakeEnds() {
         val s = Scene()
-        val b = Key(app, "b", "g2")
+        val b = Key(app, "b", generation(2))
         s.open(); s.ready(); s.ready(key = b)
         s.death()
         s.enter(); s.end(); s.end(b)
@@ -513,7 +542,8 @@ class LifecycleAcceptanceTest {
         assertTrue(t.feed(Retire(t.a)).accepted)
         val effects = t.effects()
         assertTrue(CancelCopy(t.a) in effects && effects.of<Clean>().isEmpty())
-        t.committed()
+        // The copy was told to stop and reports that; the cleanup waited for it.
+        t.sim.report(t.w.tasks.single(), SnapshotFailed(t.a)); t.perform()
         assertEquals(listOf<Effect>(Clean(t.a)), t.effects())
         assertEquals(Phase.Retired, t.record().phase)
     }
@@ -559,7 +589,7 @@ class LifecycleAcceptanceTest {
 
     @Test fun anAgentDrivesJobStartedOutsideItsSessionIsKeptForItsSession() {
         val s = Scene(Config(namespaces = listOf(app, drive)))
-        val d = Key(drive, "a", "g1")
+        val d = Key(drive, "a", generation(1))
         s.open(drive); s.ready(key = d)
         s.death(); s.effects()
         // Its job starts the process with no drive: nothing is sent, and the job stays recorded and held.
@@ -836,7 +866,7 @@ class LifecycleAcceptanceTest {
         assertTrue(s.w.jobs.isEmpty())
         s.cleaned()
         assertNull(s.sim.record(s.a))
-        assertTrue(s.start(key = Key(app, "a", "g2")).accepted)
+        assertTrue(s.start(key = Key(app, "a", generation(2))).accepted)
     }
 
     @Test fun aStartThatDiedKeepingItsCredentialsIsRetiredAtRecovery() {
@@ -873,7 +903,7 @@ class LifecycleAcceptanceTest {
     @Test fun aSecondStartOfALiveIdIsRefused() {
         val s = Scene()
         s.open(); s.ready()
-        assertFalse(s.feed(Start(Key(app, "a", "g2"), Intent.Ordinary, 1, s.conditions)).accepted)
+        assertFalse(s.feed(Start(Key(app, "a", generation(2)), Intent.Ordinary, 1, s.conditions)).accepted)
     }
 
     // Attempts, stops and results.
@@ -939,8 +969,9 @@ class LifecycleAcceptanceTest {
     // Placement.
 
     @Test fun aFailedPlacementIsTriedAgainWhileTheViewStaysUp() {
+        // A response is kept before the stop, so the ending has a file to place.
         val s = Scene()
-        s.open(); s.ready()
+        s.open(); s.ready(requests = 2); s.run(); s.respond()
         s.forceStop()
         s.open(); s.effects()
         repeat(2) {
@@ -952,7 +983,7 @@ class LifecycleAcceptanceTest {
 
         // Once the view has left, the next launch places it.
         val t = Scene()
-        t.open(); t.ready()
+        t.open(); t.ready(requests = 2); t.run(); t.respond()
         t.forceStop()
         t.open(); t.leave(); t.effects()
         t.unplaced()
@@ -985,7 +1016,7 @@ class LifecycleAcceptanceTest {
 
     @Test fun aRetiredGenerationDeliversNothingAndItsLateEventsMissItsSuccessor() {
         val s = Scene()
-        val next = Key(app, "a", "g2")
+        val next = Key(app, "a", generation(2))
         s.open(); s.ready(); s.run(); s.respond(); s.effects()
         // Retired between the ending and its placement: its files stay until the placement has reported.
         assertTrue(s.feed(Retire(s.a)).accepted)
@@ -1003,7 +1034,7 @@ class LifecycleAcceptanceTest {
 
     @Test fun aRetiredIdIsTakenUntilItsFilesAreRemoved() {
         val s = Scene()
-        val next = Key(app, "a", "g2")
+        val next = Key(app, "a", generation(2))
         s.open(); s.ready()
         assertTrue(s.feed(Retire(s.a)).accepted)
         // Its kept responses are published under the id, so the next generation waits for their removal.
@@ -1011,6 +1042,67 @@ class LifecycleAcceptanceTest {
         s.cleaned()
         assertNull(s.sim.record(s.a))
         assertTrue(s.start(key = next).accepted)
+    }
+
+    @Test fun aFailedCleanupLeavesTheRecordRetiredUntilARetirementCleansAgain() {
+        val s = Scene()
+        val next = Key(app, "a", generation(2))
+        s.open(); s.ready(); s.effects()
+        assertTrue(s.feed(Retire(s.a)).accepted)
+        assertEquals(listOf<Effect>(Clean(s.a)), s.effects().of<Clean>())
+        // The secret store kept its credentials: nothing is deleted, and the id stays taken.
+        val failed = s.uncleaned()
+        assertTrue(failed.accepted && failed.writes.isEmpty() && failed.effects.isEmpty())
+        assertEquals(Phase.Retired, s.record().phase)
+        assertFalse(s.feed(Start(next, Intent.Ordinary, 1, s.conditions)).accepted)
+        // The app retires it again: its files are removed again, and the record goes when they are.
+        val again = s.feed(Retire(s.a))
+        assertTrue(again.accepted && again.writes.isEmpty())
+        assertEquals(listOf<Effect>(Clean(s.a)), s.effects())
+        assertEquals(listOf<Lifecycle.Write>(Lifecycle.Delete(s.a)), s.cleaned().writes)
+        assertNull(s.sim.record(s.a))
+        assertTrue(s.start(key = next).accepted)
+    }
+
+    @Test fun aRetirementWhileACleanupRunsStartsNoSecond() {
+        val s = Scene()
+        s.open(); s.ready(); s.effects()
+        assertTrue(s.feed(Retire(s.a)).accepted)
+        assertEquals(listOf<Effect>(Clean(s.a)), s.effects().of<Clean>())
+        val joined = s.feed(Retire(s.a))
+        assertTrue(joined.accepted && joined.writes.isEmpty() && joined.effects.isEmpty())
+        s.cleaned()
+        assertNull(s.sim.record(s.a))
+        // Nothing waits for a second report.
+        assertFalse(s.feed(Cleaned(s.a)).accepted)
+        assertFalse(s.feed(Lifecycle.CleanFailed(s.a)).accepted)
+    }
+
+    @Test fun aCleanupThatFailedIsTriedAgainAtTheNextRecovery() {
+        val s = Scene()
+        s.open(); s.ready(); s.effects()
+        s.feed(Retire(s.a))
+        s.uncleaned(); s.effects()
+        s.death()
+        s.enter()
+        assertEquals(listOf<Effect>(Clean(s.a)), s.effects().of<Clean>())
+        s.cleaned()
+        assertNull(s.sim.record(s.a))
+    }
+
+    @Test fun anotherSessionsRetirementCleansNothing() {
+        val s = Scene(Config(namespaces = listOf(app, drive)))
+        s.open(); s.ready()
+        s.feed(Retire(s.a))
+        s.uncleaned()
+        // The next process recovers the app's namespace, and its session is a drive's.
+        s.death()
+        s.enter()
+        s.uncleaned(); s.effects()
+        s.open(drive)
+        assertFalse(s.feed(Retire(s.a)).accepted)
+        assertTrue(s.effects().of<Clean>().isEmpty())
+        assertEquals(Phase.Retired, s.record().phase)
     }
 
     @Test fun retiringAnUnfinishedTransferStopsItsBytesAndItsJob() {
@@ -1045,3 +1137,11 @@ class LifecycleAcceptanceTest {
         assertEquals(setOf(s.a to Job.Work), s.w.jobs)
     }
 }
+
+/** The cases over [Lifecycle.step] and the model's own bookkeeping. */
+class LifecycleAcceptanceTest : LifecycleAcceptance(adapted = false)
+
+/** The cases over the Android adapter: [Transfers], its store on disk and its operations. */
+@org.junit.runner.RunWith(org.robolectric.RobolectricTestRunner::class)
+@org.robolectric.annotation.Config(sdk = [35], manifest = org.robolectric.annotation.Config.NONE)
+class LifecycleAdapterTest : LifecycleAcceptance(adapted = true)

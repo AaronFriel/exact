@@ -8,6 +8,7 @@ import exact.backgroundtransfer.Lifecycle.Cancel
 import exact.backgroundtransfer.Lifecycle.CancelCopy
 import exact.backgroundtransfer.Lifecycle.CancelIo
 import exact.backgroundtransfer.Lifecycle.Clean
+import exact.backgroundtransfer.Lifecycle.CleanFailed
 import exact.backgroundtransfer.Lifecycle.Cleaned
 import exact.backgroundtransfer.Lifecycle.Conditions
 import exact.backgroundtransfer.Lifecycle.Copy
@@ -188,7 +189,25 @@ internal object LifecycleModel {
         }
     }
 
+    /**
+     * The adapter under a [Sim]. Its steps, its disk and its queue stand where the model's own
+     * would, and what it asks of the platform and the host it asks through [Sim.perform].
+     */
+    interface Backend {
+        fun feed(event: Event): Step
+        /** Perform the next queued effect, which is [effect]. */
+        fun dispatch(effect: Effect)
+        /** Run the operation of [task] against a transport that makes it report [event]. */
+        fun report(task: Task, event: Event)
+        /** Run the cleanup a [Clean] started, against a secret store that removes its credentials when [removed]. */
+        fun clean(key: Key, removed: Boolean)
+        fun durable(): Durable
+        fun state(): Pair<Process, List<Effect>>
+    }
+
     class Sim(var w: World, val c: Config) {
+        /** The adapter the events go through; the function itself when null. */
+        var backend: Backend? = null
         val crashes = ArrayList<World>()
         /** WorkManager refuses to store work it does not hold. */
         var starve = false
@@ -205,8 +224,15 @@ internal object LifecycleModel {
         fun feed(event: Event): Step {
             val before = w
             val process = w.process ?: throw Violation("$event with no process")
-            val step = Lifecycle.step(w.durable, process, event, c.limits)
+            val real = backend
+            val step = real?.feed(event) ?: Lifecycle.step(w.durable, process, event, c.limits)
             checkStep(before, event, step)
+            if (real != null) {
+                if (real.durable() != step.durable) throw Violation("the disk holds ${real.durable()} after $event, not ${step.durable}")
+                mirror(real)
+                pass()
+                return step
+            }
             var durable = w.durable
             for (write in step.writes) {
                 crashes += die(w.copy(durable = durable), c)
@@ -236,10 +262,24 @@ internal object LifecycleModel {
             return feed(JobStopped(job.first, id, reason))
         }
 
+        /** The adapter's volatile state and queue, as the model's. */
+        private fun mirror(real: Backend) {
+            val (process, queue) = real.state()
+            w = w.copy(durable = real.durable(), process = process, queue = queue)
+        }
+
         /** An operation reports and is over. */
         fun report(task: Task, event: Event): Step {
             w = w.copy(tasks = w.tasks - task)
+            backend?.report(task, event)
             return feed(event)
+        }
+
+        /** A cleanup reports and is over: everything [removed], or something left. */
+        fun cleaned(key: Key, removed: Boolean = true): Step {
+            w = w.copy(cleans = w.cleans - key)
+            backend?.clean(key, removed)
+            return feed(if (removed) Cleaned(key) else CleanFailed(key))
         }
 
         fun answer(reply: Reply): Step {
@@ -250,9 +290,15 @@ internal object LifecycleModel {
         /** The queue performs its next effect. */
         fun dispatch() {
             val effect = w.queue.first()
-            w = w.copy(queue = w.queue.drop(1))
             effects += effect
-            perform(effect)
+            val real = backend
+            if (real == null) {
+                w = w.copy(queue = w.queue.drop(1))
+                perform(effect, Lifecycle.admits(w.durable, w.process!!, effect))
+            } else {
+                real.dispatch(effect)
+                mirror(real)
+            }
             pass()
         }
 
@@ -291,9 +337,9 @@ internal object LifecycleModel {
 
         private fun task(op: Op, admitted: Boolean) { w = w.copy(tasks = w.tasks + Task(op, admitted)) }
 
-        private fun perform(effect: Effect) {
+        /** What an effect does to the platform, the host and the operations in flight. */
+        fun perform(effect: Effect, admitted: Boolean) {
             val p = w.process!!
-            val admitted = Lifecycle.admits(w.durable, p, effect)
             when (effect) {
                 is Keep -> task(Op(Kind.Keep, effect.key), admitted)
                 is Copy -> task(Op(Kind.Copy, effect.key), admitted)
@@ -348,6 +394,7 @@ internal object LifecycleModel {
                 }
                 is Clean -> {
                     w.tasks.firstOrNull { it.started && it.op.key == effect.key }?.let { throw Violation("$effect while $it may still write") }
+                    if (effect.key in w.cleans) throw Violation("$effect while a cleanup of its files runs")
                     w = w.copy(cleans = w.cleans + effect.key)
                 }
                 // The receiver only enqueues recovery work, so the recovery stays owed until one completes.
@@ -504,6 +551,8 @@ internal object LifecycleModel {
             for ((key, delivery) in w.wakes) if (p.waking[key] != delivery) fail("the wake of $key is not recorded")
             for (key in p.starting.keys) if (key !in p.keeping && key !in p.copying && p.asking.keys.none { it.key == key } &&
                 w.queue.none { it is Answer && it.key == key }) fail("nothing is left to answer the start of $key")
+            for (key in p.cleaning) if (key !in w.cleans && Clean(key) !in w.queue) fail("the machine waits for a cleanup of $key, which nothing will report")
+            for (key in w.cleans) if (key !in p.cleaning) fail("the cleanup of $key is not recorded")
         } else if (w.active.isNotEmpty()) fail("runs with no process")
         for (r in records.values) {
             if (unfinished(r) && !r.parked && r.stops >= c.limits.stops) fail("a transfer stopped ${r.stops} times goes on: $r")
@@ -548,7 +597,7 @@ internal object LifecycleModel {
                 starting = p.starting.tight(), keeping = p.keeping.tight(), copying = p.copying.tight(), placing = p.placing.tight(),
                 draining = p.draining.map(::op).toSet().tight(),
                 waking = p.waking.mapValues { delivery(it.key, it.value) }.tight(), launch = p.launch.tight(),
-                asking = p.asking.mapValues { Pending(0, it.value.from) }.tight(), asks = 0) },
+                asking = p.asking.mapValues { Pending(0, it.value.from) }.tight(), asks = 0, cleaning = p.cleaning.tight()) },
             jobs = w.jobs.tight(), limbo = w.limbo.tight(), active = w.active.mapKeys { ids.getValue(it.key) }.tight(),
             halts = w.halts.mapKeys { ids.getValue(it.key) }.tight(), lost = w.lost.tight(), restarted = w.restarted.tight(),
             // A schedule that a later one replaced is not performed.
@@ -687,7 +736,10 @@ internal object LifecycleModel {
                 }
             }
         }
-        for (key in w.cleans) act("cleaned ${name(key)}", background = true) { this.w = this.w.copy(cleans = this.w.cleans - key); feed(Cleaned(key)) }
+        for (key in w.cleans) {
+            act("cleaned ${name(key)}", background = true) { cleaned(key) }
+            if (!c.straight) act("cleanup failed ${name(key)}") { cleaned(key, removed = false) }
+        }
         for ((key, delivery) in w.wakes) for (outcome in if (key in w.barred) listOf(Outcome.Superseded) else c.outcomes)
             act("wake $outcome ${name(key)}", background = outcome == Outcome.Completed || key in w.barred) {
                 this.w = this.w.copy(wakes = this.w.wakes - key, barred = this.w.barred - key)

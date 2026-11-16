@@ -173,6 +173,13 @@ class ExtensionContext internal constructor(val application: Context, private va
     val data: java.io.File get() = root(0)
     val cache: java.io.File get() = root(1)
     val temporary: java.io.File get() = root(2)
+    /**
+     * Whether those directories are a drive's store and not the app's own, which holds under the agent whether or not
+     * the drive bound this extension (`--bind`, [agent]). What an implementation keeps outside them (a job, a record
+     * in the app's private files) it keeps apart from the app's by this, never by [agent]. A library with no such
+     * entry point is not this build's, and the question throws: the app's storage is never assumed.
+     */
+    val scratch: Boolean get() = Native.scratchStorage()
     private fun root(index: Int): java.io.File =
         java.io.File(try { Native.appRoot(index) } catch (e: UnsatisfiedLinkError) { null } ?: application.cacheDir.path)
 
@@ -291,6 +298,11 @@ class ExtensionContext internal constructor(val application: Context, private va
     fun wake(event: String, args: JSONArray, id: String, ended: (String) -> Unit = {}) {
         this.ended[id] = ended
         changed("exact-wake:" + JSONObject().put("extension", name).put("event", event).put("args", args).put("id", id))
+    }
+
+    /** The platform ended custody of this wake, including one still queued for delivery. */
+    fun expireWake(id: String) {
+        changed("exact-wake-expired:" + JSONObject().put("extension", name).put("id", id))
     }
 
     /** Every `img` showing picture [source] is emptied and fires `error`, and no reply in flight draws (LLP 1133.019

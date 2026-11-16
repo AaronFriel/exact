@@ -301,6 +301,8 @@ object Native {
     @JvmStatic external fun appRoot(index: Int): String?
     /** Whether extension [name] is told it runs under the agent ([ExtensionContext.agent]). Any thread. */
     @JvmStatic external fun underAgent(name: String): Boolean
+    /** Whether the session's storage is a drive's and not the app's own ([ExtensionContext.scratch]). Any thread. */
+    @JvmStatic external fun scratchStorage(): Boolean
     /** A package's call of the app's handler, `{"extension", "handle", "handler", "args"}` (LLP 1133.016 D15 item 1):
      *  its number, or -1 with no session; [invoked] reads its answer. */
     @JvmStatic external fun invoke(body: String): Int
