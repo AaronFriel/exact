@@ -4747,6 +4747,19 @@ the box and set no view props; write `object-fit` on the camera tag to configure
 viewfinder. A renamed spelling (`fontSize`) is refused whatever is declared. Do not
 turn a missing widget or canvas operation into invented Contract syntax.
 
+Under the agent, `@exact/camera` accepts
+`prefer extension camera.picture={"path":"assets/test/card.jpg"}` for a still,
+or `prefer extension camera.clip={"path":"assets/test/walk.mp4"}` for a clip.
+Both name app assets. A clip is decoded once and loops on the session clock,
+from the track's start: `clock +100` advances its frame by 100 ms. The
+viewfinder, a package reading the track's picture and `takePhoto` receive
+the same frame. A screenshot sequence follows that clock too. The journal
+records the clip's SHA-256, not its frames. Clear either preference with
+`=clear` before setting the other; setting both is refused in the journal.
+This works on Android, iOS, macOS and web; Linux has no camera substitute.
+For a fixture shared across these hosts use H.264 MP4 and a web browser with
+H.264 WebCodecs support. See the [camera package's guide](../packages/camera/test/checklist.md#agent-pictures-and-clips).
+
 On Apple, each package's Swift library loads at its first call, view, picture,
 authentication or wake. Permission, preference and foreground updates are kept
 until then; they do not load an unused package. A package declaring `"start":
