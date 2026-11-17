@@ -837,6 +837,15 @@ names no take; `:focus-within` remains out.
   a reload (LLP 1121 D13). It patches values only: no code, no slots, no tree. A scrub
   session previews values for the length of a gesture. Release builds change their
   design only by an update. Charlie's waiver; no take is named.
+  **Admitted (Charlie, 2026-11-17; expo/exact#754; LLP 1029.000.002 §7), every restart
+  with carry, `deploy.activate: "immediate"` included:** a replacement matches views and
+  component instances by their place in the tree (LLP 1029.000.002 D1) and keeps what
+  matches: a component's state and owned answers, a kept view and its native editor,
+  scroll anchors, focus and selection. It counts a session `generation` that never
+  repeats. It is still a restart with carry: no patch format, no staged reload, no code
+  patched in place, and no private heap migrated. It replaces four unnamed matchers
+  (`lifted`'s counter names, `CarriedPanels`, `FocusPlace`, the JS checkpoint's index
+  path). Charlie's waiver; no take is named.
 - Islands and inline islands.
 - Cross-runtime shared data in production. **Measured exception (Charlie,
   2026-09-18, LLP 1027.003 §9):** all four isolated transfer/storage directions
