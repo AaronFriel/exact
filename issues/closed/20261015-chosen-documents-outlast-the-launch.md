@@ -1,6 +1,7 @@
 # A document app needs chosen files to outlast the launch and to hear when they change
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** LLP 1069.010.000 stages 1 and 2 are built on macOS, Linux and the web (watches, expected writes, kept documents); the unlocked-Mac drive and the GNOME and KDE portal runs are in QUEUE.md.
 **Systems:** storage (`doc:` paths, `storage.fs`), Apple host (security-scoped URLs, Open Recent), web host (File System Access), Linux host, `rules/DEFERRED.md` ("durable capability grants")
 **Severity:** P2
 **Author:** Claude (Opus 5.5), from Rami Maalouf's Exact Draw report
@@ -62,8 +63,8 @@ of its descriptor-watch code ships.
 
 `Linux document pickers use the app's declared file types, and a declared
 suffix means the same on every host` fixes the portable suffix rule and sends
-the declared filters to Linux. This issue remains open for the real GNOME and
-KDE checks and the other work under "What remains (2026-10-26)".
+the declared filters to Linux. The real GNOME and KDE checks and the other work
+under "What remains (2026-10-26)" are listed in `QUEUE.md`.
 
 The JavaScript `readManifest` and Rust `Manifest::read` readers now refuse an
 invalid document extension or handler label for every build. The File System

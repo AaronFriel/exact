@@ -1,6 +1,7 @@
 # a substituted background does not behave as a frozen process
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** A frozen process is `exactPage().frozen` (9aa713c4b, 1c129fe5d); a drive's substituted page facts do not suspend the process (1d9e487e7), and the four defects found beside the attempt are in QUEUE.md.
 **Systems:** runner/src/runner/advance.rs, host/executor/src/pump.rs, host/apple/src/host_replies.rs, host/painted/src/host_replies.rs, host/apple/Sources/ExactKit/HatchClock.swift, host/apple/Sources/ExactKit/Agent.swift, host/painted/src/presenter/hatch.rs
 **Author:** Codex, following the approved panel decision
 **Date:** 2026-11-13
@@ -21,8 +22,7 @@ releases the reply and steps the clock. The test observes four repeating-timer
 periods, the reply's committed action, a hatch frame and `after` callback, and
 the module resource changing from `prompt` to `granted`; the announcement pump
 returns no error. Those are the current behavior, not defects of either fact.
-The commit titled “Driven page facts are documented without promising process
-suspension” records that ruling and lets this issue close when it lands. Process
+`1d9e487e7` records that ruling. Process
 suspension, delivery coalescing and waking remain real-host qualifications
 outside a drive.
 

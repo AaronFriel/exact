@@ -1,6 +1,7 @@
 # A phone drive that fails on Apple's local-network prompt or a locked iPhone does not say so
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** The driver names a locked iPhone and Apple's local-network prompt and says when the app printed nothing; the run on a signed iPhone is in QUEUE.md.
 **Systems:** host/apple/devices.mjs (`phoneBridge`), host/apple/Sources/ExactKit/AgentSocketStartup.swift, scripts/agent-stdio.mjs
 **Severity:** P2
 **Author:** Claude (Opus 5.5), from Exact diaries sent 2026-11-11 to 2026-11-13
@@ -57,4 +58,4 @@ device lock, gives qualified Local Network guidance for `No route to host` and
 `waiting for foreground`, and says when the app printed nothing. The reference
 documents the first-launch prompt and the need to answer it on the phone.
 Diagnostic tests cover these cases. A signed iPhone run with an unanswered prompt
-and a locked screen is still owed; this Mac lane has no signed phone.
+and a locked screen is still owed (`QUEUE.md`); this Mac lane has no signed phone.

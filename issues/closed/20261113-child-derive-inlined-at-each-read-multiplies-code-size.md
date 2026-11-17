@@ -1,6 +1,7 @@
 # A child component's `derive` is compiled again at every read, so an app's code grows silently with each one
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** A child's derive compiles once per component use (the component form is within 10% of its root-structured twin, enforced), and web builds report code by component; proof stages 4 and 5 are semantics/README.md's, listed in QUEUE.md.
 **Systems:** contract/syntax/src/inline.rs, contract/syntax/src/inline/derives.rs, contract/syntax/src/inline/calls.rs
 **Severity:** P2
 **Author:** Claude (Opus 5.5), from Exact diaries sent 2026-11-11 to 2026-11-13
@@ -31,7 +32,7 @@ non-atomic prop or inject arguments. Reads call those bodies on the reader's
 budget without storing results. Action bodies stay substituted on purpose,
 so their reads keep the action's sequential state semantics. Web builds report
 expanded code by component. The proof work listed under "Work still owed"
-remains open.
+is `semantics/README.md`'s and `QUEUE.md`'s.
 
 ## Size report
 
@@ -148,7 +149,7 @@ gaps, not reproduced results. They, the transient-instance case above and any
 further undetected plan mutation are owed work rather than fixes on this
 branch.
 
-Keep this issue open for stages 4 and 5. Stage 3 is done: `VmRows` charges
+Stages 4 and 5 are `semantics/README.md`'s. Stage 3 is done: `VmRows` charges
 callback and roster list work, string outputs, value nodes, string bytes and
 value depth at production's points and in production's refusal order. It
 transfers call and list counters and the extent memo into a row and back on

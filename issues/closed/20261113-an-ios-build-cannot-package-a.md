@@ -1,6 +1,7 @@
 # An iOS build cannot package a notification service extension
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** An iOS build packages the app's notification service extension (aeacf0b84); the real-APNs, locked-phone and distribution-signed runs are packages/push/test/checklist.md's, listed in QUEUE.md.
 **Systems:** host/apple, notifications, native modules
 **Author:** Codex, from the push diary reported in the related issue
 **Date:** 2026-11-13
@@ -24,7 +25,7 @@ its executable, bundle, provisioning or signing step.
 
 The commit "An iOS build packages an app's notification service extension
 from one recorded source inventory" fixes the build and receipt path described
-below. The issue remains open for the device proof named at the end.
+below. The device proof named at the end is listed in `QUEUE.md`.
 
 The 2026-11-14 panel, under Charlie's delegation, admitted the app's own Swift
 notification service extension for Apple's defined purpose: changing a visible

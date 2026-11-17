@@ -1,6 +1,7 @@
 # A virtualized list holds nothing but its one `for`, so headers, footers and a streaming row become data
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** A vertical virtualized list holds fixed content before and after its keyed rows (LLP 1035.005.000 D11, built as LLP 1070 §14); the runs on a physical Apple device are in QUEUE.md.
 **Systems:** contract/lower/src/collection.rs (`lower-collection-template`), collection runtime (LLP 1070), docs/recipes/chat-thread.md
 **Severity:** P3
 **Author:** Claude (Opus 5.5), from Exact diaries sent 2026-11-11 to 2026-11-13
@@ -98,4 +99,4 @@ commit. Display-hidden fixed children contribute no margins or extent.
 
 Still owed on a physical Apple device: momentum and rubber-banding while a
 followed trail grows, and VoiceOver navigation from the last data row into
-the trail. This issue remains open for those runs.
+the trail. `QUEUE.md` lists those runs.
