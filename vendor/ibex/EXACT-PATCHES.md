@@ -11,8 +11,11 @@ keep the receipt’s VM, ICU, then platform-runtime order. Ibex supplies
 NumberFormat and DateTimeFormat; Hermes's ICU backend supplies Collator.
 Stub builds emit empty Intl bytecode beside the other binding placeholders.
 
-The pinned Android bundle targets API 29. A local development bundle can be
-selected through `HERMES_LEAN_SYS_DIR_aarch64_linux_android`.
+The pinned Android bundle targets API 29. The resolver applies Android's ICU
+layout and receipt requirements to arm64 and x86_64. Local development bundles
+can be selected through `HERMES_LEAN_SYS_DIR_aarch64_linux_android` and
+`HERMES_LEAN_SYS_DIR_x86_64_linux_android`; the pinned v6 release supplies only
+Android arm64.
 
 The installer’s `--check-dir <directory> <rust-triple>` validates a local cross
 bundle with the build resolver and cached host compiler, without installing or

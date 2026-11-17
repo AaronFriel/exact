@@ -1419,12 +1419,13 @@ if (import.meta.main && process.argv[2] === 'reverse') {
   const app = resolveApp(name);
   // A TypeScript app's library links the Android Hermes bundle: said before minutes of compiling, not at the link.
   const typescript = new Map(targets.map(target => [target, usesHermes(app, apkWanted ? 'android' : 'linux', target)]));
-  for (const [target, needed] of typescript) if (needed && target !== ANDROID_TARGET) {
-    console.error(`${app.name}'s TypeScript cannot build for ${target}: the vendored Hermes resolver does not support Android x86_64 ICU, and the pinned release has no bundle. Use --abis arm64-v8a on an ARM device or an emulator with ARM translation.`);
-    process.exit(1);
-  }
   for (const [target, needed] of typescript) if (needed && !androidHermesDir(process.env, undefined, target)) {
-    const fix = hermesBundle(target).fix;
+    let fix;
+    try { fix = hermesBundle(target).fix; }
+    catch (error) {
+      if (error.message !== `hermes-lean-sys has no pinned bundle for ${target}`) throw error;
+      fix = `set HERMES_LEAN_SYS_DIR_${target.replaceAll('-', '_')} to a validated bundle directory`;
+    }
     console.error(`${app.name}'s TypeScript needs the ${target} Hermes bundle: ${fix}`);
     process.exit(1);
   }

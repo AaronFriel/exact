@@ -554,9 +554,9 @@ fn install_layout(root: PathBuf, target: &str, origin: InstallOrigin) -> Install
     } else {
         ("libhermesvm_a.a", "libhermesvmlean_a.a")
     };
-    let bundled_icu = target.ends_with("-unknown-linux-gnu") || target == "aarch64-linux-android";
+    let bundled_icu = target.ends_with("-unknown-linux-gnu") || target.ends_with("-linux-android");
     let intl_data = target.ends_with("-unknown-linux-gnu")
-        || (target == "aarch64-linux-android"
+        || (target.ends_with("-linux-android")
             && read_regular_file(&root.join("hermes-input-receipt.json"))
                 .ok()
                 .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
@@ -770,7 +770,7 @@ fn validate_bundle_files(layout: &InstallLayout) -> Result<(), String> {
         verify(&icu.trimmed_filter_path, &icu.trimmed_filter_digest)?;
         verify(&icu.en_filter_path, &icu.en_filter_digest)?;
     }
-    if layout.target == "aarch64-linux-android" {
+    if layout.target.ends_with("-linux-android") {
         for name in [
             "libjsi.a",
             "libboost_context.a",
@@ -889,7 +889,8 @@ fn validate_receipt(
 ) -> Result<(), String> {
     let receipt_path = layout.root.join("hermes-input-receipt.json");
     let Some(receipt) = read_receipt_claims(layout)? else {
-        if layout.target.ends_with("-unknown-linux-gnu") || layout.target == "aarch64-linux-android"
+        if layout.target.ends_with("-unknown-linux-gnu")
+            || layout.target.ends_with("-linux-android")
         {
             return Err(format!(
                 "Hermes install {} has no canonical receipt binding its ICU code and base/English-Intl/full data archives",
@@ -2902,24 +2903,26 @@ mod internal_tests {
 
     #[test]
     fn android_receipt_selects_intl_and_authenticates_english_data() {
+        for target in ["aarch64-linux-android", "x86_64-linux-android"] {
+            check_android_intl_receipt(target);
+        }
+    }
+
+    fn check_android_intl_receipt(target: &str) {
         let temporary = tempfile::tempdir().expect("temporary directory");
         let root = temporary.path();
         let (_, engine_digest) = write_linux_v3_fixture(root);
         let path = root.join("hermes-input-receipt.json");
         let mut receipt: serde_json::Value =
             serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
-        receipt["target"] = "aarch64-linux-android".into();
+        receipt["target"] = target.into();
         receipt["build"]["flags"] =
             serde_json::json!(["-DANDROID_PLATFORM=android-29", "-DHERMES_ENABLE_INTL=true"]);
         let save = |value: &serde_json::Value| {
             fs::write(&path, serde_json::to_vec(value).unwrap()).unwrap()
         };
         save(&receipt);
-        let layout = install_layout(
-            root.to_path_buf(),
-            "aarch64-linux-android",
-            InstallOrigin::Override,
-        );
+        let layout = install_layout(root.to_path_buf(), target, InstallOrigin::Override);
         validate_layout(&layout, false).expect("complete Android ICU layout");
         let check = || {
             validate_receipt(
@@ -2942,11 +2945,7 @@ mod internal_tests {
         fs::write(root.join("lib/libicudata-en.a"), b"English data").unwrap();
         receipt["build"]["flags"][0] = "-DANDROID_PLATFORM=android-30".into();
         save(&receipt);
-        let api30_layout = install_layout(
-            root.to_path_buf(),
-            "aarch64-linux-android",
-            InstallOrigin::Override,
-        );
+        let api30_layout = install_layout(root.to_path_buf(), target, InstallOrigin::Override);
         assert_eq!(api30_layout.icu_en_data_archive, layout.icu_en_data_archive);
         validate_layout(&api30_layout, false).expect("API 30 layout");
         validate_receipt(
@@ -2960,11 +2959,7 @@ mod internal_tests {
         receipt["build"]["flags"][0] = "-DANDROID_PLATFORM=android-29".into();
         receipt["build"]["flags"][1] = "-DHERMES_ENABLE_INTL=false".into();
         save(&receipt);
-        let layout = install_layout(
-            root.to_path_buf(),
-            "aarch64-linux-android",
-            InstallOrigin::Override,
-        );
+        let layout = install_layout(root.to_path_buf(), target, InstallOrigin::Override);
         assert!(layout.icu_en_data_archive.is_none());
         validate_receipt(
             &layout,
@@ -3048,13 +3043,19 @@ mod internal_tests {
 
     #[test]
     fn android_published_bundle_needs_no_intl_data() {
+        for target in ["aarch64-linux-android", "x86_64-linux-android"] {
+            check_android_base_receipt(target);
+        }
+    }
+
+    fn check_android_base_receipt(target: &str) {
         let temporary = tempfile::tempdir().unwrap();
         let root = temporary.path();
         let (_, engine_digest) = write_linux_v3_fixture(root);
         let path = root.join("hermes-input-receipt.json");
         let mut receipt: serde_json::Value =
             serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
-        receipt["target"] = "aarch64-linux-android".into();
+        receipt["target"] = target.into();
         receipt["build"]["flags"] = serde_json::json!([
             "-DANDROID_PLATFORM=android-30",
             "-DHERMES_ENABLE_INTL=false"
@@ -3068,11 +3069,7 @@ mod internal_tests {
                 .retain(|entry| entry["path"] != name);
         }
         fs::write(&path, serde_json::to_vec(&receipt).unwrap()).unwrap();
-        let layout = install_layout(
-            root.to_path_buf(),
-            "aarch64-linux-android",
-            InstallOrigin::Override,
-        );
+        let layout = install_layout(root.to_path_buf(), target, InstallOrigin::Override);
         validate_layout(&layout, false).unwrap();
         validate_receipt(
             &layout,

@@ -90,11 +90,11 @@ The warning does not change JVM options or disappear when you set a JIT workarou
 packages both architectures. The default remains `arm64-v8a`, including release
 builds. Install the selected Rust targets for the pinned toolchain first.
 Each ABI gets its own app library, GPU modules and sound arm, with 16 KB alignment.
-TypeScript apps support only arm64: the vendored Hermes resolver does not support
-Android x86_64 ICU, and the pinned release has no x86_64 Android bundle. A bundle
-override does not enable this target. Use an ARM device or emulator, or an x86_64
-image with ARM translation, with the default arm64 APK. Native x86_64 builds are
-available for apps whose Android dependencies do not link Hermes.
+TypeScript apps need a Hermes bundle for each selected ABI. The pinned v6 release
+supplies Android arm64 only. Until an x86_64 bundle is published, set
+`HERMES_LEAN_SYS_DIR_x86_64_linux_android` to a complete x86_64 Android bundle.
+The resolver validates its receipt, ICU archives and filters, and bytecode version
+against the pinned host compiler. An arm64 or host bundle cannot substitute for it.
 
 The build:
 
