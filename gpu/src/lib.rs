@@ -307,6 +307,20 @@ pub trait Surface {
     }
     /// The commands the last `render` recorded were submitted: map what it
     /// copied for reading (a map cannot precede the submit of the copy).
+    ///
+    /// On native hosts, a surface may call `device.poll(wgpu::PollType::Poll)`
+    /// in later `render` calls to drive map callbacks without waiting for the
+    /// GPU. Keep returning `true` from `render` while a readback is pending.
+    /// Later queue submits also drive callbacks, but the host promises no
+    /// polling after the surface rests. Android's buffered path polls to
+    /// retire buffers; native capture and `Module::sync` wait on the device.
+    /// Direct presentation has no additional per-frame device poll. On the
+    /// web, WebGPU drives callbacks when control returns to the browser.
+    ///
+    /// Do not block a live frame with `PollType::Wait` or a channel receive,
+    /// or spin until a map completes. Keep callbacks short, consume completed
+    /// bytes in a later frame, drop mapped views and unmap before reusing the
+    /// buffer. See `gpu/README.md`, "Reading GPU results" for an example.
     fn submitted(&mut self) {}
     /// A display frame the module does not render, the GPU holding as many as
     /// it may: bring the surface's state up to `frame`, so the next `render`
