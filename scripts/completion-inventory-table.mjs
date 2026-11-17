@@ -577,7 +577,7 @@ export const classifications = [
     ["apple:host/apple/src/material.rs", "exact_material_platform"],
     ["apple:host/apple/src/pan_velocity.rs", "exact_pan_sample exact_pan_velocity exact_velocity"],
     ["apple:host/apple/src/svg_image.rs", "exact_svg_image_free exact_svg_image_header exact_svg_image_scene"],
-    ["apple:host/apple/src/textflow.rs", "exact_text_line_breaks exact_textflow_flow exact_textflow_free exact_textflow_prepare"],
+    ["apple:host/apple/src/textflow.rs", "exact_text_balanced_breaks exact_text_line_breaks exact_textflow_flow exact_textflow_free exact_textflow_prepare"],
     ["painted:host/painted/src/lower.rs", "Host::play_transitions"],
     ["painted:host/painted/src/desktop.rs", "Screen::json"],
     ["painted:host/painted/src/screen_capture.rs", "fixtures sizes"],

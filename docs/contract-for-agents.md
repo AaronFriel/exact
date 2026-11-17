@@ -6506,9 +6506,9 @@ hold an address or a code (a URL, an email, a key) takes `hyphens="none"`: a hyp
 
 `text-wrap="balance"` (CSS's `text-wrap-style`, inherited) evens a short
 paragraph's lines, for a tooltip, a toast or an empty state's message: the
-lines before its first forced break take the narrowest width that keeps their
-count, as Chrome's do, on every host. It balances up to six lines (more, or a
-`line-clamp`, wrap as usual), moves only the breaks (the box measures as
+lines before its first forced break keep their count and break where Chrome's
+do, on every host. It balances up to six lines (more, a `line-clamp`, or a
+word wider than the box, wrap as usual), moves only the breaks (the box measures as
 before, and `text-align` places the lines in it), and `auto` turns it off. `pretty` and `stable` are refused; supported values are `auto | balance`.
 
 `-webkit-font-smoothing="antialiased"` (inherited) draws text as Chrome and
