@@ -240,10 +240,9 @@ test('an app launcher selects a native backend before checking its build', () =>
   const script = `
     import { mock } from 'bun:test';
     import * as processes from 'node:child_process';
+    import * as shells from './scripts/app-shells.mjs';
     const spawn = processes.spawn;
-    mock.module(${JSON.stringify(resolve(import.meta.dir, 'app-shells.mjs'))}, () => ({
-      platformOf: () => null,
-    }));
+    mock.module('./scripts/app-shells.mjs', () => ({ ...shells, platformOf: () => null }));
     mock.module('node:child_process', () => ({ ...processes, spawn(command, args, options) {
       if (args[0].endsWith('/scripts/agent.mjs')) {
         return spawn(command, ['-e', 'console.log(process.env.EXACT_BACKEND_ORIGIN)'], options);
