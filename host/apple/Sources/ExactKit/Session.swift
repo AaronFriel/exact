@@ -1136,6 +1136,8 @@ public final class ExactSession {
 
     /// Batches that reached `apply` (`IdleTickTests` read it, and painted popovers keep their measures for one: `PositionArea.MeasureCache`).
     private(set) var appliedBatches = 0
+    var missingCapabilities: Set<String> = []
+
     package func apply(_ batch: Batch) {
         guard state != .destroyed, !batch.busy, !batch.held else { return }
         #if os(iOS) || os(tvOS)
@@ -1164,6 +1166,7 @@ public final class ExactSession {
         // Each batch says what its turn left owed; batches apply in the owner's order, so the last one applied is the runner's now.
         canvasOwed = batch.canvasOwed
         if canvasOwed { askCanvasDraw() }
+        HostLog.capabilities(self, batch)
         let outputs = SessionBatchOps(batch.ops)
         for op in outputs.routers { routerOp = op.payload; presenter.armFragment(op.payload["activation"]); NavigationMarks.shared.routerChanged(self, payload: op.payload) } // a scroll to its fragment, which the runner's `scrollToFragment` makes (LLP 1153 D5)
         // @ref LLP 1048.003 D1 — the head's title, for the app that owns the chrome.

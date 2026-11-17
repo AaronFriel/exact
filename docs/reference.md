@@ -1364,6 +1364,28 @@ receipt, and signed GPU frameworks (primary and named modules). Copy those
 frameworks intact into the embedding app's `Frameworks/`; their binaries must
 retain the baked digests.
 
+### Optional Apple host products
+
+An external Swift host links `ExactKit` plus each capability product its plans
+use, then calls that product's public `install()` before creating sessions.
+The generated `--embed` composition lists the capabilities to link.
+
+| Product | Capability | Installation |
+| --- | --- | --- |
+| `ExactMarkdown` | Markdown text and editing | `ExactMarkdown.install()` |
+| `ExactDrag` | Reorder, height and transform drags | `ExactDrag.install()` |
+| `ExactGroupedLists` | Native grouped lists | `ExactGroupedLists.install()` |
+| `ExactSurfaces` | GPU and Canvas surfaces | `ExactSurfaces.install()` |
+| `ExactMediaPicker` | Native media picking | `ExactMediaPicker.install()` |
+| `ExactAuthSession` | Authentication sessions | `ExactAuthSession.install()` |
+| `ExactNumerals` | Numeric content transitions | `ExactNumerals.install()` |
+| `ExactTips` | Platform tips | `ExactTips.install()` |
+| `ExactPresence` | Native presence checks | `ExactPresence.install()` |
+
+Development builds log a missing Markdown or drag installation once per session,
+with the product and installation call. Without it, Markdown remains literal
+text and drag gestures are unavailable.
+
 ### Mac development signing
 
 `EXACT_IDENTITY=<certificate-sha1>` selects a Keychain signing identity;
@@ -1379,6 +1401,14 @@ resolve it, the build refuses and names `DEVELOPMENT_TEAM=<team-id>`,
 including an ordinary `secret.keep` app. With no identity at all, a build without
 profile requirements or extensions can still sign ad hoc. Developer ID profile
 ambiguity names `EXACT_DEVELOPER_ID=<sha1>`, the release identity selector.
+
+Local builds made by `mac --bundle` omit the hardened runtime, so an ad hoc
+host can load its ad hoc native modules. An external host signed ad hoc with
+`codesign --options runtime` can start and pass strict signature verification,
+but macOS library validation refuses its native modules because neither has a
+Team ID. For a hardened host, sign the host and every native module with valid
+certificates of the same team. A successful launch alone does not check module
+loading; exercise the plan's native view or module call too.
 
 Certificate signing keeps the app's login Keychain access stable across
 rebuilds (LLP 1018 D7). Before each local development sign (`--timestamp=none`),

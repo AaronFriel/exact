@@ -238,7 +238,13 @@ Linux host, and the iOS cross compiler. On Windows, use WSL 2 with Ubuntu 24.04 
   not needed.
 - **Google Chrome.** The agent drives the web through headless Chrome. Set `CHROME` to
   use another Chromium.
-- **Xcode 27.1 or later**, for Apple builds on macOS (`exact setup --check` checks it). For iOS builds on Linux/WSL, install
+- **Apple SDKs and Swift**, for Apple builds on macOS (`exact setup --check` checks both).
+  The host needs the macOS 26.0 SDK (Xcode 26.0+), iOS 27.1 SDK (Xcode 27.1+),
+  or tvOS 27.0 SDK (Xcode 27.0+), and Swift 6.4 or later. Swift 6.4 is tested;
+  Swift 6.2.4 cannot type-check the host. The SDK and compiler floors live in
+  [`host/apple/devices.mjs`](host/apple/devices.mjs).
+  Swift builds use `xcrun`'s selected compiler; select it with `DEVELOPER_DIR` or `TOOLCHAINS`.
+  For iOS builds on Linux/WSL, install
   [Swift 6.4.2](https://www.swift.org/install/linux/),
   [xtool 1.24.0](https://github.com/xtool-org/xtool/releases/tag/1.24.0),
   [LLVM 23](https://apt.llvm.org/), and

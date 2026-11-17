@@ -1312,7 +1312,11 @@ fn the_named_data_crate_and_the_generated_lock_are_identity() {
         .inputs["dataCrate"]
             .clone()
     };
-    assert_eq!(data()["files"], 2, "the named crate, not data/");
+    assert_eq!(
+        data()["files"],
+        3,
+        "the named crate and its lockfile, not data/"
+    );
     let first = id(&dir, "ios");
     std::fs::write(dir.join("records/src/lib.rs"), "pub const A: u8 = 2;\n").unwrap();
     let edited = id(&dir, "ios");
@@ -1345,7 +1349,21 @@ fn a_path_dependency_outside_the_workspace_is_identity() {
     std::fs::write(dir.join("Cargo.toml"), workspace).unwrap();
     let shared = "[dependencies]\nshared = { path = \"../../shared\" }\n";
     krate(&dir.join("data"), "app-data", shared);
-    krate(&root.join("shared"), "shared", "");
+    krate(
+        &root.join("shared"),
+        "shared",
+        "[dependencies]\nunused = { path = \"../unused\", optional = true }\n\
+         renamed = { package = \"enabled\", path = \"../enabled\", optional = true }\n\
+         [features]\ndefault = [\"dep:renamed\"]\n",
+    );
+    krate(&root.join("unused"), "unused", "");
+    krate(&root.join("enabled"), "enabled", "");
+    let names: Vec<_> = super::path_crates(&dir.join("data"))
+        .unwrap()
+        .into_iter()
+        .map(|(name, _)| name)
+        .collect();
+    assert_eq!(names, ["enabled", "shared"]);
     let first = id(&dir, "ios");
     assert_eq!(first, id(&dir, "ios"), "stable across computations");
     std::fs::write(root.join("shared/src/lib.rs"), "pub const A: u8 = 2;\n").unwrap();

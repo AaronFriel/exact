@@ -1128,13 +1128,15 @@ fn data_crate(app_dir: &Path, named: Option<&str>) -> Result<serde_json::Value, 
     if !dir.join("Cargo.toml").is_file() {
         return Ok(serde_json::Value::Null);
     }
+    // Cargo may create a lockfile that the source digest must already include.
+    let dependencies = path_crates(&dir)?;
     let (tree, files) = tree_digest(&dir)?;
     let watch = std::env::var_os("OUT_DIR").is_some();
     if watch {
         println!("cargo:rerun-if-changed={}", dir.display());
     }
     let mut crates = serde_json::Map::new();
-    for (name, path) in path_crates(&dir)? {
+    for (name, path) in dependencies {
         if watch {
             println!("cargo:rerun-if-changed={}", path.display());
         }
@@ -1180,13 +1182,9 @@ fn tree_identity(dir: &Path) -> Result<(String, Vec<PathBuf>), String> {
     Ok((hex(&h.finalize()), files))
 }
 
-/// The path crates the data crate at `dir` is built from, by package name
-/// and directory: the closure of its normal and build path dependencies as
-/// `cargo metadata` declares them, less exact2's own crates (everything in
-/// this checkout outside `apps/`), whose changes the id's other inputs name.
-/// Registry and git dependencies are pinned by the lockfile. `--no-deps`
-/// lists only workspace members; a closure that leaves the workspace asks
-/// Cargo again with the full graph.
+/// The enabled normal and build path dependencies of the data crate, less
+/// Exact's own crates, whose changes the id's other inputs name. Registry
+/// and git dependencies are pinned by the lockfile.
 fn path_crates(dir: &Path) -> Result<Vec<(String, PathBuf)>, String> {
     let exact = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("..")
@@ -1196,47 +1194,35 @@ fn path_crates(dir: &Path) -> Result<Vec<(String, PathBuf)>, String> {
     let start = dir
         .canonicalize()
         .map_err(|e| format!("{}: {e}", dir.display()))?;
-    for members_only in [true, false] {
-        let packages = metadata(dir, members_only)?;
-        let mut found = std::collections::BTreeMap::new();
-        let mut queue = vec![start.clone()];
-        let mut complete = true;
-        while let Some(at) = queue.pop() {
-            let Some((_, deps)) = packages.get(&at) else {
-                complete = false;
-                break;
-            };
-            for dep in deps {
-                if dep == &start || own(dep) || found.contains_key(dep) {
-                    continue;
-                }
-                let name = packages
-                    .get(dep)
-                    .map_or_else(String::new, |(n, _)| n.clone());
-                found.insert(dep.clone(), name);
+    let packages = metadata(dir)?;
+    let mut found = std::collections::BTreeMap::new();
+    let mut queue = vec![start.clone()];
+    while let Some(at) = queue.pop() {
+        let (name, deps) = packages.get(&at).ok_or_else(|| {
+            format!(
+                "cargo metadata does not list the path dependency {}",
+                at.display()
+            )
+        })?;
+        if at != start {
+            found.insert(at, name.clone());
+        }
+        for dep in deps {
+            if dep != &start && !own(dep) && !found.contains_key(dep) {
                 queue.push(dep.clone());
             }
         }
-        if complete {
-            let mut out: Vec<(String, PathBuf)> = found.into_iter().map(|(p, n)| (n, p)).collect();
-            out.sort();
-            return Ok(out);
-        }
     }
-    Err(format!(
-        "cargo metadata does not list the path dependencies of {}",
-        dir.display()
-    ))
+    let mut out: Vec<_> = found.into_iter().map(|(p, n)| (n, p)).collect();
+    out.sort();
+    Ok(out)
 }
 
-/// `cargo metadata`'s packages, by canonical directory: each one's name and
-/// the directories of its normal and build path dependencies.
 type Packages = std::collections::HashMap<PathBuf, (String, Vec<PathBuf>)>;
 
-fn metadata(dir: &Path, members_only: bool) -> Result<Packages, String> {
+fn metadata(dir: &Path) -> Result<Packages, String> {
     let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
-    let mut command = std::process::Command::new(cargo);
-    command
+    let output = std::process::Command::new(cargo)
         .args([
             "metadata",
             "--format-version",
@@ -1244,11 +1230,7 @@ fn metadata(dir: &Path, members_only: bool) -> Result<Packages, String> {
             "--offline",
             "--manifest-path",
         ])
-        .arg(dir.join("Cargo.toml"));
-    if members_only {
-        command.arg("--no-deps");
-    }
-    let output = command
+        .arg(dir.join("Cargo.toml"))
         .output()
         .map_err(|e| format!("cargo metadata: {e}"))?;
     if !output.status.success() {
@@ -1260,25 +1242,40 @@ fn metadata(dir: &Path, members_only: bool) -> Result<Packages, String> {
     }
     let meta: serde_json::Value =
         serde_json::from_slice(&output.stdout).map_err(|e| format!("cargo metadata: {e}"))?;
-    let canonical = |path: &Path| path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    let paths: std::collections::HashMap<_, _> = meta["packages"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|p| p["source"].is_null())
+        .filter_map(|p| {
+            let at = Path::new(p["manifest_path"].as_str()?).parent()?;
+            Some((
+                p["id"].as_str()?,
+                (
+                    p["name"].as_str()?,
+                    at.canonicalize().unwrap_or_else(|_| at.to_path_buf()),
+                ),
+            ))
+        })
+        .collect();
     let mut packages = Packages::new();
-    for package in meta["packages"].as_array().into_iter().flatten() {
-        let Some(manifest) = package["manifest_path"].as_str() else {
+    for node in meta["resolve"]["nodes"].as_array().into_iter().flatten() {
+        let Some((name, at)) = node["id"].as_str().and_then(|id| paths.get(id)) else {
             continue;
         };
-        let Some(at) = Path::new(manifest).parent() else {
-            continue;
-        };
-        let deps = package["dependencies"]
+        let deps = node["deps"]
             .as_array()
             .into_iter()
             .flatten()
-            .filter(|d| d["kind"].as_str() != Some("dev"))
-            .filter_map(|d| d["path"].as_str())
-            .map(|p| canonical(Path::new(p)))
+            .filter(|d| {
+                d["dep_kinds"]
+                    .as_array()
+                    .is_some_and(|kinds| kinds.iter().any(|k| k["kind"].as_str() != Some("dev")))
+            })
+            .filter_map(|d| d["pkg"].as_str().and_then(|id| paths.get(id)))
+            .map(|(_, path)| path.clone())
             .collect();
-        let name = package["name"].as_str().unwrap_or_default().to_string();
-        packages.insert(canonical(at), (name, deps));
+        packages.insert(at.clone(), (name.to_string(), deps));
     }
     Ok(packages)
 }

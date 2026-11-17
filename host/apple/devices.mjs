@@ -46,6 +46,8 @@ export function developerDir(env = process.env) {
  * promise that the host compiles; an older one certainly does not. Xcode N.M
  * carries the N.M SDKs. */
 export const HOST_SDKS = { ios: '27.1', tvos: '27.0', macos: '26.0' };
+// Swift 6.2.4 exhausts the host's expression solver; 6.4 builds it.
+export const HOST_SWIFT = '6.4';
 /** Each SDK a build compiles with: its platform's floor and its name in a message. */
 const SDK_NAMES = { iphoneos: ['ios', 'iOS'], iphonesimulator: ['ios', 'iOS Simulator'], appletvos: ['tvos', 'tvOS'], appletvsimulator: ['tvos', 'tvOS Simulator'], macosx: ['macos', 'macOS'] };
 /** The SDK an Apple build compiles with: a device's or a simulator's (`device`), or the Mac's. */
@@ -70,12 +72,18 @@ export function olderVersion(have, need) {
  * (`appleSdkName`'s), or null when it can. An SDK older than the floor is
  * named, with the Xcode it needs and how to select one: it would fail deep in
  * the Swift compile, after the Rust build, on a missing symbol. An SDK whose
- * version cannot be read is said in xcrun's own words. `run` runs a command
+ * version cannot be read is said in xcrun's own words. A sufficient SDK
+ * also needs the tested Swift compiler floor. `run` runs a command
  * (as `spawnSync`) in `developer`, the developer directory the build uses. */
 export function xcodeRefusal(sdkName, run = (cmd, args) => spawnSync(cmd, args, { encoding: 'utf8' }), developer = developerDir()) {
   const [platform, label] = SDK_NAMES[sdkName], need = HOST_SDKS[platform];
   const probe = run('xcrun', ['--sdk', sdkName, '--show-sdk-version']), sdk = probe.status === 0 ? probe.stdout.trim() : '';
-  if (/^\d+(\.\d+)*$/.test(sdk) && !olderVersion(sdk, need)) return null;
+  if (/^\d+(\.\d+)*$/.test(sdk) && !olderVersion(sdk, need)) {
+    const compiler = run('xcrun', ['swift', '--version']);
+    const version = compiler.status === 0 && /Swift version (\d+(?:\.\d+)*)/.exec(compiler.stdout ?? '')?.[1];
+    if (version && !olderVersion(version, HOST_SWIFT)) return null;
+    return `host/apple: ${version ? `Swift ${version} is too old` : `could not report the selected Swift compiler: ${compiler.stderr?.trim() || compiler.stdout?.trim() || compiler.error?.message || compiler.status}`}; the Swift host needs Swift ${HOST_SWIFT} or later. Select an Xcode or Swift toolchain providing it with DEVELOPER_DIR or TOOLCHAINS`;
+  }
   const built = run('xcodebuild', ['-version']), xcode = `${built.status === 0 ? built.stdout.trim().split('\n')[0] : 'no Xcode'}, ${developer || 'none selected'}`;
   if (!/^\d+(\.\d+)*$/.test(sdk)) {
     const said = [...new Set(String(probe.stderr ?? '').split('\n').map(line => line.trim()).filter(line => /error/.test(line)))];
