@@ -41,6 +41,30 @@ test('an agent track keeps its start time and announces a new picture to frame o
   expect(frames).toHaveLength(2);
 });
 
+test('a throwing picture observer is logged and leaves later observers and the caller running', async () => {
+  let entry;
+  const logs = [], calls = [], frame = {};
+  const camera = video({ agent: true, changed() {}, log: line => logs.push(line),
+    tracks: { add: t => { entry = t; } }, nextId: () => 1, shown: () => true });
+  const { id } = await camera.open({}, 'stream');
+  logs.length = 0;
+  entry.observePicture(() => { calls.push('throwing'); throw new Error('observer failed'); });
+  entry.observePicture(() => calls.push(entry.frame()));
+  entry.observePicture(() => { throw null; });
+  entry.observePicture(() => { throw Symbol('failed'); });
+  entry.observePicture(() => { throw { get message() { throw new Error('getter'); } }; });
+  entry.observePicture(() => calls.push('last'));
+  entry.owner.picture(id, frame);
+  calls.push('completed');
+  expect(calls).toEqual(['throwing', frame, 'last', 'completed']);
+  expect(logs).toEqual([
+    `media-capture: a picture observer of ${id} failed: observer failed`,
+    `media-capture: a picture observer of ${id} failed: null`,
+    `media-capture: a picture observer of ${id} failed: Symbol(failed)`,
+    `media-capture: a picture observer of ${id} failed: an unprintable value`,
+  ]);
+});
+
 for (const first of ['move', 'activation']) {
   for (const before of [true, false]) {
     test(`a move and an activation that opened ${before ? 'before' : 'after'} it, the ${first} finishing first, leave only the track's source running`, async () => {

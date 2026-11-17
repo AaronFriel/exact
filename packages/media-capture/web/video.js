@@ -191,7 +191,15 @@ export function video({ changed, agent, log, tracks, nextId, media, shown, now =
       const t = own.get(id);
       if (t && t.picture !== frame) {
         t.picture = frame;
-        for (const changed of [...t.pictureObservers]) changed();
+        for (const changed of [...t.pictureObservers]) {
+          try { changed(); }
+          catch (e) {
+            // Describing the throw must not throw: a Symbol or a throwing `message` getter would leave the loop.
+            let why;
+            try { why = String(e?.message ?? e); } catch { why = 'an unprintable value'; }
+            say(`a picture observer of ${t.id} failed: ${why}`);
+          }
+        }
       }
     },
   };

@@ -876,11 +876,17 @@ public final class ExactTrackEntry {
     /// each frame (LLP 1133.027 D17 item 2). The camera package sets it.
     public var picture: CGImage? {
         didSet {
-            if oldValue !== picture { for notify in Array(pictureObservers.values) { notify() } }
+            if oldValue !== picture {
+                for notify in Array(pictureObservers.values) {
+                    do { try notify() }
+                    catch { NSLog("exact: track %@ picture observer: %@", id, String(describing: error)) }
+                }
+            }
         }
     }
-    private var pictureObservers: [UUID: () -> Void] = [:]
-    public func observePicture(_ changed: @escaping () -> Void) -> ExactSubscription {
+    private var pictureObservers: [UUID: () throws -> Void] = [:]
+    /// A thrown error is logged; remaining observers still run.
+    public func observePicture(_ changed: @escaping () throws -> Void) -> ExactSubscription {
         let id = UUID()
         pictureObservers[id] = changed
         return ExactSubscription { [weak self] in self?.pictureObservers[id] = nil }

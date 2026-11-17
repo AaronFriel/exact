@@ -58,7 +58,9 @@ class TrackEntry(val id: String, val kind: String, val tracks: List<String> = em
         set(value) {
             if (field === value) return
             field = value
-            pictureObservers.toList().forEach { it() }
+            pictureObservers.toList().forEach {
+                try { it() } catch (e: Exception) { android.util.Log.w("exact", "track $id picture observer: $e", e) }
+            }
         }
     private val pictureObservers = LinkedHashSet<() -> Unit>()
     fun observePicture(changed: () -> Unit): () -> Unit {
