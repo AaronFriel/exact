@@ -124,7 +124,7 @@ The driver imports wasm-bindgen glue (`snapback4/ts/generated/`, never
 committed). The bake of an app that mounts the driver writes it with
 `snapback4/web/build.mjs`, which builds only when the inputs recorded in the
 glue's header have changed, and needs the `wasm32-unknown-unknown` target and
-`wasm-bindgen` 0.2.127 (`cargo install wasm-bindgen-cli --version 0.2.127`).
+`wasm-bindgen` 0.2.130 (`cargo install wasm-bindgen-cli --version 0.2.130`).
 
 The canonical [Messages](../apps/messages/README.md) app is the Exact port of Expo's
 chat demo, with model conversations through a local OpenRouter service. It belongs

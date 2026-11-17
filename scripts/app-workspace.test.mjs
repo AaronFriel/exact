@@ -1270,21 +1270,26 @@ test('a generated workspace captures no lock until a dependency leaves exact2\'s
     settleLock(dir, workspace);
     assert.match(lockShells(dir, workspace), /resolves against exact2's lock; the app's crates there add nothing, so it commits no Cargo\.lock of its own/);
     assert.equal(existsSync(resolve(dir, 'Cargo.lock')), false);
-    if (!other) return; // no second itoa in this machine's cache to leave exact2's lock with
-    data(`itoa = "=${other}"\n`);
-    assert.throws(() => settleLock(dir, workspace), new RegExp(`the app's crates need versions exact2's lock does not hold \\(itoa ${other.replaceAll('.', '\\.')} [^)]*\\)\\. An app whose crates add dependencies commits a lock of its own: \`bun exact\\.mjs lock\``));
-    assert.match(lockShells(dir, workspace), /Cargo\.lock: captured \(\d+ packages\); commit it/);
-    const captured = readFileSync(resolve(dir, 'Cargo.lock'), 'utf8');
-    assert.match(captured, new RegExp(`name = "itoa"\nversion = "${other.replaceAll('.', '\\.')}"`));
-    settleLock(dir, workspace);
-    // A rewrite of the shell (here, its stamp as a moved checkout leaves it) keeps the captured lock.
-    writeFileSync(resolve(workspace, '.stamp.json'), '{}\n');
-    assert.equal(ensureShells(dir).wrote, true);
-    assert.equal(readFileSync(resolve(workspace, 'Cargo.lock'), 'utf8'), captured);
-    // A dependency changed since the capture is the lock's to settle, never a build's.
-    data(`itoa = "=${held}"\n`);
-    assert.throws(() => settleLock(dir, workspace), /Cargo\.lock does not match the app's crates [^]*`bun exact\.mjs lock` in /);
-    assert.match(lockShells(dir, workspace), new RegExp(`Cargo\\.lock: resolved\nitoa ${other.replaceAll('.', '\\.')} → ${held.replaceAll('.', '\\.')}`));
+    if (other) {
+      data(`itoa = "=${other}"\n`);
+      assert.throws(() => settleLock(dir, workspace), new RegExp(`the app's crates need versions exact2's lock does not hold \\(itoa ${other.replaceAll('.', '\\.')} [^)]*\\)\\. An app whose crates add dependencies commits a lock of its own: \`bun exact\\.mjs lock\``));
+      assert.match(lockShells(dir, workspace), /Cargo\.lock: captured \(\d+ packages\); commit it/);
+      const captured = readFileSync(resolve(dir, 'Cargo.lock'), 'utf8');
+      assert.match(captured, new RegExp(`name = "itoa"\nversion = "${other.replaceAll('.', '\\.')}"`));
+      settleLock(dir, workspace);
+      // A rewrite of the shell (here, its stamp as a moved checkout leaves it) keeps the captured lock.
+      writeFileSync(resolve(workspace, '.stamp.json'), '{}\n');
+      assert.equal(ensureShells(dir).wrote, true);
+      assert.equal(readFileSync(resolve(workspace, 'Cargo.lock'), 'utf8'), captured);
+      // A dependency changed since the capture is the lock's to settle, never a build's.
+      data(`itoa = "=${held}"\n`);
+      assert.throws(() => settleLock(dir, workspace), /Cargo\.lock does not match the app's crates [^]*`bun exact\.mjs lock` in /);
+      assert.match(lockShells(dir, workspace), new RegExp(`Cargo\\.lock: resolved\nitoa ${other.replaceAll('.', '\\.')} → ${held.replaceAll('.', '\\.')}`));
+    }
+    data('rustls-platform-verifier = "=0.7.1"\n');
+    assert.match(lockShells(dir, workspace), /Cargo\.lock: (?:resolved|captured)|resolves against exact2's lock/);
+    const locked = Bun.TOML.parse(readFileSync(resolve(workspace, 'Cargo.lock'), 'utf8')).package;
+    assert.deepEqual(locked.filter(p => p.name === 'rustls-platform-verifier').map(p => p.version), ['0.7.1']);
   } finally { rmSync(scratch, { recursive: true, force: true }); }
 }, 180_000);
 
@@ -1380,6 +1385,13 @@ test('a GPU crate builds in .exact/gpu, apart from the host\'s graph, and captur
     assert.equal(names(workspace).some(name => name === 'field-log-gpu' || name === 'exact-gpu' || name === 'wgpu'), false);
     assert.match(lockShells(dir, own, resolve(dir, GPU_LOCK)), /resolves against exact2's lock; the app's crates there add nothing, so it commits no Cargo\.gpu\.lock of its own/);
     assert.equal(existsSync(resolve(dir, GPU_LOCK)), false);
+    // mln-rs 0.0.11 needs these versions in the same GPU graph (#426).
+    gpu('rustls-platform-verifier = "=0.7.1"\nwasm-bindgen = "=0.2.130"\n');
+    assert.match(lockShells(dir, own, resolve(dir, GPU_LOCK)), /resolves against exact2's lock|Cargo\.gpu\.lock: captured/);
+    const locked = Bun.TOML.parse(readFileSync(resolve(own, 'Cargo.lock'), 'utf8')).package;
+    for (const [name, version] of [['rustls-platform-verifier', '0.7.1'], ['wasm-bindgen', '0.2.130']]) {
+      assert.deepEqual(locked.filter(p => p.name === name).map(p => p.version), [version]);
+    }
     if (other) {
       gpu(`itoa = "=${other}"\n`);
       assert.match(lockShells(dir, own, resolve(dir, GPU_LOCK)), /Cargo\.gpu\.lock: captured \(\d+ packages\); commit it/);
