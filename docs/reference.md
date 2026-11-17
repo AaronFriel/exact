@@ -1654,7 +1654,8 @@ change ships as a new build and a production build needs no update signing
 keys or receipt. At `"A"` it takes signed plans, assets and TypeScript
 modules, never native code (LLP 1030.006), and a production build needs
 `deploy.signing.keys` and `EXACT_UPDATE_RECEIPT` or `EXACT_UPDATE_GENESIS=1`,
-as iOS does.
+as iOS does. The [over-the-air updates recipe](recipes/over-the-air-updates.md)
+covers the key, `app.json`, the first build, publishing and an in-app banner.
 
 ### Build an iOS app on a CI machine
 
@@ -1740,6 +1741,103 @@ unset variable. No `app.json` version key is defined. `exactDelivery().productio
 is `true` in a binary baked with production trust (for example, Apple's
 `--release`, `--distribution`, or `exact release`) and `false` in a development
 build.
+
+## Over-the-air updates
+
+The [recipe](recipes/over-the-air-updates.md) goes from a signing key to an
+update banner. This section is what it leaves out (LLP 1030).
+
+`keygen` writes the private key to `~/.config/exact/keys/<id>.pem`, or to the
+directory `EXACT_SIGNING_KEY_DIR` names; keep it out of the repository. A
+binary takes only updates signed by a key its `app.json` named when it was
+built. The web has no update store: there `exactDelivery().staged` stays
+false.
+
+### The origin a binary checks
+
+A production binary checks the origin its build read from
+`deploy.channels.<channel>` in `app.json`, and no other. Serve at that URL,
+over HTTPS, the directory that `deploy --origin <dir>` and `push --origin
+<dir>` write. In both commands `--origin` takes precedence over the manifest.
+An `https://` origin is read-only to them, so `deploy --yes` and `push` need
+`--origin` naming the directory it serves.
+
+The channel `"appdrop"` is AppDrop's origin for the signing key, with no
+account and no server. Run `deploy` and `push` without `--origin`: with a
+directory they publish there while installed apps check AppDrop. AppDrop
+holds update streams only, so `deploy` publishes no web root to it.
+
+`bun exact.mjs serve --origin <dir>` serves a directory that `deploy`
+published a web root to, on this machine (port 8765, loopback unless
+`--lan`). To watch an app take an update locally, name that URL as the
+channel before the release build (`"prod": "http://127.0.0.1:8765"`): a
+binary built with another URL never asks the local server, and logs `exact
+update: refused:` with the URL it could not reach.
+
+### Starting and continuing a stream
+
+A stream is a channel and a compatibility id: the binaries that run the same
+updates. A release build for a platform with an update store bakes production
+trust and needs one of two variables, and refuses without either:
+
+- `EXACT_UPDATE_GENESIS=1` starts a new stream. The binary embeds sequence
+  zero.
+- `EXACT_UPDATE_RECEIPT=<file>` builds a binary for a stream that has
+  releases. The file is a release record that `deploy` or `push` wrote,
+  `<origin dir>/.exact/<channel>/<compatibility id>/releases/<release>.json`,
+  and it must name exactly the plan and assets the build embeds. The binary
+  embeds that release's sequence.
+
+`deploy.store.<platform>` is `"A"` for a binary with an update store and
+`"0"` for one without, on `ios`, `macos`, `linux` and `android`. The first
+`ios`, `mac` or `linux` build of an app writes `"0"` for its platform, and an
+absent `android` is `"0"`, so set `"A"` for each platform that takes updates
+before its release build.
+
+### What `deploy` publishes
+
+`deploy` builds each platform's update, which takes minutes, and its dry run
+prints what each stream takes as an update and what needs a new binary. For
+iOS it compiles the device target, which a Mac set up only for the simulator
+lacks: `bun <exact2>/scripts/exact.mjs setup --check` names what is missing,
+and `--platform <p>`, repeated, publishes only the platforms named.
+
+`deploy` publishes the commit at `HEAD` of the app's repository and refuses
+when the files it reads differ from that commit. `--dirty` publishes the
+working tree instead, uncommitted edits and files git ignores included; the
+table is marked `(DIRTY)` and lists them. An app outside the Exact checkout
+is refused without `--dirty` even when committed, because ignored files count
+as source: the `.exact/` its builds write, and generated files in the Exact
+checkout. So commit, pass `--dirty`, and read the list. An app's first build
+for a platform edits `app.json`: commit after it. `push` always publishes the
+working tree.
+
+### When a staged update applies
+
+- `next-launch`: the next cold launch boots it; `deliveryActivate()` applies
+  it sooner.
+- `app-decides`: only `deliveryActivate()` applies it. No launch boots it,
+  and `staged` stays true across launches.
+- `immediate`: it applies as soon as a check stages it while the app is in
+  the foreground, otherwise when the app next comes to the foreground.
+
+Applying an update while the app runs (`deliveryActivate()`, `immediate`)
+waits until no request is in flight when the update carries a data module,
+as every update of an app with `app.ts` does. A resource still loading, a
+mutation still sending and a stream that has not delivered its first value
+are in flight; a stream that has is not. The running app keeps the ask and
+applies the update when the requests finish or are cancelled, without a
+second `deliveryActivate()`. The wait has no deadline and cancels nothing, so
+a request that never ends, such as a socket that never connects, holds the
+update for as long as the app runs. The next cold launch boots it under
+`next-launch` and `immediate`; under `app-decides` it is still staged and
+waits for `deliveryActivate()` again. An update without a data module applies
+with requests in flight. On Android, applying also waits for a turn with no
+touch held, no text being composed and no Back gesture in progress.
+
+A check runs when the app comes to the foreground, at most once a minute,
+and every `deploy.check.interval` seconds (900 by default) while it stays
+there; never in the background. `deliveryCheck()` checks at once.
 
 ## Install a development build beside the release one (variants)
 
