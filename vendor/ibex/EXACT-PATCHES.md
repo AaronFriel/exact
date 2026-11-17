@@ -1120,3 +1120,23 @@ this through the same endowed fetch binding as ordinary requests (LLP
 renames a completed host-owned file into it on the same filesystem. Recovery
 recognizes an already-published destination; storage errors preserve the source
 for retry. This avoids requiring another response-sized allocation at publication.
+
+## Windows known folders
+
+LLP 1173 D4's create-only namespaces use an OS-selected root, UNC included,
+and retain handles below it. Their walk refuses name-surrogate reparse tags
+and reopens admitted directories with normal reparse processing so cloud
+filters can recall placeholders. The reopened handle must identify the same
+object; tags are checked again before use. Every directory is reopened because
+Windows can hide cloud tags. The app and native drive walks keep refusing all
+reparse points. Leaf validation shares the native path rule. Exclusive
+creation uses `FILE_CREATE`; atomic publication uses the retained parent and
+`FileRenameInformation` with `ReplaceIfExists` false. Known-folder `mkdir`
+creates every component exclusively, with `FILE_CREATE` on Windows and
+`mkdirat` on Unix; app walks keep their open-or-create behavior. Replay on a refresh.
+
+The portable tag and name tests run on macOS. Windows tests cover collisions,
+retained parents and agent roots. Native qualification remains pending:
+`cargo run -p exact-windows --example known-folders` probes OneDrive and UNC
+redirection before a Windows app drive claims the cell. Append
+`-- pictures OnlineOnly` to exercise an existing dehydrated child directory.
