@@ -34,6 +34,7 @@ android {
             "../../../packages/passkeys/android", "../../../packages/passkeys/test",
             "../../../packages/payments/android", "../../../packages/payments/test",
             "../../../packages/photos/android", "../../../packages/photos/test",
+            "../../../packages/push/android", "../../../packages/push/test/android",
             "../../../packages/recording/android", "../../../packages/recording/test",
             "../../../packages/speech-recognition/android", "../../../packages/speech-recognition/test",
         ))
@@ -44,6 +45,8 @@ android {
 }
 
 dependencies {
+    testImplementation("com.google.firebase:firebase-messaging:26.0.1")
+    testImplementation("com.google.android.gms:play-services-base:18.9.0")
     testImplementation("com.google.android.play:age-signals:0.0.4")
     testImplementation("com.google.android.play:app-update:2.1.0")
     testImplementation("com.google.mlkit:text-recognition:16.0.1")

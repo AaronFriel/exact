@@ -921,8 +921,8 @@ names no take; `:focus-within` remains out.
   row is omitted there) and on the web
   (Declarative Web Push or a host worker). Still refused: push-to-start; a
   notification service extension except for the app-owned Swift form admitted
-  below; an event raised by a push, but for a declared action the person chose
-  (below).
+  below; an event raised by a push, except Android data-only pushes and a declared
+  action the person chose (below).
   **Expanded (Charlie, 2026-11-14, "admit", on LLP 1172.016 Q1 after a
   three-seat panel split two to one for admitting):** a data-only push as a
   wake's trigger (`content-available`, the `remote-notification` background
@@ -953,12 +953,16 @@ names no take; `:focus-within` remains out.
   emulators. Owed on a phone: delivery after an OEM's background limits have
   stopped the app, Doze over hours, and the channel's sound and heads-up on a
   locked screen. With it, push on Android through FCM in `@exact/push`'s
-  Android implementation: its Firebase Installation ID as the live value, a
-  notification message shown in front too, and its tap opening `data.navigate`.
+  Android implementation: its FCM registration token and Firebase Installations
+  ID as the live value, a notification message shown in front too, and its tap
+  opening `data.navigate`.
   Built and run under the agent and on an emulator with no Firebase project;
   owed: a registration with a Firebase project and delivery through FCM. A
-  data message as a wake (admitted above, on LLP 1172.016 Q1) waits for
-  Android's headless session; until then it is journaled.
+  data-only message raises `push` through Android's headless session under a
+  ten-second bound. Charlie, 2026-11-16, admitted full Expo push service support:
+  token-mode registration and a TypeScript exchange with Expo, using
+  `extra.eas.projectId`. JVM and mocked-fetch tests cover these paths; real
+  registration and delivery through Expo remain owed on the reporter's phone.
   **Expanded (the 2026-11-14 panel, two to one, under Charlie's delegation and
   direction to build the ideal end state; LLP 1133.004 §9 P6, P8):** an app's
   own Swift `UNNotificationServiceExtension`, packaged by default in iOS and

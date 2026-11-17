@@ -445,9 +445,11 @@ class ExtensionContext internal constructor(val application: Context, private va
          * the host boots here with no view, hidden as a stopped activity's is, and an activity made later adopts
          * it; with no first pixel to wait for, its data module activates at once. A wake raised in it
          * ([wake]) ends `completed` only once the store's writes are on disk, so the caller may give its job back at
-         * the wake's outcome.
+         * the wake's outcome. [active] is checked before boot and before extensions load: an expired
+         * platform callback may cancel its pending launch.
          */
-        @JvmStatic fun session(context: Context, ready: (Boolean) -> Unit) = Headless.session(context, ready)
+        @JvmStatic fun session(context: Context, active: () -> Boolean = { true }, ready: (Boolean) -> Unit) =
+            Headless.session(context, active, ready)
     }
 
     /** [requestPermissions] for [name], keeping the history [permission] reads. */

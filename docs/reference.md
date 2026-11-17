@@ -3373,8 +3373,9 @@ register beside them under this grant.
   system's answer: the subscription, or `AbortError` with the system's
   message.
 - `pushSubscription()` reads `{apple: {deviceToken}}`, the token's bytes in
-  lowercase hex, on Android `{android: {installationId}}`, the app's Firebase
-  Installation ID once FCM has registered it, or null. It never asks: its
+  lowercase hex, or on Android `{android: {installationId, token, appId}}`, the
+  Firebase Installations ID, FCM registration token and installed package id.
+  Otherwise it reads null. It never asks: its
   first read in a launch registers once when permission is already granted, as
   Apple asks of every launch (on Android, once the app has subscribed), and a
   new token or ID is a new value, which the app sends to its server again. Read
@@ -3403,7 +3404,7 @@ opens: reduced by `location_of` to the app's own location whatever its scheme
 or origin, never through the app's `protocol_handlers`. Nothing else of the
 payload is read and no event is raised; without `navigate` the app only comes
 forward. A server writes that string, so a route must not act on being opened.
-Exact runs no Contract or TypeScript when a push arrives: `content-available`
+On Apple, Exact runs no Contract or TypeScript when a push arrives: `content-available`
 does nothing and the `remote-notification` background mode is refused. An iOS
 or iPadOS app may instead put one app-authored Swift
 `UNNotificationServiceExtension` subclass named `NotificationService` under
@@ -3455,18 +3456,18 @@ names (for a file CI writes). The build reads it without the Google Services
 Gradle plugin. A release build without it is refused
 (`push-google-services-missing`); a development build says so and reads
 `available: false`. Firebase starts at the package's first call, not with the
-process. The app is addressed by its installation ID
-(`firebase_messaging_installation_id_enabled`, Firebase's registration since
-firebase-messaging 25.1.0), and FCM registers it at `subscribePush()`, then
-once a launch at the first read that finds an ID, never before the app
-subscribes. `subscribePush()` waits up to a minute for FCM's answer, then is
-refused `AbortError`.
+process. `subscribePush()` obtains the FCM registration token with `getToken()`
+and the installation ID with Firebase Installations. Messaging uses token mode
+(`firebase_messaging_installation_id_enabled=false`), since Firebase's FID
+messaging mode disables the token Expo needs. `onNewToken` keeps and announces
+rotations. Registration is checked once per launch after the app subscribes;
+`subscribePush()` waits up to a minute, then refuses `AbortError`.
 
-The server sends an FCM v1 notification message to the installation ID
-(`fid`), with `navigate` in `data`:
+The server sends an FCM v1 notification message to `android.token`, with
+`navigate` in `data`:
 
 ```json
-{ "message": { "fid": "…",
+{ "message": { "token": "…",
   "notification": { "title": "Delayed", "body": "The 9:41 now leaves at 9:52" },
   "android": { "priority": "high", "notification": { "channel_id": "delays", "tag": "trip-941" } },
   "data": { "navigate": "/trips/941" } } }
@@ -3478,9 +3479,105 @@ shows it), on its `channel_id` when the app declares that channel
 icon. Leave out `icon` and `color`: Firebase honours them for a notification it
 shows. A `tag` replaces a shown notification with that tag, a local one
 included, and `closeNotification(tag)` closes it. Its tap opens `navigate`,
-warm or at launch, as on Apple; the other `data` keys are not read. A data
-message (no `notification`) shows nothing and raises nothing: it is no wake
-on Android yet.
+warm or at launch, as on Apple; the other `data` keys are not read.
+
+A data-only message raises `push` on the root with `PushEvent = {data: string}`:
+`JSON.parse(e.data)` reads the FCM `data` map. It uses the live session, or
+boots a headless session with no activity. Boot, queueing and handler work
+share ten seconds from receipt; at expiry its pending work is cancelled.
+The handler has origin `wake`, even in front: it may fetch and post a local
+notification under an existing grant, but cannot ask permission or open UI.
+A notification message follows the presentation path above and raises no
+`push` event. Delivery remains subject to FCM, Doze and the phone's battery
+policy; a server must keep alerts available for the app to reconcile.
+
+`getExpoPushTokenAsync(subscription, manifest)` from `@exact/push/expo`
+exchanges `android.token` through Expo's service. Pass the app's imported
+`app.json`: `extra.eas.projectId` names its EAS project. The subscription's
+`android.appId` supplies the installed package id, including normalization and
+the selected variant's suffix. It returns
+`{type: "expo", data: "ExponentPushToken[…]"}`.
+Grant `net.fetch https://exp.host`, exchange again when the live subscription
+changes, and send the Expo token to your server. The [push recipe](recipes/push.md)
+includes the handler, channel and backend send.
+
+### Android Expo push example
+
+The Contract subscribes from a press and hears the Push API's `push` event
+on its root. A live subscription refreshes the token exchange after rotation.
+Merge these declarations and the root's `push` handler into the app:
+
+```text
+use subscribePush, pushSubscription, PushSubscription, push, PushEvent from "@exact/push"
+
+shape ExpoToken
+  type: string
+  data: string
+
+component App
+  resource subscription = pushSubscription() as shape option<PushSubscription>
+  resource expoToken = exchangePush(subscription) as shape ExpoToken
+  mutation subscribed as shape PushSubscription
+  mutation delivered as shape bool
+  action subscribe
+    send subscribed = subscribePush()
+  action received(e: PushEvent)
+    send delivered = receivePush(e.data)
+  view
+    main push=received
+      button press=subscribe
+        text "Enable alerts"
+```
+
+In `app.ts`, keep the app's literal `appId` and add the grants and answer
+branches below. Replace the backend origin with the app's own. The exchange
+uses the same request fields and JSON header as
+[expo-notifications](https://github.com/expo/expo/blob/main/packages/expo-notifications/src/getExpoPushTokenAsync.ts).
+It returns `{type: "expo", data}`; store `data` on the backend for this guard.
+An offline exchange throws; refresh the resource to retry.
+
+```ts
+import type { Answer } from './app.contract.d.ts';
+import manifest from './app.json';
+import { getExpoPushTokenAsync } from '@exact/push/expo';
+import { showNotification } from '@exact/notifications';
+
+export const appId = 'com.example.guard';
+export const grants = `device.notifications purpose.notifications
+device.push
+net.fetch https://exp.host
+net.fetch https://guard.example`;
+
+export const answer: Answer = async (source, args) => {
+  if (source === 'exchangePush') {
+    const [subscription] = args;
+    if (!subscription?.android) return { type: 'expo', data: '' };
+    const token = await getExpoPushTokenAsync(subscription, manifest);
+    const saved = await fetch('https://guard.example/push-token', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ token: token.data }),
+    });
+    if (!saved.ok) throw new Error('Could not save the push token');
+    return token;
+  }
+  if (source === 'receivePush') {
+    const envelope = JSON.parse(args[0]);
+    // Expo puts the sender's data in body and its visible text in title/message.
+    const alert = JSON.parse(envelope.body || '{}');
+    await showNotification({ title: envelope.title || 'Urgency',
+      body: envelope.message, tag: alert.id, navigate: alert.navigate,
+      android: { channelId: 'urgencies' } });
+    return true;
+  }
+  throw new Error(`Unknown source ${source}`);
+};
+```
+
+The handler may also refresh the urgencies resource. Await notification and
+network work inside its mutation so the wake owns it. A socket's
+`exactStream` mapper cannot post; have its mapped counter key a resource
+whose answer calls `showNotification` instead.
+
 
 Under the agent nothing reaches APNs or FCM, and `pushSubscription()` reads null
 while the permission is not granted, as on the phone. A subscribe while
@@ -3489,11 +3586,11 @@ while the permission is not granted, as on the phone. A subscribe while
 @t '{"apple":{"deviceToken":"ab12"}}'`); `prefer extension
 push.pushSubscription=<json>` sets the value later, as a rotation.
 
-On Android, run under the agent only: the substitute's ticket and rotation,
-and a build carrying Firebase's client with no start-up provider and no
-`google-services.json`, whose calls are refused as above. Not yet run: a
-registration with a Firebase project and a send through FCM to `fid`, in
-front, in the background and after the process ended, and on a phone.
+Android's data-message routing, deadline, registration and token rotation have
+JVM coverage; Expo's exchange request is checked with mocked fetch. Real
+registration and FCM/Expo delivery need the app's Firebase project and have
+not been verified here. The [device checklist](../packages/push/test/checklist.md)
+names the foreground, background and killed-process checks.
 
 Run on an iOS 27 simulator: the real prompt; a registration the simulator
 answered with a token; a relaunch that only reads `pushSubscription()`
