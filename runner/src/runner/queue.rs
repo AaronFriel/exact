@@ -465,6 +465,30 @@ pub(super) enum Asked {
 }
 
 impl<D: DataSource> Runner<D> {
+    /// What answers one send, by what owns `source`. A send asked at once
+    /// and one kept until the data source was ready (`send_one`) both come
+    /// here, so a kept send reaches the same owner.
+    pub(super) fn route_send(
+        &mut self,
+        target: Target,
+        source: &str,
+        args: &[Value],
+    ) -> Result<super::Answer, DataError> {
+        if Self::activity_send(source) {
+            self.activity_request(source, args)
+        } else if self.plan.module_named(source).is_some() {
+            // A native module's send (LLP 1133.002 D13): the runner's substitute.
+            self.module_send(target, source, args)
+        } else if self.plan.fetch_named(source).is_some() {
+            // A source declared in Contract (LLP 1162.001 D6).
+            self.fetch_answer(source, args)
+        } else {
+            let answer = self.answer_mutation(target, source, args);
+            let answer = self.single_answer(target, answer);
+            self.refuse_locked(answer)
+        }
+    }
+
     /// Ask the source for one send (`target`, a mutation's or one of a
     /// parallel mutation's sends; LLP 1016 §4): an answer now must conform
     /// to the mutation's shape.
@@ -485,19 +509,7 @@ impl<D: DataSource> Runner<D> {
         self.snapshot_sockets();
         self.store.set_clock_ms(self.now_ms);
         self.mutation_requests += 1;
-        let answer = if Self::activity_send(source) {
-            self.activity_request(source, args)
-        } else if self.plan.module_named(source).is_some() {
-            // A native module's send (LLP 1133.002 D13): the runner's substitute.
-            self.module_send(target, source, args)
-        } else if self.plan.fetch_named(source).is_some() {
-            // A source declared in Contract (LLP 1162.001 D6).
-            self.fetch_answer(source, args)
-        } else {
-            let answer = self.answer_mutation(target, source, args);
-            let answer = self.single_answer(target, answer);
-            self.refuse_locked(answer)
-        };
+        let answer = self.route_send(target, source, args);
         // What its source staged on sockets goes out only with an answer
         // now that conforms (LLP 1016.000 D7); what the turns after its
         // source sent goes whatever it answers (the amendment of 2026-10-18).
