@@ -520,7 +520,11 @@ impl<D: DataSource> Host<D> {
         // is configured and whether or not anything was picked (D7).
         crate::picker::know_roots(data.app_id());
         if let Some(store) = &secrets {
-            store.seed_snapshot(carried.map_or(snapshot.as_slice(), |carried| &carried.store));
+            store.seed_snapshot(
+                carried
+                    .filter(|c| !c.fresh_state)
+                    .map_or(snapshot.as_slice(), |carried| &carried.store),
+            );
         }
         if let Some(shared) = secrets.as_ref().and_then(|store| store.shared_secrets()) {
             data.configure_secrets(shared)

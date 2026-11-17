@@ -5,7 +5,7 @@ import { beatAfter, timerOrder } from './beat.js';
 import { commit, journal, say, Poisoned, Rev, Sched, Clocked, Writes, Listener, Now, read, Invocation, Origin } from './rt.js';
 import { Mutations, Ticket } from './resources.js';
 import { start } from './mount.js';
-export const clock = { now: 0, timers: [], agent: false, epoch: 0 };
+export const clock = { now: 0, timers: [], agent: false, generation: 1, epoch: 0 };
 let Timing = false,
   Instant = null;
 // Where a `then` or queue `next` armed now is due: on the wall clock, a callback's own place (the timers RFC, D2).

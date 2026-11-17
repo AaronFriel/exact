@@ -257,7 +257,12 @@ A script drives the same session in JavaScript: `const s = await open({ host:
 `s.resize(width, height)`, `s.prefer({ … })`, `s.perf(target)` and `s.close()` — the
 CLI's operations by the same names. Their replies are the CLI's `--json` output: `s.tree()`
 is `{ roots, nodes: [{ id, type, depth, props: { testId, text, value, … }, children }] }`,
-every node in one preorder list (`depth` and `children` give the nesting), and `s.state()` is `{ slots, derives, resources,
+every node in one preorder list (`depth` and `children` give the nesting),
+with `generation`, `epoch`, `incarnation` and `clock` on replies. `generation` advances
+once per committed replacement or carried reboot; `epoch` continues across it, while
+a new kernel can repeat `incarnation`. `state.replacement` names root slots dropped
+because they are gone (`no place`) or their type changed (`type changed`).
+`s.state()` is `{ slots, derives, resources,
 pending, … }`. `app` is the app's name; an app outside the Exact
 checkout is found through `EXACT_APP_DIR` (its directory), as its own `exact.mjs agent`
 sets it, so a script run with plain `bun` sets it to the app's directory too

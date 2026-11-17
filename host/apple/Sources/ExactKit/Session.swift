@@ -339,7 +339,8 @@ public final class ExactSession {
     public private(set) var state: State = .created {
         didSet { if state != oldValue { let changed = state; app.deliver { [weak self] in guard let self else { return }; delegate?.exactSession(self, didChange: changed) } } }
     }
-    /// Bumped by every reboot; a callback from an older generation is dropped.
+    /// The agent's session generation, advanced by each accepted boot or replacement.
+    /// A callback from an older generation is dropped.
     public var generation: Int { runtime.completionLease.generation }
     let storeRefresh = SessionStoreRefresh()
     var activatedGeneration: Int?

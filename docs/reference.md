@@ -2066,6 +2066,22 @@ publish whose file would pass its bound is refused with the same numbers.
 Every client checks the index against the envelope's card before it reads a
 card, and a signed head covers the index through its digest.
 
+Agent replies carry `generation`, `epoch`, `incarnation` and `clock` (LLP 1029.000.002 D10).
+`generation` starts at 1 and advances once for each committed replacement or
+reboot, including a return to an earlier plan. A refused candidate leaves it unchanged.
+The JS target carries it through its development document reload. `epoch` counts commits
+that change the kernel and continues across replacements. `incarnation` counts resets
+of one kernel; a replacement creates another kernel, so its incarnation can repeat.
+Use `generation` to wait for a replacement. The terminal's JSON inspection replies
+(`layout`, `plan`, `runner-tree` and `node`) carry these tags too.
+
+`state.replacement` is null before a replacement. Afterwards it reports `at`, the
+replacement's clock in milliseconds, and `dropped`, the root slots that could not carry.
+Each entry has `what: "state"`, `name`, and `why`: `"no place"` when the slot is gone,
+or `"type changed"` when its value does not fit the new declaration. The replacement's
+first journal line gives the same report. Component state, view identity, scroll,
+selection, composition and Undo preservation are later pieces of that LLP.
+
 Agent sessions use `exactTime()` launch facts `seed: 1` (LLP 1069.007), `locale: "en-US"`,
 `timeZone: "UTC"` and `epochAtZero` 2026-01-01T00:00:00Z (LLP 1027.000.000 D3, with the
 zone's `utcOffset` at that instant, answered again when the virtual date crosses a DST change) on every host. Override them at session setup with

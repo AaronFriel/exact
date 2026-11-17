@@ -221,12 +221,14 @@ impl ResourceState {
 enum Seed<'a> {
     /// The plan's initial state.
     Fresh,
+    /// Fresh state, keeping a running session's sequence.
+    Reboot(&'a Carried),
     /// Fresh state evaluated at the supplied render clock.
     At(f64),
     /// A reload's carried state (LLP 1007 §6).
     Carried(&'a Carried),
     /// A rendered document's answers (LLP 1048.000 D6).
-    Checkpoint(&'a Checkpoint),
+    Checkpoint(&'a Checkpoint, Option<&'a Carried>),
 }
 
 /// A request the host is running: the ticket its reply carries, what it
@@ -349,6 +351,8 @@ pub struct Runner<D: DataSource> {
     data: D,
     bake_warnings: Vec<String>,
     kernel: Kernel,
+    generation: u64,
+    replacement: Option<carry::Replacement>,
     slots: Vec<Value>,
     derives: Vec<Option<Value>>,
     resources: Vec<resources::ResourceRow>,
@@ -633,34 +637,6 @@ impl<D: DataSource> Runner<D> {
         .map(Runner::linking_every_device)
     }
 
-    /// Boot a new plan with the state of an old runner (a dev reload that
-    /// keeps its place — LLP 1007 §6). The tree, ids, timers, and every
-    /// derive are fresh; only slots, matching resources, and the clock are
-    /// taken, and each only where it still fits the new plan, so carried
-    /// state can never be why a boot fails. Nothing compiled into the plan
-    /// is trusted over carried state.
-    pub fn boot_carrying(
-        plan: Plan,
-        data: D,
-        kernel: Kernel,
-        carried: &Carried,
-        viewport: crate::Viewport,
-        launch: &str,
-    ) -> Result<Runner<D>, RunnerError> {
-        Runner::boot_inner(
-            RunnerLinks::ALL,
-            plan,
-            data,
-            kernel,
-            Seed::Carried(carried),
-            carried.store.clone(),
-            Default::default(),
-            viewport,
-            launch,
-        )
-        .map(Runner::linking_every_device)
-    }
-
     #[allow(clippy::too_many_arguments)] // the host boot facts
     fn boot_inner(
         links: RunnerLinks,
@@ -690,11 +666,19 @@ impl<D: DataSource> Runner<D> {
             Seed::Carried(carried) => Some(carried),
             _ => None,
         };
+        let sequence = match seed {
+            Seed::Carried(c) | Seed::Reboot(c) => Some(c),
+            Seed::Checkpoint(_, sequence) => sequence,
+            _ => None,
+        };
+        if let Some(c) = sequence {
+            kernel.continue_epoch(c.epoch);
+        }
         let now_ms = match seed {
-            Seed::Fresh => crate::time::launch_clock(),
+            Seed::Fresh | Seed::Reboot(_) => crate::time::launch_clock(),
             Seed::At(now_ms) => now_ms,
             Seed::Carried(carried) => carried.now_ms,
-            Seed::Checkpoint(checkpoint) => checkpoint.now_ms,
+            Seed::Checkpoint(checkpoint, _) => checkpoint.now_ms,
         };
         if !now_ms.is_finite() {
             return Err(RunnerError::NonFiniteClock);
@@ -949,6 +933,12 @@ impl<D: DataSource> Runner<D> {
             copied_at_checkpoint: 0,
             settled: None,
             derive_store_dependent: Vec::new(),
+            generation: sequence.map_or(1, |c| {
+                c.generation
+                    .checked_add(1)
+                    .expect("session generation exhausted")
+            }),
+            replacement: None,
             journal: std::collections::VecDeque::new(),
             console: Default::default(),
             faults: faults::Faults::from_env().map_err(RunnerError::InvalidFaults)?,
@@ -963,6 +953,7 @@ impl<D: DataSource> Runner<D> {
             fragment_warned: Default::default(),
             conformed: Default::default(),
         };
+        runner.record_replacement(carried);
         runner.init_slots(carried, launch)?;
         runner.carry_modes(carried.map_or(&[], |c| &c.modes));
         runner.ask_kept_scheme();
@@ -1003,7 +994,7 @@ impl<D: DataSource> Runner<D> {
         // @ref LLP 1048.000 D6 — a document's answers seed their resources.
         // The device's own store is an input its render never had.
         let (seeded, mut again) = match seed {
-            Seed::Checkpoint(checkpoint) => runner.seed_checkpoint(checkpoint),
+            Seed::Checkpoint(checkpoint, _) => runner.seed_checkpoint(checkpoint),
             _ => (vec![false; runner.resources.len()], Vec::new()),
         };
         // A carried answer of a stream still open, as a checkpoint's.
@@ -1035,7 +1026,7 @@ impl<D: DataSource> Runner<D> {
         // initial state, and the carried state is not that.
         runner.settle(carried.is_none())?;
         let note = match seed {
-            Seed::Checkpoint(checkpoint) => runner.end_checkpoint_seeding(checkpoint, &seeded),
+            Seed::Checkpoint(checkpoint, _) => runner.end_checkpoint_seeding(checkpoint, &seeded),
             _ => String::new(),
         };
         runner.journal_kept_seeds();

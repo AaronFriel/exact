@@ -673,8 +673,8 @@ export const classifications = [
     ["render:host/render/src/requests.rs", "render_with_at"],
     ["render:host/render/src/serve.rs", "document expire_renders Server::addr Server::bind Server::run Server::stopper Stopper::stop"],
     ["render:host/render/src/source.rs", "Anonymous::new"],
-    ["runner:runner/src/runner.rs", "Runner::auth_mut Runner::boot Runner::boot_carrying Runner::data Runner::kernel_mut Runner::set_full_evaluation Runner::set_row_reuse"],
-    ["runner:runner/src/runner/carry.rs", "Runner::carry"],
+    ["runner:runner/src/runner.rs", "Runner::auth_mut Runner::boot Runner::data Runner::kernel_mut Runner::set_full_evaluation Runner::set_row_reuse"],
+    ["runner:runner/src/runner/carry.rs", "Runner::boot_carrying Runner::carry Runner::reboot_sequence Carried::with_validated_answers"],
     ["runner:runner/src/runner/checkpoint.rs", "Runner::boot_checkpoint Runner::boot_checkpoint_linked"],
     ["runner:runner/src/runner/commit.rs", "Runner::set_inline_geometry"],
     ["runner:runner/src/runner/console.rs", "Runner::set_console"],
@@ -1280,6 +1280,8 @@ export const classifications = [
     "The named public runner-crate source is the inspection API or its value/admission helper. The declaration reads or reports the current session. It does not establish a durable operation.", [
     ["runner:runner/src/agent.rs", "base64 error field_bool field_num field_str frames handle holds logs node num quote shown_value state tags tree typed_json unbase64 untyped_json"],
     ["runner:runner/src/agent/row.rs", "row_json"],
+    ["runner:runner/src/agent/tree.rs", "tagged"],
+    ["runner:runner/src/runner/carry.rs", "Runner::generation"],
     ["runner:runner/src/frame_health.rs",
       "applied capture context create destroy distribution exact_frame_health_applied exact_frame_health_capture exact_frame_health_context exact_frame_health_create " +
       "exact_frame_health_destroy exact_frame_health_distribution exact_frame_health_history_status exact_frame_health_hitch exact_frame_health_record " +
