@@ -7058,7 +7058,10 @@ presentation to land. The status bar hides and shows at once unless the
 winning declaration has `status-bar-animation="fade"` (when none wins any more,
 the one that went); a style change still fades by its own winner's. On a phone with no notch or Dynamic Island the status bar's 20 pt
 leave the safe area, so the content of a route moves up to the screen's top;
-elsewhere the top inset stays and nothing moves. On Android it hides the
+elsewhere the top inset stays, as the home indicator's does at the bottom, and
+nothing moves: a route whose content must reach the screen's edges (the game's
+canvas) takes `-exact-safe-area="none"` and places its controls with
+`var(--exact-safe-area-inset-*)`. On Android it hides the
 status and navigation bars (immersive mode): a swipe from the screen's edge
 shows them over the page for a moment, and the safe area loses the bars'
 insets (the display cutout's stay), so content laid out against it moves into
