@@ -47,6 +47,13 @@ let terminalRestoreReported = false;
 const restoreJournal = [];
 
 const exact = globalThis.exact;
+const motionQuery = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)');
+const reducedMotion = () => motionQuery?.matches === true;
+motionQuery?.addEventListener('change', () => {
+  if (!loaded || recoveringDevice || terminalDevice || trapped()) return;
+  gpu.gpu_reduced_motion(reducedMotion());
+  schedule();
+});
 function checkSurfaceOwners(module) {
   const owners = Object.entries(exact.compat?.inputs?.gpuModules ?? {});
   if (stem !== 'gpu' || !owners.length) return;
@@ -376,9 +383,10 @@ function recoverDevice() {
   recoveringDevice = (async () => {
     const outcome = pendingCutover?.module === module ? pendingCutover.outcome : JSON.parse(await module.gpu_recover(new Uint32Array(entries.map(e => e.id)), staged.map(([,e]) => e.el)));
     if (gpu !== module) { for (const [, e] of staged) e.el.remove(); return; }
+    if (outcome.status === "healthy" || outcome.status === "recovered") module.gpu_reduced_motion(reducedMotion());
     if (outcome.status === "healthy") {
       for (const [, e] of staged) e.el.remove();
-      api.recovery = outcome; resetRecovery(); return;
+      api.recovery = outcome; resetRecovery(); schedule(); return;
     }
     if (outcome.status === "no device") {
       for (const [, e] of staged) e.el.remove();
@@ -1311,6 +1319,7 @@ async function swap(version) {
     const rows = await loadShaders(next);
     for (const [name, text] of rows) if (!await next.gpu_shader_check(name, text)) throw new Error(next.gpu_error());
     replaceShaders(rows, next);
+    next.gpu_reduced_motion(reducedMotion());
     // A canvas context belongs to one device. Stage on detached replacement
     // canvases; the old canvases and their worlds remain untouched until commit.
     // No await from carry through cutover; input cannot arrive between them.
@@ -1376,6 +1385,7 @@ try {
   await gpu.gpu_load();
   if (exact.now) gpu.gpu_seekable(true);
   replaceShaders(await loadShaders(gpu));
+  gpu.gpu_reduced_motion(reducedMotion());
   api.version = version;
   loaded = true;
 } catch (error) {

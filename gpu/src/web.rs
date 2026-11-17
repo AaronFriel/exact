@@ -401,6 +401,11 @@ pub fn seekable(on: bool) {
     with(|m| m.set_seekable(on));
 }
 
+/// Set the host's motion preference for every canvas.
+pub fn reduced_motion(on: bool) {
+    with(|m| m.set_reduced_motion(on));
+}
+
 /// The display's frame period in milliseconds (0 = unknown), for every frame after.
 pub fn period(period_ms: f64) {
     with(|m| m.set_period(period_ms));
@@ -690,6 +695,11 @@ macro_rules! module {
         #[::wasm_bindgen::prelude::wasm_bindgen]
         pub fn gpu_seekable(on: bool) {
             $crate::web::seekable(on)
+        }
+        /// Set the host's motion preference for every canvas.
+        #[::wasm_bindgen::prelude::wasm_bindgen]
+        pub fn gpu_reduced_motion(on: bool) {
+            $crate::web::reduced_motion(on)
         }
 
         /// The display's frame period in milliseconds, 0 while unknown.

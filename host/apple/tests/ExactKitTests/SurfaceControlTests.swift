@@ -15,7 +15,26 @@ private var replacements = 0
 var controlEvents: [[String: Any]] = []
 private var boundObjects: [NSDictionary] = []
 private var boundJSON: [Data] = []
+private var motionPreferences: [Bool] = []
 final class SurfaceControlTests: XCTestCase {
+    func testGpuModuleFollowsTheAgentMotionPreference() {
+        let previous = DisplayPreferences.agent
+        defer { DisplayPreferences.agent = previous }
+        DisplayPreferences.agent = (true, false)
+        motionPreferences = []
+        let (session, _, _) = fixture(reducedMotion: { motionPreferences.append($0) })
+        defer { session.destroy() }
+        XCTAssertEqual(motionPreferences, [true])
+        DisplayPreferences.agent = (false, false)
+        waitForMainQueue()
+        XCTAssertEqual(motionPreferences, [true, false])
+        DisplayPreferences.agent = (false, true)
+        waitForMainQueue()
+        XCTAssertEqual(motionPreferences, [true, false])
+        DisplayPreferences.agent = (true, true)
+        waitForMainQueue()
+        XCTAssertEqual(motionPreferences, [true, false, true])
+    }
     func testArchivedGpuFrameworksKeepTheBakedDigestAndDevelopmentDylibPath() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -38,7 +57,7 @@ final class SurfaceControlTests: XCTestCase {
         }
     }
     override class func setUp() { super.setUp(); ExactSurfaces.install() } // LLP 1047.001 D4
-    func fixture() -> (ExactSession, NodeView, NodeView) {
+    func fixture(reducedMotion: GpuModule.SeekableFn? = nil) -> (ExactSession, NodeView, NodeView) {
         #if os(macOS)
         _ = NSApplication.shared
         #endif
@@ -55,6 +74,7 @@ final class SurfaceControlTests: XCTestCase {
             wantsInput: { _ in 1 }, input: { _, p, n in
                 controlEvents.append((try? JSONSerialization.jsonObject(with: Data(bytes:p!, count:n))) as? [String: Any] ?? [:]); return 0
             }, messages: nil, published: nil, agent: { _, _, _ in recoveryLength }, outPtr: { UnsafePointer(recoveryReply) })
+        if let reducedMotion { m.followReducedMotion(reducedMotion) }
         s.surfaceHost.modules[""] = m; s.surfaceHost.attempted = [""]
         let canvas = NodeView(id:100, kind:"canvas", presenter:s.presenter)
         let button = NodeView(id:101, kind:"button", presenter:s.presenter)

@@ -340,6 +340,13 @@ a map or still mapped; each copied slot starts its map in `submitted()`.
 
 ## Frame pacing and timing
 
+`Surface::reduced_motion` receives the person's motion preference when the
+surface is created and whenever it changes. Hosts call
+`gpu_reduced_motion(on)` with the same `prefersReducedMotion` value they give
+the runner, including the agent's `prefer prefers-reduced-motion reduce`.
+A change marks every canvas in that module dirty. The surface decides how
+to honor the preference (LLP 1181 D7).
+
 A surface that rests returns `false` from `render`; the host then asks for no
 frame until the canvas is dirty (an input, a bind, an asset), its box or scale
 changes, or the agent's clock moves. `Surface::max_fps` caps its drawn frames (0

@@ -184,6 +184,11 @@ pub(super) fn fixture() -> (Probe, Value) {
 #include <stdio.h>
 #include <string.h>
 void gpu_load_headless(void) {}
+static uint32_t motion_calls;
+static bool reduced_motion;
+void gpu_reduced_motion(bool on) { motion_calls++; reduced_motion = on; }
+uint32_t test_motion_calls(void) { return motion_calls; }
+bool test_reduced_motion(void) { return reduced_motion; }
 static uint32_t tier_code = 2, retiers;
 uint32_t gpu_tier(uint32_t code) { if (code < 3) tier_code = code; return tier_code; }
 void gpu_retier(void) { retiers++; }
@@ -780,6 +785,49 @@ fn the_page_fact_follows_the_modules_gpu_tier() {
     assert_eq!(p.host.runner().page().gpu_tier(), "mid");
     drop(p);
     std::fs::remove_dir_all(path.parent().unwrap()).unwrap();
+}
+
+#[test]
+fn gpu_modules_follow_the_runner_motion_preference() {
+    let (path, compat) = fixture();
+    let plan = crate::test_plan("component App\n  view\n    box\n");
+    let (mut p, error) =
+        Presenter::boot(&plan, (), (100., 100.), 1., path.parent().unwrap().into()).unwrap();
+    assert!(error.is_none(), "{error:?}");
+    let reply = crate::agent::handle(
+        &mut p,
+        r#"{"op":"prefer","media":{"prefers-reduced-motion":"reduce"}}"#,
+    );
+    assert!(!reply.contains("error"), "{reply}");
+    let abi = Abi::open_path(&path, &compat, "").unwrap();
+    // SAFETY: the C fixture's own observers, alive until the presenter drops.
+    let (calls, reduced) = unsafe {
+        (
+            *abi.library
+                .get::<unsafe extern "C" fn() -> u32>(b"test_motion_calls")
+                .unwrap(),
+            *abi.library
+                .get::<unsafe extern "C" fn() -> bool>(b"test_reduced_motion")
+                .unwrap(),
+        )
+    };
+    p.surfaces.abis.insert(String::new(), abi);
+    p.sync_surfaces();
+    assert_eq!(unsafe { calls() }, 1);
+    assert!(unsafe { reduced() });
+    for (value, count, expected) in [
+        ("no-preference", 2, false),
+        ("no-preference", 2, false),
+        ("reduce", 3, true),
+    ] {
+        let reply = crate::agent::handle(
+            &mut p,
+            &format!(r#"{{"op":"prefer","media":{{"prefers-reduced-motion":"{value}"}}}}"#),
+        );
+        assert!(!reply.contains("error"), "{reply}");
+        assert_eq!(unsafe { calls() }, count);
+        assert_eq!(unsafe { reduced() }, expected);
+    }
 }
 
 /// A reload renumbers the tree from 1, so the canvas's old view id can name

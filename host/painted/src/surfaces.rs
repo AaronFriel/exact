@@ -58,6 +58,7 @@ struct Abi {
     output_error: std::cell::RefCell<Option<String>>,
     rendered: bool,
     device_loaded: bool,
+    reduced_motion: std::cell::Cell<Option<bool>>,
     #[cfg(any(target_os = "android", all(test, unix)))]
     initialized: bool,
     shaders: shaders::Pack,
@@ -124,6 +125,7 @@ impl Abi {
             shaders: Default::default(),
             rendered: std::env::var("EXACT_GPU_RENDER").as_deref() == Ok("1"),
             device_loaded: false,
+            reduced_motion: std::cell::Cell::new(None),
             #[cfg(any(target_os = "android", all(test, unix)))]
             initialized: false,
             symbols: Default::default(),
@@ -132,6 +134,7 @@ impl Abi {
             for name in [
                 "gpu_load_headless",
                 "gpu_recover",
+                "gpu_reduced_motion",
                 "gpu_child_view",
                 "gpu_children_count",
                 "gpu_children_mode",
@@ -227,6 +230,15 @@ impl Abi {
         #[cfg(not(target_os = "android"))]
         let _ = load;
         Ok(abi)
+    }
+
+    fn reduced_motion(&self, reduce: bool) -> bool {
+        if self.reduced_motion.replace(Some(reduce)) == Some(reduce) {
+            return false;
+        }
+        // SAFETY: checked at load; gpu/src/native.rs declares this signature.
+        unsafe { self.symbol::<unsafe extern "C" fn(bool)>(b"gpu_reduced_motion")(reduce) };
+        true
     }
     fn load_device(&mut self) -> Result<(), String> {
         if unsafe { self.symbol::<unsafe extern "C" fn() -> u32>(b"gpu_load")() } != 0 {
@@ -543,6 +555,14 @@ pub(crate) struct Surfaces {
 /// Web: glue.js POST_BOUND (gpu-glue.js reads it); Apple: Canvases.postBound.
 pub(crate) const POST_BOUND: usize = 64;
 impl Surfaces {
+    pub(crate) fn reduced_motion(&self, reduce: bool) -> bool {
+        let mut changed = false;
+        for abi in self.abis.values() {
+            changed |= abi.reduced_motion(reduce);
+        }
+        changed
+    }
+
     fn lifecycle(&mut self, hidden: bool, interrupted: bool) {
         for canvas in self.canvases.values() {
             let abi = &self.abis[&canvas.artifact];
@@ -599,6 +619,7 @@ impl Surfaces {
         compat: &str,
         assets: &crate::image::Assets,
     ) -> bool {
+        self.reduced_motion(host.runner().viewport().preferences.reduced_motion);
         for c in self.canvases.values_mut() {
             let enabled = c.owner && host.runner().wants_canvas_performance(&c.name);
             if enabled != c.performance {
@@ -674,6 +695,7 @@ impl Surfaces {
                         }
                     }
                     period::give(&abi);
+                    abi.reduced_motion(host.runner().viewport().preferences.reduced_motion);
                     self.abis.insert(artifact, abi);
                 }
                 Err(e) => {

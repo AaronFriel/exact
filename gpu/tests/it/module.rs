@@ -1025,6 +1025,9 @@ fn lifecycle_and_clock_reach_surfaces_without_a_device() {
         fn clock(&mut self, seekable: bool) {
             self.events.push(format!("clock:{seekable}"));
         }
+        fn reduced_motion(&mut self, reduce: bool) {
+            self.events.push(format!("motion:{reduce}"));
+        }
         fn lifecycle(&mut self, event: Lifecycle) {
             self.events.push(format!("{event:?}"));
         }
@@ -1038,7 +1041,9 @@ fn lifecycle_and_clock_reach_surfaces_without_a_device() {
     };
     let mut m = Module::new(&REGISTRY);
     let live = m.create_headless("probe").unwrap();
-    assert_eq!(m.agent(live, "").unwrap(), "clock:false");
+    assert_eq!(m.agent(live, "").unwrap(), "clock:false,motion:false");
+    m.set_reduced_motion(true);
+    m.set_reduced_motion(true);
     m.set_seekable(true);
     m.set_seekable(true); // only changes are delivered
     let agent = m.create_headless("probe").unwrap();
@@ -1049,17 +1054,27 @@ fn lifecycle_and_clock_reach_surfaces_without_a_device() {
     }
     assert_eq!(
         m.agent(live, "").unwrap(),
-        "clock:false,clock:true,Hidden,Visible,Interrupted,Resumed,Activated"
+        "clock:false,motion:false,motion:true,clock:true,Hidden,Visible,Interrupted,Resumed,Activated"
     );
     assert_eq!(
         m.agent(agent, "").unwrap(),
-        "clock:true,Hidden,Visible,Interrupted,Resumed,Activated"
+        "clock:true,motion:true,Hidden,Visible,Interrupted,Resumed,Activated"
     );
     m.set_seekable(false);
     assert!(m.agent(agent, "").unwrap().ends_with("clock:false"));
+    m.set_reduced_motion(false);
+    for id in [live, agent] {
+        assert!(m.agent(id, "").unwrap().ends_with("motion:false"));
+    }
     exact_gpu::native::load_headless(&REGISTRY, "test-gpu");
+    exact_gpu::native::reduced_motion(true);
     let id = exact_gpu::native::create_headless("probe");
-    assert_eq!(exact_gpu::native::agent(id, ""), "clock:true");
+    assert_eq!(exact_gpu::native::agent(id, ""), "clock:true,motion:true");
+    exact_gpu::native::reduced_motion(false);
+    assert_eq!(
+        exact_gpu::native::agent(id, ""),
+        "clock:true,motion:true,motion:false"
+    );
     exact_gpu::native::unload();
 }
 

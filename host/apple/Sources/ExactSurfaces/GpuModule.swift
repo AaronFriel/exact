@@ -132,6 +132,24 @@ final class GpuModule {
     var period: PeriodFn?
 
     typealias SeekableFn = @convention(c) (Bool) -> Void
+    private var reducedMotion: SeekableFn?
+    private var lastReducedMotion: Bool?
+    private var preferenceObservers: [NSObjectProtocol] = []
+
+    func followReducedMotion(_ send: @escaping SeekableFn) {
+        reducedMotion = send
+        tellReducedMotion()
+        preferenceObservers = DisplayPreferences.observe { [weak self] in self?.tellReducedMotion() }
+    }
+
+    private func tellReducedMotion() {
+        let reduce = DisplayPreferences.reducedMotion
+        guard lastReducedMotion != reduce else { return }
+        lastReducedMotion = reduce
+        reducedMotion?(reduce)
+        for owner in canvases.allObjects { owner.session?.frames.requestCanvas() }
+    }
+
     typealias PeriodFn = @convention(c) (Double) -> Void
     typealias HostFrameFn = @convention(c) (Double, Double, Double, UInt32) -> Void
     typealias DueFn = @convention(c) (UInt32, Double) -> UInt32
@@ -245,6 +263,7 @@ final class GpuModule {
     }
 
     deinit {
+        DisplayPreferences.forget(preferenceObservers)
         #if os(macOS)
         if let deviceObserver { MTLRemoveDeviceObserver(deviceObserver) }
         #endif
@@ -305,7 +324,7 @@ final class GpuModule {
             guard let p = dlsym(handle, name) else { return nil }
             return unsafeBitCast(p, to: T.self)
         }
-        guard let load = sym("gpu_load", LoadFn.self), let create = sym("gpu_create", CreateFn.self), let bind = sym("gpu_bind", BindFn.self),
+        guard let load = sym("gpu_load", LoadFn.self), let reducedMotion = sym("gpu_reduced_motion", SeekableFn.self), let create = sym("gpu_create", CreateFn.self), let bind = sym("gpu_bind", BindFn.self),
               let render = sym("gpu_render", RenderFn.self), let flush = sym("gpu_flush", SyncFn.self), let dirty = sym("gpu_dirty", DirtyFn.self), let destroy = sym("gpu_destroy", DestroyFn.self),
               let texture = sym("gpu_texture", TextureFn.self), let childrenMode = sym("gpu_children_mode", WantsFn.self),
               let readback = sym("gpu_readback", ReadbackFn.self),
@@ -339,6 +358,7 @@ final class GpuModule {
         let tier = sym("gpu_tier", TierFn.self)
         if PageFacts.substituted { _ = tier?(PageFacts.agentGpuTier) }
         if load() != 0 { return .failure(GpuLoadError(message: "gpu_load: \(module.error())")) }
+        module.followReducedMotion(reducedMotion)
         if let tier, !PageFacts.substituted { PageFacts.gpuTier = tier(3) }
         if let tier, let retier = sym("gpu_retier", RetierFn.self) {
             PageFacts.retiers[artifact] = { code in _ = tier(code); retier() }

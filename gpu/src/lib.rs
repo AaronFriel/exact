@@ -235,6 +235,9 @@ pub trait Surface {
     /// Clock ownership, before first input and whenever it changes. A seekable
     /// chart/video uses explicit time and must not open a live device.
     fn clock(&mut self, _seekable: bool) {}
+    /// The person prefers reduced motion (CSS `prefers-reduced-motion: reduce`).
+    /// Told when the surface is made and whenever the preference changes.
+    fn reduced_motion(&mut self, _reduce: bool) {}
     /// Named inputs and their defaults, in bind order. Without `rest_arguments`,
     /// an empty declaration accepts positional inputs only. Names are resolved
     /// before `bind` runs.
@@ -540,6 +543,7 @@ pub struct Module {
     next: u32,
     error: String,
     seekable: bool,
+    reduced_motion: bool,
     period_ms: f64,
     /// The host's last display callback and the device's thermal state ([`pace`]).
     host: (HostTiming, ThermalState),
@@ -712,6 +716,7 @@ impl Module {
             next: 0,
             error: String::new(),
             seekable: false,
+            reduced_motion: false,
             period_ms: 0.0,
             host: Default::default(),
             open: None,
@@ -891,6 +896,7 @@ impl Module {
         self.next += 1;
         let id = self.next;
         surface.clock(self.seekable);
+        surface.reduced_motion(self.reduced_motion);
         if let Some(gpu) = &self.gpu {
             surface.device_ready(gpu.device.features());
             surface.color_space_granted(target::granted(presentation.as_ref().map(|(_, c)| c)));
@@ -987,6 +993,20 @@ impl Module {
         self.seekable = on;
         for inst in self.instances.values_mut() {
             inst.surface.clock(on);
+            inst.drain();
+        }
+    }
+
+    /// Tell every canvas the host's motion preference (LLP 1181 D7).
+    pub fn set_reduced_motion(&mut self, reduce: bool) {
+        if self.reduced_motion == reduce {
+            return;
+        }
+        self.flush();
+        self.reduced_motion = reduce;
+        for inst in self.instances.values_mut() {
+            inst.surface.reduced_motion(reduce);
+            inst.dirty = true;
             inst.drain();
         }
     }

@@ -87,7 +87,7 @@ test('browser frame scheduling delivers final submitted output through the compl
     const counts = globalThis.counts = {renders:0, submits:0, assetPolls:0};
     globalThis.arm = () => { armed = true; counts.assetPolls = 0; };
     export default function() {}
-    export function gpu_load() {} export function gpu_child_view() {}
+    export function gpu_load() {} export function gpu_child_view() {} export function gpu_reduced_motion() {}
     export function gpu_shader_names() { return '[]'; } export function gpu_shaders_clear() {}
     export function gpu_create() { return 1; } export function gpu_bind_at() { return true; }
     export function gpu_lifecycle() {} export function gpu_wants_input() { return false; }
