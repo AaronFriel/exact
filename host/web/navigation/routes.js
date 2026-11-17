@@ -612,22 +612,26 @@ function contentScroller(route) {
   }
   return null;
 }
-const clearInset = new WeakSet(), clearBars = new WeakMap();
-let barResized;
+const clearInset = new WeakMap(), clearBars = new WeakMap(), pendingBars = new Set();
+let barResized, barFrame = 0;
+function restoreBarInset(route) {
+  const kept = clearInset.get(route);
+  if (kept && route.style.getPropertyValue("--exact-safe-area-inset-top") === kept.css) {
+    if (kept.said) route.style.setProperty("--exact-safe-area-inset-top", kept.said, kept.priority);
+    else route.style.removeProperty("--exact-safe-area-inset-top");
+  }
+}
 /** A route that says `navigationBar="transparent"` lays its bar over its top, clear (neutral.css), as iOS gives the bar
  * a clear scroll-edge appearance and insets no content (NavigationBarIOS.swift `transparentBar`): the route's top inset,
  * `var(--exact-safe-area-inset-top)`, then includes the bar's height, and the bar is `scrolled` while content is under
- * it. A header iOS makes no bar of keeps its place. */
+ * it. A header iOS makes no bar of keeps its place. The height and the scroller's place are read from layout in the
+ * frame after the commit, every bar's before any inset is written, and nested insets compose in ancestor order. A
+ * ResizeObserver says when to read again, never what the height is: it reports no size for an inline header. */
 function clearBar(route) {
   if (!CLEAR_BARS) {
     return;
   }
   const header = headerOf(route), clear = !!header && route.getAttribute("data-navigationbar") === "transparent" && viewChildren(route)[0] === header && !asWritten(header);
-  if (clearInset.has(route)) {
-    clearInset.delete(route);
-    route.style.removeProperty("--exact-safe-area-inset-top");
-    route.style.removeProperty("--exact-bar-height");
-  }
   for (const el of viewChildren(route)) {
     if (el.hasAttribute("data-exact-clear") && !(clear && el === header)) {
       el.removeAttribute("data-exact-clear");
@@ -636,37 +640,152 @@ function clearBar(route) {
     }
   }
   if (!clear) {
+    if (clearInset.has(route)) {
+      restoreBarInset(route);
+      route.style.removeProperty("--exact-bar-height");
+      clearInset.delete(route);
+    }
+    pendingBars.delete(route);
     return;
   }
   if (!clearBars.has(header)) {
-    // The first clear bar starts what follows each one: its height, and whether content has scrolled under it.
-    if (barResized === undefined) {
-      barResized = watchClearBars();
-    }
+    barResized ??= watchClearBars();
     clearBars.set(header, route);
-    barResized?.observe(header);
+    header.setAttribute("data-exact-clear", "");
+    barResized?.observe(header, { box: "border-box" });
   }
-  const below = getComputedStyle(route).getPropertyValue("--exact-safe-area-inset-top") || "0px", height = header.offsetHeight;
-  clearInset.add(route);
-  route.style.setProperty("--exact-bar-height", `${height}px`);
-  route.style.setProperty("--exact-safe-area-inset-top", `calc(${below} + ${height}px)`);
-  barScrolled(route, header);
+  pendingBars.add(route);
+  if (!barFrame) barFrame = requestAnimationFrame(() => {
+    barFrame = 0;
+    measureBars();
+  });
 }
-const barScrolled = (route, header) => header.setAttribute("data-exact-clear", (contentScroller(route) ?? document.scrollingElement)?.scrollTop > 0 ? "scrolled" : "");
+function measureBars() {
+  const queued = new Set([...pendingBars].filter(route => route.isConnected));
+  pendingBars.clear();
+  // A nested route's inset includes its ancestors' resolved insets, even when its own bar has not resized.
+  for (const route of [...queued]) {
+    for (const header of route.querySelectorAll('[data-exact-clear]')) {
+      const inner = clearBars.get(header);
+      if (inner) queued.add(inner);
+    }
+  }
+  const routes = [...queued];
+  routes.sort((a, b) => a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1);
+  const facts = routes.map(route => {
+    const header = headerOf(route);
+    return clearBars.has(header) ? { route, header, height: header.offsetHeight, scrolled: (contentScroller(route) ?? document.scrollingElement)?.scrollTop > 0 } : null;
+  });
+  for (const fact of facts) {
+    if (!fact) continue;
+    const { route, header, height, scrolled } = fact;
+    // Lift only our own inset, after ancestors have published theirs. The author may have replaced it.
+    restoreBarInset(route);
+    const below = getComputedStyle(route).getPropertyValue("--exact-safe-area-inset-top") || "0px", inset = `calc(${below} + ${height}px)`;
+    clearInset.set(route, { css: inset, height,
+      said: route.style.getPropertyValue("--exact-safe-area-inset-top"),
+      priority: route.style.getPropertyPriority("--exact-safe-area-inset-top") });
+    route.style.setProperty("--exact-bar-height", `${height}px`);
+    route.style.setProperty("--exact-safe-area-inset-top", inset);
+    header.setAttribute("data-exact-clear", scrolled ? "scrolled" : "");
+  }
+}
 function watchClearBars() {
   document.addEventListener("scroll", () => {
-    for (const header of root.querySelectorAll("[data-exact-clear]")) {
-      clearBars.has(header) && barScrolled(clearBars.get(header), header);
+    const facts = [...root.querySelectorAll("[data-exact-clear]")].map(header => {
+      const route = clearBars.get(header);
+      return route && { header, scrolled: (contentScroller(route) ?? document.scrollingElement)?.scrollTop > 0 };
+    });
+    for (const fact of facts) {
+      if (fact) fact.header.setAttribute("data-exact-clear", fact.scrolled ? "scrolled" : "");
     }
   }, { capture: true, passive: true });
   return globalThis.ResizeObserver ? new ResizeObserver((entries) => {
+    // A header's first report follows the frame that measured it. A height already written is not measured again:
+    // writing an inset restyles its whole route.
     for (const { target } of entries) {
       const route = clearBars.get(target);
-      route?.isConnected && clearBar(route);
+      if (route?.isConnected && clearInset.get(route)?.height !== target.offsetHeight) {
+        pendingBars.add(route);
+      }
     }
+    measureBars();
   }) : null;
 }
-function appBarBack(nav, routes, index, split, shown) {
+/** What a projection reads before it writes any presentation: for each navigation root its stacks and the route each
+ * shows, the computed styles the presentation follows (kept as values, since computed styles are live), and `leaving`,
+ * the panels and routes it hides, which focus leaves. A root with no route to show has no `key` and is left as it is. */
+function readProjections(root, log) {
+  const projections = [...root.querySelectorAll("[navigationBack]")].map((nav) => {
+    const [list, panels] = tabsOf(nav);
+    if (TABS) {
+      // The authored placement is read with the sidebar's own rules lifted, which restyles the page (an embedded frame re-centres), so only when what places the bar may have changed: the wide breakpoint, the bar's parent or orientation, or the root's or the bar's class or inline display, flex direction, position or appearance (their class rules and inline style are what place them).
+      const isWide = wide(), said = [
+        isWide,
+        viewParent(list) === nav && list.getAttribute("aria-orientation"),
+        ...[nav, list].map((el) => el && [
+          el.className,
+          el.style.display,
+          el.style.flexDirection,
+          el.style.position,
+          el.style.appearance
+        ].join("|"))
+      ].join("/");
+      if (placed.get(nav) !== said) {
+        nav.removeAttribute("data-exact-sidebar");
+        nav.toggleAttribute("data-exact-sidebar", isWide && unsaidBar(nav, list));
+        placed.set(nav, said);
+      }
+    }
+    return { nav, list, panels, stacks: panels.length ? panels.map(routesIn) : [routesIn(nav)], leaving: [] };
+  });
+  // Placing a root's bar restyles the page, so every root is placed before any computed style is read.
+  for (const projection of projections) {
+    const { nav, panels, stacks } = projection, named = (k) => (route) => route.getAttribute("navigationKey") === k;
+    const declared = (k) => stacks.some((routes) => routes.some(named(k)));
+    let key = nav.getAttribute("navigationKey");
+    if (!declared(key)) {
+      if (refused.get(nav) !== key) {
+        refused.set(nav, key);
+        log(`navigationKey "${key}" matches no route among the root's children or those of the tabpanels its tablist names; the stack is unchanged`);
+      }
+      // @ref LLP 1035.001 D1 — left alone, less the routes that left the tree: the deepest of the stack last shown
+      // still declared is selected, so a closed sheet or a popped screen never leaves the route beneath it inert.
+      key = (shown.get(nav) ?? []).findLast(declared);
+      if (key === undefined) {
+        continue;
+      }
+    } else {
+      refused.delete(nav);
+    }
+    const at = stacks.findIndex((routes) => routes.some(named(key)));
+    const facts = stacks.map((routes, stack) => {
+      // The selected stack shows the route the root names; another keeps its top laid out.
+      const selected = stack === at ? routes.findIndex(named(key)) : routes.length - 1;
+      // A route pushed inside a sheet is presented as that sheet is: what the sheet covers shows beneath it.
+      const host = sheetAt(routes, selected), presented = host >= 0 ? host : selected;
+      const found = splitOf(routes), live = found.width && !sheet(routes[presented]);
+      return {
+        selected,
+        presented,
+        found,
+        live,
+        over: routes.map(overPage),
+        headers: BARS ? routes.map((route) => {
+          const header = headerOf(route);
+          return !!header && getComputedStyle(header).display !== "none";
+        }) : []
+      };
+    });
+    const leaving = [
+      ...panels.filter((_, index) => index !== at),
+      ...stacks.flatMap((routes, stack) => routes.filter((_, index) => index !== facts[stack].selected && !(facts[stack].live && index === 0)))
+    ];
+    Object.assign(projection, { key, at, facts, leaving });
+  }
+  return projections;
+}
+function appBarBack(nav, routes, index, split, shown, headerShown) {
   if (!BARS) {
     return;
   }
@@ -674,7 +793,6 @@ function appBarBack(nav, routes, index, split, shown) {
   if (!header) {
     return;
   }
-  const headerShown = getComputedStyle(header).display !== "none";
   // In a split, a detail its list's row pushed has none: the list beside it is its way back (LLP 1116.004 D1). Nor has a route whose shown header is drawn as written, wherever it stands in the route (LLP 1153 D8): its author wrote `appearance: none`, keeping the bar they drew (HeaderRule.swift `keepsAuthoredHeader`), or it is a site's.
   const pushed = index > 0 && !sheet(route) && route.getAttribute("data-navigationbar") !== "none" && !(split && (index === 1 || rowOf.has(route))) && !(asWritten(header) && headerShown);
   // A header iOS makes no bar of draws Back when it does not show a visible Back control (iOS draws it either way).
@@ -1112,26 +1230,17 @@ export const navigation = {
       }
     }
     // site headers, under a root with no `navigationBack` too
-    for (const nav of root.querySelectorAll("[navigationBack]")) {
-      let key = nav.getAttribute("navigationKey"), [list, panels] = tabsOf(nav);
+    let projections = readProjections(root, log);
+    // Focus leaves what the projection hides. A blur handler may commit, and that commit projects, so nothing read
+    // before a blur is written after it: everything is read again. A focus that its blur does not move stays.
+    const tried = new Set(), held = () => projections.some(({ leaving }) => leaving.some((el) => el.contains(document.activeElement)));
+    while (held() && !tried.has(document.activeElement)) {
+      tried.add(document.activeElement);
+      document.activeElement.blur();
+      projections = readProjections(root, log);
+    }
+    for (const { nav, key, at, list, panels, stacks, facts } of projections) {
       if (TABS) {
-        // The authored placement is read with the sidebar's own rules lifted, which restyles the page (an embedded frame re-centres), so only when what places the bar may have changed: the wide breakpoint, the bar's parent or orientation, or the root's or the bar's class or inline display, flex direction, position or appearance (their class rules and inline style are what place them).
-        const isWide = wide(), said = [
-          isWide,
-          viewParent(list) === nav && list.getAttribute("aria-orientation"),
-          ...[nav, list].map((el) => el && [
-            el.className,
-            el.style.display,
-            el.style.flexDirection,
-            el.style.position,
-            el.style.appearance
-          ].join("|"))
-        ].join("/");
-        if (placed.get(nav) !== said) {
-          nav.removeAttribute("data-exact-sidebar");
-          nav.toggleAttribute("data-exact-sidebar", isWide && unsaidBar(nav, list));
-          placed.set(nav, said);
-        }
         for (const panel of managed.get(nav) ?? []) {
           if (!panels.includes(panel)) {
             panel.style.visibility = "";
@@ -1140,37 +1249,19 @@ export const navigation = {
         }
         managed.set(nav, panels);
       }
-      const stacks = panels.length ? panels.map(routesIn) : [routesIn(nav)];
-      const declared = (k) => stacks.some((routes) => routes.some((route) => route.getAttribute("navigationKey") === k));
-      if (!declared(key)) {
-        if (refused.get(nav) !== key) {
-          refused.set(nav, key);
-          log(`navigationKey "${key}" matches no route among the root's children or those of the tabpanels its tablist names; the stack is unchanged`);
-        }
-        // @ref LLP 1035.001 D1 — left alone, less the routes that left the tree: the deepest of the stack last shown
-        // still declared is selected, so a closed sheet or a popped screen never leaves the route beneath it inert.
-        key = (shown.get(nav) ?? []).findLast(declared);
-        if (key === undefined) {
-          continue;
-        }
-      } else {
-        refused.delete(nav);
+      if (key === undefined) {
+        continue;
       }
-      const at = stacks.findIndex((routes) => routes.some((route) => route.getAttribute("navigationKey") === key));
       // Every tab but the selected one stays mounted, hidden and inert.
       if (TABS) {
         for (const [index, panel] of panels.entries()) {
           const active = index === at;
-          if (!active && panel.contains(document.activeElement)) {
-            document.activeElement.blur();
-          }
           panel.style.visibility = active ? "" : "hidden";
           setInert(panel, !active || !!panel.authoredInert);
         }
       }
       for (const [stack, routes] of stacks.entries()) {
-        // The selected stack shows the route the root names; another keeps its top laid out.
-        const selected = stack === at ? routes.findIndex((route) => route.getAttribute("navigationKey") === key) : routes.length - 1;
+        const { selected, presented, found, live, over, headers } = facts[stack], split = found.width;
         if (stack === at) {
           const before = shownRoutes.get(nav) ?? [], showing = routes.slice(0, selected + 1);
           shownRoutes.set(nav, showing);
@@ -1184,10 +1275,7 @@ export const navigation = {
             }
           }
         }
-        // A route pushed inside a sheet is presented as that sheet is: what the sheet covers shows beneath it.
-        const host = sheetAt(routes, selected), presented = host >= 0 ? host : selected;
-        const found = splitOf(routes), split = found.width, live = split && !sheet(routes[presented]);
-        const modal = overPage(routes[presented]), beneath = routes.findLastIndex((r, i) => i < presented && !overPage(r));
+        const modal = over[presented], beneath = routes.findLastIndex((r, i) => i < presented && !over[i]);
         // The scrim under a presented sheet is its stack's parent's (neutral.css): written once a sheet has shown, so
         // it fades out as the last one leaves.
         const scrim = routes[presented]?.getAttribute("navigationPresentation") === "modal" ? "on" : "off", parent = viewParent(routes[0]);
@@ -1204,9 +1292,6 @@ export const navigation = {
         const inUse = SHEETS && new Set(shownIn.filter((s, i) => s >= 0 && (i === selected || live && i === 0 || modal && (i >= beneath && i < presented || split > 0 && i === 0))));
         for (const [index, route] of routes.entries()) {
           const active = index === selected || live && index === 0;
-          if (!active && route.contains(document.activeElement)) {
-            document.activeElement.blur();
-          }
           const covered = modal && (index >= beneath && index < presented || split > 0 && index === 0);
           // a sheet shows what it sits over: the page (in the strip above a narrow sheet) and any sheets between, which only the top one dims
           route.style.visibility = active || covered || heldRoutes.has(route) ? "" : "hidden";
@@ -1218,7 +1303,7 @@ export const navigation = {
           }
           route.style.setProperty("--exact-split", column ? `${split}px` : "");
           sheetFrame(routes, index, shownIn, inUse);
-          appBarBack(nav, routes, index, split > 0, active || covered);
+          appBarBack(nav, routes, index, split > 0, active || covered, headers[index]);
           clearBar(route);
           if (stack === at && index === selected) {
             freshPath(route);
