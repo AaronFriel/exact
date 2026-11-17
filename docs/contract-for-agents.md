@@ -4486,6 +4486,10 @@ hand an action that takes it a `PointerEvent` (`offsetX`/`offsetY` from the
 node's content box, `button` and `buttons`, `pressure`, `pointerType`,
 `pointerId`, and `clientX`/`clientY` from the viewport, `frame()`'s space), on
 any node, a canvas included; set `touch-action="none"` on a drawing surface.
+The web browser fixes `touch-action` when the touch starts. On iOS, the host
+reads it when UIKit asks whether the pan may begin, so a write in that touch's
+`pointerdown` applies there. For the same behavior on every host, set `none` before the
+touch starts (LLP 1057.001).
 Any button goes down, numbered as the DOM's: `button` 0 primary, 1 middle, 2
 secondary, 3 back, 4 forward (-1 on a move), `buttons` bits 1, 4, 2, 8, 16. A
 `contextmenu` action may take the same record, where the click was. The back

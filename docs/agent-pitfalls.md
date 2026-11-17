@@ -1303,8 +1303,10 @@ price: answers arrive `Later`, outside the action's transaction (LLP 1027.002 D1
   may scroll and send `pointercancel`, ending its moves. The web drag reply names
   observed cancellation and scrolling, with the named node’s `touch-action` and
   the effective intersection through its ancestors at contact start. Changing
-  `touch-action` during a contact does not change the browser's decision for it.
-  `drag … mouse` exercises the mouse path.
+  `touch-action` in that touch's `pointerdown` does not change the browser's
+  decision. On iOS, UIKit decides when the pan is recognized, so that write
+  applies there. For the same behavior on every host, set `none` before the
+  touch starts. `drag … mouse` exercises the mouse path.
 
 - **A `pan` hears nothing from a finger on the web.** A drag with
   `tap <id> drag dx dy` (or a real touch) moves nothing and logs nothing. Cause:
