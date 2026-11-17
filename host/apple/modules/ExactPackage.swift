@@ -395,8 +395,8 @@ public final class ExactPackageContext {
         invokeFn(handle, handler, args, reply)
     }
 
-    /// A picture of the interface's `img` scheme changed (LLP 1133.019 D11
-    /// item 1): the host loads `source` again wherever it is shown.
+    /// A picture of the interface's `img` scheme or a published image file
+    /// changed: the host reloads its image and canvas handles.
     public func pictureChanged(_ source: String) { pictureFn(0, source) }
     /// A picture the app may no longer read (D2): the host clears it from
     /// every `img` that shows it and from its cache, cancels its loads and
@@ -1087,3 +1087,35 @@ public final class ExactAudioSession {
         _ = claimFn(active ? "call-activated" : "call-deactivated", [], false, { _ in })
     }
 }
+
+#if os(macOS)
+
+/// Shared by the display list and still capture (LLP 1178 D1–D3).
+public enum ExactScreenGeometry {
+    public static var primaryTop: CGFloat { NSScreen.screens.first?.frame.maxY ?? 0 }
+    public static func id(_ screen: NSScreen) -> CGDirectDisplayID {
+        (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value ?? 0
+    }
+    public static func flipped(_ rect: NSRect) -> [CGFloat] {
+        [rect.minX, primaryTop - rect.maxY, rect.width, rect.height]
+    }
+    public static func record(_ screen: NSScreen) -> [String: Any] {
+        let (r, a) = (flipped(screen.frame), flipped(screen.visibleFrame))
+        return [
+            "left": r[0], "top": r[1], "width": r[2], "height": r[3],
+            "availLeft": a[0], "availTop": a[1], "availWidth": a[2], "availHeight": a[3],
+            "devicePixelRatio": screen.backingScaleFactor,
+            "isPrimary": NSScreen.screens.first.map(id) == id(screen),
+            "isInternal": CGDisplayIsBuiltin(id(screen)) != 0, "label": screen.localizedName,
+        ]
+    }
+    public static func client(_ screen: NSScreen, view: NSView?) -> Any {
+        guard let view, let window = view.window else { return NSNull() }
+        let content = window.convertToScreen(view.convert(view.bounds, to: nil))
+        let r = screen.frame
+        return ["x": r.minX - content.minX, "y": content.maxY - r.maxY,
+                "width": r.width, "height": r.height]
+    }
+}
+
+#endif

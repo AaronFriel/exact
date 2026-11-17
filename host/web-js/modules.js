@@ -455,6 +455,10 @@ export function modules(rows, bound = {}, views = {}, events = {}) {
     // A Blob made the file's entry by reference, as a picked file is (LLP 1133.008.000 D2): the page reads none of it.
     // `refusal` is asked inside the store's transaction, and what it returns stops the write.
     put: (path, blob, refusal) => fileStore().then(async s => { await s.mkdir(path.slice(0, path.lastIndexOf("/"))); return s.putBlob(path, blob, refusal); }),
+    putAll: (entries, refusal) => fileStore().then(async s => {
+      await Promise.all([...new Set(entries.map(e => e.path.slice(0, e.path.lastIndexOf("/"))))].map(path => s.mkdir(path)));
+      return s.putBlobs(entries, refusal);
+    }),
     list: path => fileStore().then(s => s.readdir(path)).catch(() => []),
   };
   // The page's Audio Session (W3C Audio Session; LLP 1133.009 D7, LLP 1133.012 D4): `play-and-record` while a
@@ -641,7 +645,8 @@ export function modules(rows, bound = {}, views = {}, events = {}) {
     // A pending call's handlers (LLP 1133.034 D5): the ones its handler options name, by `request:<n>` while it runs.
     const callbacks = (row.sub.handlerOptions ?? []).map(o => args?.[o]).filter(h => typeof h === "string");
     if (callbacks.length) handlers.set(`request:${request}`, new Set(callbacks));
-    const told = { origin: how.origin ?? "app", request, ...(route(row) === "agent" ? { preferred: how.sheet ?? preferred.get(row.key) } : {}) };
+    const fixture = byKey.get(row.sub.from);
+    const told = { origin: how.origin ?? "app", request, ...(route(row) === "agent" ? { preferred: how.sheet ?? preferred.get(row.key) ?? (fixture && valueOf(fixture)) } : {}) };
     const answered = (async () => impl[name](args ?? {}, told))().finally(() => {
       if (forwarded.get(asker)?.request === request) forwarded.delete(asker);
       dataCalls.delete(call); handlers.delete(`request:${request}`);

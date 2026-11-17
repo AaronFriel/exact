@@ -4190,6 +4190,40 @@ asks, from a press. [Recipe](recipes/displays.md).
 | Windows | `EnumDisplayMonitors` and `GetMonitorInfoW` (`rcMonitor`, `rcWork` for the work area), each scale `GetDpiForMonitor`'s times the Text size setting, laid out into CSS pixels as Chromium lays monitors out, so the numbers are a page's in Chrome on the same machine; `label` (the EDID name, else empty) and `isInternal` from `QueryDisplayConfig` (an LVDS or DSI panel is internal here and not in Chrome); the pointer from `GetCursorPos`; `clientRect`, `clientX` and `clientY` from physical pixels over the window's own scale, which the Text size setting does not change. A run with no window (an agent's session) reports the buffer it paints as its one display, as the Linux host does |
 | iPadOS, Android | not built: `NotSupportedError` |
 
+### Still desktop capture (`@exact/screen-capture`)
+
+`captureScreens({directory, type?, quality?})` writes a still of every
+display, in display-list order, without a picker or window activation
+(LLP 1178). It answers `{captures: [{path, width, height, type, screen}]}`:
+physical pixel sizes and the corresponding `ScreenDetailed`, with
+`clientRect` in the session window's CSS pixels (null without a window).
+The default is one `screen-<n>.png` per display. Encoding options follow
+`captureCanvas`. The grants are `device.screen-recording <usage-key>` and
+`fs.write <directory>`; drawing a file also needs `fs.read`.
+
+`screenRecordingStatus()` is a live `{available, state}` fact.
+`requestScreenRecording()` requests permission from a foreground app;
+capture itself refuses without permission and never prompts. A tool or
+wake cannot request or capture. Files publish in call order after all
+encodes finish; cancellation before publication leaves previous files.
+A failure before publication preserves every previous file; a failure
+between renames reports `EncodingError` and may leave some files new.
+Limits are 8,192² pixels per display and 2²⁷ per call, checked before
+allocation (`QuotaExceededError`). Unsupported encodings fall back to PNG;
+JPEG is supported on both desktop hosts.
+
+On macOS, status is `prompt` until this install has asked, `denied` after an
+unsuccessful request, and `granted` when the OS permits capture. It is read
+again when the app becomes active. A denial is changed in System Settings.
+See the [capture recipe](recipes/screen-capture.md) for setup and fixtures.
+
+| host | still capture |
+| --- | --- |
+| macOS 14+ | `SCScreenshotManager`, sRGB at backing pixels, without the pointer; Screen Recording permission, checked at each capture |
+| Windows | per-monitor `BitBlt` with `SRCCOPY \| CAPTUREBLT`, physical pixels, no pointer or permission dialog; GDI's SDR colors, tagged sRGB |
+| web, Linux | deterministic fixture images under the agent; real capture answers `NotSupportedError` |
+| mobile, TV, watch, terminal | unavailable |
+
 ### Pick a file of any type
 
 An `input type="file"` with no `accept` (or `accept="*/*"`) offers any file;

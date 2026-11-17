@@ -45,6 +45,7 @@ mod pads;
 mod placement;
 #[cfg(windows)]
 mod probe;
+pub mod screen_capture;
 #[cfg(windows)]
 mod timers;
 #[cfg(windows)]

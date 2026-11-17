@@ -2203,14 +2203,18 @@ compose window, an inspector window or a Settings window, without app Swift. Tak
 none offered; waived by Charlie, 2026-11-14, after the panel (decision D3: all three
 seats chose to build it).
 
-**The displays and the pointer (LLP 1178; expo/exact#506).** The displays by
+**The displays, pointer and still capture (LLP 1178; expo/exact#505, #506).** The displays by
 the Window Management API's names (`getScreenDetails`,
 `windowManagementStatus` from `@exact/window-management`) and the pointer's
 position (`getPointerPosition`), on macOS, Windows, the Linux host (its one
-display) and the web (the display list, where the browser has it). Consumer:
+display) and the web (the display list, where the browser has it). A still
+of every display (`captureScreens`, `screenRecordingStatus`,
+`requestScreenRecording` from `@exact/screen-capture`) is admitted on macOS
+and Windows, behind a one-time grant and without a picker per capture. Consumer:
 Anthonyy232's screenshot annotation tool (#505, #506). Unblocks putting its
-toolbar on the display that holds the pointer without its own monitor code.
+toolbar on the display that holds the pointer and capturing before showing
+its window, without its own Win32 monitor and capture code.
 Take: none offered; waived by Charlie, 2026-11-14, after the panel (decision
-D5: all three seats chose to build both). Still out: a still of every display
-(`captureScreens`, pieces 6 and 7), `getDisplayMedia`, window placement, and
-the desktop Linux, iPadOS and Android cells.
+D5: all three seats chose to build both). Still out: `getDisplayMedia`, one
+display, a region, a named window, window placement, and the desktop Linux,
+iPadOS and Android cells.

@@ -376,10 +376,15 @@ private typealias HatchPictureFn = @convention(c) (UnsafeMutableRawPointer?, UIn
 private let hatchPicture: HatchPictureFn = { host, kind, bytes, length in
     let source = hatchText(bytes, length)
     // From any thread: the loader is the main thread's.
-    DispatchQueue.main.async {
+    let apply = {
         guard let session = hatchSession(host) else { return }
-        if kind == 1 { session.rasters.revokePicture(source) } else { session.rasters.pictureChanged(source) }
+        if kind == 1 { session.rasters.revokePicture(source) }
+        else {
+            session.rasters.pictureChanged(source)
+            session.presenter.canvas2d.pictureChanged(source)
+        }
     }
+    if Thread.isMainThread { apply() } else { DispatchQueue.main.async(execute: apply) }
 }
 
 /// The diagnostics' call table, which a development build's host table names.

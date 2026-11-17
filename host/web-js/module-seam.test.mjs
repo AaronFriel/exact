@@ -213,6 +213,75 @@ test.each([false, true])('implementation names keep their defaults and refuse of
   } finally { await browser?.close(); server.stop(true); }
 });
 
+test.each([false, true])('an implementation receives another package fixture only under the agent (agent: %p)', async agent => {
+  const server = moduleServer(), browser = await suiteBrowser(), page = await browser.newPage();
+  try {
+    await page.goto(server.url.href);
+    const result = await page.evaluate(async agent => {
+      const rt = await import('/host/web-js/rt.js');
+      const { modules } = await import('/host/web-js/modules.js');
+      rt.clock.agent = agent;
+      modules({
+        displays: ['displays.list', false, { default: { width: 80 } }, { width: 'n' }],
+        capture: ['capture.still', true, { implementation: true, from: 'displays.list' }, { width: 'n' }],
+      }, { capture: async () => ({ implementation: () => ({ still: (_, how) => how.preferred ?? { width: 0 } }) }) });
+      const call = () => exact.extensions.call({ extension: 'capture', send: 'still' });
+      const initial = await call();
+      exact.extensions.prefer({ extension: { 'displays.list': { width: 160 } } });
+      return { initial, preferred: await call() };
+    }, agent);
+    expect(result).toEqual({ initial: { width: agent ? 80 : 0 }, preferred: { width: agent ? 160 : 0 } });
+  } finally { await browser.close(); server.stop(true); }
+});
+
+test('screen fixtures publish through one file transaction and preserve old files on refusal', async () => {
+  const server = moduleServer(), browser = await suiteBrowser(), page = await browser.newPage();
+  try {
+    await page.goto(server.url.href + '?agent&storage=capture');
+    const result = await page.evaluate(async () => {
+      const rt = await import('/host/web-js/rt.js');
+      const { modules } = await import('/host/web-js/modules.js');
+      const { implementation } = await import('/packages/screen-capture/web/index.js');
+      rt.clock.agent = true; rt.data.appId = 'test.capture';
+      let capture, files;
+      modules({ ready: ['capture.ready', false, { implementation: true }, 'b'] }, {
+        capture: async () => ({ implementation(context) {
+          files = context.files; capture = implementation(context);
+          return { ready: () => true };
+        } }),
+      });
+      await exact.extensions.call({ extension:'capture', source:'ready' });
+      const directory = 'app:/tmp/My Captures';
+      const paths = [0, 1].map(n => directory + '/screen-' + n + '.png');
+      await files.write(paths[0], new Uint8Array([7]));
+      await files.mkdir(paths[1]);
+      const screens = [{left:0, top:0, width:64, height:40, devicePixelRatio:1.25},
+        {left:64, top:0, width:80, height:40, devicePixelRatio:2}];
+      const take = () => capture.captureScreens({directory}, {request:1, preferred:{screens}});
+      // The second destination fails after the first write has entered the transaction.
+      const failed = await take();
+      const preserved = Array.from(new Uint8Array(await files.read(paths[0])));
+      await files.remove(paths[1]);
+      await files.write(paths[1], new Uint8Array([8]));
+      const aborted = await files.putAll(paths.map(path => ({path, blob:new Blob(['replacement'])})),
+        () => new DOMException('cancelled', 'AbortError')).catch(error => error.name);
+      const afterAbort = await Promise.all(paths.map(async path => Array.from(new Uint8Array(await files.read(path)))));
+      const answer = await take();
+      const sizes = await Promise.all(paths.map(async path => {
+        const image = await createImageBitmap(new Blob([await files.read(path)]));
+        const size = [image.width, image.height]; image.close(); return size;
+      }));
+      return {failed, preserved, aborted, afterAbort, count:answer.captures.length, sizes};
+    });
+    expect(result.failed.error).toBe('EncodingError');
+    expect(result.preserved).toEqual([7]);
+    expect(result.aborted).toBe('AbortError');
+    expect(result.afterAbort).toEqual([[7], [8]]);
+    expect(result.count).toBe(2);
+    expect(result.sizes).toEqual([[80, 50], [160, 80]]);
+  } finally { await browser.close(); server.stop(true); }
+});
+
 test.each([false, true])('implementation owners separate calls and explicit overrides use substitutes (agent: %p)', async agent => {
   const server = moduleServer();
   let browser;

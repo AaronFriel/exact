@@ -634,6 +634,24 @@ impl Images {
         }
         self.natural(reports)
     }
+    /// A file was replaced: discard its source identity, pending loads and
+    /// decoded handles. The next sync reads the published file.
+    pub(crate) fn file_changed(&mut self, source: &str) {
+        if self.package.serves(source) {
+            return;
+        }
+        let ids: Vec<_> = self
+            .views
+            .iter()
+            .filter_map(|(&id, v)| (v.source == source).then_some(id))
+            .collect();
+        for id in ids {
+            self.remove(id);
+        }
+        self.backend.forget_source(self.generation, source);
+        self.settled = None;
+    }
+
     fn remove(&mut self, id: ViewId) {
         if let Some(view) = self.views.remove(&id) {
             if let Some((request, _)) = view.request {

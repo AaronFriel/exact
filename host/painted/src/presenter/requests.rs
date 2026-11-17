@@ -566,6 +566,9 @@ impl<D: DataSource> Presenter<D> {
     /// package's, called now; a shell's, queued for it, each answered by its
     /// id (`answer_request`); any other, `NotSupportedError`.
     pub(super) fn modules_in(&mut self) {
+        for source in self.requests.packages.take_pictures() {
+            self.picture_changed(&source, false);
+        }
         let calls = std::mem::take(
             &mut *self
                 .requests

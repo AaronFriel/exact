@@ -57,6 +57,7 @@ pub mod com;
 pub mod content_region;
 pub mod delivery;
 pub mod desktop;
+pub mod screen_capture;
 // The packages' own Rust names this crate so; `desktop_tests.rs` compiles it here.
 #[cfg(test)]
 extern crate self as exact_painted;

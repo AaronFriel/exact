@@ -225,6 +225,15 @@ impl<D: DataSource> Runner<D> {
         if self.route(implementation) == Route::Agent {
             if let Some(preferred) = self.extensions.preferred.get(&self.key(implementation)) {
                 body["preferred"] = preferred.clone();
+            } else if let Some(from) = self.substitute(implementation)["from"]
+                .as_str()
+                .and_then(|key| self.plan.modules.iter().find(|row| self.key(row) == key))
+            {
+                // A substitute may consume another package's fixture, as
+                // still capture consumes window management's display list.
+                if let Some(value) = self.value_of(from) {
+                    body["preferred"] = value;
+                }
             }
         }
         let origin = match reader {

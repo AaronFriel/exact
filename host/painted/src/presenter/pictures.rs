@@ -83,6 +83,10 @@ impl<D: DataSource> Presenter<D> {
     /// or revoked it (every box showing it emptied), as
     /// `ExtensionContext.revokePicture` and `changedPicture` say.
     pub fn picture_changed(&mut self, source: &str, revoked: bool) {
+        if !revoked {
+            self.images.file_changed(source);
+            self.host.canvas_picture_changed(source, &self.assets);
+        }
         let reports = self.images.package_changed(source, revoked);
         self.apply_reports(reports);
         self.resync_pictures();
