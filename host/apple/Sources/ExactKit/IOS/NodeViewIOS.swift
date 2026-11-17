@@ -88,7 +88,9 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
         }
     }
     package var props: [String: String] = [:] { didSet { presenter?.propsChanged(self) } }
-    package var style: NodeStyle = [:]
+    package var style: NodeStyle = [:] {
+        didSet { if oldValue["display"] != style["display"] { Self.scrollLayoutEpoch &+= 1 } }
+    }
     /// Whether the host hid this view, whatever CSS's `display` says: what a
     /// projection or a placement saves and restores, since `isHidden` also
     /// reads `display: none` (review B1: restoring that wrote CSS's bit into
@@ -1000,14 +1002,36 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
     }
 
     // A pane hidden by its native container retains its scroll position as display:none does.
+    // An ancestor's display or parent changes every descendant's answer.
+    static var scrollLayoutEpoch: UInt64 = 0
+    private var scrollLayoutSeen: UInt64?
+    private var scrollLayoutBox = true
+    #if DEBUG
+    static var scrollLayoutWalksForTests = 0
+    #endif
     var hasScrollLayoutBox: Bool {
+        #if os(iOS)
+        // UIKit can hide an arranged pane without a batch or a reparenting.
+        let cacheable: Bool
+        if #available(iOS 27.1, *) {
+            cacheable = presenter?.arrangements.entries.isEmpty != false
+        } else { cacheable = true }
+        #else
+        let cacheable = true
+        #endif
+        if cacheable, scrollLayoutSeen == Self.scrollLayoutEpoch { return scrollLayoutBox }
+        #if DEBUG
+        Self.scrollLayoutWalksForTests += 1
+        #endif
+        scrollLayoutSeen = Self.scrollLayoutEpoch
+        scrollLayoutBox = true
         var ancestor: UIView? = self
         while let current = ancestor {
             if let node = current as? NodeView,
-               node.style["display"]?.string == "none" || node.presenter?.arrangementHides(node.id) == true { return false }
+               node.style["display"]?.string == "none" || node.presenter?.arrangementHides(node.id) == true { scrollLayoutBox = false; break }
             ancestor = current.superview
         }
-        return true
+        return scrollLayoutBox
     }
 
     var materialView: UIVisualEffectView? {
@@ -1210,6 +1234,7 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
     /// (`GlassGroups.moving`, boot navigation): no authored reparenting.
     static var containerMoves = 0
     package override func didMoveToSuperview() {
+        Self.scrollLayoutEpoch &+= 1
         if Self.containerMoves == 0 { pressEpoch &+= 1; cancelPressContact(reparenting: true); presenter?.unshown(self) } // a new parent: shown elsewhere
         super.didMoveToSuperview()
         Self.textRasterAncestryChanged(self)

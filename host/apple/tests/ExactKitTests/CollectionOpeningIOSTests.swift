@@ -29,7 +29,7 @@ final class CollectionOpeningIOSTests: XCTestCase {
             let node = try XCTUnwrap(p.views[id])
             node.handlers.insert("scrollend")
             node.scrollEnd = ScrollEnd()
-            XCTAssertTrue(node.scrollEnd!.moved(to: [0, 20, 0]))
+            XCTAssertTrue(node.scrollEnd!.moved(left: 0, top: 20, scale: 0))
             p.collections.entries[id]?.travelled = true
             node.endScroll()
             XCTAssertNil(p.collections.entries[id])

@@ -171,6 +171,9 @@ final class CollectionFillIOSTests: XCTestCase {
                 [15, 16, 17, 18, 19, 20], [19, 20, 21, 22, 23, 24, 25], [15, 16, 17, 18, 19, 20],
                 [10, 11, 12, 13, 14, 15, 16], [6, 7, 8, 9, 10, 11, 12], [2, 3, 4, 5, 6, 7, 8], [0, 1, 2, 3]]
             XCTAssertEqual(settledRows, Array(repeating: base, count: 4).flatMap { $0 }, "rest windows recorded on T2")
+            XCTAssertEqual([reports, owner, retirements, flushed, landings],
+                asynchronous ? [356, 356, 0, 276, 100] : [136, 136, 0, 136, 0],
+                "the travelling-fling counts measured on base are unchanged")
             XCTAssertLessThanOrEqual(reports, 600)
             XCTAssertLessThanOrEqual(reports + posted, 600, "include every posted job, even jobs unrelated to travel")
             XCTAssertLessThanOrEqual(owner, 600)
@@ -209,7 +212,9 @@ final class CollectionFillIOSTests: XCTestCase {
                     // Include a stale sample and two moves at the same time.
                     if offset % 3 == 0 { time += 0.2 }
                     else if offset % 3 == 1 { time += 1.0 / 60 }
+                    let reads = p.collections.geometryReads
                     scroll.contentOffset.y = CGFloat(offset)
+                    XCTAssertEqual(p.collections.geometryReads - reads, 1, "one geometry read per quiet callback")
                     let facts = p.collections.geometry(node.id)!
                     let speed = p.scrollPump.velocity(node.id)
                     let ahead = speed * p.scrollPump.leadTime(node.id)
@@ -218,7 +223,7 @@ final class CollectionFillIOSTests: XCTestCase {
                     XCTAssertLessThanOrEqual(top + facts.portMain + max(0, ahead), band.built[1])
                     XCTAssertEqual([facts.portMain, facts.portCross, facts.cross, facts.paddingStart, facts.paddingEnd],
                         [previous.portMain, previous.portCross, previous.cross, previous.paddingStart, previous.paddingEnd])
-                    XCTAssertFalse(band.owesReveal(offset: top, port: facts.portMain))
+                    XCTAssertFalse(band.owesReveal(offset: top, port: facts.portMain, extent: entry.snapshot.extent))
                     XCTAssertFalse(band.owesEdge(offset: top, port: facts.portMain, velocity: speed))
                     XCTAssertFalse(band.owesRetirement(offset: top, port: facts.portMain, moving: true))
                     XCTAssertTrue(p.collections.fillPending.isEmpty)
@@ -241,6 +246,43 @@ final class CollectionFillIOSTests: XCTestCase {
         XCTAssertTrue(band.owesRetirement(offset: 672, port: 200, moving: true))
         XCTAssertFalse(band.owesRetirement(offset: 251, port: 200, moving: false))
         XCTAssertTrue(band.owesRetirement(offset: 272, port: 200, moving: false))
+    }
+
+    func testEndBounceAndEndPaddingSendNoReports() throws {
+        for atEnd in [false, true] {
+            let (p, window, scroll) = try fixture(atEnd ? Array(96..<100) : Array(0..<4))
+            defer { p.reset(); window.isHidden = true }
+            p.collections.onFeedback = { _ in }
+            p.collections.settle()
+            var op = snapshot(2, measured: true)
+            var items = try XCTUnwrap(op["items"] as? [[String: Any]])
+            if atEnd {
+                items[0]["rows"] = (0..<4).map {
+                    ["view": 2 + $0, "root": 2 + $0, "epoch": 1, "index": 96 + $0, "size": 72, "measured": true]
+                }
+            }
+            items[0]["window"] = ["built": atEnd ? [6912, 7200] : [0, 288],
+                "retire": atEnd ? [6984, 7128] : [72, 216], "reveal": [0, 7200],
+                "edges": [72, 7128], "margin": [0, 0], "mask": atEnd ? 2 : 0,
+                "leadSeconds": 0.25, "maxLead": 400] as [String: Any]
+            op["items"] = items
+            p.apply(wireBatch([op, contentOp(1, 300, 200, padding: [20, 0, 40, 0]),
+                ["op": "content", "id": 1, "w": 300, "h": 7260]]))
+            scroll.contentOffset.y = atEnd ? 7020 : 0
+            p.scrollPump.settle()
+            XCTAssertTrue(p.collections.fillPending.isEmpty, "the rest slice finishes before counting travel")
+            var reports = 0
+            p.collections.onFeedback = { _ in reports += 1 }
+            let flushes = p.collections.flushes
+            for step in 1...40 {
+                scroll.contentOffset.y = CGFloat(atEnd ? 7020 + step * 2 : -step)
+                XCTAssertTrue(p.collections.covers(1))
+            }
+            XCTAssertEqual(reports, 0, "edge=\(atEnd ? "end" : "start")")
+            XCTAssertEqual(p.collections.flushes, flushes)
+            XCTAssertTrue(p.collections.fillPending.isEmpty)
+            print("W bounce end=\(atEnd) callbacks=40 reports=\(reports)")
+        }
     }
 
     func testALandingThatOnlyNeedsLeadRequestsABuildWithoutRetiring() throws {
@@ -402,6 +444,10 @@ final class CollectionFillIOSTests: XCTestCase {
         XCTAssertEqual(offsets, [201, 200, 201], "exit publishes the mask that makes reentry report")
         XCTAssertEqual(p.collections.flushes - flushes, 3)
         XCTAssertEqual(p.collections.entries[node.id]?.snapshot.rows.map(\.view), rows)
+        offsets.removeAll()
+        for offset in 202...340 { scroll.contentOffset.y = CGFloat(offset) }
+        XCTAssertEqual(try reaches(), "2", "reaching and bouncing past the list end does not repeat reachend")
+        XCTAssertTrue(offsets.isEmpty, "the end edge remains armed only after leaving its band")
     }
 
     private func settleAnimated(_ session: ExactSession) {

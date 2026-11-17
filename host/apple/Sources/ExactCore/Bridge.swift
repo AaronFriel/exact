@@ -545,12 +545,8 @@ package final class Runtime {
     package func scrolled(_ view: UInt32?, left: Double, top: Double, observing: Bool = true) {
         if holds() { return }
         #if os(iOS) || os(tvOS)
-        let lease = completionLease, rt = rt
-        let note = lease.session.scroll(lease, view: view ?? 0) {
-            exact_scrolled(rt, view == nil ? 1 : 0, view ?? 0, left, top)
-        }
-        if observing { Owner.shared.notify(note) }
-        else { Owner.shared.noteScroll(runtime: rt, view: view ?? 0, note) }
+        Owner.shared.noteScroll(ScrollMailbox.Values(lease: completionLease, runtime: rt, view: view ?? 0,
+            position: .offset(page: view == nil, left: left, top: top)), observing: observing)
         #else
         Owner.shared.notify { [self] in
             guard !destroyed else { return }
@@ -564,14 +560,8 @@ package final class Runtime {
     /// Replace numeric travel facts in the mailbox; no encoding or owner job.
     package func noteCollectionScroll(_ view: UInt32, revision: UInt64, sequence: UInt64, offset: Double) {
         guard !holds() else { return }
-        let lease = completionLease, rt = rt
-        Owner.shared.noteScroll(runtime: rt, view: view, collection: true) {
-            guard lease.session.accepts(lease) else { return }
-            guard let bytes = exact_in(rt, 16) else { return }
-            UnsafeMutableRawPointer(bytes).storeBytes(of: revision.littleEndian, as: UInt64.self)
-            UnsafeMutableRawPointer(bytes).storeBytes(of: sequence.littleEndian, toByteOffset: 8, as: UInt64.self)
-            exact_scrolled(rt, 2, view, 0, offset)
-        }
+        Owner.shared.noteScroll(ScrollMailbox.Values(lease: completionLease, runtime: rt, view: view,
+            position: .collection(revision: revision, sequence: sequence, offset: offset)))
     }
     /// A scroll event: left, top, then the scroller's `scrollWidth`,
     /// `scrollHeight`, `clientWidth` and `clientHeight` (`ScrollEvent`, chat F4).

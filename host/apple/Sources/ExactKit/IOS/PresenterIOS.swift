@@ -831,6 +831,8 @@ package final class Presenter {
     }
 
     func apply(_ batch: Batch) {
+        NodeView.scrollLayoutEpoch &+= 1
+        defer { NodeView.scrollLayoutEpoch &+= 1 }
         let pressChanged = pressPaintChanges(batch)
         // Keep the surface's explicit transactions inside the batch: a top-level
         // commit can submit its size before the following sibling transforms.

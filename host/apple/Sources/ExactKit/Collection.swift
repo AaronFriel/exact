@@ -197,6 +197,7 @@ package final class CollectionHost {
     private(set) var budget = CollectionTurnBudget()
     #if DEBUG
     private(set) var flushes = 0, slices = 0
+    var geometryReads = 0
     #endif
     /// Lists whose uncovered port a rescue reports first, whatever the
     /// turn has spent (`CollectionTurnBudget.begin(rescue:)`).
@@ -598,19 +599,16 @@ package final class CollectionHost {
         }
     }
     #if os(iOS) || os(tvOS)
-    private func quiet(_ id: UInt32, ignoringDirty: Bool = false, requiringLead: Bool = true) -> Bool {
-        guard !ExactEnv.agentFreezes, !resting.contains(id),
-              ignoringDirty || !dirty.contains(id),
-              sliceLimits[id] == nil, !refreshPins,
-              let entry = entries[id], !entry.owed, !entry.gesture,
-              entry.travelled || !entry.snapshot.pending,
-              !animating.contains(id), !ancestorMoving(id),
-              let window = entry.snapshot.window, let previous = entry.lastFacts,
-              let facts = geometry(id), !entry.records.changed,
-              entry.records.unacknowledged.isEmpty,
+    private func quiet(_ id: UInt32, facts: CollectionFacts, ignoringDirty: Bool = false, requiringLead: Bool = true) -> Bool {
+        guard let entry = entries[id], let previous = entry.lastFacts, let window = entry.snapshot.window,
               (facts.portMain, facts.portCross, facts.cross, facts.paddingStart, facts.paddingEnd)
-                == (previous.portMain, previous.portCross, previous.cross, previous.paddingStart, previous.paddingEnd)
-        else { return false }
+                == (previous.portMain, previous.portCross, previous.cross, previous.paddingStart, previous.paddingEnd),
+              !ExactEnv.agentFreezes, !resting.contains(id),
+              ignoringDirty || !dirty.contains(id),
+              sliceLimits[id] == nil, !refreshPins, !entry.owed, !entry.gesture,
+              entry.travelled || !entry.snapshot.pending,
+              !animating.contains(id), !ancestorMoving(id), !entry.records.changed,
+              entry.records.unacknowledged.isEmpty else { return false }
         let focus = focusFound ?? focusedView()
         focusFound = focus
         guard (owningCollection(focus) == id ? focus : nil) == previous.focus,
@@ -620,7 +618,7 @@ package final class CollectionHost {
         let top = max(0, facts.offset), end = min(entry.snapshot.extent, top + facts.portMain)
         guard !requiringLead || (max(0, top + min(0, ahead)) >= window.built[0]
               && min(entry.snapshot.extent, end + max(0, ahead)) <= window.built[1]),
-              !window.owesReveal(offset: top, port: facts.portMain),
+              !window.owesReveal(offset: top, port: facts.portMain, extent: entry.snapshot.extent),
               !window.owesEdge(offset: top, port: facts.portMain, velocity: speed),
               !window.owesRetirement(offset: top, port: facts.portMain, moving: entry.travelled)
         else { return false }
@@ -667,24 +665,24 @@ package final class CollectionHost {
             if let facts = geometry(view) {
                 presenter?.session?.runtime.noteCollectionScroll(view, revision: entry.snapshot.revision,
                     sequence: entry.cursor.sequence, offset: facts.offset)
-            }
-            if quiet(view) { return }
-            if covers(view), let facts = geometry(view), let window = entry.snapshot.window {
-                let speed = motion?(view) ?? 0
-                if window.owesReveal(offset: facts.offset, port: facts.portMain)
-                    || window.owesEdge(offset: facts.offset, port: facts.portMain, velocity: speed) {
-                    // Entering an edge or revealing a row cannot wait for a
-                    // later offset. Land earlier work before gathering facts.
-                    drain?()
-                    dirty.insert(view)
-                    retireOwed[view] = 0
-                    rescuing.insert(view)
-                    flushIfNeeded()
-                    rescuing.remove(view)
-                    return
-                }
-                if window.owesRetirement(offset: facts.offset, port: facts.portMain, moving: entry.travelled) {
-                    retireOwed[view] = 0
+                if quiet(view, facts: facts) { return }
+                if covers(view), let window = entry.snapshot.window {
+                    let speed = motion?(view) ?? 0
+                    if window.owesReveal(offset: facts.offset, port: facts.portMain, extent: entry.snapshot.extent)
+                        || window.owesEdge(offset: facts.offset, port: facts.portMain, velocity: speed) {
+                        // Entering an edge or revealing a row cannot wait for a
+                        // later offset. Land earlier work before gathering facts.
+                        drain?()
+                        dirty.insert(view)
+                        retireOwed[view] = 0
+                        rescuing.insert(view)
+                        flushIfNeeded()
+                        rescuing.remove(view)
+                        return
+                    }
+                    if window.owesRetirement(offset: facts.offset, port: facts.portMain, moving: entry.travelled) {
+                        retireOwed[view] = 0
+                    }
                 }
             }
         }
@@ -759,7 +757,8 @@ package final class CollectionHost {
         defer { if !dirty.isEmpty { schedule() } }
         guard let limit = fillLimits.removeValue(forKey: view), entries[view] != nil else { return }
         #if os(iOS) || os(tvOS)
-        if let entry = entries[view], let facts = geometry(view) {
+        let facts = geometry(view)
+        if let entry = entries[view], let facts {
             // Travel while this build was unpublished named the old
             // revision. Refresh it after the applied corrections.
             presenter?.session?.runtime.noteCollectionScroll(view, revision: entry.snapshot.revision,
@@ -767,8 +766,8 @@ package final class CollectionHost {
         }
         // Missing lead asks for a build, not a retire-only round trip. The
         // retirement band leaves two ports of hysteresis behind travel.
-        if quiet(view, ignoringDirty: true, requiringLead: false) {
-            let built = quiet(view, ignoringDirty: true)
+        if let facts, quiet(view, facts: facts, ignoringDirty: true, requiringLead: false) {
+            let built = quiet(view, facts: facts, ignoringDirty: true)
             dirty.remove(view)
             fillPending.remove(view)
             if !built { fillPending.insert(view); requestFill?() }
@@ -868,9 +867,11 @@ package final class CollectionHost {
             fillPending.insert(id)
             requestFill?()
         }
-        for id in dirty where quiet(id, ignoringDirty: true) {
-            dirty.remove(id)
-            fillPending.remove(id)
+        for id in dirty {
+            if let facts = geometry(id), quiet(id, facts: facts, ignoringDirty: true) {
+                dirty.remove(id)
+                fillPending.remove(id)
+            }
         }
         #endif
         if !dirty.isEmpty { flush() }
