@@ -232,6 +232,27 @@ fn an_indent_and_soft_hyphens_balance_as_chromes_do() {
     }
 }
 
+// Breakings whose lines are as wide in another order tie but for rounding,
+// and Blink's positions are whole layout units. In 10px DejaVu Sans at 34px,
+// where "aa aa" is 27.69 and "aa" 12.26, Chromium 159 leaves the odd word of
+// five alone on the first line and of eleven on the fourth; unrounded, each
+// is on the line before the last.
+#[test]
+fn equally_wide_breakings_fall_where_chromes_do() {
+    let mut engine = engine();
+    let (pair, word) = (27.69, 12.26);
+    for (count, chrome) in [
+        (5, vec![word, pair, pair]),
+        (11, vec![pair, pair, pair, word, pair, pair]),
+    ] {
+        let mut small = spec(&vec!["aa"; count].join(" "), true, TextAlign::Left);
+        small.strut.size = 10.0;
+        small.runs[0].size = 10.0;
+        let (lines, ..) = widths(&mut engine, &small, 34.0);
+        assert!(near(&lines, &chrome), "{count} words: {lines:?}");
+    }
+}
+
 #[test]
 fn seven_lines_and_a_clamp_stay_greedy() {
     let mut engine = engine();

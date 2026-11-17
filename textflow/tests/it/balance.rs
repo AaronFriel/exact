@@ -142,6 +142,42 @@ fn balance_ties_go_to_the_later_break() {
     );
 }
 
+// Blink's text positions are layout units, each the advances before it
+// summed and rounded up to 1/64 px (ShapeResult::CachedPositionForOffset), so
+// equal words are not equally wide everywhere and breakings that would tie
+// do not. Chromium 159 leaves the odd word of nine or eleven alone on the
+// line before the last in 10px Menlo (1233/2048 em a character) at 32px;
+// unrounded, both leave it on the third. In 10px DejaVu Sans ("a" 1255/2048
+// em, a space 651/2048) at 34px it is on the first line of five words and
+// the fourth of eleven; unrounded, the last but one of each.
+#[test]
+fn balance_rounds_positions_up_to_layout_units() {
+    let pair = "aa aa";
+    let menlo = 12330.0 / 2048.0;
+    assert_eq!(
+        balanced_lines(&["aa"; 9].join(" "), menlo, 32.0, 10.0),
+        [pair, pair, pair, "aa", pair]
+    );
+    assert_eq!(
+        balanced_lines(&["aa"; 11].join(" "), menlo, 32.0, 10.0),
+        [pair, pair, pair, pair, "aa", pair]
+    );
+    let dejavu = |words: usize| {
+        let (mut position, mut result) = (0.0, Vec::new());
+        for word in 0..words {
+            position += 2.0 * 12550.0 / 2048.0;
+            let end = position;
+            if word + 1 < words {
+                position += 6510.0 / 2048.0;
+            }
+            result.push((end, position, false));
+        }
+        balanced_breaks(34.0, 0.0, 10.0, false, &result, words.div_ceil(2))
+    };
+    assert_eq!(dejavu(5), Some(vec![0, 2]));
+    assert_eq!(dejavu(11), Some(vec![1, 3, 5, 6, 8]));
+}
+
 // Four words of `word` px with 1px spaces between them.
 fn four_words(word: f32) -> Vec<(f32, f32, bool)> {
     (1..=4)
@@ -155,9 +191,9 @@ fn four_words(word: f32) -> Vec<(f32, f32, bool)> {
         .collect()
 }
 
-// A line fits when at most 1/64 px wider than the box, from unrounded
-// positions, as Blink's AvailableWidthToFit: two words a line at 61px while a
-// pair measures 61 + 1/128 or 61 + 1/64, not at 61 + 5/256.
+// A line fits when at most 1/64 px wider than the box, between positions
+// rounded up to 1/64 px, as Blink's AvailableWidthToFit: two words a line at
+// 61px while a pair measures 61 + 1/128 or 61 + 1/64, not at 61 + 5/256.
 #[test]
 fn balance_fits_lines_a_layout_unit_wider_than_the_box() {
     assert_eq!(
@@ -216,12 +252,13 @@ fn balance_penalizes_hyphenated_breaks() {
     );
 }
 
-// Scores are f32, as Blink's LineBreakScore: breaking after "aa aa" or after
-// "aa aa aa" differs by about 6e-6 in f64, which f32 rounds to a tie, so the
-// later break wins. 14 - 2^-20 is the f32 nearest 13.999999.
+// Scores are f32, as Blink's LineBreakScore: breaking after "aa aa" scores
+// 6/64 less than after "aa aa aa", which f32 loses beside a line penalty of
+// 2^22 (a font size of 2^17 in an 8px box), so the tie goes to the later
+// break.
 #[test]
 fn balance_scores_in_f32() {
-    let end = 14.0 - 1.0 / 1_048_576.0;
+    let end = 14.0 - 1.0 / 64.0;
     let near = [
         (2.0, 3.0, false),
         (5.0, 6.0, false),
@@ -231,6 +268,10 @@ fn balance_scores_in_f32() {
     ];
     assert_eq!(
         balanced_breaks(8.0, 0.0, 16.0, false, &near, 2),
+        Some(vec![1])
+    );
+    assert_eq!(
+        balanced_breaks(8.0, 0.0, 131_072.0, false, &near, 2),
         Some(vec![2])
     );
 }

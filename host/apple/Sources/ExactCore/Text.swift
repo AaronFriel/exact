@@ -1107,10 +1107,13 @@ package final class TextEngine {
         func removed(_ line: CTLine, _ room: CGFloat) -> CGFloat {
             TextEngine.uncountedTrailingWidth(line, whiteSpace: spec.whiteSpace, source: shape.attributed, room: room)
         }
+        func made(_ range: CFRange) -> CTLine {
+            TextEngine.finishedLine(CTTypesetterCreateLine(typesetter, range), source: shape.attributed, range: range, justify: nil)
+        }
         // CSS `text-wrap-style: balance` (TextBreaks.swift): the lines before the first forced break.
         let balanced = spec.balance && spec.lineClamp == 0 && !plan.boundaries.isEmpty && width > 0
             ? plan.balance(limit, length: length, fontSize: (spec.strut ?? spec.runs.first)?.size ?? 0, justified: spec.align == 3, insets: insets,
-                           removed: removed, next: next, typesetter: typesetter, source: shape.attributed) : nil
+                           line: made, removed: removed, next: next, typesetter: typesetter, source: shape.attributed) : nil
         while start < length {
             if spec.lineClamp > 0 && lines.count == spec.lineClamp { break }
             var count: Int
@@ -1142,8 +1145,7 @@ package final class TextEngine {
             if spec.align != 3, let oldLine, CTLineGetStringRange(oldLine).location == start, CTLineGetStringRange(oldLine).length == count {
                 line = oldLine
             } else {
-                line = TextEngine.placingRooms(TextEngine.inkedSoftHyphen(CTTypesetterCreateLine(typesetter, range), source: shape.attributed, range: range),
-                                               source: shape.attributed, range: range)
+                line = made(range)
             }
             var clamps = false
             // A word too long for its line keeps its width in layout, as CSS

@@ -63,10 +63,11 @@ const MIN_CANDIDATES: usize = 5;
 /// measured from the paragraph's start, and whether breaking there
 /// hyphenates (a soft or automatic hyphen). The last entry is the paragraph's
 /// end (its `next` and `hyphen` unused). `width` and `indent`, the first
-/// line's `text-indent`, floor to 1/64 px (a layout unit); positions stay
-/// unrounded, as Blink's text break candidates do. A line fits when it is at
-/// most one layout unit wider than its room, `width` less `indent` on the
-/// first line (`AvailableWidthToFit`, matching Blink's greedy `LineBreaker`).
+/// line's `text-indent`, floor to 1/64 px (a layout unit), and each position
+/// rounds up to one, as the text positions Blink's candidates read do
+/// (`ShapeResult::CachedPositionForOffset`). A line fits when it is at most
+/// one layout unit wider than its room, `width` less `indent` on the first
+/// line (`AvailableWidthToFit`, matching Blink's greedy `LineBreaker`).
 ///
 /// All of the arithmetic is `f32`, as Blink's. A line's score is its unused
 /// width (from that fit) squared, the final line's included, plus a line
@@ -79,7 +80,9 @@ const MIN_CANDIDATES: usize = 5;
 /// penalty). As in `ComputeScores`, a line's start is skipped when its score
 /// plus the last scored start's unused width squared already reaches the
 /// best (`best_hope`), and is otherwise taken when its total is `<=` the
-/// best, so a tie goes to the later break.
+/// best, so a tie goes to the later break. Breakings whose lines are as wide
+/// in another order tie but for rounding, of the positions and of the `f32`
+/// scores, so both decide which of them wins.
 ///
 /// Blink scores only a paragraph whose greedy lines all fit, so a line that
 /// overflows is never taken here.
@@ -106,6 +109,7 @@ pub fn balanced_breaks(
         return None;
     }
     let floor = |px: f32| (px * 64.0).floor() / 64.0;
+    let ceil = |px: f32| (px * 64.0).ceil() / 64.0;
     let width = floor(width);
     let fit = width + 1.0 / 64.0;
     let first_fit = (width - floor(indent)).max(0.0) + 1.0 / 64.0;
@@ -138,7 +142,7 @@ pub fn balanced_breaks(
     // `active`): starts and ends only move forward.
     let mut active = 0;
     for b in 1..=n {
-        let end = opportunities[b - 1].0;
+        let end = ceil(opportunities[b - 1].0);
         let (mut best, mut best_from, mut hope) = (f32::INFINITY, 0, 0.0f32);
         let first = active;
         for a in first..b {
@@ -150,7 +154,11 @@ pub fn balanced_breaks(
             if score[a] + hope >= best {
                 continue;
             }
-            let start = if a == 0 { 0.0 } else { opportunities[a - 1].1 };
+            let start = if a == 0 {
+                0.0
+            } else {
+                ceil(opportunities[a - 1].1)
+            };
             // Blink's `delta`, from its `start_edge`: a line starting before
             // the edge overflows.
             let unused = start - (end - if a == 0 { first_fit } else { fit });
