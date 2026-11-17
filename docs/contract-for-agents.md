@@ -4971,7 +4971,8 @@ component App
     canvas surface=world
 ```
 
-A canvas without a metrics resource does no reporting work. Snapshots arrive at most
+A canvas without an active metrics resource does no HUD reporting work. A resource
+whose `when` condition is false collects nothing. Snapshots arrive at most
 once per second while the canvas is visible, including while it is idle. Before
 its first snapshot, after disposal, and for unsupported measurements, fields are `none`. Values
 never enter kept answers, world saves, replay or simulation hashes.
