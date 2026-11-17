@@ -318,6 +318,22 @@ final class GpuModule {
         module.performanceReporting = sym("gpu_performance_reporting", PerformanceReportingFn.self)
         module.performance = sym("gpu_performance", PerformanceFn.self)
         module.flushFn = flush
+        if artifact.isEmpty,
+           let owners = (bakedCompatibility["inputs"] as? [String: Any])?["gpuModules"] as? [String: [String]], !owners.isEmpty {
+            guard let roster = sym("gpu_surfaces", ErrorFn.self), let pointer = sym("gpu_out_ptr", ErrorPtrFn.self) else {
+                return .failure(GpuLoadError(message: "GPU ABI lacks gpu_surfaces or gpu_out_ptr"))
+            }
+            let count = Int(roster())
+            if let bytes = pointer(), let names = try? JSONSerialization.jsonObject(with: Data(bytes: bytes, count: count)) as? [String] {
+                for (owner, surfaces) in owners {
+                    let conflicts = names.filter { surfaces.contains($0) }
+                    if conflicts.isEmpty { continue }
+                    let message = "GPU surfaces \(conflicts.joined(separator: ", ")) are registered by the primary and owned by module \(owner)"
+                    if !BakedCompatibility.production(bakedCompatibility) { return .failure(GpuLoadError(message: message)) }
+                    NSLog("%@", message)
+                }
+            }
+        }
         // The GPU tier (LLP 1139.003 D2): the drive's, told before the device
         // is made, under the agent; else the module's own from its device.
         let tier = sym("gpu_tier", TierFn.self)

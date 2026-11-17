@@ -164,6 +164,31 @@ impl Abi {
                 android_init::run(&abi, path)?;
                 abi.initialized = true;
             }
+            if artifact.is_empty()
+                && compat["inputs"]["gpuModules"]
+                    .as_object()
+                    .is_some_and(|m| !m.is_empty())
+            {
+                let roster = abi
+                    .library
+                    .get::<unsafe extern "C" fn() -> u32>(b"gpu_surfaces")
+                    .map_err(|e| format!("GPU ABI gpu_surfaces: {e}"))?;
+                let bytes = abi
+                    .bytes(roster())
+                    .ok_or("GPU surface roster is unreadable")?;
+                let names: Vec<String> =
+                    serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
+                for name in names {
+                    let owner = artifact_of(compat, &name);
+                    if !owner.is_empty() {
+                        let message = format!("GPU surface {name} is registered by the primary and owned by module {owner}");
+                        if !production(compat) {
+                            return Err(message);
+                        }
+                        eprintln!("{message}");
+                    }
+                }
+            }
             // Its pages go with the app's own once boot is done (it stays
             // loaded while this host lives).
             #[cfg(target_os = "android")]

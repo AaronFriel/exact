@@ -869,12 +869,14 @@ fn compatibility_with_trust(
     // Which GPU artifact owns which surface (LLP 1009 D6): the manifest's
     // modules, bound into the cohort — a routing change is a new binary. An
     // app with one artifact carries no key, so its id and bytes are as before.
-    if let Some(modules) = manifest
-        .json
-        .pointer("/gpu/modules")
-        .filter(|m| m.as_object().is_some_and(|m| !m.is_empty()))
-    {
-        inputs["gpuModules"] = modules.clone();
+    // The TV and the watch bake as "ios"; a package's `targets` names them apart.
+    let gpu_platform = ["tvos", "watchos"]
+        .into_iter()
+        .find(|p| target.contains(&format!("-{p}")))
+        .unwrap_or(platform);
+    let modules = contract::package_gpu::modules(app_dir, &manifest.json, gpu_platform)?;
+    if modules.as_object().is_some_and(|m| !m.is_empty()) {
+        inputs["gpuModules"] = modules;
     }
     // A native TypeScript module runs on the binary's prelude: what it may
     // ask of it is identity. Only apps with one carry the key, so no other

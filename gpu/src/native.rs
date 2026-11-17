@@ -864,6 +864,14 @@ macro_rules! module {
             EXACT_GPU_OUT.with(|b| { *b.borrow_mut() = text.into_bytes(); b.borrow().len() as u32 })
         }
 
+        /// The module's surface roster as JSON in the output buffer. Needs no device.
+        #[no_mangle]
+        pub extern "C" fn gpu_surfaces() -> u32 {
+            let names = $registry.surfaces.iter().map(|(name, _, _)| (*name).to_string()).collect::<Vec<_>>();
+            let text = $crate::json::strings(&names);
+            EXACT_GPU_OUT.with(|b| { *b.borrow_mut() = text.into_bytes(); b.borrow().len() as u32 })
+        }
+
         /// Clear the previous complete shader namespace after app acceptance.
         #[no_mangle]
         pub extern "C" fn gpu_shaders_clear() { $crate::shaders::clear_shaders(); }

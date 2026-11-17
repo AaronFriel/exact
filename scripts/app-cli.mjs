@@ -662,10 +662,9 @@ export function gpuBindgen(metadata, roots) {
   };
 }
 
-/** A note when the app's GPU modules link a wasm-bindgen other than the CLI the web build runs (`exact setup` installs
- * the version exact2 pins in game/Cargo.toml), which refuses any other; null otherwise. The modules are `<app>-gpu`,
- * in gpu/, and `<app>-gpu-<module>` for each of app.json's `gpu.modules`; with no gpu/ crate the web build
- * (host/web-js/build.mjs) builds none of them. */
+/** A note when the app's own GPU crates link a wasm-bindgen other than the web build's CLI (`exact setup` installs
+ * the version exact2 pins in game/Cargo.toml); null otherwise. This checks gpu/ and app.json's `gpu.modules`.
+ * Package GPU modules build separately, from their generated workspaces, even when the app has no gpu/ crate. */
 function bindgenFinding(dir, workspace, options) {
   const game = resolve(import.meta.dir, '../game/Cargo.toml');
   const pin = existsSync(game) ? String(Bun.TOML.parse(readFileSync(game, 'utf8')).workspace?.dependencies?.['wasm-bindgen'] ?? '').replace(/^=/, '') : '';

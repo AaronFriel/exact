@@ -181,7 +181,7 @@ the page and its reload stream, never the local installer's token.
 ```sh
 bun host/apple/build.mjs --run              # macOS
 bun host/apple/build.mjs --ios --run        # an iOS Simulator (--device --run for a connected iPhone)
-cargo build --profile host-dev -p caltrain-linux   # Linux: a DRM/KMS console, or headless anywhere (--release to ship)
+bun scripts/build-linux.mjs caltrain        # Linux: a DRM/KMS console, or headless anywhere
 ```
 
 A first native build takes ten to fifteen minutes on a laptop; later builds reuse it and

@@ -71,6 +71,43 @@ impl Drop for App {
 }
 
 #[test]
+fn a_package_gpu_surface_checks_its_positional_arity() {
+    let declaration = r#"{"kind":"interface","name":"@fixture/sky","version":"1.0.0",
+        "gpu":{"crate":"rust","exactGpu":"0.2","surfaces":{"sky":{"arity":1,"factory":"sky::surface"}}}}"#;
+    let app = App::new(
+        "gpu-arity",
+        "component App\n  view\n    canvas surface=sky(1, 2)\n",
+        &[("@fixture/sky", declaration)],
+    );
+    let errors = contract::compile_path(&app.0.join("app.contract")).unwrap_err();
+    assert!(errors.message.contains("sky"), "{}", errors.message);
+    assert_eq!(errors.id, "analyze-surface-arity");
+    for surface in ["sky()", "sky(1)", "sky(color=1)"] {
+        std::fs::write(
+            app.0.join("app.contract"),
+            format!("component App\n  view\n    canvas surface={surface}\n"),
+        )
+        .unwrap();
+        contract::compile_path(&app.0.join("app.contract")).unwrap();
+    }
+    std::fs::write(app.0.join("app.contract"), "component App\n  view\n    text \"no canvas\"\ncomponent Unused\n  view\n    canvas surface=sky(1, 2)\n").unwrap();
+    contract::compile_path(&app.0.join("app.contract")).unwrap();
+    std::fs::write(
+        app.0.join("app.json"),
+        r#"{"app":{"id":"com.exact.gpu-arity","name":"GPU arity"},"gpu":{"modules":{"other":["sky"]}}}"#,
+    )
+    .unwrap();
+    let error = contract::compile_path(&app.0.join("app.contract")).unwrap_err();
+    assert!(
+        error
+            .message
+            .contains("both gpu.modules.other and @fixture/sky"),
+        "{}",
+        error.message
+    );
+}
+
+#[test]
 fn a_package_view_in_an_uninstantiated_component_is_not_in_the_plan() {
     let app = App::new("unused", "component App\n  view\n    text \"plain\"\ncomponent Tile\n  view\n    swatch-box tint=\"red\"\n", &[]);
     let plan = contract::compile_path(&app.0.join("app.contract")).unwrap();

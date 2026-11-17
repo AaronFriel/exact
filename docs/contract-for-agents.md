@@ -3444,6 +3444,47 @@ A view placed by a Contract library counts too, including through a re-export. T
 still declares the view's package as a direct dependency. A component the app never
 instantiates does not link its views' implementations.
 
+### A package's GPU surfaces
+
+Any package may declare `gpu` beside `views` in its main `exact.json` (LLP 1153.003 D5):
+
+```json
+"gpu": {
+  "crate": "rust",
+  "exactGpu": "0.2",
+  "surfaces": { "sky": { "arity": 1, "factory": "sky_surface::surface" } },
+  "targets": ["web", "macos", "ios", "linux"]
+}
+```
+
+`crate` names a directory inside the package containing a standalone `Cargo.toml` and
+`Cargo.lock`. Its dependency is `exact-gpu = "0.2"`, without a path or Git source. It uses
+`exact_gpu::wgpu` and depends on no other Exact crate. Each factory returns
+`Box<dyn exact_gpu::Surface>`. The build generates the registry and `module!` exports,
+including the web dependencies; the package writes neither. `packages/fixtures/sky` is
+a complete example.
+
+The app adds the package with `bun exact.mjs add <directory or @scope/name>` and writes
+`canvas surface=sky(false)`. The package's full name supplies the module name:
+`@fixture/sky` becomes `fixture-sky`. Duplicate module or surface names are refused,
+including conflicts with `gpu.modules`. A placed surface may take up to `arity` positional
+arguments; the surface checks named arguments and defaults.
+
+`targets` names hosts among `web`, `macos`, `ios`, `tvos`, `android`, `linux` and
+`windows`, and defaults to all of them; the watch draws no GPU surface. An omitted host
+builds no artifact for the package, and its canvases there are drawn as they would be
+without it: by the app's own `gpu/` module when that registers the name, else by the data
+source on Canvas 2D. With neither, the canvas shows only its own styles, and a native host
+logs that the module is absent.
+
+Each package resolves in its own generated workspace under `.exact/package-gpu/`.
+The package's lock keeps its dependencies, and the checkout supplies `exact-gpu` and
+its dependencies. Missing Cargo sources are fetched before the locked build. Resolution
+refuses any version absent from both locks; a conflict or an incompatible `exactGpu`
+requirement stops the build.
+The app commits no Rust files for a package. Modules load only when their surfaces mount;
+package WGSL is compiled into the crate, rather than shipped through `gpu.shaderRoots`.
+
 ### A package's storage and session
 
 A package's implementation finds the session's directories behind `app:/data`,

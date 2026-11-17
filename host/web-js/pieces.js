@@ -75,7 +75,7 @@ export function gs(e, name, values) {
       if (clock.agent) x.now = () => clock.now;
       inflight.n++;
       Gpu = new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))
-        .then(() => import(new URL('gpu-glue.js', document.baseURI).href))
+        .then(() => import(new URL(Object.keys(x.compat?.inputs?.gpuModules ?? {}).length ? 'gpu-modules.js' : 'gpu-glue.js', document.baseURI).href))
         .then(() => x.gpu?.settled?.())
         .catch(err => say(`gpu: ${err.message}`))
         .finally(() => inflight.n--);

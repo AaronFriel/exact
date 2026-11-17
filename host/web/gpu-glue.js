@@ -47,6 +47,18 @@ let terminalRestoreReported = false;
 const restoreJournal = [];
 
 const exact = globalThis.exact;
+function checkSurfaceOwners(module) {
+  const owners = Object.entries(exact.compat?.inputs?.gpuModules ?? {});
+  if (stem !== 'gpu' || !owners.length) return;
+  const names = JSON.parse(module.gpu_surfaces());
+  for (const [owner, surfaces] of owners) {
+    const conflicts = names.filter(name => surfaces.includes(name));
+    if (!conflicts.length) continue;
+    const message = `GPU surfaces ${conflicts.join(', ')} are registered by the primary and owned by module ${owner}`;
+    if (!(exact.production ?? exact.compat?.embedded?.trust === 'production')) throw new Error(message);
+    console.error(message);
+  }
+}
 const publishers = new Map(); // name -> first live entry
 const pendingRecords = [];
 let drainingRecords = false;
@@ -1260,6 +1272,7 @@ async function swap(version) {
   const carrier = { worldCarry: exact.worldCarry };
   try {
     next.gpu_tier?.(tierCode);
+    checkSurfaceOwners(next);
     await next.gpu_load();
     if (exact.now) next.gpu_seekable(true);
     if (sentPeriod) next.gpu_period(sentPeriod);
@@ -1326,6 +1339,7 @@ try {
   // The tier is chosen before the device is made, from the adapter's facts (LLP 1139.003 D2).
   tierCode = Math.max(0, TIERS.indexOf(await chooseTier(exact.pageFacts)));
   gpu = guardedModule(await loadModule(version));
+  checkSurfaceOwners(gpu);
   gpu.gpu_tier?.(tierCode);
   await gpu.gpu_load();
   if (exact.now) gpu.gpu_seekable(true);

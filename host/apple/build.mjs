@@ -654,7 +654,7 @@ async function main(args, lockHeld = false) {
   // One load name lets the Swift presenter serve every app.
   const loadName = 'libexact_gpu.dylib';
   // Each GPU module is signed before the bake binds its digest (LLP 1009 D6).
-  const moduleDylibs = gpuModules(app.manifest).map(({ name }) => ({
+  const moduleDylibs = gpuModules(app.manifest, ios ? (tv ? 'tvos' : 'ios') : 'macos').map(({ name }) => ({
     framework: `ExactGpu_${name.replace(/-/g, '_')}`, built: `lib${app.crate(`gpu-${name}`).replace(/-/g, '_')}.dylib`, load: `libexact_gpu_${name.replace(/-/g, '_')}.dylib` }));
   const gpuArtifacts = [...(hasGpu ? [{ built: dylib, load: loadName, framework: 'ExactGpu' }] : []), ...moduleDylibs];
   const preparedGpu = new Map();

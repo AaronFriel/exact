@@ -60,7 +60,7 @@ const API = ANDROID_MIN_API;
  * EXACT_ANDROID_READER decides) its APK. */
 export const androidBinary = (app, bin, reader = !!process.env.EXACT_ANDROID_READER) => reader ? readerApk(app)
   : resolve(app.target, ANDROID_TARGET, HOST_DEV, bin ?? app.crate('linux'));
-export const androidBuild = (app, bin = null) => [...linuxBuild(app, bin), '--target', ANDROID_TARGET];
+export const androidBuild = (app, bin = null) => linuxBuild(app, bin, ANDROID_TARGET);
 
 /** SDK packages from the APK's Gradle declaration, also used by `exact setup`. */
 export function androidSdkPackages(gradle = readFileSync(resolve(import.meta.dir, '../host/android/app/build.gradle.kts'), 'utf8')) {

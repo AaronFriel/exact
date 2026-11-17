@@ -42,6 +42,7 @@ mod module_rust;
 mod modules;
 pub mod native;
 mod orientationlock;
+pub mod package_gpu;
 mod package_views;
 pub mod picker;
 mod resolve;
@@ -995,6 +996,7 @@ fn compile_loaded(
     if !surface.is_empty() {
         return Err(surface);
     }
+    package_gpu::check(&app_root, &plan).map_err(|e| vec![e])?;
     let placed = package_views::placed(&plan);
     for v in views.iter().filter(|v| placed.contains(&v.tag)) {
         let binds: Vec<&str> = v.binds.iter().map(String::as_str).collect();

@@ -38,6 +38,7 @@ import { sealEnvelope } from '../../scripts/deploy-signing.mjs';
 import { compilerWarnings, oneScheme, webInputDigests } from '../../scripts/agent-launch.mjs';
 import { webBuildFailure } from '../../scripts/app-cli.mjs';
 import { builtSettings } from '../../js/bake/src/__exact_env.mjs';
+import { packageGpuDir, packageGpuInputs, packageGpuManifest } from '../../scripts/app-shells.mjs';
 import { authClientMetadata, checkModuleRoster, gpuModules, markWorlds, rustPolicy, webGpuArtifacts, webHostFiles, worldSurfaces } from '../../scripts/app.mjs';
 import { webAudioSession, webCspFile, webHead } from '../../scripts/web-head.mjs';
 import { buildRust, rustFiles, rustCards, rustPackage } from '../../scripts/rust.mjs';
@@ -107,7 +108,21 @@ export function webSourceRoots(app, js, render = 'rust') {
   if (app.crate) {
     if (!js || authored) names.push(app.crate('web'));
     if (app.manifest.rust?.module?.package) names.push(app.manifest.rust.module.package);
-    const gpu = [...(app.manifest.game || existsSync(resolve(app.dir, 'gpu/Cargo.toml')) ? [app.crate('gpu')] : []), ...gpuModules(app.manifest).map(({ name }) => app.crate(`gpu-${name}`))];
+    const gpu = [...(app.manifest.game || existsSync(resolve(app.dir, 'gpu/Cargo.toml')) ? [app.crate('gpu')] : []), ...gpuModules(app.manifest, 'web').filter(m => !m.package).map(({ name }) => app.crate(`gpu-${name}`))];
+    // Discovery reads the workspace the last build generated and never writes one: a dev loop's parent asks after
+    // each build, and regenerating from a declaration the build did not use would make its own build stale. The
+    // workspace is made from the declaration, the package's manifest and its lock, so only those are inputs. Every
+    // package's declaration is one, whichever hosts it names, so that adding the web to its `targets` rebuilds.
+    const declared = packageGpuManifest({ gpu: app.manifest.gpu }, app.dir);
+    for (const file of packageGpuInputs(declared)) files.add(file);
+    for (const module of gpuModules(declared, 'web').filter(m => m.package)) {
+      roots.add(resolve(module.root, module.crate));
+      const at = packageGpuDir(app, module);
+      // Absent before its first build, or behind an edit to the package's manifest that the next build resolves.
+      let metadata = null;
+      try { if (existsSync(resolve(at, 'Cargo.lock'))) metadata = webMetadata(at); } catch {}
+      if (metadata) closure(metadata, [app.crate(`gpu-${module.name}`)]);
+    }
     // A generated app's GPU crates resolve in a workspace of their own (LLP 1153.003 D5.1).
     const own = gpu.length && app.gpuWorkspace && app.gpuWorkspace !== app.workspace ? app.gpuWorkspace : null;
     if (own) closure(webMetadata(own), gpu); else names.push(...gpu);
@@ -173,7 +188,8 @@ export function webSourceRoots(app, js, render = 'rust') {
     }
   };
   for (const target of targets) scan(target);
-  return [...roots, ...[...files].map(file => ({ file }))];
+  const packageGpu = resolve(app.dir, '.exact/package-gpu'), source = path => !under(packageGpu, path);
+  return [...[...roots].filter(source), ...[...files].filter(source).map(file => ({ file }))];
 }
 
 /** A receipt's `sources` (serve.mjs `appSources`): the app's files as the build ends, or null when one came or went
@@ -710,7 +726,7 @@ const gpu = bakeOnly ? { note: 'none (--bake)', built: false } : webGpuArtifacts
 let gpuNote = gpu.note;
 if (gpu.built) {
   copyHostFiles('gpu');
-  if (gpuModules(app.manifest).length) copyHostFiles('gpuModules');
+  if (gpuModules(app.manifest, 'web').length) copyHostFiles('gpuModules');
   gpuNote += ', on demand';
   // A game's world surfaces, by name, as its GPU build declared them (`.shells/surfaces.json`): a browser without
   // WebGPU shows the refusal page over these and no other canvas (gpu-refusal.js, LLP 1139.003 D1).

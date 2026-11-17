@@ -271,6 +271,7 @@ uint32_t gpu_restore(void) { return 1; }
 void gpu_destroy(void) {}
 uint32_t gpu_error(void) { return 0; }
 uint32_t gpu_shader_names(void) { output="[]"; return 2; }
+uint32_t gpu_surfaces(void) { output="[\"probe\"]"; return strlen(output); }
 const unsigned char* gpu_out_ptr(void) { return (const unsigned char*)(output ? output : reply); }
 "#,
     )
@@ -728,6 +729,19 @@ fn a_module_is_absent_only_without_an_identity_or_a_file() {
         "an unknown directory is no absence"
     );
     let _ = std::fs::remove_file(here);
+}
+
+#[test]
+fn a_primary_surface_cannot_shadow_a_declared_module() {
+    let (path, mut compat) = fixture();
+    compat["inputs"]["gpuModules"] = json!({"package-probe":["probe"]});
+    let error = Abi::open_path(&path, &compat, "").err().unwrap();
+    assert!(
+        error.contains("primary and owned by module package-probe"),
+        "{error}"
+    );
+    compat["embedded"]["trust"] = json!("production");
+    assert!(Abi::open_path(&path, &compat, "").is_ok());
 }
 
 /// LLP 1139.003 D2: the module's tier (here its own choice, low) is the

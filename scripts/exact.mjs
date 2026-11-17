@@ -52,7 +52,7 @@ const { freeSpace, ROOM_GB } = await import('./filesystem.mjs');
 import { basename, delimiter, dirname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { grantAdvice } from './grant-advice.mjs';
-import { installIn } from './package-manager.mjs';
+import { addOutside, installIn, outsideSpecifier } from './package-manager.mjs';
 import { builtContract, contractTool, launch, toolEnv } from './tools.mjs';
 export { grantAdvice, grantLines } from './grant-advice.mjs';
 const { cargoEnvironment, appleExecutableName, HERMES_INSTALLER, hermesBundle, hermesTarget, pathFrom, readManifest, resolveApp, WEB_TOOLCHAIN, webToolchainEnv } = await import('./app.mjs');
@@ -839,7 +839,7 @@ const USAGE = `exact — run an Exact app from the command line (macOS)
   exact setup --platform web   install pinned stable/nightly Rust, wasm-bindgen,
                                Binaryen, node_modules, Chromium and the locked
                                crates for web builds and test web
-  exact add <module> [<app>]   a standard module (geolocation): its dependency, installed
+  exact add <module> [<app>]   a standard module (geolocation) or another package: its dependency, installed
   exact hatch <word> [<app>]   an access hatch: a stub for each target the app builds (Kotlin for android/)
                                (--app, --window for those scopes), and app.json's entry
   exact list                   the apps in this repo
@@ -898,10 +898,11 @@ export function add(args, say = console.log) {
   // A standard module (an interface), or a TypeScript library of exact2's own (`@exact/oauth`, LLP 1146 D5).
   const standard = readdirSync(resolve(ROOT, 'packages')).filter((p) => read(resolve(ROOT, 'packages', p, 'exact.json'))?.kind === 'interface'
     || read(resolve(ROOT, 'packages', p, 'package.json'))?.exports?.['.']?.types !== undefined);
-  if (!standard.includes(short)) throw new Error(`add: ${module ? `no standard module ${module}` : 'name a module'}; exact2's are ${standard.join(', ')} (bun exact.mjs add geolocation)`);
+  if (!standard.includes(short) && !outsideSpecifier(module)) throw new Error(`add: ${module ? `no standard module ${module}` : 'name a module'}; exact2's are ${standard.join(', ')} (bun exact.mjs add geolocation), and another package is a directory or a registry name with its scope or version (bun exact.mjs add ../maplibre-exact)`);
   if (!name && !process.env.EXACT_APP_DIR) throw new Error('add: name the app (bun scripts/exact.mjs add geolocation <app>), or run bun exact.mjs add in it');
   const app = resolveApp(name), at = resolve(app.dir, 'package.json'), manifest = read(at);
   if (!manifest) throw new Error(`add: ${app.dir} has no package.json; an app exact new made has one`);
+  if (!standard.includes(short)) return say(addOutside(app.dir, module, !args.includes('--no-install')));
   const key = `@exact/${short}`, spec = packageSpecifier(app.dir, short);
   if (manifest.dependencies?.[key] !== spec) writeFileSync(at, JSON.stringify({ ...manifest, dependencies: { ...manifest.dependencies, [key]: spec } }, null, 2) + '\n');
   const { manager, installed } = installIn(app.dir, `add: ${key} is in its package.json`, !args.includes('--no-install'));
