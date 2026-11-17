@@ -737,3 +737,25 @@ fn a_release_passes_over_finder_metadata_in_an_epoch() {
     assert_eq!(result.as_ref().ok(), Some(&json!(1)), "{result:?}");
     assert!(!fixture.path(&format!("cache/blobs/{digest}")).exists());
 }
+
+/// A link that fails for a reason other than an existing name (here its
+/// temporary file is gone; a volume without hard links fails the same way)
+/// reports that reason, not a conflict with a file that does not exist.
+#[test]
+#[cfg(unix)]
+fn an_immutable_write_reports_why_its_link_failed() {
+    let fixture = Fixture::new();
+    let dir = fixture.dir("origin");
+    let error = dir
+        .write_checked("value", b"bytes", true, TOKEN, || {
+            for name in dir.names()? {
+                if name.starts_with(".tmp-") {
+                    dir.unlink(&name)?;
+                }
+            }
+            Ok(())
+        })
+        .unwrap_err();
+    assert!(!fixture.path("origin/value").exists());
+    assert_eq!(error.kind(), io::ErrorKind::NotFound, "{error}");
+}
