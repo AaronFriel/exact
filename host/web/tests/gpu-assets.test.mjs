@@ -33,7 +33,7 @@ test('a failed cosmetic never gets a first-frame stamp or repeated state seriali
 });
 
 test('a final paused frame delivers submitted output once without another render', () => {
-  const entry = {id:1,view:1,name:'world',el:{},host:{},wants:true};
+  const entry = {id:1,view:1,name:'world',el:{style:{}},host:{},wants:true};
   const surfaces = new Map([[entry.view,entry]]), delivered = [], records = [];
   let renders = 0, submits = 0, pending = false, output = [], record;
   const gpu = {

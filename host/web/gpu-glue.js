@@ -295,7 +295,11 @@ function placeChildren(entry) {
 }
 
 // Both code replacement and device recovery replace the presentation context.
-const replacementCanvas = entry => entry.el.cloneNode(false);
+const replacementCanvas = entry => {
+  const el = entry.el.cloneNode(false);
+  el.style.visibility = "hidden";
+  return el;
+};
 function installCanvas(old, entry) {
   cancelAssets(old); old.observer?.disconnect(); old.unlisten?.();
   old.el.replaceWith(entry.el);
@@ -319,8 +323,8 @@ function fallback(entry) {
   for (const row of entry.children ?? []) restoreChild(row);
   entry.children = undefined;
   entry.el.style.zIndex = "-1";
-  // Resetting the bitmap once discards stale pixels. Its CSS box stays in the
-  // wrapper, transparent over the wrapper's background and under its children.
+  entry.el.style.visibility = "hidden";
+  // Discard stale pixels while retaining the drawing element's CSS box.
   entry.el.width = 1;
   entry.el.height = 1;
 }
@@ -543,6 +547,8 @@ function tellSize(entry, module, r = entry.host.getBoundingClientRect()) {
 }
 // Creation/binding is a hard result. Staging never publishes or attaches listeners.
 function create(entry, module, carry) {
+  // Until a complete frame is presented, show the author's styles and children (LLP 1181 D13).
+  entry.el.style.visibility = "hidden";
   const r = entry.host.getBoundingClientRect(), { w, h, s } = size(entry.host, r);
   entry.el.width = Math.max(1, Math.round(w * s));
   entry.el.height = Math.max(1, Math.round(h * s));
@@ -677,7 +683,15 @@ function messages(entry, drainAssets = true) {
   finishRestore(entry, gpu);
   reportRestore(entry);
   const record = gpu.gpu_published(entry.id);
-  if (record !== undefined && live(entry.view) === entry && publishers.get(entry.name) === entry) surfaceRecord(entry.name, record);
+  if (record !== undefined && live(entry.view) === entry) {
+    if (!entry.terminal && entry.el.style.visibility === "hidden") {
+      // Malformed records still reach the runner's refusal handling.
+      try {
+        if (JSON.parse(record)?.presented === true) entry.el.style.visibility = "";
+      } catch {}
+    }
+    if (publishers.get(entry.name) === entry) surfaceRecord(entry.name, record);
+  }
   performanceRecord(entry);
   const texts = gpu.gpu_messages(entry.id);
   if (texts === undefined) return;
