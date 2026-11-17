@@ -1,4 +1,4 @@
-import { grantWords, trimGrant } from '../web/grant-admission.js';
+import { grantWords, trimGrant, knownFolderPath } from '../web/grant-admission.js';
 import { asyncContext, bundleOptions, developmentLocalNetwork, lowered, packageConfig, webImplementations } from '../../js/bake/src/typescript.mjs';
 import { buildPageFiles, writeCrawlerFiles } from '../web/crawl.mjs';
 import { bakeWatchEnv, hatchWords, injectedProfiles, moduleDirectory, readManifest, resolveApp, webAppManifest, webToolchainEnv } from '../../scripts/app.mjs';
@@ -793,7 +793,7 @@ const streams = !!captured?.facts.streams;
 const fetchRefused = production && ts && !netGranted && !streams;
 const emptyGrantAdmission = () => {
   const answers = {
-    trimGrant: trimGrant.toString(), grantWords: grantWords.toString(),
+    trimGrant: trimGrant.toString(), grantWords: grantWords.toString(), knownFolderPath: knownFolderPath.toString(),
     createGrantSet: '() => EMPTY', scopedGrantSet: '() => EMPTY', unionGrantSets: '() => EMPTY',
     grantError: '() => null', rawGrantText: "() => ''", hasGrant: '() => false',
     admittingGrant: '() => null', admitsNetwork: '() => false', admitsSecret: '() => false', coversPath: '() => false',

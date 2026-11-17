@@ -2629,9 +2629,51 @@ that reads storage or calls the native module; show a placeholder), `'agent'` (a
 no scratch store, `--storage <name>`), `'unsupported'` (a host with no app
 storage). The operation was refused: `'denied'` (the grants do not cover it),
 the filesystem's POSIX name (`'ENOENT'`, `'EEXIST'`, `'ENOTDIR'`, `'EISDIR'`,
-`'ENOTEMPTY'`, `'EBUSY'`), `'full'` (256 operations already wait behind the
+`'ENOTEMPTY'`, `'EBUSY'`, `'EACCES'`), `'full'` (256 operations already wait behind the
 one in flight: the module's storage queue is full, LLP 1097), else `'failed'`. Branch on the code, never the
 message: `catch (e) { if (e.code === 'ENOENT') return empty; throw e; }`.
+
+On macOS and Linux, `desktop:/`, `documents:/`, `downloads:/`, `music:/`,
+`pictures:/`, `videos:/` and `screenshots:/` name the person's well-known
+folders (LLP 1173 D4). Declare `fs.write pictures:/` for the whole folder, or
+`fs.write pictures:/Exports` for a subtree. `fs.read` and `sqlite.open` lines
+on these namespaces are refused at build.
+
+These paths take only `writeFile`, `atomicWriteFile`, `mkdir`, `realpath`, and
+`copyFile` from an `app:/` file with `fs.read` on its source. Files are created
+exclusively: an existing name returns `'EEXIST'`, including an atomic write or
+copy. Retry with another name. `realpath` uses the write grant and returns the
+native path of an existing item. Reads, listing, watching, appending, replacing,
+renaming and removal are refused. No link below the resolved root is followed.
+A link at or above the root is followed only where the app's write grants
+cannot replace it.
+
+```ts
+export const grants = 'fs.read app:/tmp\nfs.write screenshots:/';
+await storage.fs.copyFile('app:/tmp/capture.png', 'screenshots:/Shot.png');
+```
+
+Each operation resolves the folder again. A role whose settings the app can
+write returns `'EACCES'`, including after relaunch: those settings may already
+contain the app's changes. This covers all seven roles on Linux and only
+`screenshots:` on macOS. Settings with multiple hard links also refuse, since
+another name may be app-writable. Storage and process admission share this
+resolver and retain every session's restrictions across sessions and reloads.
+This prevents a write to the settings from widening the folder grant. macOS uses the account's folders
+(`videos:` is Movies); `screenshots:` reads Screenshot's `location-screenshot`
+preference, then `location`, then defaults to Desktop. A destination that is
+not an existing folder returns `'ENOENT'`. Linux reads `$XDG_CONFIG_HOME/user-dirs.dirs`
+(default `~/.config`), expanding only `$HOME`; unset, relative and disabled
+entries return `'ENOENT'`. Linux's `screenshots:` is the Pictures folder's
+untranslated `Screenshots`, and returns `'ENOENT'` when absent. Under the agent,
+all seven resolve inside `--home`, or its temporary home, never the person's folders.
+Links below the drive's home are refused.
+
+The web, Apple mobile platforms, Android and, until its folder walk is built,
+Windows refuse these paths with `NotSupportedError` (`code: 'failed'`):
+`well-known folders are unavailable on this host`. Platform access denial is
+`'EACCES'`. A sandboxed Mac build admits Downloads, Pictures, Music and Movies
+through their entitlements and refuses Desktop, Documents and Screenshots.
 
 A drive's app storage is a scratch store it names (`--storage <name>`), on a
 native host `default` when it names none, or none (a web drive naming none).

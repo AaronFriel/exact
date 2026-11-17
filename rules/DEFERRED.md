@@ -817,6 +817,15 @@ names no take; `:focus-within` remains out.
   else of the bundle, read only, changed only by a new binary; `home:` stays
   absent there, and Android has neither. Consumer: a data module reading a
   file the app ships. Take: none; Charlie's ruling.
+- **Admitted (Charlie, 2026-11-14, waived after the panel; LLP 1173 D2,
+  D4, D5):** `startIn` on the document pickers and `saveFile`, and the seven
+  well-known folders as `fs.write` namespaces whose writes only create, on
+  macOS and Linux; Windows folder writes wait for piece 4's drive. Consumer:
+  #507's screenshot annotation tool, saving captures without a picker per file.
+  Take: waived by Charlie, 2026-11-14, after the panel. Still refused: reading,
+  replacing or removing through these namespaces, photo-library and Android
+  MediaStore access through them, and `doc.keep` on Windows. These lines are
+  declared at build; the refusal of every other durable grant stands.
 - ~~Snapback / update economy.~~ Moved 2026-09-03 (Charlie: "you can pull out snapback
   for now"), in LLP 1026 D11's minimal form only: an installed app fetches a signed
   bundle of static files from a baked-in origin, after first pixel, into an on-disk
