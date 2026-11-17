@@ -113,10 +113,20 @@ stay unchanged: dynamic offsets are the surface's binding choice.
 does not compile as written: in wgpu 30 a render pass and a render pipeline
 take `multiview_mask`, a pipeline layout takes `immediate_size` (immediate
 data, which replaced push constants) and its `bind_group_layouts` are
-`Option`s, and a colour attachment takes `depth_slice`. The surface below runs one WGSL fragment
-shader over a full-screen triangle with one uniform, as `aurora.rs` in
-`apps/caltrain/gpu` does with the canvas's children and a reflected shader
-beside. It rebuilds its pipeline when the target format changes, and writes
+`Option`s, and a colour attachment takes `depth_slice`.
+
+`exact-gpu` moves to each stable wgpu major within six weeks of its release, on
+that major's newest point release, as one breaking `exact-gpu` version (LLP
+1153.003 D6.6). The move rebases or retires the patches in
+`vendor/wgpu-hal/EXACT-PATCHES.md`, moves the first-party GPU packages with it
+and rewrites the paragraph above. There is no shim for the previous major: a
+module written against it changes its code, and a package changes its
+`exactGpu` requirement too.
+
+The surface below runs one WGSL fragment shader over a full-screen triangle
+with one uniform, as `aurora.rs` in `apps/caltrain/gpu` does with the
+canvas's children and a reflected shader beside. It rebuilds its pipeline
+when the target format changes, and writes
 the uniform through a `FrameUniform`, which writes Apple's and Vulkan's buffers
 in place instead of staging a copy each frame:
 

@@ -671,6 +671,21 @@ after the panel. Still out: a host crate the app writes beside generated ones
 (an authored workspace is the escape), and a crate deeper than one level below
 `app.json` as a member.
 
+**Expanded (Charlie, 2026-11-17, #578; LLP 1181):** `@exact/shader`, a
+first-party GPU package (LLP 1153.003 D5) whose one surface runs a WGSL
+fragment shader from the app's assets over a canvas, with no Rust in the app:
+`canvas surface=shader(src="assets/plasma.wgsl", speed=2)`. The file's uniform
+struct declares its uniforms, which the canvas binds by name. `time`,
+`resolution` and `devicePixelRatio` are filled for a struct that declares
+them. A shader that declares `time` animates, and holds one frame where the
+person prefers reduced motion; any other rests. The compiler checks a literal
+`src` at build. It draws on the web, macOS, iOS, tvOS, Android, Linux and
+Windows. Consumer: the reporter's full-screen shader, which is a GPU crate and
+about 100 lines of wgpu today. Take: none offered; waived by Charlie. Still
+out: textures, the canvas's children as a texture, several passes, compute, a
+translucent canvas, Display P3 and HDR, matrices and arrays as uniforms, a
+built-in pointer, and inline or downloaded source (LLP 1181 §8).
+
 ## Features carried over as "no"
 
 **Admitted (Charlie, 2026-10-12, textrows ruling):** bounded
