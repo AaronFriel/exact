@@ -37,6 +37,20 @@ and optionally `EXACT_AGENT_WINDOW_TAP` to a launch button's test ID.
 `EXACT_AGENT_WINDOW_UNPACED=1` removes pacing to measure rendering capacity.
 These switches require a bounded development run and are stripped in production.
 
+## Android initialization
+
+`dlopen` runs no `JNI_OnLoad`, so a module that calls into Java exports the
+optional `uint32_t gpu_android_init(JavaVM *vm, JNIEnv *env, jobject context)`,
+which `exact_gpu::android_init!` defines
+(`docs/recipes/gpu-module-android.md`). The Android host calls it once for each loaded
+image in a process, on the thread that opens the module, after verifying the
+module's baked identity and before any other export. `context` is the
+application `Context`, a global reference the host keeps for the process. It
+returns 0, or nonzero with its reason in `gpu_error` on the same thread; a
+failure or a pending Java exception refuses the module, then and at every later
+open. The host keeps an image whose entry ran loaded for the life of the
+process. A module without the export is opened as before. See LLP 1009 D11.
+
 ## Target color space
 
 `Surface::color_space()` requests `ColorSpace::Srgb` (the default) or
