@@ -12,10 +12,14 @@ with its manifests. Add it by path:
 bun add @fixture/camera-calibration@file:/absolute/path/to/exact/packages/fixtures/camera-calibration
 ```
 
-Place this beside the viewfinder, passing the opened video track:
+Place it beside the viewfinder:
 
 ```contract
 use getCameraCalibration, CameraCalibration from "@fixture/camera-calibration"
+
+component App
+  view
+    Calibration(track="camera-track")
 
 component Calibration
   props
@@ -60,4 +64,4 @@ required capture settings; a video matrix does not include its distortion tables
 or physical sensor dimensions. The [lookup](../reference.md#a-camera-tracks-calibration)
 gives those settings, coordinate transforms, platform sources and tests.
 For a clip, retain calibration from the samples encoded, with timestamps and
-crop/rotation/stabilization transforms. A one-shot read is a snapshot.
+crop/rotation/stabilization transforms.

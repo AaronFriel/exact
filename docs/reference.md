@@ -4434,6 +4434,10 @@ the viewfinder after the app's `getUserMedia` has returned a track:
 ```contract
 use getCameraCalibration, CameraCalibration from "@fixture/camera-calibration"
 
+component App
+  view
+    Calibration(track="camera-track")
+
 component Calibration
   props
     track: string
