@@ -15,10 +15,12 @@
 //   fails `NotFoundError` before anything is asked. checklist.md is the
 //   iPhone's.
 //
-// First, on this Mac, two Swift tests compiled with a package's Apple
+// On this Mac, Swift tests compiled with a package's Apple
 // sources: the capture session's notifications as the track's mute reason,
 // posted by hand (`interruptions.swift`, with media-capture's), and a failed
-// capture's answer to `takePhoto` (`photo-failure.swift`, with the camera's);
+// capture's answer to `takePhoto` (`photo-failure.swift`, with the camera's),
+// and stopped-session configuration and intrinsic matrix decoding
+// (`calibration.swift`, with media-capture and the calibration fixture);
 // and on the iOS simulator, the system camera UI's answer
 // (`camera-app.swift`). The camera app (`takePhotoWithCameraApp`) is driven
 // under the agent, its sheet's `take` and `cancel`, and bound on the
@@ -43,6 +45,8 @@ const { check, failed } = checker();
     interruptions: ['media-capture/apple/MediaCapture.swift', 'media-capture/apple/VideoCapture.swift'],
     'agent-clip': ['camera/apple/Camera.swift', 'camera/apple/Viewfinder.swift', 'camera/apple/AgentClip.swift'],
     'photo-failure': ['camera/apple/Camera.swift', 'camera/apple/Viewfinder.swift', 'camera/apple/AgentClip.swift'],
+    calibration: ['media-capture/apple/MediaCapture.swift', 'media-capture/apple/VideoCapture.swift',
+      'fixtures/camera-calibration/apple/CameraCalibration.swift'],
   };
   for (const [test, sources] of Object.entries(tests)) {
     run('xcrun', ['swiftc', '-parse-as-library', '-swift-version', '5', '-I', out, '-L', out, '-lExactPackage', ...sources.map((f) => join(packages, f)),
@@ -67,6 +71,9 @@ if (hosts.length === 0 || hosts.includes('ios')) {
     resolve(root, 'host/apple/modules/ExactPackage.swift'), '-o', join(out, 'libExactPackage.a'));
   swiftc('-swift-version', '5', '-I', out, '-L', out, '-lExactPackage', join(packages, 'camera/apple/Camera.swift'), join(packages, 'camera/apple/Viewfinder.swift'), join(packages, 'camera/apple/AgentClip.swift'),
     join(here, 'camera-app.swift'), '-o', join(out, 'camera-app'));
+  swiftc('-swift-version', '5', '-I', out, '-L', out, '-lExactPackage', join(packages, 'media-capture/apple/MediaCapture.swift'),
+    join(packages, 'media-capture/apple/VideoCapture.swift'), join(packages, 'fixtures/camera-calibration/apple/CameraCalibration.swift'),
+    join(here, 'calibration.swift'), '-o', join(out, 'calibration'));
   // The simulator the drive uses, booted and waited for (host/apple/devices.mjs, as build.mjs chooses it).
   const { simulator } = await import(resolve(root, 'host/apple/devices.mjs'));
   const device = simulator(sim);
@@ -76,6 +83,8 @@ if (hosts.length === 0 || hosts.includes('ios')) {
     if (verdict === 'PASS' || verdict === 'FAIL') check(where, name.join(' '), verdict === 'PASS', line);
   }
   if (r.status !== 0 && !lines.some((l) => l.startsWith('FAIL '))) check('apple-camera-app', `runs to its end on ${device.name}`, false, `${r.status ?? r.signal}: ${r.stderr}`);
+  const calibration = spawnSync('xcrun', ['simctl', 'spawn', device.udid, join(out, 'calibration')], { encoding: 'utf8' });
+  check('apple-calibration', 'configuration and matrix decoding on iOS', calibration.status === 0, calibration.stdout + calibration.stderr);
   rmSync(out, { recursive: true, force: true });
 }
 

@@ -3,6 +3,12 @@
 What no tool can do here: grant the camera on a Mac, open a phone's camera,
 and look. Each step says what to run and what you should see.
 
+For calibration, use the [package recipe](../../../docs/recipes/camera-calibration.md).
+On a physical iPhone and Android phone, open a track with a viewfinder, read its
+calibration, and check the reported matrix and reference dimensions against the
+delivered image. A device that reports none must return a reason; the viewfinder
+must keep running after the read. Repeat after changing cameras.
+
 Android's `takePhoto(android.shutterSound=false)` suppresses the sound only on
 API 33 or later when [`MediaActionSound.mustPlayShutterSound()`](https://developer.android.com/reference/android/media/MediaActionSound#mustPlayShutterSound())
 returns false. Earlier Android versions cannot report the regional requirement,

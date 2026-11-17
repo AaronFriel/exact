@@ -4275,6 +4275,336 @@ upload the original when it already fits. Under the agent it runs for real with
 is one call; a crop that misses the picture rejects with `code` `outside`
 (LLP 1133.019 D15).
 
+### A camera track's calibration
+
+Calibration stays in a package. A package can read the camera behind an open
+`@exact/media-capture` video track; it needs no new core API and opens no second
+camera. Keep a consumer, such as `exact-camera`, showing the track while reading.
+
+The complete example is [@fixture/camera-calibration](../packages/fixtures/camera-calibration/).
+Its [interface](../packages/fixtures/camera-calibration/exact.json),
+[package exports](../packages/fixtures/camera-calibration/package.json),
+[Android implementation manifest](../packages/fixtures/camera-calibration/android/exact.json)
+and [Apple implementation manifest](../packages/fixtures/camera-calibration/apple/exact.json)
+are part of the fixture. Copy it into your package, or add it to an app by path:
+
+```sh
+bun add @fixture/camera-calibration@file:/absolute/path/to/exact/packages/fixtures/camera-calibration
+```
+
+Pass a video track ID, not its stream ID. For example, place this component beside
+the viewfinder after the app's `getUserMedia` has returned a track:
+
+```contract
+use getCameraCalibration, CameraCalibration from "@fixture/camera-calibration"
+
+component Calibration
+  props
+    track: string
+  resource calibration = getCameraCalibration(track=track) as shape CameraCalibration else empty()
+  action read
+    refresh calibration
+  view
+    column
+      button press=read
+        text "Read calibration"
+      text calibration.reason
+```
+
+The read is a snapshot. Refresh it after the viewfinder starts, and after changing
+camera, format, focus or zoom. The fixture's agent substitute returns empty arrays
+with `reason="agent"`; bind the implementation to inspect a real camera.
+
+| Field | Meaning |
+|---|---|
+| `intrinsicMatrix` | Nine row-major values, `[[fx, skew, cx], [0, fy, cy], [0, 0, 1]]`; focal lengths and principal point in reference-frame pixels |
+| `referenceFrame`, `referenceDimensions` | The matrix's coordinate system and its width and height |
+| `distortion` | Android's five `LENS_DISTORTION` coefficients, in the platform's order; empty on the iOS video path |
+| `focalLengths` | Android's available focal lengths in millimetres, not the current frame's focal length |
+| `sensorSize`, `pixelArraySize` | Android's physical sensor width and height in millimetres, and full pixel-array width and height |
+| `preCorrectionActiveArray` | Android's `[left, top, right, bottom]` rectangle in the full pixel array |
+| `deviceId` | The native camera identifier, for associating the answer with the camera |
+| `reason` | Empty when intrinsics are present; otherwise why they are absent. Other fields may still be present |
+
+An empty array means unreported or unavailable, never zero distortion or a guessed
+calibration. Record the reference dimensions and camera identity with the matrix.
+
+#### Android
+
+`VideoSource.camera` in [Tracks.kt](../host/android/canvas/src/main/java/dev/exact/canvas/Tracks.kt)
+is the bound CameraX `Camera`. The package's manifest names the same
+`androidx.camera:camera-camera2:1.6.2` as the capture package, so it can use
+[Camera2CameraInfo](https://developer.android.com/reference/androidx/camera/camera2/interop/Camera2CameraInfo)
+and `getCameraCharacteristic`. Read on the main thread through the track table.
+
+`LENS_INTRINSIC_CALIBRATION` is `[fx, fy, cx, cy, skew]`. Its origin is the top-left
+of `SENSOR_INFO_PRE_CORRECTION_ACTIVE_ARRAY_SIZE`, before distortion correction,
+not the full sensor's origin and not the preview's. `LENS_DISTORTION` is
+`[k1, k2, k3, p1, p2]` in Camera2's model. Many devices omit either or both;
+keep null characteristics empty. See [CameraCharacteristics](https://developer.android.com/reference/android/hardware/camera2/CameraCharacteristics#LENS_INTRINSIC_CALIBRATION).
+
+This is the complete Kotlin implementation, compiled by the reader's Kotlin unit
+tests. It reads the camera characteristics without binding another
+use case or taking another camera lease:
+
+```kotlin
+package fixture.calibration
+
+import android.hardware.camera2.CameraCharacteristics as Keys
+import androidx.camera.camera2.interop.Camera2CameraInfo
+import androidx.camera.camera2.interop.ExperimentalCamera2Interop
+import androidx.camera.core.Camera
+import dev.exact.canvas.ExactExtension
+import dev.exact.canvas.ExtensionContext
+import org.json.JSONArray
+import org.json.JSONObject
+
+class CalibrationModule(context: ExtensionContext) : ExactExtension(context) {
+    override fun later(name: String, args: JSONObject, reply: (JSONObject) -> Unit) {
+        if (name != "getCameraCalibration") return reply(JSONObject().put("error", "NotSupportedError"))
+        val track = context.tracks.lookup(args.optString("track"))
+        val camera = track?.video?.invoke()?.camera as? Camera
+        reply(if (camera == null) empty("track-not-running") else read(camera))
+    }
+
+    companion object {
+        fun empty(reason: String) = JSONObject().apply {
+            put("reason", reason)
+            put("deviceId", "")
+            put("referenceFrame", "")
+            for (key in listOf("intrinsicMatrix", "distortion", "focalLengths", "sensorSize",
+                "pixelArraySize", "preCorrectionActiveArray", "referenceDimensions")) put(key, JSONArray())
+        }
+
+        @OptIn(ExperimentalCamera2Interop::class)
+        fun read(camera: Camera): JSONObject {
+            val info = try { Camera2CameraInfo.from(camera.cameraInfo) }
+                catch (_: IllegalArgumentException) { return empty("camera2-unavailable") }
+            val k = info.getCameraCharacteristic(Keys.LENS_INTRINSIC_CALIBRATION)
+            val distortion = info.getCameraCharacteristic(Keys.LENS_DISTORTION)
+            val focal = info.getCameraCharacteristic(Keys.LENS_INFO_AVAILABLE_FOCAL_LENGTHS)
+            val sensor = info.getCameraCharacteristic(Keys.SENSOR_INFO_PHYSICAL_SIZE)
+            val pixels = info.getCameraCharacteristic(Keys.SENSOR_INFO_PIXEL_ARRAY_SIZE)
+            val active = info.getCameraCharacteristic(Keys.SENSOR_INFO_PRE_CORRECTION_ACTIVE_ARRAY_SIZE)
+            return empty(if (k?.size == 5) "" else "intrinsics-not-reported").apply {
+                put("deviceId", info.cameraId)
+                put("referenceFrame", "pre-correction-active-array")
+                if (k?.size == 5) put("intrinsicMatrix", JSONArray(listOf(
+                    k[0], k[4], k[2], 0f, k[1], k[3], 0f, 0f, 1f)))
+                if (distortion != null) put("distortion", JSONArray(distortion.toList()))
+                if (focal != null) put("focalLengths", JSONArray(focal.toList()))
+                if (sensor != null) put("sensorSize", JSONArray(listOf(sensor.width, sensor.height)))
+                if (pixels != null) put("pixelArraySize", JSONArray(listOf(pixels.width, pixels.height)))
+                if (active != null) {
+                    put("preCorrectionActiveArray", JSONArray(listOf(active.left, active.top, active.right, active.bottom)))
+                    put("referenceDimensions", JSONArray(listOf(active.width(), active.height())))
+                }
+            }
+        }
+    }
+}
+```
+
+These are static, default-pixel-mode sensor characteristics. They are insufficient
+by themselves to map a processed video pixel back to a ray: account for crop,
+scaling, rotation, mirroring, zoom and distortion correction. A logical camera may
+switch physical lenses. A package recording frames should also retain the frame's
+capture-result metadata, camera identity and image transform; the available focal
+length list is not a per-frame measurement. Camera2's maximum-resolution pixel mode
+has separate calibration keys.
+
+#### iOS
+
+Attach an `AVCaptureVideoDataOutput` through
+[`ExactVideoSource.configure(stopped: true)`](../host/apple/modules/ExactPackage.swift).
+With `stopped: true`, Exact stops a running session for this configuration and
+resumes it afterwards;
+Apple requires intrinsic delivery to be enabled before `startRunning()`. Check
+[`isCameraIntrinsicMatrixDeliverySupported`](https://developer.apple.com/documentation/avfoundation/avcaptureconnection/iscameraintrinsicmatrixdeliverysupported)
+before setting
+[`isCameraIntrinsicMatrixDeliveryEnabled`](https://developer.apple.com/documentation/avfoundation/avcaptureconnection/iscameraintrinsicmatrixdeliveryenabled).
+Support depends on the active format and connection, including stabilization.
+The `.photo` session preset does not itself request calibration.
+
+Read [`kCMSampleBufferAttachmentKey_CameraIntrinsicMatrix`](https://developer.apple.com/documentation/coremedia/kcmsamplebufferattachmentkey_cameraintrinsicmatrix)
+from each delivered sample you need to associate with a frame. Its `CFData` holds
+a column-major `matrix_float3x3`, whose SIMD columns contain padding; it is not nine
+packed floats. The focal lengths are in pixels, with origin at the frame's upper
+left. The fixture copies the native matrix and serializes nine row-major numbers,
+with the sample's dimensions. It leaves the connection's image orientation alone.
+
+This complete Swift implementation shares one output for concurrent reads, returns
+the first frame's matrix and removes the output. It answers `output-unavailable`,
+`intrinsics-not-supported`, `intrinsics-not-reported` or `no-frame` when it cannot
+supply a matrix; its two-second frame deadline starts after session configuration
+and restart finish. A camera change restarts pending reads on a new output and
+discards callbacks from the old one. It takes no lease.
+The macOS build returns `intrinsics-not-supported` because Apple's connection
+switches are unavailable there.
+
+```swift
+import AVFoundation
+import ExactPackage
+import Foundation
+import simd
+
+public final class CalibrationModule: ExactPackage {
+    private let context: ExactPackageContext
+    public init(context: ExactPackageContext) { self.context = context }
+
+    public func later(_ name: String, _ args: [String: Any], preferred: Any?, reply: @escaping ([String: Any]) -> Void) {
+        guard name == "getCameraCalibration" else { return reply(["error": "NotSupportedError"]) }
+        guard let track = args["track"] as? String, let source = context.tracks.lookup(track)?.video?() else {
+            return reply(VideoCalibration.empty("track-not-running"))
+        }
+        let calibration = source.shared("fixture.camera-calibration") { VideoCalibration(source) }
+        calibration.read(reply)
+    }
+}
+
+// One output per capture, shared by concurrent reads and removed after the first frame.
+final class VideoCalibration: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
+    private weak var source: ExactVideoSource?
+    private var deviceId = ""
+    private let frames = DispatchQueue(label: "fixture.camera-calibration.frames")
+    private var output: AVCaptureVideoDataOutput?
+    private var waiting: [([String: Any]) -> Void] = []
+    private var deadline: DispatchWorkItem?
+    private let scheduleDeadline: (DispatchWorkItem) -> Void
+
+    init(_ source: ExactVideoSource, scheduleDeadline: @escaping (DispatchWorkItem) -> Void = {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2, execute: $0)
+    }) {
+        self.source = source
+        self.scheduleDeadline = scheduleDeadline
+    }
+
+    static func empty(_ reason: String) -> [String: Any] {
+        ["reason": reason, "deviceId": "", "referenceFrame": "", "intrinsicMatrix": [Double](),
+         "distortion": [Double](), "focalLengths": [Double](), "sensorSize": [Double](),
+         "pixelArraySize": [Double](), "preCorrectionActiveArray": [Double](), "referenceDimensions": [Double]()]
+    }
+
+    func read(_ reply: @escaping ([String: Any]) -> Void) {
+        guard let source else { return reply(Self.empty("track-not-running")) }
+        waiting.append(reply)
+        if output != nil, deviceId == source.device.uniqueID { return }
+        start(source)
+    }
+
+    private func start(_ source: ExactVideoSource) {
+        detach()
+        deviceId = source.device.uniqueID
+        let output = AVCaptureVideoDataOutput()
+        self.output = output
+        output.alwaysDiscardsLateVideoFrames = true
+        output.setSampleBufferDelegate(self, queue: frames)
+        source.configure(stopped: true) { session in
+            var reason: String?
+            if session.canAddOutput(output) {
+                session.addOutput(output)
+                #if os(iOS)
+                if let connection = output.connection(with: .video), connection.isCameraIntrinsicMatrixDeliverySupported {
+                    connection.isCameraIntrinsicMatrixDeliveryEnabled = true
+                } else { reason = "intrinsics-not-supported" }
+                #else
+                reason = "intrinsics-not-supported"
+                #endif
+            } else { reason = "output-unavailable" }
+            if let reason { DispatchQueue.main.async { self.finish(output, Self.empty(reason)) } }
+        }
+        source.run { _ in
+            DispatchQueue.main.async {
+                guard self.output === output else { return }
+                let timeout = DispatchWorkItem { self.finish(output, Self.empty("no-frame")) }
+                self.deadline = timeout
+                self.scheduleDeadline(timeout)
+            }
+        }
+    }
+
+    func captureOutput(_ output: AVCaptureOutput, didOutput sample: CMSampleBuffer, from connection: AVCaptureConnection) {
+        let answer = Self.decode(sample)
+        DispatchQueue.main.async { self.finish(output, answer) }
+    }
+
+    private func detach() {
+        guard let output else { return }
+        output.setSampleBufferDelegate(nil, queue: nil)
+        self.output = nil
+        deadline?.cancel(); deadline = nil
+        source?.configure { session in
+            if session.outputs.contains(where: { $0 === output }) { session.removeOutput(output) }
+        }
+    }
+
+    private func finish(_ output: AVCaptureOutput, _ answer: [String: Any]) {
+        guard output === self.output else { return }
+        if let source, source.device.uniqueID != deviceId {
+            start(source)
+            return
+        }
+        detach()
+        var answer = answer
+        answer["deviceId"] = deviceId
+        let replies = waiting
+        waiting.removeAll()
+        for reply in replies { reply(answer) }
+    }
+
+    static func decode(_ sample: CMSampleBuffer) -> [String: Any] {
+        guard let data = CMGetAttachment(sample, key: kCMSampleBufferAttachmentKey_CameraIntrinsicMatrix,
+                                         attachmentModeOut: nil) as? Data,
+              data.count == MemoryLayout<matrix_float3x3>.size else { return empty("intrinsics-not-reported") }
+        // SIMD columns have padding; copy the platform matrix before serializing its nine entries.
+        var matrix = matrix_identity_float3x3
+        _ = withUnsafeMutableBytes(of: &matrix) { data.copyBytes(to: $0) }
+        var answer = empty("")
+        answer["intrinsicMatrix"] = (0..<3).flatMap { row in (0..<3).map { column in Double(matrix[column][row]) } }
+        answer["referenceFrame"] = "sample-buffer"
+        if let description = CMSampleBufferGetFormatDescription(sample) {
+            let dimensions = CMVideoFormatDescriptionGetDimensions(description)
+            answer["referenceDimensions"] = [Int(dimensions.width), Int(dimensions.height)]
+        }
+        return answer
+    }
+}
+```
+
+A video attachment supplies the intrinsic matrix, not physical sensor dimensions
+or lens distortion tables. [`AVCameraCalibrationData`](https://developer.apple.com/documentation/avfoundation/avcameracalibrationdata)
+comes with supported depth or photo delivery: read `AVDepthData.cameraCalibrationData`
+from a depth output or depth-enabled photo, or `AVCapturePhoto.cameraCalibrationData`
+from a calibration-enabled photo capture. For the latter, check
+[`isCameraCalibrationDataDeliverySupported`](https://developer.apple.com/documentation/avfoundation/avcapturephotooutput/iscameracalibrationdatadeliverysupported)
+and request `AVCapturePhotoSettings.isCameraCalibrationDataDeliveryEnabled`.
+Apple's photo support requires constituent photo delivery and disabled geometric
+and content-aware distortion correction. A plain video output cannot return this
+object, and the camera's ordinary `takePhoto` does not enable those settings.
+
+When depth/photo calibration is present, store its
+[`intrinsicMatrixReferenceDimensions`](https://developer.apple.com/documentation/avfoundation/avcameracalibrationdata/intrinsicmatrixreferencedimensions),
+`pixelSize`, `lensDistortionCenter`, `lensDistortionLookupTable` and
+`inverseLensDistortionLookupTable` with the matrix. Apple's distortion tables are
+not Android's five coefficients. For a clip, read the attachment on the same
+samples the recording package encodes, preserving timestamps and any image
+transform; this one-shot read is a camera-model snapshot, not a per-frame log.
+
+#### Verification
+
+The camera's [Apple suite](../packages/camera/test/apple.mjs) compiles this Swift
+file with the track hooks for macOS and iOS. Its calibration tests check that
+configuration stops and resumes a running session, leaves an idle session idle,
+and decodes a sample-buffer matrix with its reference dimensions; missing or
+truncated attachments return a reason. Pending reads follow a camera switch,
+reject old frames, and start the frame deadline after restart completes.
+A controlled scheduler checks when the deadline is armed and its `no-frame` reply.
+The Android reader's
+`CalibrationTest` compiles the Kotlin implementation and checks all six
+characteristics through an open track, including partial and absent data.
+A [phone check](../packages/camera/test/checklist.md) is still needed to establish
+what an individual camera delivers.
+
 ### Save an edit of a photo (`storage.fs.transformImage`)
 
 `storage.fs.transformImage(from, to, options)` decodes the image at `from`

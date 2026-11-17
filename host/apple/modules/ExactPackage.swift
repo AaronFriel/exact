@@ -936,9 +936,11 @@ public protocol ExactVideoSource: AnyObject {
     /// The camera it captures from.
     var device: AVCaptureDevice { get }
     /// Run `change` on the session's queue between `beginConfiguration()`
-    /// and `commitConfiguration()`: add or remove inputs and outputs only.
-    /// Never waited for from the main thread.
-    func configure(_ change: @escaping (AVCaptureSession) -> Void)
+    /// and `commitConfiguration()`: add or remove inputs and outputs and
+    /// configure their connections. With `stopped`, stop capture first and
+    /// resume afterwards if it was running (intrinsic-matrix delivery must
+    /// be enabled before startRunning). Never waited for from the main thread.
+    func configure(stopped: Bool, _ change: @escaping (AVCaptureSession) -> Void)
     /// Run `work` on the session's queue, after every configuration asked
     /// before it: a capture from an output it added.
     func run(_ work: @escaping (AVCaptureSession) -> Void)
@@ -950,6 +952,11 @@ public protocol ExactVideoSource: AnyObject {
     func apply(_ constraints: [String: Any])
     /// Focus and expose at `point`, in the device's unit square.
     func focus(at point: CGPoint)
+}
+
+public extension ExactVideoSource {
+    /// Configure without stopping capture.
+    func configure(_ change: @escaping (AVCaptureSession) -> Void) { configure(stopped: false, change) }
 }
 
 /// A running audio capture, which a consumer taps.
