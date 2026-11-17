@@ -85,6 +85,27 @@ HDR keeps D12b's encoded extended-sRGB output, including values above 1.
 `apps/caltrain/gpu` is a complete GPU module; the
 [GPU module recipe](../docs/recipes/gpu-module.md) shows a minimal surface.
 
+## Dynamic buffer offsets
+
+Shader reflection (`exact-gpu-reflect`) emits a constant per binding and a `GROUP_n`
+layout descriptor per group. Buffer entries disable dynamic offsets by default.
+To bind different slots of one buffer, enable offsets on the reflected entry:
+
+```rust
+const STEP: wgpu::BindGroupLayoutEntry = exact_gpu::dynamic_offset(shader::S);
+let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+    label: Some("step"),
+    entries: &[STEP, shader::STATE],
+});
+```
+
+`dynamic_offset` preserves every other field, including the buffer type and minimum
+size. It panics on a non-buffer entry, a compile error in a `const` initializer.
+Bind a range sized to one slot (`BufferBinding::size`), align each offset to the
+device's uniform or storage buffer alignment, and pass it with
+`set_bind_group(0, &group, &[offset])`. `GROUP_n` and the shader's interface digest
+stay unchanged: dynamic offsets are the surface's binding choice.
+
 ## A fragment shader on a canvas
 
 `exact_gpu::wgpu` is wgpu 30, the version this crate pins; use it rather than a

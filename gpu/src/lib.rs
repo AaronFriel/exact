@@ -15,6 +15,7 @@
 //! - [`Module`] — the device and the instances, one per canvas node.
 //! - [`json`] — the values as the batch carries them.
 //! - [`shaders`] — the WGSL by name, registered at run time (LLP 1030 D8).
+//! - [`dynamic_offset`] — opt a reflected buffer binding into dynamic offsets.
 //! - [`module!`] — the exports for one app's registry.
 //! - [`android_init!`] — an artifact's Android initialization entry.
 //! - `fixture` (native) — a surface rendered and read back, for fixtures.
@@ -38,6 +39,8 @@ pub use wgpu;
 
 #[cfg(not(target_arch = "wasm32"))]
 mod acquire;
+mod bind_layout;
+pub use bind_layout::dynamic_offset;
 mod binding;
 #[cfg(target_os = "android")]
 mod buffers;
