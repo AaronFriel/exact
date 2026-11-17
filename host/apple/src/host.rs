@@ -223,6 +223,9 @@ pub struct Host<D: DataSource> {
     /// frame request waits for them (`exact_canvas_held`, LLP 1056 D5).
     canvas_held: IdSet<ViewId>,
     canvas_kept: [Vec<exact_runner::CanvasList>; 2],
+    /// Image handles the presenter was asked to decode and may hold,
+    /// decoded or failed (LLP 1056 D9).
+    canvas_images: BTreeSet<String>,
     /// Canvas draws run in a turn of their own (`exact_canvas_draw`), not in
     /// the turns main waits on (LLP 1072 §8.5).
     canvas_deferred: bool,
@@ -604,6 +607,7 @@ impl<D: DataSource> Host<D> {
             svg: svg::SvgState::new(svg::render_server()),
             canvas_held: IdSet::default(),
             canvas_kept: Default::default(),
+            canvas_images: BTreeSet::new(),
             canvas_deferred: false,
             canvas_scale: layout.canvas_scale.unwrap_or(canvas2d::DEFAULT_SCALE),
             dirty_paragraphs: BTreeSet::new(),

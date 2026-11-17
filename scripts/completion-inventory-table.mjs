@@ -211,8 +211,8 @@ export const classifications = [
   group("canvas images", ["one-shot"], "image source and the canvas lifetimes that requested it", "UI-owned",
     "runner/src/runner/canvas2d.rs:1360-1380 updates only canvases still held by this runner; image source strings themselves carry no session capability.", [
     ["apple:host/apple/src/abi/exports.rs", "exact_canvas_image exact_canvas_image_released"],
-    ["painted:host/painted/src/host_canvas.rs", "Host::sync_canvases"],
-    ["runner:runner/src/runner/canvas2d.rs", "Runner::canvas_fonts_loaded Runner::canvas_image Runner::canvas_image_released Runner::canvas_images_pending Runner::take_canvas_image_requests"],
+    ["painted:host/painted/src/host_canvas.rs", "Host::canvas_picture_changed Host::sync_canvases"],
+    ["runner:runner/src/runner/canvas2d.rs", "Runner::canvas_fonts_loaded Runner::canvas_image Runner::canvas_image_named Runner::canvas_image_released Runner::canvas_images_pending Runner::take_canvas_image_requests"],
     ["web:host/web/src/canvas2d.rs", "exact_canvas_image"],
   ]),
   group("declared operations", ["one-shot", "durable operation"], "declared list entry or registered app operation; scope can be session or app", "UI-owned",

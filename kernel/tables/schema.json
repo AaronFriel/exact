@@ -5723,6 +5723,10 @@
           "member": "canvasImages",
           "codec": "strings"
         },
+        "canvasImagesDropped": {
+          "member": "canvasImagesDropped",
+          "codec": "strings"
+        },
         "unchanged": {
           "member": "unchanged",
           "codec": "bool"

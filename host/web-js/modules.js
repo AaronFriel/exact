@@ -908,11 +908,14 @@ export function modules(rows, bound = {}, views = {}, events = {}) {
       }
     }
     // A path option is the app's own file, within its `fs.read` or `fs.write` lines (LLP 1133.009 D10 item 4); each
-    // of a list's (LLP 1133.024 D16); a keyed shape's path keys (`keys`), each item's (LLP 1133.006 D8 item 3).
+    // of a list's (LLP 1133.024 D16); a keyed shape's path keys (`keys`), each item's (LLP 1133.006 D8 item 3). One
+    // declared a `directory` names a directory, an app root itself included, with or without one trailing `/`.
     for (const [option, path] of Object.entries(sub.paths ?? {})) {
       const capability = `fs.${path.access}`, value = args?.[option];
       for (const given of path.keys ? [value].flat().flatMap(item => path.keys.map(k => item?.[k])) : [value].flat()) {
-        if (typeof given === "string" && !(appPath(given) && coversPath(appGrantSet(), capability, given))) return `grant-missing (${option}=${given} needs ${capability})`;
+        if (typeof given !== "string") continue;
+        const at = path.directory ? given.replace(/\/$/, "") : given;
+        if (!(appPath(path.directory ? at + "/f" : at) && coversPath(appGrantSet(), capability, at))) return `grant-missing (${option}=${given} needs ${capability})`;
       }
     }
     const applies = !sub.when || Object.entries(sub.when).every(([k, v]) => args?.[k] === v);

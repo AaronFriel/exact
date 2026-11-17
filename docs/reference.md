@@ -4213,6 +4213,7 @@ display, in display-list order, without a picker or window activation
 (LLP 1178). It answers `{captures: [{path, width, height, type, screen}]}`:
 physical pixel sizes and the corresponding `ScreenDetailed`, with
 `clientRect` in the session window's CSS pixels (null without a window).
+`directory` is an `app:/` root such as `app:/tmp` or a directory below one.
 The default is one `screen-<n>.png` per display. Encoding options follow
 `captureCanvas`. The grants are `device.screen-recording <usage-key>` and
 `fs.write <directory>`; drawing a file also needs `fs.read`.

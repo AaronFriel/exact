@@ -1466,6 +1466,10 @@ mod collection_tests;
 mod canvas_scale_tests;
 
 #[cfg(test)]
+#[path = "abi/canvas_image_tests.rs"]
+mod canvas_image_tests;
+
+#[cfg(test)]
 #[path = "abi/launch_layout_tests.rs"]
 mod launch_layout_tests;
 
