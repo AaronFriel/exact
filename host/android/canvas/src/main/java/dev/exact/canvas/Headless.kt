@@ -36,6 +36,7 @@ internal object Headless {
         Exact.live = true
         Exact.unshown = true
         Setup.environment(app)
+        Setup.nativeEnvironment()
         try { FilePicker.start(app) }
         catch (e: Exception) { android.util.Log.w("exact", "file picker: startup cleanup failed", e) }
         val owner = Owner(hwbuf = true, fast = true, android.os.Process.THREAD_PRIORITY_DEFAULT) { null }.also { Exact.owner = it }
@@ -76,6 +77,9 @@ internal object Setup {
         android.system.Os.setenv("EXACT_PACKAGE", app.packageName, true)
         return meta
     }
+
+    /** Called once, after the launch extras and before the library's first host thread. */
+    fun nativeEnvironment() = Native.environment(android.system.Os.environ().joinToString("\u0000").toByteArray(Charsets.UTF_8))
 
     /** The APK's `app/` assets (the plan names `assets/…` under it, a GPU module's shaders `shaders/`), copied once
      * per install into the app's files, replacing the last install's: exact2 reads files. */

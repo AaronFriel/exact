@@ -45,9 +45,14 @@ import java.util.concurrent.atomic.AtomicInteger
 
 /** The module over [Transfers], with [Sessions] as the host: the package's calls, its session's life and its wakes. */
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35], manifest = Config.NONE, shadows = [BackgroundTransferTest.Session::class, BackgroundTransferTest.Transport::class])
+@Config(sdk = [35], manifest = Config.NONE, shadows = [BackgroundTransferTest.Session::class, BackgroundTransferTest.Transport::class, BackgroundTransferTest.Environment::class])
 @LooperMode(LooperMode.Mode.PAUSED)
 class BackgroundTransferTest {
+    @Implements(android.system.Os::class)
+    class Environment {
+        companion object { @JvmStatic @Implementation fun environ(): Array<String> = emptyArray() }
+    }
+
     @Implements(Native::class, isInAndroidSdk = false)
     class Session {
         companion object {

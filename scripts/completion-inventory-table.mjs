@@ -649,7 +649,7 @@ export const classifications = [
     ["painted:host/painted/src/canvas/boot.rs", "CanvasHost::boot"],
     ["painted:host/painted/src/canvas/jni.rs",
       "Java_dev_exact_canvas_Native_attachBuffers Java_dev_exact_canvas_Native_attachSurface Java_dev_exact_canvas_Native_configure " +
-      "Java_dev_exact_canvas_Native_detachSurface Java_dev_exact_canvas_Native_window"],
+      "Java_dev_exact_canvas_Native_detachSurface Java_dev_exact_canvas_Native_environment Java_dev_exact_canvas_Native_window"],
     ["painted:host/painted/src/canvas/reader.rs", "CanvasHost::adopt CanvasHost::attach_window CanvasHost::detach_window"],
     ["painted:host/painted/src/content_region/presenter.rs", "Presenter::boot_with_content_region"],
     ["painted:host/painted/src/host.rs", "Host::boot Host::boot_at Host::boot_at_with_region Host::boot_with Host::runner_mut"],

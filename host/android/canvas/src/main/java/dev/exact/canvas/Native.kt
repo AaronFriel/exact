@@ -12,6 +12,9 @@ object Native {
         android.system.Os.setenv("MIMALLOC_PURGE_DELAY", "0", false)
         System.loadLibrary("exactcanvas")
     }
+    /** Copy the launch environment into the library's libc before any host thread boots. ARM translation can
+     * give Android's Os and the library separate environments. */
+    @JvmStatic external fun environment(values: ByteArray)
     /** Bind the application JVM before any host starts TLS work. The host keeps [context] for the process and gives
      * it to a GPU artifact's initialization entry (LLP 1009 D11), so it is the application's, never an activity's. */
     @JvmStatic external fun trust(context: android.content.Context)

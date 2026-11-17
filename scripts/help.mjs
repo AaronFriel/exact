@@ -374,12 +374,13 @@ Ports    none. Runs to completion.`,
       ['--release', 'optimize the APK for speed; set EXACT_UPDATE_TRUST=production for distribution'],
       ['--bundle', 'build a production .aab with an upload key; implies --release and no install'],
       ['--headless', 'build the Linux host for Android instead (agent android --headless runs it under adb shell)'],
+      ['--abis <abis>', 'APK or bundle ABIs: arm64-v8a (default), x86_64, or both comma-separated; each needs its Rust target and Hermes bundle when used'],
       ['--write-locks', 'regenerate gradle.lockfile and gradle-verification.xml after graph changes; review and commit both'],
       jsonBuilt(', installed (the device\'s serial, or null with none ready)', '; printed after the install; not with --run'),
     ],
     // `--apk --install` are the verb's own.
     internal: ['--apk', '--install'],
-    body: `Builds android/ for aarch64-linux-android, packages it with exact2's Canvas reader
+    body: `Builds android/ for the selected ABIs (arm64-v8a by default), packages it with exact2's Canvas reader
 (host/android) into an APK under target/android/, prints its path and installs it on the
 device: ANDROID_SERIAL, else the one adb lists. Several entries must share a nonempty
 ro.serialno and secure android_id and contain at most one ip:port, one matching adb mDNS name and the USB serial
