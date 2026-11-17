@@ -68,8 +68,36 @@ impl Surface for Sign {
         })
     }
 }
+
+struct DimSign;
+impl Surface for DimSign {
+    fn bind(&mut self, _: &[Value], _: Option<f64>) -> Result<(), SurfaceError> {
+        Ok(())
+    }
+    fn render(
+        &mut self,
+        _: &Frame,
+        _: &wgpu::Device,
+        _: &wgpu::Queue,
+        _: &mut wgpu::CommandEncoder,
+        _: &wgpu::TextureView,
+        _: wgpu::TextureFormat,
+    ) -> bool {
+        false
+    }
+    fn placement_opacity(&self, index: usize) -> f32 {
+        if index == 0 {
+            0.25
+        } else {
+            0.
+        }
+    }
+}
 static REGISTRY: Registry = Registry {
-    surfaces: &[("sign", 0, || Box::<Sign>::default())],
+    surfaces: &[
+        ("sign", 0, || Box::<Sign>::default()),
+        ("dimSign", 0, || Box::new(DimSign)),
+    ],
     shaders: &[],
 };
 crate::module!(REGISTRY);
@@ -263,6 +291,12 @@ fn frame_only_child_and_explicit_hidden_out_do_not_need_a_device() {
     unsafe {
         let id = gpu_create_headless(b"sign".as_ptr(), 4);
         assert_ne!(id, 0);
+        assert_eq!(gpu_placement_opacity(id, 0), 1.);
+        let dim = gpu_create_headless(b"dimSign".as_ptr(), 7);
+        assert_eq!(gpu_placement_opacity(dim, 0), 0.25);
+        assert_eq!(gpu_placement_opacity(dim, 1), 0.);
+        gpu_destroy(dim);
+        assert_eq!(gpu_placement_opacity(dim, 0), 1.);
         assert_eq!(gpu_children_mode(id), 3);
         assert_eq!(
             gpu_child_view(

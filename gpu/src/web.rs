@@ -306,6 +306,10 @@ pub fn child(id: u32, index: u32, name: &str, frame: [f32; 4]) -> bool {
 pub fn children_count(id: u32, count: u32) -> bool {
     with(|m| m.children_count(id, count as usize)).unwrap_or(false)
 }
+/// Visual opacity for a host-composited placed child (LLP 1133.039 D8).
+pub fn placement_opacity(id: u32, index: u32) -> f32 {
+    with(|m| m.placement_opacity(id, index as usize)).unwrap_or(1.0)
+}
 /// Same encoding as native: 0 kernel frame, 1 ten floats (sixteen with the
 /// two clip rows when `out` has room), 2 hidden (out untouched).
 pub fn placement(id: u32, index: u32, out: &mut [f32]) -> u32 {
@@ -581,6 +585,12 @@ macro_rules! module {
         #[::wasm_bindgen::prelude::wasm_bindgen]
         pub fn gpu_placement(id: u32, index: u32, out: &mut [f32]) -> u32 {
             $crate::web::placement(id, index, out)
+        }
+
+        /// Visual opacity multiplier for a placed child; defaults to 1.
+        #[::wasm_bindgen::prelude::wasm_bindgen]
+        pub fn gpu_placement_opacity(id: u32, index: u32) -> f32 {
+            $crate::web::placement_opacity(id, index)
         }
 
         /// Whether a canvas wants raw input.

@@ -237,7 +237,7 @@ test('package GPU modules resolve independently from shipped locks and reject in
       assert.equal(readFileSync(resolve(pkg, 'rust/Cargo.lock'), 'utf8'), lock);
     }
     const app = { dir, crate: kind => `one-${kind}` };
-    assert.throws(() => ensurePackageGpu(app, { ...module, exactGpu: '0.3' }), /requires exact-gpu 0.3, but this checkout provides 0.2.0/);
+    assert.throws(() => ensurePackageGpu(app, { ...module, exactGpu: '0.3' }), /requires exact-gpu 0.3, but this checkout provides 0.2.1/);
     const cargo = readFileSync(resolve(pkg, 'rust/Cargo.toml'), 'utf8');
     put(resolve(pkg, 'rust/Cargo.toml'), cargo.replace('exact-gpu = "0.2"', 'exact-gpu = "0.3"'));
     assert.throws(() => ensurePackageGpu(app, module), /without a path, git or workspace dependency/);

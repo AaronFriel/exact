@@ -31,7 +31,7 @@ pub(super) fn compile_fixture(source: &std::path::Path, path: &std::path::Path) 
             .arg(format!("/IMPLIB:{}", path.with_extension("lib").display()));
         let text = std::fs::read_to_string(source).unwrap();
         for line in text.lines().filter(|line| {
-            ["void ", "bool ", "uint32_t ", "const "]
+            ["void ", "bool ", "uint32_t ", "float ", "const "]
                 .iter()
                 .any(|p| line.starts_with(p))
         }) {

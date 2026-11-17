@@ -476,6 +476,11 @@ pub fn placement(id: u32, index: u32) -> Option<crate::Placement> {
     with(|m| m.placement(id, index as usize)).flatten()
 }
 
+/// Visual opacity for a host-composited placed child (LLP 1133.039 D8).
+pub fn placement_opacity(id: u32, index: u32) -> f32 {
+    with(|m| m.placement_opacity(id, index as usize)).unwrap_or(1.0)
+}
+
 /// The canvas's children as pixels (LLP 1014 D3) (`width`×`height` premultiplied
 /// RGBA). 0 on success.
 pub fn texture(id: u32, width: u32, height: u32, bytes: &[u8]) -> u32 {
@@ -942,6 +947,12 @@ macro_rules! module {
         #[no_mangle]
         pub extern "C" fn gpu_children_mode(id: u32) -> u32 {
             $crate::native::children_mode(id)
+        }
+
+        /// Visual opacity multiplier for a placed child; defaults to 1.
+        #[no_mangle]
+        pub extern "C" fn gpu_placement_opacity(id: u32, index: u32) -> f32 {
+            $crate::native::placement_opacity(id, index)
         }
 
         /// The `index`th direct child of a canvas: its frame in points and

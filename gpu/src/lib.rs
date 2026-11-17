@@ -466,6 +466,11 @@ pub trait Surface {
     fn placement(&self, _index: usize) -> Option<Placement> {
         None
     }
+    /// The opacity a host compositing the `index`th placed child multiplies into
+    /// it, 0 to 1. Visual only: hit-testing and accessibility are unchanged.
+    fn placement_opacity(&self, _index: usize) -> f32 {
+        1.0
+    }
     /// The canvas's children as a texture (LLP 1014 D2, D3) — laid
     /// out by the kernel in the canvas's box, painted by the host at the
     /// canvas's scale, premultiplied RGBA — for the surface to sample;

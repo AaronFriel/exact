@@ -81,8 +81,13 @@ export async function fixture(options = {}) {
     .replace('await import(`./gpu.js?g=${version}`)', 'await candidate(version)')
     .replace('await import(`./gpu.js${query}`)', 'await candidate(0)')
     .replaceAll('await loadModule(version)', 'await candidate(version)');
+  // Inline style as a plain record, with the two CSSOM methods that reach a custom property.
+  const style = () => Object.defineProperties({}, {
+    getPropertyValue: {value(name) { return this[name] ?? ''; }},
+    setProperty: {value(name, value) { if (value === '') delete this[name]; else this[name] = value; }},
+  });
   class Element {
-    constructor(kind = 'canvas') { this.kind = kind; this.listeners = {}; this.handlers = new Map(); this.isConnected = true; this.style = {}; this.dataset = {}; this.tabIndex = 0; this._width = undefined; this._height = undefined; }
+    constructor(kind = 'canvas') { this.kind = kind; this.listeners = {}; this.handlers = new Map(); this.isConnected = true; this.style = style(); this.dataset = {}; this.tabIndex = 0; this._width = undefined; this._height = undefined; }
     get width() { return this._width; }
     set width(value) { this._width = value; sizeWrites.push({element:this, property:'width', value}); }
     get height() { return this._height; }

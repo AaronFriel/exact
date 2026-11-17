@@ -83,9 +83,18 @@ function deliverPosts(name) {
   for (const json of queued) if (!gpu.gpu_input(entry.id, json)) console.error("exact gpu:", gpu.gpu_error());
   messages(entry); schedule();
 }
-const inputStyle = document.createElement("style");
-inputStyle.textContent = "[data-gpu-input]:focus{outline:none}";
-document.head.append(inputStyle);
+// A surface's fade of a placed child (LLP 1133.039 D8). The child carries the factor in a property no author
+// writes, and one rule multiplies it into the child's picture, shadows included, so the child is not moved and its
+// opacity, mask and animations stay the author's. A box around the child is the only other place CSS takes group
+// opacity without writing an authored property, and it would change what the child's percentages, flex or grid
+// placement and containing block resolve against. The rule outranks the shell's (index.html: `all: unset` and
+// `all: revert` on a control would clear it) and yields to the author's, a class under `#exact-root#exact-root`
+// (emit.rs) or inline. So a `filter` the author wrote wins and that child is not faded: the web's known difference.
+const PLACEMENT_OPACITY = "--exact-placement-opacity";
+const placementStyle = `#exact-root#exact-root :where([style*="${PLACEMENT_OPACITY}"]){filter:opacity(var(${PLACEMENT_OPACITY}))}`;
+const glueStyle = document.createElement("style");
+glueStyle.textContent = "[data-gpu-input]:focus{outline:none}" + placementStyle;
+document.head.append(glueStyle);
 let loaded = false, loadMs;
 let recoveringDevice;
 let pendingCutover;
@@ -221,8 +230,14 @@ function childFrames(entry) {
   const children = [...entry.host.children].filter(el => !el.hasAttribute("data-surface"));
   return children.map(el => ({el, name:el.getAttribute("data-testid") ?? "", frame:[el.offsetLeft, el.offsetTop, el.offsetWidth, el.offsetHeight]}));
 }
+// A placed child's fade, which `placementStyle` paints; 1 removes it.
+function placementOpacity(el, factor) {
+  const value = factor === 1 ? "" : String(factor);
+  if (el.style.getPropertyValue(PLACEMENT_OPACITY) !== value) el.style.setProperty(PLACEMENT_OPACITY, value);
+}
 function restoreChild(row) {
   if (!row.original) return;
+  placementOpacity(row.el, 1);
   Object.assign(row.el.style, row.original.style); row.el.inert = row.original.inert;
   delete row.original;
 }
@@ -275,6 +290,9 @@ function placeChildren(entry) {
     row.original ??= {style:Object.fromEntries(["transform","transformOrigin","zIndex","visibility","position"].map(k => [k, el.style[k]])), inert:el.inert};
     el.style.visibility = outcome === 2 ? "hidden" : row.original.style.visibility;
     el.inert = outcome === 2 || row.original.inert;
+    // Read only for a child the surface places and shows; a module without the export fades nothing.
+    const opacity = outcome === 2 ? 1 : gpu.gpu_placement_opacity?.(entry.id, i);
+    placementOpacity(el, Number.isFinite(opacity) ? Math.max(0, Math.min(1, opacity)) : 1);
     if (outcome === 2) continue;
     const [x,y] = row.frame;
     el.style.transformOrigin = "0 0";
