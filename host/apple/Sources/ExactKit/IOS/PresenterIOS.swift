@@ -1025,7 +1025,7 @@ package final class Presenter {
                 guard let parent = views[id] else { return }
                 placeChildren(parent, op.ids)
             case .surface:
-                if let v = views[id] { session?.canvases.surface(view: v, name: op.payload["name"] as? String ?? "", values: op.payload["values"] ?? []) }
+                if let v = views[id] { session?.canvases.surface(view: v, name: op.payload["name"] as? String ?? "", values: op.payload["values"] as? Data ?? Data("[]".utf8)) }
             case .canvas2d: if let v = views[id] { canvas2d.apply(id, op.payload, layer: v.layer) }
             case .svg: if views[id] != nil { applyGeometry(op) }
             case .animations:

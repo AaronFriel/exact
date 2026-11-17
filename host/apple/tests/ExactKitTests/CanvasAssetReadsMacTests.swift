@@ -63,7 +63,7 @@ final class CanvasAssetReadsMacTests: XCTestCase {
         windows.append(window)
         let canvas = NodeView(id: 100, kind: "canvas", presenter: p)
         p.root.addSubview(canvas); p.views[100] = canvas
-        let e = CanvasesHost.Entry(view: canvas, name: "world", values: []); e.id = 1; e.module = m
+        let e = CanvasesHost.Entry(view: canvas, name: "world", values: Data("[]".utf8)); e.id = 1; e.module = m
         s.surfaceHost.entries[100] = e
         return (s, e)
     }

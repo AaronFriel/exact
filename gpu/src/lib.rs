@@ -235,10 +235,18 @@ pub trait Surface {
     /// Clock ownership, before first input and whenever it changes. A seekable
     /// chart/video uses explicit time and must not open a live device.
     fn clock(&mut self, _seekable: bool) {}
-    /// Named inputs and their defaults, in bind order. An empty declaration
-    /// accepts positional inputs only. Names are resolved before `bind` runs.
+    /// Named inputs and their defaults, in bind order. Without `rest_arguments`,
+    /// an empty declaration accepts positional inputs only. Names are resolved
+    /// before `bind` runs.
     fn arguments(&self) -> Vec<(&'static str, Value)> {
         Vec::new()
+    }
+    /// Whether a named bind may carry arguments `arguments` does not declare.
+    /// When true, `bind` receives one more input after the declared ones: a
+    /// list of `[name, value]` pairs, in the order the canvas wrote them.
+    /// Changed binds retain omitted pairs; positional binds supply an empty list.
+    fn rest_arguments(&self) -> bool {
+        false
     }
     /// The canvas's inputs from the plan, as typed values; before the
     /// first render and whenever they change. A refusal names the input.

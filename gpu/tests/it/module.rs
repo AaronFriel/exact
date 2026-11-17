@@ -575,6 +575,138 @@ mod seams {
     }
 }
 
+#[test]
+fn rest_arguments_keep_names_order_and_accepted_values() {
+    use exact_gpu::{wgpu, Frame, Surface, SurfaceError, Value};
+    struct Probe {
+        declares: bool,
+        values: Vec<Value>,
+    }
+    impl Surface for Probe {
+        fn arguments(&self) -> Vec<(&'static str, Value)> {
+            if self.declares {
+                vec![("src", Value::str("")), ("gain", Value::Number(1.))]
+            } else {
+                Vec::new()
+            }
+        }
+        fn rest_arguments(&self) -> bool {
+            true
+        }
+        fn bind(&mut self, values: &[Value], _: Option<f64>) -> Result<(), SurfaceError> {
+            let pairs = exact_gpu::json::list(values.last().unwrap(), "rest")?;
+            for pair in pairs {
+                let pair = exact_gpu::json::list(&pair, "pair")?;
+                if pair[0].as_str() == Some("reject") {
+                    return Err(SurfaceError("rejected uniform".into()));
+                }
+            }
+            self.values = values.to_vec();
+            Ok(())
+        }
+        fn render(
+            &mut self,
+            _: &Frame,
+            _: &wgpu::Device,
+            _: &wgpu::Queue,
+            _: &mut wgpu::CommandEncoder,
+            _: &wgpu::TextureView,
+            _: wgpu::TextureFormat,
+        ) -> bool {
+            false
+        }
+        fn agent(&mut self, _: &str) -> Option<String> {
+            Some(format!("{:?}", self.values))
+        }
+    }
+    static REGISTRY: Registry = Registry {
+        surfaces: &[
+            ("probe", 2, || {
+                Box::new(Probe {
+                    declares: true,
+                    values: Vec::new(),
+                })
+            }),
+            ("rest", 0, || {
+                Box::new(Probe {
+                    declares: false,
+                    values: Vec::new(),
+                })
+            }),
+        ],
+        shaders: &[],
+    };
+    let mut m = Module::new(&REGISTRY);
+    let id = m.create_headless("probe").unwrap();
+    let bound = |m: &mut Module, id, expected| {
+        assert_eq!(
+            m.agent(id, "").unwrap(),
+            format!("{:?}", exact_gpu::json::parse_values(expected).unwrap())
+        );
+    };
+    assert!(
+        m.bind_json(
+            id,
+            r#"{"zebra":2,"src":"noise","alpha":[1,2],"gain":3,"flag":true}"#,
+            None
+        ),
+        "{}",
+        m.take_error()
+    );
+    bound(
+        &mut m,
+        id,
+        r#"["noise",3,[["zebra",2],["alpha",[1,2]],["flag",true]]]"#,
+    );
+    assert!(m.bind_changed_json(
+        id,
+        r#"{"alpha":[3,4],"gain":4,"new":null,"zebra":5}"#,
+        Some(5.)
+    ));
+    let changed = r#"["noise",4,[["zebra",5],["alpha",[3,4]],["flag",true],["new",null]]]"#;
+    bound(&mut m, id, changed);
+    assert!(m.bind_changed_json(id, "{}", None));
+    bound(&mut m, id, changed);
+    for (input, error) in [
+        (
+            r#"{"zebra":9,"zebra":10}"#,
+            "duplicate surface argument `zebra`",
+        ),
+        (r#"{"zebra":9,"reject":0,"gain":20}"#, "rejected uniform"),
+    ] {
+        assert!(!m.bind_changed_json(id, input, None));
+        assert_eq!(m.take_error(), error);
+        bound(&mut m, id, changed);
+        assert!(m.bind_changed_json(id, "{}", None));
+        bound(&mut m, id, changed);
+    }
+    assert!(!m.bind_json(id, r#"{"src":"refused","reject":0}"#, None));
+    assert_eq!(m.take_error(), "rejected uniform");
+    assert!(m.bind_changed_json(id, "{}", None));
+    bound(&mut m, id, changed);
+    for (input, expected) in [
+        (r#"{"flag":false}"#, r#"["",1,[["flag",false]]]"#),
+        ("{}", r#"["",1,[]]"#),
+        (r#"["positional",6]"#, r#"["positional",6,[]]"#),
+        ("[]", r#"["",1,[]]"#),
+    ] {
+        assert!(m.bind_json(id, input, None));
+        bound(&mut m, id, expected);
+    }
+    assert!(!m.bind_json(id, r#"["too",6,[]]"#, None));
+    assert_eq!(
+        m.take_error(),
+        "expected at most 2 surface arguments, got 3"
+    );
+    let rest = m.create_headless("rest").unwrap();
+    assert!(m.bind_json(rest, r#"{"speed":5,"tint":"red"}"#, None));
+    bound(&mut m, rest, r#"[[["speed",5],["tint","red"]]]"#);
+    assert!(m.bind_changed_json(rest, r#"{"speed":7}"#, None));
+    bound(&mut m, rest, r#"[[["speed",7],["tint","red"]]]"#);
+    assert!(m.bind_json(rest, "[]", None));
+    bound(&mut m, rest, "[[]]");
+}
+
 /// A full bind gives each argument it omits its default; a changed bind gives
 /// it the value of the last accepted bind, so a host sends only what changed.
 #[test]

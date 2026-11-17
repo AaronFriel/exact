@@ -61,7 +61,7 @@ package protocol Canvases: AnyObject {
     var awaitingDrawable: Bool { get }
     var frameNow: Double? { get set }
     func reset()
-    func surface(view: NodeView, name: String, values: Any)
+    func surface(view: NodeView, name: String, values: Data)
     func destroy(view: UInt32)
     func loadIfNeeded()
     func surfaceWork(_ op: [String: Any], generation: Int)
@@ -212,7 +212,7 @@ final class NoCanvases: Canvases {
     var awaitingDrawable: Bool { false }
     var frameNow: Double?
     func reset() {}
-    func surface(view: NodeView, name: String, values: Any) {}
+    func surface(view: NodeView, name: String, values: Data) {}
     func destroy(view: UInt32) {}
     func loadIfNeeded() {}
     func surfaceWork(_ op: [String: Any], generation: Int) {}

@@ -160,7 +160,7 @@ extension CanvasesHost {
     }
 
     func bindSurface(_ m: GpuModule, _ e: Entry) -> UInt32 {
-        guard let data = try? JSONSerialization.data(withJSONObject: e.values) else { return 1 }
+        let data = e.values
         let now = session?.now() ?? 0
         // The size first: a stamped bind may tick a new world, which frames
         // itself for its canvas before its first tick (`Game::first_frame`).
