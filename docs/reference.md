@@ -1020,6 +1020,10 @@ companion inside the iOS bundle. `--watchos --run --sim <iPhone udid>
 A device build of the iPhone app (`--device`, `--archive`, `--unsigned`) embeds
 the watch app in its `Watch/` folder, built for arm64 from watchOS 26: it runs
 on Series 9 and later and Ultra 2 and later (LLP 1126.002 D7).
+In development, install the watch app directly with
+`xcrun devicectl device install app --device <watch-udid> <watch-app-path>`,
+using the watch app bundle inside the iPhone app's `Watch/` folder.
+Installing the iPhone app may not install its watch companion.
 `--extensions` without `watch` leaves it out. Signed, the watch app and its
 complications each embed a profile of the iPhone app's team, App ID prefix and
 method, for `<id>.watchkitapp` and `<id>.watchkitapp.widgets`, each granting the
@@ -1078,14 +1082,15 @@ exceed 60,000 bytes is not sent: the session log says so once, the watch keeps
 its last copy, and the next change that fits is sent. A snapshot's revision is
 spent only when WatchConnectivity takes it.
 
-At launch the watch activates its session and imports the retained context
-before its readers open; an active scene does not open them earlier. A session
-that cannot activate, or a context for an old key or schema, leaves the last
-accepted store available offline. A failed or partial import keeps readers
-closed. The watch app tries it again while it is active, at the same waits, at
-each foreground and at each later delivery, without restarting. An import that
-lands after the session booted refreshes it. A phone
-edit, deletion or logout reaches it only after delivery and successful import.
+At launch the watch opens readers on its last applied store without waiting for
+WatchConnectivity activation, so stored state and secrets are available offline
+at once. With no stored copy, readers see the app's initial state. When activation
+completes, the watch imports the retained context and refreshes the live session;
+a context for an old key or schema leaves the last applied store unchanged.
+An unfinished import keeps new readers closed. The watch app tries a failed
+import again while it is active, at the same waits, at each foreground and at
+each later delivery, without restarting. A phone edit, deletion or logout
+reaches it only after delivery and successful import.
 A watch already holding a TOTP seed can keep generating codes until that seed is
 replaced at the service; local logout does not revoke that copy remotely.
 Imports and replica retirement invalidate cached complication timelines and request
