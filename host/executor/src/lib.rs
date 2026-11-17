@@ -1057,7 +1057,7 @@ fn reservation(request: &Request) -> Result<(usize, usize, usize), &'static str>
         bytes = bytes.checked_add(n).ok_or("request size overflow")?;
     }
     if bytes > MAX_REQUEST {
-        return Err("native request exceeds 4 MiB");
+        return Err("native request exceeds 4 MiB (URL, headers and body together): send a larger body from an app file with exactBodyFrom");
     }
     // A plain independent reply is read into one buffer of its ceiling
     // (`body_to::receive`; the asynchronous core grows its buffer only up to
