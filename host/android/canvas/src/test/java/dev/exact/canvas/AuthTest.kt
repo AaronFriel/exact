@@ -273,6 +273,42 @@ class AuthTest {
         assertTrue(Host.answers.isEmpty())
     }
 
+    @Test fun aFragmentCallbackKeepsItsParametersAndLeavesRejectionToTheRunner() {
+        browser(true)
+        Auth.open(activity, 1, "https://login.test/authorize", "app.test:/cb", "s +😀")
+        val url = "app.test:/cb?tracking=1#state=s+%2B%F0%9F%98%80&id_token=token&code=hybrid"
+        controller.newIntent(intent(url))
+        assertEquals(listOf(url), Host.urls)
+        assertNull(activity.intent.data)
+        Host.urls.clear()
+        controller.newIntent(intent("app.test:/cb#state=wrong"))
+        assertTrue(Host.urls.isEmpty())
+        for (suffix in listOf("?state=wrong#state=s+%2B%F0%9F%98%80", "?state=s+%2B%F0%9F%98%80#state=wrong", "#state=s+%2B%F0%9F%98%80&state=wrong")) {
+            val malformed = "app.test:/cb$suffix"
+            controller.newIntent(intent(malformed))
+            assertEquals(malformed, Host.urls.last())
+            assertNull(activity.intent.data)
+        }
+        Auth.end(1)
+        Host.urls.clear()
+        Auth.open(activity, 2, "https://login.test/logout", "app.test:/cb", "s", true)
+        // A state-less sign-in answer is addressed to no logout; the logout's state addresses one.
+        for (suffix in listOf("#error=denied", "#code=one")) {
+            controller.newIntent(intent("app.test:/cb$suffix"))
+            assertTrue(Host.urls.isEmpty())
+            assertNull(activity.intent.data)
+        }
+        for (suffix in listOf("#id_token=t&state=s", "?access_token=t&state=s", "")) {
+            val returned = "app.test:/cb$suffix"
+            controller.newIntent(intent(returned))
+            assertEquals(returned, Host.urls.last())
+            assertNull(activity.intent.data)
+        }
+        Host.urls.clear()
+        controller.newIntent(intent("app.test:/cb#state=wrong"))
+        assertTrue(Host.urls.isEmpty())
+    }
+
     private fun authRequest(id: Int, state: String = "s1", logout: Boolean = false): IntArray {
         val body = ArrayList<Int>()
         for (text in listOf("https://login.test/authorize", "app.test:/cb", state)) {
@@ -552,20 +588,32 @@ class AuthTest {
         assertEquals(listOf(1 to "cancelled"), Host.answers)
     }
 
-    @Test fun stateLessLogoutReturnsAndCannotTakeASignInResponse() {
+    @Test fun aLogoutForwardsItsOwnResponseForImmediateRunnerRejection() {
         browser(true)
         val requests = Requests(activity)
         requests.perform(authRequest(1, "sign-in"))
         requests.perform(authRequest(2, "logout", logout = true))
         controller.pause().stop()
-        controller.newIntent(intent("app.test:/cb?code=sign-in-code&state=logout")).start().resume()
+        controller.newIntent(intent("app.test:/cb#code=unaddressed")).start().resume()
         assertTrue(Host.urls.isEmpty())
+        val rejected = "app.test:/cb?code=sign-in-code&state=logout"
+        controller.newIntent(intent(rejected))
+        assertEquals(listOf(rejected), Host.urls)
+        Auth.end(2)
+        Host.urls.clear()
         val signIn = "app.test:/cb?code=sign-in-code&state=sign-in"
         controller.newIntent(intent(signIn))
+        assertEquals(listOf(signIn), Host.urls)
+        Auth.end(1)
+        requests.perform(authRequest(2, "logout", logout = true))
+        controller.newIntent(intent("app.test:/cb#id_token=unexpected"))
         assertEquals(listOf(signIn), Host.urls)
         val returned = "app.test:/cb"
         controller.newIntent(intent(returned))
         assertEquals(listOf(signIn, returned), Host.urls)
+        Auth.end(2)
+        shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMinutes(11))
+        assertTrue(Host.answers.isEmpty())
     }
 
     @Test fun defaultBrowserWaitsUntilTheBoundAndForgettingCancelsOnlyTheWait() {

@@ -1589,16 +1589,21 @@ ID-token hint and revocation therefore always name the same login without
 losing the press's browser activation. Until the provider logout succeeds or
 a new sign-in replaces it, the store retains its endpoint and ID token under
 the same secret lease; the app remains signed out. Entra and Cognito may
-return from logout without `state`; that return is accepted only when it has
-neither `code` nor `error`. A returned `state`, when present, must match. A
-sign-in response therefore cannot complete a waiting logout.
-When the runner or Android must choose among several logouts at one callback, a
-return without `state` completes the oldest live one. On the web, a return from
-a popup whose opener remains completes that popup's logout. Before navigating,
-the glue puts a fresh random identity in the blank popup's own
-`sessionStorage`; the callback reads and removes it. After severance, only the
-live logout holding that identity completes. An unaddressed state-less return
-completes nothing, and no tab takes a shared lock or reads another tab's state.
+return from logout without `state`. A successful logout return carries no
+`code`, `error`, `id_token` or `access_token` in its query or fragment. Its
+state, when present, must occur once and match the request.
+On Android and in the runner, a matching state addresses the return; a
+sign-in takes a sign-in answer before a logout sharing its state. A return
+without state and without a sign-in answer goes to the oldest logout at that
+callback, whoever else waits; one without state that carries a sign-in answer
+goes to nobody. On the web, the
+logout's own popup addresses its return through its opener. Before navigating,
+the glue also puts a fresh random identity in that popup's `sessionStorage`;
+the callback reads and removes it. After severance, that identity addresses
+the return to the live logout holding it. An addressed logout return carrying
+a sign-in answer fails immediately with 502. An unaddressed broadcast carrying
+a sign-in answer completes no logout, even if its state matches. No tab takes
+a shared lock or reads another tab's state.
 A request still held at the ten-minute bound answers 499 once, whether its
 timer or a late return arrives first.
 
@@ -1716,10 +1721,19 @@ before awaiting anything. Both parameter maps refuse `response_type`,
 `code_challenge_method`, `nonce` and `max_age` with `TypeError`; the package
 sets those fields or cannot validate what they ask for.
 
+With `openid`, `signIn(store, { nonce })` sends an app-chosen, non-empty string
+and checks the ID token against that exact value. Use a fresh value for each
+sign-in. Omit it to let the package generate one. The option applies only to
+that press, for a browser sign-in or `authorize`; raw parameter maps still
+refuse `nonce`.
+
 For flows the package does not cover, data code may use `openAuthSession`
 and `authCallback` directly; their public declarations and rejection statuses
-are in the generated `app.d.ts`. A callback must carry exactly one `state`,
-equal to the nonempty value supplied to `openAuthSession`. Keep callback URLs
+are in the generated `app.d.ts`. A callback must carry exactly one `state`
+across its query and fragment, equal to the nonempty value supplied to
+`openAuthSession`; duplicates are refused, including one in each. The full URL
+returns to data code unchanged, including fragment parameters such as
+`id_token` ([OIDC fragment responses](https://openid.net/specs/openid-connect-core-1_0.html#ImplicitAuthResponse)). Keep callback URLs
 in data code: they can contain credentials.
 
 On the web, closing the sign-in popup is not reported as cancellation:
@@ -1843,6 +1857,20 @@ native callback so an installed app does not intercept the web sign-in.
 Apple returns `502` with its reason when the app is not associated with the
 callback domain. A session that starts has not yet proved callback delivery;
 check the return in a signed app with the domain's association file published.
+
+### Web sign-in callback
+
+Grant the deployed site's exact `auth.callback https://app.example/.exact/auth/callback`
+and register it with the provider. A loopback development page grants its own
+callback automatically; deployment has no such exception.
+
+Serve the generated `dist/.exact/auth/callback` at `/.exact/auth/callback`,
+without a router fallback or trailing-slash redirect, and its script at
+`/.exact/auth/callback.js`. Include the hidden `.exact/` directory in the upload.
+With Wrangler or another static-assets uploader, verify that both URLs return
+the generated files after deploying; if the uploader omits them, serve them
+explicitly from the Worker. Keep the callback's `Cache-Control: no-store` and
+`Referrer-Policy: no-referrer` headers.
 
 ### Native sign-in (`@exact/sign-in`)
 

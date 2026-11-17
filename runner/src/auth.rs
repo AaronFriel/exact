@@ -37,7 +37,7 @@ pub struct Session {
     pub callback: String,
     /// The `state` the callback must carry, exactly once.
     pub state: String,
-    /// This is an RP-initiated logout, whose return carries no code or error
+    /// This is an RP-initiated logout, whose return carries no sign-in answer
     /// and may omit `state`.
     pub logout: bool,
     /// The web's blank window reserved synchronously at the press. Other
@@ -257,6 +257,12 @@ impl<'a> Url<'a> {
     fn web_callback(&self) -> bool {
         self.scheme == "https" && decode(self.path).ends_with(WEB_CALLBACK_PATH)
     }
+}
+
+/// A sign-in's answer, in the query or the fragment (RFC 6749 §4.1.2, §4.2.2; OpenID Connect
+/// Core 1.0 §3.2.2.5). A logout return carries none of these (LLP 1069.006 D3).
+fn sign_in_response(name: &str) -> bool {
+    matches!(name, "code" | "error" | "id_token" | "access_token")
 }
 
 /// A query's `name=value` pairs, percent-decoded, `+` as a space.
@@ -526,8 +532,8 @@ fn loopback_admits(grant: &str, callback: &str) -> bool {
 
 /// D3's match, on every host: `got`'s scheme, host and path equal
 /// `session.callback`'s exactly (no userinfo; the same port), and its query
-/// carries `state` exactly once, equal to the request's. A logout instead
-/// carries neither `code` nor `error`, and its state may be absent. `Err`
+/// and fragment together carry `state` exactly once, equal to the request's.
+/// A logout carries no sign-in answer, and its state may be absent. `Err`
 /// says which check failed, never the URL.
 pub fn accept(session: &Session, got: &str) -> Result<(), String> {
     let want = Url::parse(&session.callback).ok_or("the request's callback is unreadable")?;
@@ -547,15 +553,17 @@ pub fn accept(session: &Session, got: &str) -> Result<(), String> {
     }
     let mut states = Vec::new();
     let mut has_response = false;
-    for (name, value) in query_pairs(url.query.unwrap_or("")) {
+    for (name, value) in
+        query_pairs(url.query.unwrap_or("")).chain(query_pairs(url.fragment.unwrap_or("")))
+    {
         if name == "state" {
             states.push(value);
-        } else if matches!(name.as_str(), "code" | "error") {
+        } else if sign_in_response(&name) {
             has_response = true;
         }
     }
     if session.logout && has_response {
-        return Err("the logout return carries a code or error".into());
+        return Err("the logout return carries a sign-in response".into());
     }
     match states.as_slice() {
         [one] if same(one, &session.state) => Ok(()),
@@ -696,9 +704,9 @@ pub fn complete<D: DataSource>(
 }
 
 /// Consume a declared Android callback endpoint before navigation, including
-/// stale and cold callbacks. State selects its exact session. With no state,
-/// a response carrying neither `code` nor `error` selects the oldest logout
-/// at this endpoint; it never selects a sign-in.
+/// stale and cold callbacks. A matching sign-in takes a sign-in answer before
+/// a logout with the same state. With no state, only a sole logout at this
+/// endpoint is addressed. An addressed logout's sign-in answer settles with 502.
 pub fn receive_callback<D: DataSource>(runner: &mut Runner<D>, url: &str) -> bool {
     // A malformed response query still belongs to this endpoint, never to navigation.
     let endpoint = url.split(['?', '#']).next().unwrap_or(url);
@@ -725,33 +733,46 @@ pub fn receive_callback<D: DataSource>(runner: &mut Runner<D>, url: &str) -> boo
     }
     // Read state even if another part of the response is malformed: `complete`
     // must reject that response rather than leave the matching sign-in waiting.
-    let query = url
-        .split('#')
-        .next()
-        .unwrap_or(url)
-        .split_once('?')
-        .map_or("", |(_, q)| q);
-    let states: Vec<_> = query_pairs(query)
+    let (before_fragment, fragment) = url.split_once('#').unwrap_or((url, ""));
+    let query = before_fragment.split_once('?').map_or("", |(_, q)| q);
+    let params = || query_pairs(query).chain(query_pairs(fragment));
+    let states: Vec<_> = params()
         .filter_map(|(name, value)| (name == "state").then_some(value))
         .collect();
-    let has_response =
-        query_pairs(query).any(|(name, _)| matches!(name.as_str(), "code" | "error"));
-    let tickets: Vec<_> = runner
+    let has_response = params().any(|(name, _)| sign_in_response(&name));
+    let waiting: Vec<_> = runner
         .auth_mut()
         .live
         .iter()
-        .filter(|live| {
-            endpoint_matches(&live.session.callback)
-                && if states.is_empty() {
-                    live.session.logout && !has_response
-                } else {
-                    (!live.session.logout || !has_response)
-                        && states.iter().any(|state| same(state, &live.session.state))
-                }
+        .filter(|live| endpoint_matches(&live.session.callback))
+        .map(|live| {
+            (
+                live.ticket,
+                states.iter().any(|state| same(state, &live.session.state)),
+                live.session.logout,
+            )
         })
-        .map(|live| live.ticket)
         .collect();
-    if let Some(ticket) = tickets.into_iter().find(|t| runner.holds(*t)) {
+    let waiting: Vec<_> = waiting
+        .into_iter()
+        .filter(|(ticket, _, _)| runner.holds(*ticket))
+        .collect();
+    let selected = if states.is_empty() {
+        // A state-less return is a logout's (Entra and Cognito send none): the
+        // oldest logout at this endpoint takes it, whoever else waits. A
+        // state-less sign-in answer is addressed to nobody (LLP 1069.006 D5a).
+        (!has_response)
+            .then(|| waiting.iter().find(|(_, _, logout)| *logout))
+            .flatten()
+            .map(|(ticket, _, _)| *ticket)
+    } else {
+        waiting
+            .iter()
+            .filter(|(_, matches_state, _)| *matches_state)
+            .min_by_key(|(_, _, logout)| has_response && *logout)
+            .map(|(ticket, _, _)| *ticket)
+    };
+    if let Some(ticket) = selected {
         complete(runner, ticket, Ok(url));
     }
     true
@@ -1130,6 +1151,40 @@ mod tests {
     }
 
     #[test]
+    fn a_fragment_callback_requires_one_exact_state() {
+        for endpoint in ["social.exact.bluesky:/oauth", "https://app.example/cb"] {
+            let mut s = session(endpoint);
+            s.state = "s +😀".into();
+            assert!(accept(
+                &s,
+                &format!(
+                    "{endpoint}?tracking=1#state=s+%2B%F0%9F%98%80&id_token=token&code=hybrid"
+                )
+            )
+            .is_ok());
+            for suffix in [
+                "#id_token=token",
+                "#state=wrong",
+                "?state=wrong#state=s+%2B%F0%9F%98%80",
+                "?state=s+%2B%F0%9F%98%80#state=wrong",
+                "#state=s+%2B%F0%9F%98%80&state=wrong",
+            ] {
+                assert!(
+                    accept(&s, &format!("{endpoint}{suffix}")).is_err(),
+                    "{suffix}"
+                );
+            }
+            s.logout = true;
+            for suffix in ["#error=denied", "#code=one", "#state=wrong"] {
+                assert!(
+                    accept(&s, &format!("{endpoint}{suffix}")).is_err(),
+                    "{suffix}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn a_logout_return_has_no_code_or_error_and_may_omit_state() {
         let mut s = session("social.exact.bluesky:/oauth");
         s.logout = true;
@@ -1143,6 +1198,9 @@ mod tests {
         for bad in [
             "social.exact.bluesky:/oauth?code=c",
             "social.exact.bluesky:/oauth?error=e",
+            "social.exact.bluesky:/oauth#id_token=t&state=s1",
+            "social.exact.bluesky:/oauth#access_token=t&state=s1",
+            "social.exact.bluesky:/oauth#id_token=t",
             "social.exact.bluesky:/oauth?state=wrong",
             "social.exact.bluesky:/oauth?state=s1&state=s1",
         ] {

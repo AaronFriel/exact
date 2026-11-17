@@ -386,6 +386,38 @@ fn android_https_returns_convex_codes_only_to_the_live_session() {
 }
 
 #[test]
+fn android_delivers_fragment_callbacks_and_rejects_conflicting_states() {
+    for endpoint in ["app.test:/cb", "https://app.test/cb"] {
+        for (suffix, status) in [
+            ("?tracking=1#state=s1&id_token=token&code=hybrid", 200),
+            ("#state=s1&error=denied", 200),
+            ("?state=s1#state=wrong", 502),
+            ("?state=wrong#state=s1", 502),
+            ("#state=s1&state=s1", 502),
+        ] {
+            let mut r = boot();
+            let mut out = press(&mut r, "go");
+            out.request.body = String::from_utf8(out.request.body)
+                .unwrap()
+                .replace("app.test:/cb", endpoint)
+                .into_bytes();
+            assert!(matches!(
+                auth::arm(&mut r, &out, false, Browser::Android, None),
+                Arm::Present(_)
+            ));
+            assert!(auth::receive_callback(
+                &mut r,
+                &format!("{endpoint}#state=old")
+            ));
+            assert!(r.take_request_refusal(true).is_none());
+            let url = format!("{endpoint}{suffix}");
+            assert!(auth::receive_callback(&mut r, &url));
+            assert_eq!(settled(&mut r), (out.ticket, status));
+        }
+    }
+}
+
+#[test]
 fn android_refuses_the_reserved_web_popup_callback() {
     let mut r = boot();
     for path in [
@@ -585,7 +617,7 @@ fn android_same_target_sessions_deliver_by_state() {
 }
 
 #[test]
-fn android_state_less_return_selects_oldest_logout_and_never_a_sign_in() {
+fn android_routes_responses_by_state_and_state_less_returns_to_the_oldest_logout() {
     let mut r = Runner::boot(
         contract::compile("shape R\n  text: string\ncomponent App\n  resource signed = signIn(\"app.test:/cb\", s) for s in [\"sign-in\", \"logout-one\", \"logout-two\"] as shape R\n  view\n    text signed.map(s => s.text).join(\",\")\n").unwrap(),
         Signer, Kernel::with_monospace(), Default::default(), "/",
@@ -611,24 +643,104 @@ fn android_state_less_return_selects_oldest_logout_and_never_a_sign_in() {
         &mut r,
         "app.test:/cb?code=sign-in&state=logout-one"
     ));
+    assert_eq!(settled(&mut r), (requests[1].ticket, 502));
+    assert!(auth::receive_callback(&mut r, "app.test:/cb#id_token=t"));
     assert!(
         r.take_request_refusal(true).is_none(),
-        "a code-bearing response cannot complete its state-matched logout"
+        "a state-less sign-in answer in the fragment completes no logout"
     );
     assert!(auth::receive_callback(&mut r, "app.test:/cb"));
     assert_eq!(
         settled(&mut r),
-        (requests[1].ticket, 200),
-        "the oldest logout"
+        (requests[2].ticket, 200),
+        "the oldest logout, while a sign-in also waits"
     );
     assert!(auth::receive_callback(
         &mut r,
         "app.test:/cb?code=c&state=sign-in"
     ));
     assert_eq!(settled(&mut r), (requests[0].ticket, 200));
+}
+
+#[test]
+fn an_addressed_logout_sign_in_answer_settles_with_502_on_every_host() {
+    for browser in [Browser::Native, Browser::Web, Browser::Android] {
+        let endpoint = if matches!(browser, Browser::Web) {
+            "https://app.test/.exact/auth/callback"
+        } else {
+            "app.test:/cb"
+        };
+        let mut r = boot();
+        for part in ["?", "#"] {
+            for name in ["code", "error", "id_token", "access_token"] {
+                // On Android only the state addresses a logout; a state-less
+                // sign-in answer selects none (the test above).
+                let states: &[&str] = if matches!(browser, Browser::Android) {
+                    &["&state=s1"]
+                } else {
+                    &["", "&state=s1"]
+                };
+                for state in states {
+                    let mut out = press(&mut r, "go");
+                    let mut session =
+                        auth::Session::from_json(std::str::from_utf8(&out.request.body).unwrap())
+                            .unwrap();
+                    session.callback = endpoint.into();
+                    session.logout = true;
+                    out.request = exact_runner::Request::auth(session.to_json().into_bytes());
+                    assert!(matches!(
+                        auth::arm(&mut r, &out, false, browser, Some("https://app.test")),
+                        Arm::Present(_)
+                    ));
+                    let url = format!("{endpoint}{part}{name}=secret{state}");
+                    if matches!(browser, Browser::Android) {
+                        assert!(auth::receive_callback(&mut r, &url));
+                    } else {
+                        auth::complete(&mut r, out.ticket, Ok(&url));
+                    }
+                    assert_eq!(
+                        deliver(&mut r),
+                        "502 the logout return carries a sign-in response"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn a_sign_in_takes_its_response_when_a_logout_shares_its_state() {
+    let mut r = Runner::boot(
+        contract::compile("shape R\n  text: string\ncomponent App\n  resource signed = signIn(\"app.test:/cb\", s) for s in [\"logout\", \"sign-in\"] as shape R\n  view\n    text signed.map(s => s.text).join(\",\")\n").unwrap(),
+        Signer, Kernel::with_monospace(), Default::default(), "/",
+    ).unwrap();
+    let mut requests = r.take_requests();
+    assert_eq!(requests.len(), 2);
+    for (index, out) in requests.iter_mut().enumerate() {
+        let mut session =
+            auth::Session::from_json(std::str::from_utf8(&out.request.body).unwrap()).unwrap();
+        session.state = "s1".into();
+        session.logout = index == 0;
+        out.request = exact_runner::Request::auth(session.to_json().into_bytes());
+        assert!(matches!(
+            auth::arm(&mut r, out, false, Browser::Android, None),
+            Arm::Present(_)
+        ));
+    }
     assert!(auth::receive_callback(
         &mut r,
-        "app.test:/cb?state=logout-two"
+        "app.test:/cb#id_token=secret&state=s1"
     ));
-    assert_eq!(settled(&mut r), (requests[2].ticket, 200));
+    assert_eq!(settled(&mut r), (requests[1].ticket, 200));
+    assert!(r.take_request_refusal(true).is_none());
+    assert!(auth::receive_callback(
+        &mut r,
+        "app.test:/cb#access_token=secret"
+    ));
+    assert!(
+        r.take_request_refusal(true).is_none(),
+        "a state-less sign-in answer is addressed to no logout"
+    );
+    assert!(auth::receive_callback(&mut r, "app.test:/cb"));
+    assert_eq!(settled(&mut r), (requests[0].ticket, 200));
 }

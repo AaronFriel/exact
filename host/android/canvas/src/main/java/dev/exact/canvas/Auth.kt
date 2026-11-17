@@ -132,13 +132,15 @@ internal object Auth {
             val waiting = waits.values.filter { endpoint(it.callback, uri) }
             // Even a stale tab's callback caused this return; it is not a browser dismissal.
             waiting.forEach { it.stopped = false }
-            val states = uri.encodedQuery.orEmpty().split('&').mapNotNull { pair ->
-                fun decode(text: String) = Uri.decode(text.replace("+", " "))
-                if (decode(pair.substringBefore('=')) == "state") decode(pair.substringAfter('=', "")) else null
+            fun decode(text: String) = Uri.decode(text.replace("+", " "))
+            val params = listOf(uri.encodedQuery, uri.encodedFragment).flatMap { part ->
+                part.orEmpty().split('&').map { pair -> decode(pair.substringBefore('=')) to decode(pair.substringAfter('=', "")) }
             }
-            val names = uri.encodedQuery.orEmpty().split('&').map { pair -> Uri.decode(pair.substringBefore('=')) }
-            val hasResponse = names.any { it == "code" || it == "error" }
-            if (waiting.any { it.state in states && (!it.logout || !hasResponse) } || states.isEmpty() && !hasResponse && waiting.any { it.logout }) {
+            val states = params.filter { it.first == "state" }.map { it.second }
+            val hasResponse = params.any { it.first in setOf("code", "error", "id_token", "access_token") }
+            // The runner selects the matching sign-in first and rejects a logout's sign-in answer with 502;
+            // a state-less return without one goes to the oldest logout (LLP 1069.006 D5a).
+            if (waiting.any { it.state in states } || states.isEmpty() && !hasResponse && waiting.any { it.logout }) {
                 Exact.open(uri.toString())
             }
         }

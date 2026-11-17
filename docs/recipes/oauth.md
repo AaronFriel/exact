@@ -2,8 +2,7 @@
 
 `@exact/oauth` handles PKCE, tokens, refresh and sign-out. Install it with
 `EXACT_APP_DIR=$PWD bun <exact2>/scripts/exact.mjs add oauth`.
-Devices need trusted HTTPS or a tunnel; simulators can use loopback HTTP.
-Provider setup and tests: `bun exact.mjs docs sign-in providers`.
+Provider setup: `bun exact.mjs docs sign-in providers`.
 
 ```ts
 import { oauth } from '@exact/oauth';
@@ -26,7 +25,7 @@ const sources: Sources = {
 ```
 
 ```text
-use OAuthSession, OAuthResult from "@exact/oauth"   // at the top of the file
+use OAuthSession, OAuthResult from "@exact/oauth"
 
 shape Me
   name: string
@@ -45,8 +44,8 @@ component Account
     refresh me
 ```
 
-- On web, popup closure is unknowable under COOP and never cancels. To cancel a
-  pending sign-in, assign `signedIn = none`; this releases it for retry.
+- Web popup closure is unknowable under COOP. Cancel with `signedIn = none`
+  to release a pending sign-in for retry.
 - Show data only while `session.signedIn`; show `problem` when it is not `""`.
   `auth_session` (502) keeps the host's reason and is not retryable.
 - Let `fetch` and `json` throw `OAuthError`: the resource keeps what it showed.
@@ -57,6 +56,9 @@ component Account
   callback. Details: `bun exact.mjs docs oauth endSession`.
 - A provider-ended session leaves signed-in state and sets `session.error`; a
   network failure, 429 or 5xx keeps it.
+
+With `openid`, `signIn(store, { nonce })` sends and checks an app nonce.
+[Grant and host the callback](../contract-for-agents.md#web-sign-in-callback) before deploying.
 
 For an HTTPS-only backend, declare `auth.callback https://app.example/auth/return`.
 Apple needs `webcredentials`; Android uses Auth Tab or a verified App Link.
