@@ -1,10 +1,11 @@
 import { test } from 'bun:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, resolve } from 'node:path';
-import { ensurePackageGpu, gpuModules, gpuVersionMatches, gpuView, gpuWorkspaceInputs, joinMetadata, packageGpuLock, packageGpuManifest, unregisteredSurfaces } from './app-shells.mjs';
+import { ensurePackageGpu, gpuModules, gpuVersionMatches, gpuView, gpuWorkspaceInputs, joinMetadata, outsideExact2, packageGpuLock, packageGpuManifest, settlePackageGpuLock, unregisteredSurfaces } from './app-shells.mjs';
 import { fresh } from '../host/web-js/module.mjs';
 import { withoutExtensions } from '../host/apple/extensions.mjs';
 import { bakeTarget, HOST_DEV, linuxBinary, linuxBuild, patchLines } from './app.mjs';
@@ -269,8 +270,167 @@ test('a package lock replaces the GPU subtree and retains shared dependencies', 
   assert.equal(packages.find(p => p.name === 'exact-gpu').source, undefined);
   for (const requirement of ['0.2', '^0.2.0', '>=0.2, <0.3', '=0.2.0']) assert.ok(gpuVersionMatches('0.2.0', requirement), requirement);
   assert.equal(gpuVersionMatches('0.3.0', '0.2'), false);
+  // Build metadata is ignored: a newer patch of `ash` matches the SDK's caret.
+  assert.ok(gpuVersionMatches('0.38.1+1.3.281', '0.38.0+1.3.281'));
+  assert.ok(gpuVersionMatches('0.4.1+sdk-1.4.341.0', '0.4.0+sdk-1.4.341.0'));
+  assert.equal(gpuVersionMatches('0.39.0+1.3.281', '0.38.0+1.3.281'), false);
 });
 
+test('a package GPU lock keeps the newer shared version in each compatible series and source', () => {
+  const block = (name, version, source = 'registry+crates', deps = []) =>
+    `[[package]]\nname = "${name}"\nversion = "${version}"\nsource = "${source}"\ndependencies = ${JSON.stringify(deps)}\n`;
+  for (const [sdkVersion, ownVersion, expected] of [
+    ['1.0.151', '1.0.154', '1.0.154'], ['1.0.154', '1.0.151', '1.0.154'],
+    ['1.0.151', '1.1.0-alpha.1', '1.0.151'],
+    ['0.14.7', '0.14.9', '0.14.9'], ['0.0.3', '0.0.4', '0.0.3'],
+  ]) {
+    const sdk = 'version = 4\n\n' + block('exact-gpu', '0.2.0', '', ['shared']) + block('shared', sdkVersion);
+    const own = 'version = 4\n\n' + block('map', '1.0.0', '', ['shared']) + block('shared', ownVersion)
+      + block('shared', '2.0.0', 'git+https://example.test/shared#abc');
+    const shared = Bun.TOML.parse(packageGpuLock(sdk, own)).package.filter(p => p.name === 'shared');
+    assert.ok(shared.some(p => p.version === expected && p.source === 'registry+crates'));
+    assert.equal(shared.length, sdkVersion === '0.0.3' ? 3 : 2);
+    assert.ok(shared.some(p => p.source === 'git+https://example.test/shared#abc'));
+  }
+});
+
+test.each(['conflict', 'validation', 'sdk-first', 'pins', 'multiple', 'serde-json'])('package GPU preparation retries after %s with only shipped versions and checksums', kind => {
+  const dir = mkdtempSync(resolve(import.meta.dir, '../target/gpu-resolution-'));
+  const put = (file, text) => { mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, text); };
+  const checksum = text => createHash('sha256').update(text).digest('hex');
+  const source = 'registry+https://github.com/rust-lang/crates.io-index';
+  const checksums = new Map();
+  const vendor = (name, version, dependencies = '', features = '') => {
+    const manifest = `[package]\nname = "${name}"\nversion = "${version}"\nedition = "2021"\n[dependencies]\n${dependencies}\n${features}`;
+    const files = { 'Cargo.toml': manifest, 'src/lib.rs': '' }, root = resolve(dir, 'vendor', `${name}-${version}`);
+    for (const [file, text] of Object.entries(files)) put(resolve(root, file), text);
+    const sum = checksum(manifest);
+    put(resolve(root, '.cargo-checksum.json'), JSON.stringify({ package: sum,
+      files: Object.fromEntries(Object.entries(files).map(([file, text]) => [file, checksum(text)])) }));
+    checksums.set(`${name} ${version}`, sum);
+  };
+  const block = (name, version, deps = []) => {
+    const sum = checksums.get(`${name} ${version}`);
+    return `[[package]]\nname = "${name}"\nversion = "${version}"\n${sum ? `source = "${source}"\nchecksum = "${sum}"\n` : ''}dependencies = ${JSON.stringify(deps)}\n`;
+  };
+  const lock = (...blocks) => 'version = 4\n\n' + blocks.join('\n');
+  try {
+    let gpuDeps, mapDeps, sdk, own, expected, winner;
+    if (['conflict', 'validation', 'sdk-first'].includes(kind)) {
+      for (const version of ['1.0.0', '1.1.0', '2.0.0']) vendor('backend', version);
+      if (kind === 'conflict') {
+        vendor('helper', '1.1.0', 'backend = "=1.0.0"');
+        vendor('helper', '1.0.0', 'backend = "1"');
+      } else {
+        for (const [version, backend] of [['1.0.0', '1'], ['1.1.0', '2']]) {
+          vendor('helper', version, `backend = { version = "${backend}", optional = true }`, '[features]\nextra = ["dep:backend"]\n');
+        }
+      }
+      const reverse = kind === 'sdk-first', backend = kind === 'conflict' ? '1.1.0' : '1.0.0';
+      gpuDeps = reverse ? 'helper = { version = "1", features = ["extra"] }' : 'helper = "1"';
+      mapDeps = kind === 'conflict' ? 'backend = "1.1"' : reverse ? 'helper = "1"' : 'helper = { version = "1", features = ["extra"] }';
+      sdk = lock(block('exact-gpu', '0.2.0', ['helper']), block('helper', reverse ? '1.0.0' : '1.1.0', kind === 'validation' ? [] : ['backend']),
+        ...(kind === 'validation' ? [] : [block('backend', '1.0.0')]));
+      own = lock(block('map', '1.0.0', ['exact-gpu', kind === 'conflict' ? 'backend' : 'helper']),
+        block('exact-gpu', '0.2.0', ['helper']), block('helper', reverse ? '1.1.0' : '1.0.0', reverse ? [] : ['backend']),
+        ...(reverse ? [] : [block('backend', backend)]));
+      expected = [['backend', backend], ['helper', '1.0.0']];
+      winner = reverse ? 'sdk-first' : 'package-first';
+    } else if (kind === 'pins') {
+      for (const version of ['0.2.130', '0.2.131']) vendor('wasm-bindgen', version);
+      vendor('web-user', '1.0.0', 'wasm-bindgen = "0.2"');
+      gpuDeps = 'wasm-bindgen = "0.2"';
+      mapDeps = 'web-user = "1"';
+      sdk = lock(block('exact-gpu', '0.2.0', ['wasm-bindgen']), block('wasm-bindgen', '0.2.130'));
+      own = lock(block('map', '1.0.0', ['exact-gpu', 'web-user']), block('exact-gpu', '0.2.0', ['wasm-bindgen']),
+        block('web-user', '1.0.0', ['wasm-bindgen']), block('wasm-bindgen', '0.2.131'));
+      expected = [['wasm-bindgen', '0.2.130'], ['web-user', '1.0.0']];
+      winner = 'merged';
+    } else if (kind === 'multiple') {
+      for (const version of ['0.14.7', '0.14.9']) vendor('generic-array', version);
+      vendor('crypto-common', '0.1.7', 'generic-array = "=0.14.7"');
+      vendor('crypto-common', '0.1.8', 'generic-array = "0.14"');
+      // A newer release in the Cargo cache that neither lock holds; resolution must not settle on it.
+      vendor('crypto-common', '0.1.9', 'generic-array = "0.14"');
+      vendor('array-user', '1.0.0', 'generic-array = "0.14.9"');
+      gpuDeps = 'crypto-common = "0.1"';
+      mapDeps = 'array-user = "1"';
+      sdk = lock(block('exact-gpu', '0.2.0', ['crypto-common']), block('crypto-common', '0.1.7', ['generic-array']), block('generic-array', '0.14.7'));
+      // crypto-common is SDK-only. The package lock retains both versions, including an unused older one.
+      own = lock(block('map', '1.0.0', ['exact-gpu', 'array-user']), block('exact-gpu', '0.2.0'),
+        block('array-user', '1.0.0', ['generic-array 0.14.9']), block('generic-array', '0.14.7'), block('generic-array', '0.14.9'));
+      // The newer crypto-common is held elsewhere in the SDK lock, outside exact-gpu's subtree.
+      sdk += '\n' + block('crypto-common', '0.1.8', ['generic-array']);
+      expected = [['array-user', '1.0.0'], ['crypto-common', '0.1.8'], ['generic-array', '0.14.9']];
+      winner = 'package-first';
+    } else {
+      for (const version of ['1.0.151', '1.0.154']) vendor('serde_json', version);
+      vendor('mln-rs-feature', '0.0.12', 'serde_json = "1.0.154"');
+      for (const version of ['1.0.0', '1.1.0']) vendor('helper', version);
+      gpuDeps = 'serde_json = "1"\nhelper = "1"';
+      mapDeps = 'mln-rs-feature = "0.0.12"';
+      sdk = lock(block('exact-gpu', '0.2.0', ['serde_json', 'helper']), block('serde_json', '1.0.151'), block('helper', '1.1.0'));
+      own = lock(block('map', '1.0.0', ['exact-gpu', 'mln-rs-feature']), block('exact-gpu', '0.2.0', ['serde_json', 'helper']), block('helper', '1.0.0'),
+        block('mln-rs-feature', '0.0.12', ['serde_json']), block('serde_json', '1.0.154'));
+      expected = [['helper', '1.1.0'], ['mln-rs-feature', '0.0.12'], ['serde_json', '1.0.154']];
+      winner = 'merged';
+    }
+    put(resolve(dir, '.cargo/config.toml'), `[source.crates-io]\nreplace-with = "fixture"\n[source.fixture]\ndirectory = ${JSON.stringify(resolve(dir, 'vendor'))}\n[net]\noffline = true\n`);
+    put(resolve(dir, 'gpu/Cargo.toml'), `[package]\nname = "exact-gpu"\nversion = "0.2.0"\nedition = "2021"\n[dependencies]\n${gpuDeps}\n`);
+    put(resolve(dir, 'gpu/src/lib.rs'), '');
+    put(resolve(dir, 'map/Cargo.toml'), `[package]\nname = "map"\nversion = "1.0.0"\nedition = "2021"\n[dependencies]\nexact-gpu = { path = "../gpu" }\n${mapDeps}\n`);
+    put(resolve(dir, 'map/src/lib.rs'), '');
+    const pins = kind === 'pins' ? { 'wasm-bindgen': ['=0.2.130'] } : {};
+    const manifest = `[workspace]\nresolver = "2"\n[package]\nname = "module"\nversion = "0.1.0"\nedition = "2021"\n[dependencies]\nmap = { path = "map" }\n`
+      + (kind === 'pins' ? `[target.'cfg(target_arch = "wasm32")'.dependencies]\nwasm-bindgen = "=0.2.130"\n` : '');
+    put(resolve(dir, 'Cargo.toml'), manifest);
+    put(resolve(dir, 'src/lib.rs'), '');
+    const sdkPath = resolve(dir, 'gpu/Cargo.lock'), ownPath = resolve(dir, 'map/Cargo.lock');
+    put(sdkPath, sdk); put(ownPath, own);
+    const options = { cwd: dir, encoding: 'utf8' };
+    const accepted = [];
+    for (const attempt of ['merged', 'package-first', 'sdk-first']) {
+      const seed = packageGpuLock(sdk, own, attempt, pins);
+      if (kind === 'pins') assert.deepEqual(Bun.TOML.parse(seed).package.filter(p => p.name === 'wasm-bindgen').map(p => p.version), ['0.2.130']);
+      if (kind === 'multiple' && attempt === 'package-first') {
+        assert.deepEqual(Bun.TOML.parse(seed).package.filter(p => p.name === 'generic-array').map(p => p.version), ['0.14.7', '0.14.9']);
+        assert.equal(Bun.TOML.parse(seed).package.some(p => p.name === 'crypto-common'), false);
+      }
+      put(resolve(dir, 'Cargo.lock'), seed);
+      const result = spawnSync('cargo', ['metadata', '--offline', '--format-version', '1'], options);
+      if (result.status === 0 && !outsideExact2(readFileSync(resolve(dir, 'Cargo.lock'), 'utf8'), sdk + own.slice(own.indexOf('[[package]]'))).length) accepted.push(attempt);
+    }
+    // With an unlocked newer crypto-common cached, no seed alone stays within the locks; settling repairs it.
+    if (kind === 'multiple') assert.deepEqual(accepted, []);
+    else assert.equal(accepted[0], winner, `${kind}: accepted ${accepted}`);
+    if (['validation', 'sdk-first'].includes(kind)) assert.deepEqual(accepted, [winner]);
+    if (kind === 'serde-json') assert.equal(accepted.includes('sdk-first'), false);
+    settlePackageGpuLock(dir, readFileSync(sdkPath, 'utf8'), readFileSync(ownPath, 'utf8'), 'fixture with exact-gpu 0.2.0');
+    const final = spawnSync('cargo', ['metadata', '--locked', '--offline', '--format-version', '1'], options);
+    assert.equal(final.status, 0, final.stderr);
+    assert.deepEqual(JSON.parse(final.stdout).packages.filter(p => p.source).map(p => [p.name, p.version]).sort(),
+      expected);
+    const allowed = [...Bun.TOML.parse(sdk).package, ...Bun.TOML.parse(own).package];
+    for (const p of Bun.TOML.parse(readFileSync(resolve(dir, 'Cargo.lock'), 'utf8')).package.filter(p => p.source)) {
+      assert.ok(allowed.some(a => a.name === p.name && a.version === p.version && a.source === p.source && a.checksum === p.checksum), JSON.stringify(p));
+    }
+    assert.equal(readFileSync(sdkPath, 'utf8'), sdk);
+    assert.equal(readFileSync(ownPath, 'utf8'), own);
+    if (kind === 'validation') {
+      // No attempt may succeed when its resolved checksum is absent from both locks.
+      const invalid = own.replace(checksums.get('backend 1.0.0'), '0'.repeat(64));
+      assert.throws(() => settlePackageGpuLock(dir, sdk, invalid, 'fixture with exact-gpu 0.2.0'), error => {
+        assert.match(error.message, /merged:/);
+        assert.match(error.message, /package-first:/);
+        assert.match(error.message, /sdk-first:/);
+        assert.match(error.message, /backend 2.0.0/);
+        return true;
+      });
+      assert.equal(readFileSync(sdkPath, 'utf8'), sdk);
+      assert.equal(readFileSync(ownPath, 'utf8'), own);
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
 
 test('a package resolves with an empty Cargo cache before enforcing its shipped versions', async () => {
   const dir = mkdtempSync(resolve(import.meta.dir, '../target/gpu-cold-'));

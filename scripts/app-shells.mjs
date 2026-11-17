@@ -802,14 +802,18 @@ export function packageGpuManifest(manifest, dir) {
 }
 
 // Cargo treats a bare version as a caret requirement; commas are conjunctions.
+// Build metadata (`0.38.0+1.3.281`) takes no part in either, as in SemVer 2.0.0 §10.
 export function gpuVersionMatches(version, requirement) {
   if (requirement.includes('||')) return false;
-  const range = requirement.split(',').map(r => r.trim()).map(r => /^\d+(?:\.\d+){0,2}$/.test(r) ? `^${r}` : r).join(' ');
-  try { return Bun.semver.satisfies(version, range); } catch { return false; }
+  const bare = v => v.replace(/\+[0-9A-Za-z.-]*$/, '');
+  const range = requirement.split(',').map(r => bare(r.trim())).map(r => /^\d+(?:\.\d+){0,2}$/.test(r) ? `^${r}` : r).join(' ');
+  try { return Bun.semver.satisfies(bare(version), range); } catch { return false; }
 }
 
-/** Replace only exact-gpu's private lock subtree; a dependency shared with the package stays pinned (D5.4). */
-export function packageGpuLock(sdk, own) {
+/** Whole-graph starting points (LLP 1153.003 D5.4). Merged prefers newer compatible shared blocks;
+ * package-first keeps every package block except exact-gpu and competing exact pins, adding only the checkout's
+ * exact-gpu and the pinned closure. SDK-first keeps the SDK's block for each name, series and source it holds. */
+export function packageGpuLock(sdk, own, attempt = 'merged', pins = {}) {
   const graph = text => {
     const blocks = lockBlocks(text), packages = Bun.TOML.parse(text).package ?? [];
     const edge = dep => { const [name, version, ...source] = dep.split(' '); return packages.findIndex(p => p.name === name && (!version || p.version === version) && (!source.length || p.source === source.join(' ').slice(1, -1))); };
@@ -828,10 +832,88 @@ export function packageGpuLock(sdk, own) {
   const s = graph(sdk), o = graph(own);
   const gpu = o.reached(o.packages.flatMap((p, i) => p.name === 'exact-gpu' ? [i] : []));
   const shared = o.reached(o.packages.flatMap((_, i) => !gpu.has(i) ? [i] : []), true);
-  const keep = o.blocks.filter((_, i) => !gpu.has(i) || shared.has(i)).map(b => b.replace(/^ "exact-gpu[^"\n]*",\n/gm, ''));
+  const keep = o.blocks.filter((_, i) => attempt === 'package-first' ? o.packages[i].name !== 'exact-gpu' : !gpu.has(i) || shared.has(i))
+    .map(b => b.replace(/^ "exact-gpu[^"\n]*",\n/gm, ''));
   const sdkGpu = s.reached(s.packages.flatMap((p, i) => ['exact-gpu', 'wasm-bindgen', 'wasm-bindgen-futures', 'web-sys'].includes(p.name) ? [i] : []));
   const lock = blocks => `version = 4\n\n${blocks.join('\n\n')}\n`;
-  return lockSeed(lock(s.blocks.filter((_, i) => sdkGpu.has(i))), lock(keep));
+  const pinned = s.packages.flatMap((p, i) => pins[p.name]?.some(req => gpuVersionMatches(p.version, req)) ? [i] : []);
+  if (attempt === 'package-first') {
+    const needed = s.reached(pinned);
+    const added = s.blocks.filter((_, i) => s.packages[i].name === 'exact-gpu' || needed.has(i));
+    const pinnedSeries = new Set(pinned.map(i => lockSeriesSource(s.blocks[i])));
+    const ownBlocks = keep.filter(b => !pinnedSeries.has(lockSeriesSource(b)));
+    // Keep the package's dependency blocks, including multiple versions in one series.
+    const identities = new Set(ownBlocks.map(lockBlockId));
+    return lock([...ownBlocks, ...added.filter(b => !identities.has(lockBlockId(b)))]);
+  }
+  return lockSeed(lock(s.blocks.filter((_, i) => sdkGpu.has(i) || pinned.includes(i))), lock(keep),
+    attempt === 'merged' ? new Set(pinned.map(i => lockSeriesSource(s.blocks[i]))) : null);
+}
+
+/** Resolve a generated package GPU workspace against the two shipped locks. */
+export function settlePackageGpuLock(dir, sdk, own, label) {
+  const options = { cwd: dir, env: cargoEnvironment(), encoding: 'utf8', maxBuffer: 1 << 26 };
+  const failures = [];
+  const allowed = `${sdk}\n${lockBlocks(own).join('\n\n')}`;
+  // The generated manifest carries the dependencies copied from game/Cargo.toml, including CLI pins.
+  const manifest = Bun.TOML.parse(readFileSync(resolve(dir, 'Cargo.toml'), 'utf8'));
+  const tables = [manifest.dependencies, manifest['build-dependencies'],
+    ...Object.values(manifest.target ?? {}).flatMap(t => [t.dependencies, t['build-dependencies']])];
+  const pins = {};
+  for (const table of tables.filter(Boolean)) for (const [alias, spec] of Object.entries(table)) {
+    const requirement = typeof spec === 'string' ? spec : spec.version;
+    if (requirement?.split(',').some(r => r.trim().startsWith('='))) (pins[spec.package ?? alias] ??= []).push(requirement);
+  }
+  for (const attempt of ['merged', 'package-first', 'sdk-first']) {
+    writeChanged(resolve(dir, 'Cargo.lock'), packageGpuLock(sdk, own, attempt, pins));
+    let resolved = spawnSync('cargo', ['metadata', '--offline', '--format-version', '1'], options);
+    if (resolved.status !== 0 && OFFLINE_MISSING.test(resolved.stderr ?? '')) {
+      // Fetch may resolve missing sources; validation below binds that resolution to the input locks.
+      const fetched = spawnSync('cargo', ['fetch'], options);
+      resolved = fetched.status === 0 ? spawnSync('cargo', ['metadata', '--locked', '--offline', '--format-version', '1'], options) : fetched;
+    }
+    const outside = resolved.status === 0 ? repairOutside(dir, options, allowed) : [];
+    if (resolved.status === 0 && !outside.length) return;
+    const reason = outside.length ? `requires versions or checksums neither lock holds: ${outside.join(', ')}`
+      : resolved.stderr || resolved.error?.message;
+    failures.push(`${attempt}: ${reason}`);
+  }
+  throw new Error(`${label}: its locked dependencies have no accepted resolution:\n${failures.join('\n')}`);
+}
+
+/** A crate neither lock holds is one Cargo picked from its cache for an edge no lock entry fixed. Each is replaced
+ * by the newest block of its name, series and source that a lock holds and that Cargo then accepts as resolved
+ * (a lock edit rather than `cargo update --precise`, which a directory source ignores); what remains is returned. */
+function repairOutside(dir, options, allowed) {
+  const lockPath = resolve(dir, 'Cargo.lock'), held = lockBlocks(allowed), tried = new Set();
+  const field = (block, key) => new RegExp(`^${key} = "([^"]*)"`, 'm').exec(block)?.[1] ?? '';
+  for (;;) {
+    const outside = outsideExact2(readFileSync(lockPath, 'utf8'), allowed);
+    const id = outside.find(o => !tried.has(o));
+    if (!id) return outside;
+    tried.add(id);
+    const [name, version, source = ''] = id.split(' ');
+    const before = readFileSync(lockPath, 'utf8');
+    const current = lockBlocks(before).find(b => field(b, 'name') === name && field(b, 'version') === version);
+    const candidates = held.filter(b => field(b, 'name') === name && field(b, 'source') === source && series(field(b, 'version')) === series(version))
+      .sort((a, b) => Bun.semver.order(field(b, 'version'), field(a, 'version')));
+    for (const block of candidates) {
+      const precise = field(block, 'version');
+      writeFileSync(lockPath, before.replace(current, block).replaceAll(`"${name} ${version}`, `"${name} ${precise}`));
+      let moved = spawnSync('cargo', ['metadata', '--offline', '--format-version', '1'], options);
+      // An allowed version absent from the local cache is fetched, as the attempt's own resolution is.
+      if (moved.status !== 0 && OFFLINE_MISSING.test(moved.stderr ?? '')
+        && spawnSync('cargo', ['fetch'], options).status === 0) {
+        moved = spawnSync('cargo', ['metadata', '--offline', '--format-version', '1'], options);
+      }
+      const after = readFileSync(lockPath, 'utf8');
+      // Cargo rewrites the block's dependency list; its identity and checksum are what must hold.
+      const kept = lockBlocks(after).some(b => field(b, 'name') === name && field(b, 'version') === precise
+        && field(b, 'checksum') === field(block, 'checksum'));
+      if (moved.status === 0 && kept && !outsideExact2(after, allowed).includes(id)) break;
+      writeFileSync(lockPath, before);
+    }
+  }
 }
 
 /** One generated cdylib per package, resolved without any host or other package's graph (LLP 1153.003 D5). */
@@ -865,22 +947,12 @@ export function ensurePackageGpu(app, module) {
   writeChanged(resolve(dir, 'src/lib.rs'), `use exact_gpu::Registry;\npub static REGISTRY: Registry = Registry {\n    surfaces: &[${module.surfaces.map(s => `(${JSON.stringify(s)}, ${module.declarations[s].arity}, ${module.declarations[s].factory})`).join(', ')}],\n    shaders: &[],\n};\nexact_gpu::module!(REGISTRY);\n`);
   for (const file of ['rust-toolchain.toml', '.cargo/config.toml']) writeChanged(resolve(dir, file), readFileSync(resolve(ROOT, file), 'utf8'));
   const sdk = readFileSync(resolve(ROOT, 'Cargo.lock'), 'utf8'), own = readFileSync(lockPath, 'utf8');
-  const fingerprint = createHash('sha256').update(sdk).update(own).update(readFileSync(manifestPath)).update(readFileSync(resolve(dir, 'Cargo.toml'))).digest('hex');
+  const fingerprint = createHash('sha256').update(sdk).update(own).update(readFileSync(manifestPath))
+    .update(readFileSync(resolve(dir, 'Cargo.toml'))).update(readFileSync(fileURLToPath(import.meta.url))).digest('hex');
   const stamp = resolve(dir, '.lock-inputs');
   let metadata = existsSync(stamp) && readFileSync(stamp, 'utf8') === fingerprint ? lockedMetadata(dir) : null;
   if (metadata?.status !== 0) {
-    writeChanged(resolve(dir, 'Cargo.lock'), packageGpuLock(sdk, own));
-    const options = { cwd: dir, env: cargoEnvironment(), encoding: 'utf8', maxBuffer: 1 << 26 };
-    let resolved = spawnSync('cargo', ['metadata', '--offline', '--format-version', '1'], options);
-    if (resolved.status !== 0 && OFFLINE_MISSING.test(resolved.stderr ?? '')) {
-      // The seed still needs the generated crate. Fetch may resolve it; the version check below binds that resolution.
-      const fetched = spawnSync('cargo', ['fetch'], options);
-      if (fetched.status !== 0) throw new Error(`${module.package}: cargo fetch: ${fetched.stderr || fetched.error?.message}`);
-      resolved = spawnSync('cargo', ['metadata', '--locked', '--offline', '--format-version', '1'], options);
-    }
-    if (resolved.status !== 0) throw new Error(`${module.package}: its locked dependencies conflict with exact-gpu ${version}:\n${resolved.stderr || resolved.error?.message}`);
-    const outside = outsideExact2(readFileSync(resolve(dir, 'Cargo.lock'), 'utf8'), `${sdk}\n${lockBlocks(own).join('\n\n')}`);
-    if (outside.length) throw new Error(`${module.package}: resolving with exact-gpu ${version} requires versions neither lock holds: ${outside.join(', ')}. The package's requirements and exact-gpu's subtree must share a locked resolution.`);
+    settlePackageGpuLock(dir, sdk, own, `${module.package} with exact-gpu ${version}`);
     metadata = lockedMetadata(dir);
   }
   if (metadata.status !== 0) throw new Error(`${module.package}: ${metadata.stderr || metadata.error?.message}`);
@@ -992,22 +1064,25 @@ export async function bringPlatform(dir, platform, { report = null, os = process
   return { lines };
 }
 
-// By name and semver series (Cargo's compatibility: 1.x, 0.37.x, 0.0.3): one
-// graph holds at most one version of a package per series.
+// Cargo's compatible semver series: 1.x, 0.37.x, 0.0.3.
 export const series = version => { const [major, minor, patch] = String(version).split('.'); return major !== '0' ? major : minor !== '0' ? `0.${minor}` : `0.0.${patch}`; };
 export const seriesId = block => `${/^name = "([^"]+)"/m.exec(block)?.[1]} ${series(/^version = "([^"]+)"/m.exec(block)?.[1])}`;
 export const lockBlocks = text => text.split(/\n(?=\[\[package\]\]\n)/).slice(1).map(block => block.trimEnd());
 
-/** A package's GPU lock starting point (LLP 1153.003 D5): `sdk` decides every name and series it holds, a same-series
- * bump included, and `own` keeps the rest (its own packages, git and path ones too), so Cargo prefers exactly these
- * versions and fetches only what they lack. */
-function lockSeed(sdk, own) {
-  // The same crate from another source (a git fork, a path) is another package:
-  // the SDK's supersedes only its own source's, whatever the git revision.
-  const key = block => `${seriesId(block)} ${/^source = "([^"#]*)/m.exec(block)?.[1] ?? ''}`;
-  const held = new Set(lockBlocks(sdk).map(key));
-  const kept = lockBlocks(own).filter(block => !held.has(key(block)));
-  return kept.length ? `${sdk.trimEnd()}\n\n${kept.join('\n\n')}\n` : sdk;
+// Git revisions belong to one source, as Cargo's update of a locked git dependency does.
+const lockSeriesSource = block => `${seriesId(block)} ${/^source = "([^"#]*)/m.exec(block)?.[1] ?? ''}`;
+const lockBlockId = block => `${/^name = "([^"]+)"/m.exec(block)[1]} ${/^version = "([^"]+)"/m.exec(block)[1]} ${/^source = "([^"]*)"/m.exec(block)?.[1] ?? ''}`;
+
+/** Merge by compatible series and source, preserving exact pins; null keeps every SDK choice. */
+function lockSeed(sdk, own, pinned) {
+  const held = new Map(lockBlocks(sdk).map(block => [lockSeriesSource(block), block]));
+  const version = block => /^version = "([^"]+)"/m.exec(block)[1];
+  for (const block of lockBlocks(own)) {
+    const id = lockSeriesSource(block), previous = held.get(id);
+    if (!previous || pinned && !pinned.has(id) && Bun.semver.order(version(block), version(previous)) > 0
+      && gpuVersionMatches(version(block), version(previous))) held.set(id, block);
+  }
+  return `version = 4\n\n${[...held.values()].join('\n\n')}\n`;
 }
 
 // A lock's packages by identity. Dependency edges follow from the versions

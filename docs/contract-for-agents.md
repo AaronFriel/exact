@@ -3478,10 +3478,18 @@ source on Canvas 2D. With neither, the canvas shows only its own styles, and a n
 logs that the module is absent.
 
 Each package resolves in its own generated workspace under `.exact/package-gpu/`.
-The package's lock keeps its dependencies, and the checkout supplies `exact-gpu` and
-its dependencies. Missing Cargo sources are fetched before the locked build. Resolution
-refuses any version absent from both locks; a conflict or an incompatible `exactGpu`
-requirement stops the build.
+The checkout supplies `exact-gpu`. The build tries three whole dependency graphs in order:
+a merge that prefers newer compatible shared versions while preserving the generated
+manifest's exact pins; every package-lock entry except `exact-gpu` and competing exact
+pins, plus the checkout's `exact-gpu` and the pinned dependencies; then a merge that
+prefers the SDK's versions. The package-first attempt retains multiple versions in one
+semver series and adds none of the SDK's other dependency blocks. Cargo resolves each
+attempt; a crate Cargo picks that neither lock holds is replaced by the newest version of
+the same name and series that one does, if Cargo accepts it. The first attempt whose
+versions and checksums all occur in either input lock wins.
+Missing Cargo sources are fetched before the locked build. If every attempt fails, the
+error names each attempt's failure. An incompatible `exactGpu` requirement stops the
+build before resolution. Neither input lock changes.
 The app commits no Rust files for a package. Modules load only when their surfaces mount;
 package WGSL is compiled into the crate, rather than shipped through `gpu.shaderRoots`.
 
