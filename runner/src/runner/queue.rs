@@ -5,8 +5,9 @@
 //!
 //! The waiting sends and the stalls are in the commit's checkpoint, so a
 //! refused action queues nothing and a refused `next` puts its head back.
-//! `next_due` is not: like `then_due` it is cleared before its commit, and
-//! armed only by the scan ([`Runner::arm_next`]) after a commit concludes.
+//! A due `next` or `then` is cleared before its commit's checkpoint, so a
+//! refusal does not retry it. Reconciliation can cancel other instances'
+//! deadlines, which the checkpoint restores when that commit refuses.
 
 use super::modules::{CallOrigin, Causes};
 use super::*;
@@ -21,6 +22,7 @@ pub const QUEUE_BOUND: usize = 64;
 
 /// A send that waits: the source it names and its send-time arguments.
 #[derive(Clone)]
+#[cfg_attr(test, derive(Debug))]
 pub(super) struct Waiting {
     source: String,
     args: Vec<Value>,
@@ -38,6 +40,7 @@ pub(super) struct Waiting {
 /// a resource or a derive value from it clears the stall (D3); one that
 /// changes none of them leaves the send waiting, so a permanently failing
 /// ask is not retried every frame.
+#[cfg_attr(test, derive(Debug))]
 pub(super) struct Basis {
     slots: Vec<Value>,
     derives: Vec<Option<Value>>,
@@ -65,10 +68,12 @@ pub(super) struct Queues {
 }
 
 /// What a commit's checkpoint keeps of the queues.
+#[cfg_attr(test, derive(Debug))]
 pub(super) struct Saved {
     waiting: Vec<VecDeque<Waiting>>,
     stalled: Vec<Option<Rc<Basis>>>,
     concluded: Vec<u64>,
+    next_due: Vec<f64>,
 }
 
 /// How a `next` commit was refused: by its own ask (the source erred, or
@@ -96,6 +101,7 @@ impl Queues {
             waiting: self.waiting.clone(),
             stalled: self.stalled.clone(),
             concluded: self.concluded.clone(),
+            next_due: self.next_due.clone(),
         }
     }
 
@@ -103,6 +109,7 @@ impl Queues {
         self.waiting = s.waiting;
         self.stalled = s.stalled;
         self.concluded = s.concluded;
+        self.next_due = s.next_due;
     }
 
     /// Room for `n` mutation rows (LLP 1035.005.004 D6: a child's sends

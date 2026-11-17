@@ -443,6 +443,7 @@ export const classifications = [
     ["runner:runner/src/runner/each.rs", "Runner::declared_resources"],
     ["runner:runner/src/runner/faults.rs", "Runner::faults"],
     ["runner:runner/src/runner/fonts.rs", "Runner::plan Runner::runtime_font_count Runner::runtime_font_stacks"],
+    ["runner:runner/src/runner/owned_tasks.rs", "Runner::arm_task#generation:1 Runner::arm_task#next_ms:1 Runner::arm_task#next_ms:2 Runner::reconcile_tasks#generation:1 Runner::reconcile_tasks#instance:1"],
     ["runner:runner/src/runner/overrun.rs", "Runner::is_reask_wait Runner::reask_due_ms"],
     ["runner:runner/src/runner/perf.rs",
       "Runner::alert Runner::count_kernel_layout Runner::failure_counts Runner::measure Runner::measure_from_now Runner::measure_kernel_layouts Runner::measure_later " +
@@ -618,7 +619,7 @@ export const classifications = [
     ["painted:host/painted/src/presenter/pump.rs", "Presenter::pump Presenter::pump_with_clock"],
   ], "durable when the ticket names background/tool work or retained effectful module work; see reply.rs:70-88 and module_work.rs. Not all tool handlers survive session teardown."),
   group("request lifecycle", ["one-shot", "subscription", "durable operation"], "pending ticket, queued turn or held executor request", "UI-owned",
-    "runner/src/runner/admission.rs and in_flight.rs tie admission, aborts and retirement to pending tickets. Retained effectful work is separately represented by module_work.rs. presenter/pump.rs release_held_work resumes requests retained by runner.holds.", [
+    "runner/src/runner/admission.rs and in_flight.rs tie admission, aborts and retirement to pending tickets. queue.rs restores a refused commit's queued-send deadlines with their owners. Retained effectful work is separately represented by module_work.rs. presenter/pump.rs release_held_work resumes requests retained by runner.holds.", [
     ["apple:host/apple/src/abi/exports.rs", "exact_request_active"],
     ["painted:host/painted/src/canvas.rs", "CanvasHost::poll"],
     ["painted:host/painted/src/canvas/jni.rs", "Java_dev_exact_canvas_Native_poll Java_dev_exact_canvas_Native_requests"],
@@ -642,7 +643,7 @@ export const classifications = [
       "Runner::effects_in_flight Runner::has_pending Runner::held_replies Runner::held_requests Runner::in_flight Runner::is_open_stream Runner::must_finish " +
       "Runner::one_shot_armed Runner::pending Runner::stream_grant Runner::streams"],
     ["runner:runner/src/runner/outstanding.rs", "Runner::outstanding"],
-    ["runner:runner/src/runner/queue.rs", "Runner::mutation_requests Runner::queued"],
+    ["runner:runner/src/runner/queue.rs", "Runner::mutation_requests Runner::queued Queues::restore#next_due:1"],
     ["runner:runner/src/runner/reply.rs", "Runner::holds"],
     ["runner:runner/src/runner/uploads.rs", "Runner::uploads_started"],
     ["web:host/web/src/abi.rs", "exact_collect_aborts exact_request_active"],
@@ -710,7 +711,7 @@ export const classifications = [
     ["web:host/web/src/abi.rs", "exact_store"],
   ]),
   group("timer fires", ["subscription"], "session timer generation/deadline or one frame task", "UI-owned",
-    "runner/src/runner/native_timers.rs binds one subscription in each live ordinary timer record at native_timers handoff. Repeats reuse it; gates.rs resets it on rearming. Typed and integer fires retain the original index/generation and clock checks. Frame tasks and other clock entries still use their existing paths. Advance/frame can also pump replies and deferred thens.", [
+    "runner/src/runner/native_timers.rs binds one subscription in each live ordinary timer record at native_timers handoff. Repeats reuse it; owned_tasks.rs resets it on rearming. Typed and integer fires retain the original index/generation and clock checks. Frame tasks and other clock entries still use their existing paths. Advance/frame can also pump replies and deferred thens.", [
     ["apple:host/apple/src/abi/exports.rs",
       "exact_admitted_frame exact_advance exact_fire_native_timer exact_frame exact_frame_at exact_native_timers exact_present_frames exact_pump exact_set_live_clock " +
       "exact_prefer_presented exact_start_on_frame exact_tick exact_tick_at exact_timer_waits"],
@@ -738,7 +739,7 @@ export const classifications = [
     ["runner:runner/src/runner/advance/data_timers.rs", "Runner::data_timer_due_ms Runner::data_timer_landing Runner::data_timer_waits Runner::timer_first#next_ticket:1"],
     ["runner:runner/src/runner/dated.rs", "Runner::resources_reading_clock"],
     ["runner:runner/src/runner/gates.rs",
-      "Runner::collection_timer_due_ms Runner::collection_timer_due_ms#generation:1 Runner::gate_step#generation:1 Runner::gate_step#next_ms:1 Runner::gate_step#next_ms:2 Runner::gate_step#next_ms:3 Runner::has_timers Runner::tasks " +
+      "Runner::collection_timer_due_ms Runner::collection_timer_due_ms#generation:1 Runner::has_timers Runner::tasks " +
       "Runner::timer_due_ms Runner::timer_tolerance_ms Runner::timer_wake_ms Runner::wants_frames"],
     ["runner:runner/src/runner/native_timers.rs", "Runner::fire_native_timer Runner::native_timers Runner::native_timer_completion Runner::use_native_timers Runner::uses_native_timers"],
     ["runner:runner/src/runner/overrun.rs", "Runner::hold_overrun_reply#next_ticket:1 Runner::hold_reask#next_ticket:1"],
@@ -1200,7 +1201,7 @@ export const classifications = [
     ["painted:host/painted/src/presenter/window.rs", "Presenter::env_insets Presenter::fit_view"],
   ]),
   group("timer fires", ["subscription"], "session timer generation/deadline or one frame task", "UI-owned",
-    "The named painted adapter reads or updates the current Presenter through the runner or its Host forwarding API. runner/src/runner/native_timers.rs binds one subscription in each live ordinary timer record at native_timers handoff. Repeats reuse it; gates.rs resets it on rearming. Typed and integer fires retain the original index/generation and clock checks. Frame tasks and other clock entries still use their existing paths. Advance/frame can also pump replies and deferred thens.", [
+    "The named painted adapter reads or updates the current Presenter through the runner or its Host forwarding API. runner/src/runner/native_timers.rs binds one subscription in each live ordinary timer record at native_timers handoff. Repeats reuse it; owned_tasks.rs resets it on rearming. Typed and integer fires retain the original index/generation and clock checks. Frame tasks and other clock entries still use their existing paths. Advance/frame can also pump replies and deferred thens.", [
     ["painted:host/painted/src/presenter/clock.rs", "Presenter::android_clock Presenter::give_clock"],
     ["painted:host/painted/src/presenter/scroll_end.rs", "Presenter::scroll_end_live Presenter::scroll_end_moved Presenter::timer_or_scroll_due_ms"],
   ]),

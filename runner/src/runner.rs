@@ -6,6 +6,7 @@
 //! Kernel validation precedes every write; a refusal leaves the kernel untouched.
 mod admission;
 mod advance;
+pub use advance::{Advanced, Timed};
 mod capture;
 mod native_timers;
 mod retirement;
@@ -117,6 +118,7 @@ pub mod outstanding;
 mod overrun;
 mod owned;
 mod owned_sends;
+mod owned_tasks;
 mod page;
 mod parallel;
 mod perf;
@@ -152,18 +154,18 @@ mod transport_tests;
 mod uploads;
 mod viewport;
 mod writes;
-pub use carry::Carried;
-pub use checkpoint::Checkpoint;
-pub use router::{launch_matches, routing, RouterChange, Routing};
-pub use split::{press_writes_router, StackSplit};
-pub use uploads::{UploadEnd, UploadMark};
 
 use crate::instance::{Ids, InstanceError, InstanceStep, SurfaceUpdate, Tree, Update};
 use crate::request::{Answer, Dispatch, Outcome, Request, RequestClass, RequestOut};
 use crate::store::{Store, StoreWrite};
 use crate::vm::{self, Env, Frame, RowSlots};
+pub use carry::Carried;
+pub use checkpoint::Checkpoint;
 use exact_kernel::{CommitReceipt, Kernel, ViewId};
 use exact_plan::{ActionsId, Code, EventKind, MutationMode, MutationsId, NodesId, Plan, Value};
+pub use router::{launch_matches, routing, RouterChange, Routing};
+pub use split::{press_writes_router, StackSplit};
+pub use uploads::{UploadEnd, UploadMark};
 
 /// A host-facing effect an action asked for; executed after commit, in order.
 #[derive(Debug, Clone, PartialEq)]
@@ -176,38 +178,8 @@ pub struct Command {
     pub source: Option<ViewId>,
 }
 
-/// A timer or collection-feedback commit and the runner clock it happened at.
-#[derive(Debug, Clone)]
-pub struct Timed {
-    /// The runner's clock when the receipt committed, milliseconds.
-    pub at_ms: f64,
-    /// The commit.
-    pub receipt: CommitReceipt,
-}
-
-/// What one `advance_timed` or collection feedback call did: the commits in order, each at the time
-/// it committed (on a seek clock its due time); the clock afterwards — the requested time, or the
-/// last time reached before a refusal or, advancing until a request, at the timer that sent it
-/// (on a live clock, the last sample if later); and that refusal, if any. Commits before a refusal are
-/// kept: they are in the kernel, and a host must show them.
-#[derive(Debug)]
-pub struct Advanced {
-    /// The commits, in order.
-    pub receipts: Vec<Timed>,
-    /// The clock after the call, milliseconds.
-    pub now_ms: f64,
-    /// The refusal that stopped the advance or the collection edge action.
-    pub error: Option<RunnerError>,
-    /// [`Runner::advance_until_request`] stopped after a commit that sent a
-    /// request, short of its cutoff or at it: the host lands the reply
-    /// before it advances again.
-    pub stopped_on_request: bool,
-    /// Apply this batch before continuing: a keyed change action needs
-    /// the preceding host layout and commands to be visible.
-    pub needs_apply: bool,
-}
-
 #[derive(Clone)]
+#[cfg_attr(test, derive(Debug))]
 struct ResourceState {
     /// Development inspection only; zero means the request was not observed.
     inspection_generation: u64,
@@ -260,6 +232,7 @@ enum Seed<'a> {
 /// A request the host is running: the ticket its reply carries, what it
 /// answers, and the arguments it was asked with (what `parse` sees).
 #[derive(Clone)]
+#[cfg_attr(test, derive(Debug))]
 struct PendingReq {
     completion: Option<CompletionReply>,
     module: Option<ModuleInstance>,

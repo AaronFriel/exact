@@ -296,10 +296,10 @@ compile complete examples, parse authored tests, and check local links.
 | `slot` | Component | Accept caller-authored children |
 | `state name = expr` / `state name: T = expr` | Component | Stored state; its type is inferred unless declared |
 | `derive name = expr` | Component | Dependency-driven computed value |
-| `resource name = source(args) as shape T` | Root component | Reactive data request |
-| `mutation name as shape T [queue \| parallel]` | Root component | Optional reply slot for explicit sends |
+| `resource name = source(args) as shape T` | Root or bounded child | Reactive data request |
+| `mutation name as shape T [queue \| parallel]` | Root or bounded child | Optional reply slot for explicit sends |
 | `action name(args)` | Component | Event transaction; effects inferred |
-| `task name mount` / `task name when cond [key=expr]` | Root component | One timer/frame schedule or keyed change action, always or while `cond` holds |
+| `task name mount` / `task name when cond [key=expr]` | Root or bounded child | One timer/frame schedule or keyed change action, always or while `cond` holds |
 | `view` | Component | UI tree |
 
 Top-level declarations begin in column 1. Indent with spaces. Comments use `//`.
@@ -715,8 +715,8 @@ component Row
       archive(id)
 ```
 
-Children may hold state, derives, actions and resources. They cannot declare
-mutations or tasks: the root passes the actions that send them
+Children may hold state, derives, actions, resources, mutations and tasks
+at bounded uses
 ([A feature's requests](#a-features-requests)). A child used under `for` owns row state keyed to that row's identity.
 Stable keys matter when content is inserted, removed, filtered, or reordered.
 A child's derive is compiled once per component use and evaluated at each read
@@ -886,13 +886,15 @@ and `detected` calls `showQuote(lines)`, passed as `showQuote=showQuote(e.params
 Leaving the screen forgets what it sent: a reply after that changes nothing, its
 `then` does not run, and a queued send not yet asked is dropped.
 
-A component that owns a resource or a mutation is used where its instances are
+A component that owns a resource, mutation or task is used where its instances are
 bounded: outside every region, under `if` and `match`, or in a row of
 `stack(nav)`, `t.stack` or `nav.tabs`. Under any other `for`, or in a virtualized
 `list`, it is refused (`type-child-resource`): declare the root's resource over
 the list (`resource feeds = load(id) for id in ids key=id`) and pass each row its
 answer, or declare the mutation in the root and pass each row an action that
-sends it (`add=addWork`). Tasks stay the root's. Data two features read
+sends it (`add=addWork`). A child's task runs in its instance's frame and ends
+when that instance is destroyed. A hidden instance stays alive; gate its task
+with `when active` if it should stop while hidden. Data two features read
 belongs to the root, which passes it down; name its declarations with the
 feature's prefix (`historyDays`), since the root and its members files share one
 set of names.
@@ -1065,7 +1067,7 @@ Choose the mechanism from its lifetime:
 | Writes a person may repeat before the first answers: a rename, a save | `mutation … parallel`: every send asked at once, each reply lands |
 | Run once after a delay, while a condition holds (a toast, a debounce) | `task … when cond` with `after(ms, action)` |
 | Repeat while a condition holds (a game tick, a pulse) | `task … when cond` with `every(ms, action)` |
-| Act when a sheet or route opens (scroll the chosen item into view, load its draft) | In the root, even when the sheet is a child component's view: `task reveal when top(nav).name == "icons" key=top(nav).id` with `change(reveal)` |
+| Act when a sheet or route opens (scroll the chosen item into view, load its draft) | In the screen component: `task reveal when active key=id` with `change(reveal)`; pass its activity and entry id as props |
 | Pending indicator | `pending(resourceOrMutationName)` |
 | "Loading" for a new question, not for a refresh | `not current(resourceName)`: false while it shows its placeholder, an answer to other call arguments, or a value kept across `when`'s idleness; a refresh of the same arguments leaves it true |
 | Resource request failed without an answer | `failed(resourceOrMutationName)` |
@@ -4145,7 +4147,7 @@ surrounding box, or a `url(#id)` clip on the SVG element in `userSpaceOnUse`
 coordinates without percentages instead.
 See [CSS Masking 1 §5](https://www.w3.org/TR/css-masking-1/#the-clip-path).
 
-A root task has one `every(ms, action)`, `after(ms, action)`,
+A task has one `every(ms, action)`, `after(ms, action)`,
 `every(frame, action)`, or keyed `change(action)` entry, on the line under it:
 
 ```text
@@ -4206,8 +4208,16 @@ toast, a debounce (`when draft != saved key=draft` with `after(800, save)`), a
 round's tick (`when screen == "play"`), a flight's frames
 (`when flying` with `every(frame, step)`) and a sheet's opening
 (`when top(nav).name == "icons" key=top(nav).id` with `change(reveal)`) are each
-one gated task, and each is the root's: a child component declares none
-(`type-child-resource`), so a sheet a component draws has its task in the root.
+one gated task. A child at a bounded use may declare the same forms: each instance
+starts its tasks when it mounts and their gates hold, and stops them when a gate
+fails or the instance is destroyed. Actions run in that instance's frame. A
+covered screen or hidden tab can stay alive, so pass its activity as a prop and
+gate work on it; visibility alone grants no permission. Each instance of an
+`every(frame, …)` task runs an action per frame while armed. Reload carries
+compatible state and restarts timers, as it does for root tasks.
+On the deterministic clock, equal-deadline tasks run in declaration order;
+instances of one declaration run in creation order. A gate or key change keeps
+that order; destroying and recreating an instance gives it a new place.
 
 **Retry backoff.** For a bounded ladder of delays, use one gated task per step.
 Only the active step has a timer, which wakes once at its deadline:
@@ -6238,7 +6248,7 @@ that restates a constant is weaker evidence than the user's actual sequence.
 | `for t in tokens` with an offset `tokens.slice(0, tokens.indexOf(t))…` in the row, or a `fn` that walks the list it is passed: each row's work grows with the list, and past 65,536 steps that binding is unset (`lower-row-own-list`) | Count it once in the data module: the source gives each token the field it reads (`at`) |
 | `RoundButton(label="Start quiz", …)`, cut to "Start q…" in its 80-point circle (`lower-round-button-label`) | The circle is for a word (Start, Stop, Lap); a screen's main action of more words is `button buttonStyle="filled"` with its `text` (`recipes/content-design.md`) |
 | `now = performanceNow()`, then `now` read in the same action (`analyze-read-after-assign`) | Bind it and read the local: `let stamp = performanceNow()`, `now = stamp`, then `stamp` |
-| A child `task`, or a child `resource` or `mutation` used under a `for` over data (`type-child-resource`) | The task in the root; for a row, the root's resource over the list or its mutation, passed down as an answer or an action |
+| A child owning a `resource`, `mutation` or `task` used under a `for` over data or in a virtualized list (`type-child-resource`) | Put the resource family, mutation or shared task in the enclosing screen and pass its answer or action to the rows |
 | `fontSize`, `radius`, `resizeMode` | `font-size`, `border-radius`, `object-fit` |
 | `width=20px` | `width=20` or `width="20px"` |
 | Unbounded `scroll` | Real height/max-height or flex in a bounded layout |

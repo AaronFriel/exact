@@ -1882,8 +1882,15 @@ browser as the oracle, the same shape layout already has. In exchange, not in v1
   toasts, trivia's round (their diaries' Top-5). Unblocks an app that does
   no work at rest while nothing is showing. Take: none offered. Still out:
   an implicit reaction to a state change (LLP 1017 P4c's `task … when [dep]`),
-  component-scoped and action-started timers, computed intervals, a gate
+  action-started timers, computed intervals, a gate
   that reads `performanceNow()`, and cancelling a queued send.
+  **Expanded (LLP 1035.005.004 §7/D6; waived by Charlie, 2026-11-16, expo/exact#476):**
+  a child used outside data-sized repetition may own the root's task forms,
+  including `every(frame, …)`. Each task lives with its instance, runs only
+  while its `when` holds, restarts on `key=` changes, and runs its action in
+  the instance's frame. Unblocks a tab or screen that owns its polling or
+  delayed work. Still out: action-started timers, computed intervals, timers
+  under a data-sized `for`, per-row timers, and a child's `sequence`.
   **Expanded (Charlie, 2026-11-12, request to implement Hirbod's open issues;
   #177):** a root `task NAME [when COND] key=EXPR` may use `change(action)`
   to queue one action after the host applies the current commit, without a timer

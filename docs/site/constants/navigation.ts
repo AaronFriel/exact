@@ -428,7 +428,7 @@ export const sections: NavSection[] = [
         route: 'recipeTimerInAComponent',
         path: '/recipes/timer-in-a-component',
         source: 'recipes/timer-in-a-component.md',
-        description: 'Only the root may declare a task (type-child-resource): a timer is the app\'s.',
+        description: 'A bounded child owns its timer; an activity gate stops it while hidden.',
       },
       {
         route: 'recipeTimerThatSurvivesRelaunch',
