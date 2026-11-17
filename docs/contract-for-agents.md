@@ -4288,6 +4288,18 @@ which require optional capabilities. `-exact-spring(…)` (a `transition` timing
 function), `-exact-exit-animation`, `-exact-layout-transition`, and presentation timelines have
 specific documented behavior;
 they do not admit arbitrary frame callbacks or a second app-state graph.
+
+macOS and iOS play eligible box `translate`, `scale`, `rotate` and `opacity`
+animations and transitions in Core Animation. A transform stays sampled when
+the box takes input, contains an interactive view, uses a noncentral origin,
+is sticky or has a layout transition. Filtered pictures also need sampling.
+Mounting an interactive descendant returns a running transform to sampling.
+On macOS, a box with `backdrop-filter` keeps its transform sampled so the
+blur's sampling region follows it. Rounded background colours stay sampled
+because AppKit can paint their fill on a separate layer or into an image.
+The agent's clock still seeks these animations; taking the clock returns
+transitions to the engine.
+
 As in CSS, a `transition` or `animation` value's units, keywords and function
 names read in any ASCII case (`0.3S EASE` is `0.3s ease`), its numbers are CSS's
 (`1.s` and `infs` are no times), and a keyframes name keeps its case: in
@@ -5248,6 +5260,13 @@ A route moved off a window edge is still padded as if it reached it: its top on 
 laptop fold, its right on a book fold's segment 0.
 
 ## Inspection and testing
+
+The native agent's `tree` includes declared SVG geometry in each shape's
+`props`: a circle's `cx`, `cy` and `r`, an ellipse's radii, and a rectangle's
+position, size and radii. These are model values, not animation samples.
+Lengths in user units are numbers, including resolved font-relative lengths.
+Percentages, viewport lengths and unresolved `calc()` and `env()` values
+remain CSS text. `layout <target>` includes the same properties.
 
 On Apple development builds, an `iframe`'s web content is inspectable from
 Safari's Develop menu. Enable Safari's web developer features, launch the app,
