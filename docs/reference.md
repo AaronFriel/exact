@@ -1919,6 +1919,23 @@ grants, through the bake and platform writer. Other derived keys cannot be set
 there. For a key Exact never writes, record a `bun exact.mjs feedback note` from
 the app directory naming the key and what the native module needs.
 
+### Language and direction on macOS
+
+The Mac window and a document's unsaid layout direction follow AppKit's process
+direction. An Arabic strings table alone leaves them left to right on an English
+Mac. Set `host.macos.layoutDirection: "rtl"` in `app.json` to mirror the window,
+split view, toolbar and sidebar, even with an English table. Omission or `"auto"`
+keeps AppKit's direction. A launch argument naming `AppleTextDirection` or
+`NSForceRightToLeftWritingDirection` takes precedence over the setting.
+
+The setting applies before AppKit starts and requires a new binary. The host
+checks both the application's direction and each window's
+[`windowTitlebarLayoutDirection`](https://developer.apple.com/documentation/appkit/nswindow/windowtitlebarlayoutdirection).
+A mismatch prints a development diagnostic; the agent's `state.layoutDirection`
+reports the request, launch override, applied directions and whether both are
+right to left. `language.dir` reports the document's applied layout direction.
+iOS and the web continue to take their direction from the strings table.
+
 ## Apple privacy manifests
 
 Apple builds write `PrivacyInfo.xcprivacy` before signing each app, App Clip,

@@ -112,6 +112,10 @@ export const startLocation = ({ manifest: { start_url: at }, origin: declared })
 export const interfaceStyle = ({ manifest: { userInterfaceStyle: style } }, mac = false) =>
   style === 'light' || style === 'dark' ? (mac ? { ExactUserInterfaceStyle: style } : { UIUserInterfaceStyle: style === 'dark' ? 'Dark' : 'Light' }) : {};
 
+/** AppKit reads the Mac window's requested direction before NSApplication starts. */
+export const layoutDirection = ({ manifest }) =>
+  manifest.host?.macos?.layoutDirection === 'rtl' ? { ExactLayoutDirection: 'rtl' } : {};
+
 /** Each value `categories` admits, with the category Apple files it under (`LSApplicationCategoryType`'s values,
  * without `public.app-category.`), or null where Apple has none. The W3C's standardized categories (the manifest
  * wiki's "Categories" page) come first; the rest are Apple's own, each a category the W3C list has no name for. The

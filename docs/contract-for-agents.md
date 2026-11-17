@@ -5121,12 +5121,14 @@ setting calls `setLocale("de")` (`setLocale("")` for System) in its action; the
 choice is kept across launches and read before the first frame. Formatting
 functions accept a narrow set of literal formats; app wording is an app `fn`.
 On Apple platforms the tables are the bundle's localizations, base first, so the
-system's own words and the direction of the chrome it draws (bars, the Mac's
-split view, sidebar and toolbar) follow the table it picks. AppKit mirrors a
-window only on a Mac whose system language is right to left, as it does for any
-hand-built app, and on the Mac a direction you leave unsaid is the window's: an
-Arabic table on an English Mac is left to right throughout, and `state` reports
-`language.dir` as `ltr`. Elsewhere it is the table's. A `direction` you write
+system's own words follow the table it picks. On the Mac a direction you leave
+unsaid is AppKit's process direction: an Arabic table on an English Mac leaves
+the window and panes left to right, and `state` reports `language.dir` as `ltr`.
+Set `host.macos.layoutDirection: "rtl"` in `app.json` to mirror the whole window,
+including the split view, toolbar and sidebar, even with an English table.
+Omission or `"auto"` keeps AppKit's direction; a launch argument naming either
+`AppleTextDirection` or `NSForceRightToLeftWritingDirection` takes precedence.
+Elsewhere the direction is the table's. A `direction` you write
 wins on every host. `language.dir` is the layout direction: on the Mac, text
 under no written `direction` takes each paragraph's base direction from its
 first letter, as an `NSTextField` does, so an Arabic sentence in a left-to-right
