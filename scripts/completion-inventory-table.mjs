@@ -286,7 +286,7 @@ export const classifications = [
     ["painted:host/painted/src/presenter/hatch.rs",
       "Presenter::connect_hatches Presenter::end_hatches Presenter::hatch_built Presenter::hatch_command Presenter::hatch_fire Presenter::hatch_in_flight " +
       "Presenter::hatch_instant Presenter::hatch_moments Presenter::hatch_perf Presenter::hatch_progress Presenter::hatch_scopes Presenter::hatch_sites " +
-      "Presenter::hatch_state Presenter::hatch_ticks Presenter::hatch_trace_asked Presenter::hatch_turn Presenter::set_hatches"],
+      "Presenter::hatch_state Presenter::hatch_ticks Presenter::hatch_trace_asked Presenter::hatch_turn Presenter::reader_hatch_act Presenter::set_hatches"],
   ]),
   group("holds", ["one-shot"], "held request/node until answer, cancellation or node retirement", "UI-owned",
     "runner/src/runner/device.rs:1-12 retires holds with the requesting node or ticket and refuses duplicate answers; the agent hold is not an executor request.", [
