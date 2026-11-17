@@ -1233,7 +1233,10 @@ export const classifications = [
     "The named painted adapter reads or updates the current Presenter through the runner or its Host forwarding API. host/painted/src/picker.rs configures app file roots and copies/selects paths for the current picker/share. Persistent copies are separate from the UI continuation receiving them.", [
     ["painted:host/painted/src/presenter/picker.rs",
       "Presenter::answer_document Presenter::answer_save Presenter::ask_portal Presenter::deliver_picker Presenter::documents_chosen Presenter::finish_files " +
-      "Presenter::finish_portal_picks Presenter::is_file_input Presenter::picked_targets Presenter::start_folder"],
+      "Presenter::finish_portal_picks Presenter::is_file_input Presenter::picked_targets Presenter::save_chosen Presenter::start_folder"],
+    ["painted:host/painted/src/presenter/file_dialog.rs",
+      "FileDialog::start_folder Presenter::answer_file_dialog Presenter::finish_file_dialog Presenter::queue_file_dialog " +
+      "Presenter::serve_file_dialogs Presenter::take_file_dialogs"],
   ]),
   group("shared tokens", ["one-shot"], "share token in the live router; copying may outlive the initiating view", "UI-owned",
     "The named painted adapter reads or updates the current Presenter through the runner or its Host forwarding API. runner/src/runner/picker/shared.rs:596-630 updates only a token accepted by router.share. Copied files can survive, but this completion targets the current router token.", [

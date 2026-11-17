@@ -18,6 +18,8 @@ mod desktop;
 mod displays;
 #[cfg(windows)]
 mod edit_menu;
+#[cfg_attr(not(windows), allow(dead_code))]
+mod file_dialog;
 #[cfg(windows)]
 mod icon;
 #[cfg(windows)]

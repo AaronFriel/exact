@@ -4885,6 +4885,12 @@ rather than normalizing it; current builds cannot embed one, and older binaries
 embed no handlers. The handles end with the session, unless
 the app keeps what the person chose (below).
 
+On Windows, the three document pickers, file inputs and `saveFile` use the
+shell's common item dialogs, owned by the app's window. A headless host refuses
+them; under the agent they remain held pickers. Document pickers offer every
+file until the Windows build carries `file_handlers`. File inputs copy the
+chosen files into `app:/tmp/picked/` and leave the originals in place.
+
 **Where a picker opens** (LLP 1173 D2). The three pickers and `saveFile`
 take the File System Access API's `startIn=`: a well-known folder by name,
 or a `doc:` path the person chose earlier.
@@ -4916,14 +4922,14 @@ component Capture
 | iOS | Ignored: iOS has no such folders | The document picker's `directoryURL` |
 | Web (Chromium) | Passed as is; `screenshots` is `pictures` | The handle |
 | Linux desktop | The portal's `current_folder`, from `user-dirs.dirs`; `screenshots` is the pictures folder's `Screenshots` | `current_folder` |
+| Windows | The shell's known folder, including a redirected folder; `screenshots` is its Screenshots folder. Used as a default only when Windows has no last-used folder | The held document's folder, overriding the last-used folder |
 
 A name that does not resolve here (Linux's Downloads disabled, the Screenshot
 app saving to the Clipboard), a value that is neither a name nor a `doc:` path,
 and a handle the session does not hold are journalled as
 `<command>: startIn: refused: …`, and the panel opens where it would have.
 Linux's `saveFile` has no panel, so `startIn` there reaches only the pickers.
-Windows has no file dialogs yet. Under the agent the held picker's `args` carry
-`startIn`.
+Under the agent the held picker's `args` carry `startIn`.
 
 **A change on disk asks the answer again** (LLP 1069.010.000 D1). An answer
 that calls `storage.fs.watch(path)` is asked again when the file, a folder's

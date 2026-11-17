@@ -102,6 +102,7 @@ mod content_region_wide_tests;
 pub(crate) mod contrast;
 #[cfg(any(target_os = "android", test))]
 mod feed;
+pub mod file_dialog;
 mod glide;
 mod height;
 mod height_drag;
