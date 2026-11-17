@@ -4568,6 +4568,12 @@ click outside dismisses; iOS keeps the alert, since an action sheet drops a
 lone Cancel in an iPad's popover. The action that learns of the failure sets the state its `text`
 reads and calls `showModal("<id>")` ([tell the person something failed](recipes/error-alert.md)).
 
+An alert's own `font-family`, written on the `dialog` or its class, applies to
+its title, message and button labels on web, Linux, Android and Windows.
+Android and Windows keep the platform face when the family is only inherited.
+iOS and macOS keep the system face: `UIAlertController` and `NSAlert` have no
+public font API, so the compiler warns when an alert requests a family there.
+
 A prompt (a rename's, `Alert.prompt`) is the alert with a text field: an
 `input` among its rows, which counts as its message when it has no `text`:
 
