@@ -5522,6 +5522,14 @@ crate: the source digest reads every arm, so an edit to any of them moves it
 whose module can be replaced should branch on nothing else
 ([pitfall](agent-pitfalls.md#actions)).
 
+The digest also covers the path crates the data crate is built from, and
+theirs in turn, including an optional one no default feature enables: the
+build that links the crate can enable it. One case is not covered. A path
+crate that `[patch]` puts in place of a registry or git dependency counts
+only where Cargo's default-feature resolve reaches it. When only an optional
+dependency that resolve leaves off reaches it, an edit to it does not move
+the id; declare that dependency with `path` to have it counted.
+
 The repository's app entries use `contract::rust_entry` to select a concrete
 factory at bake time. A custom host adapter must do the same (and depend on
 `exact-logic`), or compose `Swappable::native`, `Swappable::tiered`, `Swappable::wasm` or
