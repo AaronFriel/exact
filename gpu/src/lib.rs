@@ -339,8 +339,8 @@ pub trait Surface {
     /// the next rendered frame's commands.
     fn advance(&mut self, _frame: &Frame, _device: &wgpu::Device, _queue: &wgpu::Queue) {}
     /// A presentation target acquired a device, before its first draw. Its
-    /// granted features (e.g. block-compressed textures) choose what to fetch.
-    fn device_ready(&mut self, _features: wgpu::Features) {}
+    /// granted features and limits choose the resources and compute tier to use.
+    fn device_ready(&mut self, _features: wgpu::Features, _limits: wgpu::Limits) {}
     /// Presentation was lost; release device resources without discarding owned state.
     fn device_lost(&mut self) {}
     /// The GPU tier changed (`gpu_retier`, LLP 1139.003 D2): true when the
@@ -529,6 +529,8 @@ pub struct Module {
     #[cfg(windows)]
     window: Option<window::WindowFrame>,
     registry: &'static Registry,
+    requirements: &'static [grants::Requirements],
+    refused: HashMap<&'static str, String>,
     #[cfg(not(target_arch = "wasm32"))]
     pipeline_cache: PipelineCache,
     #[cfg(not(target_arch = "wasm32"))]
@@ -595,6 +597,7 @@ mod recovery;
 const FRAME_LATENCY: u32 = if cfg!(target_os = "android") { 4 } else { 2 };
 
 struct Instance {
+    name: String,
     surface: Box<dyn Surface>,
     messages: Vec<String>,
     published: Option<String>,
@@ -704,6 +707,8 @@ impl Module {
             #[cfg(windows)]
             window: None,
             registry,
+            requirements: &[],
+            refused: HashMap::new(),
             #[cfg(not(target_arch = "wasm32"))]
             pipeline_cache: PipelineCache::default(),
             #[cfg(not(target_arch = "wasm32"))]
@@ -759,7 +764,11 @@ impl Module {
         {
             self.pipeline_cache = PipelineCache::for_module(&gpu.device, self.cache_artifact);
         }
+        self.refused = grants::refusals(self.requirements, &gpu);
         for inst in self.instances.values_mut() {
+            if self.refused.contains_key(inst.name.as_str()) {
+                continue;
+            }
             let format =
                 if let (Some(target), Some(config)) = (&inst.presentation, &mut inst.config) {
                     let caps = target.get_capabilities(&gpu.adapter);
@@ -778,7 +787,8 @@ impl Module {
                     #[cfg(not(target_arch = "wasm32"))]
                     inst.offscreen_format()
                 };
-            inst.surface.device_ready(gpu.device.features());
+            inst.surface
+                .device_ready(gpu.device.features(), gpu.device.limits());
             inst.report_color_space();
             inst.surface.prepare_assets(&gpu.device, &gpu.queue, format);
             inst.dirty = true;
@@ -881,15 +891,19 @@ impl Module {
 
     /// Create surface ownership without a device, target, or registered shaders.
     pub fn create_headless(&mut self, name: &str) -> Option<u32> {
+        if let Some(error) = self.refused.get(name).cloned() {
+            return self.fail(error);
+        }
         let Some((_, _, factory)) = self.registry.surfaces.iter().find(|(n, _, _)| *n == name)
         else {
             return self.fail(format!("no surface named `{name}` in this module"));
         };
-        self.insert(factory(), None)
+        self.insert(name, factory(), None)
     }
 
     fn insert(
         &mut self,
+        name: &str,
         mut surface: Box<dyn Surface>,
         presentation: Option<(wgpu::Surface<'static>, wgpu::SurfaceConfiguration)>,
     ) -> Option<u32> {
@@ -898,7 +912,7 @@ impl Module {
         surface.clock(self.seekable);
         surface.reduced_motion(self.reduced_motion);
         if let Some(gpu) = &self.gpu {
-            surface.device_ready(gpu.device.features());
+            surface.device_ready(gpu.device.features(), gpu.device.limits());
             surface.color_space_granted(target::granted(presentation.as_ref().map(|(_, c)| c)));
         }
         let (presentation, config) = presentation.map_or((None, None), |(target, config)| {
@@ -907,6 +921,7 @@ impl Module {
         self.instances.insert(
             id,
             Instance {
+                name: name.into(),
                 surface,
                 messages: Vec::new(),
                 published: None,
@@ -1435,8 +1450,10 @@ pub fn block_on<F: std::future::Future>(f: F) -> F::Output {
 mod pipeline_cache;
 pub use pipeline_cache::PipelineCache;
 mod device;
+pub mod grants;
 pub use device::{
-    load_gpu, requested_features, requested_limits, DeviceFailure, DeviceFailureKind,
+    load_gpu, load_gpu_with_requirements, requested_features, requested_limits, DeviceFailure,
+    DeviceFailureKind,
 };
 
 pub mod android;

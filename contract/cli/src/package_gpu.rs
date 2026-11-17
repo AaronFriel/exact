@@ -39,6 +39,7 @@ fn declared(app: &Path, manifest: &Value) -> Result<Vec<PackageGpu>, String> {
             continue;
         };
         let fail = |why: &str| format!("{package}: exact.json gpu {why}");
+        crate::gpu_requirements::check(gpu).map_err(|why| fail(&why))?;
         let krate = gpu["crate"]
             .as_str()
             .ok_or_else(|| fail("requires a crate directory"))?;

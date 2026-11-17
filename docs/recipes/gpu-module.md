@@ -1,8 +1,7 @@
 # Recipe: a GPU module (a canvas drawn in Rust)
 
-For a package's surface, run `bun exact.mjs add <its directory or @scope/name>` and write
-`canvas surface=name(…)`.
-See [package GPU surfaces](../contract-for-agents.md#a-packages-gpu-surfaces).
+For a package, `bun exact.mjs add <package>` then `canvas surface=name(…)`. For compute
+limits and features, see [device requirements](../reference.md#gpu-device-requirements).
 
 A `canvas surface=name(…)` that no data module draws is drawn by the app's GPU module: a crate
 `gpu/` beside app.json whose surfaces implement `exact_gpu::Surface`, loaded after the first pixel
@@ -71,7 +70,6 @@ fn clear() -> Box<dyn Surface> {
     Box::new(Clear)
 }
 
-/// Each surface: its name, its number of inputs, its factory.
 pub static REGISTRY: Registry = Registry { surfaces: &[("clear", 0, clear)], shaders: &[] };
 
 exact_gpu::module!(REGISTRY);

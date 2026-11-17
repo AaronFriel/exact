@@ -1066,7 +1066,7 @@ fn lifecycle_and_clock_reach_surfaces_without_a_device() {
     for id in [live, agent] {
         assert!(m.agent(id, "").unwrap().ends_with("motion:false"));
     }
-    exact_gpu::native::load_headless(&REGISTRY, "test-gpu");
+    exact_gpu::native::load_headless(&REGISTRY, "test-gpu", &[]);
     exact_gpu::native::reduced_motion(true);
     let id = exact_gpu::native::create_headless("probe");
     assert_eq!(exact_gpu::native::agent(id, ""), "clock:true,motion:true");

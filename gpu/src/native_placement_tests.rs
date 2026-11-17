@@ -103,7 +103,7 @@ static REGISTRY: Registry = Registry {
 crate::module!(REGISTRY);
 #[test]
 fn retiring_each_releases_textures_and_zero_frame_releases_a_capture() {
-    assert_eq!(load(&REGISTRY, "test-gpu"), 0);
+    assert_eq!(load(&REGISTRY, "test-gpu", &[]), 0);
     let id = create_headless("sign");
     assert_eq!(bind(id, "[]"), 0);
     for _ in 0..3 {
@@ -140,7 +140,7 @@ fn retiring_each_releases_textures_and_zero_frame_releases_a_capture() {
 fn an_untaken_acquired_texture_is_discarded_while_its_surface_exists() {
     #[link(name = "QuartzCore", kind = "framework")]
     extern "C" {}
-    assert_eq!(load(&REGISTRY, "test-gpu"), 0);
+    assert_eq!(load(&REGISTRY, "test-gpu", &[]), 0);
     // SAFETY: retained layer outlives the module's presentation target.
     let layer: objc2::rc::Retained<objc2::runtime::AnyObject> =
         unsafe { objc2::msg_send![objc2::class!(CAMetalLayer), new] };
@@ -166,7 +166,7 @@ fn an_untaken_acquired_texture_is_discarded_while_its_surface_exists() {
 fn presented_device_loss_rebinds_live_layer_and_readback_keeps_its_format() {
     #[link(name = "QuartzCore", kind = "framework")]
     extern "C" {}
-    assert_eq!(load(&REGISTRY, "test-gpu"), 0);
+    assert_eq!(load(&REGISTRY, "test-gpu", &[]), 0);
     // SAFETY: retained layer outlives the module's presentation target.
     let layer: objc2::rc::Retained<objc2::runtime::AnyObject> =
         unsafe { objc2::msg_send![objc2::class!(CAMetalLayer), new] };
@@ -218,7 +218,7 @@ fn presented_device_loss_rebinds_live_layer_and_readback_keeps_its_format() {
 
 #[test]
 fn replacement_lost_during_preparation_refuses_then_retries() {
-    assert_eq!(load(&REGISTRY, "test-gpu"), 0);
+    assert_eq!(load(&REGISTRY, "test-gpu", &[]), 0);
     let id = create_headless("sign");
     with(|m| {
         m.agent(id, "lose-on-prepare");
@@ -236,7 +236,7 @@ fn replacement_lost_during_preparation_refuses_then_retries() {
 
 #[test]
 fn recovery_of_a_healthy_device_does_not_prepare_again() {
-    assert_eq!(load(&REGISTRY, "test-gpu"), 0);
+    assert_eq!(load(&REGISTRY, "test-gpu", &[]), 0);
     let id = create_headless("sign");
     let before = with(|m| m.agent(id, "state")).unwrap();
     assert!(recover().contains("healthy"));
@@ -246,7 +246,7 @@ fn recovery_of_a_healthy_device_does_not_prepare_again() {
 
 #[test]
 fn destroyed_device_recovers_without_replacing_the_surface_table() {
-    if load(&REGISTRY, "test-gpu") != 0 {
+    if load(&REGISTRY, "test-gpu", &[]) != 0 {
         // Only an absent adapter skips (and fails under EXACT_REQUIRED); a load failure fails.
         crate::fixture::device_or_skip::<()>(Err(error()));
         return;

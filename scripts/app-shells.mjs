@@ -795,7 +795,7 @@ export function packageGpuManifest(manifest, dir) {
     }
     if (gpu.targets !== undefined && (!Array.isArray(gpu.targets) || gpu.targets.some(t => !GPU_PLATFORMS.includes(t)))) fail(`targets may name only ${GPU_PLATFORMS.join(', ')}`);
     modules.push({ name, surfaces: Object.keys(gpu.surfaces).sort(), package: pkg, root: realpathSync(root), declaration,
-      crate: gpu.crate, exactGpu: gpu.exactGpu, declarations: gpu.surfaces, targets: gpu.targets });
+      crate: gpu.crate, exactGpu: gpu.exactGpu, declarations: gpu.surfaces, targets: gpu.targets, limits: gpu.limits, features: gpu.features });
   }
   manifest[packageModules] = modules; manifest[packageDeclarations] = declarations;
   return manifest;
@@ -916,6 +916,19 @@ function repairOutside(dir, options, allowed) {
   }
 }
 
+function gpuRequirementsSource(modules) {
+  const pairs = values => Object.entries(values ?? {}).map(([name, value]) => `(${JSON.stringify(name)}, ${value})`).join(', ');
+  const strings = values => (values ?? []).map(value => JSON.stringify(value)).join(', ');
+  return '&[' + modules.map(m => {
+    const targets = m.targets?.map(t => t === 'web' ? 'target_arch = "wasm32"' : `target_os = "${t}"`);
+    return `${targets ? `#[cfg(any(${targets.join(', ')}))] ` : ''}exact_gpu::grants::Requirements {
+    package: ${JSON.stringify(m.package)}, surfaces: &[${strings(m.surfaces)}],
+    required_limits: &[${pairs(m.limits?.required)}], optional_limits: &[${pairs(m.limits?.optional)}],
+    required_features: &[${strings(m.features?.required)}], optional_features: &[${strings(m.features?.optional)}],
+}`;
+  }).join(', ') + ']';
+}
+
 /** One generated cdylib per package, resolved without any host or other package's graph (LLP 1153.003 D5). */
 export function ensurePackageGpu(app, module) {
   const dir = packageGpuDir(app, module), source = resolve(module.root, module.crate);
@@ -944,7 +957,7 @@ export function ensurePackageGpu(app, module) {
   const pins = Bun.TOML.parse(readFileSync(resolve(ROOT, 'game/Cargo.toml'), 'utf8')).workspace.dependencies;
   const toml = v => typeof v === 'string' ? JSON.stringify(v) : `{ ${Object.entries(v).map(([k, v]) => `${k} = ${JSON.stringify(v)}`).join(', ')} }`;
   writeChanged(resolve(dir, 'Cargo.toml'), `[workspace]\nresolver = "2"\n\n[package]\nname = "${app.crate(`gpu-${module.name}`)}"\nversion = "0.1.0"\nedition = "2021"\npublish = false\n\n[lib]\ncrate-type = ["cdylib"]\n\n[dependencies]\nexact-gpu = { path = ${JSON.stringify(resolve(ROOT, 'gpu'))} }\n${alias} = { package = ${JSON.stringify(crateName)}, path = ${JSON.stringify(source)} }\n\n[target.'cfg(target_arch = "wasm32")'.dependencies]\n${['wasm-bindgen', 'wasm-bindgen-futures', 'web-sys'].map(d => `${d} = ${toml(pins[d])}`).join('\n')}\n\n[patch.crates-io]\nexact-gpu = { path = ${JSON.stringify(resolve(ROOT, 'gpu'))} }\n${patchLines(dir, pathWithin).join('\n')}\n`);
-  writeChanged(resolve(dir, 'src/lib.rs'), `use exact_gpu::Registry;\npub static REGISTRY: Registry = Registry {\n    surfaces: &[${module.surfaces.map(s => `(${JSON.stringify(s)}, ${module.declarations[s].arity}, ${module.declarations[s].factory})`).join(', ')}],\n    shaders: &[],\n};\nexact_gpu::module!(REGISTRY);\n`);
+  writeChanged(resolve(dir, 'src/lib.rs'), `use exact_gpu::Registry;\npub static REGISTRY: Registry = Registry {\n    surfaces: &[${module.surfaces.map(s => `(${JSON.stringify(s)}, ${module.declarations[s].arity}, ${module.declarations[s].factory})`).join(', ')}],\n    shaders: &[],\n};\nexact_gpu::module!(REGISTRY, ${gpuRequirementsSource([module])});\n`);
   for (const file of ['rust-toolchain.toml', '.cargo/config.toml']) writeChanged(resolve(dir, file), readFileSync(resolve(ROOT, file), 'utf8'));
   const sdk = readFileSync(resolve(ROOT, 'Cargo.lock'), 'utf8'), own = readFileSync(lockPath, 'utf8');
   const fingerprint = createHash('sha256').update(sdk).update(own).update(readFileSync(manifestPath))

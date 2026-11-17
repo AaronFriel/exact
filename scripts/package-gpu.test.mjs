@@ -13,6 +13,26 @@ import { androidBuild } from './agent-android.mjs';
 import { webChanges, webNeeds } from './agent-launch.mjs';
 import { webSourceRoots } from '../host/web/build.mjs';
 
+test('package GPU device requirements reach the module inputs', () => {
+  const dir = mkdtempSync(resolve(import.meta.dir, '../target/gpu-requirements-'));
+  try {
+    const pkg = resolve(dir, 'node_modules/@fixture/sky');
+    mkdirSync(pkg, { recursive: true });
+    writeFileSync(resolve(dir, 'package.json'), JSON.stringify({ dependencies: { '@fixture/sky': '1.0.0' } }));
+    writeFileSync(resolve(pkg, 'package.json'), '{"exports":"./exact.json"}');
+    const declaration = JSON.parse(readFileSync(resolve(import.meta.dir, '../packages/fixtures/sky/exact.json'), 'utf8'));
+    const read = gpu => {
+      writeFileSync(resolve(pkg, 'exact.json'), JSON.stringify({ ...declaration, gpu: { ...declaration.gpu, ...gpu } }));
+      return gpuModules(packageGpuManifest({}, dir))[0];
+    };
+    const requirements = { limits: { required: { maxStorageBufferBindingSize: 268435456 }, optional: { maxBufferSize: 1073741824 } },
+      features: { required: ['subgroups'], optional: ['float32-filterable'] } };
+    const module = read(requirements);
+    assert.deepEqual(module.limits, requirements.limits);
+    assert.deepEqual(module.features, requirements.features);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('Linux build commands put primary and alternate binaries where the driver reads them', () => {
   const dir = mkdtempSync(resolve(import.meta.dir, '../target/gpu-linux-'));
   try {
@@ -190,15 +210,30 @@ test('web input discovery reads package declarations as they are now and leaves 
   const put = (path, text) => { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, text); };
   try {
     for (const file of ['package.json', 'exact.json', 'rust/Cargo.toml', 'rust/Cargo.lock', 'rust/src/lib.rs']) put(resolve(pkg, file), readFileSync(resolve(root, file)));
-    put(resolve(dir, 'package.json'), JSON.stringify({ dependencies: { '@fixture/sky': '1.0.0' } }));
+    const sibling = resolve(dir, 'node_modules/@fixture/impossible');
+    for (const file of ['package.json', 'exact.json', 'rust/Cargo.toml', 'rust/Cargo.lock', 'rust/src/lib.rs']) put(resolve(sibling, file), readFileSync(resolve(root, file)));
+    const impossible = JSON.parse(readFileSync(resolve(sibling, 'exact.json'), 'utf8'));
+    impossible.name = '@fixture/impossible';
+    impossible.gpu.surfaces = { impossible: impossible.gpu.surfaces.sky };
+    impossible.gpu.limits = { required: { maxBufferSize: 1125899906842624 } };
+    put(resolve(sibling, 'exact.json'), JSON.stringify(impossible));
+    put(resolve(dir, 'package.json'), JSON.stringify({ dependencies: { '@fixture/sky': '1.0.0', '@fixture/impossible': '1.0.0' } }));
     // A dev loop's parent keeps the manifest it started with; the build after a declaration edit regenerates.
     const app = { dir, workspace: dir, target: resolve(dir, 'target'), manifest: packageGpuManifest({}, dir), crate: kind => `fixture-${kind}` };
     const declaration = JSON.parse(readFileSync(resolve(pkg, 'exact.json'), 'utf8'));
     declaration.gpu.surfaces.sky.arity = 2;
+    declaration.gpu.limits = { required: { maxStorageBufferBindingSize: 536870912 }, optional: { maxBufferSize: 1073741824 } };
+    declaration.gpu.features = { required: ['float32-filterable'], optional: ['shader-f16'] };
     put(resolve(pkg, 'exact.json'), JSON.stringify(declaration));
-    const workspace = ensurePackageGpu(app, gpuModules(packageGpuManifest({}, dir))[0]);
+    const workspace = ensurePackageGpu(app, gpuModules(packageGpuManifest({}, dir)).find(m => m.package === '@fixture/sky'));
     const lib = resolve(workspace, 'src/lib.rs'), generated = readFileSync(lib, 'utf8'), written = statSync(lib).mtimeMs;
     assert.match(generated, /\("sky", 2, /);
+    assert.match(generated, /required_limits: &\[\("maxStorageBufferBindingSize", 536870912\)\]/);
+    assert.match(generated, /optional_limits: &\[\("maxBufferSize", 1073741824\)\]/);
+    assert.match(generated, /required_features: &\["float32-filterable"\]/);
+    assert.match(generated, /optional_features: &\["shader-f16"\]/);
+    assert.equal(generated.includes('@fixture/impossible'), false);
+    assert.equal(generated.match(/exact_gpu::grants::Requirements/g).length, 1);
     const roots = webSourceRoots(app, true), files = roots.filter(r => r.file).map(r => r.file);
     assert.equal(readFileSync(lib, 'utf8'), generated);
     assert.equal(statSync(lib).mtimeMs, written);
@@ -237,11 +272,11 @@ test('package GPU modules resolve independently from shipped locks and reject in
       assert.equal(readFileSync(resolve(pkg, 'rust/Cargo.lock'), 'utf8'), lock);
     }
     const app = { dir, crate: kind => `one-${kind}` };
-    assert.throws(() => ensurePackageGpu(app, { ...module, exactGpu: '0.3' }), /requires exact-gpu 0.3, but this checkout provides 0\.2\.\d+/);
+    assert.throws(() => ensurePackageGpu(app, { ...module, exactGpu: '0.4' }), /requires exact-gpu 0.4, but this checkout provides 0\.3\.\d+/);
     const cargo = readFileSync(resolve(pkg, 'rust/Cargo.toml'), 'utf8');
-    put(resolve(pkg, 'rust/Cargo.toml'), cargo.replace('exact-gpu = "0.2"', 'exact-gpu = "0.3"'));
+    put(resolve(pkg, 'rust/Cargo.toml'), cargo.replace('exact-gpu = "0.3"', 'exact-gpu = "0.4"'));
     assert.throws(() => ensurePackageGpu(app, module), /without a path, git or workspace dependency/);
-    put(resolve(pkg, 'rust/Cargo.toml'), cargo.replace('exact-gpu = "0.2"', 'exact-gpu = "0.2"\nexact-plan = "0.1"'));
+    put(resolve(pkg, 'rust/Cargo.toml'), cargo.replace('exact-gpu = "0.3"', 'exact-gpu = "0.3"\nexact-plan = "0.1"'));
     assert.throws(() => ensurePackageGpu(app, module), /may depend on exact-gpu, not exact-plan/);
     put(resolve(pkg, 'rust/Cargo.toml'), cargo);
     rmSync(resolve(pkg, 'rust/Cargo.lock'));

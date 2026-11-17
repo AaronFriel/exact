@@ -62,10 +62,11 @@ Other targets fall back to sRGB unless they advertise P3. Android's buffered
 canvas and offscreen targets always use sRGB; Android wide-color windows and
 hardware-buffer tagging are outside this API's implementation.
 
-`Surface::color_space_granted(space)` reports the actual RGB primaries after
-`device_ready`, before preparation or drawing, including on reattachment and
-device restoration and renderer rebuilding after a GPU tier change. Choose
-shader output from the grant, not the request. Every native RGBA8 readback
+`Surface::device_ready(features, limits)` reports the actual device grant.
+`Surface::color_space_granted(space)` then reports the granted RGB primaries,
+before preparation or drawing. Both repeat on reattachment, device restoration
+and renderer rebuilding after a GPU tier change. Choose shader output from the
+granted colour space. Every native RGBA8 readback
 grants sRGB before capture, including after detachment, then restores any P3
 presentation grant; captured bytes remain suitable for the host's sRGB images.
 A granted `high_dynamic_range()` request takes precedence: it stays
@@ -118,7 +119,7 @@ data, which replaced push constants) and its `bind_group_layouts` are
 `exact-gpu` moves to each stable wgpu major within six weeks of its release, on
 that major's newest point release, as one breaking `exact-gpu` version (LLP
 1153.003 D6.6). The move rebases or retires the patches in
-`vendor/wgpu-hal/EXACT-PATCHES.md`, moves the first-party GPU packages with it
+`vendor/wgpu-hal/EXACT-PATCHES.md` and `vendor/wgpu/EXACT-PATCHES.md`, moves the first-party GPU packages with it
 and rewrites the paragraph above. There is no shim for the previous major: a
 module written against it changes its code, and a package changes its
 `exactGpu` requirement too.
@@ -544,3 +545,12 @@ system haptics setting applies, as it does to `haptic()`.
   waveform. The shell's manifest asks for `VIBRATE`.
 - **macOS, tvOS, the web, Linux, Windows**, and every host under the driver,
   consume the messages and play nothing.
+
+## Declaring device requirements
+
+A package's `exact.json` `gpu.limits` and `gpu.features` declare required and optional
+WebGPU capacities. The [GPU module recipe](../docs/recipes/gpu-module.md) gives the
+manifest and fixture calls. `module!(REGISTRY, REQUIREMENTS)` accepts a static slice of
+`grants::Requirements`; omitting the slice keeps the existing device request.
+`grants::negotiate` unions satisfiable packages before device creation and reports
+unavailable packages separately. A module refuses only their surfaces.

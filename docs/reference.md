@@ -5801,6 +5801,32 @@ pass to `contract::rust`; the names are compiler metadata, outside the binary
 plan. Both map scoped names such as `Point__exact` to `PointExact`.
 `Value::Number`, `Value::str`, `Value::Bool` and `Value::list` are the rest.
 
+### GPU device requirements
+
+A package declares `gpu.limits.required` and `gpu.limits.optional` as objects of
+WebGPU limit names to integer values in its main `exact.json`. It declares
+`gpu.features.required` and `gpu.features.optional` as lists of WebGPU feature names.
+The Contract compiler validates names and bounds in the declaration. A package
+artifact requests its own requirements before its device is created. Optional values
+are clamped to the adapter, with alignment minima ordered in reverse. Buffer binding
+sizes also raise `maxBufferSize`; workgroup dimensions also raise
+`maxComputeInvocationsPerWorkgroup`. A required value that exceeds either adapter
+limit is refused; an optional value is clamped to both. An unavailable required limit or
+feature refuses the owning package's surfaces while the other surfaces keep drawing.
+The web backend does not expose `subgroups`, `primitive-index` or `immediates`:
+optional requests omit them and required requests refuse the package's surfaces;
+native grants them where the adapter offers them.
+An app without requirements retains the existing device request.
+
+`Surface::device_ready(&mut self, features: wgpu::Features, limits: wgpu::Limits)`
+receives the actual grant, including on recovery and target reattachment. A fixture
+requests the same grant through `exact_gpu::fixture::device_with_requirements`.
+An authored GPU module passes a static `&[exact_gpu::grants::Requirements]` as the
+second argument to `exact_gpu::module!`. See [the GPU module recipe](recipes/gpu-module.md)
+for a declaration and [package GPU surfaces](contract-for-agents.md#a-packages-gpu-surfaces)
+for packaging. `exact-gpu` 0.3 adds the limits argument; packages declare `exactGpu: "0.3"`
+and depend on `exact-gpu = "0.3"`.
+
 ### An authored workspace
 
 An app whose host crate does what no generated one does (its own `build.rs` or render entry, or a

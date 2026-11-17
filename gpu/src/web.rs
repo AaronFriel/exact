@@ -51,17 +51,21 @@ pub fn asset_failed(id: u32, name: &str, reason: &str) -> bool {
 
 /// Create the device and the module (asynchronous: WebGPU's adapter and
 /// device requests are).
-pub async fn load(registry: &'static Registry) -> Result<(), JsValue> {
+pub async fn load(
+    registry: &'static Registry,
+    requirements: &'static [crate::grants::Requirements],
+) -> Result<(), JsValue> {
     crate::report_panics();
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
         backends: wgpu::Backends::BROWSER_WEBGPU,
         ..wgpu::InstanceDescriptor::new_without_display_handle()
     });
-    match crate::load_gpu(instance, None).await {
+    match crate::load_gpu_with_requirements(instance, None, requirements).await {
         Ok(gpu) => {
             MODULE.with(|m| {
                 let mut m = m.borrow_mut();
-                m.get_or_insert_with(|| Module::new(registry)).set_gpu(gpu);
+                m.get_or_insert_with(|| Module::new(registry).with_requirements(requirements))
+                    .set_gpu(gpu);
             });
             Ok(())
         }
@@ -101,6 +105,9 @@ pub async fn recover(
         let mut targets = Vec::new();
         for (id, canvas) in ids.iter().zip(canvases) {
             let inst = module.instances.get_mut(id).unwrap();
+            if module.refused.contains_key(inst.name.as_str()) {
+                continue;
+            }
             let config = inst.config.as_mut().ok_or_else(|| {
                 crate::recovery::RecoveryFailure::other("missing presentation configuration")
             })?;
@@ -117,7 +124,8 @@ pub async fn recover(
         for (id, target) in targets {
             let inst = module.instances.get_mut(&id).unwrap();
             let config = inst.config.as_ref().unwrap();
-            inst.surface.device_ready(gpu.device.features());
+            inst.surface
+                .device_ready(gpu.device.features(), gpu.device.limits());
             inst.surface
                 .color_space_granted(crate::target::granted(Some(config)));
             inst.surface
@@ -471,10 +479,13 @@ pub fn error() -> String {
 #[macro_export]
 macro_rules! module {
     ($registry:expr) => {
+        $crate::module!($registry, &[]);
+    };
+    ($registry:expr, $requirements:expr) => {
         /// Create the device.
         #[::wasm_bindgen::prelude::wasm_bindgen]
         pub async fn gpu_load() -> Result<(), ::wasm_bindgen::JsValue> {
-            $crate::web::load(&$registry).await
+            $crate::web::load(&$registry, $requirements).await
         }
 
         /// Recover device/context bindings while keeping every surface ID.

@@ -5,7 +5,7 @@
   "names": [],
   "gpu": {
     "crate": "rust",
-    "exactGpu": "0.2",
+    "exactGpu": "0.3",
     "surfaces": { "sky": { "arity": 1, "factory": "sky_surface::surface" } }
   }
 }

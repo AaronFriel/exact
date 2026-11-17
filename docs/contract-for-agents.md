@@ -3479,18 +3479,29 @@ Any package may declare `gpu` beside `views` in its main `exact.json` (LLP 1153.
 ```json
 "gpu": {
   "crate": "rust",
-  "exactGpu": "0.2",
+  "exactGpu": "0.3",
   "surfaces": { "sky": { "arity": 1, "factory": "sky_surface::surface" } },
   "targets": ["web", "macos", "ios", "linux"]
 }
 ```
 
 `crate` names a directory inside the package containing a standalone `Cargo.toml` and
-`Cargo.lock`. Its dependency is `exact-gpu = "0.2"`, without a path or Git source. It uses
+`Cargo.lock`. Its dependency is `exact-gpu = "0.3"`, without a path or Git source. It uses
 `exact_gpu::wgpu` and depends on no other Exact crate. Each factory returns
 `Box<dyn exact_gpu::Surface>`. The build generates the registry and `module!` exports,
 including the web dependencies; the package writes neither. `packages/fixtures/sky` is
 a complete example.
+
+For compute or larger resources, `gpu.limits` and `gpu.features` each take `required`
+and `optional` members. Limits are objects of WebGPU camelCase names to nonnegative
+integers; features are arrays of WebGPU feature names. For example,
+`"limits":{"required":{"maxStorageBufferBindingSize":268435456},"optional":{"maxBufferSize":1073741824}}`
+and `"features":{"optional":["float32-filterable","subgroups"]}`. The build checks names,
+ranges and duplicate declarations. Each package's device requests its own requirements,
+clamping optional entries to the adapter and raising paired limits as needed. An unavailable required entry refuses only that package's surfaces with a
+diagnostic; apps that declare nothing keep the existing grant. `Surface::device_ready`
+receives the granted `wgpu::Features` and `wgpu::Limits` before preparation, including after
+recovery. See [the GPU recipe](recipes/gpu-module.md) for the request and fixture APIs.
 
 The app adds the package with `bun exact.mjs add <directory or @scope/name>` and writes
 `canvas surface=sky(false)`. The package's full name supplies the module name:

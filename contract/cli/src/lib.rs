@@ -29,6 +29,7 @@ mod declaration;
 pub mod faces;
 pub mod functions;
 pub mod gallery;
+mod gpu_requirements;
 mod grants;
 /// The Lean backend: a program as a term of `semantics/` (LLP-free; see
 /// `semantics/README.md`).
