@@ -73,6 +73,7 @@ export const classifications = [
       "Presenter::set_time Presenter::set_view_scheme"],
     ["painted:host/painted/src/presenter/scrollbar.rs", "Presenter::set_scrollbars"],
     ["painted:host/painted/src/presenter/top.rs", "Presenter::present"],
+    ["painted:host/painted/src/presenter/top/status.rs", "Presenter::sync_status_images"],
     ["painted:host/painted/src/presenter/window.rs", "Presenter::chrome Presenter::set_window"],
     ["painted:host/painted/src/scale.rs", "Host::apply_live Host::set_display_scale Host::set_modes Host::set_root_font_size Host::set_view"],
     ["painted:host/painted/src/surfaces.rs", "Presenter::sync_surfaces_with_canvas_tick"],

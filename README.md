@@ -802,8 +802,9 @@ else here was admitted because a real app needed it.
   general Windows control parity and delivery remain unfinished.
   A `-exact-menu="status"` button is a notification-area icon with a painted
   menu (LLP 1133.025 D4), verified on Windows 11 for a hidden launch,
-  pointer input, checkbox state and Exit. Menu placement beside an
-  auto-hide taskbar still needs a Windows run.
+  pointer input, checkbox state, Exit and placement clear of an auto-hiding
+  taskbar. Its UI Automation menu tree and file-backed status images at
+  changing display scales still need a Windows run.
 - **Android.** Admitted (2026-10-07) and early. An app builds for Android and runs
   on an emulator or a phone: `bun exact.mjs android` builds it, `bun exact.mjs test
   android` runs its tests, and `bun exact.mjs agent android …` drives it

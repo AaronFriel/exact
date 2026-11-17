@@ -30,6 +30,7 @@ mod presents;
 mod service;
 mod tray;
 use frames::{next_frame_deadline, presentation_resumes, FrameSchedule};
+use presents::direct_device;
 
 struct App<D: DataSource> {
     service_causes: u8,
@@ -126,11 +127,6 @@ fn system_theme<D: DataSource>(p: &mut Presenter<D>, theme: Theme) {
             eprintln!("exact-windows: appearance: {error}");
         }
     }
-}
-
-fn direct_device(painter: exact_painted::presenter::PainterChoice, device: Option<&str>) -> bool {
-    painter == exact_painted::presenter::PainterChoice::Ink
-        && exact_ink::device::direct_d3d11(device).is_some()
 }
 
 pub(crate) fn boot_phase(name: &str) {
@@ -1025,6 +1021,9 @@ impl<D: DataSource + Default + 'static> ApplicationHandler<crate::accessibility:
             return;
         }
         match event {
+            crate::accessibility::Event::TrayAccess(request) => {
+                return self.tray_access(events, request)
+            }
             crate::accessibility::Event::Focus => self.bring_forward(),
             crate::accessibility::Event::Hide => self.hide_by_app(),
             _ => {}

@@ -48,7 +48,6 @@ mod commands;
 mod contact;
 mod control;
 mod delivery;
-#[cfg(windows)]
 pub mod desktop_access;
 mod device;
 mod display_frame;

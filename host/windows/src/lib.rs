@@ -5,6 +5,9 @@
 
 #[cfg(windows)]
 mod accessibility;
+#[cfg(all(test, not(windows)))]
+#[path = "accessibility/model.rs"]
+mod accessibility_model;
 #[cfg(windows)]
 mod appearance;
 #[cfg(windows)]
