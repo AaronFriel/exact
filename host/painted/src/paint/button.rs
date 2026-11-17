@@ -262,7 +262,7 @@ pub(super) fn face_layout(
     icon: bool,
 ) -> FaceLayout {
     let neutral = look::neutral();
-    // A radio of a segmented group (`exact_kernel::segmented`): Material's
+    // A member of a segmented group (`exact_kernel::segmented`): Material's
     // segmented button, or the neutral look's segment.
     let segment = rows.segment.is_some() && look::material();
     let neutral_segment = rows.segment.is_some() && neutral;
@@ -622,10 +622,10 @@ impl Painter {
         );
         let background = active_background(node, dark, pressed);
         if let Some(palette) = look::contrast().filter(|_| authored.is_none()) {
-            // A segment's checked radio is the selected item, disabled or
+            // A segment's chosen member is the selected item, disabled or
             // not, and a pointer over one gives it none of that pair, as the
             // web's sheet has it under forced colours (`SelectedItem`).
-            let chosen = segment && node.props.bool(PropId::AccessibilityChecked) == Some(true);
+            let chosen = segment && segment::chosen(node);
             let active = chosen || (!segment && !disabled && (pressed || hover || style == "fill"));
             let ink = if chosen {
                 palette.highlighted_text
@@ -776,9 +776,9 @@ impl Painter {
         let disabled = node.props.bool(PropId::Disabled) == Some(true);
         let icon = material_icon(node.props.str(PropId::ButtonStyle), face, rows);
         let filled = material_filled(node.props.str(PropId::ButtonStyle)) && icon.is_none();
-        // A radio of a segmented group: this face with the segment's chrome.
+        // A member of a segmented group: this face with the segment's chrome.
         let material_segment = rows.segment.filter(|_| look::material());
-        let checked = node.props.bool(PropId::AccessibilityChecked) == Some(true);
+        let checked = segment::chosen(node);
         let rtl =
             node.computed_row(StyleId::Direction, |s| s.direction) == exact_kernel::Direction::Rtl;
         // The neutral look's disabled button is the grey ink, not a fade;

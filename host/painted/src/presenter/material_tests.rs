@@ -1146,3 +1146,134 @@ fn materials_icon_buttons_are_round_and_take_their_emphasis() {
     let size = crate::paint::button::image_size(kernel, &kernel.node(symbol).unwrap()).unwrap();
     assert!(size < 24.0, "segment-symbol: {size}");
 }
+
+#[test]
+fn material_content_and_header_tabs_are_segments() {
+    if !material_process() {
+        return;
+    }
+    let source = r#"component App
+  state segment = "details"
+  action pick(value: string)
+    segment = value
+  view
+    main navigationKey="detail" navigationBack="" width=400 height=600
+      column navigationKey="detail" testId="route"
+        header testId="header"
+          text "Job" role="heading" aria-level=1 testId="heading"
+          row role="tablist" testId="header-tabs"
+            button role="tab" aria-selected=(segment == "details") press=pick("details") testId="header-details"
+              text "Details"
+            button role="tab" aria-selected=(segment == "logs") press=pick("logs") testId="header-logs"
+              text "Logs"
+        row role="tablist" testId="content-tabs"
+          button role="tab" aria-controls="details" aria-selected=(segment == "details") press=pick("details") testId="content-details"
+            text "Details"
+          button role="tab" aria-controls="logs" aria-selected=(segment == "logs") press=pick("logs") testId="content-logs"
+            text "Logs"
+        column role="tabpanel" id="details" display=(segment == "details" ? "flex" : "none") testId="details-panel"
+          text "Job succeeded"
+        column role="tabpanel" id="logs" display=(segment == "logs" ? "flex" : "none") testId="logs-panel"
+          text "Build log"
+"#;
+    let (mut p, error) = Presenter::boot_with_fixture_fonts(
+        &crate::test_plan(source),
+        (),
+        (400., 600.),
+        2.4375,
+        PathBuf::new(),
+        PainterChoice::Cpu,
+    )
+    .unwrap();
+    assert!(error.is_none(), "{error:?}");
+    // The same header-cover path Android uses keeps its tablist in the page.
+    p.host.set_bar_room(Some((64., 0., 0.))).unwrap();
+    assert!(p.set_focus(None, 0.).is_none());
+    assert!(p.hover_at(None, 0.).is_none());
+    p.frame();
+    let kernel = p.host.kernel();
+    let heading = kernel.arena().slot_of(id(&p, "heading")).unwrap();
+    assert_eq!(
+        kernel.arena().cover(heading),
+        Some(exact_kernel::HostCover::Whole),
+        "the bar covers its heading"
+    );
+    let page = pixel(&mut p, 2., 590.);
+    let rect = |p: &mut Presenter<()>, name: &str| p.rect_of(id(p, name)).unwrap();
+    for prefix in ["header", "content"] {
+        let first = rect(&mut p, &format!("{prefix}-details"));
+        let last = rect(&mut p, &format!("{prefix}-logs"));
+        assert_eq!(first.3, 40., "{prefix}");
+        assert_eq!(last.3, 40.);
+        assert!(ink_count(&mut p, first) > 20, "{prefix}: visible label");
+        assert!(ink_count(&mut p, last) > 20, "{prefix}: visible label");
+        assert_ne!(
+            pixel(&mut p, first.0 + first.2 - 6., first.1 + 6.),
+            page,
+            "{prefix}: selected fill"
+        );
+        assert_eq!(
+            pixel(&mut p, last.0 + 6., last.1 + 6.),
+            page,
+            "{prefix}: unselected ground"
+        );
+    }
+    let details = id(&p, "content-details");
+    assert!(p.set_focus(Some(details), 0.).is_none());
+    p.key_down("ArrowRight", 0.);
+    assert_eq!(p.focus, Some(id(&p, "content-logs")));
+    p.key_down("Enter", 0.);
+    p.run_commands(|| ());
+    assert!(p.set_focus(None, 0.).is_none());
+    assert!(p.hover_at(None, 0.).is_none());
+    p.frame();
+    assert_eq!(
+        p.host.runner().slot("segment"),
+        Some(&exact_runner::Value::str("logs"))
+    );
+    assert!(p.rect_of(id(&p, "details-panel")).is_none());
+    assert!(p.rect_of(id(&p, "logs-panel")).is_some());
+    for prefix in ["header", "content"] {
+        let node = p
+            .host
+            .kernel()
+            .node(id(&p, &format!("{prefix}-logs")))
+            .unwrap();
+        assert_eq!(node.props.str(PropId::AccessibilityRole), Some("tab"));
+        assert_eq!(node.props.bool(PropId::AccessibilitySelected), Some(true));
+    }
+    assert_eq!(
+        p.host
+            .kernel()
+            .node(details)
+            .unwrap()
+            .props
+            .str(PropId::AccessibilityControls),
+        Some("details")
+    );
+    use crate::presenter::access::{flag, role};
+    let (nodes, _, _) = p.access_tree();
+    let tabs: Vec<_> = nodes.iter().filter(|n| n.role == role::TAB).collect();
+    assert_eq!(tabs.len(), 4);
+    for tab in tabs {
+        assert_eq!(tab.flags & flag::SELECTED != 0, tab.name == "Logs");
+        assert_eq!(tab.flags & flag::CHECKABLE, 0, "tabs remain tabs");
+    }
+    for prefix in ["header", "content"] {
+        let first = rect(&mut p, &format!("{prefix}-details"));
+        let last = rect(&mut p, &format!("{prefix}-logs"));
+        assert_eq!((first.3, last.3), (40., 40.), "{prefix}");
+        assert!(ink_count(&mut p, first) > 20, "{prefix}: visible label");
+        assert!(ink_count(&mut p, last) > 20, "{prefix}: visible label");
+        assert_eq!(
+            pixel(&mut p, first.0 + first.2 - 6., first.1 + 6.),
+            page,
+            "{prefix}: deselected ground"
+        );
+        assert_ne!(
+            pixel(&mut p, last.0 + 6., last.1 + 6.),
+            page,
+            "{prefix}: moved fill"
+        );
+    }
+}

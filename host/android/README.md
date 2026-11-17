@@ -1445,12 +1445,14 @@ Not built of D11:
 - **The medium and large top app bars**, which collapse as the content scrolls (S3); the colour change as a
   transition; a centred title; an overflow menu for buttons that do not fit (they are all placed, and the title
   is cut first).
-- **The segmented buttons** for a `tablist` in the content, and for one in a header (it stays in the page, as the
-  search field does). A `radiogroup` of radios is built (`kernel/src/segmented.rs`, `paint/segment.rs`): Compose's
-  `SingleChoiceSegmentedButtonRow`, its numbers the schema's `segmented-button-` rows, seen through the presenter on
-  a Mac and not yet on a phone or beside the oracle's `segmented-buttons` specimen. Owed there: Compose's motion
-  (the label slides and the check grows as the choice moves; here both change at once).
-  **List items** and their dividers (rows as cells land on every host at once).
+- **Segmented-button qualification and motion.** Content and header `tablist`s, and `radiogroup`s, use
+  Compose's `SingleChoiceSegmentedButtonRow` treatment (`kernel/src/segmented.rs`, `host/painted/src/paint/segment.rs`).
+  A header's tablist stays in the page under the bar, as its search field does. Tabs keep their tab semantics
+  and `aria-selected`; root navigation tabs keep the navigation bar, and `appearance="none"` keeps authored paint.
+  Headless kernel and presenter tests cover the treatment. A phone run and comparison with the Material oracle's
+  `segmented-buttons` specimen remain owed, as does Compose's motion (the label slides and the check grows;
+  here both change at once).
+- **List items** and their dividers (rows as cells land on every host at once).
 - **A header's rich title**: the avatar, the subtitle and the tap on the title that iOS shows are not read here.
 - **`onSecondaryContainer`** for the selected symbol, badges, a navigation rail on a wide window, and hiding the
   navigation bar for a route pushed while the tablist is hidden (the bar follows the tablist's own `display`).
