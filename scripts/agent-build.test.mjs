@@ -535,7 +535,7 @@ test('a missing or stale build is built first, said in one line; a fresh one run
     // A source edited since: the same refusal the driver makes, and the build first instead, naming what changed.
     utimesSync(resolve(dir, 'app.contract'), edited, edited);
     assert.deepEqual(nativeBuild('ios', app).changed.map(p => resolve(p)), [resolve(dir, 'app.contract')]);
-    assert.throws(() => refuseBuild('ios', nativeBuild('ios', app), app), /^Error: ios build is stale: .*app\.contract changed since .*; run \(cd .* && bun exact\.mjs ios\)$/);
+    assert.throws(() => refuseBuild('ios', nativeBuild('ios', app), app), /^Error: ios build is stale: .*app\.contract changed since .*; run \(cd .* && bun exact\.mjs ios\); if .*no build reads.*`\.exact\/`/);
     assert.equal(await drive('ios'), 0);
     // (A contract edit alone is a plan-only edit, which a build with no module receipt to check its bake against still rebuilds.)
     assert.deepEqual([said, builds.map(b => b.args)], [['building for iOS: the build is older than its sources (app.contract changed), and the build has no module receipt to check a new plan against; its log: ' + said[0].split('its log: ')[1]], [['--ios', 'field-log-apple', '--no-install']]]);
