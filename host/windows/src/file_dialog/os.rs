@@ -208,19 +208,9 @@ fn ask(
         if picker.kind == Kind::Save {
             dialog.SetFileName(&HSTRING::from(&picker.suggested_name))?;
         }
-        match request.start_folder() {
-            Ok(Some(folder)) => {
-                if set_folder(&dialog, &folder).is_err() {
-                    lines.push(format!(
-                        "{}: startIn: refused: {} is not a folder here",
-                        request.command,
-                        picker.start_in.as_deref().unwrap_or_default()
-                    ));
-                }
-            }
-            Err(reason) => lines.push(reason),
-            Ok(None) => {}
-        }
+        super::start_folder(request, lines, |folder| {
+            set_folder(&dialog, folder).map_err(|error| error.to_string())
+        });
         {
             let _entered = modal.enter();
             dialog.Show(Some(owner))?;
@@ -238,7 +228,7 @@ fn set_folder(dialog: &IFileDialog, folder: &StartFolder) -> windows::core::Resu
         match folder {
             StartFolder::Chosen(folder) => {
                 let item: IShellItem =
-                    SHCreateItemFromParsingName(&HSTRING::from(folder.as_os_str()), None)?;
+                    SHCreateItemFromParsingName(&crate::shell_path(folder)?, None)?;
                 dialog.SetFolder(&item)
             }
             StartFolder::Known(name) => {
@@ -289,6 +279,35 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_chosen_verbatim_folder_overrides_the_previous_folder() {
+        let root = std::env::current_dir()
+            .unwrap()
+            .join("target/507-tmp")
+            .join(format!("start-folder-{}", std::process::id()));
+        let a = root.join("A");
+        let b = root.join("B");
+        for folder in [&a, &b] {
+            std::fs::create_dir_all(folder).unwrap();
+        }
+        let a = std::fs::canonicalize(a).unwrap();
+        unsafe {
+            CoInitializeEx(None, COINIT_APARTMENTTHREADED).ok().unwrap();
+            {
+                let dialog: IFileDialog =
+                    CoCreateInstance(&FileOpenDialog, None, CLSCTX_INPROC_SERVER).unwrap();
+                set_folder(&dialog, &StartFolder::Chosen(b)).unwrap();
+                set_folder(&dialog, &StartFolder::Chosen(a.clone())).unwrap();
+                assert_eq!(
+                    std::fs::canonicalize(path(dialog.GetFolder().unwrap()).unwrap()).unwrap(),
+                    a
+                );
+            }
+            CoUninitialize();
+        }
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn collecting_shell_paths_preserves_non_unicode_beside_unicode() {
         use std::os::windows::ffi::OsStringExt;
         let dir = std::env::current_dir()
@@ -306,7 +325,7 @@ mod tests {
         unsafe {
             CoInitializeEx(None, COINIT_APARTMENTTHREADED).ok().unwrap();
             let items = chosen.iter().map(|p| {
-                SHCreateItemFromParsingName::<_, _, IShellItem>(&HSTRING::from(p.as_os_str()), None)
+                SHCreateItemFromParsingName::<_, _, IShellItem>(&crate::shell_path(p)?, None)
             });
             let result = paths(items);
             CoUninitialize();

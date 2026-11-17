@@ -2311,6 +2311,7 @@ dependencies = [
  "accesskit_windows",
  "accesskit_winit",
  "contract",
+ "exact-grants",
  "exact-ink",
  "exact-kernel",
  "exact-painted",
