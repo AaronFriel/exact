@@ -32,7 +32,7 @@ const DRIVE = [
   ['--backend <url>', "select the backend for this build: app.ts needs one top-level const origin, a literal or import.meta.env.NAME ?? '<literal>', used in net.fetch ${origin}"],
   ['--storage <name>', 'a scratch store, kept on native hosts; Chrome\'s starts empty'],
   ['--keep-storage · --reset-storage', 'reopen a named store (Chrome, or a compare) · empty a named store first, on any host'],
-  ['--size <w>x<h>', 'the viewport (default 420x900; a simulator\'s own)'],
+  ['--size <w>x<h>', 'viewport; Linux: unrotated panel; 90/270 swap layout'],
   ['--scale <n>', 'screenshots at n pixels per point (exact.mjs agent on ios, macos: 1; an iPhone\'s own: 3)'],
   ['--chrome platform|agent', 'UIKit\'s bars (exact.mjs on iOS); agent paints the header'],
   ['--live · --timing platform · --bind <extension>', 'macOS, iOS simulator: the wall clock and normal scheduling, input and reads only · Apple: native transitions · use a module implementation'],

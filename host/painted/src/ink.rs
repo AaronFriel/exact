@@ -45,6 +45,7 @@ pub struct Ink {
     groups: Vec<clips::Group>,
     clips: Vec<()>,
     target: Option<TextureId>,
+    rotated_target: Option<TextureId>,
     draw_target: Option<TextureId>,
     draw_clear: Option<[f64; 4]>,
     size: [u32; 2],
@@ -88,6 +89,7 @@ impl Ink {
             groups: Vec::new(),
             clips: Vec::new(),
             target: None,
+            rotated_target: None,
             draw_target: None,
             draw_clear: Some([1.; 4]),
             size: [1, 1],
@@ -101,6 +103,48 @@ impl Ink {
             statistics: StatisticsReader::default(),
             rows: rows::Rows::default(),
         }
+    }
+
+    fn finish_pixels(
+        &mut self,
+        rotation: exact_ink::Rotation,
+    ) -> std::result::Result<Pixmap, String> {
+        exact_ink::counters::add(exact_ink::counters::Counter::PaintAttempts, 1);
+        if let Some(e) = &self.error {
+            return Err(e.clone());
+        }
+        let mut readback = Instant::now();
+        let result = (|| {
+            while !self.groups.is_empty() {
+                self.close_group()?;
+            }
+            let mut target = self.end_frame()?;
+            if rotation != exact_ink::Rotation::R0 {
+                let [w, h] = rotation.size(self.size);
+                let rotated = match self.rotated_target {
+                    Some(t) => self.device.resize_target(t, w, h)?,
+                    None => self.device.create_target(w, h)?,
+                };
+                self.rotated_target = Some(rotated);
+                rotation.blit(&mut self.device, target, self.size, rotated)?;
+                target = rotated;
+            }
+            readback = Instant::now();
+            self.device.readback(target)
+        })();
+        let bytes = self
+            .accept(result)
+            .ok_or_else(|| self.error.clone().unwrap())?;
+        let render_ms = self.layer_ms;
+        let pixels = Pixmap::from_vec(
+            bytes,
+            tiny_skia::IntSize::from_wh(rotation.size(self.size)[0], rotation.size(self.size)[1])
+                .unwrap(),
+        )
+        .ok_or("invalid ink readback")?;
+        self.last_ms = (render_ms, readback.elapsed().as_secs_f64() * 1000.);
+        self.update_statistics();
+        Ok(pixels)
     }
 
     /// Device and shader timings reported by the presenter.
@@ -424,6 +468,9 @@ impl Backend for Ink {
                 if let Some(target) = self.target.take() {
                     self.device.retire_texture(target)?;
                 }
+            }
+            if let Some(target) = self.rotated_target.take() {
+                self.device.retire_texture(target)?;
             }
             self.images.trim(&mut self.device)?;
             self.pool.trim(&mut self.device)
@@ -764,31 +811,13 @@ impl Backend for Ink {
     }
 
     fn finish(&mut self) -> std::result::Result<Pixmap, String> {
-        exact_ink::counters::add(exact_ink::counters::Counter::PaintAttempts, 1);
-        if let Some(e) = &self.error {
-            return Err(e.clone());
-        }
-        let mut readback = Instant::now();
-        let result = (|| {
-            while !self.groups.is_empty() {
-                self.close_group()?;
-            }
-            let target = self.end_frame()?;
-            readback = Instant::now();
-            self.device.readback(target)
-        })();
-        let bytes = self
-            .accept(result)
-            .ok_or_else(|| self.error.clone().unwrap())?;
-        let render_ms = self.layer_ms;
-        let pixels = Pixmap::from_vec(
-            bytes,
-            tiny_skia::IntSize::from_wh(self.size[0], self.size[1]).unwrap(),
-        )
-        .ok_or("invalid ink readback")?;
-        self.last_ms = (render_ms, readback.elapsed().as_secs_f64() * 1000.);
-        self.update_statistics();
-        Ok(pixels)
+        self.finish_pixels(exact_ink::Rotation::R0)
+    }
+    fn finish_rotated(
+        &mut self,
+        rotation: exact_ink::Rotation,
+    ) -> Option<std::result::Result<Pixmap, String>> {
+        Some(self.finish_pixels(rotation))
     }
     fn finish_for(&mut self, target: FrameTarget) -> std::result::Result<Option<Pixmap>, String> {
         #[cfg(windows)]

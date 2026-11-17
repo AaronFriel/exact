@@ -321,6 +321,11 @@ pub trait Backend {
     fn pointer(&mut self, x: f32, y: f32);
     /// The frame's pixels.
     fn finish(&mut self) -> Result<Pixmap, String>;
+    /// Rotate a retained GPU target before readback, when this backend supports it.
+    /// Other backends return pixels for the output's GPU blit.
+    fn finish_rotated(&mut self, _rotation: exact_ink::Rotation) -> Option<Result<Pixmap, String>> {
+        None
+    }
     /// Complete a paint for its consumer. `Pixels` requires an image; `Window`
     /// permits `None` after submission. `Geometry` updates only geometry.
     /// CPU backends return pixels.
