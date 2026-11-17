@@ -3558,7 +3558,11 @@ shows it), on its `channel_id` when the app declares that channel
 icon. Leave out `icon` and `color`: Firebase honours them for a notification it
 shows. A `tag` replaces a shown notification with that tag, a local one
 included, and `closeNotification(tag)` closes it. Its tap opens `navigate`,
-warm or at launch, as on Apple; the other `data` keys are not read.
+warm or at launch, as on Apple. The top-level `navigate` takes precedence.
+When it is absent and `data` carries Expo's `experienceId` or `scopeKey`,
+Exact reads `navigate` from the JSON object encoded in `body` by the Expo push
+service. A blank or non-string location, or a malformed body, opens nothing.
+Another sender's `body` and the other `data` keys are not read.
 
 A data-only message raises `push` on the root with `PushEvent = {data: string}`:
 `JSON.parse(e.data)` reads the FCM `data` map. It uses the live session, or
