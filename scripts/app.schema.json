@@ -238,7 +238,7 @@
       "type": "string"
     },
     "handle_links": {
-      "description": "Whether the app's web addresses open the installed app (LLP 1038 D8; the WICG handle_links explainer's values). `preferred`: links to app.origin within `scope`, and to each `scope_extensions` origin, open the app on iOS, iPadOS, macOS and Android, which the build signs and registers; the web build writes app.origin's association files and prints every other origin's. `not-preferred` and `auto` (what an absent member means) claim nothing natively. Exact's /.exact/ paths and an https auth.callback are never claimed.",
+      "description": "Whether the app's web addresses open the installed app (LLP 1038 D8; the WICG handle_links explainer's values). `preferred`: links to app.origin within `scope`, and to each `scope_extensions` origin, open the app on iOS, iPadOS, macOS and Android, which the build signs and registers; the web build writes app.origin's association files and prints every other origin's. `not-preferred` and `auto` (what an absent member means) claim nothing natively. These navigation claims exclude Exact's /.exact/ paths and https auth callbacks. Android registers native auth callbacks separately for the browser return; the web popup's /.exact/auth/callback stays in the browser.",
       "enum": ["auto", "preferred", "not-preferred"]
     },
     "scope": {

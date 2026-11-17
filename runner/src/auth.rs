@@ -253,6 +253,10 @@ impl<'a> Url<'a> {
             self.authority?.rsplit('@').next()?.to_ascii_lowercase()
         ))
     }
+
+    fn web_callback(&self) -> bool {
+        self.scheme == "https" && decode(self.path).ends_with(WEB_CALLBACK_PATH)
+    }
 }
 
 /// A query's `name=value` pairs, percent-decoded, `+` as a space.
@@ -408,7 +412,7 @@ pub fn carrier_callback(grants: &str, web_origin: Option<&str>) -> Option<String
         // A loopback grant names no port, so it is no callback by itself.
         .or_else(|| {
             all.iter()
-                .find(|c| !c.ends_with(WEB_CALLBACK_PATH) && !c.starts_with("http:"))
+                .find(|c| Url::parse(c).is_some_and(|u| u.scheme != "http" && !u.web_callback()))
         })
         .cloned()
 }
@@ -636,7 +640,7 @@ pub enum Arm {
 pub enum Browser {
     /// An authentication session (Apple).
     Native,
-    /// A Custom Tab or the default browser, returning by a custom-scheme intent.
+    /// An Auth Tab or the system browser, returning through a declared callback.
     Android,
     /// A popup to the app's callback page, on this origin (the web).
     Web,
@@ -704,7 +708,7 @@ pub fn receive_callback<D: DataSource>(runner: &mut Runner<D>, url: &str) -> boo
     // Recognize the endpoint even with userinfo, then reject it in `complete`.
     let endpoint_matches = |callback: &str| {
         Url::parse(callback).is_some_and(|want| {
-            !matches!(want.scheme.as_str(), "http" | "https")
+            want.scheme != "http"
                 && want.scheme == got.scheme
                 && want.authority.map(str::to_ascii_lowercase)
                     == got
@@ -877,10 +881,9 @@ pub fn arm_with_fixture<D: DataSource>(
         return Arm::Held;
     }
     if browser == Browser::Android
-        && Url::parse(&session.callback)
-            .is_some_and(|u| matches!(u.scheme.as_str(), "http" | "https"))
+        && Url::parse(&session.callback).is_some_and(|u| u.scheme == "http" || u.web_callback())
     {
-        settle(runner, ticket, 501, "Android auth requires a custom-scheme callback; App Links and loopback callbacks are not supported");
+        settle(runner, ticket, 501, "Android auth does not support loopback or web popup callbacks; use a claimed https or custom-scheme callback");
         return Arm::Settled;
     }
     if browser == Browser::None {
@@ -1265,6 +1268,17 @@ mod tests {
             carrier_callback(grants, Some("http://127.0.0.1:9/")).as_deref(),
             Some("http://127.0.0.1:9/.exact/auth/callback")
         );
+        for path in [
+            "/.exact/auth/callback",
+            "/%2Eexact/auth/callback",
+            "/site/%2eexact/auth%2Fcallback",
+        ] {
+            assert_eq!(
+                carrier_callback(&format!("auth.callback https://app.example{path}"), None),
+                None,
+                "{path}"
+            );
+        }
         assert_eq!(carrier_callback("net.fetch https://x", None), None);
         let summary = session("social.exact.bluesky:/oauth").summary();
         assert!(summary.starts_with(r#"{"origin":"https://bsky.social","path":"/oauth/authorize","params":["client_id","request_uri","id_token_hint"],"client_id":"https://app.example/c.json","request_uri":"urn:x""#), "{summary}");

@@ -1796,6 +1796,49 @@ test "signs in, shows the person, and is still signed in after a relaunch"
   expect text "status" == "Signed in"
 ```
 
+#### HTTPS callbacks
+
+For a backend that accepts only HTTPS return URLs, declare
+`auth.callback https://app.example/auth/return` instead of the custom-scheme
+callback. Register that URL with the backend. Apple uses
+[`ASWebAuthenticationSession.Callback.https`](https://developer.apple.com/documentation/authenticationservices/aswebauthenticationsession/callback/https(host:path:));
+it requires iOS 17.4 or macOS 14.4. Android uses an
+[Auth Tab](https://developer.chrome.com/docs/android/custom-tabs/guide-auth-tab)
+when the selected browser supports it, otherwise a browser returning through
+a verified App Link on exactly `/auth/return`. HTTP loopback remains unavailable
+on Android.
+
+Serve the domain associations over HTTPS at the origin root, without redirects:
+
+- `/.well-known/apple-app-site-association` needs
+  `{"webcredentials":{"apps":["TEAM.com.example.app"]}}`. `TEAM` is the signing
+  team and `com.example.app` the bundle id. The bake derives the matching
+  `webcredentials:app.example` entitlement from the callback grant. On macOS,
+  signing it requires a provisioning profile that allows Associated Domains.
+  A development build without one reports the missing association; a release
+  build refuses to ship without it.
+  Debuggable builds append `?mode=developer` to each derived `webcredentials:`
+  entry so Apple fetches the file from the domain directly. Enable Associated
+  Domains Development on the test device ([Apple's setup](https://developer.apple.com/documentation/xcode/supporting-associated-domains)).
+- `/.well-known/assetlinks.json` needs a `delegate_permission/common.handle_all_urls`
+  statement naming the Android package and its signing certificates' SHA-256
+  fingerprints. Put the fingerprints in `host.android.certificates` in `app.json`;
+  include each signing identity used to install the app, including Play App Signing.
+
+With `app.origin` set to this origin and `host.ios.team` set, the web build writes
+these files into `.well-known/`, and deploy publishes them with the web root.
+For a callback on another origin, the build prints the files that domain must
+serve, merging any passkey and navigation entries into the same documents.
+Keep `.well-known/` at the origin root when the site has a base path.
+`handle_links` controls ordinary navigation and is not needed for auth callbacks.
+On Android 11 and earlier, one unverified navigation or callback host prevents
+verification of every App Link; the build names the hosts when more than one is registered.
+Reserve `/.exact/auth/callback` for the web popup; use a different path for the
+native callback so an installed app does not intercept the web sign-in.
+Apple returns `502` with its reason when the app is not associated with the
+callback domain. A session that starts has not yet proved callback delivery;
+check the return in a signed app with the domain's association file published.
+
 ### Native sign-in (`@exact/sign-in`)
 
 The [sign-in recipe](recipes/sign-in.md) gives the call and server flow.
@@ -1999,11 +2042,15 @@ signIn: async (_a, store) => {
   against its allowed redirect origins, and the driver picks a new port each
   run: drive with `agent web --port 3000` (or `EXACT_PORT`) and allow
   `http://127.0.0.1:3000`.
-- **Hosts.** This flow has run on the web. Convex Auth takes only an `http` or
-  `https` `redirectTo`, so natively it cannot return to a custom-scheme
-  callback (`auth.callback`); macOS's fixed-port loopback callback is `http`
-  but has not been tried with it, and Android answers 501 for a loopback or
-  HTTPS callback.
+- **Native callbacks.** Convex Auth takes only HTTP or HTTPS `redirectTo` URLs.
+  Declare `auth.callback https://app.example/auth/return` and allow its origin
+  in Convex. Use only an HTTPS callback for this flow: `authCallback()` prefers
+  a declared custom scheme when one is present. Apple requires iOS 17.4 or
+  macOS 14.4 and the callback host's `webcredentials` association. Android uses
+  Auth Tab when supported, otherwise the callback's verified App Link; HTTP
+  loopback still answers 501. The [HTTPS callback setup](#https-callbacks) describes
+  the signing identities and association files. Native Google approval and
+  token rotation still need a check against the app's real Convex deployment.
 
 ### Child processes (`@exact/child-process`)
 

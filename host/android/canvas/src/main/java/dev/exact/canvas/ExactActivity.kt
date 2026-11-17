@@ -654,6 +654,7 @@ open class ExactActivity : Activity() {
      * item 2). */
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: android.content.Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        if (Auth.result(this, requestCode, resultCode, data)) return
         Extensions.activityResult(requestCode, resultCode, data)
     }
 

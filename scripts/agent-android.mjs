@@ -1297,7 +1297,7 @@ function extensionArgs(app, out, config, bound, firebase, development) {
   const handlers = androidProtocolHandlers(app.manifest, !development);
   // The App Links `handle_links` claims (LLP 1038 D8), its https auth callbacks excluded.
   const links = androidLinkFilters(app.manifest, callbacks);
-  for (const note of androidLinkNotes(app.manifest, links, { signsIn: !!reach?.auth?.sessions || callbacks.some((c) => c.startsWith('https:')) })) console.warn(`${app.name}: ${note}`);
+  for (const note of androidLinkNotes(app.manifest, links, { callbacks, signsIn: !!reach?.auth?.sessions || callbacks.some((c) => c.startsWith('https:')) })) console.warn(`${app.name}: ${note}`);
   const fragment = withAuthCallbacks(withAppLinks(withProtocolHandlers(withMetaData(manifestFragment(bound, { privacyPolicy: app.manifest?.privacy_policy ?? null }), [...configMetaData(config), ...(androidShareActivity(app.manifest?.share_target) ?? []), ...(notify ? CHANNELS_RECEIVER : [])]), handlers), links), callbacks), fragmentFile = resolve(apkDirs(app).app, 'manifest-fragment.xml');
   rmSync(fragmentFile, { force: true });
   if (fragment) { mkdirSync(dirname(fragmentFile), { recursive: true }); writeFileSync(fragmentFile, fragment); }

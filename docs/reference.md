@@ -684,9 +684,10 @@ the installed app is one declaration in Web App Manifest vocabulary:
 `handle_links: "preferred"` claims `app.origin` narrowed to `scope` (absent:
 `start_url`'s directory, `/` for most apps) and each `scope_extensions` origin
 whole. `"auto"` (what an absent member means) and `"not-preferred"` claim
-nothing natively. Exact's own paths under `/.exact/` (the web's sign-in
-callback page) and an https `auth.callback` on a claimed origin are never
-claimed, so a sign-in that returns there in a browser stays in the browser.
+nothing natively. These navigation claims exclude Exact's own paths under
+`/.exact/` and HTTPS auth callbacks. Android registers a separate exact-path
+App Link for a native `auth.callback`, so a browser without Auth Tab can return
+to the app. The web popup's `/.exact/auth/callback` stays in the browser.
 A link that opens the app arrives as any incoming URL does: its path is the
 launch location, or one `navigate` event while the app runs.
 
@@ -702,8 +703,10 @@ The web build (either target) writes `app.origin`'s files into the build:
 `/.well-known/apple-app-site-association`, whose `applinks` `components`
 exclude `/.exact/*` and each callback path before `<scope>*`, and
 `/.well-known/assetlinks.json` with a `delegate_permission/common.handle_all_urls`
-statement beside any passkeys' `get_login_creds` (the JS target writes no
-credential entries). They need `host.ios.team` and `host.android.certificates`;
+statement beside any passkeys' `get_login_creds`. A JavaScript build without a
+bake writes `webcredentials` for an HTTPS auth callback on `app.origin`, but no
+passkey `get_login_creds`. A production JavaScript build that copies a bake keeps
+the bake's credential entries. The files need `host.ios.team` and `host.android.certificates`;
 the build line names a missing one. For every other origin a claim names, the
 build prints the files it must serve, including each extension origin's
 `/.well-known/web-app-origin-association`, keyed by the manifest's processed
@@ -3149,9 +3152,15 @@ allow an immediate retry. Returning focus to the app does not end the wait.
 
 `openAuthSession` answers 501 on the headless Linux host and Windows, and on Android
 when no system browser resolves or `ephemeral: true` is requested (this build has no
-ephemeral browser API). Android supports custom-scheme callbacks from
-`auth.callback` grants; HTTPS App Links and loopback callbacks answer 501. Returning
-to the activity after it stopped, without a callback, cancels with 499, whether by
+ephemeral session support). Android supports custom-scheme and claimed HTTPS callbacks
+from `auth.callback` grants. HTTPS uses Auth Tab when the selected browser supports
+it, otherwise a verified App Link on the callback's exact path. The bake writes
+the filter; the callback host must serve `assetlinks.json` with the app's package
+and signing fingerprints. See the [OAuth recipe](recipes/oauth.md) for the domain
+associations and publishing. HTTP loopback and reserved `/.exact/auth/callback`
+web popup callbacks answer 501. An Auth Tab wait ends on its result or the ten-minute
+bound; returning to the activity alone keeps it. For a custom-scheme or App Link wait,
+returning after the activity stopped without a callback cancels with 499, whether by
 Back or another link that brings the activity forward. A pause without a stop,
 such as a permission dialog or a multi-window focus change, keeps the wait. Callbacks
 are routed by endpoint and state: a stale, wrong-state or missing-state callback is

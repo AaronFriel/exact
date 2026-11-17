@@ -51,7 +51,7 @@ import { interfaceStyle, launchBackground, schemeHead, withInterfaceStyle, withL
 import { webIconLinks, webThemeColors } from '../../scripts/app-icons.mjs';
 import { appManifestDigest, appSources, buildFileCards, copyStaticTreeIfPresent, listAssets, hostingNotes, planRouteTable, publicFileCards, replaceBuild, webEnvelope, moduleCards, MODULE_FILES } from './serve.mjs';
 import { foreignBeside } from './generations.mjs';
-import { androidAssociation, writeLinkFiles } from './association.mjs';
+import { writeLinkFiles } from './association.mjs';
 import { cargoInputPaths, compilerPaths } from '../../scripts/cargo-dep-info.mjs';
 import { captureWebProducts, contractReadReceipt } from '../../scripts/web-build.mjs';
 
@@ -684,23 +684,8 @@ if (buildLocations.length && renderAt) {
 // The origin's association files (LLP 1030 D1; 1030.000 D2; LLP 1038 D8): one merged file per platform, from the
 // manifest's link claims and the bake's credentials; static origin files the platforms fetch, never a dev-server
 // claim. Every other origin a claim names is printed with its files.
-const ios = app.manifest.host?.ios ?? {};
-// @ref LLP 1069.006 D2 — a claimed https auth callback on Apple needs this
-// origin's `webcredentials` entry too (and is excluded from its links).
 const authReach = bakedReceipt.reach?.auth ?? {};
-// @ref LLP 1133.011 D6 — an `auth.passkey` RP ID that is the origin's host: this origin serves both platforms' files.
-const originHost = app.origin ? new URL(app.origin).hostname : null;
-const passkeyHere = (authReach.passkeys ?? []).includes(originHost);
-const webcredentials = passkeyHere || (authReach.callbacks ?? []).some((c) => app.origin && c.startsWith(new URL(app.origin).origin + '/'));
-for (const line of writeLinkFiles(stage, app, { webcredentials, passkeys: passkeyHere, callbacks: authReach.callbacks ?? [] })) console.error(line);
-// Every other RP ID's two entries are printed, for the domain that serves it.
-const certificates = app.manifest.host?.android?.certificates ?? [];
-const androidStatement = androidAssociation(app.manifest);
-const elsewhere = (authReach.passkeys ?? []).filter((rp) => rp !== originHost && rp !== 'localhost');
-const passkeyNote = (authReach.passkeys ?? []).length ? `; passkeys: ${[
-  passkeyHere ? `${originHost}'s association files${ios.team ? '' : ' (no host.ios.team: no apple-app-site-association)'}${certificates.length ? '' : ' (no host.android.certificates: no assetlinks.json)'}` : null,
-  ...elsewhere.map((rp) => `${rp} must serve /.well-known/apple-app-site-association {"webcredentials":{"apps":["${ios.team ?? '<team>'}.${app.id}"]}} and /.well-known/assetlinks.json ${JSON.stringify([androidStatement])}`),
-].filter(Boolean).join('; ')}` : '';
+for (const line of writeLinkFiles(stage, app, { passkeys: authReach.passkeys ?? [], callbacks: authReach.callbacks ?? [] })) console.error(line);
 
 // The web's auth callback page and the two client-metadata documents
 // (LLP 1069.006 D4; after review, item 3: one client id per
@@ -762,10 +747,10 @@ writeFileSync(resolve(stage, '.exact-build.json'), JSON.stringify({
 publishWarmGame(app, stage, dist, warmInputs, buildReceipt, {...buildEnv, EXACT_GAME_PROOF_PROFILE:proofProfile});
 stage = null;
 if (bakeOnly && process.argv.includes('--json')) reportBuilt({ path: dist, target: 'web', trust: buildEnv.EXACT_UPDATE_TRUST });
-if (bakeOnly) { console.log(`${relative(process.cwd(), dist) || "."}: the bake (no wasm): app.plan ${kib(planBytes.length)}, ${sealed.report}, index.html; documents: ${documentNote}${authNote}${passkeyNote}; modules: ${moduleNote}`); process.exit(0); }
+if (bakeOnly) { console.log(`${relative(process.cwd(), dist) || "."}: the bake (no wasm): app.plan ${kib(planBytes.length)}, ${sealed.report}, index.html; documents: ${documentNote}${authNote}; modules: ${moduleNote}`); process.exit(0); }
 const textFlowWasm = readFileSync(resolve(dist, 'textflow.wasm'));
 const markdownEditor = readFileSync(resolve(dist, 'markup-editor.wasm'));
-console.log(`${relative(process.cwd(), dist) || "."}: app.wasm ${kib(wasm.length)} (${kib(gzipSync(wasm, { level: 9 }).length)} gzip; ${optNote}), index.html, glue.js, app.plan ${kib(planBytes.length)}, ${sealed.report}; documents: ${documentNote}${authNote}${passkeyNote}; GPU: ${gpuNote}; modules: ${moduleNote}; markup-editor.wasm ${kib(markdownEditor.length)} (${kib(gzipSync(markdownEditor, { level: 9 }).length)} gzip), on demand; textflow.wasm ${kib(textFlowWasm.length)} (${kib(gzipSync(textFlowWasm, { level: 9 }).length)} gzip), on demand`);
+console.log(`${relative(process.cwd(), dist) || "."}: app.wasm ${kib(wasm.length)} (${kib(gzipSync(wasm, { level: 9 }).length)} gzip; ${optNote}), index.html, glue.js, app.plan ${kib(planBytes.length)}, ${sealed.report}; documents: ${documentNote}${authNote}; GPU: ${gpuNote}; modules: ${moduleNote}; markup-editor.wasm ${kib(markdownEditor.length)} (${kib(gzipSync(markdownEditor, { level: 9 }).length)} gzip), on demand; textflow.wasm ${kib(textFlowWasm.length)} (${kib(gzipSync(textFlowWasm, { level: 9 }).length)} gzip), on demand`);
 if (process.argv.includes('--json')) reportBuilt({ path: dist, target: 'web', trust: buildEnv.EXACT_UPDATE_TRUST });
 }
 

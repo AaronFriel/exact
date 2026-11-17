@@ -12,7 +12,7 @@ use exact_runner::auth::{self, Arm, Browser};
 use exact_runner::{agent, Answer, DataError, DataSource, Event, Outcome, Runner, Store};
 
 const GRANTS: &str =
-    "auth.session https://as.test\nauth.callback app.test:/cb\nauth.callback app.test://host/cb\nauth.callback http://127.0.0.1/cb\nauth.callback http://[::1]/cb";
+    "auth.session https://as.test\nauth.callback app.test:/cb\nauth.callback app.test://host/cb\nauth.callback https://app.test/cb\nauth.callback https://app.test/.exact/auth/callback\nauth.callback https://app.test/site/.exact/auth/callback\nauth.callback https://app.test/%2Eexact/auth/callback\nauth.callback https://app.test/site/%2eexact/auth%2Fcallback\nauth.callback http://127.0.0.1/cb\nauth.callback http://[::1]/cb";
 
 struct Signer;
 
@@ -350,6 +350,61 @@ fn authorize_steps_parse_and_reach_the_driver() {
         format!("{refused:?}").contains("takes nothing or `cancel`"),
         "{refused:?}"
     );
+}
+
+#[test]
+fn android_https_returns_convex_codes_only_to_the_live_session() {
+    let mut r = boot();
+    let mut out = press(&mut r, "go");
+    out.request.body = String::from_utf8(out.request.body)
+        .unwrap()
+        .replace("app.test:/cb", "https://app.test/cb")
+        .into_bytes();
+    assert!(matches!(
+        auth::arm(&mut r, &out, false, Browser::Android, None),
+        Arm::Present(_)
+    ));
+    assert!(!auth::receive_callback(
+        &mut r,
+        "https://app.test/elsewhere?state=s1"
+    ));
+    assert!(auth::receive_callback(
+        &mut r,
+        "https://app.test/cb?convexAuthCode=old&state=old"
+    ));
+    assert!(r.take_request_refusal(true).is_none());
+    assert!(auth::receive_callback(
+        &mut r,
+        "https://app.test/cb?convexAuthCode=secret&state=s1"
+    ));
+    assert_eq!(settled(&mut r), (out.ticket, 200));
+    assert!(auth::receive_callback(
+        &mut r,
+        "https://app.test/cb?convexAuthCode=secret&state=s1"
+    ));
+    assert!(r.take_request_refusal(true).is_none());
+}
+
+#[test]
+fn android_refuses_the_reserved_web_popup_callback() {
+    let mut r = boot();
+    for path in [
+        "/.exact/auth/callback",
+        "/site/.exact/auth/callback",
+        "/%2Eexact/auth/callback",
+        "/site/%2eexact/auth%2Fcallback",
+    ] {
+        let mut out = press(&mut r, "go");
+        out.request.body = String::from_utf8(out.request.body)
+            .unwrap()
+            .replace("app.test:/cb", &format!("https://app.test{path}"))
+            .into_bytes();
+        assert!(matches!(
+            auth::arm(&mut r, &out, false, Browser::Android, None),
+            Arm::Settled
+        ));
+        assert_eq!(settled(&mut r), (out.ticket, 501));
+    }
 }
 
 #[test]

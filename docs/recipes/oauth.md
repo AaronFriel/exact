@@ -53,10 +53,11 @@ component Account
   A failed read is not a sign-in problem.
 - `refresh me` reads again; sending a mutation instead asks the API twice.
 - Keep `session` a resource the sign-in screen reads; it readies the next press.
-- For a provider page, pass `{ endSession: true }` from a press and register
-  its logout callback. The opener delivers a state-less return; after severance
-  the popup identity addresses it, and a missing identity fails closed. Revocation
-  runs inside its lease first. Failure returns `end_session`; the next sign-out
-  retries after no reply, 429 or 5xx, while another reply drops the token.
+- Provider logout: pass `{ endSession: true }` from a press and register its
+  callback. Details: `bun exact.mjs docs oauth endSession`.
 - A provider-ended session leaves signed-in state and sets `session.error`; a
   network failure, 429 or 5xx keeps it.
+
+For an HTTPS-only backend, declare `auth.callback https://app.example/auth/return`.
+Apple needs `webcredentials`; Android uses Auth Tab or a verified App Link.
+Setup: [HTTPS callbacks](../contract-for-agents.md#https-callbacks).
