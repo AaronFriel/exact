@@ -3476,6 +3476,17 @@ writes the line, the build signs the row's entitlements, and `exact deploy`'s re
 it. `device.shareplay`, added for such a package, signs Group Activities'
 `com.apple.developer.group-session` on iOS and, under a provisioning profile that allows it,
 on the Mac; not on tvOS. A Mac build without such a profile signs none and still ships.
+`device.cloudkit` names no purpose and derives the container `iCloud.<bundle id>`;
+`device.cloudkit iCloud.<name>` selects another container. A second container is refused.
+On iOS and iPadOS, and under a provisioning profile on the Mac, it signs
+`com.apple.developer.icloud-services = ["CloudKit"]`,
+`com.apple.developer.icloud-container-identifiers = [<container>]` and
+`com.apple.developer.icloud-container-environment`: `Development` under a development
+signature, `Production` under a distribution signature, including an archive.
+The profile must allow CloudKit and the selected container by value. It grants no push,
+background notification mode or iCloud Documents entitlement. tvOS, App Clips and extensions
+sign none. A Mac release without a suitable profile ships with CloudKit unavailable and
+claims no shares. A package receiving shares declares the host event below.
 `device.icloud-kv`, for an app module that uses `NSUbiquitousKeyValueStore`, names no purpose
 and signs `com.apple.developer.ubiquity-kvstore-identifier` with the app's application
 identifier (`<team prefix>.<bundle id>`, `SIMULATORX.<bundle id>` on a simulator) on iOS and
@@ -3496,7 +3507,7 @@ that takes it drains it, even when it came before the package's module loaded. T
 
 | Event | Platforms | Delivered by | Needs | Writes |
 | --- | --- | --- | --- | --- |
-| `cloudkit-share` | iOS, macOS | iOS: the scene delegate's `windowScene(_:userDidAcceptCloudKitShareWith:)`, or the connection options' `cloudKitShareMetadata` when it launched the app; macOS: the application delegate's `application(_:userDidAcceptCloudKitShareWith:)` | `device.cloudkit`, not yet a row: no build takes it | `CKSharingSupported` |
+| `cloudkit-share` | iOS, macOS | iOS: the scene delegate's `windowScene(_:userDidAcceptCloudKitShareWith:)`, or the connection options' `cloudKitShareMetadata` when it launched the app; macOS: the application delegate's `application(_:userDidAcceptCloudKitShareWith:)` | `device.cloudkit`, signed in this build | `CKSharingSupported` |
 
 The Apple implementation declares what it takes, `"hostEvents": ["cloudkit-share"]`, and its
 interface `"start": "load"`, so an instance exists once the module loads. The build refuses,

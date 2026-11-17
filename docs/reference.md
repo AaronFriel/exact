@@ -1426,7 +1426,9 @@ Some entitlements hold on a Mac only under a provisioning profile that
 authorizes them (Apple TN3125), and the Mac build signs them from one (LLP
 1133.010 D7): push's `com.apple.developer.aps-environment` (`device.push`), App
 Attest's environment (`device.attestation`), the Declared Age Range
-(`device.age-range`), Group Activities (`device.shareplay`), the iCloud key-value store (`device.icloud-kv`), Sensitive Content Analysis (`device.sensitive-content-analysis`), the keychain group a locked secret is kept in
+(`device.age-range`), Group Activities (`device.shareplay`), CloudKit
+(`device.cloudkit`), the iCloud key-value store (`device.icloud-kv`), Sensitive
+Content Analysis (`device.sensitive-content-analysis`), the keychain group a locked secret is kept in
 (`secret.keep` with a presence policy), and a passkey's associated domains
 (`auth.passkey`). An app whose grants need any of them is built from the
 newest installed macOS profile for its id (or the team's wildcard) that allows
@@ -1443,7 +1445,8 @@ With a profile, the build signs with its team's identity (Apple Development, or 
 release; one `EXACT_IDENTITY` or `EXACT_DEVELOPER_ID` names must be of that
 kind and team, or the build is refused), writes the application identifier,
 the team and each entitlement (an environment `development` under a
-development profile, `production` otherwise), embeds the profile as
+development profile, `production` otherwise; CloudKit uses `Development` and
+`Production`), embeds the profile as
 `Contents/embedded.provisionprofile`, and always assembles the `.app`, where
 the profile holds.
 
@@ -1452,12 +1455,27 @@ for each grant, what the app then reports (`available: false`,
 `NotSupportedError`). A release build is refused (`grant-needs-profile`) for
 App Attest, the age range, the iCloud key-value store, Sensitive Content
 Analysis, a passkey or a locked secret that is not `optional`; one granting
-push or SharePlay ships without it, the package reporting it unavailable.
+push, SharePlay or CloudKit ships without it, the package reporting it unavailable.
 An app with Mac widgets signs both under one profile, of the widgets' team,
 chosen among the profiles that grant the widgets' App Group and shared
 Keychain group and the grants' entitlements; with none that grants both, the
 grants sign nothing. An ad hoc build (`EXACT_IDENTITY=-`) signs no profile's
 entitlements.
+
+`device.cloudkit` derives one container, `iCloud.<bundle id>`, or selects the one
+written as `device.cloudkit iCloud.<name>`; it takes no purpose. A second container
+is refused. On iOS and iPadOS, and under a Mac profile, it signs
+`com.apple.developer.icloud-services = ["CloudKit"]`,
+`com.apple.developer.icloud-container-identifiers = [<container>]` and
+`com.apple.developer.icloud-container-environment = "Development"` or `"Production"`
+by the signature's kind. A distribution archive uses `Production` (ITMS-90046).
+The profile's services must include CloudKit and its containers must allow the
+selected identifier; a profile for another container is refused. No push or
+`remote-notification` mode is derived, and no `ubiquity-*` entitlement. tvOS,
+App Clips and extensions sign none. A bound package declaring
+`"hostEvents": ["cloudkit-share"]` receives shares and gets `CKSharingSupported`
+and `ExactHostEvents` only where the grant is signed; a Mac build without a
+profile claims neither.
 
 ### Web CI preparation
 
