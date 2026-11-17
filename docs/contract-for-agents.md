@@ -3064,6 +3064,60 @@ natural size (300×150 until the metadata arrives), even when it is absolutely
 positioned with `inset=0`, since opposing insets do not stretch a replaced element
 (CSS 2.1 §10.3.8, §10.6.5), and an adaptive stream's box changes with each
 rendition. To fill a box, write `width="100%" height="100%"` with `object-fit`.
+
+On Apple, the player normally caps HLS renditions to the video's box.
+`preferredMaximumResolution="640x360"` sets an author bound below that.
+`startsOnFirstEligibleVariant=true` starts from the first eligible variant in
+playlist order, bounded by what the box needs and the author bound; a playlist
+without rendition sizes uses AVFoundation's normal selection. Playlist order
+plus this flag is the start control; Exact does not reorder variants or offer
+a `start-quality` attribute. See Apple's
+[`startsOnFirstEligibleVariant`](https://developer.apple.com/documentation/avfoundation/avplayeritem/startsonfirsteligiblevariant).
+
+For custom loading on Apple, mark the video `hatch="clip"` and declare that
+element hatch for `ios` and `macos` in `app.json`. The app's Swift in
+`modules/apple/` receives `elementConfiguration(_:_:)` synchronously before
+each item is made, including source changes and `load(id)`, in list rows too.
+The configuration is an `NSMutableDictionary`: `url` is the resolved source
+`URL`; set `asset` to an `AVURLAsset` with your options or resource loader.
+Leaving `asset` unset keeps normal loading. A cold launch waits for hatch
+registration. The supplied asset goes through the same rendition bounds and
+start preference. Do not load its tracks to warm it: that can select a rendition
+before the item exists. At `built`, or `changed` if the player was deferred,
+`element.platform` is the `AVPlayer`. Exact owns its item, playback and authored
+preferences; configure loading here and add observations afterward.
+
+For example, an app that implements a `PlaylistLoader` delegate can fetch a
+multivariant playlist, put its chosen start first, make the remaining URIs
+absolute, and serve it under its own scheme:
+
+```swift
+import AVFoundation
+
+// In the app's ExactModule subclass; PlaylistLoader is the app's delegate.
+private var loaders: [ObjectIdentifier: PlaylistLoader] = [:]
+
+override func elementConfiguration(_ element: ExactElement, _ configuration: AnyObject) {
+    guard element.hatch == .clip, let config = configuration as? NSMutableDictionary,
+          let source = config["url"] as? URL else { return }
+    let loader = PlaylistLoader(source: source)
+    let asset = AVURLAsset(url: loader.url)
+    asset.resourceLoader.setDelegate(loader, queue: loader.queue)
+    loaders[ObjectIdentifier(element)] = loader
+    config["asset"] = asset
+}
+
+override func elementEnded(_ element: ExactElement) {
+    loaders.removeValue(forKey: ObjectIdentifier(element))
+}
+```
+
+Keep the delegate alive while its asset is in use: the resource loader holds it
+[weakly](https://developer.apple.com/documentation/avfoundation/avassetresourceloader/delegate).
+A private scheme changes AirPlay and FairPlay loading behaviour; the app must
+test those paths with its loader. This video hook is Apple only. Android has no
+video player hook yet; the web uses its own media element.
+
 `audio` stays HTML's player for long media
 (a song, a podcast: `video`'s props and events with no picture, LLP 1042 §8).
 
