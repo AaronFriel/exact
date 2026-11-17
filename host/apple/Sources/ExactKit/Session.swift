@@ -350,6 +350,7 @@ public final class ExactSession {
     var pendingActivation: (generation: Int, token: UInt64)? // retried on the session's wake
     /// The generation whose data source `prepareData` or `evaluateFromDraw` activated on the owner, and whether it still runs there.
     var preparedGeneration: Int?, dataPreparing = false
+    var canvasesHeld = false // a canvas start held for what follows the draw's evaluation (`loadCanvases`)
     var nativesOpened: Int? // the generation whose native views may attach (LLP 1024 D3)
     private(set) var updateToken: UInt64 = 0; private var receipt: DrawReceipt?
     package let core: SessionCore
@@ -1207,12 +1208,12 @@ public final class ExactSession {
         if firstDrawMs != nil {
             afterBootOwner { [weak self] in
                 guard let self, state != .destroyed else { return }
-                canvases.loadIfNeeded(); natives.loadIfNeeded(); drainSurfaceWork()
+                loadCanvases(); natives.loadIfNeeded(); drainSurfaceWork()
             }
         } else {
             DispatchQueue.main.async { [weak self] in self?.afterBootOwner { [weak self] in
                 guard let self, state != .destroyed else { return }
-                canvases.loadIfNeeded(); drainSurfaceWork(); frames.run(frames.hasWork)
+                loadCanvases(); drainSurfaceWork(); frames.run(frames.hasWork)
             } }
         }
         timerDue = batch.timerDueMs; timerLanding = batch.landing
@@ -1321,7 +1322,8 @@ public final class ExactSession {
     package func drainSurfaceWorkNow() { if !applying { drainSurfaceWork() } }
 
     private func drainSurfaceWork() {
-        guard canvases.ready || canvases.failed != nil || canvases.isEmpty,
+        // A held canvas load (`loadCanvases`) drains when it is released.
+        guard !canvasesHeld, canvases.ready || canvases.failed != nil || canvases.isEmpty,
               !pendingSurfaceWork.isEmpty else { return }
         let work = pendingSurfaceWork.filter { $0.0["mode"] as? String != "canvas" }
         pendingSurfaceWork.removeAll { $0.0["mode"] as? String != "canvas" }
