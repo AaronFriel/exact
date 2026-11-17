@@ -313,7 +313,7 @@ pub struct Host<D: DataSource> {
     #[cfg(test)]
     finish_passes: usize,
     #[cfg(test)]
-    batch_writes: usize,
+    pub(crate) batch_writes: usize,
     /// The update store's last line this host journaled, so a sync after a check writes it once.
     update_line: Option<String>,
     delivery: Option<&'static crate::delivery::Hooks>,

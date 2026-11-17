@@ -251,9 +251,10 @@ export const classifications = [
     ["runner:runner/src/instance/collection/index.rs", "SizeIndex::invalidate_row#generation:1 SizeIndex::invalidate_row#next_generation:1 SizeIndex::replace_keys_indexed#next_generation:1 SizeIndex::splice_keys#next_generation:1"],
     ["runner:runner/src/instance/collection/into_view.rs", "Collection::begin_into_view#request:1"],
     ["runner:runner/src/instance/collection/mod.rs", "Collection::feedback#scroll_sequence:1 Collection::update_data#data_generation:1 Collection::update_data#scroll_sequence:1"],
+    ["runner:runner/src/instance/collection/traversal.rs", "Tree::collection_travel#scroll_sequence:1 Tree::update_collection#scroll_sequence:1"],
     ["runner:runner/src/instance/collection/nest.rs", "PinEpoch::bump#PIN_EPOCH.fetch_add:1"],
     ["runner:runner/src/runner/collection.rs",
-      "Runner::collection Runner::collection_data Runner::collection_feedback Runner::collection_feedback_bytes Runner::collection_feedback_filled " +
+      "Runner::collection_travel Runner::collection Runner::collection_data Runner::collection_feedback Runner::collection_feedback_bytes Runner::collection_feedback_filled " +
       "Runner::collection_mounted Runner::collection_shown Runner::collections Runner::collections_bounded Runner::collections_json Runner::collections_shallow " +
       "Runner::kept_positions_json"],
     ["runner:runner/src/runner/gates.rs", "Runner::collection_reply_key"],
