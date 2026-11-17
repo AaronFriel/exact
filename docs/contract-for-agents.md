@@ -3521,6 +3521,43 @@ build before resolution. Neither input lock changes.
 The app commits no Rust files for a package. Modules load only when their surfaces mount;
 package WGSL is compiled into the crate, rather than shipped through `gpu.shaderRoots`.
 
+### Native SDK dependencies
+
+An Apple implementation names Swift Package Manager products in its
+`apple/exact.json` (LLP 1133.001 D9, expo/exact#751):
+
+```json
+{
+  "swiftPackages": [{
+    "url": "https://github.com/apple/swift-collections.git",
+    "exactVersion": "1.1.4",
+    "products": ["DequeModule"]
+  }]
+}
+```
+
+For an app's own `modules/apple/*.swift`, put the same `swiftPackages` array
+under `host.ios` or `host.macos` in `app.json`. Swift imports the product's
+modules normally. All Apple destinations share one `Package.resolved` beside
+the app. Run `bun exact.mjs lock` after changing these declarations, bindings
+or used interfaces; review and commit the lock. Lock discovery follows the
+compiled plan, including views placed through Contract libraries. Builds
+refuse a missing or mismatched lock and disable automatic resolution.
+Conflicting direct versions name both requesters.
+SwiftPM verifies binary targets by checksum. One shared dynamic library links
+all declared products used by the app's Swift and its bound implementations,
+so SDK singletons and configuration are shared across consumers. It loads with
+the first consumer that needs it; an unused implementation stays unloaded.
+App-local `.xcframework`s remain supported. Package resources ship with the
+app and are available through `Bundle.module`. SDK privacy manifests and the
+requesting implementations' declarations accompany the shared library and
+dependency dylibs. CocoaPods is not supported.
+
+Android implementations declare pinned `group:artifact:version` coordinates
+in `android/exact.json`'s `maven` array; an app's own Kotlin uses
+`host.android.maven`. See [Maven libraries](../host/android/README.md#maven-libraries-one-locked-verified-gradle-graph-llp-1133008-d8-item-5)
+for the shared Gradle graph, lock and verification files.
+
 ### A package's storage and session
 
 A package's implementation finds the session's directories behind `app:/data`,

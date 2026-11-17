@@ -2042,6 +2042,13 @@ price: answers arrive `Later`, outside the action's transaction (LLP 1027.002 D1
 
 ## Working on Exact itself
 
+- **SwiftPM imports need more than Swift module paths.** An App Intents
+  typecheck with only `-I` and `-F` loses C and Objective-C module maps and
+  headers. Preserve the shared dependency target's compiler import flags when
+  compiling consumers and gathering their constants. A roster probe also needs
+  its own executable beside the package's resource bundles: `Bundle.main` in
+  Bun refers to Bun's bundle.
+
 - **An Android regression test still runs the temporarily reverted code after
   the source is restored.** A revert and restore close together can leave
   Gradle reporting `compileDebugKotlin UP-TO-DATE` and reusing the class from

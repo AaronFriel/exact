@@ -688,6 +688,12 @@ function bindgenFinding(dir, workspace, options) {
 /** Explicit app lock repair: preserve selected versions and resolve only manifest drift. An app without a workspace of
  * its own resolves its generated one (LLP 1153.003 D1.4), capturing a lock only when its crates leave exact2's. */
 export async function lockApp(dir) {
+  const { readManifest } = await import('./app.mjs');
+  const { lockSwiftPackages } = await import('../host/apple/compose.mjs');
+  const swift = lockSwiftPackages({ dir, manifest: readManifest(dir, basename(dir)) });
+  return [await lockRustApp(dir), swift].filter(Boolean).join('\n');
+}
+async function lockRustApp(dir) {
   const { cargoEnvironment } = await import('./app.mjs');
   const { appCrates, authoredWorkspace, shellsDir } = await import('./cargo-check.mjs');
   const { GPU_LOCK, ensureGpuShells, ensureShells, lockShells, lockChanges } = await import('./app-shells.mjs');

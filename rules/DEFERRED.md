@@ -733,6 +733,14 @@ to the ideal end state). Still out: `rotate` and `translate` in a look, and
 
 **Runtime**
 
+**Swift Package Manager products (LLP 1133.001 D9; expo/exact#751):**
+waived by Charlie, 2026-11-16, expo/exact#751. An Apple implementation or
+the app's own Swift may name products at exact versions, with one committed
+`Package.resolved` per app and builds restricted to its resolved versions.
+Unblocks vendor SDKs distributed as Swift packages; app-local xcframeworks
+remain supported. CocoaPods stays out: its trunk stops accepting podspecs
+on 2026-12-02, and the Apple build has no Xcode project for it to integrate into.
+
 **Expanded (Charlie, 2026-10-13, issue-program ruling 10):** runner-owned
 WebSocket sending: the stream mapper receives a socket handle and a mutation
 sends ordered, never-coalesced protocol frames (LLP 1016.000 D7). T3 Code's

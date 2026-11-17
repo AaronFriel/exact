@@ -590,11 +590,11 @@ Ports    none; send makes one HTTPS request. Runs to completion.`,
     example: 'bun exact.mjs shells',
   },
   lock: {
-    line: 'refresh the app or game Cargo.lock against this Exact checkout',
+    line: 'refresh Cargo.lock and the app’s Swift Package.resolved',
     usage: 'bun exact.mjs lock',
     flags: [],
     internal: ['--lock'],
-    body: 'Use after exact update reports app lock drift, after this checkout moves or after adding a dependency.\nApps preserve locked versions where possible, resolve offline first and fetch missing dependencies when needed; games fetch and recapture their lock. Builds never change the lock.\nPorts    none. Runs to completion.',
+    body: 'Use after exact update reports app lock drift, after this checkout moves or after adding a dependency.\nApps preserve locked versions where possible, resolve Cargo offline first and fetch missing dependencies when needed; games fetch and recapture their lock. Swift products declared by the app or its packages resolve into Package.resolved. Review and commit changed locks. Builds never change them.\nPorts    none. Runs to completion.',
     example: 'bun exact.mjs lock',
   },
   windows: {

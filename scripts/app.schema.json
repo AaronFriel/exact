@@ -822,6 +822,7 @@
           "description": "iOS: `minimumOS` (default 17.0), `deviceFamily` (iphone, ipad), and the keys below.",
           "type": "object",
           "properties": {
+            "swiftPackages": { "$ref": "#/$defs/swiftPackages" },
             "infoPlist": {
               "description": "No keys are admitted. Each refusal gives tested grant advice, points to the bundle metadata reference for a derived key, or asks for a feedback note naming a key Exact does not write.",
               "type": "object",
@@ -994,6 +995,7 @@
           "description": "macOS: `minimumOS` (default 14.0), the first window's size, and the keys below.",
           "type": "object",
           "properties": {
+            "swiftPackages": { "$ref": "#/$defs/swiftPackages" },
             "infoPlist": {
               "description": "No keys are admitted. Each refusal gives tested grant advice, points to the bundle metadata reference for a derived key, or asks for a feedback note naming a key Exact does not write.",
               "type": "object",
@@ -1658,6 +1660,18 @@
   },
   "additionalProperties": false,
   "$defs": {
+    "swiftPackages": {
+      "description": "Swift Package Manager products for native Swift, with exact versions. The app keeps Package.resolved; exact lock refreshes it (LLP 1133.001 D9, expo/exact#751).",
+      "type": "array",
+      "items": {
+        "type": "object", "required": ["url", "exactVersion", "products"], "additionalProperties": false,
+        "properties": {
+          "url": { "type": "string", "pattern": "^https://[^/?#@\\s]+/[^?#\\s]+$" },
+          "exactVersion": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\\.[0-9A-Za-z-]+)*)?(\\+[0-9A-Za-z-]+(\\.[0-9A-Za-z-]+)*)?$" },
+          "products": { "type": "array", "minItems": 1, "items": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_.-]*$" } }
+        }
+      }
+    },
     "alternativeNames": {
       "description": "Other names Siri and App Shortcuts answer to for the app, such as its name before a rename (Info.plist's INAlternativeAppNames): each a `name` and an optional `pronunciationHint`, written as it sounds. At most three. A watch app gets the iPhone app's. Apple admits names based on the app's own or ones its users commonly call it, never another app's.",
       "type": "array",

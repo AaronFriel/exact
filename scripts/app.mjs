@@ -656,6 +656,9 @@ function schema() {
 export function mavenProblems(value, at) {
   return value === undefined ? [] : validate(value, schema().properties.host.properties.android.properties.maven, at, schema());
 }
+export function swiftPackagesProblems(value, at) {
+  return value === undefined ? [] : validate(value, schema().$defs.swiftPackages, at, schema());
+}
 /** The subset of JSON Schema the manifest's schema uses — type, required, properties, additionalProperties, items, minItems, enum, pattern, minLength, oneOf, $ref into $defs — checked by hand so the reader needs no dependency. Every problem in one pass. */
 export function validate(value, node, at, root) {
   const problems = [];
@@ -1105,6 +1108,7 @@ function completeBuild(app, platform, target, graph, messages, roots, env, prepa
     add(resolve(app.dir, 'render/build.rs'), true);
   }
   if (platform === 'macos' || platform === 'ios') {
+    add(resolve(app.dir, 'Package.resolved'), true);
     add(resolve(ROOT, 'host/apple/privacy.mjs'));
     privacyManifests.push(...appleImplementations(app.dir, target.includes('-tvos') ? 'tvos' : platform, bundleGraph.extensions ?? {}, bundleGraph.contractSources ?? []).map(p => capturePrivacyManifest(p.privacyManifest)));
     const packageRoot=resolve(ROOT,'host/apple');
