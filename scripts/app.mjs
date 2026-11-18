@@ -1342,14 +1342,14 @@ export function readBuilds(app, env = process.env) {
 /** The shared dev/deploy comparison (LLP 1030 D3). A new binary and a safe
  * bundle are independent results. Compatibility-id equality decides neither. */
 export function classifyArtifacts(candidate, cohort, signingKey = null) {
-  const missing=[];
+  const missing=[], needsBinary=[]; // `needsBinary`: the misses that are proofs against the cohort's own receipt (LLP 1156.006.000 D25)
   if (!candidate?.graph?.artifacts || !cohort?.sources || !cohort?.compat?.inputs) return {binary:true,bundle:false,missing:['bake graph: the installed cohort has no authenticated capability receipt'],warnings:[]};
   const have=cohort.compat.inputs;
   if(candidate.trust==='production'&&have.store?.L!=='0') {
     if(!signingKey||have.keys?.[signingKey.id]!==signingKey.public)missing.push(`envelope: signing key ${signingKey?.id??'(not selected)'} is not carried by this cohort`);
   }
   for(const artifact of candidate.graph.artifacts) for(const [key,need] of Object.entries(artifact.requires)) {
-    const fail=(detail)=>missing.push(`${artifact.name}: ${key}${detail}`);
+    const fail=(detail,proof=true)=>{const said=`${artifact.name}: ${key}${detail}`;missing.push(said);if(proof)needsBinary.push(said);};
     if(key==='sources') {
       for(const [name,shape] of Object.entries(need)) if(canonicalBuild(cohort.sources[name]??null)!==canonicalBuild(shape)) fail(`.${name} (missing source or different parameter/result shape)`);
     } else if(key==='surfaceCalls') {
@@ -1362,7 +1362,7 @@ export function classifyArtifacts(candidate, cohort, signingKey = null) {
     } else if(key==='appleUses') { /* LLP 1047.001 D13: what the binary was composed from, as a subset; a cohort that names no set links everything, and a capability its roster predates was in its core */ if(Array.isArray(have.linked)) for(const item of need) if(!have.linked.includes(item)&&(!Array.isArray(have.linkRoster)||have.linkRoster.includes(item))) fail(`.${item} (not linked into the installed binary; that needs a new binary)`);
     } else if(['androidUses','androidExtensions','androidPermissions'].includes(key)) { /* LLP 1030.006 D4a: what the APK was composed from, as a subset */ for(const item of need) if(!have.androidLinked?.[key.slice(7).toLowerCase()]?.includes(item)) fail(`.${item} (not in the installed APK; that needs a new APK)`); } else if(key==='hermesBytecode') { if(have[key]!==need) fail(` (the module is Hermes bytecode ${need}; this cohort's APK runs ${have[key]??'none'}, which needs a new APK)`); } else if(key==='typescriptRuntime') { if(!((have[key]??0)>=need)) fail(` (requires a prelude of runtime ${need} or later; this cohort's is ${have[key]??0})`); /* LLP 1108 D6 R2: an older prelude ignores exactBodyFrom */ } else if(key==='grantCeiling') {
       const grants=new Set((have.grantCeiling??'').split('\n').filter(Boolean));
-      if(need===null||have.grantCeiling===null) fail(' (unknown baked grants)');
+      if(need===null||have.grantCeiling===null) fail(' (unknown baked grants)',false);
       else for(const grant of need.split('\n').filter(Boolean)) if(!grants.has(grant)) fail(` (${grant})`);
     } else if(canonicalBuild(have[key]??null)!==canonicalBuild(need)) fail(` (requires ${canonicalBuild(need)})`);
   }
@@ -1370,7 +1370,7 @@ export function classifyArtifacts(candidate, cohort, signingKey = null) {
   const warnings=[];
   if(changed&&!candidate.graph.artifacts.some(a=>a.name==='rust/app.module.json')&&canonicalBuild(candidate.compat.inputs.dataCrate)!==canonicalBuild(have.dataCrate)&&Object.keys(candidate.graph.sources).some(n=>!runnerOwnedSource(n)&&cohort.sources[n])) warnings.push(`same name, same shape, new native code: cohort ${cohort.compat.id} will run the old code`);
   if(changed&&Object.keys(candidate.graph.surfaceCalls??{}).length) warnings.push(`same surface name and arity: cohort ${cohort.compat.id} retains its old GPU implementation`);
-  return {binary:changed,bundle:missing.length===0&&have.store?.L!=='0',missing:have.store?.L==='0'?['store.L=0: this binary has no bundle carrier']:missing,warnings};
+  return {binary:changed,bundle:missing.length===0&&have.store?.L!=='0',missing:have.store?.L==='0'?['store.L=0: this binary has no bundle carrier']:missing,needsBinary:have.store?.L==='0'?[]:needsBinary,warnings};
 }
 
 /** Overlay the resident compiler's plan graph with the complete static

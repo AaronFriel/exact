@@ -215,8 +215,8 @@ test('the Swappable executor rename moves the cohort and refuses the old executo
     const old = classifyArtifacts(candidate, installed);
     expect(old.binary).toBe(true);
     expect(old.bundle).toBe(false);
-    expect(old.missing).toEqual(['app.plan: executors.wasmi']);
-    expect(classifyArtifacts(candidate, cohortReceipt(candidate))).toEqual({ binary: false, bundle: true, missing: [], warnings: [] });
+    expect([old.missing, old.needsBinary]).toEqual([['app.plan: executors.wasmi'], ['app.plan: executors.wasmi']]);
+    expect(classifyArtifacts(candidate, cohortReceipt(candidate))).toEqual({ binary: false, bundle: true, missing: [], needsBinary: [], warnings: [] });
     const independent = structuredClone(candidate);
     delete independent.graph.artifacts[0].requires.executors;
     expect(classifyArtifacts(independent, installed).bundle).toBe(true);
