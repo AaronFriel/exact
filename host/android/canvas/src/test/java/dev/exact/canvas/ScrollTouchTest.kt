@@ -158,6 +158,20 @@ class ScrollTouchTest {
         assertTrue(Host.fieldInputs.all { it == 0 })
     }
 
+    @Test fun aNestedSheetClaimsOnlyItsFingerDirectionAndLeavesTheListsFling() {
+        for ((claim, sign) in listOf(8 to -1f, 16 to 1f)) {
+            val words = reply(scroller(1, 100f)).also { it[0] = claim }
+            val (soon, late) = both(words) { move(400f + sign * 60f); up(400f + sign * 80f) }
+            assertTrue(soon.first.isEmpty())
+            assertEquals(soon, late)
+            assertFalse(soon.second.contains(3))
+            val (scroll, queued) = both(words) { move(400f - sign * 60f); up(400f - sign * 80f) }
+            assertEquals(sign * (60f - slop), scroll.first[1]!!, 0.01f)
+            assertEquals(scroll, queued)
+            assertTrue("the list keeps its platform fling", view.scrolling().timerActive)
+        }
+    }
+
     @Test fun aLateAnswerTakesTheWayTheFingerWentPastTheSlop() {
         val (soon, late) = both(reply(scroller(1, 0f))) { move(390f); move(370f); move(350f) }
         assertEquals(50f - slop, soon.first[1]!!, 0.01f)

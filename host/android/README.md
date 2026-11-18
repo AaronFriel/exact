@@ -504,8 +504,8 @@ Not built of D7:
   a scroller nested in a list's row, and the page itself are drawn inside their surroundings, so they move when
   exact2's paint arrives; the frame waits up to 2 ms for it, as it does for a drag's moves. They have no stretch at
   their ends either. Giving each a node needs the recorder to open a group inside a row's recording.
-- A sheet's part in the hand-off is a later stage. A hosted `EditText` takes part as a child of a ScrollView
-  does (below).
+- A sheet and its list do not transfer ownership during a contact ([Sheets](#sheets-and-route-motion-llp-1115001-d10-d12)).
+  A hosted `EditText` takes part as a child of a ScrollView does (below).
 - A mouse's wheel and a trackpad do not scroll (`onGenericMotionEvent`), and nothing scrolls for TalkBack.
 - A pressable under the finger shows its press at the down, not after the platform's tap delay, so a row may flash
   as a scroll starts.
@@ -1252,9 +1252,12 @@ below the status bar (expo/exact#234).
 
 It slides up as it opens (350 ms, emphasized decelerate) and down as it leaves (200 ms, emphasized accelerate) from
 where it was, its last drawing kept for that (`paint/tape.rs`), so a sheet the app closes slides out too. A drag
-anywhere on it that no scroller of its own takes (its handle, a header, a form's rows) moves it once past the
-system's 8 dp slop, letting go of what the finger pressed; let go, it rests on the detent its speed carries it to,
-or leaves the window. A drag that began on a module view that disallowed interception is the view's
+on its handle, a header or a form's rows moves it once past the system's 8 dp slop, letting go of what the
+finger pressed. Over a vertical scroller, a sheet with several detents takes an upward drag below its tallest
+detent and a downward drag when the scroll chain is at its start and none hears `refresh`. A short or empty
+refreshing list keeps its pulls, as does a single-detent sheet's list. A horizontal drag retires the pending sheet
+drag. Let go and the sheet rests on the detent its speed carries it to, or leaves the window. A drag that began
+on a module view that disallowed interception is the view's
 ("Pickers and hatches" above). A tap on the scrim dismisses it. Either dismissal closes the sheet whole, with any route
 pushed inside it: a root that hears `navigate` is sent to the location beneath the sheet, else Back goes once for
 each route it holds. `closedby="none"` keeps it: the scrim takes the tap and the sheet does not go below its
@@ -1310,9 +1313,10 @@ inside a sheet and popped with Back, the keyboard raising a sheet, and a push an
 agent's clock. The callback registers as an animation callback (`CoreBackPreview`), but a swipe `adb` injects is not
 the system's Back gesture, so the preview itself was seen only in the presenter's tests.
 
-Not built: the hand-off between a sheet and a scroller in it (a list at its top dragged down moves the list's edge,
-not the sheet); a tab switch's fade-through; a `fullscreen` route's entrance without a visible `navigationSource`; a sheet's window of its own
-(the IME's insets move it by ending the page, as they move any page).
+Not built: continuous hand-off between a sheet and a scroller in it. Ownership stays fixed for each contact:
+after raising the sheet to its tallest detent, lift and swipe again to scroll the list. Also not built: a tab
+switch's fade-through; a `fullscreen` route's entrance without a visible `navigationSource`; a sheet's window of
+its own (the IME's insets move it by ending the page, as they move any page).
 
 ## The bars (LLP 1115.001 D11)
 

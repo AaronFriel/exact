@@ -10,6 +10,8 @@ use crate::paint::Backend;
 mod parts;
 #[path = "rules_tests.rs"]
 mod rules;
+#[path = "scroll_tests.rs"]
+mod scroll;
 #[path = "zoom_tests.rs"]
 mod zoom;
 

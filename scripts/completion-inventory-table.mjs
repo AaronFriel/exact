@@ -1169,7 +1169,7 @@ export const classifications = [
     ["painted:host/painted/src/presenter/select.rs", "Presenter::menu_key Presenter::select_key Presenter::selected_row"],
     ["painted:host/painted/src/presenter/shortcuts.rs", "Presenter::shortcut"],
     ["painted:host/painted/src/presenter/snap.rs", "Presenter::resnap_scrollers"],
-    ["painted:host/painted/src/presenter/stage/touch.rs", "Presenter::preview_target Presenter::settle_sheet Presenter::stage_up"],
+    ["painted:host/painted/src/presenter/stage/touch.rs", "Presenter::preview_target Presenter::settle_sheet Presenter::sheet_drag_directions Presenter::stage_up"],
     ["painted:host/painted/src/presenter/svg_hit.rs", "Presenter::drawn_in Presenter::svg_hit"],
     ["painted:host/painted/src/presenter/swipe.rs", "Presenter::begin_swipe"],
     ["painted:host/painted/src/presenter/tabs.rs", "Presenter::tab_key Presenter::tab_stop"],
