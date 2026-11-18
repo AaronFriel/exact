@@ -270,7 +270,9 @@ component App
   return by Back or a tab keeps its place. A test opens there with `at "/recipe/Ramen#steps"`.
 - A welcome shown at first launch only is not a second route: the main screen is the root
   route and shows the welcome while a `persist` flag is unset (docs/recipes/first-launch.md).
-  A stack's first visit keeps its root route: `replace` to another route is refused there.
+- `replace(nav, url)` swaps the screen shown for another in place, a stack's first included:
+  the stack keeps its depth and the visit its id, so a route keyed `${e.id}` stays on screen
+  with no push.
 - A route's first child, a `header` holding one heading, is iOS's navigation bar: an
   `aria-level=1` heading is its large title, a lower level the inline title. A pushed route
   has the platform's Back button and edge swipe with nothing written; a control whose `id`

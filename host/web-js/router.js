@@ -96,7 +96,6 @@ function replace_(r, location) {
   const d = dest(r, location), i = sel(r);
   if (!d) return refuse(r, `no route matches ${canonical(location)}`);
   if (i < 0) return refuse(r, "router has no selected stack");
-  if (r[1][i][1].length === 1 && d.name !== r[1][i][0]) return refuse(r, "replace cannot change the tab's root route");
   const out = copy(r), s = out[1][i][1]; s[s.length - 1] = entry(s.at(-1)[0], d, fragmentOf(location)); return out;
 }
 function back_(r) { const i = sel(r); if (i < 0 || r[1][i][1].length < 2) return r; const out = copy(r); out[1][i][1].pop(); return out; }
@@ -285,13 +284,13 @@ export const routeMatches = location => { const m = matchRoute(canonical(locatio
 // ---------------------------------------------------------------- validity
 const int = n => typeof n === "number" && Number.isInteger(n) && n >= 0 && n <= 9007199254740991, str = s => typeof s === "string";
 /** Whether `r` is a valid router (runner/src/runner/router.rs `router`): its shape; tabs of distinct names, each stack
- * starting at its tab's own route; entries of distinct ids below `next`, each URL canonical and matching the entry's
+ * non-empty; entries of distinct ids below `next`, each URL canonical and matching the entry's
  * route name and params; and a top on the selected tab. A source can answer a forged one. */
 export function validRouter(r) {
   if (!Array.isArray(r) || r.length !== 3 || !str(r[0]) || !Array.isArray(r[1]) || !int(r[2])) return false;
   const tabs = new Set(), ids = new Set();
   for (const t of r[1]) {
-    if (!Array.isArray(t) || t.length !== 2 || !str(t[0]) || !Array.isArray(t[1]) || tabs.has(t[0]) || t[1][0]?.[1] !== t[0]) return false;
+    if (!Array.isArray(t) || t.length !== 2 || !str(t[0]) || !Array.isArray(t[1]) || tabs.has(t[0]) || !t[1].length) return false;
     tabs.add(t[0]);
     for (const e of t[1]) {
       if (!Array.isArray(e) || e.length !== 6 || !int(e[0]) || !str(e[1]) || !str(e[2]) || !str(e[3]) || !Array.isArray(e[4]) || e[4].length !== Names.length || !e[4].every(str) || !str(e[5])) return false;

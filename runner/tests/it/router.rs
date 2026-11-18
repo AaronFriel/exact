@@ -358,7 +358,6 @@ fn drained_changes_describe_commits_across_all_tabs_and_refusals_do_not_change_s
         2
     );
     assert!(act(&mut r, "select", "absent").is_none());
-    assert!(act(&mut r, "replace", "/t/5").is_none());
     assert_eq!(r.slot("nav"), before.as_ref());
 }
 

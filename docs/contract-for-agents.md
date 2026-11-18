@@ -138,9 +138,7 @@ its parent by the padding (`lower-width-padding`), a positive written border wid
 a written line style (`lower-border-unstyled`), a box whose fixed width ceiling cannot grow
 with its text at accessibility sizes (`lower-text-px-width`; use `rem` for the width and its bounds), a bare
 `line-height=28`, which is 28 times the font size, not 28 points (`lower-line-height-multiplier`),
-screens swapped by an `if` over a state, at the top of the view or inside a route (`lower-screen-by-state`), a
-`replace` to another route, pressed on the screen a launch at `/` opens before
-anything else changes the router, which the router refuses (`lower-replace-root`), a count before a plural noun, `${n} cards`
+screens swapped by an `if` over a state, at the top of the view or inside a route (`lower-screen-by-state`), a count before a plural noun, `${n} cards`
 (`lower-count-plural`), a row of the app's records that searches another table of them,
 `users.filter(u => u.id == p.userId)` in `for p in posts` (`lower-row-lookup`), a
 row that walks its own list, `tokens.slice(0, i)` in `for t, i in tokens`

@@ -992,7 +992,6 @@ dependencies = [
  "exact-motion",
  "exact-num",
  "exact-plan",
- "exact-route",
  "exact-svg-file",
  "icu_locale",
  "serde_json",

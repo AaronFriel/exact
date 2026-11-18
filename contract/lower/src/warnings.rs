@@ -31,11 +31,11 @@ mod navigation_back;
 mod nested_header;
 mod parts;
 mod roles;
-mod root_replace;
 mod routeless_header;
 mod rows;
 mod screens;
 mod scroll_bound;
+mod select_after_push;
 mod sounds;
 mod states;
 mod svg;
@@ -134,8 +134,7 @@ pub(crate) fn with_text_styles(
     }
     (checked.file.styles.iter()).for_each(|s| line_height::multiplier(&s.attrs, &mut out));
     out.extend(screens::screen_by_state(checked));
-    // A `replace` the router refuses on a root route's screen, a `select` after a push.
-    out.extend(root_replace::router(checked));
+    out.extend(select_after_push::select_after_push(checked));
     out.extend(counts::count_plural(&checking));
     // @ref LLP 1116.016 D4 — a row that searches another data list; LLP 1017.003 D3, its own; LLP 1142 D6, a key by position.
     out.extend(rows::row_lookup(&checking));

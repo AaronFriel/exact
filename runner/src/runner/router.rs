@@ -170,8 +170,8 @@ pub struct RouterContext {
     shared: RefCell<std::collections::BTreeMap<String, Value>>,
     /// The counters this launch's shares draw tokens and names from.
     claims: RefCell<Option<crate::share_in::Claims>>,
-    /// The launch was rooted (LLP 1030.004 D2): a stack may start at a
-    /// screen other than its tab's, and only the tabs selected are retained.
+    /// The launch was rooted (LLP 1030.004 D2): only the tabs selected are
+    /// retained.
     rooted: bool,
 }
 
@@ -341,9 +341,7 @@ impl RouterContext {
         if exact_route::top(&r).is_none()
             || r.tabs.iter().any(|t| {
                 !tabs.insert(&t.name)
-                    || t.stack
-                        .first()
-                        .is_none_or(|e| e.name != t.name && !self.rooted)
+                    || t.stack.is_empty()
                     || t.stack.iter().any(|e| {
                         e.tab != t.name
                             || e.id >= r.next
