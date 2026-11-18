@@ -8,6 +8,9 @@ use exact_model_gltf::{
 use std::sync::Arc;
 use styles::{NodeStyle, Occlusion};
 
+#[path = "hotspots_tests.rs"]
+mod hotspots;
+
 const GLB: &[u8] = include_bytes!("../../test/fixture/assets/assembly.glb");
 const MESHOPT: &[u8] = include_bytes!("../../test/fixture/assets/assembly-meshopt.glb");
 fn args() -> Vec<Value> {

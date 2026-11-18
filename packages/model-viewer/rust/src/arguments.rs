@@ -1,7 +1,7 @@
 use exact_gpu::{SurfaceError, Value};
 use exact_model_gltf::math::{dot, norm, V3};
 
-use crate::styles::NodeStyle;
+use crate::{hotspots::Hotspot, styles::NodeStyle};
 
 pub const NAMES: [&str; 13] = [
     "src",
@@ -95,6 +95,21 @@ pub fn angle(s: &str, name: &str) -> Result<f32, SurfaceError> {
 fn length(s: &str, name: &str) -> Result<f32, SurfaceError> {
     quantity(s, &[("mm", 0.001), ("cm", 0.01), ("m", 1.)], name)
 }
+pub fn normal(s: &str, name: &str) -> Result<V3, SurfaceError> {
+    let p: Vec<_> = s.split_whitespace().map(str::parse::<f32>).collect();
+    if p.len() != 3 || p.iter().any(|v| !matches!(v, Ok(n) if n.is_finite())) {
+        return Err(error(name, "expected three finite numbers"));
+    }
+    let n = norm([
+        p[0].clone().unwrap(),
+        p[1].clone().unwrap(),
+        p[2].clone().unwrap(),
+    ]);
+    if dot(n, n) == 0. {
+        return Err(error(name, "normal must not be zero"));
+    }
+    Ok(n)
+}
 pub fn position(s: &str, name: &str) -> Result<[Option<f32>; 3], SurfaceError> {
     let parts: Vec<_> = s.split_whitespace().collect();
     if parts.len() != 3 {
@@ -167,6 +182,8 @@ pub struct Arguments {
     pub disable_zoom: bool,
     pub decay: f32,
     pub nodes: Vec<NodeStyle>,
+    pub hotspots: Vec<Hotspot>,
+    pub min_hotspot_opacity: f32,
     pub clip_position: [Option<f32>; 3],
     pub clip_normal: V3,
 }
@@ -195,23 +212,8 @@ impl Arguments {
         let clip_normal = if normal.is_empty() {
             [0.; 3]
         } else {
-            let p: Vec<_> = normal.split_whitespace().map(str::parse::<f32>).collect();
-            if p.len() != 3 || p.iter().any(|v| !matches!(v, Ok(n) if n.is_finite())) {
-                return Err(error(NAMES[11], "expected three finite numbers"));
-            }
-            let n = [
-                p[0].clone().unwrap(),
-                p[1].clone().unwrap(),
-                p[2].clone().unwrap(),
-            ];
-            let n = norm(n);
-            if dot(n, n) == 0. {
-                return Err(error(NAMES[11], "normal must not be zero"));
-            }
-            n
+            self::normal(normal, NAMES[11])?
         };
-        list(&v[9], NAMES[9])?;
-        unit_interval(&v[12], NAMES[12])?;
         Ok(Self {
             src: string(&v[0], NAMES[0])?.into(),
             controls: boolean(&v[1], NAMES[1])?,
@@ -222,6 +224,8 @@ impl Arguments {
             disable_zoom: boolean(&v[6], NAMES[6])?,
             decay,
             nodes: NodeStyle::parse_list(&v[8])?,
+            hotspots: Hotspot::parse_list(&v[9])?,
+            min_hotspot_opacity: unit_interval(&v[12], NAMES[12])?,
             clip_position: position(string(&v[10], NAMES[10])?, NAMES[10])?,
             clip_normal,
         })

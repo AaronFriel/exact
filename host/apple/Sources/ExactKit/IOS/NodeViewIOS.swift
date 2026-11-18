@@ -385,13 +385,9 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
         }
         set { super.isAccessibilityElement = newValue }
     }
-    /// A native module's box whose view has elements of its own, named by
-    /// the Contract (`aria-label`): VoiceOver says the name entering them. A table and a `dl` are `tableContainerType`.
+    /// Semantic groups name their contents without combining their accessible elements.
     package override var accessibilityContainerType: UIAccessibilityContainerType {
-        get {
-            guard kind == "native", authoredLabel != nil, presenter?.session?.natives.speaksForItself(self) == true else { return tableContainerType ?? super.accessibilityContainerType }
-            return .semanticGroup
-        }
+        get { authoredContainerType ?? super.accessibilityContainerType }
         set { super.accessibilityContainerType = newValue }
     }
     /// It hears focus, blur, keys or clipboard events (`focusEvents`), names a tabindex, or is a canvas taking input

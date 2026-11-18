@@ -11,6 +11,25 @@ import XCTest
 final class AccessibilityTreeIOSTests: XCTestCase {
     private var window: UIWindow!
 
+    func testANamedGroupExposesItsChildrenWithoutCombiningThem() throws {
+        let p = try fixture()
+        p.apply(wireBatch([["op": "props", "id": 4, "set": [
+            "accessibilityRole": "group", "accessibilityLabel": "Pump assembly"]]]))
+        let box = try XCTUnwrap(p.views[4])
+        XCTAssertFalse(box.isAccessibilityElement)
+        XCTAssertEqual(box.accessibilityContainerType, .semanticGroup)
+        let ax = p.axElements(roots: [p.viewport])
+        let group = try XCTUnwrap(element(ax, "box"))
+        XCTAssertEqual(group["role"] as? String, "group")
+        XCTAssertEqual(group["name"] as? String, "Pump assembly")
+        XCTAssertEqual(element(ax, "inside")?["parent"] as? Int, group["i"] as? Int)
+        p.apply(wireBatch([["op": "props", "id": 4, "clear": ["accessibilityRole"]]]))
+        XCTAssertEqual(box.accessibilityContainerType, .none)
+        let ungrouped = p.axElements(roots: [p.viewport])
+        XCTAssertNil(element(ungrouped, "box"))
+        XCTAssertNotNil(element(ungrouped, "inside"))
+    }
+
     func testLabelledImagesExposeTheirTraitAndDecorativeImagesStayHidden() throws {
         let p = try fixture()
         let image = NodeView(id: 20, kind: "image", presenter: p)

@@ -1,7 +1,9 @@
-//! The modelViewer GPU surface (LLP 1133.039 D1–D7, D9, D11–D12).
+//! The modelViewer GPU surface (LLP 1133.039 D1–D12).
 mod arguments;
 mod camera;
+mod hotspots;
 mod input;
+mod labels;
 mod loading;
 mod pick;
 mod presentation;
@@ -11,8 +13,8 @@ mod styles;
 use arguments::Arguments;
 use camera::Camera;
 use exact_gpu::{
-    wgpu, AssetChanges, AssetError, Frame, InputEvent, Lifecycle, PointerPhase, Surface,
-    SurfaceError, Value,
+    wgpu, AssetChanges, AssetError, ChildrenMode, Frame, InputEvent, Lifecycle, Placement,
+    PointerPhase, Surface, SurfaceError, Value,
 };
 use exact_model_gltf::scene::Scene;
 use input::Controls;
@@ -65,6 +67,8 @@ pub struct ModelViewer {
     receiver: mpsc::Receiver<Parsed>,
     assets: AssetChanges,
     controls: Controls,
+    hotspots: hotspots::Hotspots,
+    last_frame: Option<Frame>,
     size: [f32; 2],
     seekable: bool,
     loaded: bool,
@@ -93,6 +97,8 @@ impl Default for ModelViewer {
             receiver,
             assets: AssetChanges::default(),
             controls: Controls::default(),
+            hotspots: hotspots::Hotspots::default(),
+            last_frame: None,
             size: [1., 1.],
             seekable: false,
             loaded: false,
@@ -164,6 +170,10 @@ impl Surface for ModelViewer {
         if !next.controls {
             self.controls.clear();
         }
+        self.hotspots.dirty |= next.hotspots != self.arguments.hotspots
+            || next.nodes != self.arguments.nodes
+            || next.clip_position != self.arguments.clip_position
+            || next.clip_normal != self.arguments.clip_normal;
         self.arguments = next;
         if source_changed {
             self.request();
@@ -225,6 +235,7 @@ impl Surface for ModelViewer {
         self.max_buffer_size = limits.max_buffer_size;
     }
     fn device_lost(&mut self) {
+        self.hotspots.device_lost();
         if let Some(model) = self.model_mut() {
             model.renderer = None;
         }
@@ -297,6 +308,33 @@ impl Surface for ModelViewer {
     }
     fn messages(&mut self) -> Vec<String> {
         std::mem::take(&mut self.messages)
+    }
+    fn children_mode(&self) -> ChildrenMode {
+        ChildrenMode::Each
+    }
+    fn child(
+        &mut self,
+        index: usize,
+        name: &str,
+        texture: Option<&wgpu::TextureView>,
+        frame: [f32; 4],
+    ) {
+        self.hotspots.child(index, name, texture, frame);
+        // A host can supply new child slots after rendering, then read placements immediately.
+        if let Some(frame) = self.last_frame {
+            let model = match &self.source {
+                Source::Ready { scene, .. } => scene.as_deref(),
+                _ => self.previous.as_deref(),
+            };
+            self.hotspots
+                .update(model, &self.arguments, &frame, self.generation);
+        }
+    }
+    fn placement(&self, index: usize) -> Option<Placement> {
+        self.hotspots.children.get(index)?.placement
+    }
+    fn placement_opacity(&self, index: usize) -> f32 {
+        self.hotspots.children.get(index).map_or(1., |c| c.opacity)
     }
     fn agent(&mut self, request: &str) -> Option<String> {
         let request: serde_json::Value = serde_json::from_str(request).ok()?;
@@ -378,17 +416,26 @@ impl Surface for ModelViewer {
     ) -> bool {
         self.poll();
         self.size(frame.width, frame.height);
+        self.last_frame = Some(*frame);
         let complete = !self.preparing();
         let size = frame.pixels();
         let samples = self.force_samples.unwrap_or_else(|| {
             renderer::samples(format.guaranteed_format_features(device.features()).flags)
         });
-        let Some(model) = self.model_mut() else {
+        let model = match &mut self.source {
+            Source::Ready { scene, .. } => scene.as_deref_mut(),
+            _ => self.previous.as_deref_mut(),
+        };
+        let Some(model) = model else {
+            self.hotspots
+                .update(None, &self.arguments, frame, self.generation);
             renderer::clear(encoder, target);
             self.drawn_generation = complete.then_some(self.generation);
             return self.preparing();
         };
         let moving = model.camera.step(&model.scene, frame.now_ms);
+        self.hotspots
+            .update(Some(model), &self.arguments, frame, self.generation);
         if model
             .renderer
             .as_ref()
@@ -398,6 +445,8 @@ impl Surface for ModelViewer {
                 Ok(renderer) => model.renderer = Some(renderer),
                 Err(SurfaceError(error)) => {
                     self.fail(error);
+                    self.hotspots
+                        .update(None, &self.arguments, frame, self.generation);
                     renderer::clear(encoder, target);
                     self.drawn_generation = Some(self.generation);
                     return false;
@@ -407,11 +456,17 @@ impl Surface for ModelViewer {
         model.renderer.as_ref().unwrap().draw(
             queue,
             encoder,
-            target,
             &model.scene,
             &model.camera,
             &model.effective,
             model.clip,
+        );
+        model.renderer.as_mut().unwrap().presentation.draw(
+            device,
+            encoder,
+            target,
+            &mut self.hotspots,
+            frame,
         );
         self.loaded = complete;
         self.drawn_generation = complete.then_some(self.generation);

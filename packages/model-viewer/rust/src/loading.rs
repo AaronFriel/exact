@@ -264,6 +264,7 @@ impl ModelViewer {
                     renderer: None,
                 });
                 model.style(&self.arguments);
+                self.hotspots.dirty = true;
                 self.source = Source::Ready {
                     name,
                     sequence,

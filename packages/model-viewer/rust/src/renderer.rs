@@ -42,7 +42,7 @@ pub struct Renderer {
     solid: wgpu::RenderPipeline,
     faded: wgpu::RenderPipeline,
     translucent: wgpu::RenderPipeline,
-    presentation: Presentation,
+    pub presentation: Presentation,
     depth: wgpu::TextureView,
     msaa: Option<wgpu::TextureView>,
     pub size: (u32, u32),
@@ -258,7 +258,6 @@ impl Renderer {
         &self,
         queue: &wgpu::Queue,
         encoder: &mut wgpu::CommandEncoder,
-        target: &wgpu::TextureView,
         scene: &Scene,
         camera: &Camera,
         effective: &[Effective],
@@ -351,7 +350,6 @@ impl Renderer {
             draw(&mut pass, i);
         }
         drop(pass);
-        self.presentation.draw(encoder, target);
     }
 }
 

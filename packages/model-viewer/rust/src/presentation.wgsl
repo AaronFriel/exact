@@ -21,3 +21,7 @@ fn premultiplied(p: vec4f) -> vec4f {
     // The target's sRGB transfer function must encode the already premultiplied bytes.
     return vec4f(decode(c.rgb), c.a);
 }
+@fragment fn copied_srgb(@builtin(position) p: vec4f) -> @location(0) vec4f {
+    let c = textureLoad(image, vec2i(p.xy), 0);
+    return vec4f(decode(c.rgb), c.a);
+}

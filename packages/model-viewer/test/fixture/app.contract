@@ -1,4 +1,4 @@
-use ModelNode, ModelViewerState from "@exact/model-viewer"
+use ModelNode, ModelHotspot, ModelViewerState from "@exact/model-viewer"
 use ScrollingPage from "./scrolling.contract"
 
 routes nav
@@ -18,6 +18,8 @@ component App
   state faded = false
   state hidden = false
   state clipped = false
+  state offscreen = false
+  state brightHotspots = false
   resource cached = cacheModel() as shape CachedModel
   resource viewer = exactSurface("modelViewer") as shape ModelViewerState
   action follow(url: string)
@@ -42,6 +44,10 @@ component App
     hidden = not hidden
   action toggleClip
     clipped = not clipped
+  action toggleHotspot
+    offscreen = not offscreen
+  action toggleHotspotOpacity
+    brightHotspots = not brightHotspots
   action loadPlain
     src = "assets/assembly.glb"
   action loadMeshopt
@@ -64,9 +70,11 @@ component App
           link href="/scroll" testId="scrolling-page"
             text "Scrolling page"
           text "Model viewer" role="heading" aria-level=1
-          canvas surface=modelViewer(src=src, cameraControls=true, cameraOrbit=orbit, cameraTarget="0m 0m 0m", nodes=[ModelNode(name="Housing", color=(coloured ? "#0080ff" : ""), opacity=(faded ? 0.25 : 1), visibility=(hidden ? "hidden" : "visible"), occlusion=(occlusion ? "occluder" : "none"), occludedOpacity=0.3), ModelNode(name="Impeller", color="", opacity=1, visibility="visible", occlusion=(occlusion ? "revealed" : "none"), occludedOpacity=0.3)], clipPosition="0m 0m 0m", clipNormal=(clipped ? "0 0 -1" : "")) message=pick width=320 height=320 flex-shrink=0 role="group" aria-label="Pump assembly" testId="pump"
+          canvas surface=modelViewer(src=src, cameraControls=true, cameraOrbit=orbit, cameraTarget="0m 0m 0m", nodes=[ModelNode(name="Housing", color=(coloured ? "#0080ff" : ""), opacity=(faded ? 0.25 : 1), visibility=(hidden ? "hidden" : "visible"), occlusion=(occlusion ? "occluder" : "none"), occludedOpacity=0.3), ModelNode(name="Impeller", color="", opacity=1, visibility="visible", occlusion=(occlusion ? "revealed" : "none"), occludedOpacity=0.3)], hotspots=[ModelHotspot(child="inlet", node="Inlet", position=(offscreen ? "100m 0m 0m" : "0m 0.8m 0.85m"), normal="0 0 1"), ModelHotspot(child="impeller", node="Impeller", position="-0.35m 0m 0m", normal="")], clipPosition="0m 0m 0m", clipNormal=(clipped ? "0 0 -1" : ""), minHotspotOpacity=(brightHotspots ? 1 : 0.25)) message=pick width=320 height=320 flex-shrink=0 role="group" aria-label="Pump assembly" testId="pump"
             if not viewer.presented
               text "Loading model" position="absolute" inset=0 aria-busy=true testId="loading"
+            button "Inlet" press=pick("Inlet") position="absolute" testId="inlet"
+            button "Impeller" press=pick("Impeller") position="absolute" testId="impeller"
           row gap=8
             button press=front testId="front"
               text "Front"
@@ -85,6 +93,11 @@ component App
               text "Hide"
             button press=toggleClip testId="clip"
               text "Clip"
+          row gap=8
+            button press=toggleHotspot testId="hotspot-edge"
+              text "Move hotspot off canvas"
+            button press=toggleHotspotOpacity testId="hotspot-opacity"
+              text "Hotspot opacity"
           row gap=8
             button press=loadPlain testId="plain"
               text "Plain"
