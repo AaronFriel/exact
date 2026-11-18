@@ -522,8 +522,11 @@ const builtin=(spec)=>spec.startsWith('node:') || BUILTIN.has(spec) || BUILTIN.h
 // npm's package names (with the old capitals) and versions: a place in the
 // stage is made of them, so nothing else is taken.
 const NAME=/^(?:@[a-z0-9~][\w.~-]*\/)?[a-z0-9~][\w.~-]*$/i, VERSION=/^(?:[0-9a-z][\w.+-]*)?$/i;
-// A nameless entry manifest ends the package walk; a nested `{"type":"module"}` does not.
-function packageOf(file, installed) {
+// The package a file belongs to: the nearest `package.json` that names one. For the type check's advice
+// (`checkFiles`, `entries`), a nameless entry manifest ends the walk, so its source is not called the enclosing
+// package's; the capture walks past it, since a package ships nested ones for its subpaths (zod's
+// `v4/classic/package.json`), and a file there is the enclosing package's code. A nested `{"type":"module"}` ends neither.
+function packageOf(file, installed, entries=false) {
   for (let dir=dirname(file);;) {
     let json=null;
     try { json=JSON.parse(readFileSync(join(dir,'package.json'),'utf8')); } catch { /* none here, or not JSON */ }
@@ -532,7 +535,7 @@ function packageOf(file, installed) {
       if (!NAME.test(json.name) || !VERSION.test(version)) throw new Error(`${join(dir,'package.json')}: not an npm package name and version (${JSON.stringify(json.name)}, ${JSON.stringify(version)})`);
       return {root:dir,key:json.name+'@'+version,name:json.name,json,installed:new Set(installed ? [installed] : [])};
     }
-    if (json && ['exports','main','types'].some(key=>Object.hasOwn(json,key))) return null;
+    if (entries && json && ['exports','main','types'].some(key=>Object.hasOwn(json,key))) return null;
     const up=dirname(dir);
     if (up===dir) return null;
     dir=up;
@@ -1380,7 +1383,7 @@ function checkFiles(stage, libraries, files) {
     if (!path || allowed(realpathSync.native(path))) continue;
     let pkg;
     if (/\.[cm]?tsx?$/.test(path) && !DECLARATION.test(path)) {
-      try { pkg=packageOf(path); } catch { /* keep the capture refusal if package metadata is invalid */ }
+      try { pkg=packageOf(path,undefined,true); } catch { /* keep the capture refusal if package metadata is invalid */ }
     }
     const note=pkg && pkg.root!==physicalId(capturedOrigins(stage).at(-1)[1]) ? `: TypeScript source in package ${pkg.name} (${join(pkg.root,'package.json')}). The type check stages package declarations, not source. Export a declaration file for this entry (for example, a "types" condition before "default") and keep its imports within the staged declarations.` : '';
     throw new Error('module outside captured app: ' + path + note);
