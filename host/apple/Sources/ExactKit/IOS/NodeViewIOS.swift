@@ -559,7 +559,7 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
         raster = lease; AnimatedRasters.shared.attach(self); applyImageLayer()
         self.setNeedsDisplay()
         if let c = canvasAbove { c.needsCapture = true; canvases?.scheduleCapture() }
-        presenter.boxFilters.changed(self)
+        presenter.boxFilters?.changed(self)
         return lease.image.naturalSize
     }
 
@@ -1189,22 +1189,22 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
     }
 
     /// CSS `filter` (LLP 1055.000 D14), as a picture or the layer's own effect.
-    private(set) var boxFilter: BoxFilter?
+    package private(set) var boxFilter: (any BoxFilterEffect)?
     var hasBoxFilter: Bool { boxFilter != nil }
     func applyFilter() {
         // A node with no `filter` and none before makes no `BoxFilter` (three
         // layers) to learn so: every styled node passes through here.
         guard boxFilter != nil || style["filter"] != nil else { return }
         defer { refreshPressOpacity() }
-        let f = boxFilter ?? BoxFilter()
+        guard let f = boxFilter ?? BoxFilterLink.make?() else { return }
         if f.set(style["filter"]) {
             boxFilter = f
-            presenter?.boxFilters.add(self) { [weak self] in self?.renderFilter(fresh: $0) }
+            presenter?.boxFilters?.add(self) { [weak self] in self?.renderFilter(fresh: $0) }
             redrawFilter()
         } else if let f = boxFilter {
             f.remove()
             boxFilter = nil
-            presenter?.boxFilters.remove(self)
+            presenter?.boxFilters?.remove(self)
             applyBoxMask()
             presenter?.afterBatch { [weak self] in self?.filterPublished() }
         }
@@ -1212,7 +1212,7 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
 
     /// In a batch, the picture is drawn once as it ends, with the whole batch in it.
     private func redrawFilter() {
-        if presenter?.applying == true { presenter?.boxFilters.touched(self) } else { renderFilter() }
+        if presenter?.applying == true { presenter?.boxFilters?.touched(self) } else { renderFilter() }
     }
     func renderFilter(fresh: Bool = true) {
         defer { overflowClipGeometryChanged() }
@@ -1222,7 +1222,7 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
         let shown = window.map { convert(bounds, to: $0).intersects($0.bounds) } ?? true
         // A placed canvas child's picture is drawn from the box as asked, and shows only through its surface.
         let render = { f.render(self.layer, clip: self.resolvedClipMask(), scale: self.window?.screen.scale ?? self.traitCollection.displayScale, dark: self.drawsDark,
-                                node: self.id, fresh: fresh, shown: shown) { [weak self] in if let self { self.overflowClipGeometryChanged(); self.presenter?.boxFilters.landed(self); self.filterPublished() } } }
+                                node: self.id, fresh: fresh, shown: shown) { [weak self] in if let self { self.overflowClipGeometryChanged(); self.presenter?.boxFilters?.landed(self); self.filterPublished() } } }
         let before = f.picture.sublayers?.first?.contents as AnyObject?
         let draw = { if let box = self.layer as? NodeLayer, box.drawnElsewhere { box.asAsked(render); f.picture.isHidden = true } else { render() } }
         // The filter's input raises the box's opacity and puts it back: no author's change (`passing`).

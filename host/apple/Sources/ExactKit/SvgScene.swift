@@ -92,7 +92,7 @@ final class SvgScene {
     static let systemFonts: SvgText.Fonts = { size, _, _, _ in CTFontCreateUIFontForLanguage(.system, size, nil) ?? CTFontCreateWithName("Helvetica" as CFString, size, nil) }
 
     /// The content box when the `svg` clips to it: an island over the cap
-    /// renders only what can show there (`SvgIsland.extent`).
+    /// renders only what can show there (`FilterExtent.extent`).
     private var clipped: CGRect?
 
     /// Drawn by a `CARenderer` (a live filter picture's sub-scene): the
@@ -171,20 +171,8 @@ final class SvgScene {
     /// colour space (`color-interpolation-filters`) changes only how the
     /// element's antialiased edge blends over its own shadow.
     static func dropShadow(_ fl: [String: Any]) -> (region: CGRect, sigma: CGFloat, offset: CGSize, color: CGColor, opacity: Float)? {
-        dropShadow(program: nums(fl["p"]))
+        FilterProgram.dropShadow(program: nums(fl["p"]))
     }
-    /// The same of a chain's numbers (`Filter::encode`), a box's included.
-    static func dropShadow(program p: [Double]) -> (region: CGRect, sigma: CGFloat, offset: CGSize, color: CGColor, opacity: Float)? {
-        // region (4), count, then code, in, in2, subregion (4), linear, σx, σy, dx, dy, rgba.
-        guard p.count == 5 + 8 + 8, p[4] == 1, p[5] == 6, p[6] == -1, p[13] == p[14], p[13] >= 0,
-              p[15].isFinite, p[16].isFinite else { return nil }
-        let region = CGRect(x: p[0], y: p[1], width: p[2], height: p[3])
-        let sub = CGRect(x: p[8], y: p[9], width: p[10], height: p[11])
-        guard region.width > 0, region.height > 0, sub.contains(region) || sub == region else { return nil }
-        return (region, CGFloat(p[13]), CGSize(width: p[15], height: p[16]),
-                CGColor(srgbRed: p[17], green: p[18], blue: p[19], alpha: 1), Float(min(max(p[20], 0), 1)))
-    }
-
     /// Each shape's last drawn spec, hashed (with the appearance and the
     /// scale its parts are drawn at): a scene applied again redraws only the
     /// shapes that changed. A live filter picture's sub-scene is applied on
@@ -250,7 +238,7 @@ final class SvgScene {
                 blended.contents = nil; blendKey = nil
                 let area = clipped ?? blends.bounds(content).integral
                 if !unownedBlendMotion, blends.canCapture(content),
-                   let e = SvgIsland.extent(area, k: scale, seen: clipped),
+                   let e = FilterExtent.extent(area, k: scale, seen: clipped),
                    let image = blends.bitmap(content, rect: e.rect, w: e.w, h: e.h)?.makeImage() {
                     blended.bounds = CGRect(origin: .zero, size: e.rect.size)
                     blended.position = e.rect.origin

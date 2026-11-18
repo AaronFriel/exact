@@ -179,7 +179,7 @@ package final class Presenter {
     /// Boxes' CSS animations (LLP 1055 D7).
     let boxAnimations = BoxAnimations()
     /// Boxes under CSS `filter`, drawn again after each batch (LLP 1055.000 D14).
-    let boxFilters = BoxFilters()
+    let boxFilters = BoxFilterLink.makeSet?()
     let canvas2d: Canvas2DCanvases = SurfacesLink.installed?.canvas2D() ?? NoCanvas2D()
     /// The input being edited, if any (UIKit exposes no first responder):
     /// what a canvas painted through its surface captures every frame for
@@ -910,7 +910,7 @@ package final class Presenter {
                 reaimFixedGradients()
                 ApplyProfile.time("pass.text") { paintPresentedText() }
                 paintChangedText()
-                if !boxFilters.isEmpty { boxFilters.render() }
+                if let boxFilters, !boxFilters.isEmpty { boxFilters.render() }
                 refreshPixelatedImages()
                 videoVisibility?.changed()
                 let q = waiting
@@ -1405,7 +1405,7 @@ package final class Presenter {
     /// through captures again at the end of the batch — the canvas above it, and itself for its own `children` op.
     func touched(_ id: UInt32, children: Bool = false, textChanged: Bool = false, boxChanged: Bool = true) {
         // A filtered box draws again when it or anything in it changes, a flat leaf (a layer in its parent's view) included.
-        if !boxFilters.isEmpty, let v = views[id] ?? flats.parent(of: id).flatMap({ views[$0] }) { boxFilters.touched(v) }
+        if let boxFilters, !boxFilters.isEmpty, let v = views[id] ?? flats.parent(of: id).flatMap({ views[$0] }) { boxFilters.touched(v) }
         guard let start = views[id] else { return }
         var paragraph: NodeView? = start
         while let node = paragraph, node.kind == "text" {

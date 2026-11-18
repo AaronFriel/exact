@@ -78,7 +78,7 @@ final class SvgBlend {
     func bitmap(_ layer: CALayer, rect: CGRect, w: Int, h: Int, placing: Bool = false) -> CGContext? {
         guard canCapture(layer), rect.minX.isFinite, rect.minY.isFinite,
               rect.width.isFinite, rect.height.isFinite, rect.width > 0, rect.height > 0,
-              w > 0, h > 0, w <= SvgIsland.cap / h,
+              w > 0, h > 0, w <= FilterExtent.cap / h,
               let space = CGColorSpace(name: CGColorSpace.sRGB),
               let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
                                   space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
@@ -103,7 +103,7 @@ final class SvgBlend {
         if let mask = layer.mask {
             let rect = ctx.boundingBoxOfClipPath.integral
             let k = sqrt(abs(ctx.ctm.a * ctx.ctm.d - ctx.ctm.b * ctx.ctm.c))
-            guard let e = SvgIsland.extent(rect, k: max(k, 0.01), seen: nil) else { return false }
+            guard let e = FilterExtent.extent(rect, k: max(k, 0.01), seen: nil) else { return false }
             guard let image = bitmap(mask, rect: e.rect, w: e.w, h: e.h, placing: true)?.makeImage() else { return false }
             // CGImage's rows run opposite to this top-down user space.
             let flip = CGAffineTransform(translationX: 0, y: e.rect.minY + e.rect.maxY).scaledBy(x: 1, y: -1)

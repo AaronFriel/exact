@@ -125,7 +125,7 @@ package final class Presenter {
     /// Boxes' CSS animations (LLP 1055 D7).
     let boxAnimations = BoxAnimations()
     /// Boxes under CSS `filter`, drawn again after each batch (LLP 1055.000 D14).
-    let boxFilters = BoxFilters()
+    let boxFilters = BoxFilterLink.makeSet?()
     let canvas2d: Canvas2DCanvases = SurfacesLink.installed?.canvas2D() ?? NoCanvas2D()
     lazy var segments = SegmentHost(self)
     lazy var controls = ControlHost(self)
@@ -1116,7 +1116,7 @@ package final class Presenter {
                 afterBatchWork = []
                 later.forEach { $0() }
                 batchApplied()
-                if !boxFilters.isEmpty { boxFilters.render() }
+                if let boxFilters, !boxFilters.isEmpty { boxFilters.render() }
                 refreshPixelatedImages()
                 ShadowStand.followAll()
                 leaves.batchApplied(moved: moved)
@@ -1424,7 +1424,7 @@ package final class Presenter {
     /// it, and itself for its own `children` op.
     func touched(_ id: UInt32, children: Bool = false, textChanged: Bool = false) {
         // A filtered box draws again when it or anything in it changes.
-        if !boxFilters.isEmpty, let start = views[id] { boxFilters.touched(start) }
+        if let boxFilters, !boxFilters.isEmpty, let start = views[id] { boxFilters.touched(start) }
         guard let start = views[id] else { return }
         var paragraph: NodeView? = start
         while let node = paragraph, node.kind == "text" {

@@ -1,7 +1,7 @@
 // @ref LLP 1055.000 D14 — CSS `filter` on a box, on Apple (Filter Effects 1
 // §12): the web lowers it natively; here the box's subtree is drawn as it
 // would show unfiltered, the function chain runs on the GPU (the SVG
-// island's `SvgFilterGPU`, one implementation for boxes and SVG groups),
+// filter engine, `SvgFilterGPU`, box effects' and also SVG groups'),
 // and the result shows in a layer standing where the box stands. The box
 // itself stays in the tree, masked to nothing, so it still takes hits, is
 // still what the accessibility tree and the agent read, and still lays out.
@@ -31,7 +31,7 @@
 import CoreGraphics
 import QuartzCore
 
-final class BoxFilter {
+final class BoxFilter: BoxFilterEffect {
     /// Stands where the box stands (its geometry mirrored), clipped by the
     /// box's `clip-path` after the filter, as CSS orders them.
     let picture = CALayer()
@@ -188,7 +188,7 @@ final class BoxFilter {
         let right = ceil((b.maxX + CGFloat(program[0]) + CGFloat(program[2])) * scale)
         let bottom = ceil((b.maxY + CGFloat(program[1]) + CGFloat(program[3])) * scale)
         let region = CGRect(x: left / scale, y: top / scale, width: (right - left) / scale, height: (bottom - top) / scale)
-        let extent = SvgIsland.extent(region, k: scale, seen: nil, limit: SvgIsland.budget / 24)
+        let extent = FilterExtent.extent(region, k: scale, seen: nil, limit: FilterExtent.budget / 24)
         // The tree reads as drawn, over the same region: the drawing stands.
         if drawn == now, let kept, let (rect, _, _, _) = extent, rect == kept.job.rect, let was = kept.inputs, RenderInputs(box) == was {
             guard program != kept.job.program else { return }
@@ -304,7 +304,7 @@ struct FilterShadow {
     let offset: CGSize
 
     init?(program: [Double]) {
-        guard let drop = SvgScene.dropShadow(program: program) else { return nil }
+        guard let drop = FilterProgram.dropShadow(program: program) else { return nil }
         (color, opacity, radius, offset) = (drop.color, drop.opacity, drop.sigma, drop.offset)
     }
 
@@ -323,7 +323,7 @@ struct FilterShadow {
 /// A presenter's filtered boxes, and which of them to draw again: those a
 /// batch touched (the box or anything in it), and those under which pixels
 /// were published between batches.
-final class BoxFilters {
+final class BoxFilters: BoxFilterSet {
     private struct Entry {
         weak var view: NodeView?
         /// Draw the picture again (`true`), or follow the box and draw only
@@ -403,12 +403,3 @@ final class BoxFilters {
         pictured = views.values.contains { $0.view?.boxFilter?.snapshots == true }
     }
 }
-
-#if os(iOS) || os(tvOS)
-extension NodeView {
-    func presentOpacity(_ value: CGFloat) {
-        if let boxFilter { boxFilter.presentOpacity(Float(value), on: layer) } else { alpha = value }
-        refreshPressOpacity()
-    }
-}
-#endif

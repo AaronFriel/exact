@@ -333,7 +333,7 @@ extension NodeView {
         paragraphOwner.invalidateText(); paragraphOwner.setNeedsDisplay()
         applyStyle(style)
         // The picture of a filtered box above it shows its colours
-        presenter?.boxFilters.changed(self)
+        presenter?.boxFilters?.changed(self)
         // The canvas, which shows the first root's background
         if superview === presenter?.root { presenter?.paintCanvas() }
     }

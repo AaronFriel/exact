@@ -115,52 +115,13 @@ private func affine(_ v: Any?) -> CGAffineTransform {
 }
 
 enum SvgIsland {
-    /// The most pixels one island's bitmap holds (64 MB at 4 bytes each).
-    static let cap = 16_777_216
-    /// The most bytes a filter island's work may hold at once: its bitmaps
-    /// and the chain's working images (F1's map was 747 MB in the module's
-    /// `f32` images for one drop shadow).
-    static let budget = 128 << 20
-
-    /// The part of `rect` (an island's space) an island renders, its size
-    /// in pixels and its pixels per unit, at `k` pixels per unit when that
-    /// is at most `cap` pixels, as before. Over `cap` (a huge filter region
-    /// or mask at device scale), `rect` is first cut to `seen`, what can
-    /// show of it (in the same space), on the full bitmap's own pixel grid,
-    /// so the pixels kept are the full bitmap's; then, when that is still
-    /// over `cap`, it is drawn at fewer pixels per unit and the layer scales
-    /// it up, as a browser draws a huge effect at a lower resolution rather
-    /// than not at all. `nil` when nothing of it can show.
-    static func extent(_ rect: CGRect, k: CGFloat, seen: CGRect?, limit: Int = cap) -> (rect: CGRect, w: Int, h: Int, k: CGFloat)? {
-        let cap = min(limit, SvgIsland.cap)
-        let fw = (rect.width * k).rounded(.up), fh = (rect.height * k).rounded(.up)
-        guard rect.width > 0, rect.height > 0, fw >= 1, fh >= 1, fw.isFinite, fh.isFinite else { return nil }
-        if fw * fh <= CGFloat(cap) { return (rect, Int(fw), Int(fh), k) }
-        var (r, w, h) = (rect, fw, fh)
-        if let seen {
-            let (sx, sy) = (fw / rect.width, fh / rect.height)
-            let i0 = max(0, ((seen.minX - rect.minX) * sx).rounded(.down)), i1 = min(fw, ((seen.maxX - rect.minX) * sx).rounded(.up))
-            let j0 = max(0, ((seen.minY - rect.minY) * sy).rounded(.down)), j1 = min(fh, ((seen.maxY - rect.minY) * sy).rounded(.up))
-            guard i1 > i0, j1 > j0 else { return nil }
-            r = CGRect(x: rect.minX + i0 / sx, y: rect.minY + j0 / sy, width: (i1 - i0) / sx, height: (j1 - j0) / sy)
-            (w, h) = (i1 - i0, j1 - j0)
-        }
-        var scaled = k
-        if w * h > CGFloat(cap) {
-            let f = (CGFloat(cap) / (w * h)).squareRoot()
-            (w, h) = (max(1, (w * f).rounded(.down)), max(1, (h * f).rounded(.down)))
-            scaled = k * f
-        }
-        return (r, Int(w), Int(h), scaled)
-    }
-
     /// A premultiplied sRGB bitmap of `els` (scene elements in a space `t`
     /// maps to the island's), covering `rect` of the island's space at
     /// `w` × `h` pixels, `k` per unit. `flip` puts the rect's top in the bitmap's first
     /// row, as a layer's contents; unflipped suits Core Graphics drawing.
     static func render(_ els: [Any], rect: CGRect, w: Int, h: Int, k: CGFloat, transform t: CGAffineTransform, flip: Bool,
                        dark: Bool, fonts: SvgText.Fonts?) -> CGContext? {
-        guard rect.width > 0, rect.height > 0, w > 0, h > 0, w * h <= cap,
+        guard rect.width > 0, rect.height > 0, w > 0, h > 0, w * h <= FilterExtent.cap,
               let space = CGColorSpace(name: CGColorSpace.sRGB),
               let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4, space: space,
                                   bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
@@ -202,7 +163,7 @@ enum SvgIsland {
         let r = nums(spec["r"])
         guard r.count == 4 else { return layer }
         let t = affine(spec["t"])
-        guard let (rect, w, h, k) = extent(CGRect(x: r[0], y: r[1], width: r[2], height: r[3]).applying(t), k: k, seen: seen?.applying(t)) else {
+        guard let (rect, w, h, k) = FilterExtent.extent(CGRect(x: r[0], y: r[1], width: r[2], height: r[3]).applying(t), k: k, seen: seen?.applying(t)) else {
             return layer
         }
         layer.anchorPoint = .zero
@@ -217,7 +178,7 @@ enum SvgIsland {
     }
 
     /// Where a filter island goes and at what size (`extent`, bounded by
-    /// `budget` at what its chain costs a pixel), its chain, and whether
+    /// `FilterExtent.budget` at what its chain costs a pixel), its chain, and whether
     /// the GPU runs it.
     static func filterExtent(_ spec: [String: Any], k: CGFloat, seen: CGRect?)
         -> (rect: CGRect, w: Int, h: Int, k: CGFloat, program: [Float], gpu: Bool)? {
@@ -236,7 +197,7 @@ enum SvgIsland {
         let gpu = SvgFilterGPU.runs(program)
         let steps = program.count > 4 ? Int(max(1, program[4])) : 1
         let perPixel = gpu ? 24 : 8 + 16 * (3 + 3 * steps)
-        guard let e = extent(CGRect(x: r[0], y: r[1], width: r[2], height: r[3]), k: k, seen: wide, limit: budget / perPixel) else { return nil }
+        guard let e = FilterExtent.extent(CGRect(x: r[0], y: r[1], width: r[2], height: r[3]), k: k, seen: wide, limit: FilterExtent.budget / perPixel) else { return nil }
         return (e.rect, e.w, e.h, e.k, program, gpu)
     }
 
@@ -294,8 +255,8 @@ enum SvgIsland {
         let unit = sqrt(abs(t.a * t.d - t.b * t.c))
         let tileRect = CGRect(x: tile[0], y: tile[1], width: tile[2], height: tile[3])
         let area = rect.integral.insetBy(dx: -1, dy: -1)
-        guard let (_, w, h, shown) = extent(area, k: scale, seen: nil),
-              let (_, tw, th, tk) = extent(tileRect, k: max(shown * unit, 0.01), seen: nil),
+        guard let (_, w, h, shown) = FilterExtent.extent(area, k: scale, seen: nil),
+              let (_, tw, th, tk) = FilterExtent.extent(tileRect, k: max(shown * unit, 0.01), seen: nil),
               let tileCtx = render(g["c"] as? [Any] ?? [], rect: tileRect, w: tw, h: th, k: tk, transform: .identity, flip: false, dark: dark, fonts: fonts),
               let image = tileCtx.makeImage() else { return nil }
         guard let space = CGColorSpace(name: CGColorSpace.sRGB),

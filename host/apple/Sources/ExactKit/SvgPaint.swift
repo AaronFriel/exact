@@ -151,7 +151,7 @@ enum SvgPaint {
         let rect = rect.integral.insetBy(dx: -1, dy: -1)
         // A shape too large for one bitmap at its scale gets fewer pixels,
         // stretched: a gradient is smooth, and is never dropped.
-        guard let (_, fullW, fullH, _) = SvgIsland.extent(rect, k: scale, seen: nil) else { return nil }
+        guard let (_, fullW, fullH, _) = FilterExtent.extent(rect, k: scale, seen: nil) else { return nil }
         let t = numbers(g["t"])
         let stops: [(CGFloat, CGColor)] = (g["st"] as? [Any] ?? []).compactMap { s in
             guard let s = s as? [Any], s.count == 2, let c = color(s[1], dark) else { return nil }

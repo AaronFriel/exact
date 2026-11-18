@@ -13,15 +13,15 @@ import IOSurface
 import Metal
 import MetalPerformanceShaders
 
-final class SvgFilterMetal {
-    enum Step {
+package final class SvgFilterMetal {
+    package enum Step {
         case blur(Float)
         case offset(Int32, Int32)
         case matrix([Float])
         case shadow(sigma: Float, dx: Int32, dy: Int32, color: SIMD4<Float>)
     }
 
-    static let shared: SvgFilterMetal? = SvgFilterMetal()
+    package static let shared: SvgFilterMetal? = SvgFilterMetal()
 
     /// Make the device, the library and the pipelines on a background
     /// queue, once, before the first picture needs them (`shared` waits for
@@ -30,7 +30,7 @@ final class SvgFilterMetal {
     /// is drawn in the commit that shows it, ~25 ms after boot on an iPhone
     /// 13 Pro Max (LLP 1055.000, first ink); the library is compiled at
     /// build, and the GPU's own compile of each pipeline is what remains.
-    static func prewarm() {
+    package static func prewarm() {
         guard !prewarming else { return }
         prewarming = true
         DispatchQueue.global(qos: .userInitiated).async {
@@ -87,7 +87,7 @@ final class SvgFilterMetal {
     /// per unit, or `nil` when it is not a straight chain of what this runs
     /// (each primitive reading the one before, over the whole region, in
     /// sRGB).
-    static func steps(_ program: [Float], scale: CGFloat) -> [Step]? {
+    package static func steps(_ program: [Float], scale: CGFloat) -> [Step]? {
         var i = 0
         func f() -> Float? { guard i < program.count else { return nil }; defer { i += 1 }; return program[i] }
         guard let rx = f(), let ry = f(), let rw = f(), let rh = f(), let n = f(), n >= 1, n < 64 else { return nil }

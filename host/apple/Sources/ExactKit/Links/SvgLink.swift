@@ -3,9 +3,9 @@
 // and filter modules. The core reaches it only through what this file
 // declares. Each slot's default is today's implementation, so every app still
 // links SVG; the family's own target will install them instead. Box
-// animations are the core's (`BoxAnimations`). Box effects' filters
-// (`BoxFilter`) still call SVG's filter machinery directly: which product
-// that machinery belongs to is the box-effects slice's to decide.
+// animations are the core's (`BoxAnimations`). SVG's filters run on box
+// effects' filter engine (`BoxFilterLink`), so the SVG product depends on
+// that one, never the other way.
 import CoreGraphics
 import CoreText
 import Foundation
@@ -66,7 +66,7 @@ package enum SvgLink {
     package static var prewarm: ((UInt8) -> Void)? = { svg in
         if svg & 1 != 0 { SvgRasterModule.prewarm() }
         #if os(iOS) || os(tvOS)
-        if svg & 2 != 0 { SvgFilterMetal.prewarm() }
+        if svg & 2 != 0 { BoxFilterLink.prewarm?() }
         #endif
     }
     /// How many SVG pictures are still drawing, which a settle waits for.

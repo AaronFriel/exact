@@ -322,14 +322,14 @@ final class BoxLayerIOSTests: XCTestCase {
         n.frame = CGRect(x: 0, y: 0, width: 300, height: 120)
         p.viewport.addSubview(n)
         n.applyStyle(plain)
-        XCTAssertTrue(p.boxFilters.isEmpty)
+        XCTAssertTrue(p.boxFilters!.isEmpty)
         XCTAssertNil(n.layer.mask)
         var filtered = plain; filtered["filter"] = filter
         n.applyStyle(filtered)
-        XCTAssertFalse(p.boxFilters.isEmpty, "the style that brings a filter makes the box's picture")
+        XCTAssertFalse(p.boxFilters!.isEmpty, "the style that brings a filter makes the box's picture")
         XCTAssertNotNil(n.layer.mask, "the box itself is hidden behind its picture")
         n.applyStyle(plain)
-        XCTAssertTrue(p.boxFilters.isEmpty)
+        XCTAssertTrue(p.boxFilters!.isEmpty)
         XCTAssertNil(n.layer.mask)
     }
 

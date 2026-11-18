@@ -483,7 +483,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
         raster = lease; AnimatedRasters.shared.attach(self); applyImageLayer()
         self.needsDisplay = true
         if let c = canvasAbove { c.needsCapture = true; canvases?.scheduleCapture() }
-        presenter.boxFilters.changed(self)
+        presenter.boxFilters?.changed(self)
         return lease.image.naturalSize
     }
 
@@ -1233,22 +1233,22 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
 
     /// CSS `filter` (LLP 1055.000 D14): the box shows through a filtered
     /// picture (`BoxFilter`), drawn again when what it shows changes.
-    private(set) var boxFilter: BoxFilter?
+    package private(set) var boxFilter: (any BoxFilterEffect)?
     var hasBoxFilter: Bool { boxFilter != nil }
     func applyFilter() {
         // A node with no filter makes no BoxFilter to learn so (three layers
         // per styled node otherwise; iOS's 50e9abf6e).
         guard boxFilter != nil || style["filter"] != nil else { return }
-        let f = boxFilter ?? BoxFilter()
+        guard let f = boxFilter ?? BoxFilterLink.make?() else { return }
         if f.set(style["filter"]) {
             boxFilter = f
             layer?.mask = f.hide
-            presenter?.boxFilters.add(self) { [weak self] in self?.renderFilter(fresh: $0) }
+            presenter?.boxFilters?.add(self) { [weak self] in self?.renderFilter(fresh: $0) }
             renderFilter()
         } else if let f = boxFilter {
             f.remove()
             boxFilter = nil
-            presenter?.boxFilters.remove(self)
+            presenter?.boxFilters?.remove(self)
             applyBoxMask()
         }
     }
@@ -1264,7 +1264,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
         setPaintPosition(paintZPosition)
         f.render(layer, clip: resolvedClipMask(), scale: pixelScale ?? 2, dark: drawsDark,
                  node: id, fresh: fresh, shown: window == nil || !visibleRect.isEmpty) { [weak self] in
-            if let self { overflowClipGeometryChanged(); presenter?.boxFilters.landed(self) }
+            if let self { overflowClipGeometryChanged(); presenter?.boxFilters?.landed(self) }
         }
     }
 

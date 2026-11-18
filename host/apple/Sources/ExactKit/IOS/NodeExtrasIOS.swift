@@ -618,4 +618,11 @@ extension NodeView {
         }
     }
 }
+extension NodeView {
+    /// The box's opacity, through its filter when a lone `opacity()` plays it.
+    func presentOpacity(_ value: CGFloat) {
+        if let boxFilter { boxFilter.presentOpacity(Float(value), on: layer) } else { alpha = value }
+        refreshPressOpacity()
+    }
+}
 #endif

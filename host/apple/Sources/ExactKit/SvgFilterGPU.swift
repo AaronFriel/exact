@@ -6,13 +6,15 @@
 // matrices, component transfers that are straight lines, and drop shadows
 // run here instead, on Metal, in the chain's colour space; a chain with
 // anything else still goes to the module.
+// The filter engine, box effects' (whose slots are `BoxFilterLink`), with
+// `SvgFilterMetal`; SVG groups' filters use it too.
 import CoreGraphics
 import CoreImage
 import Foundation
 import IOSurface
 import Metal
 
-enum SvgFilterGPU {
+package enum SvgFilterGPU {
     private static let srgb = CGColorSpace(name: CGColorSpace.sRGB)!
     private static let linearSRGB = CGColorSpace(name: CGColorSpace.linearSRGB)!
 
@@ -20,7 +22,7 @@ enum SvgFilterGPU {
     /// `color-interpolation-filters: sRGB`) or linear light.
     /// The device and the one queue the pictures' Core Animation renders
     /// and their chains run on, in that order.
-    static let metal: (device: MTLDevice, queue: MTLCommandQueue)? = {
+    package static let metal: (device: MTLDevice, queue: MTLCommandQueue)? = {
         guard let d = MTLCreateSystemDefaultDevice(), let q = d.makeCommandQueue() else { return nil }
         return (d, q)
     }()
@@ -63,7 +65,7 @@ enum SvgFilterGPU {
     /// this runs) is answered by that parse: the dry run makes Core Image's
     /// contexts and filters, 5–6 ms a launch on the main thread (33 on the
     /// first after an install) that a live picture drawn in Metal never uses.
-    static func runs(_ program: [Float]) -> Bool {
+    package static func runs(_ program: [Float]) -> Bool {
         if metal != nil, SvgFilterMetal.steps(program, scale: 1) != nil { return true }
         return chain(program, source: nil, w: 1, h: 1, origin: .zero, scale: CGSize(width: 1, height: 1)).ok
     }
@@ -73,7 +75,7 @@ enum SvgFilterGPU {
     /// `origin` in user units at `scale` pixels per unit), or `nil` when the
     /// chain has a primitive this path does not run (the module then runs
     /// it) or there is no GPU.
-    static func run(_ program: [Float], source cg: CGImage, origin: CGPoint, scale: CGSize) -> CGImage? {
+    package static func run(_ program: [Float], source cg: CGImage, origin: CGPoint, scale: CGSize) -> CGImage? {
         let (w, h) = (cg.width, cg.height)
         guard let (image, linear) = chain(program, source: CIImage(cgImage: cg), w: w, h: h, origin: origin, scale: scale).result,
               let contexts else { return nil }
@@ -85,7 +87,7 @@ enum SvgFilterGPU {
     /// The chain's result over `source` (CI's space: y up, the region's top
     /// row at `h`), cropped to the island, and whether it works in linear
     /// light. With no source, only whether the chain parses.
-    static func chain(_ program: [Float], source input: CIImage?, w: Int, h: Int, origin: CGPoint, scale: CGSize)
+    package static func chain(_ program: [Float], source input: CIImage?, w: Int, h: Int, origin: CGPoint, scale: CGSize)
         -> (ok: Bool, result: (CIImage, Bool)?) {
         let no: (ok: Bool, result: (CIImage, Bool)?) = (false, nil)
         guard contexts != nil else { return no }
@@ -212,7 +214,7 @@ enum SvgFilterGPU {
     /// Start rendering a chain's result into `surface` on the GPU, in the
     /// order of `queue`'s work; the task to wait on, or `nil`.
     /// `size` is the picture's, drawn at the surface's top left.
-    static func start(_ image: CIImage, linear: Bool, size: CGSize, into surface: IOSurface) -> CIRenderTask? {
+    package static func start(_ image: CIImage, linear: Bool, size: CGSize, into surface: IOSurface) -> CIRenderTask? {
         guard let contexts else { return nil }
         let destination = CIRenderDestination(ioSurface: surface)
         destination.colorSpace = srgb
