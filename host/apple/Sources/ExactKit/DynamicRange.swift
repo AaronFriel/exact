@@ -190,7 +190,7 @@ extension NodeView {
         guard old["dynamic_range_limit"] != style["dynamic_range_limit"] else { return }
         applyColorRanges()
         guard kind == "image" else { return }
-        presenter?.session?.rasters.rangeChanged(self)
+        presenter?.session?.rasters?.rangeChanged(self)
         if let bitmap = raster?.image {
             imageContentLayer?.applyDynamicRange(hdr: bitmap.isHDR, headroom: bitmap.headroom, limit: style["dynamic_range_limit"]?.string)
         }

@@ -338,7 +338,7 @@ package final class Presenter {
     /// it again — the old picture stays until the new one is decoded, as a
     /// browser keeps the old `src`.
     func assetChanged(_ name: String) {
-        session?.rasters.invalidate(name)
+        session?.rasters?.invalidate(name)
         for v in views.values where v.kind == "image" && v.imageSource == name { v.loadImage(name) }
     }
 
@@ -358,7 +358,7 @@ package final class Presenter {
         session?.transformInputHold?.cancel()
         reorder?.abandon()
         reorderGroup?.abandon()
-        session?.rasters.reset()
+        session?.rasters?.reset()
         collections.reset(); elementScrolls.cancelAll()
         autofocusProcessed.removeAll()
         segments.reset()
@@ -911,7 +911,7 @@ package final class Presenter {
                 ApplyProfile.time("pass.text") { paintPresentedText() }
                 paintChangedText()
                 if let boxFilters, !boxFilters.isEmpty { boxFilters.render() }
-                refreshPixelatedImages()
+                ImageLink.pixelated?.refresh(in: self)
                 videoVisibility?.changed()
                 let q = waiting
                 waiting = []

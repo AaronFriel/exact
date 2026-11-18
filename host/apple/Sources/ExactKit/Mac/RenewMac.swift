@@ -162,7 +162,7 @@ extension NodeView {
     /// does, where any other keeps the old one meanwhile (`loadImage`).
     func renewSource() {
         guard let presenter, presenter.renewing.contains(id), raster != nil || image != nil || hasSymbolLeaf else { return }
-        presenter.session?.rasters.cancel(id)
+        presenter.session?.rasters?.cancel(id)
         raster = nil; image = nil
         clearSymbol()
         applyImageLayer()

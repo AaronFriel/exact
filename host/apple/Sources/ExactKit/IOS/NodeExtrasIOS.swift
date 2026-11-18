@@ -55,7 +55,7 @@ final class NodeAside {
     var content = CGSize.zero
     var fitContentHeight: CGFloat?
     var image: UIImage?
-    var raster: NativeRasterLease?
+    var raster: (any ImageLease)?
     var imageLayer: CALayer?
     var imageSource: String?
     var loadGeneration = 0
@@ -278,7 +278,7 @@ extension NodeView {
     /// from an older load, or for a view that was destroyed, is dropped.
     var buttonRasterView: UInt32? { get { aside?.buttonRasterView } set { if newValue != nil || aside != nil { asideMade.buttonRasterView = newValue } } }
     var image: UIImage? { get { aside?.image } set { if newValue != nil || aside != nil { asideMade.image = newValue } } }
-    var raster: NativeRasterLease? {
+    var raster: (any ImageLease)? {
         get { aside?.raster }
         set {
             if newValue != nil || aside != nil { asideMade.raster = newValue }

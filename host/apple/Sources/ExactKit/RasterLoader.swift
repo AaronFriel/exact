@@ -14,20 +14,21 @@ final class NativeRasterCharge: RasterBackingCharge, @unchecked Sendable {
 }
 
 /// View ownership pins the core lease; the provider separately owns its charge.
-final class NativeRasterLease {
+final class NativeRasterLease: ImageLease {
     let id: UInt64
-    let image: RasterImage
+    let decoded: RasterImage
+    var image: any ImageBitmap { decoded }
     init?(_ ready: ExactRasterReady) {
         guard ready.lease != 0, let pointer = UnsafeRawPointer(bitPattern: UInt(ready.payload)) else { return nil }
         id = ready.lease
-        image = Unmanaged<RasterImage>.fromOpaque(pointer).takeUnretainedValue()
+        decoded = Unmanaged<RasterImage>.fromOpaque(pointer).takeUnretainedValue()
     }
     deinit { exact_raster_lease_release(id) }
 }
 
 /// Main-thread view interests. Replacement keeps the old lease/natural size
 /// until this exact generation accepts a new lease; metadata alone never paints.
-final class RasterLoader {
+final class RasterLoader: ImageLoader {
     /// An image waiting at the source or metadata cap. Weak: it keeps no
     /// removed view, resolver generation or session alive while it waits.
     private final class DeferredInterest {
@@ -181,7 +182,7 @@ final class RasterLoader {
         }
         refusedPictures[view.id] = nil
         if let session = view.presenter?.session, let refusal = pictures.admit(source, session: session) {
-            view.presenter?.session?.log("image refused: \(RasterRetry.withoutQuery(source)): \(refusal) (LLP 1133.019 D2)")
+            view.presenter?.session?.log("image refused: \(sourceWithoutQuery(source)): \(refusal) (LLP 1133.019 D2)")
             refusedPictures[view.id] = ({ [weak view] in view }, source, resolver)
             refuse(refusal); return false
         }
@@ -766,7 +767,7 @@ final class RasterLoader {
     /// again once the view is on screen (`scrolled`, `resized`). Returns
     /// the bytes the picture held.
     @discardableResult private func park(_ viewID: UInt32, _ item: inout Interest, _ view: NodeView) -> Int {
-        let bytes = view.raster?.image.residentBytes ?? 0
+        let bytes = (view.raster as? NativeRasterLease)?.decoded.residentBytes ?? 0
         if item.request != 0 { exact_raster_cancel(id, item.request) }
         item.request = 0; item.requestedPixel = 0; item.delivered = false
         item.admissionDeferred = false; item.waiting = nil; item.parked = true
@@ -970,6 +971,7 @@ final class RasterLoader {
         interests.removeAll(); deferred.removeAll(); parked.removeAll(); stopWatchingScrolls(); timings.reset()
         backend.reset(stop: true); exact_raster_session_control(id, 3)
     }
+    var encodedHTTPCache: Any { RasterInput.httpCacheUsage }
     var diagnostics: [String: Any] {
         let s = exact_raster_stats(id)
         backend.lock.lock(); defer { backend.lock.unlock() }

@@ -105,7 +105,7 @@ extension Presenter {
             hold.started = true
             if target !== route, !startAtFragment(target, hold) { return }
         }
-        if session?.rasters.loading(inside: route) == true { return }
+        if session?.rasters?.loading(inside: route) == true { return }
         #if !os(macOS)
         if settlesElementScroll { return }
         #endif

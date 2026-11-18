@@ -381,9 +381,9 @@ private let hatchPicture: HatchPictureFn = { host, kind, bytes, length in
     // From any thread: the loader is the main thread's.
     let apply = {
         guard let session = hatchSession(host) else { return }
-        if kind == 1 { session.rasters.revokePicture(source) }
+        if kind == 1 { session.rasters?.revokePicture(source) }
         else {
-            session.rasters.pictureChanged(source)
+            session.rasters?.pictureChanged(source)
             session.presenter.canvas2d.pictureChanged(source)
         }
     }

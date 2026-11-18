@@ -368,7 +368,7 @@ public final class ExactSession {
     package var runtime: Runtime { core.runtime }
     /// This session's file roots, captured outside a native module callback.
     package var appFileRoots: [String: String] = [:]
-    let rasters = RasterLoader()
+    let rasters = ImageLink.makeLoader?()
     #if os(macOS)
     lazy var regions = RegionController(self)
     #endif
@@ -936,7 +936,7 @@ public final class ExactSession {
         // A fresh runner must receive the view's current viewport and insets.
         if batch.error == nil { view?.rebooted() }
         // Pictures decoded while the boot applied paint in its first frame.
-        if batch.error == nil { rasters.bootPass() }
+        if batch.error == nil { rasters?.bootPass() }
         applyMs = (CACurrentMediaTime() - tApply) * 1000
         bootMs = ExactEnv.wall()
         ExactEnv.stamp("first frame applied")
@@ -1170,7 +1170,7 @@ public final class ExactSession {
         #endif
         let outermost = !applying
         // After the batch's own accounting below, which a later defer runs first
-        defer { if outermost { advanceIfDue(); rasters.readmitPictures() } }
+        defer { if outermost { advanceIfDue(); rasters?.readmitPictures() } }
         applying = true
         // What applying it cost, with its transactions, for the next sampled frame (LLP 1079 D3), told to the sampler there was when it began while the session keeps it: a recording the batch starts makes a new one, and one it stops lets a production bake's go.
         let timed = sampler, began = CACurrentMediaTime()
@@ -1212,7 +1212,7 @@ public final class ExactSession {
         drainCanvasCaptures(batch)
         if !batch.canvasImagesDropped.isEmpty { presenter.canvas2d.drop(batch.canvasImagesDropped) }
         if !batch.canvasImages.isEmpty { presenter.canvas2d.load(batch.canvasImages) }
-        AnimatedRasters.shared.poke()
+        ImageLink.animated?.poke()
         for op in outputs.reorders { presenter.reorder?.observe(ReorderState(op.payload)); presenter.reorderGroup?.observe(ReorderGroupState(op.payload)) }
         presenter.reorder?.raiseLifted()
         frames.motion = batch.motion
@@ -1489,7 +1489,7 @@ public final class ExactSession {
         runtime.held = true; presenter.reset(); runtime.held = false; _ = runtime.takeHeldCalls(); viewsEpoch += 1; presenter.showDevStatus(nil); app.refreshDevPills() // its pill to another session in its window; the dying runtime told nothing its teardown sets off (ResetGate, none replayed)
         ExactSession.live.removeValue(forKey: runtime.rt)
         forgetDocuments()
-        rasters.shutdown(); sound.shutdown(); midi.shutdown() // the sound arm stopped and let go, its session claim given back (LLP 1096 D8)
+        rasters?.shutdown(); sound.shutdown(); midi.shutdown() // the sound arm stopped and let go, its session claim given back (LLP 1096 D8)
         webviews.endSession() // its frames and in-memory partitions (LLP 1020.002 D1)
         textPressure?.cancel(); textPressure = nil
         runtime.destroy()

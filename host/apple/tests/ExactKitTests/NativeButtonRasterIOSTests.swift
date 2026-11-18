@@ -141,7 +141,7 @@ final class NativeButtonRasterIOSTests: XCTestCase {
         XCTAssertNil(button.configuration?.image)
         XCTAssertNil(owner.raster)
         XCTAssertNil(owner.imageSource)
-        XCTAssertEqual(session.rasters.diagnostics["subscribers"] as? UInt64, 0)
+        XCTAssertEqual(session.loader.diagnostics["subscribers"] as? UInt64, 0)
     }
     private func pixel(_ button: UIButton) throws -> [UInt8] {
         let image = try XCTUnwrap(button.configuration?.image)

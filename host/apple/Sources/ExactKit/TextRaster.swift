@@ -261,7 +261,7 @@ struct TextRasterJob {
             guard attributes[NSAttributedString.Key.exactHidden] as? Bool != true else { continue }
             if let icon = attributes[NSAttributedString.Key.exactAtomIcon] as? TextAtomIcon,
                !icon.tinted, let image = icon.image {
-                headroom = max(headroom, RasterImage.headroom(of: image))
+                headroom = max(headroom, ImageHeadroom.of(image))
                 deep = deep || image.bitsPerComponent > 8 || image.bitmapInfo.contains(.floatComponents)
                 if let space = image.colorSpace {
                     wide = wide || space == Self.p3

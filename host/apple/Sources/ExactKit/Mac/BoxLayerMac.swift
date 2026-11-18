@@ -363,8 +363,8 @@ extension NodeView {
 
     /// The image's pixels onto a sublayer, or none (`draw(_:)` paints them).
     func applyImageLayer() {
-        if applyPixelatedImageLayer() { return }
-        if imageLayer is PixelatedImageLayer { imageLayer?.removeFromSuperlayer(); imageLayer = nil }
+        if ImageLink.pixelated?.apply(self) == true { return }
+        if ImageLink.pixelated?.owns(imageLayer) == true { imageLayer?.removeFromSuperlayer(); imageLayer = nil }
         if cssVisibilityHidden || style["image_rendering"]?.string == "pixelated" { imageLayer?.removeFromSuperlayer(); imageLayer = nil; return }
         if let look = flightLook, let layer, kind == "image", !hasSymbolLeaf, style["tint_color"] == nil, let bitmap = raster?.image ?? look.stand?.image {
             // Flying (LLP 1013.000 D4): the whole image where the flight
@@ -377,7 +377,7 @@ extension NodeView {
             l.frame = look.image
             l.contentsRect = CGRect(x: 0, y: 0, width: 1, height: 1)
             l.contentsGravity = .resize
-            let frame = AnimatedRasters.shared.frame(for: self) ?? bitmap.image
+            let frame = ImageLink.animated?.frame(for: self) ?? bitmap.image
             if (l.contents as AnyObject?) !== frame { l.contents = frame }
             RasterGeometry.filter(l, rendering: style["image_rendering"]?.string)
             l.cornerRadius = 0
@@ -397,7 +397,7 @@ extension NodeView {
         if l.frame != plan.shown { l.frame = plan.shown }
         if l.contentsRect != plan.unit { l.contentsRect = plan.unit }
         if l.contentsGravity != .resize { l.contentsGravity = .resize }
-        let frame = AnimatedRasters.shared.frame(for: self) ?? bitmap.image
+        let frame = ImageLink.animated?.frame(for: self) ?? bitmap.image
         if (l.contents as AnyObject?) !== frame { l.contents = frame }
         RasterGeometry.filter(l, rendering: style["image_rendering"]?.string)
         l.applyDynamicRange(hdr: bitmap.isHDR, headroom: bitmap.headroom, limit: style["dynamic_range_limit"]?.string)

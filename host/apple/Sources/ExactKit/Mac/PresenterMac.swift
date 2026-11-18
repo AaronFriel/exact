@@ -453,8 +453,8 @@ package final class Presenter {
     /// A scroll container moved. Nothing here may take long: AppKit is inside
     /// its scroll synchronizer, and the scrolling thread is waiting on it.
     func scrolled() {
-        refreshPixelatedImages()
-        AnimatedRasters.shared.poke()
+        ImageLink.pixelated?.refresh(in: self)
+        ImageLink.animated?.poke()
         followPointerAfterScroll()
         guard !applying, !inScrollCallback else { return }
         menus.layout()
@@ -633,7 +633,7 @@ package final class Presenter {
     /// it again — the old picture stays until the new one is decoded, as a
     /// browser keeps the old `src`.
     func assetChanged(_ name: String) {
-        session?.rasters.invalidate(name)
+        session?.rasters?.invalidate(name)
         for v in views.values where v.kind == "image" && v.imageSource == name { v.loadImage(name) }
     }
 
@@ -653,7 +653,7 @@ package final class Presenter {
         resetFlights()
         viewport.invalidateDocumentFit()
         session?.regions.reset()
-        session?.rasters.reset()
+        session?.rasters?.reset()
         mouseSwipe.cancel()
         mouseLayoutPan.abandon()
         mouseDrags.height.cancel()
@@ -1117,7 +1117,7 @@ package final class Presenter {
                 later.forEach { $0() }
                 batchApplied()
                 if let boxFilters, !boxFilters.isEmpty { boxFilters.render() }
-                refreshPixelatedImages()
+                ImageLink.pixelated?.refresh(in: self)
                 ShadowStand.followAll()
                 leaves.batchApplied(moved: moved)
                 flushFragment()

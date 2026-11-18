@@ -49,7 +49,7 @@ final class ScrollPump: NSObject, UIScrollViewDelegate {
         FrameClock.shared.drop(self)
         restTimer?.invalidate()
         rasterTravelTimer?.invalidate()
-        RasterWorkers.shared.travelling(self, false)
+        ImageLink.travelling?(self, false)
         if let turnObserver { CFRunLoopRemoveObserver(CFRunLoopGetMain(), turnObserver, .commonModes) }
     }
     /// A scroll pass is queued or frames are asked of the app's clock.
@@ -208,7 +208,7 @@ final class ScrollPump: NSObject, UIScrollViewDelegate {
     /// A scroller moved: sample a collection's travel and schedule its text.
     func scrolled(_ node: NodeView?) {
         guard let p = presenter, !p.applying, !inScroll else { return }
-        p.refreshPixelatedImages()
+        ImageLink.pixelated?.refresh(in: p)
         inScroll = true
         defer { inScroll = false }
         lastScroll = clock()
@@ -366,7 +366,7 @@ final class ScrollPump: NSObject, UIScrollViewDelegate {
         let fast = expires != nil
         if fast != rasterLimited {
             rasterLimited = fast
-            RasterWorkers.shared.travelling(self, fast)
+            ImageLink.travelling?(self, fast)
         }
         // A finger can stay still while covered travel asks for no frames.
         if let expires {

@@ -14,7 +14,7 @@ import AppKit
 import UIKit
 #endif
 
-final class AnimatedRasters {
+final class AnimatedRasters: AnimatedImages {
     static let shared = AnimatedRasters()
 
     /// Frames a player keeps: every frame when they all fit in this, else
@@ -57,7 +57,7 @@ final class AnimatedRasters {
     /// The view took a new raster: an animated one gets a player.
     func attach(_ view: NodeView) {
         let key = ObjectIdentifier(view)
-        guard let image = view.raster?.image, let animation = image.animation else { players.removeValue(forKey: key); return }
+        guard let image = (view.raster as? NativeRasterLease)?.decoded, let animation = image.animation else { players.removeValue(forKey: key); return }
         if players[key]?.image === image { return }
         players[key] = Player(view: view, image: image, animation: animation, agent: view.presenter?.session?.clock != nil)
         #if os(iOS) || os(tvOS)

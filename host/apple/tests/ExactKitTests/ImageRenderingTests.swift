@@ -84,7 +84,7 @@ final class ImageRenderingTests: XCTestCase {
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 40, height: 40))
         #endif
         let session = ExactApp.shared.makeSession(label: "image-rendering-decode")
-        let p = session.presenter, loader = session.rasters
+        let p = session.presenter, loader = session.loader
         p.viewport.frame = CGRect(x: 0, y: 0, width: 40, height: 40)
         #if os(macOS)
         window.contentView = p.viewport

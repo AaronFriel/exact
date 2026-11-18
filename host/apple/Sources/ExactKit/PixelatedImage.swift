@@ -47,55 +47,17 @@ final class PixelatedImageLayer: CALayer {
     }
 }
 
-/// A one-pixel halo keeps the smooth pass continuous across bounded tiles.
-enum RasterTiles {
-    static func enlargement(_ image: CGImage, rect: CGRect, scale: CGSize) -> CGSize {
-        CGSize(width: max(1, (rect.width * scale.width / CGFloat(image.width)).rounded()),
-               height: max(1, (rect.height * scale.height / CGFloat(image.height)).rounded()))
-    }
-
-    static func region(_ image: CGImage, rect: CGRect, visible: CGRect, enlargement n: CGSize) -> CGRect {
-        let full = CGSize(width: CGFloat(image.width) * n.width, height: CGFloat(image.height) * n.height)
-        guard full.width.isFinite, full.height.isFinite, rect.width > 0, rect.height > 0 else { return .null }
-        let sx = rect.width / full.width, sy = rect.height / full.height
-        let clip = visible.intersection(rect)
-        guard !clip.isEmpty, !clip.isNull else { return .null }
-        let left = floor((clip.minX - rect.minX) / sx / 256) * 256
-        let bottom = floor((clip.minY - rect.minY) / sy / 256) * 256
-        let right = min(full.width, ceil((clip.maxX - rect.minX) / sx / 256) * 256)
-        let top = min(full.height, ceil((clip.maxY - rect.minY) / sy / 256) * 256)
-        return CGRect(x: left, y: bottom, width: right - left, height: top - bottom)
-    }
-
-    static func each(_ image: CGImage, rect: CGRect, visible: CGRect, enlargement n: CGSize, tint: CGColor?,
-                     draw: (CGImage, CGRect, CGRect) -> Void) {
-        let full = CGSize(width: CGFloat(image.width) * n.width, height: CGFloat(image.height) * n.height)
-        let covered = region(image, rect: rect, visible: visible, enlargement: n)
-        guard !covered.isNull, !covered.isEmpty else { return }
-        let sx = rect.width / full.width, sy = rect.height / full.height
-        func placed(_ r: CGRect) -> CGRect {
-            CGRect(x: rect.minX + r.minX * sx, y: rect.minY + r.minY * sy, width: r.width * sx, height: r.height * sy)
-        }
-        for y in stride(from: covered.minY, to: covered.maxY, by: 256) {
-            for x in stride(from: covered.minX, to: covered.maxX, by: 256) {
-                autoreleasepool {
-                    let core = CGRect(x: x, y: y, width: min(256, full.width - x), height: min(256, full.height - y))
-                    let halo = core.insetBy(dx: -1, dy: -1).intersection(CGRect(origin: .zero, size: full))
-                    guard let ctx = CGContext(data: nil, width: Int(halo.width), height: Int(halo.height),
-                        bitsPerComponent: image.bitsPerComponent, bytesPerRow: 0,
-                        space: image.colorSpace ?? CGColorSpaceCreateDeviceRGB(), bitmapInfo: image.bitmapInfo.rawValue) else { return }
-                    RasterGeometry.draw(ctx, image, in: CGRect(x: -halo.minX, y: -halo.minY, width: full.width, height: full.height), tint: tint, rendering: "crisp-edges")
-                    guard let pixels = ctx.makeImage() else { return }
-                    draw(pixels, placed(core), placed(halo))
-                }
-            }
-        }
-    }
+/// `image-rendering: pixelated` (`ImageLink.pixelated`).
+final class PixelatedSampling: PixelatedImaging {
+    func apply(_ view: NodeView) -> Bool { view.applyPixelatedSampling() }
+    func owns(_ layer: CALayer?) -> Bool { layer is PixelatedImageLayer }
+    func refresh(under view: NodeView) { view.refreshPixelatedTiles() }
+    func refresh(in presenter: Presenter) { presenter.refreshPixelatedTiles() }
 }
 
 extension NodeView {
     /// Returns true when this image's two-pass sampling owns its image layer.
-    func applyPixelatedImageLayer() -> Bool {
+    fileprivate func applyPixelatedSampling() -> Bool {
         guard style["image_rendering"]?.string == "pixelated", kind == "image" else { PixelatedImages.nodes.remove(self); return false }
         #if os(macOS)
         guard let host = layer, !hasSymbolLeaf else { return false }
@@ -147,7 +109,7 @@ extension NodeView {
     }
 
     /// This view's own and its descendants' pixelated tiles, after its transform changed.
-    func refreshPixelatedImages() {
+    fileprivate func refreshPixelatedTiles() {
         guard PixelatedImages.nodes.count > 0 else { return }
         for node in PixelatedImages.nodes.allObjects where node === self || node.isDescendant(of: self) { node.applyImageLayer() }
     }
@@ -155,7 +117,7 @@ extension NodeView {
 
 extension Presenter {
     /// Every pixelated image's tiles, after a batch or a scroll moved or resized what clips it.
-    func refreshPixelatedImages() {
+    fileprivate func refreshPixelatedTiles() {
         guard PixelatedImages.nodes.count > 0 else { return }
         for node in PixelatedImages.nodes.allObjects where node.presenter === self { node.applyImageLayer() }
     }

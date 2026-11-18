@@ -89,7 +89,7 @@ package enum AtomIcons {
         do { image = try decode(source, pixels: pixels, resolver: resolver) } catch {
             failure = error as? Failure ?? .read(error)
         }
-        let named = source.hasPrefix("data:") ? "a data: URL" : RasterRetry.withoutQuery(source)
+        let named = source.hasPrefix("data:") ? "a data: URL" : sourceWithoutQuery(source)
         if let failure, failure.declined, attempt < RasterLoader.declineDelays.count {
             let delay = RasterLoader.declineDelays[attempt]
             DispatchQueue.main.async { log("atom icon queued: \(named): \(failure); again in \(Int(delay * 1000)) ms") }

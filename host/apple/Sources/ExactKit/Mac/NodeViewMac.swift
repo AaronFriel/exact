@@ -218,7 +218,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
     var symbolRefusal: String?
     var symbolClip: NSView?
     var image: NSImage?
-    var raster: NativeRasterLease? { didSet { layerPaintCache = nil } }
+    var raster: (any ImageLease)? { didSet { layerPaintCache = nil } }
     var imageSource: String?
     var loadGeneration = 0
     package var pressed = false { didSet { if pressed != oldValue { pressChanged() } } }
@@ -466,21 +466,21 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
         let previousSource = imageSource, previousGeneration = loadGeneration
         imageSource = source; PictureInPictureHost.changed(self)
         loadGeneration += 1
-        if source.hasPrefix("symbol:") { presenter?.session?.rasters.cancel(id); raster = nil; updateSymbol(); return }
+        if source.hasPrefix("symbol:") { presenter?.session?.rasters?.cancel(id); raster = nil; updateSymbol(); return }
         clearSymbol(); image = nil
         if previousSource?.hasPrefix("symbol:") == true { presenter?.intrinsic(id, nil) }
         guard let session = presenter?.session else { return }
-        if !session.rasters.load(self, source: source, resolver: session.app.resolver) {
+        if session.rasters?.load(self, source: source, resolver: session.app.resolver) != true {
             imageSource = previousSource; loadGeneration = previousGeneration
         }
     }
 
     /// The lease is this load's: shown, its natural size answered for the
     /// loader to report (`RasterLoader.reconcile`, one report per turn).
-    func acceptRaster(_ lease: NativeRasterLease, generation: Int) -> CGSize? {
+    func acceptRaster(_ lease: any ImageLease, generation: Int) -> CGSize? {
         guard loadGeneration == generation, let presenter, presenter.views[id] === self else { return nil }
         // A redisplay doesn't re-ask the image layer for a replaced bitmap.
-        raster = lease; AnimatedRasters.shared.attach(self); applyImageLayer()
+        raster = lease; ImageLink.animated?.attach(self); applyImageLayer()
         self.needsDisplay = true
         if let c = canvasAbove { c.needsCapture = true; canvases?.scheduleCapture() }
         presenter.boxFilters?.changed(self)
@@ -496,7 +496,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
         cachedTextLayout = nil
         dropTextRaster()
         loadGeneration += 1
-        presenter?.session?.rasters.cancel(id)
+        presenter?.session?.rasters?.cancel(id)
         raster = nil
         imageSource = nil; PictureInPictureHost.gone(self)
         clearSymbol()
@@ -1043,7 +1043,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
         if kind == "image", let src = props["imageSource"], src != imageSource { renewSource(); loadImage(src) }
         if kind == "image", props["imageSource"] == nil, imageSource != nil {
             loadGeneration += 1
-            presenter?.session?.rasters.cancel(id)
+            presenter?.session?.rasters?.cancel(id)
             raster = nil
             imageSource = nil
             clearSymbol()
@@ -1107,7 +1107,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
         let origin = style["transform_origin"]
         let old = style
         style = s
-        if kind == "image", old["image_rendering"] != s["image_rendering"] { presenter?.session?.rasters.resized(self) }
+        if kind == "image", old["image_rendering"] != s["image_rendering"] { presenter?.session?.rasters?.resized(self) }
         if old["display"] != s["display"] { isHidden = hostHidden }
         if old["zoom"] != s["zoom"], kind == "iframe" { updateEmbedded() } // the guest's page zoom (LLP 1020.002 D6)
         if old["cursor"] != s["cursor"] { window?.invalidateCursorRects(for: self) }
@@ -1350,7 +1350,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
         // included, as it lays it out: the authored one goes back on.
         applyTransform()
         if style["perspective"] != nil { applyPerspective() }
-        if kind == "image", flightLook == nil { presenter?.session?.rasters.resized(self) }
+        if kind == "image", flightLook == nil { presenter?.session?.rasters?.resized(self) }
         presenter?.collections.changed(id)
         presenter?.transformGeometry.changed()
         presenter?.videoVisibility?.changed()
@@ -1433,7 +1433,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
             clipToContentEdge(ctx, content)
             ctx.translateBy(x: rect.minX, y: rect.maxY)
             ctx.scaleBy(x: 1, y: -1)
-            RasterGeometry.draw(ctx, AnimatedRasters.shared.frame(for: self) ?? bitmap.image, in: CGRect(origin: .zero, size: rect.size), tint: channels("tint_color").map { TextEngine.color($0).cgColor }, rendering: style["image_rendering"]?.string)
+            RasterGeometry.draw(ctx, ImageLink.animated?.frame(for: self) ?? bitmap.image, in: CGRect(origin: .zero, size: rect.size), tint: channels("tint_color").map { TextEngine.color($0).cgColor }, rendering: style["image_rendering"]?.string)
             ctx.restoreGState()
         }
         let textDirty = Capture.capturing || canvasAbove != nil || textIsSmall ? rect : rect.intersection(presenter?.textVisibleRect(self) ?? visibleRect)

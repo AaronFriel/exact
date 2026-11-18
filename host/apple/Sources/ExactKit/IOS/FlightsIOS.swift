@@ -24,7 +24,7 @@ struct FlightLook {
     /// loading: a new node's raster lands a turn or more after the commit
     /// that hides the leaver, and a flight drawing nothing until then showed
     /// no photo at all for a frame or two on a device (LLP 1013.000 D4).
-    var stand: NativeRasterLease? = nil
+    var stand: (any ImageLease)? = nil
     /// A view scaled whole in its clip (`FlightScale`): `applyTransform`
     /// keeps this scale while it flies, as a style would otherwise undo it.
     var scale: CGFloat? = nil
@@ -38,7 +38,7 @@ struct FlightSource {
     var fit: CGRect?
     var natural: CGSize?
     /// The leaver's decoded image (`FlightLook.stand`), held for the flight.
-    var raster: NativeRasterLease?
+    var raster: (any ImageLease)?
     /// The root of the presentation the leaver was in: a flight from an
     /// overlay over the routes into a route flies over that overlay.
     weak var root: UIView?

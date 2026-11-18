@@ -139,8 +139,8 @@ extension NodeView {
     /// canvas's capture (`render(in:)`) drops masks and would show the tint's
     /// whole rectangle, so the template is `draw(_:)`'s, from the same pixels.
     func applyImageLayer() {
-        if applyPixelatedImageLayer() { return }
-        if imageLayer is PixelatedImageLayer { imageLayer?.removeFromSuperlayer(); imageLayer = nil }
+        if ImageLink.pixelated?.apply(self) == true { return }
+        if ImageLink.pixelated?.owns(imageLayer) == true { imageLayer?.removeFromSuperlayer(); imageLayer = nil }
         guard !cssVisibilityHidden, style["image_rendering"]?.string != "pixelated", kind == "image", symbolView == nil, style["tint_color"] == nil, let bitmap = raster?.image ?? flightLook?.stand?.image else {
             imageLayer?.removeFromSuperlayer(); imageLayer = nil; return
         }
@@ -155,7 +155,7 @@ extension NodeView {
             l.frame = look.image
             l.contentsRect = CGRect(x: 0, y: 0, width: 1, height: 1)
             l.contentsGravity = .resize
-            let frame = AnimatedRasters.shared.frame(for: self) ?? bitmap.image
+            let frame = ImageLink.animated?.frame(for: self) ?? bitmap.image
             if (l.contents as AnyObject?) !== frame { l.contents = frame }
             RasterGeometry.filter(l, rendering: style["image_rendering"]?.string)
             l.applyDynamicRange(hdr: bitmap.isHDR, headroom: bitmap.headroom, limit: style["dynamic_range_limit"]?.string)
@@ -166,7 +166,7 @@ extension NodeView {
         let content = contentBox()
         let fit = style["object_fit"]?.string ?? "fill"
         let rect = RasterGeometry.rect(natural: bitmap.naturalSize, content: content, fit: fit)
-        let pixels = AnimatedRasters.shared.frame(for: self) ?? bitmap.image
+        let pixels = ImageLink.animated?.frame(for: self) ?? bitmap.image
         let shown = rect.intersection(content)
         let radii = cornerRadii(in: bounds)
         let radius = radii.max() ?? 0

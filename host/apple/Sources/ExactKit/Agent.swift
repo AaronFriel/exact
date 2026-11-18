@@ -477,10 +477,10 @@ public final class Agent {
             let pending = session.app.replacements.reason
             let report = (try? JSONSerialization.jsonObject(with: Data(reply.utf8)) as? [String: Any])?["replacement"] as? [String: Any]
             nativeSections["replacement"] = report == nil && pending == nil ? NSNull() : (report ?? [:]).merging(["pending": pending ?? NSNull()]) { $1 }
-            var raster = session.rasters.diagnostics
+            var raster = session.rasters?.diagnostics ?? [:]
             raster["encodedResolverBytes"] = session.app.resolver.encodedCacheBytes
-            raster["encodedHTTPCache"] = RasterInput.httpCacheUsage
-            raster["animated"] = AnimatedRasters.shared.diagnostics
+            raster["encodedHTTPCache"] = session.rasters?.encodedHTTPCache
+            raster["animated"] = ImageLink.animated?.diagnostics
             nativeSections["raster"] = raster
             #if os(macOS)
             nativeSections["contentRegion"] = session.regions.diagnostics
@@ -765,7 +765,7 @@ public final class Agent {
         if DisplayPreferences.gamut != gamut || DisplayPreferences.highDynamicRange != high {
             DisplayRange.pinned = high ? 4 : 1
             DisplayPreferences.agentGamut = gamut
-            session.rasters.displayChanged()
+            session.rasters?.displayChanged()
         }
         systemContrast(more: DisplayPreferences.contrast == "more")
         DisplayPreferences.agent = (motion, transparency)
@@ -983,7 +983,7 @@ public final class Agent {
             let landed = max(from, batch.clock ?? to)
             session.clock = landed
             session.apply(session.runtime.tick(now: landed))
-            AnimatedRasters.shared.evaluate()
+            ImageLink.animated?.evaluate()
             // A long catch-up (a takeover after minutes of uptime) can pass the
             // runner's timer-fire limit: it is progress, so go on from there.
             if let e = batch.error, "\(e)".contains("TimerFireLimit"), (batch.clock ?? to) < to, Date() < deadline { continue }
@@ -1209,12 +1209,12 @@ public final class Agent {
     /// as on the web, LLP 1054.000 R9).
     @discardableResult
     func waitForImages(until end: Date = Date(timeIntervalSinceNow: 3)) -> Int {
-        var loading = session.rasters.loadingOnScreen
+        var loading = session.rasters?.loadingOnScreen ?? 0
         while loading > 0 && Date() < end {
             RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.01))
-            loading = session.rasters.loadingOnScreen
+            loading = session.rasters?.loadingOnScreen ?? 0
         }
-        AnimatedRasters.shared.evaluate()
+        ImageLink.animated?.evaluate()
         return loading
     }
 
@@ -1226,7 +1226,7 @@ public final class Agent {
         let end = Date(timeIntervalSinceNow: 3)
         while true {
             presenter.settlePump()
-            let loading = session.rasters.loadingOnScreen
+            let loading = session.rasters?.loadingOnScreen ?? 0
             if loading == 0 || Date() >= end { return loading }
             waitForImages(until: end)
         }

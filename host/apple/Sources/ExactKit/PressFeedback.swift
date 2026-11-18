@@ -299,7 +299,7 @@ extension NodeView {
         defer { refreshPressTranslation() }
         defer { overflowClipGeometryChanged() }
         let before = layer.transform
-        defer { if !CATransform3DEqualToTransform(before, layer.transform) { refreshPixelatedImages() } }
+        defer { if !CATransform3DEqualToTransform(before, layer.transform) { ImageLink.pixelated?.refresh(under: self) } }
         // Flying scaled whole in its clip (LLP 1013.000 D4.4): the
         // flight's scale only.
         if flightLook != nil { stopPressEase() }
@@ -390,7 +390,7 @@ extension NodeView {
         defer { refreshPressTranslation() }
         defer { overflowClipGeometryChanged() }
         let before = layer?.transform ?? CATransform3DIdentity
-        defer { if !CATransform3DEqualToTransform(before, layer?.transform ?? CATransform3DIdentity) { refreshPixelatedImages() } }
+        defer { if !CATransform3DEqualToTransform(before, layer?.transform ?? CATransform3DIdentity) { ImageLink.pixelated?.refresh(under: self) } }
         // A backdrop mirrors its box as the transform moves and scales it.
         defer { if !backdropOperations.isEmpty { applyBackdrop() } }
         // A frame's web view takes its scale by geometry (`FrameScaleMac.swift`).

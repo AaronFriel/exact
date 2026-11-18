@@ -538,21 +538,21 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
     func loadImage(_ source: String) {
         let previousSource = imageSource, previousGeneration = loadGeneration
         imageSource = source
-        if source.hasPrefix("symbol:") { presenter?.session?.rasters.cancel(id); raster = nil; updateSymbol(); return }
+        if source.hasPrefix("symbol:") { presenter?.session?.rasters?.cancel(id); raster = nil; updateSymbol(); return }
         loadGeneration += 1
         clearSymbol(); image = nil
         if previousSource?.hasPrefix("symbol:") == true { presenter?.intrinsic(id, nil) }
         guard let session = presenter?.session else { return }
-        if !session.rasters.load(self, source: source, resolver: session.app.resolver) {
+        if session.rasters?.load(self, source: source, resolver: session.app.resolver) != true {
             imageSource = previousSource; loadGeneration = previousGeneration
         }
     }
 
     /// The lease is this load's: shown, its natural size answered for the
     /// loader to report (`RasterLoader.reconcile`, one report per turn).
-    func acceptRaster(_ lease: NativeRasterLease, generation: Int) -> CGSize? {
+    func acceptRaster(_ lease: any ImageLease, generation: Int) -> CGSize? {
         guard loadGeneration == generation, let presenter, presenter.views[id] === self else { return nil }
-        raster = lease; AnimatedRasters.shared.attach(self); applyImageLayer()
+        raster = lease; ImageLink.animated?.attach(self); applyImageLayer()
         self.setNeedsDisplay()
         if let c = canvasAbove { c.needsCapture = true; canvases?.scheduleCapture() }
         presenter.boxFilters?.changed(self)
@@ -572,7 +572,7 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
             let generation = loadGeneration
             image = name.isEmpty ? faceSymbol.flatMap { FaceSymbol.image($0, points: points) } : symbolImage(name, symbolShape(SymbolMeasure.configuration(points: points, weight: weight)))
             symbolFound = image != nil; if points <= 0 { image = nil }
-            if name.isEmpty, props["symbolPath"] == nil, props["symbolAsset"] == nil, !source.hasPrefix("symbol:sf/"), source != "symbol:", symbolRefusal != source { symbolRefusal = source; presenter?.session?.log("image \(RasterRetry.withoutQuery(source)) refused: unknown symbol role") }
+            if name.isEmpty, props["symbolPath"] == nil, props["symbolAsset"] == nil, !source.hasPrefix("symbol:sf/"), source != "symbol:", symbolRefusal != source { symbolRefusal = source; presenter?.session?.log("image \(sourceWithoutQuery(source)) refused: unknown symbol role") }
             if !name.isEmpty || props["symbolAsset"] != nil || source.hasPrefix("symbol:sf/") || source == "symbol:" { symbolRefusal = nil }
             let leaf = symbolView ?? UIImageView()
             if symbolView == nil { symbolView = leaf; (clipBox ?? self).addSubview(leaf) }
@@ -606,7 +606,7 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
         cachedTextLayout = nil
         dropTextRaster()
         loadGeneration += 1
-        presenter?.session?.rasters.cancel(id)
+        presenter?.session?.rasters?.cancel(id)
         buttonRasterView = nil
         raster = nil
         imageSource = nil
@@ -1169,7 +1169,7 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
         if kind == "image", let src = props["imageSource"], src != imageSource { loadImage(src) }
         if kind == "image", props["imageSource"] == nil, imageSource != nil {
             loadGeneration += 1
-            presenter?.session?.rasters.cancel(id)
+            presenter?.session?.rasters?.cancel(id)
             raster = nil
             imageSource = nil
             clearSymbol()
@@ -1249,7 +1249,7 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
         let origin = style["transform_origin"]
         let old = style
         style = s
-        if kind == "image", old["image_rendering"] != s["image_rendering"] { presenter?.session?.rasters.resized(self) }
+        if kind == "image", old["image_rendering"] != s["image_rendering"] { presenter?.session?.rasters?.resized(self) }
         if old["display"] != s["display"] || old["visibility"] != s["visibility"] { isHidden = hostHidden }
         if old["zoom"] != s["zoom"], kind == "iframe" { updateEmbedded() } // the guest's page zoom (LLP 1020.002 D6)
         if old["color_scheme"] != s["color_scheme"] { applyColorScheme() }
@@ -1394,7 +1394,7 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
         if materialView != nil { applyMaterialRadius(); syncDefaultSurfaceScroll() } // its corners, at its size
         syncEllipticalClip()
         if style["perspective"] != nil { applyPerspective() }
-        if kind == "image" { if flightLook == nil { presenter?.session?.rasters.resized(self) }; if raster != nil { applyImageLayer() } }
+        if kind == "image" { if flightLook == nil { presenter?.session?.rasters?.resized(self) }; if raster != nil { applyImageLayer() } }
         presenter?.collections.changed(id)
         presenter?.transformGeometry.changed()
         presenter?.videoVisibility?.changed()
@@ -1446,7 +1446,7 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
             let styles = ["top", "right", "bottom", "left"].map { style["border_style_" + $0]?.string ?? "solid" }
             BorderPaint.paint(ctx, box: bounds, widths: widths, colors: colors, radii: radii, styles: styles, shape: CornerShape(style["corner_shape"]))
         }
-        if !cssVisibilityHidden, kind == "image", symbolView == nil, flightLook == nil || imageLayer == nil, !(imageLayer is PixelatedImageLayer) || Capture.capturing, let bitmap = raster?.image {
+        if !cssVisibilityHidden, kind == "image", symbolView == nil, flightLook == nil || imageLayer == nil, ImageLink.pixelated?.owns(imageLayer) != true || Capture.capturing, let bitmap = raster?.image {
             // CSS object-fit over the content box (the frame inside border
             // and padding), clipped to the content edge's curve: `fill`
             // stretches, `contain`/`cover` keep the ratio, `none` is the
@@ -1460,7 +1460,7 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
             clipToContentEdge(ctx, content)
             ctx.translateBy(x: rect.minX, y: rect.maxY)
             ctx.scaleBy(x: 1, y: -1)
-            RasterGeometry.draw(ctx, AnimatedRasters.shared.frame(for: self) ?? bitmap.image, in: CGRect(origin: .zero, size: rect.size), tint: channels("tint_color").map { TextEngine.color($0).cgColor }, rendering: style["image_rendering"]?.string)
+            RasterGeometry.draw(ctx, ImageLink.animated?.frame(for: self) ?? bitmap.image, in: CGRect(origin: .zero, size: rect.size), tint: channels("tint_color").map { TextEngine.color($0).cgColor }, rendering: style["image_rendering"]?.string)
             ctx.restoreGState()
         }
         if isParagraph, rollsNumerals {

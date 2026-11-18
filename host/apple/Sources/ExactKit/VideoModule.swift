@@ -419,7 +419,7 @@ final class VideoVisibilityHost {
     private let scrolls = ScrollMembership()
     func changed(in scroll: UIScrollView) {
         guard !videos.isEmpty, scrolls.contains(scroll, members: videos.values.compactMap { $0.value?.owner }) else {
-            AnimatedRasters.shared.poke()
+            ImageLink.animated?.poke()
             return
         }
         changed()
@@ -452,7 +452,7 @@ final class VideoVisibilityHost {
         #endif
     }
     func changed() {
-        AnimatedRasters.shared.poke()
+        ImageLink.animated?.poke()
         guard !videos.isEmpty, !queued else { return }
         queued = true
         DispatchQueue.main.async { [weak self] in

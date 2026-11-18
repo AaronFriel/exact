@@ -169,16 +169,6 @@ func hasGainMap(_ source: CGImageSource, prefix: Data) -> Bool {
 }
 private let gainMapMarkers = ["urn:iso:std:iso:ts:21496", "hdrgm:Version", "http://ns.apple.com/HDRGainMap/"].map { Data($0.utf8) }
 
-/// A PQ or HLG transfer (LLP 1100 D4).
-func isHDRSpace(_ space: CGColorSpace) -> Bool {
-    #if os(tvOS)
-    // The PQ/HLG-specific queries have no tvOS availability annotation.
-    // This query covers both BT.2100 transfers and is available on tvOS.
-    return CGColorSpaceUsesITUR_2100TF(space)
-    #else
-    return CGColorSpaceIsPQBased(space) || CGColorSpaceIsHLGBased(space)
-    #endif
-}
 
 /// A colour space's name as the agent reports it (LLP 1100 D1): CSS's where
 /// CSS has one, a dashed standard name otherwise, `icc` for anything else.
@@ -455,7 +445,7 @@ private final class RasterOwner {
 /// merely this wrapper, owns the charge so every alias stays charged. An
 /// animated GIF or WebP carries its first frame here and the facts to play
 /// the rest (`RasterAnimation`, LLP 1011.000).
-final class RasterImage: @unchecked Sendable {
+final class RasterImage: ImageBitmap, @unchecked Sendable {
     // Cache identity: first frame, EXIF-transformed pixels, in the plan's variant.
     let image: CGImage
     let naturalSize: CGSize
@@ -529,7 +519,7 @@ final class RasterImage: @unchecked Sendable {
             var headroom: Float = 0
             if plan.variant == RasterVariant.hdr {
                 // The decode's headroom, tagged on the stored bitmap too.
-                headroom = Self.headroom(of: thumbnail)
+                headroom = ImageHeadroom.of(thumbnail)
                 if headroom > 0, #available(iOS 18, macOS 15, tvOS 18, *), let tagged = CGImageCreateCopyWithContentHeadroom(headroom, image) { image = tagged }
             }
             let animation = file.flatMap { RasterAnimation.read(source, file: $0, plan: plan, owner: sourceOwner) }
@@ -568,20 +558,6 @@ final class RasterImage: @unchecked Sendable {
         guard let context else { throw RasterFailure.svg("the picture did not render at \(plan.width)×\(plan.height)") }
         guard let drawn = context.makeImage(), let image = normalized(drawn, plan: plan) else { throw RasterFailure.svg("the picture's storage was not made") }
         return RasterImage(image: owner.own(image), natural: metadata.naturalSize, bytes: plan.outputBytes, animation: nil)
-    }
-
-    /// An image's headroom, where the system says one (iOS 18 / macOS 15);
-    /// before that, PQ's and HLG's default (1000 / 203 cd/m²).
-    static func headroom(of image: CGImage) -> Float {
-        if #available(iOS 18, macOS 15, tvOS 18, *) { return headroom(reported: image.contentHeadroom, space: image.colorSpace) }
-        return headroom(reported: 0, space: image.colorSpace)
-    }
-
-    /// Zero is unknown, not SDR. Preserve a known tag; otherwise BT.2100
-    /// supplies its reference default, and other spaces remain untagged.
-    static func headroom(reported: Float, space: CGColorSpace?) -> Float {
-        if reported > 0 { return reported }
-        return space.map(isHDRSpace) == true ? 1000 / 203 : 0
     }
 
     /// ImageIO's reduced decode of one frame at the plan's longest side; an
@@ -691,66 +667,4 @@ func withScratch<T>(_ count: Int, _ body: (UnsafeMutableRawPointer) throws -> T?
           pages != MAP_FAILED else { return nil }
     defer { munmap(pages, count) }
     return try body(pages)
-}
-
-enum RasterGeometry {
-    static func rect(natural: CGSize, content: CGRect, fit: String) -> CGRect {
-        guard natural.width > 0, natural.height > 0 else { return .zero }
-        if fit == "fill" { return content }
-        let x = content.width / natural.width, y = content.height / natural.height
-        let scale: CGFloat
-        switch fit {
-        case "contain": scale = min(x, y)
-        case "cover": scale = max(x, y)
-        case "scale-down": scale = min(1, min(x, y))
-        case "none": scale = 1
-        default: return content
-        }
-        let size = CGSize(width: natural.width * scale, height: natural.height * scale)
-        return CGRect(x: content.midX - size.width / 2, y: content.midY - size.height / 2, width: size.width, height: size.height)
-    }
-
-    /// The bitmap into `rect`, or with a `-exact-tint-color` as a template: its
-    /// alpha masks the tint (LLP 1011 §4). The same decoded pixels either way.
-    /// A layer composited source-in, not `clip(to:mask:)`, which reads an
-    /// image with alpha wrongly (a transparent pixel came back half covered).
-    static func draw(_ ctx: CGContext, _ image: CGImage, in rect: CGRect, tint: CGColor?, rendering: String? = nil) {
-        ctx.saveGState()
-        defer { ctx.restoreGState() }
-        if rendering == "crisp-edges" { ctx.interpolationQuality = .none }
-        func picture() {
-            if rendering == "pixelated" { pixelated(ctx, image, in: rect) }
-            else { ctx.draw(image, in: rect) }
-        }
-        guard let tint else { picture(); return }
-        ctx.saveGState()
-        ctx.beginTransparencyLayer(in: rect, auxiliaryInfo: nil)
-        picture()
-        ctx.setBlendMode(.sourceIn)
-        ctx.setFillColor(tint)
-        ctx.fill(rect)
-        ctx.endTransparencyLayer()
-        ctx.restoreGState()
-    }
-
-    static func filter(_ layer: CALayer, rendering: String?) {
-        let filter: CALayerContentsFilter = rendering == "crisp-edges" ? .nearest : .linear
-        layer.magnificationFilter = filter
-        layer.minificationFilter = filter
-    }
-
-    private static func pixelated(_ ctx: CGContext, _ image: CGImage, in rect: CGRect) {
-        let t = ctx.ctm
-        let n = RasterTiles.enlargement(image, rect: rect, scale: CGSize(width: hypot(t.a, t.b), height: hypot(t.c, t.d)))
-        ctx.interpolationQuality = .low
-        if n == CGSize(width: 1, height: 1) { ctx.draw(image, in: rect); return }
-        RasterTiles.each(image, rect: rect, visible: ctx.boundingBoxOfClipPath, enlargement: n, tint: nil) { pixels, core, halo in
-            ctx.saveGState()
-            ctx.setShouldAntialias(false)
-            ctx.clip(to: core)
-            ctx.draw(pixels, in: halo)
-            ctx.restoreGState()
-        }
-    }
-
 }

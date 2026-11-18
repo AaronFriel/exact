@@ -434,7 +434,7 @@ final class FrameSampler: NSObject {
     @objc func tick(_ link: CADisplayLink) {
         observe(now: link.timestamp, target: link.targetTimestamp, at: CACurrentMediaTime())
         // Which images show without their pixels this frame (LLP 1145 D2).
-        session?.rasters.sampleBlank()
+        session?.rasters?.sampleBlank()
         // The session's own frame source running is activity too.
         if session?.frames.link != nil || held { active = CACurrentMediaTime() }
         if !observing && CACurrentMediaTime() - active > Self.quiet { stop() }

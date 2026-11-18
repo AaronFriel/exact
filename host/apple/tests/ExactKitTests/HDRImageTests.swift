@@ -21,10 +21,10 @@ final class HDRImageTests: XCTestCase {
             let unknown = try XCTUnwrap(CGImageCreateCopyWithContentHeadroom(0, image))
             // Some OS versions immediately synthesize the BT.2100 default
             // on a zero-tagged CGImage; exercise an actual reported zero too.
-            XCTAssertEqual(RasterImage.headroom(reported: 0, space: space), 1000 / 203, accuracy: 0.001)
-            XCTAssertEqual(RasterImage.headroom(reported: 1, space: space), 1)
-            XCTAssertEqual(RasterImage.headroom(reported: 0, space: CGColorSpace(name: CGColorSpace.sRGB)), 0)
-            XCTAssertEqual(RasterImage.headroom(of: unknown), 1000 / 203, accuracy: 0.001)
+            XCTAssertEqual(ImageHeadroom.of(reported: 0, space: space), 1000 / 203, accuracy: 0.001)
+            XCTAssertEqual(ImageHeadroom.of(reported: 1, space: space), 1)
+            XCTAssertEqual(ImageHeadroom.of(reported: 0, space: CGColorSpace(name: CGColorSpace.sRGB)), 0)
+            XCTAssertEqual(ImageHeadroom.of(unknown), 1000 / 203, accuracy: 0.001)
             XCTAssertNoThrow(try HDRPlatformProbe.requireHDRHeadroom(0, space: space, file: "untagged BT.2100"))
             XCTAssertThrowsError(try HDRPlatformProbe.requireHDRHeadroom(1, space: space, file: "SDR headroom"))
         }
