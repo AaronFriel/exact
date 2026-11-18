@@ -352,4 +352,20 @@ mod tests {
             assert_eq!(missing(&plan, ALL), None);
         }
     }
+
+    /// D5 for the native roster: on hello's binary, which links nothing
+    /// beyond the core, a plan that uses an entry is refused by its name.
+    #[test]
+    fn hellos_binary_refuses_each_native_entry_by_name() {
+        let tools = contract::compile(
+            "component A\n  state n = 0\n  tool bump writes \"Add one.\" = bump\n  action bump\n    n = n + 1\n  view\n    text \"a\"\n",
+        )
+        .unwrap();
+        let mut view = contract::compile("component A\n  view\n    text \"a\"\n").unwrap();
+        view.add_view("swatch-box", ("swatch", "@fixture/swatch"), true, &[], "");
+        for (plan, name) in [(&tools, "tools"), (&view, "modules")] {
+            assert_eq!(missing(plan, Uses::NONE).as_deref(), Some(name));
+            assert_eq!(missing(plan, ALL), None);
+        }
+    }
 }

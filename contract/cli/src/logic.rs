@@ -527,9 +527,11 @@ pub fn web_linked(plan: &exact_plan::Plan, inputs: &serde_json::Value) -> String
     // input is the media picker, `auth` below is the sign-in sheet, and its
     // numerals roll in the runtime's text (LLP 1077 D15), its date and
     // time controls are the browser's own (LLP 1115.001.000 D2), and it
-    // shows no tips (LLP 1035.006.000 D4).
+    // shows no tips (LLP 1035.006.000 D4). The native roster's entries are
+    // never the web's.
     let names: Vec<&str> = uses
         .iter()
+        .filter(|c| !Uses::NATIVE.has(*c))
         .filter(|c| {
             !matches!(
                 c,
@@ -601,7 +603,9 @@ pub fn web_linked(plan: &exact_plan::Plan, inputs: &serde_json::Value) -> String
             | Capability::Numerals
             | Capability::Dates
             | Capability::Sqlite
-            | Capability::Tips => {}
+            | Capability::Tips
+            | Capability::Modules
+            | Capability::Tools => {}
         }
     }
     entry

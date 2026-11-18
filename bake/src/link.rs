@@ -266,6 +266,18 @@ mod tests {
         }
     }
 
+    /// Production hello, the size row's app, links nothing beyond the core
+    /// (LLP 1047.001 D10): every roster entry is absent from its binary.
+    #[test]
+    fn production_hello_links_no_capability() {
+        let hello = contract::compile(include_str!("../../apps/hello/app.contract")).unwrap();
+        for platform in ["ios", "macos"] {
+            let inputs = serde_json::json!({ "platform": platform, "grantCeiling": "" });
+            let uses = super::production_uses(&hello, std::iter::empty(), &inputs);
+            assert_eq!(uses, exact_runner::Uses::NONE, "{platform}: {uses}");
+        }
+    }
+
     /// The manifest schema's `link` names are the roster's, in its order.
     #[test]
     fn the_schema_names_every_capability() {
