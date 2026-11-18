@@ -5833,8 +5833,43 @@ requests the same grant through `exact_gpu::fixture::device_with_requirements`.
 An authored GPU module passes a static `&[exact_gpu::grants::Requirements]` as the
 second argument to `exact_gpu::module!`. See [the GPU module recipe](recipes/gpu-module.md)
 for a declaration and [package GPU surfaces](contract-for-agents.md#a-packages-gpu-surfaces)
-for packaging. `exact-gpu` 0.3 adds the limits argument; packages declare `exactGpu: "0.3"`
-and depend on `exact-gpu = "0.3"`.
+for packaging. Packages declare `exactGpu: "0.4"` and depend on `exact-gpu = "0.4"`.
+
+### GPU storage
+
+On Apple (macOS, iOS and tvOS), Android, Linux and Windows, a surface may implement:
+
+```rust
+fn storage(&mut self, data: &std::path::Path, cache: &std::path::Path,
+    temporary: &std::path::Path) {
+    self.cache = Some(cache.to_path_buf());
+}
+```
+
+The host calls this hook once for each canvas, after creation and before its first
+`bind`. The three absolute paths resolve that session's `app:/data`, `app:/cache`
+and `app:/tmp`. They are borrowed for the call; copy any path the surface keeps.
+The native ABI preserves Unix path bytes and Windows UTF-16 code units, including
+non-Unicode names. On Android, Linux and Windows, a storage delivery failure keeps
+the canvas and logs once at creation. The module does not create directories or retain
+paths for a surface that ignores them. Create a directory when needed and handle
+filesystem errors in the surface. Device recovery keeps the surface and its paths; a recreated canvas receives them
+again. Keep paths on the surface, since a loaded artifact can serve several sessions.
+
+A file written under `cache` can be shown with `image "app:/cache/<name>"`, shared
+by that path, or read as an asset. Use distinct names for changed snapshots. Cache
+and temporary files may be removed by the platform; durable files belong in `data`.
+An agent drive's named store supplies its own roots. An unnamed drive uses temporary
+process storage, not the installed app's files.
+
+The web does not call `storage`. Its GPU artifact is WebAssembly with generated
+wasm-bindgen JavaScript; Exact supplies it no filesystem or browser-storage bridge.
+A GPU module that needs persistence must supply its own browser API integration.
+The app's data module can separately use Exact's `storage.fs` and `storage.sqlite`
+APIs, backed by IndexedDB in this repo. Those APIs are not injected into GPU modules
+and supply no paths usable by `std::fs` or native SQLite.
+`exact-gpu` 0.4 carries the hook and the native `gpu_storage` export; rebuild GPU
+artifacts with the host.
 
 ### An authored workspace
 

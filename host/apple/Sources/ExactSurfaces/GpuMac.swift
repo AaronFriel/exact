@@ -266,6 +266,9 @@ final class CanvasesHost {
         e.id = bytes.withUnsafeBufferPointer { m.create($0.baseAddress, bytes.count, ptr, w, h) }
         e.presentable = e.id != 0
         if e.id == 0 { FileHandle.standardError.write(Data("exact gpu: \(m.error())\n".utf8)); return }
+        if let session, !m.giveStorage(e.id, session: session) {
+            failed = m.error(); m.destroy(e.id); e.id = 0; e.presentable = false; return
+        }
         e.performance = false
         e.module = m
         updatePerformanceTimer()

@@ -3482,14 +3482,14 @@ Any package may declare `gpu` beside `views` in its main `exact.json` (LLP 1153.
 ```json
 "gpu": {
   "crate": "rust",
-  "exactGpu": "0.3",
+  "exactGpu": "0.4",
   "surfaces": { "sky": { "arity": 1, "factory": "sky_surface::surface" } },
   "targets": ["web", "macos", "ios", "linux"]
 }
 ```
 
 `crate` names a directory inside the package containing a standalone `Cargo.toml` and
-`Cargo.lock`. Its dependency is `exact-gpu = "0.3"`, without a path or Git source. It uses
+`Cargo.lock`. Its dependency is `exact-gpu = "0.4"`, without a path or Git source. It uses
 `exact_gpu::wgpu` and depends on no other Exact crate. Each factory returns
 `Box<dyn exact_gpu::Surface>`. The build generates the registry and `module!` exports,
 including the web dependencies; the package writes neither. `packages/fixtures/sky` is

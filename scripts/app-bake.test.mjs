@@ -847,7 +847,7 @@ test('a package supplies a GPU module without an app GPU crate', async () => {
     writeFileSync(resolve(dir, 'package.json'), JSON.stringify({ dependencies: { '@fixture/sky': '1.0.0' } }));
     writeFileSync(resolve(pkg, 'package.json'), JSON.stringify({ exports: { '.': './exact.json' } }));
     writeFileSync(resolve(pkg, 'exact.json'), JSON.stringify({ kind: 'interface', name: '@fixture/sky', version: '1.0.0',
-      gpu: { crate: 'rust', exactGpu: '0.3', surfaces: { sky: { arity: 1, factory: 'sky::surface' } } } }));
+      gpu: { crate: 'rust', exactGpu: '0.4', surfaces: { sky: { arity: 1, factory: 'sky::surface' } } } }));
     const modules = gpuModules(readManifest(dir, 'sky'));
     assert.deepEqual(modules.map(({ name, surfaces }) => ({ name, surfaces })), [{ name: 'fixture-sky', surfaces: ['sky'] }]);
   } finally { rmSync(dir, { recursive: true, force: true }); }

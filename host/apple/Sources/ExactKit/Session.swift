@@ -357,7 +357,7 @@ public final class ExactSession {
     package let core: SessionCore
     package var runtime: Runtime { core.runtime }
     /// This session's file roots, captured outside a native module callback.
-    var appFileRoots: [String: String] = [:]
+    package var appFileRoots: [String: String] = [:]
     let rasters = RasterLoader()
     #if os(macOS)
     lazy var regions = RegionController(self)

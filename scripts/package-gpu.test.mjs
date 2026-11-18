@@ -272,11 +272,11 @@ test('package GPU modules resolve independently from shipped locks and reject in
       assert.equal(readFileSync(resolve(pkg, 'rust/Cargo.lock'), 'utf8'), lock);
     }
     const app = { dir, crate: kind => `one-${kind}` };
-    assert.throws(() => ensurePackageGpu(app, { ...module, exactGpu: '0.4' }), /requires exact-gpu 0.4, but this checkout provides 0\.3\.\d+/);
+    assert.throws(() => ensurePackageGpu(app, { ...module, exactGpu: '0.5' }), /requires exact-gpu 0.5, but this checkout provides 0\.4\.\d+/);
     const cargo = readFileSync(resolve(pkg, 'rust/Cargo.toml'), 'utf8');
-    put(resolve(pkg, 'rust/Cargo.toml'), cargo.replace('exact-gpu = "0.3"', 'exact-gpu = "0.4"'));
+    put(resolve(pkg, 'rust/Cargo.toml'), cargo.replace('exact-gpu = "0.4"', 'exact-gpu = "0.5"'));
     assert.throws(() => ensurePackageGpu(app, module), /without a path, git or workspace dependency/);
-    put(resolve(pkg, 'rust/Cargo.toml'), cargo.replace('exact-gpu = "0.3"', 'exact-gpu = "0.3"\nexact-plan = "0.1"'));
+    put(resolve(pkg, 'rust/Cargo.toml'), cargo.replace('exact-gpu = "0.4"', 'exact-gpu = "0.4"\nexact-plan = "0.1"'));
     assert.throws(() => ensurePackageGpu(app, module), /may depend on exact-gpu, not exact-plan/);
     put(resolve(pkg, 'rust/Cargo.toml'), cargo);
     rmSync(resolve(pkg, 'rust/Cargo.lock'));

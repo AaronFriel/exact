@@ -68,6 +68,8 @@ mod target;
 pub use target::ColorSpace;
 pub mod tier;
 pub use tier::{set_thread_tier, set_tier, tier, GpuTier};
+#[cfg(not(target_arch = "wasm32"))]
+mod storage;
 mod uniform;
 #[cfg(windows)]
 mod window;
@@ -216,6 +218,17 @@ impl AssetChanges {
 
 /// What an app implements per canvas.
 pub trait Surface {
+    /// This canvas's native session directories, once before its first bind.
+    /// Copy paths you keep; create directories only when needed. The paths map
+    /// to `app:/data`, `app:/cache` and `app:/tmp`, including named agent stores.
+    /// Not called on the web, which has no native filesystem paths.
+    fn storage(
+        &mut self,
+        _data: &std::path::Path,
+        _cache: &std::path::Path,
+        _temporary: &std::path::Path,
+    ) {
+    }
     /// Presented raster size relative to device pixels; layout stays in CSS pixels.
     /// The compositor stretches it to the canvas box. Finite (0, 1]; invalid values
     /// use 1. Explicit readback/fixture sizes are unaffected.

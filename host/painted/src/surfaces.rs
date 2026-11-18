@@ -45,6 +45,7 @@ mod pixels;
 mod placed;
 mod shaders;
 mod size;
+mod storage;
 #[cfg(windows)]
 pub(crate) mod window;
 
@@ -141,6 +142,7 @@ impl Abi {
                 "gpu_placement",
                 "gpu_unload",
                 "gpu_create_headless",
+                "gpu_storage",
                 "gpu_bind_at",
                 "gpu_agent",
                 "gpu_input",
@@ -741,6 +743,14 @@ impl Surfaces {
                 if id == 0 {
                     self.error = abi.error();
                     continue;
+                }
+                let roots = host.app_roots().unwrap_or_else(crate::picker::roots);
+                if !abi.storage(id, &roots) {
+                    host.log(format!(
+                        "surface {}: storage: {}",
+                        update.name,
+                        abi.error().unwrap_or_else(|| "paths unavailable".into())
+                    ));
                 }
                 self.initial_lifecycle(abi, id);
                 let owner = !self.canvases.values().any(|c| c.name == update.name);
