@@ -2632,6 +2632,11 @@ lists any literal colour, font size or weight an app's `.contract` files still w
 | a route with `navigationPresentation="modal"` | a sheet |
 | a route pushed while a sheet is on top, with no `navigationPresentation` of its own | pushed inside the sheet, with the system Back; the sheet's swipe down, or a tap behind a `closedby="any"` one, closes the sheet with every route pushed inside it |
 
+A native `select` fits its widest option by default, as on the web
+(LLP 1069.001 D3). Write `field-sizing="content"` to fit the shown value, as a
+UIKit pop-up button does, on either Apple host or the web. These are intrinsic sizes; authored widths and
+minimum or maximum widths still size the control's layout box.
+
 What lies over the page beneath a modal `dialog` is the platform's dim:
 UIKit's beneath a sheet or the top layer, the web's and the painted hosts'
 scrim. To colour it, write CSS's `::backdrop` as a block under the `dialog`

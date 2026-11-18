@@ -354,10 +354,10 @@ final class ControlHost: NSObject {
             var natural = control is NativeButtonIOS ? .zero : naturalSize(control, owner)
             let box = control is NativeButtonIOS ? owner.bounds : owner.contentBox()
             #if os(iOS)
-            // A select its box holds narrower than its widest option wraps its
+            // A select its box holds narrower than its natural size wraps its
             // title and grows taller, as a pop-up button does under Auto Layout,
             // rather than running past its box (unit-converter at the largest
-            // text size, round 22). Its width stays the widest option's (D3).
+            // text size, round 22). Its intrinsic width stays unchanged.
             if owner.props["type"] == "select", let button = control as? UIButton, box.width > 0, box.width < natural.width - 0.5 {
                 natural.height = max(natural.height, selectHeight(button, width: box.width))
             }
