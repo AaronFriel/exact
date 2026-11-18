@@ -368,7 +368,7 @@ public final class ExactSession {
     package var appFileRoots: [String: String] = [:]
     let rasters = ImageLink.makeLoader?()
     #if os(macOS)
-    lazy var regions = RegionController(self)
+    lazy var regions: any ContentRegionHosting = ContentRegionLink.make?(self) ?? NoContentRegions()
     #endif
     var text: TextEngine { get { core.text } set { core.text = newValue } }
     let fieldChrome = FieldChromeCache()

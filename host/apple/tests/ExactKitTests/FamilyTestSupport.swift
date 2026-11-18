@@ -25,3 +25,10 @@ extension Presenter {
     /// The built-in segment host (`ControlLink.makeSegments`' default).
     var segmentHost: SegmentHost { segments as! SegmentHost }
 }
+
+#if os(macOS)
+extension ExactSession {
+    /// The built-in content regions (`ContentRegionLink.make`'s default).
+    var regionHost: RegionController { regions as! RegionController }
+}
+#endif
