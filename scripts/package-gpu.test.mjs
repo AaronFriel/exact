@@ -271,6 +271,14 @@ test('package GPU modules resolve independently from shipped locks and reject in
       assert.equal(packages.some(p => p.name === 'exact-js' || p.name === 'contract'), false);
       assert.equal(readFileSync(resolve(pkg, 'rust/Cargo.lock'), 'utf8'), lock);
     }
+    const originalCargo = readFileSync(resolve(pkg, 'rust/Cargo.toml'), 'utf8');
+    put(resolve(pkg, 'gltf/Cargo.toml'), '[package]\nname="exact-model-gltf"\nversion="1.0.0"\nedition="2021"\n[workspace]\n');
+    put(resolve(pkg, 'gltf/src/lib.rs'), 'pub fn geometry() {}');
+    put(resolve(pkg, 'rust/Cargo.toml'), originalCargo.replace('exact-gpu = "0.4"', 'exact-gpu = "0.4"\nexact-model-gltf = { path = "../gltf" }'));
+    const withReader = ensurePackageGpu({ dir, crate: kind => `one-${kind}` }, module);
+    const readerGraph = JSON.parse(spawnSync('cargo', ['metadata', '--locked', '--offline', '--format-version', '1'], { cwd: withReader, encoding: 'utf8' }).stdout);
+    assert.equal(readerGraph.packages.find(p => p.name === 'exact-model-gltf').source, null);
+    put(resolve(pkg, 'rust/Cargo.toml'), originalCargo);
     const app = { dir, crate: kind => `one-${kind}` };
     assert.throws(() => ensurePackageGpu(app, { ...module, exactGpu: '0.5' }), /requires exact-gpu 0.5, but this checkout provides 0\.4\.\d+/);
     const cargo = readFileSync(resolve(pkg, 'rust/Cargo.toml'), 'utf8');

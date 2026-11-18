@@ -264,6 +264,7 @@ dependencies = [
  "exact-plan",
  "exact-runner",
  "libc",
+ "serde",
  "serde_json",
  "sha2",
 ]
