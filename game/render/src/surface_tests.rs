@@ -952,7 +952,7 @@ fn performance_recording_arms_only_through_diagnostic_state() {
     let state = s.agent(r#"{"op":"state","perf":true}"#).unwrap();
     assert!(state.contains("\"p50\":4"));
     let state = s.agent(r#"{"op":"state","perf_reset":true}"#).unwrap();
-    assert!(state.contains("\"p50\":0"));
+    assert!(state.contains("\"p50\":null"));
 }
 
 #[test]

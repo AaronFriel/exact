@@ -1230,10 +1230,10 @@ and browser hashes. [Game README](../README.md) covers clock, save and dev carry
 `frame.environment.exposure` and `.bloom`. Render failures are either
 `RenderError::Capacity { arena, slot, limit }` or `RenderError::Scene(reason)`.
 Mesh centers support transparent sorting; there is no unused sphere-radius API.
-World surfaces retain small work counters by default. A world-state request with
-`perf: true` or `perf_reset: true` arms the six 16,384-sample diagnostic rings;
-`perf.armed` distinguishes recorded percentiles from the unarmed zero values.
-Arming preserves accumulated counts, means, maxima and cadence; only `perf_reset`
+On an unarmed surface, a plain `state` request returns totals and `null`
+percentiles. Set `perf: true` or `perf_reset: true` to arm the six
+16,384-sample diagnostic rings. Percentiles stay `null` until the first sample
+in each ring. `perf` preserves accumulated totals and cadence. `perf_reset`
 clears them. The feel probe requests `perf: true`.
 
 ## Skinned model path
