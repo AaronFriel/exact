@@ -89,7 +89,7 @@ impl<D: DataSource> Runner<D> {
     pub(super) fn record_refusal(&mut self, list: &str, why: String) {
         self.log(format!("scrollIntoView {list} refused: {why}"));
         let mut entry = String::from("{\"list\":");
-        crate::agent::quote(list, &mut entry);
+        crate::json::quote(list, &mut entry);
         entry.push_str(",\"status\":");
         IntoViewStatus::Refused(why).json(&mut entry);
         entry.push('}');

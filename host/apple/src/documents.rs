@@ -11,7 +11,7 @@
 //! recorded ([`kept::restore`]).
 
 use exact_data::documents::{self, kept};
-use exact_runner::agent::{error, field_num, field_str, quote};
+use exact_runner::json::{error, field_num, field_str, quote};
 use serde_json::Value;
 use std::path::PathBuf;
 use std::sync::Arc;

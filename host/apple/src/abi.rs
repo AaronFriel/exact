@@ -1400,13 +1400,13 @@ impl<D: DataSource> Bridge<D> {
         // D4) before any view is looked up.
         let out = match self.host.as_mut() {
             Some(h)
-                if exact_runner::agent::field_str(&request, "op").as_deref() == Some("actions")
-                    && exact_runner::agent::field_bool(&request, "drain") =>
+                if exact_runner::json::field_str(&request, "op").as_deref() == Some("actions")
+                    && exact_runner::json::field_bool(&request, "drain") =>
             {
                 h.take_ended_actions()
             }
             Some(h) => h.answer_hold(&request).unwrap_or_else(|| h.agent(&request)),
-            None => exact_runner::agent::error("not booted"),
+            None => exact_runner::json::error("not booted"),
         };
         // An answered auth hold is delivered by the next pump (LLP 1069.006 D7).
         if out.contains("\"capability\":\"auth\"") {
@@ -1429,6 +1429,7 @@ fn escape(s: &str) -> String {
 /// A thread-local bridge cell, for the exports.
 pub type Cell<D> = RefCell<Bridge<D>>;
 
+mod answers;
 mod boot;
 mod canvas_performance;
 use boot::PreparedHost;

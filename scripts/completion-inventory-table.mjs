@@ -342,6 +342,9 @@ export const classifications = [
   ]),
   group("inspection", ["one-shot"], "synchronous session inspection or diagnostics; no delivered completion", "UI-owned",
     "The declaration reads or reports the current session. It does not establish a durable operation.", [
+    ["apple:host/apple/src/abi/answers.rs",
+      "exact_answer_ticket exact_app_roots exact_declared exact_documents exact_ended_actions exact_frame_request exact_logs exact_must_finish exact_node " +
+      "exact_outstanding exact_perf exact_picked_path exact_picker exact_share_file exact_show_picker exact_state exact_tags exact_tool exact_tree"],
     ["apple:host/apple/src/abi/exports.rs",
       "exact_activities exact_agent exact_baked_compat exact_color_references exact_colors exact_command exact_confirmation_is_alert exact_design_digest " +
       "exact_design_rows exact_entry_timeline exact_evaluates_from_draw exact_field_decorations exact_gesture_constant exact_grouped_list exact_header_shape " +
@@ -1282,14 +1285,15 @@ export const classifications = [
   ]),
   group("holds", ["one-shot"], "held request/node until answer, cancellation or node retirement", "UI-owned",
     "The named public runner-crate source is the holds API or its value/admission helper. runner/src/runner/device.rs:1-12 retires holds with the requesting node or ticket and refuses duplicate answers; the agent hold is not an executor request. runner/auth.rs arm_with_fixture admits or holds the current auth request by ticket, as arm does.", [
-    ["runner:runner/src/agent.rs", "answer"],
+    ["runner:runner/src/agent.rs", "answer answer_ticket picked_path show_picker"],
     ["runner:runner/src/auth.rs",
       "accept arm arm_with_fixture callbacks carrier_callback check_grants complete forgotten hold_opened loopback_callback one_code_or_error receive_callback session_grant_refusal " +
       "Session::from_json Session::summary Session::to_json Sessions::has_settled_for Sessions::live settle take_any_settled take_settled"],
   ]),
   group("inspection", ["one-shot"], "synchronous session inspection or diagnostics; no delivered completion", "UI-owned",
     "The named public runner-crate source is the inspection API or its value/admission helper. The declaration reads or reports the current session. It does not establish a durable operation.", [
-    ["runner:runner/src/agent.rs", "base64 error field_bool field_num field_str frames handle holds logs node num quote shown_value state tags tree typed_json unbase64 untyped_json"],
+    ["runner:runner/src/agent.rs", "base64 frames handle holds logs logs_request node node_request picker shown_value state state_with tags tree tree_request unbase64"],
+    ["runner:runner/src/json.rs", "error field_bool field_num field_str num quote typed_json untyped_json"],
     ["runner:runner/src/agent/row.rs", "row_json"],
     ["runner:runner/src/agent/tree.rs", "tagged"],
     ["runner:runner/src/runner/carry.rs", "Runner::generation Runner::set_replacement_pending"],

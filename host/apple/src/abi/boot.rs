@@ -47,7 +47,7 @@ impl<D: DataSource> Bridge<D> {
         let result = match answer {
             Ok(Answer::Now(value)) if value.conforms(&plan, signature.ty) => {
                 let mut json = String::new();
-                exact_runner::agent::typed_json(&plan, signature.ty, &value, &mut json);
+                exact_runner::json::typed_json(&plan, signature.ty, &value, &mut json);
                 serde_json::json!({"entryRefresh":"timeline", "timeline":serde_json::from_str::<serde_json::Value>(&json).unwrap()})
             }
             Ok(Answer::Now(_)) => {

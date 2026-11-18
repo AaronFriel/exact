@@ -329,7 +329,7 @@ impl Faults {
                 out.push(',');
             }
             out.push_str("{\"prefix\":");
-            crate::agent::quote(&f.prefix, &mut out);
+            crate::json::quote(&f.prefix, &mut out);
             out.push_str(&format!(
                 ",\"times\":{},\"left\":{},\"hits\":{},\"armed\":{}",
                 n(f.times),

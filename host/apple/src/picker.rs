@@ -272,7 +272,7 @@ pub fn with_files(reply: String) -> String {
     let file = temporary.join(rest);
     let mut s = reply.trim_end_matches('}').to_owned();
     s.push_str(",\"file\":");
-    exact_runner::agent::quote(&file.to_string_lossy(), &mut s);
+    exact_runner::json::quote(&file.to_string_lossy(), &mut s);
     s.push(',');
     s.push_str(&roots_reply()[1..]);
     s
@@ -286,7 +286,7 @@ pub fn roots_reply() -> String {
         s.push_str(if i == 0 { "\"" } else { ",\"" });
         s.push_str(name);
         s.push_str("\":");
-        exact_runner::agent::quote(&root.to_string_lossy(), &mut s);
+        exact_runner::json::quote(&root.to_string_lossy(), &mut s);
     }
     s.push_str("}}");
     s
@@ -370,7 +370,7 @@ fn open_pinned(roots: &[PathBuf; 3]) -> Result<AppDirectories, String> {
 /// anything else. `request` is `{"op":"shareFile","path":…,"to":…}`;
 /// `roots` the asking session's app's, `None` where it has no storage.
 pub fn share_copy(request: &str, grants: &str, roots: Option<&[PathBuf; 3]>) -> String {
-    let field = |k| exact_runner::agent::field_str(request, k).unwrap_or_default();
+    let field = |k| exact_runner::json::field_str(request, k).unwrap_or_default();
     let (path, to) = (field("path"), field("to"));
     let pinned = roots.and_then(|r| {
         PINNED
@@ -393,11 +393,11 @@ pub fn share_copy(request: &str, grants: &str, roots: Option<&[PathBuf; 3]>) -> 
     match copied {
         Ok(()) => {
             let mut s = String::from("{\"file\":");
-            exact_runner::agent::quote(&to, &mut s);
+            exact_runner::json::quote(&to, &mut s);
             s.push('}');
             s
         }
-        Err(e) => exact_runner::agent::error(&format!("{path}: {e}")),
+        Err(e) => exact_runner::json::error(&format!("{path}: {e}")),
     }
 }
 

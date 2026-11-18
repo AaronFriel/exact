@@ -320,7 +320,7 @@ pub fn value_json(value: &Value, out: &mut String) {
         }
         Value::Number(_) | Value::Unit | Value::Option(None) => out.push_str("null"),
         Value::Bool(b) => out.push_str(if *b { "true" } else { "false" }),
-        v @ exact_plan::str_value!() => crate::agent::quote(v.text(), out),
+        v @ exact_plan::str_value!() => crate::json::quote(v.text(), out),
         Value::Option(Some(v)) => value_json(v, out),
         Value::List(items) | Value::Record(items) => {
             out.push('[');
@@ -363,7 +363,7 @@ impl SurfaceUpdate {
                 out.push(',');
             }
             if named {
-                crate::agent::quote(&self.names[i], &mut out);
+                crate::json::quote(&self.names[i], &mut out);
                 out.push(':');
             }
             value_json(value, &mut out);

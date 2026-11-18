@@ -1308,6 +1308,8 @@ macro_rules! host {
             $crate::abi::with_runtime(&EXACT_RUNTIMES, rt, false, |b, _| b.tick_at(now_ms, frame_ms), |n| n)
         }
 
+        // The agent operations a production build uses, each its own export.
+        $crate::answers_exports!();
         /// An agent request from the input buffer; returns the reply's length.
         #[no_mangle]
         pub extern "C" fn exact_agent(rt: u32, len: usize) -> u32 {

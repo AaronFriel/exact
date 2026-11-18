@@ -772,7 +772,7 @@ impl<D: DataSource> Runner<D> {
                     if i > 0 {
                         s.push_str(", ");
                     }
-                    crate::agent::untyped_json(a, &mut s);
+                    crate::json::untyped_json(a, &mut s);
                 }
                 s.push(')');
                 s

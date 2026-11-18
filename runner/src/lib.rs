@@ -67,6 +67,7 @@ pub mod hardened;
 pub mod head;
 pub mod held;
 pub mod instance;
+pub mod json;
 pub mod launch_env;
 pub mod listen;
 pub mod lists;

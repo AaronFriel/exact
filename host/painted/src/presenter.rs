@@ -21,7 +21,7 @@ use crate::raster::Raster;
 use crate::text::{Measurer, Shared, TextEngine};
 use exact_kernel::{NodeType, Overflow, PropId, ViewId};
 use exact_plan::{EventKind, Plan};
-use exact_runner::agent::{num, quote};
+use exact_runner::json::{num, quote};
 use exact_runner::{DataSource, Event};
 use std::collections::BTreeMap;
 use std::fmt::Write as _;

@@ -17,7 +17,7 @@
 //! <path>` or `tap @t cancel`, LLP 1069.007 D3), or tells the host to
 //! present it.
 
-use crate::agent::{field_bool, field_str, quote};
+use crate::json::{field_bool, field_str, quote};
 use crate::{DataSource, Runner};
 use exact_kernel::ViewId;
 use exact_plan::Value;

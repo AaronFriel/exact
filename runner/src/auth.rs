@@ -19,7 +19,7 @@
 //! included). A callback URL carries a code, so no journal line, hold
 //! summary or refusal here ever includes one.
 
-use crate::agent::{field_bool, field_str, quote};
+use crate::json::{field_bool, field_str, quote};
 use crate::{DataSource, Outcome, RequestOut, Response, Runner};
 
 /// The reserved URL of an auth session request.

@@ -717,7 +717,7 @@ impl<D: DataSource> Host<D> {
     /// The agent API's read operations (LLP 1012): `tree`, `state`, `logs`
     /// from the runner; `settle` from the engine, and a resource's re-ask.
     pub fn agent(&self, request: &str) -> String {
-        if exact_runner::agent::field_str(request, "op").as_deref() == Some("settle") {
+        if exact_runner::json::field_str(request, "op").as_deref() == Some("settle") {
             return match self
                 .engine
                 .settle_time()
@@ -732,7 +732,7 @@ impl<D: DataSource> Host<D> {
                 .chain(self.runner.data_timer_due_ms())
                 .reduce(f64::max)
             {
-                Some(t) => format!("{{\"settle\":{}}}", exact_runner::agent::num(t)),
+                Some(t) => format!("{{\"settle\":{}}}", exact_runner::json::num(t)),
                 None => "{\"settle\":null}".to_string(),
             };
         }

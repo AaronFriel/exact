@@ -797,7 +797,7 @@ impl<D: DataSource> Host<D> {
     /// Swift host resolves an image's `app:/` source against (LLP 1069.002
     /// D7); `shareFile` a share's confined copy (LLP 1125 D12). `None` else.
     pub fn answer_hold(&mut self, request: &str) -> Option<String> {
-        let op = exact_runner::agent::field_str(request, "op");
+        let op = exact_runner::json::field_str(request, "op");
         if op.as_deref() == Some("shareFile") {
             return Some(crate::picker::share_file(request, self.runner.data_ref()));
         }
