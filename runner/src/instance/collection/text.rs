@@ -1,7 +1,7 @@
 //! Read-only text projection for virtual rows. Uses the same realization and
 //! binding evaluation as rendering, but commits no kernel or host operations.
 use super::*;
-use crate::{ListTextPolicy, ListTextPosition};
+use crate::list_api::{ListTextPolicy, ListTextPosition};
 use exact_kernel::{PropId, StyleId};
 
 /// A virtualized list's rows as logical text sees them: every row, mounted

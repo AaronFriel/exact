@@ -69,6 +69,7 @@ pub mod held;
 pub mod instance;
 pub mod json;
 pub mod launch_env;
+pub mod list_api;
 pub mod listen;
 pub mod lists;
 pub mod local_network;
@@ -117,14 +118,14 @@ pub use exact_canvas;
 pub use exact_plan::{Items, Str, Value};
 pub use format::formatting;
 pub use head::Head;
-pub use instance::collection::{set_bootstrap_extent, set_lead_scale};
-pub use instance::collection::{
-    AnchorCorrection, CollectionFeedback, CollectionFill, CollectionFixed, CollectionRow,
+pub use instance::{DocNode, DocTree, DocTreeError, ListLinks, SurfaceUpdate, LISTS};
+pub use list_api::{set_bootstrap_extent, set_lead_scale};
+pub use list_api::{
+    Align, AnchorCorrection, CollectionFeedback, CollectionFill, CollectionFixed, CollectionRow,
     CollectionSnapshot, FeedbackError, ListAxis, ReorderBinding, ReorderEnding, ReorderFrame,
     ReorderGeometry, ReorderPhase, ReorderProgress, ReorderStart, ReorderStep, ReorderToken,
     ReorderWrapper, RowMeasurement,
 };
-pub use instance::{DocNode, DocTree, DocTreeError, ListLinks, SurfaceUpdate, LISTS};
 pub use page::Page;
 pub use process::{ProcessOp, WorkClock, PROCESS_URL};
 pub use request::{

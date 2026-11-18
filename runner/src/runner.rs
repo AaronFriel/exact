@@ -125,12 +125,13 @@ mod perf;
 pub mod persist;
 mod query;
 mod queue;
+mod render;
 mod resource_inspection;
 mod world_origin;
 pub use queue::QUEUE_BOUND;
 mod history;
 pub mod router;
-pub use lists::{ListTextPolicy, ListTextPosition};
+pub use crate::list_api::{ListTextPolicy, ListTextPosition};
 mod settlement;
 pub(crate) use settlement::zero;
 mod sockets;
@@ -407,7 +408,7 @@ pub struct Runner<D: DataSource> {
     batch: u64,
     commands: Vec<Command>,
     /// `scrollIntoView` commands an action stated, run after its update.
-    into_view: Vec<crate::instance::collection::IntoView>,
+    into_view: Vec<crate::list_api::IntoView>,
     /// Where the host last showed each scroller (`frame`, LLP 1051.000 D1).
     scrolled: crate::geometry::Scrolled,
     /// Each `resize` handler's node and the content box last delivered.
@@ -419,7 +420,7 @@ pub struct Runner<D: DataSource> {
     /// Views the next applied batch renews (LLP 1078): rebound list rows.
     renewed: Vec<ViewId>,
     /// Rows the next batch mounts out of their port, and those that showed (LLP 1055 D13).
-    shown: crate::instance::collection::shown::RowsShown,
+    shown: crate::list_api::RowsShown,
     /// Retiring list rows are rebound to new items ([`Runner::set_row_reuse`]).
     reuse: bool,
     /// The 2D canvases (LLP 1056 D4), when Canvas 2D is linked.
