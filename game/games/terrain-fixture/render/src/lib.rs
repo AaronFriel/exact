@@ -9,8 +9,6 @@ pub mod shaders {
     include!(concat!(env!("OUT_DIR"), "/shaders.rs"));
 }
 
-const SECTIONS_PER_PREPARE: usize = 64;
-
 pub struct Passes {
     remaining: std::vec::IntoIter<[i32; 3]>,
     pending_reason: String,
@@ -31,7 +29,9 @@ impl Default for Passes {
     fn default() -> Self {
         Self {
             remaining: sections().collect::<Vec<_>>().into_iter(),
-            pending_reason: format!("{SECTION_COUNT} sections pending"),
+            pending_reason: format!(
+                "{SECTION_COUNT} sections pending, terrain pipeline validating"
+            ),
             meshes: Vec::new(),
             pipeline: Pipelines::default(),
             frame: None,
@@ -41,6 +41,8 @@ impl Default for Passes {
 }
 
 impl Hooks for Passes {
+    const ALLOWANCE: u32 = 64;
+
     fn prepare(
         &mut self,
         gpu: &HookGpu<'_>,
@@ -53,43 +55,49 @@ impl Hooks for Passes {
             });
         self.frame = Some(gpu.frame_binding.clone());
 
-        for origin in self.remaining.by_ref().take(SECTIONS_PER_PREPARE) {
+        for origin in self.remaining.by_ref().take(view.time.allowance as usize) {
             let mesh = mesh::section(origin, height);
-            if mesh.indices.is_empty() {
-                continue;
-            }
-
-            let mut bytes = mesh.vertices;
-            let index_offset = bytes.len() as u64;
-            let indices = mesh.indices.len() as u32;
-            bytes.extend(mesh.indices.into_iter().flat_map(u32::to_le_bytes));
-            let buffer = gpu
-                .device
-                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("terrain section"),
-                    contents: &bytes,
-                    usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::INDEX,
+            if !mesh.indices.is_empty() {
+                let mut bytes = mesh.vertices;
+                let index_offset = bytes.len() as u64;
+                let indices = mesh.indices.len() as u32;
+                bytes.extend(mesh.indices.into_iter().flat_map(u32::to_le_bytes));
+                let buffer = gpu
+                    .device
+                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("terrain section"),
+                        contents: &bytes,
+                        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::INDEX,
+                    });
+                self.work.upload_bytes += bytes.len() as u64;
+                self.meshes.push(Section {
+                    origin,
+                    buffer,
+                    index_offset,
+                    indices,
                 });
-            self.work.upload_bytes += bytes.len() as u64;
-            self.meshes.push(Section {
-                origin,
-                buffer,
-                index_offset,
-                indices,
-            });
+            }
+            if view.time.deadline.is_some_and(|deadline| deadline.passed()) {
+                break;
+            }
         }
-        let remaining = self.remaining.len();
-        if remaining > 0 {
-            self.pending_reason = format!("{remaining} sections pending");
-        } else if self.pipeline.pending() {
-            self.pending_reason = "0 sections pending, terrain pipeline validating".into();
+        if self.needs().contains(Needs::PENDING) {
+            let remaining = self.remaining.len();
+            let pipeline = if self.pipeline.pending() {
+                ", terrain pipeline validating"
+            } else {
+                ""
+            };
+            self.pending_reason = format!("{remaining} sections pending{pipeline}");
         }
         Ok(())
     }
 
     fn needs(&self) -> Needs {
-        if self.remaining.len() > 0 || self.pipeline.pending() {
+        if self.frame.is_none() || self.pipeline.pending() {
             Needs::PENDING
+        } else if self.remaining.len() > 0 {
+            Needs::PENDING | Needs::STARVED
         } else {
             Needs::NONE
         }
@@ -201,4 +209,14 @@ fn pipeline(gpu: &HookGpu<'_>, view: &FrameView<'_>) -> wgpu::RenderPipeline {
         multiview_mask: None,
         cache: None,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_fresh_hook_needs_a_redraw_to_start_validation() {
+        assert_eq!(Passes::default().needs(), Needs::PENDING);
+    }
 }

@@ -1,20 +1,25 @@
 # Terrain fixture
 
-This fixture exercises hook readiness and frame counters end to end with a
-seeded heightfield and a fixed camera (LLP 1182.000 D4a). The render hook meshes
-up to 64 of the window's 2,312 section addresses per prepare call and submits one
-indexed draw per visible section with exposed terrain. The logic test counts
-those sections independently by testing each section's eight corners.
+This fixture uses a seeded heightfield and a fixed camera (LLP 1182.000 D4a).
+The hook meshes up to 64 of the window's 2,312 section addresses per advancing
+frame and submits one indexed draw per visible section with exposed terrain.
+The logic test counts those sections independently by testing each section's
+eight corners.
 
-On a Mac with Metal and Chrome with WebGPU, record the first tick and save
-baseline from the repository root with `bun game/prove.mjs terrain-fixture --hosts linux,web`.
-Check the recorded baseline with `bun game/games/terrain-fixture/proof.mjs web`
-and `bun game/games/terrain-fixture/proof.mjs linux`.
+Check the recorded tick and save baseline at 1280 × 720 from the repository root.
 
-Both proofs use the shared game harness and a 1280 × 720 viewport. The Linux
-leg enables the GPU-backed agent and reads the bake's shader pack. Each leg
-allows up to 45 clock advances for the terrain to present, then resets perf
-and advances once. The hook must report at least one sample, with `itemsDrawn`
-maximum and mean both equal to the 823 sections pinned in the logic crate.
+```sh
+bun game/games/terrain-fixture/proof.mjs web
+bun game/games/terrain-fixture/proof.mjs linux
+```
 
-The fixture decides nothing in LLP 1182.000 §6.
+Each leg runs the drive twice. Settling at the play timestamp validates the
+pipeline with all 2,312 sections still pending. The proof takes 20 extra looks
+partway through meshing and requires presentation after exactly 37 advances.
+It compares pixels at the same partial and complete frames across both runs.
+After a perf reset and one advance, every sample must report the pinned 823
+sections.
+
+The Linux leg enables the GPU-backed agent and reads the bake's shader pack.
+On a Mac with Metal and Chrome with WebGPU, record the tick and save baseline
+again with `bun game/prove.mjs terrain-fixture --hosts linux,web --repin`.
