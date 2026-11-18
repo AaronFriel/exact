@@ -221,9 +221,10 @@ impl IoLinks {
     };
 }
 
-/// A turn's family work after its commits (LLP 1047.001 D10), which
-/// `Host::finish` runs in this order: the documents a source's answers
-/// watch (I/O), then, after the resize rounds, the SVG scenes the batch owes.
+/// A turn's family work (LLP 1047.001 D10): after its commits, which
+/// `Host::finish` runs in this order, the documents a source's answers
+/// watch (I/O), then, after the resize rounds, the SVG scenes the batch
+/// owes; and through the turn, what Core Animation plays of the motion.
 /// Each is `None` when the composition does not link its family, so the
 /// archive names none of its code.
 pub struct TurnLinks<D: DataSource> {
@@ -231,6 +232,41 @@ pub struct TurnLinks<D: DataSource> {
     pub documents: Option<fn(&mut crate::Host<D>)>,
     /// Send the SVG scenes laid out, moved or restyled this turn.
     pub svg: Option<fn(&mut crate::Host<D>, &mut crate::batch::Batch)>,
+    /// Hand Core Animation the motion it can play (`svg_lower`): boxes',
+    /// SVG paths' and live filters'. Linked when anything can move, as the
+    /// engine is; where nothing moves there is nothing to hand over.
+    pub motion: Option<MotionLowering<D>>,
+}
+
+/// [`TurnLinks::motion`]'s parts, each where the turn reaches it.
+pub struct MotionLowering<D: DataSource> {
+    /// At boot, over the engine's first sync of the tree: which motion Core
+    /// Animation plays and which the engine samples.
+    pub boot: fn(&mut crate::Host<D>, &exact_kernel::motion::MotionSync),
+    /// The same for each commit's sync.
+    pub commit: fn(&mut crate::Host<D>, &exact_kernel::motion::MotionSync),
+    /// Before sampling: hand over the transitions Core Animation plays.
+    pub present: fn(&mut crate::Host<D>),
+    /// After a turn's layout: the boxes' lowered animations it owes.
+    pub turn: fn(&mut crate::Host<D>, &mut crate::batch::Batch),
+}
+
+impl<D: DataSource> Clone for MotionLowering<D> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<D: DataSource> Copy for MotionLowering<D> {}
+
+/// Whether anything in a plan that `uses` can move: a spring or a hold, a
+/// drag, keyframes, a timeline, or a transition CSS would play.
+const fn moves(uses: Uses) -> bool {
+    uses.has(Capability::Motion)
+        || uses.has(Capability::Drag)
+        || uses.has(Capability::Animations)
+        || uses.has(Capability::Timelines)
+        || uses.has(Capability::Transitions)
 }
 
 impl<D: DataSource> Clone for TurnLinks<D> {
@@ -252,6 +288,16 @@ impl<D: DataSource> TurnLinks<D> {
             },
             svg: if uses.has(Capability::Svg) {
                 Some(crate::Host::<D>::emit_svg_scenes)
+            } else {
+                None
+            },
+            motion: if moves(uses) {
+                Some(MotionLowering {
+                    boot: crate::Host::<D>::lower_motion,
+                    commit: crate::Host::<D>::lower_committed_motion,
+                    present: crate::Host::<D>::hand_over_transitions,
+                    turn: crate::Host::<D>::emit_box_motion,
+                })
             } else {
                 None
             },
@@ -397,14 +443,7 @@ impl<D: DataSource> Links<D> {
             } else {
                 None
             },
-            // Anything that moves: a spring or a hold, a drag, keyframes, a
-            // timeline, or a transition CSS would play.
-            engine: if uses.has(Capability::Motion)
-                || uses.has(Capability::Drag)
-                || uses.has(Capability::Animations)
-                || uses.has(Capability::Timelines)
-                || uses.has(Capability::Transitions)
-            {
+            engine: if moves(uses) {
                 &exact_motion::EngineLinks::ALL
             } else {
                 &exact_motion::EngineLinks::SETTLE
