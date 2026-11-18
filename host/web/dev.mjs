@@ -1093,8 +1093,14 @@ function refreshNativePending() {
 }
 refreshNativePending();
 let previousWeb=cohortReceipt(JSON.parse(readFileSync(graphPath,'utf8')));
+// A native build whose inputs changed since it was built refuses every generation, Contract-only ones too, until it is
+// rebuilt (LLP 1023 D3). The device says so; here each generation's lines say it as well (LLP 1156.006.000 D21).
+const nativeRefusals = () => builtReceipts.filter(r => r.compat.inputs.platform !== 'web').flatMap(r => {
+  const changes = nativePending.get(r.compat.target + '/' + r.compat.inputs.platform) ?? [];
+  return changes.length ? [`${r.compat.inputs.platform} ${r.compat.target}: the installed build will not take this generation until it is rebuilt and relaunched (${changes.slice(0, 3).join(', ')} changed since it was built)`] : [];
+});
 function classifyGeneration(planBytes, assets) {
-  if (currentModule || currentRust) return ['plan/module/assets: development candidate; each client verifies its admitted module identity and grants (not signed deployment classification)'];
+  if (currentModule || currentRust) return ['plan/module/assets: development candidate; each client verifies its admitted module identity and grants (not signed deployment classification)', ...nativeRefusals()];
   const web=JSON.parse(readFileSync(graphPath,'utf8'));
   const candidate=developmentCandidate(web,{sha256:createHash('sha256').update(planBytes).digest('hex'),bytes:planBytes.length},assets,shaderDigests);
   const lines=[];
