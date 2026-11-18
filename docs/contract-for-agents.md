@@ -2628,7 +2628,7 @@ lists any literal colour, font size or weight an app's `.contract` files still w
 | a route whose first child is a `header` holding one heading (`text role="heading"`; an `aria-level` alone is not one), a text after it and its buttons | the navigation bar; a level-1 heading (`aria-level=1`) is a large title, in a sheet too, and any other level an inline one; the text after it the subtitle |
 | a route whose first child is a `header` holding buttons and no heading (readouts, a search field, a tablist and plain boxes around them too, nothing else) | the navigation bar with no title, its buttons trailing and the root's `navigationBack` control leading; a text or an image in it keeps the whole header in the page (`lower-header-no-bar`) |
 | a pushed route with no such `header` | a bar holding the system Back button alone (LLP 1115.000 D5.2) |
-| a route with `navigationBar="none"` | no navigation bar: a full-bleed screen that draws its own way back; the edge swipe still goes back |
+| a route with `navigationBar="none"` | no navigation bar: a full-bleed screen that draws its own way back; the edge swipe still goes back unless the route's control named by `navigationBack` is disabled; [disable that control during a run](recipes/navigation-stack.md) to refuse Back |
 | a route with `navigationPresentation="modal"` | a sheet |
 | a route pushed while a sheet is on top, with no `navigationPresentation` of its own | pushed inside the sheet, with the system Back; the sheet's swipe down, or a tap behind a `closedby="any"` one, closes the sheet with every route pushed inside it |
 
