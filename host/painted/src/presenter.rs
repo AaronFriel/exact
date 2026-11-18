@@ -132,6 +132,11 @@ mod wheel;
 use scroll_end::Completion;
 #[cfg(all(test, not(windows)))]
 mod scroll_end_tests;
+/// The host work `scroll_end_tests` hands out (LLP 1047.001 D12).
+#[cfg(all(test, not(windows)))]
+struct TestWork;
+#[cfg(all(test, not(windows)))]
+impl exact_runner::HostWork for TestWork {}
 mod shortcuts;
 mod status_bar;
 #[cfg(target_os = "android")]

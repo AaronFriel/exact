@@ -1375,7 +1375,7 @@ test('rust.data generates host crates over the data crate, composed with app.ts 
     const read = file => readFileSync(resolve(workspace, file), 'utf8');
     assert.match(read('Cargo.toml'), /^members = \["web", "apple", "linux", "android", "module", "\.\.\/\.\.\/data"\]$/m);
     for (const kind of ['web', 'apple', 'linux', 'android']) {
-      assert.equal(read(`${kind}/build.rs`), `fn main() {\n    exact_bake::host::app("${kind}", "../../..", pins_data::Pins::new(3));\n}\n`);
+      assert.equal(read(`${kind}/build.rs`), `fn main() {\n    let source = pins_data::Pins::new(3);\n    let host_work = exact_bake::hands_out_work!(source);\n    exact_bake::host::app("${kind}", "../../..", source, host_work);\n}\n`);
       assert.match(read(`${kind}/Cargo.toml`), /^pins-data = \{ path = "\.\.\/\.\.\/\.\.\/data" \}$/m);
       assert.doesNotMatch(read(`${kind}/Cargo.toml`), /exact-js/);
     }
@@ -1395,7 +1395,7 @@ test('rust.data generates host crates over the data crate, composed with app.ts 
     // With app.ts beside it, the crates compose the two: Rust answers its RUST_SOURCES, app.ts the rest.
     writeFileSync(resolve(dir, 'app.ts'), 'export const grants = "";\n');
     assert.equal(ensureShells(dir).wrote, true);
-    assert.match(read('web/build.rs'), /exact_js_bake::build_beside\([^]*&pins_data::Pins::new\(3\),\n\s*pins_data::RUST_SOURCES,/);
+    assert.match(read('web/build.rs'), /exact_js_bake::build_beside\([^]*&pins_data::Pins::new\(3\),\n\s*exact_js_bake::hands_out_work!\(pins_data::Pins::new\(3\)\),\n\s*pins_data::RUST_SOURCES,/);
     assert.match(read('apple/src/lib.rs'), /exact_data::Mixed::new\([^]*TYPESCRIPT_SOURCES,\n\s*pins_data::RUST_SOURCES,/);
     // A data crate that names no app takes the module's identity, which `Mixed` requires both sides to share.
     for (const file of ['web/build.rs', 'apple/src/lib.rs']) assert.match(read(file), /Placed::new\(pins_data::Pins::new\(3\), [^)]+\)\.named\(&app\)/);

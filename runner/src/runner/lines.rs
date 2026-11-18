@@ -353,7 +353,11 @@ mod tests {
                 format!("storage {n} (s)")
             );
             assert_eq!(
-                enqueued(n, "m", &Request::continuation(n / 3)),
+                enqueued(
+                    n,
+                    "m",
+                    &Request::continuation::<crate::host_work::TestWork>(n / 3)
+                ),
                 format!("continuation {n} (m): executor token {}", n / 3)
             );
         }

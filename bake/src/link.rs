@@ -39,8 +39,9 @@ pub(crate) fn name_into(
         let plan = exact_plan::Plan::decode(&bytes)
             .map_err(|e| format!("the baked plan is invalid: {e:?}"))?;
         let entries = entries.values().map(|entry| &entry.plan);
-        let uses = production_uses(app, &plan, entries, &compat.inputs);
-        ahead(manifest)?.into_iter().fold(uses, Uses::with)
+        let uses = production_uses(app, &plan, entries, &compat.inputs, compat.host_work);
+        let uses = ahead(manifest)?.into_iter().fold(uses, Uses::with);
+        executor(uses, &compat.inputs, compat.host_work)
     } else {
         Capability::ALL.into_iter().fold(Uses::NONE, Uses::with)
     };
@@ -59,8 +60,8 @@ pub(crate) fn name_into(
 
 /// What a production artifact links for `plan`, with what its grants allow
 /// (`inputs`' ceiling); on Apple, with what the widget `entries` its boot
-/// admits use too, the I/O executor for a source placed on a worker, and
-/// what only the bake can read in `app`, the app's directory: whether a
+/// admits use too, the I/O executor for sources that hand it work
+/// ([`executor`]), and what only the bake can read in `app`, the app's directory: whether a
 /// bundled image is an SVG, and whether the app ships a module artifact,
 /// which connects the app-level hatches (LLP 1075.003.000).
 pub(crate) fn production_uses<'a>(
@@ -68,6 +69,7 @@ pub(crate) fn production_uses<'a>(
     plan: &'a exact_plan::Plan,
     entries: impl Iterator<Item = &'a exact_plan::Plan>,
     inputs: &serde_json::Value,
+    host_work: bool,
 ) -> Uses {
     let grants = Uses::NONE.with_grants(inputs["grantCeiling"].as_str().unwrap_or(""));
     if !apple(inputs) {
@@ -77,14 +79,6 @@ pub(crate) fn production_uses<'a>(
     let mut uses = plans.iter().fold(grants, |uses, plan| {
         plan_uses(plan, inputs).iter().fold(uses, Uses::with)
     });
-    // A source placed on a worker answers through continuations, which the
-    // executor runs (LLP 1027.002 D1).
-    if ["rustPlacement", "typescriptPlacement"]
-        .iter()
-        .any(|key| inputs[key] == "worker")
-    {
-        uses = uses.with(Capability::Io);
-    }
     if plans.iter().any(|plan| bundles_svg(app, plan)) {
         uses = uses.with(Capability::Svg);
     }
@@ -93,7 +87,23 @@ pub(crate) fn production_uses<'a>(
     {
         uses = uses.with(Capability::NativeViews);
     }
-    uses
+    executor(uses, inputs, host_work)
+}
+
+/// `uses` with the Apple I/O executor when something hands it work: a source
+/// that declares it (`host_work`, LLP 1047.001 D12), one placed on a worker,
+/// which answers through continuations (LLP 1027.002 D1), or a native module's
+/// calls. Applied once every other capability is in, entries' and
+/// link-ahead's included.
+fn executor(uses: Uses, inputs: &serde_json::Value, host_work: bool) -> Uses {
+    let placed = ["rustPlacement", "typescriptPlacement"]
+        .iter()
+        .any(|key| inputs[key] == "worker");
+    if apple(inputs) && (host_work || placed || uses.has(Capability::Modules)) {
+        uses.with(Capability::Io)
+    } else {
+        uses
+    }
 }
 
 /// Whether a bundled image source of `plan` (an asset or a `data:` URL) is
@@ -354,13 +364,15 @@ mod tests {
                 &app,
                 [&entry].into_iter(),
                 &inputs,
+                false,
             );
             assert_eq!(uses.has(Capability::Grid), grid, "{platform}");
             assert!(!super::production_uses(
                 std::path::Path::new(""),
                 &app,
                 std::iter::empty(),
-                &inputs
+                &inputs,
+                false,
             )
             .has(Capability::Grid));
         }
@@ -374,70 +386,27 @@ mod tests {
         let hello_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../apps/hello");
         for platform in ["ios", "macos"] {
             let inputs = serde_json::json!({ "platform": platform, "grantCeiling": "" });
-            let uses = super::production_uses(&hello_dir, &hello, std::iter::empty(), &inputs);
+            let uses =
+                super::production_uses(&hello_dir, &hello, std::iter::empty(), &inputs, false);
             assert_eq!(uses, exact_runner::Uses::NONE, "{platform}: {uses}");
         }
     }
 
-    /// A Rust data source that hands out host work (`Request::continuation`)
-    /// has the executor run it, which an Apple production binary links only
-    /// with `io`. Neither its plan nor its grants need show that, so such an
-    /// app names `io` in its manifest's `link`; without it the work never
-    /// runs and the resource waits for ever. The sources are read as text:
-    /// what a source hands out is in no declaration.
+    /// A source that declares host work (LLP 1047.001 D12) and one placed on
+    /// a worker both answer through the executor, so an Apple composition
+    /// links I/O for them.
     #[test]
-    fn an_app_whose_source_hands_out_host_work_links_io() {
-        use std::path::Path;
-        fn sources(dir: &Path, text: &mut String) {
-            for entry in std::fs::read_dir(dir).unwrap().flatten() {
-                let path = entry.path();
-                let name = path.to_string_lossy();
-                if path.is_dir() {
-                    sources(&path, text);
-                } else if name.ends_with(".rs") && !name.ends_with("_tests.rs") {
-                    text.push_str(&std::fs::read_to_string(&path).unwrap());
-                }
-            }
-        }
-        let apps = Path::new(env!("CARGO_MANIFEST_DIR")).join("../apps");
-        let dirs: Vec<_> = std::fs::read_dir(&apps)
-            .unwrap()
-            .flatten()
-            .map(|e| e.path())
-            .collect();
-        let crate_dir = |name: &str| {
-            dirs.iter().map(|app| app.join("data")).find(|data| {
-                std::fs::read_to_string(data.join("Cargo.toml"))
-                    .is_ok_and(|toml| toml.contains(&format!("name = \"{name}\"")))
-            })
-        };
-        let mut unlinked = Vec::new();
-        for app in dirs.iter().filter(|app| app.join("apple").is_dir()) {
-            let Ok(manifest) = contract::Manifest::read(app) else {
-                continue;
-            };
-            let Some(data) = manifest.json["rust"]["data"]["crate"]
-                .as_str()
-                .and_then(crate_dir)
-            else {
-                continue;
-            };
-            let mut text = String::new();
-            sources(&data.join("src"), &mut text);
-            if text.contains("Request::continuation(")
-                && !ahead(&manifest).unwrap().contains(&Capability::Io)
-            {
-                unlinked.push(app.file_name().unwrap().to_string_lossy().into_owned());
-            }
-        }
-        assert_eq!(unlinked, Vec::<String>::new());
-    }
-
-    /// A source placed on a worker answers through the executor, so an Apple
-    /// composition links I/O for it.
-    #[test]
-    fn a_worker_placement_links_io_on_apple() {
+    fn declared_host_work_and_a_worker_placement_link_io_on_apple() {
         let app = contract::compile("component A\n  view\n    text \"a\"\n").unwrap();
+        let none = std::path::Path::new("");
+        for (platform, io) in [("ios", true), ("macos", true), ("linux", false)] {
+            let inputs = serde_json::json!({ "platform": platform });
+            for (declared, linked) in [(true, io), (false, false)] {
+                let uses =
+                    super::production_uses(none, &app, std::iter::empty(), &inputs, declared);
+                assert_eq!(uses.has(Capability::Io), linked, "{platform} {declared}");
+            }
+        }
         for language in ["rustPlacement", "typescriptPlacement"] {
             for (platform, placed, io) in [
                 ("ios", "worker", true),
@@ -446,12 +415,7 @@ mod tests {
                 ("linux", "worker", false),
             ] {
                 let inputs = serde_json::json!({ "platform": platform, language: placed });
-                let uses = super::production_uses(
-                    std::path::Path::new(""),
-                    &app,
-                    std::iter::empty(),
-                    &inputs,
-                );
+                let uses = super::production_uses(none, &app, std::iter::empty(), &inputs, false);
                 assert_eq!(
                     uses.has(Capability::Io),
                     io,
@@ -459,6 +423,26 @@ mod tests {
                 );
             }
         }
+        // Modules from wherever they come (an entry, link-ahead) bring the
+        // executor that runs their calls.
+        let modules = exact_runner::Uses::NONE.with(Capability::Modules);
+        let ios = serde_json::json!({ "platform": "ios" });
+        assert!(super::executor(modules, &ios, false).has(Capability::Io));
+    }
+
+    /// A TypeScript bundle reports host work for each route the prelude
+    /// parks an answer on, and none for an answer that settles in its turn.
+    #[test]
+    fn a_typescript_bundle_reports_the_timers_it_can_reach() {
+        use crate::compat::typescript_host_work as work;
+        assert!(work(b"setTimeout(resolve, 10)"));
+        assert!(work(
+            b"AbortSignal.timeout(10).addEventListener('abort', resolve)"
+        ));
+        assert!(work(b"yield scheduler.yield()"));
+        assert!(!work(
+            b"function answer(a) { return Promise.resolve(a + 1); }"
+        ));
     }
 
     /// On Apple the bake reads what the plan cannot say: a bundled image's
@@ -474,7 +458,7 @@ mod tests {
         let linked = |source: &str| {
             let plan = contract::compile(&format!("component A\n  view\n    image \"{source}\"\n"))
                 .unwrap();
-            super::production_uses(&dir, &plan, std::iter::empty(), &ios)
+            super::production_uses(&dir, &plan, std::iter::empty(), &ios, false)
         };
         for (source, svg) in [
             ("assets/a.png", false),

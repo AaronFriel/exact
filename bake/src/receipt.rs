@@ -117,7 +117,8 @@ pub(crate) fn emit(
     // What the binary links for its plan and, on Apple, its entries' plans,
     // as `link::name_into` decides it.
     let entry_plans = entries.values().map(|entry| &entry.plan);
-    let uses = crate::link::production_uses(app, &plan, entry_plans, &compat.inputs);
+    let uses =
+        crate::link::production_uses(app, &plan, entry_plans, &compat.inputs, compat.host_work);
     graph["uses"] = json!(uses.iter().map(|c| c.name()).collect::<Vec<_>>());
     if matches!(platform, "ios" | "macos") {
         let mut icons = apple_icons(&plan)?;

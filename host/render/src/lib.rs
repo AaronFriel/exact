@@ -1309,6 +1309,9 @@ mod fence_tests {
     use exact_plan::Value;
     use exact_runner::{Answer, DataError, Outcome, Request, Store};
     use std::sync::atomic::AtomicUsize;
+    /// The host work these tests hand out (LLP 1047.001 D12).
+    struct TestWork;
+    impl exact_runner::HostWork for TestWork {}
 
     static GOOD: AtomicUsize = AtomicUsize::new(0);
 
@@ -1326,8 +1329,8 @@ mod fence_tests {
             _: &[Value],
         ) -> Result<Answer, DataError> {
             Ok(Answer::Later(match source {
-                "bad" => Request::continuation(1).independent_http(4096),
-                _ => Request::continuation(2),
+                "bad" => Request::continuation::<TestWork>(1).independent_http(4096),
+                _ => Request::continuation::<TestWork>(2),
             }))
         }
         fn continuation(&mut self, _: u64) -> Option<Box<dyn FnOnce() -> Outcome + Send>> {
@@ -1360,7 +1363,7 @@ mod fence_tests {
             _: &[Value],
         ) -> Result<Answer, DataError> {
             let n: u64 = source[1..].parse().unwrap();
-            Ok(Answer::Later(Request::continuation(n + 1)))
+            Ok(Answer::Later(Request::continuation::<TestWork>(n + 1)))
         }
         fn continuation(&mut self, _: u64) -> Option<Box<dyn FnOnce() -> Outcome + Send>> {
             Some(Box::new(|| Outcome::Storage(vec![])))
@@ -1414,7 +1417,7 @@ mod fence_tests {
             _: &[Value],
         ) -> Result<Answer, DataError> {
             let n: u64 = source[1..].parse().unwrap_or(0);
-            Ok(Answer::Later(Request::continuation(n + 1)))
+            Ok(Answer::Later(Request::continuation::<TestWork>(n + 1)))
         }
         fn dispatch(&mut self, _: u64, _: &Store) -> Dispatch {
             Dispatch::Again
@@ -1427,7 +1430,7 @@ mod fence_tests {
             _: Outcome,
         ) -> Result<Answer, DataError> {
             if source == "forever" {
-                return Ok(Answer::Later(Request::continuation(9999)));
+                return Ok(Answer::Later(Request::continuation::<TestWork>(9999)));
             }
             AGAINS.fetch_add(1, Ordering::SeqCst);
             Ok(Answer::Now(Value::Number(1.)))

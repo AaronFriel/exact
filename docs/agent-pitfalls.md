@@ -1949,17 +1949,24 @@ price: answers arrive `Later`, outside the action's transaction (LLP 1027.002 D1
   `-exact-control-size` and `-exact-corner-style` are admitted only on an
   explicit native button, including through classes. (LLP 1069.011.001 D12–D14.)
 
-- **A Rust data source's continuation never runs in an Apple production build
-  (or a development one built `--link plan`) and its resource waits for ever.**
-  `clock data` says `requests still in flight` and `state` shows the resource
-  under `pending`; the logs say `continuation 1 (doc): executor token 1` and
-  nothing after. Cause: a `Request::continuation` runs on the host's executor,
-  which a production composition links only with `io` (LLP 1047.001, "The
-  host's I/O by use"), and neither the plan nor the grants need show that it
-  is needed. Fix: name it in `app.json`, `"link": ["io"]` (LLP 1047 D8), as
-  Markdown, Markdown Stress and the LLP reader do. `exact-bake`'s `an_app_whose_source_hands_out_host_work_links_io`
-  holds the apps under `apps/` whose own source names `Request::continuation`
-  to it; a source placed on a worker links I/O by itself.
+- **`Request::continuation` does not compile: "type annotations needed"**, or
+  an Apple production build answers a source's request with `Unlinked("io")`.
+  A continuation runs on the host's executor, which an Apple production build
+  links only with `io` (LLP 1047.001 D12). Declare the work on the source that
+  builds it: `impl exact_runner::HostWork for MySource {}`, and write
+  `Request::continuation::<Self>(token)`. The build script passes
+  `exact_bake::hands_out_work!(source)` to `compatibility_id` beside the grants,
+  so the bake links `io` with nothing in `app.json`; pass the source the entry
+  runs, which may not be the one the bake runs (Markdown Stress bakes with
+  `MarkdownStress` and runs `NativeMarkdownStress`). A source that forwards
+  another's continuations declares it too. A TypeScript module needs nothing:
+  its bake reads the bundle for the prelude's timers (`setTimeout`,
+  `AbortSignal.timeout`) and `scheduler.yield()`, and links I/O for a native
+  slot's `native.later()`. It cannot see a timer the
+  module names at run time (`globalThis["set" + "Timeout"]`), nor a source
+  that names another type's marker: those are refused by name. An update to an
+  installed binary is not refused for host work its binary lacks (the plan
+  update checks no Apple linked set): bake a new binary.
 
 - **Natively, a Snapback resource or mutation fails with `native call outside an
   answer` while the same app works on the web.** Seen with five resources

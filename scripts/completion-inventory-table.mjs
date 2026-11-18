@@ -1382,6 +1382,7 @@ export const classifications = [
     ["runner:runner/src/file_pickers.rs", "start_in_refusal"],
     ["runner:runner/src/fetch_template.rs", "argument encode expand graphql_error pointer"],
     ["runner:runner/src/format/mod.rs", "formatting"],
+    ["runner:runner/src/host_work.rs", "Probe::of"],
     ["runner:runner/src/held.rs", "Held::compiled Held::decoded Held::equivalent Held::get Held::is_compiled Held::new Held::read Held::released Held::same"],
     ["runner:runner/src/lists.rs", "concat flat flat_len index_of position slice sort_by sum"],
     ["runner:runner/src/machine.rs", "equal equal_items exec Machine::new run step"],
