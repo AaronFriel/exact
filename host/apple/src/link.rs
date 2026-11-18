@@ -38,7 +38,8 @@ pub fn linked() -> Uses {
 }
 
 /// The kernel's style grammars and grid layout, which a native host links
-/// by use (LLP 1047.001 D3, D10): each `Some` is registered at boot.
+/// by use (LLP 1047.001 D3, D10), and the families' kernel code the host's
+/// core paths reach ([`families`]): each `Some` is registered at boot.
 #[derive(Clone, Copy)]
 pub struct Grammars {
     backdrop: Option<fn()>,
@@ -46,6 +47,8 @@ pub struct Grammars {
     timelines: Option<fn()>,
     wide_colors: Option<fn()>,
     grid: Option<fn()>,
+    svg: Option<fn()>,
+    effects: Option<fn()>,
 }
 
 impl Grammars {
@@ -78,6 +81,16 @@ impl Grammars {
             } else {
                 None
             },
+            svg: if uses.has(Capability::Svg) {
+                Some(families::link_svg)
+            } else {
+                None
+            },
+            effects: if uses.has(Capability::Effects) {
+                Some(families::link_effects)
+            } else {
+                None
+            },
         }
     }
 
@@ -89,12 +102,61 @@ impl Grammars {
             self.timelines,
             self.wide_colors,
             self.grid,
+            self.svg,
+            self.effects,
         ]
         .into_iter()
         .flatten()
         {
             link();
         }
+    }
+}
+
+/// The families' kernel code the host's core paths call (LLP 1047.001 D10):
+/// registered at boot when the composition links the family ([`Grammars`]),
+/// so an archive without it names none of that code. Unregistered, each
+/// answers what a plan without the family needs, which is all admission lets
+/// such an archive run.
+pub(crate) mod families {
+    use exact_kernel::svg::filter::{Filter, FilterList};
+    use exact_kernel::{style::ColorValue, Kernel, NodeRef, ViewId};
+    use std::{collections::HashSet, sync::OnceLock};
+
+    type Sources = fn(&Kernel, ViewId) -> HashSet<ViewId>;
+    type Blended = fn(&Kernel, &NodeRef<'_>) -> bool;
+    type BoxFilter = fn(&FilterList, ColorValue, bool) -> Option<Filter>;
+
+    static SVG: OnceLock<(Sources, Blended)> = OnceLock::new();
+    static EFFECTS: OnceLock<BoxFilter> = OnceLock::new();
+
+    /// SVG: the nodes a scene reads, and whether a node is drawn into one.
+    pub fn link_svg() {
+        let _ = SVG.set((
+            exact_kernel::svg::scene_sources,
+            exact_kernel::svg::in_blended_scene,
+        ));
+    }
+
+    /// Box effects: a box's `filter` resolved to its program.
+    pub fn link_effects() {
+        let _ = EFFECTS.set(exact_kernel::svg::scene::box_filter);
+    }
+
+    /// The nodes `root`'s scene reads; none without SVG.
+    pub(crate) fn scene_sources(kernel: &Kernel, root: ViewId) -> HashSet<ViewId> {
+        SVG.get()
+            .map_or_else(HashSet::new, |svg| (svg.0)(kernel, root))
+    }
+
+    /// Whether `node` is drawn into an SVG's pixels; never without SVG.
+    pub(crate) fn in_blended_scene(kernel: &Kernel, node: &NodeRef<'_>) -> bool {
+        SVG.get().is_some_and(|svg| (svg.1)(kernel, node))
+    }
+
+    /// A box's `filter` as its program; none without box effects.
+    pub(crate) fn box_filter(list: &FilterList, text: ColorValue, dark: bool) -> Option<Filter> {
+        EFFECTS.get().and_then(|filter| filter(list, text, dark))
     }
 }
 
@@ -370,9 +432,25 @@ impl<D: DataSource> Links<D> {
 }
 
 /// The capabilities `plan` uses that `linked` lacks, by name; `None` when
-/// it links them all.
+/// it links them all. A `data:` image that is an SVG uses SVG, as the bake
+/// counts it, so a plan applied after the bake is held to the same rule; a
+/// bundled asset's bytes are the bake's alone to read.
 pub fn missing(plan: &exact_plan::Plan, linked: Uses) -> Option<String> {
-    let missing = exact_runner::uses::apple_uses(plan).beyond(linked);
+    let mut uses = exact_runner::uses::apple_uses(plan);
+    let data_svg = exact_runner::uses::image_sources(plan)
+        .iter()
+        .any(|source| {
+            source
+                .bundled()
+                .and_then(|name| name.strip_prefix("data:"))
+                .is_some_and(|url| {
+                    exact_runner::uses::data_url(url).is_none_or(|b| exact_svg_file::sniff(&b))
+                })
+        });
+    if data_svg {
+        uses = uses.with(Capability::Svg).with(Capability::Effects);
+    }
+    let missing = uses.beyond(linked);
     (!missing.is_empty()).then(|| missing.to_string())
 }
 
@@ -469,7 +547,7 @@ mod tests {
         for (plan, name) in [
             (&tools, "tools"),
             (&view, "modules, native_views"),
-            (&svg, "svg"),
+            (&svg, "effects, svg"),
             (&image, "images"),
             (&hatch, "native_views"),
             (&control, "controls"),

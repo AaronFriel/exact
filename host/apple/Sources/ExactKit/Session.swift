@@ -735,7 +735,7 @@ public final class ExactSession {
     static func drainAll() { for weak in live.values { weak.session?.drainFill() } }
 
     /// Work that every session counts ended: the last SVG picture in flight (`hostOutstanding`).
-    static func workEndedEverywhere() { for weak in live.values { weak.session?.workEnded() } }
+    package static func workEndedEverywhere() { for weak in live.values { weak.session?.workEnded() } }
 
     /// Wait for the slice in flight and land it: what shows, the agent and
     /// every read that must see it (T5, T7, T9).

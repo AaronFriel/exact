@@ -16,6 +16,8 @@ import CoreImage
 import IOSurface
 import Metal
 import QuartzCore
+import ExactKit
+import ExactEffects
 
 final class SvgFilterLive {
     /// The picture's layer in the scene; its contents are the last drawn.

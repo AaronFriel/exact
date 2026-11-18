@@ -640,6 +640,7 @@ pub fn apple_linked(uses: exact_runner::Uses, host: &str) -> String {
         (Capability::GroupedLists, "grouped_list_exports"),
         (Capability::Markdown, "markup_exports"),
         (Capability::Presence, "presence_exports"),
+        (Capability::Svg, "svg_exports"),
     ] {
         if uses.has(capability) {
             entry.push_str(&format!("{apple}::{group}!();\n"));
@@ -855,6 +856,8 @@ mod tests {
             "{update}"
         );
         assert!(!super::apple_linked(Uses::NONE, "exact_apple").contains("exports!"));
+        let svg = super::apple_linked(Uses::NONE.with(Capability::Svg), "exact_apple");
+        assert!(svg.contains("::exact_apple::svg_exports!();"), "{svg}");
         let markdown = super::apple_linked(Uses::NONE.with(Capability::Markdown), "exact_apple");
         assert!(
             markdown.contains("::exact_apple::markup_exports!();"),

@@ -8,6 +8,8 @@ import CoreGraphics
 import CoreText
 import Foundation
 import QuartzCore
+import ExactKit
+import ExactEffects
 
 /// No implicit animations: a model change is immediate, as in CSS.
 private final class Still: NSObject, CAAction {

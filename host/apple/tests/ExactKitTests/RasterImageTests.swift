@@ -9,6 +9,8 @@ import AppKit
 import UIKit
 #endif
 @testable import ExactKit
+@testable import ExactEffects
+@testable import ExactSvg
 
 final class RasterImageTests: XCTestCase {
     func testSVGPictureFontsUseTheirNamesWeightAndStyle() {

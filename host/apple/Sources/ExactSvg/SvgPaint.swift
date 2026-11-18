@@ -8,6 +8,8 @@
 import CoreGraphics
 import Foundation
 import QuartzCore
+import ExactKit
+import ExactEffects
 
 private final class PartAction: NSObject, CAAction {
     static let shared = PartAction()

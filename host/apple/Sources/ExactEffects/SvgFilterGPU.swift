@@ -13,6 +13,7 @@ import CoreImage
 import Foundation
 import IOSurface
 import Metal
+import ExactKit
 
 package enum SvgFilterGPU {
     private static let srgb = CGColorSpace(name: CGColorSpace.sRGB)!

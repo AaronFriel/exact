@@ -95,7 +95,7 @@ extension CALayer {
 
     /// An HDR colour this layer paints asks for what `limit` allows; `deep`
     /// does the same for every sublayer (a shadow caster, an SVG scene).
-    func applyColorRange(limit: String?, deep: Bool = false) {
+    package func applyColorRange(limit: String?, deep: Bool = false) {
         setColorRange(hdr: ownColors.contains { ColorRange.isHDR($0) || ColorRange.needsExtendedComponents($0) }, limit: limit)
         if self is CAGradientLayer { mapsExtendedRange(ownColors.contains(where: ColorRange.isHDR)) }
         if deep { sublayers?.forEach { $0.applyColorRange(limit: limit, deep: true) } }

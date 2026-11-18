@@ -4,6 +4,7 @@
 // (`SvgFilterGPU`). It belongs to box effects, and SVG uses it: a plan with
 // only a CSS filter links no SVG (LLP 1047.001 D10).
 import CoreGraphics
+import ExactKit
 
 package enum FilterExtent {
     /// The most pixels one island's bitmap holds (64 MB at 4 bytes each).

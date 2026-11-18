@@ -2,6 +2,8 @@
 // decoded: each shape's path made and each animation read once
 // (`SvgLink.prepare`).
 import Foundation
+import ExactKit
+import ExactEffects
 
 enum SvgPrepare {
     /// A scene's element tree, in place: each shape's path, each animation.

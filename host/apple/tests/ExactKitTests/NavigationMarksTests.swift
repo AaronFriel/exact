@@ -2,6 +2,8 @@
 import XCTest
 import QuartzCore
 @testable import ExactKit
+@testable import ExactEffects
+@testable import ExactSvg
 
 final class NavigationMarksTests: XCTestCase {
     func testTheRenderLinkStopsWhileTTIWaitsForWork() throws {

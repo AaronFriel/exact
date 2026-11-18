@@ -9,6 +9,8 @@ import CoreGraphics
 import CoreText
 import Foundation
 import QuartzCore
+import ExactKit
+import ExactEffects
 
 enum SvgText {
     /// A font for a run: size, CSS weight, family index, italic.

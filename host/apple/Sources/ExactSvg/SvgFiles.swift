@@ -1,9 +1,11 @@
 // @ref LLP 1011.001 D3, D4 — an SVG file an image or an icon draws: parsed
 // and resolved in Rust (`exact_svg_image_*`), its scene drawn as an island is
 // (`SvgIsland.render`). `SvgLink.documents`.
-import CExact
+import CExact.Svg
 import CoreGraphics
 import Foundation
+import ExactKit
+import ExactEffects
 
 final class SvgFiles: SvgDocuments {
     func size(prefix: Data) -> CGSize? {

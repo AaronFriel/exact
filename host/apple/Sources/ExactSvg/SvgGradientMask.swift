@@ -9,6 +9,8 @@
 // rasterizing it: the gradient, the island's render and the coverage pass.
 import CoreGraphics
 import QuartzCore
+import ExactKit
+import ExactEffects
 
 enum SvgGradientMask {
     private static func nums(_ v: Any?) -> [Double] { (v as? [Any])?.map { ($0 as? NSNumber)?.doubleValue ?? .nan } ?? [] }

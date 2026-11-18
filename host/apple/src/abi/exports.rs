@@ -35,6 +35,7 @@ macro_rules! host {
         $crate::grouped_list_exports!();
         $crate::markup_exports!();
         $crate::presence_exports!();
+        $crate::svg_exports!();
 
         $crate::host!(@core $data, $plan, $compat, $delivery, $api, $new, $region, $crate::link::ALL);
     };
@@ -45,10 +46,6 @@ macro_rules! host {
             $crate::decorations::read(input, len, count)
         }
         $crate::raster_exports!();
-        // SVG's group (`include/exact_svg.h`). The core's Swift still calls
-        // it, so every entry emits it until the SVG family's Swift leaves
-        // ExactKit; that move emits it only for an archive linking `svg`.
-        $crate::svg_exports!();
         $crate::textflow_exports!();
         $crate::collapse_exports!();
         $crate::app_module_exports!();

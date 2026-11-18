@@ -12,6 +12,7 @@ import Foundation
 import IOSurface
 import Metal
 import MetalPerformanceShaders
+import ExactKit
 
 package final class SvgFilterMetal {
     package enum Step {
@@ -157,7 +158,7 @@ package final class SvgFilterMetal {
     /// Blur kernels by σ (their weights are made once).
     private var blurs: [Float: MPSImageGaussianBlur] = [:]
 
-    func encode(_ steps: [Step], source: MTLTexture, into surface: IOSurface, on cb: MTLCommandBuffer) -> Bool {
+    package func encode(_ steps: [Step], source: MTLTexture, into surface: IOSurface, on cb: MTLCommandBuffer) -> Bool {
         lock.lock()
         defer { lock.unlock() }
         let (w, h) = (source.width, source.height)

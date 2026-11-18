@@ -10,6 +10,8 @@
 import CoreGraphics
 import Foundation
 import QuartzCore
+import ExactKit
+import ExactEffects
 
 /// The island module (LLP 1047 D1's loaded tier). A plan that can show an
 /// island (`exact_svg_islands`) has it opened off the main thread at boot

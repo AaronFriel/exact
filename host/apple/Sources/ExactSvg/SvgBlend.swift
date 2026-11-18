@@ -3,6 +3,8 @@
 // (LLP 1055.000 D2, D19).
 import CoreGraphics
 import QuartzCore
+import ExactKit
+import ExactEffects
 
 #if os(iOS) || os(tvOS)
 final class SvgBlend {
