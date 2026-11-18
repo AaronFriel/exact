@@ -1,4 +1,11 @@
 module CExact {
     header "../../include/exact.h"
     export *
+    // A family's declarations (LLP 1047.001 D4). A family whose Swift is in
+    // its own target makes its submodule `explicit` and imports it by name,
+    // so the core cannot call its exports.
+    module Svg {
+        header "../../include/exact_svg.h"
+        export *
+    }
 }

@@ -45,7 +45,10 @@ macro_rules! host {
             $crate::decorations::read(input, len, count)
         }
         $crate::raster_exports!();
-        $crate::svg_image_exports!();
+        // SVG's group (`include/exact_svg.h`). The core's Swift still calls
+        // it, so every entry emits it until the SVG family's Swift leaves
+        // ExactKit; that move emits it only for an archive linking `svg`.
+        $crate::svg_exports!();
         $crate::textflow_exports!();
         $crate::collapse_exports!();
         $crate::app_module_exports!();
@@ -1397,16 +1400,6 @@ macro_rules! host {
             $crate::abi::with_runtime(&EXACT_RUNTIMES, rt, true, |b, _| b.command(len), |n| n)
         }
 
-        /// What SVG pixel work the live plan can need, as bits: 1 an island
-        /// (a `mask` or a `filter`; `exact_runner::svg_islands`), when the
-        /// host should open its island module off the main thread now (LLP
-        /// 1055.000 §8 ruling 4); 2 a filter (`exact_runner::svg_filters`),
-        /// when it should make its GPU filter pipelines now.
-        #[no_mangle]
-        pub extern "C" fn exact_svg_islands(rt: u32) -> u8 {
-            $crate::abi::with_runtime(&EXACT_RUNTIMES, rt, false, |b, _| b.svg_islands(), |_| 0)
-        }
-
         /// 1 when the data source's activation evaluates a TypeScript module
         /// on the owner, which the presenter then posts from the first draw
         /// (LLP 1027.008 D1); 0 otherwise, and before a boot.
@@ -1460,6 +1453,24 @@ macro_rules! grouped_list_exports {
                 |b, _| b.grouped_list(view),
                 |n| n,
             )
+        }
+    };
+}
+
+/// The SVG family's exports (`include/exact_svg.h`; LLP 1047.001 D3, D10):
+/// its files' decoding and the live plan's island and filter work.
+#[macro_export]
+macro_rules! svg_exports {
+    () => {
+        $crate::svg_image_exports!();
+        /// What SVG pixel work the live plan can need, as bits: 1 an island
+        /// (a `mask` or a `filter`; `exact_runner::svg_islands`), when the
+        /// host should open its island module off the main thread now (LLP
+        /// 1055.000 §8 ruling 4); 2 a filter (`exact_runner::svg_filters`),
+        /// when it should make its GPU filter pipelines now.
+        #[no_mangle]
+        pub extern "C" fn exact_svg_islands(rt: u32) -> u8 {
+            $crate::abi::with_runtime(&EXACT_RUNTIMES, rt, false, |b, _| b.svg_islands(), |_| 0)
         }
     };
 }
