@@ -38,8 +38,8 @@ package final class Presenter {
     private(set) var chrome = ChromeIndex()
     /// Views leaving with their exit, by id (LLP 1063, `PresenceMac.swift`).
     var leaving: [UInt32: Leaving] = [:]
-    /// Shared elements in flight, by the arriver's id (LLP 1013.000, `FlightsMac.swift`).
-    var flights: [UInt32: Flight] = [:]
+    /// The shared elements in flight (LLP 1013.000, `FlightLink`).
+    package lazy var flightHost: any FlightHosting = FlightLink.make?(self) ?? NoFlights()
     /// Views whose drawn origin a batch moved (`PixelGridMac.swift`).
     var gridMoved: [NodeView] = []
     /// A view's props were written (`NodeView.props`' own observer).
@@ -90,7 +90,7 @@ package final class Presenter {
     lazy package var transformGeometry = TransformGeometryHost(self)
     var videoVisibility: VideoVisibilityHost?
     lazy package var collections: any ListHosting = ListLink.make?(self) ?? NoLists()
-    lazy var stickies = StickyHost(self)
+    lazy var stickies: any StickyHosting = StickyLink.make?(self) ?? NoStickies()
     let tableGrid = TableGrid()
     /// Heavy leaves held while their rows are far or flying (LLP 1068 §5.1).
     lazy var leaves = HeavyLeaves(self)
@@ -650,7 +650,7 @@ package final class Presenter {
         mouseChain.early = nil; mouseChain.reported = []; mouseChain.heldUp = nil; mouseChain.releaseAfterBubbling = false
         elements.reset()
         blocks.forgetRects() // the new runtime's ids are its own
-        resetFlights()
+        flightHost.reset()
         viewport.invalidateDocumentFit()
         session?.regions.reset()
         session?.rasters?.reset()
@@ -1208,7 +1208,7 @@ package final class Presenter {
                     if let node = child as? NodeView { reparented.insert(node.id) }
                     child.removeFromSuperview()
                 }
-                let mounted = want.filter { !dialogs.owns($0) && !menus.owns($0) && !blocks.owns($0) && !tables.owns($0, in: id) && !isFlying($0) }
+                let mounted = want.filter { !dialogs.owns($0) && !menus.owns($0) && !blocks.owns($0) && !tables.owns($0, in: id) && !flightHost.isFlying($0) }
                 for child in mounted where child.superview !== container {
                     reparented.insert(child.id)
                     child.rejoinUnderHold()
@@ -1230,8 +1230,8 @@ package final class Presenter {
                 if name == "stopPropagation" { propagationStopped = true; break }
                 onCommand?(name, op.payload["args"] as? [Any] ?? [], (op.payload["source"] as? NSNumber)?.uint32Value)
             case .exit: beginExit(id)
-            case .flight: beginFlight(op)
-            case .land: if let f = flights[id] { landFlight(f) }
+            case .flight: flightHost.begin(op)
+            case .land: flightHost.land(id)
             case .rank:
                 if let rank = op.rank { views[id]?.setRank(rank) }
             case .layoutHits, .layoutHitsWithdrawn: break
@@ -1245,7 +1245,7 @@ package final class Presenter {
                 blocks.destroyed(id)
                 stickies.forget(id)
                 tableGrid.forget(id)
-                forgetFlight(id)
+                flightHost.forget(id)
                 views[id]?.holdGone()
                 if endExit(id) { continue }
                 // A route that left with its exit to play stays for it (RouteTransitionMac.swift).
@@ -1280,7 +1280,7 @@ package final class Presenter {
                 case "scale": v.scale = x; v.applyTransform()
                 case "rotate": v.rotate = x; v.rotationAxis = [op.y, op.w, op.h]; v.applyTransform()
                 case "opacity": v.presentedAlpha = x; v.alphaValue = v.disabledShown ? x * NodeView.disabledOpacity : x; v.refreshPressOpacity()
-                case "flight": presentFlight(id, x)
+                case "flight": flightHost.present(id, x)
                 default: break
                 }
             default: break
@@ -1288,7 +1288,7 @@ package final class Presenter {
         }
         regridMoved(); if !renewing.isEmpty { renewsApplied() }
         NodeView.inkPlaced(reparented.compactMap { views[$0] })
-        if !flights.isEmpty { flightsBatchApplied() }
+        if !flightHost.isEmpty { flightHost.batchApplied() }
         tables.sync(batch)
         navigation.sync(batch, reparented: reparented)
         sidebar.sync(batch)

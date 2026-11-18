@@ -322,7 +322,7 @@ extension NodeView {
     var insetCaster: InsetShadowCaster? { get { paintExtras?.insetCaster } set { if newValue != nil || paintExtras != nil { paintMore.insetCaster = newValue } } }
     var clipBox: PlainView? { get { extras?.clipBox } set { if newValue != nil || extras != nil { more.clipBox = newValue } } }
     var layoutOffset: CGPoint { get { extras?.layoutOffset ?? .zero } set { if newValue != .zero || extras != nil { more.layoutOffset = newValue } } }
-    var stickyOffset: CGPoint { get { extras?.stickyOffset ?? .zero } set { if newValue != .zero || extras != nil { more.stickyOffset = newValue } } }
+    package var stickyOffset: CGPoint { get { extras?.stickyOffset ?? .zero } set { if newValue != .zero || extras != nil { more.stickyOffset = newValue } } }
     var zoomFactor: CGFloat { get { extras?.zoomFactor ?? 1 } set { if newValue != 1 || extras != nil { more.zoomFactor = newValue } } }
     var zoomShift: CGPoint { get { extras?.zoomShift ?? .zero } set { if newValue != .zero || extras != nil { more.zoomShift = newValue } } }
     var authoredAccentTint: UIColor? { get { extras?.authoredAccentTint } set { if newValue != nil || extras != nil { more.authoredAccentTint = newValue } } }
@@ -354,7 +354,7 @@ extension NodeView {
         }
     }
     /// While it flies as a shared element (LLP 1013.000 D4): where its image is drawn.
-    var flightLook: FlightLook? { get { extras?.flightLook } set { if newValue != nil || extras != nil { more.flightLook = newValue } } }
+    package var flightLook: FlightLook? { get { extras?.flightLook } set { if newValue != nil || extras != nil { more.flightLook = newValue } } }
     /// LLP 1093 D7: fragments or columns.
     var columnRecord: ColumnRecord? { get { extras?.columnRecord } set { if newValue != nil || extras != nil { more.columnRecord = newValue } } }
     var liveText: String? { get { extras?.liveText } set { if newValue != nil || extras != nil { more.liveText = newValue } } }

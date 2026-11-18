@@ -83,8 +83,8 @@ package final class Presenter {
     lazy var focusEvents = FocusEvents(self)
     /// Views leaving with their exit, by id (LLP 1063, `PresenceIOS.swift`).
     var leaving: [UInt32: Leaving] = [:]
-    /// Shared elements in flight, by the arriver's id (LLP 1013.000, `FlightsIOS.swift`).
-    var flights: [UInt32: Flight] = [:]
+    /// The shared elements in flight (LLP 1013.000, `FlightLink`).
+    package lazy var flightHost: any FlightHosting = FlightLink.make?(self) ?? NoFlights()
     private(set) var chrome = ChromeIndex()
     var listRowDependencies: ListRowDependencies?
     #if DEBUG
@@ -130,7 +130,7 @@ package final class Presenter {
     }
     var videoVisibility: VideoVisibilityHost?
     lazy package var collections: any ListHosting = ListLink.make?(self) ?? NoLists()
-    lazy var stickies = StickyHost(self)
+    lazy var stickies: any StickyHosting = StickyLink.make?(self) ?? NoStickies()
     let tableGrid = TableGrid()
     lazy var pool = NodePool(self)
     /// Heavy leaves held mid-fling (LLP 1068 §5.1).
@@ -354,7 +354,7 @@ package final class Presenter {
         focusEvents.reset(); TipLink.installed?.withdraw(owner: self)
         // Every hatched node ends first, its view and platform object there.
         elements.reset()
-        resetFlights()
+        flightHost.reset()
         canvasKey = nil
         session?.transformInputHold?.cancel()
         reorder?.abandon()
@@ -1049,9 +1049,9 @@ package final class Presenter {
                 #endif
             case .flight:
                 if let from = (op.payload["from"] as? NSNumber)?.uint32Value, flats.isFlat(from) { flats.promote(from) }
-                beginFlight(op)
+                flightHost.begin(op)
             case .land:
-                if let f = flights[id] { landFlight(f) }
+                flightHost.land(id)
             case .rank:
                 if let rank = op.rank { flats.rank(id, rank) }
             case .layoutHits:
@@ -1083,7 +1083,7 @@ package final class Presenter {
                 elements.destroyed(id)
                 stickies.forget(id)
                 tableGrid.forget(id)
-                forgetFlight(id)
+                flightHost.forget(id)
                 if flats.isFlat(id) { flats.destroy(id); return }
                 if endExit(id) { return }
                 if let view = views[id] { glassGroups.depart(view) }
@@ -1103,7 +1103,7 @@ package final class Presenter {
                     return
                 }
                 if kind == .frame { pool.framed(id) }
-                if flightFrame(op) { return }
+                if flightHost.frame(op) { return }
                 if views[id] != nil { applyGeometry(op) }
             case .present:
                 if flats.isFlat(id) {
@@ -1119,7 +1119,7 @@ package final class Presenter {
                 case "scale": v.scale = x; v.applyTransform()
                 case "rotate": v.rotate = x; v.rotationAxis = [op.y, op.w, op.h]; v.applyTransform()
                 case "opacity": v.presentOpacity(x)
-                case "flight": presentFlight(id, x)
+                case "flight": flightHost.present(id, x)
                 default: break
                 }
             default: menus.sheets.applied(op); owners.applied(op)
@@ -1190,7 +1190,7 @@ package final class Presenter {
         groupedLists?.sync(changed: changed)
         if rowFill, pageGeometryOwed || listRowDependencies?.scrollers != scrollers { rowFill = false }
         if !rowFill { pageGeometryOwed = false; reachPageEdges() } // a list mounted now reaches its bands too
-        if !flights.isEmpty { flightsBatchApplied() }
+        if !flightHost.isEmpty { flightHost.batchApplied() }
         #if os(tvOS)
         menuKey.sync()
         playPauseKey.sync()
@@ -1298,7 +1298,7 @@ package final class Presenter {
             #endif
             return false
         }
-        let contained = NodeView.keepingGhosts(want.filter { !heldByArrangement($0) && !navigation.ownsContainment(of: $0, under: parent) && !menus.lifted($0) && !isFlying($0) }, in: container)
+        let contained = NodeView.keepingGhosts(want.filter { !heldByArrangement($0) && !navigation.ownsContainment(of: $0, under: parent) && !menus.lifted($0) && !flightHost.isFlying($0) }, in: container)
         // Keep paragraph coverage below authored children when UIKit owns its view
         let text = parent.specs?.rasterView
         let offset = text?.superview === container ? 1 : 0

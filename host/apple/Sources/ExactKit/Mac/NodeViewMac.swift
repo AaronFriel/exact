@@ -121,7 +121,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
     /// translation plus `stickyOffset` (`applyTransform`).
     package var arrangeShift = CGPoint.zero
     /// How far its scroller's scroll moves a sticky box (LLP 1083, `Sticky.swift`).
-    var stickyOffset = CGPoint.zero
+    package var stickyOffset = CGPoint.zero
     package var scale: CGFloat = 1
     package var rotate: CGFloat = 0
     var rotationAxis: [Double] = [0, 0, 0]
@@ -165,7 +165,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
     var boxPattern: GradientPatternLayer?
     var imageLayer: CALayer?
     /// While it flies as a shared element (LLP 1013.000 D4): where its image is drawn.
-    var flightLook: FlightLook?
+    package var flightLook: FlightLook?
     var materialView: NSView?
     /// The backdrop blur's σ and mirrored box as last set (`Backdrop.swift`).
     var backdropDrawn: BackdropDrawn?
