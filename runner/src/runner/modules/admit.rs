@@ -52,6 +52,11 @@ impl<D: DataSource> Runner<D> {
             || (self.extensions.held.iter()).any(|h| h.id == id)
     }
 
+    /// Whether the host bound its own implementation of `extension`.
+    pub(in crate::runner) fn bound_here(&self, extension: &str) -> bool {
+        self.extensions.bound.contains(extension)
+    }
+
     /// Whether a host's implementation answers some name of `extension`.
     pub(in crate::runner) fn implemented(&self, extension: &str) -> bool {
         (self.plan.modules.iter())

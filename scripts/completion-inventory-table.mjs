@@ -558,20 +558,21 @@ export const classifications = [
     ["painted:host/painted/src/presenter/pictures.rs", "Presenter::bind_pictures Presenter::picture_answered Presenter::picture_changed"],
   ]),
   group("presence", ["one-shot"], "outstanding presence call and secret generation", "UI-owned",
-    "runner/src/runner/modules/presence.rs:224-249 drops a check whose call was let go. The authentication continuation is session-owned even though the keystore value is durable.", [
+    "runner/src/runner/presence_secrets.rs drops a check whose call was let go. The authentication continuation is session-owned even though the keystore value is durable.", [
     ["apple:host/apple/src/abi/exports.rs", "exact_presence"],
     ["painted:host/painted/src/canvas/jni_extensions.rs", "Java_dev_exact_canvas_Native_presence"],
     ["painted:host/painted/src/canvas/requests.rs", "CanvasHost::presence_reply"],
     ["painted:host/painted/src/presence.rs", "Host::track_presence"],
     ["painted:host/painted/src/presenter.rs", "Presenter::service_commit"],
-    ["runner:runner/src/runner/modules/presence.rs", "Runner::presence_answer Runner::presence_call#next:1 Runner::presence_reply Runner::take_presence_asks"],
+    ["runner:runner/src/runner/presence_secrets.rs", "LinkedPresence::presence_call#next:1"],
+    ["runner:runner/src/runner/seams.rs", "Runner::presence_answer Runner::presence_reply Runner::take_presence_asks"],
     ["web:host/web/src/abi.rs", "exact_presence"],
   ]),
   group("presence storage", ["durable operation"], "app/account secret generation and backend queue", "durable",
     "runner/src/presence.rs Backend serializes secret operations by name/generation; module presence installation adopts its occupancy. This class applies to backend storage, not a retired unlock continuation.", [
     ["apple:host/apple/src/presence_secrets.rs", "exact_on_presence_keychain"],
     ["runner:runner/src/presence.rs", "Backend::invalidated#generation:1 Backend::moved#generation:1 Backend::protect#generation:1 Backend::unprotect#generation:1 Backend::write#generation:1 Backend::write#generation:2"],
-    ["runner:runner/src/runner/modules/presence.rs", "Runner::install_presence Runner::presence_list"],
+    ["runner:runner/src/runner/seams.rs", "Runner::install_presence Runner::presence_list"],
   ]),
   group("presentation helpers", ["one-shot"], "synchronous calculation or retained presentation resource; no runner completion", "UI-owned",
     "The export computes or releases presentation data; its caller owns the input/output buffers and resource lifetime. painted snapshot.rs render boots an isolated entry per size and returns its tree without I/O or a continuation; snapshot/jni.rs returns that JSON. presenter/zoom.rs computes and reports the current container geometry.", [

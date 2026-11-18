@@ -28,6 +28,7 @@
 //! readers again through [`Runner::apply_announced`].
 
 use super::provenance::CallOrigin;
+use super::reply::{response, Pending};
 use super::wakes::WakeHow;
 use super::{DataError, DataSource, Runner, RunnerError, Target};
 use crate::failure::FailureCode;
@@ -57,7 +58,6 @@ mod network;
 mod permits;
 mod pictures;
 mod poll;
-mod presence;
 mod samples;
 mod services;
 mod sheet;
@@ -73,7 +73,6 @@ pub use declared::AppState;
 pub(super) use declared::CHOSEN;
 pub(super) use disclosed::STATED;
 pub(super) use events::EMITTED;
-pub use presence::{PresenceAnswer, PresenceAsk};
 pub(super) use services::CLAIMED;
 use std::sync::{Arc, Mutex};
 use values::{fill, set_path};
@@ -153,8 +152,6 @@ pub(super) struct Extensions {
     /// The polled sources whose last answer was an error, not asked again by
     /// a poll (`poll.rs`).
     failed: BTreeSet<String>,
-    /// Presence secrets: the host's backend and the calls on it (`presence.rs`).
-    presence: presence::Presence,
     /// Sampled sources' cursors, tracks and canvas inputs (`samples.rs`).
     samples: samples::Samples,
     /// The ceremonies and signals held or answered, by held token, with
@@ -238,32 +235,6 @@ struct Held {
     request: Option<u64>,
     /// A ceremony waiting behind a modal one, with no ticket yet (`ceremony.rs`).
     queued: bool,
-}
-
-/// A held data-code call's two halves, whichever comes first: the host's
-/// reply, or the answer to send through it.
-#[derive(Default)]
-struct Pending {
-    reply: Option<Reply>,
-    outcome: Option<Outcome>,
-}
-
-impl Pending {
-    fn complete(slot: &Mutex<Pending>, outcome: Outcome) {
-        let mut s = slot.lock().unwrap_or_else(|e| e.into_inner());
-        match s.reply.take() {
-            Some(reply) => reply.send(outcome),
-            None => s.outcome = Some(outcome),
-        }
-    }
-}
-
-fn response(answer: &Json) -> Outcome {
-    Outcome::Response(Response {
-        status: 200,
-        headers: Vec::new(),
-        body: answer.to_string().into_bytes(),
-    })
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -548,7 +519,7 @@ impl<D: DataSource> Runner<D> {
             .clone()
     }
 
-    fn substitute(&self, row: &ModulesRow) -> std::sync::Arc<Json> {
+    pub(in crate::runner) fn substitute(&self, row: &ModulesRow) -> std::sync::Arc<Json> {
         let key = row.substitute.0;
         if let Some(sub) = self.extensions.substitutes.borrow().get(&key) {
             return sub.clone();
@@ -769,7 +740,7 @@ impl<D: DataSource> Runner<D> {
     /// where the runner answers itself (a status), as does a `partial`
     /// source's. A default has this target's restrictions laid over it
     /// (`targets`). Its `facts` are the runner's own, over either.
-    fn value_of(&self, row: &ModulesRow) -> Option<Json> {
+    pub(in crate::runner) fn value_of(&self, row: &ModulesRow) -> Option<Json> {
         let sub = self.substitute(row);
         if let Some(listed) = self.listed_value(row, &sub) {
             return Some(listed);

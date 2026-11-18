@@ -134,8 +134,8 @@ export function helperClassifications(group) {
     ["runner:runner/src/runner/modules/declared/wake_list.rs", "Runner::wake_entry_ended#not_before:1 Runner::wake_entry_ended#not_before:2"],
   ]),
   group("presence", ["one-shot"], "outstanding presence call and secret generation", "UI-owned",
-    "The named public runner-crate source is the presence API or its value/admission helper. runner/src/runner/modules/presence.rs:224-249 drops a check whose call was let go. The authentication continuation is session-owned even though the keystore value is durable.", [
-    ["runner:runner/src/runner/modules/presence.rs", "PresenceAsk::json"],
+    "The named public runner-crate source is the presence API or its value/admission helper. runner/src/runner/presence_secrets.rs drops a check whose call was let go. The authentication continuation is session-owned even though the keystore value is durable.", [
+    ["runner:runner/src/runner/presence_secrets.rs", "PresenceAsk::json"],
   ]),
   group("holds", ["one-shot"], "held request/node until answer, cancellation or node retirement", "UI-owned",
     "runner/src/runner/device.rs:1-12 retires holds with the requesting node or ticket and refuses duplicate answers; the agent hold is not an executor request.", [

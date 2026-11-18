@@ -140,14 +140,16 @@ mod apply;
 mod live_time;
 pub mod midi;
 mod modules;
-pub use modules::{AppState, PresenceAnswer, PresenceAsk};
+pub use modules::AppState;
 mod calls;
 pub use calls::CallHow;
+mod presence_secrets;
+pub use presence_secrets::{PresenceAnswer, PresenceAsk};
 mod processes;
 mod provenance;
 mod seams;
 pub use provenance::CallOrigin;
-pub use seams::{ModuleLinks, Tools};
+pub use seams::{ModuleLinks, PresenceSecrets, Tools};
 mod wakes;
 pub use wakes::WakeHow;
 #[cfg(test)]
@@ -546,6 +548,8 @@ pub struct Runner<D: DataSource> {
     wakes: wakes::Wakes,
     /// Tool calls, running and to come (LLP 1133.023 D7).
     calls: calls::Calls,
+    /// Locked secrets: the host's backend and the calls on it.
+    presence: presence_secrets::Presence,
     /// The optional parts this runner links, for its plan.
     seams: ModuleLinks<D>,
     poisoned: bool,
@@ -638,12 +642,6 @@ pub const TIMER_FIRE_LIMIT: usize = 4096;
 pub const VIRTUAL_FRAME_MS: f64 = 1000.0 / 60.0;
 
 impl<D: DataSource> Runner<D> {
-    /// This runner, linking every device capability: the plain boots'.
-    pub(crate) fn linking_every_device(mut self) -> Self {
-        self.device_links = DeviceLinks::ALL;
-        self
-    }
-
     /// Boot: refuse a plan built against another kernel schema, evaluate
     /// initial state, settle resources (compiled data first, the source
     /// otherwise), realize the tree, and apply the first frame's ops.
@@ -837,7 +835,7 @@ impl<D: DataSource> Runner<D> {
         let booting = exact_kernel::style::roles::bind(&roles);
         root_font::bold_text_facts(&mut kernel, &plan, viewport.preferences.bold_text); // LLP 1115.000 D12.3
         let viewport_geometry = crate::viewport::Geometry::of(&kernel);
-        let seams = seams.for_plan(&plan);
+        let seams = seams.for_plan(&plan, !store.presence_names().is_empty());
         let mut runner = Runner {
             sites,
             strings,
@@ -946,6 +944,7 @@ impl<D: DataSource> Runner<D> {
             processes: Default::default(),
             wakes: Default::default(),
             calls: Default::default(),
+            presence: Default::default(),
             seams,
             delivery,
             viewport,

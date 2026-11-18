@@ -580,3 +580,29 @@ impl<D: DataSource> Runner<D> {
         }
     }
 }
+
+/// A held data-code call's two halves, whichever comes first: the host's
+/// reply, or the answer to send through it.
+#[derive(Default)]
+pub(in crate::runner) struct Pending {
+    pub(in crate::runner) reply: Option<crate::Reply>,
+    pub(in crate::runner) outcome: Option<Outcome>,
+}
+
+impl Pending {
+    pub(in crate::runner) fn complete(slot: &std::sync::Mutex<Pending>, outcome: Outcome) {
+        let mut s = slot.lock().unwrap_or_else(|e| e.into_inner());
+        match s.reply.take() {
+            Some(reply) => reply.send(outcome),
+            None => s.outcome = Some(outcome),
+        }
+    }
+}
+
+pub(in crate::runner) fn response(answer: &serde_json::Value) -> Outcome {
+    Outcome::Response(crate::request::Response {
+        status: 200,
+        headers: Vec::new(),
+        body: answer.to_string().into_bytes(),
+    })
+}

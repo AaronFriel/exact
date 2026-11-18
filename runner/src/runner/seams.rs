@@ -10,7 +10,13 @@
 //! uses them whenever the plan has none of the part's rows.
 
 use super::calls::{CallHow, LinkedTools};
+use super::presence_secrets::{presence_body, LinkedPresence, PresenceAnswer, PresenceAsk};
+use super::reply::response;
 use super::{CommitReceipt, DataSource, Runner, RunnerError};
+use crate::presence::{Backend, Occupancy};
+use crate::request::{Dispatch, Work};
+use crate::{HoldAnswer, StoreWrite};
+use exact_plan::ModulesRow;
 use serde_json::{json, Value as Json};
 
 /// What a runner links of its optional parts, chosen by an entry's
@@ -19,6 +25,8 @@ use serde_json::{json, Value as Json};
 pub struct ModuleLinks<D: DataSource> {
     /// Tool calls (LLP 1111), for a plan with tools.
     pub tools: &'static dyn Tools<D>,
+    /// Locked secrets (LLP 1133.010), for grants with a presence policy.
+    pub presence: &'static dyn PresenceSecrets<D>,
 }
 
 impl<D: DataSource> Clone for ModuleLinks<D> {
@@ -33,18 +41,27 @@ impl<D: DataSource> ModuleLinks<D> {
     /// Every part.
     pub const ALL: ModuleLinks<D> = ModuleLinks {
         tools: &LinkedTools,
+        presence: &LinkedPresence,
     };
 
     /// No part: the core alone.
-    pub const NONE: ModuleLinks<D> = ModuleLinks { tools: &NoTools };
+    pub const NONE: ModuleLinks<D> = ModuleLinks {
+        tools: &NoTools,
+        presence: &NoPresence,
+    };
 
-    /// The parts `plan` uses of these: a part whose rows the plan lacks is
-    /// left out, so the core answers as for an empty table.
-    pub(in crate::runner) fn for_plan(self, plan: &exact_plan::Plan) -> Self {
+    /// The parts `plan` uses of these, `presence` whether its store keeps a
+    /// name with a presence policy: a part the plan does not use is left
+    /// out, so the core answers as it would with the part's table empty.
+    pub(in crate::runner) fn for_plan(self, plan: &exact_plan::Plan, presence: bool) -> Self {
         ModuleLinks {
             tools: match plan.tools.is_empty() {
                 true => &NoTools,
                 false => self.tools,
+            },
+            presence: match presence {
+                true => self.presence,
+                false => &NoPresence,
             },
         }
     }
@@ -98,6 +115,73 @@ pub trait Tools<D: DataSource> {
 struct NoTools;
 
 impl<D: DataSource> Tools<D> for NoTools {}
+
+/// The presence seam (LLP 1047.001 D11 item 4): locked secrets, the
+/// person's check and the host's backend (`presence_secrets.rs`). Each
+/// provided method is the answer with no presence name: nothing is kept
+/// locked, and a store's presence call is refused.
+pub trait PresenceSecrets<D: DataSource> {
+    /// [`Runner::install_presence`].
+    fn install_presence(&self, _: &mut Runner<D>, _: Backend, _: Option<String>) {}
+    /// Whether this session keeps locked secrets.
+    fn presence_secrets(&self, _: &Runner<D>) -> bool {
+        false
+    }
+    /// The local-auth module's status answered, with its presence facts.
+    fn presence_status(&self, _: &mut Runner<D>, _: &ModulesRow, answer: Json) -> Json {
+        answer
+    }
+    /// The local-auth implementation was bound.
+    fn presence_rebound(&self, _: &mut Runner<D>) {}
+    /// [`Runner::take_presence_asks`].
+    fn take_presence_asks(&self, _: &mut Runner<D>) -> Vec<PresenceAsk> {
+        Vec::new()
+    }
+    /// [`Runner::presence_answer`].
+    fn presence_answer(&self, _: &mut Runner<D>, _: u64, _: PresenceAnswer) {}
+    /// [`Runner::presence_reply`].
+    fn presence_reply(&self, _: &mut Runner<D>, _: &[u8]) {}
+    /// A request goes out.
+    fn presence_noted(&self, _: &mut Runner<D>, _: u64, _: &crate::Request) {}
+    /// Whether request `ticket` is a presence call waiting on a ticket.
+    fn presence_holds(&self, _: &Runner<D>, _: u64) -> bool {
+        false
+    }
+    /// A store's presence call: with no presence name, refused by its name.
+    fn presence_call(&self, _: &mut Runner<D>, body: &[u8]) -> Option<Dispatch> {
+        let (_, name, _) = presence_body(body)?;
+        let message = format!("{name} is not a secret.keep name with a presence policy");
+        let answer = json!({ "error": "NotSupportedError", "message": message });
+        Some(Dispatch::Run(Work::Now(Box::new(move || {
+            response(&answer)
+        }))))
+    }
+    /// Committed writes for the host, a presence name's taken out.
+    fn presence_writes(&self, _: &mut Runner<D>, writes: Vec<StoreWrite>) -> Vec<StoreWrite> {
+        writes
+    }
+    /// The data source is ready.
+    fn presence_ready(&self, _: &mut Runner<D>) {}
+    /// When the backend next retries.
+    fn presence_due_ms(&self, _: &Runner<D>) -> Option<f64> {
+        None
+    }
+    /// Retry at the clock the advance reached.
+    fn tick_presence(&self, _: &mut Runner<D>) -> Result<Option<CommitReceipt>, RunnerError> {
+        Ok(None)
+    }
+    /// Run what the backend can run now.
+    fn pump_presence(&self, _: &mut Runner<D>) {}
+    /// The agent answered a presence hold.
+    fn presence_answered(&self, _: &mut Runner<D>, _: u64, _: &HoldAnswer) {}
+    /// The backend's occupancy, adopted into the store.
+    fn adopt_presence(&self, _: &mut Runner<D>) {}
+}
+
+/// The presence seam, not linked.
+struct NoPresence;
+
+impl<D: DataSource> PresenceSecrets<D> for NoPresence {}
 
 impl<D: DataSource> Runner<D> {
     /// Whether nothing outside the collections waits to be output: no
@@ -249,6 +333,140 @@ impl<D: DataSource> Runner<D> {
     }
 }
 
+impl<D: DataSource> Runner<D> {
+    /// The host's presence backend for this session, reconciled before boot
+    /// (its occupancy is in the boot snapshot). The runner runs it from now
+    /// on: its queue, the checks, and every committed write of its names.
+    /// `keystore`: where the platform's keystore keeps the items, when the
+    /// vault is it, so a check the host makes reads the item itself.
+    pub fn install_presence(&mut self, backend: Backend, keystore: Option<String>) {
+        let p = self.seams.presence;
+        p.install_presence(self, backend, keystore)
+    }
+
+    pub(in crate::runner) fn presence_secrets(&self) -> bool {
+        self.seams.presence.presence_secrets(self)
+    }
+
+    pub(in crate::runner) fn presence_status(&mut self, row: &ModulesRow, answer: Json) -> Json {
+        let p = self.seams.presence;
+        p.presence_status(self, row, answer)
+    }
+
+    pub(in crate::runner) fn presence_rebound(&mut self) {
+        let p = self.seams.presence;
+        p.presence_rebound(self)
+    }
+
+    /// The checks the host's platform makes, since the last take.
+    pub fn take_presence_asks(&mut self) -> Vec<PresenceAsk> {
+        let p = self.seams.presence;
+        p.take_presence_asks(self)
+    }
+
+    /// How a check the host made ended. A call let go meanwhile is dropped.
+    pub fn presence_answer(&mut self, id: u64, answer: PresenceAnswer) {
+        let p = self.seams.presence;
+        p.presence_answer(self, id, answer)
+    }
+
+    /// How a check the host made ended, as a host says it:
+    /// `{"call", "status": "passed"|"read"|"failed", "value"?, "code"?,
+    /// "message"?}`, a `read` without a value being an item the platform
+    /// dropped. The value goes to the waiting call alone; never journaled.
+    pub fn presence_reply(&mut self, json: &[u8]) {
+        let p = self.seams.presence;
+        p.presence_reply(self, json)
+    }
+
+    pub(in crate::runner) fn presence_noted(&mut self, ticket: u64, request: &crate::Request) {
+        let p = self.seams.presence;
+        p.presence_noted(self, ticket, request)
+    }
+
+    pub(in crate::runner) fn presence_holds(&self, ticket: u64) -> bool {
+        self.seams.presence.presence_holds(self, ticket)
+    }
+
+    pub(in crate::runner) fn presence_call(&mut self, body: &[u8]) -> Option<Dispatch> {
+        let p = self.seams.presence;
+        p.presence_call(self, body)
+    }
+
+    pub(in crate::runner) fn presence_writes(
+        &mut self,
+        writes: Vec<StoreWrite>,
+    ) -> Vec<StoreWrite> {
+        let p = self.seams.presence;
+        p.presence_writes(self, writes)
+    }
+
+    pub(in crate::runner) fn presence_ready(&mut self) {
+        let p = self.seams.presence;
+        p.presence_ready(self)
+    }
+
+    pub(in crate::runner) fn presence_due_ms(&self) -> Option<f64> {
+        self.seams.presence.presence_due_ms(self)
+    }
+
+    pub(in crate::runner) fn tick_presence(
+        &mut self,
+    ) -> Result<Option<CommitReceipt>, RunnerError> {
+        let p = self.seams.presence;
+        p.tick_presence(self)
+    }
+
+    pub(in crate::runner) fn pump_presence(&mut self) {
+        let p = self.seams.presence;
+        p.pump_presence(self)
+    }
+
+    pub(in crate::runner) fn presence_answered(&mut self, hold: u64, answer: &HoldAnswer) {
+        let p = self.seams.presence;
+        p.presence_answered(self, hold, answer)
+    }
+
+    pub(in crate::runner) fn adopt_presence(&mut self) {
+        let p = self.seams.presence;
+        p.adopt_presence(self)
+    }
+
+    /// The presence names, each with what the agent's `state` says of it:
+    /// `locked, user-presence`, `pending`, `plain` or `absent`, never a value
+    /// (§7, Disclosure).
+    pub fn presence_list(&self) -> Vec<(String, String)> {
+        (self.store.presence_names().into_iter())
+            .map(|(name, presence)| {
+                let said = match self.store.occupancy(name).unwrap_or(Occupancy::Absent) {
+                    Occupancy::Locked => format!("locked, {}", presence.policy.word()),
+                    other => other.word().to_owned(),
+                };
+                (name.to_owned(), said)
+            })
+            .collect()
+    }
+
+    /// `key`'s text in the strings table the app shows now, or the key.
+    pub(in crate::runner) fn strings_text(&self, key: &str) -> String {
+        (self.plan.localized(self.resolved_locale(), key))
+            .unwrap_or(key)
+            .to_owned()
+    }
+
+    /// A Rust source's answer that read a locked name with `get` fails, as
+    /// data code's `store.get` throws (D5): its value is `unlock`'s alone.
+    pub(in crate::runner) fn refuse_locked<T>(
+        &self,
+        answer: Result<T, super::DataError>,
+    ) -> Result<T, super::DataError> {
+        match self.store.take_locked_read() {
+            Some(name) => Err(crate::StoreError::Locked(name).into()),
+            None => answer,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{CallHow, DataError, DataSource, Runner, Value};
@@ -294,5 +512,37 @@ mod tests {
         assert_eq!(r.intents_state(), None);
         assert!(r.declared_state().is_empty());
         assert!(!r.call_running() && r.call_due().is_none() && !r.call_stops_timers());
+    }
+
+    #[test]
+    fn a_plan_with_no_presence_name_refuses_a_store_call_without_the_presence_seam() {
+        let source = "component App\n  view\n    text \"hello\"\n";
+        let plan = contract::compile(source).unwrap();
+        let mut r = Runner::boot(
+            plan,
+            Empty,
+            Kernel::with_monospace(),
+            Default::default(),
+            "/",
+        )
+        .unwrap();
+        let body = br#"{"presence":"unlock","name":"token","reason":"Sign in"}"#;
+        let Some(crate::request::Dispatch::Run(crate::request::Work::Now(answer))) =
+            r.presence_call(body)
+        else {
+            panic!("a presence call is answered now");
+        };
+        let crate::Outcome::Response(response) = answer() else {
+            panic!("a response");
+        };
+        let said: serde_json::Value = serde_json::from_slice(&response.body).unwrap();
+        assert_eq!(said["error"], "NotSupportedError");
+        assert_eq!(
+            said["message"],
+            "token is not a secret.keep name with a presence policy"
+        );
+        assert!(r.presence_call(br#"{"op":"other"}"#).is_none());
+        assert!(r.presence_list().is_empty() && r.take_presence_asks().is_empty());
+        assert!(!r.presence_secrets() && r.presence_due_ms().is_none());
     }
 }
