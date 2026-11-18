@@ -1,5 +1,5 @@
-//! What the reload tests share: a source with no data, a plan of one view,
-//! a boot and the running plan's digest.
+//! What the reload tests share: a source with no data, a plan of one view
+//! or of one action, a boot and the running plan's digest.
 
 use exact_apple::abi::{Bridge, Hooks};
 
@@ -26,6 +26,10 @@ pub fn source(text: &str) -> Vec<u8> {
 /// A plan that can start a Live Activity, which only the activities family
 /// serves; it reads nothing at boot, so its candidate is not held for data.
 pub const ACTIVITIES: &str = "shape ID\n  id: string\nshape S\n  n: number\ncomponent A\n  mutation started as shape ID\n  action start\n    send started = startActivity(\"k\", S(n=1))\n  view\n    text \"a\"\n";
+
+/// A plan whose button starts a trace, which only the traces family serves.
+pub const TRACING: &str =
+    "component A\n  action go\n    startTrace_EXPERIMENTAL()\n  view\n    button \"b\" press=go\n";
 
 pub fn boot(bridge: &mut Bridge<NoData>, plan: &[u8]) {
     let out = bridge.boot(plan, NoData, Hooks::none(), 390.0, 844.0);

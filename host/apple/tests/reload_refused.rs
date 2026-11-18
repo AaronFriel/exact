@@ -10,7 +10,7 @@ use exact_apple::link::{self, Uses};
 
 #[path = "reload/common.rs"]
 mod common;
-use common::{boot, digest, plan, source, NoData, ACTIVITIES};
+use common::{boot, digest, plan, source, NoData, ACTIVITIES, TRACING};
 
 #[test]
 fn hellos_binary_refuses_a_reload_into_a_family_and_keeps_its_plan() {
@@ -49,6 +49,7 @@ fn hellos_binary_refuses_a_reload_into_a_family_and_keeps_its_plan() {
             "gradients",
         ),
         (plan("input type=\"file\" id=\"f\""), "picker"),
+        (source(TRACING), "traces"),
     ] {
         let len = bridge.input_write(&next);
         let out = bridge.prepare_plan(len, NoData, Hooks::none(), 390.0, 844.0);

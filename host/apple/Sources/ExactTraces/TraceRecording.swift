@@ -13,6 +13,8 @@
 // Presentation probe readings remain diagnostic until qualified on a device.
 // A scroller that moves with no finger on it (an animation or app-driven scroll)
 // is moving. A Mac recording follows no scroller: its frames are at rest.
+import ExactCore
+import ExactKit
 import CExact
 import Foundation
 import QuartzCore

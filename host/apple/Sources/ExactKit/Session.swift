@@ -388,7 +388,7 @@ public final class ExactSession {
     var activityOutput: (any ActivityOutputting)?
     package let frames: Frames
     /// A session's presented frames (LLP 1079 D3); a production bake has one only while an app records.
-    var sampler: FrameSampler?
+    package var sampler: FrameSampler?
     let frameHealth = FrameHealth()
     var clockTimer: Timer?
     /// The runner deadline `clockTimer` fires for.

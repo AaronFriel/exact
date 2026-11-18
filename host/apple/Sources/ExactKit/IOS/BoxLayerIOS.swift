@@ -22,7 +22,7 @@ extension CALayer {
     var boxMask: CALayer? { (self as? NodeLayer).map(\.ownMask) ?? mask }
     /// Its opacity as it shows on screen: 0 for a placed canvas child, which
     /// its surface draws and UIKit does not, as alpha 0 once said.
-    var shownOpacity: Float { (self as? NodeLayer)?.drawnElsewhere == true ? 0 : opacity }
+    package var shownOpacity: Float { (self as? NodeLayer)?.drawnElsewhere == true ? 0 : opacity }
 }
 
 final class NodeLayer: CALayer {

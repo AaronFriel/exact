@@ -6,7 +6,7 @@ use exact_apple::abi::{Bridge, Hooks};
 
 #[path = "reload/common.rs"]
 mod common;
-use common::{boot, digest, plan, source, NoData, ACTIVITIES};
+use common::{boot, digest, plan, source, NoData, ACTIVITIES, TRACING};
 
 #[test]
 fn an_all_linked_binary_reloads_from_hello_into_each_family() {
@@ -48,6 +48,7 @@ fn an_all_linked_binary_reloads_from_hello_into_each_family() {
         ),
         ("activities", source(ACTIVITIES)),
         ("file input", plan("input type=\"file\" id=\"f\"")),
+        ("trace", source(TRACING)),
     ] {
         let mut bridge = Bridge::<NoData>::new();
         boot(&mut bridge, &plan("text \"Hello world\""));

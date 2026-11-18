@@ -1,4 +1,6 @@
 #if canImport(UIKit)
+import ExactCore
+import ExactKit
 import QuartzCore
 import UIKit
 
@@ -23,7 +25,7 @@ extension FrameSampler {
         var rows: [String: Row] = [:], order: [String] = [], layers = 0
         let content = scroller?.layer
         func walk(_ layer: CALayer, node: String, inContent: Bool) {
-            guard !layer.isHidden, layer.opacity > 0, (layer as? NodeLayer)?.drawnElsewhere != true else { return }
+            guard !layer.isHidden, layer.shownOpacity > 0 else { return }
             layers += 1
             let node = (layer.delegate as? NodeView).map { $0.props["testId"] ?? $0.props["id"].map { "#\($0)" } ?? "node \($0.id)" } ?? node
             let inContent = inContent || (content != nil && layer === content)
