@@ -614,7 +614,10 @@ export function propertyHolds(line, state, previous) {
 }
 
 async function propertyFailure(p, line, state, previous, s, file, test, step, index, host) {
-  const label = ['boot', 'reload'].includes(step.op) ? step.op : step.op === 'clock' ? `clock ${step.arg}` : `${step.op} ${JSON.stringify(step.target)}${step.op === 'type' ? ` ${JSON.stringify(step.text)}` : ''}`;
+  const label = ['boot', 'reload'].includes(step.op) ? step.op
+    : step.op === 'clock' ? `clock ${step.arg}`
+    : step.op === 'presence' ? `presence ${step.answer}`
+    : `${step.op} ${JSON.stringify(step.target)}${step.op === 'type' ? ` ${JSON.stringify(step.text)}` : ''}`;
   const location = at => `${at.file}:${at.line}:${at.col}`;
   const out = [`PROPERTY ${JSON.stringify(p.name)} is false on ${host}`,
     `  property line: ${file}:${line.line}`,
@@ -898,7 +901,7 @@ export async function runTests({ host, browser, file, plan, app, size, env, webD
       };
       // Before an input while counted faults are outstanding: those that fired leave the check, so a press the app
       // answers with `close()` cannot take an unfired one's evidence with it (LLP 1103 D3).
-      const INPUTS = new Set(['tap', 'drag', 'type', 'key', 'pick', 'authorize', 'clipboard', 'resize', 'back']);
+      const INPUTS = new Set(['tap', 'drag', 'type', 'key', 'pick', 'authorize', 'presence', 'clipboard', 'resize', 'back']);
       const settleFired = async () => {
         if (!armed.size) return;
         const faults = (await s.state()).faults ?? [];
@@ -974,6 +977,17 @@ export async function runTests({ host, browser, file, plan, app, size, env, webD
           case 'pick': {
             try { delivered(st.paths.length ? await s.type(`@${st.target}`, st.paths.map((p) => resolve(dirname(resolve(file)), p)).join('\n') + '\n') : await s.tap(`@${st.target}`, { choice: 'cancel' })); }
             catch (error) { if (error.message.includes('held: none')) error.message += pickHint(host); throw error; }
+            input = st.line; break;
+          }
+          case 'presence': {
+            const r = await s.clock('data');
+            if (r?.error || r?.settled === false) throw new Error(`presence: waiting for the prompt: ${r.error ?? r.diagnostic ?? r.reason}`);
+            try { delivered(await s.tap('@presence', { choice: st.answer })); }
+            catch (error) {
+              const missing = error.message.includes('no held device request');
+              error.message = `presence: ${error.message}${missing ? '; tap the control that calls authenticate or unlocks a presence secret first' : ''}`;
+              throw error;
+            }
             input = st.line; break;
           }
           // The held sign-in, completed against the app's own server (LLP 1146 D4): its authorization URL is
@@ -1155,7 +1169,7 @@ export async function runTests({ host, browser, file, plan, app, size, env, webD
           default: failures.push(`${at}: unknown step ${st.op}`);
         }
         if (closedAt == null) await mutationClock.advance(s, properties.length ? async (state, delta) => {
-          if (delta || ['tap', 'type', 'clock', 'key', 'reload'].includes(st.op)) {
+          if (delta || ['tap', 'type', 'clock', 'key', 'reload', 'presence'].includes(st.op)) {
             await checkProperties(state, delta ? { ...st, op: 'clock', arg: '+' + delta } : st, n);
           } else previous = state;
         } : undefined);
