@@ -673,7 +673,7 @@ fn mounts(root: &Path) -> Result<Vec<(String, PathBuf)>, String> {
         let dir = root
             .join(path)
             .canonicalize()
-            // Relative to the app's directory, where app.json is: say which (app farm wave 1, five builds).
+            // Name the base for a missing relative path.
             .map_err(|e| {
                 format!(
                     "typescript.sources.{name}: {path}, resolved from the app's directory {}: {e}",

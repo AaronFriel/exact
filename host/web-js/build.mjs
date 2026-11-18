@@ -130,9 +130,7 @@ const appTs = resolve(appDir, 'app.ts');
 // `./<name>/…` from the app's own modules resolves into that directory in
 // every load this build makes (the module read below, the server and page
 // bundles), as the type check's capture lays it out.
-// A mount is relative to the app's directory, where app.json is; one that is not there is named with the directory it
-// was resolved from, and this checkout's Snapback driver offered when that is what it names (app farm wave 1: five
-// builds miscounted the `../`, and one built the device's wasm outside the app).
+// Resolve relative mounts from app.json's directory and name that base when a mount is missing.
 function mountDir(name, path) {
   try { return realpathSync(resolve(appDir, path)); } catch (e) {
     const driver = /(^|\/)snapback4\/ts\/?$/.test(path) ? `; this checkout's Snapback driver is "${relative(appDir, resolve(root, 'snapback4/ts'))}" from there` : '';

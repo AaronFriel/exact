@@ -34,7 +34,7 @@ import { spawnSync } from '../host/apple/toolchain.mjs';
 import { checkDesignName } from './forma-design-path.mjs';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, readlinkSync, renameSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { basename, delimiter, dirname, isAbsolute, relative, resolve, sep, toNamespacedPath } from 'node:path';
-import { pathFrom, within } from './paths.mjs';
+import { pathFrom, preservePaths, samePath, within } from './paths.mjs';
 export { pathFrom } from './paths.mjs';
 import { homedir, tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -178,13 +178,13 @@ export function patchLines(from, path = pathFrom) {
 }
 /** An outside workspace's patches and toolchain, against this checkout's.
  * Refuses with the exact text to paste rather than letting Cargo fail later
- * on a duplicate crate or a missing wasm target. A patch path is compared as `pathFrom` writes it, through symlinks. */
+ * on a duplicate crate or a missing wasm target. Patch paths are compared by the directories they reach. */
 export function outsideWorkspaceProblems(workspace) {
   const problems = [];
   const manifest = Bun.TOML.parse(readFileSync(resolve(workspace, 'Cargo.toml'), 'utf8'));
   const theirs = manifest.patch?.['crates-io'] ?? {};
   const root = Bun.TOML.parse(readFileSync(resolve(ROOT, 'Cargo.toml'), 'utf8')).patch?.['crates-io'] ?? {};
-  const wrong = Object.entries(root).filter(([name, spec]) => !theirs[name]?.path || pathFrom(workspace, resolve(workspace, theirs[name].path)) !== pathFrom(workspace, resolve(ROOT, spec.path)));
+  const wrong = Object.entries(root).filter(([name, spec]) => !theirs[name]?.path || !samePath(resolve(workspace, theirs[name].path), resolve(ROOT, spec.path)));
   if (wrong.length) problems.push(`${workspace}/Cargo.toml: [patch.crates-io] must name exact2's vendored ${wrong.map(([name]) => name).join(', ')}. Use (or run \`bun exact.mjs update\` in an app \`exact new\` made):\n[patch.crates-io]\n${patchLines(workspace).join('\n')}`);
   // A nested workspace inherits the checkout's pinned toolchain from rustup.
   // An external workspace still needs its own pin.
@@ -411,6 +411,7 @@ export function resolveApp(nameOrCrate) {
   let dir = outside ?? resolve(ROOT, 'apps', name);
   if (!outside && !existsSync(resolve(dir, 'app.contract')) && existsSync(resolve(ROOT, 'game/games', name, 'app.contract'))) dir = resolve(ROOT, 'game/games', name);
   if (!existsSync(resolve(dir, 'app.contract'))) throw new Error(`no app at ${dir} (no app.contract)${outside ? '' : '; set EXACT_APP_DIR for an app outside this repo'}`);
+  preservePaths(dir);
   dir = realpathSync(dir);
   // The bake runs this checkout's TypeScript compiler and bundler (partial
   // fixture copies carry no package.json, as PINNED_BUN says).
@@ -439,7 +440,7 @@ export function resolveApp(nameOrCrate) {
       // authored no workspace builds in the generated one (scripts/app-shells.mjs), written when a build asks (`rust`).
       else if (outside || !manifests.some(existsSync)) workspace = authoredWorkspace(dir) ?? shellsDir(dir);
       // A crate beside app.json that names no workspace, with none above to own it, joins none (LLP 1153.003 D1.1).
-      if (workspace === dir && !existsSync(resolve(dir, 'Cargo.toml'))) refuseLoose(dir);
+      if (samePath(workspace, dir) && !existsSync(resolve(dir, 'Cargo.toml'))) refuseLoose(dir);
       // EXACT_APP_DIR may name an app of this repo; only another workspace is checked, its lock when a build asks.
       if (workspace !== ROOT && workspace !== shellsDir(dir) && existsSync(resolve(workspace, 'Cargo.toml'))) {
         const problems = outsideWorkspaceProblems(workspace);
