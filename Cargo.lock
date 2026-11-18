@@ -2214,6 +2214,8 @@ name = "exact-ureq"
 version = "3.4.0"
 dependencies = [
  "base64 0.23.1",
+ "brotli-decompressor",
+ "flate2",
  "log",
  "percent-encoding",
  "rustls",
