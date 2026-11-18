@@ -4062,7 +4062,7 @@ main navigationKey=`${top(nav).id}` navigationBack="close" navigate=follow displ
 - Each tab names its panel with `aria-controls`; the panels are the stacks, and every
   tab's stack stays mounted, so a pushed screen, a draft and a scroll offset survive
   a visit to another tab. A tab is `select(nav, name)`; selecting the shown tab
-  again pops it to its root. A sheet is a route of the tab's stack, rendered in the
+  again pops it to its first visit. A sheet is a route of the tab's stack, rendered in the
   panel's `for e in t.stack` like the others, and is presented over the tabs; with
   tabs the root's own children are no routes, and one with a `navigationKey` is refused.
 - On iOS the panels become a `UITabBarController`: a tab of one symbol over its label

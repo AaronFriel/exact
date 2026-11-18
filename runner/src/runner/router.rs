@@ -170,8 +170,8 @@ pub struct RouterContext {
     shared: RefCell<std::collections::BTreeMap<String, Value>>,
     /// The counters this launch's shares draw tokens and names from.
     claims: RefCell<Option<crate::share_in::Claims>>,
-    /// The launch was rooted (LLP 1030.004 D2): only the tabs selected are
-    /// retained.
+    /// The launch was rooted (LLP 1030.004 D2): a launch or relaunch opens
+    /// the location's screen alone, and only the tabs selected are retained.
     rooted: bool,
 }
 

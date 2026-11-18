@@ -271,8 +271,8 @@ component App
 - A welcome shown at first launch only is not a second route: the main screen is the root
   route and shows the welcome while a `persist` flag is unset (docs/recipes/first-launch.md).
 - `replace(nav, url)` swaps the screen shown for another in place, a stack's first included:
-  the stack keeps its depth and the visit its id, so a route keyed `${e.id}` stays on screen
-  with no push.
+  the stack keeps its depth and the visit its id, so a route keyed `${e.id}` stays mounted,
+  with no transition.
 - A route's first child, a `header` holding one heading, is iOS's navigation bar: an
   `aria-level=1` heading is its large title, a lower level the inline title. A pushed route
   has the platform's Back button and edge swipe with nothing written; a control whose `id`
