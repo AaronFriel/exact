@@ -927,7 +927,7 @@ public final class Agent {
             session.sampler?.stop()
             // An activity indicator holds one frame under it (LLP 1069.001,
             // amended 2026-10-07).
-            presenter.controls.syncProgress()
+            presenter.controls.family.syncProgress()
         }
         if req["take"] as? Bool == true { return ["clock": session.clock ?? 0] }
         let from = session.clock ?? 0

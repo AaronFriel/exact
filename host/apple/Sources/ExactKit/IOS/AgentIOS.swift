@@ -562,7 +562,7 @@ extension Agent {
            req["wheel"] == nil, req["hover"] == nil, req["contextmenu"] == nil, req["dblclick"] == nil,
            tapHitsControl(node, request: req),
            let activated = presenter.controls.activate(node, before: { nativePointer(node, request: req, at: $0) }) {
-            if var unsupported = presenter.controls.unopened(node) {
+            if var unsupported = presenter.controls.family.unopened(node) {
                 unsupported["reason"] = (unsupported["reason"] as? String ?? "") + "; an iOS simulator can use --touch platform for a real touch"
                 return unsupported
             }
@@ -1047,12 +1047,12 @@ extension Agent {
             }
             return ["typed":v.id, "key":key, "delivery":"recognized"]
         }
-        if req["key"] == nil, let reply = presenter.controls.type(v, req["text"] as? String ?? "") { return reply }
+        if req["key"] == nil, let reply = presenter.controls.family.type(v, req["text"] as? String ?? "") { return reply }
         #if os(iOS)
-        if let key = req["key"] as? String, let reply = presenter.controls.rangeKey(v, key, phase: req["phase"] as? String, repeats: req["repeat"] as? Bool == true) {
+        if let key = req["key"] as? String, let reply = presenter.controls.family.rangeKey(v, key, phase: req["phase"] as? String, repeats: req["repeat"] as? Bool == true) {
             if req["phase"] as? String == "down", let token = req["releaseKey"] as? String {
                 keyReleases[token] = { [weak presenter, weak v] in
-                    if let v { _ = presenter?.controls.rangeKey(v, key, phase: "up") }
+                    if let v { _ = presenter?.controls.family.rangeKey(v, key, phase: "up") }
                     return ["phase": "up", "delivery": "host-activation"]
                 }
             }

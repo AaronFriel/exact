@@ -127,7 +127,7 @@ package final class Presenter {
     /// Boxes under CSS `filter`, drawn again after each batch (LLP 1055.000 D14).
     let boxFilters = BoxFilterLink.makeSet?()
     let canvas2d: Canvas2DCanvases = SurfacesLink.installed?.canvas2D() ?? NoCanvas2D()
-    lazy var segments = SegmentHost(self)
+    lazy var segments: any SegmentHosting = ControlLink.makeSegments?(self) ?? NoSegments()
     lazy var controls = ControlHost(self)
     lazy var fieldSelections = FieldSelections(self)
     /// The one editor every `input`'s field of this session edits in (`FieldEditor`).

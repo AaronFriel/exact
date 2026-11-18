@@ -145,7 +145,7 @@ package final class Presenter {
     /// The `input`s the batch being applied makes in a closed box (`MenuHost.waitingFields`).
     var fieldsWaiting = Set<UInt32>()
     lazy var keyboardToolbars = KeyboardToolbars(self)
-    lazy var segments = SegmentHost(self)
+    lazy var segments: any SegmentHosting = ControlLink.makeSegments?(self) ?? NoSegments()
     /// Present only when the composition links them (LLP 1047.001 D4).
     package lazy var groupedLists: GroupedLists? = GroupedListsLink.make?(self)
     lazy var controls = ControlHost(self)

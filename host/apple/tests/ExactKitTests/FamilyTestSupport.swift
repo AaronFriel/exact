@@ -20,3 +20,8 @@ extension Presenter {
     var rowCellsHost: RowCells { rowCells as! RowCells }
 }
 #endif
+
+extension Presenter {
+    /// The built-in segment host (`ControlLink.makeSegments`' default).
+    var segmentHost: SegmentHost { segments as! SegmentHost }
+}
