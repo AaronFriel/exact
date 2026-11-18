@@ -17,10 +17,10 @@ to the panel to get the **direction** right — not to finish the design.
 | Grok, xhigh | `grok -p "<prompt>" -m grok-4.7 --effort xhigh` |
 | Muse Wonder Full, xhigh | `muse exec --model muse-wonder-full --effort xhigh --trust-workspace "<prompt>"` |
 
-Each seat is its family's newest model. `--model fable` always picks the newest Fable; the
-other CLIs take a version, so when one lists a newer model than its row names (`codex debug
-models` for Codex, [xAI's model list](https://docs.x.ai/docs/models) for Grok), use it and
-update the row.
+Each seat runs the latest model in its family. `--model fable` always resolves to the latest
+Fable. Codex and Grok take an exact version, so before a pass check `codex debug models` and
+[xAI's model list](https://docs.x.ai/docs/models); if either names a newer model in the
+seat's family, use it and update the row.
 
 Muse sits **if available**. If it fails to start, the panel is three and the report says so —
 do not stall the decision waiting on a seat. The other three are required; if one is down,

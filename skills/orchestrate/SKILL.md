@@ -31,9 +31,9 @@ unsafe or would waste the work if wrong.
 
 Codex: `codex exec -m gpt-6.2-sol -c model_reasoning_effort=<effort>`, prompt on stdin;
 `-s read-only` for reviews. Grok: `grok -p "<prompt>" -m grok-4.7 --effort xhigh`. Sol and
-Grok mean the newest of each, and neither CLI has an alias that follows it: when `codex
-debug models` or [xAI's model list](https://docs.x.ai/docs/models) names a newer one, use it
-and update this paragraph.
+Grok mean the latest of each. Neither CLI has an alias for that, so at the start of a
+program check `codex debug models` and [xAI's model list](https://docs.x.ai/docs/models); if
+either names a newer one, use it and update this paragraph.
 
 Reviews are **mutually blind**: two families, neither shown the other's findings, both on
 the same revision. Agreement across families is signal; a finding only one family raises
