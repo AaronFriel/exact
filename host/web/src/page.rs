@@ -644,6 +644,7 @@ impl<D: DataSource> crate::Host<D> {
         let boot = || {
             Runner::boot_checkpoint_linked(
                 crate::link::runner_links(),
+                exact_runner::ModuleLinks::ALL,
                 plan,
                 data,
                 crate::host::browser_kernel(),

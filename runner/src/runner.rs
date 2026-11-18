@@ -140,11 +140,14 @@ mod apply;
 mod live_time;
 pub mod midi;
 mod modules;
-pub use modules::{AppState, CallHow, PresenceAnswer, PresenceAsk};
+pub use modules::{AppState, PresenceAnswer, PresenceAsk};
+mod calls;
+pub use calls::CallHow;
 mod processes;
 mod provenance;
 mod seams;
 pub use provenance::CallOrigin;
+pub use seams::{ModuleLinks, Tools};
 mod wakes;
 pub use wakes::WakeHow;
 #[cfg(test)]
@@ -541,6 +544,10 @@ pub struct Runner<D: DataSource> {
     processes: processes::Processes,
     /// Wakes and background actions, running and to come (LLP 1133.017 D5).
     wakes: wakes::Wakes,
+    /// Tool calls, running and to come (LLP 1133.023 D7).
+    calls: calls::Calls,
+    /// The optional parts this runner links, for its plan.
+    seams: ModuleLinks<D>,
     poisoned: bool,
     /// Evaluate every site on every update (the incremental update's reference; `set_full_evaluation`).
     full: bool,
@@ -649,6 +656,7 @@ impl<D: DataSource> Runner<D> {
     ) -> Result<Runner<D>, RunnerError> {
         Runner::boot_inner(
             RunnerLinks::ALL,
+            ModuleLinks::ALL,
             plan,
             data,
             kernel,
@@ -664,6 +672,7 @@ impl<D: DataSource> Runner<D> {
     #[allow(clippy::too_many_arguments)] // the host boot facts
     fn boot_inner(
         links: RunnerLinks,
+        seams: ModuleLinks<D>,
         plan: impl Into<crate::Program>,
         mut data: D,
         mut kernel: Kernel,
@@ -828,6 +837,7 @@ impl<D: DataSource> Runner<D> {
         let booting = exact_kernel::style::roles::bind(&roles);
         root_font::bold_text_facts(&mut kernel, &plan, viewport.preferences.bold_text); // LLP 1115.000 D12.3
         let viewport_geometry = crate::viewport::Geometry::of(&kernel);
+        let seams = seams.for_plan(&plan);
         let mut runner = Runner {
             sites,
             strings,
@@ -935,6 +945,8 @@ impl<D: DataSource> Runner<D> {
             origins: Default::default(),
             processes: Default::default(),
             wakes: Default::default(),
+            calls: Default::default(),
+            seams,
             delivery,
             viewport,
             viewport_geometry,

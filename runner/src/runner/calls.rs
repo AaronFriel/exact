@@ -30,9 +30,11 @@
 //!   runs to its end, since its commit has landed and what it started is the
 //!   app's to finish, and its record says the caller left (`cancelled`).
 
-use super::super::{CommitReceipt, DataSource, Runner, RunnerError};
-use super::{CallOrigin, Json};
+use super::provenance::CallOrigin;
+use super::seams::Tools;
+use super::{CommitReceipt, DataSource, Runner, RunnerError};
 use serde_json::json;
+use serde_json::Value as Json;
 use std::collections::VecDeque;
 
 /// How long a call waits for the invocation before it (D7).
@@ -98,82 +100,11 @@ pub(in crate::runner) struct Calls {
 }
 
 impl<D: DataSource> Runner<D> {
-    /// A door's call of `tool` with `args`, a JSON object: queued, and its
-    /// invocation id answered. `Err` for a tool the plan does not name.
-    pub fn call_tool(&mut self, tool: &str, args: &str, how: CallHow) -> Result<u64, String> {
-        let Some(row) = (self.plan.tools.iter()).position(|t| self.plan.str(t.name) == tool) else {
-            let names: Vec<&str> = (self.plan.tools.iter())
-                .map(|t| self.plan.str(t.name))
-                .collect();
-            return Err(match names.is_empty() {
-                true => format!("no tool `{tool}`: this app declares none"),
-                false => format!("no tool `{tool}`; its tools: {}", names.join(", ")),
-            });
-        };
-        let args = serde_json::from_str(args).unwrap_or(Json::Null);
-        let id = self.next_invocation();
-        self.log(format!("tool:system:{} {tool}: arrived", how.door));
-        self.extensions.calls.waiting.push_back(Call {
-            id,
-            tool: row,
-            args,
-            how,
-            arrived: self.now_ms,
-            dispatched: None,
-            skipped: Vec::new(),
-            cancelled: false,
-        });
-        self.native_slot().changed("");
-        Ok(id)
-    }
-
-    /// Whether a call is between dispatch and its end.
-    pub(in crate::runner) fn call_running(&self) -> bool {
-        self.extensions.calls.current.is_some()
-    }
-
-    /// Run what is due of the calls: the next once nothing else runs, and
-    /// the end of the one running once it owns nothing or its time is up.
-    pub(in crate::runner) fn step_calls(&mut self) -> (Vec<CommitReceipt>, Option<RunnerError>) {
-        let mut receipts = Vec::new();
-        loop {
-            self.expire_waiting_calls();
-            if let Some(call) = self.extensions.calls.current.as_ref() {
-                let (id, at) = (call.id, call.dispatched.unwrap_or(self.now_ms));
-                if self.now_ms >= at + BOUND {
-                    self.end_call("timeout", "uncertain", "", Json::Null);
-                    continue;
-                }
-                if self.invocation_owns(id) || !self.complete_call() {
-                    break;
-                }
-                continue;
-            }
-            if self.extensions.calls.waiting.is_empty() || self.wake_running() || !self.data.ready()
-            {
-                break;
-            }
-            let call = self.extensions.calls.waiting.pop_front().expect("front");
-            self.extensions.calls.current = Some(call);
-            match self.dispatch_call() {
-                Ok(Some(receipt)) => receipts.push(receipt),
-                Ok(None) => {}
-                Err(e) => return (receipts, Some(e)),
-            }
-        }
-        (receipts, None)
-    }
-
     /// Refuse `busy` each waiting call whose [`WAIT`] has run out, whether
     /// a wake, another call or the data source held it.
     fn expire_waiting_calls(&mut self) {
         let now = self.now_ms;
-        let waiting = |r: &mut Self| {
-            r.extensions
-                .calls
-                .waiting
-                .pop_front_if(|c| now >= c.arrived + WAIT)
-        };
+        let waiting = |r: &mut Self| r.calls.waiting.pop_front_if(|c| now >= c.arrived + WAIT);
         while let Some(call) = waiting(self) {
             let name = self.plan.str(self.plan.tools[call.tool].name).to_owned();
             let message = "a wake or another call is running";
@@ -184,7 +115,7 @@ impl<D: DataSource> Runner<D> {
 
     /// Validate the current call and run its action (module doc).
     fn dispatch_call(&mut self) -> Result<Option<CommitReceipt>, RunnerError> {
-        let call = self.extensions.calls.current.as_ref().expect("a call");
+        let call = self.calls.current.as_ref().expect("a call");
         let (id, row, door) = (call.id, call.tool, call.how.door.clone());
         let tool = self.plan.tools[row].clone();
         let derive = |d: Option<exact_plan::DerivesId>| d.map(|d| self.derive_at(d.0 as usize));
@@ -226,7 +157,7 @@ impl<D: DataSource> Runner<D> {
             return Ok(self.refuse_call("busy", "the app's storage is still writing"));
         }
         let name = self.plan.str(tool.name).to_owned();
-        let call = self.extensions.calls.current.as_mut().expect("a call");
+        let call = self.calls.current.as_mut().expect("a call");
         call.dispatched = Some(self.now_ms);
         self.log(format!("tool:system:{door} {name} dispatched"));
         let result = self.as_invocation(CallOrigin::Tool, id, |r| {
@@ -279,7 +210,7 @@ impl<D: DataSource> Runner<D> {
     }
 
     fn current_tool_name(&self) -> String {
-        (self.extensions.calls.current.as_ref())
+        (self.calls.current.as_ref())
             .map(|c| self.plan.str(self.plan.tools[c.tool].name).to_owned())
             .unwrap_or_default()
     }
@@ -287,7 +218,7 @@ impl<D: DataSource> Runner<D> {
     /// The current call owns nothing: read what it reports, once. `false`
     /// while `fails when` or `returns` reads a pending resource.
     fn complete_call(&mut self) -> bool {
-        let row = self.extensions.calls.current.as_ref().expect("a call").tool;
+        let row = self.calls.current.as_ref().expect("a call").tool;
         let tool = self.plan.tools[row].clone();
         if self.background_ticket().is_some() {
             self.end_call("failed", "uncertain", "background", Json::Null);
@@ -320,7 +251,7 @@ impl<D: DataSource> Runner<D> {
 
     /// The current call ends `outcome`, with its certainty and reason.
     fn end_call(&mut self, outcome: &str, certainty: &str, reason: &str, value: Json) {
-        if let Some(call) = self.extensions.calls.current.take() {
+        if let Some(call) = self.calls.current.take() {
             self.finish_call(call, outcome, certainty, reason, value);
         }
     }
@@ -365,101 +296,175 @@ impl<D: DataSource> Runner<D> {
             "message": message,
             "at": self.time.epoch_at_zero + self.now_ms,
         });
-        let calls = &mut self.extensions.calls;
+        let calls = &mut self.calls;
         calls.ended.push_back(ended);
         while calls.ended.len() > KEPT {
             calls.ended.pop_front();
         }
         self.native_slot().changed("");
     }
+}
+
+/// The tool seam, linked: the calls above.
+pub(crate) struct LinkedTools;
+
+impl<D: DataSource> Tools<D> for LinkedTools {
+    /// A door's call of `tool` with `args`, a JSON object: queued, and its
+    /// invocation id answered. `Err` for a tool the plan does not name.
+    fn call_tool(
+        &self,
+        r: &mut Runner<D>,
+        tool: &str,
+        args: &str,
+        how: CallHow,
+    ) -> Result<u64, String> {
+        let Some(row) = (r.plan.tools.iter()).position(|t| r.plan.str(t.name) == tool) else {
+            let names: Vec<&str> = (r.plan.tools.iter()).map(|t| r.plan.str(t.name)).collect();
+            return Err(match names.is_empty() {
+                true => format!("no tool `{tool}`: this app declares none"),
+                false => format!("no tool `{tool}`; its tools: {}", names.join(", ")),
+            });
+        };
+        let args = serde_json::from_str(args).unwrap_or(Json::Null);
+        let id = r.next_invocation();
+        r.log(format!("tool:system:{} {tool}: arrived", how.door));
+        r.calls.waiting.push_back(Call {
+            id,
+            tool: row,
+            args,
+            how,
+            arrived: r.now_ms,
+            dispatched: None,
+            skipped: Vec::new(),
+            cancelled: false,
+        });
+        r.native_slot().changed("");
+        Ok(id)
+    }
+
+    /// Whether a call is between dispatch and its end.
+    fn call_running(&self, r: &Runner<D>) -> bool {
+        r.calls.current.is_some()
+    }
+
+    /// Run what is due of the calls: the next once nothing else runs, and
+    /// the end of the one running once it owns nothing or its time is up.
+    fn step_calls(&self, r: &mut Runner<D>) -> (Vec<CommitReceipt>, Option<RunnerError>) {
+        let mut receipts = Vec::new();
+        loop {
+            r.expire_waiting_calls();
+            if let Some(call) = r.calls.current.as_ref() {
+                let (id, at) = (call.id, call.dispatched.unwrap_or(r.now_ms));
+                if r.now_ms >= at + BOUND {
+                    r.end_call("timeout", "uncertain", "", Json::Null);
+                    continue;
+                }
+                if r.invocation_owns(id) || !r.complete_call() {
+                    break;
+                }
+                continue;
+            }
+            if r.calls.waiting.is_empty() || r.wake_running() || !r.data.ready() {
+                break;
+            }
+            let call = r.calls.waiting.pop_front().expect("front");
+            r.calls.current = Some(call);
+            match r.dispatch_call() {
+                Ok(Some(receipt)) => receipts.push(receipt),
+                Ok(None) => {}
+                Err(e) => return (receipts, Some(e)),
+            }
+        }
+        (receipts, None)
+    }
 
     /// Invocation `id` was let go of by a commit that stood: the running
     /// call ends `superseded`, `uncertain` when what was let go was a send.
-    pub(in crate::runner) fn call_superseded(&mut self, id: u64, send: bool) {
-        if (self.extensions.calls.current.as_ref()).is_some_and(|c| c.id == id) {
+    fn call_superseded(&self, r: &mut Runner<D>, id: u64, send: bool) {
+        if (r.calls.current.as_ref()).is_some_and(|c| c.id == id) {
             let certainty = if send { "uncertain" } else { "applied" };
-            self.end_call("superseded", certainty, "", Json::Null);
+            r.end_call("superseded", certainty, "", Json::Null);
         }
     }
 
     /// A name that needs a person was called by the running call's work.
-    pub(in crate::runner) fn call_person_required(&mut self) {
-        let id = self.invocation_id();
-        if (self.extensions.calls.current.as_ref()).is_some_and(|c| c.id == id && id != 0) {
-            self.end_call("refused", "uncertain", "person-required", Json::Null);
+    fn call_person_required(&self, r: &mut Runner<D>) {
+        let id = r.invocation_id();
+        if (r.calls.current.as_ref()).is_some_and(|c| c.id == id && id != 0) {
+            r.end_call("refused", "uncertain", "person-required", Json::Null);
         }
     }
 
     /// Take off this commit's commands from `first` that a call does not
     /// run, when the commit is the running call's (LLP 1111 D4a).
-    pub(in crate::runner) fn skip_in_call(&mut self, first: usize) {
-        let id = self.invocation_id();
-        if id == 0 || !(self.extensions.calls.current.as_ref()).is_some_and(|c| c.id == id) {
+    fn skip_in_call(&self, r: &mut Runner<D>, first: usize) {
+        let id = r.invocation_id();
+        if id == 0 || !(r.calls.current.as_ref()).is_some_and(|c| c.id == id) {
             return;
         }
         let mut i = first;
-        while i < self.commands.len() {
-            let name = self.commands[i].name.clone();
+        while i < r.commands.len() {
+            let name = r.commands[i].name.clone();
             if RUN.contains(&name.as_str()) {
                 i += 1;
                 continue;
             }
-            self.commands.remove(i);
+            r.commands.remove(i);
             if SKIPPED.contains(&name.as_str()) {
-                let call = self.extensions.calls.current.as_mut().expect("a call");
+                let call = r.calls.current.as_mut().expect("a call");
                 call.skipped.push(name.clone());
-                self.log(format!("{name}: skipped in a tool call"));
+                r.log(format!("{name}: skipped in a tool call"));
             } else {
-                self.log(format!("{name}: refused: in a tool call"));
+                r.log(format!("{name}: refused: in a tool call"));
             }
         }
     }
 
     /// Whether a running call is in a session no one sees: timers stop.
-    pub(in crate::runner) fn call_stops_timers(&self) -> bool {
-        (self.extensions.calls.current.as_ref()).is_some_and(|c| c.how.hidden)
+    fn call_stops_timers(&self, r: &Runner<D>) -> bool {
+        (r.calls.current.as_ref()).is_some_and(|c| c.how.hidden)
     }
 
     /// When the host should next advance for the calls.
-    pub(in crate::runner) fn call_due(&self) -> Option<f64> {
-        let calls = &self.extensions.calls;
+    fn call_due(&self, r: &Runner<D>) -> Option<f64> {
+        let calls = &r.calls;
         let waited = calls.waiting.front().map(|c| c.arrived + WAIT);
         if let Some(call) = calls.current.as_ref() {
-            let deadline = call.dispatched.unwrap_or(self.now_ms) + BOUND;
-            let due = match self.invocation_owns(call.id) {
+            let deadline = call.dispatched.unwrap_or(r.now_ms) + BOUND;
+            let due = match r.invocation_owns(call.id) {
                 true => deadline,
-                false => self.now_ms,
+                false => r.now_ms,
             };
             return Some(waited.map_or(due, |w| due.min(w)));
         }
         let waited = waited?;
-        Some(match self.wake_running() || !self.data.ready() {
+        Some(match r.wake_running() || !r.data.ready() {
             true => waited,
-            false => self.now_ms,
+            false => r.now_ms,
         })
     }
 
     /// Call `id`'s caller cancelled it (module doc): `{call, state}`, the
     /// state `ended` once it has ended, `running` while it runs to its end.
-    fn cancel_call(&mut self, id: u64) -> Result<String, String> {
-        let calls = &mut self.extensions.calls;
+    fn cancel_call(&self, r: &mut Runner<D>, id: u64) -> Result<String, String> {
+        let calls = &mut r.calls;
         if let Some(i) = calls.waiting.iter().position(|c| c.id == id) {
             let mut call = calls.waiting.remove(i).expect("found");
             call.cancelled = true;
-            let name = self.plan.str(self.plan.tools[call.tool].name).to_owned();
-            self.log(format!(
+            let name = r.plan.str(r.plan.tools[call.tool].name).to_owned();
+            r.log(format!(
                 "tool:system:{} {name}: cancelled before it ran",
                 call.how.door
             ));
             let message = json!("Its caller cancelled it before it ran.");
-            self.finish_call(call, "refused", "none", "cancelled", message);
+            r.finish_call(call, "refused", "none", "cancelled", message);
             return Ok(json!({ "call": id, "state": "ended" }).to_string());
         }
         if let Some(call) = calls.current.as_mut().filter(|c| c.id == id) {
             if !std::mem::replace(&mut call.cancelled, true) {
                 let door = call.how.door.clone();
-                let name = self.current_tool_name();
-                self.log(format!(
+                let name = r.current_tool_name();
+                r.log(format!(
                     "tool:system:{door} {name}: its caller cancelled; it runs to its end"
                 ));
             }
@@ -473,8 +478,8 @@ impl<D: DataSource> Runner<D> {
 
     /// Call `id` as its door polls it: LLP 1111 D4's envelope once it has
     /// ended, else `{call, state}` with `waiting` or `running`.
-    fn call_answer(&self, id: u64) -> Result<String, String> {
-        let calls = &self.extensions.calls;
+    fn call_answer(&self, r: &Runner<D>, id: u64) -> Result<String, String> {
+        let calls = &r.calls;
         if let Some(ended) = calls.ended.iter().find(|c| c["id"] == id) {
             return Ok(ended.to_string());
         }
@@ -486,87 +491,32 @@ impl<D: DataSource> Runner<D> {
         Ok(json!({ "call": id, "state": state }).to_string())
     }
 
-    /// The agent's `call` (`{"op":"call","tool","args","door"}`, queued
-    /// as the door would hand it), a launch's `--call '<tool> <json>'`
-    /// (`{"op":"launchEntry","launch":"call","entry"}`: a cold call in a
-    /// session no one sees, as a system's call boots one), a door's poll of
-    /// its call (`{"op":"called","id"}`), its caller's cancellation
-    /// (`{"op":"cancel","id"}`). `None` for any other op.
-    pub fn call_agent(&mut self, op: &str, request: &str) -> Option<Result<String, String>> {
-        let v: Json = serde_json::from_str(request).ok()?;
-        match op {
-            "launchEntry" if v["launch"] == "call" => {
-                let entry = v["entry"].as_str().unwrap_or_default().trim();
-                let (tool, args) = entry
-                    .split_once(char::is_whitespace)
-                    .unwrap_or((entry, "{}"));
-                let how = CallHow {
-                    door: v["door"].as_str().unwrap_or("agent").to_owned(),
-                    cold: true,
-                    hidden: true,
-                    digest: None,
-                };
-                self.log(format!("launch --call ({tool})"));
-                let id = self.call_tool(tool, args.trim(), how);
-                Some(id.map(|id| json!({ "call": id, "tool": tool, "cold": true }).to_string()))
-            }
-            "call" => {
-                let tool = v["tool"].as_str().unwrap_or_default().to_owned();
-                let args = match &v["args"] {
-                    Json::String(text) => text.clone(),
-                    args => args.to_string(),
-                };
-                let how = CallHow {
-                    door: v["door"].as_str().unwrap_or("agent").to_owned(),
-                    cold: v["cold"] == true,
-                    hidden: v["hidden"] == true,
-                    digest: v["digest"].as_str().map(str::to_owned),
-                };
-                let id = self.call_tool(&tool, &args, how);
-                Some(
-                    id.map(|id| {
-                        json!({ "call": id, "tool": tool, "state": "waiting" }).to_string()
-                    }),
-                )
-            }
-            "called" => Some(match v["id"].as_u64() {
-                Some(id) => self.call_answer(id),
-                None => Err("called needs the call's id".into()),
-            }),
-            "cancel" => Some(match v["id"].as_u64() {
-                Some(id) => self.cancel_call(id),
-                None => Err("cancel needs the call's id".into()),
-            }),
-            _ => None,
-        }
-    }
-
     /// `state.intents`: each tool with its word, modifiers, availability
     /// and face, and the calls running, waiting and ended, never their
     /// arguments (LLP 1133.023 §10).
-    pub fn intents_state(&self) -> Option<Json> {
-        if self.plan.tools.is_empty() {
+    fn intents_state(&self, r: &Runner<D>) -> Option<Json> {
+        if r.plan.tools.is_empty() {
             return None;
         }
-        let tools: Vec<Json> = (self.plan.tools.iter())
+        let tools: Vec<Json> = (r.plan.tools.iter())
             .map(|t| {
-                let available = t.available.map(|d| self.derive_at(d.0 as usize).cloned());
-                let face: Json = serde_json::from_str(self.plan.str(t.face)).unwrap_or_default();
+                let available = t.available.map(|d| r.derive_at(d.0 as usize).cloned());
+                let face: Json = serde_json::from_str(r.plan.str(t.face)).unwrap_or_default();
                 json!({
-                    "name": self.plan.str(t.name),
-                    "consequence": self.plan.str(t.consequence),
+                    "name": r.plan.str(t.name),
+                    "consequence": r.plan.str(t.consequence),
                     "additive": t.additive,
                     "idempotent": t.idempotent,
                     "closed": t.closed,
-                    "description": self.plan.str(t.description),
-                    "action": self.plan.str(self.plan.action(t.action).name),
+                    "description": r.plan.str(t.description),
+                    "action": r.plan.str(r.plan.action(t.action).name),
                     "available": !matches!(available, Some(Some(exact_plan::Value::Bool(false)))),
                     "face": face,
                 })
             })
             .collect();
-        let calls = &self.extensions.calls;
-        let open = |c: &Call, state: &str| json!({ "id": c.id, "tool": self.plan.str(self.plan.tools[c.tool].name), "door": c.how.door, "origin": "tool", "state": state });
+        let calls = &r.calls;
+        let open = |c: &Call, state: &str| json!({ "id": c.id, "tool": r.plan.str(r.plan.tools[c.tool].name), "door": c.how.door, "origin": "tool", "state": state });
         let mut all: Vec<Json> = calls.ended.iter().cloned().collect();
         all.extend(calls.current.iter().map(|c| open(c, "running")));
         all.extend(calls.waiting.iter().map(|c| open(c, "waiting")));

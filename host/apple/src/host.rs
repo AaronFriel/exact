@@ -534,6 +534,7 @@ impl<D: DataSource> Host<D> {
         let was = exact_runner::page::set_awaits_present(start_on_frame);
         let runner = Runner::boot_with_delivery_linked(
             links.runner,
+            exact_runner::ModuleLinks::ALL,
             plan,
             data,
             kernel,

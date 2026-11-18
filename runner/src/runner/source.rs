@@ -439,7 +439,7 @@ macro_rules! data_source {
         /// The app's data source: the one seam through which computation enters
         /// (LLP 1004 D4). Leaves implement this trait; sources that wrap another
         /// implement [`DataSourceWrapper`] to handle host capabilities explicitly.
-        pub trait DataSource {
+        pub trait DataSource: 'static {
             $(
                 $(#[$new_doc])*
                 fn $new(&mut $new_self, $($new_arg: $new_type),*) -> $new_result $new_body
@@ -485,7 +485,7 @@ macro_rules! data_source {
             )*
         }
 
-        impl<T: DataSourceWrapper + ?Sized> DataSource for T {
+        impl<T: DataSourceWrapper + ?Sized + 'static> DataSource for T {
             $(
                 fn $new(&mut $new_self, $($new_arg: $new_type),*) -> $new_result {
                     <T as DataSourceWrapper>::$new($new_self, $($new_arg),*)

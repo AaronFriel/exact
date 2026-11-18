@@ -41,7 +41,6 @@ mod agent;
 mod answered;
 mod arrival;
 mod bound;
-mod calls;
 mod ceremony;
 mod declared;
 mod declared_actions;
@@ -70,7 +69,6 @@ mod values;
 mod views;
 use super::event::absent_is_none;
 use admit::Route;
-pub use calls::CallHow;
 pub use declared::AppState;
 pub(super) use declared::CHOSEN;
 pub(super) use disclosed::STATED;
@@ -134,8 +132,6 @@ pub(super) struct Extensions {
     services: services::Services,
     /// What bound implementations disclose of their own objects (`disclosed.rs`).
     disclosed: disclosed::Disclosed,
-    /// Tool calls, running and to come (LLP 1133.023 D7).
-    calls: calls::Calls,
     /// Each bound live source's Contract readers, by resource, with the
     /// arguments each last asked with (`bound.rs`).
     pub(super) readers: BTreeMap<String, BTreeMap<usize, String>>,

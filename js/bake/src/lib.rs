@@ -1248,15 +1248,22 @@ fn bake_in(
             Composed((composer.compose)(module)),
             Composed((composer.compose)(refresh_module)),
         ),
-        (None, Some(seed)) => contract::snapshot::bake_app_with_warnings(
-            &entries,
-            plan,
-            Seeded { module, seed },
-            Seeded {
-                module: refresh_module,
-                seed,
-            },
-        ),
+        (None, Some(seed)) => {
+            // A data source owns what it reads: the bake's two share one seed.
+            let seed = std::rc::Rc::new(seed.clone());
+            contract::snapshot::bake_app_with_warnings(
+                &entries,
+                plan,
+                Seeded {
+                    module,
+                    seed: seed.clone(),
+                },
+                Seeded {
+                    module: refresh_module,
+                    seed,
+                },
+            )
+        }
         (None, None) => {
             contract::snapshot::bake_app_with_warnings(&entries, plan, module, refresh_module)
         }

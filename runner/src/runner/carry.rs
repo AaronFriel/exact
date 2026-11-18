@@ -110,6 +110,7 @@ impl<D: super::DataSource> super::Runner<D> {
     ) -> Result<Runner<D>, RunnerError> {
         Runner::boot_inner(
             RunnerLinks::ALL,
+            super::ModuleLinks::ALL,
             plan,
             data,
             kernel,
