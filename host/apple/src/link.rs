@@ -493,7 +493,12 @@ impl<D: DataSource> Links<D> {
                 } else {
                     exact_runner::ModuleLinks::<D>::NONE.text_axes
                 },
-                lists: exact_runner::ModuleLinks::<D>::ALL.lists,
+                // As `RunnerLinks::lists`, its instance half (LLP 1047.000 §9).
+                lists: if uses.has(Capability::Collections) {
+                    exact_runner::ModuleLinks::<D>::ALL.lists
+                } else {
+                    exact_runner::ModuleLinks::<D>::NONE.lists
+                },
             },
             turn: TurnLinks::of(uses),
         }
@@ -555,6 +560,24 @@ mod tests {
             assert_eq!(endowed.presence.is_some(), linked.has(Capability::Presence));
         }
         crate::store::PLATFORM.with(|p| *p.borrow_mut() = None);
+    }
+
+    /// The list engine's two halves come together or not at all: a runner
+    /// runs neither unless both are linked (LLP 1047.000 §9).
+    #[test]
+    fn the_list_engine_links_both_halves_or_neither() {
+        let without = Capability::ALL
+            .into_iter()
+            .filter(|c| *c != Capability::Collections)
+            .fold(Uses::NONE, Uses::with);
+        for uses in [ALL, Uses::NONE, without] {
+            let links = Links::<()>::of(uses);
+            assert_eq!(links.runner.lists.is_some(), links.modules.lists.linked());
+            assert_eq!(
+                links.runner.lists.is_some(),
+                uses.has(Capability::Collections)
+            );
+        }
     }
 
     /// D5: a plan that uses what the archive doesn't link is named and
