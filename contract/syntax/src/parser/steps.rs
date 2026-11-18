@@ -463,25 +463,17 @@ impl Parser {
         self.next();
         let path = self.state_path()?;
         self.expect_punct("==")?;
-        let token = self.next();
-        let value = match token.kind {
-            TokenKind::Str(s) => json_string(&s),
-            // A number too large for a double is no JSON the driver reads back.
-            TokenKind::Number(n) if n.is_finite() => format!("{n}"),
-            TokenKind::Punct("-") if matches!(self.peek_kind(), TokenKind::Number(n) if n.is_finite()) => {
-                format!("-{}", self.step_number("a number")?)
+        let value = if self.eat_punct("[") {
+            let mut items = Vec::new();
+            while !self.eat_punct("]") {
+                if !items.is_empty() {
+                    self.expect_punct(",")?;
+                }
+                items.push(self.until_scalar(&path)?);
             }
-            TokenKind::Ident(w) if w == "true" || w == "false" || w == "null" => w,
-            other => {
-                return Err(SyntaxError {
-                    id: "syntax-expected-step",
-                    message: format!(
-                        "`clock until state {path} ==` takes a string, a number, true, false or null, not {}",
-                        describe(&other)
-                    ),
-                    span: token.span,
-                })
-            }
+            format!("[{}]", items.join(","))
+        } else {
+            self.until_scalar(&path)?
         };
         if !self.at_ident("within") {
             let found = describe(&self.peek_kind().clone());
@@ -499,6 +491,30 @@ impl Parser {
             );
         }
         Ok(format!("until state {path} == {value} within {ms}"))
+    }
+
+    /// One scalar of `clock until state`'s literal, as JSON text.
+    fn until_scalar(&mut self, path: &str) -> R<String> {
+        let token = self.next();
+        Ok(match token.kind {
+            TokenKind::Str(s) => json_string(&s),
+            // A number too large for a double is no JSON the driver reads back.
+            TokenKind::Number(n) if n.is_finite() => format!("{n}"),
+            TokenKind::Punct("-") if matches!(self.peek_kind(), TokenKind::Number(n) if n.is_finite()) => {
+                format!("-{}", self.step_number("a number")?)
+            }
+            TokenKind::Ident(w) if w == "true" || w == "false" || w == "null" => w,
+            other => {
+                return Err(SyntaxError {
+                    id: "syntax-expected-step",
+                    message: format!(
+                        "`clock until state {path} ==` takes a string, a number, true, false, null or a list of them, not {}",
+                        describe(&other)
+                    ),
+                    span: token.span,
+                })
+            }
+        })
     }
 
     /// A JSON value from its tokens, as JSON text: a request's body. Its

@@ -1153,12 +1153,12 @@ fn clock_until_state_takes_a_path_a_json_literal_and_a_bound() {
         ("clock until state g == 1 within 2.5", "whole milliseconds"),
         ("clock until state g == 1 within 0", "whole milliseconds"),
         (
-            "clock until state g == [] within 10",
-            "a string, a number, true, false or null",
+            "clock until state g == [[1]] within 10",
+            "a string, a number, true, false, null or a list of them",
         ),
         (
             "clock until state g == none within 10",
-            "a string, a number, true, false or null",
+            "a string, a number, true, false, null or a list of them",
         ),
         ("clock until state g within 10", "=="),
         (huge.as_str(), "too large for a number"),
@@ -1235,6 +1235,24 @@ fn a_perf_block_refuses_the_wall_clock_and_counts_need_a_block() {
     let e = contract::tests("test \"t\"\n  perf\n    clock data\n  expect perf time a == 1\n")
         .unwrap_err();
     assert!(e.message.contains("counts `query"), "{e}");
+}
+
+/// LLP 1156.006.000 D5: `clock until state` takes a list of scalars, as JSON text for the driver.
+#[test]
+fn clock_until_state_takes_a_list_of_scalars() {
+    let tests = contract::tests(
+        "test \"lists\"\n  clock until state saved == [\"a\", 1, -2, false, null] within 10\n  clock until state saved == [] within 10\n",
+    )
+    .unwrap();
+    let json: serde_json::Value = serde_json::from_str(&contract::tests_json(&tests)).unwrap();
+    assert_eq!(
+        json[0]["steps"][0]["arg"],
+        "until state saved == [\"a\",1,-2,false,null] within 10"
+    );
+    assert_eq!(
+        json[0]["steps"][1]["arg"],
+        "until state saved == [] within 10"
+    );
 }
 
 #[test]
