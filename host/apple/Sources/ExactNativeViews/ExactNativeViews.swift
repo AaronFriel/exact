@@ -7,11 +7,13 @@
 // or when the app ships a module artifact, and installs it before any
 // session is made;
 // the core reaches it only through `NativeModuleLink`.
+@_exported import ExactFormaBinding
 import ExactKit
 
 public enum ExactNativeViews {
     /// Set `NativeModuleLink`'s slots, before any session is made.
     public static func install() {
+        ExactFormaBinding.install()
         NativeModuleLink.make = { NativeViews() }
         NativeModuleLink.makeElements = { ElementHatches($0) }
     }

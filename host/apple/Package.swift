@@ -58,7 +58,7 @@ let allCapabilities: [(name: String, target: String)] = [
 // which the roster links with it, or ExactCore's package API. Surfaces' Canvas
 // 2D images fetch and decode through the images family's static API, which
 // needs no install.
-let capabilityNeeds: [String: [Target.Dependency]] = ["ExactCollections": ["ExactCore"], "ExactSvg": ["ExactCore", "ExactEffects"], "ExactSurfaces": ["ExactImages"]]
+let capabilityNeeds: [String: [Target.Dependency]] = ["ExactCollections": ["ExactCore"], "ExactNativeViews": ["ExactFormaBinding"], "ExactSvg": ["ExactCore", "ExactEffects"], "ExactSurfaces": ["ExactImages"]]
 let capabilities = allCapabilities.filter { links($0.name) }
 
 // `swift test` builds every target a package declares, and the two UIKit
@@ -77,8 +77,9 @@ let intentFileSettings: [SwiftSetting] = intentFiles ? [.define("EXACT_INTENT_FI
 let devTools: [SwiftSetting] = ProcessInfo.processInfo.environment["EXACT_UPDATE_TRUST"] == "production" ? [] : [.define("EXACT_INSPECT"), .define("EXACT_AGENT")]
 // A production trust bake cannot enter agent mode (LLP 1069.007 D2), so its
 // ExactKit target does not compile the carrier or inspection implementation,
-// nor hatch diagnostics (LLP 1047.001 D11). Development keeps the same
-// sources and API it has always had.
+// nor hatch diagnostics (LLP 1047.001 D11), nor the plan from a URL and its
+// live design: network plan loading is compiled only into dev-capable hosts
+// (LLP 1023 §8). Development keeps the same sources and API it has always had.
 let agentSources = ProcessInfo.processInfo.environment["EXACT_UPDATE_TRUST"] == "production" ? [
     "ActivityAgent.swift",
     "Agent.swift",
@@ -92,6 +93,8 @@ let agentSources = ProcessInfo.processInfo.environment["EXACT_UPDATE_TRUST"] == 
     "AgentSensors.swift",
     "AgentSocketStartup.swift",
     "HatchDiagnostics.swift",
+    "LiveDesign.swift",
+    "PlanURL.swift",
     "IOS/AgentAimIOS.swift",
     "IOS/AgentCheckIOS.swift",
     "IOS/AgentFlatIOS.swift",
@@ -140,6 +143,9 @@ let core: [Target] = [
     .target(name: "ExactKit", dependencies: [.target(name: "ExactCore"), .target(name: "CExact"), .target(name: "CExactLaunch")] + (gallery ? [.target(name: "ExactSnapshot")] : []), path: "Sources/ExactKit", exclude: agentSources + (intentFiles ? [] : ["IntentFiles.swift"]), swiftSettings: devTools + gallerySettings + intentFileSettings),
     .target(name: "ExactWatchSync", dependencies: ["ExactCore", "CExact"], path: "Sources/ExactWatchSync"),
     .target(name: "ExactUpdates", dependencies: ["ExactKit", "CExact"], path: "Sources/ExactUpdates"),
+    // The binding core (LLP 1121 D12): no roster row of its own; the native
+    // module family answers a module's bindings through it, and links it.
+    .target(name: "ExactFormaBinding", dependencies: ["ExactKit", "CExact"], path: "Sources/ExactFormaBinding", swiftSettings: devTools),
 ] + allCapabilities.map {
     .target(name: $0.target, dependencies: ["ExactKit", "CExact"] + (capabilityNeeds[$0.target] ?? []), path: "Sources/\($0.target)", swiftSettings: devTools)
 } + [
@@ -186,7 +192,7 @@ let tests: [Target] = [
     // (`ExactTestsInstall`, `TestsInstall.swift`).
     .target(name: "ExactTestsInstall", path: "tests/ExactTestsInstall"),
     .testTarget(name: "ExactKitTests", dependencies: ["ExactWatchSync", "ExactPackage", "MediaCaptureImplementation", "SignInImplementation", "PasskeysImplementation", "ExactWidgetTimeline", "ExactCore", "ExactSnapshot", "ExactKit", "ExactUpdates", "ExactComposition", "ExactTestsInstall"]
-                + allCapabilities.map { .target(name: $0.target) } + ["ExactSoundRender", "ExactNowPlaying", "ExactShare", "ExactSharePlain"], path: "tests/ExactKitTests",
+                + allCapabilities.map { .target(name: $0.target) } + ["ExactFormaBinding", "ExactSoundRender", "ExactNowPlaying", "ExactShare", "ExactSharePlain"], path: "tests/ExactKitTests",
                 resources: [.copy("ColorFixtures"), .copy("SnapshotFixtures")], swiftSettings: devTools + gallerySettings + caltrainSettings),
 ]
 

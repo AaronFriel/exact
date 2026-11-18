@@ -121,12 +121,9 @@ try {
 } finally { rmSync(dir, {recursive:true, force:true}); }
 "#);
     // Compile the actual Foundation-only opening code, not a parallel parser.
-    let source = include_str!("../../Sources/ExactKit/PlanURL.swift")
+    let source = include_str!("../../Sources/ExactKit/DevelopmentLink.swift")
         .split("public enum ExactDevelopmentLink")
         .nth(1)
-        .unwrap()
-        .split("/// One bounded HTTP rung.")
-        .next()
         .unwrap();
     let checks = r#"
 final class ExactApp {

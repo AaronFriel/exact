@@ -1487,7 +1487,7 @@ The generated `--embed` composition lists the capabilities to link.
 | `ExactPresence` | Native presence checks | `ExactPresence.install()` |
 | `ExactEffects` | CSS `filter` on a box | `ExactEffects.install()` |
 | `ExactSvg` | SVG elements, SVG images and icons (links `ExactEffects` too) | `ExactSvg.install()` |
-| `ExactNativeViews` | The app's native module, native views and hatches | `ExactNativeViews.install()` |
+| `ExactNativeViews` | The app's native module, native views and hatches; links `ExactFormaBinding`, the public `ExactForma` | `ExactNativeViews.install()`, which installs Forma too |
 | `ExactControls` | Switches, checkboxes, radios, ranges, selects, dates, progress and segmented tablists | `ExactControls.install()` |
 | `ExactFlights` | Shared-element flights (`sharedElement`) | `ExactFlights.install()` |
 | `ExactSticky` | `position: sticky` | `ExactSticky.install()` |

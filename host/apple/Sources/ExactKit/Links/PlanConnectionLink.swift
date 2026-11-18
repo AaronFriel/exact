@@ -3,13 +3,12 @@
 // app URL, fetches and verifies each generation, applies it to every session
 // and subscribes to the server's edits. `ExactApp` holds it, and the core
 // reaches it only through what this file declares. Its readers are the dev
-// pill, the build channel, live design and the inspector. Only development
-// paths connect: the host executables' (`EXACT_DEV_PLAN` naming a URL, a
-// development link, `ExactDevelopmentLink`) and the dev menus'. Its move
-// selects it in development, where every family links (D6), and settles
-// which production store levels (D2) need it. Without it `connect` is
-// refused on stderr and the app stays unconnected. The slot's default is
-// today's.
+// pill, the build channel, live design and the inspector. Network plan
+// loading is compiled only into dev-capable hosts (LLP 1023 §8): no store
+// level of a production build takes a plan from a URL, so a production bake
+// compiles neither `PlanURL.swift` nor its live design, and the slot is
+// empty there. Without it `connect` is refused on stderr and the app stays
+// unconnected.
 import Foundation
 
 /// What the dev loop said it is doing before it had a plan to give:
@@ -49,5 +48,9 @@ package protocol PlanConnection: AnyObject {
 package enum PlanConnectionLink {
     /// The app's connection to a URL, telling the app's dev pills what it
     /// has to say; nil when the URL is no HTTP app URL.
+    #if EXACT_INSPECT
     package static var open: ((ExactApp, String) -> (any PlanConnection)?)? = { PlanURL.open(for: $0, $1) }
+    #else
+    package static var open: ((ExactApp, String) -> (any PlanConnection)?)?
+    #endif
 }

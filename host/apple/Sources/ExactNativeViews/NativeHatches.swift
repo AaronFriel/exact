@@ -64,6 +64,7 @@ import CExact
 import AVFoundation
 #endif
 import Foundation
+import ExactFormaBinding
 import ExactKit
 #if os(macOS)
 import AppKit

@@ -272,6 +272,16 @@ extension ExactApp {
         if let refused { connection?.report(["kind": "unsupported", "what": "pin.mode", "detail": refused, "revision": BuildChannel.revision.map { $0 as Any } ?? NSNull()]) }
     }
 
+    /// A session booted from the published plan, which carries that plan's
+    /// own design: that design is the one reported until the server's
+    /// snapshot says otherwise (`/__dev/design` answers 204 while the
+    /// server's is the plan's), fetched again here; a pin held is set on
+    /// it, and the generation reported (LLP 1122 D4).
+    func liveBooted(_ session: ExactSession) {
+        if BuildChannel.enabled, let design = session.runtime.designDigest() { BuildChannel.design = design }
+        connection?.syncDesign(); repinBooted()
+    }
+
     /// A session (or scene) that boots under a pin takes the whole of it,
     /// once the boot's batch is in (a generation's runner starts from the
     /// plan's); either way the generation it runs is reported.

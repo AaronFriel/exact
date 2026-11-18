@@ -38,7 +38,7 @@ extension NodeView {
     /// accent. The colour follows the appearance it is asked in, as a
     /// `light-dark()` accent must. Reading it records whose it was
     /// (`tintSource`), so a move under another accent is known (`retint`).
-    var nearestAccent: NSColor? {
+    package var nearestAccent: NSColor? {
         let node = accentNode
         tintSource = node.map(ObjectIdentifier.init)
         // No authored accent above: the theme's `AccentColor`, if it sets one

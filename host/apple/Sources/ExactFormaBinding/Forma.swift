@@ -15,6 +15,7 @@ import AppKit
 import UIKit
 #endif
 import CExact
+import ExactKit
 
 #if os(macOS)
 public typealias ExactFormaView = NSView

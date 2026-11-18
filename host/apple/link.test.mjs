@@ -1088,7 +1088,7 @@ agentSymbolCheck('production omits the agent, hatch diagnostics, CSS filter, SVG
       assert.match(symbols, line('_exact_outstanding$'), `${bake.platform} positive control for the exports`);
       assert.doesNotMatch(symbols, line('_exact_agent$'), `${bake.platform} production agent dispatcher`);
       assert.doesNotMatch(symbols, line('exact_runner::agent::handle'), `${bake.platform} production agent dispatcher`);
-      assert.doesNotMatch(symbols, line('ExactSvg\\.SvgHost|exact_svg_islands|ExactImages\\.|ExactCollections\\.|ExactNativeViews\\.|ExactControls\\.|ExactFlights\\.|ExactSticky\\.|ExactNotifications\\.|ExactHostEventMailbox\\.|ExactActivities\\.|ExactWakeCarriers\\.'), `${bake.platform} production SVG, images, lists, native module, form controls, flights or sticky`);
+      assert.doesNotMatch(symbols, line('ExactSvg\\.SvgHost|exact_svg_islands|ExactImages\\.|ExactCollections\\.|ExactNativeViews\\.|ExactControls\\.|ExactFlights\\.|ExactSticky\\.|ExactNotifications\\.|ExactHostEventMailbox\\.|ExactActivities\\.|ExactWakeCarriers\\.|ExactFormaBinding\\.|ExactKit\\.PlanURL|ExactKit\\.ExactApp\\.design\\('), `${bake.platform} production SVG, images, lists, native module, form controls, flights, sticky, session families, Forma or the plan connection`);
     } else {
       assert.match(symbols, line('_exact_agent$'), `${bake.platform} agent dispatcher`);
       assert.match(symbols, line(GRID_LAYOUT), `${bake.platform} grid layout`);

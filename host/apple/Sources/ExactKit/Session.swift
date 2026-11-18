@@ -361,7 +361,7 @@ public final class ExactSession {
     #if os(macOS)
     lazy var regions: any ContentRegionHosting = ContentRegionLink.make?(self) ?? NoContentRegions()
     #endif
-    var text: TextEngine { get { core.text } set { core.text = newValue } }
+    package internal(set) var text: TextEngine { get { core.text } set { core.text = newValue } }
     let fieldChrome = FieldChromeCache()
     let buttonMeasurements = ButtonMeasureCache()
     package let presenter: Presenter
