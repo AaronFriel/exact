@@ -2265,6 +2265,8 @@ panel it opens, sit one level below every other app's windows, so they never sho
 back when it exits, however it exits (LLP 1121 stage 9 F2).
 A data module's `crypto.getRandomValues()` and `crypto.randomUUID()` draw from the seed too, so every drive with the same seed
 repeats the same identifiers: against a live backend that deduplicates on one, give each drive a seed of its own.
+A Rust data crate asks whether its draws are seeded with `exact_data::crypto::seeded(&store)`; code that makes a key refuses while they are. The hosts keep a
+production bake out of agent mode; a development build, a release build under another trust, a terminal entry and an embedded session honour `EXACT_AGENT=1`.
 Seeds are whole numbers from 0 through 2^32 − 1, the range every host draws (LLP 1116.005 D5); an epoch is an ISO date, Unix milliseconds, or `now`: the machine's clock,
 read once by the driver at launch, for a drive against a live backend on real time (`snapback4 dev`). Native carriers pass
 `EXACT_AGENT_SEED`, `EXACT_AGENT_LOCALE`, `EXACT_AGENT_TIME_ZONE` and `EXACT_AGENT_EPOCH`
