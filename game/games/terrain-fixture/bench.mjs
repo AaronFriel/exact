@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { cpus, loadavg } from 'node:os';
 import { resolve } from 'node:path';
 
 const resolution = [1280, 720];
@@ -18,14 +19,14 @@ const valid = (key, value) => choices[key]?.includes(value) ??
     : whole(value));
 
 export function parseOptions([host, ...args], headless = process.env.BENCH_HEADLESS === '1') {
-  if (!['web', 'macos'].includes(host))
-    throw new Error('Specify web (Chrome WebGPU) or macos (Metal).');
+  if (!['web', 'macos', 'ios'].includes(host))
+    throw new Error('Specify web (Chrome WebGPU), macos (Metal) or ios (a paired device, with --phone=…).');
   if (headless && host !== 'web')
     throw new Error('BENCH_HEADLESS=1 is available for web only.');
   const timings = { '--warmup-ms': 20000, '--window-ms': 60000, '--timeout-ms': 60000, '--poll-ms': 50 };
   const switches = { ...defaults };
   const set = new Map();
-  let pair = null, device = null, os = null, refreshHz = null;
+  let pair = null, device = null, os = null, refreshHz = null, phone = null;
   for (let index = 0; index < args.length; index++) {
     const arg = args[index];
     if (arg === '--pair' && args[index + 1] === 'draw' && pair == null) {
@@ -44,6 +45,8 @@ export function parseOptions([host, ...args], headless = process.env.BENCH_HEADL
       device = value;
     } else if (key === '--os' && value.trim()) {
       os = value;
+    } else if (key === '--phone' && value.trim() && host === 'ios') {
+      phone = value;
     } else if (key === '--refresh-hz' && /^\d+(\.\d+)?$/.test(value) && Number.isFinite(Number(value)) && Number(value) > 0) {
       refreshHz = Number(value);
     } else {
@@ -52,8 +55,9 @@ export function parseOptions([host, ...args], headless = process.env.BENCH_HEADL
   }
   if (!headless && (!device || !os || refreshHz == null))
     throw new Error('A display row requires --device=…, --os=… and --refresh-hz=….');
+  if (host === 'ios' && !phone) throw new Error('An ios row requires --phone=<device name or identifier>.');
   const { '--warmup-ms': warmupMs, '--window-ms': windowMs, '--timeout-ms': timeoutMs, '--poll-ms': pollMs } = timings;
-  return { host, switches, set, warmupMs, windowMs, timeoutMs, pollMs, pair, headless, device, os, refreshHz };
+  return { host, switches, set, warmupMs, windowMs, timeoutMs, pollMs, pair, headless, device, os, refreshHz, phone };
 }
 
 function game(world) {
@@ -149,8 +153,6 @@ function inconclusive(windows, headless) {
 export async function readBench(session, config, commit) {
   const { host, switches, set, warmupMs, windowMs, timeoutMs, pollMs, headless, device, os, refreshHz } = config;
   for (const [name, value] of set) await session.set(name, value);
-  // The view takes a typed value at its next commit: play too soon and the canvas mounts with the old one.
-  if (set.length) await session.wait(100);
 
   let observedSwitches = null;
   const state = async (reset = false) => {
@@ -281,7 +283,8 @@ async function run(config) {
     EXACT_GAME_PROOF_PROFILE: config.host === 'web' ? 'release' : 'gpu-dev',
     EXACT_APP_DIR: app, EXACT_WEB_DIST: dist, EXACT_SCALE: '1',
   };
-  const build = spawn(process.execPath, [resolve(app, 'proof.mjs'), config.host, '--build-only'],
+  const deviceFlags = config.host === 'ios' ? ['--device', '--phone', config.phone] : [];
+  const build = spawn(process.execPath, [resolve(app, 'proof.mjs'), config.host, ...deviceFlags, '--build-only'],
     { cwd: root, env, stdio: ['ignore', 2, 2] });
   const status = await new Promise((done, fail) => {
     build.once('error', fail);
@@ -293,9 +296,18 @@ async function run(config) {
   const read = async options => {
     const transport = config.host === 'web'
       ? await openWeb(dist, pollUntil, options)
-      : await openMac(app, env);
+      : await openNative(config.host, app, env, config.phone);
+    // A loaded machine stretches the frames of a browser or an app it runs; a device's are its own.
+    const loaded = () => config.host === 'ios' ? null : Math.round(loadavg()[0] * 10) / 10;
+    const before = loaded();
     try {
-      return await readBench({ ...transport, now: () => performance.now(), wait: sleep }, options, commit);
+      const row = await readBench({ ...transport, now: () => performance.now(), wait: sleep }, options, commit);
+      row.browser = transport.browser ?? null;
+      row.machineLoad = before == null ? null : { before, after: loaded(), cores: cpus().length };
+      // With more runnable threads than cores, a frame waits for a core.
+      if (row.machineLoad && Math.max(before, row.machineLoad.after) > row.machineLoad.cores)
+        row.inconclusive.push({ quantity: 'row', condition: 'the machine had more load than cores' });
+      return row;
     } finally {
       await transport.close();
     }
@@ -312,18 +324,20 @@ async function run(config) {
   }
 }
 
-async function openMac(app, env) {
+async function openNative(host, app, env, phone) {
   const [{ open }, { displayReady, focus }] = await Promise.all([
     import('../../../scripts/agent-session.mjs'), import('../../bench/exact.mjs'),
   ]);
-  displayReady();
+  const mac = host === 'macos';
+  if (mac) displayReady();
   let pid, id, pixels;
+  // A device draws at its own size; the Mac app takes the bench's.
   const session = await open({
-    host: 'macos', app, size: resolution, timing: 'platform',
+    host, app, timing: 'platform', ...(mac ? { size: resolution } : { device: true, phone }),
     env: { ...env, EXACT_AGENT: 'live' }, onProcess: child => { pid = child.pid; },
   });
   try {
-    if (pid) focus(pid, true);
+    if (mac && pid) focus(pid, true);
   } catch (error) {
     await session.close();
     throw error;
@@ -437,6 +451,10 @@ async function openWeb(dist, poll, { headless, timeoutMs, pollMs }) {
     });
     child = track(spawn(executable, ['--user-data-dir=' + profile, '--no-first-run', '--no-default-browser-check',
       '--remote-debugging-port=0', '--window-size=1280,720', '--enable-unsafe-webgpu',
+      // Chrome for Testing turns on every experiment in Chromium's testing configuration. One of them
+      // sends this page a main frame on one display frame in two to four while it uploads sections:
+      // a 53 ms frame at 75 Hz that is 13 ms without it. A release browser starts with none of them.
+      '--disable-field-trial-config',
       ...(headless ? ['--headless=new'] : []), server.url.href],
     { stdio: 'ignore' }));
     let launchError;
@@ -452,18 +470,21 @@ async function openWeb(dist, poll, { headless, timeoutMs, pollMs }) {
     }, Boolean, { bound: timeoutMs, interval: pollMs });
     if (!page) throw new Error(`Chrome did not open the bench page within ${timeoutMs} ms`);
     client = await cdp(page.webSocketDebuggerUrl);
+    const { product } = await client.call('Browser.getVersion');
     await client.call('Page.bringToFront');
     await client.call('Emulation.setDeviceMetricsOverride', { width: resolution[0], height: resolution[1], deviceScaleFactor: 1, mobile: false });
     const evaluate = (fn, ...args) => client.eval(`(${fn})(${args.map(value => JSON.stringify(value)).join(',')})`);
     await waitForBenchPage(client, poll, timeoutMs, pollMs);
     return {
+      browser: product,
       async set(name, value) {
         const set = await evaluate((key, text) => {
           const input = document.querySelector('[data-testid="' + key + '"]');
           if (!input) return false;
           input.value = text;
           input.dispatchEvent(new Event('input', { bubbles: true }));
-          return true;
+          // The view takes a typed value at its next commit: play before it and the canvas mounts with the old one.
+          return new Promise(taken => requestAnimationFrame(() => requestAnimationFrame(() => taken(true))));
         }, name, value);
         if (!set) throw new Error('Could not set ' + name);
       },
@@ -507,12 +528,12 @@ async function openWeb(dist, poll, { headless, timeoutMs, pollMs }) {
 
 if (import.meta.main) {
   if (process.argv.includes('--help')) {
-    console.log('bun game/games/terrain-fixture/bench.mjs web|macos --device=… --os=… --refresh-hz=… [switch=value ...] [--pair draw] [--warmup-ms=20000] [--window-ms=60000] [--timeout-ms=60000] [--poll-ms=50]');
+    console.log('bun game/games/terrain-fixture/bench.mjs web|macos|ios --device=… --os=… --refresh-hz=… [--phone=…] [switch=value ...] [--pair draw] [--warmup-ms=20000] [--window-ms=60000] [--timeout-ms=60000] [--poll-ms=50]');
     console.log('BENCH_HEADLESS=1 allows a web sanity run without display metadata.');
   } else {
     await run(parseOptions(process.argv.slice(2))).catch(error => {
       console.error(error.message);
-      process.exitCode = 1;
+      process.exit(1);
     });
   }
 }

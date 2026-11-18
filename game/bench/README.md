@@ -1724,3 +1724,49 @@ uploaded no terrain bytes.
 The fixture's [benchmark runner](../games/terrain-fixture/README.md#decision-workload)
 records the switches, host metadata, mount observations and three live windows
 for LLP 1182.000 D4b. Its rows carry the uncalibrated label.
+
+### Mac Studio, 2026-11-18
+
+Mac Studio (Apple M5 Ultra, 36 cores), macOS 27.2.1, a 1440 × 900 display at 75 Hz
+(13.33 ms), canvas 1280 × 720. Every row is `radius=40` under the live clock with
+`budget=deadline`: 20 s of warm-up, then three 60 s windows, and a figure with a
+range is the range across the three. The engine and fixture are `7dc6fdf8c`'s. The
+web rows are Google Chrome 158.0.8127.37 on WebGPU, `web` profile; the Metal rows
+are the macOS app, `host-dev` profile. The machine's one-minute load was 5 to 30
+during the rows. Uncalibrated: the switch values stand for a game's costs and were
+not fitted to one.
+
+Flying crosses a chunk every 800 ms, and each crossing queues 648 sections.
+"Refill" is the time from a crossing to its last section installed.
+
+| Renderer | Switches | Window filled | Frame interval p50, p95 | `prepare` p95 | Encode p95 | Refills finished of 75 a window; time p50 | Sections pending at each window's end | Frames `prepare` ran past its budget | GPU frame p95 |
+|---|---|---|---|---|---|---|---|---|---|
+| Chrome, WebGPU | `move=fly` | 13.3 s | 13.34, 13.36 ms | 2.9–3.0 ms | 4.2–4.3 ms | 75, 75, 75; 280 ms | 0, 0, 0 | 0 | 0.36–0.37 ms |
+| Chrome, WebGPU | `move=fly light=8000 compare=on` | not in 60 s | 13.34, 13.36–13.37 ms | 8.7 ms | 10.5–10.6 ms | 0, 0, 35; 16.5 s | 51,152, 50,768, 50,448 | 17, 3, 18 | 0.38–0.39 ms |
+| Chrome, WebGPU | `move=fly light=96000 compare=on vertex=64 blend=window edits=4` | not in 60 s | 13.34, 13.36–13.45 ms | 12.1–12.3 ms | 14.0 ms | 0, 0, 0 | 52,488, 52,488, 52,488 | 3,652, 3,502, 3,434 of about 4,400 | 0.39 ms |
+| Metal | `move=fly` | 12.0 s | 13.33, 13.33 ms | 3.8–5.4 ms | 5.2–6.5 ms | 75, 75, 75; 280 ms | 0, 0, 0 | 0, 1, 0 | 0.43–0.48 ms |
+| Metal | `move=fly light=8000 compare=on` | not in 60 s | 13.33, 13.33 ms | 7.8–8.6 ms | 9.5–10.7 ms | 8, 10, 33; 15.6–16.5 s | 50,512, 50,512, 50,481 | 120, 60, 60 | 0.45 ms |
+| Metal | `move=fly light=96000 compare=on vertex=64 blend=window edits=4` | not in 60 s | 13.33, 13.33–21.36 ms | 12.2–12.4 ms | 13.6–13.7 ms | 0, 0, 0 | 50,458, 52,488, 52,488 | 2,049, 2,270, 2,087 of about 4,300 | 0.44–0.46 ms |
+
+With meshing alone a refill takes a third of a chunk crossing on both renderers.
+With lighting and the reuse compare on, the frame still holds the display period,
+because the hook stops at its deadline, and the work no longer fits: a refill that
+finishes takes twenty crossings, and at the larger light region nothing is installed
+at all. No row has an overload frame (`catchUp.overloadFrames`), and a tick costs
+0.03 ms.
+
+Draw cost, from `--pair draw`: the same switches with `draw=on` and `draw=off`,
+which did equal work in every window. Each cell is the encode time's p50 with draws,
+without them, and the difference.
+
+| Renderer | Switches | Draws a frame | Encode p50, `draw=on` | `draw=off` | Difference |
+|---|---|---|---|---|---|
+| Chrome, WebGPU | `move=stand` | 1,136 | 1.28–1.38 ms | 0.84–0.95 ms | 0.34–0.52 ms |
+| Chrome, WebGPU | `move=fly` | 1,205–1,243 | 1.17–1.48 ms | 0.91–1.33 ms | 0.15–0.30 ms |
+| Metal | `move=stand` | 1,136 | 1.24–1.65 ms | 1.13–1.23 ms | 0.10–0.41 ms |
+| Metal | `move=fly` | 1,201–1,242 | 1.40–1.63 ms | 0.98–1.10 ms | 0.42–0.62 ms |
+
+The p95 of the flying pairs is `prepare`'s and differs between the two runs by more
+than the draws cost, so it says nothing about them.
+
+Not taken: an iPad and a Pixel 5. The script's `ios` carrier has not run on a device.

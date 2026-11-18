@@ -297,7 +297,9 @@ test('validates hosts, metadata and switch values before opening a host', async 
   expect(() => options('radius=12')).toThrow('radius');
   expect(() => options('light=-1')).toThrow('light');
   expect(() => options('budget=count:0')).toThrow('budget');
-  expect(() => parseOptions(['linux'], true)).toThrow('web (Chrome WebGPU) or macos');
+  expect(() => parseOptions(['linux'], true)).toThrow('web (Chrome WebGPU), macos (Metal) or ios');
+  expect(() => parseOptions(['ios', '--device=d', '--os=o', '--refresh-hz=120'], false)).toThrow('--phone');
+  expect(parseOptions(['ios', '--device=d', '--os=o', '--refresh-hz=120', '--phone=pad'], false).phone).toBe('pad');
   expect(() => parseOptions(['macos'], true)).toThrow('web only');
   expect(() => parseOptions(['web'], false)).toThrow('--refresh-hz');
   await expect(readBench(double({ ignoredSwitch: 'radius' }), options('radius=8'), 'abc'))
