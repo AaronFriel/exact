@@ -2836,8 +2836,11 @@ buttons under the row"). Its swipe actions
 are UIKit's, drawn by UIKit (rounded on iOS 26 and later) whatever the buttons
 paint; when every control the row names says `appearance="none"`, the paint is
 kept instead, in a grouped list too: the row swipes by its own scroll, as on
-the web, with one row open at a time (a native swipe row's opening closes it,
-and its drag closes a native one), a full swipe past half the row pressing the outermost action
+the web, with one row open at a time (any other swipe row's opening closes it,
+and its drag closes the other's, a grouped list's row included; a touch elsewhere
+in the scroll that holds it, or that scroll's drag, closes it, and the tap that
+closes it presses nothing, as in a UIKit table),
+a full swipe past half the row pressing the outermost action
 (a haptic as it arms), and each action a VoiceOver custom action of the row's
 content.
 

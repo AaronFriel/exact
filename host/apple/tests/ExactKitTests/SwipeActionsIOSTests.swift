@@ -189,8 +189,8 @@ final class SwipeActionsIOSTests: XCTestCase {
         scroll.contentOffset.x = 90
         p.swipeActions.painted.began(try XCTUnwrap(p.views[1]))
         XCTAssertEqual(scroll.contentOffset.x, 90, "its own drag leaves it open")
-        // A native row opening closes it (one row of either kind open).
-        p.swipeActions.painted.closeAll()
+        // Another row's swipe opening closes it (one row of any kind open).
+        p.swipeActions.opening(5)
         XCTAssertEqual(scroll.contentOffset.x, 0, accuracy: 0.5, "closed")
 
         // No longer a swipe action: what the row installed goes, and its

@@ -296,6 +296,19 @@ final class GroupedListHost: GroupedLists {
         return nil
     }
 
+    #if os(iOS)
+    /// UIKit has no call that only closes a list's revealed swipe actions;
+    /// a collection view entering editing closes them. The list enters
+    /// editing and leaves it in the same turn (`isEditing`:
+    /// https://developer.apple.com/documentation/uikit/uicollectionview/isediting).
+    func closeSwipe(row id: UInt32) {
+        guard let collection = scroller(for: id) as? UICollectionView, !collection.isEditing,
+              collection.visibleCells.contains(where: { $0.configurationState.isSwiped }) else { return }
+        collection.isEditing = true
+        collection.isEditing = false
+    }
+    #endif
+
     /// Whether a list draws `id` (a row, or a row's toggle or detail
     /// button): the agent finds it in UIKit's cell, not the hidden row.
     func draws(_ id: UInt32) -> Bool { list(drawing: id) != nil }

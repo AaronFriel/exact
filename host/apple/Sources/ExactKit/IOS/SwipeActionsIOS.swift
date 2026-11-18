@@ -82,26 +82,77 @@ package final class SwipeActionsHost {
         for row in rows.values { row.discard() }
         rows.removeAll(); refusals.removeAll()
         #if os(iOS)
-        painted.reset()
+        painted.reset(); openRow = nil
+        dismissal.view?.removeGestureRecognizer(dismissal)
         #endif
     }
     #if os(iOS)
-    /// A painted row began a drag (PaintedSwipesIOS.swift): every native
-    /// row closes, one row of either kind open at a time.
-    func closeNative() {
-        for row in rows.values { row.table?.setEditing(false, animated: true) }
+    /// The row whose swipe last opened on this screen, of any kind.
+    private(set) var openRow: UInt32?
+    /// On the view that holds the open row: a touch beginning there, off
+    /// the row, closes it.
+    private lazy var dismissal = Dismissal { [weak self] touches in
+        guard let self, let id = openRow, let owner = presenter.views[id] else { return false }
+        // Closed already, or closing, by its own tap, drag or action.
+        guard rows[id].map({ $0.projection?.configurationState.isSwiped == true }) ?? painted.isOpen(id) else { openRow = nil; return false }
+        // A touch on the open row is the row's: its actions, its own close.
+        guard touches.contains(where: { !owner.bounds.contains($0.location(in: owner)) }) else { return false }
+        openRow = nil
+        close(id)
+        return true
     }
-    #endif
-    #if os(iOS)
+    /// `id`'s swipe is opening: the row open before it closes, as UIKit
+    /// keeps one row open in a table or a list. UIKit coordinates only the
+    /// rows of one view, and these rows are in different views: each
+    /// projected row is a table of its own, each grouped list a collection
+    /// view, each painted row a scroll. So every row, whatever its kind,
+    /// reports here as its swipe opens and is closed from here, by its
+    /// kind's own dismissal.
+    ///
+    /// UIKit also closes a revealed row on a touch elsewhere in its table or
+    /// list and as that view scrolls, and leaves it open on a touch outside
+    /// the view and through a push. A grouped row's list is that view. For
+    /// a projected or painted row it is the nearest scroll holding the row
+    /// (the screen, if none does), which `dismissal` watches.
+    func opening(_ id: UInt32) {
+        if let was = openRow, was != id { close(was, opening: id) }
+        openRow = id
+        dismissal.view?.removeGestureRecognizer(dismissal)
+        guard rows[id]?.grouped != true, let owner = presenter.views[id] else { return }
+        var holder = owner.superview
+        while let view = holder, !(view is UIScrollView) { holder = view.superview }
+        (holder ?? presenter.viewport).addGestureRecognizer(dismissal)
+    }
+    /// The person scrolls `scroll` (`ElementScrolls.userScrolled`): a
+    /// projected or painted row open in it closes, whatever the drag began on.
+    func scrolling(_ scroll: UIScrollView) {
+        guard let id = openRow, rows[id]?.grouped != true, let owner = presenter.views[id],
+              owner.isDescendant(of: scroll), !scroll.isDescendant(of: owner) else { return }
+        openRow = nil
+        close(id)
+    }
+    /// `id`'s revealed actions close, by its kind's own dismissal.
+    private func close(_ id: UInt32, opening: UInt32? = nil) {
+        if let row = rows[id] {
+            if !row.grouped { row.table?.setEditing(false, animated: true) }
+            // Two cell swipes of one list are UIKit's to coordinate: closing
+            // the list's swipe here would close the one opening. A painted
+            // row in the list is no cell swipe.
+            else if let list = presenter.groupedLists,
+                    !(opening.map { rows[$0]?.grouped == true && list.scroller(for: $0) === list.scroller(for: id) } ?? false) {
+                list.closeSwipe(row: id)
+            }
+        }
+        painted.close(id)
+    }
     /// A grouped list row's actions on one side, as its list cell offers
     /// them (LLP 1116.001 D1); nil for a row that names none there, or that
     /// is no grouped list's swipe row.
     package func configuration(row id: UInt32, leading: Bool) -> UISwipeActionsConfiguration? {
         guard let row = rows[id], row.grouped else { return nil }
         let offered = row.configuration(leading ? row.leading : row.trailing)
-        // The list asks as its row's swipe begins: a painted row that is
-        // open closes, one row of either kind open at a time.
-        if offered != nil { painted.closeAll() }
+        // The list asks as its row's swipe begins.
+        if offered != nil { opening(id) }
         return offered
     }
     #endif
@@ -334,6 +385,27 @@ package final class SwipeActionsHost {
         override func canPrevent(_ other: UIGestureRecognizer) -> Bool { false }
         override func canBePrevented(by other: UIGestureRecognizer) -> Bool { false }
         func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
+    }
+
+    /// Closes the open row on a touch that begins in its view off the row,
+    /// and takes that touch from the views, as UIKit's table takes the tap
+    /// that closes its revealed row: the touch presses nothing, by a view's
+    /// touches or a tap recognizer. Every other recognizer recognizes with
+    /// it, so a drag still scrolls, another row's swipe still opens and an
+    /// authored pan still pans.
+    private final class Dismissal: UIGestureRecognizer, UIGestureRecognizerDelegate {
+        let closes: (Set<UITouch>) -> Bool
+        init(_ closes: @escaping (Set<UITouch>) -> Bool) {
+            self.closes = closes
+            super.init(target: nil, action: nil)
+            delaysTouchesEnded = false; delegate = self
+        }
+        override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
+            state = state == .possible && closes(touches) ? .ended : .failed
+        }
+        func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
+            !(other is UITapGestureRecognizer)
+        }
     }
 
     /// A contact in a swipe row that leaves the slop toward a side with
@@ -650,8 +722,7 @@ package final class SwipeActionsHost {
         #if !os(tvOS)
         func tableView(_ tableView: UITableView, willBeginEditingRowAt indexPath: IndexPath) {
             open = true
-            for other in host.rows.values where other !== self { other.table?.setEditing(false, animated: true) }
-            host.painted.closeAll()
+            host.opening(owner.id)
             DispatchQueue.main.async { [weak self] in self?.nameActions() }
         }
         func tableView(_ tableView: UITableView, didEndEditingRowAt indexPath: IndexPath?) {

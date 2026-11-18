@@ -1,6 +1,7 @@
 # A grouped swipe and a native swipe can stay open together
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** One row's swipe actions are open on an iOS screen whatever the row's kind (`SwipeActionsHost.opening`), and a touch elsewhere in the open row's view closes it, as UIKit's does; `SwipeOneOpenIOSTests` drives each pairing with real touches
 **Systems:** host/apple
 **Severity:** P3
 **Author:** Grok 4.7

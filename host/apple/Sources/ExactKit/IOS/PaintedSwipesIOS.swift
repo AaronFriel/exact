@@ -6,8 +6,9 @@
 // row stays the authored horizontal snap scroll the web shows, and this keeps
 // what UIKit's swipe would have given it:
 //
-// - one row open at a time: a drag on one closes the others, the native
-//   swipe rows' included, and a native row opening closes these;
+// - one row open at a time, whatever the other row's kind, and a touch
+//   elsewhere in the scroll holding it, or that scroll's drag, closes it
+//   (`SwipeActionsHost.opening`);
 // - the full swipe: dragged on past its actions, more than half the row's
 //   width, it presses the outermost action (a haptic when it would), and
 //   the row closes, as `performsFirstActionWithFullSwipe` does;
@@ -105,16 +106,24 @@ final class PaintedSwipes {
             control.accessibilityElementsHidden = control.hidesAccessibility
         }
     }
-    /// A native swipe row opened (SwipeActionsIOS.swift): every painted row closes.
-    func closeAll() {
-        for row in rows.values { close(row) }
+    /// Whether `id` is a painted row showing actions: moved from rest toward
+    /// a side that has some, not a rubber band past one that has none.
+    func isOpen(_ id: UInt32) -> Bool {
+        guard let row = rows[id], let sv = row.owner?.scrollView else { return false }
+        let x = sv.contentOffset.x - rest(row, sv)
+        let rtl = row.owner?.effectiveUserInterfaceLayoutDirection == .rightToLeft
+        let (right, left) = rtl ? (row.leading, row.trailing) : (row.trailing, row.leading)
+        return (x > 0.5 && !right.isEmpty) || (x < -0.5 && !left.isEmpty)
     }
-    private func close(_ row: Row) {
-        guard let sv = row.owner?.scrollView else { return }
+    /// `id`'s actions close, if it is a painted row (`SwipeActionsHost.close`).
+    func close(_ id: UInt32) {
+        guard let row = rows[id], let sv = row.owner?.scrollView else { return }
         let x = rest(row, sv)
         guard abs(sv.contentOffset.x - x) > 0.5 else { return }
         // At rest at once, the slide animated over it, as a cell closes: what
-        // asks next (a drag, the agent) reads the row closed.
+        // asks next (a drag, the agent) reads the row closed. Setting the
+        // offset unanimated first ends a deceleration still moving it.
+        sv.setContentOffset(sv.contentOffset, animated: false)
         UIView.animate(withDuration: ExactEnv.agentFreezes ? 0 : 0.3, delay: 0, options: [.beginFromCurrentState, .allowUserInteraction]) {
             sv.contentOffset = PixelGrid.offset(CGPoint(x: x, y: sv.contentOffset.y), in: sv, clamped: false)
         }
@@ -147,12 +156,11 @@ final class PaintedSwipes {
         return nil
     }
 
-    /// A drag begins on `owner`: any other open row closes, a native one too.
+    /// A drag begins on `owner`: the row open before it closes, whatever its kind.
     func began(_ owner: NodeView) {
         guard rows[owner.id] != nil else { return }
         armed = nil
-        for (id, row) in rows where id != owner.id { close(row) }
-        presenter.swipeActions.closeNative()
+        presenter.swipeActions.opening(owner.id)
     }
     /// As it is dragged: a haptic once past the full swipe, as UIKit's.
     func scrolled(_ owner: NodeView) {
