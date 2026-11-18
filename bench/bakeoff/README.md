@@ -26,8 +26,9 @@ bun bench/bakeoff/round.mjs r21 grade --specs chat,inbox --redo 1
 A round's apps, logs and screenshots stay in `~/bakeoff/rounds/<name>`; `report` copies records, feel results,
 grades, builders' notes and the summary into `results/<name>/`.
 
-- Builders: GPT-6.1 Sol (high) through `codex exec`, sandboxed with escalations reviewed (`--approve-for-me`), and
-  Claude Opus 5.5 through `claude -p` in the `auto` permission mode. Muse is not logged in on this machine.
+- Builders: GPT-6.2 Sol (high) through `codex exec`, sandboxed with escalations reviewed (`--approve-for-me`), and
+  Claude Opus 5.5 through `claude -p` in the `auto` permission mode. Muse is not logged in on this machine. A
+  record's `builder` names the exact model; records without it (s1, and r34 and earlier) were built with GPT-6.1 Sol.
 - Exact builders use a detached checkout pinned at the round's commit (`~/bakeoff/pins/<rev>`) with this directory
   removed, so the grader's prompt is not there to read.
 - Simulators: `bake-b1`…`b6` build, `bake-g1`, `g2` grade, `bake-feel` probes (iPhone 18 Pro, iOS 27). Apps are

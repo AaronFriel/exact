@@ -19,7 +19,8 @@ to the panel to get the **direction** right — not to finish the design.
 
 Each seat is its family's newest model. `--model fable` always picks the newest Fable; the
 other CLIs take a version, so when one lists a newer model than its row names (`codex debug
-models` for Codex), use it and update the row.
+models` for Codex, [xAI's model list](https://docs.x.ai/docs/models) for Grok), use it and
+update the row.
 
 Muse sits **if available**. If it fails to start, the panel is three and the report says so —
 do not stall the decision waiting on a seat. The other three are required; if one is down,
