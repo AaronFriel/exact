@@ -229,7 +229,7 @@ final class MenuHost: NSObject {
     }
     func refresh() {
         guard let presenter else { return }
-        presenter.navigation.refreshInputGates(Array(presenter.views.values))
+        presenter.inputGates.refresh(Array(presenter.views.values))
         presenter.topLayerChanged()
         presenter.syncKeyViewLoop()
         presenter.syncAccessibility()
@@ -455,7 +455,7 @@ final class MenuHost: NSObject {
         if let presenter, let at = PositionArea.inset(of: pop, viewport: presenter.clientSize) {
             return presenter.point(fromClient: at, in: source)
         }
-        let column = presenter.map { $0.navigation.split.pane(holding: source) ?? $0.viewport }
+        let column = presenter.map { $0.navigation.stackSplit.pane(holding: source) ?? $0.viewport }
         let bounds = column.map { source.convert($0.bounds, from: $0) } ?? .infinite
         return PositionArea.origin(PositionArea.of(pop), anchor: anchor(source, in: source), size: menu.size,
                                    margins: PositionArea.margins(of: pop), overflow: .platform, in: bounds)
@@ -643,7 +643,7 @@ final class MenuHost: NSObject {
         // A sheet's window and a popover's hold this session's nodes alone.
         if window !== viewport.window {
         } else if let owner = focusOwner(window) {
-            guard owner === viewport || owner.isDescendant(of: viewport) || presenter?.navigation.split.holdsFocus(owner) == true else { return false }
+            guard owner === viewport || owner.isDescendant(of: viewport) || presenter?.navigation.stackSplit.holdsFocus(owner) == true else { return false }
         } else if presenter?.session?.view?.ownsShortcutFocus() == false { return false }
         guard let last = entries.last(where: { $0.value != "manual" }),
               (window.firstResponder as? NSTextInputClient)?.hasMarkedText() != true else { return false }

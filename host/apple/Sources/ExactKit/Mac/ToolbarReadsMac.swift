@@ -150,8 +150,8 @@ extension WindowToolbarHost {
         inputs.hasStack = navigation.hasStack
         inputs.backInToolbar = navigation.backInToolbar
         inputs.back = navigation.backFacts
-        let split = navigation.split
-        if split.active, let shown = split.shown { inputs.split = [shown.root.id, shown.list.id, shown.detail?.id ?? 0] }
+        let split = navigation.stackSplit
+        if split.active, let shown = split.shownSplit { inputs.split = [shown.root.id, shown.list.id, shown.detail?.id ?? 0] }
         inputs.listOwnsWindow = split.listOwns
         inputs.modal = presenter.dialogs.active?.id
         let routes = [navigation.headerRoute?.route, navigation.splitHeaderRoutes?.owner, navigation.splitHeaderRoutes?.beside].compactMap { $0 }
@@ -224,7 +224,7 @@ extension WindowToolbarHost {
             if let beside = s.beside { routes.append((s.root, beside, true)) }
         }
         // Every route in the split's pane: a block's answer for the one under the detail shows the detail.
-        if navigation.split.active, let shown = navigation.split.shown { shown.routes.forEach(note) }
+        if navigation.stackSplit.active, let shown = navigation.stackSplit.shownSplit { shown.routes.forEach(note) }
         for (root, route, _) in routes {
             note(root); note(route)
             // The route's own children: which one is its header (`HeaderRule`). A first child that is a

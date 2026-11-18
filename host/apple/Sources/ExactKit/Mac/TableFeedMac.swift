@@ -869,7 +869,7 @@ final class TableFeed: NSObject, NSTableViewDataSource, NSTableViewDelegate {
         if let mounted, table.keying, navigates(mounted) { pressRow(row) }
         // The person took the selection off its row (a Command-click): a
         // split's pane then shows nothing (LLP 1115.002 D4, SplitMac.swift).
-        if row < 0 { presenter?.navigation.split.deselected(id) }
+        if row < 0 { presenter?.navigation.stackSplit.deselected(id) }
     }
     /// The split's word on the selection (SplitMac.swift): the owning row,
     /// else the current row for a detail no row owns, is selected, and with
@@ -958,9 +958,9 @@ final class TableFeed: NSObject, NSTableViewDataSource, NSTableViewDelegate {
     func pressRow(_ row: Int) -> Bool {
         guard let pressing = self.row(at: row).flatMap(pressing), !pressing.disabled, !pressing.inert else { return false }
         // The list of a split (SplitMac.swift): a route this press brings is this row's detail.
-        let split = presenter?.navigation.split
-        if split?.shown?.table == id { split?.pressing = pressing.id }
-        defer { split?.pressing = nil }
+        let split = presenter?.navigation.stackSplit
+        if let split, split.table == id { split.pressing = pressing.id }
+        defer { if let split { split.pressing = nil } }
         presenter?.press(pressing.id)
         return true
     }

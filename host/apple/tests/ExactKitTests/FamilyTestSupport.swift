@@ -48,7 +48,7 @@ extension ExactSession {
 
 #if os(macOS)
 extension Presenter {
-    /// Navigation as the iOS tests name it (`navigationHost` is the family's cast there).
-    var navigationHost: NavigationHost { navigation }
+    /// The built-in back swipe (`NavigationLink.makeBackSwipe`'s default).
+    var backSwipeHost: BackSwipe { backSwipe as! BackSwipe }
 }
 #endif

@@ -1091,8 +1091,8 @@ final class HeaderMacTests: XCTestCase {
             styleMask: [.titled, .closable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
         window.contentView = view
-        XCTAssertTrue(p.navigation.oneLocation)
-        XCTAssertFalse(p.navigation.backPossible)
+        XCTAssertTrue(p.navigationHost.oneLocation)
+        XCTAssertFalse(p.navigationHost.backPossible)
         XCTAssertTrue(view.attachWindowToolbar(to: window))
         XCTAssertNotNil(window.toolbar, "the root header supplies the toolbar")
         let header = try named("header"), route = try named("route-library")

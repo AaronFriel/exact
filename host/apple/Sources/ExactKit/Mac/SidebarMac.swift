@@ -134,7 +134,7 @@ final class SidebarHost {
     }
 
     private func read(_ batch: Batch?) {
-        guard !ExactEnv.authoredChrome, let root = presenter.navigation.root else { shown = nil; return }
+        guard !ExactEnv.authoredChrome, let root = presenter.navigationHost.root else { shown = nil; return }
         // The root's tabs as the last batch to say them gave them (`NavigationTabs.of`), with what only the
         // kernel's layout rows tell: whether the app left the bar's placement unsaid
         guard let host = root.tabs, let kernel = presenter.rootTabs[root.node.id] else {

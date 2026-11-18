@@ -59,7 +59,7 @@ final class RouteTransitions {
             held = (stack[at - 1].id, route.id)
             play(part, on: route) { [weak self] alone in
                 self?.held = nil
-                if alone { self?.presenter.navigation.resync() }
+                if alone { self?.presenter.navigationHost.resync() }
             }
         }
         top = route.map { ($0.id, at > 0 ? presenter.session?.runtime.routePart($0.id, exit: true, size: $0.bounds.size) : nil) }

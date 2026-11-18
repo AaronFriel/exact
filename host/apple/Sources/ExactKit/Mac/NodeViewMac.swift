@@ -866,7 +866,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
         if let controls = presenter?.controls, let button = controls.controls[id] as? NativeButtonMac {
             controls.configureNative(button, self, accent: channels("accent_color").map { TextEngine.color($0) })
         }
-        presenter?.tables.appearanceChanged(self); refreshGroupedSeparator(); presenter?.navigation.split.recolor(self)
+        presenter?.tables.appearanceChanged(self); refreshGroupedSeparator(); presenter?.navigation.stackSplit.recolor(self)
         if let regions = presenter?.session?.regions, regions.owns(self) { regions.geometryChanged() }
         // An `svg`'s paints are resolved again; paint motion hears the appearance (LLP 1062 D4).
         presenter?.svg?.reappear(id, dark: drawsDark, clock: presenter?.session?.clock, tint: viewTint); presenter?.session?.noteAppearance(self)
@@ -879,7 +879,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
     /// what it resolved is applied again, as for an appearance change; an
     /// untinted symbol follows the accent, so it counts too.
     func systemColorsChanged() {
-        presenter?.navigation.split.recolor(self)
+        presenter?.navigation.stackSplit.recolor(self)
         guard hasSchemeColor || hasSymbolLeaf || inlineText.contains(where: { $0.hasSchemeColor }) else { return }
         reapplyColors()
     }

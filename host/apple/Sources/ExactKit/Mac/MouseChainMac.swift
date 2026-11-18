@@ -708,7 +708,7 @@ extension Presenter {
     /// Ancestor tracking exits cannot evict a child under visible overflow.
     func hoverAt(_ point: NSPoint) -> NodeView? {
         // The page, or a split's detail pane beside it (LLP 1115.002 D4).
-        let pane = navigation.split.active ? navigation.split.controller?.detailPane : nil
+        let pane = navigation.stackSplit.active ? navigation.stackSplit.detailPane : nil
         let ports = [viewport] + [pane].compactMap { $0 }
         guard let content = viewport.window?.contentView,
               ports.contains(where: { $0.bounds.contains($0.convert(point, from: nil)) }) else {

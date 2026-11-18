@@ -93,7 +93,7 @@ extension Presenter {
             if v.inert || v.isHidden { return }
             visit(v)
             let own = v.container.subviews.compactMap { $0 as? NodeView }
-            for child in tables.feeds[v.id]?.mounted ?? navigation.split.authored(own, in: v.container) { walk(child) }
+            for child in tables.feeds[v.id]?.mounted ?? navigation.stackSplit.authored(own, in: v.container) { walk(child) }
             for popover in menus.following(v) { walk(popover) }
         }
         for top in tops { walk(top) }

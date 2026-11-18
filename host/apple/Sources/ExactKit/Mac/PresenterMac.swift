@@ -119,8 +119,9 @@ package final class Presenter {
     /// Lists whose rows a table holds (LLP 1115.002 D5, stage 3a).
     lazy var tables = TableHost(self)
     lazy var alerts = AlertHost(self)
-    lazy var navigation = NavigationHost(presenter: self)
-    lazy var backSwipe = BackSwipe(self)
+    lazy package var navigation: any NavigationHosting = NavigationLink.make?(self) ?? NoNavigation(self)
+    lazy var inputGates = InputGates(self)
+    lazy var backSwipe: any BackSwiping = NavigationLink.makeBackSwipe?(self) ?? NoBackSwipe()
     /// SVG scenes (LLP 1055 D4), when the app links SVG.
     let svg = SvgLink.make?()
     /// Boxes' CSS animations (LLP 1055 D7).
@@ -144,7 +145,7 @@ package final class Presenter {
     /// The border box a person dragged a box's `resize` grip to; nil keeps an axis (ResizeGrip.swift).
     var onResizeBox: ((UInt32, CGFloat?, CGFloat?) -> Void)?
     /// The root tab bar as the window's sidebar (LLP 1115.002 D3).
-    lazy var sidebar = SidebarHost(self)
+    lazy var sidebar: any SidebarHosting = NavigationLink.makeSidebar?(self) ?? NoSidebar(self)
     /// Each navigation root's tabs, as the last batch to say them gave them (`takeRootTabs`).
     var rootTabs: [UInt32: RootTabs] = [:]
     /// The head's title goes to the window the app attached, through the
@@ -672,6 +673,7 @@ package final class Presenter {
         dialogs.reset()
         toolbar.reset() // its header's cover goes with `covers.reset()` below, untold
         navigation.reset()
+        inputGates.reset()
         sidebar.reset()
         statusItems.reset()
         covers.reset()
@@ -880,7 +882,7 @@ package final class Presenter {
         commitPendingEdit() // the press no longer ends a field's editing (FocusMac.swift)
         guard views[node.id] === node else { return }
         // A route this press brings is the row's detail (SplitMac.swift).
-        let split = navigation.split, row = split.pressing == nil && split.pressesPaintedRow(node)
+        let split = navigation.stackSplit, row = split.pressing == nil && split.pressesPaintedRow(node)
         if row { split.pressing = node.id }
         defer { if row { split.pressing = nil } }
         let command = dialogs.command(node, fromNativeMenu: fromNativeMenu, bubbled: bubbled)
@@ -986,7 +988,7 @@ package final class Presenter {
         let generation = hoverTransition
         defer { if hoverTransition == generation { hoverLooks(nodes) } } // LLP 1121 D8 (HoverMac.swift)
         func eligible(_ node: NodeView) -> Bool {
-            views[node.id] === node && (node.isDescendant(of: viewport) || navigation.split.pane(holding: node) != nil)
+            views[node.id] === node && (node.isDescendant(of: viewport) || navigation.stackSplit.pane(holding: node) != nil)
                 && !node.inert && !node.isHiddenOrHasHiddenAncestor && node.handlers.contains("hover")
         }
         let next = nodes.filter(eligible)
@@ -1254,7 +1256,7 @@ package final class Presenter {
                 views[id]?.holdGone()
                 if endExit(id) { continue }
                 // A route that left with its exit to play stays for it (RouteTransitionMac.swift).
-                if navigation.transitions.keeps(id) { beginExit(id); continue }
+                if navigation.keepsForExit(id) { beginExit(id); continue }
                 release(id, forget: true)?.removeFromSuperview()
             case .roots:
                 dialogs.children(root, op.ids.compactMap { views[UInt32($0)] })

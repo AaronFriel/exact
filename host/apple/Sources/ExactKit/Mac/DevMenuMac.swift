@@ -534,4 +534,32 @@ public enum DevMenu {
         return f
     }()
 }
+
+/// Go ▸ Back ⌘[ and Forward ⌘]: the ways of the session in the key window,
+/// which the adapter that owns the windows keeps current (`DevMenu.session`);
+/// each enabled only while that session has somewhere to go.
+final class GoMenuTarget: NSObject, NSMenuItemValidation {
+    @objc func back(_ sender: Any?) { DevMenu.session?.presenter.navigation.goBack() }
+    @objc func forward(_ sender: Any?) { DevMenu.session?.presenter.navigation.goForward() }
+    func validateMenuItem(_ item: NSMenuItem) -> Bool {
+        guard let navigation = DevMenu.session?.presenter.navigation else { return false }
+        return item.action == #selector(forward(_:)) ? navigation.canGoForward : navigation.canGoBack
+    }
+}
+
+extension Presenter {
+    /// A mouse's back or forward button came up (`buttonNumber` 3 or 4): Back
+    /// or Forward, after the event's `pointerup` has run, unless one of its
+    /// handlers prevented it (LLP 1115.000 D5.5). Chrome steps history at
+    /// the release and lets a `mouseup` or `pointerup` cancel it; a press, a
+    /// `pointerdown` or an `auxclick` does not.
+    func historyButton(_ event: NSEvent) {
+        guard event.type == .otherMouseUp, [3, 4].contains(event.buttonNumber) else { return }
+        // A turn later: the window dispatches the up after this monitor.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.mouseChain.upPrevented !== event else { return }
+            if event.buttonNumber == 3 { self.navigation.goBack() } else { self.navigation.goForward() }
+        }
+    }
+}
 #endif

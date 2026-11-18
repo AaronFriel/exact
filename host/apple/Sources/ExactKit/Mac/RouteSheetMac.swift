@@ -320,15 +320,15 @@ extension DialogHost {
             var left = false
             for entry in entries.reversed() where entry.route {
                 if presenter.isLeaving(entry.routeBase ?? entry.dialog) || presenter.isLeaving(entry.dialog) { continue }
-                let wanted = presenter.navigation.sheets.contains { $0.base === entry.routeBase }
+                let wanted = presenter.navigationHost.sheets.contains { $0.base === entry.routeBase }
                 if !wanted || !live(entry.routeBase ?? entry.dialog) { close(entry.dialog); left = true }
             }
             // The routes that left are navigation's to hide again, and those under them its to show.
-            if left { presenter.navigation.resync() }
+            if left { presenter.navigationHost.resync() }
             // A header is read again only by a batch that can have changed it.
-            let read = presenter.navigation.sheetsRead
-            presenter.navigation.sheetsRead = false
-            for wanted in presenter.navigation.sheets {
+            let read = presenter.navigationHost.sheetsRead
+            presenter.navigationHost.sheetsRead = false
+            for wanted in presenter.navigationHost.sheets {
                 if let entry = entries.first(where: { $0.route && $0.routeBase === wanted.base }) {
                     if presenter.isLeaving(entry.routeBase ?? entry.dialog) || presenter.isLeaving(entry.dialog) { continue }
                     if entry.dialog !== wanted.route { replace(entry, with: wanted.route, header: wanted.header) }
@@ -361,7 +361,7 @@ extension DialogHost {
         }
         route.isHidden = false
         route.sheetGroundChanged()
-        presenter.navigation.resync()
+        presenter.navigationHost.resync()
         refreshInputGates()
         presenter.syncKeyViewLoop()
         enterFocus()
@@ -392,9 +392,9 @@ extension DialogHost {
         let name = header?.title ?? ""
         if sheet.window.title != name { sheet.window.title = name }
         let row = { (node: NodeView?) in node.map { (SheetHeader.words(of: $0), $0.id, !$0.disabled) } }
-        chrome.onBack = { [weak presenter] in _ = presenter?.navigation.goBack() }
-        let back = entry.dialog.props["navigationBar"] != "none" && entry.routeBase !== entry.dialog && presenter.navigation.backOffered
-        chrome.back.isEnabled = presenter.navigation.back != nil
+        chrome.onBack = { [weak presenter] in _ = presenter?.navigationHost.goBack() }
+        let back = entry.dialog.props["navigationBar"] != "none" && entry.routeBase !== entry.dialog && presenter.navigationHost.backOffered
+        chrome.back.isEnabled = presenter.navigationHost.back != nil
         // The heading's authored typography on the title's words (LLP 1115 §2).
         let font = header?.heading?.authoredTitleFont(over: RouteChrome.titleFont) ?? RouteChrome.titleFont
         let changed = chrome.show(title: header?.title, font: font, back: back, cancel: back ? nil : row(header?.cancel), confirm: row(header?.confirm),
@@ -459,8 +459,9 @@ extension DialogHost {
                     "cancel": id(entry.header?.cancel), "confirm": id(entry.header?.confirm), "header": entry.header.map { $0.whole ? "projected" : "partly" } ?? "authored",
                     "size": [InspectionValue.r2(size.width), InspectionValue.r2(size.height)], "closedby": dismissalOwner(of: entry.dialog).props["closedby"] ?? "closerequest"]
         }
-        guard let painted = presenter.navigation.paintedModal else { return nil }
-        return ["route": Int(painted.id), "presentation": "painted", "kept": presenter.navigation.keptSheets[painted.id] ?? NSNull()]
+        // Without navigation no modal route is painted in the window.
+        guard let navigation = presenter.navigation as? NavigationHost, let painted = navigation.paintedModal else { return nil }
+        return ["route": Int(painted.id), "presentation": "painted", "kept": navigation.keptSheets[painted.id] ?? NSNull()]
     }
 }
 #endif

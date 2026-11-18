@@ -450,4 +450,14 @@ extension NodeView {
         layerPaintCache = (hasBoxPaint && p.drawn) || (kind == "image" && !hasSymbolLeaf && raster != nil && imageLayer == nil)
     }
 }
+
+extension NodeView {
+    /// The implicit form ground uses AppKit's desktop tint in both panes.
+    var standsOnSplitGround: Bool {
+        guard !wrote("background_color"), case .object(let role)? = style["background_color"],
+              role["sys"]?.string == "windowBackgroundColor", let presenter,
+              presenter.navigation.stackSplit.active else { return false }
+        return isDescendant(of: presenter.viewport) || presenter.navigation.stackSplit.pane(holding: self) != nil
+    }
+}
 #endif

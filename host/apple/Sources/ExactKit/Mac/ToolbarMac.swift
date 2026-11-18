@@ -622,8 +622,8 @@ final class WindowToolbarHost: NSObject, NSToolbarItemValidation {
         // A list beside its detail (LLP 1115.002 D4): the bar's items stop
         // at the divider between them and begin again after it, so each
         // header's buttons are over its own column.
-        let split = presenter.navigation.split, columns = declared == nil && split.active && split.controller?.view.window === window
-        let listIsOwner = header == nil || header?.route === split.shown?.list
+        let split = presenter.navigation.stackSplit, columns = declared == nil && split.active && split.window === window
+        let listIsOwner = header == nil || header?.route === split.shownSplit?.list
         let (over, after): (WindowHeader?, WindowHeader?) = !columns ? (header, nil) : listIsOwner ? (header, beside) : (beside, header)
         let installing = toolbar == nil
         if installing {
@@ -845,8 +845,8 @@ final class WindowToolbarHost: NSObject, NSToolbarItemValidation {
             return NSTrackingSeparatorToolbarItem(identifier: identifier, splitView: split, dividerIndex: 0)
         }
         // The same for the divider between a list and its detail (LLP 1115.002 D4).
-        if identifier == Self.listSeparatorIdentifier, let controller = presenter.navigation.split.controller {
-            return NSTrackingSeparatorToolbarItem(identifier: identifier, splitView: controller.splitView, dividerIndex: controller.listDivider)
+        if identifier == Self.listSeparatorIdentifier, let divider = presenter.navigation.stackSplit.listDivider {
+            return NSTrackingSeparatorToolbarItem(identifier: identifier, splitView: divider.view, dividerIndex: divider.index)
         }
         if let group = segments.item, group.itemIdentifier == identifier { return group }
         if let field = search.item, field.itemIdentifier == identifier { return field }

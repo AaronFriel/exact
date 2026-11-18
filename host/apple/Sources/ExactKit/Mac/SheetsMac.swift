@@ -218,7 +218,7 @@ extension Presenter {
     /// presentation the runner keeps live with what is above it, and the
     /// rest inert (LLP 1123 D2).
     package var openTopLayer: TopLayerGeometry {
-        navigation.split.samplePlacement()
+        navigation.stackSplit.samplePlacement()
         let sheets = dialogs.presented, popovers = menus.presented
         func depth(_ view: NodeView) -> Int {
             if view.window !== viewport.window {

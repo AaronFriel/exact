@@ -235,7 +235,7 @@ final class SplitHost {
     /// Read and present again with no batch: a controller came or went, or
     /// entered its window.
     func sync() {
-        presenter.navigation.resync()
+        presenter.navigationHost.resync()
         // With no batch to run them, the passes that read what the window shows.
         presenter.afterBatch { [weak presenter] in presenter?.toolbar.sync(); presenter?.shortcuts.sync() }
     }
@@ -610,7 +610,7 @@ final class SplitHost {
     @discardableResult func closeDetail() -> Bool {
         for _ in 0..<32 {
             guard active, let top = shown?.detail else { return true }
-            if presenter.navigation.dismiss(top) != nil || shown?.detail === top { return false }
+            if presenter.navigationHost.dismiss(top) != nil || shown?.detail === top { return false }
         }
         return shown?.detail == nil
     }
@@ -654,29 +654,6 @@ private final class MarkWindow {
     deinit {
         responder?.invalidate()
         tokens.forEach(NotificationCenter.default.removeObserver)
-    }
-}
-
-extension Presenter {
-    /// The view over `view` in the authored tree: an open popover's authored
-    /// parent, and for a subtree the split's pane holds, its home in the
-    /// page; else its superview. What inerts or hides a node from
-    /// assistive technology is read up it.
-    func authoredSuperview(of view: NSView) -> NSView? {
-        if let pane = navigation.split.controller?.detailPane, view.superview === pane, navigation.split.active, let node = view as? NodeView {
-            return blocks.parent(of: node)
-        }
-        return menus.parent(of: view)
-    }
-}
-
-extension NodeView {
-    /// The implicit form ground uses AppKit's desktop tint in both panes.
-    var standsOnSplitGround: Bool {
-        guard !wrote("background_color"), case .object(let role)? = style["background_color"],
-              role["sys"]?.string == "windowBackgroundColor", let presenter,
-              presenter.navigation.split.active else { return false }
-        return isDescendant(of: presenter.viewport) || presenter.navigation.split.pane(holding: self) != nil
     }
 }
 #endif

@@ -275,7 +275,7 @@ final class DialogHost {
     func refreshInputGates() {
         guard let presenter else { return }
         accessibilityBlocker = accessibleActive.map(ObjectIdentifier.init)
-        presenter.navigation.refreshInputGates(Array(presenter.views.values))
+        presenter.inputGates.refresh(Array(presenter.views.values))
         presenter.topLayerChanged()
     }
     func layout() {

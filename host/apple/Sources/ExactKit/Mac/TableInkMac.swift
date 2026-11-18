@@ -43,7 +43,7 @@ extension NodeView {
     /// read up the view chain, as the tint is (NodeColorMac.swift).
     var inEmphasizedRow: Bool {
         guard let presenter else { return false }
-        if let row = presenter.navigation.split.emphasizedRow, isDescendant(of: row) { return true }
+        if let row = presenter.navigation.stackSplit.emphasizedRow, isDescendant(of: row) { return true }
         guard !presenter.tables.feeds.isEmpty else { return false }
         var above = superview
         while let view = above, !(view is NSTableView) {
