@@ -1049,7 +1049,13 @@ impl<D: DataSource> Runner<D> {
             sent: false,
             grant: request
                 .stream
-                .then(|| crate::grants::admitting_request(self.data.grants(), &request))
+                .then(|| {
+                    crate::grants::admitting_request(
+                        self.links.grants,
+                        self.data.grants(),
+                        &request,
+                    )
+                })
                 .flatten()
                 .map(str::to_string),
             ask_again: false,

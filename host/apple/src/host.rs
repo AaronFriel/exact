@@ -35,7 +35,7 @@ mod arrange_tests;
 #[path = "canvas2d.rs"]
 pub(crate) mod canvas2d;
 #[path = "canvas_capture.rs"]
-mod canvas_capture;
+pub(crate) mod canvas_capture;
 #[path = "canvas_performance.rs"]
 mod canvas_performance;
 #[path = "colors.rs"]
@@ -894,7 +894,14 @@ impl<D: DataSource> Host<D> {
     /// [`Host::listen`] to `io`, and read sockets' buffered bytes (D7) and
     /// long polls' backoff waits (D8) from it; watch the documents the answers watch, as `owner`'s (LLP 1069.010.000 D1).
     pub fn listen_io(&mut self, io: &dyn crate::executor::Io, owner: u64) {
-        self.doc_watch = Some(crate::doc_watch::DocWatch::new(owner, &mut self.runner));
+        self.doc_watch = Some(crate::doc_watch::DocWatch::new(
+            owner,
+            self.runner.native_slot(),
+        ));
+        // Its first watches, read under the grants by the turn's documents work.
+        if let Some(documents) = self.turn.documents {
+            documents(self);
+        }
         self.listen(io.waker());
         self.runner.set_socket_reader(io.socket_reader());
         self.runner.set_retry_reader(io.retry_reader());

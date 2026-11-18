@@ -392,11 +392,11 @@ impl<D: DataSource> Bridge<D> {
                 Outcome::Surface(SurfaceOutcome::Captured(body))
             }
             7 if body.is_empty() => Outcome::Surface(SurfaceOutcome::Restored),
-            8 if self.host.is_some() => self
-                .host
-                .as_mut()
-                .expect("booted")
-                .canvas_captured(ticket, &body),
+            8 if self.host.is_some() => self.host.as_mut().expect("booted").canvas_captured(
+                ticket,
+                &body,
+                self.links.io.map(|io| io.write_file),
+            ),
             2..=4 => Outcome::Failed {
                 kind: match kind {
                     2 => FailureKind::Refused,

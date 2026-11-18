@@ -111,7 +111,20 @@ pub struct IoLinks {
     pub snapshot: StoreSnapshot,
     /// Start the executor: [`crate::executor::start_io`].
     pub start: StartIo,
+    /// Write a canvas capture's image under the app's `fs.write` grants.
+    pub write_file: AppFileWrite,
 }
+
+/// How [`IoLinks`] writes an image at an app path among the app's roots
+/// (`app:/data`, `app:/cache`, `app:/tmp`), under the `fs.write` lines of
+/// the grants narrowed by a source's scope, or names the refusal.
+pub type AppFileWrite = fn(
+    &[std::path::PathBuf; 3],
+    &str,
+    Option<&str>,
+    &str,
+    &[u8],
+) -> Result<(), (&'static str, String)>;
 
 /// Read a linked app's stores through its endowed bindings, or say why the
 /// read cannot be used.
@@ -133,6 +146,7 @@ impl IoLinks {
         endow: crate::store::endowed::<true>,
         snapshot: crate::store::snapshot_for,
         start: crate::executor::start_io,
+        write_file: crate::host::canvas_capture::write,
     };
 }
 

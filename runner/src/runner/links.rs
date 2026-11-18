@@ -24,7 +24,7 @@ pub struct RunnerLinks {
     /// `frame` and `measure` (LLP 1051.000 D3/D4): the kernel's answers
     /// natively ([`crate::geometry::KERNEL`]), the page's on the web.
     pub geometry: GeometryLink,
-    /// The I/O grant grammar (LLP 1047.001): [`crate::grants::validate`].
+    /// The I/O grant grammar (LLP 1047.001): [`crate::grants::LINKED`].
     pub grants: crate::grants::GrantsLink,
     /// CSS animations' `@keyframes`, resolved for a node's `animation` list
     /// (LLP 1055 D5): [`crate::bridge::KeyframesTable::resolve`].
@@ -63,7 +63,7 @@ impl RunnerLinks {
         canvas: Some(canvas2d::engine),
         format: Some(crate::format::formatting),
         geometry: Some(&crate::geometry::KERNEL),
-        grants: Some(crate::grants::validate),
+        grants: Some(&crate::grants::LINKED),
         keyframes: Some(crate::bridge::KeyframesTable::resolve),
         text_axes: Some(exact_motion::Engine::new),
     };
@@ -80,4 +80,11 @@ impl RunnerLinks {
         keyframes: None,
         text_axes: None,
     };
+}
+
+impl<D: crate::DataSource> super::Runner<D> {
+    /// How this runner reads I/O grants: `None` in an archive without I/O.
+    pub(crate) fn grants_link(&self) -> crate::grants::GrantsLink {
+        self.links.grants
+    }
 }

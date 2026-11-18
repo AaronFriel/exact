@@ -39,7 +39,7 @@ impl<D: DataSource> Bridge<D> {
         };
         let signature = plan.source(source);
         data.bind(&plan);
-        let mut store = Store::new(data.grants(), []);
+        let mut store = Store::new_linked(data.grants(), [], self.links.runner.grants);
         let answer = exact_runner::time::launching_with(self.launch_facts.clone(), || {
             data.activate()?;
             data.answer(&mut store, plan.str(signature.name), &[Value::Number(now)])
