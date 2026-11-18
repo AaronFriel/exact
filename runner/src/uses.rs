@@ -209,11 +209,14 @@ pub enum Capability {
     /// `device.periodic-background-sync`, `device.geolocation-background`)
     /// or a background transfer's or a geofence's names. Native only.
     Wakes,
+    /// The display held awake (LLP 1125 D11): a `wakelock` that can be
+    /// `screen`. Native only.
+    WakeLock,
 }
 
 impl Capability {
     /// Every capability, in bit order.
-    pub const ALL: [Capability; 51] = [
+    pub const ALL: [Capability; 52] = [
         Capability::Markdown,
         Capability::Motion,
         Capability::Collections,
@@ -265,6 +268,7 @@ impl Capability {
         Capability::HostEvents,
         Capability::Activities,
         Capability::Wakes,
+        Capability::WakeLock,
     ];
 
     /// The name an entry, a refusal and a report use.
@@ -321,6 +325,7 @@ impl Capability {
             Capability::HostEvents => "host_events",
             Capability::Activities => "activities",
             Capability::Wakes => "wakes",
+            Capability::WakeLock => "wake_lock",
         }
     }
 
@@ -360,7 +365,8 @@ impl Uses {
         .with(Capability::Notifications)
         .with(Capability::HostEvents)
         .with(Capability::Activities)
-        .with(Capability::Wakes);
+        .with(Capability::Wakes)
+        .with(Capability::WakeLock);
 
     /// This set and `capability`.
     pub const fn with(self, capability: Capability) -> Uses {

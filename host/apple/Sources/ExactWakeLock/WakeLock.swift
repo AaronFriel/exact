@@ -5,6 +5,7 @@
 // holds or lets go here. The process's lock is taken by the first holder and
 // given back with the last: on iOS and tvOS UIKit's idle timer, on the Mac a
 // power-management assertion against idle display sleep.
+import ExactKit
 import Foundation
 #if os(macOS)
 import IOKit.pwr_mgt
@@ -12,7 +13,7 @@ import IOKit.pwr_mgt
 import UIKit
 #endif
 
-package enum WakeLock {
+enum WakeLock {
     nonisolated(unsafe) private static var holders: Set<ObjectIdentifier> = []
     #if os(macOS)
     nonisolated(unsafe) private static var assertion: IOPMAssertionID = 0

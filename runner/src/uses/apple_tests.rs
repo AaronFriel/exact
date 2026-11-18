@@ -117,6 +117,18 @@ fn a_document_picker_links_the_pickers_family() {
     }
 }
 
+/// D10: the wake lock's family is a `wakelock` that can be `screen`.
+#[test]
+fn a_wake_lock_is_a_wakelock_that_can_be_screen() {
+    let held = |view: &str| apple_uses(&plan(view)).has(Capability::WakeLock);
+    assert!(held("text \"a\" wakelock=\"screen\""));
+    // A computed value can be either word.
+    assert!(held("text \"a\" wakelock=(wide ? \"screen\" : \"none\")"));
+    assert!(!held("text \"a\" wakelock=\"none\""));
+    assert!(!held("text \"a\""));
+    assert!(!uses(&plan("text \"a\" wakelock=\"screen\"")).has(Capability::WakeLock));
+}
+
 /// D10: each native roster entry is selected by the rows that reach its
 /// family's code, a computed value by whatever it can be, and a plain text
 /// and button plan by none; no other host's set moves.

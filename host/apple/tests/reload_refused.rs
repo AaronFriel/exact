@@ -50,6 +50,7 @@ fn hellos_binary_refuses_a_reload_into_a_family_and_keeps_its_plan() {
         ),
         (plan("input type=\"file\" id=\"f\""), "picker"),
         (source(TRACING), "traces"),
+        (plan("text \"a\" wakelock=\"screen\""), "wake_lock"),
     ] {
         let len = bridge.input_write(&next);
         let out = bridge.prepare_plan(len, NoData, Hooks::none(), 390.0, 844.0);

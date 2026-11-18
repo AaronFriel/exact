@@ -705,6 +705,10 @@ mod tests {
         );
         let flying = compile("column sharedElement=\"hero\"", "on = false");
         let stuck = compile("column position=\"sticky\" top=0", "on = false");
+        let awake = compile(
+            "text \"a\" wakelock=(on ? \"screen\" : \"none\")",
+            "on = false",
+        );
         let placed = compile(
             "box grid-column=(on ? \"1 / span 2\" : \"auto\")",
             "on = false",
@@ -730,6 +734,7 @@ mod tests {
             (&stuck, "sticky"),
             (&placed, "grid"),
             (&activity, "activities"),
+            (&awake, "wake_lock"),
         ] {
             assert_eq!(missing(plan, Uses::NONE).as_deref(), Some(name));
             assert_eq!(missing(plan, ALL), None);

@@ -56,6 +56,7 @@ let allCapabilities: [(name: String, target: String)] = [
     ("wakes", "ExactWakeCarriers"),
     ("gradients", "ExactGradients"),
     ("traces", "ExactTraces"),
+    ("wake_lock", "ExactWakeLock"),
 ]
 // What a family imports beyond ExactKit and CExact: another family's product,
 // which the roster links with it, or ExactCore's package API. Surfaces' Canvas

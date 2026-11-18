@@ -79,6 +79,15 @@ pub fn apple_uses(plan: &Plan) -> Uses {
         runs_command(plan, &["startTrace_EXPERIMENTAL", "stopTrace_EXPERIMENTAL"]),
     );
     add(Capability::Controls, uses_controls(plan));
+    // `wakelock="screen"` holds the display awake (LLP 1125 D11).
+    add(
+        Capability::WakeLock,
+        plan.bindings.iter().any(|b| {
+            b.kind == BindingKind::Prop
+                && b.id == PropId::Wakelock as u16
+                && can_be(plan, &b, |v| v == "screen")
+        }),
+    );
     // A flight follows a shared element's name from a leaver to an arriver.
     add(
         Capability::Flights,

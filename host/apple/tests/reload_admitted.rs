@@ -49,6 +49,7 @@ fn an_all_linked_binary_reloads_from_hello_into_each_family() {
         ("activities", source(ACTIVITIES)),
         ("file input", plan("input type=\"file\" id=\"f\"")),
         ("trace", source(TRACING)),
+        ("wake lock", plan("text \"a\" wakelock=\"screen\"")),
     ] {
         let mut bridge = Bridge::<NoData>::new();
         boot(&mut bridge, &plan("text \"Hello world\""));

@@ -636,7 +636,8 @@ pub fn web_linked(plan: &exact_plan::Plan, inputs: &serde_json::Value) -> String
             | Capability::Notifications
             | Capability::HostEvents
             | Capability::Activities
-            | Capability::Wakes => {}
+            | Capability::Wakes
+            | Capability::WakeLock => {}
         }
     }
     entry
