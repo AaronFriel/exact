@@ -1,6 +1,7 @@
 # a partial selection from fixed content into a virtualized list's rows loses retired rows on copy
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** Browser selections carry fixed-side endpoints through list-selection.js, the JS projection and the wasm list-text ABI; both web targets copy the same text after retirement.
 **Systems:** host/web/list-selection.js, host/web-js/list-text.js, host/web/src/abi.rs
 **Author:** Codex, from Astra’s round-7 review of fixed collection content
 **Date:** 2026-11-14

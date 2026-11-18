@@ -478,7 +478,9 @@ impl<D: DataSource> Bridge<D> {
             .unwrap_or(u32::MAX)
     }
 
-    /// Logical text for all rows (empty keys), or two UTF-16 endpoints.
+    /// Logical text for the whole list, or between two UTF-16 endpoints, each
+    /// a keyed row or the fixed lead (`fixed` 0) or trail (1); any other
+    /// `fixed` names a row. As the Apple host's `list_text`.
     #[allow(clippy::too_many_arguments)]
     pub fn list_text(
         &mut self,
@@ -489,6 +491,8 @@ impl<D: DataSource> Bridge<D> {
         first_offset: usize,
         last_paragraph: usize,
         last_offset: usize,
+        first_fixed: u32,
+        last_fixed: u32,
     ) -> u32 {
         let bytes = &self.input[..len.min(self.input.len())];
         if first_len > bytes.len() {
@@ -496,15 +500,15 @@ impl<D: DataSource> Bridge<D> {
         }
         let first = String::from_utf8_lossy(&bytes[..first_len]);
         let last = String::from_utf8_lossy(&bytes[first_len..]);
-        let range = (first_len != 0).then_some((
+        let range = (first_len != 0 || first_fixed <= 1).then_some((
             exact_runner::ListTextPosition {
-                fixed: None,
+                fixed: (first_fixed <= 1).then_some(first_fixed == 1),
                 key: &first,
                 paragraph: first_paragraph,
                 offset: first_offset,
             },
             exact_runner::ListTextPosition {
-                fixed: None,
+                fixed: (last_fixed <= 1).then_some(last_fixed == 1),
                 key: &last,
                 paragraph: last_paragraph,
                 offset: last_offset,
@@ -1426,6 +1430,8 @@ macro_rules! list_exports {
             first_offset: u32,
             last_paragraph: u32,
             last_offset: u32,
+            first_fixed: u32,
+            last_fixed: u32,
         ) -> u32 {
             EXACT_BRIDGE.with(|b| {
                 b.borrow_mut().list_text(
@@ -1436,6 +1442,8 @@ macro_rules! list_exports {
                     first_offset as usize,
                     last_paragraph as usize,
                     last_offset as usize,
+                    first_fixed,
+                    last_fixed,
                 )
             })
         }

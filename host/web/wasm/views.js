@@ -126,7 +126,8 @@ export function listView(el, id, collection) {
       index: (el, key) => host.wasm.exact_list_index(Number(el.dataset.view), writeIn(key)),
       text: (el, a, b) => {
         const first = encoder.encode(a?.key ?? "").length, len = writeIn((a?.key ?? "") + (b?.key ?? ""));
-        return readOut(host.wasm.exact_list_text(Number(el.dataset.view), first, len, a?.paragraph ?? 0, a?.offset ?? 0, b?.paragraph ?? 0, b?.offset ?? 0));
+        const fixed = p => p?.fixed == null ? 0xffffffff : Number(p.fixed);
+        return readOut(host.wasm.exact_list_text(Number(el.dataset.view), first, len, a?.paragraph ?? 0, a?.offset ?? 0, b?.paragraph ?? 0, b?.offset ?? 0, fixed(a), fixed(b)));
       }
     });
     host.listSelection.sync();
