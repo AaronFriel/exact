@@ -41,6 +41,9 @@ class ScrollTouchTest {
         @Implementation fun under(x: Float, y: Float, done: (IntArray) -> Unit) { answers.addLast(done) }
         @Implementation fun touch(action: Int, x: Float, y: Float, tool: Int, waitMs: Long): Boolean { touches.add(action); return false }
         @Implementation fun finger(action: Int, id: Int, x: Float, y: Float, waitMs: Long) = false
+        /** What exact2 was told of the touch itself: down, then lifted. */
+        val touching = ArrayList<Boolean>()
+        @Implementation fun touching(on: Boolean) { touching.add(on) }
         @Implementation fun scrolled(id: Int, dx: Float, dy: Float, rev: Int, seq: Int) {
             moved[id] = (moved[id] ?: 0f) + dx + dy
             Host.told.add("move $id")
@@ -170,6 +173,18 @@ class ScrollTouchTest {
             assertEquals(scroll, queued)
             assertTrue("the list keeps its platform fling", view.scrolling().timerActive)
         }
+    }
+
+    /** A scroll takes the touch and exact2 hears its cancel with the finger still down: the reader tells exact2 of
+     * the touch itself, before it routes it, until the last lift (LLP 1029.000.002 D9). */
+    @Test fun exact2IsToldTheFingerIsDownUntilItLifts() {
+        down(400f)
+        answer(reply(scroller(1, 0f)))
+        move(390f); move(370f); move(350f)
+        assertEquals("the scroll took the touch", listOf(0, 2, 3), thread.touches)
+        assertEquals("the finger is still down", listOf(true), thread.touching)
+        up(350f)
+        assertEquals(listOf(true, false), thread.touching)
     }
 
     @Test fun aLateAnswerTakesTheWayTheFingerWentPastTheSlop() {

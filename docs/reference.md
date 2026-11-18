@@ -1437,6 +1437,40 @@ Development builds log a missing Markdown or drag installation once per session,
 with the product and installation call. Without it, Markdown remains literal
 text and drag gestures are unavailable.
 
+### Replacing an embedded app's plan
+
+`ExactApp.apply` and `applyGeneration` answer `ExactApplyResult`: `.applied`,
+`.held(reason)` or `.refused(error)`. A replacement waits while a field is
+composing text, a pointer is down or a gesture is under way. The host asks
+the platform, not the app's handlers. On macOS that is marked text in a
+window's first responder, a mouse button down in the app, a trackpad
+gesture's fingers, a tracking loop AppKit runs (a menu, a control's press, a
+scroller) and a gesture recognizer that has begun in a session's window. On
+iOS and tvOS it is a touch UIKit has not ended, a press of a remote's or a
+game controller's button (tvOS's Select has no touch) and, in a session's
+window, a first responder with marked text, a scroll view tracking or
+dragging, a gesture recognizer that has begun and a view controller
+transition. An embedder's own recognizers and scroll views in that window
+hold it too. A row the keyboard lifted to reorder holds it until the drop or
+the cancel.
+Loading a candidate's data module and finishing the running module's
+requests also hold it; the reason names which. The app keeps the held candidate as bytes, with its assets,
+modules and commit closure, and prepares it once the hold clears, so it carries the state
+of that moment. A newer candidate supersedes it. Do not poll or submit it
+again.
+
+`ExactAppLifecycle.generationStarted` reports that a candidate applied.
+`replacementEnded` reports, once, with its token and reason, that a held
+candidate was refused when prepared, superseded, or dropped because every
+session it was held for was destroyed or, for a generation from `connect`'s
+URL, because `disconnect` or another `connect` closed that connection.
+`state.replacement.pending` in the
+agent's `state` names the hold. `ExactSession.apply`, which replaces one
+session's plan, refuses instead of holding. The rule covers development saves
+and `immediate` production updates (LLP 1029.000.002 D7, D9). The dev menu's
+Reload is the person's own act: it ends a composition as a click elsewhere
+does, keeping the marked text, and commits at once.
+
 ### Mac development signing
 
 `EXACT_IDENTITY=<certificate-sha1>` selects a Keychain signing identity;
@@ -1931,8 +1965,9 @@ a request that never ends, such as a socket that never connects, holds the
 update for as long as the app runs. The next cold launch boots it under
 `next-launch` and `immediate`; under `app-decides` it is still staged and
 waits for `deliveryActivate()` again. An update without a data module applies
-with requests in flight. On Android, applying also waits for a turn with no
-touch held, no text being composed and no Back gesture in progress.
+with requests in flight. Every host also waits while text is being composed,
+a pointer is down or a gesture is under way, including an interactive Back,
+and applies the update when that ends, without a second `deliveryActivate()`.
 
 A check runs when the app comes to the foreground, at most once a minute,
 and every `deploy.check.interval` seconds (900 by default) while it stays
@@ -2113,8 +2148,10 @@ of one kernel; a replacement creates another kernel, so its incarnation can repe
 Use `generation` to wait for a replacement. The terminal's JSON inspection replies
 (`layout`, `plan`, `runner-tree` and `node`) carry these tags too.
 
-`state.replacement` is null before a replacement. Afterwards it reports `at`, the
+`state.replacement` is null before a replacement while none waits. Afterwards it reports `at`, the
 replacement's clock in milliseconds, and `dropped`, the root slots that could not carry.
+`pending` names what a waiting replacement waits for (such as `"composition"`, `"pointer"`,
+`"gesture"`, `"module"` or `"requests"`), or is null.
 Each entry has `what: "state"`, `name`, and `why`: `"no place"` when the slot is gone,
 or `"type changed"` when its value does not fit the new declaration. The replacement's
 first journal line gives the same report. Component state, view identity, scroll,

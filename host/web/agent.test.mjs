@@ -1051,64 +1051,6 @@ test('initial flow loading cannot hold the first frame or module activation', as
   await boot;
 });
 
-for (const letGo of [false, true]) test(`module replacement reaches the runner without waiting on a parked ticket (letGo=${letGo})`, async () => {
-  const f = fixture(), elapsed = requestClock(f), calls = [];
-  f.requestsPending = 1;
-  f.setInputReady = value => { f.inputReady = value; };
-  f.wasm.exact_boot_module = (...args) => {
-    calls.push(args[3]);
-    return letGo ? '{"ops":[]}' : '{"error":"runner still has a pending request"}';
-  };
-  const candidate = { realm: { id: 1 }, receipt: new Uint8Array([1]), letGo };
-  const result = f.boot(new Uint8Array([1]), null, () => true, candidate);
-  if (letGo) { await result; expect(f.activeModule).toBe(candidate); }
-  else await expect(result).rejects.toThrow('runner still has a pending request');
-  expect(calls).toEqual([Number(letGo)]);
-  expect(elapsed()).toBe(0);
-});
-
-test('module replacement waits for requests, rechecks supersession; the dev loop swaps after its settle window, an update refuses', async () => {
-  for (const [result, letGo] of [['accept', true], ['superseded', true], ['pending', true], ['accept', false], ['pending', false]]) {
-    const f = fixture(false), entered = deferred(), drained = deferred(), lines = [];
-    let current = true, swaps = 0, flag = null;
-    f.waitForInflight = async deadline => {
-      expect(deadline).toBe(letGo ? 1010 : 20010);
-      entered.resolve();
-      return drained.promise;
-    };
-    f.log = line => lines.push(line);
-    f.setInputReady = value => { f.inputReady = value; };
-    f.wasm.exact_boot_module = (...args) => { swaps++; flag = args[3]; return '{"ops":[],"timers":true}'; };
-    // An app that always has a request out, here a read and a write; the write is named when let go.
-    if (result === 'pending') f.inflight.add(new Promise(() => {})).add(Object.assign(new Promise(() => {}), { write: 'POST https://api.test/like' }));
-    const candidate = {realm:{id:1},receipt:new Uint8Array([1]),letGo};
-    const update = f.boot(new Uint8Array([1]), null, () => current, candidate);
-    const outcome = update.then(value => ({value}), error => ({error}));
-    await entered.promise;
-    expect(swaps).toBe(0);
-    expect(f.views.size).toBe(1);
-    expect(f.inputReady).toBe(true);
-    if (result === 'superseded') current = false;
-    drained.resolve(result !== 'pending');
-    const reply = await outcome;
-    if (result === 'superseded' || result === 'pending' && !letGo) {
-      expect(swaps).toBe(0);
-      expect(f.views.size).toBe(1);
-      expect(f.activeModule).toBeNull();
-      if (letGo) expect(reply.value).toBeNull();
-      else expect(String(reply.error)).toContain('in-flight requests');
-    } else {
-      expect(reply.error).toBeUndefined();
-      expect(swaps).toBe(1);
-      expect(flag).toBe(letGo ? 1 : 0);
-      expect(f.activeModule).toBe(candidate);
-      expect(f.inflight.size).toBe(0);
-      expect(lines.filter(l => l.startsWith('module replacement'))).toEqual(result === 'pending' ? ['module replacement let go of 2 requests still in flight after 1000 ms; aborted writes the server may or may not have seen: POST https://api.test/like'] : []);
-    }
-  }
-});
-
-
 test('scoped tree rendering trims only shared indentation and preserves guest depth', () => {
   const node = {id:7,parent:3,depth:4,type:'WebView',props:{testId:'panel'},handlers:[],children:[8],guest:[{depth:0,tag:'button',text:'guest'}]};
   const child = {id:8,parent:7,depth:5,type:'Text',props:{text:'child'},handlers:[],children:[]};

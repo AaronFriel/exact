@@ -1,6 +1,7 @@
 import { views, ask, shownValue, host, INHERITED_CSS, now, root, iframeLoading, waiting, httpHelpers, loadGpuIfNeeded, heldNamed, loadAfterPaint, stageLoaded, loadStage, agentMode, gpuInPlay, register, seek, postSurface, deferFulfill, documentsGlue, picker, t0, log, readOut, presence, forgettable, writeIn, pageFacts, pageChanged, foldChanged, followOffset, pieces, moduleReady, SETTLE_DEADLINE_MS, mediaAttached, GLIDE_BOUND_MS, collections, settleCandidate } from "../glue.js";
 import { inertAncestor, routeFlags, navigation, environment, preferFold, foldEnv, typedControl, settleValue } from "../navigation.js";
 import { applyBatch, sendBatch } from "./commit.js";
+import { replacements } from "./boot.js";
 function nodeDetail(id, plan = false) {
   const el = views.get(id);
   if (!el || !el.isConnected) {
@@ -334,6 +335,9 @@ function agentReply(request) {
           return st;
         }
         st.presence = presence.live?.observation() ?? [];
+        // The runner's report of the last replacement, with what a waiting one waits for (LLP 1029.000.002 D9).
+        const pending = replacements.pending;
+        st.replacement = st.replacement || pending ? { ...st.replacement, pending } : null;
         for (const [c, t] of forgettable) {
           const s = c.retrying && st.streams?.find((s) => s.ticket === t);
           if (s) {

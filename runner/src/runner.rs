@@ -361,6 +361,9 @@ pub struct Runner<D: DataSource> {
     kernel: Kernel,
     generation: u64,
     replacement: Option<carry::Replacement>,
+    /// What a waiting replacement waits for, as the host says
+    /// ([`Runner::set_replacement_pending`]).
+    replacement_pending: Option<&'static str>,
     slots: Vec<Value>,
     derives: Vec<Option<Value>>,
     resources: Vec<resources::ResourceRow>,
@@ -947,6 +950,7 @@ impl<D: DataSource> Runner<D> {
                     .expect("session generation exhausted")
             }),
             replacement: None,
+            replacement_pending: None,
             journal: std::collections::VecDeque::new(),
             console: Default::default(),
             faults: faults::Faults::from_env().map_err(RunnerError::InvalidFaults)?,

@@ -109,11 +109,12 @@ export const classifications = [
     ["apple:host/apple/src/abi/exports.rs", "exact_dispatch"],
     ["painted:host/painted/src/canvas/access.rs", "CanvasHost::access CanvasHost::access_act CanvasHost::access_off"],
     ["painted:host/painted/src/canvas/field.rs", "CanvasHost::field_action CanvasHost::field_composing CanvasHost::field_edited CanvasHost::field_focused CanvasHost::field_input CanvasHost::field_selected"],
-    ["painted:host/painted/src/canvas/input.rs", "CanvasHost::finger CanvasHost::scroll CanvasHost::touch"],
+    ["painted:host/painted/src/canvas/input.rs", "CanvasHost::finger CanvasHost::scroll CanvasHost::touch CanvasHost::touching"],
     ["painted:host/painted/src/canvas/jni.rs",
       "Java_dev_exact_canvas_Native_accessAct Java_dev_exact_canvas_Native_fieldAction Java_dev_exact_canvas_Native_fieldComposing " +
       "Java_dev_exact_canvas_Native_fieldEdited Java_dev_exact_canvas_Native_fieldFocused Java_dev_exact_canvas_Native_fieldInput " +
-      "Java_dev_exact_canvas_Native_fieldSelected Java_dev_exact_canvas_Native_finger Java_dev_exact_canvas_Native_scroll Java_dev_exact_canvas_Native_touch"],
+      "Java_dev_exact_canvas_Native_fieldSelected Java_dev_exact_canvas_Native_finger Java_dev_exact_canvas_Native_scroll Java_dev_exact_canvas_Native_touch " +
+      "Java_dev_exact_canvas_Native_touching"],
     ["painted:host/painted/src/canvas/jni_keys.rs", "Java_dev_exact_canvas_Native_key Java_dev_exact_canvas_Native_namedKey"],
     ["painted:host/painted/src/canvas/jni_pad.rs", "Java_dev_exact_canvas_Native_pad"],
     ["painted:host/painted/src/canvas/jni_scroll.rs", "Java_dev_exact_canvas_Native_scrollDrag"],
@@ -130,7 +131,8 @@ export const classifications = [
     ["painted:host/painted/src/presenter/collection.rs", "Presenter::collection_scroll_turn Presenter::dispatch_authored_scroll"],
     ["painted:host/painted/src/presenter/contact.rs",
       "Presenter::contact_live Presenter::contact_position Presenter::pan_candidate Presenter::pointer_cancel Presenter::pointer_down " +
-      "Presenter::pointer_down_with_clicks Presenter::pointer_lost Presenter::pointer_move Presenter::pointer_up Presenter::pointerdown_prevents_focus Presenter::press_lifted"],
+      "Presenter::pointer_abandoned Presenter::pointer_down_with_clicks Presenter::pointer_lost Presenter::pointer_move Presenter::pointer_up " +
+      "Presenter::pointerdown_prevents_focus Presenter::press_lifted"],
     ["painted:host/painted/src/presenter/control.rs", "Presenter::commit_control_value Presenter::key_click Presenter::toggle_control Presenter::toggle_control_with_press"],
     ["painted:host/painted/src/presenter/desktop_access.rs",
       "Presenter::access_focus Presenter::access_focus_node Presenter::access_origin Presenter::access_select Presenter::access_selection Presenter::access_text " +
@@ -149,6 +151,7 @@ export const classifications = [
     ["painted:host/painted/src/presenter/pan_release.rs", "Presenter::release_pan"],
     ["painted:host/painted/src/presenter/pointer.rs", "Presenter::pointer_dispatch"],
     ["painted:host/painted/src/presenter/radio.rs", "Presenter::activate_radio"],
+    ["painted:host/painted/src/presenter/replacement.rs", "Presenter::buttons_released Presenter::pointer_released Presenter::reader_touch Presenter::set_touching"],
     ["painted:host/painted/src/presenter/scroll_drag.rs", "Presenter::reader_drag_began Presenter::reader_drag_ended Presenter::reader_fling_ended Presenter::reader_refresh Presenter::scroll_drag"],
     ["painted:host/painted/src/presenter/scroll_end.rs", "Presenter::deliver_scroll_ends"],
     ["painted:host/painted/src/presenter/scrollers.rs",
@@ -237,6 +240,7 @@ export const classifications = [
       "Presenter::first_pixel_told Presenter::first_pixel_unshown Presenter::module_pending Presenter::poll_development Presenter::poll_update Presenter::prepare_logic " +
       "Presenter::said_at_boot Presenter::set_development Presenter::set_module Presenter::set_updates Presenter::sync_delivery Presenter::tick_development " +
       "Presenter::turn_due_ms Presenter::update_fd Presenter::update_ready"],
+    ["painted:host/painted/src/presenter/replacement.rs", "Presenter::owe_update"],
     ["runner:runner/src/runner/delivery.rs", "Runner::delivery Runner::set_delivery Runner::set_delivery_from_compat"],
   ]),
   group("durable module work", ["durable operation"], "retained request or report until its source turn ends; process-local today", "durable",
@@ -662,7 +666,10 @@ export const classifications = [
     ["painted:host/painted/src/canvas/reader.rs", "CanvasHost::adopt CanvasHost::attach_window CanvasHost::detach_window"],
     ["painted:host/painted/src/content_region/presenter.rs", "Presenter::boot_with_content_region"],
     ["painted:host/painted/src/host.rs", "Host::boot Host::boot_at Host::boot_at_with_region Host::boot_with Host::runner_mut"],
-    ["painted:host/painted/src/presenter.rs", "Presenter::host_mut Presenter::reload Presenter::reload_module"],
+    ["painted:host/painted/src/presenter.rs", "Presenter::host_mut"],
+    ["painted:host/painted/src/presenter/replacement.rs",
+      "Presenter::reload Presenter::reload_hold Presenter::reload_module Presenter::reload_now Presenter::reload_with_outcome " +
+      "Presenter::replacement_pending Presenter::resume_reload Presenter::tell_replacement_pending"],
     ["painted:host/painted/src/presenter/device.rs", "Presenter::reader_replaced"],
     ["painted:host/painted/src/presenter/painter.rs", "Presenter::boot Presenter::boot_with"],
     ["painted:host/painted/src/presenter/window.rs", "Presenter::window"],
@@ -1281,7 +1288,7 @@ export const classifications = [
     ["runner:runner/src/agent.rs", "base64 error field_bool field_num field_str frames handle holds logs node num quote shown_value state tags tree typed_json unbase64 untyped_json"],
     ["runner:runner/src/agent/row.rs", "row_json"],
     ["runner:runner/src/agent/tree.rs", "tagged"],
-    ["runner:runner/src/runner/carry.rs", "Runner::generation"],
+    ["runner:runner/src/runner/carry.rs", "Runner::generation Runner::set_replacement_pending"],
     ["runner:runner/src/frame_health.rs",
       "applied capture context create destroy distribution exact_frame_health_applied exact_frame_health_capture exact_frame_health_context exact_frame_health_create " +
       "exact_frame_health_destroy exact_frame_health_distribution exact_frame_health_history_status exact_frame_health_hitch exact_frame_health_record " +

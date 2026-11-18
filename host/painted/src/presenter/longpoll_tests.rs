@@ -193,7 +193,10 @@ fn a_reload_keeps_the_faults_a_retry_took_while_it_prepared() {
             ))));
             assert!(p.activate_update(replacement).unwrap());
         } else {
-            assert!(p.reload(&plan, replacement).unwrap().is_none());
+            assert!(
+                p.reload(&plan, replacement).unwrap()
+                    == crate::presenter::ReloadResult::Applied(None)
+            );
         }
         let runner = p.host.runner();
         let faults = runner.faults().json();

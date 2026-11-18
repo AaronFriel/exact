@@ -186,6 +186,11 @@ object Native {
      * [id] ([android.view.MotionEvent.getPointerId]). The canvas holding the touch takes it where it lands on that
      * canvas; where no canvas holds the touch, a second finger cancels it. */
     @JvmStatic external fun finger(action: Int, id: Int, x: Float, y: Float)
+    /** Whether a finger, a pen or a mouse button is down on the view: true at the touch's down, before the reader
+     * routes it, and false at its last lift or the system's cancel. A scroll, a field or a hosted view takes a touch
+     * that is still down, and exact2 then hears a cancel and no up ([touch]); a replacement waits for the finger
+     * itself (LLP 1029.000.002 D9). Whether one was waiting for this lift, and so wants a turn. */
+    @JvmStatic external fun touching(on: Boolean): Boolean
     /** What happened in the window the reader made for surface [serial] of the top layer ([Surfaces], LLP 1115.001
      * D10), on the host's thread: a touch ([what] 0 down, 1 up, 2 move, 3 cancel) at ([x], [y]), pixels from the
      * window's own top left; the system dismissed the window (8: a tap outside a menu, Back, Escape); the reader

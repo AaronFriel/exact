@@ -277,6 +277,34 @@ impl<D: super::DataSource> Runner<D> {
         ));
     }
 
+    /// The host's word on what a replacement waits for (LLP 1029.000.002
+    /// D9), which `state.replacement.pending` reports.
+    pub fn set_replacement_pending(&mut self, pending: Option<&'static str>) {
+        self.replacement_pending = pending;
+    }
+
+    /// `state.replacement`: the last replacement's report and what a waiting
+    /// one waits for; null before any replacement while none waits.
+    pub(crate) fn replacement_state_json(&self, out: &mut String) {
+        if self.replacement.is_none() && self.replacement_pending.is_none() {
+            out.push_str("null");
+            return;
+        }
+        if self.replacement.is_some() {
+            self.replacement_json(out);
+            out.pop();
+            out.push(',');
+        } else {
+            out.push('{');
+        }
+        out.push_str("\"pending\":");
+        match self.replacement_pending {
+            Some(pending) => crate::agent::quote(pending, out),
+            None => out.push_str("null"),
+        }
+        out.push('}');
+    }
+
     pub(crate) fn replacement_json(&self, out: &mut String) {
         use std::fmt::Write;
         let Some(report) = &self.replacement else {
@@ -393,9 +421,21 @@ mod tests {
             assert_eq!(runner.kernel().incarnation(), 1);
             if generation == 1 {
                 assert!(state.contains("\"replacement\":null"));
+                // What the host says a waiting replacement waits for (LLP 1029.000.002 D9).
+                runner.set_replacement_pending(Some("pointer"));
+                let held = crate::agent::handle(&runner, "{\"op\":\"state\"}");
+                assert!(
+                    held.contains("\"replacement\":{\"pending\":\"pointer\"}"),
+                    "{held}"
+                );
+                runner.set_replacement_pending(None);
             }
             if generation == 2 {
                 assert!(state.contains("\"replacement\":{\"at\":50,"));
+                assert!(
+                    state.contains("\"why\":\"no place\"}],\"pending\":null}"),
+                    "{state}"
+                );
                 assert!(runner
                     .journal()
                     .next()

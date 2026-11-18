@@ -643,7 +643,16 @@ impl<D: DataSource> Bridge<D> {
         let mut validated = None;
         if self.painted {
             match data.preload() {
-                Ok(false) => return self.emit("{\"ops\":[],\"pending\":true}".into()),
+                Ok(false) => {
+                    // The session's own wake, which a session without an
+                    // executor has too: nothing else asks again once the
+                    // image has loaded (LLP 1029.000.002 D9).
+                    if let Some(wake) = hooks.wake {
+                        let ctx = hooks.wake_ctx as usize;
+                        data.when_preloaded(Box::new(move || wake(ctx as *mut c_void)));
+                    }
+                    return self.emit("{\"ops\":[],\"pending\":true}".into());
+                }
                 Err(error) => {
                     return self.refuse_preparation(&format!("candidate preload: {error:?}"))
                 }

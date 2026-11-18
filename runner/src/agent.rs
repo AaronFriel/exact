@@ -768,7 +768,7 @@ fn state_with<D: DataSource>(runner: &Runner<D>, request: &str) -> String {
         }
     }
     s.push_str("},\"replacement\":");
-    runner.replacement_json(&mut s);
+    runner.replacement_state_json(&mut s);
     s.push_str(",\"language\":{\"lang\":");
     quote(runner.resolved_locale(), &mut s);
     s.push_str(",\"dir\":");

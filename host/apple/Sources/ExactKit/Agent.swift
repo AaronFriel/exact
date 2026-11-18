@@ -472,6 +472,11 @@ public final class Agent {
             // LLP 1035.006.000 D6: each tip, as TipKit has it, and whether it shows.
             nativeSections["tips"] = ["linked": TipLink.installed != nil, "tips": TipLink.installed?.state(owner: presenter) ?? []] as [String: Any]
             nativeSections["storage"] = session.appFileStorage()
+            // The runner's report of the last replacement, with what a waiting one waits for (LLP 1029.000.002 D9).
+            // This section comes after the runner's, so a reader takes it.
+            let pending = session.app.replacements.reason
+            let report = (try? JSONSerialization.jsonObject(with: Data(reply.utf8)) as? [String: Any])?["replacement"] as? [String: Any]
+            nativeSections["replacement"] = report == nil && pending == nil ? NSNull() : (report ?? [:]).merging(["pending": pending ?? NSNull()]) { $1 }
             var raster = session.rasters.diagnostics
             raster["encodedResolverBytes"] = session.app.resolver.encodedCacheBytes
             raster["encodedHTTPCache"] = RasterInput.httpCacheUsage

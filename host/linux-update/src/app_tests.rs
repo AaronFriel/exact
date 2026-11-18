@@ -1084,7 +1084,7 @@ fn failed_post_pixel_rust_activation_does_not_bless_the_selected_bundle() {
 }
 
 #[test]
-fn a_live_rust_swap_refuses_before_loading_while_a_request_is_pending() {
+fn a_live_rust_swap_waits_without_loading_while_a_request_is_pending() {
     use exact_runner::{Answer, Store};
     #[derive(Clone)]
     struct Held(Arc<std::sync::atomic::AtomicUsize>);
@@ -1126,12 +1126,11 @@ fn a_live_rust_swap_refuses_before_loading_while_a_request_is_pending() {
         receipt: String::new(),
         bytes: Vec::new(),
     };
-    let error = presenter
-        .reload_module(&plan, source, Some(module), false)
-        .unwrap_err();
-    assert!(
-        matches!(error, exact_painted::host::HostError::RequestsPending),
-        "{error}"
+    assert_eq!(
+        presenter
+            .reload_module(&plan, source, Some(module), false)
+            .unwrap(),
+        exact_painted::presenter::ReloadResult::Held("requests")
     );
     assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 0);
     assert_eq!(presenter.host().runner().pending(), pending);

@@ -893,10 +893,10 @@ fn a_reload_that_renumbers_the_tree_gives_the_canvas_its_own_surface() {
         (&"world".into(), true, Some(canvas))
     );
 
-    assert!(p
-        .reload(&plan("      text \"new\"\n"), ())
-        .unwrap()
-        .is_none());
+    assert!(
+        p.reload(&plan("      text \"new\"\n"), ()).unwrap()
+            == crate::presenter::ReloadResult::Applied(None)
+    );
     p.sync_surfaces();
     let after = canvases(&p);
     assert_eq!(after.len(), 1, "{after:?}");

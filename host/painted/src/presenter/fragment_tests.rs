@@ -193,7 +193,7 @@ fn a_replacement_runner_arms_its_first_activation_and_checks_person_scrolls() {
     let _ = open(&mut p, "moves", None);
     let _ = open(&mut p, "to-moves", None);
     assert!(p.fragment_seen > 1);
-    assert!(p.reload(&plan(), ()).unwrap().is_none());
+    assert!(p.reload(&plan(), ()).unwrap() == crate::presenter::ReloadResult::Applied(None));
     settle(&mut p);
     assert_eq!(p.fragment_seen, 1);
     assert!(p.fragment_armed.is_some());

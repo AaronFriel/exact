@@ -176,12 +176,13 @@ fn answer_line<D: DataSource>(p: &mut Presenter<D>, line: &str) -> String {
         Some("perf") => p.hatch_sites(p.host().agent(line)),
         Some("state") => {
             p.boxes();
+            p.tell_replacement_pending();
             // Host-only sections report `unavailable` instead of disappearing
             // (LLP 1035.002 D2), distinguishing no keyboard from no report.
             let mut s = p.host().agent(line);
             if s.ends_with('}') && !s.starts_with("{\"error\"") {
                 s.pop();
-                s.push_str(&format!(",\"painter\":{}", p.painter_state()));
+                s.push_str(&p.state_sections());
                 let mut decorations: Vec<_> = p
                     .brush
                     .field_text

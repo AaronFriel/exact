@@ -532,8 +532,8 @@ pub(crate) struct Surfaces {
     pointer: Option<(u32, f32, f32)>,
     /// The device's motion for the next canvas pointer event, when it has one.
     motion: Option<(f32, f32)>,
-    /// The secondary and middle buttons held (`PointerEvent.buttons` bits).
-    aux: u32,
+    /// The secondary, middle, back and forward buttons held (`PointerEvent.buttons` bits).
+    pub(crate) aux: u32,
     /// The canvas their first press went to: it hears their release wherever
     /// the pointer is, as the web's pointer capture.
     aux_canvas: Option<u32>,
@@ -1205,7 +1205,10 @@ impl<D: DataSource> Presenter<D> {
     /// web does — the first button held is a down, the last released an up.
     pub fn pointer_aux(&mut self, bit: u32, down: bool, x: f32, y: f32, at: f64) {
         if down {
+            self.pressed |= bit;
             self.touched();
+        } else {
+            self.pressed &= !bit;
         }
         let before = self.surfaces.aux;
         self.surfaces.aux = if down { before | bit } else { before & !bit };

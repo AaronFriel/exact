@@ -248,6 +248,7 @@ class ExactView(context: Context, private val live: Boolean, private val onFirst
         val frames = android.view.Choreographer.getInstance()
         scrolling.stopped()
         contacts.stop()
+        touching(false) // a stopped activity hears no lift
         frames.removeFrameCallback(turn); turnPosted = false
         frames.removeFrameCallback(sampler); samplerPosted = false
         frames.removeFrameCallback(holder); holdFrom = 0L
@@ -264,7 +265,20 @@ class ExactView(context: Context, private val live: Boolean, private val onFirst
     internal fun cancelContact(x: Float, y: Float, tool: Int) = contacts.scrollClaimed(x, y, tool)
 
     @SuppressLint("ClickableViewAccessibility")
-    override fun onTouchEvent(e: MotionEvent): Boolean = contacts.touch(e)
+    override fun onTouchEvent(e: MotionEvent): Boolean {
+        // Where the platform delivers the touch, before [Contacts] gives it to a scroll, a field or a hosted view.
+        if (e.actionMasked == MotionEvent.ACTION_DOWN) touching(true)
+        val taken = contacts.touch(e)
+        if (e.actionMasked == MotionEvent.ACTION_UP || e.actionMasked == MotionEvent.ACTION_CANCEL) touching(false)
+        return taken
+    }
+
+    /** exact2 is told whether a touch is down on this view ([Native.touching]). */
+    private fun touching(on: Boolean) {
+        if (!started) return
+        val o = owner
+        if (o != null) o.touching(on) else if (Native.touching(on)) pump()
+    }
 
     /** A mouse's wheel with `ctrl` held zooms the zoomable scroller under the pointer about it (LLP 1057.001.000 §5),
      * as a desktop's does: a notch is the platform's scroll distance, in points. */

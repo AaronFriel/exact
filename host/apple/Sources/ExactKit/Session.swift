@@ -77,6 +77,9 @@ public protocol ExactAppLifecycle: AnyObject {
     func generationStarted(_ app: ExactApp, token: UInt64)
     func firstPixel(_ app: ExactApp, token: UInt64)
     func initialGenerationRefused(_ app: ExactApp, token: UInt64, reason: String)
+    /// A candidate `apply` held ended unapplied (LLP 1029.000.002 D9), told
+    /// once; one it held and then applied is told by `generationStarted`.
+    func replacementEnded(_ app: ExactApp, token: UInt64, outcome: ExactReplacementOutcome, reason: String)
     func handleCommand(_ name: String, app: ExactApp) -> Bool
 }
 /// A plan and its complete asset namespace prepared by an app composition.
@@ -111,9 +114,9 @@ public final class ExactApp {
     private(set) var lastPlan: Data?
     private(set) var lastModule: ExactModule?
     private(set) package var resolver: AssetResolver!
-    private var transaction = false
-    /// A retryable image preparation; the current sessions remain live.
-    public private(set) var generationPending = false; private(set) var requestsHeld = false
+    private(set) var transaction = false
+    /// The candidate an interaction holds back (LLP 1029.000.002 D9).
+    lazy var replacements = ReplacementQueue(self)
     private var notifications: [() -> Void] = []
     func deliver(_ body: @escaping () -> Void) {
         if transaction { notifications.append(body) } else { body() }
@@ -156,7 +159,6 @@ public final class ExactApp {
         lastModule = generation.module
         selectedToken = generation.token
     }
-
     func fallBackFromInitial(reason: String) -> Bool {
         guard selectedToken != 0, !sessions.contains(where: \.booted) else { return false }
         lifecycle?.initialGenerationRefused(self, token: selectedToken, reason: reason)
@@ -166,12 +168,10 @@ public final class ExactApp {
         selectedToken = 0
         return true
     }
-
     func firstPixel(_ token: UInt64) {
         lifecycle?.firstPixel(self, token: token)
         WidgetContainer.publishAfterFirstPixel(resolver)
     }
-
     /// Refresh generic delivery facts after a composition-owned event.
     public func refreshDelivery() {
         for session in sessions { session.apply(session.runtime.deliverySync()) }
@@ -188,12 +188,13 @@ public final class ExactApp {
         let named = label.isEmpty ? (1...).lazy.map { "session-\($0)" }.first { !live.contains($0) }! : label
         let s = ExactSession(app: self, label: named)
         s.delegate = delegate; PushRegistration.listen(); HostEvents.listen() // before its packages can register or drain
+        replacements.attach(s)
         sessionRefs.append(WeakSession(s))
         sessionRefs.removeAll { $0.session == nil }
         return s
     }
-
     func forget(_ session: ExactSession) {
+        replacements.destroyed(session)
         sessionRefs.removeAll { $0.session == nil || $0.session === session }
         HostEvents.ended(session.label)
     }
@@ -203,79 +204,88 @@ public final class ExactApp {
     /// server's events subscribed so an edit re-fetches. Replaces a prior
     /// connection.
     public func connect(_ url: String) {
-        connection?.close()
+        disconnect()
         connection = PlanURL.open(url, program: devProgram, acceptProgram: { [weak self] program in
             guard let self else { return false }
             if let old = self.devProgram { return old == program }
             self.devProgram = program
             return true
-        }, current: { [weak self] in self?.devGeneration }, plan: { [weak self] in self?.sessions.first { $0.booted && $0.state != .destroyed }?.runtime.planDigest() }, waiting: { [weak self] in self?.generationPending == true }, held: { [weak self] in self?.requestsHeld == true }, design: { [weak self] in self?.design($0) ?? "closed" }, channel: { [weak self] in self?.channel($0) }, apply: { [weak self] candidate, label, letGo in
-            guard let self else { return false }
+        }, current: { [weak self] in self?.devGeneration }, plan: { [weak self] in self?.sessions.first { $0.booted && $0.state != .destroyed }?.runtime.planDigest() }, design: { [weak self] in self?.design($0) ?? "closed" }, channel: { [weak self] in self?.channel($0) }, apply: { [weak self] candidate, label, now, finished in
+            guard let self else { return .refused("app closed") }
             let resolver = candidate.assets
-            return self.applyTogether(candidate.plan, label: label, resolver: resolver, token: 0, identity: candidate.identity, module: candidate.module, letGo: letGo, commit: { true })
+            // A closed connection applies nothing, so the one asking is the open one.
+            return self.applyTogether(candidate.plan, label: label, resolver: resolver, token: 0, identity: candidate.identity, module: candidate.module, development: true, now: now, producer: self.connection, commit: { true }, finished: finished)
         })
         connection?.onDevNotice = { [weak self] in self?.showDevStatus($0) } // the old one's went at its close
     }
 
+    /// Close the connection, with the generation it brought that waits.
+    /// It is detached first: the lifecycle hears the drop and may connect again.
     public func disconnect() {
-        connection?.close()
+        guard let closing = connection else { return }
         connection = nil
+        closing.close()
+        replacements.withdraw(closing, "its connection closed")
     }
 
     /// The connection's page URL, when connected (what a deck's `//` source resolves against).
     public var connectedPage: URL? { connection?.page }
     /// The connection's status line for a dev menu, or nil.
-    public var connectionStatus: String? { connection.map { "\($0.page)\($0.devStatus.map { " (\($0.said))" } ?? ($0.terminal != nil ? " (rebuild the host)" : $0.refused != nil ? " (edit not applied)" : generationPending ? " (preparing Rust update)" : " (live)"))" } }
+    public var connectionStatus: String? { connection.map { "\($0.page)\($0.devStatus.map { " (\($0.said))" } ?? ($0.terminal != nil ? " (rebuild the host)" : $0.refused != nil ? " (edit not applied)" : replacements.reason(after: 1).map { " (held: \($0))" } ?? " (live)"))" } }
     /// Re-resolve the connection (the menu's Reload); the native program stays pinned.
     public func reloadConnection() { connection?.reload() }
 
     /// A plan is one app generation: every session accepts before any swaps.
+    /// It waits while a field composes, a pointer is down or a gesture is
+    /// under way, or its module prepares or requests are in flight (LLP
+    /// 1029.000.002 D9): the app keeps it, applies it at the first turn
+    /// without one, and `lifecycle` hears how it ended.
     @discardableResult
-    public func apply(_ bytes: Data, label: String = "plan") -> Bool {
+    public func apply(_ bytes: Data, label: String = "plan") -> ExactApplyResult {
         applyTogether(bytes, label: label, resolver: resolver, token: 0, commit: { true })
     }
 
     /// Every session accepts before the durable commit. Its callback runs on
     /// main while the runtime owner holds replies; it cannot reenter a runtime.
     @discardableResult
-    public func applyGeneration(_ candidate: ExactGeneration, label: String = "generation", commit: () -> Bool) -> Bool {
+    public func applyGeneration(_ candidate: ExactGeneration, label: String = "generation", commit: @escaping () -> Bool) -> ExactApplyResult {
         applyTogether(candidate.plan, label: label, resolver: candidate.assets, token: candidate.token, module: candidate.module, commit: commit)
     }
 
-    private func applyTogether(_ bytes: Data, label: String, resolver candidateResolver: AssetResolver, token: UInt64, identity: String? = nil, module: ExactModule? = nil, letGo: Bool = false, commit: () -> Bool) -> Bool {
-        generationPending = false; requestsHeld = false
-        guard !transaction else { return false }
+    /// Prepare and commit in every session now (`applyTogether` holds it first).
+    func commitTogether(_ bytes: Data, label: String, resolver candidateResolver: AssetResolver, token: UInt64, identity: String?, module: ExactModule?, letGo: Bool, commit: () -> Bool) -> ExactApplyResult {
+        guard !transaction else { return .refused("a replacement is already committing") }
         let module = module ?? lastModule
         let participants = sessions.filter { $0.state != .destroyed }
         // Validate a staged plan without starting a hidden runner's requests.
         if participants.isEmpty {
             let validator = ExactSession(app: self, label: "")
             defer { validator.destroy() }
-            guard validator.prepare(bytes, resolver: candidateResolver, token: token, module: module, size: CGSize(width: 1, height: 1), letGo: letGo) != nil else { return false }
+            guard validator.prepare(bytes, resolver: candidateResolver, token: token, module: module, size: CGSize(width: 1, height: 1), letGo: letGo) != nil else { return .refused(validator.preparationError ?? "the plan was not prepared") }
             validator.runtime.discardPlan()
         }
         guard let prepared = prepareGeneration(participants, prepare: { session in
             session.prepare(bytes, resolver: candidateResolver, token: token, module: module, letGo: letGo)
         }) else {
-            generationPending = participants.contains { $0.modulePending || $0.requestsPending }
-            requestsHeld = participants.contains { $0.requestsPending }
+            let pending = participants.contains { $0.modulePending || $0.requestsPending }
+            let requests = participants.contains { $0.requestsPending }
             for session in participants { session.runtime.discardPlan() }
-            return false
+            return pending ? .held(requests ? "requests" : "module") : .refused(participants.lazy.compactMap(\.preparationError).first ?? "the plan was not prepared")
         }
         let surfaces = SurfacesLink.installed
         let shaderSources = surfaces?.shadersLoaded == true ? candidateResolver.shaderSources() : nil
         let shadersAccepted = shaderSources.map { surfaces?.acceptsShaders($0) == true } ?? true
         guard candidateResolver.refusal == nil, shadersAccepted else {
             for (session, _) in prepared { session.runtime.discardPlan() }
-            return false
+            return .refused(candidateResolver.refusal ?? "shader preparation failed")
         }
         for (session, candidate) in prepared { session.configureCommit(candidate) }
         transaction = true
         let result = Runtime.commitTogether(prepared.map { $0.0.runtime }, commit: commit)
         guard let committed = result.batches else {
-            transaction = false; generationPending = result.pending; requestsHeld = result.requests
+            transaction = false
             for (session, _) in prepared { session.cancelCommit() }
-            return false
+            return result.pending ? .held(result.requests ? "requests" : "module") : .refused("durable commit refused")
         }
         let batches = zip(prepared, committed).map { pair, batch in (pair.0, pair.0.commit(pair.1, batch: batch)) }
         resolver = candidateResolver
@@ -297,7 +307,7 @@ public final class ExactApp {
         let callbacks = notifications
         notifications = []
         for callback in callbacks { callback() }
-        return true
+        return .applied
     }
 
     /// A local asset as pinned bytes, verified before any native consumer uses it.
@@ -629,7 +639,7 @@ public final class ExactSession {
         let rt = ExactRuntime(UInt(bitPattern: ctx))
         DispatchQueue.main.async {
             guard let s = ExactSession.live[rt]?.session else { return }
-            s.whenIdle { [weak s] in s?.pumpReplies() }
+            s.whenIdle { [weak s] in s?.pumpReplies(); s?.app.replacements.changed() } // a reply may end a requests hold
         }
     }
 
@@ -942,13 +952,14 @@ public final class ExactSession {
     }
 
     private(set) var modulePending = false, requestsPending = false
+    private(set) var preparationError: String? // why the last preparation refused the plan
     /// While a carried restart applies its tree, autofocus waits; the restart
     /// then puts focus back at its place (`Presenter.restoreFocus`).
     var autofocusHeld = false
     private var keptFocus: FocusPlace?
 
     func prepare(_ bytes: Data, resolver: AssetResolver, token: UInt64 = 0, module: ExactModule? = nil, size: CGSize? = nil, letGo: Bool = false) -> Prepared? {
-        modulePending = false; requestsPending = false
+        modulePending = false; requestsPending = false; preparationError = nil
         guard state != .destroyed else { return nil }
         // The running tree's focus, read before the candidate replaces it.
         keptFocus = booted ? presenter.focusPlace(tree: agent("{\"op\":\"tree\"}")) : nil
@@ -978,7 +989,7 @@ public final class ExactSession {
         }
         if let error = batch.error ?? resolver.refusal {
             runtime.discardPlan()
-            if !batch.requests { fputs("exact: prepare refused: \(error)\n", stderr) } // asked again every 50 ms, unlogged
+            if !batch.requests { fputs("exact: prepare refused: \(error)\n", stderr); preparationError = error }
             return nil
         }
         return Prepared(text: candidate, resolver: resolver, token: token)
@@ -1042,10 +1053,12 @@ public final class ExactSession {
     }
 
     /// A host may replace one session's plan transactionally; app delivery
-    /// uses prepare/commit across every attached session instead.
+    /// uses prepare/commit across every attached session instead. It refuses
+    /// while an interaction is under way, where `ExactApp.apply` holds.
     @discardableResult
     public func apply(_ bytes: Data, label: String = "plan") -> Bool {
-        guard let candidate = prepare(bytes, resolver: app.resolver), let batch = commit(candidate) else { return false }
+        guard app.replacements.interactionHold == nil,
+              let candidate = prepare(bytes, resolver: app.resolver), let batch = commit(candidate) else { return false }
         app.invalidateDevGeneration()
         presentCommitted(batch, label: label)
         return true
@@ -1145,6 +1158,7 @@ public final class ExactSession {
         AudioSession.beginPresentation()
         defer { AudioSession.endPresentation() }
         #endif
+        defer { app.replacements.changed() }
         appliedBatches += 1
         // Land earlier owner slices first; ask what they leave owed after this batch (LLP 1034 T4).
         if !applying, !landing, ownerInFlight, hasPublished() {
