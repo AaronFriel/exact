@@ -569,8 +569,14 @@ complication recommendations. Each placement's choices reach only its snapshot
 render; refresh and its cache remain shared.
 The Categories consumer unblocks this first stage. Take: none named; Charlie's
 2026-11-12 decision to the maintainers' agent waives the trade for enum-only
-configuration on Apple. Data-backed options, entity queries and
-configuration-dependent refresh stay deferred.
+configuration on Apple.
+
+**Expanded (Charlie, 2026-11-18, #874, “Approve the waiver”; LLP 1126 D3):**
+An Apple widget’s refresh receives the placement’s configuration. Placements
+with the same choices share a timeline. The Expo Services Active Users widget
+can fetch the period the person chose. Android keeps one timeline per kind
+and passes the defaults to refresh (LLP 1126.003 D5). Data-backed options
+and entity queries remain deferred.
 
 **Admitted (Charlie, 2026-10-06: "this is pretty great. commit and push this
 and document that TUI is now an officially supported platform for Exact2";
