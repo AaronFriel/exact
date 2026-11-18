@@ -2433,6 +2433,11 @@ A mutation's answer hands over one request at a time, in order. Sends of the
 same `parallel` mutation overlap, up to three at a time on the six shared
 workers. They wait for everything before them except the other sends of
 their mutation; later work waits for them. Replies retain the order asked.
+The six workers, a source's scoped requests and the launch's preloads share
+one connection pool natively (LLP 1162 D5), so a read reuses a connection
+another left open to its origin, and on Apple their reads of an HTTP/2 or
+HTTP/3 origin share one connection. The ordered lane keeps a pool of its
+own, and a stream opens its own connection.
 
 Native hosts keep a resource's `GET` reply when it says how long it is fresh
 or carries a validator (LLP 1162 D4): in memory, 16 MiB per runtime, gone with

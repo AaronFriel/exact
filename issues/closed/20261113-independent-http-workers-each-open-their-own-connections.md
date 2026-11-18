@@ -1,6 +1,7 @@
 # Each independent HTTP worker has its own transport, so a launch's first reads each open a new connection
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** The independent lane's workers, scoped requests and preloads share one transport, on Apple one URLSession for collected exchanges (ibex2 patch 49; LLP 1162, one connection pool a lane); the machine stays off (QUEUE).
 **Systems:** host/executor/src/lib.rs (compiled by every native host), host/executor/src/async.rs
 **Severity:** P2
 **Author:** Claude (Opus 5.5), from Exact diaries sent 2026-11-11 to 2026-11-13
@@ -28,3 +29,13 @@ Give the independent lane's workers one shared transport (bindings endowed once,
 ## Owner
 
 LLP 1162 owns this: D5 (one loader a process) and D8 (the transport is the platform's client, with stage 4's campaign deciding whether the asynchronous machine becomes Apple's default). It is built in that LLP's stages, not as a separate fix. A design review on 2026-11-12 ruled that the per-worker transport should go: on the portable transport the independent workers share one transport, and on Apple the asynchronous machine, with one `URLSession` a lane, is the way there. It also recommended that D8's thread-or-memory condition be reported rather than required, since this is now a defect and not an optimisation. Close this issue in the commit that lands that change, or say here why the campaign kept the workers.
+
+## As fixed
+
+Sharing the workers' transport was not enough on Apple: the blocking Darwin transport leased each exchange one of four `URLSession`s of its own, each with its own connection pool, because its delegate waits for a slow reader. Built on the workers, since the asynchronous machine is not ready to be Apple's default (LLP 1162, "One connection pool a lane"; `QUEUE.md`, "The asynchronous machine as Apple's default"):
+
+- the independent workers, their scoped requests and the launch's preloads share one transport (`host/executor/src/lane.rs`);
+- on Apple an exchange whose reply is held in memory runs on one `URLSession` a transport whose delegate never waits; a stream and a reply written to a file keep sessions of their own (ibex2 local patch 49);
+- on the portable transport a request takes the idle agent that last went to its origin.
+
+`host/executor/src/lane_tests.rs` counts connections at a loopback HTTP/1.1 peer: six reads in turn, the last scoped, ride one (six on main), and reads with four event streams open wait for none of them. On a Mac, an app of eight resources reading one Cloudflare URL at launch opened 2 QUIC connections a cold launch (1 once), against 6 on main.
