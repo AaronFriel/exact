@@ -8,13 +8,13 @@
 
 `bun scripts/metrics.mjs --long` measures the hello app's stripped iOS simulator executable over an empty UIKit
 app's (LLP 1047.001 D8) and gates it at `IOS_HELLO_BYTES`. The size row's target is 8 MB, 8,000,000 B (Charlie,
-2026-11-17: "trying to get to 8MB is maybe worth it"). Main at d92c68ee8, measured on an M5 Max with Xcode 27.2:
+2026-11-17: "trying to get to 8MB is maybe worth it"). Main at 36d7baf41, measured on an M5 Max with Xcode 27.2:
 
 | row | measured | ceiling | target |
 |---|---:|---:|---:|
-| optimized for size (the embed default) | 9,722,832 B | 9,830,000 B | 8,000,000 B |
-| balanced (the iOS and tvOS app default) | 13,808,784 B | 13,910,000 B | |
-| optimized for speed (the Mac default) | 15,127,216 B | 15,230,000 B | |
+| optimized for size (the embed default) | 9,550,448 B | 9,650,000 B | 8,000,000 B |
+| balanced (the iOS and tvOS app default) | 13,604,704 B | 13,710,000 B | |
+| optimized for speed (the Mac default) | 14,890,512 B | 14,990,000 B | |
 
 The ceilings are a tripwire at main's size plus about 100 KB, not an accepted size. A row over its ceiling says how
 far over in 100 KB steps (`VIOLATION by 0.2 MB`), and the async lane's failure carries the step, so each further
@@ -270,6 +270,12 @@ runner's seams; §9.3: the order of work). Landed, size row:
 | N0b: the iOS core and menus reach the `dialog` sheet only through a link | cee801a97 | +64 B |
 | B2: notifications, the host-event mailbox, Live Activities and the wake carriers their own products | 89c9afaa9 | −258,848 B |
 | C11: no plan connection in production, and Forma linked only with native views | d92c68ee8 | −169,616 B, to 9,722,832 B |
+| CSS gradients their own product | ae3c7134d | −34,432 B |
+| the transition and gradient grammars and the exit check linked by use on native hosts | eb4e8b941 | −16,688 B |
+| exits, layout and height transitions and list moves behind the turn's motion link | 2b53c66e0 | −16,672 B |
+| C9: the pickers their own product | 83f6a7e1e | −54,768 B |
+| C11: traces their own product | 0d103a3bf | −82,928 B |
+| C9: the wake lock its own product | 36d7baf41 | under a page, to 9,550,448 B |
 
 A second link map, at 51002ee77, measured what the first declined to claim: the overhead (standard-library
 specializations, outlined functions, metadata, unwind sections) leaves with the families at 0.17 B for each direct
