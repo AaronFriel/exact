@@ -1,7 +1,7 @@
 # A document app needs chosen files to outlast the launch and to hear when they change
 
 **Status:** Closed
-**Resolution:** LLP 1069.010.000 stages 1 and 2 are built on macOS, Linux and the web (watches, expected writes, kept documents); the unlocked-Mac drive and the GNOME and KDE portal runs are in QUEUE.md.
+**Resolution:** LLP 1069.010.000 stages 1 and 2 are built on macOS, Linux and the web (watches, expected writes, kept documents); the editor fixture's drive passed on macOS on 2026-11-17; the GNOME and KDE portal runs are in QUEUE.md.
 **Systems:** storage (`doc:` paths, `storage.fs`), Apple host (security-scoped URLs, Open Recent), web host (File System Access), Linux host, `rules/DEFERRED.md` ("durable capability grants")
 **Severity:** P2
 **Author:** Claude (Opus 5.5), from Rami Maalouf's Exact Draw report
@@ -40,10 +40,13 @@ another program replaces it (a new file renamed over the path) mid-session.
   replacement at its name fires the `FileSystemObserver`, the browser's
   handle reads the new file, and a save expecting the earlier read is
   refused `ECHANGED`.
-- **macOS**: `kept.drives.mjs macos` has the relaunch legs (the kept path
-  reads the editor's save after a relaunch; replaced by another program, it
-  is forgotten at the next launch) and the watch. The fixture builds for
-  macOS, but the drive was not run: the screen was locked.
+- **macOS**: on 2026-11-17 `kept.drives.mjs macos` passed all eight checks
+  in each of ten runs on macOS 27.2.1 (an M4 Pro, its screen unlocked, at
+  `60f4b9880`, the app built with `host/apple/build.mjs kept-editor-apple`).
+  The kept path read the editor's save after a relaunch; replaced by another
+  program, it was forgotten at the next launch (`ENOENT`); the FSEvents watch
+  showed the other program's replacement under the draft in every run, and
+  the draft's save was refused `ECHANGED`.
 
 ## Status (2026-11-14, macOS selected-file watch)
 
@@ -149,8 +152,8 @@ Recent list. Left:
 ## What remains (2026-10-26)
 
 - **D4's hard rows by an editor**: built and driven on Linux and the web
-  (Status, 2026-11-13); left: `kept.drives.mjs macos` run with the screen
-  unlocked. The watch's re-ask on real Linux passed on 2026-11-14.
+  (Status, 2026-11-13), and on macOS on 2026-11-17. The watch's re-ask on
+  real Linux passed on 2026-11-14.
 - **The Linux file chooser on a desktop**: `showOpenFilePicker`,
   `showDirectoryPicker` and `showSaveFilePicker` ask the desktop portal's
   `FileChooser` and keep what it answers (`host/painted/src/portal.rs`), tested
