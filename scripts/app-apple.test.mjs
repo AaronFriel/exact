@@ -220,7 +220,7 @@ test('the Apple build rejects --phone before selecting a simulator or resolving 
   assert.match(result.stderr, /--phone needs --device; for a simulator use --sim/);
 });
 
-test.skipIf(process.platform === 'win32')('an iOS, phone, Apple TV or iOS test build checks its Rust target before resolving an app', () => {
+test.skipIf(process.platform === 'win32')('an iOS, phone, Apple TV or iOS test build names a missing Rust target before it compiles, with what else it lacks', () => {
   const bin = mkdtempSync(resolve(tmpdir(), 'exact-rustup-'));
   try {
     const build = (installed, ...args) => {
@@ -228,13 +228,13 @@ test.skipIf(process.platform === 'win32')('an iOS, phone, Apple TV or iOS test b
       writeFileSync(resolve(bin, 'rustup'), `#!/bin/sh\ncase " $* " in *" --toolchain ${PINNED_RUST} "*) printf '${installed}\\n';; *) printf '${[iosTarget, 'aarch64-apple-ios', 'aarch64-apple-tvos', 'aarch64-apple-tvos-sim'].join('\\n')}\\n';; esac\n`, { mode: 0o755 });
       // This machine's Xcode is not what is tested: its SDK is new enough.
       writeFileSync(resolve(bin, 'xcrun'), `#!/bin/sh\ncase "$*" in *--show-sdk-version*) echo ${HOST_SDKS.ios};; *) exec /usr/bin/xcrun "$@";; esac\n`, { mode: 0o755 });
-      return spawnSync(process.execPath, ['host/apple/build.mjs', ...args, 'no-such-app'], { encoding: 'utf8', env: { ...process.env, RUSTUP_TOOLCHAIN: 'stable', PATH: bin + delimiter + process.env.PATH } });
+      return spawnSync(process.execPath, ['host/apple/build.mjs', ...args, ...(args.some((a) => !a.startsWith('--')) ? [] : ['no-such-app'])], { encoding: 'utf8', env: { ...process.env, RUSTUP_TOOLCHAIN: 'stable', PATH: bin + delimiter + process.env.PATH } });
     };
-    const phone = build('aarch64-apple-ios-sim', '--device');
+    const phone = build('aarch64-apple-ios-sim', '--device', 'hello'); // LLP 1156.006.000 D7: one list, once the app is known
     assert.equal(phone.status, 1);
     assert.match(phone.stderr, new RegExp(`--device needs Rust's aarch64-apple-ios std, which the pinned toolchain lacks\\. Install it with \`rustup target add aarch64-apple-ios --toolchain ${PINNED_RUST}\``));
-    assert.match(build('aarch64-apple-ios', '--ios').stderr, new RegExp(`--ios needs Rust's ${iosTarget} std`));
-    assert.match(build('aarch64-apple-ios', '--tvos', '--device').stderr, /--tvos needs Rust's aarch64-apple-tvos std/);
+    assert.match(build('aarch64-apple-ios', '--ios', 'hello').stderr, new RegExp(`--ios needs Rust's ${iosTarget} std`));
+    assert.match(build('aarch64-apple-ios', '--tvos', '--device', 'hello').stderr, /--tvos needs Rust's aarch64-apple-tvos std/);
     assert.match(build('aarch64-apple-ios', '--device').stderr, /no app at /);
     assert.match(build(iosTarget, '--ios').stderr, /no app at /);
     // The XCTest build (`--test --ios`) compiles for the simulator too.

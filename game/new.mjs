@@ -960,7 +960,7 @@ app.json's \`"commands"\`.
 \`bun exact.mjs update --without linux\` stops shipping Linux.` : ` Native verbs (\`ios\`, \`mac\`, \`linux\`, \`android\`, \`windows\`)
 name their platform in app.json on first use and build in a generated workspace;
 \`update --without <platform>\` stops shipping it.`}
-\`bun ${sdk('scripts/exact.mjs')} setup --check\` names what a native build lacks.${snapback && `\n${snapback}`}
+\`bun ${sdk('scripts/exact.mjs')} setup --check\` names what a native build lacks (\`--platform ios --device\` for a phone's: \`share\`, \`ios --device\`).${snapback && `\n${snapback}`}
 
 Generated, so don't edit: \`exact.mjs\`${authoredApp(dir) ? `, \`rust-toolchain.toml\`, \`.cargo/config.toml\`,
 \`Cargo.toml\`'s \`[patch.crates-io]\`` : ''} and this block.

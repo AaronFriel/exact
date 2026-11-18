@@ -89,8 +89,9 @@ const run = (cmd, args, opts = {}) => {
   if (r.status !== 0) throw new Error(`${cmd} failed (${r.status ?? r.error?.message})${r.stderr?.length ? ': ' + String(r.stderr).trim() : ''}`);
   return r;
 }; const read = (cmd, args, opts = {}) => spawnSync(...appleCargo(cmd, args, { cwd: root, encoding: 'utf8', ...opts }));
-/** Whether the pinned toolchain, which a build uses whatever RUSTUP_TOOLCHAIN says, has `target`'s std; if not, says so for `flag`. */
-const hasStd = (flag, target) => read('rustup', ['target', 'list', '--installed', '--toolchain', PINNED_RUST]).stdout?.split('\n').includes(target) || (console.error(`${flag} needs Rust's ${target} std, which the pinned toolchain lacks. Install it with \`rustup target add ${target} --toolchain ${PINNED_RUST}\``), process.exitCode = 1, false);
+/** What `flag` says when the pinned toolchain, which a build uses whatever RUSTUP_TOOLCHAIN says, lacks `target`'s std, or null; `hasStd` says it. */
+const stdRefusal = (flag, target) => read('rustup', ['target', 'list', '--installed', '--toolchain', PINNED_RUST]).stdout?.split('\n').includes(target) ? null : `${flag} needs Rust's ${target} std, which the pinned toolchain lacks. Install it with \`rustup target add ${target} --toolchain ${PINNED_RUST}\``;
+const hasStd = (flag, target) => { const refusal = stdRefusal(flag, target); if (refusal) { console.error(refusal); process.exitCode = 1; } return !refusal; };
 // Fail on deployment-target and sysroot warnings because Apple tools can still link incompatible inputs
 // @ref LLP 1008
 export const runApple = (cmd, args, opts = {}) => {
@@ -586,7 +587,7 @@ async function main(args, lockHeld = false) {
   if (!ios && !args.includes('--bundle')) args = [...args, '--bundle'];
   if (tv && (args.includes('--host') || args.includes('--embed'))) { console.error('--tvos takes neither --host nor --embed'); process.exitCode = 1; return; }
   const tvTarget = device ? tvosDeviceTarget : tvosTarget, rustTarget = tv ? tvTarget : device ? 'aarch64-apple-ios' : iosTarget;
-  if (ios && !hasStd(tv ? '--tvos' : device ? '--device' : '--ios', rustTarget)) return;
+  const stdMissing = ios ? stdRefusal(tv ? '--tvos' : device ? '--device' : '--ios', rustTarget) : null; // said with the other refusals below
   const ipa = args.includes('--archive') ? resolve(process.cwd(), args[args.indexOf('--archive') + 1] ?? '') : null;
   const unsigned = args.includes('--unsigned');
   // What leaves this machine: an .ipa, or the Mac bundle `exact release` signs and notarises.
@@ -610,6 +611,7 @@ async function main(args, lockHeld = false) {
   // --extensions: which app extensions this build packages (a build service's quick development build leaves some out).
   buildStep('prepare');
   if (packaged.size < EXTENSION_KINDS.length) { app.manifest = withoutExtensions(app.manifest, packaged); console.log(`host/apple: extensions ${[...packaged].join(',') || 'none'} (--extensions)`); }
+  if (args.includes('--watchos') && stdMissing) { console.error(stdMissing); process.exitCode = 1; return; }
   if (args.includes('--watchos')) return buildWatch(app, args, { runApple, appleArtifacts, appleBuildLock, receipt, buildParent: args => main(args, true) });
   const { optimize, profile: productionProfile } = appleProduction(app, ios ? 'ios' : 'macos', args);
   // What the manifest and the app's files refuse is said before Cargo: an app with an update store ships into a stream, so the bake refuses a production
@@ -618,6 +620,11 @@ async function main(args, lockHeld = false) {
   const refused = [...(distribution && streamed && !process.env.EXACT_UPDATE_RECEIPT && process.env.EXACT_UPDATE_GENESIS !== '1' ? [`${app.name}: what is distributed bakes production trust, and with an update store (${store} is not "0") it belongs to a stream: set EXACT_UPDATE_RECEIPT to its authenticated publisher receipt (scripts/deploy.mjs), or EXACT_UPDATE_GENESIS=1 to start a new stream`] : []), ...appleRefusals(app, tv ? 'tvos' : ios ? 'ios' : 'macos', { archive: distribution })];
   const sdkName = appleSdkName(tv ? 'tvos' : ios ? 'ios' : 'macos', device); // the SDK this build compiles with
   if (process.platform === 'darwin' && compilesSwiftHost(args)) refused.push(...[xcodeRefusal(sdkName)].filter(Boolean));
+  // Everything known before Cargo is said in one run (LLP 1156.006.000 D7): Rust's std for the target first, and the
+  // Hermes bundle the bake would stop on only after the others were fixed.
+  if (stdMissing) refused.unshift(stdMissing);
+  const hermesEarly = ios && existsSync(resolve(app.dir, 'app.ts')) && process.env.EXACT_JS_ENGINE !== 'stub' && hermesBundle(rustTarget, process.env);
+  if (hermesEarly && !hermesEarly.installed) refused.push((await import('../../scripts/exact.mjs')).hermesRefusal(hermesEarly, process.env));
   if (refused.length) { console.error(refused.join('\n')); process.exitCode = 1; return; }
   if (ios && !device && !ipa && !args.includes('--no-install') && !args.includes('--prebuild')) chooseSimulator(args.includes('--sim') ? args[args.indexOf('--sim') + 1] : undefined, { tv, app: app.id, dir: app.dir, hint: '--sim <udid|name> (or EXACT_SIM)' }); // refused before anything compiles, not after (LLP 1156.000 D5)
   if (!existsSync(resolve(app.target, 'apple-swift'))) { const room = freeSpace(app.dir, [app.target, resolve(process.env.HOME ?? '', '.cache/exact')]); if (room && room.gb < ROOM_GB) console.warn(`host/apple: a first build here; ${room.text}`); } // a cold build (LLP 1156.000 D3)
