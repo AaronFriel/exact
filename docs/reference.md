@@ -1504,6 +1504,7 @@ The generated `--embed` composition lists the capabilities to link.
 | `ExactWebViews` | `iframe` web views | `ExactWebViews.install()` |
 | `ExactSound` | Declared sounds, sequences and the voice-table commands | `ExactSound.install()` |
 | `ExactMIDI` | MIDI ports and a sequence's MIDI output | `ExactMIDI.install()` |
+| `ExactAnimations` | What Core Animation plays for a box: its CSS animations (`animation`, `@keyframes`), transitions, drags and spring motion, so any of `animations`, `transitions`, `motion`, `drag` or `timelines` links it; SVG's element animations play through it too | `ExactAnimations.install()` |
 
 Development builds log a missing Markdown or drag installation once per session,
 with the product and installation call. Without it, Markdown remains literal

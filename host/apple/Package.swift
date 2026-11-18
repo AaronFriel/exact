@@ -62,13 +62,19 @@ let allCapabilities: [(name: String, target: String)] = [
     ("web_views", "ExactWebViews"),
     ("sound", "ExactSound"),
     ("midi", "ExactMIDI"),
+    ("animations", "ExactAnimations"),
 ]
 // What a family imports beyond ExactKit and CExact: another family's product,
 // which the roster links with it, or ExactCore's package API. Surfaces' Canvas
 // 2D images fetch and decode through the images family's static API, which
 // needs no install.
-let capabilityNeeds: [String: [Target.Dependency]] = ["ExactCollections": ["ExactCore"], "ExactContentRegions": ["ExactCore"], "ExactPickers": ["ExactCore"], "ExactTraces": ["ExactCore"], "ExactNativeViews": ["ExactFormaBinding"], "ExactSvg": ["ExactCore", "ExactEffects"], "ExactSurfaces": ["ExactImages"], "ExactGradients": ["ExactCore"]]
-let capabilities = allCapabilities.filter { links($0.name) }
+let capabilityNeeds: [String: [Target.Dependency]] = ["ExactCollections": ["ExactCore"], "ExactContentRegions": ["ExactCore"], "ExactPickers": ["ExactCore"], "ExactTraces": ["ExactCore"], "ExactNativeViews": ["ExactFormaBinding"], "ExactSvg": ["ExactCore", "ExactEffects", "ExactAnimations"], "ExactSurfaces": ["ExactImages"], "ExactGradients": ["ExactCore"]]
+// The host lowers a box's transitions, drags and motion to the same
+// `animations` op as its CSS animations, which ExactAnimations plays, so any
+// of them links that product without the keyframe grammar the `animations`
+// capability links into the Rust archive (link.mjs's `PLAYED`).
+let played = ["animations", "motion", "drag", "timelines", "transitions"]
+let capabilities = allCapabilities.filter { $0.name == "animations" ? played.contains(where: links) : links($0.name) }
 
 // `swift test` builds every target a package declares, and the two UIKit
 // executables cannot build for macOS. EXACT_TESTS=1 narrows the package to

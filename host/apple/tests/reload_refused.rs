@@ -10,7 +10,7 @@ use exact_apple::link::{self, Uses};
 
 #[path = "reload/common.rs"]
 mod common;
-use common::{boot, digest, media, plan, source, NoData, ACTIVITIES, TRACING};
+use common::{boot, digest, media, plan, source, NoData, ACTIVITIES, ANIMATED, TRACING};
 
 #[test]
 fn hellos_binary_refuses_a_reload_into_a_family_and_keeps_its_plan() {
@@ -51,6 +51,7 @@ fn hellos_binary_refuses_a_reload_into_a_family_and_keeps_its_plan() {
         (plan("input type=\"file\" id=\"f\""), "picker"),
         (source(TRACING), "traces"),
         (plan("text \"a\" wakelock=\"screen\""), "wake_lock"),
+        (source(ANIMATED), "animations"),
     ]
     .into_iter()
     .chain(media())

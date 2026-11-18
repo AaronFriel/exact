@@ -23,6 +23,10 @@ pub fn source(text: &str) -> Vec<u8> {
     contract::compile(text).unwrap().encode()
 }
 
+/// A plan whose box plays a CSS animation, which only the animations family
+/// plays.
+pub const ANIMATED: &str = "keyframes spin\n  from opacity=0\n  to opacity=1\ncomponent A\n  view\n    text \"a\" animation=\"spin 1s infinite\"\n";
+
 /// A plan that can start a Live Activity, which only the activities family
 /// serves; it reads nothing at boot, so its candidate is not held for data.
 pub const ACTIVITIES: &str = "shape ID\n  id: string\nshape S\n  n: number\ncomponent A\n  mutation started as shape ID\n  action start\n    send started = startActivity(\"k\", S(n=1))\n  view\n    text \"a\"\n";

@@ -1,13 +1,13 @@
 // @ref LLP 1055.001 — a box's CSS animations (its transform key paths and
-// background colour) on its own layer. They are the core's, whatever SVG
-// the app links (LLP 1047.001 D10).
+// background colour) on its own layer.
+import ExactKit
 import Foundation
 import QuartzCore
 
 /// A presenter's box animations, by view id: the `animations` ops, a box
 /// hidden by `visibility`, a box flying scaled, the agent clock's re-seek,
 /// and cleanup when a view goes.
-final class BoxAnimations {
+final class BoxAnimations: BoxAnimating {
     private var boxSpecs: [UInt32: (layer: CALayer, specs: [CssAnimation])] = [:]
     private var boxInstalled: [UInt32: [String: Int]] = [:]
     private var hiddenBoxes: Set<UInt32> = []

@@ -99,6 +99,9 @@ import ExactSound
 #if EXACT_LINK_MIDI
 import ExactMIDI
 #endif
+#if EXACT_LINK_ANIMATIONS
+import ExactAnimations
+#endif
 public enum ExactComposition {
     public static let app: ExactApp = {
         AgentLink.install()
@@ -207,6 +210,9 @@ public enum ExactComposition {
         #endif
         #if EXACT_LINK_MIDI
         ExactMIDI.install()
+        #endif
+        #if EXACT_LINK_ANIMATIONS
+        ExactAnimations.install()
         #endif
     }
 }

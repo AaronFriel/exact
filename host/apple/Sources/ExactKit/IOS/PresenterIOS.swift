@@ -183,7 +183,7 @@ package final class Presenter {
     /// SVG scenes (LLP 1055 D4), when the app links SVG.
     let svg = SvgLink.make?()
     /// Boxes' CSS animations (LLP 1055 D7).
-    let boxAnimations = BoxAnimations()
+    let boxAnimations: any BoxAnimating = AnimationLink.make?() ?? NoBoxAnimations()
     /// Boxes under CSS `filter`, drawn again after each batch (LLP 1055.000 D14).
     let boxFilters = BoxFilterLink.makeSet?()
     package let canvas2d: Canvas2DCanvases = SurfacesLink.installed?.canvas2D() ?? NoCanvas2D()

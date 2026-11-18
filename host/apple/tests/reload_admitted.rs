@@ -6,7 +6,7 @@ use exact_apple::abi::{Bridge, Hooks};
 
 #[path = "reload/common.rs"]
 mod common;
-use common::{boot, digest, media, plan, source, NoData, ACTIVITIES, TRACING};
+use common::{boot, digest, media, plan, source, NoData, ACTIVITIES, ANIMATED, TRACING};
 
 #[test]
 fn an_all_linked_binary_reloads_from_hello_into_each_family() {
@@ -21,6 +21,7 @@ fn an_all_linked_binary_reloads_from_hello_into_each_family() {
         ),
         ("hatch", plan("view hatch=\"avatar\"")),
         ("checkbox", plan("input type=\"checkbox\"")),
+        ("animation", source(ANIMATED)),
         (
             "gradient",
             plan("column background-image=\"linear-gradient(red, blue)\""),
