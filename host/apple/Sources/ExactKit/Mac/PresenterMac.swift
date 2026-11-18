@@ -610,7 +610,7 @@ package final class Presenter {
     /// The page's canvas colour as the viewport draws it: the first root's
     /// opaque background, the window background when unset, and clear when
     /// the root's is translucent, which the viewport leaves undrawn.
-    var pageBackground: NSColor { viewport.drawsBackground ? viewport.backgroundColor : .clear }
+    package var pageBackground: NSColor { viewport.drawsBackground ? viewport.backgroundColor : .clear }
     /// What covers the page where a route paints no ground of its own: the
     /// canvas, or the window background behind a translucent one.
     var opaqueGround: NSColor { viewport.drawsBackground ? viewport.backgroundColor : .windowBackgroundColor }

@@ -3,6 +3,9 @@
 @testable import ExactPickers
 @testable import ExactImages
 @testable import ExactCollections
+#if os(macOS)
+@testable import ExactContentRegions
+#endif
 
 // The built-in family implementations behind the core's link slots (LLP 1047.001 D10), for tests that read their internals.
 
@@ -32,7 +35,7 @@ extension Presenter {
 
 #if os(macOS)
 extension ExactSession {
-    /// The built-in content regions (`ContentRegionLink.make`'s default).
+    /// The region controller `ExactContentRegions.install()` puts in `ContentRegionLink.make`.
     var regionHost: RegionController { regions as! RegionController }
 }
 #endif

@@ -8,6 +8,10 @@ module CExact {
         header "../../include/exact_svg.h"
         export *
     }
+    explicit module ContentRegions {
+        header "../../include/exact_content_regions.h"
+        export *
+    }
     module Traces {
         header "../../include/exact_traces.h"
         export *

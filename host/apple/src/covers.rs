@@ -164,13 +164,7 @@ impl<D: DataSource> Host<D> {
                 Err(e) => drop(error.get_or_insert(format!("block: {e:?}"))),
             }
             if captured != self.native_captured_id(view) {
-                self.content_region
-                    .as_mut()
-                    .unwrap()
-                    .native
-                    .as_mut()
-                    .unwrap()
-                    .dirty = true;
+                self.native_moved();
             }
         }
         self.runner.place_blocks(placements);

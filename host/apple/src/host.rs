@@ -44,6 +44,7 @@ mod colors;
 mod commit;
 #[path = "content_region/host.rs"]
 mod content_region_host;
+pub use content_region_host::LinkedRegions;
 #[cfg(test)]
 #[path = "control_text_tests.rs"]
 mod control_text_tests;
@@ -89,6 +90,8 @@ mod forma;
 mod persistence;
 #[path = "presence.rs"]
 mod presence;
+#[path = "region_seam.rs"]
+pub mod region_seam;
 #[path = "renew.rs"]
 mod renew;
 #[path = "route_overflow.rs"]
@@ -285,7 +288,10 @@ pub struct Host<D: DataSource> {
     group: Option<arrange_group::GroupArrange>,
     presence: presence::Presence,
     flights: flights::Flights,
-    content_region: Option<crate::content_region::RegionState>,
+    /// The content region, which only [`LinkedRegions`] makes.
+    content_region: Option<Box<dyn std::any::Any>>,
+    /// The content-region seam (LLP 1047.001 §9.8).
+    regions: &'static dyn region_seam::ContentRegions<D>,
     height_projection: Vec<(NodeKey, f32)>,
     height_sampling: Vec<(NodeKey, f32)>,
     height_presented: Vec<exact_kernel::PresentedHeight>,
@@ -577,18 +583,10 @@ impl<D: DataSource> Host<D> {
         if let Some(action) = region.and_then(|r| r.activate) {
             runner.act(action, Vec::new()).map_err(HostError::Runner)?;
         }
-        let mut content_region = region
-            .map(|r| crate::content_region::RegionState::new(runner.kernel_mut(), r))
-            .transpose()
+        let content_region = links
+            .regions
+            .boot(runner.kernel_mut(), region, native)
             .map_err(HostError::Layout)?;
-        if let Some(limits) = native {
-            content_region
-                .as_mut()
-                .ok_or_else(|| HostError::Layout("native registration missing".into()))?
-                .native = Some(
-                crate::content_region::NativeProjection::new(limits).map_err(HostError::Layout)?,
-            );
-        }
         // Install the candidate catalog before first text measurement.
         prepare(&mut runner)?;
         let font_hook =
@@ -667,6 +665,7 @@ impl<D: DataSource> Host<D> {
             presence: presence::Presence::default(),
             flights: flights::Flights::default(),
             content_region,
+            regions: links.regions,
             height_projection: Vec::new(),
             height_sampling: Vec::new(),
             height_presented: Vec::new(),

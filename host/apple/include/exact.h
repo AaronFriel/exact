@@ -379,13 +379,7 @@ typedef struct ExactMetrics {
                               -2 = pending native metrics for this revision */
 } ExactMetrics;
 
-/* Region completion takes one retained native artifact on every return path. */
-typedef void (*ExactRegionReleaseFn)(void *owner);
 uint32_t exact_text_ready(ExactRuntime rt, uint32_t index, uint32_t generation, uint64_t revision);
-uint32_t exact_region_request(ExactRuntime rt, uint64_t request, uint64_t known_source);
-uint32_t exact_region_complete(ExactRuntime rt, uint64_t request, ExactMetrics metrics, void *owner, ExactRegionReleaseFn release);
-/* A current incomplete flow returns the registration to native layout. */
-uint32_t exact_region_fallback(ExactRuntime rt, uint64_t request);
 
 typedef ExactMetrics (*ExactMeasureFn)(void *ctx, const ExactMeasureRequest *request);
 

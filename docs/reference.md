@@ -1499,6 +1499,7 @@ The generated `--embed` composition lists the capabilities to link.
 | `ExactGradients` | CSS gradients: `background-image` and `mask-image` | `ExactGradients.install()` |
 | `ExactTraces` | The traces an app records, and `ExactSession.startTrace()` and `stopTrace(maxBytes:)` | `ExactTraces.install()` |
 | `ExactWakeLock` | `wakelock="screen"` | `ExactWakeLock.install()` |
+| `ExactContentRegions` | Content regions an entry registers (the Mac's region controller) | `ExactContentRegions.install()` |
 
 Development builds log a missing Markdown or drag installation once per session,
 with the product and installation call. Without it, Markdown remains literal

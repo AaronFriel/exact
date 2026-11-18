@@ -223,7 +223,7 @@ export function helperClassifications(group) {
   ]),
   group("region and text", ["one-shot"], "current layout region, paragraph or content measurement", "UI-owned",
     "exact_region_fallback and exact_text_paragraph_bases answer the current region and text request; painted stage.rs fit_content measures the current sheet.", [
-    ["apple:host/apple/src/abi/exports.rs", "exact_region_fallback"],
+    ["apple:host/apple/src/content_region/exports.rs", "exact_region_fallback"],
     ["apple:host/apple/src/textflow.rs", "exact_text_paragraph_bases"],
     ["painted:host/painted/src/presenter/stage.rs", "Presenter::fit_content"],
   ]),

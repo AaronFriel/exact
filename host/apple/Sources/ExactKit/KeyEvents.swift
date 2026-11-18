@@ -403,7 +403,7 @@ extension NodeView {
     /// and `charactersIgnoringModifiers` loses it. Option and Control change
     /// `characters` too, so with either the layout is asked for Command's
     /// character alone.
-    static func commandKey(_ event: NSEvent) -> String? {
+    package static func commandKey(_ event: NSEvent) -> String? {
         let typed = event.modifierFlags.isDisjoint(with: [.control, .option])
             ? event.characters : event.characters(byApplyingModifiers: .command)
         return (typed ?? event.charactersIgnoringModifiers)?.lowercased()
@@ -411,7 +411,7 @@ extension NodeView {
     /// Whether Command is the only modifier held, as the Edit menu's ⌘A and
     /// ⌘C have it, ignoring Caps Lock, the numeric pad and Fn: a chord with
     /// another (⇧⌘C) is a different command.
-    static func isCommandAlone(_ event: NSEvent) -> Bool {
+    package static func isCommandAlone(_ event: NSEvent) -> Bool {
         event.modifierFlags.intersection(.deviceIndependentFlagsMask).subtracting([.capsLock, .numericPad, .function]) == .command
     }
 }

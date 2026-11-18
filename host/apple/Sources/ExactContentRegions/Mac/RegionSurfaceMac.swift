@@ -2,6 +2,7 @@
 // source/hits and pixels publish together; live candidate NodeViews never paint.
 #if os(macOS)
 import AppKit
+import ExactKit
 
 private final class RegionInkView: NSView {
     weak var surface: RegionSurfaceMac?

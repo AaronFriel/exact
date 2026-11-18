@@ -116,7 +116,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
             if shadowStand != nil { followShadowStand() }
         }
     }
-    var clipPath: CGPath?, clipRule = CGPathFillRule.winding
+    package var clipPath: CGPath?, clipRule = CGPathFillRule.winding
     package var handlers: Set<String> = [] { didSet { video?.update(); if handlers.contains("hover") != oldValue.contains("hover") || handlers.contains("pointermove") != oldValue.contains("pointermove") { syncHoverTracking() }; if handlers.intersection(FileDrag.events) != oldValue.intersection(FileDrag.events) { syncDropTypes() }; syncDisabledLook() } } // the media events the player reports; a hover handler's tracking area; a drop handler's dragged types; a disabled pressable's look
     var translatePx = CGPoint.zero, translatePercent = CGPoint.zero // `translate`: its lengths, and its percentages of the box (chess diary #4)
     var layoutOffset = CGPoint.zero, layoutResize = CGSize.zero // layout*: the box layout moved it from, and its surface's size from the laid-out one (LLP 1063)
@@ -170,7 +170,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
     package var imageLayer: CALayer?
     /// While it flies as a shared element (LLP 1013.000 D4): where its image is drawn.
     package var flightLook: FlightLook?
-    var materialView: NSView?
+    package var materialView: NSView?
     /// The backdrop blur's σ and mirrored box as last set (`Backdrop.swift`).
     var backdropDrawn: BackdropDrawn?
     /// `glassGroup`'s view and a grouped glass's isolation (`GlassGroup.swift`).

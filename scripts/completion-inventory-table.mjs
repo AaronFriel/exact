@@ -352,8 +352,9 @@ export const classifications = [
       "exact_host_covers exact_intrinsics exact_layout_stamp exact_link_activities exact_list_covered exact_log exact_measure_block exact_measure_work " +
       "exact_measure_work_later exact_placement_box exact_plan_covers_viewport exact_plan_digest exact_preloads_begin exact_preloads_count exact_preloads_launched " +
       "exact_preloads_mark exact_preloads_name exact_preloads_opened exact_press_face exact_protocol_location_of exact_radio_group exact_reads_on_line " +
-      "exact_refresh_entry exact_region_request exact_regions exact_role_keys exact_row_reuse exact_scheme exact_screen exact_select_options " +
+      "exact_refresh_entry exact_regions exact_role_keys exact_row_reuse exact_scheme exact_screen exact_select_options " +
       "exact_stack_split exact_svg_islands exact_forma exact_titlebar_area exact_trim exact_view exact_view_scheme"],
+    ["apple:host/apple/src/content_region/exports.rs", "exact_region_request"],
     ["apple:runner/src/frame_health.rs",
       "exact_frame_health_applied exact_frame_health_capture exact_frame_health_context exact_frame_health_create exact_frame_health_destroy " +
       "exact_frame_health_distribution exact_frame_health_history_status exact_frame_health_hitch exact_frame_health_record exact_frame_health_requested_period " +
@@ -610,8 +611,9 @@ export const classifications = [
       "exact_raster_status exact_raster_take_ready exact_raster_wake_sequence"],
   ]),
   group("region and text", ["one-shot"], "layout region or text revision in a live session", "UI-owned",
-    "host/apple/src/abi/exports.rs exact_region_complete names a region; exact_text_ready supplies index, generation and revision. Both target current presentation state.", [
-    ["apple:host/apple/src/abi/exports.rs", "exact_region_complete exact_text_ready"],
+    "host/apple/src/content_region/exports.rs exact_region_complete names a region; exact_text_ready supplies index, generation and revision. Both target current presentation state.", [
+    ["apple:host/apple/src/abi/exports.rs", "exact_text_ready"],
+    ["apple:host/apple/src/content_region/exports.rs", "exact_region_complete"],
     ["painted:host/painted/src/content_region/host.rs", "Host::content_region_painted Host::poll_content_region"],
   ]),
   group("replies", ["one-shot", "subscription", "durable operation"], "pending ticket and source turn; UI target by default", "UI-owned",

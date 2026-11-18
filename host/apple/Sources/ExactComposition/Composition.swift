@@ -84,6 +84,9 @@ import ExactTraces
 #if EXACT_LINK_WAKE_LOCK
 import ExactWakeLock
 #endif
+#if EXACT_LINK_CONTENT_REGIONS
+import ExactContentRegions
+#endif
 public enum ExactComposition {
     public static let app: ExactApp = {
         AgentLink.install()
@@ -177,6 +180,9 @@ public enum ExactComposition {
         #endif
         #if EXACT_LINK_WAKE_LOCK
         ExactWakeLock.install()
+        #endif
+        #if EXACT_LINK_CONTENT_REGIONS
+        ExactContentRegions.install()
         #endif
     }
 }

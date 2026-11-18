@@ -1,5 +1,6 @@
 #if os(macOS)
 import AppKit
+import ExactKit
 
 private final class WeakRegionArtifact {
     weak var value: RegionArtifact?

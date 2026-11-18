@@ -408,6 +408,8 @@ pub struct Links<D: DataSource> {
     pub modules: exact_runner::ModuleLinks<D>,
     /// A turn's family work after its commits.
     pub turn: TurnLinks<D>,
+    /// The content region an entry registers (LLP 1047.001 §9.8).
+    pub regions: &'static dyn crate::host::region_seam::ContentRegions<D>,
 }
 
 impl<D: DataSource> Clone for Links<D> {
@@ -421,6 +423,7 @@ impl<D: DataSource> Clone for Links<D> {
             engine: self.engine,
             modules: self.modules,
             turn: self.turn,
+            regions: self.regions,
         }
     }
 }
@@ -436,6 +439,7 @@ impl<D: DataSource> Links<D> {
         engine: &exact_motion::EngineLinks::ALL,
         modules: exact_runner::ModuleLinks::ALL,
         turn: TurnLinks::of(ALL),
+        regions: &crate::host::LinkedRegions,
     };
 
     /// What `uses` needs; evaluated in a `const`, so nothing else is named.
@@ -558,6 +562,11 @@ impl<D: DataSource> Links<D> {
                 },
             },
             turn: TurnLinks::of(uses),
+            regions: if uses.has(Capability::ContentRegions) {
+                &crate::host::LinkedRegions
+            } else {
+                &crate::host::region_seam::NoRegions
+            },
         }
     }
 }

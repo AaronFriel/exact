@@ -1119,13 +1119,6 @@ package final class Runtime {
             read(exact_text_ready(rt, index, generation, revision))
         }
     }
-    package func regionRequest(_ id: UInt64, knownSource: UInt64) -> [String: Any]? {
-        return on(busy: nil) {
-            let length = exact_region_request(rt, id, knownSource)
-            let data = Data(bytes: exact_out(rt), count: Int(length))
-            return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-        }
-    }
 
     #if EXACT_AGENT
     /// The agent API (LLP 1012): a request in, its reply out — JSON, not a
