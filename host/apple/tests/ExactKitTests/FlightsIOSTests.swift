@@ -34,7 +34,7 @@ final class FlightsIOSTests: XCTestCase {
                 ["op": "frame", "id": 2, "x": 0.0, "y": 0.0, "w": 200.0, "h": 300.0]]))
             let panel = try XCTUnwrap(p.views[2])
             panel.accessibilityElementsHidden = authoredHidden
-            p.navigation.tabPanels = [panel.id]
+            p.navigationHost.tabPanels = [panel.id]
             XCTAssertTrue(panel.accessibilityElementsHidden)
             let flight = Flight(id: panel.id, source: FlightSource(rect: panel.convert(panel.bounds, to: nil), radius: 0))
             p.flights[panel.id] = flight

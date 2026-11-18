@@ -450,8 +450,8 @@ final class FragmentTests: XCTestCase {
             ["op": "content", "id": 1, "w": 800, "h": 1600],
         ]))
         window.layoutIfNeeded()
-        p.navigation.sync(wireBatch([]))
-        let route = try XCTUnwrap(p.navigation.activeRoute)
+        p.navigationHost.sync(wireBatch([]))
+        let route = try XCTUnwrap(p.navigationHost.activeRoute)
         let target = try XCTUnwrap(p.views[3])
         XCTAssertEqual(p.keyboardPolicy, "resizes-content")
         let scroll = try XCTUnwrap(route.contentViewport, "the projected route keeps the root's scrolling")

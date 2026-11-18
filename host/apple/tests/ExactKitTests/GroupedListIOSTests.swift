@@ -1210,8 +1210,8 @@ final class GroupedListIOSTests: GroupedListFixture {
             ["op": "create", "id": 95, "kind": "view", "props": [:], "style": [:]],
             ["op": "roots", "ids": [95]],
         ]))
-        p.modals.present(try XCTUnwrap(p.views[90]), navigation: UIViewController(), from: background, preceding: nil, owner: owner)
-        XCTAssertEqual(p.modals.routes.count, 1, "the sheet is up")
+        p.modalHost.present(try XCTUnwrap(p.views[90]), navigation: UIViewController(), from: background, preceding: nil, owner: owner)
+        XCTAssertEqual(p.modalHost.routes.count, 1, "the sheet is up")
 
         // The refresh, under the sheet: a "next up" section first, a new row
         // under the others, and row 21 grown.
@@ -1240,11 +1240,11 @@ final class GroupedListIOSTests: GroupedListFixture {
         let l = try list(p)
         p.onViewportFit = {
             l.mount()
-            p.modals.closeTop(animated: false)
+            p.modalHost.closeTop(animated: false)
         }
         p.apply(wireBatch([["op": "props", "id": 95, "set": ["viewportFit": "cover"], "clear": [String]()]]))
         p.onViewportFit = nil
-        XCTAssertTrue(p.modals.routes.isEmpty, "the sheet closed")
+        XCTAssertTrue(p.modalHost.routes.isEmpty, "the sheet closed")
         func shown(_ id: UInt32, _ height: CGFloat, _ what: String) throws {
             let cell = try self.cell(p, id), row = try XCTUnwrap(p.views[id])
             XCTAssertTrue(row.superview === cell.contentView, "\(what): carried into its cell")
@@ -1463,7 +1463,7 @@ final class GroupedListIOSTests: GroupedListFixture {
         view.frame = root.view.bounds
         view.layoutIfNeeded()
         let spin = { (seconds: Double) in RunLoop.main.run(until: Date().addingTimeInterval(seconds)) }
-        let p = session.presenter, nav = try XCTUnwrap(p.navigation.primaryNavigation)
+        let p = session.presenter, nav = try XCTUnwrap(p.navigationHost.primaryNavigation)
         func node(_ testId: String) throws -> NodeView { try XCTUnwrap(p.views.values.first { $0.props["testId"] == testId }, "no \(testId)") }
         func settle(_ count: Int, _ what: String) {
             let deadline = Date().addingTimeInterval(5)

@@ -138,7 +138,7 @@ extension Presenter {
         #if os(macOS)
         if let node = view as? NodeView { return menus.authoredParent(of: node) ?? dialogs.authoredParent(of: node) ?? blocks.parent(of: node) }
         #else
-        if let node = view as? NodeView, navigation.controllers[node.id]?.node === node,
+        if let node = view as? NodeView, navigation.routeSurfaces[node.id]?.node === node,
            let parent = navigation.logicalParent(of: node) ?? navigation.container {
             return parent
         }

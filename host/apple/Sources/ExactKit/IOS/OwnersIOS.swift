@@ -79,7 +79,7 @@ extension Presenter {
     func listenerParent(of view: UIView) -> UIView? {
         if let node = view as? NodeView, let parent = menus.sheets.authoredParent(of: node) { return parent }
         if let parent = menus.logicalParent(of: view) { return parent }
-        if let node = view as? NodeView, navigation.controllers[node.id]?.node === node, modals.mounts(node) {
+        if let node = view as? NodeView, navigation.routeSurfaces[node.id]?.node === node, modals.mounts(node) {
             return eventParent(of: node)
         }
         return view.superview
@@ -222,17 +222,17 @@ final class OwnerBlocks {
     /// its controller's view, its block in that view's coordinates, and
     /// whether a window shows that view: a route under a pushed one, or in a
     /// tab not selected, is out of the window.
-    private var routes: [(route: RouteController, view: UIView, block: CGRect, shown: Bool, presented: Bool)] {
+    private var routes: [(route: any RouteSurface, view: UIView, block: CGRect, shown: Bool, presented: Bool)] {
         presenter.navigation.primaryStacks.flatMap { routes(of: $0, presented: false) } + presenter.modals.navigations.flatMap { routes(of: $0, presented: true) }
     }
 
     /// A stack's routes: a navigation controller's, or a plain tab's one route.
-    private func routes(of stack: UIViewController, presented: Bool) -> [(route: RouteController, view: UIView, block: CGRect, shown: Bool, presented: Bool)] {
+    private func routes(of stack: UIViewController, presented: Bool) -> [(route: any RouteSurface, view: UIView, block: CGRect, shown: Bool, presented: Bool)] {
         var controllers = stack.stackRoutes
         if let leaving = (stack as? UINavigationController)?.transitionCoordinator?.viewController(forKey: .from),
            !controllers.contains(where: { $0 === leaving }) { controllers.append(leaving) }
         return controllers.compactMap { controller in
-            guard let route = controller as? RouteController, let view = route.bootSurface ?? route.viewIfLoaded,
+            guard let route = controller as? any RouteSurface, let view = route.bootSurface ?? route.viewIfLoaded,
                   presenter.views[route.node.id] === route.node else { return nil }
             let block = self.block(in: view)
             route.fitContentViewport(in: block)
@@ -388,7 +388,7 @@ final class OwnerBlocks {
     /// turned panel would be its bounding box. The conversion leaves out
     /// the owner's transform and every ancestor's, which the runner applies
     /// itself. None while the owner is not in the window.
-    private func placement(of route: RouteController, block: CGRect, in view: UIView) -> BlockPlacement? {
+    private func placement(of route: any RouteSurface, block: CGRect, in view: UIView) -> BlockPlacement? {
         guard let owner = presenter.navigation.container, owner.window != nil, owner.window === view.window else { return nil }
         return BlockPlacement(rect: NativeGeometry.convert(block, from: view, to: owner), within: owner.id, contentOffset: route.contentViewport?.contentOffset)
     }

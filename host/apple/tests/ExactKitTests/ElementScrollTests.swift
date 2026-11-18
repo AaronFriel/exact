@@ -28,12 +28,12 @@ final class ElementScrollTests: XCTestCase {
         let sv = try XCTUnwrap(node.scrollView)
         sv.contentSize = CGSize(width: 200, height: 1000)
         node.retainScrollPosition(from: sv)
-        p.navigation.coversReported += 1
+        p.navigationHost.coversReported += 1
         p.scrollElementIntoView(["target", "start", "nearest", "instant"])
         XCTAssertNil(node.pendingScrollTop, "the reveal drops the carried position")
         let revealed = sv.contentOffset.y
         XCTAssertGreaterThan(revealed, 300)
-        p.navigation.writeCarriedScrollsWhenAnswered(through: p.navigation.coversReported)
+        p.navigationHost.writeCarriedScrollsWhenAnswered(through: p.navigationHost.coversReported)
         XCTAssertEqual(sv.contentOffset.y, revealed, accuracy: 0.5, "the answer's write leaves the reveal's offset")
     }
     #endif
@@ -618,9 +618,9 @@ final class ElementScrollTests: XCTestCase {
         XCTAssertNotNil(p.session?.view?.window, "the session's view is in the window")
         XCTAssertTrue(p.canScrollIntoView(chip), "laid out")
         XCTAssertFalse(p.settlesElementScroll, "nothing is settling")
-        let calls = p.navigation.syncCalls
-        p.navigation.sync(wireBatch([]))
-        XCTAssertEqual(p.navigation.syncCalls, calls + 1)
+        let calls = p.navigationHost.syncCalls
+        p.navigationHost.sync(wireBatch([]))
+        XCTAssertEqual(p.navigationHost.syncCalls, calls + 1)
         XCTAssertEqual(sv.contentOffset.x, 800, accuracy: 0.5, "the settle carries it out")
         XCTAssertEqual(p.elementScrolls.names, [])
     }

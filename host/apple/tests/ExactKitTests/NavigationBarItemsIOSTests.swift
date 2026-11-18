@@ -23,7 +23,7 @@ extension NavigationBarIOSTests {
     /// controls or only a readout.
     func testABarsItemsChangedOnARouteThatShowsAreSetWithUIKitsAnimation() throws {
         let session = try fixture("bar-items-animated", module: false, plan: "BAR_SHARE")
-        let nav = try XCTUnwrap(session.presenter.navigation.primaryNavigation)
+        let nav = try XCTUnwrap(session.presenter.navigationHost.primaryNavigation)
         nav.view.layoutIfNeeded()
         let uikit = try XCTUnwrap(class_getInstanceMethod(UINavigationItem.self, #selector(UINavigationItem.setRightBarButtonItems(_:animated:))))
         let recorded = try XCTUnwrap(class_getInstanceMethod(UINavigationItem.self, #selector(UINavigationItem.recordedRightBarButtonItems(_:animated:))))
@@ -55,7 +55,7 @@ extension NavigationBarIOSTests {
         let session = try fixture("authored-title-touch", module: false)
         let p = session.presenter
         p.press(try node(session, "chat").id)
-        let nav = try XCTUnwrap(p.navigation.primaryNavigation)
+        let nav = try XCTUnwrap(p.navigationHost.primaryNavigation)
         until("chat is pushed") { nav.transitionCoordinator == nil }
         let bar = try XCTUnwrap(nav.navigationBar as? RouteNavigationBar)
         let tap = try node(session, "title-group")
@@ -81,12 +81,12 @@ extension NavigationBarIOSTests {
     /// that presses it, as the same button's in the page is (#501).
     func testABarItemsShortcutIsAKeyCommandThatPressesIt() throws {
         let session = try fixture("bar-item-shortcut", module: false, plan: "BAR_SHARE")
-        let nav = try XCTUnwrap(session.presenter.navigation.primaryNavigation)
+        let nav = try XCTUnwrap(session.presenter.navigationHost.primaryNavigation)
         nav.view.layoutIfNeeded()
         let more = try node(session, "more-home")
         session.presenter.apply(wireBatch([["op": "props", "id": Int(more.id), "set": ["accessibilityKeyShortcuts": "Meta+Z"]]]))
         XCTAssertFalse(more.accessibilityVisible, "the bar's item stands for the control")
-        XCTAssertNotNil(session.presenter.navigation.tipItem(more), "the bar that shows draws it")
+        XCTAssertNotNil(session.presenter.navigationHost.tipItem(more), "the bar that shows draws it")
         let commands = session.presenter.shortcutCommands(#selector(UIResponder.becomeFirstResponder))
         XCTAssertEqual(commands.map { [$0.input, $0.title] }, [["z", "More"]], "one command, named for the button")
         XCTAssertTrue(session.presenter.shortcut(key: "z", held: "Meta+", focus: nil) === more)

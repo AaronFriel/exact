@@ -11,7 +11,7 @@ extension NavigationTabsIOSTests {
         guard #available(iOS 18.0, *) else { throw XCTSkip("setTabBarHidden is iOS 18") }
         guard hostedWindowScene() != nil else { throw missing("scene", "a presentation completes only in a scene's window") }
         let session = try fixture("basics-roottabbar")
-        let tabs = try XCTUnwrap(session.presenter.navigation.tabController)
+        let tabs = try XCTUnwrap(session.presenter.navigationHost.tabController)
         let nav = try XCTUnwrap(tabs.selectedViewController as? UINavigationController)
         let root = try XCTUnwrap(nav.stackRoutes.first as? RouteController)
         try tapNode(session, "toggle-choosing")
@@ -31,7 +31,7 @@ extension NavigationTabsIOSTests {
         guard #available(iOS 18.0, *) else { throw XCTSkip("setTabBarHidden is iOS 18") }
         guard hostedWindowScene() != nil else { throw missing("scene", "a presentation completes only in a scene's window") }
         let session = try fixture("pushed-tablist-transition")
-        let tabs = try XCTUnwrap(session.presenter.navigation.tabController)
+        let tabs = try XCTUnwrap(session.presenter.navigationHost.tabController)
         let nav = try XCTUnwrap(tabs.selectedViewController as? UINavigationController)
         try tapNode(session, "detail")
         until("Detail pushed, its tablist shown") { nav.viewControllers.count == 2 && nav.transitionCoordinator == nil && !tabs.isTabBarHidden }
@@ -39,7 +39,7 @@ extension NavigationTabsIOSTests {
         let hidden = try whenAHeldPresentationEnds(over: tabs, in: session, during: {
             // Hidden in place over Detail, which the fixture's own tablist never is
             list.style["display"] = .string("none")
-            session.presenter.navigation.followTablist(nav.viewControllers.compactMap { $0 as? RouteController }, in: nav)
+            session.presenter.navigationHost.followTablist(nav.viewControllers.compactMap { $0 as? RouteController }, in: nav)
             XCTAssertFalse(tabs.isTabBarHidden, "the bar waits for the transition")
         }, read: { tabs.isTabBarHidden })
         XCTAssertEqual(hidden, true, "the bar left as the transition ended")
@@ -49,7 +49,7 @@ extension NavigationTabsIOSTests {
     func testARoutePushedDuringATransitionIsPushedAfterIt() throws {
         guard hostedWindowScene() != nil else { throw missing("scene", "a presentation completes only in a scene's window") }
         let session = try fixture("pushed-during-transition")
-        let tabs = try XCTUnwrap(session.presenter.navigation.tabController)
+        let tabs = try XCTUnwrap(session.presenter.navigationHost.tabController)
         let nav = try XCTUnwrap(tabs.selectedViewController as? UINavigationController)
         let routes = try whenAHeldPresentationEnds(over: tabs, in: session, during: {
             // Press the button through the runtime: it is under the sheet

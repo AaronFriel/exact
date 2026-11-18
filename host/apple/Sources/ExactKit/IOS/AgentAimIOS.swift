@@ -5,22 +5,6 @@
 #if os(iOS) || os(tvOS)
 import UIKit
 
-extension NavigationHost {
-    /// The search field a shown route projects into UIKit's search bar.
-    func drawnSearch(_ node: NodeView) -> UITextField? {
-        #if os(iOS)
-        guard !ExactEnv.authoredChrome else { return nil }
-        for c in controllers.values {
-            guard let nav = c.navigationController, nav.topViewController === c, barShows(nav),
-                  c.viewIfLoaded?.window != nil, let search = c.search, search.field === node else { continue }
-            return search.controller.searchBar.searchTextField
-        }
-        #endif
-        return nil
-    }
-
-}
-
 extension Agent {
     /// A compact control can occupy only one end of its authored box.
     func nativeControlPoint(_ node: NodeView, box b: CGRect, in window: UIWindow) -> AddressedAim? {

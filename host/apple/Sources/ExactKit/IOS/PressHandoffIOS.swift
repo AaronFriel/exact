@@ -64,7 +64,7 @@ package final class PressHandoff {
     private func prune() {
         destinations.removeAll { d in
             guard let route = d.route, let presenter, presenter.views[route.id] === route else { return true }
-            guard let controller = presenter.navigation.controllers[route.id], controller.node === route else { return false }
+            guard let controller = presenter.navigation.routeSurfaces[route.id], controller.node === route else { return false }
             return controller.stack == nil
         }
     }

@@ -422,7 +422,7 @@ extension Agent {
         let tabs = navigation.adopts(tablist: host) ? navigation.tabController : nil
         let projectedBar = presenter.segments.bar(of: host.id)
         if tabs != nil || projectedBar != nil {
-            let shown = tabs?.shownTabBar ?? NavigationHost.shownBar(projectedBar)
+            let shown = tabs?.shownTabBar ?? RouteGeometry.shownBar(projectedBar)
             var observation: [String: Any] = ["visible": shown != nil]
             if let shown { observation["frame"] = rect(box(shown)) }
             native["tabBar"] = observation

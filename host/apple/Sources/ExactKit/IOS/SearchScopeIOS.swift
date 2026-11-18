@@ -95,7 +95,7 @@ extension NavigationHost {
         guard UIDevice.current.userInterfaceIdiom == .phone, shape.authored.isEmpty, shape.search != nil || large else { return nil }
         let kids = c.node.container.subviews.compactMap { $0 as? NodeView }
         // What the host hides (this filter, a segmented control's tabs) is still the author's.
-        let shown = { (v: NodeView) in v.style["display"]?.string != "none" && Self.inFlow(v) }
+        let shown = { (v: NodeView) in v.style["display"]?.string != "none" && RouteGeometry.inFlow(v) }
         guard let at = kids.firstIndex(where: { $0 === shape.header }),
               let list = kids[(at + 1)...].first(where: shown),
               // Under a large title it is the list's filter, right above it (LLP 1135 D1).

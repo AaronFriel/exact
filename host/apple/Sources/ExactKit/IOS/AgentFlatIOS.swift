@@ -74,7 +74,7 @@ extension Agent {
             }
             if hiddenBy == nil, s.isHidden || (s.alpha == 0 && (s as? NodeView)?.placement == nil) { hiddenBy = describe(s) }
             if inertBy == nil, !s.isUserInteractionEnabled { inertBy = describe(s) }
-            if let sv = s as? ScrollView, let route = sv.superview?.next as? RouteController, route.contentViewport === sv {
+            if let sv = s as? ScrollView, let route = sv.superview?.next as? any RouteSurface, route.contentViewport === sv {
                 let port = box(sv, region: sv.bounds.inset(by: sv.adjustedContentInset))
                 chain.append(["route": Int(route.node.id), "port": [port.minX, port.minY, port.width, port.height].map(Agent.r2)]
                     .merging(Agent.offset(of: sv)) { a, _ in a }.merging(Agent.range(of: sv)) { a, _ in a })

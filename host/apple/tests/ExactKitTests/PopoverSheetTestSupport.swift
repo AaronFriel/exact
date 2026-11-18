@@ -92,9 +92,9 @@ extension PopoverSheetIOSTests {
         let route = try XCTUnwrap(p.views[30]), owner = try XCTUnwrap(window?.rootViewController)
         let navigation = UIViewController()
         navigation.view.addSubview(route)
-        p.modals.present(route, navigation: navigation, from: owner, preceding: nil, owner: owner)
-        settle { !p.modals.inTransition }
-        return try XCTUnwrap(p.modals.owner)
+        p.modalHost.present(route, navigation: navigation, from: owner, preceding: nil, owner: owner)
+        settle { !p.modalHost.inTransition }
+        return try XCTUnwrap(p.modalHost.owner)
     }
 
     func flushCallbacks() {

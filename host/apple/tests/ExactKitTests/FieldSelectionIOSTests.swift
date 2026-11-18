@@ -167,7 +167,7 @@ final class FieldSelectionIOSTests: XCTestCase {
         let node = try XCTUnwrap(p.views[3])
         node.applyProps(set: ["type": "search"], clear: [])
         node.handlers.formUnion(["beforeinput", "selectionchange"])
-        let search = HeaderSearch(host: p.navigation)
+        let search = HeaderSearch(host: p.navigationHost)
         search.field = node
         let bar = search.controller.searchBar
         bar.frame = CGRect(x: 0, y: 180, width: 350, height: 60)

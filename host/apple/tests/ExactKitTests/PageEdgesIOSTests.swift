@@ -279,7 +279,7 @@ final class PageEdgesIOSTests: XCTestCase {
         // An app's own scroll view holds the bar's edge through a batch, and its nil gives the edge
         // back to the list by the route's next layout, through the list's band under the switcher,
         // since the title does not collapse with the list
-        let route = try XCTUnwrap(p.navigation.activeRoute)
+        let route = try XCTUnwrap(p.navigationHost.activeRoute)
         XCTAssertNil(route.collapseScroll, "the switcher stands between the title and the list")
         XCTAssertTrue(route.contentScrollView(for: .top) === sv, "the bar follows the list under the switcher")
         let own = UIScrollView(frame: route.view.bounds)
@@ -320,7 +320,7 @@ final class PageEdgesIOSTests: XCTestCase {
         XCTAssertEqual(list.pageBand.bottom, 0, "the filled composer keeps the rows above it")
         XCTAssertEqual(sv.convert(sv.bounds, to: nil).minY, 0, accuracy: 0.5, "its scroll view runs up under the bar")
         XCTAssertEqual(sv.convert(sv.bounds, to: nil).maxY, composer.convert(composer.bounds, to: nil).minY, accuracy: 0.5, "and stops at the composer")
-        let route = try XCTUnwrap(session.presenter.navigation.activeRoute)
+        let route = try XCTUnwrap(session.presenter.navigationHost.activeRoute)
         XCTAssertTrue(route.contentScrollView(for: .top) === sv, "the bar's edge effect follows it")
     }
 
@@ -380,7 +380,7 @@ final class PageEdgesIOSTests: XCTestCase {
         p.press(try node(session, "pick-large").id)
         let filter = try node(session, "filter"), list = try node(session, "list")
         p.apply(wireBatch([["op": "props", "id": Int(filter.id), "set": ["accessibilityRole": "group"]]]))
-        let route = try XCTUnwrap(p.navigation.activeRoute)
+        let route = try XCTUnwrap(p.navigationHost.activeRoute)
         until("the filter is page content and its bar has settled") { route.scoped == nil && !Agent(session: session).nativeInFlight() }
         let nav = try XCTUnwrap(route.navigationController), sv = try XCTUnwrap(list.scrollView)
         nav.view.layoutIfNeeded()
@@ -422,7 +422,7 @@ final class PageEdgesIOSTests: XCTestCase {
         p.press(try node(session, "pick-large").id)
         let filter = try node(session, "filter"), list = try node(session, "list")
         p.apply(wireBatch([["op": "props", "id": Int(filter.id), "set": ["accessibilityRole": "group"]]]))
-        let route = try XCTUnwrap(p.navigation.activeRoute)
+        let route = try XCTUnwrap(p.navigationHost.activeRoute)
         until("the filter is page content and its bar has settled") { route.scoped == nil && !Agent(session: session).nativeInFlight() }
         let nav = try XCTUnwrap(route.navigationController)
         XCTAssertTrue(route.collapseScroll === list)
@@ -432,7 +432,7 @@ final class PageEdgesIOSTests: XCTestCase {
         list.style["z_index"] = .number(100)
         list.setRank(filter.paintRank + 100)
         for _ in 0..<2 {
-            p.navigation.prepareRoutes([route], in: nav)
+            p.navigationHost.prepareRoutes([route], in: nav)
             p.reachPageEdges()
             XCTAssertNil(route.collapseScroll, "a scroller above its bar cannot drive collapse")
             XCTAssertTrue(route.ridingBars.isEmpty)
@@ -443,7 +443,7 @@ final class PageEdgesIOSTests: XCTestCase {
         list.setRank(filter.paintRank - 1)
         list.frame = CGRect(x: originalFrame.minX, y: originalFrame.minY, width: originalFrame.width, height: originalFrame.height - 40)
         for _ in 0..<2 {
-            p.navigation.prepareRoutes([route], in: nav)
+            p.navigationHost.prepareRoutes([route], in: nav)
             p.reachPageEdges()
             XCTAssertNil(route.collapseScroll, "an open opposite edge must reach the route's edge")
             XCTAssertTrue(route.ridingBars.isEmpty)
@@ -480,12 +480,12 @@ final class PageEdgesIOSTests: XCTestCase {
         guard #available(iOS 26.0, *) else { throw XCTSkip("control bars are iOS 26's, where UIKit draws the edge effect over them") }
         let (session, _) = try fixture("COVER_TABS")
         let p = session.presenter, routeNode = try node(session, "route-home")
-        let route = try XCTUnwrap(p.navigation.controllers[routeNode.id])
+        let route = try XCTUnwrap(p.navigationHost.controllers[routeNode.id])
         let foot = { routeNode.convert(routeNode.bounds, to: nil).maxY }
         // Not `node`: its XCTUnwrap records a failure while a variant is on its way.
         let list = { p.views.values.first { $0.props["testId"] == "list" && $0.window != nil } }
         until("the scroller runs under the tab bar") { (list()?.pageBand.bottom ?? 0) > 0.5 }
-        guard case .edges(let cover)? = p.navigation.covers[routeNode.id] else { return XCTFail("the route keeps the tab bar's cover") }
+        guard case .edges(let cover)? = p.navigationHost.covers[routeNode.id] else { return XCTFail("the route keeps the tab bar's cover") }
         XCTAssertGreaterThan(cover.bottom, 0.5)
         var v = try XCTUnwrap(list()), sv = try XCTUnwrap(v.scrollView)
         let box = v.convert(v.bounds, to: nil)

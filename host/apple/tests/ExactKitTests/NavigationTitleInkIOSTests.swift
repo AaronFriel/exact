@@ -10,7 +10,7 @@ extension NavigationBarIOSTests {
     func testAuthoredClearTitleInkAndAbsenceUseDifferentAppearances() throws {
         let session = try fixture("title-ink", module: false)
         let heading = try node(session, "title-home")
-        let nav = try XCTUnwrap(session.presenter.navigation.primaryNavigation)
+        let nav = try XCTUnwrap(session.presenter.navigationHost.primaryNavigation)
         let item = try XCTUnwrap(nav.topViewController?.navigationItem)
         XCTAssertNil(item.standardAppearance)
         session.presenter.apply(wireBatch([["op": "style", "id": heading.id,
@@ -33,7 +33,7 @@ extension NavigationBarIOSTests {
     func testAHeadingsAuthoredTypographyIsTheBarsTitleFont() throws {
         let session = try fixture("title-font", module: false)
         let heading = try node(session, "title-home"), engine = try XCTUnwrap(heading.text)
-        let nav = try XCTUnwrap(session.presenter.navigation.primaryNavigation)
+        let nav = try XCTUnwrap(session.presenter.navigationHost.primaryNavigation)
         let route = try XCTUnwrap(nav.topViewController), item = route.navigationItem
         func labels(_ view: UIView) -> [UILabel] { ((view as? UILabel).map { [$0] } ?? []) + view.subviews.flatMap(labels) }
         func drawnLarge() -> UIFont? {
@@ -78,7 +78,7 @@ extension NavigationBarIOSTests {
         let p = session.presenter
         let heading = try node(session, "title-home")
         let route = try node(session, "route-home")
-        let item = try XCTUnwrap(p.navigation.primaryNavigation?.topViewController?.navigationItem)
+        let item = try XCTUnwrap(p.navigationHost.primaryNavigation?.topViewController?.navigationItem)
         p.apply(wireBatch([
             ["op": "props", "id": route.id, "set": ["navigationBar": "transparent"]],
             ["op": "style", "id": heading.id, "style": ["text_color": [0, 0, 0, 0], "written": ["text_color"]]]

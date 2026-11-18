@@ -169,7 +169,7 @@ public final class ExactView: UIView {
 
     private func fitAheadOfLayout() {
         guard !fitting, session.booted, window != nil,
-              (session.presenter.navigation.primaryOwner ?? session.presenter.navigation.bootOwner) != nil, bounds.size != fittedSize else { return }
+              (session.presenter.navigation.primaryOwner ?? session.presenter.navigation.bootHolder) != nil, bounds.size != fittedSize else { return }
         fit()
         // Autoresizing may precede UIKit's safe-area update. The normal
         // layout still rereads insets and regions after its parent settles.
@@ -225,7 +225,7 @@ public final class ExactView: UIView {
     public override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         #if os(iOS)
         // A touch starts under the real owner, so its scroll cannot span the boot transfer.
-        if session.presenter.navigation.bootOwner != nil, event?.type == .touches { session.presenter.navigation.finishBootOwner() }
+        if session.presenter.navigation.bootHolder != nil, event?.type == .touches { session.presenter.navigation.finishBootOwner() }
         #endif
         return super.hitTest(point, with: event)
     }
@@ -434,7 +434,7 @@ public final class ExactView: UIView {
         guard bounds.width > 0, bounds.height > 0 else { return }
         #if os(iOS)
         // A launch resize (including rotation) uses the native owner for the new geometry.
-        if fittedSize != .zero, bounds.size != fittedSize, presenter.navigation.bootOwner != nil { presenter.navigation.finishBootOwner() }
+        if fittedSize != .zero, bounds.size != fittedSize, presenter.navigation.bootHolder != nil { presenter.navigation.finishBootOwner() }
         #endif
         fittedSize = bounds.size
         // @ref LLP 1123 D1 — the document is the session view's; a
@@ -509,7 +509,7 @@ public final class ExactView: UIView {
         }
         presenter.placeDocumentMount()
         // Establish UIKit's containing bounds before sampling route blocks.
-        if let owner = presenter.navigation.primaryOwner ?? presenter.navigation.bootOwner {
+        if let owner = presenter.navigation.primaryOwner ?? presenter.navigation.bootHolder {
             presenter.navigation.fitOwner()
             owner.view.layoutIfNeeded()
         }

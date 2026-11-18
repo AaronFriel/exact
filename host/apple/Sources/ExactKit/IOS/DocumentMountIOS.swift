@@ -64,8 +64,4 @@ extension Presenter {
     }
 }
 
-extension NavigationHost {
-    /// An authored scroller holds the native container alongside the root's children.
-    func ownerMount(_ root: NodeView) -> UIView { root.scroll ?? root }
-}
 #endif

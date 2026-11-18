@@ -70,7 +70,7 @@ final class BarFaceIOSTests: XCTestCase {
         XCTAssertNotNil(shape[1].badge)
         XCTAssertFalse(shape[0].ownGlass)
         XCTAssertTrue(shape[1].ownGlass)
-        let items = p.navigation.barItems(shape, RouteController(try XCTUnwrap(p.views[100])))
+        let items = p.navigationHost.barItems(shape, RouteController(try XCTUnwrap(p.views[100])))
         XCTAssertEqual(items.count, 2)
         XCTAssertTrue(items[0].hidesSharedBackground, "a badge alone is its own shape, with no glass")
         XCTAssertFalse(items[1].hidesSharedBackground, "a badge on a glass button shows glass")
@@ -323,7 +323,7 @@ final class BarFaceIOSTests: XCTestCase {
         let shape = buttons.map { HeaderShape.Item($0) }
         XCTAssertEqual(shape.map(\.title), ["● Clock", "Done", "Edit"])
         XCTAssertTrue(shape[0].ownGlass)
-        let items = p.navigation.barItems(shape, RouteController(header)).filter { $0.title != nil }
+        let items = p.navigationHost.barItems(shape, RouteController(header)).filter { $0.title != nil }
         XCTAssertEqual(items.count, 3)
         let unsaid = HeaderShape.Item.titleFont(bold: false)
         for state: UIControl.State in [.normal, .highlighted, .disabled] {
@@ -357,15 +357,15 @@ final class BarFaceIOSTests: XCTestCase {
         header.container.addSubview(node)
         let route = RouteController(header)
         XCTAssertNotNil(HeaderShape.Item(node).chip)
-        let item = try XCTUnwrap(p.navigation.barItems([HeaderShape.Item(node)], route).first)
+        let item = try XCTUnwrap(p.navigationHost.barItems([HeaderShape.Item(node)], route).first)
         let first = try XCTUnwrap(item.image)
-        let kept = try XCTUnwrap(p.navigation.barItems([HeaderShape.Item(node)], route).first)
+        let kept = try XCTUnwrap(p.navigationHost.barItems([HeaderShape.Item(node)], route).first)
         XCTAssertTrue(kept === item, "the item is changed in place")
         if #available(iOS 26.0, *) { XCTAssertTrue(kept.image === first, "its face kept as drawn") }
         else { XCTAssertFalse(kept.image === first, "its face drawn again in the tint") }
         let shown = try XCTUnwrap(kept.image)
         p.apply(wireBatch([["op": "style", "id": 3, "style": ["background_color": [255, 59, 48, 255], "width": 14, "height": 6]]]))
-        let recoloured = try XCTUnwrap(p.navigation.barItems([HeaderShape.Item(node)], route).first)
+        let recoloured = try XCTUnwrap(p.navigationHost.barItems([HeaderShape.Item(node)], route).first)
         XCTAssertTrue(recoloured === item)
         XCTAssertFalse(recoloured.image === shown, "a new dot colour: its face drawn again")
     }
@@ -385,11 +385,11 @@ final class BarFaceIOSTests: XCTestCase {
         button.props["type"] = "button"
         header.container.addSubview(button)
         let route = RouteController(header)
-        let item = try XCTUnwrap(p.navigation.barItems([HeaderShape.Item(button)], route).first)
+        let item = try XCTUnwrap(p.navigationHost.barItems([HeaderShape.Item(button)], route).first)
         XCTAssertEqual((item.titleTextAttributes(for: .normal)?[.font] as? UIFont)?.pointSize, 12)
         done.rows.title = [:]
         p.apply(facesBatch())
-        let kept = try XCTUnwrap(p.navigation.barItems([HeaderShape.Item(button)], route).first)
+        let kept = try XCTUnwrap(p.navigationHost.barItems([HeaderShape.Item(button)], route).first)
         XCTAssertTrue(kept === item, "the item is changed in place")
         for state: UIControl.State in [.normal, .highlighted, .disabled, .selected, .focused] {
             XCTAssertNil(kept.titleTextAttributes(for: state)?[.font], "state \(state.rawValue)")

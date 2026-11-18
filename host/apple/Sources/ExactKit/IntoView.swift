@@ -381,10 +381,10 @@ extension Presenter {
     /// A reveal still aligns inside the part of that page UIKit leaves visible.
     private func elementPageInsets(_ scroll: UIScrollView) -> UIEdgeInsets {
         var inset = scroll.adjustedContentInset
-        guard let route = scroll.superview?.next as? RouteController,
+        guard let route = scroll.superview?.next as? any RouteSurface,
               route.contentViewport === scroll else { return inset }
-        let safe = scroll.safeAreaInsets, off = NavigationHost.clearanceOff(route.node)
-        if !NavigationHost.insetsNoTop(route.node) { inset.top = max(inset.top, safe.top) }
+        let safe = scroll.safeAreaInsets, off = RouteGeometry.clearanceOff(route.node)
+        if !RouteGeometry.insetsNoTop(route.node) { inset.top = max(inset.top, safe.top) }
         if off & 2 == 0 { inset.right = max(inset.right, safe.right) }
         if off & 4 == 0 { inset.bottom = max(inset.bottom, safe.bottom) }
         if off & 8 == 0 { inset.left = max(inset.left, safe.left) }

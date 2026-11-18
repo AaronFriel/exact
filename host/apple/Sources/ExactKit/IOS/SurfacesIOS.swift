@@ -1,8 +1,8 @@
 #if os(iOS) || os(tvOS)
 import UIKit
 
-struct SessionSurface {
-    enum Kind: Equatable { case document, route, dialog, popover }
+package struct SessionSurface {
+    package enum Kind: Equatable { case document, route, dialog, popover }
     let view: UIView
     let label: String
     let kind: Kind
@@ -64,12 +64,12 @@ package enum ViewPresentation {
         while let current = responder {
             if !layout, let node = current as? NodeView { node.presenter?.navigation.finishBootOwner() }
             if !layout, let view = current as? ExactView { view.session.presenter.navigation.finishBootOwner() }
-            if let holder = current as? PlainTab, holder.bootContent, let route = holder.route {
-                if !layout { holder.host?.finishBootOwner(); return controller(for: view, fallbackToWindow: fallbackToWindow, layout: true) }
+            if let holder = current as? any BootHolding, holder.bootContent, let route = holder.routeSurface {
+                if !layout { route.node.presenter?.navigation.finishBootOwner(); return controller(for: view, fallbackToWindow: fallbackToWindow, layout: true) }
                 return route
             }
             if let controller = current as? UIViewController {
-                if !layout, let route = controller as? RouteController, route.bootSurface != nil { route.host?.finishBootOwner() }
+                if !layout, let route = controller as? any RouteSurface, route.bootSurface != nil { route.node.presenter?.navigation.finishBootOwner() }
                 return controller
             }
             responder = current.next
@@ -82,7 +82,7 @@ package enum ViewPresentation {
     static func controllers(for view: UIView, layout: Bool = false) -> [UIViewController] {
         guard let controller = controller(for: view, layout: layout) else { return [] }
         return sequence(first: controller as UIResponder, next: { responder in
-            if let route = responder as? RouteController, let surface = route.bootSurface { return surface.next }
+            if let route = responder as? any RouteSurface, let surface = route.bootSurface { return surface.next }
             return responder.next
         }).compactMap { $0 as? UIViewController }
     }
@@ -101,8 +101,8 @@ package enum ViewPresentation {
     package static func root(of view: UIView) -> UIView? {
         if let layer = PopoverLayer.containing(view), layer.sheet != nil { return layer }
         return controllers(for: view, layout: true).first {
-            $0.parent == nil || $0.parent is UINavigationController || $0.parent is PlainTab || $0.parent is UITabBarController
-        }.map { ($0 as? RouteController)?.surface ?? $0.view } ?? view.window
+            $0.parent == nil || $0.parent is UINavigationController || $0.parent is BootHolding || $0.parent is UITabBarController
+        }.map { ($0 as? any RouteSurface)?.surface ?? $0.view } ?? view.window
     }
 }
 #endif

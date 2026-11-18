@@ -127,8 +127,8 @@ final class KeyboardProbeIOSTests: XCTestCase {
         view.frame = host.view.bounds
         view.layoutIfNeeded()
         let p = session.presenter
-        let nav = try XCTUnwrap(p.navigation.tabController?.selectedViewController as? UINavigationController)
-        let rests = { nav.viewControllers.count == 2 && nav.transitionCoordinator == nil && !p.navigation.transitioning }
+        let nav = try XCTUnwrap(p.navigationHost.tabController?.selectedViewController as? UINavigationController)
+        let rests = { nav.viewControllers.count == 2 && nav.transitionCoordinator == nil && !p.navigationHost.transitioning }
         until("Home shown") { nav.topViewController?.viewIfLoaded?.window != nil }
         XCTAssertFalse(view.hasKeyboardGuide)
         let open = try XCTUnwrap(p.views.values.first { $0.props["testId"] == "home-open-seek" })

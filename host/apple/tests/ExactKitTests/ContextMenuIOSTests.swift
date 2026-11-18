@@ -176,13 +176,13 @@ final class ContextMenuIOSTests: XCTestCase {
         XCTAssertEqual(session.presenter.menus.observation()?["kind"] as? String, "contextmenu")
 
         // Tapping the preview: its press pushes Detail, unanimated, and UIKit pops into it.
-        let before = session.presenter.navigation.activeKey
+        let before = session.presenter.navigationHost.activeKey
         let commit = Commit()
         commit.preferredCommitStyle = .dismiss
         host.contextMenuInteraction(interaction, willPerformPreviewActionForMenuWith: configuration, animator: commit)
         XCTAssertEqual(commit.preferredCommitStyle, .pop, "a press that navigates commits with .pop")
         XCTAssertEqual(commit.animated, 1, "with an animation, without which UIKit shrinks the preview away")
-        XCTAssertNotEqual(session.presenter.navigation.activeKey, before, "the press pushed")
+        XCTAssertNotEqual(session.presenter.navigationHost.activeKey, before, "the press pushed")
         XCTAssertNotNil(try node(session, "route-detail"))
         XCTAssertNil(host.contextMenuInteraction(interaction, configuration: configuration, dismissalPreviewForItemWithIdentifier: configuration.identifier),
                      "after it navigated, the source is under the new screen: no return to it")

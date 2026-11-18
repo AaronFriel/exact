@@ -183,17 +183,17 @@ extension NavigationHost {
                 let reached = end - (c.surface.bounds.maxY - safe.bottom)
                 // A transparent bar covers nothing of the route's top, scroller or not: the content starts under it.
                 edges = Self.routeEdges(safe: safe, whole: whole, covered: covered,
-                                        collapses: c.collapseScroll != nil || !topPeers.isEmpty || !c.ridingBars.isEmpty || Self.insetsNoTop(c.node),
+                                        collapses: c.collapseScroll != nil || !topPeers.isEmpty || !c.ridingBars.isEmpty || RouteGeometry.insetsNoTop(c.node),
                                         reached: reached)
                 // An edge the route opts out of has no clearance to take (LLP 1123 D4).
-                c.bottomClearance = Self.clearanceOff(c.node) & 4 != 0 ? 0 : edges?.bottom ?? 0
-                if let node = c.collapseScroll, let sv = node.scrollView, !Self.insetsNoTop(c.node) {
+                c.bottomClearance = RouteGeometry.clearanceOff(c.node) & 4 != 0 ? 0 : edges?.bottom ?? 0
+                if let node = c.collapseScroll, let sv = node.scrollView, !RouteGeometry.insetsNoTop(c.node) {
                     let top = clearanceExtra(c, scroller: node, top: true)
                     let held = extras[ObjectIdentifier(sv)]
                     extras[ObjectIdentifier(sv)] = (sv, top, held?.bottom ?? 0)
                 }
                 if let node = c.edgeScroll ?? c.collapseScroll, let sv = node.scrollView,
-                   node === c.edgeScroll || Self.clearanceOff(c.node) & 4 != 0 && !Self.insetsNoTop(c.node) {
+                   node === c.edgeScroll || RouteGeometry.clearanceOff(c.node) & 4 != 0 && !RouteGeometry.insetsNoTop(c.node) {
                     let bottom = clearanceExtra(c, scroller: node, top: false)
                     let held = extras[ObjectIdentifier(sv)]
                     extras[ObjectIdentifier(sv)] = (sv, held?.top ?? 0, bottom)
@@ -214,7 +214,7 @@ extension NavigationHost {
             // starts under it (`collapse`), so no `.inset` is reported there.
             var insetNodes = [c.collapseScroll, c.edgeScroll].compactMap { $0 }
             for peer in topPeers + bottomPeers where !insetNodes.contains(where: { $0 === peer }) { insetNodes.append(peer) }
-            for node in insetNodes where wanted[node.id] != .whole && node.scrollView != nil && !(node === c.collapseScroll && Self.insetsNoTop(c.node)) {
+            for node in insetNodes where wanted[node.id] != .whole && node.scrollView != nil && !(node === c.collapseScroll && RouteGeometry.insetsNoTop(c.node)) {
                 if settled, let safe = node.scrollView?.safeAreaInsets {
                     // The bottom edge's scroller takes the route's bottom
                     // clearance, which the route then pads nothing of
@@ -461,10 +461,6 @@ extension NavigationHost {
 
     // MARK: The development check (LLP 1075.003 §3.5)
 
-    /// Whether this build checks what Exact owns: every build but a
-    /// production bake.
-    static let checksOwnership = !ExactEnv.productionBake
-
     /// The delegate slots Exact keeps (LLP 1075.003 §3.5): every stack's,
     /// hooked or not, More's once adopted, and its own tab container's. A
     /// slot written outside Exact takes its container's calls from Exact, so
@@ -504,7 +500,7 @@ extension NavigationHost {
     /// detection, not enforcement; a change made and undone between two
     /// batches is not seen.
     func checkOwned() {
-        guard NavigationHost.checksOwnership else { return }
+        guard RouteGeometry.checksOwnership else { return }
         checkDelegates()
         checkTabs()
         if let difference = restDifference { reportOnce("navigation: at rest, \(difference)") }
@@ -524,7 +520,7 @@ extension NavigationHost {
         for c in controllers.values where c.hatched && presenter.views[c.node.id] === c.node {
             if c.navigationController != nil, c.isViewLoaded, c.node.superview !== c.contentMount { say("route \(c.key)", "view") }
             guard let node = c.ownedScroll, let scroll = node.scrollView else { continue }
-            for property in NavigationHost.ownedChanges(scroll, of: node, insetByUIKit: insetByUIKit(node)) { say("route \(c.key)", property) }
+            for property in RouteGeometry.ownedChanges(scroll, of: node, insetByUIKit: insetByUIKit(node)) { say("route \(c.key)", property) }
         }
     }
 
@@ -563,30 +559,6 @@ extension NavigationHost {
         if ownedReported.insert(line).inserted { presenter.session?.log(line) }
     }
 
-    /// What Exact sets on a node's scroll view and nothing else may (LLP
-    /// 1075.003 §3.5) and differs from what Exact writes: no inset (a
-    /// refresh control insets it while it spins), automatic adjustment for a
-    /// route's collapse or bottom-edge scroller and arranged peers, the backend's
-    /// Exact-owned delegate, the node's keyboard dismissal (authored, or
-    /// the platform's for what it scrolls, LLP 1115.000 D9.1). The offset
-    /// and the content size are Exact's too but are not checked: they move
-    /// with the user and with layout, so no last write predicts them.
-    static func ownedChanges(_ s: UIScrollView, of node: NodeView, insetByUIKit: Bool) -> [String] {
-        var out: [String] = []
-        // A native backend owns layout/footer insets, composed with the
-        // refresh control and keyboard; zero is only the plain-scroll baseline.
-        if s === node.scroll {
-            #if os(tvOS)
-            if s.contentInset != node.bandInset { out.append("contentInset") }
-            #else
-            if s.contentInset != node.bandInset, s.refreshControl?.isRefreshing != true { out.append("contentInset") } // a band's is the host's
-            #endif
-        }
-        if s.contentInsetAdjustmentBehavior != (insetByUIKit ? .automatic : .never) { out.append("contentInsetAdjustmentBehavior") }
-        if s !== node.scrollView || !node.ownsScrollDelegate { out.append("delegate") }
-        if s.keyboardDismissMode != node.keyboardDismissal { out.append("keyboardDismissMode") }
-        return out
-    }
 }
 
 extension RouteController {

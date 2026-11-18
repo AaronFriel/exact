@@ -61,15 +61,15 @@ final class LocalInsetsIOSTests: XCTestCase {
         let (session, _) = try fixture(scene, "TRANSPARENT_BAR")
         let p = session.presenter
         waitFor("the transparent route appears") {
-            guard let route = self.node(session, "route-home"), let c = p.navigation.controllers[route.id] else { return false }
-            return c.viewIfLoaded?.window != nil && c.view.safeAreaInsets.top > 0 && !p.navigation.inTransition
+            guard let route = self.node(session, "route-home"), let c = p.navigationHost.controllers[route.id] else { return false }
+            return c.viewIfLoaded?.window != nil && c.view.safeAreaInsets.top > 0 && !p.navigationHost.inTransition
         }
         let route = try XCTUnwrap(node(session, "route-home"))
-        let controller = try XCTUnwrap(p.navigation.controllers[route.id])
+        let controller = try XCTUnwrap(p.navigationHost.controllers[route.id])
         let scroll = try XCTUnwrap(node(session, "home-scroll")?.scrollView)
         XCTAssertEqual(scroll.contentInsetAdjustmentBehavior, .never)
         waitFor("the hero's control clears the bar using the route's inset", facts: {
-            "control=\(self.node(session, "hero-control").map(self.onScreen) ?? .zero), hero=\(self.node(session, "hero").map(self.onScreen) ?? .zero), safe=\(controller.view.safeAreaInsets), local=\(p.navigation.localInsets.wanted[route.id] ?? []), offset=\(scroll.contentOffset)"
+            "control=\(self.node(session, "hero-control").map(self.onScreen) ?? .zero), hero=\(self.node(session, "hero").map(self.onScreen) ?? .zero), safe=\(controller.view.safeAreaInsets), local=\(p.navigationHost.localInsets.wanted[route.id] ?? []), offset=\(scroll.contentOffset)"
         }) {
             guard let control = self.node(session, "hero-control") else { return false }
             return abs(self.onScreen(control).minY - controller.view.safeAreaInsets.top) < 0.5
@@ -86,11 +86,11 @@ final class LocalInsetsIOSTests: XCTestCase {
         }
         let (session, view) = try fixture(scene)
         until("the route shows under its bar") {
-            guard let route = node(session, "route"), let c = session.presenter.navigation.controllers[route.id] else { return false }
+            guard let route = node(session, "route"), let c = session.presenter.navigationHost.controllers[route.id] else { return false }
             return c.viewIfLoaded?.window != nil && c.view.safeAreaInsets.top > view.safeAreaInsets.top
         }
         let route = try XCTUnwrap(node(session, "route"))
-        let c = try XCTUnwrap(session.presenter.navigation.controllers[route.id])
+        let c = try XCTUnwrap(session.presenter.navigationHost.controllers[route.id])
         let bars = c.view.safeAreaInsets
         until("the content reads the route's safe area") {
             guard let first = self.node(session, "sidebar-first") else { return false }
@@ -117,11 +117,11 @@ final class LocalInsetsIOSTests: XCTestCase {
         until("the route shows") { self.node(session, "open") != nil }
         _ = Agent(session: session).tap(["id": Int(try XCTUnwrap(node(session, "open")).id)])
         until("the sheet is presented") {
-            guard let sheet = self.node(session, "sheet"), let c = session.presenter.navigation.controllers[sheet.id] else { return false }
+            guard let sheet = self.node(session, "sheet"), let c = session.presenter.navigationHost.controllers[sheet.id] else { return false }
             return c.presentingViewController != nil && c.viewIfLoaded?.window != nil
         }
         let sheet = try XCTUnwrap(node(session, "sheet"))
-        let c = try XCTUnwrap(session.presenter.navigation.controllers[sheet.id])
+        let c = try XCTUnwrap(session.presenter.navigationHost.controllers[sheet.id])
         until("the probe reads the sheet's own bottom inset") {
             guard let probe = self.node(session, "sheet-probe") else { return false }
             return abs(probe.bounds.height - c.view.safeAreaInsets.bottom) < 0.5
@@ -135,7 +135,7 @@ final class LocalInsetsIOSTests: XCTestCase {
             throw missing("scene", "the bars and the safe area are a scene window's")
         }
         let (session, _) = try fixture(scene)
-        let navigation = session.presenter.navigation
+        let navigation = session.presenter.navigationHost
         until("the route shows") { self.node(session, "open") != nil }
         _ = Agent(session: session).tap(["id": Int(try XCTUnwrap(node(session, "open")).id)])
         var first: [CGFloat]?
@@ -158,11 +158,11 @@ final class LocalInsetsIOSTests: XCTestCase {
         }
         let (session, _) = try fixture(scene, "BAR_HERO")
         until("the route shows under its bar") {
-            guard let route = self.node(session, "route"), let c = session.presenter.navigation.controllers[route.id] else { return false }
+            guard let route = self.node(session, "route"), let c = session.presenter.navigationHost.controllers[route.id] else { return false }
             return c.viewIfLoaded?.window != nil && c.view.safeAreaInsets.top > 0 && c.collapseScroll != nil
         }
         let route = try XCTUnwrap(node(session, "route"))
-        let c = try XCTUnwrap(session.presenter.navigation.controllers[route.id])
+        let c = try XCTUnwrap(session.presenter.navigationHost.controllers[route.id])
         let list = try XCTUnwrap(node(session, "list")), sv = try XCTUnwrap(list.scrollView)
         XCTAssertEqual(sv.contentInsetAdjustmentBehavior, .never, "UIKit insets nothing of the top")
         let top = c.view.safeAreaInsets.top
@@ -173,7 +173,7 @@ final class LocalInsetsIOSTests: XCTestCase {
         let hero = try XCTUnwrap(node(session, "hero"))
         XCTAssertEqual(onScreen(hero).minY, 0, accuracy: 0.5, "the hero's background starts at the screen's top, under the bar")
         XCTAssertEqual(sv.contentOffset.y + sv.adjustedContentInset.top, 0, accuracy: 0.5, "at its start")
-        if case .edges(let edges)? = session.presenter.navigation.covers[route.id] { XCTAssertEqual(edges.top, 0, "no top cover") }
+        if case .edges(let edges)? = session.presenter.navigationHost.covers[route.id] { XCTAssertEqual(edges.top, 0, "no top cover") }
     }
 
     func testAScrollerBelowAControlBarGetsNoInsetForIt() throws {
@@ -182,11 +182,11 @@ final class LocalInsetsIOSTests: XCTestCase {
         }
         let (session, _) = try fixture(scene, "BAR_CONTROL")
         until("the route shows its scroller under its bar") {
-            guard let route = self.node(session, "route"), let c = session.presenter.navigation.controllers[route.id] else { return false }
+            guard let route = self.node(session, "route"), let c = session.presenter.navigationHost.controllers[route.id] else { return false }
             return c.viewIfLoaded?.window != nil && c.view.safeAreaInsets.top > 0 && self.node(session, "first") != nil
         }
         let route = try XCTUnwrap(node(session, "route"))
-        let c = try XCTUnwrap(session.presenter.navigation.controllers[route.id])
+        let c = try XCTUnwrap(session.presenter.navigationHost.controllers[route.id])
         let control = try XCTUnwrap(node(session, "control")), list = try XCTUnwrap(node(session, "list"))
         let sv = try XCTUnwrap(list.scrollView)
         // The route clears the bar, the control sits under it and the scroller under the control

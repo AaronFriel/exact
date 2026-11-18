@@ -180,3 +180,35 @@ extension ExactSession {
         apply(batch)
     }
 }
+
+#if os(iOS) || os(tvOS)
+import UIKit
+
+extension Presenter {
+    /// A hatch's act on an authored element, as the DOM's: `click()` presses
+    /// it as a tap does, `focus()` and `blur()` follow the focus rules. Each
+    /// is queued (`ElementHatches.later`) and runs on a later turn. False when
+    /// refused.
+    package func hatchAct(_ id: UInt32, _ action: UInt32) -> Bool {
+        guard let node = views[id] else { return false }
+        switch action {
+        case 0:
+            guard node.handlers.contains("press"), !node.disabled else { return false }
+            // Still the node it was when asked: a reload restarts node ids.
+            return elements.later(id, "click") { [weak self, weak node] in
+                if let self, let node, self.views[id] === node { self.session?.log("hatch \(node.props["hatch"].map { "element \($0) #\(id)" } ?? "node #\(id)"): click (delivery: hatch)"); self.press(id) }
+            }
+        case 1:
+            return elements.later(id, "focus") { [weak self, weak node] in
+                if let self, let node, self.views[id] === node { self.focusNode(node) }
+            }
+        case 2:
+            return elements.later(id, "blur") { [weak self, weak node] in
+                if let self, let node, self.views[id] === node { _ = (node.textArea ?? node.field ?? node).resignFirstResponder() }
+            }
+        default: return false
+        }
+        return true
+    }
+}
+#endif

@@ -21,7 +21,7 @@ final class ControlBars {
     private func children(of p: NodeView) -> Kids {
         if let known = kids[ObjectIdentifier(p)] { return known }
         var k = Kids()
-        let shown = { (v: NodeView) in !v.isHidden && NavigationHost.inFlow(v) }
+        let shown = { (v: NodeView) in !v.isHidden && RouteGeometry.inFlow(v) }
         if let ids = presenter.flats.children(of: p.id) {
             k.all = ids.compactMap { id in presenter.flats.leaves[id] != nil ? .some(nil) : presenter.views[id].flatMap { shown($0) ? .some($0) : nil } }
         } else { k.all = p.container.subviews.compactMap { $0 as? NodeView }.filter(shown) }
@@ -50,7 +50,7 @@ final class ControlBars {
     /// makes it no bar.
     func isBar(_ box: NodeView) -> Bool {
         if let known = bars[ObjectIdentifier(box)] { return known }
-        let placed = !box.isHidden && NavigationHost.inFlow(box) && Self.onlyRide(box)
+        let placed = !box.isHidden && RouteGeometry.inFlow(box) && Self.onlyRide(box)
             && ["static", "relative"].contains(box.layoutPosition) && !box.wrote("background_color")
         let answer = placed && contents(box).map { $0 > 0 } == true
         bars[ObjectIdentifier(box)] = answer

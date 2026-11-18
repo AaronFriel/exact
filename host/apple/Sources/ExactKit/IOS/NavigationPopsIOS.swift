@@ -95,7 +95,7 @@ extension NavigationHost {
     /// when they agree, or while a transition, a sync or a tap is under way.
     var restDifference: String? {
         guard container != nil, primaryOwner != nil, !syncing, !changing, !pendingSync, !resyncOwed, tapping == nil,
-              !presenter.modals.inTransition else { return nil }
+              !presenter.modalHost.inTransition else { return nil }
         let keys = { (routes: [UIViewController]) in "[" + routes.map { ($0 as? RouteController)?.key ?? "?" }.joined(separator: ", ") + "]" }
         for (index, routes) in routerStacks.enumerated() where !routes.isEmpty {
             let wanted = base(routes)

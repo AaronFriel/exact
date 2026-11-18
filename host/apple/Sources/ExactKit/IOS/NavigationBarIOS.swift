@@ -37,7 +37,7 @@ final class RouteNavigationBar: UINavigationBar {
         if onControl { return hit }
         if authoredControl(at: point) != nil { return nil }
         guard let route = (delegate as? UINavigationController)?.topViewController as? RouteController,
-              NavigationHost.transparentBar(route.node) else { return hit }
+              RouteGeometry.transparentBar(route.node) else { return hit }
         if let scroll = route.contentScrollView(for: .top), scroll.contentOffset.y + scroll.adjustedContentInset.top > 0.5 { return hit }
         let item = route.navigationItem
         // Follow UINavigationBar's appearance fallback order; a hatch can
@@ -223,7 +223,7 @@ final class HeaderSearch: NSObject, UISearchBarDelegate, UISearchControllerDeleg
     }
     func willDismissSearchController(_ search: UISearchController) {
         // A disappearing route keeps its query; closing search accepts UIKit's reset
-        acceptingDismissal = editingCompletion == nil && host?.changing == false && host?.presenter.modals.inTransition == false
+        acceptingDismissal = editingCompletion == nil && host?.changing == false && host?.presenter.modalHost.inTransition == false
     }
     func didDismissSearchController(_ search: UISearchController) {
         let accepts = acceptingDismissal
@@ -370,7 +370,7 @@ final class SegmentPress: NSObject {
         let i = control.selectedSegmentIndex
         settled = i
         guard tabs.indices.contains(i) else { return }
-        _ = host?.act(tabs[i], 0)
+        _ = host?.presenter.hatchAct(tabs[i], 0)
     }
 }
 
@@ -397,7 +397,7 @@ final class BarPress: NSObject {
                 return
             }
         }
-        _ = host.act(id, 0)
+        _ = host.presenter.hatchAct(id, 0)
     }
 }
 
@@ -632,7 +632,7 @@ extension NavigationHost {
             // (no header, a hidden one, one that is not a bar's), or no bar
             // where the route says so or has nothing to go back to.
             c.pushed = index + front > 0
-            let transparent = Self.transparentBar(c.node)
+            let transparent = RouteGeometry.transparentBar(c.node)
             let (shape, bar) = barShape(of: c, in: nav)
             let shows = bar != .hidden
             if shows {
@@ -691,7 +691,7 @@ extension NavigationHost {
             c.ownedScroll = scroller
             // Run the passes again for a selection this route's hatch made, before UIKit lays out its stack, unless a
             // transition the hatch may have started holds them (More's own included, for a plain tab)
-            if !changing, !moreChanging, !presenter.modals.inTransition { runOwedScrollEdges(of: c) }
+            if !changing, !moreChanging, !presenter.modalHost.inTransition { runOwedScrollEdges(of: c) }
         }
         coverLifted(routes)
         keepExit(routes, in: nav)
@@ -730,7 +730,7 @@ extension NavigationHost {
     /// transition a stack off screen keeps until its tab shows again holds none (`changing`). The caller reports the covers.
     @discardableResult
     func runOwedScrollEdges() -> Bool {
-        guard !changing, !moreChanging, !presenter.modals.inTransition else { return false }
+        guard !changing, !moreChanging, !presenter.modalHost.inTransition else { return false }
         return controllers.values.filter(\.scrollEdgesOwed).reduce(false) { runOwedScrollEdges(of: $1) || $0 }
     }
 
@@ -1058,7 +1058,7 @@ extension NavigationHost {
         var riders: [NodeView] = []
         #if os(iOS)
         if #available(iOS 26.0, *), shape?.level == 1, let scroller,
-           scroller.style["scroll_edge_effect"]?.string != "none", !Self.transparentBar(c.node),
+           scroller.style["scroll_edge_effect"]?.string != "none", !RouteGeometry.transparentBar(c.node),
            case let bands = presenter.controlBands(of: scroller, in: c.node, ControlBars(presenter)), !bands.top.isEmpty {
             riders = bands.top
         }
@@ -1082,7 +1082,7 @@ extension NavigationHost {
         // A route that turns transparent, or back, keeps its scroller: only
         // whether UIKit insets it follows.
         if let sv = physical, c.collapseScroll === target, c.collapseScrollView === sv {
-            let adjustment: UIScrollView.ContentInsetAdjustmentBehavior = Self.insetsNoTop(c.node) ? .never : .automatic
+            let adjustment: UIScrollView.ContentInsetAdjustmentBehavior = RouteGeometry.insetsNoTop(c.node) ? .never : .automatic
             if sv.contentInsetAdjustmentBehavior != adjustment { sv.contentInsetAdjustmentBehavior = adjustment }
         }
         guard c.collapseScroll !== target || c.collapseScrollView !== physical else {
@@ -1108,7 +1108,7 @@ extension NavigationHost {
         // Under a transparent bar the content starts at the top edge, under
         // the bar, as on the web under a fixed transparent header: a hero
         // photo bleeds to the top, and the bar's material comes as it scrolls.
-        shown?.contentInsetAdjustmentBehavior = Self.insetsNoTop(c.node) ? .never : .automatic
+        shown?.contentInsetAdjustmentBehavior = RouteGeometry.insetsNoTop(c.node) ? .never : .automatic
         // …and is there before UIKit is handed it: a bar handed a
         // scroller that far from its top closes an open large title.
         if atStart, let sv = shown, sv.contentOffset.y != -sv.adjustedContentInset.top { sv.contentOffset = PixelGrid.offset(CGPoint(x: sv.contentOffset.x, y: -sv.adjustedContentInset.top), in: sv) }
@@ -1133,10 +1133,6 @@ extension NavigationHost {
         let under = shape?.level == 1 ? "collapses its title with its scroller" : "scrolls its content under the bar"
         presenter.session?.log("navigation: route \(c.key) \(target == nil ? "keeps its title still" : under)")
     }
-
-    /// Whether a route asks `navigationBar="transparent"`: its bar shows
-    /// with a clear scroll-edge appearance and insets no content.
-    static func transparentBar(_ route: NodeView) -> Bool { route.props["navigationBar"] == "transparent" }
 
     /// The bar's appearance at a scroller's top edge for a transparent bar:
     /// nothing drawn until the content scrolls under it, UIKit's own
@@ -1207,7 +1203,7 @@ extension NavigationHost {
         let peer = contentScroller(of: c).flatMap { node in peers.contains(where: { $0 === node }) ? node : nil } ?? peers.first
         let found = presented || presenter.viewportFit != "cover" ? (Self.bottomScroller(in: c.node, cover: c.bottomClearance) ?? peer) : nil
         // Nor one the route opts out of the bottom clearance of (LLP 1123 D4).
-        let target = found === c.collapseScroll && Self.insetsNoTop(c.node) || Self.clearanceOff(c.node) & 4 != 0 ? nil : found
+        let target = found === c.collapseScroll && RouteGeometry.insetsNoTop(c.node) || RouteGeometry.clearanceOff(c.node) & 4 != 0 ? nil : found
         let projects = !c.nativeContentScrollEdges.contains(.bottom)
         guard c.edgeScroll !== target || (projects && c.contentScrollView(for: .bottom) !== c.automaticBottomScroll) else { return }
         if let old = c.edgeScroll, old !== target, let sv = old.scrollView, old !== c.collapseScroll, !arrangementInsets(sv, in: c) { sv.contentInsetAdjustmentBehavior = .never }
@@ -1241,7 +1237,7 @@ extension NavigationHost {
     /// let a sideways carousel scroll up and down. `cover` is the route's
     /// bottom cover, which the route's child may end above.
     static func bottomScroller(in route: NodeView, cover: CGFloat = 0) -> NodeView? {
-        let flowing = inFlow
+        let flowing = RouteGeometry.inFlow
         // The last in-flow child spans the bottom edge alone when every other
         // ends above its top, as children stacked down a block or a column
         // do. Beside it in a row or a grid, a sibling reaches the edge too
@@ -1264,23 +1260,6 @@ extension NavigationHost {
             if last.scrollView != nil { return ["scroll", "auto"].contains(last.style["overflow_y"]?.string ?? "") ? last : nil }
             parent = last
         }
-    }
-
-    /// Whether `v` takes a place in its parent's flow as the kernel lays it
-    /// out: not `display: none`, not positioned out of it, not a popover
-    /// (the kernel lays an open one out of flow, as HTML's top layer is, and
-    /// a closed one not at all), and not a closed `dialog`, which the host
-    /// leaves out of layout (`MenuHost.layOut`), as a browser's
-    /// `dialog:not([open])` is `display: none`. So a route's menus and
-    /// confirmations, written between its header and its scroller or after
-    /// the scroller, leave the scroller its route's top and bottom edges. A
-    /// dialog given back to layout to show in Exact's views counts as laid out.
-    static func inFlow(_ v: NodeView) -> Bool {
-        // A popover lays out absolute (`layoutPosition`), unless sticky; a
-        // sticky one is in flow while laid out, as a dialog is (`MenuHost.layOut`).
-        let dialog = v.props["semanticTag"] == "dialog" || v.props["popover"] != nil
-        return v.style["display"]?.string != "none" && !["absolute", "fixed"].contains(v.layoutPosition)
-            && (!dialog || v.presenter?.menus.isLaidOut(v) == true)
     }
 
     /// The physical backend owned by a content node.
@@ -1450,32 +1429,6 @@ extension NavigationHost {
     func resolve(route key: String, id: String) -> NodeView? {
         guard let route = controllers.values.first(where: { $0.key == key && presenter.views[$0.node.id] === $0.node })?.node else { return nil }
         return element(named: id, in: route)
-    }
-
-    /// A hatch's act on an authored element, as the DOM's: `click()` presses
-    /// it as a tap does, `focus()` and `blur()` follow the focus rules. Each
-    /// is queued (`ElementHatches.later`) and runs on a later turn. False when
-    /// refused.
-    func act(_ id: UInt32, _ action: UInt32) -> Bool {
-        guard let node = presenter.views[id] else { return false }
-        switch action {
-        case 0:
-            guard node.handlers.contains("press"), !node.disabled else { return false }
-            // Still the node it was when asked: a reload restarts node ids.
-            return presenter.elements.later(id, "click") { [weak presenter = self.presenter, weak node] in
-                if let presenter, let node, presenter.views[id] === node { presenter.session?.log("hatch \(node.props["hatch"].map { "element \($0) #\(id)" } ?? "node #\(id)"): click (delivery: hatch)"); presenter.press(id) }
-            }
-        case 1:
-            return presenter.elements.later(id, "focus") { [weak presenter = self.presenter, weak node] in
-                if let presenter, let node, presenter.views[id] === node { presenter.focusNode(node) }
-            }
-        case 2:
-            return presenter.elements.later(id, "blur") { [weak presenter = self.presenter, weak node] in
-                if let presenter, let node, presenter.views[id] === node { _ = (node.textArea ?? node.field ?? node).resignFirstResponder() }
-            }
-        default: return false
-        }
-        return true
     }
 
     /// The app's delegate for a controller whose own slot Exact keeps

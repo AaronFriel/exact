@@ -7,7 +7,6 @@ import UIKit
 #if os(iOS)
 /// A presented controller that paints its own surface, which a live theme
 /// edit has it paint again (`Presenter.applyThemeTint`).
-protocol PaintsSheetSurface: AnyObject { func paintSurface() }
 extension ModalController: PaintsSheetSurface {}
 #endif
 
@@ -495,7 +494,7 @@ final class ModalHost: NSObject, UIAdaptivePresentationControllerDelegate {
     }
     func dismissByBackdrop(_ id: UInt32) {
         guard canDismissByBackdrop(id), let route = layers.last?.route else { return }
-        presenter.navigation.sheetBack(from: route)?()
+        presenter.navigationHost.sheetBack(from: route)?()
     }
     /// The agent's `back` on the top sheet (LLP 1116.006 D4): its swipe
     /// down, refused as UIKit's is (`presentationControllerShouldDismiss`)
@@ -505,8 +504,8 @@ final class ModalHost: NSObject, UIAdaptivePresentationControllerDelegate {
         guard let route = layers.last?.route else { return nil }
         if inTransition { return "the sheet is still moving: `clock settle` first" }
         if NavigationRules.modalRefusesDismissal(closedby: route.props["closedby"]) { return "its closedby is \"none\"" }
-        if refusesDismissal(of: route) { return presenter.navigation.backRefusal }
-        presenter.navigation.sheetBack(from: route)?()
+        if refusesDismissal(of: route) { return presenter.navigationHost.backRefusal }
+        presenter.navigationHost.sheetBack(from: route)?()
         return ""
     }
 
@@ -518,7 +517,7 @@ final class ModalHost: NSObject, UIAdaptivePresentationControllerDelegate {
             layer.sampleLanding?()
             controller.freeze()
             controller.retiringRoot = layer.route
-            controller.retiringNavigation = presenter.navigation.preserveModalContent(in: controller)
+            controller.retiringNavigation = presenter.navigationHost.preserveModalContent(in: controller)
         }
     }
 
@@ -735,7 +734,7 @@ final class ModalHost: NSObject, UIAdaptivePresentationControllerDelegate {
                 guard let self, let layer else { return }
                 if layers.contains(where: { $0 === layer }) {
                     fit()
-                    presenter.navigation.modalDidDismiss()
+                    presenter.navigationHost.modalDidDismiss()
                 }
                 // The transition's transforms are gone: a transform drag in
                 // the presented route measures again, or it stays refused
@@ -771,7 +770,7 @@ final class ModalHost: NSObject, UIAdaptivePresentationControllerDelegate {
         presenter.elementScrolls.cancel(inside: layer.controller.view)
         let controller = layer.controller
         layer.presentationsDidDismiss = presenter.menus.retire(over: controller, removing: layer.route)
-        presenter.navigation.retireNavigation(layer.navigation, preserving: controller.retiringNavigation != nil)
+        presenter.navigationHost.retireNavigation(layer.navigation, preserving: controller.retiringNavigation != nil)
         layers.removeLast()
         endPress(layer)
         releaseBackground(layer)
@@ -809,7 +808,7 @@ final class ModalHost: NSObject, UIAdaptivePresentationControllerDelegate {
                 drainRetired()
                 defer { presenter.menus.resumeAfterRouteDismissal() }
                 guard let session = presenter.session, session.state != .destroyed else { return }
-                presenter.navigation.modalDidDismiss()
+                presenter.navigationHost.modalDidDismiss()
                 fit()
                 // As after a presentation: what the dismissal's transition
                 // covered measures again (a drag in the route left on top).
@@ -826,7 +825,7 @@ final class ModalHost: NSObject, UIAdaptivePresentationControllerDelegate {
 
     private func refusesDismissal(of route: NodeView) -> Bool {
         presenter.views[route.id] !== route || NavigationRules.modalRefusesDismissal(closedby: route.props["closedby"]) ||
-            presenter.navigation.sheetBack(from: route) == nil
+            presenter.navigationHost.sheetBack(from: route) == nil
     }
 
     func presentationControllerShouldDismiss(_ presentationController: UIPresentationController) -> Bool {
@@ -836,8 +835,8 @@ final class ModalHost: NSObject, UIAdaptivePresentationControllerDelegate {
 
     func presentationControllerDidAttemptToDismiss(_ presentationController: UIPresentationController) {
         guard layers.last?.controller === presentationController.presentedViewController,
-              !presenter.navigation.canInvokeBack else { return }
-        presenter.session?.log("modal dismissal refused: \(presenter.navigation.backRefusal)")
+              !presenter.navigationHost.canInvokeBack else { return }
+        presenter.session?.log("modal dismissal refused: \(presenter.navigationHost.backRefusal)")
     }
 
     /// A sheet the person swipes down: what is beneath shows from the
@@ -863,10 +862,10 @@ final class ModalHost: NSObject, UIAdaptivePresentationControllerDelegate {
         // owner before dispatch, so an action may safely keep the same route.
         DispatchQueue.main.async { [weak self, layer] in
             guard let self, layers.last === layer else { return }
-            let back = presenter.navigation.sheetBack(from: layer.route)
+            let back = presenter.navigationHost.sheetBack(from: layer.route)
             closeTop(animated: false, refit: false)
             back?()
-            presenter.navigation.modalDidDismiss()
+            presenter.navigationHost.modalDidDismiss()
             fit()
         }
     }
@@ -882,7 +881,7 @@ final class ModalHost: NSObject, UIAdaptivePresentationControllerDelegate {
         for layer in layers.reversed() {
             layer.controller.freeze()
             layer.controller.retiringRoot = layer.route
-            layer.controller.retiringNavigation = presenter.navigation.preserveModalContent(in: layer.controller)
+            layer.controller.retiringNavigation = presenter.navigationHost.preserveModalContent(in: layer.controller)
             closeTop(animated: false, refit: false)
         }
     }

@@ -61,7 +61,7 @@ extension NavigationHost {
 
     /// Whether Exact's tab bar shows: not under the agent's own chrome,
     /// which sees the authored tablist (LLP 1021 D4's one presentation).
-    var tabBarShows: Bool { tabController != nil && tabOwner === tabController && !ExactEnv.authoredChrome && !tablistAppearanceNone }
+    package var tabBarShows: Bool { tabController != nil && tabOwner === tabController && !ExactEnv.authoredChrome && !tablistAppearanceNone }
     /// Whether UIKit's tab bar stands for `node`: a root tab, or what it holds, while the bar shows.
     func tabBarStands(for node: NodeView) -> Bool {
         guard tabBarShows, let tabs = container.flatMap({ NavigationTabs.of($0, presenter) }) else { return false }
@@ -172,7 +172,7 @@ extension NavigationHost {
             tabsHatched = true
             natives.tabsHatch(container, event: 0)
         }
-        guard !tabContainerAsked, presenter.modals.routes.isEmpty, !presenter.modals.inTransition, presentedNavigations.isEmpty,
+        guard !tabContainerAsked, presenter.modalHost.routes.isEmpty, !presenter.modalHost.inTransition, presentedNavigations.isEmpty,
               let root = self.container, let tabs = NavigationTabs.of(root, presenter), let parent = container.parent else { return }
         tabContainerAsked = true
         // Offer the stacks in place: a container the hook returns takes them from Exact's, as UIKit moves any
@@ -225,7 +225,7 @@ extension NavigationHost {
         case 0:
             return presenter.elements.later("tabs", "back()") { [weak self] in
                 guard let self, inTerm(term) else { return }
-                if inTransition || presenter.modals.inTransition { return backRefused("a transition is running") }
+                if inTransition || presenter.modalHost.inTransition { return backRefused("a transition is running") }
                 switch agentBack() {
                 case nil: backRefused("nothing is beneath the top of the stack in front")
                 case ""?: break
@@ -283,7 +283,7 @@ extension NavigationHost {
         func visit(_ children: [NodeView]) {
             let holding = children.filter { child in panels.contains { $0 === child || $0.isDescendant(of: child) } }
             guard let end = holding.map({ $0.convert($0.bounds, to: root).maxY }).max() else { return }
-            for child in children where !holding.contains(child) && !owned.contains(child.id) && Self.inFlow(child) && !child.isHidden {
+            for child in children where !holding.contains(child) && !owned.contains(child.id) && RouteGeometry.inFlow(child) && !child.isHidden {
                 let box = child.convert(child.bounds, to: root)
                 guard !box.isEmpty, box.intersects(area), box.minY >= end - 0.5,
                       routes.contains(where: { $0.minX < box.maxX && $0.maxX > box.minX }) else { continue }
@@ -854,7 +854,7 @@ extension NavigationHost {
             // Page facts can carry no ops after UIKit sized an inactive owner.
             fitOwner()
         }
-        presenter.modals.inheritFromAncestors()
+        presenter.modalHost.inheritFromAncestors()
         followAuthoredTablist()
     }
 
@@ -868,18 +868,6 @@ extension NavigationHost {
         guard tablistAppearanceNone, !syncing, let view = presenter.session?.view,
               let list = adoptedTablist.flatMap({ presenter.views[$0] }) else { return }
         if list.convert(list.bounds, to: view) != measuredTablist { reportCovers() }
-    }
-
-    /// A bar visible in its window, including every ancestor's visibility.
-    static func shownBar(_ bar: UIView?) -> UIView? {
-        guard let bar, let window = bar.window else { return nil }
-        var at: UIView? = bar
-        while let view = at {
-            if view.isHidden || view.alpha < 0.01 { return nil }
-            at = view.superview
-        }
-        let frame = bar.convert(bar.bounds, to: window)
-        return frame.width > 1 && frame.height > 1 && frame.intersects(window.bounds) ? bar : nil
     }
 
     /// Whether a tab container takes this tablist's place.
@@ -909,7 +897,7 @@ extension UITabBarController {
     }
 
     /// The projected bar, when it is visibly on screen.
-    var shownTabBar: UIView? { NavigationHost.shownBar(projectedTabBar) }
+    var shownTabBar: UIView? { RouteGeometry.shownBar(projectedTabBar) }
 }
 
 #if os(iOS)

@@ -97,7 +97,7 @@ final class SwipeRoutesIOSTests: XCTestCase {
         }
         let s = try screen(scene, "swipe-push")
         defer { close(s) }
-        let nav = try XCTUnwrap(s.p.navigation.primaryNavigation)
+        let nav = try XCTUnwrap(s.p.navigationHost.primaryNavigation)
         func settle(_ count: Int, _ what: String) {
             waitFor(what, cap: 10) { nav.viewControllers.count == count && nav.transitionCoordinator == nil }
             waitForMainQueue()

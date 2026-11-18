@@ -76,7 +76,7 @@ final class TouchActionIOSTests: XCTestCase {
                 let pan = try XCTUnwrap(node.transformRecognizer)
                 pan.addTarget(recognized, action: #selector(Recognitions.pan(_:)))
             }
-            p.navigation.finishBootOwner()
+            p.navigationHost.finishBootOwner()
             window.layoutIfNeeded()
             let display = CADisplayLink(target: recognized, selector: #selector(Recognitions.frame))
             display.add(to: .main, forMode: .common)

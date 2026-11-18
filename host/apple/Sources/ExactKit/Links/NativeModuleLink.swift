@@ -305,15 +305,14 @@ extension Presenter {
 extension Presenter {
     /// Whether a development build journals what a hatch changed of a view
     /// Exact owns (LLP 1075.003 §3.5).
-    package static var checksHatchOwnership: Bool { NavigationHost.checksOwnership }
+    package static var checksHatchOwnership: Bool { RouteGeometry.checksOwnership }
     /// What of `node`'s scroll view changed outside Exact, which owns it.
     package func scrollOwnedChanges(_ node: NodeView) -> [String] {
         guard let scroll = node.scrollView else { return [] }
-        return NavigationHost.ownedChanges(scroll, of: node, insetByUIKit: node.scrollOrigin > 0 || navigation.insetByUIKit(node))
+        return RouteGeometry.ownedChanges(scroll, of: node, insetByUIKit: node.scrollOrigin > 0 || navigation.insetByUIKit(node))
     }
     /// Whether a native list is making `id`'s row now.
     package func listCreating(_ id: UInt32) -> Bool { pool.list(creating: id) != nil }
-    package func navigationAct(_ id: UInt32, _ action: UInt32) -> Bool { navigation.act(id, action) }
     /// The node a route hatch names by its route key and id, or nil.
     package func resolveRoute(_ key: String, id: String) -> UInt32? { navigation.resolve(route: key, id: id)?.id }
     package func tabIntent(_ kind: UInt32, _ text: String) -> Bool { navigation.tabIntent(kind, text) }
@@ -329,7 +328,7 @@ extension Presenter {
 extension NodeView {
     /// `found` when it is this route's own controller, else nil.
     package func routeController(in found: UIViewController?) -> UIViewController? {
-        (found as? RouteController).flatMap { $0.node === self ? $0 : nil }
+        (found as? any RouteSurface).flatMap { $0.node === self ? $0 : nil }
     }
 }
 #endif

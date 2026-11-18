@@ -58,7 +58,7 @@ extension Presenter {
             var found = Bands(), own = UIEdgeInsets.zero
             if let sv = v.scrollView, (sv as? ScrollView)?.scrollsY ?? true, v.window != nil {
                 let edgeEffect = v.style["scroll_edge_effect"]?.string != "none"
-                if let route = ViewPresentation.controllers(for: v, layout: true).lazy.compactMap({ $0 as? RouteController }).first(where: { $0.host === navigation && v.isDescendant(of: $0.node) }) {
+                if let route = ViewPresentation.controllers(for: v, layout: true).lazy.compactMap({ $0 as? any RouteSurface }).first(where: { $0.hosting === navigation && v.isDescendant(of: $0.node) }) {
                     if let judge, edgeEffect { found = routeBands(of: v, sv, in: route, judge) }
                     #if os(iOS)
                     if route.edgeScroll === v, let top = keyboardTop,
@@ -83,10 +83,9 @@ extension Presenter {
         }
         #if os(iOS)
         // The bar's and the bottom bar's own edge effects follow a banded scroller (D2).
-        for c in navigation.controllers.values {
+        for c in navigation.routeSurfaces.values {
             let r = routes[ObjectIdentifier(c)]
-            if c.bandedTop !== r?.top { c.bandedTop = r?.top; c.projectContentScrollView(c.automaticTopScroll, for: .top) }
-            if c.bandedBottom !== r?.bottom { c.bandedBottom = r?.bottom; c.projectContentScrollView(c.automaticBottomScroll, for: .bottom) }
+            c.bandEdges(top: r?.top, bottom: r?.bottom)
         }
         #endif
         ControlBars.sync(bars, in: self)
@@ -130,7 +129,7 @@ extension Presenter {
     /// bar's collapse or the bottom edge already took is there already, so
     /// the collapse scroller is judged as its title's riders are. None under
     /// a large title unless the eligible top bars ride its safe area.
-    private func routeBands(of v: NodeView, _ sv: UIScrollView, in c: RouteController, _ judge: ControlBars) -> Bands {
+    private func routeBands(of v: NodeView, _ sv: UIScrollView, in c: any RouteSurface, _ judge: ControlBars) -> Bands {
         #if os(iOS)
         if let nav = c.navigationController, navigation.routeShowsBar(c, in: nav), c.navigationItem.largeTitleDisplayMode == .always, c.ridingBars.isEmpty { return Bands() }
         #endif

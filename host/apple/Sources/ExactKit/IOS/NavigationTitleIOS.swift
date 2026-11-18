@@ -395,13 +395,11 @@ final class HeaderTitleView: UIControl {
     }
 
     @objc private func pressed() {
-        if let tap { _ = host?.act(tap, 0) }
+        if let tap { _ = host?.presenter.hatchAct(tap, 0) }
     }
 }
 
 extension NavigationHost {
-    /// What the agent says of a header node the bar leaves out.
-    static let unshownReason = "the iOS navigation bar does not show this node; in the app it is not visible (the bar shows a header's heading, the first text after it as its subtitle, one search field, one tablist and its buttons)"
 
     /// The authored header nodes the iOS navigation bar would not show
     /// (LLP 1116 D2), by id. Under the agent's own chrome the header paints
@@ -418,7 +416,7 @@ extension NavigationHost {
                       let shape = HeaderShape.bar(of: c.node, back: back, backIsUIKits: index > 0) else { continue }
                 func walk(_ node: NodeView) {
                     for case let child as NodeView in node.container.subviews {
-                        if !shape.presents(child) { out[child.id] = Self.unshownReason }
+                        if !shape.presents(child) { out[child.id] = RouteGeometry.unshownReason }
                         walk(child)
                     }
                 }

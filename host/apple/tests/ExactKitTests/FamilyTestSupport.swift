@@ -45,3 +45,10 @@ extension ExactSession {
     /// The built-in pickers (`PickerLink.make`'s default).
     var pickerHost: Picker { picker as! Picker }
 }
+
+#if os(macOS)
+extension Presenter {
+    /// Navigation as the iOS tests name it (`navigationHost` is the family's cast there).
+    var navigationHost: NavigationHost { navigation }
+}
+#endif

@@ -171,7 +171,7 @@ final class NavigationHost: NSObject, UINavigationControllerDelegate, UIGestureR
             || primaryNavigation?.transitionCoordinator != nil
             || presentedNavigations.contains(where: { $0.transitionCoordinator != nil }) { return true }
         if nativeMove == .transition {
-            guard !syncing, !resyncOwed, tapping == nil, !presenter.modals.inTransition,
+            guard !syncing, !resyncOwed, tapping == nil, !presenter.modalHost.inTransition,
                   !routerStacks.contains(where: routesInFlight), restDifference == nil else { return true }
             // UIKit finished the projected push or restored a cancelled pop.
             // Check once per transition, not once per row fill.
@@ -487,7 +487,7 @@ final class NavigationHost: NSObject, UINavigationControllerDelegate, UIGestureR
         if p.tabs != nil { syncTabs(p) }
         // Initial content draws before a presentation covers it.
         if parts.count > 1, let session = presenter.session, session.firstDrawMs == nil { return }
-        guard !changing, !presenter.modals.inTransition else {
+        guard !changing, !presenter.modalHost.inTransition else {
             pendingSync = true
             owePress()
             reportCovers()
@@ -506,7 +506,7 @@ final class NavigationHost: NSObject, UINavigationControllerDelegate, UIGestureR
             owed?.settle()
         }
         let boundaries = parts.dropFirst().map { wanted[$0.lowerBound].node }
-        let mounted = presenter.modals.routes
+        let mounted = presenter.modalHost.routes
         let common = zip(boundaries, mounted).prefix {
             $0.0 === $0.1.node && $0.0.props["navigationPresentation"] == $0.1.kind
         }.count
@@ -566,12 +566,12 @@ final class NavigationHost: NSObject, UINavigationControllerDelegate, UIGestureR
         }
         if mounted.count > common {
             pendingSync = true
-            presenter.modals.closeTop()
+            presenter.modalHost.closeTop()
             return
         }
         if boundaries.count > mounted.count, let background = modalNavigation ?? primaryOwner, let owner {
             let part = parts[mounted.count + 1], route = wanted[part.lowerBound].node
-            guard presenter.modals.canPresent(from: owner, route: route) else { return }
+            guard presenter.modalHost.canPresent(from: owner, route: route) else { return }
             // The sheet mounts its own navigation (`ModalHost.present`)
             let nav = makeNavigation(first: route)
             nav.view.frame = root.bounds
@@ -583,7 +583,7 @@ final class NavigationHost: NSObject, UINavigationControllerDelegate, UIGestureR
             nav.view.layoutIfNeeded()
             pendingSync = boundaries.count > mounted.count + 1
             let preceding = part.lowerBound > 0 ? wanted[part.lowerBound - 1].node : nil
-            presenter.modals.present(route, navigation: nav, from: background,
+            presenter.modalHost.present(route, navigation: nav, from: background,
                                      preceding: preceding, owner: owner)
         }
         // A presented navigation fills its sheet; the primary owner the root,
@@ -595,7 +595,7 @@ final class NavigationHost: NSObject, UINavigationControllerDelegate, UIGestureR
         }
         for (id, c) in controllers where !routeIDs.contains(id) { end(c) }
         controllers = controllers.filter { routeIDs.contains($0.key) }
-        presenter.modals.updatePermissions()
+        presenter.modalHost.updatePermissions()
         if p.tabs != nil { replayTabs() }
         // Before the covers, run the edge passes owed (a route hatch's selection may owe some), unless a transition holds them
         runOwedScrollEdges()
@@ -677,7 +677,7 @@ final class NavigationHost: NSObject, UINavigationControllerDelegate, UIGestureR
 
     /// What presents a sheet: the last sheet, else the primary owner's
     /// parent — with tabs the tab controller's, never a tab's own stack.
-    var owner: UIViewController? { presenter.modals.owner ?? primaryOwner?.parent }
+    var owner: UIViewController? { presenter.modalHost.owner ?? primaryOwner?.parent }
     /// The controller Exact installed under the root: the tab container, or
     /// the one stack.
     var primaryOwner: UIViewController? { tabOwner ?? primaryNavigation }
@@ -819,7 +819,7 @@ final class NavigationHost: NSObject, UINavigationControllerDelegate, UIGestureR
         }()
         let stack = (navigation?.viewControllers ?? primaryPlain?.stackRoutes ?? []).compactMap { ($0 as? RouteController)?.key }
         let transition: [String: Any] = ["interactive": navigation?.transitionCoordinator?.isInteractive ?? false,
-                                         "phase": changing || pendingSync || presenter.modals.inTransition ? "in-progress" : lastTransition]
+                                         "phase": changing || pendingSync || presenter.modalHost.inTransition ? "in-progress" : lastTransition]
         let root = container ?? presenter.root.subviews.first as? NodeView
         let top = navigation?.topViewController as? RouteController
         return ["route": root?.props["navigationKey"] ?? NSNull(), "stack": stack, "transition": transition,
@@ -924,10 +924,10 @@ final class NavigationHost: NSObject, UINavigationControllerDelegate, UIGestureR
         if let owner, owner !== navigation, !toList { return false }
         let depth = (toList ? owner : navigation)?.viewControllers.count ?? 0
         let goes = toList || back != nil
-        guard NavigationRules.popMayBegin(depth: depth, changing: changing, modalActive: presenter.modals.inTransition,
+        guard NavigationRules.popMayBegin(depth: depth, changing: changing, modalActive: presenter.modalHost.inTransition,
                                           hasBackControl: goes,
                                           contextPreviewActive: !presenter.chrome.ids("contextTarget").isEmpty) else {
-            if depth > 1, !changing, !presenter.modals.inTransition, !goes {
+            if depth > 1, !changing, !presenter.modalHost.inTransition, !goes {
                 presenter.session?.log("back gesture refused: \(backRefusal)")
             }
             return false
@@ -1105,7 +1105,7 @@ final class NavigationHost: NSObject, UINavigationControllerDelegate, UIGestureR
         let sourceReplaced = sourceKey == nil && selectedRouteCount == swipe.depth
         let dispatches = (viewController as? RouteController).map {
             NavigationRules.dispatchesBack(shownKey: $0.key, rootKey: selectedKey ?? "", sourceKey: sourceKey,
-                                           sourceReplaced: sourceReplaced, modalActive: presenter.modals.inTransition)
+                                           sourceReplaced: sourceReplaced, modalActive: presenter.modalHost.inTransition)
         } ?? false
         guard dispatches else {
             followPops()
@@ -1130,7 +1130,7 @@ final class NavigationHost: NSObject, UINavigationControllerDelegate, UIGestureR
         retireBootOwner()
         #endif
         unanimated = false
-        presenter.modals.reset()
+        presenter.modalHost.reset()
         for nav in presentedNavigations { retireNavigation(nav, preserving: false) }
         for c in controllers.values { end(c) }
         retireTabs()

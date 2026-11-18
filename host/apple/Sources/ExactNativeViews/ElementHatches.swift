@@ -429,7 +429,7 @@ final class ElementHatches: ElementHatching {
     /// the next turn (`later`). False when refused.
     func act(_ id: UInt32, _ action: UInt32) -> Bool {
         #if os(iOS) || os(tvOS)
-        return presenter.navigationAct(id, action)
+        return presenter.hatchAct(id, action)
         #else
         guard let node = presenter.views[id] else { return false }
         switch action {

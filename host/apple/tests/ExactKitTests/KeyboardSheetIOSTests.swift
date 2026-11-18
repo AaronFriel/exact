@@ -65,7 +65,7 @@ final class KeyboardSheetIOSTests: XCTestCase {
         let scale = try XCTUnwrap(window?.screen.scale)
         until("the display's scale is the app's") { (try? self.viewport()["devicePixelRatio"] as? Double) == Double(scale) }
         p.press(try XCTUnwrap(named("open")).id)
-        until("the sheet is presented") { self.named("name")?.field?.window != nil && p.modals.coordinateView != nil }
+        until("the sheet is presented") { self.named("name")?.field?.window != nil && p.modalHost.coordinateView != nil }
         let bar = try XCTUnwrap(named("keys"))
         let field = try XCTUnwrap(named("name")?.field)
         let shown = expectation(forNotification: UIResponder.keyboardDidShowNotification, object: nil)
@@ -82,7 +82,7 @@ final class KeyboardSheetIOSTests: XCTestCase {
         field.resignFirstResponder()
         wait(for: [hidden], timeout: 10)
         until("the overlap is 0 again") { (try? self.viewport()["keyboardHeight"] as? Double) == 0 }
-        let sheet = try XCTUnwrap(p.modals.coordinateView)
+        let sheet = try XCTUnwrap(p.modalHost.coordinateView)
         until("the toolbar is back at the sheet's bottom") {
             abs(bar.convert(bar.bounds, to: nil).maxY - sheet.convert(sheet.bounds, to: nil).maxY + sheet.safeAreaInsets.bottom) < 1
         }

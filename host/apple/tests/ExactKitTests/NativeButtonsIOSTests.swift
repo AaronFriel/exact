@@ -239,7 +239,7 @@ final class NativeButtonsIOSTests: XCTestCase {
                           faces: [2: face("Second")])
         XCTAssertNotNil(p.controls.controls[2])
         let list = try XCTUnwrap(p.views[1])
-        p.navigation.covers[1] = .whole
+        p.navigationHost.covers[1] = .whole
         list.isHidden = true
         p.controls.sync()
         XCTAssertNil(p.controls.controls[2], "the bar's item stands for it")

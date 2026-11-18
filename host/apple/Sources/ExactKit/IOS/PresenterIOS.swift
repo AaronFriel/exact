@@ -153,9 +153,9 @@ package final class Presenter {
     lazy var fieldSelections = FieldSelections(self)
     /// Nodes marked `hatch="word"` (LLP 1075.003.000).
     package internal(set) lazy var elements: any ElementHatching = NativeModuleLink.makeElements?(self) ?? NoElementHatches()
-    lazy var navigation = NavigationHost(presenter: self)
+    lazy package var navigation: any NavigationHosting = NavigationLink.make?(self) ?? NoNavigation(self)
     /// Each navigation root's tabs, as the last batch to say them gave them (`takeRootTabs`).
-    var rootTabs: [UInt32: RootTabs] = [:]
+    package var rootTabs: [UInt32: RootTabs] = [:]
     #if os(tvOS)
     lazy var menuKey = MenuKey(presenter: self)
     lazy var focusGuides = FocusGuides(presenter: self)
@@ -163,7 +163,7 @@ package final class Presenter {
     /// The `testId` of the node that last held the remote's focus.
     var focusKey: String?
     #endif
-    lazy var modals = ModalHost(presenter: self)
+    lazy package var modals: any ModalHosting = NavigationLink.makeModals?(self) ?? NoModals()
     lazy var owners = OwnerBlocks(self)
     #if os(iOS)
     private var arrangementHost: AnyObject?
@@ -240,7 +240,7 @@ package final class Presenter {
     /// Whether the keyboard's editor is the search field of the bar over `container`'s route.
     func editsInBar(of container: UIView) -> Bool {
         guard let editor = keyboardEditor else { return false }
-        return (ViewPresentation.controller(for: container) as? RouteController)?.search?.field?.headerField === editor
+        return (ViewPresentation.controller(for: container) as? any RouteSurface)?.headerSearchEditor === editor
     }
     /// The docked keyboard's occupied geometry in its owning container.
     package func keyboardGuideTop(in container: UIView) -> CGFloat? {
@@ -299,7 +299,7 @@ package final class Presenter {
     var interactiveKeyboardDrag: Bool {
         let drags = { (sv: UIScrollView) in sv.keyboardDismissMode == .interactive && (sv.isTracking || sv.isDragging) }
         return drags(viewport) || scrollers.contains { views[$0]?.scrollView.map(drags) ?? false }
-            || navigation.primaryRoutes.contains { $0.contentViewport.map(drags) ?? false }
+            || navigation.primaryRouteSurfaces.contains { $0.contentViewport.map(drags) ?? false }
     }
 
     /// Reconcile through UIKit layout in the keyboard's animation, after batches finish.
@@ -1438,7 +1438,7 @@ extension Presenter {
     package func authoredParent(of view: UIView) -> UIView? {
         if let node = view as? NodeView {
             if let p = menus.sheets.authoredParent(of: node) { return p }
-            if navigation.controllers[node.id]?.node === node, let p = navigation.logicalParent(of: node) ?? navigation.container { return p }
+            if navigation.routeSurfaces[node.id]?.node === node, let p = navigation.logicalParent(of: node) ?? navigation.container { return p }
         }
         return menus.logicalParent(of: view) ?? groupedLists?.logicalParent(of: view) ?? view.superview
     }

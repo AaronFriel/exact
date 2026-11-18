@@ -548,8 +548,8 @@ extension Presenter {
                let id = segments.segmentOwner(of: element, owners: segments.segmentOwners) { return (id, "owner") }
             #if os(iOS)
             if let segments = s as? UISegmentedControl, let element,
-               let search = navigation.controllers.values.compactMap(\.search).first(where: { $0.scopeControl === segments }),
-               let id = segments.segmentOwner(of: element, owners: search.scopeTabs) { return (id, "owner") }
+               let tabs = navigation.searchScopeTabs(of: segments),
+               let id = segments.segmentOwner(of: element, owners: tabs) { return (id, "owner") }
             #endif
             if let n = s as? NodeView { return (n.id, control && n.isAccessibilityElement == false ? "owner" : "ancestor") }
             v = s.superview
