@@ -285,12 +285,13 @@ each left with bytes it had counted as core). At the ratios measured on it (a Sw
 overhead, a Rust byte with 0.18 B) the steps still ahead end near 7.86 MB with neither ruling: pickers and traces
 to 9.57 MB, media to 9.35 MB, navigation with dialogs, menus and fields to 8.16 MB, tools, the small capability
 families and share to 8.04 MB, content regions to 7.86 MB. If the deep families shed less overhead than the
-measured ratio, that is nearer 8.04 MB. The map also found about 0.66 MB that no step owned and no plan of
-hello's reaches, each linked by use rather than shaved: the motion engine's paths in a still app (about 120 KB),
-what only a development-shaped caller keeps (the agent's `state` reader, the build channel's status report, the
+measured ratio, that is nearer 8.04 MB. The map also found about 0.56 MB that no step owned and no plan of
+hello's reaches, each linked by use rather than shaved: what only a development-shaped caller keeps (the agent's `state` reader, the build channel's status report, the
 dev menu's reload, the development link; about 113 KB), box effects and the gradient grammar (about 99 KB),
 pointer, drag, zoom and snapping (about 84 KB), widget publication in an app with no entries (about 75 KB), text
-selection (about 56 KB), and smaller remnants. With the five largest the list ends between 7.43 and 7.61 MB.
+selection (about 56 KB), the transition and gradient grammars with the height, exit and layout transitions
+(about 50 KB; the rest of the motion engine shows a still plan's transforms, opacity and colour and stays), and
+smaller remnants. With the five largest the list ends between 7.53 and 7.71 MB.
 Frame health is about 0.43 MB and the panic machinery about 0.24 MB; neither ruling is needed for the target.
 
 R4g took 481,888 B off the size row against the list's estimate of about 250,000 B (629,808 B off balanced and
