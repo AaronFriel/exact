@@ -279,6 +279,20 @@ route modals, dialogs, menus, fields, content regions, and about 105 KB of Rust 
 8.2 MB. Frame health is about 0.5 MB of the row with its overhead and the panic machinery about 0.24 MB; either
 ruling closes the gap.
 
+A third link map, at d92c68ee8 (9,722,832 B), classes every byte by the type that reaches it rather than by file,
+which is what the second map's three large misses needed (controls, the session families and the plan connection
+each left with bytes it had counted as core). At the ratios measured on it (a Swift byte leaves with 0.42 B of
+overhead, a Rust byte with 0.18 B) the steps still ahead end near 7.86 MB with neither ruling: pickers and traces
+to 9.57 MB, media to 9.35 MB, navigation with dialogs, menus and fields to 8.16 MB, tools, the small capability
+families and share to 8.04 MB, content regions to 7.86 MB. If the deep families shed less overhead than the
+measured ratio, that is nearer 8.04 MB. The map also found about 0.66 MB that no step owned and no plan of
+hello's reaches, each linked by use rather than shaved: the motion engine's paths in a still app (about 120 KB),
+what only a development-shaped caller keeps (the agent's `state` reader, the build channel's status report, the
+dev menu's reload, the development link; about 113 KB), box effects and the gradient grammar (about 99 KB),
+pointer, drag, zoom and snapping (about 84 KB), widget publication in an app with no entries (about 75 KB), text
+selection (about 56 KB), and smaller remnants. With the five largest the list ends between 7.43 and 7.61 MB.
+Frame health is about 0.43 MB and the panic machinery about 0.24 MB; neither ruling is needed for the target.
+
 R4g took 481,888 B off the size row against the list's estimate of about 250,000 B (629,808 B off balanced and
 1,265,968 B off speed): `runner::modules` went from 370,556 B of code to 8,104 B, the drop code of its state,
 which 40b2d2c8c then put behind the seam. The core kept about 33 KB of what was in `modules/`: provenance,
