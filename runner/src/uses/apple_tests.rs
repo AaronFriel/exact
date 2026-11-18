@@ -96,3 +96,103 @@ fn tools_are_a_plan_with_a_tool() {
     assert!(apple_uses(&tooled).has(Capability::Tools));
     assert!(!uses(&tooled).has(Capability::Tools));
 }
+
+/// D10: each native roster entry is selected by the rows that reach its
+/// family's code, a computed value by whatever it can be, and a plain text
+/// and button plan by none; no other host's set moves.
+#[test]
+fn each_native_entry_is_selected_by_the_rows_that_reach_its_family() {
+    use Capability::{Collections, Controls, Images, NativeViews, Svg, Traces};
+    let plain = "column\n      text \"a\"\n      button \"b\" press=go";
+    for (view, capability, selected) in [
+        (plain, Svg, false),
+        (plain, Images, false),
+        (plain, NativeViews, false),
+        (plain, Controls, false),
+        (plain, Traces, false),
+        (plain, Collections, false),
+        (
+            "svg viewBox=\"0 0 10 10\"\n      circle cx=5 cy=5 r=4",
+            Svg,
+            true,
+        ),
+        // A box's filter runs on box effects' engine, which SVG's uses.
+        ("text \"a\" filter=\"blur(2px)\"", Svg, false),
+        // The host tells an SVG by its bytes: a computed source can be one,
+        // and so can a download; a bundled file is the bake's to read.
+        (
+            "image (wide ? \"assets/a.png\" : \"assets/b.png\")",
+            Svg,
+            true,
+        ),
+        ("image \"https://example.test/a.png\"", Svg, true),
+        ("image \"assets/a.png\"", Svg, false),
+        ("image \"assets/a.png\"", Images, true),
+        ("image \"symbol:star\"", Images, false),
+        // The loader fails an empty source, which an `error` handler hears.
+        ("image \"\"", Images, true),
+        ("image \"symbol:star\"", Svg, false),
+        ("view hatch=\"avatar\"", NativeViews, true),
+        ("swatch-box", NativeViews, true),
+        ("column\n      action-button press=go", NativeViews, true),
+        ("button \"b\" press=go appearance=\"none\"", Controls, false),
+        ("input type=\"checkbox\"", Controls, true),
+        ("input type=\"checkbox\" role=\"switch\"", Controls, true),
+        ("input type=\"range\"", Controls, true),
+        ("progress value=0.5", Controls, true),
+        ("input type=\"number\"", Controls, true),
+        ("input type=\"text\"", Controls, false),
+        (
+            "row role=\"tablist\"\n      button \"a\" press=go",
+            Controls,
+            true,
+        ),
+        ("row role=(wide ? \"tablist\" : \"group\")", Controls, true),
+        ("row role=\"group\"", Controls, false),
+        (
+            "list\n      row delete=go\n        text \"a\"",
+            Collections,
+            true,
+        ),
+        (
+            "scroll swipeContent=\"r\" overflow-x=\"scroll\" height=60\n      row id=\"r\"\n        text \"a\"",
+            Collections,
+            true,
+        ),
+    ] {
+        let plan = plan(view);
+        assert_eq!(
+            apple_uses(&plan).has(capability),
+            selected,
+            "{view}: {capability:?}"
+        );
+        if capability != Collections {
+            assert!(!uses(&plan).has(capability), "{view}: {capability:?}");
+        }
+    }
+    let traced = contract::compile(
+        "component A\n  action go\n    startTrace_EXPERIMENTAL()\n  view\n    button \"b\" press=go\n",
+    )
+    .unwrap();
+    assert!(apple_uses(&traced).has(Traces));
+}
+
+/// A literal source's file ships with the app, so the bake reads it; a
+/// download's and an app file's bytes come at run time.
+#[test]
+fn a_bundled_image_source_is_the_bakes_to_read() {
+    use super::ImageSource::{Computed, Literal};
+    for (source, bundled) in [
+        (Literal("assets/a.png"), Some("assets/a.png")),
+        (
+            Literal("data:image/png;base64,AAAA"),
+            Some("data:image/png;base64,AAAA"),
+        ),
+        (Literal("https://example.test/a.svg"), None),
+        (Literal("app:/photos/1"), None),
+        (Computed, None),
+    ] {
+        assert_eq!(source.bundled(), bundled);
+        assert_eq!(source.can_be_svg(), bundled.is_none());
+    }
+}

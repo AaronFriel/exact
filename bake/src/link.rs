@@ -21,6 +21,7 @@ use exact_runner::{Capability, Uses};
 /// a binary change.
 pub(crate) fn name_into(
     compat: &mut Compat,
+    app: &std::path::Path,
     manifest: &contract::Manifest,
     out: &std::path::Path,
     entries: &std::collections::BTreeMap<String, contract::snapshot::Entry>,
@@ -38,10 +39,17 @@ pub(crate) fn name_into(
         let plan = exact_plan::Plan::decode(&bytes)
             .map_err(|e| format!("the baked plan is invalid: {e:?}"))?;
         let entries = entries.values().map(|entry| &entry.plan);
-        let uses = production_uses(&plan, entries, &compat.inputs);
+        let uses = production_uses(app, &plan, entries, &compat.inputs);
         ahead(manifest)?.into_iter().fold(uses, Uses::with)
     } else {
         Capability::ALL.into_iter().fold(Uses::NONE, Uses::with)
+    };
+    // The native roster is Apple's: another platform's set, and so its id,
+    // never names it, whatever a manifest links ahead.
+    let uses = if apple(&compat.inputs) {
+        uses
+    } else {
+        uses.beyond(Uses::NATIVE)
     };
     let names: Vec<&str> = uses.iter().map(Capability::name).collect();
     compat.inputs["linked"] = serde_json::json!(names);
@@ -51,17 +59,24 @@ pub(crate) fn name_into(
 
 /// What a production artifact links for `plan`, with what its grants allow
 /// (`inputs`' ceiling); on Apple, with what the widget `entries` its boot
-/// admits use too, and the I/O executor for a source placed on a worker.
+/// admits use too, the I/O executor for a source placed on a worker, and
+/// what only the bake can read in `app`, the app's directory: whether a
+/// bundled image is an SVG, and whether the app ships a module artifact,
+/// which connects the app-level hatches (LLP 1075.003.000).
 pub(crate) fn production_uses<'a>(
-    plan: &exact_plan::Plan,
+    app: &std::path::Path,
+    plan: &'a exact_plan::Plan,
     entries: impl Iterator<Item = &'a exact_plan::Plan>,
     inputs: &serde_json::Value,
 ) -> Uses {
-    let mut uses =
-        plan_uses(plan, inputs).with_grants(inputs["grantCeiling"].as_str().unwrap_or(""));
+    let grants = Uses::NONE.with_grants(inputs["grantCeiling"].as_str().unwrap_or(""));
     if !apple(inputs) {
-        return uses;
+        return plan_uses(plan, inputs).iter().fold(grants, Uses::with);
     }
+    let plans: Vec<&exact_plan::Plan> = std::iter::once(plan).chain(entries).collect();
+    let mut uses = plans.iter().fold(grants, |uses, plan| {
+        plan_uses(plan, inputs).iter().fold(uses, Uses::with)
+    });
     // A source placed on a worker answers through continuations, which the
     // executor runs (LLP 1027.002 D1).
     if ["rustPlacement", "typescriptPlacement"]
@@ -70,13 +85,80 @@ pub(crate) fn production_uses<'a>(
     {
         uses = uses.with(Capability::Io);
     }
-    entries.fold(uses, |uses, entry| {
-        plan_uses(entry, inputs).iter().fold(uses, Uses::with)
+    if plans.iter().any(|plan| bundles_svg(app, plan)) {
+        uses = uses.with(Capability::Svg);
+    }
+    // A package's Swift implementation is compiled into the artifact too.
+    if uses.has(Capability::Modules) || ships_module(app, inputs["platform"].as_str().unwrap_or(""))
+    {
+        uses = uses.with(Capability::NativeViews);
+    }
+    uses
+}
+
+/// Whether a bundled image source of `plan` (an asset or a `data:` URL) is
+/// an SVG, which the host tells by the bytes; one the bake cannot read counts
+/// as one.
+fn bundles_svg(app: &std::path::Path, plan: &exact_plan::Plan) -> bool {
+    exact_runner::uses::image_sources(plan)
+        .iter()
+        .filter_map(|source| source.bundled())
+        .filter(|name| !name.is_empty())
+        .any(|name| {
+            let bytes = if let Some(url) = name.strip_prefix("data:") {
+                data_url(url)
+            } else {
+                std::fs::read(app.join(name.trim_start_matches('/'))).ok()
+            };
+            bytes.is_none_or(|bytes| exact_svg_file::sniff(&bytes))
+        })
+}
+
+/// A `data:` URL's bytes after `data:` (RFC 2397): base64 after `;base64`,
+/// else percent-decoded.
+fn data_url(url: &str) -> Option<Vec<u8>> {
+    let (meta, body) = url.split_once(',')?;
+    if meta.to_ascii_lowercase().ends_with(";base64") {
+        let body: String = body.chars().filter(|c| !c.is_ascii_whitespace()).collect();
+        return exact_runner::agent::unbase64(&body);
+    }
+    let (body, mut bytes, mut i) = (body.as_bytes(), Vec::new(), 0);
+    while i < body.len() {
+        let hex = body
+            .get(i + 1..i + 3)
+            .and_then(|h| std::str::from_utf8(h).ok());
+        match hex
+            .filter(|_| body[i] == b'%')
+            .and_then(|h| u8::from_str_radix(h, 16).ok())
+        {
+            Some(byte) => (bytes.push(byte), i += 3),
+            None => (bytes.push(body[i]), i += 1),
+        };
+    }
+    Some(bytes)
+}
+
+/// Whether the app ships a module artifact on Apple: Swift or a framework
+/// in its module directory (`scripts/app.mjs`, `moduleDirectory`).
+fn ships_module(app: &std::path::Path, platform: &str) -> bool {
+    let own = app.join(platform).join("modules");
+    let folder = if own.exists() {
+        own
+    } else {
+        app.join("modules").join("apple")
+    };
+    std::fs::read_dir(folder).is_ok_and(|entries| {
+        entries.flatten().any(|e| {
+            let name = e.file_name();
+            let name = name.to_string_lossy();
+            name.ends_with(".swift") || name.ends_with(".xcframework")
+        })
     })
 }
 
 /// What `plan` uses on the platform `inputs` name: on Apple, which links
-/// grid layout by use, [`exact_runner::uses::apple_uses`] (LLP 1047.001 D10).
+/// grid layout by use and the native roster, [`exact_runner::uses::apple_uses`]
+/// (LLP 1047.001 D10).
 pub(crate) fn plan_uses(plan: &exact_plan::Plan, inputs: &serde_json::Value) -> Uses {
     if apple(inputs) {
         exact_runner::uses::apple_uses(plan)
@@ -267,11 +349,20 @@ mod tests {
         .unwrap();
         for (platform, grid) in [("ios", true), ("macos", true), ("linux", false)] {
             let inputs = serde_json::json!({ "platform": platform, "grantCeiling": "" });
-            let uses = super::production_uses(&app, [&entry].into_iter(), &inputs);
-            assert_eq!(uses.has(Capability::Grid), grid, "{platform}");
-            assert!(
-                !super::production_uses(&app, std::iter::empty(), &inputs).has(Capability::Grid)
+            let uses = super::production_uses(
+                std::path::Path::new(""),
+                &app,
+                [&entry].into_iter(),
+                &inputs,
             );
+            assert_eq!(uses.has(Capability::Grid), grid, "{platform}");
+            assert!(!super::production_uses(
+                std::path::Path::new(""),
+                &app,
+                std::iter::empty(),
+                &inputs
+            )
+            .has(Capability::Grid));
         }
     }
 
@@ -280,9 +371,10 @@ mod tests {
     #[test]
     fn production_hello_links_no_capability() {
         let hello = contract::compile(include_str!("../../apps/hello/app.contract")).unwrap();
+        let hello_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../apps/hello");
         for platform in ["ios", "macos"] {
             let inputs = serde_json::json!({ "platform": platform, "grantCeiling": "" });
-            let uses = super::production_uses(&hello, std::iter::empty(), &inputs);
+            let uses = super::production_uses(&hello_dir, &hello, std::iter::empty(), &inputs);
             assert_eq!(uses, exact_runner::Uses::NONE, "{platform}: {uses}");
         }
     }
@@ -354,7 +446,12 @@ mod tests {
                 ("linux", "worker", false),
             ] {
                 let inputs = serde_json::json!({ "platform": platform, language: placed });
-                let uses = super::production_uses(&app, std::iter::empty(), &inputs);
+                let uses = super::production_uses(
+                    std::path::Path::new(""),
+                    &app,
+                    std::iter::empty(),
+                    &inputs,
+                );
                 assert_eq!(
                     uses.has(Capability::Io),
                     io,
@@ -362,6 +459,42 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// On Apple the bake reads what the plan cannot say: a bundled image's
+    /// bytes (an SVG links SVG decoding; one it cannot read counts as one),
+    /// and an app module artifact, which connects the app-level hatches.
+    #[test]
+    fn the_bake_reads_bundled_images_and_the_module_artifact() {
+        let dir = std::env::temp_dir().join(format!("exact-link-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("assets")).unwrap();
+        std::fs::write(dir.join("assets/a.png"), b"\x89PNG\r\n\x1a\n").unwrap();
+        std::fs::write(dir.join("assets/b.png"), b"<?xml version=\"1.0\"?>\n<svg/>").unwrap();
+        let ios = serde_json::json!({ "platform": "ios", "grantCeiling": "" });
+        let linked = |source: &str| {
+            let plan = contract::compile(&format!("component A\n  view\n    image \"{source}\"\n"))
+                .unwrap();
+            super::production_uses(&dir, &plan, std::iter::empty(), &ios)
+        };
+        for (source, svg) in [
+            ("assets/a.png", false),
+            ("assets/b.png", true),
+            ("/assets/a.png", false),
+            ("assets/missing.png", true),
+            ("data:image/png;base64,iVBORw0KGgo=", false),
+            ("data:image/svg+xml;base64,PHN2Zy8+", true),
+            ("data:image/svg+xml,%3Csvg%2F%3E", true),
+            ("https://example.test/a.png", true),
+        ] {
+            let uses = linked(source);
+            assert!(uses.has(Capability::Images), "{source}");
+            assert_eq!(uses.has(Capability::Svg), svg, "{source}");
+            assert!(!uses.has(Capability::NativeViews), "{source}");
+        }
+        std::fs::create_dir_all(dir.join("modules/apple")).unwrap();
+        std::fs::write(dir.join("modules/apple/Hatches.swift"), "").unwrap();
+        assert!(linked("assets/a.png").has(Capability::NativeViews));
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     /// The manifest schema's `link` names are the roster's, in its order.

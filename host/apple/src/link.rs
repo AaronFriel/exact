@@ -385,7 +385,29 @@ mod tests {
         .unwrap();
         let mut view = contract::compile("component A\n  view\n    text \"a\"\n").unwrap();
         view.add_view("swatch-box", ("swatch", "@fixture/swatch"), true, &[], "");
-        for (plan, name) in [(&tools, "tools"), (&view, "modules")] {
+        let compile = |view: &str, act: &str| {
+            contract::compile(&format!(
+                "component A\n  state on = true\n  action go\n    {act}\n  view\n    {view}\n"
+            ))
+            .unwrap()
+        };
+        let svg = compile(
+            "svg viewBox=\"0 0 10 10\"\n      circle cx=5 cy=5 r=4",
+            "on = false",
+        );
+        let image = compile("image \"assets/a.png\"", "on = false");
+        let hatch = compile("view hatch=\"avatar\"", "on = false");
+        let control = compile("input type=\"checkbox\"", "on = false");
+        let traced = compile("button \"b\" press=go", "startTrace_EXPERIMENTAL()");
+        for (plan, name) in [
+            (&tools, "tools"),
+            (&view, "modules, native_views"),
+            (&svg, "svg"),
+            (&image, "images"),
+            (&hatch, "native_views"),
+            (&control, "controls"),
+            (&traced, "traces"),
+        ] {
             assert_eq!(missing(plan, Uses::NONE).as_deref(), Some(name));
             assert_eq!(missing(plan, ALL), None);
         }

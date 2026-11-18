@@ -1275,7 +1275,7 @@ export const classifications = [
     ["runner:runner/src/grants.rs", "admitting admitting_request declared Grants::lines Grants::presence Grants::secrets launch_names normalized_json parse parse_with redacted refusal validate with_declared"],
     ["runner:runner/src/hardened.rs", "is_runtime_line runtime_grants"],
     ["runner:runner/src/runner/persist.rs", "decode encode"],
-    ["runner:runner/src/uses/apple.rs", "apple_uses lays_out_grid"],
+    ["runner:runner/src/uses/apple.rs", "apple_uses image_sources ImageSource::bundled ImageSource::can_be_svg lays_out_grid"],
     ["runner:runner/src/uses.rs",
       "Capability::from_name Capability::name chooses_locale keeps_midi runs_sounds svg_filters svg_islands uses uses_midi uses_picture_in_picture Uses::beyond " +
       "Uses::has Uses::is_empty Uses::iter Uses::with Uses::with_grants zoomable zooms"],

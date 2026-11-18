@@ -605,7 +605,13 @@ pub fn web_linked(plan: &exact_plan::Plan, inputs: &serde_json::Value) -> String
             | Capability::Sqlite
             | Capability::Tips
             | Capability::Modules
-            | Capability::Tools => {}
+            | Capability::Tools
+            | Capability::Svg
+            | Capability::Images
+            | Capability::NativeViews
+            | Capability::ContentRegions
+            | Capability::Traces
+            | Capability::Controls => {}
         }
     }
     entry

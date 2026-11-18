@@ -15,10 +15,20 @@ macro_rules! host {
     ($data:ty, $plan:expr, $compat:expr, $delivery:expr, $api:expr $(; linked = $linked:expr)?) => {
         $crate::host!($data, $plan, $compat, $delivery, $api, || <$data as ::std::default::Default>::default() $(; linked = $linked)?);
     };
-    ($data:ty, $plan:expr, $compat:expr, $delivery:expr, $api:expr, $new:expr $(; linked = $linked:expr)?) => {
-        $crate::host!($data, $plan, $compat, $delivery, $api, $new, None $(; linked = $linked)?);
+    ($data:ty, $plan:expr, $compat:expr, $delivery:expr, $api:expr, $new:expr; linked = $linked:expr) => {
+        $crate::host!(@core $data, $plan, $compat, $delivery, $api, $new, None, $linked);
     };
+    ($data:ty, $plan:expr, $compat:expr, $delivery:expr, $api:expr, $new:expr) => {
+        $crate::host!($data, $plan, $compat, $delivery, $api, $new, None);
+    };
+    // An entry that registers a content region links them (LLP 1047.001
+    // D10): its set names `content_regions`, which no plan sets, so a
+    // production build whose manifest's `link` forgets it fails here.
     ($data:ty, $plan:expr, $compat:expr, $delivery:expr, $api:expr, $new:expr, $region:expr; linked = $linked:expr) => {
+        const _: () = assert!(
+            $linked.has($crate::link::Capability::ContentRegions),
+            "an entry that registers a content region links `content_regions`: name it in app.json's `link`"
+        );
         $crate::host!(@core $data, $plan, $compat, $delivery, $api, $new, $region, $linked);
     };
     ($data:ty, $plan:expr, $compat:expr, $delivery:expr, $api:expr, $new:expr, $region:expr) => {

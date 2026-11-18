@@ -15,7 +15,7 @@ use exact_plan::{BindingKind, EventKind, Opcode, Plan, Stdlib, StrId};
 use std::fmt;
 
 mod apple;
-pub use apple::{apple_uses, lays_out_grid};
+pub use apple::{apple_uses, image_sources, lays_out_grid, ImageSource};
 
 /// A capability beyond the core, linked into an artifact only when its plan
 /// uses it (LLP 1047 §4's roster, as each one moves behind its seam).
@@ -156,11 +156,34 @@ pub enum Capability {
     /// Tool calls (LLP 1111; LLP 1047.001 D11): a plan whose `tools` table
     /// is not empty. Native only ([`apple_uses`]).
     Tools,
+    /// SVG decoding (LLP 1047.001 D10): an SVG element, or an image whose
+    /// file can be an SVG, which the host tells by its bytes. Native only.
+    Svg,
+    /// Loading and showing image files: an `image` whose source can be a
+    /// file, or a Markdown atom's icon. Native only.
+    Images,
+    /// The app module's native views and hatches (LLP 1024, LLP
+    /// 1075.003.000): a module tag, a `hatch`, or a package's view, and an
+    /// app whose module artifact connects the app-level hatches, which the
+    /// bake reads. Native only.
+    NativeViews,
+    /// Content regions (long documents): never set by a plan, since the
+    /// entry registers the region. An entry that registers one requires it
+    /// in its set, so a manifest's `link` names it. Native only.
+    ContentRegions,
+    /// Trace recording: a plan that runs `startTrace_EXPERIMENTAL` or
+    /// `stopTrace_EXPERIMENTAL`, or a manifest's `link` for an embedder that
+    /// calls the public API. Native only.
+    Traces,
+    /// The optional native controls: switches, checkboxes, radios, sliders,
+    /// pop-up selects, date pickers, progress, steppers and segmented
+    /// controls. A plain button is the core's. Native only.
+    Controls,
 }
 
 impl Capability {
     /// Every capability, in bit order.
-    pub const ALL: [Capability; 39] = [
+    pub const ALL: [Capability; 45] = [
         Capability::Markdown,
         Capability::Motion,
         Capability::Collections,
@@ -200,6 +223,12 @@ impl Capability {
         Capability::Presence,
         Capability::Modules,
         Capability::Tools,
+        Capability::Svg,
+        Capability::Images,
+        Capability::NativeViews,
+        Capability::ContentRegions,
+        Capability::Traces,
+        Capability::Controls,
     ];
 
     /// The name an entry, a refusal and a report use.
@@ -244,6 +273,12 @@ impl Capability {
             Capability::Presence => "presence",
             Capability::Modules => "modules",
             Capability::Tools => "tools",
+            Capability::Svg => "svg",
+            Capability::Images => "images",
+            Capability::NativeViews => "native_views",
+            Capability::ContentRegions => "content_regions",
+            Capability::Traces => "traces",
+            Capability::Controls => "controls",
         }
     }
 
@@ -266,9 +301,18 @@ impl Uses {
     /// The core alone.
     pub const NONE: Uses = Uses(0);
 
-    /// The native roster's entries (LLP 1047.001 D10), which only
-    /// [`apple_uses`] sets: the web links nothing for them.
-    pub const NATIVE: Uses = Uses::NONE.with(Capability::Modules).with(Capability::Tools);
+    /// The native roster's entries (LLP 1047.001 D10), which only an Apple
+    /// set names: [`apple_uses`] and the Apple bake select them, and no other
+    /// host links anything for them.
+    pub const NATIVE: Uses = Uses::NONE
+        .with(Capability::Modules)
+        .with(Capability::Tools)
+        .with(Capability::Svg)
+        .with(Capability::Images)
+        .with(Capability::NativeViews)
+        .with(Capability::ContentRegions)
+        .with(Capability::Traces)
+        .with(Capability::Controls);
 
     /// This set and `capability`.
     pub const fn with(self, capability: Capability) -> Uses {

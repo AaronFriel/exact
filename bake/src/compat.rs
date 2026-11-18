@@ -455,7 +455,7 @@ pub fn compatibility_id_pinned(
         // A native artifact's composition is part of its cohort (LLP
         // 1047.001 D2), named before anything binds the id.
         if platform != "web" {
-            crate::link::name_into(&mut compat, manifest, Path::new(&out), entries)?;
+            crate::link::name_into(&mut compat, app_dir, manifest, Path::new(&out), entries)?;
         }
         crate::receipt::emit(
             &mut compat,
