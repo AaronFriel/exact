@@ -329,6 +329,17 @@ if (maven.isNotEmpty()) {
         lockMode.set(LockMode.STRICT)
         lockFile.set(file(providers.gradleProperty("mavenLock").get()))
     }
+    if (gradle.startParameter.isWriteDependencyLocks) {
+        // Lock constraints can expose transitive edges absent from an unconstrained graph. Resolve with the
+        // selected versions constrained before recording the lock, as the next strict build will resolve it.
+        configurations.configureEach {
+            incoming.beforeResolve {
+                val unlocked = copyRecursive()
+                unlocked.resolutionStrategy.deactivateDependencyLocking()
+                shouldResolveConsistentlyWith(unlocked)
+            }
+        }
+    }
 }
 dependencies {
     maven.forEach { implementation(it) }

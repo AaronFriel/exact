@@ -3647,6 +3647,13 @@ includes the handler, channel and backend send.
 
 ### Android Expo push example
 
+The backend sends a data-only message, with title and body inside `data`, as
+the [push recipe](recipes/push.md) shows. Expo wraps that object as JSON in
+`envelope.body`; the handler reads it and posts the notification itself.
+Top-level `title` or `body` makes Expo send a notification message instead:
+Firebase shows it in the background and Exact shows it in front, without
+raising `push` ([FCM message types](https://firebase.google.com/docs/cloud-messaging/customize-messages/set-message-type)).
+
 The Contract subscribes from a press and hears the Push API's `push` event
 on its root. A live subscription refreshes the token exchange after rotation.
 Merge these declarations and the root's `push` handler into the app:
@@ -3706,10 +3713,10 @@ export const answer: Answer = async (source, args) => {
   }
   if (source === 'receivePush') {
     const envelope = JSON.parse(args[0]);
-    // Expo puts the sender's data in body and its visible text in title/message.
+    // Expo encodes the sender's data-only payload in body.
     const alert = JSON.parse(envelope.body || '{}');
-    await showNotification({ title: envelope.title || 'Urgency',
-      body: envelope.message, tag: alert.id, navigate: alert.navigate,
+    await showNotification({ title: alert.title || 'Urgency',
+      body: alert.body, tag: alert.id, navigate: alert.navigate,
       android: { channelId: 'urgencies' } });
     return true;
   }

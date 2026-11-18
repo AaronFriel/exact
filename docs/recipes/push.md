@@ -29,15 +29,16 @@ backend's origin. Await the handler's work so the wake owns it.
 
 The backend sends the saved Expo token to Expo's send endpoint. The FCM
 credentials stay on Expo; no server key belongs in the app. This Bun example
-sends one panic alert and checks Expo's ticket:
+sends one data-only panic alert and checks Expo's ticket. Keep the title and
+body inside `data` so the app's handler runs:
 
 ```ts
 const response = await fetch('https://exp.host/--/api/v2/push/send', {
   method: 'POST', headers: { 'content-type': 'application/json' },
   body: JSON.stringify({ to: process.env.EXPO_PUSH_TOKEN,
-    title: 'Urgency: Police', body: 'House 12', priority: 'high',
-    channelId: 'urgencies', sound: 'default',
-    data: { id: 'urgency-42', navigate: '/urgencies' } }),
+    priority: 'high',
+    data: { title: 'Urgency: Police', body: 'House 12',
+      id: 'urgency-42', navigate: '/urgencies' } }),
 });
 if (!response.ok) throw new Error(`Expo HTTP ${response.status}`);
 const ticket = await response.json();
@@ -51,9 +52,10 @@ the app sound on Android. `high` is Android's highest used importance;
 
 A data-only message raises `push` in the live or headless session. Boot,
 queueing and handler work share ten seconds. It cannot ask permission or
-open UI. A notification message shows directly and raises no `push` event.
+open UI. Top-level `title` or `body` makes a notification message: Firebase
+shows it in the background and Exact shows it in front, without raising `push`.
 
-Real Firebase registration and Expo delivery need the app's project. Follow
+With the app's Firebase project, follow
 [the phone checklist](../../packages/push/test/checklist.md#android-through-expo)
 on the POCO X6 Pro in front, in the background and after `am kill`. Do not
 use force-stop: Android stops delivery to a force-stopped app until it is
