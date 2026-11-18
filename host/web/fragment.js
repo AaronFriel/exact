@@ -153,8 +153,24 @@ export function scroll(root, visit, fragment, log, activation) {
     return;
   }
   if (fragment && id?.toLowerCase() !== "top") log(`fragment #${fragment}: no element in the route of visit ${visit} has that id; the route goes to its top`);
+  if (!fragment) return arrive(r);
   for (const el of inside(r)) el.scrollTo({ top: 0, left: 0, behavior: "instant" });
   r.scrollIntoView({ block: "start", inline: "nearest", behavior: "instant" });
+  keep(r);
+}
+
+/** A page that arrived with no fragment (D5.1): each scroller where it opens, the offsets its `scrollTop` and
+ * `scrollLeft` give (the JS target's `$scrollTop`, tree.js), the end of a list that opens there, else its start; one
+ * under `scroll-restoration="manual"` stays where it is, the document's too. */
+function arrive(r) {
+  const manual = el => el.$list ? el.$list.manual : el.getAttribute("scrollRestoration") === "manual";
+  for (const el of inside(r)) {
+    if (manual(el)) continue;
+    if (el.$list?.opensAtEnd) el.scrollTo({ top: el.scrollHeight, behavior: "instant" });
+    else el.scrollTo({ top: el.$scrollTop ?? 0, left: el.$scrollLeft ?? 0, behavior: "instant" });
+  }
+  const page = r.matches("[data-scrolldocument=\"true\"]") ? r : r.querySelector("[data-scrolldocument=\"true\"]");
+  if (!page || !manual(page)) r.scrollIntoView({ block: "start", inline: "nearest", behavior: "instant" });
   keep(r);
 }
 

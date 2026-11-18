@@ -158,6 +158,46 @@ final class FragmentTests: XCTestCase {
         XCTAssertEqual(gap("moves"), 0, accuracy: 1, "the fill completion resumes the fragment without another batch")
     }
 
+    /// @ref LLP 1153 D5.1 — a page that arrives with no fragment opens each scroller in it where it opens: its start,
+    /// the offset its `scrollTop` gives, or, under `scroll-restoration="manual"`, where it was.
+    func testAPageThatArrivesOpensWhereItsScrollersOpen() throws {
+        try fixture()
+        try releasePicture()
+        XCTAssertTrue(session.navigate("/page/1"))
+        waitFor("the page") { (try? self.node("inner")) != nil }
+        let p = session.presenter, inner = try node("inner")
+        let route = try XCTUnwrap(sequence(first: inner as NSObject?, next: { ($0 as? NodeView)?.superview })
+            .compactMap { $0 as? NodeView }.first { $0.props["navigationKey"] != nil && $0.props["navigationBack"] == nil })
+        let visit = try XCTUnwrap(Int(try XCTUnwrap(route.props["navigationKey"])))
+        func at() -> CGFloat {
+            #if os(macOS)
+            return inner.scroll!.contentView.bounds.minY
+            #else
+            return inner.scrollView!.contentOffset.y
+            #endif
+        }
+        func arrive(from y: CGFloat, activation: Int) {
+            #if os(macOS)
+            inner.scroll!.contentView.scroll(to: NSPoint(x: 0, y: y))
+            inner.scroll!.reflectScrolledClipView(inner.scroll!.contentView)
+            #else
+            inner.scrollView!.setContentOffset(CGPoint(x: 0, y: y), animated: false)
+            #endif
+            XCTAssertEqual(at(), y, accuracy: 1)
+            p.scrollToFragment([visit, "", activation])
+            waitForMainQueue("the arrival")
+        }
+        arrive(from: 300, activation: 10)
+        XCTAssertEqual(at(), 0, accuracy: 1, "with nothing written, its start")
+        inner.props["scrollTop"] = "120"
+        arrive(from: 300, activation: 11)
+        XCTAssertEqual(at(), 120, accuracy: 1, "the offset its scrollTop gives")
+        inner.props["scrollTop"] = nil
+        inner.props["scrollRestoration"] = "manual"
+        arrive(from: 300, activation: 12)
+        XCTAssertEqual(at(), 300, accuracy: 1, "manual: where it was")
+    }
+
     func testPersonCancelsThePictureHold() throws {
         try fixture()
         let p = session.presenter

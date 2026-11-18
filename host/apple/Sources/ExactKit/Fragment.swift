@@ -175,6 +175,7 @@ extension Presenter {
         if !fragment.isEmpty, id?.lowercased() != "top" {
             session?.log("fragment #\(fragment): no element in the route of visit \(visit) has that id; the route goes to its top")
         }
+        if fragment.isEmpty { return arrive(route, among: nodes, visit: visit) }
         for node in nodes where node === route || node.isDescendant(of: route) {
             #if os(macOS)
             guard let clip = node.scroll?.contentView, clip.bounds.origin.y != 0 else { continue }
@@ -189,5 +190,37 @@ extension Presenter {
         // The scrollers that present the route, above it.
         let name = route.props["id"] ?? "route \(visit)"
         holdFragment(route, in: route, name: name)
+    }
+
+    /// @ref LLP 1153 D5.1 — a page that arrived with no fragment: each scroller in the route where it opens, the
+    /// offsets its `scrollTop` and `scrollLeft` give, the end of a list that opens there, else its start; one under
+    /// `scroll-restoration="manual"` stays where it is.
+    private func arrive(_ route: NodeView, among nodes: [NodeView], visit: String) {
+        for node in nodes where (node === route || node.isDescendant(of: route)) && node.props["scrollRestoration"] != "manual" {
+            #if os(macOS)
+            guard node.scroll != nil else { continue }
+            #else
+            guard node.scrollView != nil else { continue }
+            #endif
+            if node.props["scrollStart"] == "end" {
+                node.pendingScrollTop = .greatestFiniteMagnitude
+            } else {
+                node.pendingScrollTop = node.props["scrollTop"].flatMap(Double.init) ?? 0
+                node.pendingScrollLeft = node.props["scrollLeft"].flatMap(Double.init) ?? 0
+            }
+            #if os(macOS)
+            collections.userIntent(node.id)
+            node.applyPendingScroll()
+            #endif
+        }
+        #if os(macOS)
+        let scrolls = route.scroll != nil
+        #else
+        finishScrollPositions(restoring: false)
+        let scrolls = route.scrollView != nil
+        #endif
+        // The scrollers that present the route, above it. A route that scrolls itself is placed already: aligning it
+        // would move its own scroller to its start.
+        if scrolls { cancelFragment() } else { holdFragment(route, in: route, name: route.props["id"] ?? "route \(visit)") }
     }
 }

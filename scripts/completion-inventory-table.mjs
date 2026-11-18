@@ -1170,7 +1170,7 @@ export const classifications = [
       "Presenter::retained_route Presenter::retire_retained_motion_picture"],
     ["painted:host/painted/src/presenter/reveal.rs",
       "Presenter::clear_of_sticky Presenter::hold_fragment Presenter::reveal_shift Presenter::scroll_by Presenter::scroll_element_by " +
-      "Presenter::scroll_element_into_view Presenter::scroll_into_with Presenter::scroll_page_by Presenter::scroll_to_fragment Presenter::sticky_at"],
+      "Presenter::open_arrived Presenter::scroll_element_into_view Presenter::scroll_into_with Presenter::scroll_page_by Presenter::scroll_to_fragment Presenter::sticky_at"],
     ["painted:host/painted/src/presenter/scrollbar.rs", "Presenter::scrollbar_pointer"],
     ["painted:host/painted/src/presenter/scrollers.rs", "Presenter::claims_at Presenter::hidden_scrollers Presenter::scroll_bounds_of Presenter::scroll_to_completion Presenter::touch_kept"],
     ["painted:host/painted/src/presenter/select.rs", "Presenter::menu_key Presenter::select_key Presenter::selected_row"],
