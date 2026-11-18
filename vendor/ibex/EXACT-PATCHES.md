@@ -1235,3 +1235,23 @@ replaces a URL that holds a character RFC 3986 gives no URI with the `url`
 crate's serialization of it. A URL that is already a URI is sent as written,
 so no request that worked changes. Replay on a refresh
 (`stdlib/fetch.rs`, `a_url_the_web_would_encode_is_sent_encoded`).
+
+## Local patch 51, an execution says whether it changed the database
+
+exact2 tells an app's other windows of a SQLite write (exact2 LLP 1030.004
+D2) when the statement changed the database, a row or the schema, so a
+`DROP` or an `ALTER` counts and a `CREATE TABLE IF NOT EXISTS` that finds
+its table does not. `stdlib::sqlite::ExecuteResult` gains `changed`:
+`ibex2-sqlite`'s `execute` reads the connection's `total_changes` (which
+moves for a trigger's rows too) and `PRAGMA schema_version` before and
+after the statement, and `changed` is either moving. The authorizer admits
+`PRAGMA schema_version` only while the provider reads it, as it admits the
+provider's own `BEGIN` and `COMMIT`. `changes` is zero when the total did
+not move: `sqlite3_changes` keeps the last `INSERT`, `UPDATE` or `DELETE`'s
+count after any other statement (https://www.sqlite.org/c3ref/changes.html).
+`sqlite_abi` result field 9 carries `changed`, and the JS binding's
+execution has it beside `changes` and `lastInsertRowid`; exact2's prelude
+reads it and gives the app the other two, so `storage.d.ts` leaves it out.
+exact2's web worker answers alike. `src/tests.rs` covers each statement
+kind, and exact2's `exact-js` `topics` test what announces. Replay on a
+refresh.
