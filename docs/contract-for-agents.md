@@ -2032,7 +2032,8 @@ out (LLP 1157).
   native host's randomness (`EXACT_AGENT_SEED`, 1 by default), so two launches
   draw the same session id and Convex answers the second's writes with the
   first's answers, without running them. Give each launch a new seed: `agent
-  macos --seed 7 …`.
+  macos --seed 7 …`. The tests of one file launch at the file's seed too, on
+  every host: give each test that writes its own `seed` line, first in the test.
 - **Hosts.** The web, macOS, iOS, Linux and Windows. A worker-placed source
   and any other host have no socket to send on. There, and for a read that
   need not be live, use Convex's HTTP client under `net.fetch`: `new
@@ -4209,8 +4210,9 @@ main navigationKey=`${top(nav).id}` navigationBack="close" navigate=follow displ
 - On iOS the panels become a `UITabBarController`: a tab of one symbol over its label
   is its bar item, a filled box holding a text is the item's badge (the tab stays the
   platform's tab; the web draws the box as a badge on the symbol), and the
-  tablist's `accent-color` (inherited, as in CSS) tints the selected item; `tap tab-…`
-  works on every host. An app's `bun exact.mjs agent ios` and `test ios` drive what a
+  tablist's `accent-color` (inherited, as in CSS) tints the selected item; the unselected
+  colour, the label's font and the badge's colour and size are UIKit's, and nothing
+  authored reaches them. `tap tab-…` works on every host. An app's `bun exact.mjs agent ios` and `test ios` drive what a
   person sees (`--chrome platform`; `--chrome agent` paints the authored tablist and
   header instead, as `scripts/agent.mjs` does by default): UIKit's tab bar, navigation bars and sheets show,
   `screenshot "file" window` draws them (`display` reads the simulator's screen as it
@@ -5115,7 +5117,8 @@ the box and set no view props; write `object-fit` on the camera tag to configure
 viewfinder. A renamed spelling (`fontSize`) is refused whatever is declared. Do not
 turn a missing widget or canvas operation into invented Contract syntax.
 
-Under the agent, `@exact/camera` accepts
+In an agent drive (a `*.test.contract` cannot set an extension's substitute with
+`prefer` yet), `@exact/camera` accepts
 `prefer extension camera.picture={"path":"assets/test/card.jpg"}` for a still,
 or `prefer extension camera.clip={"path":"assets/test/walk.mp4"}` for a clip.
 Both name app assets. A clip is decoded once and loops on the session clock,

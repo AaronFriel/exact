@@ -1666,9 +1666,11 @@ game loops belong in those modules. See [Canvas Gallery](../apps/canvas-gallery/
 Use `object-fit` for replaced media; distinguish text content from markup.
 [Video Player](../apps/video-player/app.contract) shows playback bindings and
 [Markdown Stress](../apps/markdown-stress/app.contract) selection and editing;
-[Markdown](../apps/markdown/app.contract) is a reader. Markdown rendering and
-editing run on the web and Apple hosts; Linux shows `markup="markdown"` text as
-raw source and has no `iframe` or `video`.
+[Markdown](../apps/markdown/app.contract) is a reader. A Markdown reader
+(`text markup="markdown"`) renders on every host. The Markdown editor and
+`format()` run on the web, macOS and iOS; on Linux, Windows and Android a
+`textarea markup="markdown"` is a plain textarea of the source. Linux has no
+`iframe` or `video`.
 
 A hyphenated tag can address the app's native module: the bake checks the tag
 against `app.json`'s `modules` list, and its unknown attributes pass to the

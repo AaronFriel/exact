@@ -404,10 +404,12 @@ resource over a list, and a child that owns requests or tasks is used where its 
 are bounded: outside every region, under `if` and `match`, or in a row of
 `stack(nav)`, `t.stack` or `nav.tabs`, never under another `for` or in a
 virtualized list (`type-child-resource`). Its state initializers do not read its
-own resources (`type-state-reads-request`). The device's facts,
-`exactViewport()` and `exactPage()` with no arguments (`EmptyState` reads
-`accessibilityTextSize`), open no request: every instance reads the root's one
-answer. A task's body has exactly one schedule. Each child's task starts with
+own resources (`type-state-reads-request`). The device's facts are sources a
+component declares, the root or a child: `resource v = exactViewport() as shape
+V` (or `exactPage()`), with no arguments and no `else`, opens no request, and
+every instance reads the root's one answer (`EmptyState` reads
+`accessibilityTextSize`). A `derive` reads the resource's field (`v.width`), never
+`exactViewport().width`. A task's body has exactly one schedule. Each child's task starts with
 its instance, stops when the instance is destroyed and runs its action in that
 instance's frame. A hidden tab or covered screen can remain alive: gate its
 work on activity. Frame tasks are allowed, with one action per armed instance
@@ -1745,9 +1747,10 @@ makes no network requests.
 - `textarea id="editor" value=draft input=edit markup="markdown"` is the editor:
   on the web, Markdown shown as it reads, with the syntax hidden away from the
   caret; on macOS and iOS, the platform's text view with the syntax dimmed and
-  each link's `](destination)` hidden, as the web hides it. Linux
-  edits it as a plain textarea. Without `markup` the same source is a plain
-  textarea: the source mode.
+  each link's `](destination)` hidden, as the web hides it. Linux, Windows and
+  Android edit it as a plain textarea of the source, and `format` changes
+  nothing there. Without `markup` the same source is a plain textarea: the
+  source mode.
 - A thematic break (`---`) is drawn in the colour of the text around it,
   dimmed, so that it reads on a dark ground as on a light one: on the web a
   line across the field, as dim as the syntax shown at the caret; on macOS

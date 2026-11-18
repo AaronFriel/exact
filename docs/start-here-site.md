@@ -109,8 +109,9 @@ the query and `fragment(top(nav))` what follows `#`.
   chooses with `if`/`else` and repeats with `for x in xs key=x.id`; there is no `form` (a
   field's Enter is its `submit`).
 - **Expressions** are TypeScript's: what compiles means what it means there, and what does
-  not is refused with what to write. String and array methods are methods (`s.trim()`,
-  `xs.filter(x => …)`, `xs.length`); the rest are functions (`first(xs)`, `round(n)`,
+  not is refused with what to write. Nineteen string and array methods are methods (`s.trim()`,
+  `xs.filter(x => …)`), with `xs.length`: `trim`, `split`, `slice`, `includes`, `startsWith`, `endsWith`, `indexOf`, `replaceAll`, `toLowerCase`, `toUpperCase`, `at`, `concat`, `map`, `filter`, `join`, `flat`, `toFixed`, `toString`, `isEmpty`.
+  Any other (`trimEnd`, `find`, `sort`) is refused; the rest are functions (`first(xs)`, `round(n)`,
   `formatNumber(n, "decimal")`). No truthiness; absence is an option (`none`, `some(x)`,
   `match x { case some(v) => …, case none => … }`), not `null`; a value never changes
   (`xs.concat([x])`); an order is `sortBy(xs, x => x.key)`, stable (`"desc"` third).

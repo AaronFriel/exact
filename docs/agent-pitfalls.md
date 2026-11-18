@@ -833,7 +833,10 @@ screen, 2026-10-16.)
   Native's boxes are all `border-box`, so its `minHeight: 24` counted
   the padding and did nothing; a Contract box is `content-box`, as CSS's is. Fix: drop a
   `minHeight` or `height` that the padding already passes, or write
-  `box-sizing="border-box"` on that box.
+  `box-sizing="border-box"` on that box. A web app under Tailwind ports the same way:
+  its preflight sets `box-sizing: border-box` on every element, so a `width`,
+  `max-width` or `min-height` written beside padding or a border was a border-box size
+  there (a 388 px box with 34 px of padding and border is 422 px wide here).
 - **Rows with text in them drift up the list.** Each Patterns row (a 16/20 name over a
   13/16 subtitle) was 67 points where the original's was 67⅔, so the eighth row ended 5⅓
   points high. Cause: on iOS, React Native (0.88's `TextMeasurementRounding.h`,

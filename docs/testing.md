@@ -109,7 +109,10 @@ test or drive to investigate; it does not add another blocking check.
     READY after its HELLO) write `clock until state <path> == <literal> within <ms>`, not
     `clock +N real`: the clock stays frozen while it polls `state` on real
     time, and a miss fails naming the last value. A task due a commit later
-    (`after(1, …)`) needs a `clock settle` before it.
+    (`after(1, …)`) is reached for certain by `clock +1`: `clock data` fires no
+    timer, and `clock settle` fires one only if an input or an answer armed it or
+    it lies on the way to a motion's end. After a `reload` or a navigation, step
+    `clock +1`.
 - **Poll only when nothing notifies, and poll cheaply.** Every 50–100 ms, with a
   limit of tens of seconds that only stops hanging tests. A shorter interval can
   be considered for state that is cheap to read in the test's own process, when

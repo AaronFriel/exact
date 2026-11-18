@@ -323,8 +323,9 @@ component Groceries
   validation and button enablement follow typing. A text field fires `change` on Enter or
   blur; its handler should normalize the draft. Use `submit` for explicit submission.
 - **Expressions** are TypeScript's: what compiles means what it means in TypeScript, and
-  what does not is refused with what to write. The web's string and array methods are
-  methods (`s.trim()`, `xs.filter(x => …)`, `xs.length`); the rest are functions
+  what does not is refused with what to write. Nineteen of the web's string and array
+  methods are methods (`s.trim()`, `xs.filter(x => …)`), with `xs.length`: `trim`, `split`, `slice`, `includes`, `startsWith`, `endsWith`, `indexOf`, `replaceAll`, `toLowerCase`, `toUpperCase`, `at`, `concat`, `map`, `filter`, `join`, `flat`, `toFixed`, `toString`, `isEmpty`.
+  Any other (`trimEnd`, `find`, `sort`) is refused; the rest are functions
   (`first(xs)`, `round(n)`). What differs: no truthiness; absence is an option (`none`,
   `some(x)`, `match`), not `null`; a value never changes (`xs.concat([x])`, a record copy
   `Shape(old, field=value)`); `==` compares lists and records by value; a stored number is
