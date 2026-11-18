@@ -1,4 +1,4 @@
-# The iOS hello app is about 2.7 MB over its 8 MB size target
+# The iOS hello app is about 2.4 MB over its 8 MB size target
 
 **Status:** Open
 **Systems:** host/apple (iOS binary size), runner (native module seam), scripts/metrics.mjs
@@ -8,18 +8,18 @@
 
 `bun scripts/metrics.mjs --long` measures the hello app's stripped iOS simulator executable over an empty UIKit
 app's (LLP 1047.001 D8) and gates it at `IOS_HELLO_BYTES`. The size row's target is 8 MB, 8,000,000 B (Charlie,
-2026-11-17: "trying to get to 8MB is maybe worth it"). Main at bcebe6eba, measured on an M5 Max with Xcode 27.2:
+2026-11-17: "trying to get to 8MB is maybe worth it"). Main at dd4a54a91, measured on an M5 Max with Xcode 27.2:
 
 | row | measured | ceiling | target |
 |---|---:|---:|---:|
-| optimized for size (the embed default) | 10,721,312 B | 10,825,000 B | 8,000,000 B |
-| balanced (the iOS and tvOS app default) | 14,932,368 B | 15,035,000 B | |
-| optimized for speed (the Mac default) | 16,380,384 B | 16,485,000 B | |
+| optimized for size (the embed default) | 10,439,232 B | 10,540,000 B | 8,000,000 B |
+| balanced (the iOS and tvOS app default) | 14,618,912 B | 14,720,000 B | |
+| optimized for speed (the Mac default) | 16,050,816 B | 16,155,000 B | |
 
 The ceilings are a tripwire at main's size plus about 100 KB, not an accepted size. A row over its ceiling says how
 far over in 100 KB steps (`VIOLATION by 0.2 MB`), and the async lane's failure carries the step, so each further
 step up is a new failure the lane attributes to the commit that took it, and a step down is not
-(`scripts/async-bisect.mjs`, `newFailures` and `holds`). The target needs about 2.7 MB more cut from the size build. Byte counts differ between Xcode versions, so
+(`scripts/async-bisect.mjs`, `newFailures` and `holds`). The target needs about 2.4 MB more cut from the size build. Byte counts differ between Xcode versions, so
 measure with the lane's.
 
 ## How to reproduce
@@ -254,6 +254,18 @@ runner's seams; §9.3: the order of work). Landed, size row:
 | F1: SVG its own product, the filter engine with it (cut list C2) | 0e7168690 | −318,128 B, to 11,327,456 B |
 | F3: images their own product, the raster crate with them (cut list C3) | 684c8ad80 | −371,664 B |
 | F2: lists, swipe actions and row cells their own product (cut list C1's Swift) | bcebe6eba | −266,816 B, to 10,721,312 B |
+| the motion handover to Core Animation linked only where something can move | 89f89da69 | −49,728 B |
+| the runner's font-axis motion a seam | b68ec63e3 | −33,168 B |
+| F4: the native module and element hatches their own product (cut list C6) | 3878daeb4 | −248,800 B |
+| C0 S5a, S5b: the core reaches media and the module seam's session families only through links | dd4a54a91 | about +33,000 B, to 10,439,232 B |
+
+A second link map, at 51002ee77, measured what the first declined to claim: the overhead (standard-library
+specializations, outlined functions, metadata, unwind sections) leaves with the families at 0.17 B for each direct
+byte, 0.33 for a Swift byte. Re-priced with that ratio, the steps still ahead (the lists' Rust engine, optional
+controls, flights, media, wakes and notifications, tools and traces, the plan from a URL, share, navigation with
+route modals, dialogs, menus, fields, content regions, and about 105 KB of Rust the first list missed) end near
+8.2 MB. Frame health is about 0.5 MB of the row with its overhead and the panic machinery about 0.24 MB; either
+ruling closes the gap.
 
 R4g took 481,888 B off the size row against the list's estimate of about 250,000 B (629,808 B off balanced and
 1,265,968 B off speed): `runner::modules` went from 370,556 B of code to 8,104 B, the drop code of its state,
