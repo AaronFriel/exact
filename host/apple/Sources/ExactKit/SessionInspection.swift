@@ -1,3 +1,4 @@
+import CExact
 import Foundation
 
 /// An accessibility object standing for one Exact view it is not itself.
@@ -31,7 +32,7 @@ public extension ExactEnv {
 
 extension ExactSession {
     /// The runner's inspection API, also used by the development build channel.
-    public func agent(_ request: String) -> String { runtime.agent(request) }
+    public func agent(_ request: String) -> String { runtime.ask(exact_agent, request) }
     /// A line for the runner's journal (LLP 1012 §3; LLP 1035.001 D6).
     public func log(_ line: String) { runtime.log(line) }
     /// The number of live views the presenter holds.

@@ -1336,11 +1336,12 @@
       ]
     },
     "synchronousBridgeReturns": {
-      "ceiling": 134,
+      "ceiling": 135,
       "sites": [
         "host/apple/Sources/ExactCore/Bridge.swift: func activities ( _ json : String ) -> Batch",
         "host/apple/Sources/ExactCore/Bridge.swift: func advance ( now : Double , untilRequest : Bool = false ) -> Batch",
         "host/apple/Sources/ExactCore/Bridge.swift: func agent ( _ request : String ) -> String",
+        "host/apple/Sources/ExactCore/Bridge.swift: func ask ( _ export : ( ExactRuntime , Int ) -> UInt32 , _ request : String ) -> String",
         "host/apple/Sources/ExactCore/Bridge.swift: func bakedCompat ( ) -> Data",
         "host/apple/Sources/ExactCore/Bridge.swift: func beforeunload ( _ view : UInt32 , now : Double ) -> Batch",
         "host/apple/Sources/ExactCore/Bridge.swift: func blur ( _ view : UInt32 , now : Double ) -> Batch",

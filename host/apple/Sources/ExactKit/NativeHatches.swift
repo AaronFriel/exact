@@ -492,7 +492,7 @@ extension NativeViews {
         guard HatchDiagnosticsLink.measuring, let session else { return nil }
         if ended { return hatchSites.removeValue(forKey: id) ?? nil }
         if let known = hatchSites[id] { return known }
-        let reply = try? JSONSerialization.jsonObject(with: Data(session.agent("{\"op\":\"node\",\"id\":\(id)}").utf8)) as? [String: Any]
+        let reply = try? JSONSerialization.jsonObject(with: Data(session.runtime.ask(exact_node, "{\"id\":\(id)}").utf8)) as? [String: Any]
         let site = (reply?["site"] as? NSNumber)?.intValue
         hatchSites[id] = .some(site)
         return site

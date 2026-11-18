@@ -7,6 +7,7 @@
 // Safari's rule), with its pixel size and a video's duration (D3). Under
 // the agent the request is held for `type @t <path>…` / `tap @t cancel`
 // (D9), whose files take the same path.
+import CExact
 import Foundation
 import ImageIO
 import CoreImage
@@ -51,7 +52,7 @@ enum AppFiles {
     /// The roots the library has now (`appRoots`), before the first frame's
     /// images load and again once storage is configured.
     @discardableResult static func learn(_ runtime: Runtime) -> [String: String] {
-        let reply = try? JSONSerialization.jsonObject(with: Data(runtime.agent("{\"op\":\"appRoots\"}").utf8))
+        let reply = try? JSONSerialization.jsonObject(with: Data(runtime.ask(exact_app_roots, "").utf8))
         let object = reply as? [String: Any] ?? [:]
         learn(object)
         return object["roots"] as? [String: String] ?? [:]
@@ -124,7 +125,7 @@ final class Picker: NSObject {
     func show(_ args: [Any]) {
         guard let id = args.first as? String else { session.log("picker: refused: showPicker names an element id"); return }
         if ExactEnv.agentMode {
-            let r = object(session.agent("{\"op\":\"showPicker\",\"id\":\(quoted(id))}"))
+            let r = object(session.runtime.ask(exact_show_picker, "{\"id\":\(quoted(id))}"))
             if let e = r["error"] as? String { fputs("exact: \(e)\n", stderr) }
             return
         }
@@ -134,7 +135,7 @@ final class Picker: NSObject {
     /// The request to show input `id`'s picker, now marked open; nil when it
     /// is no file input or its picker shows already.
     func request(_ id: String) -> Request? {
-        let r = object(session.agent("{\"op\":\"picker\",\"id\":\(quoted(id))}"))
+        let r = object(session.runtime.ask(exact_picker, "{\"id\":\(quoted(id))}"))
         guard let view = (r["view"] as? NSNumber)?.uint32Value else {
             session.log("picker: refused: no file input with id \"\(id)\""); return nil
         }
@@ -179,7 +180,7 @@ final class Picker: NSObject {
             let mime = UTType(filenameExtension: ext)?.preferredMIMEType ?? "application/octet-stream"
             let convert = Picker.converts(mime, accept: accept)
             let stored = convert ? (f.name as NSString).deletingPathExtension + ".jpg" : f.name
-            let reply = object(session.agent("{\"op\":\"pickedPath\",\"name\":\(quoted(stored))}"))
+            let reply = object(session.runtime.ask(exact_picked_path, "{\"name\":\(quoted(stored))}"))
             AppFiles.learn(reply)
             guard let path = reply["path"] as? String, let file = reply["file"] as? String else {
                 session.log("picker: refused: no app:/tmp/picked/ for \(f.name)"); cancel(view); return

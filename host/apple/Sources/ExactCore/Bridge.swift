@@ -1069,10 +1069,13 @@ package final class Runtime {
     }
 
     /// The agent API (LLP 1012): a request in, its reply out — JSON, not a batch.
-    package func agent(_ request: String) -> String {
+    package func agent(_ request: String) -> String { ask(exact_agent, request) }
+    /// A request to `export`, `exact_agent` or one operation's own (LLP
+    /// 1047.001 D11), and its reply.
+    package func ask(_ export: (ExactRuntime, Int) -> UInt32, _ request: String) -> String {
         return on(busy: Runtime.busyAgent) {
             let n = write(request)
-            let len = exact_agent(rt, n)
+            let len = export(rt, n)
             return String(decoding: Data(bytes: exact_out(rt), count: Int(len)), as: UTF8.self)
         }
     }

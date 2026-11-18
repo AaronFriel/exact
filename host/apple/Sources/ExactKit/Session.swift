@@ -961,7 +961,7 @@ public final class ExactSession {
         modulePending = false; requestsPending = false; preparationError = nil
         guard state != .destroyed else { return nil }
         // The running tree's focus, read before the candidate replaces it.
-        keptFocus = booted ? presenter.focusPlace(tree: agent("{\"op\":\"tree\"}")) : nil
+        keptFocus = booted ? presenter.focusPlace(tree: runtime.ask(exact_tree, "{}")) : nil
         let module = module ?? app.lastModule
         runtime.setProfileResolver(resolver)
         defer { runtime.setProfileResolver(app.resolver) }
@@ -1046,7 +1046,7 @@ public final class ExactSession {
         ExactLaunch.shared.treeApplied(self, path: label)
         view?.rebooted()
         autofocusHeld = false
-        if restart { presenter.restoreFocus(kept, tree: agent("{\"op\":\"tree\"}")) }
+        if restart { presenter.restoreFocus(kept, tree: runtime.ask(exact_tree, "{}")) }
         state = .ready
         if restart { fputs("reloaded \(label)\n", stderr) } // a launch generation's first boot is no reload
     }
