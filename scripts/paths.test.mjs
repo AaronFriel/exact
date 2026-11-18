@@ -2,10 +2,11 @@ import { test } from 'bun:test';
 import assert from 'node:assert/strict';
 import { posix, win32 } from 'node:path';
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
-import { relative, resolve } from 'node:path';
+import { dirname, relative, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
-import { pathFrom, pathWithin, slashRelative, within } from './paths.mjs';
+import { pathFrom, pathWithin, slashRelative, systemChrome, within } from './paths.mjs';
+import { chromium } from './agent-launch.mjs';
 import * as paths from './paths.mjs';
 
 test('a path is within a directory by its own platform separator', () => {
@@ -79,4 +80,20 @@ test.each([false, true])('committed references use the local link while build pa
     mkdirSync(local, { recursive: true });
     assert.equal(pathFrom(app, local), '../packages/local');
   } finally { rmSync(parent, { recursive: true, force: true }); }
+});
+
+// LLP 1156.006.000 D9: a Chrome installed here is named as the CHROME to set beside a missing pinned browser, and
+// never launched unasked.
+test('a missing pinned browser names the Chrome installed here', () => {
+  const full = '/absent/ms-playwright/chromium-1248/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing';
+  const at = (system) => chromium({ environment: {}, platform: 'darwin', arch: 'arm64', full, system });
+  assert.match(at(() => undefined).unavailable, /headless shell is missing .*install chromium-headless-shell, or set CHROME to a browser$/);
+  const here = at(() => '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome');
+  assert.ok(here.unavailable.endsWith("install chromium-headless-shell, or set CHROME='/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' to use the Chrome installed here (not the pinned revision)"), here.unavailable);
+  assert.match(here.executable, /chrome-headless-shell$/);
+  const onPath = '/opt/tools/bin/chromium';
+  assert.equal(systemChrome({ environment: { PATH: dirname(onPath) }, platform: 'linux', executable: (path) => path === onPath }), onPath);
+  assert.equal(systemChrome({ environment: { PATH: dirname(onPath) }, platform: 'linux', executable: () => false }), undefined);
+  assert.equal(systemChrome({ environment: {}, platform: 'darwin', executable: (path) => path.endsWith('/Chromium') }), '/Applications/Chromium.app/Contents/MacOS/Chromium');
+  assert.equal(systemChrome({ environment: { PATH: resolve('/x') }, platform: 'win32', executable: () => true }), undefined);
 });

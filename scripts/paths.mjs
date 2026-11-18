@@ -1,8 +1,8 @@
 // Filesystem path comparisons that hold on Windows. A test against `dir + '/'`
 // never matches a path `resolve` made there, whose separator is `\`; these take
 // the platform's path module, a parameter so a test can pass `path.win32`.
-import nodePath, { basename, dirname, relative, resolve, sep } from 'node:path';
-import { existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import nodePath, { basename, delimiter, dirname, relative, resolve, sep } from 'node:path';
+import { accessSync, constants, existsSync, lstatSync, mkdirSync, readdirSync, readFileSync, readlinkSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
@@ -261,3 +261,14 @@ export function linkCheckout(app, seed, override = process.env.EXACT ?? process.
   // Installed packages can outlive a missing or broken link.
   return { physical, spelling, retargeted: previous !== physical };
 }
+
+/** A Chrome or Chromium installed on this machine outside Playwright's cache, or undefined: named beside a missing
+ * pinned browser as a value for CHROME (LLP 1156.006.000 D9), never launched unasked, so drives stay on the pin. */
+export function systemChrome({ environment = process.env, platform = process.platform, executable = (path) => { try { accessSync(path, constants.X_OK); return true; } catch { return false; } } } = {}) {
+  const apps = platform === 'darwin' ? ['Google Chrome', 'Chromium'].map((name) => `/Applications/${name}.app/Contents/MacOS/${name}`) : [];
+  const onPath = platform === 'win32' ? [] : ['google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser']
+    .flatMap((name) => (environment.PATH ?? '').split(delimiter).filter(Boolean).map((dir) => resolve(dir, name)));
+  return [...apps, ...onPath].find(executable);
+}
+/** How "…, or set CHROME" ends: with the browser `systemChrome` found, or as advice to name one. */
+export const chromeHere = (here) => (here ? `='${here}' to use the Chrome installed here (not the pinned revision)` : ' to a browser');

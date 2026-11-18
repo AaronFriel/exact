@@ -11,7 +11,7 @@ import { createHash } from 'node:crypto';
 import { accessSync, constants, existsSync, lstatSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, readlinkSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { homedir, hostname, tmpdir } from 'node:os';
 import { basename, delimiter, dirname, isAbsolute, relative, resolve, sep } from 'node:path';
-import { slashRelative, within } from './paths.mjs';
+import { chromeHere, slashRelative, systemChrome, within } from './paths.mjs';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { types as utilTypes } from 'node:util';
@@ -445,9 +445,9 @@ const executableAt = (path) => { try { accessSync(path, constants.X_OK); return 
 export const webNeeds = app => app?.hasGpu || (app?.manifest && gpuModules(app.manifest, 'web').length) ? ['gpu'] : [];
 /** The Chromium a drive or test launches: CHROME when it is set (a bare name is resolved through PATH; one that names
  * no browser is `unavailable`), else the build Playwright pins (package.json): its headless shell, or its full build for a need in CHROMIUM_NEEDS. A browser
- * that is not there is no error: `unavailable` says why and how to install it, so a test can skip on it. `environment`,
- * `platform`, `arch` and `full` (the full build's path) are the machine's unless a test of this function names them. */
-export function chromium({ needs = [], environment = process.env, platform = process.platform, arch = process.arch, full } = {}) {
+ * that is not there is no error: `unavailable` says why, how to install it and the Chrome installed here (`system`), so a test can
+ * skip on it. `environment`, `platform`, `arch`, `full` (the full build's path) and `system` are the machine's unless a test names them. */
+export function chromium({ needs = [], environment = process.env, platform = process.platform, arch = process.arch, full, system = systemChrome } = {}) {
   const unknown = needs.filter((need) => !CHROMIUM_NEEDS.includes(need));
   if (unknown.length) throw new Error(`chromium: unknown need ${unknown.join(', ')} (${CHROMIUM_NEEDS.join(', ')})`);
   if (environment.CHROME) {
@@ -461,7 +461,7 @@ export function chromium({ needs = [], environment = process.env, platform = pro
   if (executable && executableAt(executable)) return { executable, unavailable: null };
   const [what, browser] = wantsFull ? ['Chromium', 'chromium'] : ['Chromium headless shell', 'chromium-headless-shell'];
   const where = executable ? `at ${executable}` : `for ${platform}-${arch}`;
-  return { executable: executable ?? builds.full, unavailable: `${what} is missing ${where}; install it with bunx playwright@${playwrightVersion()} install ${browser}, or set CHROME to a browser` };
+  return { executable: executable ?? builds.full, unavailable: `${what} is missing ${where}; install it with bunx playwright@${playwrightVersion()} install ${browser}, or set CHROME${chromeHere(system({ environment, platform }))}` };
 }
 
 const sharedBrowsers = new Map();

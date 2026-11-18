@@ -255,7 +255,9 @@ async function openWebUnlocked({
     console.error(
       `${(openWeb.said = `web: ${selected.name} served at http://127.0.0.1:${port}${js ? buildBase(served) : "/"}`)}${fixed ? '' : ' (--port <n> or EXACT_PORT picks the port)'}`,
     );
-  const chrome = chromium({ needs: webNeeds(selected) }).executable,
+  const { executable: chrome, unavailable } = chromium({ needs: webNeeds(selected) }),
+    // What the pinned browser's absence says, the Chrome installed here included (LLP 1156.006.000 D9).
+    missing = (error) => `web carrier unavailable: ${error.code === 'ENOENT' && unavailable ? unavailable : `${chrome}: ${error.code}; install Playwright's Chromium, or set CHROME`} (docs/testing.md, Browsers)`,
     // LLP 1115.000 D10.3: EXACT_SCALE, the Linux host's variable, launches Chrome at that device scale factor too, its
     // own and not CDP's emulated one (which leaves a 0.5px border 1px): an override's 0 keeps it
     scale = Number(env?.EXACT_SCALE ?? process.env.EXACT_SCALE) || 0;
@@ -305,9 +307,7 @@ async function openWebUnlocked({
   } catch (error) {
     server.close();
     if (!kept) rmSync(profile, { recursive: true, force: true });
-    throw new Error(
-      `web carrier unavailable: ${chrome}: ${error.code}; install Playwright's Chromium (docs/testing.md, Browsers), or set CHROME`,
-    );
+    throw new Error(missing(error));
   }
   onProcess?.(child);
   const hostLines = pageURL ? [] : builtSettingLines(dist),
@@ -335,9 +335,7 @@ async function openWebUnlocked({
       r();
     });
     child.on('error', error => {
-      cdp.fail(
-        `web carrier unavailable: ${chrome}: ${error.code}; install Playwright's Chromium (docs/testing.md, Browsers), or set CHROME`,
-      );
+      cdp.fail(missing(error));
       r();
     });
   });
