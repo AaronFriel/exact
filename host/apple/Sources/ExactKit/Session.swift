@@ -1,11 +1,9 @@
-// The owners (LLP 1031 D1): `ExactApp` — one per process, the Exact app
-// the archive links: its asset root, its sessions, its one dev connection —
-// `ExactSession` — any number: one runtime handle, one plan, one clock,
-// its presenter, text engine, canvases, and web views — and, per
-// platform, `ExactView`, the ordinary view that presents a session. The
-// standalone apps and a brownfield host both build on exactly these; the
-// dev menu, the environment variables, and the agent carrier stay in the
-// adapters.
+// The owners (LLP 1031 D1): `ExactApp` — one per process, the Exact app the archive links: its
+// asset root, its sessions, its one dev connection — `ExactSession` — any number: one runtime
+// handle, one plan, one clock, its presenter, text engine, canvases, and web views — and, per
+// platform, `ExactView`, the ordinary view that presents a session. The standalone apps and a
+// brownfield host both build on exactly these; the dev menu, the environment variables, and the
+// agent carrier stay in the adapters.
 #if canImport(UIKit)
 import UIKit
 #else
