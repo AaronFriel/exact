@@ -491,9 +491,7 @@ impl<D: DataSource> Runner<D> {
     /// (`{"op":"launchEntry","launch":"call","entry"}`: a cold call in a
     /// session no one sees, as a system's call boots one), a door's poll of
     /// its call (`{"op":"called","id"}`), its caller's cancellation
-    /// (`{"op":"cancel","id"}`) and `entities`
-    /// (`{"op":"entities","kind","matching"}`, what the content index's
-    /// query answers a system). `None` for any other op.
+    /// (`{"op":"cancel","id"}`). `None` for any other op.
     pub fn call_agent(&mut self, op: &str, request: &str) -> Option<Result<String, String>> {
         let v: Json = serde_json::from_str(request).ok()?;
         match op {
@@ -539,13 +537,6 @@ impl<D: DataSource> Runner<D> {
                 Some(id) => self.cancel_call(id),
                 None => Err("cancel needs the call's id".into()),
             }),
-            "entities" => {
-                let Some(kind) = v["kind"].as_str() else {
-                    return Some(Err("entities <kind> [<text>]".into()));
-                };
-                let found = self.index_entities(kind, v["matching"].as_str());
-                Some(Ok(json!({ "entities": found }).to_string()))
-            }
             _ => None,
         }
     }

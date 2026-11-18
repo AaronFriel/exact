@@ -68,6 +68,7 @@ mod stale;
 mod substitute_tests;
 mod values;
 mod views;
+use super::event::absent_is_none;
 use admit::Route;
 pub use calls::CallHow;
 pub use declared::AppState;
@@ -77,7 +78,7 @@ pub(super) use events::EMITTED;
 pub use presence::{PresenceAnswer, PresenceAsk};
 pub(super) use services::CLAIMED;
 use std::sync::{Arc, Mutex};
-use values::{absent_is_none, fill, set_path};
+use values::{fill, set_path};
 
 /// The key of the answer `decide` gives a send that lists what it answers,
 /// which its caller turns into the entry (`region_list.rs`, `listed_or`).

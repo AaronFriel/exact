@@ -635,11 +635,9 @@ impl<D: DataSource> Runner<D> {
         }
     }
 
-    /// Each list and value the plan's modules declare, by its state name,
-    /// as the agent's state shows it: `"notifications": [{…, "ref": 7,
-    /// "delivered": true}]`, `"badge": 3`. Empty for a plan that declares
-    /// none.
-    pub fn declared_state(&self) -> Vec<(String, Json)> {
+    /// Each list and value the plan's modules declare, by its state name:
+    /// [`Self::declared_state`]'s module part.
+    pub(in crate::runner) fn module_declared_state(&self) -> BTreeMap<String, Json> {
         let mut out: BTreeMap<String, Json> = BTreeMap::new();
         let app = self.extensions.declared.app.clone();
         for row in &self.plan.modules {
@@ -672,11 +670,7 @@ impl<D: DataSource> Runner<D> {
                 out.insert(state.to_owned(), value.unwrap_or(Json::Null));
             }
         }
-        // The app's tools and the system's calls of them (LLP 1133.023 §10).
-        if let Some(intents) = self.intents_state() {
-            out.insert("intents".into(), intents);
-        }
-        out.into_iter().collect()
+        out
     }
 
     /// Whether the agent clock has reached an entry's declared `at` time;
@@ -693,16 +687,6 @@ impl<D: DataSource> Runner<D> {
         match at.and_then(|f| e.fields.get(&f).and_then(Json::as_f64)) {
             Some(t) => t <= now,
             None => true,
-        }
-    }
-
-    /// [`Self::declared_state`] as the agent's state writes it: `,"name":value` each.
-    pub fn declared_state_json(&self, s: &mut String) {
-        for (name, value) in self.declared_state() {
-            s.push(',');
-            s.push_str(&Json::String(name).to_string());
-            s.push(':');
-            s.push_str(&value.to_string());
         }
     }
 

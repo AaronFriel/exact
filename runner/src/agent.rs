@@ -311,7 +311,17 @@ pub fn answer<D: DataSource>(
     if let Some(reply) = runner.listed_op(&op, request) {
         return Some((reply.unwrap_or_else(|e| error(&e)), None));
     }
-    // A system's call of a tool, and the content index's query (LLP 1133.023 §10).
+    // The content index's query, which a system asks with or without tools.
+    if op == "entities" {
+        if let Ok(v) = serde_json::from_str::<serde_json::Value>(request) {
+            let Some(kind) = v["kind"].as_str() else {
+                return Some((error("entities <kind> [<text>]"), None));
+            };
+            let found = runner.index_entities(kind, v["matching"].as_str());
+            return Some((serde_json::json!({ "entities": found }).to_string(), None));
+        }
+    }
+    // A system's call of a tool (LLP 1133.023 §10).
     if let Some(reply) = runner.call_agent(&op, request) {
         return Some((reply.unwrap_or_else(|e| error(&e)), None));
     }

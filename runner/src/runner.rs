@@ -143,6 +143,7 @@ mod modules;
 pub use modules::{AppState, CallHow, PresenceAnswer, PresenceAsk};
 mod processes;
 mod provenance;
+mod seams;
 pub use provenance::CallOrigin;
 mod wakes;
 pub use wakes::WakeHow;

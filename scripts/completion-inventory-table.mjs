@@ -221,10 +221,11 @@ export const classifications = [
   group("declared operations", ["one-shot", "durable operation"], "declared list entry or registered app operation; scope can be session or app", "UI-owned",
     "runner/src/runner/modules/declared.rs:425-430 chooses app_reference for app scope and next_ticket for session scope. The declaration, not the numeric ticket, determines ownership.", [
     ["runner:runner/src/runner/modules/declared.rs",
-      "Runner::apply_effect#next_ticket:1 Runner::declared_state Runner::declared_state_json Runner::is_listed Runner::launch_listed Runner::listed_op " +
+      "Runner::apply_effect#next_ticket:1 Runner::is_listed Runner::launch_listed Runner::listed_op " +
       "Runner::share_app_state Runner::tap_listed Runner::tap_listed_as"],
     ["runner:runner/src/runner/modules/declared/desktop.rs", "Runner::launch_login Runner::places_status_items Runner::shortcut_register#next_ticket:1"],
     ["runner:runner/src/runner/modules/declared/reach.rs", "Runner::index_entities"],
+    ["runner:runner/src/runner/seams.rs", "Runner::declared_state Runner::declared_state_json"],
   ], "durable for an app-scoped declaration; app_reference uses app state, while session-scoped entries use the runner counter (declared.rs:425-430)."),
   group("delivery", ["durable operation"], "installed app/update stream; session application is synchronous", "durable",
     "runner/src/runner/delivery.rs exposes the app delivery state; host delivery synchronization applies persisted stream facts to the current session.", [

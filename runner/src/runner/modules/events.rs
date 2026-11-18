@@ -14,7 +14,6 @@
 
 use super::super::{CommitReceipt, DataSource, Runner, RunnerError};
 use super::{CallOrigin, Json, ModulesRow};
-use exact_plan::Value;
 use std::collections::VecDeque;
 
 /// The prefix of a `changed` topic that is an event a bound implementation
@@ -155,22 +154,6 @@ impl<D: DataSource> Runner<D> {
         let (woke, error) = self.step_invocations();
         receipts.extend(woke);
         (receipts, error)
-    }
-
-    /// One argument as the action's parameter takes it.
-    pub(in crate::runner) fn event_arg(
-        &self,
-        ty: exact_plan::TypesId,
-        json: &Json,
-    ) -> Result<Value, String> {
-        let shape = exact_js_value::Shape::from_plan(&self.plan, ty)?;
-        let mut json = json.clone();
-        super::absent_is_none(&mut json, &shape);
-        let value = exact_js_value::from_json(&json, &shape)?;
-        if !value.conforms(&self.plan, ty) {
-            return Err(crate::conform::mismatch(&self.plan, &value, ty));
-        }
-        Ok(value)
     }
 
     /// Journal a request a commit not the app's made while `prompt`, which

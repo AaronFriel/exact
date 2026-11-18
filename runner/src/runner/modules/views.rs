@@ -50,15 +50,13 @@ struct Viewed {
 }
 
 impl<D: DataSource> Runner<D> {
-    pub(in crate::runner) fn collection_output_quiet(&self) -> bool {
+    /// The modules' part of [`Self::collection_output_quiet`]: no package
+    /// view, fed canvas or held call.
+    pub(in crate::runner) fn modules_quiet(&self) -> bool {
         self.plan.views.is_empty()
             && !self.fed_any()
             && self.extensions.held.is_empty()
             && self.extensions.released.is_empty()
-            && !self.has_work_clock()
-            && self.wake_due().is_none()
-            && self.call_due().is_none()
-            && self.presence_due_ms().is_none()
     }
 
     /// After a commit is applied: its origin is the one a change it made is
