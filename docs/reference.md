@@ -5858,10 +5858,19 @@ the shape declares them. `bun exact.mjs contract rust app.contract -o
 /tmp/shapes.rs` writes each shape as a struct with its fields in that order.
 It includes native-module call records only when an authored shape or a data
 source's parameter or result type reaches them; `contract::module_rust`
-generates the module bindings. For a build script,
+generates the module bindings. A data crate's build script calls
+`contract::build_rust(Path::new("../app.contract"))` to write `OUT_DIR/shapes.rs`.
+Exact refreshes the generated Rust before each Cargo build, writing it only
+when its contents change. The first build creates the file; Cargo establishes
+its watch on the following build. Once warm, a view edit leaves the data crate
+fresh when its shapes stay the same. Compiler flags, features and other Cargo
+inputs still trigger builds. The dev watcher follows the generator's Contract
+source graph even when the generated Rust stays unchanged. Existing build scripts
+keep working. Replace their shape-generation calls with `contract::build_rust`
+to get this reuse. Direct Cargo builds watch the Contract source graph. For custom generation,
 `contract::compile_path_for_rust` returns the plan and call-record names to
 pass to `contract::rust`; the names are compiler metadata, outside the binary
-plan. Both map scoped names such as `Point__exact` to `PointExact`.
+plan. Scoped names such as `Point__exact` become `PointExact`.
 `Value::Number`, `Value::str`, `Value::Bool` and `Value::list` are the rest.
 
 ### GPU device requirements
