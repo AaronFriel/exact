@@ -106,8 +106,8 @@ final class NodeLayer: CALayer {
 /// paragraph's text): its place changes in the animation context of the view
 /// it is in, as a subview's frame would, by that view's own
 /// `action(for:forKey:)`; nothing else of it animates.
-class BoxPartLayer: CALayer {
-    override func action(forKey event: String) -> CAAction? {
+open class BoxPartLayer: CALayer {
+    override open func action(forKey event: String) -> CAAction? {
         guard ["bounds", "position"].contains(event) else { return NSNull() }
         var ancestor = superlayer
         while let layer = ancestor {
@@ -232,7 +232,7 @@ extension NodeView {
     func applyGradientLayer() {
         applyGradientPattern()
         let fixed = gradientLayered
-        guard !cssVisibilityHidden, !drawsPaint || fixed, surface == nil, let gradient = Gradient(style["background_image"], tint: gradientTint), !gradient.needsDrawing else {
+        guard !cssVisibilityHidden, !drawsPaint || fixed, surface == nil, let gradient = GradientLink.gradient(style["background_image"], tint: gradientTint), !gradient.needsDrawing else {
             boxGradient?.removeFromSuperlayer(); boxGradient = nil
             presenter?.noteFixedGradient(self, fixed: false)
             return
@@ -268,12 +268,12 @@ extension NodeView {
     /// clipped as it is. When `draw(_:)` paints the box, it paints them
     /// instead.
     func applyGradientPattern() {
-        let layers = Gradient.layers(style["background_image"], tint: gradientTint)
+        let layers = GradientLink.layers(style["background_image"], tint: gradientTint)
         guard !cssVisibilityHidden, !drawsPaint, surface == nil, gradientPatterned(layers) else {
             boxPattern?.removeFromSuperlayer(); boxPattern = nil
             return
         }
-        let p = boxPattern ?? GradientPatternLayer()
+        guard let p = boxPattern ?? GradientLink.makePattern?() else { return }
         let mounted = p.superlayer === layer
         CATransaction.begin()
         CATransaction.setDisableActions(!mounted || CATransaction.disableActions())
@@ -325,7 +325,7 @@ extension NodeView {
         let tint = source.namesTint ? gradientTint : nil
         let last = aimedGradient.flatMap { $0.layer === g && $0.source == source && $0.dark == dark && $0.tint == tint ? $0 : nil }
         if let last, last.bounds == bounds, last.box == box { return }
-        guard let gradient = last?.gradient ?? Gradient(source, tint: gradientTint) else { return }
+        guard let gradient = last?.gradient ?? GradientLink.gradient(source, tint: gradientTint) else { return }
         let stops = last?.stops ?? gradient.stops(dark: dark, dense: true)
         CATransaction.begin(); CATransaction.setDisableActions(true)
         gradient.apply(g, bounds: bounds, box: box, dark: dark, limit: style["dynamic_range_limit"]?.string, stops: stops)

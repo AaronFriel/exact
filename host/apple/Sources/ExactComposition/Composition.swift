@@ -72,6 +72,9 @@ import ExactActivities
 #if EXACT_LINK_WAKES
 import ExactWakeCarriers
 #endif
+#if EXACT_LINK_GRADIENTS
+import ExactGradients
+#endif
 public enum ExactComposition {
     public static let app: ExactApp = {
         AgentLink.install()
@@ -153,6 +156,9 @@ public enum ExactComposition {
         #endif
         #if EXACT_LINK_WAKES
         ExactWakeCarriers.install()
+        #endif
+        #if EXACT_LINK_GRADIENTS
+        ExactGradients.install()
         #endif
     }
 }

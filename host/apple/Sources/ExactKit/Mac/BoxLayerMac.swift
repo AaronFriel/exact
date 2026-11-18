@@ -276,7 +276,7 @@ extension NodeView {
     /// paints its gradient there instead.
     private func applyGradientLayer(_ p: BoxPlan) {
         applyGradientPattern(p)
-        guard materialContent == nil, let layer, layerBoxEligible, !(hasBoxPaint && p.drawn), surface == nil, !cssVisibilityHidden, let gradient = Gradient(style["background_image"], tint: gradientTint), !gradient.needsDrawing else {
+        guard materialContent == nil, let layer, layerBoxEligible, !(hasBoxPaint && p.drawn), surface == nil, !cssVisibilityHidden, let gradient = GradientLink.gradient(style["background_image"], tint: gradientTint), !gradient.needsDrawing else {
             boxGradient?.removeFromSuperlayer(); boxGradient = nil; return
         }
         CATransaction.begin(); CATransaction.setDisableActions(true)
@@ -301,13 +301,13 @@ extension NodeView {
     /// clipped as it is: a live resize draws nothing new. When `draw(_:)`
     /// paints the box, it paints them instead.
     private func applyGradientPattern(_ p: BoxPlan) {
-        let layers = Gradient.layers(style["background_image"], tint: gradientTint)
+        let layers = GradientLink.layers(style["background_image"], tint: gradientTint)
         guard materialContent == nil, let layer, layerBoxEligible, !(hasBoxPaint && p.drawn), surface == nil, !cssVisibilityHidden, gradientPatterned(layers) else {
             boxPattern?.removeFromSuperlayer(); boxPattern = nil; return
         }
+        guard let g = boxPattern ?? GradientLink.makePattern?() else { return }
         CATransaction.begin(); CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
-        let g = boxPattern ?? GradientPatternLayer()
         boxPattern = g
         if g.superlayer !== layer { insertBoxSublayer(g) }
         let radius = p.radius

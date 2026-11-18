@@ -15,6 +15,7 @@
 // matrix must not turn it.
 import CoreGraphics
 import QuartzCore
+import ExactKit
 
 #if os(iOS) || os(tvOS)
 /// Placed in the animation context of the view it is in (`BoxPartLayer`).
@@ -25,9 +26,13 @@ typealias GradientPatternBase = CALayer
 
 /// A box's repeating linear gradients over the view's bounds, one sublayer
 /// each, the first on top. Its owner clips it to the box's corners.
-final class GradientPatternLayer: GradientPatternBase {
+final class GradientPatternLayer: GradientPatternBase, GradientPatterning {
     /// `gradients` placed in `box` over `bounds` (both the view's), at
     /// `scale` device pixels a point.
+    func show(_ gradients: [any BoxGradient], bounds: CGRect, box: CGRect, dark: Bool, scale: CGFloat) {
+        show(gradients.compactMap { $0 as? Gradient }, bounds: bounds, box: box, dark: dark, scale: scale)
+    }
+
     func show(_ gradients: [Gradient], bounds: CGRect, box: CGRect, dark: Bool, scale: CGFloat) {
         if frame != bounds { frame = bounds }
         var stripes = sublayers?.compactMap { $0 as? GradientStripesLayer } ?? []

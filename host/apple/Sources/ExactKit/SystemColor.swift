@@ -204,7 +204,7 @@ package enum SystemColor {
     /// scene's first; nil with no window. What the
     /// kernel resolves `AccentColor` by, never a view's own, so sessions
     /// under different tints never overwrite each other's report. On main.
-    static var appTint: PlatformColor? {
+    package static var appTint: PlatformColor? {
         #if os(iOS) || os(tvOS)
         let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
         let ordered = scenes.filter { $0.activationState == .foregroundActive } + scenes.filter { $0.activationState != .foregroundActive }
@@ -221,7 +221,7 @@ package enum SystemColor {
     /// (`appTint` for the report), since the owner thread that reports
     /// colours can read no window. `extended`: in extended sRGB, unclipped,
     /// so a Display P3 tint keeps its colour.
-    static func tintPair(_ color: PlatformColor?, extended: Bool = false) -> [[Double]]? {
+    package static func tintPair(_ color: PlatformColor?, extended: Bool = false) -> [[Double]]? {
         let color = color ?? {
             #if os(iOS) || os(tvOS)
             return defaultTint

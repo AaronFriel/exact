@@ -166,7 +166,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
     struct AccessibilityWrite: Equatable { var enabled = true; var identifier: String?; var label: String?; var help: String?; var required = false; var formInitialized = false; var text: TextAccessibilityWrite? }
     var lastAccessibilityWrite = AccessibilityWrite()
     var boxGradient: CAGradientLayer?
-    var boxPattern: GradientPatternLayer?
+    var boxPattern: (any GradientPatterning)?
     package var imageLayer: CALayer?
     /// While it flies as a shared element (LLP 1013.000 D4): where its image is drawn.
     package var flightLook: FlightLook?

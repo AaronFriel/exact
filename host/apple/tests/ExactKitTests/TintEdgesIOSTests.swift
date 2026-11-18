@@ -2,6 +2,7 @@
 import UIKit
 import XCTest
 @testable import ExactKit
+@testable import ExactGradients
 
 final class TintEdgesIOSTests: XCTestCase {
     private var window: UIWindow!

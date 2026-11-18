@@ -44,6 +44,10 @@ fn hellos_binary_refuses_a_reload_into_a_family_and_keeps_its_plan() {
             "sticky",
         ),
         (source(ACTIVITIES), "activities"),
+        (
+            plan("column background-image=\"linear-gradient(red, blue)\""),
+            "gradients",
+        ),
     ] {
         let len = bridge.input_write(&next);
         let out = bridge.prepare_plan(len, NoData, Hooks::none(), 390.0, 844.0);

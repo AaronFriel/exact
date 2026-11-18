@@ -4,11 +4,13 @@
 // repeating stops cross as CSS and resolve through the kernel once the
 // presenter knows the box; percentage-only placement is computed here.
 import CExact
+import ExactCore
+import ExactKit
 import CoreGraphics
 import Foundation
 import QuartzCore
 
-struct Gradient {
+struct Gradient: BoxGradient {
     enum Shape: Equatable {
         case angle(CGFloat)
         case corner(right: Bool, bottom: Bool)
@@ -407,77 +409,5 @@ struct Gradient {
         if layer.locations != numbers { layer.locations = numbers }
         if (layer.colors as? [CGColor]) != colors { layer.colors = colors }
         layer.applyColorRange(limit: limit)
-    }
-}
-
-/// A drawn `mask-image`'s pixels as a layer's mask (LLP 1077 D5).
-final class GradientImageMaskLayer: CALayer {}
-
-extension BatchValue {
-    /// A gradient that carries a `light-dark()` stop: an appearance change
-    /// is something to the view that shows it.
-    ///
-    /// Nested too: a layer list, a shadow list's or a text shadow's colour,
-    /// a symbol palette (LLP 1077), and a box filter with a dark program
-    /// (`pd`, LLP 1095 D9).
-    var isSchemeGradient: Bool {
-        switch self {
-        case .object(let o): return o["css"] != nil || o["dark"] != nil || o["pd"] != nil || o.values.contains { $0.isSchemeColor || $0.isSchemeGradient }
-        case .array(let a): return a.contains { $0.isSchemeColor || $0.isSchemeGradient }
-        default: return false
-        }
-    }
-}
-
-extension NodeView {
-    var gradientTint: PlatformColor? {
-        #if os(iOS) || os(tvOS)
-        return viewTint?.resolvedColor(with: traitCollection)
-        #else
-        return viewTint ?? ThemeRoles.color("AccentColor", in: self)
-        #endif
-    }
-    /// `background-attachment: fixed` (LLP 1066 D7).
-    var gradientFixed: Bool { style["background_attachment"]?.string == "fixed" }
-
-    /// The padding box: CSS's gradient box under the initial `background-origin`;
-    /// under `background-attachment: fixed`, the viewport, in this view's
-    /// coordinates (LLP 1066 D7), so every node with it shows its part of one
-    /// gradient and the gradient stays as they scroll.
-    var gradientBox: CGRect {
-        if gradientFixed, let port = fixedGradientPort { return port }
-        let uniform = number("border_width")
-        return bounds.insetBy(left: number("border_width_left", uniform), top: number("border_width_top", uniform),
-                              right: number("border_width_right", uniform), bottom: number("border_width_bottom", uniform))
-    }
-
-    /// The gradient painted by `draw(_:)`, over the background and under
-    /// the border, inside the border box's outline.
-    func paintGradient(_ ctx: CGContext, clip: CGPath) {
-        guard surface == nil, !cssVisibilityHidden else { return }
-        #if os(iOS)
-        // A fixed gradient is the layer's (LLP 1066 D7).
-        if gradientLayered && boxGradient != nil { return }
-        #endif
-        // The last layer first, so the first is on top (LLP 1077 D5).
-        for g in Gradient.layers(style["background_image"], tint: gradientTint).reversed() {
-            g.paint(ctx, clip: clip, box: gradientBox, dark: drawsDark)
-        }
-    }
-
-    /// Whether the background's gradients need `draw(_:)`: several layers,
-    /// or a conic or repeating one (LLP 1077 D5, LLP 1066). Repeating linear
-    /// gradients alone are patterns instead (`gradientPatterned`).
-    var gradientDraws: Bool {
-        let layers = Gradient.layers(style["background_image"], tint: gradientTint)
-        if gradientPatterned(layers) { return false }
-        return layers.count > 1 || layers.contains { $0.needsDrawing }
-    }
-
-    /// A background of repeating linear gradients only, not `fixed`: Core
-    /// Animation tiles each one's period (`GradientPatternLayer`, #661)
-    /// wherever nothing else makes the box draw.
-    func gradientPatterned(_ layers: [Gradient]) -> Bool {
-        !gradientFixed && !layers.isEmpty && layers.allSatisfy(\.isRepeatingLinear)
     }
 }
