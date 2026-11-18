@@ -38,6 +38,7 @@ import { createConnection } from 'node:net';
 import { homedir, tmpdir, userInfo } from 'node:os';
 import { basename, dirname, resolve } from 'node:path';
 import { within } from './paths.mjs';
+import { missingDependencies } from './package-libraries.mjs';
 import { HOST_DEV, PINNED_RUST, androidPackageId, bakeWatchEnv, buildBake, claimLive, hermesBundle, cargoEnvironment, copyShaders, linuxBuild, mavenProblems, resolveApp } from './app.mjs';
 import { ANDROID_MIN_API } from './hermes-android.mjs';
 import { ANDROID_TARGET, ANDROID_ABIS, androidAbis, androidSdk, androidToolchainEnv, androidHermesDir } from './android-abi.mjs';
@@ -1436,12 +1437,17 @@ if (import.meta.main && process.argv[2] === 'reverse') {
   // With what the bake watches named (`bakeWatchEnv`), as every baking build.
   const env = { ...androidToolchainEnv(process.env, process.platform, linkApi, targets[0]), ...bakeWatchEnv(app), CARGO_TARGET_DIR: app.target };
   if (apkWanted) {
+    const trust = process.env.EXACT_UPDATE_TRUST ?? 'development', install = !bundle && !args.includes('--no-install') && (args.includes('--install') || args.includes('--run'));
+    // What needs no compile to know is refused before it (LLP 1156.006.000 D8): a dependency the bake would miss after
+    // Rust had built, and two ready devices with none chosen. No device at all still lets the build stand.
+    const absent = missingDependencies(app.dir);
+    if (absent.length) { console.error(`${app.name} depends on ${absent.join(', ')}, which ${absent.length > 1 ? 'are' : 'is'} not installed: run bun install`); process.exit(1); }
+    if (install) try { androidDevice(); } catch (error) { if (!/^no Android device/.test(error.message)) { console.error(error.message); process.exit(1); } }
     const started = Date.now();
     const apk = buildApk(app, env, bundle || args.includes('--release') ? 'release' : HOST_DEV, args.includes('--write-locks'), bundle, abis);
     if (!apk) process.exit(1);
     console.log(apk);
     // `--json`'s object once the install is done: `installed` names the device, or is null when none was ready.
-    const trust = process.env.EXACT_UPDATE_TRUST ?? 'development', install = !bundle && !args.includes('--no-install') && (args.includes('--install') || args.includes('--run'));
     let serial = null;
     const code = install ? installApk(app, apk, { run: args.includes('--run'), url, built: Date.now() - started, installed: (s) => { serial = s; } }) : 0;
     if (!code && args.includes('--json')) reportBuilt({ path: apk, target: 'android', trust, ...(install ? { installed: serial } : {}) });

@@ -1300,6 +1300,25 @@ test('fresh resets Snapback beside an owned app server, with file and test seeds
   } finally {rmSync(dir, {recursive:true, force:true});}
 }, 30000);
 
+// LLP 1156.006.000 D8: with no build, every test of a run would fail alike, so the run stops at the first; another
+// launch failure of an app with a server is still that test's.
+test('a missing build stops a test run at its first test', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'exact-test-nobuild-')), script = join(dir, 'check.mjs');
+  writeFileSync(join(dir, 'app.contract'), 'component App\n  view\n    text "Test"\n'); writeFileSync(join(dir, 'app.test.contract'), 'test "one"\n  expect state ready == true\ntest "two"\n  expect state ready == true\n');
+  writeFileSync(script, `
+    import assert from 'node:assert/strict'; import {mock} from 'bun:test';
+    let opens = 0, missing = true;
+    mock.module(${JSON.stringify(fileURLToPath(new URL('./agent.mjs', import.meta.url)))}, () => ({open: async () => { opens++; throw Object.assign(new Error('run bun exact.mjs android first'), {missingBuild: missing}); }}));
+    const {runTests} = await import(${JSON.stringify(fileURLToPath(new URL('./agent-test.mjs', import.meta.url)))});
+    const run = () => runTests({host:'linux', app:${JSON.stringify(dir)}, file:${JSON.stringify(join(dir, 'app.test.contract'))}, running:{beforeTest:async()=>{}, check(){}}});
+    await assert.rejects(run(), /run bun exact.mjs android first/); assert.equal(opens, 1);
+    missing = false; opens = 0;
+    const r = await run(); assert.equal(r.failed, 2); assert.equal(opens, 2); console.log('completed');
+  `);
+  try { const r = spawnSync(process.execPath, [script], {encoding:'utf8', timeout:30000}); expect(r.status, r.stdout + r.stderr).toBe(0); expect(r.stdout).toContain('completed'); }
+  finally { rmSync(dir, {recursive:true, force:true}); }
+}, 30000);
+
 test('replay selects the original ordinal among duplicate names and host variants', () => {
   const dir = mkdtempSync(join(tmpdir(), 'exact-test-ordinal-')), script = join(dir, 'check.mjs');
   writeFileSync(join(dir, 'app.contract'), 'component App\n  view\n    text "Test"\n');
