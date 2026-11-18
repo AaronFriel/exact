@@ -57,6 +57,7 @@ pub const RECIPES: &[(&str, &str)] = &[
     recipe!("in-app-browser"),
     recipe!("ios-driving"),
     recipe!("keyboard-and-focus"),
+    recipe!("large-live-list"),
     recipe!("list-rows"),
     recipe!("local-network"),
     recipe!("long-lists"),
