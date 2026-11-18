@@ -1,4 +1,4 @@
-# The iOS hello app is about 2.2 MB over its 8 MB size target
+# The iOS hello app is about 2.1 MB over its 8 MB size target
 
 **Status:** Open
 **Systems:** host/apple (iOS binary size), runner (native module seam), scripts/metrics.mjs
@@ -8,18 +8,18 @@
 
 `bun scripts/metrics.mjs --long` measures the hello app's stripped iOS simulator executable over an empty UIKit
 app's (LLP 1047.001 D8) and gates it at `IOS_HELLO_BYTES`. The size row's target is 8 MB, 8,000,000 B (Charlie,
-2026-11-17: "trying to get to 8MB is maybe worth it"). Main at 4d7e47995, measured on an M5 Max with Xcode 27.2:
+2026-11-17: "trying to get to 8MB is maybe worth it"). Main at 6c8548e48, measured on an M5 Max with Xcode 27.2:
 
 | row | measured | ceiling | target |
 |---|---:|---:|---:|
-| optimized for size (the embed default) | 10,202,080 B | 10,305,000 B | 8,000,000 B |
-| balanced (the iOS and tvOS app default) | 14,384,432 B | 14,490,000 B | |
-| optimized for speed (the Mac default) | 15,817,232 B | 15,920,000 B | |
+| optimized for size (the embed default) | 10,085,776 B | 10,190,000 B | 8,000,000 B |
+| balanced (the iOS and tvOS app default) | 14,187,024 B | 14,290,000 B | |
+| optimized for speed (the Mac default) | 15,489,008 B | 15,590,000 B | |
 
 The ceilings are a tripwire at main's size plus about 100 KB, not an accepted size. A row over its ceiling says how
 far over in 100 KB steps (`VIOLATION by 0.2 MB`), and the async lane's failure carries the step, so each further
 step up is a new failure the lane attributes to the commit that took it, and a step down is not
-(`scripts/async-bisect.mjs`, `newFailures` and `holds`). The target needs about 2.2 MB more cut from the size build. Byte counts differ between Xcode versions, so
+(`scripts/async-bisect.mjs`, `newFailures` and `holds`). The target needs about 2.1 MB more cut from the size build. Byte counts differ between Xcode versions, so
 measure with the lane's.
 
 ## How to reproduce
@@ -264,6 +264,8 @@ runner's seams; §9.3: the order of work). Landed, size row:
 | the animation, filter and clip-path grammars linked by use on native hosts | b9a4447a2 | −32,992 B |
 | F1: optional form controls their own product (cut list C14) | eac184563 | −135,760 B |
 | F1: shared-element flights and `position: sticky` their own products | 4d7e47995 | −49,520 B, to 10,202,080 B |
+| N0a: the core reaches iOS navigation and route modals only through a link | 8633bd19d | +16,736 B |
+| the runner's list engine a seam, linked with lists (cut list C1's Rust) | 6c8548e48 | −133,040 B, to 10,085,776 B |
 
 A second link map, at 51002ee77, measured what the first declined to claim: the overhead (standard-library
 specializations, outlined functions, metadata, unwind sections) leaves with the families at 0.17 B for each direct
