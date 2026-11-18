@@ -7,6 +7,8 @@
 // Safari's rule), with its pixel size and a video's duration (D3). Under
 // the agent the request is held for `type @t <path>…` / `tap @t cancel`
 // (D9), whose files take the same path.
+import ExactCore
+import ExactKit
 import CExact
 import Foundation
 import ImageIO

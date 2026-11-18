@@ -37,6 +37,7 @@ let allCapabilities: [(name: String, target: String)] = [
     ("collections", "ExactCollections"),
     ("surfaces", "ExactSurfaces"),
     ("drag", "ExactDrag"),
+    ("picker", "ExactPickers"),
     ("media_picker", "ExactMediaPicker"),
     ("auth_session", "ExactAuthSession"),
     ("numerals", "ExactNumerals"),
@@ -59,7 +60,7 @@ let allCapabilities: [(name: String, target: String)] = [
 // which the roster links with it, or ExactCore's package API. Surfaces' Canvas
 // 2D images fetch and decode through the images family's static API, which
 // needs no install.
-let capabilityNeeds: [String: [Target.Dependency]] = ["ExactCollections": ["ExactCore"], "ExactNativeViews": ["ExactFormaBinding"], "ExactSvg": ["ExactCore", "ExactEffects"], "ExactSurfaces": ["ExactImages"], "ExactGradients": ["ExactCore"]]
+let capabilityNeeds: [String: [Target.Dependency]] = ["ExactCollections": ["ExactCore"], "ExactPickers": ["ExactCore"], "ExactNativeViews": ["ExactFormaBinding"], "ExactSvg": ["ExactCore", "ExactEffects"], "ExactSurfaces": ["ExactImages"], "ExactGradients": ["ExactCore"]]
 let capabilities = allCapabilities.filter { links($0.name) }
 
 // `swift test` builds every target a package declares, and the two UIKit

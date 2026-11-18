@@ -14,6 +14,8 @@
 // (`--touch platform`) keeps the hold and presents the real picker too: what
 // the person chooses there answers the hold, and the agent's answer, or
 // `back`, closes it.
+import ExactCore
+import ExactKit
 import CExact
 import Foundation
 import UniformTypeIdentifiers
@@ -131,7 +133,7 @@ extension Picker {
         // window that shows it is no longer an empty one.
         ExactDocuments.chosen(urls, in: session)
         #endif
-        session.apply(session.runtime.change(view, docs.joined(separator: "\n"), now: session.now()))
+        session.apply(session.runtime.valueChange(view, docs.joined(separator: "\n"), now: session.now()))
     }
 
     func documentCancelled(_ view: UInt32, _ name: String) {

@@ -24,6 +24,9 @@ import ExactSurfaces
 #if EXACT_LINK_DRAG
 import ExactDrag
 #endif
+#if EXACT_LINK_PICKER
+import ExactPickers
+#endif
 #if EXACT_LINK_MEDIA_PICKER
 import ExactMediaPicker
 #endif
@@ -108,6 +111,9 @@ public enum ExactComposition {
         #endif
         #if EXACT_LINK_DRAG
         ExactDrag.install()
+        #endif
+        #if EXACT_LINK_PICKER
+        ExactPickers.install()
         #endif
         #if EXACT_LINK_MEDIA_PICKER
         ExactMediaPicker.install()

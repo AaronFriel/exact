@@ -89,7 +89,7 @@ package enum ViewPresentation {
 
     /// The owner, followed through presentations that are not being dismissed;
     /// nil out of a window, where UIKit refuses to present and calls back nothing.
-    static func presenter(for view: UIView) -> UIViewController? {
+    package static func presenter(for view: UIView) -> UIViewController? {
         var owner = controller(for: view, fallbackToWindow: true, layout: false)
         guard view.window != nil else { return nil }
         while let presented = owner?.presentedViewController, !presented.isBeingDismissed { owner = presented }

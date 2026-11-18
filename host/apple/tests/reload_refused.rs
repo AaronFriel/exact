@@ -48,6 +48,7 @@ fn hellos_binary_refuses_a_reload_into_a_family_and_keeps_its_plan() {
             plan("column background-image=\"linear-gradient(red, blue)\""),
             "gradients",
         ),
+        (plan("input type=\"file\" id=\"f\""), "picker"),
     ] {
         let len = bridge.input_write(&next);
         let out = bridge.prepare_plan(len, NoData, Hooks::none(), 390.0, 844.0);

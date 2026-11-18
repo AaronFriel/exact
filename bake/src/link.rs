@@ -87,15 +87,25 @@ pub(crate) fn composed<'a>(
     Ok(dependents(uses, inputs, host_work))
 }
 
-/// `uses` with what the manifest links `ahead`; on Apple, an SVG linked
-/// ahead links box effects' engine too, which SVG's filters run on.
+/// `uses` with what the manifest links `ahead`. On Apple, an SVG linked
+/// ahead links box effects' engine too, which SVG's filters run on; and
+/// `documents` or `media_picker` linked ahead links the pickers' family
+/// (`picker`), since a later plan's document pickers or photo picker present
+/// through it. A plan's own uses need no such rule: its document-picker
+/// commands and file inputs select `picker` themselves, and its drops,
+/// pastes and `requestPermission` need only the core's `doc:` table.
 fn linked_ahead(uses: Uses, ahead: Vec<Capability>, inputs: &serde_json::Value) -> Uses {
-    let uses = ahead.into_iter().fold(uses, Uses::with);
+    let presents = ahead
+        .iter()
+        .any(|c| matches!(c, Capability::Documents | Capability::MediaPicker));
+    let mut uses = ahead.into_iter().fold(uses, Uses::with);
     if apple(inputs) && uses.has(Capability::Svg) {
-        uses.with(Capability::Effects)
-    } else {
-        uses
+        uses = uses.with(Capability::Effects);
     }
+    if apple(inputs) && presents {
+        uses = uses.with(Capability::Picker);
+    }
+    uses
 }
 
 /// What a plan requires of an Apple binary it is delivered to (LLP 1047.001
@@ -532,6 +542,16 @@ mod tests {
         assert!(brought.has(Capability::Io) && brought.has(Capability::NativeViews));
         let linux = serde_json::json!({ "platform": "linux" });
         assert_eq!(super::dependents(modules, &linux, false), modules);
+        // Documents or the photo picker linked ahead bring the pickers'
+        // family; a plan's own `documents` (a drop, a paste) does not.
+        for presents in [Capability::Documents, Capability::MediaPicker] {
+            let ahead = super::linked_ahead(exact_runner::Uses::NONE, vec![presents], &ios);
+            assert!(ahead.has(Capability::Picker), "{presents:?}");
+            let linux_ahead = super::linked_ahead(exact_runner::Uses::NONE, vec![presents], &linux);
+            assert!(!linux_ahead.has(Capability::Picker), "{presents:?}");
+        }
+        let dropped = exact_runner::Uses::NONE.with(Capability::Documents);
+        assert!(!super::dependents(dropped, &ios, false).has(Capability::Picker));
     }
 
     /// A TypeScript bundle reports host work for each route the prelude

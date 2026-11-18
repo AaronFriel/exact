@@ -1,5 +1,6 @@
 @testable import ExactKit
 @testable import ExactControls
+@testable import ExactPickers
 @testable import ExactImages
 @testable import ExactCollections
 
@@ -42,7 +43,7 @@ extension ExactSession {
 }
 
 extension ExactSession {
-    /// The built-in pickers (`PickerLink.make`'s default).
+    /// The pickers `ExactPickers.install()` makes.
     var pickerHost: Picker { picker as! Picker }
 }
 

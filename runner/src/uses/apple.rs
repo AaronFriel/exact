@@ -41,6 +41,20 @@ pub fn apple_uses(plan: &Plan) -> Uses {
             _ => false,
         }),
     );
+    // One Swift family presents the file picker and the document pickers;
+    // `requestPermission` and dropped or pasted documents are the core's.
+    add(
+        Capability::Picker,
+        runs_command(
+            plan,
+            &[
+                "saveFile",
+                "showOpenFilePicker",
+                "showDirectoryPicker",
+                "showSaveFilePicker",
+            ],
+        ),
+    );
     // An event-only or a view-only package reaches the module seam too.
     add(
         Capability::Modules,

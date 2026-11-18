@@ -1480,7 +1480,8 @@ The generated `--embed` composition lists the capabilities to link.
 | `ExactGroupedLists` | Native grouped lists | `ExactGroupedLists.install()` |
 | `ExactSurfaces` | GPU and Canvas surfaces | `ExactSurfaces.install()`; links `ExactImages`, which Canvas 2D images read through |
 | `ExactImages` | Image files, animated images and package pictures; icons in text | `ExactImages.install()` |
-| `ExactMediaPicker` | Native media picking | `ExactMediaPicker.install()` |
+| `ExactPickers` | File inputs' picker, `saveFile` and the File System Access pickers | `ExactPickers.install()` |
+| `ExactMediaPicker` | Native media picking (the composition links `ExactPickers` with it) | `ExactMediaPicker.install()` |
 | `ExactAuthSession` | Authentication sessions | `ExactAuthSession.install()` |
 | `ExactNumerals` | Numeric content transitions | `ExactNumerals.install()` |
 | `ExactTips` | Platform tips | `ExactTips.install()` |

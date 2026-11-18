@@ -54,6 +54,8 @@ extension Runtime {
             return (batch.ops.first { $0.op == .hold }.flatMap { NativeHold($0.payload) }, batch)
         }
     }
+    /// `change` at `view` with no field selection, for a family outside the core.
+    package func valueChange(_ view: UInt32, _ value: String, now: Double) -> Batch { change(view, value, now: now) }
     /// A `change`; a text field's carries its selection as the edit left
     /// it (kind 41, x2apps codeedit #2), else the value alone (kind 1).
     func change(_ view: UInt32, _ value: String, selection: FieldSelection? = nil, now: Double) -> Batch {

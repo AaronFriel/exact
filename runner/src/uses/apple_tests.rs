@@ -98,6 +98,25 @@ fn tools_are_a_plan_with_a_tool() {
     assert!(!uses(&tooled).has(Capability::Tools));
 }
 
+/// D10: the pickers' family presents `saveFile` and the File System Access
+/// pickers, so they select `picker` on Apple as well as `documents`.
+#[test]
+fn a_document_picker_links_the_pickers_family() {
+    for call in [
+        "saveFile(\"f\", \"app:/data/a.json\", \"a.json\")",
+        "showOpenFilePicker(\"f\")",
+        "showDirectoryPicker(\"f\")",
+        "showSaveFilePicker(\"f\", \"a.txt\")",
+    ] {
+        let source = format!(
+            "component A\n  action pick\n    {call}\n  view\n    button \"Pick\" press=pick\n"
+        );
+        let plan = contract::compile(&source).unwrap();
+        assert!(apple_uses(&plan).has(Capability::Picker), "{call}");
+        assert!(!uses(&plan).has(Capability::Picker), "{call}");
+    }
+}
+
 /// D10: each native roster entry is selected by the rows that reach its
 /// family's code, a computed value by whatever it can be, and a plain text
 /// and button plan by none; no other host's set moves.

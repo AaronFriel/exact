@@ -8,6 +8,8 @@
 // names; a dismissed panel is HTML's `cancel` there. `saveFile(id, text=…,
 // suggestedName=…)` saves the text itself: the host writes it to a scratch
 // file and goes on as for a copy (x2apps notes #4).
+import ExactCore
+import ExactKit
 import Foundation
 import UniformTypeIdentifiers
 #if canImport(UIKit)
@@ -101,7 +103,7 @@ extension Picker {
 
     func saved(_ view: UInt32, name: String) {
         session.log("saveFile: saved")
-        session.apply(session.runtime.change(view, name, now: session.now()))
+        session.apply(session.runtime.valueChange(view, name, now: session.now()))
     }
 
     func saveCancelled(_ view: UInt32) {
