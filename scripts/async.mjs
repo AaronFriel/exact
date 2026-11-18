@@ -149,7 +149,7 @@ export function laneSelection(changed, { root = WT, full = false, repo, graphs =
   };
 }
 const WEB_AX = ['./host/web/tests/accessibility-tree.test.mjs', './host/web/tests/presence-preload.test.mjs', './host/web/tests/zero-viewport.test.mjs'];
-/** Suites outside the established steps still run: other Bun files, macOS XCTests and authored app tests. */
+/** Suites outside the established steps still run: other Cargo workspaces, Bun files, macOS XCTests and app tests. */
 export function extraChecks(hits, glue, repo) {
   const covered = new Set([...glue, ...WEB_AX, './host/web/tests/document.test.mjs', './game/vocab.test.mjs']);
   const bun = hits.filter(({ suite: s }) => s.kind === 'bun' && !covered.has(`./${s.file}`));
@@ -160,6 +160,10 @@ export function extraChecks(hits, glue, repo) {
     ...(fixture ? [`EXACT_REALWORLD_DIST=${realworld}`] : []), ...cmd]]);
   for (const hit of hits) {
     const s = hit.suite;
+    if (s.kind === 'cargo' && s.manifest !== 'Cargo.toml' && s.manifest !== 'game/Cargo.toml') {
+      const [cmd, ...args] = commands([hit])[0];
+      out.push([s.id, cmd, args]);
+    }
     if (s.kind !== 'app' && !(s.kind === 'xctest' && s.host === 'macos')) continue;
     const named = s.kind === 'app' ? `app:${s.app}:${s.host}` : 'macos';
     const first = out.length;
@@ -405,7 +409,7 @@ export function retainSkippedFailures(previous, result, owners = {}, steps = TIE
   const found = new Set(result.failures);
   for (const f of previous) {
     const name = f.split(': ', 1)[0], check = result.checks[name], owner = owners[f];
-    if (found.has(f) || !(steps.has(name) || name === 'other-glue' || name === 'bundle-fixture' || name === 'macos' || name.startsWith('app:') || name.startsWith('build-app:'))) continue;
+    if (found.has(f) || !(steps.has(name) || name === 'other-glue' || name === 'bundle-fixture' || name === 'macos' || name.startsWith('cargo:') || name.startsWith('app:') || name.startsWith('build-app:'))) continue;
     // What ran it again: its check whole, or the part of it that holds its suites (one it cannot name: any part).
     const ran = check && !check.skipped && check.complete !== false && (!check.covers || (owner?.length && owner.every(o => check.covers.includes(o))));
     if (ran) continue;
@@ -423,6 +427,7 @@ export function owners(name, log, found) {
   const out = {};
   const own = (f, id) => { if (!(out[f] ??= []).includes(id)) out[f].push(id); };
   for (const f of found) {
+    if (name.startsWith('cargo:')) own(f, name);
     const pkg = /^\S+: -p (\S+) /.exec(f)?.[1] ?? /^\S+: (\S+) (?:\([^)]*\) does not compile|build script failed)$/.exec(f)?.[1];
     if (pkg && ['test', 'lane', 'default-test', 'build', 'workspace-build', 'workspace', 'clippy', 'workspace-clippy', 'linux', 'windows', 'windows-arm64'].includes(name)) own(f, `cargo:${pkg}`);
     const app = name.startsWith('conform') && f.slice(name.length + 2).split(' ').slice(0, 2).find(w => WEB_APPS.includes(w));

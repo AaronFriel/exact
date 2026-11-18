@@ -706,6 +706,7 @@ dependencies = [
 name = "exact-gpu"
 version = "0.3.0"
 dependencies = [
+ "exact-color",
  "exact-gpu-reflect",
  "exact-plan",
  "objc2",
