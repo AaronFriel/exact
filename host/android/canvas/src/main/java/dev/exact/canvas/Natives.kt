@@ -196,6 +196,14 @@ class Natives(
         @Volatile var window = 0L
         /** Rows (and 0, the unrowed stream) that draw it. */
         val rows = HashSet<Int>()
+        val directRows = HashSet<Int>()
+        /** Retained drawings and the rows that draw each one. */
+        val layers = HashMap<Int, HashSet<Int>>()
+        fun updateRows() {
+            rows.clear()
+            rows.addAll(directRows)
+            for (layer in layers.values) rows.addAll(layer)
+        }
         var fullWindow = false
         val presentation = CanvasPresentation()
         var copying = false
@@ -540,6 +548,39 @@ class Natives(
     /** The node op 28 draws for [id] (main thread). */
     fun node(id: Int): RenderNode? = elements[id]?.node
 
+    private val layerElements = HashMap<Int, HashSet<Int>>()
+
+    /** A retained layer keeps the native nodes its drawing references, even when its ops are not sent again. */
+    private fun inLayer(layer: Int, e: Element, row: Int) {
+        e.layers.getOrPut(layer) { HashSet() }.add(row)
+        layerElements.getOrPut(layer) { HashSet() }.add(e.id)
+    }
+
+    internal fun layerAgain(layer: Int, walk: () -> Unit) {
+        val before = layerElements.remove(layer)
+        walk()
+        for (id in before ?: emptySet()) if (layerElements[layer]?.contains(id) != true) leaveLayer(layer, id)
+    }
+
+    internal fun layerFreed(layer: Int) {
+        for (id in layerElements.remove(layer) ?: return) leaveLayer(layer, id)
+    }
+
+    private fun leaveLayer(layer: Int, id: Int) {
+        val e = elements[id] ?: return
+        e.layers.remove(layer)
+        e.updateRows()
+        if (e.layers.isEmpty() && e.directRows.isEmpty()) release(e)
+    }
+
+    /** A kept layer is drawn by another row without another set of its drawing. */
+    internal fun retained(layer: Int, id: Int, row: Int) {
+        val e = elements[id] ?: return
+        val rows = e.layers[layer] ?: return
+        rows.add(row)
+        e.rows.add(row)
+    }
+
     internal var origins: PaintedOrigins? = null
     internal fun transform(view: View, matrix: android.graphics.Matrix): Boolean =
         byView[view]?.let { origins?.transform(it.node, matrix) } == true
@@ -553,7 +594,7 @@ class Natives(
     fun snapshot(): Map<Int, RenderNode> = nodes ?: elements.mapValues { it.value.node }.also { nodes = it }
 
     /** Op 28 seen while ingesting a stream: make or update the element; [row] draws it (0: not in a row). */
-    fun ensure(id: Int, kind: Int, w: Int, h: Int, props: String, row: Int, fullWindow: Boolean = false) {
+    fun ensure(id: Int, kind: Int, w: Int, h: Int, props: String, row: Int, fullWindow: Boolean = false, layer: Int? = null) {
         // A top-level WebView cannot enforce an iframe's sandbox (LLP 1020 D2).
         if (kind == 1 && !JSONObject(props).isNull("sandbox")) {
             elements[id]?.let { release(it, reuse = false) }
@@ -588,6 +629,7 @@ class Natives(
             if (e.view is SurfaceView && e.presentation.replaced(Native.canvasReady(id))) { e.dirty = true; poll() }
         }
         if (json != null && kind == 2) e.disabled = json.optBoolean("disabled")
+        if (layer == null) e.directRows.add(row) else inLayer(layer, e, row)
         e.rows.add(row)
         e.wanted = props
         if (e.w != w || e.h != h) {
@@ -783,16 +825,24 @@ class Natives(
         if (e.dirty) record(e)
     }
 
-    /** A row was freed: its elements that no other row draws go. */
+    /** A row was freed: native nodes no row or retained layer draws go. */
     fun rowFreed(row: Int) {
-        val gone = elements.values.filter { it.rows.remove(row) && it.rows.isEmpty() }
+        val gone = elements.values.filter {
+            it.directRows.remove(row)
+            for (rows in it.layers.values) rows.remove(row)
+            it.rows.remove(row)
+            it.directRows.isEmpty() && it.layers.isEmpty()
+        }
         for (e in gone) release(e)
     }
 
-    /** The unrowed stream was replaced: elements only it drew and [seen] does not name go. */
+    /** The unrowed stream was replaced: drop its references to elements [seen] does not name. */
     fun unrowed(seen: Set<Int>) {
-        val gone = elements.values.filter { it.rows.contains(0) && !seen.contains(it.id) }
-        for (e in gone) { e.rows.remove(0); if (e.rows.isEmpty()) release(e) }
+        val gone = elements.values.filter { it.directRows.contains(0) && !seen.contains(it.id) }
+        for (e in gone) {
+            e.directRows.remove(0); e.updateRows()
+            if (e.directRows.isEmpty() && e.layers.isEmpty()) release(e)
+        }
     }
 
     private fun obtain(kind: Int, json: JSONObject, id: Int = 0): View? = when (kind) {
@@ -1168,6 +1218,7 @@ class Natives(
 
     fun destroyAll() {
         for (e in elements.values.toList()) release(e, forget = false)
+        layerElements.clear()
         for (w in webPool) { removeView(w); w.destroy() }
         webPool.clear()
         for (v in videoPool) { players.remove(v)?.release(); removeView(v) }
