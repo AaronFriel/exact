@@ -1602,10 +1602,12 @@ component Motion
       text "Working" animation="breathe 1.6s ease-in-out infinite"
 ```
 
-Keyframe values are literals or calls to the app's own `fn`s with constant
-arguments (standard functions are refused), and keyframes animate paint and
-transform properties, not layout ones such as `width`. Styles remain
-literal-only. CSS easing and the admitted `-exact-spring(…)` timing function, which
+Keyframe values are evaluated at compilation using the runtime's pure operations:
+list literals, `.at()`, option `match`, templates and pure built-ins, including
+`toFixed` and `formatDecimal`. Only executed branches are evaluated. Reading
+state, resources, props, the clock, the locale or a host capability is refused
+by name. Keyframes animate paint and transform properties, not layout ones
+such as `width`. Styles remain literal-only. CSS easing and the admitted `-exact-spring(…)` timing function, which
 belongs only inside `transition`, are not interchangeable guesses: copy the
 appropriate [motion fixture](../contract/corpus/spring.contract).
 In a `list virtualized=true` row, an animation waits until its row first

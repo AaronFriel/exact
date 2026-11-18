@@ -144,6 +144,11 @@ declares the same shape (`type-source-declared`).
 A font face's weight is a whole number in 1–1000. Keyframe percentages are in
 0–100; `from` and `to` are 0% and 100%. Lowering checks whether keyframe properties
 are animatable and constant-call values can be evaluated at compilation.
+Constant calls use the runtime's pure operations: list literals, `.at()`, option
+`match` expressions, templates and pure built-ins such as `toFixed` and
+`formatDecimal`. Only executed branches are evaluated. Reading
+state, resources, props, the clock, the locale or a host capability is refused
+by name; evaluation and expansion limits produce compile errors.
 Styles accept literal style attributes and explicitly styleable props (currently
 `backgroundMaterial`, `glassGroup` and `buttonStyle`), not arbitrary expressions
 or event props. In a conditional class, each prop must be set in both styles or

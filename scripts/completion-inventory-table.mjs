@@ -1382,7 +1382,7 @@ export const classifications = [
     ["runner:runner/src/tools.rs", "check sends"],
   ], "durable for a retained effectful/background ticket; holds() also accepts those tickets (reply.rs:27-33)."),
   group("runner helpers", ["one-shot"], "synchronous invocation, evaluator state or caller-owned value; no independent completion", "UI-owned",
-    "The named runner source evaluates, encodes, compares or constructs caller-owned values. These public helpers have no independently delivered outcome or persisted operation identity. vm.rs eval_accounted returns its result and counters synchronously to semantics/difftest/src/accounting.rs and vm/unsettled_tests.rs.", [
+    "The named runner source evaluates, encodes, compares or constructs caller-owned values. These public helpers have no independently delivered outcome or persisted operation identity. vm.rs eval_accounted returns its result and counters synchronously to semantics/difftest/src/accounting.rs and vm/unsettled_tests.rs; vm/constant.rs eval_constant returns them synchronously to contract/lower/src/keyframes.rs.", [
     ["runner:runner/src/compare.rs", "changed_fields equal equivalent equivalent_all equivalent_opt same shared"],
     ["runner:runner/src/failure.rs", "Failure::error Failure::exposed_code Failure::of FailureCode::from_name FailureCode::name FailureCode::of_kind FailureCode::seam_error"],
     ["runner:runner/src/file_pickers.rs", "start_in_refusal"],
@@ -1399,6 +1399,7 @@ export const classifications = [
     ["runner:runner/src/tools.rs", "mcp_tools"],
     ["runner:runner/src/vm.rs", "decode eval eval_accounted Frame::row_of instructions intern is_literal Strings::get Strings::is_empty Strings::len Strings::new Strings::of transitive_instructions Trap::bound"],
     ["runner:runner/src/vm/column.rs", "Column::get Column::is_empty Column::iter Column::len Column::to_vec"],
+    ["runner:runner/src/vm/constant.rs", "eval_constant"],
   ]),
   ...helperClassifications(group),
 ];
