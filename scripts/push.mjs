@@ -104,10 +104,12 @@ export async function pusher(opts) {
     if (!current.length) refuse(`no stream on the channel ${channel} can take this as an update: ${frozen.map((update) => `${name(update.row)}: ${why(update)}`).join('; ')}`);
     for (const update of frozen) console.log(`  ${name(update.row)} — frozen: ${why(update)}`);
     // Every current stream is checked before any is published.
-    for (const update of current) {
+    // Each one that cannot take the update is named in the one refusal, not the first alone (LLP 1030.007 D1; LLP 1156.006.000 D19).
+    const unfit = current.flatMap((update) => {
       const checked = classifyArtifacts(update.build, update.row.receipt, signingKey);
-      if (update.reason || !checked.bundle) refuse(`${name(update.row)} cannot take this as an update — ${update.reason ?? checked.missing.join('; ')}. It needs ${binaryCommand(app, update.row.platform)}`);
-    }
+      return update.reason || !checked.bundle ? [`${name(update.row)} cannot take this as an update — ${update.reason ?? checked.missing.join('; ')}. It needs ${binaryCommand(app, update.row.platform)}`] : [];
+    });
+    if (unfit.length) refuse(unfit.length === 1 ? unfit[0] : `${unfit.length} streams on the channel ${channel} cannot take this as an update, and nothing is published until each can:\n  ${unfit.join('\n  ')}`);
     for (const update of current) {
       const native = update.build.pendingInputs ?? [];
       if (native.length) console.log(`  ${name(update.row)} — note: native sources differ from its binary's, and only a new binary carries them: ${listed(native)}`);

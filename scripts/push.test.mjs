@@ -240,6 +240,14 @@ test('push builds a Rust module for each native target and checks every stream b
     await expect(pusher({_:[root],origin:root,keys:root})).rejects.toThrow('cannot take this as an update — rustTarget');
     expect(published).toEqual([]);
   } finally {fs.rmSync(root,{recursive:true,force:true})}
+  // LLP 1156.006.000 D19: two streams that cannot take it are both named in the one refusal, each with its build.
+  const both=harness(()=>({bundle:false,missing:['rustTarget']}),4,{targets:[[x86,'native'],[arm,'native']]});
+  try {
+    const said=await both.pusher({_:[both.root],origin:both.root,keys:both.root}).then(()=>'',e=>e.message);
+    expect(said).toMatch(/^2 streams on the channel \S+ cannot take this as an update, and nothing is published until each can:\n/);
+    expect(said.match(/cannot take this as an update — rustTarget\. It needs /g)).toHaveLength(2);
+    expect(both.published).toEqual([]);
+  } finally {fs.rmSync(both.root,{recursive:true,force:true})}
 });
 
 // An app with widgets or Live Activities: the binary's production bake listed their plans, schemas and, for a TypeScript
