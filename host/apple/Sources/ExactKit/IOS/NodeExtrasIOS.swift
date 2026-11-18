@@ -4,6 +4,12 @@
 #if os(iOS) || os(tvOS)
 import UIKit
 
+/// A transform handle's contact, which the Drag module keeps: the core asks
+/// only for its pinch, which gesture precedence orders.
+package protocol TransformPinchContact: AnyObject {
+    var pinchRecognizer: UIGestureRecognizer { get }
+}
+
 /// What most nodes never set — gestures and their holds, editors and
 /// embedded platform views, a canvas's overlay, symbols, focus rings, a
 /// scroller's bookkeeping — held apart and made on the first write that is
@@ -126,7 +132,7 @@ final class NodeExtras {
     var reorderOrigin: CGPoint = .zero
     var transformRecognizer: UIPanGestureRecognizer?
     var transformHold: DragInput?
-    var transformContact: TransformContact?
+    var transformContact: TransformPinchContact?
     var swipeOrigin: Double = 0
     var contextRecognizer: UILongPressGestureRecognizer?
     var doubleRecognizer: UITapGestureRecognizer?
@@ -348,7 +354,7 @@ extension NodeView {
     package var reorderOrigin: CGPoint { get { extras?.reorderOrigin ?? .zero } set { if newValue != .zero || extras != nil { more.reorderOrigin = newValue } } }
     package var transformRecognizer: UIPanGestureRecognizer? { get { extras?.transformRecognizer } set { if newValue != nil || extras != nil { more.transformRecognizer = newValue } } }
     package var transformHold: DragInput? { get { extras?.transformHold } set { if newValue != nil || extras != nil { more.transformHold = newValue } } }
-    package var transformContact: TransformContact? { get { extras?.transformContact } set { if newValue != nil || extras != nil { more.transformContact = newValue } } }
+    package var transformContact: TransformPinchContact? { get { extras?.transformContact } set { if newValue != nil || extras != nil { more.transformContact = newValue } } }
     /// A projection's transform over its layout (PresenterIOS), identity for every other node.
     package var contextTransform: CGAffineTransform {
         get { extras?.contextTransform ?? .identity }

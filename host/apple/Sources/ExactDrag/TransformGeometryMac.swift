@@ -1,5 +1,6 @@
 #if os(macOS)
 import AppKit
+import ExactKit
 
 extension NodeView {
     package func transformDragModel() -> TransformDragPosition? {

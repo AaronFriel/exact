@@ -1,31 +1,28 @@
 import Foundation
+import ExactKit
 
 /// One bounded observation per authored handle. No timer or frame loop: native
 /// layout/scroll and presentation batches schedule a coalesced UI turn. Facts
 /// exclude the target's own Translate/Scale so panning cannot feed back itself.
-package final class TransformGeometryHost {
-    package struct Observation {
-        package let binding: TransformDragBinding
-        package let facts: TransformGeometryFacts?
-        package let sequence: UInt64
-        package var accepted: Bool
+final class TransformGeometryObserver {
+    struct Observation {
+        let binding: TransformDragBinding
+        let facts: TransformGeometryFacts?
+        let sequence: UInt64
+        var accepted: Bool
     }
     weak var presenter: Presenter?
+    unowned let handles: DragHandleSet
     private var observations: [UInt32: Observation] = [:]
     private var serial: UInt64 = 0
     private var queued = false
     private var delivering = false
     private var remainingPasses = 0
-    init(_ presenter: Presenter) { self.presenter = presenter }
+    init(_ presenter: Presenter, _ handles: DragHandleSet) { self.presenter = presenter; self.handles = handles }
     func reset() { observations.removeAll(); serial = 0; remainingPasses = delivering ? 2 : 0 }
     func retire(_ id: UInt32) { observations.removeValue(forKey: id) }
-    /// Moves on every native layout, scroll, window move and presentation
-    /// batch — what may have moved a view — so a reader can keep a geometric
-    /// answer until it does (a canvas's on-screen test, `Canvases.shown`).
-    private(set) package var epoch = 0
-    package func changed() {
-        epoch &+= 1
-        guard !delivering, presenter?.transformBindings.isEmpty == false else { return }
+    func changed() {
+        guard !delivering, !handles.transform.isEmpty else { return }
         remainingPasses = 2
         enqueue()
     }
@@ -39,7 +36,7 @@ package final class TransformGeometryHost {
             refresh()
         }
     }
-    package func current(_ binding: TransformDragBinding) -> Observation? {
+    func current(_ binding: TransformDragBinding) -> Observation? {
         guard let observation = observations[binding.id], observation.accepted,
               observation.binding == binding, observation.facts?.ready == true,
               let facts = presenter?.transformFacts(binding), facts == observation.facts else { return nil }
@@ -50,12 +47,12 @@ package final class TransformGeometryHost {
               !session.runtime.destroyed, remainingPasses > 0 else { return }
         remainingPasses -= 1
         var refine = false
-        observations = observations.filter { presenter.transformBindings[$0.key] != nil }
+        observations = observations.filter { handles.transform[$0.key] != nil }
         // Copy the small authored binding set because a geometry action may
         // replace/remove any of these handles while this turn is delivered.
-        let bindings = presenter.transformBindings
+        let bindings = handles.transform
         for binding in bindings.values.sorted(by: { $0.id < $1.id }) {
-            guard presenter.transformBindings[binding.id] == binding,
+            guard handles.transform[binding.id] == binding,
                   let target = binding.targetKey, let clip = binding.clipKey else { continue }
             let facts = presenter.transformFacts(binding)
             if let prior = observations[binding.id], prior.binding == binding, prior.facts == facts, prior.accepted { continue }
@@ -73,10 +70,10 @@ package final class TransformGeometryHost {
                 session.apply(reply.batch)
             }
             delivering = false
-            refine = refine || presenter.transformBindings[binding.id] != binding || presenter.transformFacts(binding) != facts
+            refine = refine || handles.transform[binding.id] != binding || presenter.transformFacts(binding) != facts
         }
         // A geometry action may change layout. One later UI refinement is
         // allowed; a refusal by itself never starts a polling/frame loop.
-        if refine || presenter.transformBindings != bindings { enqueue() }
+        if refine || handles.transform != bindings { enqueue() }
     }
 }

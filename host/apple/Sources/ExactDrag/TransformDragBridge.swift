@@ -1,5 +1,7 @@
 import CExact
 import Foundation
+import ExactCore
+import ExactKit
 
 package struct TransformDragReply {
     package let accepted: Bool

@@ -69,7 +69,7 @@ let allCapabilities: [(name: String, target: String)] = [
 // which the roster links with it, or ExactCore's package API. Surfaces' Canvas
 // 2D images fetch and decode through the images family's static API, which
 // needs no install.
-let capabilityNeeds: [String: [Target.Dependency]] = ["ExactCollections": ["ExactCore"], "ExactContentRegions": ["ExactCore"], "ExactPickers": ["ExactCore"], "ExactTraces": ["ExactCore"], "ExactNativeViews": ["ExactFormaBinding", "ExactHeavyLeaves"], "ExactVideo": ["ExactHeavyLeaves"], "ExactWebViews": ["ExactHeavyLeaves"], "ExactSvg": ["ExactCore", "ExactEffects", "ExactAnimations"], "ExactSurfaces": ["ExactImages"], "ExactGradients": ["ExactCore"], "ExactNavigation": ["ExactCore"]]
+let capabilityNeeds: [String: [Target.Dependency]] = ["ExactCollections": ["ExactCore"], "ExactContentRegions": ["ExactCore"], "ExactPickers": ["ExactCore"], "ExactTraces": ["ExactCore"], "ExactNativeViews": ["ExactFormaBinding", "ExactHeavyLeaves"], "ExactVideo": ["ExactHeavyLeaves"], "ExactWebViews": ["ExactHeavyLeaves"], "ExactSvg": ["ExactCore", "ExactEffects", "ExactAnimations"], "ExactSurfaces": ["ExactImages"], "ExactGradients": ["ExactCore"], "ExactNavigation": ["ExactCore"], "ExactDrag": ["ExactCore"]]
 // The host lowers a box's transitions, drags and motion to the same
 // `animations` op as its CSS animations, which ExactAnimations plays, so any
 // of them links that product without the keyframe grammar the `animations`

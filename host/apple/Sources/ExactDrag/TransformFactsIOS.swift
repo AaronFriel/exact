@@ -1,8 +1,7 @@
-// A transform drag's geometry facts on UIKit (`TransformGeometry`): the
-// core's, which reports them whether or not the Drag module is linked
-// (LLP 1047.001 D4).
+// A transform drag's contact and geometry facts on UIKit (`TransformGeometry`).
 #if os(iOS) || os(tvOS)
 import UIKit
+import ExactKit
 
 /// The photo handle's one contact (LLP 1057.001 §4): the binding's pan, now up
 /// to two fingers, and a `UIPinchGestureRecognizer`, simultaneous with it —
@@ -10,21 +9,30 @@ import UIKit
 /// `TransformDragHold`. Every sample is the pair anchored at the contact's
 /// focal point; the anchor moves whenever a recognizer starts or stops or the
 /// finger count changes, which also absorbs UIKit's centroid jump.
-package final class TransformContact {
+final class TransformContact: TransformPinchContact {
     #if os(tvOS)
     // tvOS has no pinch; nothing makes a contact there.
-    package let pinch: UIGestureRecognizer
+    let pinch: UIGestureRecognizer
     #else
-    package let pinch: UIPinchGestureRecognizer
+    let pinch: UIPinchGestureRecognizer
     #endif
-    package var panning = false, pinching = false
+    var pinchRecognizer: UIGestureRecognizer { pinch }
+    var panning = false, pinching = false
     /// The pair's value, the focal point (window points) and pinch scale at the anchor.
-    package var anchor: (value: TransformDragPosition, focal: CGPoint, scale: CGFloat, touches: Int)?
+    var anchor: (value: TransformDragPosition, focal: CGPoint, scale: CGFloat, touches: Int)?
     #if os(tvOS)
-    package init(_ pinch: UIGestureRecognizer) { self.pinch = pinch }
+    init(_ pinch: UIGestureRecognizer) { self.pinch = pinch }
     #else
-    package init(_ pinch: UIPinchGestureRecognizer) { self.pinch = pinch }
+    init(_ pinch: UIPinchGestureRecognizer) { self.pinch = pinch }
     #endif
+}
+
+extension NodeView {
+    /// The core keeps a handle's contact untyped (`transformContact`).
+    var contact: TransformContact? {
+        get { transformContact as? TransformContact }
+        set { transformContact = newValue }
+    }
 }
 
 extension Presenter {

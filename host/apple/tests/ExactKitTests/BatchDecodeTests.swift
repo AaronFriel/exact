@@ -1,6 +1,7 @@
 import Foundation
 import XCTest
 @testable import ExactKit
+@testable import ExactDrag
 #if os(macOS)
 import AppKit
 #endif

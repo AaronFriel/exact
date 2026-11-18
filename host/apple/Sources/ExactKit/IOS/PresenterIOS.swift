@@ -111,8 +111,8 @@ package final class Presenter {
     let glassGroups = GlassGroups()
     var contextNodes: Set<UInt32> = []
     var inlineOwners: [UInt32: (owner: UInt32, index: Int)] = [:]
-    package var heightBindings: [UInt32: HeightDragBinding] = [:]
-    package var transformBindings: [UInt32: TransformDragBinding] = [:]
+    /// Transform and height drag handles, which the Drag module keeps.
+    lazy package var drags: DragHandles = DragLink.installed?.handles(self) ?? NoDragHandles()
     /// Reordering a list's rows: the lists family's (`ReorderLink`).
     lazy package var reorders: any ReorderHosting = ReorderLink.make?(self) ?? NoReorders()
     lazy package var transformGeometry = TransformGeometryHost(self)
@@ -399,9 +399,7 @@ package final class Presenter {
         owedText.removeAll()
         movingText.removeAll()
         listViews.removeAll()
-        heightBindings.removeAll()
-        transformBindings.removeAll()
-        transformGeometry.reset(); nativeGeometry.reset()
+        drags.reset(); nativeGeometry.reset()
         videoVisibility?.reset()
         pageGeometryOwed = false
     }
@@ -951,32 +949,16 @@ package final class Presenter {
         // An op inside an animation UIKit has open only if its view showed in the last frame (`moveOrPlace`).
         func applyOp(_ op: BatchOp, _ kind: BatchOp.Kind, _ id: UInt32) {
             switch kind {
-            case .transformDrag:
-                if let binding = TransformDragBinding(op.payload) {
-                    for n in [binding.id, binding.target, binding.clip].compactMap({ $0 }) where flats.isFlat(n) { flats.promote(n) }
-                    if binding.target == nil {
-                        if transformBindings[binding.id]?.handleKey == binding.handleKey
-                            && transformBindings[binding.id]?.runtime == binding.runtime {
-                            transformBindings.removeValue(forKey: binding.id)
-                            transformGeometry.retire(binding.id)
-                        }
-                    } else { transformBindings[binding.id] = binding }
-                    if let v = views[binding.id] { DragLink.installed?.updateTransformGesture(v) }
+            case .transformDrag, .heightDrag:
+                let nodes = drags.bind(kind, op.payload)
+                for n in nodes where flats.isFlat(n) { flats.promote(n) }
+                if let id = nodes.first, let v = views[id] {
+                    if kind == .transformDrag { DragLink.installed?.updateTransformGesture(v) } else { DragLink.installed?.updateHeightGesture(v) }
                 }
             case .retireMotion:
                 if let rawRuntime = op.payload["runtime"] as? String, let runtime = UInt64(rawRuntime),
                    let rawToken = op.payload["token"] as? String, let token = UInt64(rawToken) {
                     session?.transformInputHold?.retire(runtime: runtime, token: token)
-                }
-            case .heightDrag:
-                if let binding = HeightDragBinding(op.payload) {
-                    for n in [binding.id, binding.target].compactMap({ $0 }) where flats.isFlat(n) { flats.promote(n) }
-                    if binding.target == nil {
-                        if heightBindings[binding.id]?.handleKey == binding.handleKey {
-                            heightBindings.removeValue(forKey: binding.id)
-                        }
-                    } else { heightBindings[binding.id] = binding }
-                    if let v = views[binding.id] { DragLink.installed?.updateHeightGesture(v) }
                 }
             case .create:
                 // An inert leaf box is a layer in its parent's (LLP 1068 §6.1).
@@ -1268,9 +1250,7 @@ package final class Presenter {
         owedText.remove(id)
         movingText.remove(id)
         scrollPump.forget(id)
-        heightBindings.removeValue(forKey: id)
-        transformBindings.removeValue(forKey: id)
-        transformGeometry.retire(id)
+        drags.retire(id)
         chrome.forget(id)
         scrollers.remove(id); pendingScrolls.remove(id); materialNodes.remove(id); contextNodes.remove(id)
         return views.removeValue(forKey: id)

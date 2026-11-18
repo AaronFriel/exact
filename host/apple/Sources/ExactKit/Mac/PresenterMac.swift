@@ -91,8 +91,8 @@ package final class Presenter {
     var pendingScrolls: Set<UInt32> = []
     /// The batch's suppression triggers for scroll anchoring (`ScrollAnchoring.swift`).
     var anchorChanges = ScrollAnchoring.Changes()
-    package var heightBindings: [UInt32: HeightDragBinding] = [:]
-    package var transformBindings: [UInt32: TransformDragBinding] = [:]
+    /// Transform and height drag handles, which the Drag module keeps.
+    lazy package var drags: DragHandles = DragLink.installed?.handles(self) ?? NoDragHandles()
     lazy package var transformGeometry = TransformGeometryHost(self)
     package var videoVisibility: VideoVisibilityHost?
     lazy package var collections: any ListHosting = ListLink.make?(self) ?? NoLists()
@@ -695,9 +695,7 @@ package final class Presenter {
         AriaCarriers.forget(presenter: self)
         scrollers.removeAll()
         pendingScrolls.removeAll()
-        heightBindings.removeAll()
-        transformBindings.removeAll()
-        transformGeometry.reset()
+        drags.reset()
         videoVisibility?.reset()
         selection.structureChanged(); selection.clear() // a selection of the retired tree, unreported
         visibleText.removeAll()
@@ -830,9 +828,7 @@ package final class Presenter {
         if forget { views[id]?.forget() }
         // Out of the map before out of the window: the editing-ended
         // notification removal fires finds no view to send for.
-        heightBindings.removeValue(forKey: id)
-        transformBindings.removeValue(forKey: id)
-        transformGeometry.retire(id)
+        drags.retire(id)
         session?.text.readerParagraphs.removeValue(forKey: id)
         // A view made later may have this one's identifier: its `autofocus` is its own to offer.
         if let view = views[id] { autofocusProcessed.remove(ObjectIdentifier(view)) }
@@ -1161,28 +1157,11 @@ package final class Presenter {
             if kind == .destroy, let stage, let up = views[id]?.nodeSuperview, stage.destroyed.contains(up.id) {} else
             if kind == .children { touched(id, children: true) } else if kind != .roots && kind != .create { touched(id, textChanged: kind == .props || kind == .style || kind == .destroy || kind == .fieldContent) }
             switch kind {
-            case .transformDrag:
-                if let binding = TransformDragBinding(op.payload) {
-                    if binding.target == nil {
-                        if transformBindings[binding.id]?.handleKey == binding.handleKey
-                            && transformBindings[binding.id]?.runtime == binding.runtime {
-                            transformBindings.removeValue(forKey: binding.id)
-                            transformGeometry.retire(binding.id)
-                        }
-                    } else { transformBindings[binding.id] = binding }
-                }
+            case .transformDrag, .heightDrag: _ = drags.bind(kind, op.payload)
             case .retireMotion:
                 if let rawRuntime = op.payload["runtime"] as? String, let runtime = UInt64(rawRuntime),
                    let rawToken = op.payload["token"] as? String, let token = UInt64(rawToken) {
                     session?.transformInputHold?.retire(runtime: runtime, token: token)
-                }
-            case .heightDrag:
-                if let binding = HeightDragBinding(op.payload) {
-                    if binding.target == nil {
-                        if heightBindings[binding.id]?.handleKey == binding.handleKey {
-                            heightBindings.removeValue(forKey: binding.id)
-                        }
-                    } else { heightBindings[binding.id] = binding }
                 }
             case .create: register(newView(op))
             case .paragraph:

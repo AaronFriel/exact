@@ -38,13 +38,3 @@ package struct HeightDragPosition {
         return max(0, next)
     }
 }
-
-/// Recognition may have displacement but zero instantaneous velocity (notably
-/// a coalesced iOS-on-Mac drag). Direction still belongs to the actual input.
-package enum HeightDragDirection {
-    package static func accepts(velocityX: Double, velocityY: Double, translationX: Double, translationY: Double) -> Bool {
-        guard velocityX.isFinite, velocityY.isFinite, translationX.isFinite, translationY.isFinite else { return false }
-        if velocityX == 0 && velocityY == 0 { return abs(translationY) > abs(translationX) }
-        return abs(velocityY) > abs(velocityX)
-    }
-}
