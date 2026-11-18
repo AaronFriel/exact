@@ -28,7 +28,7 @@ grades, builders' notes and the summary into `results/<name>/`.
 
 - Builders: GPT-6.2 Sol (high) through `codex exec`, sandboxed with escalations reviewed (`--approve-for-me`), and
   Claude Opus 5.5 through `claude -p` in the `auto` permission mode. Muse is not logged in on this machine. A
-  record's `builder` names the exact model. A `gpt` record without one (s1, and r34 and earlier) was built by
+  record's `builder` names the exact model; the `gpt` records of r21–r34 and s1 have none and were built by
   GPT-6.1 Sol.
 - Exact builders use a detached checkout pinned at the round's commit (`~/bakeoff/pins/<rev>`) with this directory
   removed, so the grader's prompt is not there to read.
