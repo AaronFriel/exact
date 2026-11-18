@@ -131,6 +131,12 @@ function lockFrom(crate) {
   writeFileSync(resolve(crate, 'Cargo.lock'), lock);
   writeFileSync(from, id);
 }
+/** A built `app.js` past this is an order of magnitude over what the apps here build, and near what a host refuses
+ * (a 25 MiB limit in one report): a guess, for a warning that fails nothing. */
+export const APP_JS_WARN_BYTES = 8 << 20;
+/** What a build says of a built `app.js` of `bytes` past that size, with the compiler's line of plan code by component
+ * (`costs`) when it gave one; '' below it. Two apps reached 30 MB with no word (LLP 1156.006.000 D4). */
+export const sizeWarning = (name, bytes, costs = '') => (bytes <= APP_JS_WARN_BYTES ? '' : `warning: ${name} is ${(bytes / 2 ** 20).toFixed(1)} MiB: a component's body is compiled in at each place it is used, so a large body used many times multiplies. Draw repeated structure from data in one \`for\`, and keep a many-armed \`if\` out of a component used hundreds of times${costs ? `; ${costs}` : ''}`);
 /** What separates two directories of one app name (two worktrees of an app) in the names made from it: twelve hex
  * of the directory's real path, as `host/web/dev.mjs` keys `dev-generations` (LLP 1156.006.000 D13). Every app's
  * module builds into one Cargo target, where one crate name from two directories is one product and one claim. */

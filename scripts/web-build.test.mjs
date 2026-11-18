@@ -462,3 +462,14 @@ test('a failed type check keeps its error in a form no pattern knows', () => {
   expect(webBuildFailure(`warning: one\n${unknown}\nerror: app: app.ts failed the type check every host's build runs\n`))
     .toEqual(['warning: one', `Command failed: tsc --noEmit\napp.ts: the staged origin is not a string\nerror: app: app.ts failed the type check every host's build runs`]);
 });
+
+// LLP 1156.006.000 D4: a built app.js past 8 MiB is said, with the compiler's plan code by component when it gave it.
+test('a large built app.js warns with where its size came from', async () => {
+  const { APP_JS_WARN_BYTES, sizeWarning } = await import('../host/web-js/module.mjs');
+  expect(sizeWarning('app-x.js', APP_JS_WARN_BYTES)).toBe('');
+  expect(sizeWarning('app-x.js', 339_489, 'own plan code by component: App: 3895 B (1 instance)')).toBe('');
+  const said = sizeWarning('app-x.js', 29_045_555, 'own plan code by component (shared bodies counted per use): Pane: 81200 B (27 instances)');
+  expect(said).toStartWith("warning: app-x.js is 27.7 MiB: a component's body is compiled in at each place it is used");
+  expect(said).toEndWith('; own plan code by component (shared bodies counted per use): Pane: 81200 B (27 instances)');
+  expect(sizeWarning('app-x.js', APP_JS_WARN_BYTES + 1)).toEndWith('used hundreds of times');
+});

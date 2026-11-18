@@ -38,7 +38,7 @@ import { namesStream } from './stream-names.mjs';
 import { bundleHostModule, localImports, stageHostGlue } from './glue.mjs';
 import { gateAgent } from './agent-gate.mjs';
 import { contentName, contentNames } from './content-names.mjs';
-import { buildEditor, buildFlow, buildMarkdown, buildModule, buildMotion, moduleSourceDirs, undeclaredRustData, fresh, leafTaken, moduleGrants, webCompiler, inspectHooked, withInspectHooks, withoutDev, withRuntimeStamp } from './module.mjs';
+import { buildEditor, buildFlow, buildMarkdown, buildModule, buildMotion, moduleSourceDirs, undeclaredRustData, fresh, leafTaken, moduleGrants, webCompiler, inspectHooked, withInspectHooks, withoutDev, withRuntimeStamp, sizeWarning } from './module.mjs';
 import { appDigest, developmentStore } from '../../scripts/agent-launch.mjs';
 import { settingLines } from '../../js/bake/src/__exact_env.mjs';
 import { colorSchemeMeta, interfaceStyle, launchBackground, schemeHead, withInterfaceStyle, withLook } from '../web/look.mjs';
@@ -237,9 +237,11 @@ const unregistered = rust ? [] : unregisteredSurfaces(manifest, 'web').filter(na
 const rustMissing = (error) => { if (!error.rustMissing) throw error; console.error(error.message); process.exit(1); };
 let compiler;
 try { compiler = webCompiler(); } catch (error) { rustMissing(error); }
+let planCosts = ''; // the compiler's line of plan code by component, for the size warning at the end
 function compilePlan(undrawn, source = input) {
   rmSync(resolve(gen, 'canvas2d.flag'), { force: true });
-  const cargo = spawnSync(compiler.cmd, [...compiler.pre, 'js', source, '-o', gen, '--app', appDir, ...(production ? [] : ['--sites']), ...(devReload ? ['--dev-reload'] : [])], { cwd: root, stdio: checkOnly ? ['ignore', 'ignore', 'pipe'] : 'inherit', encoding: 'utf8', env: { ...compiler.env, EXACT_JS_GPU_SURFACES: (gpuSurfaces ?? []).join(','), EXACT_JS_UNREGISTERED_SURFACES: undrawn.join(',') } });
+  const cargo = spawnSync(compiler.cmd, [...compiler.pre, 'js', source, '-o', gen, '--app', appDir, ...(production ? [] : ['--sites']), ...(devReload ? ['--dev-reload'] : [])], { cwd: root, stdio: checkOnly ? ['ignore', 'ignore', 'pipe'] : ['inherit', 'pipe', 'inherit'], encoding: 'utf8', maxBuffer: 64 << 20, env: { ...compiler.env, EXACT_JS_GPU_SURFACES: (gpuSurfaces ?? []).join(','), EXACT_JS_UNREGISTERED_SURFACES: undrawn.join(',') } });
+  if (!checkOnly) { process.stdout.write(cargo.stdout ?? ''); planCosts = /^ *own plan code by component[^\n]*/m.exec(cargo.stdout ?? '')?.[0].trim() ?? planCosts; }
   if (cargo.status !== 0) { if (checkOnly) process.stderr.write(cargo.stderr ?? ''); process.exit(cargo.status ?? 1); }
   compiler.done();
 }
@@ -1450,4 +1452,6 @@ const lost = !unused.size || how === 'none' ? [] : readdirSync(out, { recursive:
   return cut.length ? [`error: ${relative(out, path)} has ${cut.join(', ')}, which the sheet's rules were left out for (host/web-js/writers.mjs)`] : [];
 });
 if (lost.length) { for (const line of lost) console.error(line); process.exit(1); }
-console.log(`${out}: ${contentFiles['app.js']} ${statSync(resolve(out, contentFiles['app.js'])).size} B, built`);
+const builtBytes = statSync(resolve(out, contentFiles['app.js'])).size;
+console.log(`${out}: ${contentFiles['app.js']} ${builtBytes} B, built`);
+const large = sizeWarning(contentFiles['app.js'], builtBytes, planCosts); if (large) console.error(large);
