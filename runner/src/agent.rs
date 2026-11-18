@@ -859,6 +859,8 @@ pub fn state_with<D: DataSource>(runner: &Runner<D>, request: &str) -> String {
     );
     s.push_str(",\"displayMode\":");
     quote(media.display_mode.keyword(), &mut s);
+    s.push_str(",\"screenReader\":");
+    quote(media.screen_reader.keyword(), &mut s);
     s.push_str(",\"navigationType\":");
     quote(page.navigation_type(), &mut s);
     let _ = write!(

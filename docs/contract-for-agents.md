@@ -5317,14 +5317,30 @@ Firefox and WebKit carriers refuse both.
 of iOS's accessibility sizes (AX1 to AX5, UIKit's `isAccessibilityCategory`), where
 UIKit's own views drop decoration and stack what sat side by side; it is an Exact
 fact, not a CSS media feature, read wherever Exact draws with UIKit's metrics (iOS,
-iPadOS, tvOS, visionOS, watchOS), and false on the Mac, Android, Linux, Windows and
-the web.
+iPadOS, tvOS, visionOS, watchOS), and also true on Android at `Configuration.fontScale >= 1.3`, Exact's convention
+for Android's large-text range. It reads the system setting independently of any
+root font the app authors. It is false on the Mac, Linux, Windows and the web.
 `EmptyState` drops its symbol then. Under the agent on iOS, `prefer root-font-size
 28` (Dynamic Type's AX1 body) or more sets it. That `prefer` sets only the size of the
 text Exact draws: UIKit's own text, a native field's among them, keeps the simulator's
 text size. To see a screen at the largest size, as `verify` does, set the simulator's:
 `xcrun simctl ui <udid> content_size accessibility-extra-extra-extra-large`. With no
 size, `content_size` prints the current one: set it back after.
+`exactViewport().screenReader` is a string: `"on"`, `"off"` or `"unknown"`, live
+as the system reading changes and refreshed on resume (LLP 1039 D10). Apple reads
+VoiceOver; Android reads touch exploration, a proxy for TalkBack or another screen
+reader; Windows reads `SPI_GETSCREENREADER`. The web, the terminal, the renderer
+and Linux without detection report `"unknown"`. `"off"` means the platform reported
+it off; it never means detection was unavailable.
+Use this fact to pause disruptive self-updating content, such as rolling text or
+auto-advance, never to select a separate reduced UI. Pause on `"on"`, and treat
+`"unknown"` as possibly on for optional rotation. Keep the same content accessible
+and offer manual advance. Reduced motion is an independent reason to pause.
+Declare `screenReader: string` on the viewport shape. The agent's
+`prefer screen-reader on|off|unknown` substitutes it;
+`state.device.screenReader` reports it even without a resource.
+See [a rolling stat](recipes/rolling-stat.md).
+
 `exactViewport().gpuTier` is `low`, `mid` or `high`: how much GPU work a frame can
 afford, chosen once before the GPU device is made from what the adapter reports
 (a phone GPU of the Adreno 600 class is `low`), else from the screen (a phone-sized

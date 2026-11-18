@@ -504,6 +504,7 @@ open class ExactActivity : Activity() {
 
     /** The device's settings as the host was last told them. */
     private var told: Device? = null
+    private val screenReaderChanged = android.view.accessibility.AccessibilityManager.TouchExplorationStateChangeListener { configure() }
 
     /** The device's colours as the host was last told them ([Palette]). */
     private var toldColors: IntArray? = null
@@ -557,6 +558,7 @@ open class ExactActivity : Activity() {
         if (stopped) { stopped = false; take(); read() }
         contentResolver.registerContentObserver(android.provider.Settings.Global.getUriFor(android.provider.Settings.Global.ANIMATOR_DURATION_SCALE), false, settings)
         contentResolver.registerContentObserver(android.provider.Settings.System.getUriFor(android.provider.Settings.System.TIME_12_24), false, settings)
+        getSystemService(android.view.accessibility.AccessibilityManager::class.java)?.addTouchExplorationStateChangeListener(screenReaderChanged)
         // What changed while the activity was stopped and is no configuration change.
         configure()
         natives?.lifecycle?.event(ViewLifecycle.START)
@@ -606,6 +608,7 @@ open class ExactActivity : Activity() {
         if (!Exact.drainStore()) android.util.Log.w("exact", "the store's writes did not finish before the stop")
         if (reads() && !isChangingConfigurations) updateWidgets()
         contentResolver.unregisterContentObserver(settings)
+        getSystemService(android.view.accessibility.AccessibilityManager::class.java)?.removeTouchExplorationStateChangeListener(screenReaderChanged)
         super.onStop()
     }
 
@@ -627,6 +630,7 @@ open class ExactActivity : Activity() {
      * reads again what the person may have changed in Settings ([Extensions.resumed]). */
     override fun onResume() {
         super.onResume()
+        configure()
         nativeResumed = true
         natives?.lifecycle?.event(ViewLifecycle.RESUME)
         Auth.resumed()

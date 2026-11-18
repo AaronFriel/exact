@@ -23,7 +23,7 @@ export function helperClassifications(group) {
     ["runner:runner/src/viewport_reads.rs", "Media::holds Reads::any Reads::key Reads::media Reads::of Reads::reads"],
     ["runner:runner/src/viewport.rs",
       "Contrast::keyword DisplayMode::keyword even_segments Fold::validate Gamut::keyword Geometry::field Geometry::of Geometry::restore Hover::keyword " +
-      "Pointer::keyword Posture::from_bits Posture::from_keyword Posture::keyword Preferences::bits Preferences::color_scheme Preferences::from_bits Update::keyword " +
+      "Pointer::keyword Posture::from_bits Posture::from_keyword Posture::keyword Preferences::bits Preferences::color_scheme Preferences::from_bits ScreenReader::from_bits ScreenReader::keyword Update::keyword " +
       "Viewport::field Viewport::sized Viewport::validate"],
     ["runner:runner/src/wakelock.rs", "bound bound_prop holders"],
   ]),

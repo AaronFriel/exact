@@ -275,6 +275,7 @@ export function pageReporter(agent, platform = globalThis) {
     "can-open-files": true,
     "has-focus": true,
     "root-font-size": 16,
+    "screen-reader": "unknown",
     "gpu-tier": "high",
     "iframe-partition": false,
     presented: true
@@ -309,6 +310,7 @@ export function pageReporter(agent, platform = globalThis) {
     ...cache
   } : {
     ...cache,
+    "screen-reader": "unknown",
     frozen,
     "visibility-state": platform.document.visibilityState === "hidden" ? "hidden" : "visible",
     online: platform.navigator.onLine !== false,
@@ -339,7 +341,7 @@ export function pageReporter(agent, platform = globalThis) {
     const next = { ...facts };
     for (const [name, raw] of Object.entries(page ?? {})) {
       const value = String(raw);
-      if (name === "visibility-state" && (value === "visible" || value === "hidden") || name === "gpu-tier" && [
+      if (name === "screen-reader" && ["on", "off", "unknown"].includes(value) || name === "visibility-state" && (value === "visible" || value === "hidden") || name === "gpu-tier" && [
         "low",
         "mid",
         "high"
@@ -399,6 +401,7 @@ export function pageReporter(agent, platform = globalThis) {
   };
   return {
     bits,
+    screenReaderCode: () => ["unknown", "off", "on"].indexOf(read()["screen-reader"]),
     read: () => ({
       ...read(),
       "root-font-size": rootFontSize(),

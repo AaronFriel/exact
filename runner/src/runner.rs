@@ -696,6 +696,9 @@ impl<D: DataSource> Runner<D> {
     ) -> Result<Runner<D>, RunnerError> {
         let program = plan.into();
         let plan = &*program;
+        if let Some(preferences) = crate::time::launch_preferences() {
+            viewport.preferences = preferences;
+        }
         viewport.device_pixel_ratio = kernel
             .reported_display_scale()
             .map(f64::from)

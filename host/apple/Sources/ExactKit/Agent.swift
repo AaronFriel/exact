@@ -695,6 +695,7 @@ public final class Agent {
         var displayMode = session.displayModeOverride
         var (gamut, high) = (DisplayPreferences.gamut, DisplayPreferences.highDynamicRange)
         var input = DisplayPreferences.input
+        var screenReader = DisplayPreferences.screenReader
         for (name, value) in media ?? [:] {
             switch (name, value) {
             case ("prefers-reduced-motion", "reduce"), ("prefers-reduced-motion", "no-preference"): motion = value == "reduce"
@@ -731,6 +732,7 @@ public final class Agent {
             // The Mac's Keyboard Navigation setting (LLP 1115.000 D7.2): whether Tab reaches every control.
             case ("keyboard-navigation", "true"), ("keyboard-navigation", "false"): keyboardNavigation = value == "true"
             #endif
+            case ("screen-reader", "on"), ("screen-reader", "off"), ("screen-reader", "unknown"): screenReader = value
             case ("visibility-state", "visible"), ("visibility-state", "hidden"): facts.hidden = value == "hidden"
             case ("frozen", "true"), ("frozen", "false"): facts.frozen = value == "true"
             case ("online", "true"), ("online", "false"): facts.onLine = value == "true"
@@ -770,6 +772,7 @@ public final class Agent {
         systemContrast(more: DisplayPreferences.contrast == "more")
         DisplayPreferences.agent = (motion, transparency)
         if input != DisplayPreferences.input { DisplayPreferences.agentInput = input }
+        if screenReader != DisplayPreferences.screenReader { DisplayPreferences.agentScreenReader = screenReader }
         if page != nil { PageFacts.agent = facts }
         if let boldText { DisplayPreferences.agentBoldText = boldText }
         if let presented { session.apply(session.runtime.preferPresented(presented)); session.presentedHeld = presented }
@@ -786,7 +789,8 @@ public final class Agent {
                                        "has-focus": PageFacts.hasFocus(session.pageWindow), "root-font-size": PageFacts.rootFontSize,
                                        "display-scale": PageFacts.displayScale(session.presenter.viewport),
                                        "gpu-tier": ["high", "mid", "low", "low"][Int(PageFacts.tier & 3)],
-                                       "bold-text": DisplayPreferences.boldText, "presented": session.presentedHeld ?? true]
+                                       "bold-text": DisplayPreferences.boldText, "presented": session.presentedHeld ?? true,
+                                       "screen-reader": DisplayPreferences.screenReader]
         #if os(macOS)
         if let keyboardNavigation { KeyboardNavigation.agent = keyboardNavigation }
         pageFacts["keyboard-navigation"] = KeyboardNavigation.on

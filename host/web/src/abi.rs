@@ -130,6 +130,7 @@ impl<D: DataSource> Bridge<D> {
     pub fn set_preferences(&mut self, bits: u32) {
         self.preferences = exact_runner::Preferences {
             update: self.preferences.update,
+            screen_reader: self.preferences.screen_reader,
             ..exact_runner::Preferences::from_bits((bits & 0xff) | ((bits >> 26) << 8))
         };
         self.fold = fold_bits(bits);
@@ -140,6 +141,11 @@ impl<D: DataSource> Bridge<D> {
     /// the next boot or resize, which the page sends after this.
     pub fn set_update(&mut self, code: u32) {
         self.preferences.update = exact_runner::Preferences::from_bits((code & 3) << 15).update;
+    }
+
+    /// The agent's substitute; a browser's own reading is always unknown (LLP 1039 D10).
+    pub fn set_screen_reader(&mut self, code: u32) {
+        self.preferences.screen_reader = exact_runner::ScreenReader::from_bits(code);
     }
 
     /// UTF-8 launch location carried after optional plan bytes.
@@ -1260,6 +1266,11 @@ macro_rules! host {
         #[no_mangle]
         pub extern "C" fn exact_set_update(code: u32) {
             EXACT_BRIDGE.with(|b| b.borrow_mut().set_update(code))
+        }
+
+        #[no_mangle]
+        pub extern "C" fn exact_set_screen_reader(code: u32) {
+            EXACT_BRIDGE.with(|b| b.borrow_mut().set_screen_reader(code));
         }
 
         /// The viewport or the page's facts (bit 0 reduced motion, bit 1

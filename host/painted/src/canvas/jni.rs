@@ -188,10 +188,12 @@ macro_rules! canvas_jni {
                 touch_slop: jfloat,
                 dates: jstring,
                 format_locale: jstring,
+                screen_reader: jint,
             ) {
                 let device = $crate::presenter::Device {
                     night: night == JNI_TRUE,
                     font_scale,
+                    screen_reader: $crate::presenter::ScreenReader::from_bits(screen_reader as u32),
                     locale: string(env, locale),
                     rtl: rtl == JNI_TRUE,
                     hour24: hour24 == JNI_TRUE,

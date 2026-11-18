@@ -701,6 +701,13 @@ fn prefer<D: DataSource>(p: &mut Presenter<D>, line: &str) -> String {
             .map(str::to_owned)
             .unwrap_or_else(|| value.to_string());
         match (name.as_str(), text.as_str()) {
+            ("screen-reader", v @ ("on" | "off" | "unknown")) => {
+                preferences.screen_reader = match v {
+                    "on" => exact_runner::ScreenReader::On,
+                    "off" => exact_runner::ScreenReader::Off,
+                    _ => exact_runner::ScreenReader::Unknown,
+                };
+            }
             ("visibility-state", v @ ("visible" | "hidden")) => page.hidden = v == "hidden",
             ("online", v @ ("true" | "false")) => page.on_line = v == "true",
             ("can-share", v @ ("true" | "false")) => page.can_share = v == "true",
@@ -799,6 +806,7 @@ fn prefer<D: DataSource>(p: &mut Presenter<D>, line: &str) -> String {
         "frozen": page.frozen,
         "presented": p.host().runner().presented().value(),
         "root-font-size": p.host().runner().root_font_size(),
+        "screen-reader": preferences.screen_reader.keyword(),
         "display-scale": p.host().runner().display_scale(),
         "gpu-tier": page.gpu_tier(),
     }, "fold": {

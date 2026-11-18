@@ -458,8 +458,14 @@ export const contextTransforms = new Set();
 export const contextAnchors = new Map();
 // preview view id -> mounted source and entry box
 // @ref LLP 1039 D2, LLP 1061 D4 — viewport facts and display preferences, on every change, without debounce.
+let toldScreenReader = "unknown";
 export const pageFacts = pageReporter(agentMode), pageChanged = () => {
   if (host.wasm?.exact_set_page && host.incarnation) {
+    const screenReader = pageFacts.read()["screen-reader"];
+    if (screenReader !== toldScreenReader) {
+      resizeRunner();
+      toldScreenReader = screenReader;
+    }
     applyBatch(JSON.parse(readOut(host.wasm.exact_set_page(pageFacts.bits()))));
     if (host.wasm.exact_set_root_font_size) {
       applyBatch(JSON.parse(readOut(host.wasm.exact_set_root_font_size(pageFacts.rootFontSize()))));
@@ -487,6 +493,7 @@ const resizeRunner = () => {
   if (host.wasm && host.incarnation && innerWidth > 0 && innerHeight > 0) {
     const told = host.wasm.exact_set_viewport_geometry && document.body ? writeIn(pageGeometry()) : 0;
     host.wasm.exact_set_update?.(updateCode());
+    host.wasm.exact_set_screen_reader(pageFacts.screenReaderCode());
     const batch = JSON.parse(readOut(host.wasm.exact_resize(innerWidth, innerHeight, now(), preferences() | foldBits(), told)));
     // Only a size the runner took is told: a refused one is asked again, never followed by geometry alone.
     if (!batch.error) {

@@ -41,6 +41,7 @@ export function viewportFacts(geometry = false) {
     devicePosture: f.posture, horizontalViewportSegments: f.cols, verticalViewportSegments: f.rows, // @ref LLP 1078 D2, D6
     colorGamut: GAMUT[(p >>> 26) & 3], dynamicRange: p & (1 << 28) ? "high" : "standard", // @ref LLP 1100 D9
     pointer: p & 64 ? "none" : p & 32 ? "coarse" : "fine", hover: p & 128 ? "none" : "hover",
+    screenReader: reporter()?.read()["screen-reader"] ?? "unknown",
     accessibilityTextSize: false, // a browser has no accessibility text sizes (runner/src/runner/root_font.rs)
     keyboardHeight: keyboardInset(), // @ref LLP 1039 D9: `env(keyboard-inset-height)`
     gpuTier: reporter()?.read()["gpu-tier"] ?? "high" }; // @ref LLP 1139.003 D2: the page facts' tier; this target has no GPU module, so the screen's class, or the agent's
@@ -75,7 +76,7 @@ const reporter = () => pageFacts !== undefined ? pageFacts : typeof document ===
 function shareReporter() {
   const facts = reporter();
   if (!facts) return;
-  (globalThis.exact ??= {}).page = { prefer: p => { facts.prefer(p); pageChanged(); if (p?.["gpu-tier"]) viewportChanged(); return facts.read(); }, read: () => facts.read() };
+  (globalThis.exact ??= {}).page = { prefer: p => { facts.prefer(p); pageChanged(); if (p?.["gpu-tier"] || p?.["screen-reader"]) viewportChanged(); return facts.read(); }, read: () => facts.read() };
 }
 const pageFields = f => ({ visibilityState: f["visibility-state"], frozen: f.frozen, onLine: f.online, canShare: f["can-share"], canShareFiles: f["can-share-files"], canSharePictures: f["can-share-pictures"], canOpenFiles: f["can-open-files"], hasFocus: f["has-focus"], navigationType: f["navigation-type"], persisted: f.persisted, restores: f.restores, iframePartition: f["iframe-partition"] === true, name: windowName(), presented: f.presented === true });
 // `window.name`, an empty one set to `main` the first time it is read, so the tab the person opened is `main` and one a
