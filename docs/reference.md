@@ -2217,8 +2217,21 @@ replacement's clock in milliseconds, and `dropped`, the root slots that could no
 `"gesture"`, `"module"` or `"requests"`), or is null.
 Each entry has `what: "state"`, `name`, and `why`: `"no place"` when the slot is gone,
 or `"type changed"` when its value does not fit the new declaration. The replacement's
-first journal line gives the same report. Component state, view identity, scroll,
-selection, composition and Undo preservation are later pieces of that LLP.
+first journal line gives the same report. Component state, view identity, composition
+and Undo preservation are later pieces of that LLP.
+
+The JS development reload restores reading anchors and focus, including a field's
+selection range and direction when its text matches. A field may regain focus after
+its resource answers; reader focus cancels pending focus and selection. Scrolling
+caused by reader input cancels only the axes that move, including an
+ancestor when scrolling chains into it. Records match by tree path and type, so
+structural edits can prevent a match.
+Pending records cross another reload with their remaining time. Restoration ends
+when every record has applied or been cancelled, when the page leaves, or after
+ten seconds. Autofocus stays suppressed
+until then, and the browser's history scroll-restoration setting returns to its
+prior value.
+Browser Undo history is lost when the document reloads.
 
 Agent sessions use `exactTime()` launch facts `seed: 1` (LLP 1069.007), `locale: "en-US"`,
 `timeZone: "UTC"` and `epochAtZero` 2026-01-01T00:00:00Z (LLP 1027.000.000 D3, with the
