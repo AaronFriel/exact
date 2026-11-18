@@ -554,7 +554,7 @@ origin `tool`. Consumer: Shelf's Add Book, Continue Reading, books in
 Spotlight and Log Pages. Unblocks reaching an app's screens and writes
 without opening it. Take: none named; the ruling is its own waiver. Still
 out, each until a consumer asks (LLP 1133.023 §13): further App Intents in
-widgets beyond the fixed enum configuration below; controls and Live Activities; interactive snippets and
+widgets beyond the configuration below; controls and Live Activities; interactive snippets and
 `requestConfirmation`'s snippet content; assistant schemas; `IndexedEntity`
 and Spotlight's semantic index; `NSUserActivity` and Handoff; long-running
 intents; an App Intents extension; a structured `returns` through a face;
@@ -575,8 +575,14 @@ configuration on Apple.
 An Apple widget’s refresh receives the placement’s configuration. Placements
 with the same choices share a timeline. The Expo Services Active Users widget
 can fetch the period the person chose. Android keeps one timeline per kind
-and passes the defaults to refresh (LLP 1126.003 D5). Data-backed options
-and entity queries remain deferred.
+and passes the defaults to refresh (LLP 1126.003 D5).
+
+**Expanded (Charlie, 2026-11-18, #896, “Approve the waiver”; LLP 1126 D2):**
+An iOS or macOS widget can offer entries of a declared content-index kind.
+The Expo Services Active Users widget can list the person’s projects. Edit
+Widget reads the list the app published to the App Group. Its refresh and
+render receive the selected ID. Computing options in the extension, images,
+dependent parameters and entity choices on watchOS and Android stay deferred.
 
 **Admitted (Charlie, 2026-10-06: "this is pretty great. commit and push this
 and document that TUI is now an officially supported platform for Exact2";
