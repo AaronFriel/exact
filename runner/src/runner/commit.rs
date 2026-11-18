@@ -46,7 +46,7 @@ pub(super) struct Checkpoint {
     /// Who each request and `then` is from (LLP 1133.023 D7).
     origins: super::provenance::OriginsSaved,
     /// The arguments refused a child's resource (LLP 1133.007 D13).
-    refused_args: super::modules::Refused,
+    refused_args: super::processes::Refused,
     /// What sends had written into instances before it (LLP 1035.005.004 D6).
     send_undo: usize,
 }

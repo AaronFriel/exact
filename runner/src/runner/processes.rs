@@ -2,16 +2,16 @@
 //! admission of what data code asks of a child by the origin of the commit
 //! that asks it (D13), and the clock a host's process work keeps under the
 //! agent (§7).
-use super::super::{DataSource, Request, Runner, Target};
-use super::admit::held_to_app;
-use super::CallOrigin;
+use super::provenance::CallOrigin;
+use super::{DataSource, Request, Runner, Target};
 use crate::process::WorkClock;
 use exact_plan::Value;
+use serde_json::Value as Json;
 use std::sync::Arc;
 
 /// `@exact/child-process`'s declaration: the `origin` of each name in its
 /// `data` list is held as a module name's is (`admit.rs`).
-const DECLARATION: &str = include_str!("../../../../packages/child-process/exact.json");
+const DECLARATION: &str = include_str!("../../../packages/child-process/exact.json");
 
 /// The runner's process state for this session.
 #[derive(Default)]
@@ -60,7 +60,7 @@ pub(crate) struct ChildState {
 
 impl<D: DataSource> Runner<D> {
     pub(in crate::runner) fn has_work_clock(&self) -> bool {
-        self.extensions.processes.clock.is_some()
+        self.processes.clock.is_some()
     }
 
     /// Hand the host's process work its clock under the agent (LLP
@@ -71,7 +71,7 @@ impl<D: DataSource> Runner<D> {
         if let Some(clock) = &clock {
             clock.advance(self.now_ms);
         }
-        self.extensions.processes.clock = clock;
+        self.processes.clock = clock;
     }
 
     /// Why data code may not call `name` of `@exact/child-process` now
@@ -137,7 +137,7 @@ impl<D: DataSource> Runner<D> {
 
     /// Whether resource `target` was refused at `args` (D13).
     fn args_refused(&self, target: Target, args: &[Value]) -> bool {
-        let refused = &self.extensions.processes.refused;
+        let refused = &self.processes.refused;
         refused.iter().any(|(t, a)| *t == target && a == args)
     }
 
@@ -145,7 +145,7 @@ impl<D: DataSource> Runner<D> {
     /// until they change: the one set it keeps. A send is asked anew.
     fn refuse_args(&mut self, target: Target, args: &[Value]) {
         if let Target::Resource(_) = target {
-            let refused = &mut self.extensions.processes.refused;
+            let refused = &mut self.processes.refused;
             refused.retain(|(t, _)| *t != target);
             refused.push((target, args.to_vec()));
         }
@@ -153,12 +153,12 @@ impl<D: DataSource> Runner<D> {
 
     /// The refused arguments, for a commit's checkpoint.
     pub(in crate::runner) fn refused_saved(&self) -> Refused {
-        self.extensions.processes.refused.clone()
+        self.processes.refused.clone()
     }
 
     /// A refused commit's: the refused arguments as it found them.
     pub(in crate::runner) fn refused_restore(&mut self, saved: Refused) {
-        self.extensions.processes.refused = saved;
+        self.processes.refused = saved;
     }
 
     /// Whether resource `i`, which settlement would ask again at `args`
@@ -205,14 +205,14 @@ impl<D: DataSource> Runner<D> {
     /// stay refused only while they are asked (D13).
     pub(in crate::runner) fn forget_refused(&mut self, i: usize, args: &[Value]) {
         let target = Target::Resource(i);
-        (self.extensions.processes.refused).retain(|(t, a)| *t != target || a == args);
+        (self.processes.refused).retain(|(t, a)| *t != target || a == args);
     }
 
     /// Resource `i`'s refused arguments, whatever they are, go: its row is
     /// a new member's.
     pub(in crate::runner) fn forget_refused_row(&mut self, i: usize) {
         let target = Target::Resource(i);
-        (self.extensions.processes.refused).retain(|(t, _)| *t != target);
+        (self.processes.refused).retain(|(t, _)| *t != target);
     }
 
     /// Whether `target`'s request in flight is a child this commit's origin
@@ -239,7 +239,7 @@ impl<D: DataSource> Runner<D> {
     /// `target`'s child stream in flight: its ticket and the arguments it
     /// was asked with.
     fn child_of(&self, target: Target) -> Option<(u64, Vec<Value>)> {
-        let children = &self.extensions.processes.children;
+        let children = &self.processes.children;
         (self.pending.iter())
             .find(|p| p.target == target && children.contains_key(&p.ticket))
             .map(|p| (p.ticket, p.args.clone()))
@@ -247,18 +247,18 @@ impl<D: DataSource> Runner<D> {
 
     /// When the host's process work is next due on the agent's clock.
     pub(in crate::runner) fn work_due(&self) -> Option<f64> {
-        self.extensions.processes.clock.as_ref()?.due()
+        self.processes.clock.as_ref()?.due()
     }
 
     /// Whether that work has outcomes the runner has not taken.
     pub(in crate::runner) fn work_owed(&self) -> bool {
-        (self.extensions.processes.clock.as_ref()).is_some_and(|clock| clock.owed())
+        (self.processes.clock.as_ref()).is_some_and(|clock| clock.owed())
     }
 
     /// The agent's clock reads `now_ms`: the host's process work due by
     /// then runs.
     pub(in crate::runner) fn advance_work(&self, now_ms: f64) {
-        if let Some(clock) = &self.extensions.processes.clock {
+        if let Some(clock) = &self.processes.clock {
             clock.advance(now_ms);
         }
     }
@@ -270,7 +270,7 @@ impl<D: DataSource> Runner<D> {
         }
         let program = crate::process::summary(&request.body).1.unwrap_or_default();
         let held: Vec<u64> = self.pending.iter().map(|p| p.ticket).collect();
-        let children = &mut self.extensions.processes.children;
+        let children = &mut self.processes.children;
         children.retain(|t, _| held.contains(t));
         children.insert(
             ticket,
@@ -283,7 +283,7 @@ impl<D: DataSource> Runner<D> {
 
     /// What one outcome of a child stream tells of it: its messages.
     pub(in crate::runner) fn note_child_outcome(&mut self, ticket: u64, outcome: &crate::Outcome) {
-        let children = &mut self.extensions.processes.children;
+        let children = &mut self.processes.children;
         let (crate::Outcome::Message(message), Some(child)) = (outcome, children.get_mut(&ticket))
         else {
             return;
@@ -315,14 +315,14 @@ impl<D: DataSource> Runner<D> {
 
     /// Bytes a host accepted for a child's stdin.
     pub(in crate::runner) fn note_child_sent(&mut self, ticket: u64, bytes: u64) {
-        if let Some(child) = self.extensions.processes.children.get_mut(&ticket) {
+        if let Some(child) = self.processes.children.get_mut(&ticket) {
             child.bytes_in += bytes;
         }
     }
 
     /// What `state.streams` shows of the child stream `ticket`.
     pub(crate) fn child_state(&self, ticket: u64) -> Option<&ChildState> {
-        self.extensions.processes.children.get(&ticket)
+        self.processes.children.get(&ticket)
     }
 }
 
@@ -346,9 +346,23 @@ fn refusal(name: &str, origin: CallOrigin) -> Result<(), String> {
     }
 }
 
-#[cfg(test)]
-#[path = "processes_tests.rs"]
-mod runner_tests;
+/// Whether a name declared `sub` holds a call giving `args` to the `app`
+/// origin: `"origin": "app"`, or `{"whenAny": [options], "is": "app"}` when
+/// the call gives one of them (LLP 1133.012 D12 item 5).
+pub(in crate::runner) fn held_to_app(sub: &Json, args: &Json) -> bool {
+    match &sub["origin"] {
+        Json::Object(o) if o.contains_key("none") => false,
+        Json::Object(o) => (o["whenAny"].as_array().into_iter().flatten())
+            .any(|a| a.as_str().is_some_and(|a| given(args, a))),
+        o => o == "app",
+    }
+}
+
+/// Whether a call gave option `argument`: set and not `false`. The grant
+/// key `"*"` is given by every call.
+pub(in crate::runner) fn given(args: &Json, argument: &str) -> bool {
+    argument == "*" || (!args[argument].is_null() && args[argument] != false)
+}
 
 #[cfg(test)]
 mod tests {

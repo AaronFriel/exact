@@ -25,6 +25,7 @@
 //!
 //! Each call is admitted under its origin and causes (`provenance.rs`).
 
+use super::super::processes::{given, held_to_app};
 use super::super::provenance::{CallOrigin, ORIGINS};
 use super::super::{DataSource, Runner};
 use super::{error_code, Decision, Json, ModulesRow, Waits};
@@ -51,13 +52,12 @@ impl<D: DataSource> Runner<D> {
             || (self.extensions.held.iter()).any(|h| h.id == id)
     }
 
-    /// Resource row `i` is a new member's: the arguments a child's start
-    /// refused and its last poll answer no longer stand.
+    /// Resource row `i` is a new member's: its last poll answer no longer
+    /// stands.
     pub(in crate::runner) fn forget_module_row(&mut self, i: usize) {
         for within in self.extensions.within.values_mut() {
             within.remove(&i);
         }
-        self.forget_refused_row(i);
     }
 
     pub(super) fn implementation_here(&self, row: &ModulesRow) -> bool {
@@ -641,24 +641,6 @@ fn fetch_refusal(grants: &str, at: &str, given: &str) -> Option<String> {
     let web = given.starts_with("https://") || given.starts_with("http://");
     let ok = web && crate::grants::admitting(grants, None, given).is_some();
     (!ok).then(|| format!("grant-missing ({at}={shown} needs net.fetch)"))
-}
-
-/// Whether a name declared `sub` holds a call giving `args` to the `app`
-/// origin: `"origin": "app"`, or `{"whenAny": [options], "is": "app"}` when
-/// the call gives one of them (LLP 1133.012 D12 item 5).
-pub(super) fn held_to_app(sub: &Json, args: &Json) -> bool {
-    match &sub["origin"] {
-        Json::Object(o) if o.contains_key("none") => false,
-        Json::Object(o) => (o["whenAny"].as_array().into_iter().flatten())
-            .any(|a| a.as_str().is_some_and(|a| given(args, a))),
-        o => o == "app",
-    }
-}
-
-/// Whether a call gave option `argument`: set and not `false`. The grant
-/// key `"*"` is given by every call.
-fn given(args: &Json, argument: &str) -> bool {
-    argument == "*" || (!args[argument].is_null() && args[argument] != false)
 }
 
 /// `over`'s fields laid over `value`'s, record by record.

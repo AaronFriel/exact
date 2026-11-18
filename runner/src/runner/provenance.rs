@@ -641,13 +641,14 @@ impl<D: DataSource> Runner<D> {
     }
 
     /// Resource row `i` is a new member's (`each.rs`): nothing an earlier
-    /// member asked through it stands: its asks' origins, and what the
-    /// modules keep of it ([`Self::forget_module_row`]).
+    /// member asked through it stands: its asks' origins, the arguments a
+    /// child's start refused, and what the modules keep of it.
     pub(in crate::runner) fn forget_resource_row(&mut self, i: usize) {
         let o = &mut self.origins;
         o.asked.remove(&i);
         o.asked_causes.remove(&i);
         o.deferred.remove(&i);
+        self.forget_refused_row(i);
         self.forget_module_row(i);
     }
 

@@ -141,6 +141,7 @@ mod live_time;
 pub mod midi;
 mod modules;
 pub use modules::{AppState, CallHow, PresenceAnswer, PresenceAsk, WakeHow};
+mod processes;
 mod provenance;
 pub use provenance::CallOrigin;
 #[cfg(test)]
@@ -533,6 +534,8 @@ pub struct Runner<D: DataSource> {
     /// Who each commit, request and armed `then` comes from, and the
     /// invocation each is part of (`provenance.rs`).
     origins: provenance::Origins,
+    /// `@exact/child-process`'s children and the host's process work clock.
+    processes: processes::Processes,
     poisoned: bool,
     /// Evaluate every site on every update (the incremental update's reference; `set_full_evaluation`).
     full: bool,
@@ -925,6 +928,7 @@ impl<D: DataSource> Runner<D> {
             activities: activities::Activities::default(),
             extensions: Default::default(),
             origins: Default::default(),
+            processes: Default::default(),
             delivery,
             viewport,
             viewport_geometry,

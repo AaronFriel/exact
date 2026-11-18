@@ -557,6 +557,10 @@ pub(super) fn grant_handles(granted: &Granted, ids: &[String], grant: &Grant) {
 }
 
 #[cfg(test)]
+#[path = "processes_tests.rs"]
+mod process_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::{DataError, Request, Store};
