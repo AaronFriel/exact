@@ -274,6 +274,7 @@ fn build_sources(
         ("app.hbc", &baked.bytecode[..]),
         (DECLARATIONS, baked.declarations.as_bytes()),
         ("app.module.json", baked.receipt.as_bytes()),
+        ("app.sources.json", &baked.source_inputs),
     ] {
         replace_changed(&out.join(name), bytes)?;
     }
@@ -581,6 +582,8 @@ pub struct Baked {
     pub declarations: String,
     /// App identity, grants, ABI and content hashes; not a signing receipt.
     pub receipt: String,
+    /// Files loaded by the bundler and type checker, for build freshness.
+    pub source_inputs: Vec<u8>,
     /// Development-only source locations, keyed by the final plan digest.
     /// Absent from standalone and Cargo bakes, receipts and module payloads.
     pub source_map: Option<String>,
@@ -1135,9 +1138,7 @@ fn bake_in(
     })?;
     write_changed(
         &stage.join("__exact_backend_source.json"),
-        serde_json::to_string(&String::from_utf8_lossy(&captured[Path::new("app.ts")]))
-            .map_err(|e| e.to_string())?
-            .as_bytes(),
+        &resident::setting_sources(&captured)?,
     )?;
     let exported = contract::design_exports(&app.join("app.contract"));
     let entries = contract::snapshot::entries(&app)?;
@@ -1313,6 +1314,8 @@ fn bake_in(
         bytecode,
         declarations,
         receipt,
+        source_inputs: std::fs::read(stage.join("__exact_inputs.json"))
+            .map_err(|e| e.to_string())?,
         source_map,
         warnings,
         entries,
@@ -1458,41 +1461,6 @@ export default {
         stage,
     )?;
     Ok(())
-}
-
-impl Baked {
-    /// Publish the complete result to a *new* directory. Existing output is
-    /// never replaced; a dev server selects an accepted generation separately.
-    pub fn write_new(&self, output: &Path) -> Result<(), String> {
-        let output = std::path::absolute(output).map_err(|e| e.to_string())?;
-        if output.exists() {
-            return Err(format!("output already exists: {}", output.display()));
-        }
-        // Reserve the destination before writing, so another producer cannot
-        // be overwritten by a later rename. The receipt is written last; this
-        // directory is not a candidate until that complete receipt exists.
-        std::fs::create_dir(&output).map_err(|e| e.to_string())?;
-        let result = (|| {
-            contract::snapshot::write_entries(&self.entries, &output)?;
-            if let Some(map) = &self.source_map {
-                std::fs::write(output.join("app.plan.map.json"), map).map_err(|e| e.to_string())?;
-            }
-            for (name, bytes) in [
-                ("app.plan", &self.plan[..]),
-                ("app.js", &self.script),
-                ("app.hbc", &self.bytecode),
-                ("app.contract.d.ts", self.declarations.as_bytes()),
-                ("app.module.json", self.receipt.as_bytes()),
-            ] {
-                std::fs::write(output.join(name), bytes).map_err(|e| e.to_string())?;
-            }
-            Ok(())
-        })();
-        if result.is_err() {
-            let _ = std::fs::remove_dir_all(&output);
-        }
-        result
-    }
 }
 
 #[cfg(test)]

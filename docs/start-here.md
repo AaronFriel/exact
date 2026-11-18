@@ -358,9 +358,11 @@ component Groceries
 field fails a resource or voids a mutation’s reply, whose slot keeps its old value.
 Type the function returning a reply (`Promise<Result<'post'>>`) so the build names
 an extra field. It reaches only what its `grants` name. A value fixed at build, such as an
-API's origin, is `const API = import.meta.env.API_BASE_URL` at its top level, the name declared
-in `app.json`'s `env` ([your own REST server](recipes/rest-backend.md)). A failed read should
-fail its resource so Exact can retain its previous answer; a mutation may return
+API's origin, is `const API = import.meta.env.API_BASE_URL` in a top-level const of `app.ts`
+or an app-local module it imports transitively, the name declared
+in `app.json`'s `env` ([your own REST server](recipes/rest-backend.md)). Type-only imports
+read no settings.
+A failed read should fail its resource so Exact can retain its previous answer; a mutation may return
 a shaped domain refusal for its action to handle
 ([fetch with loading, error and retry](recipes/fetch-loading-error.md)). The clock and
 randomness are refused there; time comes as an argument. A date from a value

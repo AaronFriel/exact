@@ -1,6 +1,4 @@
 // Build facts from syntax, never module initialization (LLP 1016 D6).
-import { existsSync, readFileSync, realpathSync } from 'node:fs';
-import { relative, resolve, sep } from 'node:path';
 import { bare, lineColumn, propertyName, walkRuntime } from './__exact_portable.mjs';
 import { grantsDeclaration } from './__exact_launch_setting.mjs';
 
@@ -54,7 +52,7 @@ function constantBindings(code, parse, { load, source = code } = {}) {
   const imported = (m, source, node, name) => {
     if (!load || name !== 'grants') refuse(m, node, name);
     const next = load(source, m.file, message => refuse(m, node, name, message));
-    if (!modules.has(next.file)) modules.set(next.file, moduleFacts(next.file, next.code, parse));
+    if (!modules.has(next.file)) modules.set(next.file, moduleFacts(next.file, next.code, parse, next.source ?? next.code));
     const result = modules.get(next.file);
     if (result.parsed.errors?.length) refuse(m, node, name, `cannot read ${next.file}: the module does not parse`);
     return result;
@@ -132,7 +130,7 @@ export function grantsInitializer(code, parse, options) {
 }
 
 /** appId stays local; grants may follow imports through `load`, which returns captured app-local syntax. */
-export function staticFacts(code, parse, { load, launchNames = new Set(), locations = false, source = code, checkLaunchOnly = false } = {}) {
+export function staticFacts(code, parse, { load, locations = false, source = code } = {}) {
   const { root, refuse, binding, exported, resolveBinding } = constantBindings(code, parse, { load, source });
   if (root.parsed.errors?.length) return { appId: undefined, grants: undefined, exported: [], ...(locations ? { grantSources: [] } : {}) };
   const literal = (m, node, value) => {
@@ -190,28 +188,9 @@ export function staticFacts(code, parse, { load, launchNames = new Set(), locati
       : node.type === 'MemberExpression' ? 'cannot read a computed value or array element; use literal constants' : syntax;
     refuse(m, node, name, why);
   };
-  // Inspect dependencies before folding: a web build inlines launch settings too, but grants still cannot use them.
-  const checked = new WeakSet();
-  const checkLaunch = (m, node, name) => {
-    node = bare(node);
-    if (!node || typeof node !== 'object') return;
-    if (checked.has(node)) return;
-    checked.add(node);
-    if (node.type === 'Identifier' && (m.consts.has(node.name) || m.imports.has(node.name))) return binding(m, node.name, node, name, checkLaunch);
-    if (node.type === 'MemberExpression' && launchNames.has(propertyName(node)) && propertyName(bare(node.object)) === 'env'
-      && bare(bare(node.object).object)?.type === 'MetaProperty') refuse(m, node, name, `depend on launch-marked setting ${propertyName(node)}; grants are fixed at build (LLP 1153.002 D3)`);
-    for (const [key, child] of Object.entries(node)) {
-      if (key === 'property' && node.type === 'MemberExpression' && !node.computed) continue;
-      if (key === 'key' && node.type === 'Property' && !node.computed) continue;
-      if (Array.isArray(child)) child.forEach(n => checkLaunch(m, n, name));
-      else if (child && typeof child === 'object') checkLaunch(m, child, name);
-    }
-  };
   const value = name => {
     const entry = root.exported.get(name);
     if (name !== 'grants' && (!entry || entry.source)) return undefined;
-    if (name === 'grants' && launchNames.size) exported(root, name, name, checkLaunch, true);
-    if (checkLaunchOnly) return undefined;
     const result = exported(root, name, name, constant, true);
     if (!result) return undefined;
     if (Array.isArray(result)) {
@@ -268,52 +247,17 @@ export function freezeGrants(code, parse, grants) {
   return `${code}\nconst ${local} = ${value};\nexport { ${local} as grants };\n`;
 }
 
-/** Read app-local syntax using the same plugin chain and resolution as the data bundle. */
-export async function capturedConstants(stage, rolldown, options, parse, code = readFileSync(resolve(stage, 'app.ts'), 'utf8')) {
-  stage = realpathSync.native(stage);
-  const configFile = ['__exact_tsconfig.json', 'tsconfig.json'].map(file => resolve(stage, file)).find(existsSync);
-  const resolutions = new Map(), visited = new Set();
-  const local = (source, found, refuse) => {
-    const path = found && !found.external && !found.id.startsWith('\0') && existsSync(found.id) ? realpathSync.native(found.id) : null;
-    const file = path && relative(stage, path).split(sep).join('/');
+/** A `load` for grants over a build's recorded import graph (`__exact_inputs.json` edges, `resolveImport`): each
+ * import's app-local code module, as `code(file)` holds it and as `source(file)` was authored, else a refusal. */
+export function recordedConstants(resolveImport, code, source = code) {
+  return (specifier, importer, refuse) => {
+    const file = resolveImport(importer, specifier) || null;
     const packageCode = file?.split('/').includes('node_modules') || file?.startsWith('__exact_modules/');
-    if (packageCode || !source.startsWith('.') && (!file || file.startsWith('../'))) refuse(`cannot use package binding ${JSON.stringify(source)}; import an app-local literal constant`);
-    if (!file || file.startsWith('../') || file === '..' || resolve(stage, file) !== path) refuse(`cannot resolve ${JSON.stringify(source)} inside the captured app`);
+    if (packageCode || !specifier.startsWith('.') && (!file || file.startsWith('../'))) refuse(`cannot use package binding ${JSON.stringify(specifier)}; import an app-local literal constant`);
+    if (!file || file.startsWith('../')) refuse(`cannot resolve ${JSON.stringify(specifier)} inside the captured app`);
     if (!/\.[cm]?[jt]sx?$/.test(file) || /\.d\.[cm]?ts$/.test(file)) refuse(`require literal constants in an app-local code module, received ${file}`);
-    return { file, code: readFileSync(path, 'utf8') };
-  };
-  const build = await rolldown({ ...options, cwd: stage, input: '\0exact-constants', tsconfig: configFile ?? false, logLevel: 'silent',
-    plugins: [{ name: 'exact-constants',
-      resolveId(id) { if (id === '\0exact-constants') return id; },
-      load(id) { if (id === '\0exact-constants') return ''; },
-      async buildStart() {
-        const visit = async (file, code) => {
-          if (visited.has(file)) return;
-          visited.add(file);
-          const m = moduleFacts(file, code, parse);
-          const sources = new Set([...m.imports.values(), ...m.exported.values(), ...m.stars].map(x => typeof x.source === 'string' ? x.source : x.source?.value).filter(Boolean));
-          for (const source of sources) {
-            let result;
-            try {
-              let found;
-              try { found = await this.resolve(source, resolve(stage, file)); }
-              catch { /* The literal reader reports the refused binding at its import site. */ }
-              result = local(source, found, message => { throw new Error(message); });
-            } catch (error) { result = error; }
-            resolutions.set(`${file}\0${source}`, result);
-            if (!(result instanceof Error)) await visit(result.file, result.code);
-          }
-        };
-        await visit('app.ts', code);
-      },
-    }, ...(options.plugins ?? []).map(({ name, resolveId }) => ({ name, resolveId }))],
-  });
-  try { await build.generate({ format: 'es' }); }
-  finally { await build.close(); }
-  return (source, importer, refuse) => {
-    const result = resolutions.get(`${importer}\0${source}`);
-    if (result instanceof Error) refuse(result.message);
-    if (!result) refuse(`cannot resolve ${JSON.stringify(source)} inside the captured app`);
-    return result;
+    const text = code(file);
+    if (text === undefined) refuse(`cannot resolve ${JSON.stringify(specifier)} inside the captured app`);
+    return { file, code: text, source: source(file) ?? text };
   };
 }

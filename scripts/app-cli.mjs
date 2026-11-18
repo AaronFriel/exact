@@ -546,9 +546,6 @@ if (verb === 'contract') {
     // Its refusal ends here, so the command is logged like any other.
     const refused = await refusedFlag();
     if (refused != null) return log(refused);
-    // A server entry that does not read DB is refused before the build too, not after it (verify.mjs `withAppServer`, LLP 1116.008 D1).
-    const refusal = verb === 'test' ? (await import(resolve(exact2, 'scripts/verify.mjs'))).appServer(dir)?.refusal : null;
-    if (refusal) { console.error(`test: ${refusal}`); return log(1); }
     const prepared = await prepare();
     if (prepared) return log(prepared);
     // An `agent` drive's check hashes the build's inputs, and the driver need not again (LLP 1012.001.000 D1: once a drive).
@@ -559,6 +556,8 @@ if (verb === 'contract') {
       : await script(['scripts/agent-build.mjs', host, '--app', name], [], [0, 2, 2]);
     if (checked) { delete process.env.EXACT_BUILD_CHECK_OUT; try { process.env.EXACT_BUILD_CHECKED = readFileSync(checked, 'utf8'); rmSync(checked); } catch {} }
     if (built) return log(await withCargoFault(built));
+    const refusal = verb === 'test' ? (await import(resolve(exact2, 'scripts/verify.mjs'))).appServer(dir)?.refusal : null;
+    if (refusal) { console.error(`test: ${refusal}`); return log(1); }
   }
   // A verb that builds, runs, compiles or checks the app prepares first (`beforeBuild`); a drive prepared above. An
   // app's own command keeps its name (a game's verify, an app's check) and prepares nothing.

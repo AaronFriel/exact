@@ -401,7 +401,7 @@ fn a_bake_receipt_records_the_selected_backend_even_when_grants_are_identical() 
     f.write("app.ts", &source);
     let first: Json = serde_json::from_str(&f.bake().receipt).unwrap();
     assert_eq!(first["backendOrigin"], "http://127.0.0.1:4400");
-    std::fs::create_dir(f.0.join(".exact")).unwrap();
+    std::fs::create_dir_all(f.0.join(".exact")).unwrap();
     f.write(".exact/backend-origin", "http://127.0.0.1:4412");
     let second: Json = serde_json::from_str(&f.bake().receipt).unwrap();
     assert_eq!(second["backendOrigin"], "http://127.0.0.1:4412");

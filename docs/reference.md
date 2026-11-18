@@ -5519,6 +5519,31 @@ from an app-local module, by name or through `export *`. The captured export
 becomes the same fixed string. Launch-marked settings require a grants
 declaration in `app.ts`, where the bake adds their `env.launch` lines.
 
+A setting declared in app.json's `env` is read in a top-level const of `app.ts` or an
+app-local module it imports transitively:
+`const API = import.meta.env.API_BASE_URL ?? 'https://api.example'`.
+Each read of a name must use the same default, including no default. A declared name
+must be read in app.ts or its transitive app-local imports; other files do not count.
+The graph uses the bundle's browser resolution, including package main fields and
+conditions. Discovery and freshness read the bake's recorded module list; they do not resolve
+imports again. Type-only imports and re-exports read no settings. Every source file loaded
+by the TypeScript check remains a freshness input, including declarations, `import()` types
+and triple-slash references. Resolution inputs also count: manifests, configuration, and
+the names a resolution would have chosen in each place it searched (the specifier with each
+extension, as a directory, a package name in each `node_modules`), present with their bytes or
+absent, including inside packages. An unrelated file or directory, such as `out/`, is none.
+An implementation source omitted from declaration capture remains a file input if it exists.
+Web, Linux and Apple builds write the same discovery record beside
+the app. The checker types declared settings even in modules reached only through types;
+those modules supply no setting values or defaults. Grants may use a setting's const from
+`app.ts` or an imported module, as any literal constant, unless the setting is launch-marked.
+
+Server discovery gives a local setting read by `app.ts` priority. Otherwise it walks the
+recorded imports depth-first in source order, visiting each module before its imports,
+and takes the first local setting, then the first literal URL. Different local settings
+in the first setting-owning module are refused, naming the values; keep the server's
+setting in `app.ts` and other clients' settings in their modules.
+
 A backend override (`--backend`, `EXACT_BACKEND_ORIGIN` or `.exact/backend-origin`)
 needs one top-level `const origin`, set to a literal http(s) string or a setting
 such as `import.meta.env.API_BASE_URL ?? 'https://api.example'`, and used in
@@ -5568,8 +5593,8 @@ process belong to this app directory and origin. Choose a free port with `--back
 or `PORT` when another checkout holds it. Ordinary app servers keep their authored ports.
 
 **A setting a launch gives** (LLP 1153.002). Beside a name, app.json's `env` takes
-`{ "name": "API_BASE_URL", "launch": true }`, and app.ts reads it as any setting, in a
-top-level `const API = import.meta.env.API_BASE_URL ?? '…'`. Its build's value (the
+`{ "name": "API_BASE_URL", "launch": true }`. In `app.ts` or an app-local module it imports
+transitively, read it as `const API = import.meta.env.API_BASE_URL ?? '…'`. Its build's value (the
 environment, `.env.local`, `.env`, the default) is what the web and Android read (the web's
 bundles inline it), what a process that renders the web's pages reads, at build or while
 serving, and what the bake's own evaluation reads, so the first frame it compiles. On Apple
@@ -5720,7 +5745,7 @@ tested. The page cannot detect installation, and does not trigger signing/builds
 Linux native apps can run TypeScript through `exact-js` and Hermes;
 `apps/shelf/linux` is an entry using that executor.
 
-**Limits.** `app.ts` imports pure-JavaScript packages only (Node's modules, the DOM, a computed `import()` and native addons are refused; a use that a `typeof` test guards is not, nor a read through the global object, such as `globalThis.process?.env`, whose value is only tested, compared, spread into an object, returned, or held in a `const` whose uses are guarded in turn). Code from a string throws on every host through `Function` and `eval`, and through their own `constructor`: each throws `SyntaxError: Parsing source code unsupported`, as Hermes does. The build warns (`code-from-string`) at the uses of the global `Function` or `eval` it can see by name, a package's or `app.ts`'s: a direct call or `new`, a member of `globalThis`, destructuring a global object's property, a parameter initializer, or a JSX component name (`<Function />`). A use reached another way builds without a warning and throws the same error when it runs. Either way, code that uses them works only if it catches that error and takes another path, as zod does. What reaches `Function.prototype.constructor` or a function's own `constructor` (`(function () {}).constructor`) still runs code from a string on the web, and not on Hermes: the warning is a tripwire, not a sandbox, and refuses nothing. Under the render server's CSP and in the JS server render that throws too. A package may not read `import.meta.env`, which is app.ts's to read and pass in; a read the bundle drops, in a function nothing calls, is not one. That check keeps a module portable between Hermes and the page; it is no security boundary: on the web the module runs in the page's realm, and a package is code the author chose, trusted as their own. A package's `/// <reference lib>` to an ES library newer than the data module's (`esnext.disposable`) loads nothing, so what that library declares (`Symbol.dispose`, which Hermes lacks) stays undeclared for the app.
+**Limits.** `app.ts` imports pure-JavaScript packages only (Node's modules, the DOM, a computed `import()` and native addons are refused; a use that a `typeof` test guards is not, nor a read through the global object, such as `globalThis.process?.env`, whose value is only tested, compared, spread into an object, returned, or held in a `const` whose uses are guarded in turn). Code from a string throws on every host through `Function` and `eval`, and through their own `constructor`: each throws `SyntaxError: Parsing source code unsupported`, as Hermes does. The build warns (`code-from-string`) at the uses of the global `Function` or `eval` it can see by name, a package's or `app.ts`'s: a direct call or `new`, a member of `globalThis`, destructuring a global object's property, a parameter initializer, or a JSX component name (`<Function />`). A use reached another way builds without a warning and throws the same error when it runs. Either way, code that uses them works only if it catches that error and takes another path, as zod does. What reaches `Function.prototype.constructor` or a function's own `constructor` (`(function () {}).constructor`) still runs code from a string on the web, and not on Hermes: the warning is a tripwire, not a sandbox, and refuses nothing. Under the render server's CSP and in the JS server render that throws too. A package may not read `import.meta.env`: an app-local module reads the setting and passes it in; a read the bundle drops, in a function nothing calls, is not one. That check keeps a module portable between Hermes and the page; it is no security boundary: on the web the module runs in the page's realm, and a package is code the author chose, trusted as their own. A package's `/// <reference lib>` to an ES library newer than the data module's (`esnext.disposable`) loads nothing, so what that library declares (`Symbol.dispose`, which Hermes lacks) stays undeclared for the app.
 
 Signed delivery carries one module pair, and which pair depends on the host. The
 Apple loader accepts TypeScript or a Rust module enabled by the binary's Rust policy.

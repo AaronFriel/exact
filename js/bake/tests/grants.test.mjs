@@ -382,7 +382,7 @@ for (const web of [false, true]) for (const dependency of [
     'app.ts': "import { LINE } from './barrel';\nexport const API = import.meta.env.API ?? 'https://built.example';\nexport const grants = LINE;\n",
     'barrel.ts': dependency,
   }, { env: [{ name: 'API', launch: true }] });
-  try { await expect(configure(f.stage, false, parseSync, web)).rejects.toThrow('depend on launch-marked setting API; grants are fixed at build'); }
+  try { await expect(configure(f.stage, false, parseSync, web)).rejects.toThrow('grants read API, and import.meta.env.API is one a launch may give'); }
   finally { f.close(); }
 });
 
@@ -405,7 +405,7 @@ test('a reused captured stage restores the authored backend after an override is
   try {
     mkdirSync(app);mkdirSync(stage);mkdirSync(join(app,'.exact'));
     const source="const origin='http://127.0.0.1:4400'; export const grants=`net.fetch ${origin}`;";
-    writeFileSync(join(stage,'app.ts'),source);writeFileSync(join(stage,'__exact_backend_source.json'),JSON.stringify(source));
+    writeFileSync(join(stage,'app.ts'),source);writeFileSync(join(stage,'__exact_backend_source.json'),JSON.stringify({'app.ts':source}));
     writeFileSync(join(stage,'__exact_paths.json'),JSON.stringify({app,mounts:[]}));
     writeFileSync(join(app,'.exact/backend-origin'),'http://127.0.0.1:4412');
     await configure(stage,true,parseSync);
@@ -414,10 +414,10 @@ test('a reused captured stage restores the authored backend after an override is
     expect(backend()).toEqual({origin:'http://127.0.0.1:4412',warning:expect.stringContaining('overriding')});
     rmSync(join(app,'.exact/backend-origin'));await configure(stage,true,parseSync);
     expect(staticFacts(readFileSync(join(stage,'app.ts'),'utf8'),parseSync).grants).toBe('net.fetch http://127.0.0.1:4400');
-    expect(JSON.parse(readFileSync(join(stage,'__exact_backend_source.json'),'utf8'))).toBe(source);
+    expect(JSON.parse(readFileSync(join(stage,'__exact_backend_source.json'),'utf8'))).toEqual({'app.ts':source});
     expect(backend()).toEqual({origin:'http://127.0.0.1:4400',warning:null});
     // An authored edit equal to the previous injection is still a new captured source.
-    const edited=source.replace('4400','4412');writeFileSync(join(stage,'__exact_backend_source.json'),JSON.stringify(edited));
+    const edited=source.replace('4400','4412');writeFileSync(join(stage,'__exact_backend_source.json'),JSON.stringify({'app.ts':edited}));
     await configure(stage,true,parseSync);
     expect(staticFacts(readFileSync(join(stage,'app.ts'),'utf8'),parseSync).grants).toBe('net.fetch http://127.0.0.1:4412');
     expect(backend()).toEqual({origin:'http://127.0.0.1:4412',warning:null});

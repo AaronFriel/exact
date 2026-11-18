@@ -5,6 +5,25 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, ChildStdout, Stdio};
 
+// Reconfiguration starts from every authored module, even when stage_capture kept its rewritten copy.
+pub(super) fn setting_sources(captured: &BTreeMap<PathBuf, Vec<u8>>) -> Result<Vec<u8>, String> {
+    let modules: BTreeMap<_, _> = captured
+        .iter()
+        .filter(|(path, _)| {
+            path.extension()
+                .is_some_and(|ext| ["ts", "js", "mjs", "cjs", "json"].iter().any(|x| ext == *x))
+                && !path.to_string_lossy().ends_with(".d.ts")
+        })
+        .map(|(path, bytes)| {
+            (
+                path.to_string_lossy().replace('\\', "/"),
+                String::from_utf8_lossy(bytes),
+            )
+        })
+        .collect();
+    serde_json::to_vec(&modules).map_err(|e| e.to_string())
+}
+
 /// Sequential development bakes over one private captured graph. Every request
 /// still runs strict diagnostics, bundling, HBC compilation and the normal bake.
 /// Nonstandard compiler tools retain their existing one-shot invocation contract.
@@ -323,7 +342,7 @@ mod tests {
         write("app.ts", source);
         write(
             "__exact_backend_source.json",
-            &serde_json::to_string(source).unwrap(),
+            &serde_json::to_string(&serde_json::json!({"app.ts": source})).unwrap(),
         );
         write(
             "__exact_entry.ts",

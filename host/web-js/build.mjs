@@ -5,7 +5,7 @@ import { bakeWatchEnv, hatchWords, injectedProfiles, moduleDirectory, readManife
 import { rustDataOf } from '../../scripts/app-shells.mjs';
 import { webIconLinks, webThemeColors } from '../../scripts/app-icons.mjs';
 import { webAudioSession, webCspFile, webHead } from '../../scripts/web-head.mjs';
-import { fileIdentity, resourceIdentities } from '../apple/assets.mjs';
+import { appSourceFiles } from '../../scripts/app-imports.mjs';
 import { launchModules } from '../../scripts/launch-modules.mjs';
 import { installedFileDependencies } from '../../scripts/file-dependencies.mjs';
 // The web build's JS target: `bun host/web-js/build.mjs <app> [--plan <baked app.plan>] [--out <dir>]`.
@@ -42,7 +42,6 @@ import { buildEditor, buildFlow, buildMarkdown, buildModule, buildMotion, module
 import { appDigest, developmentStore } from '../../scripts/agent-launch.mjs';
 import { settingLines } from '../../js/bake/src/__exact_env.mjs';
 import { colorSchemeMeta, interfaceStyle, launchBackground, schemeHead, withInterfaceStyle, withLook } from '../web/look.mjs';
-import { beside as besideDist } from '../web/beside.mjs';
 import { copyStaticTreeIfPresent } from '../web/serve.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -306,7 +305,7 @@ if (checkOnly) {
   sayWarnings(captured?.warnings);
   process.exit(typeError ? 1 : 0);
 }
-// Each setting app.ts read, as inlined, and its source (`configure`; LLP 1153 D4).
+// Each setting the app-local modules read, as inlined, and its source (`configure`; LLP 1153 D4).
 if (ts) for (const line of settingLines(JSON.parse(readFileSync(resolve(tsStage, '__exact_env.json'), 'utf8')))) console.log(line);
 // The Contract supplies the types needed to resolve app.ts's exports. Emit from that same plan once those exports
 // are known, so re-exports without `draw` leave omitted package surfaces undrawn without recompiling the Contract.
@@ -419,33 +418,12 @@ async function typecheck(checking) {
   // it is no source, and the stage is inside it (review r4a 2).
   const output = realpathSync(out);
   const mounts = Object.entries(manifest.typescript?.sources ?? {}).map(([name, path]) => [name, mountDir(name, path)]);
-  // A declared resource tree is no source, known by identity (js/bake's `sources`, by the same rule).
-  const resources = resourceIdentities(appDir, manifest);
-  const capture = (from, to, top) => {
-    for (const entry of readdirSync(from, { withFileTypes: true })) {
-      const name = entry.name, path = resolve(from, name);
-      if (resources.size && resources.has(fileIdentity(path))) continue;
-      if (['.git', 'node_modules', 'target', 'dist'].includes(name) || name.startsWith('.exact-js-bake-') || (top && name === 'app.contract.d.ts')) continue;
-      // Dot directories at any depth hold tooling state, not app sources, as in js/bake's capture.
-      if (name.startsWith('.') && entry.isDirectory()) continue;
-      // Nor is what a build in `dist` keeps beside it (`web-build --out dist`: serve.mjs `replaceBuild`, generations.mjs).
-      if (top && besideDist(name)) continue;
-      if (top && mounts.some(([mount]) => mount === name)) continue;
-      // Native link inputs, fingerprinted by the Apple build, as in js/bake's capture.
-      if (entry.isDirectory() && name.endsWith('.xcframework') && /^(modules|(?:ios|macos|tvos)\/modules)\//.test(relative(appDir, path).split(sep).join('/'))) continue;
-      // Links are refused, except a document link outside the static trees
-      // (CLAUDE.md → AGENTS.md), as js/bake's capture: no build reads one.
-      if (entry.isSymbolicLink()) {
-        const document = /\.(md|txt)$/.test(name) && !/^(assets|deck|shaders|gpu)$/.test(relative(appDir, from).split(/[\\/]/)[0]);
-        if (!document || statSync(path, { throwIfNoEntry: false })?.isDirectory()) throw new Error(`source links are not captured: ${path}`);
-        continue;
-      }
-      if (entry.isDirectory()) { if (realpathSync(path) !== output) capture(path, resolve(to, name), false); }
-      else if (/\.(ts|[cm]?js|json)$/.test(name)) { mkdirSync(to, { recursive: true }); cpSync(path, resolve(to, name)); }
-    }
-  };
-  capture(appDir, stage, true);
-  for (const [name, dir] of mounts) capture(dir, resolve(stage, name), false);
+  const capturedSettings = new Map();
+  for (const [file, path] of appSourceFiles(appDir, { manifest, mounts, output })) {
+    mkdirSync(dirname(resolve(stage, file)), { recursive: true });
+    cpSync(path, resolve(stage, file));
+    if (/\.(ts|[cm]?js)$/.test(file) && !file.endsWith('.d.ts')) capturedSettings.set(file, readFileSync(path, 'utf8'));
+  }
   writeFileSync(resolve(stage, 'app.contract.d.ts'), declarations);
   // The bake's optional data exports (js/bake/src/lib.rs `OPTIONAL_ENTRY`).
   // The web host supplies its own Canvas 2D seam.
@@ -456,10 +434,11 @@ async function typecheck(checking) {
   writeFileSync(resolve(stage, '__exact_entry.ts'), `import * as app from './app';\nimport type { TypeScriptAnswer } from './app.contract.d.ts';\nconst named = (app as unknown as { appId?: string }).appId;\nexport const appId: string = named === undefined || named === ${JSON.stringify(base)} ? ${JSON.stringify(id)} : named;\nexport const grants: string = app.grants;\nexport const answer: TypeScriptAnswer = app.answer;\n` + optional
     + "export const draw: ((surface: string, args: any, ctx: any, frame: any) => unknown) | undefined = (app as { draw?: unknown }).draw as Optional<'draw'>;\nexport const surfaces = (app as { surfaces?: unknown }).surfaces as Optional<'surfaces'>;\n");
   writeFileSync(resolve(stage, '__exact_paths.json'), JSON.stringify({ app: realpathSync(appDir), mounts, target: 'web' }));
-  writeFileSync(resolve(stage,'__exact_backend_source.json'), JSON.stringify(readFileSync(resolve(stage,'app.ts'),'utf8')));
+  writeFileSync(resolve(stage,'__exact_backend_source.json'), JSON.stringify(Object.fromEntries(capturedSettings)));
   const real = realpathSync(stage);
   if (real !== tsStage) throw new Error(`the TypeScript stage moved: ${real}`);
-  await configure(real, false, parseSync, true);
+  const { rolldown } = await import('rolldown');
+  await configure(real, false, parseSync, true, rolldown);
   const backendWarning=JSON.parse(readFileSync(resolve(real,'__exact_backend.json'),'utf8')).warning;
   if (backendWarning) console.warn(`warning: ${backendWarning}`);
   // The packages whose declarations the check reads (typescript.mjs
@@ -481,7 +460,6 @@ async function typecheck(checking) {
   // bundle from the capture is refused, as the native bake refuses it.
   // Both run, and every diagnostic is reported, as the resident compiler joins them.
   const why = [];
-  const { rolldown } = await import('rolldown');
   // Whether a module can ask for a stream (LLP 1047.003 D5); the page's and the server's bundles load no other module.
   let streams = false;
   const streamNames = { name: 'stream-names', transform(code, id) { streams ||= namesStream(code, id); return null; } };
@@ -1176,7 +1154,7 @@ function cutSheet(chunks) {
   return contentFiles['style.css'] = contentName('style.css', sheet);
 }
 if (how !== 'none' || markdownReaders) {
-  const b = await rolldown({ input: resolve(gen, 'main-server.js'), ...(ts ? { tsconfig: resolve(tsStage, '__exact_tsconfig.json') } : {}),
+  const b = await rolldown({ ...bundleOptions, input: resolve(gen, 'main-server.js'), ...(ts ? { tsconfig: resolve(tsStage, '__exact_tsconfig.json') } : {}),
     transform: { ...bundleOptions.transform, define: { ...bundleOptions.transform.define, ...versionDefines, 'globalThis.__exactRender': 'true', 'import.meta.url': JSON.stringify(pathToFileURL(resolve(out, 'app.js')).href) } },
     plugins: [...scopedPlugins(), contentNames(contentFiles, exactModule)], logLevel: 'warn', onLog });
   try { shipped.push(...(await b.write({ file: resolve(gen, 'server.js'), format: 'iife', codeSplitting: false })).output.filter(file => file.type === 'chunk')); }
@@ -1212,7 +1190,7 @@ const prepareChunks = { name: 'exact-prepare-chunks', renderChunk(code, chunk, _
   return code.replace('__EXACT_DEFERRED_CHUNKS__', () => JSON.stringify(deferred)).replace('__EXACT_SHEET__', () => cutSheet(Object.values(meta.chunks)));
 } };
 {
-  const b = await rolldown({ input: resolve(gen, 'main.js'), ...(ts ? { tsconfig: resolve(tsStage, '__exact_tsconfig.json') } : {}), transform: { ...bundleOptions.transform, define: { ...bundleOptions.transform.define, ...versionDefines, 'globalThis.__exactRender': 'false' } },
+  const b = await rolldown({ ...bundleOptions, input: resolve(gen, 'main.js'), ...(ts ? { tsconfig: resolve(tsStage, '__exact_tsconfig.json') } : {}), transform: { ...bundleOptions.transform, define: { ...bundleOptions.transform.define, ...versionDefines, 'globalThis.__exactRender': 'false' } },
     plugins: [...scopedPlugins(), contentNames(contentFiles, exactModule), prepareChunks], logLevel: 'warn', onLog });
   // In a development reload build, put the TypeScript data module and every
   // helper it imports in one chunk the page really loads. Its emitted bytes,

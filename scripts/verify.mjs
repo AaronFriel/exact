@@ -1050,17 +1050,7 @@ async function deviceMain(argv, emitJSON, declined, ended) {
   const started = Date.now();
   ACCEPT = app.manifest.verify?.accept ?? [];
   const say = (lines) => console.log(lines.join('\n'));
-  // An app with a server of its own: verify runs it where the app calls it, on an empty database. One already
-  // answering there (the builder's dev server) is refused before the build: never stopped, never written to; so is
-  // an entry that does not read DB (LLP 1116.008 D1), which could only be run on its own database.
-  const server = appServer(app.dir), owned = server && !server.why;
   const refuse = (line) => { if (json) emitJSON({ host, server: { error: line }, problems: 1, exit: 1 }); else console.error(`verify: ${line}`); return declined(1); };
-  if (server?.refusal) return refuse(server.refusal);
-  // (A test run that holds the port's turn is waited for when the server starts.)
-  if (owned && await answering(server.url) && !(await holderOf(server.port))) return refuse(heldLine(server));
-
-  const last = lastRuns(app)[host];
-  console.error(`verify ${host}: about ${Math.round((last ?? ESTIMATE[host]) / 1000)} s${last ? ', as its last run took' : ''}; one report when it ends`);
   const built = host === 'web' ? await webBuild(app) : host === 'windows' ? await windowsBuild(app) : host === 'android' ? await (await import('./agent-android.mjs')).apkBuildFirst(app) : await iosBuild(app);
   // The build said the compiler's warnings when it ran; the report's own group says them whether it ran or not.
   if (built?.said) { const { compilerWarnings } = await import('./agent-launch.mjs'); built.said = built.said.filter((line) => !compilerWarnings(line).length && !/^compiler: \d+ (?:warnings?|notes?)\b/.test(line)); }
@@ -1071,6 +1061,14 @@ async function deviceMain(argv, emitJSON, declined, ended) {
     return built.code;
   }
 
+  // Discovery uses the completed build's module record. Database and ownership checks precede every launch.
+  const server = appServer(app.dir), owned = server && !server.why;
+  if (server?.refusal) return refuse(server.refusal);
+  // A test run that holds the port's turn is waited for when the server starts.
+  if (owned && await answering(server.url) && !(await holderOf(server.port))) return refuse(heldLine(server));
+
+  const last = lastRuns(app)[host];
+  console.error(`verify ${host}: about ${Math.round((last ?? ESTIMATE[host]) / 1000)} s${last ? ', as its last run took' : ''}; one report when it ends`);
   const shots = resolve(app.dir, '.exact', 'verify');
   mkdirSync(shots, { recursive: true }); largeShots = { dir: shots, host, n: 0 };
   for (const f of readdirSync(shots)) if (f.startsWith(`${host}-`) && f.endsWith('.png')) rmSync(resolve(shots, f), { force: true });

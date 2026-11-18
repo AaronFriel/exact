@@ -126,7 +126,9 @@ It answers with exactly the declared shape: an extra field fails a resource, so 
 record field by field. Type a source's result (`Promise<Result<'loadItems'>>`) so the build
 names one.
 It reaches only what its `grants` name: `export const grants = \`net.fetch ${API}\``, with
-`const API = import.meta.env.API_BASE_URL` (app.json's `env`). A failed read should throw,
+`const API = import.meta.env.API_BASE_URL` in `app.ts` (app.json's `env`). A client may
+also read settings in an app-local module imported transitively; type-only imports
+read no settings. A failed read should throw,
 failing its resource. It imports its own `.ts` and pure-JS npm packages; one needing Node
 (`fs`, `Buffer`) or the DOM is refused by name. A page rendered on the server has no
 storage. A source still waiting there on a `storage` call is left pending: its placeholder

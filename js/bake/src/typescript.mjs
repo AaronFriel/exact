@@ -9,19 +9,19 @@ import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readSync, rea
 import { execFile } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
-import { builtinModules, createRequire } from 'node:module';
+import { createRequire } from 'node:module';
 import { resolve, relative, dirname, basename, join, sep, isAbsolute, toNamespacedPath } from 'node:path';
 // The bake writes the binding's generator beside this file in its stage (js/bake/src/resident.rs `BINDING`).
 import { moduleBinding, languageModelToolCheck, languageModelToolNote, languageModelTools, languageModelToolSources, TOOL_CHECK, unownedTools } from './__exact_binding.mjs';
 // And the settings' reader beside it (resident.rs `ENV`).
-import { checkPreloadBackend, envReads, inlineSettings, launchNames } from './__exact_env.mjs';
+import { checkPreloadBackend, checkerOutput, declaredSettings, envReads, inlineSettings, moduleResolution, orderImportEdges, packageOrigin, recordSourceInputs, resolutionCandidates, settingSources } from './__exact_env.mjs';
 import { grantsDeclaration, launchGrants as grantsWithLaunches, launchModule, launchSource } from './__exact_launch_setting.mjs';
 export { launchModule, launchSource };
 // And the check of what package code may use (resident.rs `PORTABLE`).
-import { compilerOptions, bare, lineColumn, packageRefusals, propertyName, walkRuntime, moduleSpecifiers } from './__exact_portable.mjs';
+import { compilerOptions, builtin, nodeNote, bare, lineColumn, packageRefusals, propertyName, walkRuntime, moduleSpecifiers } from './__exact_portable.mjs';
 
-import { capturedConstants, freezeGrants, grantsInitializer, staticFacts } from './__exact_facts.mjs';
-export { moduleBinding, compilerOptions, capturedConstants, staticFacts };
+import { freezeGrants, grantsInitializer, recordedConstants, staticFacts } from './__exact_facts.mjs';
+export { moduleBinding, compilerOptions, nodeNote, staticFacts };
 
 function httpOrigin(value, label) {
   let url; try { url=new URL(value); } catch { throw new Error(`${label}: expected an http(s) origin`); }
@@ -366,16 +366,6 @@ export function packageName(spec) {
   const parts=spec.split('/'), name=spec.startsWith('@') ? parts.slice(0,2).join('/') : parts[0];
   return /^(?:@[\w.-]+\/)?[\w.-]+$/.test(name) && !/^\.+$/.test(name.split('/').at(-1)) ? name : null;
 }
-// Where a staged package file came from (`__exact_declarations.json`).
-function packageOrigin(stage, file) {
-  try {
-    const { packages }=JSON.parse(readFileSync(resolve(stage,PACKAGES),'utf8'));
-    const match=packages.map(([at,from])=>[resolve(stage,at),from]).sort((a,b)=>b[0].length-a[0].length)
-      .find(([at])=>file===at || file.startsWith(at+sep));
-    if (match) return resolve(match[1],relative(match[0],file));
-  } catch { /* no packages staged */ }
-  return file;
-}
 // The captured app's places: the app at the stage's root and each mount
 // under its name, each with the directory it was captured from.
 function capturedOrigins(stage) {
@@ -401,7 +391,7 @@ const physicalId=id=>{ if (!isAbsolute(id)) return id; try { return realpathSync
  * installed, so a producer can watch them. */
 export function stagePackages(stage, parse) {
   const roots=capturedOrigins(stage), app=roots.at(-1);
-  const staged=new Map(), files=new Map(), queue=[], peers=[], peerRefusals=[];
+  const staged=new Map(), files=new Map(), sourceDigests=new Map(), queue=[], peers=[], peerRefusals=[];
   let total=0;
   // Over the cap, the error names the largest packages, each with the captured file whose imports reached it.
   const tooLarge=()=>{
@@ -464,7 +454,8 @@ export function stagePackages(stage, parse) {
       const kind=entry.isSymbolicLink() ? statSync(path,{throwIfNoEntry:false}) : entry;
       if (kind?.isDirectory()) copy(path,join(place,name),owner);
       else if (kind?.isFile() && (name==='package.json' || DECLARATION.test(name))) {
-        const bytes=DECLARATION.test(name) ? unreferenced(readFileSync(path)) : readFileSync(path);
+        const raw=readFileSync(path), bytes=DECLARATION.test(name) ? unreferenced(raw) : raw;
+        sourceDigests.set(join(owner.installed,relative(owner.from,path)),createHash('sha256').update(raw).digest('hex'));
         total+=bytes.length;
         owner.staged.bytes+=bytes.length;
         if (total>64<<20) throw tooLarge();
@@ -518,6 +509,7 @@ export function stagePackages(stage, parse) {
   const record=JSON.stringify({
     packages:[...staged].map(([at,{installed,real}])=>[relative(stage,at),installed,real]).sort(),
     files:[...files.values()].map(([path])=>path).sort(),
+    digests:Object.fromEntries(sourceDigests),
     peerRefusals:peerRefusals.sort(),
   });
   const recordPath=resolve(stage,PACKAGES);
@@ -542,8 +534,6 @@ const RECORD='__exact_packages.json';
 /** The bundle's sites that run code from a string, a JSON list of warnings each producer says (the web build,
  * js/bake/src/lib.rs `bake_in`). */
 export const CODE_WARNINGS='__exact_code_warnings.json';
-const BUILTIN=new Set(builtinModules);
-const builtin=(spec)=>spec.startsWith('node:') || BUILTIN.has(spec) || BUILTIN.has(spec.split('/')[0]);
 // npm's package names (with the old capitals) and versions: a place in the
 // stage is made of them, so nothing else is taken.
 const NAME=/^(?:@[a-z0-9~][\w.~-]*\/)?[a-z0-9~][\w.~-]*$/i, VERSION=/^(?:[0-9a-z][\w.+-]*)?$/i;
@@ -603,7 +593,7 @@ const kindOf=(options)=>options?.kind==='require-call' ? 'require' : 'import';
 // `browser` condition and field first), as the page's own bundle does, so
 // the page and Hermes run the same file of a package; `process.env.NODE_ENV`
 // is the constant packages test.
-export const bundleOptions={platform:'browser',transform:{define:{'process.env.NODE_ENV':'"production"'}}};
+export const bundleOptions={platform:'browser',resolve:moduleResolution,transform:{define:{'process.env.NODE_ENV':'"production"'}}};
 // An async function resumes under the answer it began in (LLP 1133.002 D14),
 // so a call it makes after an `await` is that answer's, even when it awaited
 // a promise another answer made. No engine carries context across a native
@@ -650,12 +640,15 @@ export const dataBundle=(stage)=>({...bundleOptions, transform:{...bundleOptions
  * files load only from the stage, package code only from its capture, and
  * the clock (`ambientRefusals`) or what no executor has (`packageRefusals`)
  * is refused by file and line, into `refusals` when given, else thrown. */
-export function capturedSources(stage, refusals=null) {
+export function capturedSources(stage, refusals=null, discovery=false) {
   stage=realpathSync.native(stage);
   const files=new Map(), roots=new Map(), edges=new Map(), stray=new Map(), area=join(stage,'node_modules','.packages');
   // Each site that runs code from a string, once (`packageRefusals`): written beside the stage at the build's end.
   const warned=new Set();
   let total=0;
+  const resolution=new Map();
+  const config=resolve(stage,'__exact_tsconfig.json');
+  const aliases={base:stage,paths:existsSync(config) ? JSON.parse(readFileSync(config,'utf8')).compilerOptions.paths : {}};
   // Staged declarations and captured package code sit under a `node_modules` in the stage.
   const staged=(id)=>within(id,stage) && relative(stage,id).split(sep).includes('node_modules');
   const label=(id,at='')=>{
@@ -719,12 +712,17 @@ export function capturedSources(stage, refusals=null) {
       if (!importer || importer.startsWith('\0')) return null;
       importer=physicalId(importer);
       const from=files.get(importer), name=packageName(source), kind=kindOf(options);
+      const resolving=async (place)=>{
+        const result=await this.resolve(source, place, { ...options, skipSelf: true });
+        for (const name of resolutionCandidates(source,place,result?.id,result?.packageJsonPath,aliases)) resolution.set(name,packageOrigin(stage,name));
+        return result;
+      };
       const record=(id)=>edges.set([slash(relative(stage,importer)),source,kind].join('\0'),[slash(relative(stage,importer)),source,kind,id ? slash(relative(stage,id)) : '']);
       // The app's own imports (a relative or absolute path) resolve as they
       // would, and are recorded, so a later bundle replays every one.
       if (!from && !name && !builtin(source)) {
         if (!within(importer,stage)) return null;
-        const result=await this.resolve(source, importer, { ...options, skipSelf: true });
+        const result=await resolving(importer);
         const resolved=result && !result.external ? {...result,id:physicalId(result.id)} : result;
         if (resolved && !resolved.external && !resolved.id.startsWith('\0')) record(resolved.id);
         return resolved;
@@ -734,7 +732,7 @@ export function capturedSources(stage, refusals=null) {
         // place that differs between the stage and the app's own directory.
         if (source.split(/[\\/]/).some(part => part === '.' || part === '..')) throw new Error('module outside captured app: '+source);
         // A path mapping into the capture.
-        const result=await this.resolve(source, importer, { ...options, skipSelf: true });
+        const result=await resolving(importer);
         const resolved=result && !result.external ? {...result,id:physicalId(result.id)} : result;
         if (resolved && !resolved.external && within(resolved.id,stage) && !staged(resolved.id)) { record(resolved.id); return resolved; }
       }
@@ -742,7 +740,7 @@ export function capturedSources(stage, refusals=null) {
       const origins=capturedOrigins(stage), [at,origin]=origins.find(([at])=>within(importer,at)) ?? [stage,stage];
       const app=origins.at(-1)[1], peer=name && appPeer(app,from?.package,name);
       const place=peer ? join(app,'app.ts') : from ? from.real : resolve(origin,relative(at,importer));
-      const real=await this.resolve(source, place, { ...options, skipSelf: true }).catch(() => null);
+      const real=await resolving(place).catch(() => null);
       const who=label(importer);
       if (!real || real.external) {
         if (builtin(source)) throw new Error(`${who} imports Node's built-in '${source}': a data module runs on Hermes and in the browser, which have no Node modules; import a part of the package that needs none, or another package`);
@@ -760,6 +758,7 @@ export function capturedSources(stage, refusals=null) {
       return null;
     },
     transform(code, id) {
+      if (discovery) return null;
       id=physicalId(id);
       const parse=(c,o)=>this.parse(c,o), js=/\.[cm]?js$/.test(id) && within(id,stage), inPackage=files.has(id);
       const reads=envReads(id,code,parse,(at)=>label(id,at),inPackage);
@@ -787,7 +786,13 @@ export function capturedSources(stage, refusals=null) {
     buildEnd() {
       const listed=[...files.values()].map(({real,package:{key,root},sha256})=>[key,slash(relative(root,real)),real,sha256])
         .sort((a,b)=>a[0]+'\0'+a[1]<b[0]+'\0'+b[1] ? -1 : 1);
-      const resolved=[...edges.values()].sort((a,b)=>a.join('\0')<b.join('\0') ? -1 : 1);
+      const imports=new Map([...this.getModuleIds()].map(id=>{
+        const info=this.getModuleInfo(id);
+        return [slash(relative(stage,physicalId(id))),[...info.importedIds,...info.dynamicallyImportedIds].map(id=>slash(relative(stage,physicalId(id))))];
+      }));
+      const resolved=orderImportEdges([...edges.values()],imports);
+      recordSourceInputs(stage,'modules',[...this.getModuleIds()].filter(id=>!files.has(id)),resolved);
+      recordSourceInputs(stage,'resolution',[...resolution]);
       // A package's digest: its files' paths and bytes, and every import that reached it.
       const digests={};
       for (const key of [...roots.keys()].sort()) {
@@ -923,8 +928,8 @@ export function snapbackMutationTypes(declarations) {
 
 /** With `web`, for the web's bundles: a setting a launch may give is inlined as any other, as no launch gives one
  * there (LLP 1153.002 D2). */
-export async function configure(stage, incremental=false, parse, web=false, rolldown) {
-  const app=capturedOrigins(stage).at(-1)[1], modulePath=resolve(stage,'app.ts');
+export async function configure(stage, incremental=false, parse, web=false, build) {
+  const app=capturedOrigins(stage).at(-1)[1];
   const inside = (path) => {
     if (path !== stage && !path.startsWith(stage+sep)) throw new Error('tsconfig: path outside captured app: '+path);
     return path;
@@ -944,9 +949,10 @@ export async function configure(stage, incremental=false, parse, web=false, roll
     if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('tsconfig: '+label+' must be an object');
     return value;
   };
-  const chain = new Set();
+  const chain = new Set(), configs = new Set();
   function read(path) {
     inside(path);
+    configs.add(path);
     if (chain.has(path)) throw new Error('tsconfig: cyclic extends: '+path);
     chain.add(path);
     const json=object(Bun.JSONC.parse(readFileSync(path,'utf8')),path), dir=source(dirname(path));
@@ -988,17 +994,41 @@ export async function configure(stage, incremental=false, parse, web=false, roll
     include:['**/*.d.ts'],exclude:['**/node_modules']};
   const path=resolve(stage,'__exact_tsconfig.json'), bytes=JSON.stringify(config);
   if (!existsSync(path) || readFileSync(path,'utf8')!==bytes) writeFileSync(path,bytes);
+  writeFileSync(resolve(stage,'__exact_env.d.ts'), `interface ImportMeta { readonly env: {\n${declaredSettings(app).filter(name=>typeof name==='string' && /^[A-Z][A-Z0-9_]*$/.test(name)).map(name=>`  readonly ${name}: string;`).join('\n')}\n}; }\n`);
+  if(capturedOrigins(stage).slice(0,-1).some(([,from])=>/(?:^|[/\\])snapback4[/\\](?:ts|online)$/.test(from))) {
+    const declaration=resolve(stage,'app.contract.d.ts');
+    const before=readFileSync(declaration,'utf8'), after=snapbackMutationTypes(before);
+    if(before!==after) writeFileSync(declaration,after);
+  }
+  writeFileSync(resolve(stage,'__exact_inputs.json'), '{}');
+  const modulePath=resolve(stage,'app.ts');
   if (existsSync(modulePath)) {
-    const before=readFileSync(modulePath,'utf8'), original=resolve(stage,'__exact_backend_source.json');
-    const authored=existsSync(original) ? JSON.parse(readFileSync(original,'utf8')) : before;
-    const load=await capturedConstants(stage,rolldown ?? createRequire(import.meta.url)('rolldown').rolldown,dataBundle(stage),parse,authored);
-    const manifest=resolve(app,existsSync(resolve(app,'.shells/app.json')) ? '.shells/app.json' : 'app.json');
-    const manifestCode=existsSync(manifest) ? readFileSync(manifest,'utf8') : '{}', launches=launchNames(JSON.parse(manifestCode).env);
+    const original=resolve(stage,'__exact_backend_source.json');
+    const modules=existsSync(original) ? new Map(Object.entries(JSON.parse(readFileSync(original,'utf8')))) : settingSources(stage);
+    for (const [file,code] of modules) if (readFileSync(resolve(stage,file),'utf8')!==code) writeFileSync(resolve(stage,file),code);
+    build ??= createRequire(import.meta.url)('rolldown').rolldown;
+    try {
+      const bundle=await build({...bundleOptions,cwd:stage,input:modulePath,tsconfig:path,logLevel:'silent',plugins:[capturedSources(stage,null,true)]});
+      try {
+        await bundle.generate({format:'esm'});
+        recordSourceInputs(stage,'resolution',[...await bundle.watchFiles,...configs].map(file=>[file,packageOrigin(stage,file)]));
+      } finally { await bundle.close(); }
+    } catch { /* The normal bundle and checker report resolution and syntax errors. */ }
+    const inputs=JSON.parse(readFileSync(resolve(stage,'__exact_inputs.json'),'utf8'));
+    const edges=new Map(inputs.edges.map(([file,source,kind,next])=>[[file,source,kind].join('\0'),next]));
+    const resolveImport=(file,source,kind='import')=>edges.get([file,source,kind].join('\0')) ?? null;
+    const reached=new Set(inputs.modules.map(([file])=>file));
+    for (const file of modules.keys()) if (!reached.has(file)) modules.delete(file);
+    const authored=modules.get('app.ts') ?? readFileSync(modulePath,'utf8'), authoredModules=new Map(modules);
+    const syntaxError=[...modules].some(([file,code])=>!file.endsWith('.json') && parse(file,code).errors?.length);
     const selection=backendOriginSelection(app,process.env,parse), warning=backendOriginWarning(authored,selection,parse);
     // `import.meta.env` first: a `const origin` it sets is a literal the backend selection may then override.
-    const settings=inlineSettings(authored,app,parse,process.env,{launches:!web});
-    if (launches.size) staticFacts(authored,parse,{load,launchNames:launches,checkLaunchOnly:true});
+    const settings=inlineSettings(authored,app,parse,process.env,{launches:!web,modules,resolveImport,syntaxError});
+    for (const [file,code] of modules) if (file!=='app.ts' && readFileSync(resolve(stage,file),'utf8')!==code) writeFileSync(resolve(stage,file),code);
     writeFileSync(resolve(stage,'__exact_env.json'), JSON.stringify(settings.record));
+    // Grants fold the imported constants as inlined, over the graph the settings were read from; locations name the authored text.
+    const staged=file=>{ try { return readFileSync(resolve(stage,file),'utf8'); } catch { return undefined; } };
+    const load=recordedConstants(resolveImport,file=>modules.get(file) ?? staged(file),file=>authoredModules.get(file));
     let injected, keyedSources;
     try { injected=injectBackendOrigin(settings.code,selection?.origin ?? null,parse,process.env,{source:authored,load,onKeyed:sources=>{keyedSources=sources;}}); }
     catch (error) {
@@ -1017,26 +1047,20 @@ export async function configure(stage, incremental=false, parse, web=false, roll
       const lines=facts.grants.split('\n').map(line=>line.trim()).filter(Boolean);
       facts.grantSources=facts.grantSources.map((s,i)=>({...s,grant:lines[i]}));
     }
-    if (facts.grants!==undefined) {
-      injected=freezeGrants(injected,parse,facts.grants);
-    }
+    if (facts.grants!==undefined) injected=freezeGrants(injected,parse,facts.grants);
     launchModule(stage,web ? [] : launched);
     const after=developmentGrants(launchGrants(injected,parse,launched),parse);
     const grantSources=facts.grantSources.flatMap(source=>developmentLine(source.grant).map(grant=>({...source,grant})));
+    const manifest=resolve(app,existsSync(resolve(app,'.shells/app.json')) ? '.shells/app.json' : 'app.json'), manifestCode=existsSync(manifest) ? readFileSync(manifest,'utf8') : '{}';
     for (const setting of launched) {
       const [row,column]=lineColumn(manifestCode)(Math.max(0,manifestCode.indexOf(JSON.stringify(setting)))).split(':').map(Number);
       grantSources.push({grant:`env.launch ${setting}`,file:'app.json',line:row,column,setting});
     }
     writeFileSync(resolve(stage,'__exact_grants.json'),JSON.stringify(grantSources));
     writeFileSync(resolve(stage,'__exact_backend.json'), JSON.stringify({origin:literalBackendOrigin(after,parse),warning}));
-    if (before!==after) writeFileSync(modulePath,after);
+    if (readFileSync(modulePath,'utf8')!==after) writeFileSync(modulePath,after);
     // Every producer refuses alike what the web build cannot read without running it.
     if (parse) staticFacts(after,parse);
-  }
-  if(capturedOrigins(stage).slice(0,-1).some(([,from])=>/(?:^|[/\\])snapback4[/\\](?:ts|online)$/.test(from))) {
-    const declaration=resolve(stage,'app.contract.d.ts');
-    const before=readFileSync(declaration,'utf8'), after=snapbackMutationTypes(before);
-    if(before!==after) writeFileSync(declaration,after);
   }
   stagePackages(stage,parse);
 }
@@ -1406,16 +1430,6 @@ function checkPeers(stage, files) {
   for (const [file,why] of peerRefusals) if (used.has(physicalId(resolve(stage,file)))) throw new Error(why);
 }
 
-/** The checker runs before the bundle refuses a Node built-in, and says only "Cannot find module 'node:fs'… Try
- * `npm i --save-dev @types/node`", which changes nothing (expo/exact-build#183). Said here as the bundle says it. */
-export function nodeNote(diagnostics) {
-  // TS2591 names an import's specifier as a module ("Cannot find module 'fs'") or, as the bake's checker words a
-  // `node:` import, a name ("Cannot find name 'node:fs'"); a bare name there (`process`) is a global, said below.
-  const modules=[...new Set([...diagnostics.matchAll(/Cannot find module '([^']+)'|Cannot find name '(node:[^']+)'/g)].map(match=>match[1] ?? match[2]).filter(builtin))];
-  const names=/Cannot find name '(?:require|process|Buffer|__dirname|__filename)'/.test(diagnostics);
-  if (!modules.length && !names) return '';
-  return `\nnote: ${modules.length ? `${modules.map(m=>`'${m}'`).join(', ')} ${modules.length>1 ? "are Node's built-ins" : "is Node's built-in"}` : "Node's globals are"}: a data module runs on Hermes and in the browser, which have no Node modules, so @types/node does not help; import a part of the package that needs none, or another package\n`;
-}
 /** Type-check a configured stage with native `tsc`: diagnostics and resolved files, including type-only imports,
  * must stay inside the stage (`stagePackages` captures package declarations) and the configured `libraries`.
  * An external declaration must not influence an accepted app artifact. */
@@ -1437,21 +1451,25 @@ export async function check(stage, tsc, libraries) {
   let head='';
   try { const fd=openSync(tsc,'r'), bytes=Buffer.alloc(128); head=bytes.toString('utf8',0,readSync(fd,bytes,0,128,0)).split('\n')[0]; closeSync(fd); } catch { /* not readable: execFile says so */ }
   const script=head.startsWith('#!') && head.split(/\s+/).some(word=>['node','bun'].includes(word.split('/').at(-1)));
-  const args=['--project',resolve(stage,'__exact_tsconfig.json'),'--pretty','false','--listFiles'];
+  const args=['--project',resolve(stage,'__exact_tsconfig.json'),'--pretty','false','--listFiles','--traceResolution'];
   return new Promise((done, fail) => execFile(script ? process.execPath : tsc,script ? [tsc,...args] : args,
-    {cwd:stage,env:checkEnv,encoding:'utf8',maxBuffer:4*1024*1024,timeout:checkBound(),killSignal:'SIGKILL'}, (error, stdout, stderr) => {
+    {cwd:stage,env:checkEnv,encoding:'utf8',maxBuffer:64*1024*1024,timeout:checkBound(),killSignal:'SIGKILL'}, (error, stdout, stderr) => {
       // (A tsc that never returns is stopped at the bound: checkBound above.)
       if (error?.killed && error.signal === 'SIGKILL') return fail(new Error(`the TypeScript check did not finish in ${boundWords(checkBound())} (tsc stopped)`));
+      const {files,resolution,diagnostics}=checkerOutput(stdout);
       if (error) {
-        try { checkPeers(stage,String(stdout??'').split(/\r?\n/)); }
+        try { checkPeers(stage,files); }
         catch (refusal) { return fail(refusal); }
-        const diagnostics=String(stdout??'').split(/\r?\n/).filter(line=>! /^(?:\/|[A-Za-z]:[\\/]).*\.[cm]?[jt]sx?$/.test(line)).join('\n');
         const mutationFailure=/Type '(?:false|boolean)' is not assignable to type 'true'|SnapbackMutationSuccess/.test(diagnostics)
           && readFileSync(resolve(stage,'app.contract.d.ts'),'utf8').includes('type SnapbackMutationSuccess<');
         const refusal=mutationFailure ? "\nnote: a Snapback mutation returning {ok:false} leaves failure(slot) empty; throw refused({code: 'YOUR_CODE', message: 'Explain the refusal'}) instead. Annotate successful helpers with Result<'source'>, or keep ok:true literal with `as const`.\n" : '';
         return fail(new Error(diagnostics+languageModelToolNote(readFileSync(entry,'utf8'),diagnostics)+sourceNames(stage,diagnostics)+refusal+nodeNote(diagnostics)+String(stderr??'') || String(error.message)));
       }
-      try { checkFiles(stage, libraries, stdout.trim().split(/\r?\n/)); }
+      try {
+        checkFiles(stage, libraries, files);
+        recordSourceInputs(stage,'types',files.map(file=>[file,packageOrigin(stage,file)]));
+        recordSourceInputs(stage,'resolution',resolution.map(file=>[file,packageOrigin(stage,file)]));
+      }
       catch (error) { return fail(error); }
       done();
     }));

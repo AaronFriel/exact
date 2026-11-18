@@ -161,6 +161,7 @@ test('a declaration subdirectory cannot shadow its app-owned peer', async () => 
 });
 
 test('comments and string types do not require an optional peer', async () => {
+  const { sourceInputChanges } = await import('../src/__exact_env.mjs');
   const fixture = linkedApp();
   const { stage, module, manifest, peerDir, put } = fixture;
   try {
@@ -178,6 +179,8 @@ export declare const value: 1;
     await configure(stage, false, parseSync);
     await check(stage, join(libraries, 'tsc'), libraries);
     await bundle(stage);
+    const inputs = JSON.parse(readFileSync(join(stage,'__exact_inputs.json'),'utf8'));
+    expect(sourceInputChanges(inputs).filter(file=>file.endsWith('index.d.ts'))).toEqual([]);
     for (const declaration of [
       "import type { Value } from /* peer */ '@scratch/peer/values'; export { Value };",
       "export { Value } from '@scratch/peer/values';",
