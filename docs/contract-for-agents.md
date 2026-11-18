@@ -895,7 +895,11 @@ bounded: outside every region, under `if` and `match`, or in a row of
 `list`, it is refused (`type-child-resource`): declare the root's resource over
 the list (`resource feeds = load(id) for id in ids key=id`) and pass each row its
 answer, or declare the mutation in the root and pass each row an action that
-sends it (`add=addWork`). A child's task runs in its instance's frame and ends
+sends it (`add=addWork`). Only the root declares a resource over a list, so a
+screen that needs one request per element takes the root's list resource as a
+prop.
+
+A child's task runs in its instance's frame and ends
 when that instance is destroyed. A hidden instance stays alive; gate its task
 with `when active` if it should stop while hidden. Data two features read
 belongs to the root, which passes it down; name its declarations with the
