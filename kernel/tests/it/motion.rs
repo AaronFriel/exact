@@ -1346,6 +1346,7 @@ fn rotation_targets_keep_axes_until_the_transition_is_sampled() {
 
 #[test]
 fn parsed_keyframes_match_kernel_axis_precision_and_inherit_negative_z() {
+    exact_kernel::style::link_all();
     for (row, frame, half, distance) in [
         ("0.1 0.2 0.3 10deg", "0.1 0.2 0.3 370deg", 190., 360.),
         ("0 0 -1 0deg", "60deg", -30., 60.),

@@ -635,10 +635,7 @@ fn style_value(
             );
         }
         // The compiler checks every row's grammar (LLP 1053.000 §2).
-        exact_kernel::style::link_backdrop_filter();
-        exact_kernel::style::link_segments();
-        exact_kernel::style::link_wide_colors();
-        exact_kernel::timeline::link();
+        exact_kernel::style::link_all();
         let literal = match value {
             expr if numeric_literal(expr).is_some() => {
                 Some(StyleValue::Number(numeric_literal(expr).unwrap()))

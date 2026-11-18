@@ -414,15 +414,16 @@ impl Kernel {
         engine(&mut self.layout)
     }
 
-    /// A kernel with the given host text measurer. It links grid layout
-    /// ([`crate::layout::link_grid_layout`]).
+    /// A kernel with the given host text measurer. It links every grammar
+    /// and grid layout ([`crate::style::link_all`]).
     pub fn new(measurer: Box<dyn TextMeasurer>) -> Self {
-        crate::layout::link_grid_layout();
+        crate::style::link_all();
         Self::by_use(measurer)
     }
 
-    /// [`Kernel::new`] for a host that links grid layout by use (LLP
-    /// 1047.001 D10): a grid needs the host to have linked it.
+    /// [`Kernel::new`] for a host that links grid layout and the style
+    /// grammars by use (LLP 1047.001 D10): a grid, or a row whose grammar is
+    /// linked by use, needs the host to have linked it.
     pub fn by_use(measurer: Box<dyn TextMeasurer>) -> Self {
         let mut kernel = Self::on_demand(measurer);
         kernel.layout = Some(Box::new(LayoutTree::new()));
@@ -434,7 +435,8 @@ impl Kernel {
     /// for, when it builds one from the arena. For a host whose platform lays
     /// out (the browser): commits then create no engine nodes and derive no
     /// engine styles, and a kernel that never lays out links no engine code.
-    /// Layout, when asked for, is the same, a grid's once linked.
+    /// Layout, when asked for, is the same, a grid's once linked; it links
+    /// no grammar ([`Kernel::by_use`]).
     pub fn on_demand(measurer: Box<dyn TextMeasurer>) -> Self {
         Kernel {
             arena: NodeArena::new(),

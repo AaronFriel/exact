@@ -67,7 +67,8 @@ pub enum Capability {
     Effects,
     /// CSS animations (LLP 1055 D5): the `animation` shorthand's and
     /// `@keyframes`' grammars, for a plan that declares keyframes or binds
-    /// `animation` or `-exact-exit-animation`.
+    /// `animation`, `-exact-exit-animation` or a route's
+    /// `::view-transition-new` or `::view-transition-old`.
     Animations,
     /// Gradient grammars (LLP 1066, LLP 1077 D2), for a plan that binds
     /// `background-image` or `mask-image`.
@@ -454,26 +455,10 @@ pub fn uses(plan: &Plan) -> Uses {
                 }
                 Some(PropId::BackgroundMaterial) => uses = uses.with(Capability::Materials),
                 Some(PropId::DecorationStyles) => {
-                    // The compiler puts decoration rows in a literal JSON table
-                    // rather than style bindings (LLP 1114.007 D1).
-                    if let Some(serde_json::Value::Object(table)) =
-                        constant_str(plan, plan.code(binding.expr))
-                            .and_then(|json| serde_json::from_str(json).ok())
+                    for style in
+                        decoration_rows(plan, &binding).unwrap_or_else(|| StyleId::ALL.to_vec())
                     {
-                        for row in table
-                            .values()
-                            .filter_map(serde_json::Value::as_array)
-                            .flatten()
-                        {
-                            if let Some(style) = row
-                                .get(0)
-                                .and_then(serde_json::Value::as_u64)
-                                .and_then(|id| u32::try_from(id).ok())
-                                .and_then(StyleId::from_bit)
-                            {
-                                uses = uses.with_style(style);
-                            }
-                        }
+                        uses = uses.with_style(style);
                     }
                 }
                 Some(PropId::ListStyle) => uses = uses.with(Capability::GroupedLists),
@@ -522,23 +507,6 @@ pub fn uses(plan: &Plan) -> Uses {
                 }
                 if StyleId::from_bit(u32::from(binding.id)) == Some(StyleId::ContentTransition) {
                     uses = uses.with(Capability::Numerals);
-                }
-                if matches!(
-                    StyleId::from_bit(u32::from(binding.id)),
-                    Some(StyleId::Filter | StyleId::ClipPath)
-                ) {
-                    uses = uses.with(Capability::Effects);
-                }
-                if matches!(
-                    StyleId::from_bit(u32::from(binding.id)),
-                    Some(
-                        StyleId::Animation
-                            | StyleId::ExitAnimation
-                            | StyleId::ViewTransitionNew
-                            | StyleId::ViewTransitionOld
-                    )
-                ) {
-                    uses = uses.with(Capability::Animations);
                 }
                 if matches!(
                     StyleId::from_bit(u32::from(binding.id)),
@@ -859,6 +827,33 @@ fn constant_bool(plan: &Plan, code: &[u8]) -> Option<bool> {
 
 /// The string a binding always evaluates to, when its code is one constant:
 /// `Str`, then `Return`.
+/// The style rows a decoration table binding names (LLP 1114.007 D1): the
+/// compiler writes the table as a literal JSON string, and a table that is
+/// not a literal can name any row, so it is `None`.
+pub(super) fn decoration_rows(
+    plan: &Plan,
+    binding: &exact_plan::BindingsRow,
+) -> Option<Vec<StyleId>> {
+    let json = constant_str(plan, plan.code(binding.expr))?;
+    let Ok(serde_json::Value::Object(table)) = serde_json::from_str(json) else {
+        // The host refuses a table that does not decode, parsing no row.
+        return Some(Vec::new());
+    };
+    Some(
+        table
+            .values()
+            .filter_map(serde_json::Value::as_array)
+            .flatten()
+            .filter_map(|row| {
+                row.get(0)
+                    .and_then(serde_json::Value::as_u64)
+                    .and_then(|id| u32::try_from(id).ok())
+                    .and_then(StyleId::from_bit)
+            })
+            .collect(),
+    )
+}
+
 fn constant_str<'a>(plan: &'a Plan, code: &[u8]) -> Option<&'a str> {
     match plan.read_code(code).0 {
         [op, a, b, c, d, ret] if *op == Opcode::Str as u8 && *ret == Opcode::Return as u8 => {

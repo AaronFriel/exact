@@ -18,7 +18,7 @@ mod border;
 pub(crate) mod effects;
 mod engine;
 pub use crate::gradient::link as link_gradients;
-pub use effects::link as link_effects;
+pub use effects::{link as link_effects, link_clip_path, link_filter};
 mod grid;
 pub use crate::corner::link as link_corners;
 pub use grid::link as link_grid;
@@ -49,6 +49,9 @@ pub use env::{uses_env, Edge, Env, EnvRefusal, Rect, Region, SegmentVar, TitleBa
 /// `color()`) into every colour row's grammar: native hosts and the compiler
 /// at start, a web artifact by use (LLP 1047 D2, LLP 1056 §8.2).
 pub use exact_motion::color::css::link_wide as link_wide_colors;
+
+mod link;
+pub use link::link_all;
 mod viewport;
 pub use viewport::ViewportUnit;
 pub mod cells;

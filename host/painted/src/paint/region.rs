@@ -973,6 +973,7 @@ mod hit_tests {
     use super::*;
     #[test]
     fn affine_hit_uses_the_transformed_rectangle() {
+        exact_kernel::style::link_all();
         for degrees in [0.0, 45.0] {
             let ts = Transform::from_rotate_at(degrees, 50.0, 50.0);
             let rect = (0.0, 0.0, 100.0, 100.0);

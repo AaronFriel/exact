@@ -730,6 +730,7 @@ fn bound_basic_clips_reach_css() {
 
 #[test]
 fn computed_basic_clip_admission_matches_the_kernel() {
+    exact_kernel::style::link_all();
     let values = [
         "circle()",
         "ellipse()",

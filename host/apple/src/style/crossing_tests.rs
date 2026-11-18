@@ -262,6 +262,7 @@ component App
 
 #[test]
 fn basic_clips_cross_as_relative_geometry() {
+    exact_kernel::style::link_all();
     let mut style = StyleProps::default();
     style
         .set_dynamic(

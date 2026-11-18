@@ -372,11 +372,10 @@ pub fn lower(
         .map_err(|mut all| all.swap_remove(0))
 }
 
-/// Lower, reporting every independent refusal: each element and each of its
-/// attributes is lowered whatever its siblings' fate (at most
-/// [`MAX_REFUSALS`]). `mapped` also returns the development source sites;
-/// `profile` is the surface the plan is for. `warned` collects diagnostics using
-/// the same control appearance decisions as the plan.
+/// Lower, reporting every independent refusal: each element and each of its attributes is
+/// lowered whatever its siblings' fate (at most [`MAX_REFUSALS`]). `mapped` also returns the
+/// development source sites; `profile` is the surface the plan is for. `warned` collects diagnostics
+/// using the plan's control appearance decisions. It links every row's grammar (LLP 1053.000 §2).
 pub fn lower_all(
     checked: &Checked<'_>,
     analysis: &Analysis,
@@ -385,6 +384,7 @@ pub fn lower_all(
     profile: Profile,
     warned: Option<&mut Vec<LowerError>>,
 ) -> Result<(Plan, Option<Sites>), Vec<LowerError>> {
+    exact_kernel::style::link_all();
     if mapped && checked.expanded.instances.is_empty() {
         return Err(vec![LowerError {
             id: "lower-source-sites",

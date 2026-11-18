@@ -456,6 +456,7 @@ fn a_press_scale_keeps_the_authored_scale_and_transitions() {
 /// its picture every frame).
 #[test]
 fn only_a_pressable_node_animates_the_scale_custom_property() {
+    exact_motion::link_animations();
     use exact_motion::animation::{Animations, Keyframes};
     let mut list = Animations::parse("grow 1s linear infinite, fade 2s").unwrap();
     list.0[0].keyframes = Keyframes::parse("from{scale:1;translate:0px 0px}to{scale:1.6}").unwrap();

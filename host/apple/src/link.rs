@@ -49,6 +49,9 @@ pub struct Grammars {
     grid: Option<fn()>,
     svg: Option<fn()>,
     effects: Option<fn()>,
+    animation_grammar: Option<fn()>,
+    filter_grammar: Option<fn()>,
+    clip_path_grammar: Option<fn()>,
 }
 
 impl Grammars {
@@ -91,6 +94,19 @@ impl Grammars {
             } else {
                 None
             },
+            animation_grammar: if uses.has(Capability::Animations) {
+                Some(exact_kernel::style::link_animations)
+            } else {
+                None
+            },
+            // An SVG's filters parse by `filter`'s grammar too.
+            filter_grammar: if uses.has(Capability::Effects) || uses.has(Capability::Svg) {
+                Some(exact_kernel::style::link_filter)
+            } else {
+                None
+            },
+            // `clip-path` is the core's mask on Apple (`apple_uses`).
+            clip_path_grammar: Some(exact_kernel::style::link_clip_path),
         }
     }
 
@@ -104,6 +120,9 @@ impl Grammars {
             self.grid,
             self.svg,
             self.effects,
+            self.animation_grammar,
+            self.filter_grammar,
+            self.clip_path_grammar,
         ]
         .into_iter()
         .flatten()
@@ -593,6 +612,11 @@ mod tests {
         let control = compile("input type=\"checkbox\"", "on = false");
         let traced = compile("button \"b\" press=go", "startTrace_EXPERIMENTAL()");
         let filtered = compile("text \"a\" filter=\"blur(2px)\"", "on = false");
+        let animated = compile(
+            "text \"a\" animation=(on ? \"none\" : \"none 1s\")",
+            "on = false",
+        );
+        let exiting = compile("text \"a\" -exact-exit-animation=\"none\"", "on = false");
         for (plan, name) in [
             (&tools, "tools"),
             (&view, "modules, native_views"),
@@ -602,9 +626,24 @@ mod tests {
             (&control, "controls"),
             (&traced, "traces"),
             (&filtered, "effects"),
+            (&animated, "animations"),
+            (&exiting, "animations"),
         ] {
             assert_eq!(missing(plan, Uses::NONE).as_deref(), Some(name));
             assert_eq!(missing(plan, ALL), None);
         }
+    }
+
+    /// The grammars a native artifact links by use follow the use-set; Apple
+    /// draws `clip-path` in its core, so that grammar is linked always.
+    #[test]
+    fn grammars_follow_the_use_set() {
+        let none = Grammars::of(Uses::NONE);
+        assert!(none.animation_grammar.is_none() && none.filter_grammar.is_none());
+        assert!(none.clip_path_grammar.is_some());
+        let with = |c| Grammars::of(Uses::NONE.with(c));
+        assert!(with(Capability::Animations).animation_grammar.is_some());
+        assert!(with(Capability::Effects).filter_grammar.is_some());
+        assert!(with(Capability::Svg).filter_grammar.is_some());
     }
 }

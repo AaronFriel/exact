@@ -9,7 +9,7 @@
 //! What the bake alone can know (an image file's bytes, the app's module
 //! artifact) it adds to the set itself (`exact_bake`'s `production_uses`).
 
-use super::{constant_str, runs_command, uses, Capability, Uses};
+use super::{constant_str, decoration_rows, runs_command, uses, Capability, Uses};
 use exact_kernel::{NodeType, PropId, StyleId};
 use exact_plan::{BindingKind, BindingsRow, Plan};
 
@@ -29,13 +29,17 @@ pub fn apple_uses(plan: &Plan) -> Uses {
         }
     };
     add(Capability::Grid, lays_out_grid(plan));
-    // A box's `filter` is the family's; `clip-path`, which the web's entry
-    // counts too, is the core's mask on Apple.
+    // A box's `filter`, bound or in a decoration table, is the family's;
+    // `clip-path`, which the web's entry counts too, is the core's mask on
+    // Apple.
     add(
         Capability::Effects,
-        plan.bindings.iter().any(|b| {
-            b.kind == BindingKind::Style
-                && StyleId::from_bit(u32::from(b.id)) == Some(StyleId::Filter)
+        plan.bindings.iter().any(|b| match b.kind {
+            BindingKind::Style => StyleId::from_bit(u32::from(b.id)) == Some(StyleId::Filter),
+            BindingKind::Prop if PropId::from_wire(b.id) == Some(PropId::DecorationStyles) => {
+                decoration_rows(plan, &b).is_none_or(|rows| rows.contains(&StyleId::Filter))
+            }
+            _ => false,
         }),
     );
     // An event-only or a view-only package reaches the module seam too.

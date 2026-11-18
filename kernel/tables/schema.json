@@ -3857,6 +3857,7 @@
     {
       "bit": 84,
       "field": "clip_path",
+      "capability": "effects",
       "snapshot": "admit",
       "watch": "admit",
       "rare": true,
@@ -4075,6 +4076,7 @@
     {
       "bit": 111,
       "field": "animation",
+      "capability": "animations",
       "codec": "animations",
       "_comment": "@ref LLP 1055 D5: CSS `animation`, each entry with its resolved @keyframes (grammar: `_animations`).",
       "separate": true
@@ -4237,6 +4239,7 @@
     {
       "bit": 133,
       "field": "filter",
+      "capability": "effects",
       "codec": "filter",
       "_comment": "@ref LLP 1055.000 D14: CSS `filter` on SVG elements: none, url(#id) and the filter functions, in order.",
       "hosts": [
@@ -4313,6 +4316,7 @@
     {
       "bit": 142,
       "field": "exit_animation",
+      "capability": "animations",
       "rare": true,
       "codec": "animations",
       "ends": true,
@@ -5225,6 +5229,7 @@
     {
       "bit": 249,
       "field": "view_transition_new",
+      "capability": "animations",
       "rare": true,
       "codec": "animations",
       "ends": true,
@@ -5233,6 +5238,7 @@
     {
       "bit": 250,
       "field": "view_transition_old",
+      "capability": "animations",
       "rare": true,
       "codec": "animations",
       "ends": true,

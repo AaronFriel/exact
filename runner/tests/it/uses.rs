@@ -253,6 +253,53 @@ fn visual_grammars_follow_literal_class_and_computed_rows() {
 }
 
 #[test]
+fn linked_grammars_follow_literal_class_and_computed_rows() {
+    // A native artifact parses these rows only through the grammar it links by
+    // use, so the row selects it however its value is written (LLP 1047 D2).
+    for (row, value, capability) in [
+        ("animation", "none", "animations"),
+        ("-exact-exit-animation", "none", "animations"),
+        ("filter", "blur(2px)", "effects"),
+        ("clip-path", "inset(2px)", "effects"),
+    ] {
+        for source in [
+            format!("component A\n  view\n    text \"a\" {row}=\"{value}\"\n"),
+            format!("style S\n  {row}=\"{value}\"\ncomponent A\n  view\n    text \"a\" class=S\n"),
+            format!(
+                "component A\n  state paint = \"{value}\"\n  view\n    text \"a\" {row}=paint\n"
+            ),
+            format!(
+                "component A\n  state on = true\n  view\n    text \"a\" {row}=(on ? \"{value}\" : \"none\")\n"
+            ),
+        ] {
+            assert!(
+                used(&source).iter().any(|c| c.name() == capability),
+                "{source}: {}",
+                used(&source)
+            );
+        }
+    }
+}
+
+#[test]
+fn every_row_a_linked_grammar_parses_names_its_capability() {
+    // The kernel's table, row by row: a row whose value parses by a grammar
+    // linked by use names the capability that links it (kernel/build/codec.rs
+    // refuses to generate one that does not).
+    use exact_kernel::{StyleCodec, StyleId};
+    for style in StyleId::ALL {
+        let wanted = match style.codec() {
+            StyleCodec::Animations => Some("animations"),
+            StyleCodec::Filter | StyleCodec::ClipPath => Some("effects"),
+            _ => None,
+        };
+        if let Some(wanted) = wanted {
+            assert_eq!(style.capability(), Some(wanted), "{style:?}");
+        }
+    }
+}
+
+#[test]
 fn decoration_styles_link_their_visual_grammars() {
     let field = "component A\n  view\n    textarea decorations=TextDecorations(value=\"a\", spans=[TextDecorationSpan(name=\"glow\", start=0, end=1)])\n";
     assert_eq!(used(field), Uses::NONE);
@@ -266,6 +313,39 @@ fn decoration_styles_link_their_visual_grammars() {
         used(&format!("{shadow}component A\n  view\n    text \"a\"\n")),
         Uses::NONE
     );
+}
+
+#[test]
+fn a_decoration_table_that_is_not_a_literal_can_name_any_row() {
+    // The compiler writes the table as a literal; a decoded plan whose table
+    // is computed selects what any row can, on Apple a box's `filter` too.
+    let source = "decoration glow color=\"#000\"\ncomponent A\n  state rows = \"{}\"\n  view\n    column\n      text rows\n      textarea decorations=TextDecorations(value=\"a\", spans=[])\n";
+    let mut plan = contract::compile(source).unwrap();
+    let is_prop = |b: &exact_plan::BindingsRow, prop| {
+        b.kind == exact_plan::BindingKind::Prop
+            && exact_kernel::PropId::from_wire(b.id) == Some(prop)
+    };
+    let computed = plan
+        .bindings
+        .iter()
+        .find(|b| is_prop(b, exact_kernel::PropId::Text))
+        .unwrap()
+        .expr;
+    let table = plan
+        .bindings
+        .to_mut()
+        .iter_mut()
+        .find(|b| is_prop(b, exact_kernel::PropId::DecorationStyles))
+        .unwrap();
+    table.expr = computed;
+    for capability in [
+        Capability::Animations,
+        Capability::Effects,
+        Capability::Shadows,
+    ] {
+        assert!(uses(&plan).has(capability), "{capability:?}");
+    }
+    assert!(exact_runner::uses::apple_uses(&plan).has(Capability::Effects));
 }
 
 #[test]

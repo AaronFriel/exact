@@ -14,7 +14,29 @@ const CODEC_PATHS: [&str; 11] = [
 const SCHEMA_PATH: &str = "tables/schema.json";
 const DIGEST_DOMAIN: &[u8] = b"exact-kernel-schema-v1\0";
 
+/// The codecs whose text an artifact parses only through a grammar it links
+/// by use (`style::effects`, `exact_motion::link_animations`), and the
+/// capability that links each: a row with one of them names it, so a plan
+/// that writes the row, constant, bound or computed, selects the grammar,
+/// and an artifact that links it by use and lacks it refuses the plan by
+/// that name. (Apple links `clip-path`'s always.)
+const LINKED_CODECS: &[(&str, &str)] = &[
+    ("animations", "animations"),
+    ("filter", "effects"),
+    ("clip-path", "effects"),
+];
+
 fn emit_style_capabilities(w: &mut String, schema: &Schema) {
+    for row in &schema.styles {
+        for (codec, capability) in LINKED_CODECS {
+            assert!(
+                row.codec != *codec || row.capability.as_deref() == Some(*capability),
+                "style `{}` parses by the `{codec}` grammar, which is linked by use: \
+                 give it `\"capability\": \"{capability}\"` in kernel/tables/schema.json",
+                row.field
+            );
+        }
+    }
     w.push_str("    /// The parser family a bound row links, if any (LLP 1047 D2).\n");
     w.push_str("    pub fn capability(self) -> Option<&'static str> {\n        match self {\n");
     for row in &schema.styles {

@@ -155,6 +155,7 @@ fn scroll_margins_refuse_percentages_without_changing_the_length() {
 
 #[test]
 fn borrowed_css_parses_like_owned_css_and_retains_no_source_borrow() {
+    exact_kernel::style::link_all();
     for (id, css, valid) in [
         (StyleId::TextColor, "#abcdef80", true),
         (StyleId::TextColor, "light-dark(#123, #abc)", true),
@@ -930,6 +931,7 @@ fn dimension_pixel_strings_use_css_numbers_and_refuse_invalid_values_atomically(
 
 #[test]
 fn every_row_writes_its_own_field_and_no_other() {
+    exact_kernel::style::link_all();
     // Linked by use (LLP 1057.003), as every host that sets the rows links it.
     exact_kernel::timeline::link();
     exact_kernel::style::link_backdrop_filter();
