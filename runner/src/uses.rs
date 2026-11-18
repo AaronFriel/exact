@@ -106,10 +106,11 @@ pub enum Capability {
     /// its own, so the web links nothing for it.
     Io,
     /// What a native engine plays that CSS plays on the web: a `transition`,
-    /// a `-exact-layout-transition` or a shared element's flight. A native
-    /// host's motion engine moves them; without them it only settles values
-    /// (LLP 1047.001). The browser plays them, so the web links nothing for
-    /// it.
+    /// a `-exact-layout-transition` or a shared element's flight, and the
+    /// `transition` shorthand's grammar. A native host's motion engine moves
+    /// them; without them it only settles values (LLP 1047.001). The browser
+    /// plays them, so the web counts it linked and links only the grammar
+    /// (`exact_web::link::link`, the JS target's motion module).
     Transitions,
     /// iOS's photo picker (LLP 1047.001.000 E): a file input whose `accept`
     /// is only images and videos, or is computed. Linking it costs every
@@ -558,14 +559,6 @@ pub fn uses(plan: &Plan) -> Uses {
                     && can_be(&binding, &|v| v.contains("spring"))
                 {
                     uses = uses.with(Capability::Motion);
-                }
-                // A native engine plays every transition, a layout's too.
-                if matches!(
-                    StyleId::from_bit(u32::from(binding.id)),
-                    Some(StyleId::Transition | StyleId::LayoutTransition)
-                ) && can_be(&binding, &|v| !matches!(v.trim(), "" | "none"))
-                {
-                    uses = uses.with(Capability::Transitions);
                 }
             }
         }

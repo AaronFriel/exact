@@ -355,6 +355,8 @@ pub(crate) fn check_style_value(
     scope: &Scope,
     shapes: &Shapes,
 ) -> Result<(), LowerError> {
+    // The compiler checks every row's grammar (LLP 1053.000 §2).
+    exact_kernel::style::link_all();
     if rows.contains(&StyleId::PressTranslate) {
         let leaves = contract_checking::value_leaves(&a.value);
         for leaf in leaves.filter(|v| matches!(v, Expr::Str(..))) {
@@ -640,8 +642,6 @@ fn style_value(
                 span,
             );
         }
-        // The compiler checks every row's grammar (LLP 1053.000 §2).
-        exact_kernel::style::link_all();
         let literal = match value {
             expr if numeric_literal(expr).is_some() => {
                 Some(StyleValue::Number(numeric_literal(expr).unwrap()))

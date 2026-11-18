@@ -1308,6 +1308,7 @@ mod writer_tests {
 
     #[test]
     fn transitions_and_linear_easings_write_what_joining_wrote() {
+        exact_kernel::style::link_all();
         for text in [
             "none",
             "opacity 1s",
@@ -1327,6 +1328,7 @@ mod writer_tests {
     /// host's frames, and `all` names each property the spring does not drive.
     #[test]
     fn a_paint_spring_is_its_curve_as_linear() {
+        exact_kernel::style::link_all();
         let config = exact_motion::SpringConfig {
             stiffness: 180.0,
             damping: 12.0,

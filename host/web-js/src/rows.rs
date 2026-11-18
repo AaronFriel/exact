@@ -1183,6 +1183,7 @@ mod tests {
 
     #[test]
     fn a_pressed_nodes_computed_transition_is_checked_as_an_authors() {
+        exact_kernel::style::link_all();
         // LLP 1081 D5, as `style`'s map, then `scale` moved to the press's
         // `--exact-scale`.
         assert_eq!(

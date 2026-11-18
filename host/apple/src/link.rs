@@ -50,6 +50,8 @@ pub struct Grammars {
     svg: Option<fn()>,
     effects: Option<fn()>,
     animation_grammar: Option<fn()>,
+    transition_grammar: Option<fn()>,
+    gradient_grammar: Option<fn()>,
     filter_grammar: Option<fn()>,
     clip_path_grammar: Option<fn()>,
 }
@@ -106,6 +108,16 @@ impl Grammars {
             } else {
                 None
             },
+            transition_grammar: if uses.has(Capability::Transitions) {
+                Some(exact_kernel::style::link_transitions)
+            } else {
+                None
+            },
+            gradient_grammar: if uses.has(Capability::Gradients) {
+                Some(exact_kernel::style::link_gradients)
+            } else {
+                None
+            },
             // An SVG's filters parse by `filter`'s grammar too.
             filter_grammar: if uses.has(Capability::Effects) || uses.has(Capability::Svg) {
                 Some(exact_kernel::style::link_filter)
@@ -128,6 +140,8 @@ impl Grammars {
             self.svg,
             self.effects,
             self.animation_grammar,
+            self.transition_grammar,
+            self.gradient_grammar,
             self.filter_grammar,
             self.clip_path_grammar,
         ]
@@ -648,6 +662,11 @@ mod tests {
             "on = false",
         );
         let exiting = compile("text \"a\" -exact-exit-animation=\"none\"", "on = false");
+        let transitioned = compile("text \"a\" transition=\"opacity 1s\"", "on = false");
+        let painted = compile(
+            "box background-image=(on ? \"linear-gradient(#000, #fff)\" : \"none\")",
+            "on = false",
+        );
         let flying = compile("column sharedElement=\"hero\"", "on = false");
         let stuck = compile("column position=\"sticky\" top=0", "on = false");
         let placed = compile(
@@ -669,6 +688,8 @@ mod tests {
             (&filtered, "effects"),
             (&animated, "animations"),
             (&exiting, "animations"),
+            (&transitioned, "transitions"),
+            (&painted, "gradients"),
             (&flying, "transitions, flights"),
             (&stuck, "sticky"),
             (&placed, "grid"),
@@ -690,5 +711,8 @@ mod tests {
         assert!(with(Capability::Animations).animation_grammar.is_some());
         assert!(with(Capability::Effects).filter_grammar.is_some());
         assert!(with(Capability::Svg).filter_grammar.is_some());
+        assert!(none.transition_grammar.is_none() && none.gradient_grammar.is_none());
+        assert!(with(Capability::Transitions).transition_grammar.is_some());
+        assert!(with(Capability::Gradients).gradient_grammar.is_some());
     }
 }

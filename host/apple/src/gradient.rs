@@ -339,6 +339,7 @@ pub(crate) fn gradient_json(g: &exact_kernel::gradient::Gradient) -> String {
 mod tests {
     #[test]
     fn tint_references_follow_the_presenting_platforms_role_column() {
+        exact_kernel::style::link_all();
         for role in ["LinkText", "Highlight"] {
             let image = exact_kernel::gradient::BackgroundImage::parse(&format!(
                 "linear-gradient({role}, {role})"
@@ -356,6 +357,7 @@ mod tests {
 
     #[test]
     fn the_views_tint_resolves_before_gradient_placement_and_interpolation() {
+        exact_kernel::style::link_all();
         for css in [
             "linear-gradient(AccentColor, Highlight)",
             "radial-gradient(40px at 20% 50%, AccentColor, Highlight)",
@@ -395,6 +397,7 @@ mod tests {
 
     #[test]
     fn tint_stops_keep_their_reference_for_the_presenting_view() {
+        exact_kernel::style::link_all();
         let image = exact_kernel::gradient::BackgroundImage::parse(
             "linear-gradient(AccentColor, Highlight)",
         )
@@ -407,6 +410,7 @@ mod tests {
 
     #[test]
     fn explicit_radii_cross_as_css_and_the_kernel_places_them() {
+        exact_kernel::style::link_all();
         let css = "radial-gradient(120% 90% at 8% 0%, #FFCFA8 0%, #FFCFA800 58%)";
         let image = exact_kernel::gradient::BackgroundImage::parse(css).unwrap();
         let sent: serde_json::Value =
@@ -435,6 +439,7 @@ mod tests {
 
     #[test]
     fn lengths_cross_the_apple_seam_after_the_box_is_known() {
+        exact_kernel::style::link_all();
         let css = b"linear-gradient(to right, red 20px, blue 80%)";
         // SAFETY: input is readable; the first call asks only for its size.
         let n = unsafe {
@@ -475,6 +480,7 @@ mod tests {
 
     #[test]
     fn a_cycle_crosses_as_one_period_and_its_line() {
+        exact_kernel::style::link_all();
         let resolve = |css: &str| {
             let mut out = vec![0; 4096];
             // SAFETY: both buffers have the lengths passed.

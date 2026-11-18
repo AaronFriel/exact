@@ -3823,6 +3823,7 @@
     {
       "bit": 76,
       "field": "transition",
+      "capability": "transitions",
       "codec": "transitions",
       "cold": true
     },
@@ -4346,6 +4347,7 @@
     {
       "bit": 143,
       "field": "layout_transition",
+      "capability": "transitions",
       "rare": true,
       "codec": "transitions",
       "_comment": "@ref LLP 1063: how the node's laid-out origin in its parent moves when layout moves it; the last declaration naming no property governs. Grammar: `_transitions`."

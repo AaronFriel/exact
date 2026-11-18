@@ -1269,7 +1269,7 @@ fn generate(schema: &Schema, digest: u64) -> String {
             Codec::Transitions => "Transitions::parse(value.text(id)?).map_err(|_| StyleValueError::BadTransition { style: id })?".to_string(),
             // Names resolve against the plan's `@keyframes` after this (LLP 1055 D5).
             // An exit must end (LLP 1063 D2), refused here as on the wire.
-            Codec::Animations if row.ends => "Animations::parse(value.text(id)?).ok().filter(|a| a.validate_ending().is_ok()).ok_or(StyleValueError::BadAnimation { style: id })?".to_string(),
+            Codec::Animations if row.ends => "Animations::parse(value.text(id)?).ok().filter(|a| a.validate_ending_linked().is_ok()).ok_or(StyleValueError::BadAnimation { style: id })?".to_string(),
             Codec::Animations => "Animations::parse(value.text(id)?).map_err(|_| StyleValueError::BadAnimation { style: id })?".to_string(),
             Codec::CssValue { variant: "BackdropFilter", path, .. } => format!("{path}::check(&value.css_text(id)?).map_err(|reason| StyleValueError::BadBackdropFilter {{ style: id, reason }})?"),
             Codec::CssValue { path, error, .. } => format!("{path}::parse(&value.css_text(id)?).ok_or(StyleValueError::{error} {{ style: id }})?"),
