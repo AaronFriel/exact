@@ -48,6 +48,8 @@
 //!   outside the border box `b…` (`canvas/shadow.rs`)
 //! - `43 SHADER len …` — the next RRECT, PATH or STROKE paints with a gradient shader (`canvas/gradient.rs`)
 //! - `44 BLUR sigma` — the next GLYPHS draws through a blur of `sigma`, local units (`canvas/glyphs.rs`)
+//! - `53 FILTER len x y w h n (kind args…)×n` … `54 FILTER_END` — what is drawn between them goes
+//!   through a box's CSS `filter`, run by the reader over that region (`canvas/filter.rs`)
 //! - `45 CLIP_UNION len n (rule path)×n` — save and clip to the union of independently filled paths
 //! - `46 MASK_LAYER` — save a layer composited through destination-in at its RESTORE
 //! - `47 IMAGE_TINT color` — the next IMAGE or IMAGE_RRECT uses this colour through the image's alpha
@@ -104,10 +106,14 @@ const BACKDROP: u32 = 42;
 const NATIVE: u32 = 28;
 /// A row's recording: id, the id of the row it replaces (0 for none; the top
 /// bit set when the row shows in this frame, so the reader makes it before
-/// drawing), width and height (device pixels), then the count of words up to
-/// and including its `ROW_END`. Kept by the reader until freed; a row not in
-/// view may be made later, the row it replaces drawn meanwhile.
+/// drawing; [`UNCLIPPED`] when the reader does not clip it to its bounds),
+/// width and height (device pixels), then the count of words up to and
+/// including its `ROW_END`. Kept by the reader until freed; a row not in view
+/// may be made later, the row it replaces drawn meanwhile.
 const ROW_BEGIN: u32 = 15;
+/// In `ROW_BEGIN`'s second word: a filter in the row reaches past the room
+/// left of or above its origin ([`ROW_PAD`]).
+const UNCLIPPED: u32 = 1 << 30;
 const ROW_END: u32 = 16;
 /// Draw a kept row: id, x, y (device pixels).
 const ROW_DRAW: u32 = 17;
@@ -221,6 +227,8 @@ pub mod legacy;
 pub mod tls;
 #[cfg(target_os = "android")]
 pub use jni_sys;
+#[path = "canvas/filter.rs"]
+mod filter;
 #[path = "canvas/picture.rs"]
 mod picture;
 #[cfg(target_os = "android")]
@@ -329,6 +337,13 @@ pub struct Recorder {
     /// Each kept row's recording, so one recorded again the same is kept,
     /// and the pictures it draws (by allocation), drawn whenever it is.
     kept: HashMap<u32, (Vec<u32>, Vec<usize>)>,
+    /// The device pixels each kept row's filters hold on the reader, and the
+    /// page's in this stream (`canvas/filter.rs`).
+    filter_areas: HashMap<u32, f32>,
+    page_area: f32,
+    /// Freed rows' filter pixels, and the frame from which each no longer
+    /// counts (`canvas/filter.rs`, `RELEASE`).
+    filter_leaving: Vec<(f32, u64)>,
     /// Deletions may arrive between frames; keep them until a stream is finished.
     freed_rows: Vec<u32>,
     /// While a picture slot records: the row's ops so far, its matrix, and
@@ -364,6 +379,10 @@ struct RowRecording {
     previous: Option<u32>,
     images: Vec<usize>,
     slots: Vec<(ViewId, slot::Context)>,
+    /// Whether it draws a box's filter, and the device pixels of those the
+    /// reader runs.
+    filtered: bool,
+    area: f32,
 }
 
 impl Default for Recorder {
@@ -397,6 +416,9 @@ impl Recorder {
             row: None,
             recorded: None,
             kept: HashMap::new(),
+            filter_areas: HashMap::new(),
+            page_area: 0.0,
+            filter_leaving: Vec::new(),
             freed_rows: Vec::new(),
             slot: None,
             slots: HashMap::new(),
@@ -532,8 +554,10 @@ impl Backend for Recorder {
         self.slot_sets.clear();
         self.layers.begin();
         self.recorded = None;
+        self.page_area = 0.0;
         GROUPS.with(|g| g.borrow_mut().clear());
         self.frames += 1;
+        self.filter_frame();
         // Pictures the presenter dropped, and those not drawn for a while
         // that the reader copied: its copy goes, and is sent again when it
         // draws again. Kept rows hold their own reference.
@@ -642,6 +666,19 @@ impl Backend for Recorder {
         ts: Transform,
     ) -> bool {
         self.shadow(shape, color, sigma, outer, ts)
+    }
+
+    fn push_filter(
+        &mut self,
+        primitives: &[exact_kernel::svg::filter::Primitive],
+        region: Rect4,
+        ts: Transform,
+    ) -> bool {
+        self.filter_open(primitives, region, ts)
+    }
+
+    fn pop_filter(&mut self) {
+        self.filter_close();
     }
 
     fn backdrop_filter(
@@ -801,6 +838,8 @@ impl Backend for Recorder {
             previous,
             images: Vec::new(),
             slots: Vec::new(),
+            filtered: false,
+            area: 0.0,
         });
         self.origin = (origin.0 - ROW_PAD, origin.1 - ROW_PAD);
         self.ops
@@ -816,6 +855,8 @@ impl Backend for Recorder {
             previous,
             images,
             slots,
+            filtered,
+            area,
         }) = self.row.take()
         else {
             return 0;
@@ -831,6 +872,11 @@ impl Backend for Recorder {
         };
         self.ops[at + 3] = (w.max(1.0) * s).to_bits();
         self.ops[at + 4] = (h.max(1.0) * s).to_bits();
+        // The node cannot reach further left or up than the pad: a filter that
+        // does is drawn unclipped (LLP 1172.023.001 D1).
+        if filtered && (bounds.0 < -ROW_PAD || bounds.1 < -ROW_PAD) {
+            self.ops[at + 2] |= UNCLIPPED;
+        }
         self.ops.push(ROW_END);
         self.ops[at + 5] = (self.ops.len() - at - 6) as u32;
         self.clips = clips;
@@ -852,6 +898,9 @@ impl Backend for Recorder {
         }
         let body = body.to_vec();
         self.kept.insert(id, (body, images));
+        if area > 0.0 {
+            self.filter_areas.insert(id, area);
+        }
         self.keep_slots(id, slots);
         self.recorded = Some((id, at));
         self.ops.extend(sets);
@@ -968,6 +1017,7 @@ impl Backend for Recorder {
 
     fn row_free(&mut self, id: u32) {
         self.kept.remove(&id);
+        self.filter_free(id);
         self.slot_contexts.remove(&id);
         self.layers.row_free(id);
         self.shared.rows.remove(&id);

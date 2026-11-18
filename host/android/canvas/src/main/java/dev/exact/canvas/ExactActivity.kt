@@ -714,6 +714,8 @@ open class ExactActivity : Activity() {
             // A share that starts the app is its launch location, claimed before the boot (LLP 1133.024 D5).
             Shares.request(this, intent)?.let { android.system.Os.setenv("EXACT_SHARE", it, true) }
         }
+        // filters=0: a box's filter runs on the CPU, not as a RenderEffect (exact2's EXACT_FILTERS), to compare.
+        if (intent.getStringExtra("filters") == "0") android.system.Os.setenv("EXACT_FILTERS", "0", true)
         if (meta?.getBoolean("dev.exact.development", false) != true) return
         // rows=0: no kept rows, every frame walks every row (exact2's EXACT_ROWS), to compare.
         if (intent.getStringExtra("rows") == "0") android.system.Os.setenv("EXACT_ROWS", "0", true)

@@ -80,6 +80,9 @@ internal object Setup {
         // The logcat tag of the app's `console` lines, in every build (`host/painted/src/android.rs`, `console`): the
         // package name, as Apple's subsystem is the bundle identifier. A label can be localized and hold spaces.
         android.system.Os.setenv("EXACT_PACKAGE", app.packageName, true)
+        // A box's filter runs as a RenderEffect (LLP 1172.023.001 D1), which Android 12 brought; before it, exact2 runs
+        // the chain on the CPU.
+        if (android.os.Build.VERSION.SDK_INT < 31) android.system.Os.setenv("EXACT_FILTERS", "0", true)
         return meta
     }
 
