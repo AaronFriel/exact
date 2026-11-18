@@ -1308,9 +1308,9 @@ test('a missing build stops a test run at its first test', () => {
   writeFileSync(script, `
     import assert from 'node:assert/strict'; import {mock} from 'bun:test';
     let opens = 0, missing = true;
-    mock.module(${JSON.stringify(fileURLToPath(new URL('./agent.mjs', import.meta.url)))}, () => ({open: async () => { opens++; throw Object.assign(new Error('run bun exact.mjs android first'), {missingBuild: missing}); }}));
+    mock.module(${JSON.stringify(fileURLToPath(new URL('./agent.mjs', import.meta.url)))}, () => ({open: async (o) => { opens++; assert.equal(o.ax, true, 'the launch asks for the accessibility runtime (D15)'); throw Object.assign(new Error('run bun exact.mjs android first'), {missingBuild: missing}); }}));
     const {runTests} = await import(${JSON.stringify(fileURLToPath(new URL('./agent-test.mjs', import.meta.url)))});
-    const run = () => runTests({host:'linux', app:${JSON.stringify(dir)}, file:${JSON.stringify(join(dir, 'app.test.contract'))}, running:{beforeTest:async()=>{}, check(){}}});
+    const run = () => runTests({host:'linux', app:${JSON.stringify(dir)}, file:${JSON.stringify(join(dir, 'app.test.contract'))}, running:{beforeTest:async()=>{}, check(){}}, ax:true});
     await assert.rejects(run(), /run bun exact.mjs android first/); assert.equal(opens, 1);
     missing = false; opens = 0;
     const r = await run(); assert.equal(r.failed, 2); assert.equal(opens, 2); console.log('completed');
