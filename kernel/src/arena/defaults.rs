@@ -7,7 +7,7 @@ static HEADER: std::sync::LazyLock<StyleProps> = std::sync::LazyLock::new(|| {
     // Static defaults keep roles, independent of the initializing app's theme.
     let role = |name| {
         let metric = metrics::named(name).expect("schema header metric");
-        let crate::generated::MetricValue::Text(name) = metric.neutral else {
+        let crate::generated::MetricValue::Text(name) = metric.neutral() else {
             panic!("schema header role");
         };
         crate::ColorValue::Role(crate::style::roles::role(name).expect("schema header role"))
@@ -36,7 +36,7 @@ static HEADER: std::sync::LazyLock<StyleProps> = std::sync::LazyLock::new(|| {
         (StyleId::Top, "-exact-header-top"),
     ] {
         let metric = metrics::named(name).expect("schema header metric");
-        let value = metrics::as_written(id, metric.neutral).expect("neutral header row");
+        let value = metrics::as_written(id, metric.neutral()).expect("neutral header row");
         style.set_dynamic(id, &value).expect("schema header value");
     }
     style
