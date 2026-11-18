@@ -1964,9 +1964,9 @@ price: answers arrive `Later`, outside the action's transaction (LLP 1027.002 D1
   `AbortSignal.timeout`) and `scheduler.yield()`, and links I/O for a native
   slot's `native.later()`. It cannot see a timer the
   module names at run time (`globalThis["set" + "Timeout"]`), nor a source
-  that names another type's marker: those are refused by name. An update to an
-  installed binary is not refused for host work its binary lacks (the plan
-  update checks no Apple linked set): bake a new binary.
+  that names another type's marker: those are refused by name. A push of a
+  module that newly hands out host work to a binary without `io` is refused
+  (`appleUses.io`): bake a new binary.
 
 - **Natively, a Snapback resource or mutation fails with `native call outside an
   answer` while the same app works on the web.** Seen with five resources

@@ -16,9 +16,9 @@ use exact_runner::{Capability, Uses};
 /// manifest's `link` ahead of use; on Apple, whose boot admits a widget's
 /// entry plan against the same set, what `entries` use too. Development and
 /// unknown grants link every capability (LLP 1047.001 D6). `EXACT_APPLE_LINK`
-/// selects `plan` or `all` explicitly, as Apple's build does. A bundle
-/// needing a capability this binary lacks is then another compatibility id:
-/// a binary change.
+/// selects `plan` or `all` explicitly, as Apple's build does. An update
+/// whose plan needs a capability this set lacks is a binary change
+/// ([`apple_requirement`]).
 pub(crate) fn name_into(
     compat: &mut Compat,
     app: &std::path::Path,
@@ -39,9 +39,14 @@ pub(crate) fn name_into(
         let plan = exact_plan::Plan::decode(&bytes)
             .map_err(|e| format!("the baked plan is invalid: {e:?}"))?;
         let entries = entries.values().map(|entry| &entry.plan);
-        let uses = production_uses(app, &plan, entries, &compat.inputs, compat.host_work);
-        let uses = ahead(manifest)?.into_iter().fold(uses, Uses::with);
-        executor(uses, &compat.inputs, compat.host_work)
+        composed(
+            app,
+            &plan,
+            entries,
+            &compat.inputs,
+            manifest,
+            compat.host_work,
+        )?
     } else {
         Capability::ALL.into_iter().fold(Uses::NONE, Uses::with)
     };
@@ -54,8 +59,54 @@ pub(crate) fn name_into(
     };
     let names: Vec<&str> = uses.iter().map(Capability::name).collect();
     compat.inputs["linked"] = serde_json::json!(names);
+    // The roster `linked` is drawn from. A capability added to it later was in
+    // this binary's core, and a binary built after has another id: the
+    // classifier requires only what the cohort's roster names (LLP 1047.001
+    // D13).
+    if apple(&compat.inputs) {
+        let roster: Vec<&str> = Capability::ALL.iter().map(|c| c.name()).collect();
+        compat.inputs["linkRoster"] = serde_json::json!(roster);
+    }
     compat.id = compatibility_digest(&compat.inputs);
     Ok(())
+}
+
+/// What a production artifact links: [`production_uses`], the manifest's
+/// `link` ahead of use, and the executor for what hands it work. Computed
+/// once for the bake's linked set and for what an update requires.
+pub(crate) fn composed<'a>(
+    app: &std::path::Path,
+    plan: &'a exact_plan::Plan,
+    entries: impl Iterator<Item = &'a exact_plan::Plan>,
+    inputs: &serde_json::Value,
+    manifest: &contract::Manifest,
+    host_work: bool,
+) -> Result<Uses, String> {
+    let uses = production_uses(app, plan, entries, inputs, host_work);
+    let uses = ahead(manifest)?.into_iter().fold(uses, Uses::with);
+    Ok(executor(uses, inputs, host_work))
+}
+
+/// What a plan requires of an Apple binary it is delivered to (LLP 1047.001
+/// D5, D13): the set [`composed`] names for it, which the classifier
+/// (`classifyArtifacts`, `scripts/app.mjs`) compares as a subset of the
+/// cohort's `linked`. `None` off Apple.
+pub(crate) fn apple_requirement<'a>(
+    app: &std::path::Path,
+    plan: &'a exact_plan::Plan,
+    entries: impl Iterator<Item = &'a exact_plan::Plan>,
+    inputs: &serde_json::Value,
+    manifest: &contract::Manifest,
+    host_work: bool,
+) -> Result<Option<serde_json::Value>, String> {
+    if !apple(inputs) {
+        return Ok(None);
+    }
+    let uses = composed(app, plan, entries, inputs, manifest, host_work)?;
+    Ok(Some(serde_json::json!(uses
+        .iter()
+        .map(Capability::name)
+        .collect::<Vec<_>>())))
 }
 
 /// What a production artifact links for `plan`, with what its grants allow
@@ -390,6 +441,43 @@ mod tests {
                 super::production_uses(&hello_dir, &hello, std::iter::empty(), &inputs, false);
             assert_eq!(uses, exact_runner::Uses::NONE, "{platform}: {uses}");
         }
+    }
+
+    /// What an update's plan requires of an Apple cohort is what a bake of
+    /// it would link: a table needs grid, the manifest's `link` and a
+    /// source's declared host work count, and no other platform is asked.
+    #[test]
+    fn an_update_requires_what_its_bake_would_link_on_apple() {
+        let hello = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../apps/hello");
+        let manifest = contract::Manifest::read(&hello).unwrap();
+        let table = contract::compile(
+            "component W\n  view\n    table\n      tr\n        td\n          text \"a\"\n",
+        )
+        .unwrap();
+        let required = |platform: &str, host_work| {
+            let inputs = serde_json::json!({ "platform": platform, "grantCeiling": "" });
+            super::apple_requirement(
+                &hello,
+                &table,
+                std::iter::empty(),
+                &inputs,
+                &manifest,
+                host_work,
+            )
+            .unwrap()
+        };
+        assert_eq!(required("ios", false), Some(serde_json::json!(["grid"])));
+        assert_eq!(
+            required("macos", true),
+            Some(serde_json::json!(["grid", "io"]))
+        );
+        assert_eq!(required("linux", true), None);
+        let mut linking = manifest.clone();
+        linking.json["link"] = serde_json::json!(["svg"]);
+        let inputs = serde_json::json!({ "platform": "ios", "grantCeiling": "" });
+        let ahead =
+            super::apple_requirement(&hello, &table, std::iter::empty(), &inputs, &linking, false);
+        assert_eq!(ahead.unwrap(), Some(serde_json::json!(["grid", "svg"])));
     }
 
     /// A source that declares host work (LLP 1047.001 D12) and one placed on
