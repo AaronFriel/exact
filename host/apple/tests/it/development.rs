@@ -192,10 +192,10 @@ precondition(!ExactDevelopmentLink.claims(link("https://x.test/", token)) && !Ex
 #[test]
 #[ignore = "async lane: launches the Swift compiler; bun scripts/async.mjs runs it"]
 fn local_development_plan_loads_the_pair_and_retries_partial_writes() {
-    let source = include_str!("../../Sources/ExactKit/PlanURL.swift")
-        .split("/// Explicit development-only opening action")
-        .next()
-        .unwrap();
+    // The file form of the dev loop as the host compiles it, its package
+    // access read as internal: a script has no package.
+    let source =
+        include_str!("../../Sources/ExactKit/DevelopmentPlan.swift").replace("package ", "");
     let checks = r#"
 public enum ExactApplyResult: Equatable { case applied, held(String), refused(String) }
 struct ExactModule { let receipt: Data; let bytecode: Data }
