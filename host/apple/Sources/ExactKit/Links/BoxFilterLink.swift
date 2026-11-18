@@ -2,11 +2,13 @@
 // selects (the roster's `Effects`): a box's picture, the presenter's
 // filtered boxes, and the filter engine (`FilterExtent`, `FilterProgram`,
 // `SvgFilterGPU`), which SVG's filters use too, so the SVG product depends on
-// this one. The core reaches it only through what this file declares. Each
-// slot's default is today's implementation, so every app still links it;
-// the family's own target will install them instead. `clip-path` stays in
-// the core: its parser is small and its mask is the core's rounded-outline
-// mask (`ClipPath.mask`). `RenderInputs` belongs to this family.
+// this one. The core reaches it only through what this file declares.
+// `ExactEffects.install()` sets `make` and `makeSet`; without it a box's
+// `filter` draws nothing, and a plan with one is refused at boot
+// (`Unlinked("effects")`). The engine is still ExactKit's while the SVG
+// files that call it are, so `prewarm` keeps its default until they move.
+// `clip-path` stays in the core: its parser is small and its mask is the
+// core's rounded-outline mask (`ClipPath.mask`).
 import CoreGraphics
 import QuartzCore
 
@@ -59,9 +61,9 @@ package protocol BoxFilterSet: AnyObject {
 /// The slots are set before any session is made, and read on the main thread.
 package enum BoxFilterLink {
     /// One box's filter.
-    package static var make: (() -> any BoxFilterEffect)? = { BoxFilter() }
+    package static var make: (() -> any BoxFilterEffect)?
     /// A presenter's filtered boxes.
-    package static var makeSet: (() -> any BoxFilterSet)? = { BoxFilters() }
+    package static var makeSet: (() -> any BoxFilterSet)?
     /// Make the GPU filter pipelines now, off the main thread, for a plan
     /// that can show a filter, before its first picture.
     package static var prewarm: (() -> Void)? = { SvgFilterMetal.prewarm() }

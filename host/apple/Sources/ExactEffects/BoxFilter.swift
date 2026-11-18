@@ -30,6 +30,7 @@
 // multiplies the layer's opacity and its press and look fades instead.
 import CoreGraphics
 import QuartzCore
+import ExactKit
 
 final class BoxFilter: BoxFilterEffect {
     /// Stands where the box stands (its geometry mirrored), clipped by the

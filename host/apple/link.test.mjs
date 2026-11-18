@@ -958,11 +958,11 @@ test('production links the baked set; development links costly frameworks by use
   assert.deepEqual(appleComposition(graph, true, [], baked(graph.uses)), { link: 'markdown,picker', products: ['ExactMarkdown'] });
   assert.deepEqual(appleComposition({ uses: [] }, true, [], baked([])), { link: 'none', products: [] });
   assert.deepEqual(appleComposition(graph, true, [], baked([...graph.uses, 'auth_session'])).products, ['ExactMarkdown', 'ExactAuthSession']);
-  assert.deepEqual(appleComposition(graph, false).products, ['ExactGroupedLists', 'ExactMarkdown', 'ExactSurfaces', 'ExactDrag', 'ExactPresence']);
+  assert.deepEqual(appleComposition(graph, false).products, ['ExactGroupedLists', 'ExactMarkdown', 'ExactSurfaces', 'ExactDrag', 'ExactPresence', 'ExactEffects']);
   assert.deepEqual(appleComposition(graph, false, [], auth).products,
-    ['ExactGroupedLists', 'ExactMarkdown', 'ExactSurfaces', 'ExactDrag', 'ExactAuthSession', 'ExactPresence']);
+    ['ExactGroupedLists', 'ExactMarkdown', 'ExactSurfaces', 'ExactDrag', 'ExactAuthSession', 'ExactPresence', 'ExactEffects']);
   assert.deepEqual(appleComposition({ uses: ['picker', 'media_picker'] }, false, [], auth).products,
-    ['ExactGroupedLists', 'ExactMarkdown', 'ExactSurfaces', 'ExactDrag', 'ExactMediaPicker', 'ExactAuthSession', 'ExactPresence']);
+    ['ExactGroupedLists', 'ExactMarkdown', 'ExactSurfaces', 'ExactDrag', 'ExactMediaPicker', 'ExactAuthSession', 'ExactPresence', 'ExactEffects']);
   assert.deepEqual(appleComposition(graph, false, ['auth_session']).products.includes('ExactAuthSession'), true);
   assert.deepEqual(appleComposition({ uses: ['numerals'] }, false).products.includes('ExactNumerals'), true);
   assert.ok(!appleComposition(graph, false).products.includes('ExactNumerals'));
@@ -1057,7 +1057,7 @@ test.skipIf(process.platform !== 'darwin' || helloBake().length === 0)('an app w
 const agentSymbolCheck = process.platform !== 'darwin' ? notApplicable('Darwin only')
   : process.env.EXACT_GLUE_FAST === '1' ? notApplicable('the async glue step builds no Apple apps; metrics --long builds and checks these artifacts')
   : need('Apple Hello builds', missingAgentHelloBakes());
-agentSymbolCheck('production omits the agent and hatch diagnostics while development links them (LLP 1047.001)', () => {
+agentSymbolCheck('production omits the agent, hatch diagnostics and CSS filter while development links them (LLP 1047.001)', () => {
   const names = (binary) => {
     const raw = spawnSync('xcrun', ['llvm-nm', '--demangle', binary], { encoding: 'utf8', maxBuffer: 1 << 28 });
     assert.equal(raw.status, 0, raw.stderr);
@@ -1083,12 +1083,14 @@ agentSymbolCheck('production omits the agent and hatch diagnostics while develop
       // Hello lays out no grid, so its composition links no grid layout (LLP 1047.001 D10).
       assert.doesNotMatch(symbols, line(GRID_LAYOUT), `${bake.platform} production grid layout`);
       assert.doesNotMatch(symbols, line('ExactKit\\.HatchDiagnostics(?:[.( ]|$)'), `${bake.platform} production hatch diagnostics`);
+      assert.doesNotMatch(symbols, line('ExactEffects\\.BoxFilter'), `${bake.platform} production CSS filter`);
     } else {
       assert.match(symbols, line(GRID_LAYOUT), `${bake.platform} grid layout`);
       assert.match(symbols, line(`static ExactKit\\.Agent\\.${bake.platform === 'iOS' ? 'startSocket' : 'startStdio'}`), `${bake.platform} carrier`);
       assert.match(symbols, line('ExactKit\\.Agent\\.accessibilityElementsTree'), `${bake.platform} accessibility`);
       assert.match(symbols, line('ExactKit\\.Agent\\.layout\\(\\)'), `${bake.platform} layout`);
       assert.match(symbols, line('ExactKit\\.HatchDiagnostics\\.perf\\(tags:'), `${bake.platform} hatch diagnostics`);
+      assert.match(symbols, line('ExactEffects\\.BoxFilter'), `${bake.platform} CSS filter`);
     }
   }
 }, 60_000);

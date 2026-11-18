@@ -36,6 +36,9 @@ import ExactTips
 #if EXACT_LINK_PRESENCE
 import ExactPresence
 #endif
+#if EXACT_LINK_EFFECTS
+import ExactEffects
+#endif
 public enum ExactComposition {
     public static let app: ExactApp = {
         AgentLink.install()
@@ -81,6 +84,9 @@ public enum ExactComposition {
         #endif
         #if EXACT_LINK_PRESENCE
         ExactPresence.install()
+        #endif
+        #if EXACT_LINK_EFFECTS
+        ExactEffects.install()
         #endif
     }
 }

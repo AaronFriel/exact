@@ -8,6 +8,7 @@ import UIKit
 #endif
 @testable import ExactKit
 @testable import ExactSurfaces
+@testable import ExactEffects
 
 final class BoxFilterTests: XCTestCase {
     private var p: Presenter!

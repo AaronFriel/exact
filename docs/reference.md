@@ -1432,6 +1432,7 @@ The generated `--embed` composition lists the capabilities to link.
 | `ExactNumerals` | Numeric content transitions | `ExactNumerals.install()` |
 | `ExactTips` | Platform tips | `ExactTips.install()` |
 | `ExactPresence` | Native presence checks | `ExactPresence.install()` |
+| `ExactEffects` | CSS `filter` on a box | `ExactEffects.install()` |
 
 Development builds log a missing Markdown or drag installation once per session,
 with the product and installation call. Without it, Markdown remains literal

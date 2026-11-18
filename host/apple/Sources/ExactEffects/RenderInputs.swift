@@ -24,6 +24,7 @@
 import CoreGraphics
 import Foundation
 import QuartzCore
+import ExactKit
 
 struct RenderInputs: Equatable {
     private var numbers: [CGFloat] = []

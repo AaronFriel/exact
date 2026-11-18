@@ -41,6 +41,7 @@ let allCapabilities: [(name: String, target: String)] = [
     ("numerals", "ExactNumerals"),
     ("tips", "ExactTips"),
     ("presence", "ExactPresence"),
+    ("effects", "ExactEffects"),
 ]
 let capabilities = allCapabilities.filter { links($0.name) }
 

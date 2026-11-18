@@ -456,6 +456,7 @@ mod tests {
         let hatch = compile("view hatch=\"avatar\"", "on = false");
         let control = compile("input type=\"checkbox\"", "on = false");
         let traced = compile("button \"b\" press=go", "startTrace_EXPERIMENTAL()");
+        let filtered = compile("text \"a\" filter=\"blur(2px)\"", "on = false");
         for (plan, name) in [
             (&tools, "tools"),
             (&view, "modules, native_views"),
@@ -464,6 +465,7 @@ mod tests {
             (&hatch, "native_views"),
             (&control, "controls"),
             (&traced, "traces"),
+            (&filtered, "effects"),
         ] {
             assert_eq!(missing(plan, Uses::NONE).as_deref(), Some(name));
             assert_eq!(missing(plan, ALL), None);
