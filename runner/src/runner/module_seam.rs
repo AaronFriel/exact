@@ -15,10 +15,18 @@ use crate::HoldAnswer;
 use exact_kernel::ViewId;
 use exact_plan::{ModulesRow, TypesId, Value};
 use serde_json::{json, Value as Json};
+use std::any::Any;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
 mod forward;
+
+/// The native modules' state, owned by the runner so that a module's calls
+/// into the core and the core's back into the module find it where they
+/// left it. Its type is the modules' own, made by the linked seam
+/// ([`Modules::state`]) and reached only by module code (`modules.rs`), so
+/// a binary without the modules holds none of its code, its drop included.
+pub(in crate::runner) struct ModuleState(pub(in crate::runner) Box<dyn Any>);
 
 /// The module readers a commit's checkpoint keeps: each bound live
 /// source's readers, by resource, with the arguments each last asked with.
@@ -52,6 +60,13 @@ pub(in crate::runner) fn build_target() -> &'static str {
 /// that extension when it is let go.
 #[allow(unused_variables)]
 pub trait Modules<D: DataSource> {
+    /// The modules' state for a new runner, which it keeps: none here. A
+    /// seam's other methods run on the state its own `state` made, so an
+    /// implementation that delegates them delegates this too.
+    fn state(&self) -> Box<dyn Any> {
+        Box::new(())
+    }
+
     /// Invocation `id`'s held calls end `AbortError` with `message`.
     fn abort_held_of(&self, r: &mut Runner<D>, id: u64, message: &str) {}
 

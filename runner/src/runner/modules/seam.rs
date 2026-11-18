@@ -17,6 +17,10 @@ use std::sync::Arc;
 pub(crate) struct LinkedModules;
 
 impl<D: DataSource> Modules<D> for LinkedModules {
+    fn state(&self) -> Box<dyn std::any::Any> {
+        Box::new(super::Extensions::default())
+    }
+
     fn abort_held_of(&self, r: &mut Runner<D>, id: u64, message: &str) {
         r.abort_held_of_linked(id, message)
     }

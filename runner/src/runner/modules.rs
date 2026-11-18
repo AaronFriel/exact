@@ -288,6 +288,28 @@ enum Decision {
     Forward,
 }
 
+/// Module code reaches the runner's module state as `self.extensions`. It is
+/// `Extensions` wherever module code runs: the boot makes the state with the
+/// seam it chose for the runner, and module code is reached only through
+/// that seam.
+impl std::ops::Deref for super::module_seam::ModuleState {
+    type Target = Extensions;
+
+    fn deref(&self) -> &Extensions {
+        self.0
+            .downcast_ref()
+            .expect("the linked seam made this state")
+    }
+}
+
+impl std::ops::DerefMut for super::module_seam::ModuleState {
+    fn deref_mut(&mut self) -> &mut Extensions {
+        self.0
+            .downcast_mut()
+            .expect("the linked seam made this state")
+    }
+}
+
 impl Extensions {
     /// Whether `token` is a held module request (not I/O: no clock waits).
     pub(super) fn holds_token(&self, token: Option<u64>) -> bool {
@@ -824,6 +846,7 @@ impl<D: DataSource> Runner<D> {
                     .map(|t| self.now_ms + t),
             ),
         };
+        let invocation = self.invocation_id();
         self.extensions.held.push(Held {
             token,
             reply: None,
@@ -836,7 +859,7 @@ impl<D: DataSource> Runner<D> {
             deadline,
             forward,
             origin,
-            id: self.invocation_id(),
+            id: invocation,
             args,
             permission,
             request: None,
@@ -1180,6 +1203,7 @@ impl<D: DataSource> Runner<D> {
                         .map(|t| self.now_ms + t),
                 };
                 let forward = (route == Route::Agent).then(|| self.forward_body(&row, args, None));
+                let invocation = self.invocation_id();
                 self.extensions.held.push(Held {
                     token,
                     reply: Some(slot.clone()),
@@ -1195,7 +1219,7 @@ impl<D: DataSource> Runner<D> {
                     deadline,
                     forward,
                     origin,
-                    id: self.invocation_id(),
+                    id: invocation,
                     args: held_args.clone(),
                     permission,
                     request,

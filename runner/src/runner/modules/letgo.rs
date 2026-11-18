@@ -85,7 +85,8 @@ impl<D: DataSource> Runner<D> {
             self.retire_hold(hold);
             self.release(token, cancel);
         }
-        let held = &self.extensions.held;
-        (self.extensions.letgo.held).retain(|token, _| held.iter().any(|h| h.token == *token));
+        let ext = &mut *self.extensions;
+        let held = &ext.held;
+        (ext.letgo.held).retain(|token, _| held.iter().any(|h| h.token == *token));
     }
 }

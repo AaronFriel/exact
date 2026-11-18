@@ -534,11 +534,12 @@ impl<D: DataSource> Runner<D> {
         let mut held = std::collections::BTreeSet::new();
         for key in keys {
             let resources = &self.resources;
-            let readers = self.extensions.readers.entry(key.clone()).or_default();
+            let ext = &mut *self.extensions;
+            let readers = ext.readers.entry(key.clone()).or_default();
             readers.retain(|i, _| resources.get(*i).is_some_and(|row| row.state.is_some()));
             held.extend(readers.keys().copied());
             let groups: Vec<String> = readers.values().cloned().collect();
-            let samples = &mut self.extensions.samples;
+            let samples = &mut ext.samples;
             // A data-code reader's grid is kept while its cursor is.
             let data = samples.data.lock().map(|d| d.clone()).unwrap_or_default();
             samples.grids.retain(|(k, g), _| {

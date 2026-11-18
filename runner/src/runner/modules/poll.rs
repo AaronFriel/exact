@@ -126,7 +126,8 @@ impl<D: DataSource> Runner<D> {
     /// A polled source was asked now.
     pub(in crate::runner) fn note_poll(&mut self, row: &ModulesRow) {
         if self.poll_of(row).is_some() {
-            (self.extensions.polls).insert(self.key(row), self.now_ms);
+            let key = self.key(row);
+            (self.extensions.polls).insert(key, self.now_ms);
         }
     }
 

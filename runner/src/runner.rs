@@ -540,7 +540,7 @@ pub struct Runner<D: DataSource> {
     /// Resources asked again and again with new arguments (a development build's warning).
     churn: query::Churn,
     /// The agent's preferred answers of native modules' sources (LLP 1124 D7).
-    extensions: modules::Extensions,
+    extensions: module_seam::ModuleState,
     /// Who each commit, request and armed `then` comes from, and the
     /// invocation each is part of (`provenance.rs`).
     origins: provenance::Origins,
@@ -943,7 +943,7 @@ impl<D: DataSource> Runner<D> {
             keeping: Default::default(),
             churn: Default::default(),
             activities: activities::Activities::default(),
-            extensions: Default::default(),
+            extensions: module_seam::ModuleState(seams.modules.state()),
             origins: Default::default(),
             processes: Default::default(),
             wakes: Default::default(),
