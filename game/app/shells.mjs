@@ -408,10 +408,21 @@ const sdkLockFile = source => [resolve(source, 'app/shells.lock'), resolve(gameR
 // path packages, which carry no source or checksum, seed it the same way.
 export function withRootPins(sdk, root = existsSync(resolve(gameRoot, '../Cargo.lock')) ? readFileSync(resolve(gameRoot, '../Cargo.lock'), 'utf8') : '') {
   // A root's new major of a package the SDK lock holds is a pin too; a compatible one is not.
-  const held = new Set((Bun.TOML.parse(sdk).package ?? []).map(pkg => `${pkg.name} ${series(pkg.version)}`));
+  const packages = Bun.TOML.parse(sdk).package ?? [];
+  const held = new Set(packages.map(pkg => `${pkg.name} ${series(pkg.version)}`));
   const pins = lockBlocks(root)
     .filter(block => (/^source = "registry\+/m.test(block) || !/^source = /m.test(block)) && !held.has(seriesId(block)));
-  return pins.length ? `${sdk.trimEnd()}\n\n${pins.join('\n\n')}\n` : sdk;
+  if (!pins.length) return sdk;
+  // A lock names a dependency by its bare name while it holds one version. A
+  // second version of that name makes the bare edge ambiguous, and Cargo then
+  // resolves it afresh: codespan-reporting's `>=0.1, <0.3` took the root's
+  // unicode-width 0.1.14 over the SDK's 0.2.2. Naming the SDK's version keeps it.
+  let seeded = sdk;
+  for (const name of new Set(pins.map(block => /^name = "([^"]+)"/m.exec(block)[1]))) {
+    const versions = packages.filter(pkg => pkg.name === name).map(pkg => pkg.version);
+    if (versions.length === 1) seeded = seeded.replaceAll(`\n "${name}",\n`, `\n "${name} ${versions[0]}",\n`);
+  }
+  return `${seeded.trimEnd()}\n\n${pins.join('\n\n')}\n`;
 }
 const cargoMetadata = (cwd, flags, env) => spawnSync('cargo', ['metadata', ...flags, '--format-version', '1'], {cwd, env, encoding:'utf8', maxBuffer:64 * 1024 * 1024});
 // A lock's versions by package name.
