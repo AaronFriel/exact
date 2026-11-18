@@ -106,8 +106,9 @@ public final class ExactApp {
     }
     /// The complete generation last accepted by every live session. A new
     /// connection can recognize it without restarting carried app state.
-    private var devGeneration: String?
-    private var devProgram: String?
+    package var devGeneration: String?
+    /// The native program the dev connection's generations are for, once one is taken.
+    package var devProgram: String?
     /// The plan last applied across the app, also used by newly created sessions.
     private(set) var lastPlan: Data?
     private(set) var lastModule: ExactModule?
@@ -129,7 +130,7 @@ public final class ExactApp {
     public var sessions: [ExactSession] { sessionRefs.compactMap(\.session) }
     /// The one dev connection (D11): the app URL `dev.mjs` prints, resolved
     /// and subscribed once; every `{seq}` applies to every session.
-    private(set) var connection: PlanURL?
+    package private(set) var connection: (any PlanConnection)?
     private init() {
         WidgetContainer.configure()
         #if canImport(UIKit)
@@ -203,18 +204,8 @@ public final class ExactApp {
     /// connection.
     public func connect(_ url: String) {
         disconnect()
-        connection = PlanURL.open(url, program: devProgram, acceptProgram: { [weak self] program in
-            guard let self else { return false }
-            if let old = self.devProgram { return old == program }
-            self.devProgram = program
-            return true
-        }, current: { [weak self] in self?.devGeneration }, plan: { [weak self] in self?.sessions.first { $0.booted && $0.state != .destroyed }?.runtime.planDigest() }, design: { [weak self] in self?.design($0) ?? "closed" }, channel: { [weak self] in self?.channel($0) }, apply: { [weak self] candidate, label, now, finished in
-            guard let self else { return .refused("app closed") }
-            let resolver = candidate.assets
-            // A closed connection applies nothing, so the one asking is the open one.
-            return self.applyTogether(candidate.plan, label: label, resolver: resolver, token: 0, identity: candidate.identity, module: candidate.module, development: true, now: now, producer: self.connection, commit: { true }, finished: finished)
-        })
-        connection?.onDevNotice = { [weak self] in self?.showDevStatus($0) } // the old one's went at its close
+        guard let open = PlanConnectionLink.open else { fputs("exact url: refused: this build links no plan connection: \(url)\n", stderr); return }
+        connection = open(self, url)
     }
 
     /// Close the connection, with the generation it brought that waits.
@@ -1208,7 +1199,7 @@ public final class ExactSession {
         // Each presenter takes its boot's table, a second one with the same too.
         ThemeRoles.apply(outputs.roles, root: presenter.root); if outputs.roles != nil { presenter.applyThemeTint() }
         let orientationChanged = presenter.orientationChangesScreen(batch)
-        ThemeRoles.within(presenter.root) { presenter.apply(batch) }; Formas.moved(self) // bindings' places (LLP 1121 D12)
+        ThemeRoles.within(presenter.root) { presenter.apply(batch) }; FormaLink.moved?(self) // bindings' places (LLP 1121 D12)
         drainCanvasCaptures(batch)
         if !batch.canvasImagesDropped.isEmpty { presenter.canvas2d.drop(batch.canvasImagesDropped) }
         if !batch.canvasImages.isEmpty { presenter.canvas2d.load(batch.canvasImages) }
