@@ -249,7 +249,7 @@ public final class ExactView: NSView {
     /// Boot at the first real size (an embedder's view), else resize; the
     /// insets follow. Owed while a restart holds the runtime, the last-told
     /// size untouched: ResetGate replays it after the batch.
-    private func fit() {
+    package func fit() {
         if session.runtime.holds("resize(width:height:)") { return }
         if Owner.shared.isServingMain {
             if !fitPending {

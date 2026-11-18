@@ -8,6 +8,7 @@
 // change comes, the held route takes its hiding and the leaving route goes.
 #if os(macOS)
 import AppKit
+import ExactKit
 
 final class RouteTransitions {
     unowned let presenter: Presenter

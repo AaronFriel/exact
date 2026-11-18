@@ -4,6 +4,7 @@
 // it as a person does, More's Back to its list included (LLP 1075.003 §3.7).
 #if os(iOS) || os(tvOS)
 import UIKit
+import ExactKit
 
 extension NavigationHost {
     func invokeBack(from source: NodeView) {

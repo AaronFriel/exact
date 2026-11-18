@@ -85,7 +85,7 @@ extension Presenter {
         return view.superview
     }
 
-    func authored(_ view: UIView, inside ancestor: UIView) -> Bool {
+    package func authored(_ view: UIView, inside ancestor: UIView) -> Bool {
         sequence(first: view, next: listenerParent).contains { $0 === ancestor }
     }
 
@@ -199,7 +199,7 @@ package struct TopLayerBox {
 /// any other by a placement, its block in the routes' owner's local
 /// coordinates, sent with the block when either changes, so that it keeps
 /// its place among its siblings.
-final class OwnerBlocks {
+package final class OwnerBlocks {
     private unowned let presenter: Presenter
     /// What the runtime was last told, by route: its block, and its
     /// placement unless it is presented.
@@ -242,7 +242,7 @@ final class OwnerBlocks {
 
     /// A native route keeps its controller's bounds and avoids only its own keyboard.
     /// Authored chrome keeps the document's allocation.
-    func block(in view: UIView) -> CGRect {
+    package func block(in view: UIView) -> CGRect {
         var block = view.bounds
         if ExactEnv.authoredChrome, let document = presenter.navigation.container, view.isDescendant(of: document) {
             let end = view.convert(CGPoint(x: 0, y: document.bounds.height), from: document).y
@@ -298,7 +298,7 @@ final class OwnerBlocks {
     /// applied, as `fit` does, and for a slice in flight (`whenIdle`), and
     /// samples what to tell when it tells it, so a report that waited tells
     /// what is current, and the ones behind it what changed since: none.
-    func publish() {
+    package func publish() {
         guard viewChanges == 0, !resetting, !presenter.resetting else { return } // (a sheet a reset dismisses is the old tree's: never told the runtime replacing it)
         presenter.nativeGeometry.changed()
         if presenter.applying {

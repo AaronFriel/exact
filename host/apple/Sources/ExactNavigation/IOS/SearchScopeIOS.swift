@@ -4,6 +4,7 @@
 // it, riding the bar as the title collapses.
 #if os(iOS) || os(tvOS)
 import UIKit
+import ExactKit
 
 extension NavigationHost {
     /// Whether the search bar draws `tablist` (`SegmentHost` steps aside).

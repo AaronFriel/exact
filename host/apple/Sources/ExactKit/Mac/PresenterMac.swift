@@ -36,7 +36,7 @@ package final class Presenter {
     var personScrolls = 0, fragmentArm: (activation: Int, scrolls: Int)?, fragmentSeen = 0 // the person's wheels and live scrolls; the activation a router change asked a fragment's scroll for and their count then, which one since cancels; the last armed (Fragment.swift)
     lazy var focusEvents = FocusEvents(self)
     var inlineOwners: [UInt32: (owner: UInt32, index: Int)] = [:]
-    private(set) var chrome = ChromeIndex()
+    private(set) package var chrome = ChromeIndex()
     /// Views leaving with their exit, by id (LLP 1063, `PresenceMac.swift`).
     package var leaving: [UInt32: Leaving] = [:]
     /// The shared elements in flight (LLP 1013.000, `FlightLink`).
@@ -96,7 +96,7 @@ package final class Presenter {
     lazy package var transformGeometry = TransformGeometryHost(self)
     package var videoVisibility: VideoVisibilityHost?
     lazy package var collections: any ListHosting = ListLink.make?(self) ?? NoLists()
-    lazy var stickies: any StickyHosting = StickyLink.make?(self) ?? NoStickies()
+    package lazy var stickies: any StickyHosting = StickyLink.make?(self) ?? NoStickies()
     let tableGrid = TableGrid()
     /// Heavy leaves held while their rows are far or flying (LLP 1068 §5.1).
     lazy var leaves = HeavyLeaves(self)
@@ -117,15 +117,15 @@ package final class Presenter {
     private var visibleText: [UInt32: NSRect] = [:]
     private var textViewportIndex: TextViewportIndex?
     /// The native menu arm (LLP 1021 D3).
-    lazy var menus = MenuHost(presenter: self)
-    lazy var dialogs = DialogHost(self)
+    package lazy var menus = MenuHost(presenter: self)
+    package lazy var dialogs = DialogHost(self)
     /// Subtrees shown in a native container's view (LLP 1115.002 D8.2).
-    lazy var blocks = BlockHost(self)
+    package lazy var blocks = BlockHost(self)
     /// Lists whose rows a table holds (LLP 1115.002 D5, stage 3a).
-    lazy var tables = TableHost(self)
-    lazy var alerts = AlertHost(self)
+    package lazy var tables = TableHost(self)
+    package lazy var alerts = AlertHost(self)
     lazy package var navigation: any NavigationHosting = NavigationLink.make?(self) ?? NoNavigation(self)
-    lazy var inputGates = InputGates(self)
+    package lazy var inputGates = InputGates(self)
     lazy var backSwipe: any BackSwiping = NavigationLink.makeBackSwipe?(self) ?? NoBackSwipe()
     /// SVG scenes (LLP 1055 D4), when the app links SVG.
     let svg = SvgLink.make?()
@@ -134,25 +134,25 @@ package final class Presenter {
     /// Boxes under CSS `filter`, drawn again after each batch (LLP 1055.000 D14).
     let boxFilters = BoxFilterLink.makeSet?()
     package let canvas2d: Canvas2DCanvases = SurfacesLink.installed?.canvas2D() ?? NoCanvas2D()
-    lazy var segments: any SegmentHosting = ControlLink.makeSegments?(self) ?? NoSegments()
-    lazy var controls = ControlHost(self)
-    lazy var fieldSelections = FieldSelections(self)
+    package lazy var segments: any SegmentHosting = ControlLink.makeSegments?(self) ?? NoSegments()
+    package lazy var controls = ControlHost(self)
+    package lazy var fieldSelections = FieldSelections(self)
     /// The one editor every `input`'s field of this session edits in (`FieldEditor`).
     lazy var fieldEditor = FieldEditor.make()
     /// Nodes marked `hatch="word"` (LLP 1075.003.000).
     package internal(set) lazy var elements: any ElementHatching = NativeModuleLink.makeElements?(self) ?? NoElementHatches()
-    lazy var shortcuts = ShortcutHost(presenter: self)
-    lazy var toolbar = WindowToolbarHost(self)
+    package lazy var shortcuts = ShortcutHost(presenter: self)
+    package lazy var toolbar = WindowToolbarHost(self)
     /// What native presentations cover of boxes (LLP 1115.002 D8.1, CoversMac.swift).
-    lazy var covers = HostCovers(self)
+    package lazy var covers = HostCovers(self)
     lazy var statusItems = StatusItemHost(self)
-    var onCovers: (([(UInt32, HostCover?)]) -> Void)?
+    package var onCovers: (([(UInt32, HostCover?)]) -> Void)?
     /// The border box a person dragged a box's `resize` grip to; nil keeps an axis (ResizeGrip.swift).
     var onResizeBox: ((UInt32, CGFloat?, CGFloat?) -> Void)?
     /// The root tab bar as the window's sidebar (LLP 1115.002 D3).
-    lazy var sidebar: any SidebarHosting = NavigationLink.makeSidebar?(self) ?? NoSidebar(self)
+    package lazy var sidebar: any SidebarHosting = NavigationLink.makeSidebar?(self) ?? NoSidebar(self)
     /// Each navigation root's tabs, as the last batch to say them gave them (`takeRootTabs`).
-    var rootTabs: [UInt32: RootTabs] = [:]
+    package var rootTabs: [UInt32: RootTabs] = [:]
     /// The head's title goes to the window the app attached, through the
     /// toolbar host that already owns its title (LLP 1048.003 D1).
     func headTitle(_ title: String?) { toolbar.headTitle(title) }
@@ -162,7 +162,7 @@ package final class Presenter {
     /// last batch; `onViewportFit` fires when it changes. macOS maps `cover`
     /// to a full-size-content window (the titlebar overlays the viewport;
     /// its height is `safe-area-inset-top`). @ref LLP 1008 §9
-    private(set) var viewportFit: String?
+    private(set) package var viewportFit: String?
     var onViewportFit: (() -> Void)?
     /// The safe-area insets the kernel was given (the titlebar under `viewport-fit=cover`, zero
     /// when the viewport is the content view below it) and its layout regions (LLP 1123 D10,
@@ -613,7 +613,7 @@ package final class Presenter {
     package var pageBackground: NSColor { viewport.drawsBackground ? viewport.backgroundColor : .clear }
     /// What covers the page where a route paints no ground of its own: the
     /// canvas, or the window background behind a translucent one.
-    var opaqueGround: NSColor { viewport.drawsBackground ? viewport.backgroundColor : .windowBackgroundColor }
+    package var opaqueGround: NSColor { viewport.drawsBackground ? viewport.backgroundColor : .windowBackgroundColor }
 
     /// The page's canvas: the first root's background, else the theme's, else
     /// the platform's (LLP 1115 D2).
@@ -730,7 +730,7 @@ package final class Presenter {
         viewport.syncElasticity()
         viewport.acceptDocumentFit()
     }
-    var onPress, onClose, onCancel: ((UInt32) -> Void)?
+    package var onPress, onClose, onCancel: ((UInt32) -> Void)?
     var onChange: ((UInt32, String) -> Void)?
     /// Images' intrinsic sizes, several at once under one layout.
     package internal(set) var onIntrinsic: (([(UInt32, CGSize?)]) -> Void)?
@@ -914,7 +914,7 @@ package final class Presenter {
         edited = id
         if input { onInput?(id, value) }
     }
-    func commitEdit(_ id: UInt32, _ value: String, change: Bool) {
+    package func commitEdit(_ id: UInt32, _ value: String, change: Bool) {
         guard edited == id else { return }
         edited = nil
         var value = value

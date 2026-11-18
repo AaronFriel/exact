@@ -6,6 +6,7 @@
 import AppKit
 import XCTest
 @testable import ExactKit
+@testable import ExactNavigation
 
 final class BackMacTests: XCTestCase {
     private var window: NSWindow!

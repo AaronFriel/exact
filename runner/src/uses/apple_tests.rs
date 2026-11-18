@@ -135,7 +135,8 @@ fn a_wake_lock_is_a_wakelock_that_can_be_screen() {
 #[test]
 fn each_native_entry_is_selected_by_the_rows_that_reach_its_family() {
     use Capability::{
-        Collections, Controls, Effects, Flights, Images, NativeViews, Sticky, Svg, Traces,
+        Collections, Controls, Effects, Flights, Images, NativeViews, Navigation, Sticky, Svg,
+        Traces,
     };
     let plain = "column\n      text \"a\"\n      button \"b\" press=go";
     for (view, capability, selected) in [
@@ -186,6 +187,15 @@ fn each_native_entry_is_selected_by_the_rows_that_reach_its_family() {
         ("column position=\"sticky\" top=0", Sticky, true),
         ("column position=(wide ? \"sticky\" : \"static\") top=0", Sticky, true),
         ("column position=\"relative\" top=0", Sticky, false),
+        (plain, Navigation, false),
+        ("column navigationKey=\"a\"", Navigation, true),
+        ("column navigationKey=(wide ? \"a\" : \"b\")", Navigation, true),
+        (
+            "column navigationKey=\"a\" navigationPresentation=\"modal\"",
+            Navigation,
+            true,
+        ),
+        ("row role=\"tablist\"\n      button \"a\" role=\"tab\"", Navigation, false),
         ("input type=\"text\"", Controls, false),
         (
             "row role=\"tablist\"\n      button \"a\" press=go",

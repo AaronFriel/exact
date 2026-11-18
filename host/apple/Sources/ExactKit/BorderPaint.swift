@@ -18,7 +18,7 @@ import QuartzCore
 
 package enum BorderPaint {
     /// Percentages use the border box's width and height independently.
-    static func radii(_ style: NodeStyle, in rect: CGRect, inset: CGFloat = 0) -> [CGSize] {
+    package static func radii(_ style: NodeStyle, in rect: CGRect, inset: CGFloat = 0) -> [CGSize] {
         ["top_left", "top_right", "bottom_right", "bottom_left"].map { name in
             let value = style["border_radius_" + name] ?? style["border_radius"]
             func length(_ basis: CGFloat) -> CGFloat {

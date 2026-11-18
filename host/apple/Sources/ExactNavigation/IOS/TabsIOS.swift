@@ -23,6 +23,7 @@
 // `UISearchTab`'s identifier is UIKit's, so tabs are found by object.
 #if os(iOS) || os(tvOS)
 import UIKit
+import ExactKit
 
 /// A hidden tab bar's UIKit wrappers can remain visible to accessibility.
 /// Hide only its branch, stopping before any child controller's content.

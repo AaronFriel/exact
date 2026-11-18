@@ -9,6 +9,7 @@
 // on a pushed route with none, and no bar where the route says so.
 #if os(iOS) || os(tvOS)
 import UIKit
+import ExactKit
 
 /// The heading's group in a header-shaped route: the element around the
 /// heading that holds no bar item, search field or tablist — or the

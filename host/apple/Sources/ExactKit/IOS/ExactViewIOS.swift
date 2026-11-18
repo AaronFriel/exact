@@ -377,7 +377,7 @@ public final class ExactView: UIView {
     /// Fit the session to its safe area and derive keyboard avoidance from its guide.
     /// Native containers stay full size; their editing route owns avoidance.
     /// An ordinary page resizes its viewport or insets its content.
-    func fit(boot: Bool = true) {
+    package func fit(boot: Bool = true) {
         guard !fitting else {
             // A keyboard-guide change can lay this view out synchronously.
             // Marking it dirty in that layout would keep UIKit in the same pass.

@@ -7,7 +7,7 @@
 import Foundation
 import os
 
-enum HostLog {
+package enum HostLog {
     private static let logger = Logger(subsystem: "dev.exact", category: "host")
 
     static func capabilities(_ session: ExactSession, _ batch: Batch) {
@@ -27,7 +27,7 @@ enum HostLog {
         }
     }
 
-    static func note(_ session: ExactSession?, _ line: @autoclosure () -> String) {
+    package static func note(_ session: ExactSession?, _ line: @autoclosure () -> String) {
         guard HatchDiagnosticsLink.available, let session else { return }
         let line = line()
         session.log("host: " + line)

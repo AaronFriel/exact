@@ -562,7 +562,7 @@ package final class FrameSampler: NSObject {
     /// recording follows it, unless a person is moving another. Every
     /// scroller's delegate tells it: an element's, a route's page and the
     /// document.
-    static func scrolled(_ scroll: UIScrollView, in session: ExactSession?, person: Bool) {
+    package static func scrolled(_ scroll: UIScrollView, in session: ExactSession?, person: Bool) {
         guard let sampler = session?.sampler, let recording = sampler.recording, recording.scroller !== scroll else { return }
         if !person, let current = recording.scroller, current.isTracking || current.isDecelerating { return }
         recording.scroller = scroll

@@ -2,6 +2,7 @@
 import UIKit
 import XCTest
 @testable import ExactKit
+@testable import ExactNavigation
 @testable import ExactGroupedLists
 
 /// LLP 1116.003 over `scripts/fixtures/tab-edge.contract`: a tab's scroller,

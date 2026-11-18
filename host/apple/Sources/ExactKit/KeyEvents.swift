@@ -134,7 +134,7 @@ extension Presenter {
     /// (BlockHostMac.swift); on iOS a route to its tab panel or the routes'
     /// owner (LLP 1123 D2). Never the page under a popover or a dialog that
     /// is not its ancestor.
-    func eventParent(of view: KeyPlatformView) -> KeyPlatformView? {
+    package func eventParent(of view: KeyPlatformView) -> KeyPlatformView? {
         #if os(macOS)
         if let node = view as? NodeView { return menus.authoredParent(of: node) ?? dialogs.authoredParent(of: node) ?? blocks.parent(of: node) }
         #else

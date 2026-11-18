@@ -7,6 +7,7 @@
 // zoom's own, which `transitionEnded` dispatches as any interactive pop.
 #if os(iOS)
 import UIKit
+import ExactKit
 
 extension NavigationHost {
     /// Give `top`, the route about to be pushed over `beneath`, its zoom

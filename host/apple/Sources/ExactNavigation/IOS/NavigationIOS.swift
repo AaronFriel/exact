@@ -6,6 +6,7 @@
 // hatches run are LLP 1075.003's (NavigationBarIOS.swift, NativeHatches.swift).
 #if os(iOS) || os(tvOS)
 import UIKit
+import ExactKit
 
 final class NavigationHost: NSObject, UINavigationControllerDelegate, UIGestureRecognizerDelegate {
     weak var scrollsToTopSelection: UIScrollView?

@@ -3,6 +3,7 @@
 // which read the family's own state.
 #if os(macOS)
 import AppKit
+import ExactKit
 
 extension NavigationHost: NavigationHosting {
     var stackSplit: any StackSplitting { split }
@@ -28,6 +29,10 @@ extension SplitHost: StackSplitting {
 }
 
 extension SidebarHost: SidebarHosting {}
+
+extension ExactSidebarController: WindowSplitting {
+    package func dismantle() { release() }
+}
 
 extension BackSwipe: BackSwiping {
     func scroll(_ event: NSEvent) -> Bool { scroll(event, enabled: NSEvent.isSwipeTrackingFromScrollEventsEnabled && !ExactEnv.agentMode) }

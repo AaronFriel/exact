@@ -1173,11 +1173,9 @@ extension Agent {
                 } else if name == "Enter", let prompt = focus.headerField, let field = prompt.delegate as? PromptField {
                     // A prompt's field is UIKit's, standing in for this one: its Return.
                     _ = field.returnHeard(prompt)
-                } else if name == "Enter", let editor = focus.headerField, let search = editor.delegate as? HeaderSearch {
+                } else if name == "Enter", let editor = focus.headerField, presenter.navigation.submitSearch(editor) {
                     // The bar's search field: Return is the keyboard's Search key. Its text
                     // field's own Return goes to UIKit's private delegate, which does not submit.
-                    let bar = search.controller.searchBar
-                    bar.delegate?.searchBarSearchButtonClicked?(bar)
                 } else if let f = focus.selectionField {
                     (f as? TextField)?.heard = name
                     (f.delegate as? PromptField)?.heard = name

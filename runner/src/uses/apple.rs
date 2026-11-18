@@ -158,6 +158,27 @@ pub fn apple_uses(plan: &Plan) -> Uses {
                 .any(|r| plan.str(r.source) == crate::transport::SOURCE),
     );
     add(Capability::Midi, keeps_midi(plan));
+    // A navigation root or a route: lowering gives the first root with a
+    // `navigationKey` its `navigationBack`, and every route has a key. The
+    // others are a route's or a root's props, each read only by the family.
+    add(
+        Capability::Navigation,
+        [
+            PropId::NavigationBack,
+            PropId::NavigationKey,
+            PropId::NavigationPresentation,
+            PropId::NavigationDetent,
+            PropId::NavigationInitialDetent,
+            PropId::NavigationGrabber,
+            PropId::NavigationBar,
+            PropId::NavigationSplit,
+            PropId::NavigationHistory,
+            PropId::NavigationScroll,
+            PropId::NavigationSource,
+        ]
+        .into_iter()
+        .any(|id| binds(plan, BindingKind::Prop, id as u16)),
+    );
     // A swipe row, a reorder group, a reorder grip and a list whose rows
     // are cells (iOS draws them, LLP 1115.000 D16) reach the family without
     // a windowed list.

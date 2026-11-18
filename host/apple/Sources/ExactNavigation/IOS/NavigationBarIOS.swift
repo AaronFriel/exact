@@ -8,6 +8,7 @@
 // decided once for its stack (`routeShowsBar`, NavigationTitleIOS.swift).
 #if os(iOS) || os(tvOS)
 import UIKit
+import ExactKit
 
 /// What a route's bar item is projected from: what it shows of the bar
 /// (its header, the system Back alone, nothing) and that header's parts. A

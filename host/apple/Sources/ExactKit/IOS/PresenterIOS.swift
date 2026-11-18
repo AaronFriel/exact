@@ -28,7 +28,7 @@ package final class Presenter {
     #endif
     var autofocusProcessed: Set<ObjectIdentifier> = []
     weak var autofocusedThisTurn: NodeView? // taken out of the window this turn, it has not had its autofocus (NodeViewIOS)
-    var pressHandoff: PressHandoff? // the press whose work may hand its control's focus on (PressHandoffIOS)
+    package var pressHandoff: PressHandoff? // the press whose work may hand its control's focus on (PressHandoffIOS)
     /// While a batch a person's input caused is presented, when it was marked
     /// (`Batch.input`): a glass that joins a group then materializes.
     var inputStarted: CFTimeInterval?
@@ -86,13 +86,13 @@ package final class Presenter {
     package var leaving: [UInt32: Leaving] = [:]
     /// The shared elements in flight (LLP 1013.000, `FlightLink`).
     package lazy var flightHost: any FlightHosting = FlightLink.make?(self) ?? NoFlights()
-    private(set) var chrome = ChromeIndex()
-    var listRowDependencies: ListRowDependencies?
+    private(set) package var chrome = ChromeIndex()
+    package var listRowDependencies: ListRowDependencies?
     #if DEBUG
     var listRowDependencyBuilds = 0
     #endif
     /// A physical scroll backend changed since the last batch's page pass.
-    var pageGeometryOwed = false
+    package var pageGeometryOwed = false
     func propsChanged(_ view: NodeView) {
         chrome.note(view.id, props: view.props)
         ScrollMembership.epoch &+= 1
@@ -131,28 +131,28 @@ package final class Presenter {
     }
     package var videoVisibility: VideoVisibilityHost?
     lazy package var collections: any ListHosting = ListLink.make?(self) ?? NoLists()
-    lazy var stickies: any StickyHosting = StickyLink.make?(self) ?? NoStickies()
+    package lazy var stickies: any StickyHosting = StickyLink.make?(self) ?? NoStickies()
     let tableGrid = TableGrid()
     lazy var pool = NodePool(self)
     /// Heavy leaves held mid-fling (LLP 1068 §5.1).
     lazy var leaves = HeavyLeaves(self)
-    lazy var flats = FlatLeaves(self)
+    package lazy var flats = FlatLeaves(self)
     /// The native swipe rows (LLP 1008 §9), a grouped list's included.
     package lazy var swipeActions: any SwipeActionsHosting = SwipeActionsLink.make?(self) ?? NoSwipeActions()
-    lazy var rowCells: any RowCellsHosting = SwipeActionsLink.makeRowCells?(self) ?? NoRowCells()
+    package lazy var rowCells: any RowCellsHosting = SwipeActionsLink.makeRowCells?(self) ?? NoRowCells()
     lazy var accent = AppAccent(self)
     /// The native menu arm (LLP 1021 D3).
-    lazy var menus = MenuHost(presenter: self)
+    package lazy var menus = MenuHost(presenter: self)
     /// A `dialog` that is not a confirmation, as UIKit's sheet (`DialogLink`).
     lazy package var dialogs: any DialogHosting = DialogLink.make?(self) ?? NoDialogs(self)
     /// The `input`s the batch being applied makes in a closed box (`MenuHost.waitingFields`).
     var fieldsWaiting = Set<UInt32>()
     lazy var keyboardToolbars = KeyboardToolbars(self)
-    lazy var segments: any SegmentHosting = ControlLink.makeSegments?(self) ?? NoSegments()
+    package lazy var segments: any SegmentHosting = ControlLink.makeSegments?(self) ?? NoSegments()
     /// Present only when the composition links them (LLP 1047.001 D4).
     package lazy var groupedLists: GroupedLists? = GroupedListsLink.make?(self)
-    lazy var controls = ControlHost(self)
-    lazy var fieldSelections = FieldSelections(self)
+    package lazy var controls = ControlHost(self)
+    package lazy var fieldSelections = FieldSelections(self)
     /// Nodes marked `hatch="word"` (LLP 1075.003.000).
     package internal(set) lazy var elements: any ElementHatching = NativeModuleLink.makeElements?(self) ?? NoElementHatches()
     lazy package var navigation: any NavigationHosting = NavigationLink.make?(self) ?? NoNavigation(self)
@@ -166,11 +166,11 @@ package final class Presenter {
     var focusKey: String?
     #endif
     lazy package var modals: any ModalHosting = NavigationLink.makeModals?(self) ?? NoModals()
-    lazy var owners = OwnerBlocks(self)
+    package lazy var owners = OwnerBlocks(self)
     #if os(iOS)
     private var arrangementHost: AnyObject?
     @available(iOS 27.1, *)
-    var arrangements: ArrangementHost {
+    package var arrangements: ArrangementHost {
         if let host = arrangementHost as? ArrangementHost { return host }
         let host = ArrangementHost(self); arrangementHost = host
         return host
@@ -193,16 +193,16 @@ package final class Presenter {
     weak package var editing: NodeView?
     /// The first root's `viewportFit` prop (`"cover"` or nothing), as of the
     /// last batch; `onViewportFit` fires when it changes.
-    private(set) var viewportFit: String?
+    private(set) package var viewportFit: String?
     var onViewportFit: (() -> Void)?
     /// The first root's `interactiveWidget` prop, as written (`keyboardPolicy` is what applies).
     private(set) var interactiveWidget: String?
     /// Keyboard avoidance defaults to resizing the editing route's layout block,
     /// or the viewport of an ordinary page. Visual resizing instead insets its
     /// scrollport; overlays-content leaves layout to keyboard toolbars.
-    var keyboardPolicy: String { interactiveWidget ?? "resizes-content" }
+    package var keyboardPolicy: String { interactiveWidget ?? "resizes-content" }
     /// The keyboard guide's top in window coordinates for this session's current layout.
-    var keyboardTop: CGFloat?
+    package var keyboardTop: CGFloat?
     /// The safe-area insets the kernel was given (LLP 1008 §9): the
     /// screen's under `viewport-fit=cover`, zero when the viewport is the
     /// safe area itself. Reported to the agent as `env`.
@@ -236,11 +236,11 @@ package final class Presenter {
     var hasKeyboardEditor: Bool { keyboardEditor != nil }
 
     /// A route's content or its projected search field currently owns text input.
-    func ownsKeyboard(in container: UIView) -> Bool { edits(in: container) || editsInBar(of: container) }
+    package func ownsKeyboard(in container: UIView) -> Bool { edits(in: container) || editsInBar(of: container) }
     /// Whether the keyboard's editor is in `container`'s content.
     func edits(in container: UIView) -> Bool { keyboardEditor?.isDescendant(of: container) == true }
     /// Whether the keyboard's editor is the search field of the bar over `container`'s route.
-    func editsInBar(of container: UIView) -> Bool {
+    package func editsInBar(of container: UIView) -> Bool {
         guard let editor = keyboardEditor else { return false }
         return (ViewPresentation.controller(for: container) as? any RouteSurface)?.headerSearchEditor === editor
     }
@@ -422,7 +422,7 @@ package final class Presenter {
         let content = CGSize(width: size.width + m.left + m.right, height: size.height + m.top + m.bottom)
         if viewport.contentSize != content { viewport.contentSize = content }
     }
-    var onPress, onClose, onCancel: ((UInt32) -> Void)?
+    package var onPress, onClose, onCancel: ((UInt32) -> Void)?
     var onChange: ((UInt32, String) -> Void)?
     /// Host intrinsic sizes, several at once under one layout.
     package internal(set) var onIntrinsic: (([(UInt32, CGSize?)]) -> Void)?
@@ -443,7 +443,7 @@ package final class Presenter {
     /// One focus intent, bound to the editor even without an authored id.
     /// Replacing a node with the same HTML id cannot inherit it.
     private var pendingFocus: (node: NodeView, name: String?, selectText: Bool, reason: String)?
-    private var deliveringFocus = false; lazy var elementScrolls = ElementScrolls(self) // held `scrollIntoView` requests (IntoView.swift)
+    private var deliveringFocus = false; package lazy var elementScrolls = ElementScrolls(self) // held `scrollIntoView` requests (IntoView.swift)
     var personScrolls = 0, fragmentArm: (activation: Int, scrolls: Int)?, fragmentSeen = 0
     var fragmentHeld: FragmentHold?
     var pendingFocusObservation: [String: String]? {
@@ -451,10 +451,10 @@ package final class Presenter {
         return ["target": pending.name ?? "#\(pending.node.id)", "reason": pending.reason]
     }
 
-    func cancelPendingFocus() { pendingFocus = nil }
-    var pendingFocusNode: NodeView? { pendingFocus?.node }
+    package func cancelPendingFocus() { pendingFocus = nil }
+    package var pendingFocusNode: NodeView? { pendingFocus?.node }
 
-    func flushPendingFocus() {
+    package func flushPendingFocus() {
         guard let pending = pendingFocus, !applying, !modals.defersFocus else { return }
         let arriving = navigation.isArriving(pending.node)
         guard !navigation.defersFocus || arriving else { return }
@@ -665,7 +665,7 @@ package final class Presenter {
     var textSurfaceBuilds = 0, scrollSignpostIntervals = 0
     #endif
     let textIndex = TextIndex()
-    lazy var scrollPump = ScrollPump(self)
+    package lazy var scrollPump = ScrollPump(self)
     let textRasters = TextRasterizer()
     /// Clip geometry memoized for one text refresh (`TextClips`), else nil.
     var textClips: TextClips?
@@ -712,7 +712,7 @@ package final class Presenter {
             if input { onInput?(id, value) }
         }
     }
-    func commitEdit(_ id: UInt32, _ value: String, change: Bool) {
+    package func commitEdit(_ id: UInt32, _ value: String, change: Bool) {
         guard edited == id, !menus.preservesFocus(id) else { return }
         edited = nil
         var value = value
@@ -795,7 +795,7 @@ package final class Presenter {
     }
     package func intrinsic(_ id: UInt32, _ size: CGSize?) { onIntrinsic?([(id, size)]) }
     /// What native containers cover of boxes (LLP 1075.003 §3.5).
-    var onCovers: (([(UInt32, HostCover?)]) -> Void)?
+    package var onCovers: (([(UInt32, HostCover?)]) -> Void)?
     /// The border box a person dragged a box's `resize` grip to; nil keeps an axis (ResizeGrip.swift).
     var onResizeBox: ((UInt32, CGFloat?, CGFloat?) -> Void)?
     /// In `reset`: host state its views would move with no runtime to tell stays as it was (FocusEvents' focus,
@@ -1387,7 +1387,7 @@ package final class Presenter {
     #if os(iOS)
     lazy var textSelection = TextSelectionHost(self) // `user-select: text` (LLP 1115.000 D11.6)
     /// The status bar's resolved style (LLP 1105), the controllers' `preferredStatusBarUpdateAnimation`, and who is told of a change.
-    var statusBar = StatusBarChoice(), statusBarUpdateAnimation = UIStatusBarAnimation.none
+    package var statusBar = StatusBarChoice(), statusBarUpdateAnimation = UIStatusBarAnimation.none
     var onStatusBar: ((StatusBarChoice) -> Void)?
     var statusBarNoted = Set<String>()
     #endif

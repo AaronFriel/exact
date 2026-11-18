@@ -115,7 +115,7 @@ public final class ExactApp {
     private(set) package var resolver: AssetResolver!
     private(set) var transaction = false
     /// The candidate an interaction holds back (LLP 1029.000.002 D9).
-    lazy var replacements = ReplacementQueue(self)
+    package lazy var replacements = ReplacementQueue(self)
     private var notifications: [() -> Void] = []
     func deliver(_ body: @escaping () -> Void) {
         if transaction { notifications.append(body) } else { body() }
@@ -345,11 +345,11 @@ public final class ExactSession {
     var activatedGeneration: Int?
     /// The generation whose deferred data has activated (or failed to): the
     /// agent's `clock data` waits for it before a test's first step.
-    var dataGeneration: Int?
+    package var dataGeneration: Int?
     package var dataActivated: Bool { dataGeneration == generation }
     var pendingActivation: (generation: Int, token: UInt64)? // retried on the session's wake
     /// The generation whose data source `prepareData` or `evaluateFromDraw` activated on the owner, and whether it still runs there.
-    var preparedGeneration: Int?, dataPreparing = false
+    package var preparedGeneration: Int?, dataPreparing = false
     var canvasesHeld = false // a canvas start held for what follows the draw's evaluation (`loadCanvases`)
     var nativesOpened: Int? // the generation whose native views may attach (LLP 1024 D3)
     private(set) var updateToken: UInt64 = 0; private var receipt: DrawReceipt?
@@ -389,7 +389,7 @@ public final class ExactSession {
     package let frames: Frames
     /// A session's presented frames (LLP 1079 D3); a production bake has one only while an app records.
     package var sampler: FrameSampler?
-    let frameHealth = FrameHealth()
+    package let frameHealth = FrameHealth()
     var clockTimer: Timer?
     /// The runner deadline `clockTimer` fires for.
     var clockDue: Double?
@@ -445,7 +445,7 @@ public final class ExactSession {
     private(set) var applying = false { didSet { releaseWaitingFirings() } }
     /// The chain of covers corrections the work running belongs to (`CoversChain`): work asked in one
     /// runs in it, at once or queued; a batch the owner publishes lands in none
-    private(set) var coversCause: AnyObject?
+    private(set) package var coversCause: AnyObject?
     // @ref LLP 1072 §3 — a collection slice built on the owner thread. While
     // one is in flight, work that would wait behind it on the owner (a
     // frame's tick, a timer, a reply, an intrinsic size, a report) waits on
@@ -1078,7 +1078,7 @@ public final class ExactSession {
     private(set) var routerOp: [String: Any]?
 
     /// Run `work` in the chain of covers corrections `cause` (`coversCause`)
-    func inCoversChain(_ cause: AnyObject?, _ work: () -> Void) { let outer = coversCause; coversCause = cause; defer { coversCause = outer }; work() }
+    package func inCoversChain(_ cause: AnyObject?, _ work: () -> Void) { let outer = coversCause; coversCause = cause; defer { coversCause = outer }; work() }
 
     /// A batch from a timer, a scroll event or a host's measurement: one that
     /// changes nothing skips the presentation pass. An app's timer that writes nothing

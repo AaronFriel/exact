@@ -1,6 +1,7 @@
 // A route owns its content viewport and projects its scroll edges to UIKit.
 #if os(iOS) || os(tvOS)
 import UIKit
+import ExactKit
 
 final class RouteController: UIViewController, UIScrollViewDelegate {
     let node: NodeView

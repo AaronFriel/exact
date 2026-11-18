@@ -2,6 +2,7 @@
 // the navigation machinery. The same content views supply both frames.
 #if os(iOS) || os(tvOS)
 import UIKit
+import ExactKit
 
 extension NavigationHost {
     private func canDeferOwner(_ p: Projection, batch: Batch) -> Bool {
@@ -23,14 +24,17 @@ extension NavigationHost {
         let bounds = CGRect(origin: .zero, size: frame(p.root).size)
         guard !bounds.isEmpty, let route = p.chosen.last, frame(route.node) == bounds else { return false }
         // No presentation or bar may acquire an owner in the partial batch.
-        return !batch.ops.contains { $0.op == .command } && !presenter.views.values.contains { node in
-            node.kind == "list" && (node.hasRowCells || node.style["appearance"]?.string != "none") || node.kind == "video" || node.kind == "audio" || node.kind == "iframe" || packageMayServe(node.imageSource ?? node.props["imageSource"] ?? "")
-                || node.props["accessibilityRole"] == "toolbar" || node.props["type"] == "search"
-                || node.props["accessibilityRole"] == "search"
-                || node.props["popover"] != nil || node.props["tip"] != nil
-                || node.props["semanticTag"] == "dialog" && node.props["accessibilityRole"] != "alertdialog"
-                || node.props["accessibilityRole"] == "alertdialog" && presenter.menus.isOpen(node)
+        func acquiresOwner(_ node: NodeView) -> Bool {
+            if node.kind == "list", node.hasRowCells || node.style["appearance"]?.string != "none" { return true }
+            if ["video", "audio", "iframe"].contains(node.kind) { return true }
+            if packageMayServe(node.imageSource ?? node.props["imageSource"] ?? "") { return true }
+            let role = node.props["accessibilityRole"]
+            if role == "toolbar" || role == "search" || node.props["type"] == "search" { return true }
+            if node.props["popover"] != nil || node.props["tip"] != nil { return true }
+            if node.props["semanticTag"] == "dialog", role != "alertdialog" { return true }
+            return role == "alertdialog" && presenter.menus.isOpen(node)
         }
+        return !batch.ops.contains { $0.op == .command } && !presenter.views.values.contains(where: acquiresOwner)
         #endif
     }
 

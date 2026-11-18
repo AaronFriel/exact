@@ -122,7 +122,7 @@ package enum SystemColor {
 
     /// The platform's own colour a row names (`{"sys": "systemTealColor"}`),
     /// which the platform resolves for each trait itself; nil for any other row.
-    static func native(_ row: BatchValue?) -> PlatformColor? {
+    package static func native(_ row: BatchValue?) -> PlatformColor? {
         guard case .object(let o)? = row, let name = o["sys"]?.string, !name.hasPrefix("@"), name != "exactGroupedCardColor" else { return nil }
         return lookup(name)
     }
@@ -390,7 +390,7 @@ extension NodeView {
     /// above it, else the theme's `AccentColor`, else the session's viewport's as UIKit last gave it
     /// undimmed, else its window's, which UIKit never dims), and out of a window with only UIKit's
     /// default, the roots' accent, which the window will take (`AppAccent`), else the app's.
-    var carriedTint: UIColor {
+    package var carriedTint: UIColor {
         if tintAdjustmentMode == .dimmed {
             return accentAuthor?.authoredAccentTint ?? ThemeRoles.color("AccentColor", in: self) ?? (presenter?.viewport as? Viewport)?.restingTint
                 ?? window?.tintColor ?? tintColor
@@ -400,7 +400,7 @@ extension NodeView {
     }
 
     /// The colour of row `key` by `carriedTint`
-    func carriedChannels(_ key: String, dark: Bool) -> [Double]? {
+    package func carriedChannels(_ key: String, dark: Bool) -> [Double]? {
         style[key].flatMap { $0.channels(dark: dark, contrast: drawsHighContrast, elevated: drawsElevated, tint: $0.namesTint ? carriedTint : nil) }
     }
 
@@ -450,7 +450,7 @@ extension NodeView {
     }
 
     /// The colour of row `key` as a dynamic colour resolves it in `traits`, the tint they carry included
-    func channels(_ key: String, in traits: UITraitCollection) -> [Double]? {
+    package func channels(_ key: String, in traits: UITraitCollection) -> [Double]? {
         style[key]?.channels(in: traits, contrast: drawsHighContrast, elevated: drawsElevated)
     }
     #endif
@@ -459,7 +459,7 @@ extension NodeView {
     /// trait, so a subtree's override counts; nil before it has one, and
     /// on macOS, where contrast is the system's alone (AppKit's named
     /// high-contrast appearances resolve as plain Aqua).
-    var drawsHighContrast: Bool? {
+    package var drawsHighContrast: Bool? {
         #if os(iOS) || os(tvOS)
         switch traitCollection.accessibilityContrast {
         case .high: return true
@@ -471,7 +471,7 @@ extension NodeView {
         #endif
     }
     /// Whether this view draws at iOS's elevated level (a sheet, a popover).
-    var drawsElevated: Bool {
+    package var drawsElevated: Bool {
         #if os(iOS)
         return traitCollection.userInterfaceLevel == .elevated
         #else

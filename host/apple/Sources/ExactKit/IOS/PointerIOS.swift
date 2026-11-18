@@ -17,7 +17,7 @@ extension Presenter {
     /// A window point from the viewport's top-left, the page scroll applied:
     /// DOM's `clientX`/`clientY`, `frame()`'s space (LLP 1094 D11). tvOS's
     /// samples (the agent's pan, a long press) read it too.
-    func client(_ windowPoint: CGPoint) -> CGPoint {
+    package func client(_ windowPoint: CGPoint) -> CGPoint {
         let p = viewport.convert(windowPoint, from: nil)
         return CGPoint(x: p.x - viewport.pageOrigin.x, y: p.y - viewport.pageOrigin.y)
     }
@@ -295,7 +295,7 @@ import UIKit
 /// touch references leave UIKit's original hit and contact lifetime intact.
 final class PressContact {
     weak var touch: UITouch?
-    let incarnation: UInt64
+    package let incarnation: UInt64
     weak var responder: UIResponder?
     weak var responderContact: PressContact?
     var responderIncarnation: UInt64?

@@ -411,7 +411,7 @@ final class DocumentWindow: NSObject, NSWindowDelegate {
     }
 
     /// The window's content while the app's root tab bar is its sidebar.
-    private var sidebar: ExactSidebarController?
+    private var sidebar: (any WindowSplitting)?
 
     /// The window's content: the view; or, for an app whose root tab bar is
     /// the window's sidebar (LLP 1115.002 D3), a split view of that sidebar
@@ -438,7 +438,7 @@ final class DocumentWindow: NSObject, NSWindowDelegate {
         if let sidebar, wanted, sidebar.hasSidebar == rail { return }
         let was = window.frame, under = window.contentLayoutRect.height
         if let old = sidebar {
-            old.release()
+            old.dismantle()
             sidebar = nil
             window.contentViewController = nil
         }
@@ -450,8 +450,14 @@ final class DocumentWindow: NSObject, NSWindowDelegate {
             // columns need, a script's too: Q6's "always, with a minimum
             // window width" has no narrower form to fall back to, and a
             // detail squeezed to what a 420-point window leaves shows nothing.
-            let split = ExactSidebarController(view: view, autosaveName: sidebarName, minimumPageWidth: minimum, sidebar: rail,
-                                               minimumDetailWidth: windowDimension("minWidth", fallback: 320))
+            // The navigation family composes it; a view wants it only where the family is linked.
+            guard let split = NavigationLink.makeWindowSplit?(view, WindowSplitOptions(autosaveName: sidebarName, minimumPageWidth: minimum, sidebar: rail,
+                                                                                          minimumDetailWidth: windowDimension("minWidth", fallback: 320))) else {
+                window.contentView = view
+                coverChrome()
+                attachToolbar()
+                return
+            }
             sidebar = split
             // Full-size content, then the split view: the order AppKit
             // places a source list's first row by.

@@ -28,7 +28,7 @@ package struct HostBlock: Equatable {
     var width: Axis, height: Axis
     var tactic: Tactic = .none
     /// A pane's: the block is its size.
-    static func size(_ size: CGSize) -> HostBlock { HostBlock(width: .size(size.width), height: .size(size.height)) }
+    package static func size(_ size: CGSize) -> HostBlock { HostBlock(width: .size(size.width), height: .size(size.height)) }
     /// A sheet's: as large as its content, at most this.
     static func atMost(_ size: CGSize) -> HostBlock { HostBlock(width: .atMost(size.width), height: .atMost(size.height)) }
     /// A modal route fits an automatic size; its authored size and minimum win.
@@ -45,11 +45,12 @@ package struct HostBlock: Equatable {
 /// Where a host shows a block in place (LLP 1123 D2): its rectangle in the
 /// local coordinates of `within`, a node that holds it in the host's
 /// hierarchy as in the document.
-struct BlockPlacement: Equatable {
-    var rect: CGRect
-    var within: UInt32
+package struct BlockPlacement: Equatable {
+    package var rect: CGRect
+    package var within: UInt32
     /// A scrollport's offset in block points, including zero; nil for a fixed allocation.
-    var contentOffset: CGPoint?
+    package var contentOffset: CGPoint?
+    package init(rect: CGRect, within: UInt32, contentOffset: CGPoint? = nil) { (self.rect, self.within, self.contentOffset) = (rect, within, contentOffset) }
 }
 
 extension Runtime {

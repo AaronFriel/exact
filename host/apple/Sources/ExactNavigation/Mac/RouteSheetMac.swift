@@ -44,6 +44,7 @@
 // sheet leaves when the route is no longer the one shown.
 #if os(macOS)
 import AppKit
+import ExactKit
 
 /// What a sheet shows of a modal route's header.
 struct SheetHeader: SheetHeading {

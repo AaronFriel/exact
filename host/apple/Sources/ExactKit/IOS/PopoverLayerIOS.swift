@@ -20,7 +20,7 @@ extension MenuHost {
 final class PopoverLayer: UIView {
     private struct Host { weak var controller: UIViewController? }
     private var hosts: [Host]
-    let order: Int
+    package let order: Int
     private(set) weak var sheet: UIViewController?
     private weak var popover: UIView?
     var rehost: (() -> Void)?

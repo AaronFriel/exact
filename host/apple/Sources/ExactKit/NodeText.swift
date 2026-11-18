@@ -27,7 +27,7 @@ extension NodeView {
 
     /// The node boxes among `views` that a reader of the committed tree
     /// finds. `reader`, a box in a held subtree, finds its own subtree.
-    static func committed(_ views: [PlatformView], reader: NodeView? = nil) -> [NodeView] {
+    package static func committed(_ views: [PlatformView], reader: NodeView? = nil) -> [NodeView] {
         let insideHeld = reader?.held == true
         return views.compactMap { ($0 as? NodeView).flatMap { $0.held && !insideHeld ? nil : $0 } }
     }

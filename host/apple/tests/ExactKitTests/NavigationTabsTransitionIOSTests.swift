@@ -2,6 +2,7 @@
 import UIKit
 import XCTest
 @testable import ExactKit
+@testable import ExactNavigation
 
 /// What the tabs' stack cannot do while a transition runs over it, a tablist's move of the tab bar (LLP 1075.003 §3.7)
 /// or a push, it does as the transition ends, with no batch after it.

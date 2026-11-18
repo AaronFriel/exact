@@ -143,7 +143,7 @@ extension NodeView {
     /// box takes these roles as a box does.
     /// On the Mac a menu's row (`menuitem`, `menuitemcheckbox`,
     /// `menuitemradio`) is one too, as AppKit's menu item is.
-    var actsAsButton: Bool {
+    package var actsAsButton: Bool {
         #if os(macOS)
         let menuItem = isMenuItem
         #else
@@ -802,7 +802,7 @@ extension Presenter {
     /// views a batch touched and their ancestors — a button's name reads its
     /// subtree — plus every live region and pending autofocus; nil reads
     /// every view.
-    func syncAccessibility(changed: Set<UInt32>? = nil, disabledRoots: Set<UInt32> = []) {
+    package func syncAccessibility(changed: Set<UInt32>? = nil, disabledRoots: Set<UInt32> = []) {
         guard Thread.isMainThread else {
             DispatchQueue.main.async { [weak self] in self?.syncAccessibility() }
             return
@@ -1105,7 +1105,7 @@ extension Presenter {
     /// siblings only the frontmost is modal, and one inside a branch another
     /// modal hides is not. VoiceOver moves into the innermost modal when that
     /// changes, or back to the screen, once no transition is running.
-    func syncModal() {
+    package func syncModal() {
         let candidates = chrome.ids("accessibilityModal").sorted().compactMap { views[$0] }
         func ancestors(_ view: UIView) -> [UIView] { sequence(first: view, next: \.superview).map { $0 } }
         func inFront(_ a: UIView, of b: UIView) -> Bool {

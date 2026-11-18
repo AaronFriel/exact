@@ -5,6 +5,7 @@
 // routes it took back into a stack, nor any route UIKit is moving.
 #if os(iOS) || os(tvOS)
 import UIKit
+import ExactKit
 
 extension NavigationHost {
     /// The router's stacks as the tree holds them: each tab panel's routes in

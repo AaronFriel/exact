@@ -226,11 +226,16 @@ pub enum Capability {
     /// MIDI ports and the MIDI queue's output (LLP 1125 D6–D8): a plan that
     /// [`keeps_midi`]. Native only.
     Midi,
+    /// Route stacks, tabs and their bars as the platform's navigation, with
+    /// route modals (LLP 1008 §9, LLP 1115.000): a plan that binds a
+    /// navigation root's or a route's props (`navigationBack`,
+    /// `navigationKey`, `navigationPresentation` and the rest). Native only.
+    Navigation,
 }
 
 impl Capability {
     /// Every capability, in bit order.
-    pub const ALL: [Capability; 56] = [
+    pub const ALL: [Capability; 57] = [
         Capability::Markdown,
         Capability::Motion,
         Capability::Collections,
@@ -287,6 +292,7 @@ impl Capability {
         Capability::WebViews,
         Capability::Sound,
         Capability::Midi,
+        Capability::Navigation,
     ];
 
     /// The name an entry, a refusal and a report use.
@@ -348,6 +354,7 @@ impl Capability {
             Capability::WebViews => "web_views",
             Capability::Sound => "sound",
             Capability::Midi => "midi",
+            Capability::Navigation => "navigation",
         }
     }
 
@@ -392,7 +399,8 @@ impl Uses {
         .with(Capability::Video)
         .with(Capability::WebViews)
         .with(Capability::Sound)
-        .with(Capability::Midi);
+        .with(Capability::Midi)
+        .with(Capability::Navigation);
 
     /// This set and `capability`.
     pub const fn with(self, capability: Capability) -> Uses {

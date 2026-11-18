@@ -44,6 +44,7 @@
 // the stack pushes too, and `--chrome platform` shows the split.
 #if os(macOS)
 import AppKit
+import ExactKit
 import CExact
 
 /// A stack that shows its root route as a list beside its detail, as the

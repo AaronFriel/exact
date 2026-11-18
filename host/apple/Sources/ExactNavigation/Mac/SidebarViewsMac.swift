@@ -13,6 +13,7 @@
 // minimum width, which the window had.
 #if os(macOS)
 import AppKit
+import ExactKit
 
 /// The window's content while the app's root tab bar is its sidebar, or a
 /// stack of it shows a list beside its detail (LLP 1115.002 D4,

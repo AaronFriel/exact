@@ -2,6 +2,7 @@
 import UIKit
 import XCTest
 @testable import ExactKit
+@testable import ExactNavigation
 @testable import ExactNativeViews
 
 /// LLP 1075.003 §3.6: a tab container the app owns sends Exact its intents

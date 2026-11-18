@@ -52,7 +52,7 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
     /// recognizers, and its registration with the window.
     var swipeOwner = false { didSet { if oldValue && !swipeOwner { syncScroll() } } }
     private(set) var scrollNeeded = false
-    var incarnation = NodePool.issue()
+    package var incarnation = NodePool.issue()
     /// Bumped where a touch's press contact here is cancelled for good
     /// (moved, out of the window, disabled, made inert): a captured agent
     /// press (`PressPath`) ends there too, even if the change is undone.
@@ -970,14 +970,14 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
     func textChannels(_ key: String, dark: Bool? = nil) -> [Double]? { style[key].flatMap { $0.textChannels(dark: dark ?? drawsDark, contrast: drawsHighContrast, elevated: drawsElevated, tint: ownTint(for: $0)) } }
     package func color(_ key: String, _ fallback: UIColor) -> UIColor { cgColor(key).map { UIColor(cgColor: $0) } ?? fallback }
     /// CSS `::placeholder { color }` (LLP 1104 D3); nil, the platform's.
-    var placeholderColor: UIColor? { uiColor("placeholder_color") }
+    package var placeholderColor: UIColor? { uiColor("placeholder_color") }
     package func cgColor(_ key: String, dark: Bool? = nil) -> CGColor? { style[key].flatMap { $0.cgColor(dark: dark ?? drawsDark, contrast: drawsHighContrast, elevated: drawsElevated, tint: ownTint(for: $0)) } }
     package func number(_ key: String, _ fallback: CGFloat = 0) -> CGFloat {
         if let n = style[key]?.number { return CGFloat(n) }
         return fallback
     }
 
-    func applyPlaceholder(_ f: UITextField) {
+    package func applyPlaceholder(_ f: UITextField) {
         let text = props["placeholder"] ?? ""
         let font = f.font ?? UIFont.systemFont(ofSize: 17)
         if text.isEmpty {
@@ -1091,7 +1091,7 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
     var kernelContentBox: CGRect?
     /// The padding layout resolved and sent with `kernelContentBox`: top,
     /// right, bottom, left (`nil` on a native button's unsaid side).
-    var kernelPadding: [CGFloat?]?
+    package var kernelPadding: [CGFloat?]?
     var pendingScrollLeft: Double? {
         get { extras?.pendingScrollLeft }
         set { if newValue != nil || extras != nil { more.pendingScrollLeft = newValue; more.pendingScrollTransfer = false }; presenter?.pendingScrolls.insert(id) }
@@ -1229,7 +1229,7 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
 
     /// A native container comes or goes under the same authored parent
     /// (`GlassGroups.moving`, boot navigation): no authored reparenting.
-    static var containerMoves = 0
+    package static var containerMoves = 0
     package override func didMoveToSuperview() {
         Self.scrollLayoutEpoch &+= 1
         if Self.containerMoves == 0 { pressEpoch &+= 1; cancelPressContact(reparenting: true); presenter?.unshown(self) } // a new parent: shown elsewhere
@@ -1356,7 +1356,7 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
     /// The scroll container's content size: the kernel's extent on an axis
     /// that scrolls, the box on one that does not (so UIKit cannot pan it
     /// there), never less than the box (or the port UIKit's insets leave, `scrollFloor`).
-    func fitScroll() {
+    package func fitScroll() {
         guard let sv = scroll else { return }
         // Ending where its last edge is drawn, from this box's place on the
         // pixel grid, so the furthest offset is a whole pixel and reaches it (`PixelGridIOS.swift`).

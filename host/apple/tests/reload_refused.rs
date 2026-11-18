@@ -52,6 +52,22 @@ fn hellos_binary_refuses_a_reload_into_a_family_and_keeps_its_plan() {
         (source(TRACING), "traces"),
         (plan("text \"a\" wakelock=\"screen\""), "wake_lock"),
         (source(ANIMATED), "animations"),
+        (
+            plan("column navigationKey=\"a\"\n      text \"a\""),
+            "navigation",
+        ),
+        (
+            plan("column navigationKey=\"a\"\n      column navigationKey=\"b\" navigationPresentation=\"modal\"\n        text \"a\""),
+            "navigation",
+        ),
+        (
+            plan("column navigationKey=\"a\"\n      column navigationKey=\"a\" navigationBar=\"none\"\n        text \"a\""),
+            "navigation",
+        ),
+        (
+            plan("column navigationKey=\"a\" navigationHistory=\"back\"\n      text \"a\""),
+            "navigation",
+        ),
     ]
     .into_iter()
     .chain(media())

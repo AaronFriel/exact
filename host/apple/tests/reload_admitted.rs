@@ -51,6 +51,22 @@ fn an_all_linked_binary_reloads_from_hello_into_each_family() {
         ("file input", plan("input type=\"file\" id=\"f\"")),
         ("trace", source(TRACING)),
         ("wake lock", plan("text \"a\" wakelock=\"screen\"")),
+        (
+            "route",
+            plan("column navigationKey=\"a\"\n      text \"a\""),
+        ),
+        (
+            "sheet route",
+            plan("column navigationKey=\"a\"\n      column navigationKey=\"b\" navigationPresentation=\"modal\"\n        text \"a\""),
+        ),
+        (
+            "bar",
+            plan("column navigationKey=\"a\"\n      column navigationKey=\"a\" navigationBar=\"none\"\n        text \"a\""),
+        ),
+        (
+            "history",
+            plan("column navigationKey=\"a\" navigationHistory=\"back\"\n      text \"a\""),
+        ),
     ]
     .into_iter()
     .chain(media().map(|(next, name)| (name, next)))

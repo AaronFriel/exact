@@ -3,6 +3,7 @@ import ObjectiveC.runtime
 import UIKit
 import XCTest
 @testable import ExactKit
+@testable import ExactNavigation
 import ExactGroupedLists
 
 /// The keyboard guide's first constraint makes UIKit lay the window out at

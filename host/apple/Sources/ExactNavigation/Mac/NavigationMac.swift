@@ -1,6 +1,7 @@
 // @ref LLP 1038 D6; LLP 1035.001 D1/D6 — the web's hide-and-inert rule.
 #if os(macOS)
 import AppKit
+import ExactKit
 
 final class NavigationHost {
     unowned let presenter: Presenter

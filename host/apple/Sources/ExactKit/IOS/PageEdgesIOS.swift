@@ -42,7 +42,7 @@ extension Presenter {
     /// edges, through the status bar's and the home indicator's; through the
     /// control bars between it and its page's or route's edge; none for every
     /// other. After a batch's frames or a change of the viewport or its margins.
-    func reachPageEdges() {
+    package func reachPageEdges() {
         let m = pageMargins, area = viewportSize
         // Control bars are iOS 26's, where UIKit draws the edge effect over them (LLP 1131 D4).
         var judge: ControlBars? = ControlBars(self)
@@ -92,7 +92,9 @@ extension Presenter {
     }
 
     /// A scroller's bands, and the control bars it is drawn through on each edge.
-    struct Bands { var band = UIEdgeInsets.zero, top: [NodeView] = [], bottom: [NodeView] = [] }
+    package struct Bands { package var band = UIEdgeInsets.zero, top: [NodeView] = [], bottom: [NodeView] = []
+        package init(band: UIEdgeInsets = .zero, top: [NodeView] = [], bottom: [NodeView] = []) { (self.band, self.top, self.bottom) = (band, top, bottom) }
+    }
 
     /// A page's scroller, laid out in the document with nothing between them
     /// that clips, transforms, scrolls or hides. LLP 1130 D3: an edge at the
@@ -149,7 +151,7 @@ extension Presenter {
     /// scroller) is reached with no bars too, as a hand-built table runs under
     /// its tab bar (#223). A top with more than bars over the scroller keeps
     /// both edges where they are (a footer under it keeps the bottom cover).
-    func controlBands(of v: NodeView, in route: NodeView, _ judge: ControlBars, apart: Bool = false) -> Bands {
+    package func controlBands(of v: NodeView, in route: NodeView, _ judge: ControlBars, apart: Bool = false) -> Bands {
         guard let sv = v.scrollView else { return Bands() }
         let r = v.convert(v.bounds, to: route)
         let top = judge.bars(of: v, in: route, top: true), bottom = judge.bars(of: v, in: route, top: false)
@@ -191,7 +193,7 @@ extension NodeView {
     /// and its `contentInset` by `inset` (all of it unless said), so the content stays where it was, and
     /// the logical `scrollTop` (`scrollTopInset`) is kept across the change;
     /// a list following its end, or a virtualized list at its end, stays there.
-    func setPageBand(_ band: UIEdgeInsets, inset own: UIEdgeInsets? = nil) {
+    package func setPageBand(_ band: UIEdgeInsets, inset own: UIEdgeInsets? = nil) {
         // The scroller's frame, insets and offset move as one: inside an animation UIKit has open, only if the last frame showed it
         moveOrPlace { bandScroll(band, inset: own) }
     }

@@ -10,6 +10,7 @@
 // UIKit adds there.
 #if os(iOS) || os(tvOS)
 import UIKit
+import ExactKit
 
 /// One scroller's part of its `contentInset` that clearance set, top and
 /// bottom, so a later report moves only that part.

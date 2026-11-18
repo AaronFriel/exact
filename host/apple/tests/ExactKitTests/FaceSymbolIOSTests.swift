@@ -3,6 +3,7 @@ import UIKit
 import XCTest
 import ExactCore
 @testable import ExactKit
+@testable import ExactNavigation
 @testable import ExactGroupedLists
 
 /// Stage 9 A2 on UIKit (LLP 1121 D10): an svg-only icon on a control's face

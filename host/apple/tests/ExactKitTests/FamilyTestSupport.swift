@@ -1,4 +1,5 @@
 @testable import ExactKit
+@testable import ExactNavigation
 @testable import ExactControls
 @testable import ExactPickers
 @testable import ExactWebViews

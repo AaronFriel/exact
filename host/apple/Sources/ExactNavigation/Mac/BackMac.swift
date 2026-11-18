@@ -26,6 +26,7 @@
 // nothing.
 #if os(macOS)
 import AppKit
+import ExactKit
 
 extension NavigationHost {
     /// The selected route when it was pushed, with its navigation root: not

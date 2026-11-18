@@ -10,6 +10,7 @@
 // (§9.14) has its controller from launch, empty until its routes arrive.
 #if os(iOS) || os(tvOS)
 import UIKit
+import ExactKit
 
 /// A tab that shows one fixed route with no header, with no navigation
 /// controller of its own.

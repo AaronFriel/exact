@@ -20,6 +20,7 @@
 // address as the authored tabs.
 #if os(macOS)
 import AppKit
+import ExactKit
 
 /// One row of the sidebar: an authored tab and what it shows.
 struct SidebarRow: Equatable {

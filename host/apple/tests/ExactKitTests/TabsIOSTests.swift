@@ -2,6 +2,7 @@
 import UIKit
 import XCTest
 @testable import ExactKit
+@testable import ExactNavigation
 
 /// Exact's tab container built from `UITab`s (TabsIOS.swift) over
 /// `scripts/fixtures/search-tabs.contract`: the search tab a `UISearchTab`

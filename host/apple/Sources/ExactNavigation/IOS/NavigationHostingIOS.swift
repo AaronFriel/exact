@@ -3,6 +3,7 @@
 // because they read the family's own types.
 #if os(iOS) || os(tvOS)
 import UIKit
+import ExactKit
 
 extension RouteController: RouteSurface {
     var headerSearchEditor: UIView? {
@@ -329,6 +330,27 @@ extension NavigationHost {
             pending += node.container.subviews.compactMap { $0 as? NodeView }
         }
         return nil
+    }
+}
+#endif
+
+#if EXACT_INSPECT && os(iOS)
+extension NavigationHost {
+    func inspectTitle(_ view: UIView) -> UInt32? { (view as? HeaderTitleView)?.groupId }
+}
+#endif
+
+#if EXACT_AGENT && (os(iOS) || os(tvOS))
+extension NavigationHost {
+    func submitSearch(_ editor: UITextField) -> Bool {
+        #if os(iOS)
+        guard let search = editor.delegate as? HeaderSearch else { return false }
+        let bar = search.controller.searchBar
+        bar.delegate?.searchBarSearchButtonClicked?(bar)
+        return true
+        #else
+        return false
+        #endif
     }
 }
 #endif

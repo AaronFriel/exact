@@ -4,6 +4,7 @@ import XCTest
 import ObjectiveC
 import ExactCore
 @testable import ExactKit
+@testable import ExactNavigation
 
 final class NavigationBootIOSTests: XCTestCase {
     private var session: ExactSession?

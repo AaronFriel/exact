@@ -12,6 +12,7 @@
 // politely, as ARIA's `status` asks.
 #if os(iOS) || os(tvOS)
 import UIKit
+import ExactKit
 
 /// What a readout's view shows besides its face: its padding, direction,
 /// words and how they are spoken.

@@ -85,7 +85,7 @@ extension NodeView {
 /// state at its commit. It is tried at the first main run-loop turn with no
 /// interaction under way after something changed: an input, a reply, a
 /// presented batch.
-final class ReplacementQueue {
+package final class ReplacementQueue {
     struct Candidate {
         // Producer tokens may repeat; every submission has its own identity.
         let id = UUID()
@@ -384,7 +384,7 @@ final class ReplacementQueue {
 
     /// The fingers of a gesture lifted, said by whoever tracked it: this
     /// monitor, a scroll view, or AppKit's swipe tracking (`BackSwipe`).
-    func lifted(_ type: NSEvent.EventType) {
+    package func lifted(_ type: NSEvent.EventType) {
         if trackpad.remove(type.rawValue) != nil { changed() }
     }
 

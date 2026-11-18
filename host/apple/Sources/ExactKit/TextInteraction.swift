@@ -101,7 +101,7 @@ extension NodeView {
     /// A heading by its role, which is what the iOS bar takes for a route's
     /// title: an `aria-level` with no `role="heading"` is not one there (LLP
     /// 1115.000 D12.5), as it has no heading style on any host.
-    var isHeading: Bool { isParagraph && props["accessibilityRole"] == "heading" }
+    package var isHeading: Bool { isParagraph && props["accessibilityRole"] == "heading" }
     /// @ref LLP 1116.019 — what a labelled text shows, as its value: an
     /// `aria-label` names the text, and the words it shows are still spoken
     /// after the name, as a hand-built readout's `accessibilityLabel` and

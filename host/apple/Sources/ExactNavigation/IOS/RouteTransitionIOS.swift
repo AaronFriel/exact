@@ -7,6 +7,7 @@
 // ends. The edge swipe keeps UIKit's interactive pop (D5).
 #if os(iOS) || os(tvOS)
 import UIKit
+import ExactKit
 
 /// Plays one part on the route that owns the change.
 final class RouteTransition: NSObject, UIViewControllerAnimatedTransitioning {

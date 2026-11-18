@@ -1,5 +1,6 @@
 #if os(iOS) || os(tvOS)
 import UIKit
+import ExactKit
 
 /// Item appearances keep an authored title colour and font local to its route.
 final class NavigationTitleInk {

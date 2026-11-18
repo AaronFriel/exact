@@ -740,6 +740,11 @@ mod tests {
             "text \"a\" wakelock=(on ? \"screen\" : \"none\")",
             "on = false",
         );
+        let routed = compile("column navigationKey=\"a\"\n      text \"a\"", "on = false");
+        let sheet = compile(
+            "column navigationKey=\"a\" navigationPresentation=\"modal\"",
+            "on = false",
+        );
         let placed = compile(
             "box grid-column=(on ? \"1 / span 2\" : \"auto\")",
             "on = false",
@@ -767,6 +772,8 @@ mod tests {
             (&painted, "gradients"),
             (&flying, "transitions, flights"),
             (&stuck, "sticky"),
+            (&routed, "navigation"),
+            (&sheet, "navigation"),
             (&placed, "grid"),
             (&activity, "activities"),
             (&awake, "wake_lock"),

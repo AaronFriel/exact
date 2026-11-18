@@ -14,6 +14,7 @@
 // size and weight are the item's title font (`HeaderShape.Item.font`).
 #if os(iOS) || os(tvOS)
 import UIKit
+import ExactKit
 
 struct ChipFace: Equatable {
     enum Part: Equatable {

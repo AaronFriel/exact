@@ -3,10 +3,11 @@ import UIKit
 
 package struct SessionSurface {
     package enum Kind: Equatable { case document, route, dialog, popover }
-    let view: UIView
-    let label: String
-    let kind: Kind
-    var owned: [UIView] = []
+    package let view: UIView
+    package let label: String
+    package let kind: Kind
+    package var owned: [UIView] = []
+    package init(view: UIView, label: String, kind: Kind, owned: [UIView] = []) { (self.view, self.label, self.kind, self.owned) = (view, label, kind, owned) }
 }
 
 extension Presenter {
@@ -79,7 +80,7 @@ package enum ViewPresentation {
 
     /// The controllers on the responder chain from the owner, nearest first:
     /// its containment ancestors, then those presenting it.
-    static func controllers(for view: UIView, layout: Bool = false) -> [UIViewController] {
+    package static func controllers(for view: UIView, layout: Bool = false) -> [UIViewController] {
         guard let controller = controller(for: view, layout: layout) else { return [] }
         return sequence(first: controller as UIResponder, next: { responder in
             if let route = responder as? any RouteSurface, let surface = route.bootSurface { return surface.next }

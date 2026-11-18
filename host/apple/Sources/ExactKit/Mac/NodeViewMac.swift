@@ -154,7 +154,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
     var kernelContentBox: NSRect?
     /// The padding layout resolved and sent with `kernelContentBox`: top,
     /// right, bottom, left (`nil` on a native button's unsaid side).
-    var kernelPadding: [CGFloat?]?
+    package var kernelPadding: [CGFloat?]?
     var fieldInCell = false // a grouped form's field, which is borderless (NativeFieldsMac.swift)
     var boxFill: CALayer?
     /// `drawsPaint`, kept: AppKit asks `wantsUpdateLayer` of every view as it
@@ -231,7 +231,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
     var pressPaint = PressPaint() // LLP 1061 D7: the author's pressed paint
     var presentedAlpha: CGFloat = 1, disabledShown = false // the opacity presented, and whether the disabled look halves it (PressLookMac.swift)
     // @ref LLP 1038 D6 — projection does not overwrite authored inert.
-    var routeInert = false { didSet { presenter?.mouseChain.bubbledPress?.validate() } }
+    package var routeInert = false { didSet { presenter?.mouseChain.bubbledPress?.validate() } }
     /// What `setAccessibilityHidden` last wrote (`Accessibility.swift`).
     var accessibilityHiddenWritten = false
     var webArea: DialogWebArea? // served above it while it is a dialog drawn in the page (`dialogWebArea`)
@@ -275,7 +275,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
     package var canvases: Canvases? { presenter?.session?.canvases }
 
     /// A native button's command is its own too (a confirmation's close row, LLP 1069.011.000 D9).
-    var pressable: Bool { handlers.contains("press") || defaultLink != nil || presenter?.invocation(of: self) != nil }
+    package var pressable: Bool { handlers.contains("press") || defaultLink != nil || presenter?.invocation(of: self) != nil }
     /// Whether the focus here matches `:focus-visible`, so its ring shows (`FocusMac.swift`).
     var focusVisible = false { didSet { if focusVisible != oldValue { noteFocusRingMaskChanged(); lookState(focus: focusVisible) } } }
     /// A focused field whose ring Exact draws (LLP 1104 D6; `showFieldFocus`).
@@ -656,7 +656,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
     /// Something under a canvas repainted outside a batch (LLP 1014 D4 b, c):
     /// the canvas captures again on this run-loop turn — unless the draw is
     /// the capture's own, or follows a batch that already captured.
-    func repaintThrough() {
+    package func repaintThrough() {
         guard !Capture.capturing, !Capture.redrawingBackingStore, let c = canvasAbove, !c.paintedThisTurn else { return }
         c.needsCapture = true
         canvases?.scheduleCapture()
@@ -925,7 +925,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
         return f
     }
 
-    func applyPlaceholder(_ f: NSTextField) {
+    package func applyPlaceholder(_ f: NSTextField) {
         if pageField != nil { return syncBarField() }
         let text = props["placeholder"] ?? ""
         let font = f.font ?? NSFont.systemFont(ofSize: NSFont.systemFontSize)
@@ -1315,7 +1315,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
         if layerBoxEligible && (hasBoxPaint || kind == "image") { needsDisplay = true }
     }
 
-    func fitScroll() {
+    package func fitScroll() {
         guard let scroll, let document = scroll.documentView else { return }
         let visible = scroll.contentView.bounds.size, origin = scroll.kernelDocumentOrigin, o = grid?.origin ?? .zero, s = presenter?.gridScale ?? 1
         let size = CGSize(width: max(PixelGrid.length(content.width, from: o, vertical: false, scale: s) - origin.x, visible.width), height: max(PixelGrid.length(content.height, from: o, vertical: true, scale: s) - origin.y, visible.height)) // ending where its last edge is drawn (`PixelGridMac.swift`)

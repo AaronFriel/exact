@@ -2,6 +2,7 @@
 import UIKit
 import XCTest
 @testable import ExactKit
+@testable import ExactNavigation
 
 /// LLP 1075.003 §3.7 over more root tabs than an iPhone's tab bar shows
 /// (`more-tabs.contract`), so UIKit lists the last ones under its More item.

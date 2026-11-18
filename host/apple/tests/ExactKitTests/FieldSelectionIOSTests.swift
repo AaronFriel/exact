@@ -2,6 +2,7 @@
 import UIKit
 import XCTest
 @testable import ExactKit
+@testable import ExactNavigation
 @testable import ExactNativeViews
 
 /// x2apps codeedit #2 on UIKit: a field's `input` reports the selection its

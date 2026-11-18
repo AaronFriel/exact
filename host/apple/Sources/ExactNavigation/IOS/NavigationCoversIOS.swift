@@ -3,6 +3,7 @@
 // the objects it handed a hatch.
 #if os(iOS) || os(tvOS)
 import UIKit
+import ExactKit
 
 extension NavigationHost {
     // MARK: The content area (LLP 1075.003 §3.5)
@@ -113,11 +114,6 @@ extension NavigationHost {
         var changes: [(UInt32, HostCover?)] = []
         var wanted: [UInt32: HostCover] = [:]
         var extras: [ObjectIdentifier: (UIScrollView, top: CGFloat, bottom: CGFloat)] = [:]
-        #if os(iOS)
-        if #available(iOS 27.1, *) {
-            for id in presenter.arrangements.hiddenPanes { wanted[id] = .whole }
-        }
-        #endif
         for c in controllers.values where presenter.views[c.node.id] === c.node {
             // A lifted header takes no room, on a stack yet or not (`coverLifted`).
             for node in (c.lifted.map({ [$0] }) ?? c.barNodes) + [c.scoped].compactMap({ $0 }) { wanted[node.id] = .whole }
@@ -274,8 +270,15 @@ extension NavigationHost {
             }
         }
         applyClearance(extras)
+        // A pane a native arrangement hides is the arrangement's to cover whole (`ArrangementHost.reportHiddenPanes`):
+        // nothing is told of it here, and once shown again it is told afresh.
+        var arranged = Set<UInt32>()
+        #if os(iOS)
+        if #available(iOS 27.1, *) { arranged = Set(presenter.arrangements.hiddenPanes) }
+        #endif
+        for id in arranged { wanted[id] = nil }
         for (id, cover) in wanted where covers[id] != cover { changes.append((id, cover)) }
-        for id in covers.keys where wanted[id] == nil && presenter.views[id] != nil { changes.append((id, nil)) }
+        for id in covers.keys where wanted[id] == nil && presenter.views[id] != nil && !arranged.contains(id) { changes.append((id, nil)) }
         covers = wanted
         let locals = reportLocalInsets()
         guard !changes.isEmpty || locals else { return writeCarriedScrollsWhenAnswered() }

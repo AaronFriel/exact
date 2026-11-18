@@ -2,6 +2,7 @@
 import UIKit
 import XCTest
 @testable import ExactKit
+@testable import ExactNavigation
 
 /// LLP 1095: the root's `accent-color` is the app's accent, its window's
 /// tint, and behind an alert only the accent dims.

@@ -641,7 +641,8 @@ pub fn web_linked(plan: &exact_plan::Plan, inputs: &serde_json::Value) -> String
             | Capability::Video
             | Capability::WebViews
             | Capability::Sound
-            | Capability::Midi => {}
+            | Capability::Midi
+            | Capability::Navigation => {}
         }
     }
     entry

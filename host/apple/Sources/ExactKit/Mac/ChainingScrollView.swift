@@ -186,7 +186,7 @@ package final class ChainingScrollView: NSScrollView {
     /// `overscroll-behavior` per axis: what happens to a gesture this view
     /// has run out of room for. `auto` hands the rest to the enclosing
     /// scroller (CSS scroll chaining); `contain` and `none` keep it here.
-    var containX = false
+    package var containX = false
     package var containY = false
     /// Whether a contained axis shows the platform's overscroll affordance —
     /// the rubber band. `contain` does, `none` does not (CSS Overscroll §3).

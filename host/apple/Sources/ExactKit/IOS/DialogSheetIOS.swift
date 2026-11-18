@@ -68,7 +68,7 @@ final class DialogSheetController: UIViewController, UIGestureRecognizerDelegate
     var relay: MountRelay?
     #endif
 
-    fileprivate init(host: DialogSheets, topLayer: Bool) {
+    package init(host: DialogSheets, topLayer: Bool) {
         self.host = host
         self.topLayer = topLayer
         super.init(nibName: nil, bundle: nil)
@@ -94,7 +94,7 @@ final class DialogSheetController: UIViewController, UIGestureRecognizerDelegate
         }]
         #endif
     }
-    required init?(coder: NSCoder) { nil }
+    package required init?(coder: NSCoder) { nil }
     #if os(iOS)
     // LLP 1133.029 D5: UIKit asks a presented controller, whose default is
     // not its presenter's answer; a dialog over a locked screen keeps the lock.
@@ -173,7 +173,7 @@ final class DialogSheetController: UIViewController, UIGestureRecognizerDelegate
     @objc private func escape() { host?.closeRequest(self) }
     override func accessibilityPerformEscape() -> Bool { host?.closeRequest(self) ?? false }
     /// The dialog this presents, once it is in the scroller.
-    fileprivate var dialog: NodeView? { scroller.subviews.lazy.compactMap { $0 as? NodeView }.first }
+    package var dialog: NodeView? { scroller.subviews.lazy.compactMap { $0 as? NodeView }.first }
     /// The author's `::backdrop` colour, nil where none is written.
     private var authoredBackdrop: UIColor? { dialog?.uiColor("backdrop_color") }
     /// The dim's colour, again after a batch or a theme edit: the top layer's
@@ -362,12 +362,12 @@ final class DialogSheets: NSObject, UIAdaptivePresentationControllerDelegate, Di
     var orientationLock: OrientationLock? { presenter?.orientationLock }
     #endif
     private final class Entry {
-        let dialog: NodeView
+        package let dialog: NodeView
         let incarnation: UInt64
         weak var parent: UIView?
         var index: Int
         /// The kernel's frame for the dialog, in its authored parent.
-        var frame: CGRect
+        package var frame: CGRect
         var usedBlock: CGSize?
         weak var source: NodeView?
         /// What held the keyboard's focus when it opened.
@@ -389,7 +389,7 @@ final class DialogSheets: NSObject, UIAdaptivePresentationControllerDelegate, Di
         /// The dismissal of a sheet closed while UIKit was still presenting
         /// it, which UIKit would drop: run when the presentation ends.
         var afterPresenting: (() -> Void)?
-        init(_ dialog: NodeView, source: NodeView?, previous: UIView?, controller: DialogSheetController) {
+        package init(_ dialog: NodeView, source: NodeView?, previous: UIView?, controller: DialogSheetController) {
             self.dialog = dialog; self.source = source; self.previous = previous; self.controller = controller
             incarnation = dialog.incarnation
             parent = dialog.superview
@@ -401,7 +401,7 @@ final class DialogSheets: NSObject, UIAdaptivePresentationControllerDelegate, Di
     /// Still open in the document, waiting for a retiring route's UIKit stack.
     private var resuming: [Entry] = []
 
-    init(presenter: Presenter) { self.presenter = presenter }
+    package init(presenter: Presenter) { self.presenter = presenter }
     fileprivate func geometryChanged() { presenter?.nativeGeometry.changed() }
 
     /// Shown, or still on screen while its sheet leaves.

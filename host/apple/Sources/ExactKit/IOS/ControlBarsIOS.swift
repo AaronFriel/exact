@@ -9,9 +9,9 @@ import UIKit
 
 /// One pass's answers (`Presenter.reachPageEdges`), so sibling scrollers share
 /// their parent's children and each box is judged once.
-final class ControlBars {
+package final class ControlBars {
     unowned let presenter: Presenter
-    init(_ presenter: Presenter) { self.presenter = presenter }
+    package init(_ presenter: Presenter) { self.presenter = presenter }
     private var bars: [ObjectIdentifier: Bool] = [:]
     /// A parent's shown in-flow children (nil: one drawn as a layer, `FlatLeaves`, never a bar), where each
     /// is, and whether every one before and after each is a bar.
