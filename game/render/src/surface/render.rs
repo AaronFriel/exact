@@ -315,8 +315,14 @@ impl<G: Game, P: Executor, const ASSETS: bool, H: crate::Hooks> WorldSurface<G, 
         // The host's display period: the live scheduler looks ahead by it.
         sim.frame_period(frame.period_ms);
         // The first frame after a rest: the idle time runs no ticks.
+        let mut rest_ms = 0.0;
         if std::mem::take(&mut self.resting) && !frame.seekable {
+            self.perf.submitted_live = None;
             sim.wake(frame.now_ms);
+            rest_ms = self
+                .perf
+                .record_gap(sim.take_live_gap(), sim.picture_generation())
+                .idle_ms;
             // What woke it may change the pose: rest again only after it draws.
             self.idle_tick = None;
         }
@@ -450,6 +456,7 @@ impl<G: Game, P: Executor, const ASSETS: bool, H: crate::Hooks> WorldSurface<G, 
         self.perf.pixels = frame.pixels();
         self.perf.frame(frame.now_ms, frame.seekable);
         let due = sim.ticks_due(frame.now_ms, Clock::Live);
+        let picture = sim.picture_generation();
         let ticks = sim.advance_with(
             frame.now_ms,
             if frame.seekable {
@@ -474,7 +481,9 @@ impl<G: Game, P: Executor, const ASSETS: bool, H: crate::Hooks> WorldSurface<G, 
             !G::paused(sim.args()),
             frame.seekable,
         );
-        self.perf.ticks.push(ticks as f64);
+        let mut gap = self.perf.record_gap(sim.take_live_gap(), picture);
+        gap.idle_ms += rest_ms;
+        crate::perf::warn_catch_up(self.perf.record_ticks::<G>(frame, ticks, gap));
         if self.error.is_some() {
             return false;
         }
@@ -670,6 +679,9 @@ impl<G: Game, P: Executor, const ASSETS: bool, H: crate::Hooks> WorldSurface<G, 
         let hooks = self.hooks.needs().contains(crate::Needs::ANIMATE)
             || self.hooks.needs().contains(crate::Needs::PENDING);
         self.resting = rests && !hooks && !asset_work;
+        if self.resting {
+            self.perf.submitted_live = None;
+        }
         (wants && !rests) || hooks || asset_work
     }
 
@@ -717,7 +729,8 @@ impl<G: Game, P: Executor, const ASSETS: bool, H: crate::Hooks> WorldSurface<G, 
             return;
         }
         sim.frame_period(frame.period_ms);
-        sim.advance_with(
+        let picture = sim.picture_generation();
+        let ticks = sim.advance_with(
             frame.now_ms,
             Clock::Live,
             observer(
@@ -731,6 +744,8 @@ impl<G: Game, P: Executor, const ASSETS: bool, H: crate::Hooks> WorldSurface<G, 
                 due,
             ),
         );
+        let gap = self.perf.record_gap(sim.take_live_gap(), picture);
+        crate::perf::warn_catch_up(self.perf.record_overload::<G>(frame.period_ms, ticks, gap));
         self.presentation
             .sync(sim.world(), sim.generation(), !G::paused(sim.args()), false);
     }
@@ -741,6 +756,10 @@ impl<G: Game, P: Executor, const ASSETS: bool, H: crate::Hooks> WorldSurface<G, 
         let Some(timed) = self.encoded.take() else {
             return;
         };
+        self.perf.submitted_live = self.sim.as_ref().and_then(|sim| {
+            (self.perf.live && !self.hidden && !self.resting && !G::paused(sim.args()))
+                .then(|| sim.picture_generation())
+        });
         let Some((renderer, _)) = &mut self.render else {
             return;
         };

@@ -545,6 +545,53 @@ fn a_look_frame_leaves_the_hook_clock_where_the_live_frames_left_it() {
     assert_eq!([&looked[..2], &looked[3..]].concat(), live);
     assert_eq!(live[2], (0.016, false), "{live:?}");
 }
+struct Running;
+impl Game for Running {
+    type Args = ();
+    const ID: &'static str = "running-under-pending-hooks";
+    const HZ: u32 = 120;
+    fn setup(_: &mut World, _: &()) {}
+    fn tick(_: &mut World, _: &Input, _: &()) {}
+}
+#[derive(Default)]
+struct Pending;
+impl Hooks for Pending {
+    fn needs(&self) -> Needs {
+        Needs::PENDING
+    }
+}
+// A loading phase is overload: its frames are submitted before the hooks are ready.
+#[test]
+fn a_long_gap_while_hooks_are_pending_is_clamp_not_idle() {
+    let Some(gpu) = fixture::device_or_skip(fixture::device()) else {
+        return;
+    };
+    let mut surface = WorldSurface::<Running, (), false, Pending>::default();
+    exact_gpu::Surface::clock(&mut surface, false);
+    surface.bind(&[], None).unwrap();
+    let mut f = frame();
+    f.seekable = false;
+    for (now, interval_ms) in [(0., 0.), (300., 300.), (600., 300.)] {
+        f.now_ms = now;
+        exact_gpu::Surface::timing(
+            &mut surface,
+            &exact_gpu::FrameTiming {
+                interval_ms,
+                ..Default::default()
+            },
+        );
+        fixture::render(&gpu, &mut surface, &f).unwrap();
+    }
+    let reply = surface.agent(r#"{"op":"state"}"#).unwrap();
+    let state: serde_json::Value = serde_json::from_str(&reply).unwrap();
+    assert_eq!(state["world"]["ready"], false, "{state}");
+    assert_eq!(
+        state["world"]["perf"]["catchUp"],
+        serde_json::json!({"clampFrames":2,"clampMs":100,"idleFrames":0,"idleMs":0,"overloadFrames":0}),
+        "{state}"
+    );
+    assert_eq!(state["world"]["perf"]["ticksOwed"]["max"], 36, "{state}");
+}
 #[test]
 fn all_stages_and_recovery() {
     check::<true, true, true>();

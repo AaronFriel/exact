@@ -361,6 +361,9 @@ impl<G: Game, P: Executor, const ASSETS: bool, H: crate::Hooks> Surface
         self.retier_rung()
     }
     fn clock(&mut self, seekable: bool) {
+        if self.seekable != seekable {
+            self.perf.submitted_live = None;
+        }
         self.seekable = seekable;
         if let Some(report) = &mut self.perf.reporting {
             if report.clock(seekable) {
@@ -384,6 +387,9 @@ impl<G: Game, P: Executor, const ASSETS: bool, H: crate::Hooks> Surface
             _ => return,
         }
         self.presentation.suspend(self.hidden || self.interrupted);
+        if matches!(event, Lifecycle::Hidden | Lifecycle::Interrupted) {
+            self.perf.submitted_live = None;
+        }
         self.hook_clock.reset();
     }
     fn arguments(&self) -> Vec<(&'static str, Value)> {

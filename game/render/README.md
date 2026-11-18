@@ -925,6 +925,22 @@ Missing materials/environment use defaults.
 
 `state.world.perf` reports live frame stamps, tick,
 feed, encode (frame input through submit), pipeline and ticks/frame distributions.
+`ticksPerFrame` counts ticks run. `catchUp` counts live host gaps over 250 ms, the
+most a frame admits. `clampFrames` and `clampMs` count excess time consumed by a
+running clock after a submitted live frame of the same unpaused picture. `idleFrames`
+and `idleMs` count the excess on wakes, pauses and advances without that prior
+submission. Both millisecond totals count only the excess over 250 ms.
+`ticksOwed` and `ticksPerFrame` sample the same drawn frames. `ticksOwed` uses the
+live scheduler's advance target with the full host gap minus the tick at the start
+of the advance, when the gap exceeds 250 ms and the clock is running. Other drawn
+frames use the ticks run: seekable frames, a paused clock, which asks for none, and
+a wake from rest, which discards its gap before the scheduler reads it. A timed
+bind and an advance-only frame update the `catchUp` counters and add no ring sample.
+`overloadFrames` counts live frames, timed binds and advance-only frames that run
+more than `ceil(display period in seconds × HZ) + 1` ticks when the display period
+is known.
+The first logs the ticks owed and run, the ticks per display period, the clamped
+and idle time, and `perf world:<surface>`.
 `pipelineMs` is the time a live frame spent creating render and compute pipelines
 on its thread (`perf::pipeline`): in the host's asset preparation before it, its feed
 and encode, frames before it that stopped short of drawing, and the `Game::PREPARE`
@@ -1251,10 +1267,10 @@ and browser hashes. [Game README](../README.md) covers clock, save and dev carry
 `RenderError::Capacity { arena, slot, limit }` or `RenderError::Scene(reason)`.
 Mesh centers support transparent sorting; there is no unused sphere-radius API.
 On an unarmed surface, a plain `state` request returns totals and `null`
-percentiles. Set `perf: true` or `perf_reset: true` to arm the six
+percentiles. Set `perf: true` or `perf_reset: true` to arm the seven
 16,384-sample diagnostic rings. Percentiles stay `null` until the first sample
 in each ring. `perf` preserves accumulated totals and cadence. `perf_reset`
-clears them. The feel probe requests `perf: true`.
+clears them and the five `catchUp` counters. The feel probe requests `perf: true`.
 
 ## Skinned model path
 
