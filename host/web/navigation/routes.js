@@ -2,6 +2,7 @@ import { viewChildren, unwrapListItem, viewParent } from "./lists.js";
 import { fold, launched, onFold, launchLocation, launchVisits } from "./environment.js";
 import { inertAncestor } from "./layers.js";
 import { popoverObservation } from "./popover.js";
+import { sheetGone, sheetsLeft, stackSheets } from "./sheet-stack.js";
 // @ref LLP 1038 D6/D7/D11 — host projection and the last committed URL.
 const AGENT_ADMITTED = true; // false in a production bake: host/web/build.mjs rewrites this line (LLP 1069.007 D2)
 // @ref LLP 1047.002 D2.1 — the behaviours that act only on what a plan makes: a tablist's panels and the sidebar, a
@@ -108,6 +109,7 @@ export function sheetLeaves(el) {
   }), done = () => {
     leavingSheets.delete(slide);
     el.remove();
+    sheetGone(el);
   };
   leavingSheets.add(slide);
   slide.finished.then(done, done);
@@ -189,8 +191,10 @@ function selectedDetent(route) {
   return chosen;
 }
 /** The frame of `routes[index]`: its own detent, or its sheet's when it was pushed inside one; written only where it
- * changed. `shownIn` is the sheet each route shows in (`sheetAt`), `inUse` the sheets something shown is in. */
-function sheetFrame(routes, index, shownIn, inUse) {
+ * changed. `shownIn` is the sheet each route shows in (`sheetAt`), `inUse` the sheets something shown is in,
+ * `selected` the stack's shown route. The projection frames a stack's routes in order, and with the last one the
+ * stack's sheets are to be compared (`stackSheets`). */
+function sheetFrame(routes, index, shownIn, inUse, selected) {
   if (!SHEETS) {
     return;
   }
@@ -200,6 +204,14 @@ function sheetFrame(routes, index, shownIn, inUse) {
     sheetDetents.delete(route);
   }
   const chosen = inUse.has(at) ? selectedDetent(routes[at]) : null;
+  // A sheet presented from a route in a sheet is stacked, and so is a push inside it; a full-screen route between two
+  // sheets ends the stack. The mark is part of the frame (the look cuts a stacked card), so it is here before the
+  // stack is read, and keeps what the last reading made it.
+  if (!(inUse.has(at) && at > 0 && shownIn[at - 1] >= 0)) {
+    route.removeAttribute("data-exact-sheet-stacked");
+  } else if (!route.hasAttribute("data-exact-sheet-stacked")) {
+    route.setAttribute("data-exact-sheet-stacked", "");
+  }
   if (route.hasAttribute("data-exact-in-sheet") !== pushed) {
     route.toggleAttribute("data-exact-in-sheet", pushed);
   }
@@ -208,6 +220,9 @@ function sheetFrame(routes, index, shownIn, inUse) {
   }
   if (route.style.getPropertyValue("--exact-sheet-detent") !== (chosen?.css ?? "")) {
     route.style.setProperty("--exact-sheet-detent", chosen?.css ?? "");
+  }
+  if (index === routes.length - 1) {
+    stackSheets(routes, shownIn, inUse, selected);
   }
 }
 // The route a route shows in as a sheet: itself, or the sheet it was pushed over, since a push inside a sheet stays in
@@ -1250,6 +1265,8 @@ export const navigation = {
         managed.set(nav, panels);
       }
       if (key === undefined) {
+        // No route is framed, so no stack of sheets is reached: one whose routes have left this root goes here.
+        SHEETS && sheetsLeft();
         continue;
       }
       // Every tab but the selected one stays mounted, hidden and inert.
@@ -1302,7 +1319,7 @@ export const navigation = {
             column ? route.setAttribute("data-exact-split", column) : route.removeAttribute("data-exact-split");
           }
           route.style.setProperty("--exact-split", column ? `${split}px` : "");
-          sheetFrame(routes, index, shownIn, inUse);
+          sheetFrame(routes, index, shownIn, inUse, selected);
           appBarBack(nav, routes, index, split > 0, active || covered, headers[index]);
           clearBar(route);
           if (stack === at && index === selected) {
