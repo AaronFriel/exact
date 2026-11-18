@@ -271,7 +271,7 @@ extension NodeView {
     package var rotate: CGFloat { get { aside?.rotate ?? 0 } set { if newValue != 0 || aside != nil { asideMade.rotate = newValue } } }
     /// A scroll container's content extent (the `content` op), before the
     /// axes that do not scroll are held to the box.
-    var content: CGSize { get { aside?.content ?? .zero } set { if newValue != .zero || aside != nil { asideMade.content = newValue } } }
+    package var content: CGSize { get { aside?.content ?? .zero } set { if newValue != .zero || aside != nil { asideMade.content = newValue } } }
     var fitContentHeight: CGFloat? { get { aside?.fitContentHeight } set { if newValue != nil || aside != nil { asideMade.fitContentHeight = newValue } } }
     /// An image node's picture, once loaded (decoded off the main thread),
     /// the source it came from, and which load is current: a completion
@@ -499,7 +499,7 @@ extension NodeView {
             ? sv.adjustedContentInset.top : (extras?.nativeScrollContentInsets.top ?? 0) + bandInset.top
     }
     /// Its page band (`NodeExtras.pageBand`), zero for most.
-    var pageBand: UIEdgeInsets { extras?.pageBand ?? .zero }
+    package var pageBand: UIEdgeInsets { extras?.pageBand ?? .zero }
     var bandInset: UIEdgeInsets { extras?.bandInset ?? .zero }
     var bandOver: Int64? { get { extras?.bandOver } set { if newValue != nil || extras != nil { more.bandOver = newValue } } }
     var edgeInteraction: AnyObject? { get { extras?.edgeInteraction } set { if newValue != nil || extras != nil { more.edgeInteraction = newValue } } }
@@ -541,7 +541,7 @@ extension NodeView {
     /// A keyboard toolbar's inset leaves the port too: a short transcript
     /// rises only by what the keyboard would cover of its rows, as a
     /// collection view's does, not by the whole keyboard.
-    func scrollFloor(_ sv: UIScrollView) -> CGFloat {
+    package func scrollFloor(_ sv: UIScrollView) -> CGFloat {
         let keyboard = extras?.keyboardInset ?? 0
         guard case .inset(let top, let bottom)? = presenter?.navigation.covers[id] else { return max(0, sv.bounds.height - pageBand.top - pageBand.bottom - keyboard) }
         return max(0, sv.bounds.height - top - bottom - pageBand.top - pageBand.bottom - keyboard)

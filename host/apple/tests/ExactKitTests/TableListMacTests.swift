@@ -7,6 +7,7 @@ import AppKit
 import XCTest
 @testable import ExactKit
 @testable import ExactImages
+@testable import ExactCollections
 
 final class TableListMacTests: XCTestCase {
     private var fixture: TableFixture?

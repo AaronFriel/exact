@@ -3,7 +3,7 @@ import CExact
 import Foundation
 
 extension Runtime {
-    func collectionFixedSizes(_ view: UInt32, lead: Int, trail: Int) -> [Double]? {
+    package func collectionFixedSizes(_ view: UInt32, lead: Int, trail: Int) -> [Double]? {
         guard let fixedSize = CoreExports.collectionFixedSize else { return nil }
         return on(busy: nil) {
             let sizes = (0..<2).map { fixedSize(rt, view, UInt32(lead), UInt32(trail), UInt32($0)) }

@@ -1,6 +1,8 @@
 // Host metadata and LE feedback for runner/src/instance/collection/api.rs.
 // No record data, keys, height index, or row lifetime policy lives in Swift.
 import Foundation
+import ExactKit
+import ExactCore
 
 struct CollectionMeasurement: Equatable {
     var view: UInt32
@@ -308,7 +310,7 @@ final class CollectionHost: ListHosting {
         startOwed.remove(view); pendingSerial[view] = nil; pendingToken[view] = nil
         #if os(iOS) || os(tvOS)
         offsetDrivers.removeValue(forKey: view)?.cancel()
-        presenter?.scrollPump.forgetTravel(view)
+        presenter?.forgetTravel(view)
         #else
         haltClip(view)
         #endif
@@ -623,7 +625,7 @@ final class CollectionHost: ListHosting {
         guard (owningCollection(focus) == id ? focus : nil) == previous.focus,
               (owningCollection(interaction) == id ? interaction : nil) == previous.interaction else { return false }
         let speed = motion?(id) ?? 0
-        let ahead = speed * (presenter?.scrollPump.leadTime(id) ?? 0)
+        let ahead = speed * (presenter?.leadTime(id) ?? 0)
         let top = max(0, facts.offset), end = min(entry.snapshot.extent, top + facts.portMain)
         guard !requiringLead || (max(0, top + min(0, ahead)) >= window.built[0]
               && min(entry.snapshot.extent, end + max(0, ahead)) <= window.built[1]),
@@ -639,7 +641,7 @@ final class CollectionHost: ListHosting {
     func rested(_ id: UInt32) {
         guard let entry = entries[id], entry.travelled else { return }
         entry.travelled = false
-        presenter?.scrollPump.forgetTravel(id)
+        presenter?.forgetTravel(id)
         resting.insert(id)
         retireOwed[id] = nil
         fillPending.insert(id)

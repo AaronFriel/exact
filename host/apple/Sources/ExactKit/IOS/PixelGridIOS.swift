@@ -257,7 +257,7 @@ extension Presenter {
     }
 
     /// `view`, newly among its parent's children (or the roots), drawn from there.
-    func regrid(_ view: NodeView) {
+    package func regrid(_ view: NodeView) {
         let origin = gridOrigin(above: view)
         guard let old = view.grid, PixelGrid.place(old.layout, in: origin, scale: gridScale(under: origin)) != old else { return }
         applyFrame(view, old.layout)

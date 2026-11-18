@@ -1,5 +1,7 @@
 #if os(iOS) || os(tvOS)
 import UIKit
+import ExactKit
+import ExactCore
 
 /// Geometry belongs to a mounted row epoch. Reports keep these records until
 /// a batch changes the row; acknowledgement belongs to the runner's snapshot.

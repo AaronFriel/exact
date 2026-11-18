@@ -2,6 +2,7 @@
 import UIKit
 import XCTest
 @testable import ExactKit
+@testable import ExactCollections
 
 /// A batch that only builds, moves or drops a virtualized list's rows (a
 /// fling's fills, many a second) skips the route projection; anything the

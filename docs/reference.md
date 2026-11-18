@@ -1424,6 +1424,7 @@ The generated `--embed` composition lists the capabilities to link.
 | Product | Capability | Installation |
 | --- | --- | --- |
 | `ExactMarkdown` | Markdown text and editing | `ExactMarkdown.install()` |
+| `ExactCollections` | Windowed lists, swipe rows, reorder groups and iOS list row cells | `ExactCollections.install()` |
 | `ExactDrag` | Reorder, height and transform drags | `ExactDrag.install()` |
 | `ExactGroupedLists` | Native grouped lists | `ExactGroupedLists.install()` |
 | `ExactSurfaces` | GPU and Canvas surfaces | `ExactSurfaces.install()`; links `ExactImages`, which Canvas 2D images read through |

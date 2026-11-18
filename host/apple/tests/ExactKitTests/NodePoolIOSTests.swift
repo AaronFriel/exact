@@ -3,6 +3,7 @@ import UIKit
 import XCTest
 @testable import ExactKit
 @testable import ExactImages
+@testable import ExactCollections
 @testable import ExactSurfaces
 
 /// A virtualized list's retired row lends its views to the next row of its

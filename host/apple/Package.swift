@@ -34,6 +34,7 @@ func links(_ capability: String) -> Bool {
 let allCapabilities: [(name: String, target: String)] = [
     ("grouped_lists", "ExactGroupedLists"),
     ("markdown", "ExactMarkdown"),
+    ("collections", "ExactCollections"),
     ("surfaces", "ExactSurfaces"),
     ("drag", "ExactDrag"),
     ("media_picker", "ExactMediaPicker"),
@@ -49,7 +50,7 @@ let allCapabilities: [(name: String, target: String)] = [
 // which the roster links with it, or ExactCore's package API. Surfaces' Canvas
 // 2D images fetch and decode through the images family's static API, which
 // needs no install.
-let capabilityNeeds: [String: [Target.Dependency]] = ["ExactSvg": ["ExactCore", "ExactEffects"], "ExactSurfaces": ["ExactImages"]]
+let capabilityNeeds: [String: [Target.Dependency]] = ["ExactCollections": ["ExactCore"], "ExactSvg": ["ExactCore", "ExactEffects"], "ExactSurfaces": ["ExactImages"]]
 let capabilities = allCapabilities.filter { links($0.name) }
 
 // `swift test` builds every target a package declares, and the two UIKit

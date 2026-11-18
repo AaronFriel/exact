@@ -175,7 +175,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
     var materialContent: NSView?
     private var materialKind: String?
     /// Natural extent from the kernel, before the CSS client-size minimum.
-    var content = CGSize.zero
+    package var content = CGSize.zero
     /// The platform view returned by the dlopened iframe arm (@ref LLP 1020 D3).
     var video: VideoView?
     var web: NSView? { didSet { if web !== oldValue { placeWeb() } } }

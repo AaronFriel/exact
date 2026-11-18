@@ -62,14 +62,16 @@ pub fn apple_uses(plan: &Plan) -> Uses {
         runs_command(plan, &["startTrace_EXPERIMENTAL", "stopTrace_EXPERIMENTAL"]),
     );
     add(Capability::Controls, uses_controls(plan));
-    // A swipe row, a reorder group and a reorder grip reach the collection
-    // host without a windowed list.
+    // A swipe row, a reorder group, a reorder grip and a list whose rows
+    // are cells (iOS draws them, LLP 1115.000 D16) reach the family without
+    // a windowed list.
     add(
         Capability::Collections,
         [
             PropId::SwipeContent,
             PropId::ReorderGroup,
             PropId::ReorderFor,
+            PropId::ListRows,
         ]
         .into_iter()
         .any(|id| binds(plan, BindingKind::Prop, id as u16)),

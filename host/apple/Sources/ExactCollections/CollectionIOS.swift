@@ -1,6 +1,8 @@
 // UIKit keeps gesture recognition; this recognizer only observes a bounded pin.
 #if os(iOS) || os(tvOS)
 import UIKit
+import ExactKit
+import ExactCore
 
 private final class CollectionContact: UIGestureRecognizer {
     weak var collections: CollectionHost?
@@ -156,11 +158,8 @@ extension CollectionHost {
             animateOffset(id, scroll, to: moved)
             return
         }
-        if presenter?.elementScrolls.revealing(scroll) != nil {
-            // An element reveal heads for where its target now is instead (`IntoView.swift`).
-            presenter?.elementScrolls.retarget(scroll)
-            return
-        }
+        // An element reveal heads for where its target now is instead (`IntoView.swift`).
+        if presenter?.retargetReveal(scroll) == true { return }
         let insets = scroll.adjustedContentInset
         var target = scroll.contentOffset
         if let start {
@@ -196,7 +195,7 @@ extension CollectionHost {
         let moved = horizontal ? target.x - scroll.contentOffset.x : target.y - scroll.contentOffset.y
         scroll.contentOffset = target
         // Not the reader's travel: the fill's velocity reads on from here.
-        presenter?.scrollPump.shifted(id, by: moved)
+        presenter?.shifted(id, by: moved)
     }
     /// The content size the list's extent needs.
     private func fit(_ node: NodeView, _ scroll: UIScrollView, extent: Double) {
@@ -322,7 +321,7 @@ extension CollectionHost {
             // What was sampled before it is not the reader's travel after it;
             // a finger still down drags on, and its next move says so
             // (`ScrollPump.scrolled`).
-            presenter?.scrollPump.forgetTravel(id)
+            presenter?.forgetTravel(id)
             if scroll.isTracking {
                 // Under a dragging finger a smooth one lands at once too:
                 // UIKit's animated call would pull the port from under it.

@@ -1,5 +1,6 @@
 @testable import ExactKit
 @testable import ExactImages
+@testable import ExactCollections
 
 // The built-in family implementations behind the core's link slots (LLP 1047.001 D10), for tests that read their internals.
 

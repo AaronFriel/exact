@@ -3,6 +3,8 @@
 #if os(iOS) || os(tvOS)
 import UIKit
 import UIKit.UIGestureRecognizerSubclass
+import ExactKit
+import ExactCore
 
 /// A row pays for its UIKit cell only while a swipe can start. At rest the
 /// authored scroll holds the content, as on the web, and a batch walks no
@@ -99,7 +101,7 @@ final class SwipeActionsHost: SwipeActionsHosting {
     /// The open row on the screen that shows (tests and diagnostics).
     var openRow: UInt32? { openRows.last { shows($0) } }
     private func shows(_ id: UInt32) -> Bool {
-        presenter.views[id].map { !presenter.navigation.isInactiveRoute(containing: $0) } ?? false
+        presenter.views[id].map { !presenter.isInactiveRoute(containing: $0) } ?? false
     }
     /// Whether `id` shows its actions now.
     private func revealed(_ id: UInt32) -> Bool {
@@ -920,7 +922,7 @@ final class SwipeActionsHost: SwipeActionsHosting {
 /// row's body, as it does a custom button's (LLP 1069.011.000 D6).
 private final class SwipeTable: UITableView {
     override func touchesShouldCancel(in view: UIView) -> Bool {
-        view is NativeButtonIOS || super.touchesShouldCancel(in: view)
+        view.isNativeButtonView || super.touchesShouldCancel(in: view)
     }
 }
 #endif

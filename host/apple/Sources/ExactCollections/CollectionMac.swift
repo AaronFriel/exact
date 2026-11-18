@@ -1,6 +1,8 @@
 // AppKit collection observations are independent of authored event handlers.
 #if os(macOS)
 import AppKit
+import ExactKit
+import ExactCore
 
 /// A knob drag on a collection's scroller. AppKit derives a knob drag's
 /// offsets from the pointer, and derives one more at the mouse-up. Rows
@@ -438,7 +440,7 @@ extension CollectionHost {
     private func hitView(_ event: NSEvent) -> NSView? {
         guard let presenter else { return nil }
         let point = presenter.viewport.superview?.convert(event.locationInWindow, from: nil) ?? event.locationInWindow
-        return TableRowCell.whatIsThere { presenter.viewport.hitTest(point) }
+        return presenter.viewUnder(point)
     }
     func startTracking() {
         let monitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .leftMouseUp,
@@ -464,7 +466,7 @@ extension CollectionHost {
         let observer = NotificationCenter.default.addObserver(forName: NSWindow.didResignKeyNotification,
             object: nil, queue: .main) { [weak self] notification in
                 guard let self, let window = notification.object as? NSWindow else { return }
-                if presenter?.hosts(window) == true { presenter?.tables.cancelPress() }
+                if presenter?.hosts(window) == true { presenter?.cancelTablePress() }
                 if window === presenter?.viewport.window { releaseInteractionLater() }
             }
         stopTracking = {

@@ -101,7 +101,7 @@ package final class Presenter {
         view.relook()
     }
     package func carrying(_ key: String) -> [NodeView] { chrome.ids(key).sorted().compactMap { views[$0] } }
-    func takeChangedNames() -> Set<String> { chrome.takeChangedNames() }
+    package func takeChangedNames() -> Set<String> { chrome.takeChangedNames() }
     var scrollers: Set<UInt32> = []
     var pendingScrolls: Set<UInt32> = []
     /// The batch's suppression triggers for scroll anchoring (`ScrollAnchoring.swift`).
@@ -650,7 +650,7 @@ package final class Presenter {
     /// A scroller (nil: the page) moved, handler or not: `frame()` reads
     /// boxes where the viewer sees them (LLP 1051.000 D1).
     var onScrolled: ((UInt32?, Double, Double) -> Void)?
-    var listViews: [UInt32: NodeView] = [:]
+    package var listViews: [UInt32: NodeView] = [:]
     var textViews: [UInt32: NodeView] = [:] { didSet { NodeView.textGeometry &+= 1 } }
     /// Attached paragraphs that use a raster and lack it whole. Direct drawing owes no raster work.
     var owedText: Set<UInt32> = []

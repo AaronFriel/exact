@@ -15,6 +15,9 @@ import ExactGroupedLists
 #if EXACT_LINK_MARKDOWN
 import ExactMarkdown
 #endif
+#if EXACT_LINK_COLLECTIONS
+import ExactCollections
+#endif
 #if EXACT_LINK_SURFACES
 import ExactSurfaces
 #endif
@@ -69,6 +72,9 @@ public enum ExactComposition {
         #endif
         #if EXACT_LINK_MARKDOWN
         ExactMarkdown.install()
+        #endif
+        #if EXACT_LINK_COLLECTIONS
+        ExactCollections.install()
         #endif
         #if EXACT_LINK_SURFACES
         ExactSurfaces.install()

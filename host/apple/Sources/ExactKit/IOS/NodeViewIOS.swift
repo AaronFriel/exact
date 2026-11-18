@@ -301,7 +301,7 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
         }
     }
     /// Off the accessibility tree: projected away, inert, or `aria-hidden`.
-    var hidesAccessibility: Bool {
+    package var hidesAccessibility: Bool {
         placementHidden || props["inert"] == "true" || props["accessibilityElementsHidden"] == "true"
     }
     /// The assigned flag before placeholder suppression, for save and restore.
@@ -1342,11 +1342,11 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
 
     var scrollWaits: Bool { swipeOwner && !scrollNeeded && !handlers.contains("scroll") && !handlers.contains("scrollend") }
     /// The node's overflow scrolls, and its scroll view is still waiting.
-    var scrollDormant: Bool {
+    package var scrollDormant: Bool {
         !groupedOwner && scrollView == nil && (["scroll", "auto"].contains(style["overflow_x"]?.string ?? "") || ["scroll", "auto"].contains(style["overflow_y"]?.string ?? ""))
     }
 
-    func needScroll() {
+    package func needScroll() {
         guard scrollDormant else { return }
         scrollNeeded = true
         syncScroll()

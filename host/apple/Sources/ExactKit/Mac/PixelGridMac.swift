@@ -189,7 +189,7 @@ extension Presenter {
     }
 
     /// `view`, newly among its parent's children (or the roots), drawn from there.
-    func regrid(_ view: NodeView) {
+    package func regrid(_ view: NodeView) {
         guard let old = view.grid, gridPlace(view, old.layout) != old else { return }
         applyFrame(view, old.layout)
     }

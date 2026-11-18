@@ -1,9 +1,8 @@
 // @ref LLP 1047.001 D10 — the C exports a family owns that ExactCore calls.
 // ExactCore reaches each through a slot here, never by name, so an app
 // without the family links no call to an export its archive does not emit
-// (D3). A slot's default is the export while its family is in ExactKit; a
-// family with its own target sets it from its installer (SVG's does). A nil
-// slot answers what the family's absence means, written at each call site.
+// (D3). A family's target sets its slots from its installer; a nil slot
+// answers what the family's absence means, written at each call site.
 import CExact
 
 package enum CoreExports {
@@ -12,18 +11,18 @@ package enum CoreExports {
     package static var svgIslands: ((ExactRuntime) -> UInt8)?
     /// A windowed list's feedback (its fills and reports); absent, the
     /// session sends none, and a call answers `Runtime.noFeedback`.
-    package static var collectionFeedback: ((ExactRuntime, Int, Double) -> UInt32)? = exact_collection_feedback
+    package static var collectionFeedback: ((ExactRuntime, Int, Double) -> UInt32)?
     /// What UIKit covers of a list's port; absent, not told.
-    package static var listCovered: ((ExactRuntime, UInt32, Double, Double) -> Void)? = exact_list_covered
+    package static var listCovered: ((ExactRuntime, UInt32, Double, Double) -> Void)?
     /// A row's index by key; absent, none.
-    package static var listIndex: ((ExactRuntime, UInt32, UInt32) -> UInt32)? = exact_list_index
+    package static var listIndex: ((ExactRuntime, UInt32, UInt32) -> UInt32)?
     /// A list's text between two positions; absent, none.
-    package static var listText: ((ExactRuntime, UInt32, UInt32, UInt32, UInt32, UInt32, UInt32, UInt32, UInt32, UInt32) -> UInt32)? = exact_list_text
+    package static var listText: ((ExactRuntime, UInt32, UInt32, UInt32, UInt32, UInt32, UInt32, UInt32, UInt32, UInt32) -> UInt32)?
     /// A list's fixed lead or trail size, its snap position and its snap
     /// stop; absent, none (not finite).
-    package static var collectionFixedSize: ((ExactRuntime, UInt32, UInt32, UInt32, UInt32) -> Double)? = exact_collection_fixed_size
-    package static var collectionSnap: ((ExactRuntime, UInt32, Double, Double, Double, Double, Double) -> Double)? = exact_collection_snap
-    package static var collectionSnapStop: ((ExactRuntime, UInt32, Double, Double, Double, Double, Double) -> Double)? = exact_collection_snap_stop
+    package static var collectionFixedSize: ((ExactRuntime, UInt32, UInt32, UInt32, UInt32) -> Double)?
+    package static var collectionSnap: ((ExactRuntime, UInt32, Double, Double, Double, Double, Double) -> Double)?
+    package static var collectionSnapStop: ((ExactRuntime, UInt32, Double, Double, Double, Double, Double) -> Double)?
 }
 
 extension Runtime {

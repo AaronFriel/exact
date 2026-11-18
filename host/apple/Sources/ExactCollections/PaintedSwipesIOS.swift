@@ -22,6 +22,8 @@
 // scrolls, and a row that was never touched parks in the node pool.
 #if os(iOS)
 import UIKit
+import ExactKit
+import ExactCore
 
 final class PaintedSwipes {
     private struct Row {

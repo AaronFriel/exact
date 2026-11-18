@@ -33,6 +33,8 @@
 // its pressed paint, `pointerdown`, `pointerup`) replaces the highlight.
 #if os(iOS) || os(tvOS)
 import UIKit
+import ExactKit
+import ExactCore
 
 extension NodeView {
     /// The nearest node view above this one.
@@ -196,6 +198,7 @@ final class RowCells: RowCellsHosting {
         shown?.ground.removeFromSuperview()
         shown = nil
     }
+    func inspectionOwns(_ view: UIView) -> Bool { view is RowLinesView || view is RowGroundView }
 
     // MARK: Separators
 

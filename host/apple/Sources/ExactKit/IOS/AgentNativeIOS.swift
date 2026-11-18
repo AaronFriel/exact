@@ -264,6 +264,7 @@ extension Presenter {
             if sub === controls.controls[id] { return ("control", id) }
             if segments.inspectionOwns(sub) { return ("segment", id) }
             if swipeActions.inspectionOwns(sub) { return ("swipe", id) }
+            if rowCells.inspectionOwns(sub) { return ("row-cells", id) }
             if groupedLists?.inspectionOwns(sub) == true { return ("grouped-list", id) }
             if Self.platformKinds.contains(o.kind) || o.props["hatch"] != nil { return ("platform", id) }
         }
