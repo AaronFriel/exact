@@ -217,8 +217,7 @@ impl<D: DataSource> Host<D> {
             self.layout_calls += 1;
         }
         self.sync_height_owner()?;
-        self.sync_height_transitions()?;
-        self.collect_height_samples()?;
+        self.sync_height_motion()?;
         self.height_presented.clear();
         let epoch = self.runner.kernel().epoch();
         self.height_presented
@@ -357,7 +356,9 @@ impl<D: DataSource> Host<D> {
     /// the presenter last heard them.
     fn emit_layout(&mut self, batch: &mut Batch) -> Result<(), String> {
         self.emit_flat_hits(batch);
-        self.judge_list_moves();
+        if let Some(motion) = self.turn.motion {
+            (motion.list_moves)(self);
+        }
         // Preserve publication order without a tree insertion for each touch.
         self.queue_flat_descendants();
         let mut pending: Vec<_> = std::mem::take(&mut self.pending_layout)
@@ -545,13 +546,15 @@ impl<D: DataSource> Host<D> {
                 }
             }
             // @ref LLP 1063 — a moved box plays from where it was.
-            if !self.presence.snap {
-                self.observe_layout(key, batch);
+            if let Some(motion) = self.turn.motion.filter(|_| !self.presence.snap) {
+                (motion.observe_layout)(self, key, batch);
             }
         }
         self.emit_fitted(&visited, &moved, batch);
         self.emit_extents(!visited.is_empty(), batch);
-        self.snap_layout(batch);
+        if let Some(motion) = self.turn.motion {
+            (motion.snap_layout)(self, batch);
+        }
         self.emit_sticky(batch);
         self.place_timelines(batch);
         self.emit_fragments(batch);
@@ -603,7 +606,9 @@ impl<D: DataSource> Host<D> {
             return self.layout(batch);
         }
         if !self.height_layout_if_needed(batch)? && committed {
-            self.judge_list_moves();
+            if let Some(motion) = self.turn.motion {
+                (motion.list_moves)(self);
+            }
             self.emit_collections(batch)?;
         }
         Ok(())

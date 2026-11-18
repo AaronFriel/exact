@@ -116,6 +116,9 @@ mod box_motion_tests;
 mod filter_motion_tests;
 #[path = "layout.rs"]
 mod layout;
+#[cfg(test)]
+#[path = "turn_motion_tests.rs"]
+mod turn_motion_tests;
 use layout::{content_size, published_content_box};
 #[path = "resize.rs"]
 mod resize;
@@ -764,7 +767,7 @@ impl<D: DataSource> Host<D> {
         let batch = host.write(batch, None);
         Ok((host, batch))
     }
-    /// [`crate::link::MotionLowering`]'s boot: what Core Animation can play of
+    /// [`crate::link::TurnMotion`]'s boot: what Core Animation can play of
     /// the motion the engine's first sync started, and the rest resampled.
     pub(crate) fn lower_motion(&mut self, sync: &MotionSync) {
         let runner = &self.runner;

@@ -179,7 +179,7 @@ impl<D: DataSource> Host<D> {
         }
     }
 
-    /// [`crate::link::MotionLowering`]'s turn: the boxes' lowered animations.
+    /// [`crate::link::TurnMotion`]'s turn: the boxes' lowered animations.
     pub(crate) fn emit_box_motion(&mut self, batch: &mut Batch) {
         self.svg
             .emit_boxes(self.runner.kernel(), &self.engine, batch);

@@ -267,7 +267,8 @@ impl IoLinks {
 /// A turn's family work (LLP 1047.001 D10): after its commits, which
 /// `Host::finish` runs in this order, the documents a source's answers
 /// watch (I/O), then, after the resize rounds, the SVG scenes the batch
-/// owes; and through the turn, what Core Animation plays of the motion.
+/// owes; and through the turn, the motion: what Core Animation plays, the
+/// exits, the layout and height transitions, and the list rows' moves.
 /// Each is `None` when the composition does not link its family, so the
 /// archive names none of its code.
 pub struct TurnLinks<D: DataSource> {
@@ -275,14 +276,15 @@ pub struct TurnLinks<D: DataSource> {
     pub documents: Option<fn(&mut crate::Host<D>)>,
     /// Send the SVG scenes laid out, moved or restyled this turn.
     pub svg: Option<fn(&mut crate::Host<D>, &mut crate::batch::Batch)>,
-    /// Hand Core Animation the motion it can play (`svg_lower`): boxes',
-    /// SVG paths' and live filters'. Linked when anything can move, as the
-    /// engine is; where nothing moves there is nothing to hand over.
-    pub motion: Option<MotionLowering<D>>,
+    /// The turn's motion: what Core Animation plays (`svg_lower`: boxes',
+    /// SVG paths' and live filters'), exits, layout and height transitions
+    /// and list moves. Linked when anything can move, as the engine is;
+    /// where nothing moves each finds nothing to do, so it is not linked.
+    pub motion: Option<TurnMotion<D>>,
 }
 
 /// [`TurnLinks::motion`]'s parts, each where the turn reaches it.
-pub struct MotionLowering<D: DataSource> {
+pub struct TurnMotion<D: DataSource> {
     /// At boot, over the engine's first sync of the tree: which motion Core
     /// Animation plays and which the engine samples.
     pub boot: fn(&mut crate::Host<D>, &exact_kernel::motion::MotionSync),
@@ -292,15 +294,38 @@ pub struct MotionLowering<D: DataSource> {
     pub present: fn(&mut crate::Host<D>),
     /// After a turn's layout: the boxes' lowered animations it owes.
     pub turn: fn(&mut crate::Host<D>, &mut crate::batch::Batch),
+    /// A receipt's exits (`-exact-exit-animation`), before its destroys.
+    pub exits: fn(&mut crate::Host<D>, &exact_kernel::CommitReceipt, &mut crate::batch::Batch),
+    /// Whether a destroyed view's `destroy` waits for an exit.
+    pub exit_holds: fn(&mut crate::Host<D>, exact_kernel::ViewId, &mut crate::batch::Batch) -> bool,
+    /// Start the exits the engine has not heard.
+    pub play_exits: fn(&mut crate::Host<D>, &mut crate::batch::Batch),
+    /// At a present: the exits that ended.
+    pub end_exits: fn(&mut crate::Host<D>, &mut crate::batch::Batch),
+    /// Before a commit's layout: the boxes a layout transition starts from.
+    pub seed_layout:
+        fn(&mut crate::Host<D>, &exact_kernel::CommitReceipt, &mut crate::batch::Batch),
+    /// After a box's layout: its move, under its layout transition.
+    pub observe_layout: fn(&mut crate::Host<D>, exact_kernel::NodeKey, &mut crate::batch::Batch),
+    /// After a layout's observations.
+    pub snap_layout: fn(&mut crate::Host<D>, &mut crate::batch::Batch),
+    /// Before a layout's observations: the list rows that only moved.
+    pub list_moves: fn(&mut crate::Host<D>),
+    /// The height transitions' targets (`transition: height`).
+    pub heights: fn(&mut crate::Host<D>) -> Result<(), String>,
+    /// The heights the engine presents, for layout.
+    pub height_samples: fn(&mut crate::Host<D>) -> Result<(), String>,
+    /// A created or restyled view's `transition: height`.
+    pub track_height: fn(&mut crate::Host<D>, exact_kernel::ViewId),
 }
 
-impl<D: DataSource> Clone for MotionLowering<D> {
+impl<D: DataSource> Clone for TurnMotion<D> {
     fn clone(&self) -> Self {
         *self
     }
 }
 
-impl<D: DataSource> Copy for MotionLowering<D> {}
+impl<D: DataSource> Copy for TurnMotion<D> {}
 
 /// Whether anything in a plan that `uses` can move: a spring or a hold, a
 /// drag, keyframes, a timeline, or a transition CSS would play.
@@ -335,11 +360,22 @@ impl<D: DataSource> TurnLinks<D> {
                 None
             },
             motion: if moves(uses) {
-                Some(MotionLowering {
+                Some(TurnMotion {
                     boot: crate::Host::<D>::lower_motion,
                     commit: crate::Host::<D>::lower_committed_motion,
                     present: crate::Host::<D>::hand_over_transitions,
                     turn: crate::Host::<D>::emit_box_motion,
+                    exits: crate::Host::<D>::begin_exits,
+                    exit_holds: crate::Host::<D>::exit_holds,
+                    play_exits: crate::Host::<D>::play_exits,
+                    end_exits: crate::Host::<D>::end_exits,
+                    seed_layout: crate::Host::<D>::seed_layout,
+                    observe_layout: crate::Host::<D>::observe_layout,
+                    snap_layout: crate::Host::<D>::snap_layout,
+                    list_moves: crate::Host::<D>::judge_list_moves,
+                    heights: crate::Host::<D>::sync_height_transitions,
+                    height_samples: crate::Host::<D>::collect_height_samples,
+                    track_height: crate::Host::<D>::track_height_transition,
                 })
             } else {
                 None

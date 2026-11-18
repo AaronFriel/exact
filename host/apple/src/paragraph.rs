@@ -404,7 +404,9 @@ impl<D: DataSource> Host<D> {
                 return;
             }
         }
-        self.track_height_transition(id);
+        if let Some(motion) = self.turn.motion {
+            (motion.track_height)(self, id);
+        }
         if self.native_protected_id(id) {
             if let Some(node) = self.runner.kernel().node(id) {
                 self.keys.insert(node.key, id);
@@ -482,7 +484,9 @@ impl<D: DataSource> Host<D> {
                 return;
             }
         }
-        self.track_height_transition(id);
+        if let Some(motion) = self.turn.motion {
+            (motion.track_height)(self, id);
+        }
         if self.native_protected_id(id) {
             return;
         }
