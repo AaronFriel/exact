@@ -1,9 +1,8 @@
 // @ref LLP 1047.001 D10 — shared-element flights (LLP 1013.000) are a family
-// the composition selects (the roster's pointer and motion row). The core
-// reaches them only through what this file declares; without the family the
-// presenter holds `NoFlights`, and nothing flies. The slot's default is
-// today's flights, so every app still links them; their own target will
-// install them instead. How a view shows while it flies (`FlightLook`), a
+// the composition selects (the roster's `flights`: a plan that binds
+// `sharedElement`). The core reaches them only through what this file
+// declares; without the family the presenter holds `NoFlights`, and nothing
+// flies. `ExactFlights.install()` sets the slot. How a view shows while it flies (`FlightLook`), a
 // flight's clip (`FlightClip`) and, on macOS, its slot (`FlightSlot`) are the
 // core's: its image, grid, paint order and child order passes read them.
 #if os(macOS)
@@ -67,8 +66,11 @@ package protocol FlightHosting: AnyObject {
     func regridSlots()
     /// The slot a flying `view` lands in, while it flies.
     func slot(of view: NodeView) -> PlatformView?
-    /// Whether `view` is a flight's container or slot (the inspection walk).
+    #if EXACT_AGENT
+    /// Whether `view` is a flight's container or slot (the agent's
+    /// inspection walk; a production build keeps no implementation of it).
     func owns(_ view: PlatformView) -> Bool
+    #endif
     #if os(macOS)
     func frame(_ id: UInt32, _ frame: NSRect) -> Bool
     #else
@@ -101,5 +103,5 @@ package final class NoFlights: FlightHosting {
 /// The slots are set before any session is made, and read on the main thread.
 package enum FlightLink {
     /// A presenter's flights.
-    package static var make: ((Presenter) -> any FlightHosting)? = { BuiltInFlights($0) }
+    package static var make: ((Presenter) -> any FlightHosting)?
 }

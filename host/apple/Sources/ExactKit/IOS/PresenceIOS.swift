@@ -8,14 +8,14 @@
 import UIKit
 
 package struct Leaving {
-    let view: NodeView
+    package let view: NodeView
     package let members: [NodeView]
 }
 
 extension Presenter {
     /// Retirement follows lifted content as well as routes. Event ancestry
     /// retains its own inertness rules across a modal presentation.
-    func retirementParent(of view: UIView) -> UIView? {
+    package func retirementParent(of view: UIView) -> UIView? {
         if let node = view as? NodeView, let parent = menus.sheets.authoredParent(of: node) ?? menus.logicalParent(of: node) { return parent }
         return eventParent(of: view)
     }

@@ -102,7 +102,9 @@ fn tools_are_a_plan_with_a_tool() {
 /// and button plan by none; no other host's set moves.
 #[test]
 fn each_native_entry_is_selected_by_the_rows_that_reach_its_family() {
-    use Capability::{Collections, Controls, Effects, Images, NativeViews, Svg, Traces};
+    use Capability::{
+        Collections, Controls, Effects, Flights, Images, NativeViews, Sticky, Svg, Traces,
+    };
     let plain = "column\n      text \"a\"\n      button \"b\" press=go";
     for (view, capability, selected) in [
         (plain, Svg, false),
@@ -146,6 +148,12 @@ fn each_native_entry_is_selected_by_the_rows_that_reach_its_family() {
         ("input type=\"range\"", Controls, true),
         ("progress value=0.5", Controls, true),
         ("input type=\"number\"", Controls, false),
+        ("column sharedElement=\"hero\"", Flights, true),
+        ("column sharedElement=(wide ? \"a\" : \"b\")", Flights, true),
+        ("column", Flights, false),
+        ("column position=\"sticky\" top=0", Sticky, true),
+        ("column position=(wide ? \"sticky\" : \"static\") top=0", Sticky, true),
+        ("column position=\"relative\" top=0", Sticky, false),
         ("input type=\"text\"", Controls, false),
         (
             "row role=\"tablist\"\n      button \"a\" press=go",

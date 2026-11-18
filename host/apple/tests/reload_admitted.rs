@@ -16,6 +16,8 @@ fn an_all_linked_binary_reloads_from_hello_into_each_family() {
         "view hatch=\"avatar\"",
         "input type=\"checkbox\"",
         "row role=\"tablist\"\n      button \"a\" role=\"tab\"",
+        "column sharedElement=\"hero\"\n      text \"a\"",
+        "column position=\"sticky\" top=0\n      text \"a\"",
     ] {
         let mut bridge = Bridge::<NoData>::new();
         boot(&mut bridge, &plan("text \"Hello world\""));

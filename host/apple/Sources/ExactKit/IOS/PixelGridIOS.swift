@@ -142,7 +142,7 @@ extension Presenter {
     /// children it is among (for a row a grouped list carried into its cell,
     /// the node it was carried from), else a container on the grid (a cell,
     /// the window).
-    func gridOrigin(above view: UIView) -> GridOrigin {
+    package func gridOrigin(above view: UIView) -> GridOrigin {
         func origin(_ holder: UIView) -> GridOrigin? {
             var ancestor: UIView? = holder
             while let a = ancestor, !(a is NodeView) { ancestor = a.superview }

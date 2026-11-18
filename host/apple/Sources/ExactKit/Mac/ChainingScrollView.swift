@@ -433,7 +433,7 @@ package final class ChainingScrollView: NSScrollView {
 extension NodeView {
     /// Kernel frames include the gutter; the document starts at the clip. A
     /// zoomable scroller's child is its document's box (`ScrollZoomMac.swift`).
-    func frameInScrollDocument(_ frame: NSRect) -> NSRect {
+    package func frameInScrollDocument(_ frame: NSRect) -> NSRect {
         guard let clip = superview?.superview as? NSClipView,
               let scroll = clip.superview as? ChainingScrollView,
               scroll.documentView === superview else { return frame }

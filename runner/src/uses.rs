@@ -181,11 +181,18 @@ pub enum Capability {
     /// plain button and a number field's stepper are the core's. Native
     /// only.
     Controls,
+    /// Shared-element flights (LLP 1013.000): a plan that binds
+    /// `sharedElement`, the name a flight follows from a leaving view to an
+    /// arriving one. Native only.
+    Flights,
+    /// `position: sticky` (LLP 1083 D4): a plan whose `position` can be
+    /// `sticky`. Native only.
+    Sticky,
 }
 
 impl Capability {
     /// Every capability, in bit order.
-    pub const ALL: [Capability; 45] = [
+    pub const ALL: [Capability; 47] = [
         Capability::Markdown,
         Capability::Motion,
         Capability::Collections,
@@ -231,6 +238,8 @@ impl Capability {
         Capability::ContentRegions,
         Capability::Traces,
         Capability::Controls,
+        Capability::Flights,
+        Capability::Sticky,
     ];
 
     /// The name an entry, a refusal and a report use.
@@ -281,6 +290,8 @@ impl Capability {
             Capability::ContentRegions => "content_regions",
             Capability::Traces => "traces",
             Capability::Controls => "controls",
+            Capability::Flights => "flights",
+            Capability::Sticky => "sticky",
         }
     }
 
@@ -314,7 +325,9 @@ impl Uses {
         .with(Capability::NativeViews)
         .with(Capability::ContentRegions)
         .with(Capability::Traces)
-        .with(Capability::Controls);
+        .with(Capability::Controls)
+        .with(Capability::Flights)
+        .with(Capability::Sticky);
 
     /// This set and `capability`.
     pub const fn with(self, capability: Capability) -> Uses {

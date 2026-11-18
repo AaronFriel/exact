@@ -305,7 +305,7 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
         placementHidden || props["inert"] == "true" || props["accessibilityElementsHidden"] == "true"
     }
     /// The assigned flag before placeholder suppression, for save and restore.
-    var storedAccessibilityElementsHidden: Bool { super.accessibilityElementsHidden }
+    package var storedAccessibilityElementsHidden: Bool { super.accessibilityElementsHidden }
     package override var accessibilityElementsHidden: Bool {
         get { super.accessibilityElementsHidden || isEmptyPanelPlaceholder }
         set { super.accessibilityElementsHidden = newValue }
@@ -1278,7 +1278,7 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
     /// Whether the style clips the children (`overflow: hidden` or `clip`); a waiting
     /// scroll clips as its scroll view would. Without a clip box, it is the
     /// layer's `masksToBounds` (`syncScroll`; a landing flight, `FlightsIOS`).
-    var overflowClips: Bool {
+    package var overflowClips: Bool {
         let ox = style["overflow_x"]?.string ?? "visible", oy = style["overflow_y"]?.string ?? "visible"
         return ["hidden", "clip"].contains(ox) || ["hidden", "clip"].contains(oy) || scrollDormant
     }
@@ -1411,7 +1411,7 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
     package func cornerSizes(in rect: CGRect, inset: CGFloat = 0) -> [CGSize] {
         BorderPaint.reduced(BorderPaint.radii(style, in: rect, inset: inset), in: rect)
     }
-    func cornerRadii(in rect: CGRect, inset: CGFloat = 0) -> [CGFloat] {
+    package func cornerRadii(in rect: CGRect, inset: CGFloat = 0) -> [CGFloat] {
         cornerSizes(in: rect, inset: inset).map { $0.width }
     }
     func roundedPath(in rect: CGRect, inset: CGFloat = 0) -> UIBezierPath {

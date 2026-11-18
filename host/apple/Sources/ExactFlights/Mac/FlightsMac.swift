@@ -8,6 +8,7 @@
 // `FlightScale`), and put back at `land`.
 #if os(macOS)
 import AppKit
+import ExactKit
 
 /// Where a leaver was shown when its name moved on.
 struct FlightSource {

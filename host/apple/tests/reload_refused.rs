@@ -35,6 +35,14 @@ fn hellos_binary_refuses_a_reload_into_a_family_and_keeps_its_plan() {
             "row role=\"tablist\"\n      button \"a\" role=\"tab\"",
             "controls",
         ),
+        (
+            "column sharedElement=\"hero\"\n      text \"a\"",
+            "transitions, flights",
+        ),
+        (
+            "column position=\"sticky\" top=0\n      text \"a\"",
+            "sticky",
+        ),
     ] {
         let next = plan(view);
         let len = bridge.input_write(&next);

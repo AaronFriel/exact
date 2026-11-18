@@ -98,7 +98,7 @@ package enum ViewPresentation {
 
     /// A flight stays in its presentation's paint plane. Above a sheet that
     /// is the popover layer, not the clipped card or the window around it.
-    static func root(of view: UIView) -> UIView? {
+    package static func root(of view: UIView) -> UIView? {
         if let layer = PopoverLayer.containing(view), layer.sheet != nil { return layer }
         return controllers(for: view, layout: true).first {
             $0.parent == nil || $0.parent is UINavigationController || $0.parent is PlainTab || $0.parent is UITabBarController

@@ -144,7 +144,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
     /// `box-shadow` (`BoxShadow.swift`): outer, and inset (LLP 1077 D4).
     var shadowCaster: ShadowCaster?
     var insetCaster: InsetShadowCaster?
-    var clipBox: NSView?
+    package var clipBox: NSView?
     /// The box's border, gradient and image pixels as sublayers (`BoxLayerMac.swift`).
     var boxBorder: CALayer?
     var kernelContentBox: NSRect?
@@ -1095,7 +1095,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
     /// Whether the style clips the children (`overflow: hidden` or `clip`; a paragraph's
     /// any overflow but `visible`; line-clamp, LLP 1054 P3). Without a clip box
     /// it is `clipsToBounds` (`applyStyle`; a landing flight, `FlightsMac`).
-    var overflowClips: Bool {
+    package var overflowClips: Bool {
         let over = [style["overflow_x"]?.string ?? "visible", style["overflow_y"]?.string ?? "visible"]
         return kind == "text" ? over.contains { $0 != "visible" } || number("line_clamp") > 0 : over.contains { $0 == "hidden" || $0 == "clip" }
     }
@@ -1367,7 +1367,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
     package func cornerSizes(in rect: NSRect, inset: CGFloat = 0) -> [CGSize] {
         BorderPaint.reduced(BorderPaint.radii(style, in: rect, inset: inset), in: rect)
     }
-    func cornerRadii(in rect: NSRect, inset: CGFloat = 0) -> [CGFloat] {
+    package func cornerRadii(in rect: NSRect, inset: CGFloat = 0) -> [CGFloat] {
         cornerSizes(in: rect, inset: inset).map { $0.width }
     }
     func roundedPath(in rect: NSRect, inset: CGFloat = 0) -> NSBezierPath {

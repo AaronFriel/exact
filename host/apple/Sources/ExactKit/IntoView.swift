@@ -7,11 +7,11 @@
 // and a virtualized list's window, as a reader's scroll does.
 import CoreGraphics
 
-enum IntoView {
+package enum IntoView {
     /// Where a scroller's offset goes on one axis so the target `t0..<t1`
     /// (in the scroller's content) aligns in the port `p0..<p0 + size` by
     /// CSS's `start`, `center`, `end` or `nearest`, before clamping.
-    static func aligned(_ align: String, target t0: CGFloat, _ t1: CGFloat, port p0: CGFloat, size: CGFloat) -> CGFloat {
+    package static func aligned(_ align: String, target t0: CGFloat, _ t1: CGFloat, port p0: CGFloat, size: CGFloat) -> CGFloat {
         let p1 = p0 + size, length = t1 - t0
         switch align {
         case "start": return t0

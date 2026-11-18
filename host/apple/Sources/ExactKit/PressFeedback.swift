@@ -234,7 +234,7 @@ extension NodeView {
     }
     /// No ease of the press on the render server: a view taken for another
     /// node, or one a flight carries, shows its own transform alone.
-    func stopPressEase() {
+    package func stopPressEase() {
         #if os(iOS)
         dimPress(false, instantly: true)
         #endif

@@ -102,7 +102,7 @@ extension Presenter {
 
     /// The absolute origin `view` is placed from: that of the node whose
     /// children it is among, else a container on the grid.
-    func gridOrigin(above view: NSView) -> GridOrigin {
+    package func gridOrigin(above view: NSView) -> GridOrigin {
         guard let holder = view.superview else { return .zero }
         var ancestor: NSView? = holder
         while let a = ancestor, !(a is NodeView) { ancestor = a.superview }

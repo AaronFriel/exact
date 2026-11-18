@@ -15,6 +15,7 @@
 // that is the shown box (`FlightScale`). `land` puts it back.
 #if os(iOS) || os(tvOS)
 import UIKit
+import ExactKit
 
 /// Where a leaver was shown when its name moved on.
 struct FlightSource {

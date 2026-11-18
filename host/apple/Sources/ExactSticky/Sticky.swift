@@ -6,8 +6,10 @@
 // Arrange row's), so hit-testing follows it and a frame op keeps it.
 #if os(macOS)
 import AppKit
+import ExactKit
 #else
 import UIKit
+import ExactKit
 #endif
 
 /// One sticky box's constraint: rectangles `[left, top, right, bottom]` in

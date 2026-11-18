@@ -66,6 +66,19 @@ pub fn apple_uses(plan: &Plan) -> Uses {
         runs_command(plan, &["startTrace_EXPERIMENTAL", "stopTrace_EXPERIMENTAL"]),
     );
     add(Capability::Controls, uses_controls(plan));
+    // A flight follows a shared element's name from a leaver to an arriver.
+    add(
+        Capability::Flights,
+        binds(plan, BindingKind::Prop, PropId::SharedElement as u16),
+    );
+    add(
+        Capability::Sticky,
+        plan.bindings.iter().any(|b| {
+            b.kind == BindingKind::Style
+                && StyleId::from_bit(u32::from(b.id)) == Some(StyleId::PositionType)
+                && can_be(plan, &b, |v| v.trim().eq_ignore_ascii_case("sticky"))
+        }),
+    );
     // A swipe row, a reorder group, a reorder grip and a list whose rows
     // are cells (iOS draws them, LLP 1115.000 D16) reach the family without
     // a windowed list.

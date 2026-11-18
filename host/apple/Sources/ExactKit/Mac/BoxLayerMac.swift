@@ -160,7 +160,7 @@ extension NodeView {
     /// The web's box: background and border inside the border box, a
     /// uniform border following the curve, the radius clipping children
     /// only where the overflow clips.
-    func applyBoxLayer() {
+    package func applyBoxLayer() {
         defer { syncEllipticalClip(); applyColorRanges() }
         guard layerBoxEligible else { applyClipOnly(); return }
         let p = boxPlan

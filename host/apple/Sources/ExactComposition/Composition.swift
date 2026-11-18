@@ -45,6 +45,12 @@ import ExactEffects
 #if EXACT_LINK_SVG
 import ExactSvg
 #endif
+#if EXACT_LINK_FLIGHTS
+import ExactFlights
+#endif
+#if EXACT_LINK_STICKY
+import ExactSticky
+#endif
 #if EXACT_LINK_IMAGES
 import ExactImages
 #endif
@@ -108,6 +114,12 @@ public enum ExactComposition {
         #endif
         #if EXACT_LINK_SVG
         ExactSvg.install()
+        #endif
+        #if EXACT_LINK_FLIGHTS
+        ExactFlights.install()
+        #endif
+        #if EXACT_LINK_STICKY
+        ExactSticky.install()
         #endif
         #if EXACT_LINK_IMAGES
         ExactImages.install()

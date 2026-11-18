@@ -1347,7 +1347,7 @@ package final class Presenter {
 
     /// A frame, content box or scene, in a batch or after one (a flight
     /// landing, FlightsIOS.swift).
-    func applyGeometry(_ op: BatchOp) {
+    package func applyGeometry(_ op: BatchOp) {
         // Outside a batch, carried rows go back to their authored parents
         // first, as before a batch, so the new box is theirs; the projections
         // remount on the next turn. Inside one, a carried row's box is placed

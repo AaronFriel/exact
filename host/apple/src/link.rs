@@ -617,6 +617,8 @@ mod tests {
             "on = false",
         );
         let exiting = compile("text \"a\" -exact-exit-animation=\"none\"", "on = false");
+        let flying = compile("column sharedElement=\"hero\"", "on = false");
+        let stuck = compile("column position=\"sticky\" top=0", "on = false");
         for (plan, name) in [
             (&tools, "tools"),
             (&view, "modules, native_views"),
@@ -628,6 +630,8 @@ mod tests {
             (&filtered, "effects"),
             (&animated, "animations"),
             (&exiting, "animations"),
+            (&flying, "transitions, flights"),
+            (&stuck, "sticky"),
         ] {
             assert_eq!(missing(plan, Uses::NONE).as_deref(), Some(name));
             assert_eq!(missing(plan, ALL), None);

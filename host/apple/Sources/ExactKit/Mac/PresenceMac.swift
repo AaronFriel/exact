@@ -8,7 +8,7 @@
 import AppKit
 
 package struct Leaving {
-    let view: NodeView
+    package let view: NodeView
     package let members: [NodeView]
 }
 

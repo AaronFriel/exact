@@ -4,6 +4,7 @@ import XCTest
 @testable import ExactKit
 @testable import ExactCollections
 @testable import ExactNativeViews
+@testable import ExactFlights
 
 final class PopoverSheetIOSTests: XCTestCase {
     private final class Touch: UITouch {

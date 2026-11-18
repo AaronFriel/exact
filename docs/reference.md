@@ -1489,6 +1489,8 @@ The generated `--embed` composition lists the capabilities to link.
 | `ExactSvg` | SVG elements, SVG images and icons (links `ExactEffects` too) | `ExactSvg.install()` |
 | `ExactNativeViews` | The app's native module, native views and hatches | `ExactNativeViews.install()` |
 | `ExactControls` | Switches, checkboxes, radios, ranges, selects, dates, progress and segmented tablists | `ExactControls.install()` |
+| `ExactFlights` | Shared-element flights (`sharedElement`) | `ExactFlights.install()` |
+| `ExactSticky` | `position: sticky` | `ExactSticky.install()` |
 
 Development builds log a missing Markdown or drag installation once per session,
 with the product and installation call. Without it, Markdown remains literal
