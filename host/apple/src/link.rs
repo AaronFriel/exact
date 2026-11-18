@@ -560,6 +560,13 @@ impl<D: DataSource> Links<D> {
                 } else {
                     exact_runner::ModuleLinks::<D>::NONE.lists
                 },
+                // The voice table, the transport and MIDI: a plan's sounds,
+                // sequences or MIDI, which the Sound and MIDI products play.
+                audio: if uses.has(Capability::Sound) || uses.has(Capability::Midi) {
+                    exact_runner::ModuleLinks::<D>::ALL.audio
+                } else {
+                    exact_runner::ModuleLinks::<D>::NONE.audio
+                },
             },
             turn: TurnLinks::of(uses),
             regions: if uses.has(Capability::ContentRegions) {
@@ -643,6 +650,21 @@ mod tests {
                 links.runner.lists.is_some(),
                 uses.has(Capability::Collections)
             );
+        }
+    }
+
+    /// The runner's audio comes with the sound or the MIDI product, and
+    /// with neither stays out.
+    #[test]
+    fn the_runners_audio_links_with_sound_or_midi() {
+        use Capability::{Midi, Sound};
+        for (uses, linked) in [
+            (Uses::NONE, false),
+            (Uses::NONE.with(Sound), true),
+            (Uses::NONE.with(Midi), true),
+            (ALL, true),
+        ] {
+            assert_eq!(Links::<()>::of(uses).modules.audio.linked(), linked);
         }
     }
 

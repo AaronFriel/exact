@@ -219,8 +219,9 @@ pub enum Capability {
     Video,
     /// Iframes' web views (LLP 1020): an `iframe` node. Native only.
     WebViews,
-    /// The voice table's output (LLP 1096; LLP 1125 D3): a plan that
-    /// [`runs_sounds`]. Native only.
+    /// The voice table's output and the runner's audio (LLP 1096; LLP 1125
+    /// D3): a plan that [`runs_sounds`] or reads `exactTransport`. Native
+    /// only.
     Sound,
     /// MIDI ports and the MIDI queue's output (LLP 1125 D6–D8): a plan that
     /// [`keeps_midi`]. Native only.

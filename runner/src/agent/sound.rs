@@ -14,7 +14,7 @@ const SHOWN: usize = 64;
 
 /// `,"sounds":{…}`, for a plan that declares a sound.
 pub(super) fn state<D: DataSource>(runner: &Runner<D>, request: &str, s: &mut String) {
-    if runner.plan().sounds.is_empty() {
+    if runner.plan().sounds.is_empty() || !runner.plays_audio() {
         return;
     }
     let table = runner.sounds();

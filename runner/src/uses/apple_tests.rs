@@ -333,6 +333,11 @@ fn media_is_four_products_each_by_its_own_use() {
         ),
         (plan("iframe src=\"https://example.test\""), vec![WebViews]),
         (action("stopSounds()", button), vec![Sound]),
+        (
+            contract::compile("shape T\n  playing: bool\ncomponent A\n  resource t = exactTransport() as shape T\n  view\n    text \"a\"\n")
+                .unwrap(),
+            vec![Sound],
+        ),
         (action("requestMIDIAccess()", button), vec![Midi]),
         (
             action("sendMIDI(\"out\", [144, 60, 100])", button),

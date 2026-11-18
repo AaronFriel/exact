@@ -148,7 +148,15 @@ pub fn apple_uses(plan: &Plan) -> Uses {
         Capability::WebViews,
         has_node(plan, |t| t == NodeType::WebView),
     );
-    add(Capability::Sound, runs_sounds(plan));
+    // The transport answers `exactTransport` (LLP 1125 D5).
+    add(
+        Capability::Sound,
+        runs_sounds(plan)
+            || plan
+                .resources
+                .iter()
+                .any(|r| plan.str(r.source) == crate::transport::SOURCE),
+    );
     add(Capability::Midi, keeps_midi(plan));
     // A swipe row, a reorder group, a reorder grip and a list whose rows
     // are cells (iOS draws them, LLP 1115.000 D16) reach the family without

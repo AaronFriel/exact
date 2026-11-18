@@ -95,13 +95,17 @@ impl<D: DataSource> Runner<D> {
         }
         if source == crate::transport::SOURCE {
             return self
-                .transport_answer(i)
+                .seams
+                .audio
+                .transport_answer(self, i)
                 .map(Answer::Now)
                 .map_err(|error| RunnerError::Data { resource, error });
         }
         if source == crate::midi::SOURCE {
             return self
-                .midi_answer(i)
+                .seams
+                .audio
+                .midi_answer(self, i)
                 .map(Answer::Now)
                 .map_err(|error| RunnerError::Data { resource, error });
         }
