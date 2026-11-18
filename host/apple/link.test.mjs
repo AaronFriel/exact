@@ -1084,7 +1084,12 @@ agentSymbolCheck('production omits the agent, hatch diagnostics and CSS filter w
       assert.doesNotMatch(symbols, line(GRID_LAYOUT), `${bake.platform} production grid layout`);
       assert.doesNotMatch(symbols, line('ExactKit\\.HatchDiagnostics(?:[.( ]|$)'), `${bake.platform} production hatch diagnostics`);
       assert.doesNotMatch(symbols, line('ExactEffects\\.BoxFilter'), `${bake.platform} production CSS filter`);
+      // Production asks each agent operation's own export; the general dispatcher is development's (LLP 1047.001 D11).
+      assert.match(symbols, line('_exact_outstanding$'), `${bake.platform} positive control for the exports`);
+      assert.doesNotMatch(symbols, line('_exact_agent$'), `${bake.platform} production agent dispatcher`);
+      assert.doesNotMatch(symbols, line('exact_runner::agent::handle'), `${bake.platform} production agent dispatcher`);
     } else {
+      assert.match(symbols, line('_exact_agent$'), `${bake.platform} agent dispatcher`);
       assert.match(symbols, line(GRID_LAYOUT), `${bake.platform} grid layout`);
       assert.match(symbols, line(`static ExactKit\\.Agent\\.${bake.platform === 'iOS' ? 'startSocket' : 'startStdio'}`), `${bake.platform} carrier`);
       assert.match(symbols, line('ExactKit\\.Agent\\.accessibilityElementsTree'), `${bake.platform} accessibility`);

@@ -1068,8 +1068,12 @@ package final class Runtime {
         }
     }
 
-    /// The agent API (LLP 1012): a request in, its reply out — JSON, not a batch.
+    #if EXACT_AGENT
+    /// The agent API (LLP 1012): a request in, its reply out — JSON, not a
+    /// batch. In development builds only: production asks each operation's
+    /// own export (LLP 1047.001 D11).
     package func agent(_ request: String) -> String { ask(exact_agent, request) }
+    #endif
     /// A request to `export`, `exact_agent` or one operation's own (LLP
     /// 1047.001 D11), and its reply.
     package func ask(_ export: (ExactRuntime, Int) -> UInt32, _ request: String) -> String {

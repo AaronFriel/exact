@@ -554,7 +554,7 @@ impl<D: DataSource> Runner<D> {
                     ),
                     false => (crate::save_file::plain_app_path(given), *given),
                 };
-                !plain || !crate::save_file::covered(self.data.grants(), &capability, at)
+                !plain || !self.covers(&capability, at)
             }) {
                 return Err(format!(
                     "grant-missing ({option}={given} needs {capability})"
@@ -583,7 +583,7 @@ impl<D: DataSource> Runner<D> {
                             return Err(why);
                         }
                     } else if !crate::save_file::plain_app_path(given)
-                        || !crate::save_file::covered(grants, capability, given)
+                        || !self.covers(capability, given)
                     {
                         return Err(format!("grant-missing ({at}={given} needs {capability})"));
                     }

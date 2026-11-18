@@ -122,8 +122,9 @@ impl<D: DataSource> Bridge<D> {
 
     /// Copy an app file a share names (`{"path":P,"to":T}`) for the sheet.
     pub fn share_file(&mut self, len: usize) -> u32 {
+        let copy = self.links.io.map(|io| io.share_copy);
         self.answer(len, |h, request| {
-            crate::picker::share_file(request, h.runner().data_ref())
+            crate::picker::share_file(request, h.runner().data_ref(), copy)
         })
     }
 

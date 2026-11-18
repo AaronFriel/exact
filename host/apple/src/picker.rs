@@ -311,14 +311,23 @@ pub(crate) fn app_roots_reply<D: exact_runner::DataSource>(data: &D) -> String {
     format!("{{\"storage\":{},{}", reply, &roots_reply()[1..])
 }
 
-/// The agent's `shareFile` ([`share_copy`]), through the asking session's
-/// own app's roots.
-pub fn share_file<D: exact_runner::DataSource>(request: &str, data: &D) -> String {
+/// The agent's `shareFile` ([`share_copy`], the I/O link's `copy`), through
+/// the asking session's own app's roots. An archive without I/O copies
+/// nothing and refuses as grants that name no `fs.read` refuse.
+pub fn share_file<D: exact_runner::DataSource>(
+    request: &str,
+    data: &D,
+    copy: Option<crate::link::ShareCopy>,
+) -> String {
+    let Some(copy) = copy else {
+        let path = exact_runner::json::field_str(request, "path").unwrap_or_default();
+        return exact_runner::json::error(&format!("{path}: denied: fs.read"));
+    };
     let roots = app_dirs(data.app_id())
         .ok()
         .flatten()
         .map(|(roots, _)| roots);
-    share_copy(request, data.grants(), roots.as_ref())
+    copy(request, data.grants(), roots.as_ref())
 }
 
 /// Each app's directories as its storage opened them, by their paths, pinned

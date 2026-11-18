@@ -114,7 +114,7 @@ impl SaveFile {
         if self.text.is_none() && !plain_app_path(&self.from) {
             return Err(format!("{} is not an app:/ file", self.from));
         }
-        if self.text.is_none() && !covered(runner.data_ref().grants(), "fs.read", &self.from) {
+        if self.text.is_none() && !runner.covers("fs.read", &self.from) {
             return Err(format!("{} is outside the app's fs.read grants", self.from));
         }
         let name = &self.suggested_name;

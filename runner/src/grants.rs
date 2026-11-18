@@ -81,6 +81,9 @@ pub struct GrantLinks {
     /// Whether an `auth.session` grant's origin admits a sign-in page's
     /// origin: [`session_admits`].
     pub session_admits: fn(&str, &str) -> bool,
+    /// Whether an `fs.read` or `fs.write` line admits a path:
+    /// [`crate::save_file::covered`].
+    pub covers: fn(&str, &str, &str) -> bool,
 }
 
 /// The I/O grant grammar.
@@ -88,6 +91,7 @@ pub const LINKED: GrantLinks = GrantLinks {
     validate,
     admitting,
     session_admits,
+    covers: crate::save_file::covered,
 };
 
 /// Read one I/O grant line.

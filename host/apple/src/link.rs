@@ -113,7 +113,15 @@ pub struct IoLinks {
     pub start: StartIo,
     /// Write a canvas capture's image under the app's `fs.write` grants.
     pub write_file: AppFileWrite,
+    /// Copy an app file a share names for the sheet, under the app's
+    /// `fs.read` grants: [`crate::picker::share_copy`].
+    pub share_copy: ShareCopy,
 }
+
+/// How [`IoLinks`] copies an app file a share names (`{"path","to"}`) under
+/// the grants, from the app's roots (none where it has no storage), and
+/// answers the share's JSON.
+pub type ShareCopy = fn(&str, &str, Option<&[std::path::PathBuf; 3]>) -> String;
 
 /// How [`IoLinks`] writes an image at an app path among the app's roots
 /// (`app:/data`, `app:/cache`, `app:/tmp`), under the `fs.write` lines of
@@ -147,6 +155,7 @@ impl IoLinks {
         snapshot: crate::store::snapshot_for,
         start: crate::executor::start_io,
         write_file: crate::host::canvas_capture::write,
+        share_copy: crate::picker::share_copy,
     };
 }
 

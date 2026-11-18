@@ -10,7 +10,7 @@
 //! written that the app can read.
 
 use crate::json::{field_num, field_str, quote};
-use crate::save_file::{covered, plain_app_path};
+use crate::save_file::plain_app_path;
 use crate::{DataSource, Runner};
 use exact_kernel::ViewId;
 use exact_plan::Value;
@@ -227,7 +227,7 @@ fn file<D: DataSource>(runner: &Runner<D>, entry: &str, reach: Reach) -> Result<
             "{entry} is neither an app:/ file nor an element's #id"
         ));
     }
-    if !covered(runner.data_ref().grants(), "fs.read", entry) {
+    if !runner.covers("fs.read", entry) {
         return Err(format!("{entry} is outside the app's fs.read grants"));
     }
     if let Some(reason) = reach.files {

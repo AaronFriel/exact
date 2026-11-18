@@ -1275,6 +1275,7 @@ export const classifications = [
     "The named public runner-crate source is the session lifecycle API or its value/admission helper. Runner boot constructs session state (runner/src/runner.rs); host ABI buffers and configuration belong to that runtime handle.", [
     ["runner:runner/src/activation.rs", "offers_tools runtime_kept wake"],
     ["runner:runner/src/device.rs", "device_grants granted is_device_line keeps_no_answers permissions_policy"],
+    ["runner:runner/src/runner/links.rs", "Runner::covers"],
     ["runner:runner/src/grants.rs", "admitting admitting_request declared Grants::lines Grants::presence Grants::secrets launch_names normalized_json parse parse_with redacted refusal session_admits validate with_declared"],
     ["runner:runner/src/hardened.rs", "is_runtime_line runtime_grants"],
     ["runner:runner/src/runner/persist.rs", "decode encode"],

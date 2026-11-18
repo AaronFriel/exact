@@ -799,7 +799,12 @@ impl<D: DataSource> Host<D> {
     pub fn answer_hold(&mut self, request: &str) -> Option<String> {
         let op = exact_runner::json::field_str(request, "op");
         if op.as_deref() == Some("shareFile") {
-            return Some(crate::picker::share_file(request, self.runner.data_ref()));
+            let copy = Some(crate::picker::share_copy as crate::link::ShareCopy);
+            return Some(crate::picker::share_file(
+                request,
+                self.runner.data_ref(),
+                copy,
+            ));
         }
         if op.as_deref() == Some("appRoots") {
             return Some(crate::picker::app_roots_reply(self.runner.data_ref()));

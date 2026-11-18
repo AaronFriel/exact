@@ -836,8 +836,7 @@ impl<D: DataSource> Host<D> {
             .kernel()
             .node(view)
             .is_some_and(|n| n.props.str(exact_kernel::PropId::TestId) == Some("open-file"));
-        let granted =
-            exact_runner::save_file::covered(self.runner.data_ref().grants(), "fs.read", "doc:/");
+        let granted = self.runner.covers("fs.read", "doc:/");
         match open_file && granted {
             true => match exact_data::documents::open_route(path, 0) {
                 Some(doc) => Event::Change(exact_runner::ControlValue::Text(doc)),

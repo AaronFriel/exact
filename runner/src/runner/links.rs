@@ -87,4 +87,11 @@ impl<D: crate::DataSource> super::Runner<D> {
     pub(crate) fn grants_link(&self) -> crate::grants::GrantsLink {
         self.links.grants
     }
+
+    /// Whether the app's `capability` (`fs.read`, `fs.write`) lines admit
+    /// `path`, read through the I/O link: false in an archive without I/O,
+    /// as under grants that name no such line.
+    pub fn covers(&self, capability: &str, path: &str) -> bool {
+        (self.links.grants).is_some_and(|link| (link.covers)(self.data.grants(), capability, path))
+    }
 }
