@@ -1084,6 +1084,8 @@ fn bake_in(
         "__exact_binding.mjs",
         "__exact_env.mjs",
         "__exact_launch_setting.mjs",
+        "__exact_facts.mjs",
+        "__exact_grants.json",
         "__exact_portable.mjs",
         "__exact_env.json",
         "__exact_paths.json",
@@ -1284,6 +1286,7 @@ fn bake_in(
     let mut receipt = serde_json::json!({
         "version": 1, "appId": app_id, "grants": grants, "abi": abi,
         "backendOrigin": backend["origin"],
+        "grantSources": launch::grant_sources(stage, &grants)?,
         // The prelude runtime it needs, which a push to an older binary checks (LLP 1016.000 D10).
         "typescriptRuntime": exact_bake::compat::typescript_runtime_of(&script, &grants),
         "typescriptHostWork": exact_bake::compat::typescript_host_work(&script),
@@ -1400,8 +1403,9 @@ import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
 const [tsc, root] = process.argv.slice(1);
 const {parseSync}=await import(createRequire(resolve(root, 'package.json')).resolve('rolldown/utils'));
+const {rolldown}=await import(createRequire(resolve(root, 'package.json')).resolve('rolldown'));
 const libraries = resolve(dirname(createRequire(resolve(root, 'package.json')).resolve(`@typescript/typescript-${process.platform}-${process.arch}/package.json`)), 'lib');
-try { configure(process.cwd(),false,parseSync); await prepareCanvas(process.cwd(), libraries); await check(process.cwd(), tsc, libraries); }
+try { await configure(process.cwd(),false,parseSync,false,rolldown); await prepareCanvas(process.cwd(), libraries); await check(process.cwd(), tsc, libraries); }
 catch (error) { process.stderr.write(String(error?.message ?? error)); process.exit(3); }
 "#;
 

@@ -5414,18 +5414,49 @@ cargo run -q -p exact-js-bake -- path/to/app --out path/to/new-generation
 
 The app exports `grants` and an `Answer`-typed `answer`, and may export `appId`,
 which must then be `app.json`'s `app.id` (the build supplies that id when it does
-not); `appId` and `grants` are constants the build reads from the source without
-running it (a
-string, a template or `+` of constants, an array of them `.join('\n')`, or a
-top-level `const` holding one). Numbers keep their type: `1 + 2` is `3`, while
-`'a' + 1 + 2` is `'a12'`. Conditional expressions are refused.
+not); `appId` and `grants` are constants the build reads from syntax without
+running the module: a string, a template or `+` of constants, an array of them
+`.join('\n')`, or a top-level `const` holding one. Numbers keep their type:
+`1 + 2` is `3`, while `'a' + 1 + 2` is `'a12'`. Conditional expressions are refused.
+
+Plain `grants` may also use constants imported from app-local modules, including
+local re-exports, arrays and spreads of those arrays:
+
+```ts
+import { SECRET_GRANTS } from './src/session';
+export const grants = ['net.fetch https://api.example.com', ...SECRET_GRANTS].join('\n');
+```
+
+The imported bindings follow the same literal grammar. Calls other than the
+array's `.join`, computed arrays, package bindings (including re-exports
+from packages), and dependencies on launch-marked settings are refused with a
+source location. Imports resolve through Rolldown, to the file the bundle runs.
+Re-exports follow ECMAScript export resolution: a loop through star exports
+keeps searching, ambiguous bindings are refused, and a star never exports
+`default`. A cycle through constant initializers is refused. `app.ts` declares
+the grants explicitly; importing a module adds no grants. The captured export
+becomes the resolved string, so mutating an imported array at run time cannot
+change it. The rewrite preserves initialization of imported and re-exported
+modules. The bake receipt's `grants` is the
+complete resolved list; `grantSources` lists each nonempty line with its `grant`,
+`file`, `line` and `column`. Locations name the source expression that starts the
+line; generated `env.launch` lines name their setting in `app.json`.
+
+When no setting is launch-marked, `app.ts` may also re-export literal grants
+from an app-local module, by name or through `export *`. The captured export
+becomes the same fixed string. Launch-marked settings require a grants
+declaration in `app.ts`, where the bake adds their `env.launch` lines.
 
 A backend override (`--backend`, `EXACT_BACKEND_ORIGIN` or `.exact/backend-origin`)
 needs one top-level `const origin`, set to a literal http(s) string or a setting
 such as `import.meta.env.API_BASE_URL ?? 'https://api.example'`, and used in
-`net.fetch ${origin}`. Settings are inlined before the override. An unannotated
-setting without an authored type assertion has type `string`, so comparisons
-such as `MODE === 'live'` type-check whatever value the build supplies. Binding
+`net.fetch ${origin}`. Settings are inlined before the override.
+Plain fetch and WebSocket grant lines at the original origin move with it,
+including imported constants; matching normalizes host case and default ports.
+Their receipt entries keep the authored source locations.
+
+An unannotated setting without an authored type assertion has type `string`, so
+comparisons such as `MODE === 'live'` type-check whatever value the build supplies. Binding
 annotations and surrounding assertions are preserved for inlined values. Native launch reads
 retain `as` and angle-bracket assertions, parenthesized around the whole read;
 `satisfies` and const assertions are removed because a launch can supply any
@@ -5443,8 +5474,11 @@ top-level literal `const origin`, after `EXACT_BACKEND_ORIGIN` or
 `.exact/backend-origin` overrides it, and refuses a missing entry, listing the
 origin and keys. Before type-checking, it replaces only the captured initializer
 with a string of the selected lines joined by `\n`, so web and native read the
-same grants. Authored source stays unchanged. Keyed grants move to another
-origin in a development build (`EXACT_UPDATE_TRUST` unset or `development`): an
+same grants. Aliased exports select the initializer exported as `grants`;
+private bindings of that name do not contribute grants or receipt locations.
+Receipt locations name each selected literal. Authored source
+stays unchanged. Keyed grants move to another origin in a development build
+(`EXACT_UPDATE_TRUST` unset or `development`): an
 unlisted loopback or private-network origin (RFC 1918 or link-local IPv4,
 `fc00::/7` or `fe80::/10` IPv6) takes a loopback entry (`127.0.0.1`, `localhost`
 or `[::1]`) of the same scheme. A matching port wins; otherwise exactly one
