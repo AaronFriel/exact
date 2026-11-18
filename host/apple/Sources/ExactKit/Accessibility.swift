@@ -429,8 +429,8 @@ final class FieldCell: NSTextFieldCell {
         if let field = numberField {
             switch attribute {
             case .role: return NSAccessibility.Role.incrementor.rawValue
-            case .minValue: return field.accessibilityMinValue()
-            case .maxValue: return field.accessibilityMaxValue()
+            case .minValue: return field.numberBounds?.min
+            case .maxValue: return field.numberBounds?.max
             default: break
             }
         }
@@ -441,8 +441,8 @@ final class FieldCell: NSTextFieldCell {
     }
     override func accessibilityPerformAction(_ action: NSAccessibility.Action) {
         if let field = numberField {
-            if action == .increment { _ = field.accessibilityPerformIncrement(); return }
-            if action == .decrement { _ = field.accessibilityPerformDecrement(); return }
+            if action == .increment { _ = field.numberOwner?.step(up: true); return }
+            if action == .decrement { _ = field.numberOwner?.step(up: false); return }
         }
         super.accessibilityPerformAction(action)
     }
