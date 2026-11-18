@@ -642,7 +642,7 @@ package final class Presenter {
         resetting = true // (from its first teardown: a view it removes may end an edit)
         defer { resetting = false }
         MainActor.assumeIsolated { HeldState.retire(self) } // before its views leave the map (HeldState.swift)
-        WakeLock.hold(self, false); releaseOrientationLock() // the new host's first batch says them again
+        WakeLockLink.hold?(self, false); releaseOrientationLock() // the new host's first batch says them again
         cancelPageElementScroll(viewport.contentView)
         resetFragments()
         focusEvents.reset(); TipLink.installed?.withdraw(owner: self)

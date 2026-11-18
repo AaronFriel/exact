@@ -846,9 +846,15 @@ package final class Runtime {
         on { read(exact_build_tabs(rt, write(panels.map(String.init).joined(separator: ",")), now)) }
     }
     /// A received share, `{"root", "target", "share", "inbox"?}` (LLP 1133.024 D2–D4).
-    package func share(_ json: String, now: Double) -> Batch { on { read(exact_share(rt, write(json), now)) } }
+    package func share(_ json: String, now: Double) -> Batch {
+        guard let share = CoreExports.share else { return Runtime.noShare }
+        return on { read(share(rt, write(json), now)) }
+    }
     /// The files of a share claimed before the boot, once storage is configured.
-    package func landShare() -> Batch { on { read(exact_share_land(rt)) } }
+    package func landShare() -> Batch {
+        guard let land = CoreExports.shareLand else { return Runtime.noShare }
+        return on { read(land(rt)) }
+    }
     /// A package's call of the app's handler (LLP 1133.016 D15 item 1),
     /// `{"extension", "handle", "handler", "args"}`: the runner's answer,
     /// JSON, goes to `reply(ctx, …)` once, now or when the handler's work lands.

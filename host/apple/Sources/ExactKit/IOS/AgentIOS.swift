@@ -459,7 +459,7 @@ extension Agent {
     /// sheet's swipe down. The system's button is no node, so no tap reaches it.
     func back() -> [String: Any] {
         #if os(iOS)
-        if ShareSheet.agentBack(in: session) || session.picker.agentBackDocument() { return backReply(("sheet", "")) }
+        if session.shareHost.agentBack(session) || session.picker.agentBackDocument() { return backReply(("sheet", "")) }
         #endif
         if let cancelled = presenter.menus.agentCancel() { return backReply(("dialog", cancelled ? "" : "the alert is still moving: `clock settle` first")) }
         if let refused = presenter.menus.sheets.agentCancel() { return backReply(("dialog", refused)) }

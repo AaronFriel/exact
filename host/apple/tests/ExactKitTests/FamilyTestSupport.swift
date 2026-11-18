@@ -39,3 +39,8 @@ extension ExactSession {
     /// The built-in web views (`MediaLink.makeWeb`'s default).
     var webHost: WebViews { webviews as! WebViews }
 }
+
+extension ExactSession {
+    /// The built-in pickers (`PickerLink.make`'s default).
+    var pickerHost: Picker { picker as! Picker }
+}

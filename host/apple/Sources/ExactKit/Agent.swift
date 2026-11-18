@@ -317,7 +317,7 @@ public final class Agent {
             session.picker.saveAnswered(answer, request: req)
             // An iframe guest's `open-file` and `save-file` are the arm's, not a document picker's (LLP 1020.002 §10).
             if !session.webviews.answered(answer, request: req) { session.picker.documentAnswered(answer, request: req) }
-            ShareSheet.answered(answer, in: session)
+            session.shareHost.answered(session, answer)
             listedAnswered(answer)
             emit(tagged(answer))
             return
@@ -413,7 +413,7 @@ public final class Agent {
             let r = completingInput(releaseCanvasKey(req) ?? type(req))
             session.canvases.settle(now: session.now())
             emit(tagged(r))
-        case "share": emit(tagged(completingInput(session.receiveShare(req)))) // the driver's `share:` form (LLP 1133.024 D9)
+        case "share": emit(tagged(completingInput(session.shareHost.receive(session, req)))) // the driver's `share:` form (LLP 1133.024 D9)
         case "reveal": emit(tagged(settling(reveal(req)))) // before a tap or a type: a target out of view, scrolled into it
         case "clock": let r = clock(req); session.tellAgentOffset(); emit(tagged(r))
         // A fetch fault (LLP 1103) is the runner's, below; the device facts are this host's.

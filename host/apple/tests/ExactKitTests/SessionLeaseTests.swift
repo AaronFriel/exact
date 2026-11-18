@@ -143,29 +143,29 @@ final class SessionLeaseTests: XCTestCase {
     /// has put its input at the old one's node id.
     func testAPickerShownBeforeAReloadAnswersNoInputAfterIt() throws {
         let session = try session(Self.picking)
-        let old = try XCTUnwrap(session.picker.request("attach"))
-        XCTAssertNil(session.picker.request("attach"), "open: a second showPicker does nothing")
+        let old = try XCTUnwrap(session.pickerHost.request("attach"))
+        XCTAssertNil(session.pickerHost.request("attach"), "open: a second showPicker does nothing")
         XCTAssertTrue(session.apply(try compile(Self.picking)))
-        let new = try XCTUnwrap(session.picker.request("attach"), "the replacement's input opens its own picker at once")
+        let new = try XCTUnwrap(session.pickerHost.request("attach"), "the replacement's input opens its own picker at once")
         XCTAssertEqual(new.view, old.view, "the replacement numbers its nodes afresh")
         let file = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString).txt")
         try Data("old".utf8).write(to: file)
         defer { try? FileManager.default.removeItem(at: file) }
-        session.picker.finish(old, files: [(file, "old.txt")])
-        session.picker.finish(old, files: [])
+        session.pickerHost.finish(old, files: [(file, "old.txt")])
+        session.pickerHost.finish(old, files: [])
         XCTAssertEqual(try slots(session)["picked"] as? String, "none", "the old pick changed the new input")
         XCTAssertEqual(try slots(session)["cancels"] as? Int, 0, "the old cancel reached the new input")
-        XCTAssertNil(session.picker.request("attach"), "the new input's picker is still open")
-        session.picker.finish(new, files: [])
+        XCTAssertNil(session.pickerHost.request("attach"), "the new input's picker is still open")
+        session.pickerHost.finish(new, files: [])
         XCTAssertEqual(try slots(session)["cancels"] as? Int, 1, "the current generation's cancel")
     }
 
     func testAPickerCannotAnswerAnotherSessionsInput() throws {
         let a = try session(Self.picking), b = try session(Self.picking)
-        let request = try XCTUnwrap(a.picker.request("attach"))
-        b.picker.finish(request, files: [])
+        let request = try XCTUnwrap(a.pickerHost.request("attach"))
+        b.pickerHost.finish(request, files: [])
         XCTAssertEqual(try slots(b)["cancels"] as? Int, 0)
-        a.picker.finish(request, files: [])
+        a.pickerHost.finish(request, files: [])
         XCTAssertEqual(try slots(a)["cancels"] as? Int, 1)
     }
 

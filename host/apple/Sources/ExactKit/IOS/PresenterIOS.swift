@@ -349,7 +349,7 @@ package final class Presenter {
         listRowDependencies = nil
         resetFragments()
         MainActor.assumeIsolated { HeldState.retire(self) } // before its views leave the map (HeldState.swift)
-        WakeLock.hold(self, false) // the new host's first batch says it again
+        WakeLockLink.hold?(self, false) // the new host's first batch says it again
         releaseOrientationLock()
         focusEvents.reset(); TipLink.installed?.withdraw(owner: self)
         // Every hatched node ends first, its view and platform object there.

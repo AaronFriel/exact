@@ -388,8 +388,9 @@ public final class ExactSession {
     package let canvases: Canvases
     let webviews: any WebHosting
     package let natives: any NativeModuleHosting = NativeModuleLink.make?() ?? NoNativeModule()
-    /// The file picker (LLP 1069.002).
-    lazy var picker = Picker(session: self)
+    /// The file and document pickers (LLP 1069.002, LLP 1069.010).
+    lazy var picker: any FilePicking = PickerLink.make?(self) ?? NoPicker(session: self)
+    var documentScopes: [URL] = [] // the documents this session minted, under their security scope until it ends (SessionDocuments.swift)
     /// The voice table's output (LLP 1096 D8); settable for tests.
     lazy var sound: any AudioOutputting = MediaLink.makeSound?(self) ?? NoAudioOutput()
     lazy var midi: any AudioOutputting = MediaLink.makeMIDI?(self) ?? NoAudioOutput()
@@ -532,7 +533,7 @@ public final class ExactSession {
     /// Live sessions by handle: what a wake looks up (a stranger's is dropped).
     nonisolated(unsafe) private static var live: [ExactRuntime: WeakSession] = [:]
     private var preferenceObservers: [NSObjectProtocol] = [], pageObservers: [NSObjectProtocol] = [], placeObservers: [(NotificationCenter, NSObjectProtocol)] = []
-    var leaveObserver: NSObjectProtocol?, shareInboxObserver: NSObjectProtocol?
+    var leaveObserver: NSObjectProtocol?; package var shareInboxObserver: NSObjectProtocol?
     #if os(macOS)
     private var colorObserver: NSObjectProtocol?
     #endif
@@ -876,7 +877,7 @@ public final class ExactSession {
         ApplyProfile.begin(); ExactLaunch.shared.bootEntered(self)
         openStartLocation()
         primePreferences()
-        primeTime(); claimColdShare()  // `prepare` primes again; the fallback boot reads this
+        primeTime(); shareHost.claimCold(self)  // `prepare` primes again; the fallback boot reads this
         if let bytes = app.lastPlan {
             // A selected launch can crash in runner/font/asset preparation.
             // Record the attempt first; an integrity refusal clears it below.
@@ -1271,13 +1272,13 @@ public final class ExactSession {
                 if ["navigate", "traverseHistory", "reload", "stopLoading", "captureScreenshot", "openDevTools"].contains(name) { app.deliver { [weak self] in self?.webviews.command(name, args) }; continue } // an iframe's, by id (LLP 1020.002 D3, D7, D11)
                 if name == "relaunch" || name == "setPageZoom" { app.deliver { [weak self] in if name == "relaunch" { self?.relaunch() } else { self?.setPageZoom(args) } }; continue } // `setPageZoom`: LLP 1021 §5.3.1 (ZoomMac.swift)
                 if name.hasPrefix("observe") { ExactEvents.hostCommand(name, args); continue }
-                if name == "startTrace_EXPERIMENTAL" || name == "stopTrace_EXPERIMENTAL" { app.deliver { [weak self] in self?.traceCommand(name, args) }; continue }
+                if name == "startTrace_EXPERIMENTAL" || name == "stopTrace_EXPERIMENTAL" { app.deliver { [weak self] in self?.trace(name, args) }; continue }
                 if name == "haptic" {
                     // @ref LLP 1077 D14 — feedback from app logic.
                     app.deliver { Haptics.play(args.first as? String ?? "") }
                     continue
                 }
-                if name == "share" { app.deliver { [weak self] in self?.share(args, source: source) }; continue }
+                if name == "share" { app.deliver { [weak self] in if let self { shareHost.share(self, args, source: source) } }; continue }
                 if name == "postMessage" {
                     let text = args.first as? String ?? "", surface = args.count > 1 ? args[1] as? String ?? "" : "", iframe = args.count > 2 && args[2] as? String == "iframe"
                     app.deliver { [weak self] in self?.post(text, to: surface, iframe: iframe) }
@@ -1320,7 +1321,7 @@ public final class ExactSession {
                     continue
                 }
                 if ["showOpenFilePicker", "showDirectoryPicker", "showSaveFilePicker", "requestPermission"].contains(name) {
-                    app.deliver { [weak self] in if name == "requestPermission" { self?.picker.permission(args) } else { self?.picker.document(name, args) } }
+                    app.deliver { [weak self] in if name == "requestPermission" { self?.requestPermission(args) } else { self?.picker.document(name, args) } }
                     continue
                 }
                 if name == "format" {

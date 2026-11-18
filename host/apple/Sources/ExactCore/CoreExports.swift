@@ -31,10 +31,20 @@ package enum CoreExports {
     /// The activity arm's snapshots and send completions; absent, no activity
     /// output exists to ask.
     package static var activities: ((ExactRuntime, Int) -> UInt32)? = exact_activities
+    /// A received share's claim, and its files' landing (LLP 1133.024);
+    /// absent, `Runtime.noShare`. Only the share family asks.
+    package static var share: ((ExactRuntime, Int, Double) -> UInt32)? = exact_share
+    package static var shareLand: ((ExactRuntime) -> UInt32)? = exact_share_land
 }
 
 extension Runtime {
     /// What a list's feedback answers when no list family is linked. Applied,
     /// it would clear running motion and timers, so the session does not ask.
     static let noFeedback = Batch(ops: [], timers: false, motion: false, clock: nil, error: nil)
+}
+
+extension Runtime {
+    /// What a share's claim answers when no share family is linked: nothing
+    /// delivered, and why.
+    static let noShare = Batch(ops: [], timers: false, motion: false, clock: nil, error: "share: this build links no share target")
 }

@@ -157,7 +157,7 @@ extension ExactSession {
         let applying = CACurrentMediaTime()
         apply(batch)
         ExactLaunch.shared.dataApplied(self, CACurrentMediaTime() - applying)
-        landColdShare() // a share claimed before the boot lands in the storage just configured
+        shareHost.land(self) // a share claimed before the boot lands in the storage just configured
         observeLeaving()
         dataGeneration = drawnGeneration
         ExactLaunch.shared.activated(self, ok: batch.error == nil)

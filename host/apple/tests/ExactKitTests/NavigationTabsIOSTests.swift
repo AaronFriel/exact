@@ -1356,7 +1356,7 @@ final class NavigationTabsIOSTests: XCTestCase {
         until("the app's container holds the tabs") { navigation.tabController == nil && navigation.tabOwner != nil }
         try tapNode(session, "detail")
         until("Detail is shown") { navigation.primaryNavigation?.viewControllers.count == 2 }
-        let (anchor, rect) = session.presenter.shareAnchor(nil)
+        let (anchor, rect) = session.presenter.presentationAnchor(nil)
         let sheet = try XCTUnwrap(ShareSheet.present(["Workout"], title: "Workout", from: XCTUnwrap(anchor), at: rect, outcome: { _ in }) as? UIActivityViewController)
         defer { sheet.dismiss(animated: false) }
         until("the share sheet is presented over the app's tabs") { sheet.presentingViewController != nil && sheet.viewIfLoaded?.window != nil }
