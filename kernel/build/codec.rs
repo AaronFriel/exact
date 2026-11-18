@@ -15,15 +15,17 @@ const SCHEMA_PATH: &str = "tables/schema.json";
 const DIGEST_DOMAIN: &[u8] = b"exact-kernel-schema-v1\0";
 
 /// The codecs whose text an artifact parses only through a grammar it links
-/// by use (`style::effects`, `exact_motion::link_animations`), and the
-/// capability that links each: a row with one of them names it, so a plan
-/// that writes the row, constant, bound or computed, selects the grammar,
-/// and an artifact that links it by use and lacks it refuses the plan by
-/// that name. (Apple links `clip-path`'s always.)
+/// by use (`style::effects`, `style::grid`, `exact_motion::link_animations`),
+/// and the capability that links each: a row with one of them names it, so a
+/// plan that writes the row, constant, bound or computed, selects the
+/// grammar, and an artifact that links it by use and lacks it refuses the
+/// plan by that name. (Apple links `clip-path`'s always.)
 const LINKED_CODECS: &[(&str, &str)] = &[
     ("animations", "animations"),
     ("filter", "effects"),
     ("clip-path", "effects"),
+    ("tracks", "grid"),
+    ("placement", "grid"),
 ];
 
 fn emit_style_capabilities(w: &mut String, schema: &Schema) {

@@ -54,6 +54,13 @@ pub struct Grammars {
     clip_path_grammar: Option<fn()>,
 }
 
+/// The grid rows' grammars and the algorithm, which Apple links together
+/// (D10).
+fn link_grid() {
+    exact_kernel::style::link_grid();
+    exact_kernel::layout::link_grid_layout();
+}
+
 impl Grammars {
     /// Every grammar.
     pub const ALL: Grammars = Grammars::of(ALL);
@@ -80,7 +87,7 @@ impl Grammars {
             },
             wide_colors: Some(exact_kernel::style::link_wide_colors),
             grid: if uses.has(Capability::Grid) {
-                Some(exact_kernel::layout::link_grid_layout)
+                Some(link_grid)
             } else {
                 None
             },
@@ -643,6 +650,10 @@ mod tests {
         let exiting = compile("text \"a\" -exact-exit-animation=\"none\"", "on = false");
         let flying = compile("column sharedElement=\"hero\"", "on = false");
         let stuck = compile("column position=\"sticky\" top=0", "on = false");
+        let placed = compile(
+            "box grid-column=(on ? \"1 / span 2\" : \"auto\")",
+            "on = false",
+        );
         for (plan, name) in [
             (&tools, "tools"),
             (&view, "modules, native_views"),
@@ -656,6 +667,7 @@ mod tests {
             (&exiting, "animations"),
             (&flying, "transitions, flights"),
             (&stuck, "sticky"),
+            (&placed, "grid"),
         ] {
             assert_eq!(missing(plan, Uses::NONE).as_deref(), Some(name));
             assert_eq!(missing(plan, ALL), None);

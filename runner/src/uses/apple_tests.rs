@@ -25,8 +25,9 @@ fn built(add: impl FnOnce(&mut PlanBuilder)) -> exact_plan::Plan {
     b.finish().unwrap()
 }
 
-/// D10: Apple's `grid` covers every plan whose layout reaches the grid
-/// algorithm; elsewhere it stays the grammars a grid row needs.
+/// D10: Apple's `grid` covers every plan that writes a grid row or whose
+/// layout reaches the grid algorithm; elsewhere it stays the grammars a grid
+/// row needs.
 #[test]
 fn apple_links_grid_layout_for_every_plan_that_lays_out_a_grid() {
     let column = |attrs: &str| format!("column {attrs}\n      text \"a\"");
@@ -42,8 +43,8 @@ fn apple_links_grid_layout_for_every_plan_that_lays_out_a_grid() {
         (column("display=\"grid\""), true, false),
         ("text \"a\" display=\"grid\"".to_string(), true, false),
         (grid_rows, true, true),
-        // A grid row on a box that is no grid reaches no grid layout.
-        (flex_rows, false, true),
+        // A grid row on a box that is no grid parses by grid's grammar.
+        (flex_rows, true, true),
         (table(""), true, false),
         // A table that is a block holds an anonymous table, a grid too.
         (table(" display=\"block\""), true, false),

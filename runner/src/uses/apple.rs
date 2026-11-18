@@ -14,15 +14,14 @@ use exact_kernel::{NodeType, PropId, StyleId};
 use exact_plan::{BindingKind, BindingsRow, Plan};
 
 /// What `plan` uses on Apple: [`uses`], with [`Capability::Grid`] the grid
-/// algorithm, which Apple links by use, for a plan whose layout can reach it
-/// ([`lays_out_grid`]), [`Capability::Effects`] a box's `filter` or what
-/// SVG uses, and the native roster's entries. A native host
-/// parses the grid rows whatever it links, so a grid row alone does not need
-/// the algorithm. The browser lays out a grid itself, and the other native
-/// hosts link the algorithm whole, so for them the capability is the rows'
-/// grammars.
+/// rows' grammars and the grid algorithm together, which a grid row or a
+/// layout that can reach the algorithm ([`lays_out_grid`]) selects,
+/// [`Capability::Effects`] a box's `filter` or what SVG uses, and the
+/// native roster's entries. The browser lays out a grid itself, and the
+/// other native hosts link the algorithm whole, so for them the capability
+/// is the rows' grammars.
 pub fn apple_uses(plan: &Plan) -> Uses {
-    let mut uses = uses(plan).beyond(Uses::NONE.with(Capability::Grid).with(Capability::Effects));
+    let mut uses = uses(plan).beyond(Uses::NONE.with(Capability::Effects));
     let mut add = |capability, used: bool| {
         if used {
             uses = uses.with(capability);

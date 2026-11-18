@@ -232,6 +232,7 @@ fn layout_rows_keep_their_css() {
 
 #[test]
 fn every_grid_row_has_css_and_none_is_skipped() {
+    exact_kernel::style::link_all();
     fn t(s: &str) -> StyleValue<'_> {
         StyleValue::Text(s.into())
     }

@@ -3341,6 +3341,7 @@
     {
       "bit": 36,
       "field": "grid_auto_flow",
+      "capability": "grid",
       "snapshot": "admit",
       "watch": "admit",
       "terminal": "admit",
@@ -3350,6 +3351,7 @@
     {
       "bit": 37,
       "field": "grid_template_columns",
+      "capability": "grid",
       "snapshot": "admit",
       "watch": "admit",
       "rare": true,
@@ -3360,6 +3362,7 @@
     {
       "bit": 38,
       "field": "grid_template_rows",
+      "capability": "grid",
       "snapshot": "admit",
       "watch": "admit",
       "rare": true,
@@ -3370,6 +3373,7 @@
     {
       "bit": 39,
       "field": "grid_column",
+      "capability": "grid",
       "snapshot": "admit",
       "watch": "admit",
       "rare": true,
@@ -3380,6 +3384,7 @@
     {
       "bit": 40,
       "field": "grid_row",
+      "capability": "grid",
       "snapshot": "admit",
       "watch": "admit",
       "rare": true,
@@ -3390,6 +3395,7 @@
     {
       "bit": 41,
       "field": "justify_items",
+      "capability": "grid",
       "snapshot": "admit",
       "watch": "admit",
       "terminal": "admit",

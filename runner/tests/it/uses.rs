@@ -256,20 +256,26 @@ fn visual_grammars_follow_literal_class_and_computed_rows() {
 fn linked_grammars_follow_literal_class_and_computed_rows() {
     // A native artifact parses these rows only through the grammar it links by
     // use, so the row selects it however its value is written (LLP 1047 D2).
-    for (row, value, capability) in [
-        ("animation", "none", "animations"),
-        ("-exact-exit-animation", "none", "animations"),
-        ("filter", "blur(2px)", "effects"),
-        ("clip-path", "inset(2px)", "effects"),
+    for (row, value, alternative, capability) in [
+        ("animation", "none", "none 1s", "animations"),
+        ("-exact-exit-animation", "none", "none 1s", "animations"),
+        ("filter", "blur(2px)", "none", "effects"),
+        ("clip-path", "inset(2px)", "none", "effects"),
+        ("grid-template-columns", "1fr 2fr", "auto", "grid"),
+        ("grid-template-rows", "auto 40px", "25%", "grid"),
+        ("grid-column", "1 / span 2", "auto", "grid"),
+        ("grid-row", "rail / 2", "span 2", "grid"),
+        ("grid-auto-flow", "column dense", "row", "grid"),
+        ("justify-items", "safe center", "stretch", "grid"),
     ] {
         for source in [
-            format!("component A\n  view\n    text \"a\" {row}=\"{value}\"\n"),
+            format!("component A\n  view\n    box {row}=\"{value}\"\n"),
             format!("style S\n  {row}=\"{value}\"\ncomponent A\n  view\n    text \"a\" class=S\n"),
             format!(
-                "component A\n  state paint = \"{value}\"\n  view\n    text \"a\" {row}=paint\n"
+                "component A\n  state paint = \"{value}\"\n  view\n    box {row}=paint\n"
             ),
             format!(
-                "component A\n  state on = true\n  view\n    text \"a\" {row}=(on ? \"{value}\" : \"none\")\n"
+                "component A\n  state on = true\n  view\n    box {row}=(on ? \"{value}\" : \"{alternative}\")\n"
             ),
         ] {
             assert!(
@@ -291,6 +297,7 @@ fn every_row_a_linked_grammar_parses_names_its_capability() {
         let wanted = match style.codec() {
             StyleCodec::Animations => Some("animations"),
             StyleCodec::Filter | StyleCodec::ClipPath => Some("effects"),
+            StyleCodec::Tracks | StyleCodec::Placement => Some("grid"),
             _ => None,
         };
         if let Some(wanted) = wanted {
@@ -360,26 +367,6 @@ fn data_words_and_tabs_are_linked_by_use() {
         "component A\n  view\n    column\n      row role=\"tablist\"\n        button role=\"tab\" aria-controls=\"one\"\n          text \"One\"\n      column role=\"tabpanel\" id=\"one\"\n",
     );
     assert_eq!(tabs.to_string(), "tabs");
-}
-
-#[test]
-fn grid_grammars_are_linked_by_any_grid_row() {
-    assert!(!used("component A\n  view\n    box display=\"grid\"\n").has(Capability::Grid));
-    for (row, value, alternative) in [
-        ("grid-template-columns", "1fr 2fr", "auto"),
-        ("grid-template-rows", "auto 40px", "25%"),
-        ("grid-column", "1 / span 2", "auto"),
-        ("grid-row", "rail / 2", "span 2"),
-        ("grid-auto-flow", "column dense", "row"),
-        ("justify-items", "safe center", "stretch"),
-    ] {
-        let literal = used(&format!("component A\n  view\n    box {row}=\"{value}\"\n"));
-        assert!(literal.has(Capability::Grid), "literal {row}");
-        let dynamic = used(&format!(
-            "component A\n  state on = true\n  view\n    box {row}=(on ? \"{value}\" : \"{alternative}\")\n"
-        ));
-        assert!(dynamic.has(Capability::Grid), "dynamic {row}");
-    }
 }
 
 #[test]

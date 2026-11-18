@@ -1170,6 +1170,7 @@ mod tests {
 
     #[test]
     fn css_percentages_accept_browser_exponents() {
+        exact_kernel::style::link_grid();
         let mut style = StyleProps::default();
         set_style(
             &mut style,

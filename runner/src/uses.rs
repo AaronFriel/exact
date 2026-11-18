@@ -74,9 +74,9 @@ pub enum Capability {
     /// `background-image` or `mask-image`.
     Gradients,
     /// CSS grid's track, placement and keyword grammars, for a plan that
-    /// binds any of the six grid rows. On Apple, which parses them always and
-    /// links layout by use, the grid algorithm instead, for a plan whose
-    /// layout can reach it ([`apple_uses`]).
+    /// binds any of the six grid rows. On Apple, the grammars and the grid
+    /// algorithm together, for a plan that binds one or whose layout can
+    /// reach the algorithm ([`apple_uses`]).
     Grid,
     /// `frame` and `measure` (LLP 1051.000): a plan whose actions read
     /// geometry. Native hosts answer from the kernel; the web links a
@@ -521,19 +521,6 @@ pub fn uses(plan: &Plan) -> Uses {
                 }
                 if StyleId::from_bit(u32::from(binding.id)) == Some(StyleId::ContentTransition) {
                     uses = uses.with(Capability::Numerals);
-                }
-                if matches!(
-                    StyleId::from_bit(u32::from(binding.id)),
-                    Some(
-                        StyleId::GridTemplateColumns
-                            | StyleId::GridTemplateRows
-                            | StyleId::GridColumn
-                            | StyleId::GridRow
-                            | StyleId::GridAutoFlow
-                            | StyleId::JustifyItems
-                    )
-                ) {
-                    uses = uses.with(Capability::Grid);
                 }
                 if StyleId::from_bit(u32::from(binding.id)) == Some(StyleId::Transition)
                     && can_be(&binding, &|v| v.contains("spring"))
