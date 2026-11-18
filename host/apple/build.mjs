@@ -41,7 +41,7 @@ import { writeAppleBatchReader } from '../../kernel/build/apple-batch.mjs';
 // These developer builds explicitly allow unsigned updates. --release, --distribution, --archive (or EXACT_UPDATE_TRUST=production) build a signed-update-only artifact.
 import { platformWidgetEntries, widgetEntityKeys, activityEntries, hasEntries, widgetGroup, prepareWidgetCore, sharedWidgetCore, placeCoreFramework, dropLeftoverCore, entryProfiles, alarmActivity } from './widgets.mjs';
 import { assembleMac, assembleIOS, buildIntents, shortcutKeys, placeMacDylibs } from './bundle.mjs';
-import { EXTENSION_KINDS, assertNotificationServiceGrants, extensionKinds, notificationService, notificationServiceDirectory, notificationServicePlatformRefusal, withoutExtensions } from './extensions.mjs';
+import { EXTENSION_KINDS, assertNotificationServiceGrants, extensionKinds, notificationService, notificationServiceDirectory, notificationServicePlatformRefusal, staleModuleCache, withoutExtensions } from './extensions.mjs';
 import { buildWatch, watchCompanion, watchProfiles, watchSyncSelected } from './watch.mjs';
 import { spawn, spawnSync } from './toolchain.mjs';
 import { metalRequired, metalToolchainInstructions } from './metal.mjs';
@@ -94,9 +94,11 @@ const stdRefusal = (flag, target) => read('rustup', ['target', 'list', '--instal
 const hasStd = (flag, target) => { const refusal = stdRefusal(flag, target); if (refusal) { console.error(refusal); process.exitCode = 1; } return !refusal; };
 // Fail on deployment-target and sysroot warnings because Apple tools can still link incompatible inputs
 // @ref LLP 1008
-export const runApple = (cmd, args, opts = {}) => {
+export const runApple = (cmd, args, opts = {}, again = false) => {
   const { cargoMessages = false, read = false, ...spawnOptions } = opts;
   const r = spawnSync(...appleCargo(cmd, args, { cwd: root, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024, ...spawnOptions }));
+  const stale = !again && r.status !== 0 && staleModuleCache(args, `${r.stdout ?? ''}\n${r.stderr ?? ''}`); // a copied or moved folder's cache: once more without it
+  if (stale) { rmSync(stale, { recursive: true, force: true }); console.error(`host/apple: ${stale} was compiled at another path: removed, compiling again`); return runApple(cmd, args, opts, true); }
   if (!cargoMessages && !read) process.stdout.write(quiet(r.stdout ?? ''));
   process.stderr.write(quiet(r.stderr ?? ''));
   if (r.status !== 0) throw new Error(`${cmd} failed (${r.status ?? r.error?.message})`);
@@ -136,7 +138,8 @@ function startApple(cmd, args, log, { authored, ...opts } = {}) {
     if (repeated && r.status !== 0) return false;
     const output = readFileSync(log, 'utf8');
     process.stderr.write(quiet(output));
-    if (r.status !== 0) throw new Error(`${cmd} failed (${r.status ?? r.error?.message})`);
+    const stale = r.status !== 0 && staleModuleCache(args, output); if (stale) rmSync(stale, { recursive: true, force: true });
+    if (r.status !== 0) throw new Error(`${cmd} failed (${r.status ?? r.error?.message})${stale ? `: ${stale} was compiled at another path and is removed; run the build again` : ''}`);
     refuseMixedTargets(cmd, args, output);
     return true;
   } };
