@@ -51,8 +51,8 @@ function fetchInCall(input, options) {
   if (idle !== undefined) {
     if (!Number.isInteger(idle) || idle < 1 || idle > 3600000) return Promise.reject(new TypeError('exactIdleTimeout must be an integer number of milliseconds from 1 to 3600000'));
     let url; try { url = input instanceof Request ? input.url : String(input); } catch (e) { return Promise.reject(e); }
-    if (options.exactStream === undefined || options.exactUploadProgress === true || options.exactLongPoll !== undefined || !/^wss?:/i.test(url))
-      return Promise.reject(new TypeError('exactIdleTimeout: only a WebSocket stream takes an idle timeout'));
+    if (options.exactStream === undefined || options.exactUploadProgress === true || options.exactLongPoll !== undefined || !(/^(wss?|https?):/i.test(url) || !/^[a-z][a-z0-9+.-]*:/i.test(url)))
+      return Promise.reject(new TypeError('exactIdleTimeout: only a WebSocket, event or byte stream takes an idle timeout'));
   }
   let protocols;
   try {

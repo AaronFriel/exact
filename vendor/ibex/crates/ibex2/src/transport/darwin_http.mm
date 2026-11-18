@@ -113,6 +113,9 @@ void ibex2_darwin_body_free(void *file);
 // attempt going out, stopped before the next one's starts (Exact patch 46).
 @property(nonatomic, assign) void *bodyFile;
 @property(nonatomic, strong) Ibex2FilePump *bodyPump;
+// Read for as long as its caller holds it, on a session with no whole-exchange
+// limit (Exact patch 48).
+@property(nonatomic, assign) BOOL openEnded;
 @end
 
 @implementation Ibex2Exchange
@@ -150,6 +153,11 @@ void ibex2_darwin_body_free(void *file);
 // The bound pair's buffer and the copy's: what an attempt holds beside the
 // Rust reader's two chunks.
 static const NSUInteger Ibex2PumpBytes = 64 << 10;
+
+// A limit no exchange reaches, about 32 years, for one that is to have none
+// (Exact patch 48). It stays finite: Foundation keeps these intervals as
+// doubles and converts them to timers.
+static const NSTimeInterval Ibex2Unbounded = 1e9;
 
 @implementation Ibex2FilePump {
   std::atomic<bool> _stopped;
@@ -369,7 +377,7 @@ extern "C" {
 /// Serial delegate queues preserve per-task callback order while the four
 /// leases bound native callback concurrency and application handoff buffers.
 /// @ref LLP 0057#3-the-boundary — pooling is the platform's job
-static NSURLSession *new_session(void) {
+static NSURLSession *new_session(BOOL open_ended) {
   @autoreleasepool {
     NSURLSessionConfiguration *config =
         [NSURLSessionConfiguration ephemeralSessionConfiguration];
@@ -399,6 +407,12 @@ static NSURLSession *new_session(void) {
     config.URLCache = nil;
     config.requestCachePolicy = NSURLRequestReloadIgnoringLocalCacheData;
 
+    // An open-ended stream lasts as long as its caller holds it, so its
+    // session has no whole-exchange limit (Exact patch 48). The limit is a
+    // session's, not a task's: every other request goes on a session that
+    // keeps URLSession's seven days.
+    if (open_ended) config.timeoutIntervalForResource = Ibex2Unbounded;
+
     // One serial delegate per session; leases never overlap on a session.
     Ibex2NoRedirect *delegate = [[Ibex2NoRedirect alloc] init];
     NSURLSession *session = [NSURLSession sessionWithConfiguration:config
@@ -426,7 +440,7 @@ void ibex2_darwin_session_has_state(void *handle, int *out_cookies,
     return;
   }
   @autoreleasepool {
-    NSURLSession *session = new_session();
+    NSURLSession *session = new_session(NO);
     NSURLSessionConfiguration *config = session.configuration;
     [session finishTasksAndInvalidate];
     *out_cookies = (config.HTTPCookieStorage != nil ||
@@ -456,7 +470,8 @@ void ibex2_darwin_session_destroy(void *handle) {
 void *ibex2_darwin_http_start(void *session_handle, const char *method,
     const char *url, const char *header_block, const unsigned char *body,
     size_t body_len, void *body_file, unsigned long long body_file_len,
-    size_t max_body, double timeout_seconds, int speculative, char **out_error) {
+    size_t max_body, double timeout_seconds, int open_ended, int speculative,
+    char **out_error) {
   @autoreleasepool {
     *out_error = nullptr;
     NSURL *nsurl = [NSURL URLWithString:[NSString stringWithUTF8String:url]];
@@ -482,13 +497,21 @@ void *ibex2_darwin_http_start(void *session_handle, const char *method,
     if (body_file != nullptr)
       [request setValue:[NSString stringWithFormat:@"%llu", body_file_len]
           forHTTPHeaderField:@"Content-Length"];
+    // An open-ended request (an event stream, a byte stream) is read for as
+    // long as its caller holds it, and `timeoutInterval` ends a task after
+    // that long without data, so it is lifted (Exact patch 48). Its wait for
+    // the head goes with it: URLSession holds a response back until its first
+    // body bytes or its end (content sniffing), so a stream whose server
+    // answers and then waits shows no head until it sends.
     if (timeout_seconds > 0) request.timeoutInterval = timeout_seconds;
+    else if (open_ended) request.timeoutInterval = Ibex2Unbounded;
     // Low Data Mode refuses a request nobody has asked for yet (Exact patch 37).
     if (speculative) request.allowsConstrainedNetworkAccess = NO;
     Ibex2Exchange *exchange = [[Ibex2Exchange alloc] initWithLimit:max_body];
     exchange.pool = pool;
     exchange.request = request;
     exchange.bodyFile = body_file;
+    exchange.openEnded = open_ended != 0;
     // Rust installs cancellation before resume, including an already aborted signal.
     return (__bridge_retained void *)exchange;
   }
@@ -514,13 +537,23 @@ int ibex2_darwin_http_headers(void *handle, int *out_status,
       if (aborted) break;
       Ibex2SessionPool *pool = exchange.pool;
       [pool.condition lock];
-      if (pool.idle.count != 0) {
-        session = pool.idle.lastObject;
-        [pool.idle removeLastObject];
-      } else if (pool.count < 4) {
-        pool.count++;
+      // An idle session of the exchange's kind (Exact patch 48); at the four,
+      // one of the other kind gives up its place.
+      BOOL open = exchange.openEnded;
+      NSUInteger kind = [pool.idle indexOfObjectPassingTest:^BOOL(NSURLSession *idle, NSUInteger, BOOL *) {
+        return (idle.configuration.timeoutIntervalForResource >= Ibex2Unbounded) == open;
+      }];
+      if (kind != NSNotFound) {
+        session = pool.idle[kind];
+        [pool.idle removeObjectAtIndex:kind];
+      } else if (pool.count < 4 || pool.idle.count != 0) {
+        if (pool.count < 4) pool.count++;
+        else {
+          [pool.idle.lastObject finishTasksAndInvalidate];
+          [pool.idle removeLastObject];
+        }
         [pool.condition unlock];
-        session = new_session();
+        session = new_session(open);
         continue;
       } else {
         // Timed wait also closes the check/wait race with cancellation.

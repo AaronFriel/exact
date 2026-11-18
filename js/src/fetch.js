@@ -287,11 +287,11 @@
         return optionRefused(new TypeError("exactTimeout must be an integer number of milliseconds from 1 to 3600000"));
       if (timeout !== undefined && stream && !upload)
         return optionRefused(new TypeError("exactTimeout: a stream has no timeout"));
-      // A quiet WebSocket ends as a Timeout (LLP 1016.000 D11).
+      // A quiet WebSocket, event or byte stream ends as a Timeout (LLP 1016.000 D11).
       var idle = init ? init.exactIdleTimeout : undefined,
         idleWhy = idleRefusal(
           idle,
-          !!stream && !upload && !listen && !own && init.exactLongPoll === undefined && /^wss?:/i.test(url)
+          !!stream && !upload && !listen && !own && init.exactLongPoll === undefined && (/^(wss?|https?):/i.test(url) || !/^[a-z][a-z0-9+.-]*:/i.test(url))
         );
       if (idleWhy) return optionRefused(new TypeError(idleWhy));
       // `exactHeld`: the server may hold the reply, and no clock waits on it (LLP 1016.000 D9); `exactLongPoll` (D8):

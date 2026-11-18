@@ -2845,22 +2845,30 @@ exchange, headers and body: `fetch(url, { exactTimeout: 10000 })`. When it
 passes the request is cancelled and the fetch rejects with a `FetchError`
 whose `kind` is `Timeout` (`the request timed out after 10000 ms`). The same
 holds on Apple, Linux, the web's wasm host and the web build; a stream
-(`exactStream`) takes none, except an upload (below).
+(`exactStream`) takes none, except an upload (below). Any other stream stays
+open as long as the server holds it, however quiet it is, as in a browser: no
+limit of the platform's ends it once it is open. Natively a WebSocket has
+about 10 s to connect and 15 s for its handshake, and so has an HTTP stream
+for its connection and its response's head off Apple.
 
-A WebSocket stream can stay open and carry nothing. Give it
-`exactIdleTimeout`, in milliseconds (1 to 3600000), and the host ends it
-when nothing has arrived for that long: `fetch('wss://…', { exactStream,
-exactIdleTimeout: 60000 })` (LLP 1016.000 D11). The count starts when the
-socket is asked, and starts again at its opening and at each message;
-protocol pings and pongs do not count, and nothing the app sends does. The
+So a stream can stay open and carry nothing. Give it `exactIdleTimeout`, in
+milliseconds (1 to 3600000), and the host ends it when nothing has arrived
+for that long: `fetch('wss://…', { exactStream, exactIdleTimeout: 60000 })`
+(LLP 1016.000 D11). The count starts when the stream is asked. On a
+WebSocket it starts again at the opening and at each message; protocol
+pings and pongs do not count. On an event stream or a byte stream it starts
+again at any bytes of the body, an event stream's comment lines included
+(the `: keep-alive` a server sends every 15 s to hold a quiet stream open),
+but not at the response's head; a byte stream waiting for its mapper to take
+what it holds is not counted as quiet. Nothing the app sends counts. The
 mapper is then called once more, with `{ type: 'error', kind: 'Timeout',
 message: 'nothing arrived for 60000 ms' }`, after what it had already
 received (each message, in order), and the stream is over; the app opens it again by refreshing the
 resource. The time is real time on every host, under the driver too, so
-`clock +60000` ends no socket: test it with a short timeout against a peer
-that stays silent, and wait with `clock until state …`. Only a WebSocket
-stream takes it: on an event stream, a byte stream, a long poll or an upload
-it is a `TypeError`, and the web's wasm host and a Rust module across the
+`clock +60000` ends no stream: test it with a short timeout against a peer
+that stays silent, and wait with `clock until state …`. A long poll and an
+upload do not take it, nor does a URL of another scheme: it is a
+`TypeError` there, and the web's wasm host and a Rust module across the
 logic ABI refuse a request that has it, by name.
 
 A stream's request is never sent at build, so an option the host refuses on one

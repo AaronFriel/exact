@@ -42,7 +42,7 @@ function request(input, init, redirect, protocols) {
   // Read again as the stream opens: what `fetch` checked may have changed since (LLP 1016.000 D11).
   const idle = init.exactIdleTimeout;
   if (idle !== undefined && (!Number.isInteger(idle) || idle < 1 || idle > 3600000)) throw new TypeError('exactIdleTimeout must be an integer number of milliseconds from 1 to 3600000');
-  if (idle !== undefined && (upload || init.exactLongPoll !== undefined || !/^wss?:/i.test(url))) throw new TypeError('exactIdleTimeout: only a WebSocket stream takes an idle timeout');
+  if (idle !== undefined && (upload || init.exactLongPoll !== undefined || !(/^(wss?|https?):/i.test(url) || !/^[a-z][a-z0-9+.-]*:/i.test(url)))) throw new TypeError('exactIdleTimeout: only a WebSocket, event or byte stream takes an idle timeout');
   return { method, url, signal, headers: [...new Headers(init.headers ?? request?.headers ?? [])], raw, bodyFrom, cache: init.cache ?? request?.cache, mode: init.mode ?? request?.mode, redirect, maxResponseBytes: independent ?? 1048576, longPoll: longPollOf(init.exactLongPoll, method, url), upload, timeoutMs, idleTimeoutMs: idle, protocols };
 }
 // `exactUploadProgress` (LLP 1016.000 D10), as js/src/binary.js `uploadOf` checks it.

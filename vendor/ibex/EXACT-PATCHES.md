@@ -55,18 +55,6 @@ the distrusted emSign intermediate keys (RUSTSEC-2026-0382). Exact's
 `transport/testdata/distrusted/`, checks both against either kind of store;
 replay it on a refresh unless upstream carries the same check.
 
-## Portable event-stream timeouts
-
-`transport/rustls_http.rs` removes implicit read deadlines after a successful
-`text/event-stream` response identifies an event stream without an explicit
-request timeout. Connection and header limits and explicit timeouts still apply.
-Cancellation interrupts blocked reads; ordinary requests keep their limits.
-The last `Content-Type` controls classification when it is repeated.
-`transport/rustls_timeout_tests.rs` probes both default deadlines and expired
-deadlines, explicit-timeout policy and agent reuse. `transport/stream_tests.rs`
-exercises later events, explicit timeout expiry, cancellation and release
-against loopback peers.
-
 ## Repeated portable HTTP response fields
 
 `transport/rustls_http.rs` combines repeated `Cache-Control` and `Vary` fields
@@ -1161,3 +1149,39 @@ The rustls transport builds ureq with `gzip` and `brotli`: a request names
 send a stored coding unasked: Cloud Storage serves a `br` object to a request that
 names only `identity`. Without the features Android, Linux and Windows handed the
 coded bytes to `text()`. Replay on a refresh.
+
+## Local patch 48, an open-ended response
+
+`Request::open_ended` marks a response its caller reads for as long as it
+holds it: exact2's event streams and byte streams (LLP 1016.000). Without an
+explicit `timeout`, no limit of the transport's own ends it, on the whole
+exchange or on a quiet body, whatever its status. An explicit timeout keeps
+its meaning, and ordinary requests keep their limits.
+
+The portable transport (`transport/rustls_http.rs`) keeps its limits on
+connecting (10 s) and on the head (15 s), and lifts every read deadline ureq
+would apply to the body (its 30 s global and 15 s body limits) once the head
+arrives, for an `open_ended` request and for a successful response whose
+last `Content-Type` is `text/event-stream`. Cancellation still interrupts a
+blocked read, and a pooled agent restores its deadlines when it is leased
+again. `transport/rustls_timeout_tests.rs` probes the deadlines passed to the
+wire, default and expired, and agent reuse; `transport/stream_tests.rs`
+exercises later events, explicit timeout expiry, cancellation and release
+against loopback peers.
+
+Darwin (`transport/darwin_http.mm`) sets an open-ended request's
+`timeoutInterval`, which ends a task after that long without data (60 s by
+default), to a limit nothing reaches (`Ibex2Unbounded`). The head goes
+without a limit too: URLSession calls `didReceiveResponse` only with the
+first body bytes or the body's end (content sniffing; measured for
+`text/event-stream`, `application/octet-stream` and `text/plain`), so a
+server that answers and then waits shows no head until it sends. Its
+session's `timeoutIntervalForResource` (seven days by default) is the same
+unreached limit; that limit is a session's, so the pool leases an open-ended
+exchange only a session of its kind and every other request one that keeps
+the seven days, and at its four sessions an idle one of the other kind gives
+up its place.
+
+exact2's `host/executor/src/stream_quiet_tests.rs` holds an event stream and
+a byte stream quiet past each transport's limits against a loopback peer, on
+rustls and on URLSession. Replay on a refresh.

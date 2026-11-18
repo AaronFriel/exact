@@ -1104,7 +1104,7 @@ fn a_bundle_needs_the_runtime_of_the_newest_option_it_names() {
     assert_eq!(needs(b"fetch(u, {cache: 'no-store'})"), 11);
     assert_eq!(
         needs(b"fetch(u, {cache: 'default', exactIdleTimeout: n})"),
-        11
+        15
     );
     assert_eq!(needs(b"fetch(u, {exactBodyFrom: p})"), 1);
     assert_eq!(needs(b"fetch(u, {exactBodyTo: p, exactBodyFrom: q})"), 4);
@@ -1132,7 +1132,7 @@ fn a_bundle_needs_the_runtime_of_the_newest_option_it_names() {
     // LLP 1016.000 D11's idle timeout.
     assert_eq!(
         needs(b"fetch(u, {exactStream: m, exactIdleTimeout: 6e4})"),
-        9
+        15
     );
     assert_eq!(
         needs(b"fetch(u, {exactStream: m, exactProtocols: names})"),

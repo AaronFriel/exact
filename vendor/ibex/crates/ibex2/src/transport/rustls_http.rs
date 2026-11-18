@@ -30,7 +30,10 @@ use super::tls::{tls_config_from, NATIVE_CERT_LOADS};
 struct Current {
     generation: u64,
     signal: Option<AbortSignal>,
-    event_stream: bool,
+    /// The response's head has arrived and its body has no implicit read
+    /// deadline: the request names no timeout of its own and is
+    /// `open_ended`, or its reply is a successful event stream.
+    open_ended: bool,
     /// The request's body is a file and it names no timeout of its own:
     /// each write may wait [`IDLE_SEND`], with no limit on the whole
     /// exchange (Exact patch 46).
@@ -118,7 +121,7 @@ impl RustlsHttpTransport {
             let mut current = slot.context.lock().unwrap();
             current.generation = current.generation.wrapping_add(1);
             current.signal = Some(signal.clone());
-            current.event_stream = false;
+            current.open_ended = false;
             current.file_body = false;
             current.idle_timeout = None;
             current.written = None;
@@ -164,7 +167,7 @@ fn needs_tls(target_https: bool, proxy: Option<&ureq::Proxy>) -> bool {
 }
 
 /// The longest an ordinary request without a timeout of its own takes,
-/// its resend included. Event streams keep this limit only until their headers.
+/// its resend included. An open-ended response keeps it only until its head.
 const GLOBAL_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// The longest a request whose body is a file waits for one write, when it
@@ -421,14 +424,14 @@ impl<T: WireTransport> WireTransport for Observed<T> {
         Ok(())
     }
     fn await_input(&mut self, mut timeout: NextTimeout) -> Result<bool, ureq::Error> {
-        // ureq retains the request's deadlines in its body reader. An event
-        // stream without an explicit timeout must also outlive its global limit.
+        // ureq retains the request's deadlines in its body reader. An
+        // open-ended response must also outlive its global limit.
         let current = self.context.lock().unwrap();
         if let Some(idle) = current.idle_timeout {
             timeout.after = timeout
                 .after
                 .min(ureq::unversioned::transport::time::Duration::Exact(idle));
-        } else if self.response && current.event_stream {
+        } else if self.response && current.open_ended {
             timeout.after = ureq::unversioned::transport::time::Duration::NotHappening;
         }
         drop(current);
@@ -592,8 +595,8 @@ fn failed(error: impl std::fmt::Display) -> HostError {
 /// patch 23), within `left` of the request's time, if it has a limit. A
 /// request's own `timeout` replaces every agent default: no shorter internal
 /// phase limit may win before it (LLP 0068.000 §4). Without one, the agent's
-/// phase and global limits stand until the response identifies an event
-/// stream, but for a file body, which has no global limit (`IDLE_SEND`).
+/// phase and global limits stand until the head of an open-ended response
+/// arrives, but for a file body, which has no global limit (`IDLE_SEND`).
 fn run<S: ureq::AsSendBody>(
     lease: &Lease,
     req: ureq::http::Request<S>,
@@ -872,14 +875,15 @@ impl Transport for RustlsHttpTransport {
         }
         let content_type = headers.get("content-type");
         let context = &lease.slot.as_ref().unwrap().context;
-        context.lock().unwrap().event_stream = request.timeout.is_none()
-            && status.is_success()
+        let event_stream = status.is_success()
             && content_type.is_some_and(|value| {
                 value
                     .split(';')
                     .next()
                     .is_some_and(|mime| mime.trim().eq_ignore_ascii_case("text/event-stream"))
             });
+        context.lock().unwrap().open_ended =
+            request.timeout.is_none() && (request.open_ended || event_stream);
         let limit = request.body_limit();
         if request.method != "HEAD"
             && !matches!(status.as_u16(), 204 | 304)

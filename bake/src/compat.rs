@@ -83,7 +83,10 @@ pub(crate) const RUST_ABI: u32 = exact_logic_abi::ABI;
 /// launch module asks the prelude for (`__exact_launch_settings`) before any
 /// other module runs: an older prelude has none, and gives the module the
 /// build's value whatever the launch set.
-pub(crate) const TYPESCRIPT_RUNTIME: u32 = 14;
+/// 15: `exactIdleTimeout` on an event stream or a byte stream (LLP 1016.000
+/// D11), which a prelude of 9 to 14 refuses, failing the stream. A bundle
+/// names the option alike on a socket, so every use needs 15.
+pub(crate) const TYPESCRIPT_RUNTIME: u32 = 15;
 
 /// What each runtime past the first added that a bundle names to use (see
 /// [`TYPESCRIPT_RUNTIME`]): a `fetch` option an older prelude would ignore,
@@ -95,12 +98,12 @@ pub(crate) const TYPESCRIPT_RUNTIME: u32 = 14;
 /// a request body. `structuredClone` names none of them. 10 is read from the
 /// grants, not the bundle.
 const RUNTIME_OPTIONS: [(u32, &str); 28] = [
+    (15, "exactIdleTimeout"),
     (14, "__exact_launch_settings"),
     (13, "exactPrefetch"),
     (13, "exactPreload"),
     (12, "exactProtocols"),
     (11, "cache"),
-    (9, "exactIdleTimeout"),
     (8, "Response"),
     (8, "ReadableStream"),
     (8, "TransformStream"),

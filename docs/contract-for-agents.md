@@ -6286,8 +6286,9 @@ answers as any failure (a Rust source's request takes `Request::timeout(ms)`).
 Without it a stalled fetch waits the platform's limit (60 s without data on
 Apple). Test the error state with `fail fetch`, as above; a timeout itself is
 tested against a stand-in server that never answers (the reference's
-"exactTimeout"). A WebSocket stream that may go silent takes
-`exactIdleTimeout: ms` beside `exactStream`: the host ends it, as one
+"exactTimeout"). A stream that may go silent (a WebSocket, an event stream,
+a byte stream) takes `exactIdleTimeout: ms` beside `exactStream`: the host
+ends it, as one
 `error` event of kind `"Timeout"`, when nothing has arrived for that long,
 and the app refreshes the resource to open it again (the reference's
 "exactIdleTimeout"); `fail fetch` does not produce it.

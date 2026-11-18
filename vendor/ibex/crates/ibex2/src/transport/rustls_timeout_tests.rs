@@ -78,6 +78,16 @@ fn transport_with_context() -> (RustlsHttpTransport, Context) {
 }
 
 fn check_response(status: u16, types: &[&str], timeout: Option<Duration>, exempt: bool) {
+    check_request(false, status, types, timeout, exempt);
+}
+
+fn check_request(
+    open_ended: bool,
+    status: u16,
+    types: &[&str],
+    timeout: Option<Duration>,
+    exempt: bool,
+) {
     let mut head = format!("HTTP/1.1 {status} Test\r\nContent-Length: 0\r\n");
     for content_type in types {
         head.push_str(&format!("Content-Type: {content_type}\r\n"));
@@ -88,6 +98,7 @@ fn check_response(status: u16, types: &[&str], timeout: Option<Duration>, exempt
     let mut request = Request::get(&url);
     request.headers.set("accept", "text/event-stream");
     request.timeout = timeout;
+    request.open_ended = open_ended;
     let response = transport.open(&request, &AbortSignal::default()).unwrap();
     assert_eq!(response.headers.get("content-type"), types.last().copied());
     assert_deadlines(&context, exempt);
@@ -130,6 +141,16 @@ fn only_successful_event_streams_without_an_explicit_timeout_remove_deadlines() 
     );
     check_response(200, &["text/plain"], None, false);
     check_response(200, &[], None, false);
+}
+
+#[test]
+fn an_open_ended_request_without_an_explicit_timeout_removes_deadlines_whatever_its_reply() {
+    let bytes = &["application/octet-stream"];
+    check_request(true, 200, bytes, None, true);
+    check_request(true, 200, &[], None, true);
+    check_request(true, 503, bytes, None, true);
+    check_request(true, 200, bytes, Some(Duration::from_secs(5)), false);
+    check_request(false, 200, bytes, None, false);
 }
 
 #[test]

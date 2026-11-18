@@ -120,8 +120,8 @@
     if (method === "GET" || method === "HEAD") return "exactUploadProgress: a GET or HEAD request sends no body";
     return true;
   }
-  // `exactIdleTimeout` (LLP 1016.000 D11): why it is refused, if it is. `socket`: a WebSocket stream that is no
-  // listener, child, upload or long poll.
+  // `exactIdleTimeout` (LLP 1016.000 D11): why it is refused, if it is. `taken`: a WebSocket, event or byte stream,
+  // a `ws:`, `wss:`, `http:` or `https:` one that is no listener, child, upload or long poll.
   // Protocol names, never credentials (LLP 1016.000; RFC 7230 token).
   function socketProtocols(value, socket) {
     if (value === undefined) return [];
@@ -137,11 +137,11 @@
     return names;
   }
 
-  function idleRefusal(idle, socket) {
+  function idleRefusal(idle, taken) {
     if (idle === undefined) return undefined;
     if (!Number.isInteger(idle) || idle < 1 || idle > 3600000)
       return "exactIdleTimeout must be an integer number of milliseconds from 1 to 3600000";
-    return socket ? undefined : "exactIdleTimeout: only a WebSocket stream takes an idle timeout";
+    return taken ? undefined : "exactIdleTimeout: only a WebSocket, event or byte stream takes an idle timeout";
   }
   // An upload's event for its mapper, as XMLHttpRequest names them: `progress` for the host's count of the body's
   // bytes sent, and `load` for the reply, whatever its status, which ends the stream.
