@@ -22,6 +22,7 @@
 //                72  after(host, token, ms)      ms < 0 cancels
 //   module table 200 tick(module, kind, token, now, seq)   kind 0 tick, 1 after
 import Foundation
+import ExactKit
 
 typealias HatchTickFn = @convention(c) (UnsafeMutableRawPointer?, UInt32, UInt64, Double, UInt64) -> Void
 

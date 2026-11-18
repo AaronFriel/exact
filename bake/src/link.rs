@@ -72,7 +72,7 @@ pub(crate) fn name_into(
 }
 
 /// What a production artifact links: [`production_uses`], the manifest's
-/// `link` ahead of use, and the executor for what hands it work. Computed
+/// `link` ahead of use, and what those bring with them ([`dependents`]). Computed
 /// once for the bake's linked set and for what an update requires.
 pub(crate) fn composed<'a>(
     app: &std::path::Path,
@@ -84,7 +84,7 @@ pub(crate) fn composed<'a>(
 ) -> Result<Uses, String> {
     let uses = production_uses(app, plan, entries, inputs, host_work);
     let uses = linked_ahead(uses, ahead(manifest)?, inputs);
-    Ok(executor(uses, inputs, host_work))
+    Ok(dependents(uses, inputs, host_work))
 }
 
 /// `uses` with what the manifest links `ahead`; on Apple, an SVG linked
@@ -122,8 +122,8 @@ pub(crate) fn apple_requirement<'a>(
 
 /// What a production artifact links for `plan`, with what its grants allow
 /// (`inputs`' ceiling); on Apple, with what the widget `entries` its boot
-/// admits use too, the I/O executor for sources that hand it work
-/// ([`executor`]), and what only the bake can read in `app`, the app's directory: whether a
+/// admits use too, what those bring with them ([`dependents`]), and what
+/// only the bake can read in `app`, the app's directory: whether a
 /// bundled image is an SVG, and whether the app ships a module artifact,
 /// which connects the app-level hatches (LLP 1075.003.000).
 pub(crate) fn production_uses<'a>(
@@ -145,28 +145,36 @@ pub(crate) fn production_uses<'a>(
     if plans.iter().any(|plan| bundles_svg(app, plan)) {
         uses = uses.with(Capability::Svg).with(Capability::Effects);
     }
-    // A package's Swift implementation is compiled into the artifact too.
-    if uses.has(Capability::Modules) || ships_module(app, inputs["platform"].as_str().unwrap_or(""))
-    {
+    // The app's own module artifact is loaded by the native module family.
+    if ships_module(app, inputs["platform"].as_str().unwrap_or("")) {
         uses = uses.with(Capability::NativeViews);
     }
-    executor(uses, inputs, host_work)
+    dependents(uses, inputs, host_work)
 }
 
-/// `uses` with the Apple I/O executor when something hands it work: a source
-/// that declares it (`host_work`, LLP 1047.001 D12), one placed on a worker,
-/// which answers through continuations (LLP 1027.002 D1), or a native module's
-/// calls. Applied once every other capability is in, entries' and
-/// link-ahead's included.
-fn executor(uses: Uses, inputs: &serde_json::Value, host_work: bool) -> Uses {
+/// `uses` with what Apple links for what it holds: [`production_uses`]
+/// applies it to the plans and grants, and [`composed`] again once
+/// link-ahead is in:
+/// - the I/O executor when something hands it work: a source that declares it
+///   (`host_work`, LLP 1047.001 D12), one placed on a worker, which answers
+///   through continuations (LLP 1027.002 D1), or a native module's calls;
+/// - the native module family, which loads a module's Swift implementation,
+///   with the runner's module seam (`modules`).
+fn dependents(uses: Uses, inputs: &serde_json::Value, host_work: bool) -> Uses {
+    if !apple(inputs) {
+        return uses;
+    }
     let placed = ["rustPlacement", "typescriptPlacement"]
         .iter()
         .any(|key| inputs[key] == "worker");
-    if apple(inputs) && (host_work || placed || uses.has(Capability::Modules)) {
-        uses.with(Capability::Io)
-    } else {
-        uses
+    let mut uses = uses;
+    if host_work || placed || uses.has(Capability::Modules) {
+        uses = uses.with(Capability::Io);
     }
+    if uses.has(Capability::Modules) {
+        uses = uses.with(Capability::NativeViews);
+    }
+    uses
 }
 
 /// Whether a bundled image source of `plan` (an asset or a `data:` URL) is
@@ -512,10 +520,14 @@ mod tests {
             }
         }
         // Modules from wherever they come (an entry, link-ahead) bring the
-        // executor that runs their calls.
+        // executor that runs their calls and the family that loads their
+        // Swift.
         let modules = exact_runner::Uses::NONE.with(Capability::Modules);
         let ios = serde_json::json!({ "platform": "ios" });
-        assert!(super::executor(modules, &ios, false).has(Capability::Io));
+        let brought = super::dependents(modules, &ios, false);
+        assert!(brought.has(Capability::Io) && brought.has(Capability::NativeViews));
+        let linux = serde_json::json!({ "platform": "linux" });
+        assert_eq!(super::dependents(modules, &linux, false), modules);
     }
 
     /// A TypeScript bundle reports host work for each route the prelude

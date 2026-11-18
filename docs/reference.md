@@ -1436,6 +1436,7 @@ The generated `--embed` composition lists the capabilities to link.
 | `ExactPresence` | Native presence checks | `ExactPresence.install()` |
 | `ExactEffects` | CSS `filter` on a box | `ExactEffects.install()` |
 | `ExactSvg` | SVG elements, SVG images and icons (links `ExactEffects` too) | `ExactSvg.install()` |
+| `ExactNativeViews` | The app's native module, native views and hatches | `ExactNativeViews.install()` |
 
 Development builds log a missing Markdown or drag installation once per session,
 with the product and installation call. Without it, Markdown remains literal

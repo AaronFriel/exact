@@ -29,6 +29,7 @@ fn hellos_binary_refuses_a_reload_into_a_family_and_keeps_its_plan() {
             "image \"data:image/svg+xml,%3Csvg%2F%3E\"",
             "effects, svg, images",
         ),
+        ("view hatch=\"avatar\"", "native_views"),
     ] {
         let next = plan(view);
         let len = bridge.input_write(&next);

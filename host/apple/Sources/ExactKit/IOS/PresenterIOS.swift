@@ -151,7 +151,7 @@ package final class Presenter {
     lazy var controls = ControlHost(self)
     lazy var fieldSelections = FieldSelections(self)
     /// Nodes marked `hatch="word"` (LLP 1075.003.000).
-    lazy var elements: any ElementHatching = NativeModuleLink.makeElements?(self) ?? NoElementHatches()
+    package internal(set) lazy var elements: any ElementHatching = NativeModuleLink.makeElements?(self) ?? NoElementHatches()
     lazy var navigation = NavigationHost(presenter: self)
     #if os(tvOS)
     lazy var menuKey = MenuKey(presenter: self)
@@ -181,7 +181,7 @@ package final class Presenter {
     let boxAnimations = BoxAnimations()
     /// Boxes under CSS `filter`, drawn again after each batch (LLP 1055.000 D14).
     let boxFilters = BoxFilterLink.makeSet?()
-    let canvas2d: Canvas2DCanvases = SurfacesLink.installed?.canvas2D() ?? NoCanvas2D()
+    package let canvas2d: Canvas2DCanvases = SurfacesLink.installed?.canvas2D() ?? NoCanvas2D()
     /// The input being edited, if any (UIKit exposes no first responder):
     /// what a canvas painted through its surface captures every frame for
     /// (LLP 1014 D4 d), and what the keyboard reveals.
@@ -419,7 +419,7 @@ package final class Presenter {
     var onPress, onClose, onCancel: ((UInt32) -> Void)?
     var onChange: ((UInt32, String) -> Void)?
     /// Host intrinsic sizes, several at once under one layout.
-    package var onIntrinsic: (([(UInt32, CGSize?)]) -> Void)?
+    package internal(set) var onIntrinsic: (([(UInt32, CGSize?)]) -> Void)?
     /// A capability an action called (LLP 1005 §3), after its commit.
     var onCommand: ((String, [Any], UInt32?) -> Void)?
     /// A `key` handler called `preventDefault()` (`keyDown(at:_:)`, KeyEvents.swift).
@@ -692,7 +692,7 @@ package final class Presenter {
         dispatchPressHandler(id, from: original)
         if let original, views[id] === original { menus.invoke(original, bubbled: bubbled) }
     }
-    func change(_ id: UInt32, _ value: String) { send(id) { [self] in onChange?(id, value) } }
+    package func change(_ id: UInt32, _ value: String) { send(id) { [self] in onChange?(id, value) } }
     /// A text field typed into since it took the focus: its `change` fires
     /// when the editing ends or Enter commits it, HTML's `change` (LLP
     /// 1069.001 D4); every keystroke is its `input`.
@@ -748,7 +748,7 @@ package final class Presenter {
         guard textHost(id) != nil else { return }
         if applying { waiting.append((id, f)) } else { navigation.finishBootOwner(); f() }
     }
-    func hover(_ view: NodeView, _ over: Bool) {
+    package func hover(_ view: NodeView, _ over: Bool) {
         if over { hoverInline(nil) }
         guard views[view.id] === view else { return }
         if over {
@@ -760,7 +760,7 @@ package final class Presenter {
             send(view.id) { [self] in onHover?(view.id, false) }
         }
     }
-    func key(_ id: UInt32, _ press: KeyPress) { send(id) { [self] in onKey?(id, press) } }
+    package func key(_ id: UInt32, _ press: KeyPress) { send(id) { [self] in onKey?(id, press) } }
     func clipboard(_ id: UInt32, _ kind: UInt32, _ text: String) { send(id) { [self] in onClipboard?(id, kind, text) } }
     func contextmenu(_ id: UInt32) { send(id) { [self] in onContextmenu?(id) } }
     /// A `contextmenu` with its point (studio diary R22): kind 10 and its line.
@@ -778,8 +778,8 @@ package final class Presenter {
     func scroll(_ id: UInt32, _ metrics: [Double]) { send(id) { [self] in onScroll?(id, metrics) } }
     func scrollend(_ id: UInt32) { send(id) { [self] in onScrollend?(id) } }
     func scrollDrag(_ id: UInt32, _ end: (velocity: CGPoint, target: CGPoint?)?) { send(id) { [self] in onScrollDrag?(id, end) } }
-    func submit(_ id: UInt32) { send(id) { [self] in onSubmit?(id) } }
-    func load(_ id: UInt32) { send(id) { [self] in onLoad?(id) } }
+    package func submit(_ id: UInt32) { send(id) { [self] in onSubmit?(id) } }
+    package func load(_ id: UInt32) { send(id) { [self] in onLoad?(id) } }
     package func message(_ id: UInt32, _ value: String) {
         guard let view = views[id], view.handlers.contains("message") else { return }
         send(id) { [weak self, weak view] in

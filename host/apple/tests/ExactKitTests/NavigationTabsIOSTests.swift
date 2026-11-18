@@ -3,6 +3,7 @@ import UIKit
 import XCTest
 @testable import ExactKit
 @testable import ExactCollections
+@testable import ExactNativeViews
 
 /// LLP 1075.003 Stage 2 over the native fixture's tabs: Exact's
 /// `UITabBarController`, one controller per tab, items from the authored

@@ -522,7 +522,7 @@ public final class Agent {
             let json = (try? JSONSerialization.data(withJSONObject: forward)).map { String(decoding: $0, as: UTF8.self) } ?? line
             let reply = session.agent(json)
             // A hatched site's row names its hatch's calls and time (LLP 1075.003.000.001 §3.1).
-            if op == "perf", let data = session.hatchDiagnostics.joined(perf: reply).data(using: .utf8),
+            if op == "perf", let data = (session.hatchDiagnostics?.joined(perf: reply) ?? reply).data(using: .utf8),
                var result = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
                 result["hostWork"] = HostPhases.shared.work()
                 emit(result)

@@ -25,7 +25,7 @@ package final class Presenter {
     weak package var session: ExactSession?
     var orientationLock = OrientationLock() // journaled once: the Mac has no orientation (LLP 1133.029 D12)
     /// The document: the roots live here, content-sized like a page.
-    let root = FlippedView(frame: .zero)
+    package let root = FlippedView(frame: .zero)
     /// The viewport over it: the window's content view, scrolling like a browser's.
     package let viewport = PageScrollView(frame: .zero)
     package var views: [UInt32: NodeView] = [:]
@@ -126,14 +126,14 @@ package final class Presenter {
     let boxAnimations = BoxAnimations()
     /// Boxes under CSS `filter`, drawn again after each batch (LLP 1055.000 D14).
     let boxFilters = BoxFilterLink.makeSet?()
-    let canvas2d: Canvas2DCanvases = SurfacesLink.installed?.canvas2D() ?? NoCanvas2D()
+    package let canvas2d: Canvas2DCanvases = SurfacesLink.installed?.canvas2D() ?? NoCanvas2D()
     lazy var segments: any SegmentHosting = ControlLink.makeSegments?(self) ?? NoSegments()
     lazy var controls = ControlHost(self)
     lazy var fieldSelections = FieldSelections(self)
     /// The one editor every `input`'s field of this session edits in (`FieldEditor`).
     lazy var fieldEditor = FieldEditor.make()
     /// Nodes marked `hatch="word"` (LLP 1075.003.000).
-    lazy var elements: any ElementHatching = NativeModuleLink.makeElements?(self) ?? NoElementHatches()
+    package internal(set) lazy var elements: any ElementHatching = NativeModuleLink.makeElements?(self) ?? NoElementHatches()
     lazy var shortcuts = ShortcutHost(presenter: self)
     lazy var toolbar = WindowToolbarHost(self)
     /// What native presentations cover of boxes (LLP 1115.002 D8.1, CoversMac.swift).
@@ -722,7 +722,7 @@ package final class Presenter {
     var onPress, onClose, onCancel: ((UInt32) -> Void)?
     var onChange: ((UInt32, String) -> Void)?
     /// Images' intrinsic sizes, several at once under one layout.
-    package var onIntrinsic: (([(UInt32, CGSize?)]) -> Void)?
+    package internal(set) var onIntrinsic: (([(UInt32, CGSize?)]) -> Void)?
     /// A capability an action called (LLP 1005 §3), after its commit.
     var onCommand: ((String, [Any], UInt32?) -> Void)?
     /// A `key` handler called `preventDefault()` (`keyDown(at:_:)`, KeyEvents.swift).
@@ -889,7 +889,7 @@ package final class Presenter {
         dialogs.command(node, fromNativeMenu: fromNativeMenu, bubbled: bubbled)?()
         menus.command(node, fromNativeMenu: fromNativeMenu, bubbled: bubbled)?()
     }
-    func change(_ id: UInt32, _ value: String) { onChange?(id, value) }
+    package func change(_ id: UInt32, _ value: String) { onChange?(id, value) }
     /// A text field typed into since it took the focus: its `change` fires
     /// when the editing ends or Enter commits it, HTML's `change` (LLP
     /// 1069.001 D4); every keystroke is its `input`.
@@ -1011,7 +1011,7 @@ package final class Presenter {
         guard hoverTransition == generation else { return }
         if let inline, inlineEnabled(inline) { hoverInline(inline) }
     }
-    func key(_ id: UInt32, _ press: KeyPress) { send(id) { [self] in onKey?(id, press) } }
+    package func key(_ id: UInt32, _ press: KeyPress) { send(id) { [self] in onKey?(id, press) } }
     func clipboard(_ id: UInt32, _ kind: UInt32, _ text: String) { send(id) { [self] in onClipboard?(id, kind, text) } }
     func selectionChange(_ id: UInt32, _ text: String, _ start: Int, _ end: Int, rects: [CGRect] = []) { send(id) { [self] in onSelectionChange?(id, text, start, end, rects) } }
     func contextmenu(_ id: UInt32) { send(id) { [self] in onContextmenu?(id) } }
@@ -1029,8 +1029,8 @@ package final class Presenter {
     func scroll(_ id: UInt32, _ metrics: [Double]) { send(id) { [self] in onScroll?(id, metrics) } }
     func scrollend(_ id: UInt32) { send(id) { [self] in onScrollend?(id) } }
     func scrollDrag(_ id: UInt32, _ end: (velocity: CGPoint, target: CGPoint?)?) { send(id) { [self] in onScrollDrag?(id, end) } }
-    func submit(_ id: UInt32) { send(id) { [self] in onSubmit?(id) } }
-    func load(_ id: UInt32) { send(id) { [self] in onLoad?(id) } }
+    package func submit(_ id: UInt32) { send(id) { [self] in onSubmit?(id) } }
+    package func load(_ id: UInt32) { send(id) { [self] in onLoad?(id) } }
     package func message(_ id: UInt32, _ value: String) {
         guard let view = views[id], view.handlers.contains("message") else { return }
         send(id) { [weak self, weak view] in
@@ -1412,7 +1412,7 @@ package final class Presenter {
     /// what it is built from, the Keyboard Navigation setting it was built
     /// for, and for each view that can hold the focus and is no stop, the
     /// stop before it (where Shift-Tab goes).
-    var keyViewLoopStale = false
+    package var keyViewLoopStale = false
     var keyViewLoopMode: Bool?
     let keyViewBefore = NSMapTable<NSView, NSView>.weakToWeakObjects()
     /// HTML's sequential focus navigation starting point: a fragment target

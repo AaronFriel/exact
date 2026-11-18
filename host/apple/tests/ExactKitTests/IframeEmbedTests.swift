@@ -1,6 +1,7 @@
 import WebKit
 import XCTest
 @testable import ExactKit
+@testable import ExactNativeViews
 #if os(macOS)
 import AppKit
 #else

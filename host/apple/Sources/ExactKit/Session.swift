@@ -30,7 +30,7 @@ public enum ExactEnv {
     }()
     /// Whether this binary was baked with `EXACT_UPDATE_TRUST=production`
     /// (`BakedCompatibility.production`).
-    static let productionBake = BakedCompatibility.production(BakedCompatibility.json)
+    static package let productionBake = BakedCompatibility.production(BakedCompatibility.json)
     public static let agentMode = environment["EXACT_AGENT"] == "1"
     /// `EXACT_AGENT=live` (the driver's `--live`): an ordinary launch on the
     /// wall clock that the driver can still reach, which sends input and
@@ -39,7 +39,7 @@ public enum ExactEnv {
     /// Whether the launch serves the driver: agent mode or `--live`.
     public static let agentCarried = agentMode || agentLive
     /// `EXACT_AGENT_BIND` (`--bind`, LLP 1133.001 D7): extensions answered by their implementations under the agent.
-    static let agentBind = Set((environment["EXACT_AGENT_BIND"] ?? "").split(separator: ",").map(String.init))
+    static package let agentBind = Set((environment["EXACT_AGENT_BIND"] ?? "").split(separator: ",").map(String.init))
     /// `EXACT_AGENT_TIMING=platform` (LLP 1035.003 D5, opt-in): under the
     /// agent carrier, UIKit's own transitions, presentations and keyboard
     /// animations keep their natural timing — the ordinary app with a
@@ -123,7 +123,7 @@ public final class ExactApp {
     public var lifecycle: ExactAppLifecycle?
     private(set) var selectedToken: UInt64 = 0
     private var sessionRefs: [WeakSession] = []
-    let notificationProcessID = UUID().uuidString
+    package let notificationProcessID = UUID().uuidString
     let sharedStore = SharedStoreRefresh()
     /// Every live session, in creation order.
     public var sessions: [ExactSession] { sessionRefs.compactMap(\.session) }
@@ -339,7 +339,7 @@ public final class ExactSession {
     public let app: ExactApp
     /// A host-owned name the agent carrier routes by (D9) and logs carry.
     public let label: String
-    let notificationOwnerID: String
+    package let notificationOwnerID: String
     /// Under the agent the session's own pasteboard, which `copyText` and @exact/clipboard write, registered for
     /// removal when the session is made, so a process that exits removes it too (AgentPasteboard.swift).
     let agentPasteboard: String?
@@ -366,7 +366,7 @@ public final class ExactSession {
     package var runtime: Runtime { core.runtime }
     /// This session's file roots, captured outside a native module callback.
     package var appFileRoots: [String: String] = [:]
-    let rasters = ImageLink.makeLoader?()
+    package let rasters = ImageLink.makeLoader?()
     #if os(macOS)
     lazy var regions: any ContentRegionHosting = ContentRegionLink.make?(self) ?? NoContentRegions()
     #endif
@@ -385,9 +385,9 @@ public final class ExactSession {
     var webMount: [String: String] = ExactEnv.appMetadata["ExactWebMount"] as? [String: String] ?? [:]
     var protocolHandlers: [[String: String]] = ExactEnv.appMetadata["ExactProtocolHandlers"] as? [[String: String]] ?? []
     private var textPressure: DispatchSourceMemoryPressure?
-    let canvases: Canvases
+    package let canvases: Canvases
     let webviews: any WebHosting
-    let natives: any NativeModuleHosting = NativeModuleLink.make?() ?? NoNativeModule()
+    package let natives: any NativeModuleHosting = NativeModuleLink.make?() ?? NoNativeModule()
     /// The file picker (LLP 1069.002).
     lazy var picker = Picker(session: self)
     /// The voice table's output (LLP 1096 D8); settable for tests.
@@ -631,7 +631,7 @@ public final class ExactSession {
     deinit { destroy() }
 
     /// The live session behind a runtime handle, or nil for a stranger's.
-    static func session(for rt: ExactRuntime) -> ExactSession? { live[rt]?.session }
+    static package func session(for rt: ExactRuntime) -> ExactSession? { live[rt]?.session }
 
     private static let wake: ExactWakeFn = { ctx in
         let rt = ExactRuntime(UInt(bitPattern: ctx))

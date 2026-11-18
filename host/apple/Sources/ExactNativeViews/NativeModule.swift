@@ -92,6 +92,7 @@
 // delivered only to that one.
 import CExact
 import Foundation
+import ExactKit
 #if os(macOS)
 import AppKit
 #else
@@ -1315,7 +1316,7 @@ extension NativeViews {
             responder = next.next
         }
         let found = responder as? UIViewController
-        guard let parent = route.map({ route in (found as? RouteController).flatMap { $0.node === route ? $0 : nil } }) ?? found else {
+        guard let parent = route.map({ $0.routeController(in: found) }) ?? found else {
             insert()
             guard retry, let presenter = owner.presenter else { return log("\(entry.name) #\(entry.id): a screen with no controller to hold it") }
             presenter.afterBatch { [weak self, weak entry] in

@@ -64,6 +64,7 @@ import CExact
 import AVFoundation
 #endif
 import Foundation
+import ExactKit
 #if os(macOS)
 import AppKit
 #else
@@ -95,7 +96,7 @@ private func hatchSession(_ host: UnsafeMutableRawPointer?) -> ExactSession? {
 
 private let hatchResolve: HatchResolveFn = { host, key, keyLength, id, idLength in
     #if os(iOS) || os(tvOS)
-    hatchSession(host)?.presenter.navigation.resolve(route: hatchText(key, keyLength), id: hatchText(id, idLength))?.id ?? 0
+    hatchSession(host)?.presenter.resolveRoute(hatchText(key, keyLength), id: hatchText(id, idLength)) ?? 0
     #else
     0
     #endif
@@ -112,7 +113,7 @@ private let hatchInputText: HatchInputFn = { host, node, bytes, length in
 
 private let hatchTabIntent: HatchInputFn = { host, kind, bytes, length in
     #if os(iOS) || os(tvOS)
-    hatchSession(host)?.presenter.navigation.tabIntent(kind, hatchText(bytes, length)) == true ? 0 : 1
+    hatchSession(host)?.presenter.tabIntent(kind, hatchText(bytes, length)) == true ? 0 : 1
     #else
     1
     #endif
@@ -132,7 +133,7 @@ private let hatchArrangement: HatchArrangementFn = { host, node, object in
     if #available(iOS 27.1, *), let presenter = hatchSession(host)?.presenter {
         let controller = object.map { Unmanaged<AnyObject>.fromOpaque($0).takeUnretainedValue() }
         guard object == nil || controller is UIArrangementViewController else { return 1 }
-        return presenter.arrangements.set(node, controller: controller as? UIArrangementViewController) ? 0 : 1
+        return presenter.setArrangement(node, controller: controller as? UIArrangementViewController) ? 0 : 1
     }
     return 1
     #else
@@ -279,19 +280,19 @@ private let hatchDelegate: HatchDelegateFn = { host, controller, object in
     guard let controller, let session = hatchSession(host) else { return }
     let delegate = object.map { Unmanaged<AnyObject>.fromOpaque($0).takeUnretainedValue() }
     #if os(iOS) || os(tvOS)
-    session.presenter.navigation.setAppDelegate(Unmanaged<AnyObject>.fromOpaque(controller).takeUnretainedValue(), delegate)
+    session.presenter.setNavigationAppDelegate(Unmanaged<AnyObject>.fromOpaque(controller).takeUnretainedValue(), delegate)
     #else
-    guard Unmanaged<AnyObject>.fromOpaque(controller).takeUnretainedValue() === session.presenter.toolbar.toolbar else { return }
-    session.presenter.toolbar.setAppDelegate(delegate as? NSToolbarDelegate)
+    guard Unmanaged<AnyObject>.fromOpaque(controller).takeUnretainedValue() === session.presenter.windowToolbar else { return }
+    session.presenter.setToolbarAppDelegate(delegate as? NSToolbarDelegate)
     #endif
 }
 
 private let hatchToolbarItem: HatchToolbarFn = { host, toolbar, item in
     #if os(macOS)
     guard let toolbar, let item, let session = hatchSession(host),
-          Unmanaged<AnyObject>.fromOpaque(toolbar).takeUnretainedValue() === session.presenter.toolbar.toolbar,
+          Unmanaged<AnyObject>.fromOpaque(toolbar).takeUnretainedValue() === session.presenter.windowToolbar,
           let added = Unmanaged<AnyObject>.fromOpaque(item).takeUnretainedValue() as? NSToolbarItem else { return }
-    session.presenter.toolbar.addAppItem(added)
+    session.presenter.addToolbarAppItem(added)
     #endif
 }
 
@@ -314,42 +315,8 @@ private typealias HatchFormaFn = @convention(c) (UnsafeMutableRawPointer?, Unsaf
 private let hatchForma: HatchFormaFn = { host, view, request, length, out, cap in
     guard let session = hatchSession(host), let request,
           let asked = try? JSONSerialization.jsonObject(with: Data(bytes: request, count: Int(length))) as? [String: Any] else { return 0 }
-    var at = view.map { Unmanaged<PlatformView>.fromOpaque($0).takeUnretainedValue() }
-    while let v = at, !(v is NodeView) { at = v.superview }
-    let node = at as? NodeView
-    var measures: [Formas.Measure: [String: BatchValue?]] = [:]
-    for kind in Formas.Measure.allCases {
-        for name in asked[kind.rawValue] as? [String] ?? [] { measures[kind, default: [:]][name] = .some(nil) }
-    }
-    guard let answer = Formas.ask(session, view: node?.id ?? 0, names: asked["names"] as? [String] ?? [], measures: measures) else { return 0 }
-    let colors = answer.colors.mapValues { value -> Any in
-        guard let value else { return NSNull() }
-        return (0..<8).map { side in
-            value.textChannels(dark: side & 1 != 0, contrast: side & 2 != 0, elevated: side & 4 != 0, tint: answer.tints[side])
-                .map { ExactForma.extended(TextEngine.color($0)) } ?? []
-        }
-    }
-    var reply: [String: Any] = ["inputs": answer.inputs, "colors": colors]
-    for (kind, values) in answer.measures {
-        reply[kind.rawValue] = values.mapValues { value -> Any in
-            switch (kind, value) {
-            case (.fonts, .object(let f)?):
-                guard let size = f["size"]?.number else { return NSNull() }
-                let weight = Int(f["weight"]?.number ?? 400), italic = f["italic"] == .bool(true)
-                let family = Int(f["family"]?.number ?? 0)
-                let font = session.text.font(size: CGFloat(size), weight: weight, family: family, italic: italic)
-                // A system face's name is no name a font opens by: the
-                // library makes the system font at the weight, in its
-                // design (a generic stack's: serif, monospaced, rounded).
-                let generic = family < 8 ? family : session.text.catalog[family]?.first?.generic
-                let design = switch generic { case 3, 4: "serif"; case 5, 6: "monospaced"; case 7: "rounded"; default: "default" }
-                return ["size": size, "name": font.fontName, "weight": weight, "italic": italic,
-                        "system": generic != nil, "design": design]
-            case (_, .number(let n)?): return n
-            default: return NSNull()
-            }
-        }
-    }
+    let at = view.map { Unmanaged<PlatformView>.fromOpaque($0).takeUnretainedValue() }
+    guard let reply = Formas.hatchReply(session, view: at, asked: asked) else { return 0 }
     guard let data = try? JSONSerialization.data(withJSONObject: reply) else { return 0 }
     if let out, data.count <= Int(cap) { data.copyBytes(to: out, count: data.count) }
     return UInt32(data.count)

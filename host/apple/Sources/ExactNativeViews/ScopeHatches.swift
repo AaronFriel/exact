@@ -20,6 +20,7 @@
 // Built runs as the hatches connect, after first pixel; changed and ended
 // never inside a batch.
 import Foundation
+import ExactKit
 #if os(macOS)
 import AppKit
 #else

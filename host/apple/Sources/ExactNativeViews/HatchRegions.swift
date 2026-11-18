@@ -19,6 +19,7 @@
 // replaces), 32 parts a node with ids of 64 bytes, unique in the node, and
 // labels of 120. Past one, the registration is refused by name, whole.
 import Foundation
+import ExactKit
 #if os(macOS)
 import AppKit
 typealias HatchRecognizer = NSGestureRecognizer

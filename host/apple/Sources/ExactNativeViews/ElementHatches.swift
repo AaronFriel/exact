@@ -10,6 +10,7 @@
 // `state.hatches` counts them. Shared by the AppKit and UIKit presenters; the
 // module side is ExactNativeModule.swift, the call NativeHatches.swift.
 import Foundation
+import ExactKit
 #if os(macOS)
 import AppKit
 #else
@@ -138,12 +139,12 @@ final class ElementHatches: ElementHatching {
         self.waiting = [:]
         for id in waiting.keys.sorted() {
             if let node = waiting[id]?(), presenter.views[id] === node {
-                if node.kind == "video" { node.video?.update() } else { node.embedFrame(presenter) }
+                if node.kind == "video" { node.videoUpdate() } else { node.embedFrame(presenter) }
             }
         }
         // Outside a batch: a held frame outside a list's rows is made now, as
         // at a batch's end, not by the tick, which makes only the near ones.
-        if !waiting.isEmpty { presenter.leaves.batchApplied(moved: true) }
+        if !waiting.isEmpty { presenter.leavesMoved() }
     }
 
     /// Before a batch's ops: every hatched node it destroys ends now, its view
@@ -197,7 +198,7 @@ final class ElementHatches: ElementHatching {
         let reusable = presenter.session?.nativeViews?.elementHatch(entry.node, event: event.rawValue, platform: Self.platform(of: entry.node, presenter), quiet: quiet) ?? false
         if let had { regions.undeclared(under: entry.node, by: "element \(word)") { had.contains(ObjectIdentifier($0)) } }
         // A frame's arm says what the call changed of what it owns (LLP 1020.002 §9).
-        if entry.node.kind == "iframe", event != .ended { presenter.session?.webviews.hatched(id) }
+        if entry.node.kind == "iframe", event != .ended { presenter.session?.webViewHatched(id) }
         // What the node's hatch registered ends with it; a view lent to another node starts clean.
         if event == .ended { regions.ended(node: id) }
         #if os(iOS) || os(tvOS)
@@ -234,7 +235,7 @@ final class ElementHatches: ElementHatching {
     /// Whether `node` is in a list's row, or in one the batch is making (iOS).
     private static func inList(_ node: NodeView, _ presenter: Presenter) -> Bool {
         #if os(iOS) || os(tvOS)
-        if presenter.pool.list(creating: node.id) != nil { return true }
+        if presenter.listCreating(node.id) { return true }
         #endif
         return list(holding: node) != nil
     }
@@ -286,11 +287,11 @@ final class ElementHatches: ElementHatching {
     /// 1075.003.000 §3.6): what Exact owns of each hatched node's scroll view,
     /// text field or text view against what it writes, journaled once.
     func checkOwned() {
-        guard NavigationHost.checksOwnership, !nodes.isEmpty, presenter.session?.natives.hatchesConnected == true else { return }
+        guard Presenter.checksHatchOwnership, !nodes.isEmpty, presenter.session?.natives.hatchesConnected == true else { return }
         for entry in nodes.values where entry.told {
             let node = entry.node
             var changed: [String] = []
-            if let sv = node.scrollView { changed += NavigationHost.ownedChanges(sv, of: node, insetByUIKit: node.scrollOrigin > 0 || presenter.navigation.insetByUIKit(node)) }
+            changed += presenter.scrollOwnedChanges(node)
             if let field = node.field, field.delegate !== node { changed.append("the text field's delegate") }
             if let text = node.textArea, text.delegate !== node { changed.append("the text view's delegate") }
             for property in changed {
@@ -307,11 +308,11 @@ final class ElementHatches: ElementHatching {
     /// a control (a switch, slider, date picker…), an iframe's `WKWebView` or
     /// a local PDF's `PDFView` (LLP 1020.002 §9), a video's `AVPlayer`, a scroll view.
     static func platform(of node: NodeView, _ presenter: Presenter) -> AnyObject? {
-        if node.kind == "video" { return node.video?.platform }
+        if node.kind == "video" { return node.videoPlatform }
         #if os(iOS) || os(tvOS)
-        return node.field ?? node.textArea ?? presenter.controls.controls[node.id] ?? presenter.segments.control(of: node.id) ?? node.web ?? node.scrollView
+        return node.field ?? node.textArea ?? presenter.control(of: node.id) ?? node.web ?? node.scrollView
         #else
-        return node.field ?? node.textArea ?? presenter.controls.controls[node.id] ?? presenter.segments.control(of: node.id) ?? node.web ?? node.scroll
+        return node.field ?? node.textArea ?? presenter.control(of: node.id) ?? node.web ?? node.scroll
         #endif
     }
 
@@ -419,16 +420,7 @@ final class ElementHatches: ElementHatching {
                 t.replaceCharacters(in: NSRange(location: 0, length: (t.string as NSString).length), with: value)
             }
             #endif
-            // The app is told whatever the hatch wrote, and that is the text it knows from here.
-            node.toldText = value
-            if FieldSelections.tracks(node) {
-                let end = value.utf16.count, selection = FieldSelection(start: end, end: end)
-                self.presenter.fieldSelections.set(node, selection, notify: false)
-                self.presenter.typed(id, value, input: false)
-                self.presenter.fieldSelections.replacementInput(node, value, selection, data: value)
-            } else {
-                self.presenter.typed(id, value, input: node.handlers.contains("input"))
-            }
+            self.presenter.hatchWrote(node, value)
             self.said(id, "input (\(node.props["type"] == "password" ? "protected" : "\(value.count) chars"), delivery: hatch)")
         }
     }
@@ -437,7 +429,7 @@ final class ElementHatches: ElementHatching {
     /// the next turn (`later`). False when refused.
     func act(_ id: UInt32, _ action: UInt32) -> Bool {
         #if os(iOS) || os(tvOS)
-        return presenter.navigation.act(id, action)
+        return presenter.navigationAct(id, action)
         #else
         guard let node = presenter.views[id] else { return false }
         switch action {

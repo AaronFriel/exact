@@ -378,7 +378,7 @@ extension NodeView {
     /// A `value` that arrived while text was marked, applied when the composition ends.
     var pendingValue: String? { get { extras?.pendingValue } set { if newValue != nil || extras != nil { more.pendingValue = newValue } } }
     var video: (any VideoPlaying)? { get { extras?.video } set { if newValue != nil || extras != nil { more.video = newValue } } }
-    var web: UIView? { get { extras?.web } set { if newValue != nil || extras != nil { more.web = newValue } } }
+    package internal(set) var web: UIView? { get { extras?.web } set { if newValue != nil || extras != nil { more.web = newValue } } }
     package var metal: MetalView? { get { extras?.metal } set { if newValue != nil || extras != nil { more.metal = newValue } } }
     package var canvasInput: CanvasInput? { get { extras?.canvasInput } set { if newValue != nil || extras != nil { more.canvasInput = newValue } } }
     package var overlay: PlainView? { get { extras?.overlay } set { if newValue != nil || extras != nil { more.overlay = newValue } } }
@@ -486,7 +486,7 @@ extension NodeView {
     var scrollOrigin: CGFloat { get { extras?.scrollOrigin ?? 0 } set { if newValue != 0 || extras != nil { more.scrollOrigin = newValue } } }
     var scrollCollapsed: CGFloat { get { extras?.scrollCollapsed ?? 0 } set { if newValue != 0 || extras != nil { more.scrollCollapsed = newValue } } }
     var scrollWritten: String? { get { extras?.scrollWritten } set { if newValue != nil || extras != nil { more.scrollWritten = newValue } } }
-    var hatchReusable: Bool { get { extras?.hatchReusable ?? false } set { if newValue || extras != nil { more.hatchReusable = newValue } } }
+    package var hatchReusable: Bool { get { extras?.hatchReusable ?? false } set { if newValue || extras != nil { more.hatchReusable = newValue } } }
     var clearsNavigation: Bool { get { extras?.clearsNavigation ?? false } set { if newValue || extras != nil { more.clearsNavigation = newValue } } }
     /// Where CSS's `scrollTop` 0 is in UIKit's offsets: past the scroller's
     /// top inset when UIKit insets it — a collapsing title's bar, or the bar

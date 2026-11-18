@@ -3,6 +3,7 @@ import UIKit
 import WebKit
 import XCTest
 @testable import ExactKit
+@testable import ExactNativeViews
 
 /// LLP 1075.003.000 Stage 1 over the native fixture: a node marked
 /// `hatch="badge"` — a leaf box that would otherwise be drawn flat into its
@@ -95,7 +96,7 @@ final class ElementHatchesIOSTests: XCTestCase {
         let compose = try XCTUnwrap(node(session, "compose-home"))
         session.presenter.press(compose.id)
         until("the badge's hatch heard its data change") { log().contains("hatch element badge #\(badge.id): changed") }
-        let hatches = try XCTUnwrap((session.presenter.elements.observation(session.hatchDiagnostics)["words"] as? [String: Any])?["badge"] as? [String: Any])
+        let hatches = try XCTUnwrap((session.presenter.elements.observation(session.hatchDiagnostics!)["words"] as? [String: Any])?["badge"] as? [String: Any])
         XCTAssertEqual((hatches["calls"] as? [String: Int])?["changed"], 1)
         XCTAssertEqual(hatches["live"] as? Int, 1)
         // The plan boots again in this session: the node ends, a new one is built.
@@ -140,7 +141,7 @@ final class ElementHatchesIOSTests: XCTestCase {
         let configuring = try XCTUnwrap(log.range(of: "hatch element frame #\(frame.id): configuring"), log)
         let built = try XCTUnwrap(log.range(of: "hatch element frame #\(frame.id): built"))
         XCTAssertLessThan(configuring.lowerBound, built.lowerBound, "the configuration before the web view")
-        let word = try XCTUnwrap((session.presenter.elements.observation(session.hatchDiagnostics)["words"] as? [String: Any])?["frame"] as? [String: Any])
+        let word = try XCTUnwrap((session.presenter.elements.observation(session.hatchDiagnostics!)["words"] as? [String: Any])?["frame"] as? [String: Any])
         XCTAssertEqual(word["calls"] as? [String: Int], ["configuring": 1, "built": 1])
         // The fixture counts `built` when `isNew`, else `changed`.
         XCTAssertEqual(word["counters"] as? NSDictionary, ["configuring": 1, "built": 1] as NSDictionary, "\(word)")
