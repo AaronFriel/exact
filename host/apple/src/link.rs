@@ -136,6 +136,44 @@ impl IoLinks {
     };
 }
 
+/// A turn's family work after its commits (LLP 1047.001 D10), which
+/// `Host::finish` runs in this order: the documents a source's answers
+/// watch (I/O), then, after the resize rounds, the SVG scenes the batch owes.
+/// Each is `None` when the composition does not link its family, so the
+/// archive names none of its code.
+pub struct TurnLinks<D: DataSource> {
+    /// Reconcile the watched documents with the answers' (`doc_watch`).
+    pub documents: Option<fn(&mut crate::Host<D>)>,
+    /// Send the SVG scenes laid out, moved or restyled this turn.
+    pub svg: Option<fn(&mut crate::Host<D>, &mut crate::batch::Batch)>,
+}
+
+impl<D: DataSource> Clone for TurnLinks<D> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<D: DataSource> Copy for TurnLinks<D> {}
+
+impl<D: DataSource> TurnLinks<D> {
+    /// What `uses` needs.
+    pub const fn of(uses: Uses) -> TurnLinks<D> {
+        TurnLinks {
+            documents: if uses.has(Capability::Io) {
+                Some(crate::Host::<D>::sync_documents)
+            } else {
+                None
+            },
+            svg: if uses.has(Capability::Svg) {
+                Some(crate::Host::<D>::emit_svg_scenes)
+            } else {
+                None
+            },
+        }
+    }
+}
+
 /// What a boot links (LLP 1047.001 D3): the runner's capabilities, its
 /// device capabilities, the kernel's grammars and the host's I/O. An entry makes it in a
 /// `const` from its set (`host!`), so the linker sees only what it names;
@@ -158,6 +196,8 @@ pub struct Links<D: DataSource> {
     /// The runner's optional parts: native modules, tool calls and presence
     /// secrets (LLP 1047.001 D11).
     pub modules: exact_runner::ModuleLinks<D>,
+    /// A turn's family work after its commits.
+    pub turn: TurnLinks<D>,
 }
 
 impl<D: DataSource> Clone for Links<D> {
@@ -170,6 +210,7 @@ impl<D: DataSource> Clone for Links<D> {
             io: self.io,
             engine: self.engine,
             modules: self.modules,
+            turn: self.turn,
         }
     }
 }
@@ -184,6 +225,7 @@ impl<D: DataSource> Links<D> {
         io: Some(IoLinks::LINKED),
         engine: &exact_motion::EngineLinks::ALL,
         modules: exact_runner::ModuleLinks::ALL,
+        turn: TurnLinks::of(ALL),
     };
 
     /// What `uses` needs; evaluated in a `const`, so nothing else is named.
@@ -299,6 +341,7 @@ impl<D: DataSource> Links<D> {
                     exact_runner::ModuleLinks::<D>::NONE.presence
                 },
             },
+            turn: TurnLinks::of(uses),
         }
     }
 }

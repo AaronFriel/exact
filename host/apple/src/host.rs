@@ -308,6 +308,8 @@ pub struct Host<D: DataSource> {
     /// The session's wake (`listen`), which a pending activation leaves with the data source.
     preload_wake: exact_runner::PreloadWake,
     doc_watch: Option<crate::doc_watch::DocWatch>,
+    /// A turn's family work after its commits, in its written order.
+    turn: crate::link::TurnLinks<D>,
     /// Deadline at the last successful finish with no pending resize notifications;
     /// only a receipt-free collection report can reuse its settled passes.
     finished_deadline: Option<Option<f64>>,
@@ -671,6 +673,7 @@ impl<D: DataSource> Host<D> {
             store_retry_names: Vec::new(),
             preload_wake: Default::default(),
             doc_watch: None,
+            turn: links.turn,
             finished_deadline: None,
             quiet_collection: None,
             resize_pending: false,
