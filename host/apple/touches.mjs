@@ -253,16 +253,25 @@ const simDefaults = (udid, args) => new Promise((done) => {
   p.on('close', (status, signal) => { clearTimeout(timer); done({ status: signal ? -1 : status, out, err: signal ? 'no answer in 10 s' : err }); });
 });
 /** Hold the simulator's shared launch lock through AX setup, launch and restoration.
- * The loaded runtime stays with the process. Ordinary drives perform no defaults reads or writes. */
+ * The loaded runtime stays with the process. Ordinary drives perform no defaults reads or writes.
+ * `enabled` is `'try'` for a launch that reads the tree if it can (verify, LLP 1156.006.000 D15): a simulator that
+ * will not say or take the setting is launched without the runtime, with a note, where `true` refuses. */
 export async function withAccessibilityRuntime(udid, enabled, launch, run = simDefaults) {
   return withAccessibilityLock(udid, async () => {
     if (!enabled) return launch();
     const key = 'ApplicationAccessibilityEnabled', args = [AX, key];
+    const refuse = (message) => {
+      if (enabled !== 'try') throw new Error(message);
+      console.error(`note: ${message}; launched without UIKit's accessibility runtime, so the accessibility tree is not read`);
+      return launch();
+    };
     const before = await run(udid, ['read', ...args]);
-    if (before.status !== 0 && !/does not exist|not found/.test(before.err)) throw new Error(`simulator accessibility: ${before.err}`);
+    // An unset key is no failure. `defaults` words it three ways: macOS's "does not exist", and iOS 27's "Domain … not
+    // found" and "Could not find key … in domain …", which a simulator no session has touched answers.
+    if (before.status !== 0 && !/does not exist|not found|Could not find key/.test(before.err)) return refuse(`simulator accessibility: ${before.err}`);
     if (before.status === 0 && before.out.trim() === '1') return launch();
     const set = await run(udid, ['write', ...args, '-bool', 'true']);
-    if (set.status !== 0) throw new Error(`simulator accessibility: ${set.err}`);
+    if (set.status !== 0) return refuse(`simulator accessibility: ${set.err}`);
     let carrier;
     try { carrier = await launch(); return carrier; }
     finally {
@@ -279,7 +288,7 @@ export async function withAccessibilityRuntime(udid, enabled, launch, run = simD
 /** The three keys as simulator `udid` has them (`'1'`, `'0'`, or undefined when unset), or null when it could not say. */
 async function accessibilityKeys(udid) {
   const r = await simDefaults(udid, ['read', AX]);
-  if (r.status !== 0 && !/does not exist/.test(r.err)) return null;
+  if (r.status !== 0 && !/does not exist|not found/.test(r.err)) return null;
   return Object.fromEntries(AX_KEYS.map((k) => [k, new RegExp(`^\\s*${k} = (\\d+);`, 'm').exec(r.out)?.[1]]));
 }
 /** The keys as a session finds them: the record a session killed before its end left of what it found, else read

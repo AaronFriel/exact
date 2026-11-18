@@ -355,7 +355,7 @@ async function reloadEnd(s, t, persisted = []) {
 /** Whether a launch verify reads the accessibility tree of asks the host to load its accessibility runtime: UIKit's
  * loads only for an assistive technology, and a simulator has none, so every screen's tree would come back unread
  * (`open`'s `ax`, as a drive that asks `tree --ax` passes it; LLP 1156.006.000 D15). */
-const readsAx = (host) => host === 'ios';
+const readsAx = (host) => host === 'ios' && 'try'; // if the simulator allows: `withAccessibilityRuntime`
 async function checkHere(s, { screen, sizes = [null], shot, state, ax = true }) {
   const [{ checkOp }, { axHere }] = await Promise.all([import('./agent-check.mjs'), import('./verify-ax.mjs')]);
   const failed = Object.entries(state?.failed ?? {}).map(([name, why]) => `  failed   resource ${name}: ${why}; the screen shows its placeholder or last value`);
