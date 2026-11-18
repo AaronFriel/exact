@@ -53,6 +53,8 @@ pub struct Bridge<D: DataSource> {
     /// Requests whose continuation a source held at dispatch (LLP 1027.002
     /// D3): released after a later commit, by token.
     parked: std::collections::BTreeMap<u64, exact_runner::RequestOut>,
+    /// The session's wake, which an archive with no executor calls itself.
+    wake: Option<(crate::executor::WakeFn, *mut c_void)>,
     launch: Option<String>,
     /// Whether motion an author's commit begins waits for the first presented
     /// frame (LLP 1003.001 D7): every host booted here takes it.
@@ -118,6 +120,7 @@ impl<D: DataSource> Bridge<D> {
             compat: None,
             delivery: None,
             parked: std::collections::BTreeMap::new(),
+            wake: None,
             launch: None,
             start_on_frame: false,
             app_module: None,
@@ -264,8 +267,15 @@ impl<D: DataSource> Bridge<D> {
             host,
             executor,
             parked,
+            wake,
+            links,
             ..
         } = self;
+        // A widget's entry starts its own executor when the archive links
+        // I/O (`entry_timeline`): only an archive without I/O refuses.
+        if let (Some(h), None) = (host.as_mut(), links.io) {
+            Self::emit_without_io(h, *wake, s);
+        }
         if let (Some(h), Some(x)) = (host.as_mut(), executor.as_deref()) {
             if !h.runner_mut().intersect_due().is_empty() {
                 x.notify();
@@ -282,7 +292,6 @@ impl<D: DataSource> Bridge<D> {
                     x.notify();
                 }
             }
-            let admitted = h.grants();
             let mut presenter = crate::batch::Batch::new();
             Self::auth_forgotten(h, &mut presenter);
             for r in h.take_requests() {
@@ -296,22 +305,11 @@ impl<D: DataSource> Bridge<D> {
                     Self::run_dispatch(h, x, parked, r, exact_runner::Dispatch::Missing);
                     continue;
                 }
-                if r.request.url == "exact-activity:" {
-                    if let Ok(request) = std::str::from_utf8(&r.request.body) {
-                        presenter.activity(r.ticket, request);
-                    }
+                if Self::presenter_work(h, &mut presenter, &r) {
                     continue;
                 }
                 if r.request.is_auth() {
                     Self::auth_arm(h, x, &mut presenter, &r);
-                    continue;
-                }
-                if let Some(surface) = r.request.surface.as_deref() {
-                    let oversized = matches!(surface, SurfaceRequest::Restore { bytes, .. } if bytes.len() > MAX_HOST_WORK_BYTES);
-                    let refusal = oversized
-                        .then(|| "surface restore exceeds 16 MiB".to_string())
-                        .or_else(|| r.request.check_surface_grant(&admitted).err());
-                    h.surface_work(&mut presenter, &r, refusal.as_deref());
                     continue;
                 }
                 let dispatch = match r.request.continuation {
@@ -910,6 +908,7 @@ impl<D: DataSource> Bridge<D> {
             candidate.host.listen_io(&**executor, self.document_owner);
         }
         self.presenter_hooks(&mut candidate.host, &candidate.hooks);
+        self.wake = candidate.hooks.wake.map(|w| (w, candidate.hooks.wake_ctx));
         self.executor = executor;
         let batch = Host::ending(self.host.replace(candidate.host), candidate.batch);
         self.launch_layout.insets = None;
@@ -1438,6 +1437,7 @@ mod preparation;
 mod pump;
 mod registry;
 mod snapshot;
+mod without_io;
 #[cfg(test)]
 use registry::REFUSAL;
 pub use registry::{refusal_ptr, with_entry, with_runtime, Entry, Registry};

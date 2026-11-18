@@ -186,6 +186,7 @@ impl<D: DataSource> Bridge<D> {
                     host.listen_io(&**executor, self.document_owner);
                 }
                 self.presenter_hooks(&mut host, &hooks);
+                self.wake = hooks.wake.map(|w| (w, hooks.wake_ctx));
                 self.executor = executor;
                 let batch = Host::ending(self.host.replace(host), batch);
                 self.launch_layout.insets = None;

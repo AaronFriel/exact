@@ -303,7 +303,9 @@ impl Uses {
             }
             uses = match line.split_whitespace().next() {
                 Some("sqlite.open") => uses.with(Capability::Sqlite),
-                Some("auth.session") => uses.with(Capability::AuthSession),
+                // The sign-in sheet's answer reaches its source through the
+                // executor's pump.
+                Some("auth.session") => uses.with(Capability::AuthSession).with(Capability::Io),
                 Some("net.listen" | "env.launch") => uses.with(Capability::Io),
                 _ => uses,
             };
@@ -918,10 +920,11 @@ mod grant_tests {
     }
 
     #[test]
-    fn the_listener_and_the_processes_link_io() {
+    fn the_listener_the_processes_and_the_sign_in_sheet_link_io() {
         for grants in [
             "net.listen unix:/tmp/exact-listen-fixture",
             "process.spawn /usr/bin/git",
+            "auth.session https://example.test",
         ] {
             assert!(
                 Uses::NONE.with_grants(grants).has(Capability::Io),
