@@ -5,8 +5,10 @@ use exact_plan::bytes::{Reader, Writer};
 
 /// Candidates from one accepted geometry report. The second edge may run only
 /// after a pure no-op first action. State changes defer it until settlement.
-pub(crate) struct CollectionEdges {
+pub struct CollectionEdges {
+    /// The edge reached first.
     pub first: exact_plan::EventKind,
+    /// Whether `reachend` follows when the first edge's action changes nothing.
     pub end_after_noop: bool,
 }
 

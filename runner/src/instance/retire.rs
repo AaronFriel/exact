@@ -6,8 +6,8 @@ pub(in crate::instance) fn retire_node(u: &mut Update<'_>, node: &NodeInst) {
     if u.ids.work.sites.is_empty() {
         return;
     }
-    if let Some(c) = node.collection() {
-        c.retire_rows(u);
+    if let Some(list) = node.list() {
+        list.retire(u);
     }
     retire_children(u, &node.children);
 }

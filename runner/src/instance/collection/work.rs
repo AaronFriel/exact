@@ -16,7 +16,7 @@ impl Collection {
     }
 
     /// Count each mounted row's subtree as retired, as its list is destroyed.
-    pub(in crate::instance) fn retire_rows(&self, u: &mut Update<'_>) {
+    pub(super) fn retire_rows(&self, u: &mut Update<'_>) {
         for row in &self.mounted {
             self.retire_row(u, row);
         }

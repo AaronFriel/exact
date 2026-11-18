@@ -493,6 +493,7 @@ impl<D: DataSource> Links<D> {
                 } else {
                     exact_runner::ModuleLinks::<D>::NONE.text_axes
                 },
+                lists: exact_runner::ModuleLinks::<D>::ALL.lists,
             },
             turn: TurnLinks::of(uses),
         }

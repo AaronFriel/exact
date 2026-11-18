@@ -13,6 +13,8 @@
 //! animations.
 
 use super::calls::{CallHow, LinkedTools};
+use super::list_seam::{Lists, NoLists};
+use super::lists::LinkedLists;
 use super::module_seam::{Modules, NoModules};
 use super::modules::LinkedModules;
 use super::presence_secrets::{presence_body, LinkedPresence, PresenceAnswer, PresenceAsk};
@@ -41,6 +43,9 @@ pub struct ModuleLinks<D: DataSource> {
     /// host that plays transitions and animations; they run only where
     /// [`super::RunnerLinks::text_axes`] makes their engine too.
     pub text_axes: &'static dyn TextAxes<D>,
+    /// The list engine's runner half (LLP 1047.000 §9), beside
+    /// [`super::RunnerLinks::lists`], its instance half.
+    pub lists: &'static dyn Lists<D>,
 }
 
 impl<D: DataSource> Clone for ModuleLinks<D> {
@@ -58,6 +63,7 @@ impl<D: DataSource> ModuleLinks<D> {
         tools: &LinkedTools,
         presence: &LinkedPresence,
         text_axes: &LinkedTextAxes,
+        lists: &LinkedLists,
     };
 
     /// No part: the core alone.
@@ -66,13 +72,22 @@ impl<D: DataSource> ModuleLinks<D> {
         tools: &NoTools,
         presence: &NoPresence,
         text_axes: &NoTextAxes,
+        lists: &NoLists,
     };
 
     /// The parts `plan` uses of these, `presence` whether its store keeps a
     /// name with a presence policy: a part the plan does not use is left
     /// out, so the core answers as it would with the part's table empty.
-    /// Font-axis motion is the host's choice alone, kept as it is.
-    pub(in crate::runner) fn for_plan(self, plan: &exact_plan::Plan, presence: bool) -> Self {
+    /// Font-axis motion is the host's choice alone, kept as it is. The lists
+    /// follow the composition, not the plan (LLP 1047.000 §9): `lists` is
+    /// whether the instance tree's list table is linked, and the runner's
+    /// half runs only beside it.
+    pub(in crate::runner) fn for_plan(
+        self,
+        plan: &exact_plan::Plan,
+        presence: bool,
+        lists: bool,
+    ) -> Self {
         let modules =
             plan.modules.is_empty() && plan.views.is_empty() && plan.module_events.is_empty();
         ModuleLinks {
@@ -89,6 +104,10 @@ impl<D: DataSource> ModuleLinks<D> {
                 false => &NoPresence,
             },
             text_axes: self.text_axes,
+            lists: match lists {
+                true => self.lists,
+                false => &NoLists,
+            },
         }
     }
 }

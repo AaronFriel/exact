@@ -112,6 +112,9 @@ pub(crate) mod kept;
 mod kept_tests;
 mod kept_wait;
 mod lines;
+mod list_seam;
+#[cfg(test)]
+mod list_seam_tests;
 mod lists;
 mod media_session;
 pub mod outstanding;
@@ -151,6 +154,7 @@ pub use presence_secrets::{PresenceAnswer, PresenceAsk};
 mod processes;
 mod provenance;
 mod seams;
+pub use list_seam::Lists;
 pub(crate) use processes::refusal as process_refusal;
 pub use provenance::CallOrigin;
 pub use seams::{ModuleLinks, PresenceSecrets, TextAxes, Tools};
@@ -400,7 +404,8 @@ pub struct Runner<D: DataSource> {
     /// Its role overrides, its own (LLP 1121 stage 5; [`Runner::roles`]).
     roles: exact_kernel::style::roles::Installed,
     /// The session the owner's token names (LLP 1094 D4).
-    reorder_session: Option<Box<reorder_group::Session>>,
+    /// Only the list engine makes one (`reorder_group::Session`).
+    reorder_session: Option<Box<dyn std::any::Any>>,
     /// A grouped drop's source while its `reorderdrop` runs (D2).
     dropping_from: Option<exact_kernel::NodeKey>,
     ids: Ids,
@@ -843,7 +848,16 @@ impl<D: DataSource> Runner<D> {
         let booting = exact_kernel::style::roles::bind(&roles);
         root_font::bold_text_facts(&mut kernel, &plan, viewport.preferences.bold_text); // LLP 1115.000 D12.3
         let viewport_geometry = crate::viewport::Geometry::of(&kernel);
-        let seams = seams.for_plan(&plan, !store.presence_names().is_empty());
+        let seams = seams.for_plan(
+            &plan,
+            !store.presence_names().is_empty(),
+            links.lists.is_some(),
+        );
+        // The instance tree's list table runs only beside the runner's half.
+        let links = RunnerLinks {
+            lists: links.lists.filter(|_| seams.lists.linked()),
+            ..links
+        };
         let mut runner = Runner {
             sites,
             strings,

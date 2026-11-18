@@ -664,7 +664,7 @@ fn lists<'a>(
                     Some(ref v @ exact_plan::str_value!()) => v.to_shared_str(),
                     _ => None,
                 };
-                match crate::instance::rare::list_mut(&mut node.rare) {
+                match super::state::list_mut(&mut node.rare) {
                     Some(c) => out.push((c, id, frames.to_vec())),
                     None => lists(&mut node.children, (plan, sites), frames, out),
                 }
@@ -701,7 +701,7 @@ fn by_view<'a>(
                 if node.collection().is_some_and(|c| c.view == view) {
                     return node.collection_mut().map(|c| (c, frames.to_vec()));
                 }
-                if let Some(c) = crate::instance::rare::list_mut(&mut node.rare) {
+                if let Some(c) = super::state::list_mut(&mut node.rare) {
                     for m in &mut c.mounted {
                         let mut inner = frames.to_vec();
                         inner.push(m.row.frame.clone());

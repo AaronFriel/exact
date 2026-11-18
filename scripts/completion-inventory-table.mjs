@@ -250,7 +250,7 @@ export const classifications = [
     ["runner:runner/src/runner/module_work.rs", "Runner::module_work_landed#next_ticket:1 Runner::take_reports#next_ticket:1"],
   ]),
   group("fills", ["one-shot"], "collection/view generation, window and fill token", "UI-owned",
-    "runner/src/runner/collection.rs validates feedback/fill against the current collection; instance/collection/index.rs versions rows and into_view.rs versions reveal requests. Collection.swift fixedMeasurements reads exact_collection_fixed_size through Bridge.swift for the current fixed-region view/epoch measurements.", [
+    "runner/src/runner/list_seam.rs validates feedback/fill against the current collection; instance/collection/index.rs versions rows and into_view.rs versions reveal requests. Collection.swift fixedMeasurements reads exact_collection_fixed_size through Bridge.swift for the current fixed-region view/epoch measurements.", [
     ["apple:host/apple/src/abi/exports.rs", "exact_collection_feedback exact_collection_fixed_size exact_collection_snap exact_collection_snap_stop exact_into_view exact_list_index exact_list_text"],
     ["painted:host/painted/src/canvas/jni.rs", "Java_dev_exact_canvas_Native_ahead Java_dev_exact_canvas_Native_feed Java_dev_exact_canvas_Native_owed Java_dev_exact_canvas_Native_refine"],
     ["painted:host/painted/src/canvas/refine.rs", "CanvasHost::ahead CanvasHost::feed CanvasHost::owed CanvasHost::refine CanvasHost::refine_pending CanvasHost::refine_slice"],
@@ -265,14 +265,14 @@ export const classifications = [
     ["runner:runner/src/instance/collection/mod.rs", "Collection::feedback#scroll_sequence:1 Collection::update_data#data_generation:1 Collection::update_data#scroll_sequence:1"],
     ["runner:runner/src/instance/collection/traversal.rs", "Tree::collection_travel#scroll_sequence:1 Tree::update_collection#scroll_sequence:1"],
     ["runner:runner/src/instance/collection/nest.rs", "PinEpoch::bump#PIN_EPOCH.fetch_add:1"],
-    ["runner:runner/src/runner/collection.rs",
+    ["runner:runner/src/runner/list_seam.rs",
       "Runner::collection_travel Runner::collection Runner::collection_data Runner::collection_feedback Runner::collection_feedback_bytes Runner::collection_feedback_filled " +
       "Runner::collection_mounted Runner::collection_shown Runner::collections Runner::collections_bounded Runner::collections_json Runner::collections_shallow " +
       "Runner::kept_positions_json"],
     ["runner:runner/src/runner/gates.rs", "Runner::collection_reply_key"],
     ["runner:runner/src/runner/foresee.rs", "Runner::foresee"],
     ["runner:runner/src/runner/into_view.rs", "Runner::into_view_json Runner::reveal_collection_index Runner::scroll_into_view Runner::scroll_into_view_at Runner::set_list_covered"],
-    ["runner:runner/src/runner/lists.rs", "Runner::collection_snap Runner::collection_snap_areas Runner::collection_snap_stop Runner::list_index Runner::list_text"],
+    ["runner:runner/src/runner/list_seam.rs", "Runner::collection_snap Runner::collection_snap_areas Runner::collection_snap_stop Runner::list_index Runner::list_text"],
     ["web:host/web/src/abi.rs", "exact_collection_feedback exact_into_view exact_list_index exact_list_text"],
   ]),
   group("frame landings", ["one-shot"], "submitted frame/window generation until presentation or release", "UI-owned",
@@ -319,10 +319,10 @@ export const classifications = [
     ["painted:host/painted/src/transform_binding.rs", "Host::transform_drag_begin Host::transform_drag_binding Host::transform_drag_end Host::transform_drag_update Host::transform_hold_live"],
     ["runner:runner/src/runner/device.rs", "Runner::answer_hold Runner::device_holds Runner::hold Runner::hold_frame_request Runner::hold_request Runner::hold#next_ticket:1 Runner::retire_holds_on"],
     ["runner:runner/src/runner/held.rs", "Runner::asked Runner::hold_facts"],
-    ["runner:runner/src/runner/reorder.rs",
-      "Runner::begin_reorder Runner::begin_session#SERIAL.try_update:1 Runner::cancel_reorder Runner::drop_reorder Runner::finish_reorder Runner::has_reorder " +
-      "Runner::preview_reorder Runner::reorder_binding Runner::reorder_frame Runner::reorder_geometry"],
-    ["runner:runner/src/runner/reorder_group.rs", "Runner::begin_group_reorder Runner::preview_reorder_into Runner::reorder_json Runner::reorder_step"],
+    ["runner:runner/src/runner/list_seam.rs",
+      "Runner::begin_group_reorder Runner::begin_reorder Runner::cancel_reorder Runner::drop_reorder Runner::finish_reorder Runner::has_reorder " +
+      "Runner::preview_reorder Runner::preview_reorder_into Runner::reorder_binding Runner::reorder_frame Runner::reorder_geometry Runner::reorder_json Runner::reorder_step"],
+    ["runner:runner/src/runner/reorder.rs", "Runner::begin_session#SERIAL.try_update:1"],
     ["web-js:host/web-js/motion/src/abi.rs", "m_begin m_end m_height m_held m_lower m_measured m_observe m_pair_begin m_pair_update m_pan_release m_pan_sample m_remove m_settle m_track m_transitions m_unheight m_update"],
     ["web:host/web/src/abi.rs", "exact_auth"],
     ["web:host/web/src/abi/mode.rs", "exact_hold_facts"],
@@ -1220,7 +1220,7 @@ export const classifications = [
     ["painted:host/painted/src/presenter/scroll_end.rs", "Presenter::scroll_end_live Presenter::scroll_end_moved Presenter::timer_or_scroll_due_ms"],
   ]),
   group("fills", ["one-shot"], "collection/view generation, window and fill token", "UI-owned",
-    "The named painted adapter reads or updates the current Presenter through the runner or its Host forwarding API. runner/src/runner/collection.rs validates feedback/fill against the current collection; instance/collection/index.rs versions rows and into_view.rs versions reveal requests.", [
+    "The named painted adapter reads or updates the current Presenter through the runner or its Host forwarding API. runner/src/runner/list_seam.rs validates feedback/fill against the current collection; instance/collection/index.rs versions rows and into_view.rs versions reveal requests.", [
     ["painted:host/painted/src/presenter/collection.rs",
       "Presenter::collection_glided Presenter::collection_scroll_limits Presenter::collection_scroll_pending Presenter::pending_model_scroll " +
       "Presenter::refine_collections Presenter::refine_deferred Presenter::reorder_facts_current Presenter::schedule_collections Presenter::scroll_event " +

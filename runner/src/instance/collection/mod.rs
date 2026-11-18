@@ -19,6 +19,7 @@ mod sizing;
 mod snap;
 use shown::in_collection_row;
 mod start;
+mod state;
 #[cfg(test)]
 mod tests;
 mod text;
@@ -32,6 +33,7 @@ use exact_kernel::PropId;
 use exact_plan::EventKind;
 use index::{MeasurementToken, SizeIndex};
 use sizing::Sizing;
+pub(super) use state::{create_state, update_state};
 pub(super) use traversal::{collections_json, invalidate_typography};
 
 pub(super) struct DataUpdate<'a> {
