@@ -24,6 +24,7 @@ import { installedFileDependencies } from '../../scripts/file-dependencies.mjs';
 // A data module loaded after first pixel (`rust-data.js`) and the agent
 // adapter (`agent.js`, only under `?agent`) are separate files.
 import { spawn, spawnSync } from 'node:child_process';
+import { sourceProvenance } from '../../scripts/install-page.mjs';
 import { createHash } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, isAbsolute, join, normalize, posix, relative, resolve, sep } from 'node:path';
@@ -94,18 +95,7 @@ if (production) process.env.EXACT_UPDATE_TRUST = 'production';
 const checkOnly = args.includes('--check');
 // The wrapper's --check compiles the plan to select artifacts, without building them or checking TypeScript.
 const prerequisitesOnly = args.includes('--prerequisites');
-// The source revision a development build's install pages name, read while
-// it builds: optional, so no git, no repository, or a git held past 5 s (a
-// held index lock) leaves it unknown rather than failing or hanging the build.
-const git = (...a) => new Promise((done) => {
-  let text = '', c;
-  try { c = spawn('git', a, { cwd: appDir, stdio: ['ignore', 'pipe', 'ignore'] }); } catch { return done(null); }
-  const timer = setTimeout(() => { c.kill('SIGKILL'); done(null); }, 5000);
-  c.on('error', () => { clearTimeout(timer); done(null); });
-  c.on('close', (code) => { clearTimeout(timer); done(code === 0 ? text.trim() : null); });
-  c.stdout?.on('data', (d) => { text += d; });
-});
-const revision = production ? null : Promise.all([git('rev-parse', '--short=10', 'HEAD'), git('status', '--porcelain')]);
+const revision = production ? null : sourceProvenance(appDir);
 const gen = resolve(out, '.gen');
 rmSync(out, { recursive: true, force: true });
 mkdirSync(gen, { recursive: true });

@@ -538,7 +538,7 @@ export function compilerSet() {
  * compiles them at this checkout's sources. A product already built is kept
  * on the receipt its compile left (`keepAgain`); one without is built again. */
 async function prebuild() {
-  if (spawnSync('git', ['-C', root, 'status', '--porcelain'], { encoding: 'utf8' }).stdout) console.warn('web-js: this checkout has uncommitted changes; what they touch is built but not kept');
+  if (spawnSync('git', ['--no-optional-locks', '-C', root, 'status', '--porcelain'], { encoding: 'utf8' }).stdout) console.warn('web-js: this checkout has uncommitted changes; what they touch is built but not kept');
   const compiler = compilerKept();
   const compiling = (async () => {
     const again = freshCompiler(COMPILER) ? compiler.keepAgain() : null;

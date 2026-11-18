@@ -34,7 +34,7 @@ import { basename, dirname, relative, resolve, sep } from 'node:path';
 import { within } from '../../scripts/paths.mjs';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
-import { writeInstallPages } from '../../scripts/install-page.mjs';
+import { sourceProvenance, writeInstallPages } from '../../scripts/install-page.mjs';
 import { sealEnvelope } from '../../scripts/deploy-signing.mjs';
 import { compilerWarnings, oneScheme, webInputDigests } from '../../scripts/agent-launch.mjs';
 import { webBuildFailure } from '../../scripts/app-cli.mjs';
@@ -577,11 +577,10 @@ const manifestNotes = [];
 const webManifest = webAppManifest(app.manifest, app.displayName, manifestNotes, app.dir);
 for (const note of manifestNotes) console.log(note);
 writeFileSync(resolve(stage, 'manifest.json'), JSON.stringify(webManifest, null, 2) + '\n');
-const sourceRevision = spawnSync('git', ['rev-parse', '--short=10', 'HEAD'], {cwd:app.dir,encoding:'utf8',timeout:5000,killSignal:'SIGKILL'});
-const sourceChanges = spawnSync('git', ['status', '--porcelain'], {cwd:app.dir,encoding:'utf8',timeout:5000,killSignal:'SIGKILL'});
+const [sourceRevision, sourceChanges] = await sourceProvenance(app.dir);
 writeInstallPages(stage, app.manifest, { id: buildReceipt.binary.sha256,
-  source: sourceRevision.status === 0 ? sourceRevision.stdout.trim() : null,
-  dirty: sourceChanges.status === 0 ? !!sourceChanges.stdout.trim() : null,
+  source: sourceRevision,
+  dirty: sourceChanges === null ? null : !!sourceChanges,
   builtAt: buildEnv.EXACT_UPDATE_TRUST === 'production' ? null : new Date().toISOString(),
   mode: buildEnv.EXACT_UPDATE_TRUST === 'production' ? 'Release build' : 'Development build', reach: bakedReceipt.reach?.rows ?? [] });
 const escapeHtml = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
