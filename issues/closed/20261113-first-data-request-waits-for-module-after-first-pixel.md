@@ -1,6 +1,7 @@
 # On iOS a cold launch sends no data request until about 0.4 s after its first frame
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** LLP 1027.008 Part 1 (95e00d67f) and the canvas hold (b35ada3f8) landed with the launch marks; asking from the owner is undecided, Part 2 waits on the iPhone measurement that QUEUE.md holds, and an earlier transport measured under 1 ms
 **Systems:** host/apple/Sources/ExactKit/SessionActivation.swift, host/apple/src/activation.rs, host/executor/src/lib.rs
 **Severity:** P3
 **Author:** Claude (Opus 5.5), from Exact diaries sent 2026-11-11 to 2026-11-13
@@ -83,3 +84,17 @@ Part of the main thread's hold after the first frame was not the chain's. On App
 Weatherlight (one render pipeline) on an M5 Mac, six launches each way. Before, `create_render_pipeline` took 50 to 54 ms on every launch of a development build and 50 to 58 ms of a release build, whose shaders ship compiled. With the archive written, the first launch takes the same and each launch after it 0.66 to 0.76 ms. Writing the archive holds its lock for about 10 ms on a worker thread, once, on a launch that compiled something.
 
 Not measured on an iPhone. The measurements above have the world's start holding the main thread for about 45 ms there, with the chain waiting behind it in 21 launches of 25 (93 ms or more against 53 to 59). If that hold is this compile, a launch after the first should lose most of it; the paired run on a phone that Part 1 is owed would show it.
+
+## Closed
+
+Main has Part 1 (`95e00d67f`, `c334159c9`; Charlie kept it on 2026-11-14) with the launch report's `evaluation` and `asked` marks, the GPU canvas's start, while the draw's evaluation is in flight, held until the rest of what follows first pixel has run (`b35ada3f8`), no notification-centre read for an app that declares no notification actions and keeps no categories (`66fd57419`), and the canvas's pipeline archive (`8f13deca7`). When a barless iPhone launch defers its navigation owner (`34676bfa2`), the evaluation is posted at the owner's hand-off, after the draw's callback. On an iPhone 18 Pro simulator with all of this, Weatherlight's first request left 35 ms after the draw, where it left at 123 (LLP 1027.008 §2.5).
+
+The three moves under "Fix", against LLP 1027.008 as its §2.5 profile left it:
+
+- **Asking from the owner** (Q1), which would take the remaining main-queue turn off the path, is undecided: an open question "not in this revision", with four conditions its reviews named for a design. It cannot serve a native request, and Weatherlight and Shelf ask `exact-native:` at activation, so it removes nothing for either (§2.5). It needs a revision and a review round before anything is built.
+- **Evaluating before the boot** (Part 2) is gated: Charlie paused it on 2026-11-14 until a profile said what it is worth, and §8 orders it after the phone measurement (step 2) and a review round that finds it ready (both families read r5 NOT READY). The bake's fact it needs (D7) does not exist, and the simulator profile says it removes nothing for Weatherlight or Shelf.
+- **Making the transport when the module is prepared** saves nothing measured: on the iPhone 16 Pro Max above, starting the workers and making their transports took under a millisecond. The transport's first connection was not measured; one transport for the independent workers is `issues/20261113-independent-http-workers-each-open-their-own-connections.md`, and a request sent at process start is LLP 1162.000's preload (stage 1, built).
+
+D3's mark for the first request's hand-off is `asked`, the end of the activating `dataReady`: the requests are handed to the executor inside that call (§2.4), so it bounds the hand-off from above in the same turn, which is what §6's bar asks.
+
+What is owed needs an iPhone: §8 step 2, the §2.5 profile repeated on a phone, and LLP 1162.000 §7's comparison against the same build with no preload. It is `QUEUE.md`'s entry "The first data request on Apple".

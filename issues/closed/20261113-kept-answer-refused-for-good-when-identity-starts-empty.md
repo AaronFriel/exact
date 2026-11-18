@@ -6,7 +6,7 @@
 **Severity:** P2
 **Author:** Claude (Opus 5.5), from Exact diaries sent 2026-11-11 to 2026-11-13
 **Date:** 2026-11-13
-**Related:** issues/20261113-first-data-request-waits-for-module-after-first-pixel.md
+**Related:** issues/closed/20261113-first-data-request-waits-for-module-after-first-pixel.md
 
 ## What is wrong
 
