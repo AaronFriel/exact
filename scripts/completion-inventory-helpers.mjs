@@ -131,7 +131,7 @@ export function helperClassifications(group) {
   ]),
   group("wakes", ["durable operation"], "app action/wake invocation until expiration or end", "durable",
     "runner/src/runner/wakes.rs raises and expires action/wake invocations independently of a mounted view; modules/declared/wake_list.rs allocates their references. Persistence after process exit is not established here.", [
-    ["runner:runner/src/runner/modules/declared/wake_list.rs", "Runner::wake_entry_ended#not_before:1 Runner::wake_entry_ended#not_before:2"],
+    ["runner:runner/src/runner/modules/declared/wake_list.rs", "Runner::wake_entry_ended_linked#not_before:1 Runner::wake_entry_ended_linked#not_before:2"],
   ]),
   group("presence", ["one-shot"], "outstanding presence call and secret generation", "UI-owned",
     "The named public runner-crate source is the presence API or its value/admission helper. runner/src/runner/presence_secrets.rs drops a check whose call was let go. The authentication continuation is session-owned even though the keystore value is durable.", [
@@ -217,7 +217,7 @@ export function helperClassifications(group) {
     "Store::announce_topic records changed app topics; exact_peer_changed delivers them to another session. Canvas extension activation checks the current plan's declared action before raising its event.", [
     ["apple:host/apple/src/abi/exports.rs", "exact_peer_changed"],
     ["runner:runner/src/store.rs", "Store::announce_topic Store::take_announced"],
-    ["runner:runner/src/runner/modules/declared_actions.rs", "Runner::declares_action"],
+    ["runner:runner/src/runner/module_seam/forward.rs", "Runner::declares_action"],
     ["painted:host/painted/src/canvas/jni_extensions.rs", "Java_dev_exact_canvas_Native_activate"],
     ["painted:host/painted/src/canvas/requests.rs", "CanvasHost::extension_activated"],
   ]),

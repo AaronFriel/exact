@@ -23,7 +23,7 @@ pub(in crate::runner) struct LetGo {
 impl<D: DataSource> Runner<D> {
     /// `request`, about to be handed out, numbered when it is data code's
     /// call of one of this plan's module sends that has no number yet.
-    pub(in crate::runner) fn number_data_call(&mut self, request: &mut Request) {
+    pub(super) fn number_data_call_linked(&mut self, request: &mut Request) {
         if !request.is_native() {
             return;
         }

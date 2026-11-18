@@ -39,7 +39,7 @@ impl<D: DataSource> Runner<D> {
     /// activation the host's own platform callback reported. Queued for
     /// [`Runner::apply_announced`]; `Err` for an event the plan does not
     /// know or arguments that are not an array.
-    pub fn raise_module_event(
+    pub(super) fn raise_module_event_linked(
         &mut self,
         extension: &str,
         name: &str,
@@ -96,7 +96,7 @@ impl<D: DataSource> Runner<D> {
 
     /// An event a bound implementation emitted: the device's origin, whatever
     /// it claims.
-    pub(in crate::runner) fn raise_emitted(&mut self, body: &str) {
+    pub(super) fn raise_emitted_linked(&mut self, body: &str) {
         let v: Json = serde_json::from_str(body).unwrap_or_default();
         let (Some(extension), Some(event)) = (v["extension"].as_str(), v["event"].as_str()) else {
             self.log(format!("an emitted event is unreadable: {body}"));
@@ -111,7 +111,7 @@ impl<D: DataSource> Runner<D> {
 
     /// Each queued event, in order, one commit each: its action run with as
     /// many of its arguments as the action takes, under its origin.
-    pub(in crate::runner) fn deliver_module_events(
+    pub(super) fn deliver_module_events_linked(
         &mut self,
     ) -> (Vec<CommitReceipt>, Option<RunnerError>) {
         self.journal_effect_lines();
@@ -150,10 +150,7 @@ impl<D: DataSource> Runner<D> {
                 Err(e) => return (receipts, Some(e)),
             }
         }
-        // Then a wake's, one invocation at a time (LLP 1133.017 D5).
-        let (woke, error) = self.step_invocations();
-        receipts.extend(woke);
-        (receipts, error)
+        (receipts, None)
     }
 
     /// Journal a request a commit not the app's made while `prompt`, which
@@ -185,7 +182,7 @@ impl<D: DataSource> Runner<D> {
     }
 
     /// The session ends: each event still queued is journaled, unheard (D6).
-    pub fn journal_unheard_events(&mut self) {
+    pub(super) fn journal_unheard_events_linked(&mut self) {
         while let Some(raised) = self.extensions.events.queued.pop_front() {
             let row = &self.plan.module_events[raised.row];
             let key = format!(

@@ -10,6 +10,8 @@
 //! uses them whenever the plan has none of the part's rows.
 
 use super::calls::{CallHow, LinkedTools};
+use super::module_seam::{Modules, NoModules};
+use super::modules::LinkedModules;
 use super::presence_secrets::{presence_body, LinkedPresence, PresenceAnswer, PresenceAsk};
 use super::reply::response;
 use super::{CommitReceipt, DataSource, Runner, RunnerError};
@@ -23,6 +25,9 @@ use serde_json::{json, Value as Json};
 /// composition (LLP 1047.001 D11): every part for the plain boots
 /// ([`ModuleLinks::ALL`]).
 pub struct ModuleLinks<D: DataSource> {
+    /// Native modules (LLP 1133.002), for a plan with module, view or event
+    /// rows.
+    pub modules: &'static dyn Modules<D>,
     /// Tool calls (LLP 1111), for a plan with tools.
     pub tools: &'static dyn Tools<D>,
     /// Locked secrets (LLP 1133.010), for grants with a presence policy.
@@ -40,12 +45,14 @@ impl<D: DataSource> Copy for ModuleLinks<D> {}
 impl<D: DataSource> ModuleLinks<D> {
     /// Every part.
     pub const ALL: ModuleLinks<D> = ModuleLinks {
+        modules: &LinkedModules,
         tools: &LinkedTools,
         presence: &LinkedPresence,
     };
 
     /// No part: the core alone.
     pub const NONE: ModuleLinks<D> = ModuleLinks {
+        modules: &NoModules,
         tools: &NoTools,
         presence: &NoPresence,
     };
@@ -54,7 +61,13 @@ impl<D: DataSource> ModuleLinks<D> {
     /// name with a presence policy: a part the plan does not use is left
     /// out, so the core answers as it would with the part's table empty.
     pub(in crate::runner) fn for_plan(self, plan: &exact_plan::Plan, presence: bool) -> Self {
+        let modules =
+            plan.modules.is_empty() && plan.views.is_empty() && plan.module_events.is_empty();
         ModuleLinks {
+            modules: match modules {
+                true => &NoModules,
+                false => self.modules,
+            },
             tools: match plan.tools.is_empty() {
                 true => &NoTools,
                 false => self.tools,
@@ -512,6 +525,93 @@ mod tests {
         assert_eq!(r.intents_state(), None);
         assert!(r.declared_state().is_empty());
         assert!(!r.call_running() && r.call_due().is_none() && !r.call_stops_timers());
+    }
+
+    #[test]
+    fn an_event_only_package_hears_its_event_through_the_module_seam() {
+        use exact_plan::builder::PlanBuilder;
+        let mut b = PlanBuilder::new(exact_kernel::SCHEMA_DIGEST, 1);
+        let body = b.code(exact_plan::asm::Asm::new());
+        let hear = b.action("hear", &[], &[], body);
+        b.module_event(("bell", "@fixture/bell"), "chime", hear, "emit", 4, 0);
+        b.node(
+            exact_kernel::NodeType::View as u8,
+            None,
+            None,
+            0,
+            &[],
+            &[],
+            None,
+        );
+        let plan = b.finish().unwrap();
+        assert!(plan.modules.is_empty() && plan.views.is_empty());
+        let mut r = Runner::boot(
+            plan,
+            Empty,
+            Kernel::with_monospace(),
+            Default::default(),
+            "/",
+        )
+        .unwrap();
+        r.raise_module_event("bell", "chime", "[]", crate::CallOrigin::Device)
+            .unwrap();
+        let (_, error) = r.apply_announced();
+        assert!(error.is_none());
+        assert!(r
+            .journal()
+            .any(|l| l.ends_with("bell.chime: heard by hear")));
+    }
+
+    #[test]
+    fn a_view_only_package_links_the_module_seam_and_a_plan_without_one_does_not() {
+        let source = "component App\n  view\n    text \"hello\"\n";
+        let boot = |plan| {
+            Runner::boot(
+                plan,
+                Empty,
+                Kernel::with_monospace(),
+                Default::default(),
+                "/",
+            )
+            .unwrap()
+        };
+        let plain = boot(contract::compile(source).unwrap());
+        assert!(plain.extensions_json().is_none());
+        // The same app reloaded with a package view: the new runner links it.
+        let mut plan = contract::compile(source).unwrap();
+        plan.add_view("words", ("words", "@fixture/words"), false, &[], "{}");
+        let mut viewed = boot(plan);
+        assert!(viewed.extensions_json().is_some());
+        viewed.bind_extensions(&[], &["words"]);
+        assert!(viewed.extensions_json().unwrap().contains("words"));
+    }
+
+    #[test]
+    fn a_plan_with_tools_and_no_modules_keeps_its_intents() {
+        let source = "component App\n  state n = 0\n  tool bump writes \"Count up.\" = bump\n  action bump\n    n = n + 1\n  view\n    text \"x\"\n";
+        let plan = contract::compile(source).unwrap();
+        assert!(plan.modules.is_empty() && !plan.tools.is_empty());
+        let mut r = Runner::boot(
+            plan,
+            Empty,
+            Kernel::with_monospace(),
+            Default::default(),
+            "/",
+        )
+        .unwrap();
+        let state = r.declared_state();
+        let intents = (state.iter())
+            .find(|(name, _)| name == "intents")
+            .map(|(_, v)| v);
+        assert_eq!(intents.unwrap()["tools"][0]["name"], "bump");
+        let agent = CallHow {
+            door: "agent".into(),
+            ..CallHow::default()
+        };
+        let id = r.call_tool("bump", "{}", agent).unwrap();
+        let (_, error) = r.step_calls();
+        assert!(error.is_none());
+        assert!(r.call_answer(id).unwrap().contains("\"outcome\":\"ok\""));
     }
 
     #[test]

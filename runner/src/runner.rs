@@ -143,6 +143,8 @@ mod modules;
 pub use modules::AppState;
 mod calls;
 pub use calls::CallHow;
+mod module_seam;
+pub use module_seam::Modules;
 mod presence_secrets;
 pub use presence_secrets::{PresenceAnswer, PresenceAsk};
 mod processes;
@@ -550,6 +552,8 @@ pub struct Runner<D: DataSource> {
     calls: calls::Calls,
     /// Locked secrets: the host's backend and the calls on it.
     presence: presence_secrets::Presence,
+    /// The host's target, once it said ([`Runner::set_module_target`]).
+    module_target: Option<String>,
     /// The optional parts this runner links, for its plan.
     seams: ModuleLinks<D>,
     poisoned: bool,
@@ -945,6 +949,7 @@ impl<D: DataSource> Runner<D> {
             wakes: Default::default(),
             calls: Default::default(),
             presence: Default::default(),
+            module_target: None,
             seams,
             delivery,
             viewport,
@@ -1373,48 +1378,6 @@ impl<D: DataSource> Runner<D> {
     pub fn take_store_writes(&mut self) -> Vec<StoreWrite> {
         let writes = self.store.take_writes();
         self.presence_writes(writes)
-    }
-
-    /// The names the store holds a value for — never the values (LLP 1018
-    /// D5: a token is not the agent's to see).
-    /// A presence name is listed with its occupancy, `token: locked,
-    /// user-presence`, `pending`, `plain` or `absent` (LLP 1133.010 §7).
-    pub fn store_names(&self) -> Vec<String> {
-        let presence = self.presence_list();
-        let mut names: Vec<String> = (self.store.names().into_iter())
-            .filter(|n| !n.starts_with(Store::PRESENCE) && !presence.iter().any(|(p, _)| p == n))
-            .map(str::to_string)
-            .collect();
-        names.extend(
-            presence
-                .into_iter()
-                .map(|(name, said)| format!("{name}: {said}")),
-        );
-        names.sort();
-        names
-    }
-
-    /// The store, for a test that reads what an action kept.
-    pub fn store(&self) -> &Store {
-        &self.store
-    }
-
-    /// Whether resource `name` observed device state (secrets, filesystem,
-    /// or SQLite). Bake marks its compiled value as a placeholder, refreshed
-    /// when the data source becomes ready (LLP 1018 D4 / LLP 1027 D4).
-    pub fn resource_reads_store(&self, name: &str) -> bool {
-        self.resource_rows()
-            .position(|r| self.plan.str(r.name) == name)
-            .is_some_and(|i| self.resources[i].store_reader)
-    }
-
-    /// Whether resource `name` drew secure randomness (LLP 1069.005 D2):
-    /// a device read whose value bake leaves out of the plan, so no random
-    /// value is shared by every install; the device asks it.
-    pub fn resource_draws_entropy(&self, name: &str) -> bool {
-        self.resource_rows()
-            .position(|r| self.plan.str(r.name) == name)
-            .is_some_and(|i| self.resources[i].entropy_reader)
     }
 
     /// Deterministic instance work counters, separate from layout and host costs.

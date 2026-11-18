@@ -299,7 +299,7 @@ impl<D: DataSource> Runner<D> {
         // 1133.015 D7), whether Contract or data code reads it.
         let live = (self.plan.module_named(&p.source))
             .filter(|row| row.live && !row.send)
-            .map(|row| self.key(row))
+            .map(|row| self.module_key(row))
             .or_else(|| (p.keepable.as_ref()).and_then(|r| self.module_topic(&r.body)));
         let outcome = match (live, outcome) {
             (Some(key), Outcome::Response(mut response)) => {

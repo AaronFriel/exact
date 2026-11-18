@@ -59,6 +59,8 @@ mod permits;
 mod pictures;
 mod poll;
 mod samples;
+mod seam;
+pub(in crate::runner) use seam::LinkedModules;
 mod services;
 mod sheet;
 mod spans;
@@ -84,7 +86,7 @@ const LISTS: &str = "exact:lists";
 /// The continuation tokens the runner keeps for its held module requests:
 /// a data source's count up from zero, far below, and its reserved ones
 /// (`BACKGROUND`) sit at the top, above.
-const TOKENS: std::ops::Range<u64> = 1 << 62..1 << 63;
+pub(in crate::runner) const TOKENS: std::ops::Range<u64> = 1 << 62..1 << 63;
 
 #[cfg(test)]
 thread_local! {
@@ -295,7 +297,7 @@ impl Extensions {
 
 impl<D: DataSource> Runner<D> {
     /// What answers resource `i`, whose source `source` is a module's name.
-    pub(super) fn module_answer(
+    fn module_answer_linked(
         &mut self,
         i: usize,
         source: &str,
@@ -312,7 +314,7 @@ impl<D: DataSource> Runner<D> {
     }
 
     /// What answers a send (`target`) to `source`, a module's name.
-    pub(super) fn module_send(
+    fn module_send_linked(
         &mut self,
         target: Target,
         source: &str,
@@ -468,7 +470,7 @@ impl<D: DataSource> Runner<D> {
 
     /// Value tickets whose timeout has passed on the agent's clock (§6):
     /// each fails `TIMEOUT`, its ticket retired.
-    pub(super) fn module_deadlines(&mut self, now_ms: f64) {
+    fn module_deadlines_linked(&mut self, now_ms: f64) {
         if !self.native_slot().synced() {
             self.publish_sync();
         }
@@ -487,7 +489,7 @@ impl<D: DataSource> Runner<D> {
     }
 
     /// The reply to a held module request, as `fulfill` parses it.
-    pub(super) fn module_parse(
+    fn module_parse_linked(
         &mut self,
         target: Target,
         ty: TypesId,
@@ -519,7 +521,7 @@ impl<D: DataSource> Runner<D> {
             .clone()
     }
 
-    pub(in crate::runner) fn substitute(&self, row: &ModulesRow) -> std::sync::Arc<Json> {
+    pub(in crate::runner::modules) fn substitute(&self, row: &ModulesRow) -> std::sync::Arc<Json> {
         let key = row.substitute.0;
         if let Some(sub) = self.extensions.substitutes.borrow().get(&key) {
             return sub.clone();
@@ -740,7 +742,7 @@ impl<D: DataSource> Runner<D> {
     /// where the runner answers itself (a status), as does a `partial`
     /// source's. A default has this target's restrictions laid over it
     /// (`targets`). Its `facts` are the runner's own, over either.
-    pub(in crate::runner) fn value_of(&self, row: &ModulesRow) -> Option<Json> {
+    pub(in crate::runner::modules) fn value_of(&self, row: &ModulesRow) -> Option<Json> {
         let sub = self.substitute(row);
         if let Some(listed) = self.listed_value(row, &sub) {
             return Some(listed);
@@ -962,7 +964,7 @@ impl<D: DataSource> Runner<D> {
 
     /// The host dispatches held module request `token`: answered already,
     /// or held until the agent answers. `None` for a data source's token.
-    pub(super) fn module_dispatch(&mut self, token: u64) -> Option<Dispatch> {
+    fn module_dispatch_linked(&mut self, token: u64) -> Option<Dispatch> {
         if !TOKENS.contains(&token) {
             return None;
         }
@@ -985,7 +987,7 @@ impl<D: DataSource> Runner<D> {
     }
 
     /// Held module requests the agent answered since the host dispatched them.
-    pub(super) fn module_release(&mut self) -> Vec<(u64, Dispatch)> {
+    fn module_release_linked(&mut self) -> Vec<(u64, Dispatch)> {
         let (out, keep): (Vec<_>, Vec<_>) = std::mem::take(&mut self.extensions.released)
             .into_iter()
             .partition(|(_, _, dispatched)| *dispatched);
@@ -1049,7 +1051,7 @@ impl<D: DataSource> Runner<D> {
     /// names a module's source or send, `{"extension": …, "source": …,
     /// "args": {…}}`, admitted here as a Contract read or send is, before any
     /// module. `None` for any other body.
-    pub(super) fn module_call(&mut self, native: &crate::Request) -> Option<Dispatch> {
+    fn module_call_linked(&mut self, native: &crate::Request) -> Option<Dispatch> {
         let body = &native.body;
         let v: Json = serde_json::from_slice(body).ok()?;
         let extension = v.get("extension")?.as_str()?;
@@ -1248,7 +1250,7 @@ impl<D: DataSource> Runner<D> {
     }
 
     /// The topic a data-code read of a module's source watches, its key.
-    pub(super) fn module_topic(&self, body: &[u8]) -> Option<String> {
+    fn module_topic_linked(&self, body: &[u8]) -> Option<String> {
         let v: Json = serde_json::from_slice(body).ok()?;
         let owner = v["owner"]
             .as_str()
@@ -1280,7 +1282,7 @@ impl<D: DataSource> Runner<D> {
 
     /// A typed answer to `ticket`, checked before the hold is spent, so it
     /// can be corrected. `None` when the hold is not a module's.
-    pub(super) fn module_check(&self, ticket: u64, text: &str) -> Option<Result<(), String>> {
+    fn module_check_linked(&self, ticket: u64, text: &str) -> Option<Result<(), String>> {
         let h = self.extensions.held.iter().find(|h| h.hold == ticket)?;
         if h.waits == Waits::Ceremony {
             let row = self.module_row(&h.source);
@@ -1363,7 +1365,7 @@ impl<D: DataSource> Runner<D> {
 
     /// Held module requests whose request is gone (superseded, its reader
     /// released, a refused commit): retired with their tickets (§6).
-    pub(super) fn retire_modules(&mut self) {
+    fn retire_modules_linked(&mut self) {
         self.release_idle();
         self.release_sampled();
         self.dispose_dropped();

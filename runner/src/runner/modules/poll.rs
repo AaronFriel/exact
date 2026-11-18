@@ -179,7 +179,7 @@ impl<D: DataSource> Runner<D> {
     }
 
     /// When the next poll is due, for a host on the live clock to wake at.
-    pub(in crate::runner) fn poll_due_ms(&self) -> Option<f64> {
+    pub(super) fn poll_due_ms_linked(&self) -> Option<f64> {
         if self.extensions.polls.is_empty() {
             return self.stale_due_ms();
         }
@@ -193,7 +193,7 @@ impl<D: DataSource> Runner<D> {
 
     /// After an advance: each polled source whose period passed and whose
     /// last ask has landed is asked again, once.
-    pub(in crate::runner) fn poll(&mut self) -> Result<Vec<CommitReceipt>, RunnerError> {
+    pub(super) fn poll_linked(&mut self) -> Result<Vec<CommitReceipt>, RunnerError> {
         let due: Vec<String> = self
             .polled()
             .iter()
@@ -212,7 +212,7 @@ impl<D: DataSource> Runner<D> {
 
     /// Whether a polled source's ask is in flight, or a stale answer's
     /// (`stale.rs`): what an agent's jump waits for before it replies.
-    pub fn polls_asking(&self) -> bool {
+    pub(super) fn polls_asking_linked(&self) -> bool {
         self.polled().iter().any(|(key, _)| self.asking(key)) || self.stale_asking()
     }
 }

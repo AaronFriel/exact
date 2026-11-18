@@ -132,7 +132,7 @@ impl<D: DataSource> Runner<D> {
     fn local_auth(&self) -> Option<ModulesRow> {
         (self.plan.modules.iter())
             .find(|m| {
-                let sub = self.substitute(m);
+                let sub = self.module_substitute(m);
                 sub["authenticator"].is_object()
                     && sub["permission"]["status"].as_str() == Some(self.plan.str(m.declared))
             })
@@ -142,7 +142,8 @@ impl<D: DataSource> Runner<D> {
     /// The device's status as the substitute answers it.
     fn local_auth_status(&self) -> Json {
         let row = self.local_auth();
-        row.and_then(|r| self.value_of(&r)).unwrap_or(json!({}))
+        row.and_then(|r| self.module_value_of(&r))
+            .unwrap_or(json!({}))
     }
 
     /// A locked item can be kept now: the host keeps them, and a device
@@ -227,13 +228,13 @@ impl<D: DataSource> Runner<D> {
             return self.presence_checked(id, checked);
         }
         let permission = self.local_auth().and_then(|row| {
-            let sub = self.substitute(&row);
+            let sub = self.module_substitute(&row);
             let name = sub["permission"]["name"].as_str()?.to_owned();
             let asks = sub["permission"]["asks"].as_object().cloned();
             Some((name, asks))
         });
         let (state, asks) = match &permission {
-            Some((name, asks)) => (self.permission_state(name), asks.clone()),
+            Some((name, asks)) => (self.module_permission_state(name), asks.clone()),
             None => ("granted".to_owned(), None),
         };
         let biometric_only = !matches!(
@@ -298,7 +299,7 @@ impl<D: DataSource> Runner<D> {
     fn store_check(&self) -> Json {
         let declared = self
             .local_auth()
-            .map(|row| self.substitute(&row)["authenticator"]["substitute"].clone());
+            .map(|row| self.module_substitute(&row)["authenticator"]["substitute"].clone());
         declared.filter(Json::is_object).unwrap_or_else(|| {
             json!({ "ticket": "presence", "cancel": "USER_CANCEL",
                 "choices": { "fail": "AUTHENTICATION_FAILED", "lockout": "LOCKOUT", "invalidated": "unlock" } })
@@ -606,13 +607,13 @@ impl<D: DataSource> PresenceSecrets<D> for LinkedPresence {
         };
         if permission {
             let name = r.local_auth().and_then(|row| {
-                r.substitute(&row)["permission"]["name"]
+                r.module_substitute(&row)["permission"]["name"]
                     .as_str()
                     .map(str::to_owned)
             });
             match (choice.as_str(), name) {
-                ("allow", Some(name)) => r.set_permission(&name, "granted"),
-                ("deny", Some(name)) => r.set_permission(&name, "denied"),
+                ("allow", Some(name)) => r.set_module_permission(&name, "granted"),
+                ("deny", Some(name)) => r.set_module_permission(&name, "denied"),
                 _ => {
                     let checked = Checked::Failed(
                         "PERMISSION_DENIED".into(),

@@ -1516,7 +1516,7 @@
         "runner/src/runner/midi.rs: Runner::set_midi",
         "runner/src/runner/mode.rs: Runner::set_mode",
         "runner/src/runner/mode.rs: Runner::set_modes",
-        "runner/src/runner/modules/agent.rs: Runner::extension_agent",
+        "runner/src/runner/module_seam/forward.rs: Runner::extension_agent",
         "runner/src/runner/native_timers.rs: Runner::fire_native_timer",
         "runner/src/runner/page.rs: Runner::page_presented",
         "runner/src/runner/page.rs: Runner::prefer_presented",
