@@ -8,7 +8,7 @@
 //        machine, so no app's first build compiles them.
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 // Also for its PATH: the pinned binaryen (and Cargo) as every web build has
@@ -131,6 +131,11 @@ function lockFrom(crate) {
   writeFileSync(resolve(crate, 'Cargo.lock'), lock);
   writeFileSync(from, id);
 }
+/** What separates two directories of one app name (two worktrees of an app) in the names made from it: twelve hex
+ * of the directory's real path, as `host/web/dev.mjs` keys `dev-generations` (LLP 1156.006.000 D13). Every app's
+ * module builds into one Cargo target, where one crate name from two directories is one product and one claim. */
+export const dirKey = (dir) => createHash('sha256').update(realpathSync(dir)).digest('hex').slice(0, 12);
+
 /** Cargo's module at `wasm`, optimized to `<out>/app.module.wasm`. */
 function module(manifest, name, out, label) {
   const wasm = resolve(TARGET, 'wasm32-unknown-unknown/release', `${name}.wasm`), done = resolve(out, 'app.module.wasm');
@@ -165,7 +170,9 @@ function prepareModule(wasm, done, { manifest, targetDir, profile }, build) {
   replace(done, temp => cpSync(cached, temp, { preserveTimestamps: true }));
 }
 
-export function buildModule(app, out = resolve(MODULES, app), draw = false, dir = resolve(root, 'apps', app)) {
+export function buildModule(app, out, draw = false, dir = resolve(root, 'apps', app)) {
+  const key = dirKey(dir);
+  out ??= resolve(MODULES, `${app}-${key}`);
   const manifest = JSON.parse(readFileSync(resolve(dir, 'app.json'), 'utf8'));
   if (manifest.rust?.module?.package) return ownModule(app, out, dir);
   // The source app.json's rust.data names (LLP 1153.003 D2), exported from a crate of its own whose one dependency is
@@ -201,7 +208,7 @@ export function buildModule(app, out = resolve(MODULES, app), draw = false, dir 
   const ws = readFileSync(resolve(root, 'Cargo.toml'), 'utf8');
   const patch = ws.slice(ws.indexOf('[patch.crates-io]')).split('\n[')[0].replace(/path = "vendor/g, `path = "${root}/vendor`);
   keep(resolve(crate, 'Cargo.toml'), `[package]
-name = "exact-js-module-${app}"
+name = "exact-js-module-${app}-${key}"
 version = "0.1.0"
 edition = "2021"
 publish = false
@@ -222,7 +229,7 @@ ${patch}
 `);
   keep(resolve(crate, 'src/lib.rs'), lib);
   lockFrom(crate);
-  return module(resolve(crate, 'Cargo.toml'), `exact_js_module_${app.replaceAll('-', '_')}`, out, `${app}: the module`);
+  return module(resolve(crate, 'Cargo.toml'), `exact_js_module_${app.replaceAll('-', '_')}_${key}`, out, `${app}: the module`);
 }
 
 /** The refusal of an app at `dir` whose web crate bakes a Rust source while `manifest` names neither `rust.data` nor

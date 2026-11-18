@@ -441,3 +441,16 @@ test('one-shot wasm packaging preserves the bake receipt Rust reloads consume', 
     expect(readBuilds(app, {}).map(build => build.compat.inputs.app)).toEqual([app.id]);
   } finally { for (const exit of exits) exit(); rmSync(dir, { recursive: true, force: true }); }
 });
+
+// LLP 1156.006.000 D13: two directories of one app name (two worktrees) have their own key in the module crate's name.
+test('a web module is keyed by its app directory', async () => {
+  const { dirKey } = await import('../host/web-js/module.mjs');
+  const dir = mkdtempSync(resolve(tmpdir(), 'exact-module-key-')), other = resolve(dir, 'worktree');
+  try {
+    mkdirSync(other);
+    expect(dirKey(dir)).toMatch(/^[0-9a-f]{12}$/);
+    expect(dirKey(other)).not.toBe(dirKey(dir));
+    symlinkSync(other, resolve(dir, 'link'));
+    expect(dirKey(resolve(dir, 'link'))).toBe(dirKey(other));
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
