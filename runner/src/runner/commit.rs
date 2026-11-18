@@ -1045,6 +1045,7 @@ impl<D: DataSource> Runner<D> {
             fetch: request.fetch,
             keepable: keepable.then(|| request.clone()),
             stream: sockets::stream_count(&request),
+            stream_url: super::faults::stream_url(&request),
             upload: request.stream && request.upload_progress,
             sent: false,
             grant: request

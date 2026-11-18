@@ -1405,7 +1405,11 @@ impl<D: DataSource> Bridge<D> {
             {
                 h.take_ended_actions()
             }
-            Some(h) => h.answer_hold(&request).unwrap_or_else(|| h.agent(&request)),
+            Some(h) => match h.drop_stream(&request) {
+                Some(Ok(batch)) => batch,
+                Some(Err(e)) => return self.refuse(&e),
+                None => h.answer_hold(&request).unwrap_or_else(|| h.agent(&request)),
+            },
             None => exact_runner::json::error("not booted"),
         };
         // An answered auth hold is delivered by the next pump (LLP 1069.006 D7).

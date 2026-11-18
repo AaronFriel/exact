@@ -91,7 +91,7 @@ parts: use X from "exact:content"; an option is none or some(…)
   RoundButton(label="Start", tint=some("-exact-system-green"), press=toggle, disabled=false, testId="start")
   AnswerTile(label="Paris", status="idle", press=pick("Paris"), testId="answer-paris")
 
-test steps (app.test.contract; every other form: docs/contract-grammar.md)
+test steps (app.test.contract, docs/contract-grammar.md)
   tap "id" (… contextmenu)
   type "id" "text", type "id" key "Enter"
   expect text "id" == "…"
@@ -100,6 +100,7 @@ test steps (app.test.contract; every other form: docs/contract-grammar.md)
   back
   presence allow (cancel, fail, lockout, invalidated)
   fail fetch "<prefix>", pass fetch …
+  drop stream "<prefix>"
   answer fetch "<prefix>" with 200 {"text":"Hello"}
   request POST "/items" {…} as grace expect 409
   size 390x844, at "/item/7#moves", epoch, time-zone, locale, seed, before data

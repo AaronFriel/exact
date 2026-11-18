@@ -1238,6 +1238,9 @@ fn faults<D: DataSource>(runner: &Runner<D>, request: &str) -> String {
     let table = runner.faults();
     let full_request = request;
     let request = after_key(request, "faults").unwrap_or("{}");
+    if after_key(request, "dropStream").is_some() {
+        return error("drop stream is unavailable on this host");
+    }
     if let Some(prefix) = field_str(request, "answer") {
         let value: serde_json::Value = match serde_json::from_str(full_request) {
             Ok(v) => v,
@@ -1265,6 +1268,24 @@ fn faults<D: DataSource>(runner: &Runner<D>, request: &str) -> String {
         }
     }
     format!("{{\"faults\":{}}}", table.json())
+}
+
+/// Handle an immediate stream fault before the host's read-only agent operations.
+/// The host publishes the returned commits and cancels the retired transports.
+pub fn drop_stream<D: DataSource>(
+    runner: &mut Runner<D>,
+    request: &str,
+) -> Option<Result<crate::Advanced, String>> {
+    if field_str(request, "op").as_deref() != Some("prefer") {
+        return None;
+    }
+    let faults = after_key(request, "faults")?;
+    after_key(faults, "dropStream")?;
+    let prefix = field_str(faults, "dropStream").filter(|s| !s.is_empty());
+    Some(match prefix {
+        Some(prefix) => runner.drop_streams(&prefix),
+        None => Err("drop stream needs a URL prefix".into()),
+    })
 }
 
 #[cfg(test)]

@@ -843,6 +843,7 @@ step          = "tap" "midi" STRING ( HEX { HEX } | "clock" NUMBER NUMBER ) NL
               | "reload" NL
               | "fail" "fetch" STRING [ "times" NUMBER ] NL (* later fetches whose URL starts with it fail *)
               | "pass" "fetch" STRING NL             (* it stops failing *)
+              | "drop" "stream" STRING NL           (* ends open streams whose URL starts with it *)
               | "prefer" IDENT STRING NL             (* quoted media preference or root-font-size *)
               | "request" METHOD STRING [ json ] [ "as" ( IDENT | STRING ) ] [ "expect" NUMBER ] NL
                                                      (* the driver writes through the app's server *)
@@ -1055,7 +1056,16 @@ prefix itself. A counted fault that matched no fetch by the test's end (or
 before it is armed again) fails the test at the line that armed it, and
 `reload` relaunches with the table as it is then. Each HTTP attempt of a long
 poll (`exactStream` with `exactLongPoll`) takes a matching fault and retries as
-a network failure. Event streams, byte streams and WebSockets are not matched.
+a network failure. Event streams, byte streams and WebSockets use
+`drop stream "<prefix>"`. This step ends every open matching stream and
+releases its connection. The mapper receives a terminal `error` of kind
+`"Network"` (Rust receives `Failed { kind: Network }`). Frames waiting behind
+an unfinished mapper are discarded. If no open stream matches, the step
+fails at its line. Wait for a value that confirms the stream is open before
+dropping it. Long polls use `fail fetch` on their individual HTTP attempts
+because their transport repeats buffered requests. Upload progress streams
+and local listeners are outside this step's scope. The web's wasm host
+opens event streams and WebSockets. It reads byte streams as buffered replies.
 `answer fetch "<prefix>" with <status> [header "<name>" "<value>"]… [<body>]`
 supplies an immediate HTTP response, with no request to the service. It may lead
 a test or the file, like `fail fetch`, so the first resource load receives it.

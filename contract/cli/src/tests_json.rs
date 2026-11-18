@@ -230,6 +230,10 @@ fn step_json(step: &Step, s: &mut String) {
             s.push_str("{\"op\":\"pass-fetch\",\"prefix\":");
             q(prefix, s);
         }
+        Step::DropStream { prefix, .. } => {
+            s.push_str("{\"op\":\"drop-stream\",\"prefix\":");
+            q(prefix, s);
+        }
         // @ref LLP 1116.006 D8 — the body as JSON text, the persona as `as`.
         Step::Request {
             method,

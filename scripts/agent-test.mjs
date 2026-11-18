@@ -974,6 +974,15 @@ export async function runTests({ host, browser, file, plan, app, size, env, webD
             break;
           }
           case 'pass-fetch': { const r = await s.op({ op: 'prefer', faults: { pass: st.prefix } }); if (r?.error) throw new Error(r.error); break; }
+          case 'drop-stream': {
+            const r = await s.op({ op: 'prefer', faults: { dropStream: st.prefix } }).catch(e => {
+              if (e.reply?.error) throw new Error(e.reply.error);
+              throw e;
+            });
+            if (r?.error) throw new Error(r.error);
+            if (r?.dropped !== true) throw new Error(`drop stream is unavailable on ${host}`);
+            break;
+          }
           // The driver's `tap` forms (feed F10): `into` brings a virtualized list's row into view by its key.
           case 'tap': {
             const opts = st.form === 'into' ? { into: { key: st.key } }

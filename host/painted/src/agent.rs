@@ -571,7 +571,21 @@ fn answer_line<D: DataSource>(p: &mut Presenter<D>, line: &str) -> String {
         Some("clock") => clock(p, line),
         Some("share") => p.receive_share(&q).unwrap_or_else(|e| error(&e)),
         // A fetch fault (LLP 1103) is the runner's; the device facts are this presenter's.
-        Some("prefer") if top_level(line, "faults") => p.host().agent(line),
+        Some("prefer") if top_level(line, "faults") => {
+            match exact_runner::agent::drop_stream(p.host_mut().runner_mut(), line) {
+                Some(Ok(drop)) => {
+                    let host_error = p
+                        .host_mut()
+                        .commit(&drop.receipts, drop.error.map(|e| format!("{e:?}")));
+                    let present_error = p.after_commit();
+                    host_error
+                        .or(present_error)
+                        .map_or_else(|| r#"{"dropped":true}"#.into(), |e| error(&e))
+                }
+                Some(Err(e)) => error(&e),
+                None => p.host().agent(line),
+            }
+        }
         // @ref LLP 1125 §4 — MIDI ports the agent names, and a message from one.
         Some("prefer" | "midi") if top_level(line, "midi") || top_level(line, "input") => {
             match p.midi_agent(line) {

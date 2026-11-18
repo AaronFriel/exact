@@ -14,6 +14,7 @@
 // there is more than one — routing, not a tenth operation.
 import Foundation
 import CoreFoundation
+import CExact
 #if os(macOS)
 import AppKit
 #endif
@@ -421,6 +422,8 @@ public final class Agent {
         case "prefer" where req["midi"] != nil: emit(tagged(midi(req)))
         case "prefer" where req["extension"] != nil || req["permission"] != nil: emit(tagged(preferExtension(req)))
         case "midi": emit(tagged(midi(req)))
+        case "prefer" where (req["faults"] as? [String: Any])?["dropStream"] != nil:
+            emit(tagged(dropStream(line)))
         case "prefer" where req["faults"] == nil: emit(tagged(prefer(req)))
         case "screenshot": emit(tagged(screenshot(req)))
         // What is wrong with the presented screen, as observations the driver judges (LLP 1116.003 D8).
@@ -643,6 +646,15 @@ public final class Agent {
         session.apply(batch)
         if let error = batch.error { return ["error": error] }
         return ["midi": true]
+    }
+
+    private func dropStream(_ line: String) -> [String: Any] {
+        let runtime = session.runtime
+        let batch = runtime.on(layout: true) { runtime.read(exact_agent(runtime.rt, runtime.write(line))) }
+        if batch.held { return ["error": "drop stream: the runtime is held"] }
+        session.apply(batch)
+        if let error = batch.error { return ["error": error] }
+        return ["dropped": true]
     }
 
     /// `prefer extension` (LLP 1124 D7) and `prefer permission` (LLP

@@ -980,7 +980,11 @@ impl<D: DataSource> Bridge<D> {
         // `tap @t` / `type @t` answer a held device request (LLP 1069.007
         // D4) before any view is looked up.
         let out = match self.host.as_mut() {
-            Some(h) => h.answer_hold(&request).unwrap_or_else(|| h.agent(&request)),
+            Some(h) => match exact_runner::agent::drop_stream(h.runner_mut(), &request) {
+                Some(Ok(drop)) => h.advanced(drop),
+                Some(Err(e)) => exact_runner::json::error(&e),
+                None => h.answer_hold(&request).unwrap_or_else(|| h.agent(&request)),
+            },
             None => exact_runner::json::error("not booted"),
         };
         self.emit(out)

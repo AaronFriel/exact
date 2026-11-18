@@ -730,6 +730,16 @@ fn the_test_step_grammar_names_drag_to() {
 }
 
 #[test]
+fn drop_stream_lowers_as_a_step_at_its_line() {
+    let tests = contract::tests("test \"socket\"\n  drop stream \"ws://a/\"\n").unwrap();
+    let json = contract::tests_json(&tests);
+    assert!(json.contains(r#"{"op":"drop-stream","prefix":"ws://a/","line":2}"#));
+    assert!(contract::tests("drop stream \"x\"\ntest \"t\"\n  clock data\n").is_err());
+    assert!(contract::tests("test \"t\"\n  drop stream \"\"\n").is_err());
+    assert!(contract::tests("test \"t\"\n  drop stream \"x\" times 2\n").is_err());
+}
+
+#[test]
 fn fail_fetch_leads_as_a_launch_line_or_is_a_step_and_inherits_by_prefix() {
     // LLP 1103 D3: leading lines arm before the first data load; later ones
     // are steps; the file's lines lead every test that names no such prefix.

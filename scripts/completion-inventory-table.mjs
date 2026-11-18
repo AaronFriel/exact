@@ -709,6 +709,7 @@ export const classifications = [
   ]),
   group("sockets and listens", ["subscription"], "source stream/watch and pending subscription in a session", "UI-owned",
     "runner/src/runner/sockets.rs and listen.rs associate reader facts with source requests; retirement of the source removes the UI observer.", [
+    ["runner:runner/src/agent.rs", "drop_stream"],
     ["runner:runner/src/runner/listen.rs", "Runner::listen_standing Runner::listen_view Runner::set_listen_reader"],
     ["runner:runner/src/runner/sockets.rs", "Runner::publish_sockets Runner::retrying Runner::set_retry_reader Runner::set_socket_reader Runner::socket_buffered Runner::socket_published Runner::take_socket_sends"],
   ]),

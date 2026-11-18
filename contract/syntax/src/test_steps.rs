@@ -190,6 +190,13 @@ pub enum Step {
         /// Where.
         span: Span,
     },
+    /// End open network streams whose URL starts with the prefix.
+    DropStream {
+        /// The URL prefix.
+        prefix: String,
+        /// Where.
+        span: Span,
+    },
     /// `request POST "/items" {"title": "Bread"} as grace [expect 409]` (LLP 1116.006
     /// D8): the driver writes through the app's server as another person.
     Request {

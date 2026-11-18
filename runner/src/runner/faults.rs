@@ -9,11 +9,80 @@
 //! `faults` operation.
 
 use super::Runner;
-use crate::{DataSource, Dispatch, FailureKind, Outcome, RequestOut, Response, Work};
+use crate::{
+    Advanced, DataSource, Dispatch, FailureKind, Outcome, Request, RequestOut, Response, Timed,
+    Work,
+};
 use std::sync::{Arc, Mutex};
 
 /// A long poll's check before each HTTP attempt: a matching fault's network error.
 pub type FetchFault = Arc<dyn Fn(&str) -> Option<String> + Send + Sync>;
+
+pub(super) fn stream_url(request: &Request) -> Option<Box<str>> {
+    let network = request.url.split_once("://").is_some_and(|(scheme, _)| {
+        ["http", "https", "ws", "wss"]
+            .iter()
+            .any(|s| scheme.eq_ignore_ascii_case(s))
+    });
+    (request.stream
+        && network
+        && request.long_poll.is_none()
+        && !request.upload_progress
+        && request.listen.is_none())
+    .then(|| request.url.as_str().into())
+}
+
+impl<D: DataSource> Runner<D> {
+    pub(crate) fn drop_streams(&mut self, prefix: &str) -> Result<Advanced, String> {
+        let tickets: Vec<_> = self
+            .pending
+            .iter()
+            .filter(|p| {
+                p.completion.is_some()
+                    && p.refusal.is_none()
+                    && !p.refused
+                    && p.stream_url
+                        .as_deref()
+                        .is_some_and(|url| url.starts_with(prefix))
+            })
+            .map(|p| p.ticket)
+            .collect();
+        if tickets.is_empty() {
+            return Err(format!("drop stream {prefix:?} matched no open stream"));
+        }
+        let mut receipts = Vec::new();
+        let mut error = None;
+        for ticket in tickets {
+            let message = "stream dropped by test";
+            // The injected end overtakes any frames waiting on an unfinished mapper.
+            self.fail_mapper_turn(ticket, message);
+            self.explicit_aborts.push(ticket);
+            match self.fulfill(
+                ticket,
+                Outcome::Failed {
+                    kind: FailureKind::Network,
+                    message: message.into(),
+                },
+            ) {
+                Ok(Some(receipt)) => receipts.push(Timed {
+                    at_ms: self.now_ms,
+                    receipt,
+                }),
+                Ok(None) => {}
+                Err(e) => {
+                    error.get_or_insert(e);
+                }
+            }
+        }
+        Ok(Advanced {
+            receipts,
+            now_ms: self.now_ms,
+            error,
+            stopped_on_request: false,
+            needs_apply: false,
+        })
+    }
+}
 
 /// One armed prefix (D3): how many matching fetches it fails yet (`None`:
 /// every one until `pass`), whether it still matches, and how many it has

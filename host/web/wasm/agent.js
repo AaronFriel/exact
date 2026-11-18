@@ -479,6 +479,12 @@ function agentReply(request) {
       }
       case "midi":
       case "prefer": {
+        if (request.faults && "dropStream" in request.faults) {
+          const reply = ask(request);
+          if (!Array.isArray(reply.ops)) return { error: reply.error ?? "drop stream is unavailable on this wasm host" };
+          const { batch } = applyBatch(reply);
+          return batch.error == null ? tagged({ dropped: true }) : { error: batch.error };
+        }
         if (request.faults) {
           return loadAfterPaint("./faults.js", "faults").then((m) => tagged(m.faultOp(request.faults)));
         }

@@ -45,6 +45,6 @@ message. [Loopback server](../../apps/large-live-list/socket.mjs)
 - Web SQLite imports the file on open and exports it to IndexedDB after
   writes. Values, bind parameters and results have a 16 MiB adapter
   limit. The file is subject to browser quota.
-- Authored `fail fetch` leaves WebSockets alone. The loopback server
-  has test controls for disconnects and gaps.
+- Use `drop stream` to inject a WebSocket network error. The loopback
+  server's controls exercise peer closes, missing acknowledgements and replay gaps.
   [Test setup](../../apps/large-live-list/README.md)

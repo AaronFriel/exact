@@ -110,6 +110,7 @@ enum ResetGate {
         "scrolldragend(_:velocity:target:now:)": "a drag of an old scroller let go",
         "refresh(_:now:)": "a pull to refresh on the old tree's list",
         "intoView(_:key:block:inline:)": "the agent's scroll into an old list",
+        "dropStream(_:)": "the test reports that the runtime is held",
         "heightDragUpdate(_:height:now:)": "a height drag moving on the old tree",
         "heightDragRelease(_:height:now:)": "a height drag released as its view goes",
         "reorderBegin(_:scrollTop:now:)": "a reorder beginning on the old tree",

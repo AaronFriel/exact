@@ -1064,6 +1064,11 @@ impl Parser {
                     Step::FailFetch { prefix, times, span }
                 }
             }
+            "drop" => {
+                self.expect_word("stream")?;
+                let prefix = self.launch_str("drop stream", "a URL prefix")?;
+                Step::DropStream { prefix, span }
+            }
             "answer" => {
                 self.expect_word("fetch")?;
                 let prefix = self.launch_str("answer fetch", "a URL prefix")?;
