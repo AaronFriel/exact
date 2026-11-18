@@ -858,6 +858,10 @@ uint32_t exact_frame_at(ExactRuntime rt, double now_ms, double wall_ms);
  * presented frame, in every host booted after; zero at the agent's takeover,
  * where what waits starts at at_ms. Returns the batch's length. */
 uint32_t exact_start_on_frame(ExactRuntime rt, uint32_t on, double at_ms);
+/* @ref LLP 1072 §3.5: the views prepared off screen and not yet revealed;
+ * motion a commit began on them starts at the first frame after they leave
+ * the list. Count 0 reveals them all. */
+void exact_unshown(ExactRuntime rt, const uint32_t *views, uint32_t count);
 /* Whether the display drives frame tasks: exact_frame turns it on; 0 when the
  * agent's clock takes over, whose advances then fire virtual frames. */
 uint32_t exact_present_frames(ExactRuntime rt, uint32_t on);

@@ -23,7 +23,7 @@ extension ControlHost {
         guard let popup = control as? NSPopUpButton else { return }
         (popup as? SelectField)?.owner = owner
         popup.bezelStyle = owner.inGroupedForm ? .inline : .push
-        let menu = presenter.selectOptions?(owner.id) ?? SelectMenu()
+        let menu = selectMenu(owner.id)
         guard menus[owner.id] != menu else { return }
         menus[owner.id] = menu
         // Items by hand: `addItems(withTitles:)` merges equal titles.
@@ -71,12 +71,12 @@ extension ControlHost {
         guard presenter.views[id] != nil else { return }
         // The shown title can resize even when the action writes no bound value.
         defer { self.sync() }
-        let before = presenter.selectOptions?(id)
+        let before = selectMenu(id)
         presenter.controlValue(id, value, input: true, change: true)
         // The bound value is shown when it changes, as the web build's select:
         // an action that wrote none leaves the person's choice showing (LLP
         // 1069.001 D4, amended 2026-10-04).
-        guard presenter.selectOptions?(id) != before else { return }
+        guard selectMenu(id) != before else { return }
         menus.removeValue(forKey: id)
         if let owner = presenter.views[id], let control = controls[id] {
             configureValue(control, owner, accent: nil)

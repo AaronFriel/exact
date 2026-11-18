@@ -179,7 +179,7 @@ extension NodeView {
     /// parent (the Mac's table under a list's rows) is no sibling of theirs.
     static func keepingGhosts(_ children: [NodeView], in parent: PaintView) -> [NodeView] {
         var result = children
-        for (index, node) in parent.subviews.compactMap({ $0 as? NodeView }).enumerated() where node.paintGhost {
+        for (index, node) in NodeView.structural(parent.subviews).enumerated() where node.paintGhost {
             result.insert(node, at: min(index, result.count))
         }
         return result

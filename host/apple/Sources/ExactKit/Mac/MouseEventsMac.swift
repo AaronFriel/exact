@@ -554,7 +554,7 @@ extension NodeView {
         if !handlers.isDisjoint(with: FileDrag.events) { registerForDraggedTypes([.fileURL]) } else { unregisterDraggedTypes() }
     }
 
-    package override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation { FileDrag.moved(self, sender) ?? [] }
+    package override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation { held ? [] : FileDrag.moved(self, sender) ?? [] }
     package override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation { FileDrag.moved(self, sender) ?? [] }
     package override func draggingExited(_ sender: NSDraggingInfo?) { FileDrag.exited(self, sender) }
     package override func performDragOperation(_ sender: NSDraggingInfo) -> Bool { FileDrag.perform(self, sender) ?? false }

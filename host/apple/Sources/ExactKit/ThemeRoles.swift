@@ -138,7 +138,7 @@ extension Presenter {
         // shows outside its root, resolves the theme's `AccentColor` again
         // (a live edit, LLP 1121 stage 5).
         for view in [root] + ThemeRoles.adopted(by: root) {
-            for case let node as NodeView in view.subviews {
+            for node in NodeView.structural(view.subviews) {
                 node.retint(changed: true)
                 node.accentChanged()
             }

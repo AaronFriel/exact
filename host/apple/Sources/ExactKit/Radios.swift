@@ -58,7 +58,7 @@ extension NodeView {
 extension ControlHost {
     /// The radios of `id`'s group, itself alone when the kernel has none.
     func radioMembers(_ id: UInt32) -> [UInt32] {
-        let group = radioGroup?(id).group ?? []
+        let group = self.group(id)?.group ?? []
         return group.isEmpty ? [id] : group
     }
 
@@ -104,7 +104,7 @@ extension ControlHost {
             checkRadio(node.id)
             return true
         case "ArrowDown", "ArrowRight", "ArrowUp", "ArrowLeft":
-            let group = radioGroup?(node.id)
+            let group = self.group(node.id)
             let forward = name == "ArrowDown" || name == "ArrowRight"
             guard let to = (forward ? group?.next : group?.previous).flatMap({ presenter.views[$0] }) else { return true }
             focusRadio(to, keyboard: true)

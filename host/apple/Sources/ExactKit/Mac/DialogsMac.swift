@@ -317,7 +317,7 @@ final class DialogHost {
                 if run.canBecomeKeyView { views.append((run, run.tabOrder)) }
                 else if run === start { before = views.count }
             }
-            for case let child as NodeView in node.container.subviews { walk(child) }
+            for child in node.childNodes { walk(child) }
             for popover in presenter.menus.following(node) { walk(popover) }
         }
         walk(dialog)

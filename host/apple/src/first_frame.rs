@@ -174,6 +174,18 @@ impl<D: DataSource> Host<D> {
         (ms.min(self.now_ms) / 1000.0).max(self.engine.now())
     }
 
+    /// The views the presenter prepares off screen and has not revealed
+    /// (LLP 1072 §3.5): motion a commit began on them starts at the first
+    /// frame after they show, not at a frame that shows them nowhere.
+    pub fn set_unshown(&mut self, views: &[u32]) {
+        let kernel = self.runner.kernel();
+        let nodes = views
+            .iter()
+            .filter_map(|&v| kernel.node(v))
+            .map(|n| exact_kernel::motion::motion_node(n.key));
+        self.engine.set_unshown(nodes);
+    }
+
     /// While a motion tick's frame is set, start what waits for it, and send
     /// the started plays' lowered specs again (D4).
     pub(super) fn start_frame(&mut self) {

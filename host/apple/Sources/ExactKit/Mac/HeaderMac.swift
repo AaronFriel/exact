@@ -87,7 +87,7 @@ struct WindowHeader {
     /// this route. `shown`: whether a node is shown as authored.
     static func read(route: NodeView, back: String?, pushed: Bool, shown: (NodeView) -> Bool) -> Read {
         guard let rule = HeaderRule(route: route, back: back, backIsPlatforms: pushed, projected: true) else { return .none }
-        let children = { (node: NodeView) in node.container.subviews.compactMap { $0 as? NodeView } }
+        let children = { (node: NodeView) in node.childNodes }
         let items = Set(rule.items.map(ObjectIdentifier.init))
         let backs = rule.items.filter { item in !rule.leading.contains { $0 === item } && !rule.trailing.contains { $0 === item } }
         var passedHeading = false
@@ -149,7 +149,7 @@ struct WindowHeader {
     /// two or more and nothing else, each a pressable tab that shows its
     /// title alone. AppKit's toolbar group is made of titles.
     static func titleTabs(of list: NodeView) -> [NodeView]? {
-        let children = { (node: NodeView) in node.container.subviews.compactMap { $0 as? NodeView } }
+        let children = { (node: NodeView) in node.childNodes }
         func textOnly(_ node: NodeView) -> Bool { node.kind == "text" && children(node).allSatisfy(textOnly) }
         let tabs = children(list).filter { $0.style["display"]?.string != "none" }
         let titled = { (tab: NodeView) -> Bool in
@@ -175,7 +175,7 @@ struct WindowHeader {
     static func showable(_ button: NodeView) -> Bool {
         if BadgeFace(button) != nil || MacBarFace(button) != nil { return true }
         if button.isNativeButton { return button.face?.raster != true }
-        let children = { (node: NodeView) in node.container.subviews.compactMap { $0 as? NodeView } }
+        let children = { (node: NodeView) in node.childNodes }
         let content = children(button)
         func textOnly(_ node: NodeView) -> Bool { node.kind == "text" && children(node).allSatisfy(textOnly) }
         let images = content.filter { $0.kind == "image" && children($0).isEmpty }

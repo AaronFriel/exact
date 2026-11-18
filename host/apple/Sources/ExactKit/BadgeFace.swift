@@ -27,7 +27,7 @@ struct BadgeFace: Equatable {
     let shares: [Double?]
     #endif
     init?(_ button: NodeView) {
-        let kids = button.container.subviews.compactMap { $0 as? NodeView }
+        let kids = button.childNodes
         guard kids.count == 1, let box = kids.first else { return nil }
         self.init(box: box)
     }
@@ -39,7 +39,7 @@ struct BadgeFace: Equatable {
         guard box.channels("background_color") != nil else { return nil }
         var text = "", symbol: String?, ink: NodeView?, pictured: NodeView?
         func walk(_ node: NodeView) {
-            for case let child as NodeView in node.container.subviews {
+            for child in node.childNodes {
                 if child.kind == "image", let name = child.faceSymbol { symbol = symbol ?? name; ink = ink ?? child }
                 else if child.kind == "image", child.imageSource != nil { pictured = pictured ?? child }
                 else if child.isParagraph, text.isEmpty { text = child.accessibleText; ink = ink ?? child }

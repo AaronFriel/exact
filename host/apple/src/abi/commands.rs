@@ -399,6 +399,13 @@ impl<D: DataSource> Bridge<D> {
         self.output.len() as u32
     }
 
+    /// The views prepared off screen and not yet revealed (`exact_unshown`).
+    pub fn unshown(&mut self, views: &[u32]) {
+        if let Some(h) = self.host.as_mut() {
+            h.set_unshown(views);
+        }
+    }
+
     /// A select's options (`exact_select_options`), as JSON in the output
     /// buffer: `[{"value","label","disabled"}]` in order, and which one it
     /// shows (`chosen`, an index or null). Not a batch: nothing changes.

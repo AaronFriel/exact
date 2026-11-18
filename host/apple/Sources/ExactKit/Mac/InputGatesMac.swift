@@ -64,6 +64,12 @@ final class InputGates {
         refresh(touched.compactMap { presenter.views[$0] })
     }
 
+    /// A prepared node's gates, read where it stands under live ancestors (LLP 1072 T13).
+    func prepared(_ node: NodeView) {
+        gates[node.id] = [node.isHidden, node.routeInert, node.props["inert"] == "true", node.props["accessibilityElementsHidden"] == "true"]
+        refresh([node])
+    }
+
     /// Top-layer ownership changes the same native input/AX gates as inert.
     /// The focus leaves a node input no longer reaches (a hidden view, an
     /// inert one: authored, a route's, behind a dialog) and a control that

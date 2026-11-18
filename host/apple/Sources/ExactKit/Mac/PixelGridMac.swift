@@ -155,7 +155,7 @@ extension Presenter {
     /// `parent`'s children drawn again from its origin: those whose drawn
     /// frame changes, and theirs in turn.
     func regridChildren(of parent: NodeView) {
-        for case let child as NodeView in parent.container.subviews {
+        for child in parent.structuralChildren {
             guard let old = child.grid, gridPlace(child, old.layout) != old else { continue }
             applyFrame(child, old.layout)
         }

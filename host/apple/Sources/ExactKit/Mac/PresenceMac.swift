@@ -27,7 +27,7 @@ extension Presenter {
                 guard seen.insert(node.id).inserted else { continue }
                 members.append(node)
             }
-            stack.append(contentsOf: next.subviews)
+            stack.append(contentsOf: next.committedSubviews)
         }
         for leaving in [view] + held {
             guard let window = leaving.window, let responder = dialogs.focusOwner(window),

@@ -150,6 +150,8 @@ package final class ControlHost: NSObject {
 
     /// Asks for the face of `id` again at its next read.
     func faceChanged(_ id: UInt32) { faces.removeValue(forKey: id) }
+    /// A radio's group, as the runtime gives it now: iOS stages no batch.
+    func group(_ id: UInt32) -> RadioGroup? { radioGroup?(id) }
     /// Asks for every face again at its next read.
     func facesChanged() { faces.removeAll() }
 

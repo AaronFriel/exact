@@ -80,7 +80,7 @@ struct SheetHeader {
     static func read(route: NodeView, back: String?) -> Read {
         guard let rule = HeaderRule(route: route, back: back, backIsPlatforms: false, projected: true) else { return .none }
         if let tap = rule.tap { return .kept("its heading is inside a pressable (#\(tap.id)), and a sheet's title is not pressed") }
-        let children = { (node: NodeView) in node.container.subviews.compactMap { $0 as? NodeView } }
+        let children = { (node: NodeView) in node.childNodes }
         // A push button says words and presses: one that opens a menu, shows no word or is not shown is not one.
         let button = { (node: NodeView) in
             node.pressable && node.presenter?.invocation(of: node).map({ $0.opens && $0.target.props["popover"] != nil }) != true

@@ -995,8 +995,7 @@ final class MenuHost: NSObject {
         if v.isButton, let face = v.face, face.fits, let shown = face.shown { return shown }
         // Its accessible name: an `aria-hidden` child (a submenu row's `›`,
         // which the platform menu draws itself) is not part of it.
-        return v.container.subviews
-            .compactMap { $0 as? NodeView }
+        return v.childNodes
             .filter { $0.props["accessibilityElementsHidden"] != "true" }
             .map(title(of:))
             .filter { !$0.isEmpty }

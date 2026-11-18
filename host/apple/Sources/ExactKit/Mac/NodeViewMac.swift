@@ -52,6 +52,10 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
     // Twice the kernel rank; transients never overwrite the authored answer.
     var rank: Int64 = 0
     var paintLifted = false
+    /// The opacity written while a reveal holds the box off screen (`holdOffstage`).
+    var offstageAlpha: CGFloat?
+    /// In a subtree a staged batch prepares or has taken down: outside the committed tree (`StagingMac.swift`).
+    var held = false
     var paintGhost = false
     var paintGhosts = 0
     weak var paintParent: PaintView?
@@ -372,6 +376,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
     /// of a fling's main thread on bones, 2026-09-30, against SwiftUI's 9).
     package override func resetCursorRects() {
         super.resetCursorRects()
+        guard !held else { return }
         if let cursor = CSSCursor.value(style["cursor"]?.string ?? "auto") { addCursorRect(bounds, cursor: cursor); return }
         // `cursor: auto` over a link is AppKit's pointing hand, as
         // `NSTextView` shows over its links (LLP 1115 §3): a `link` node, and
@@ -408,7 +413,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
     /// child as on the web (`controlAccessibilityChildren`). An image or a
     /// range is a leaf.
     package override func accessibilityChildren() -> [Any]? {
-        if props["accessibilityElementsHidden"] == "true" || accessibilityHiddenWritten { return [] }
+        if props["accessibilityElementsHidden"] == "true" || accessibilityHiddenWritten || held { return [] }
         if actsAsButton { return withAtoms(controlAccessibilityChildren()) }
         return props["accessibilityRole"] == "img" || rangeRole != nil ? nil : withAtoms(textAccessibilityChildren() ?? inDrawnOrder(exposed(super.accessibilityChildren())))
     }
@@ -447,7 +452,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
     /// `aria-hidden` takes the node and its subtree off the tree, as the
     /// web's does (onboarding F16: a checkbox's visible label stayed exposed).
     package override func isAccessibilityElement() -> Bool {
-        accessibilityExposed && props["accessibilityElementsHidden"] != "true" && super.isAccessibilityElement()
+        accessibilityExposed && props["accessibilityElementsHidden"] != "true" && !held && super.isAccessibilityElement()
     }
     /// Where an image source resolves, as a page resolves `src`: an `http(s)`
     /// URL as is; a relative path under the asset root (`EXACT_ASSETS`, else
@@ -566,7 +571,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
         let kind = requested ?? (needsSheetMaterial ? "sheet" : paintedMenuRadius != nil && !unevenCorners ? "glass" : nil)
         if materialKind != kind {
             releaseGlassIsolation()
-            let children = container.subviews.compactMap { $0 as? NodeView }
+            let children = structuralChildren
             let old = materialView
             let oldContent = materialContent
             materialView = nil
@@ -759,7 +764,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
         NodeView.hitDepth += 1
         if NodeView.hitDepth == 1 { NodeView.hitInert = [:] }
         defer { NodeView.hitDepth -= 1; if NodeView.hitDepth == 0 { NodeView.hitInert = nil } }
-        guard !inert, !isHiddenOrHasHiddenAncestor, placedAncestor?.placementHidden != true, let point = spaceHit(point) else { return nil }
+        guard !inert, !held, !isHiddenOrHasHiddenAncestor, placedAncestor?.placementHidden != true, let point = spaceHit(point) else { return nil }
         if drawsRowBezel, let bezel = rowBezelRect, !bezel.contains(convert(point, from: superview)) { return nil }
         if let clipPath, !clipPath.contains(convert(point, from: superview), using: clipRule) { return nil }
         if !fragmentHit(convert(point, from: superview)) { return nil }
@@ -778,7 +783,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
             return hit
         }
         guard let overlay, let sup = superview else { return ordinary() }
-        let placed = overlay.subviews.compactMap { $0 as? NodeView }.filter { $0.placement != nil || $0.placementHidden }
+        let placed = NodeView.structural(overlay.subviews).filter { $0.placement != nil || $0.placementHidden }
         guard !placed.isEmpty else { return ordinary() }
         let inCanvas = convert(point, from: sup)
         if clipsOneAxis, !oneAxisClipContains(inCanvas) { return ordinary() }
@@ -1165,7 +1170,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
             observeLiveScroll(sv, replacing: scroll)
             sv.autoresizingMask = [.width, .height]
             GlassGroups.moving(in: self) {
-                let children = container.subviews.filter { $0 is NodeView }
+                let children = structuralChildren
                 addSubview(sv)
                 for child in children { sv.documentView?.addSubview(child) }
             }
@@ -1308,15 +1313,6 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
         if !backdropOperations.isEmpty { applyBackdrop() }
         // Border, gradient and image sublayers follow the new size.
         if layerBoxEligible && (hasBoxPaint || kind == "image") { needsDisplay = true }
-    }
-
-    func prepareToMount() {
-        guard kind == "text" else { return }
-        wantsLayer = true
-        applyShadow()
-        if let hide = boxFilter?.hide { layer?.mask = hide } else { applyBoxMask() }
-        setPaintPosition(paintZPosition)
-        applyTransform()
     }
 
     func fitScroll() {

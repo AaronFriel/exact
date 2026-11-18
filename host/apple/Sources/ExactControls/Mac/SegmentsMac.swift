@@ -122,7 +122,7 @@ final class SegmentHost: SegmentHosting {
     /// A tablist's pressable tabs, or a radio group's pressable radios.
     private func tabs(in owner: NodeView) -> [NodeView] {
         let role = owner.props["accessibilityRole"] == "radiogroup" ? "radio" : "tab"
-        return owner.container.subviews.compactMap { $0 as? NodeView }.filter {
+        return owner.childNodes.filter {
             $0.isButton && $0.props["accessibilityRole"] == role && $0.handlers.contains("press")
         }
     }

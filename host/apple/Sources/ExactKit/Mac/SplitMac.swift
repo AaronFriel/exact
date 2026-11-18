@@ -284,7 +284,7 @@ final class SplitHost {
     /// Table cells hold their rows apart from the list's native children.
     private func currentRow(in list: NodeView) -> UInt32? {
         let children = presenter.tables.feeds[list.id].map { $0.children ?? $0.rows.map(\.node) }
-            ?? list.container.subviews.compactMap { $0 as? NodeView }
+            ?? list.childNodes
         for row in children where presenter.views[row.id] === row && row.style["display"]?.string != "none"
             && row.props["popover"] == nil && row.props["navigationSplit"] != "placeholder" {
             if row.handlers.contains("press") || row.props["href"]?.isEmpty == false {
@@ -505,7 +505,7 @@ final class SplitHost {
         // A table draws no separator beside its selected row, above it or under it.
         var beside: [NodeView] = []
         if let row {
-            let siblings = (row.superview?.subviews ?? []).compactMap { $0 as? NodeView }.filter { presenter.views[$0.id] === $0 && ($0 === row || !$0.isHidden) }
+            let siblings = NodeView.committed(row.superview?.subviews ?? []).filter { presenter.views[$0.id] === $0 && ($0 === row || !$0.isHidden) }
             beside = [row]
             if let index = siblings.firstIndex(where: { $0 === row }), index > 0 { beside.append(siblings[index - 1]) }
         }

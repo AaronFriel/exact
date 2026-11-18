@@ -26,7 +26,7 @@ extension NodeView {
     private var onlySymbol: UIImageView? {
         var symbols: [UIImageView] = [], other = false
         func walk(_ node: NodeView) {
-            for child in node.container.subviews.compactMap({ $0 as? NodeView }) where !child.isHidden && child.props["accessibilityElementsHidden"] != "true" {
+            for child in node.childNodes where !child.isHidden && child.props["accessibilityElementsHidden"] != "true" {
                 if let leaf = child.symbolView, leaf.image != nil { symbols.append(leaf) } else if child.kind == "image" || child.props["text"]?.isEmpty == false { other = true }
                 walk(child)
             }
@@ -79,7 +79,7 @@ extension NodeView {
         // nothing (habits F16: a tab's icon glyph). One the host hides still
         // names: a native control draws its words (a grouped list's sections,
         // a segmented control's tabs).
-        let children = container.subviews.compactMap { $0 as? NodeView }.filter { unshown || !$0.leftOut }
+        let children = childNodes.filter { unshown || !$0.leftOut }
         return children.map { naming ? $0.authoredLabel ?? $0.contentText(naming: true) : $0.contentText(naming: false, unshown: unshown) }.filter { !$0.isEmpty }.joined(separator: " ")
     }
     /// Not rendered (`display: none`) or left out of the accessibility tree (`aria-hidden`).
@@ -359,10 +359,13 @@ extension NodeView {
         if target === self {
             // The host owns these values on the node; native controls still
             // read their cell's values below.
+            // Help is written at the first sync even when nil, or AppKit serves
+            // the tooltip as help. Required is AppKit's false on a new view and
+            // nothing else writes it, so it is written only once it differs.
             var last = lastAccessibilityWrite
             if !last.formInitialized || last.enabled != enabled { setAccessibilityEnabled(enabled); last.enabled = enabled }
             if !last.formInitialized || last.help != description { setAccessibilityHelp(description); last.help = description }
-            if !last.formInitialized || last.required != required { setAccessibilityRequired(required); last.required = required }
+            if last.required != required { setAccessibilityRequired(required); last.required = required }
             last.formInitialized = true
             lastAccessibilityWrite = last
         } else {
@@ -764,7 +767,7 @@ extension NodeView {
             if let title = face.title, face.symbol == nil { return .title(title) }
             return nil
         }
-        let children = container.subviews.compactMap { $0 as? NodeView }
+        let children = childNodes
         // An `aria-hidden` child (an icon glyph) is drawn but not named: no
         // segment shows one thing and is named another (habits F16).
         if children.contains(where: { $0.props["accessibilityElementsHidden"] == "true" }) { return nil }
@@ -783,6 +786,18 @@ extension Presenter {
             ?? (view as? NodeView).flatMap { navigation.logicalParent(of: $0) } ?? view.superview
     }
     #endif
+    /// What `syncAccessibility` writes of a node a staged batch made, while
+    /// it is prepared (LLP 1072 T13): its form facts. False for what the
+    /// reveal's pass writes instead: a live region or an autofocus, which
+    /// speak or move the focus when the node is seen, and a button, whose
+    /// name is read from content.
+    func prepareAccessibility(_ node: NodeView) -> Bool {
+        guard node.livePoliteness == nil, node.props["autofocus"] != "true" else { return false }
+        guard !(node.actsAsButton || node.props["accessibilityRole"] == "button") || node.isNativeButton else { return false }
+        node.applyFormAccessibility()
+        return true
+    }
+
     /// Names, live regions and autofocus. `changed` limits the pass to the
     /// views a batch touched and their ancestors — a button's name reads its
     /// subtree — plus every live region and pending autofocus; nil reads

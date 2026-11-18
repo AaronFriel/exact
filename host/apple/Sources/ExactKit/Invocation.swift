@@ -168,9 +168,11 @@ extension ExactSession {
     /// before it (a published reply or tick) and a timer due after it carry
     /// none: their glass is drawn at once. So do events the app's own script
     /// can cause as well as a person: focus, a selection, a scroll, a
-    /// dialog's close and a popover's `toggle`.
+    /// dialog's close and a popover's `toggle`. Beside a staged batch the
+    /// input on `id` is admitted as `admit` says (LLP 1072 T13).
     // Input without a touch hit test still installs ownership before its runner call.
-    func applyInput(_ input: @autoclosure () -> Batch) {
+    func applyInput(_ input: @autoclosure () -> Batch, at id: UInt32? = nil) {
+        guard admits(id) else { return }
         #if os(iOS)
         presenter.navigation.finishBootOwner()
         #endif

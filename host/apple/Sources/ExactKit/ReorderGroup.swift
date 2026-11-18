@@ -297,9 +297,9 @@ package final class ReorderGroupHold {
     }
     private static func grip(in view: NodeView) -> NodeView? {
         if !(view.props["reorderFor"] ?? "").isEmpty { return view }
-        for case let child as NodeView in view.subviews { if let found = grip(in: child) { return found } }
+        for child in NodeView.committed(view.subviews, reader: view) { if let found = grip(in: child) { return found } }
         for child in view.subviews where !(child is NodeView) {
-            for case let inner as NodeView in child.subviews { if let found = grip(in: inner) { return found } }
+            for inner in NodeView.committed(child.subviews, reader: view) { if let found = grip(in: inner) { return found } }
         }
         return nil
     }

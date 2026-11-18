@@ -1355,6 +1355,18 @@ macro_rules! host {
             $crate::abi::with_runtime(&EXACT_RUNTIMES, rt, true, |b, _| b.presence(len), |_| 0)
         }
 
+        /// The views prepared off screen and not yet revealed (LLP 1072
+        /// §3.5): motion begun on them waits for the first frame after; an
+        /// empty list reveals them all.
+        #[no_mangle]
+        pub unsafe extern "C" fn exact_unshown(rt: u32, views: *const u32, count: u32) {
+            let views = if count == 0 { &[] } else {
+                // SAFETY: the caller keeps `count` ids live for this synchronous call.
+                unsafe { std::slice::from_raw_parts(views, count as usize) }
+            };
+            $crate::abi::with_runtime(&EXACT_RUNTIMES, rt, false, |b, _| b.unshown(views), |_| ())
+        }
+
         /// A native button's title and symbol (LLP 1069.011 D5), JSON;
         /// returns its length.
         #[no_mangle]

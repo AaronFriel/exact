@@ -88,10 +88,31 @@ public struct Batch {
     /// The journal's other lines, for the unified log at a lower level (LLP 1143).
     public var journal: [String] = []
     package var frameWorkTiming: FrameWorkTiming?
+    /// Where the runtime made it in the order of everything it made
+    /// (`Runtime.sequence`): batches apply in this order (LLP 1072 T13). Zero
+    /// until it is numbered.
+    package var sequence: UInt64 = 0
+    /// What the clock asked for: a frame's tick, which is per node while it
+    /// commits nothing, or a timer's advance (frame tasks and settled `then`s
+    /// included), whose next is held while it waits (LLP 1072 T13). The
+    /// bridge sets it as it reads the batch.
+    package var clockWork: ClockWork?
+    /// The native control state it changes, by control, as the runtime gave
+    /// it when it made the batch: the presenter shows this, never state the
+    /// runtime holds later (LLP 1072 §3.5). Nil for a batch the runtime did
+    /// not make: what it may change is read again from the runtime.
+    package var controlReads: [UInt32: ControlRead]?
+    package enum ClockWork { case tick, advance }
+    package func made(by clock: ClockWork) -> Batch {
+        var batch = self
+        batch.clockWork = clock
+        return batch
+    }
     /// It may change the screen when it applies: it has ops, a control's
-    /// viewless contents, page facts or the navigation roots' tabs, whose
-    /// placement the views may not carry. The presenter resolves an orientation request separately.
-    package var changesScreen: Bool { !ops.isEmpty || controls || facts || rootTabs != nil }
+    /// viewless contents, page facts, the native control state it carries or
+    /// the navigation roots' tabs, whose placement the views may not carry.
+    /// The presenter resolves an orientation request separately.
+    package var changesScreen: Bool { !ops.isEmpty || controls || facts || rootTabs != nil || controlReads?.isEmpty == false }
     package init(ops: [BatchOp], timers: Bool, motion: Bool, clock: Double?, error: String?, timerDueMs: Double? = nil, pending: Bool = false, busy: Bool = false) {
         self.ops = ops; self.timers = timers; self.motion = motion; self.clock = clock
         self.error = error; self.timerDueMs = timerDueMs; self.pending = pending
@@ -113,14 +134,26 @@ public struct Batch {
 
 }
 
+/// A native control's state that the runtime computes and no op carries, as
+/// JSON the bridge reads: a button's face (`exact_press_face`), a select's
+/// options (`exact_select_options`), a radio's group (`exact_radio_group`).
+/// In a batch, the parts it changes.
+package struct ControlRead: Equatable {
+    package var face: Data?, select: Data?, radio: Data?
+    package init(face: Data? = nil, select: Data? = nil, radio: Data? = nil) { self.face = face; self.select = select; self.radio = radio }
+    /// The parts it has, as a batch's footprint names them.
+    package var parts: Set<String> { Set([face.map { _ in "face" }, select.map { _ in "select" }, radio.map { _ in "radio" }].compactMap { $0 }) }
+}
+
 /// Immutable composition services, installed before the runtime can serve a turn.
 package struct RuntimeHooks {
     package let decodeBatch: (UnsafeBufferPointer<UInt8>, AssetResolver?) -> Batch
-    package let prepareBatch: ((inout Batch) -> Void)?
+    /// On the owner as a batch is read, with the runtime as it made it.
+    package let prepareBatch: ((Runtime, inout Batch) -> Void)?
     package let symbolMeasure: ExactSymbolFn?
     package let prewarmIslands: ((UInt8) -> Void)?
     package init(decodeBatch: @escaping (UnsafeBufferPointer<UInt8>, AssetResolver?) -> Batch,
-                 prepareBatch: ((inout Batch) -> Void)? = nil, symbolMeasure: ExactSymbolFn? = nil,
+                 prepareBatch: ((Runtime, inout Batch) -> Void)? = nil, symbolMeasure: ExactSymbolFn? = nil,
                  prewarmIslands: ((UInt8) -> Void)? = nil) {
         self.decodeBatch = decodeBatch; self.prepareBatch = prepareBatch
         self.symbolMeasure = symbolMeasure; self.prewarmIslands = prewarmIslands
@@ -152,6 +185,12 @@ package final class Runtime {
     #endif
 
     private let hooks: RuntimeHooks
+    /// Numbers each batch as the owner makes it, and a batch the host makes
+    /// as it reaches `apply`: one order for everything (LLP 1072 T13).
+    package let sequence = BatchSequence()
+    /// On the owner, each native control's `type` and its state as the last
+    /// batch read gave it (`Batch.controlReads`): a batch carries what changed.
+    package var controlTypes: [UInt32: String] = [:], controlsRead: [UInt32: ControlRead] = [:]
     package init(hooks: RuntimeHooks = .headless) {
         self.hooks = hooks
         rt = Owner.shared.sync {
@@ -311,11 +350,12 @@ package final class Runtime {
         // strings into Swift values before returning; no batch borrows the buffer.
         let bytes = UnsafeBufferPointer(start: exact_out(rt), count: Int(len))
         var batch = hooks.decodeBatch(bytes, profileResolver)
+        batch.sequence = sequence.next()
         #if DEBUG
         // What was decoded, before `prepare` adds the owner's values.
         observeBatch?(Data(bytes), batch)
         #endif
-        hooks.prepareBatch?(&batch)
+        hooks.prepareBatch?(self, &batch)
         return batch
     }
     /// A payload into the runtime's input buffer; its length. An empty
@@ -639,7 +679,7 @@ package final class Runtime {
         let queued = capture == 0 ? 0 : hostMediaTime()
         post(layout: presentOnly, done: done) { [self] _ in
             let began = capture == 0 ? 0 : hostMediaTime()
-            var batch = read(frame.map { exact_tick_at(rt, now, $0) } ?? exact_tick(rt, now))
+            var batch = read(frame.map { exact_tick_at(rt, now, $0) } ?? exact_tick(rt, now)).made(by: .tick)
             if measureFrame || capture != 0 { batch.frameWorkTiming = FrameWorkTiming(capture: capture, frame: frame,
                 queued: queued, began: began, finished: capture == 0 ? 0 : hostMediaTime()) }
             return batch
@@ -882,28 +922,31 @@ package final class Runtime {
     package func fireNativeTimerAsync(_ timer: NativeTimerWake, now: Double, done: @escaping (RuntimeCompletion) -> Void) {
         post(done: done) { [self] _ in read(exact_fire_native_timer(rt, timer.index, timer.generation, now)) }
     }
-    package func advance(now: Double, untilRequest: Bool = false) -> Batch { on { read(exact_advance(rt, now, untilRequest ? 1 : 0)) } }
+    package func advance(now: Double, untilRequest: Bool = false) -> Batch { on { read(exact_advance(rt, now, untilRequest ? 1 : 0)).made(by: .advance) } }
     /// The `then`s an agent's input settled, the clock unmoved (LLP 1012 §2).
-    package func landThen() -> Batch { on { read(exact_advance(rt, 0, 2)) } }
+    package func landThen() -> Batch { on { read(exact_advance(rt, 0, 2)).made(by: .advance) } }
     /// Those `then`s only when one is the earliest work due (LLP 1072.000 §4 B).
-    package func landThenFirst() -> Batch { on { read(exact_advance(rt, 0, 3)) } }
+    package func landThenFirst() -> Batch { on { read(exact_advance(rt, 0, 3)).made(by: .advance) } }
     /// A timer advance on the owner, not waited for (LLP 1072.000): what is
     /// due by `now`, or with `frame` that display frame's (`frame(now:wall:)`).
     package func advanceAsync(now: Double, frame: Double? = nil, admitted: Bool = false, capture: UInt64 = 0, measureFrame: Bool = false, done: @escaping (RuntimeCompletion) -> Void) {
         let queued = capture == 0 ? 0 : hostMediaTime()
         post(done: done) { [self] _ in
             let began = capture == 0 ? 0 : hostMediaTime()
-            var batch = read(frame.map { admitted ? exact_admitted_frame(rt, $0, now) : exact_frame_at(rt, $0, now) } ?? exact_advance(rt, now, 0))
+            var batch = read(frame.map { admitted ? exact_admitted_frame(rt, $0, now) : exact_frame_at(rt, $0, now) } ?? exact_advance(rt, now, 0)).made(by: .advance)
             if measureFrame || capture != 0 { batch.frameWorkTiming = FrameWorkTiming(capture: capture, frame: frame,
                 queued: queued, began: began, finished: capture == 0 ? 0 : hostMediaTime()) }
             return batch
         }
     }
-    package func frame(now: Double, wall: Double? = nil, admitted: Bool = false) -> Batch { on { read(admitted ? exact_admitted_frame(rt, now, wall ?? now) : wall.map { exact_frame_at(rt, now, $0) } ?? exact_frame(rt, now)) } }
+    package func frame(now: Double, wall: Double? = nil, admitted: Bool = false) -> Batch { on { read(admitted ? exact_admitted_frame(rt, now, wall ?? now) : wall.map { exact_frame_at(rt, now, $0) } ?? exact_frame(rt, now)).made(by: .advance) } }
     /// Whether motion a commit begins waits for the first presented frame
     /// (LLP 1003.001 D7); off, what waits starts at `at`.
     package func startOnFrame(_ yes: Bool, at: Double) -> Batch { on { read(exact_start_on_frame(rt, yes ? 1 : 0, at)) } }
     package func presentFrames(_ yes: Bool) { on { () -> Void in _ = exact_present_frames(rt, yes ? 1 : 0) } }
+    /// The views prepared off screen and not yet revealed (LLP 1072 §3.5):
+    /// motion begun on them starts at the first frame after they show.
+    package func unshown(_ views: [UInt32]) { on { () -> Void in views.withUnsafeBufferPointer { exact_unshown(rt, $0.baseAddress, UInt32($0.count)) } } }
 
     package func resize(width: CGFloat, height: CGFloat) -> Batch { on(layout: true) { read(exact_resize(rt, Float(width), Float(height))) } }
     /// A placement root's resolved margins (left, top, right, bottom) and 1 for an authored width, then the resolved minimum width
@@ -1048,7 +1091,7 @@ package final class Runtime {
 
     /// `presentOnly`: the tick only hears the present of the page's first picture, and enters as the page's facts do
     package func tick(now: Double, frame: Double? = nil, presentOnly: Bool = false) -> Batch {
-        on(layout: presentOnly) { read(frame.map { exact_tick_at(rt, now, $0) } ?? exact_tick(rt, now)) }
+        on(layout: presentOnly) { read(frame.map { exact_tick_at(rt, now, $0) } ?? exact_tick(rt, now)).made(by: .tick) }
     }
     package func scheme(dark: Bool) -> Batch { on(layout: true) { read(exact_scheme(rt, dark ? 1 : 0)) } }
     package func viewScheme(_ view: UInt32, dark: Bool) -> Batch { on(layout: true) { read(exact_view_scheme(rt, view, dark ? 1 : 0)) } }
@@ -1235,4 +1278,12 @@ package struct PointerSample {
         self.x = x; self.y = y; self.buttons = buttons; self.pressure = pressure; self.type = type; self.id = id
         self.clientX = clientX; self.clientY = clientY; self.held = held; self.button = button
     }
+}
+
+/// A batch's place in the order of production (`Batch.sequence`). The owner
+/// numbers what it makes; main numbers a batch the host made itself.
+package final class BatchSequence: @unchecked Sendable {
+    private let lock = NSLock()
+    private var last: UInt64 = 0
+    package func next() -> UInt64 { lock.withLock { last += 1; return last } }
 }

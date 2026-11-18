@@ -17,7 +17,7 @@ struct NavigationTabs {
 
     /// A panel's stack: its children that carry a `navigationKey`.
     static func routes(in node: NodeView) -> [NodeView] {
-        node.container.subviews.compactMap { $0 as? NodeView }.filter { $0.props["navigationKey"] != nil }
+        node.childNodes.filter { $0.props["navigationKey"] != nil }
     }
 
     /// The root's tabs, or nil when it has none (one stack): the kernel's,

@@ -114,6 +114,20 @@ extension ExactSession {
         #endif
     }
 
+    /// @ref LLP 1095 D9 — the platform's resolution of every reference the kernel paints itself, with the app's tint
+    /// read here, on main: one for every session (`SystemColor.appTint`), since the table is the process's; a view's
+    /// own tint is the host's to paint (`ownTint`).
+    func reportColors() {
+        guard booted, state != .destroyed else { return }
+        #if os(iOS) || os(tvOS)
+        // No window, no report: attaching reports (`didMoveToWindow`), before its scheme, so nothing eases from a stand-in blue.
+        guard view?.window != nil else { return }
+        #endif
+        if applying || awaitingTree { colorsOwed = true; return } // a tint the batch being applied set, reported once the batch is in
+        // No app tint: `@tint` is left out, and the kernel keeps the last.
+        apply(runtime.reportColors(tint: SystemColor.appTint.flatMap { SystemColor.tintPair($0) }))
+    }
+
     /// Recheck appearances seen before the session's trait report.
     func reportDeferredAppearances(first: Bool) {
         let early = unreported

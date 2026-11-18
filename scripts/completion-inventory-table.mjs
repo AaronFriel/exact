@@ -728,7 +728,7 @@ export const classifications = [
     "runner/src/runner/native_timers.rs binds one subscription in each live ordinary timer record at native_timers handoff. Repeats reuse it; owned_tasks.rs resets it on rearming. Typed and integer fires retain the original index/generation and clock checks. Frame tasks and other clock entries still use their existing paths. Advance/frame can also pump replies and deferred thens.", [
     ["apple:host/apple/src/abi/exports.rs",
       "exact_admitted_frame exact_advance exact_fire_native_timer exact_frame exact_frame_at exact_native_timers exact_present_frames exact_pump exact_set_live_clock " +
-      "exact_prefer_presented exact_start_on_frame exact_tick exact_tick_at exact_timer_waits"],
+      "exact_prefer_presented exact_start_on_frame exact_tick exact_tick_at exact_timer_waits exact_unshown"],
     ["painted:host/painted/src/agent.rs", "clock_within"],
     ["painted:host/painted/src/canvas.rs", "CanvasHost::frame CanvasHost::frame_held"],
     ["painted:host/painted/src/canvas/jni.rs", "Java_dev_exact_canvas_Native_frame Java_dev_exact_canvas_Native_picturePresented Java_dev_exact_canvas_Native_presentToken Java_dev_exact_canvas_Native_timerHeld Java_dev_exact_canvas_Native_timerObservation"],

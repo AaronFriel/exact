@@ -751,7 +751,7 @@ final class ShortcutHost: NSObject, NSMenuItemValidation {
         // A native button's children are its face, not views (LLP 1069.011.000 D1).
         if view.isNativeButton { return view.face?.title ?? "" }
         if view.kind == "text" { return view.paragraphSpec().runs.map(\.text).joined() }
-        return view.container.subviews.compactMap { $0 as? NodeView }.map(title).filter { !$0.isEmpty }.joined(separator: " ")
+        return view.childNodes.map(title).filter { !$0.isEmpty }.joined(separator: " ")
     }
     /// A window's command is enabled while its window is key with no sheet
     /// and no modal dialog over the button. One in the app menu or Help is

@@ -148,7 +148,7 @@ extension NodeView {
     /// the window's ground are painted again, on the ground they now have.
     func sheetGroundChanged() {
         if groundIsTheWindows || hasGroupedCardFill { updateMaterial(); applyBoxLayer(); materialContent?.needsDisplay = true; needsDisplay = true }
-        for case let child as NodeView in container.subviews { child.sheetGroundChanged() }
+        for child in structuralChildren { child.sheetGroundChanged() }
     }
 }
 

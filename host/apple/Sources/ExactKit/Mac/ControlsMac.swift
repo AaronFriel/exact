@@ -24,13 +24,24 @@ package final class ControlHost: NSObject {
     package var menus: [UInt32: SelectMenu] = [:]
     /// A range's last reported value while it moves, so each is sent once.
     package var lastRange: [UInt32: String] = [:]
-    /// Each native button's face as the runner last gave it. A face is the
-    /// button's viewless contents, which change only in a batch that says so
-    /// (`Batch.controls`), and its own props, which change only in a batch
-    /// that touches it: `Presenter.apply` drops it then, and the next read
-    /// asks the runner. Every other batch keeps it, so a commit that changes
-    /// no button waits on the owner thread for none, as on iOS.
+    /// Each native button's face, select's options and radio's group as the
+    /// last batch applied gave it. The runtime computes them from a control's
+    /// props and viewless contents: a batch that changes one carries it as the
+    /// runtime made it (`Batch.controlReads`), so what shows is the batches
+    /// applied so far, never a batch that has not applied (LLP 1072 §3.5). A
+    /// batch the runtime did not make drops the faces it may change, and a
+    /// read with none taken asks the runner.
     private var faces: [UInt32: ButtonFace] = [:]
+    private var selectMenus: [UInt32: SelectMenu] = [:], radioGroups: [UInt32: RadioGroup] = [:]
+    func took(_ reads: [UInt32: ControlRead]) {
+        for (id, read) in reads {
+            if let face = read.face { faces[id] = ButtonFace(json: face) }
+            if let select = read.select { selectMenus[id] = SelectMenu(json: select) }
+            if let radio = read.radio { radioGroups[id] = RadioGroup(json: radio) }
+        }
+    }
+    package func selectMenu(_ id: UInt32) -> SelectMenu { selectMenus[id] ?? presenter.selectOptions?(id) ?? SelectMenu() }
+    func group(_ id: UInt32) -> RadioGroup? { radioGroups[id] ?? radioGroup?(id) }
     func face(_ id: UInt32) -> ButtonFace {
         if let face = faces[id] { return face }
         let face = presenter.buttonFace?(id) ?? ButtonFace()
@@ -100,7 +111,7 @@ package final class ControlHost: NSObject {
         for id in Array(controls.keys) where !live.contains(id) && !leaving.contains(id) {
             controls.removeValue(forKey: id)?.removeFromSuperview()
             reported.removeValue(forKey: id)
-            faces.removeValue(forKey: id)
+            if presenter.views[id] == nil { faces[id] = nil; selectMenus[id] = nil; radioGroups[id] = nil }
             kinds.removeValue(forKey: id)
             menus.removeValue(forKey: id)
             lastRange.removeValue(forKey: id)

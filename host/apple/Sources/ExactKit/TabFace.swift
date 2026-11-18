@@ -37,7 +37,7 @@ package struct TabFace: Equatable {
             // Its children are its face and draw no views: the kernel reads its badge.
             if let badge = face.badge { badges.append(badge) }
         }
-        for case let child as NodeView in tab.container.subviews {
+        for child in tab.childNodes {
             if child.kind == "image", let name = child.faceSymbol { symbol = name }
             else if child.kind == "image", let source = child.props["imageSource"], Self.isLocalRaster(source) { raster = source }
             else if child.isParagraph, !child.accessibleText.isEmpty { label = child.accessibleText }
@@ -90,7 +90,7 @@ package struct TabFace: Equatable {
         let shown = { (v: NodeView) in !v.isHidden && v.style["display"]?.string != "none" && v.shownAlpha > 0 }
         guard !box.isParagraph, box.kind != "image", shown(box),
               let fill = box.channels("background_color"), fill[3] > 0, !box.holdsFlatLeaves else { return nil }
-        let children = box.container.subviews.compactMap { $0 as? NodeView }
+        let children = box.childNodes
         guard children.count == 1, let text = children.first, text.isParagraph, shown(text),
               !text.accessibleText.isEmpty else { return nil }
         return text.accessibleText

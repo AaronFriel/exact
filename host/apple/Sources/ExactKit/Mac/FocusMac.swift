@@ -14,7 +14,7 @@ extension NodeView {
     /// never a Tab stop on the web. An explicit `tabindex` makes any box
     /// focusable, and a Tab stop only when ≥ 0 (LLP 1088 D7.3).
     package override var acceptsFirstResponder: Bool {
-        if formDisabled || inert || isHiddenOrHasHiddenAncestor || cssVisibilityHidden { return false }
+        if held || formDisabled || inert || isHiddenOrHasHiddenAncestor || cssVisibilityHidden { return false }
         if field != nil || textArea != nil || isNativeButton || nativeValueControl != nil { return false }
         return props["semanticTag"] == "dialog" || isParagraph || explicitTabIndex != nil || isRadio || focusableByKind
     }

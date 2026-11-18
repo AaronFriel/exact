@@ -206,6 +206,7 @@ extension ExactSession {
     /// teardown sets off reaches it. Its calls wait in `heldCalls` for `replayHeld`, after the committed batch.
     func resetHeld() {
         let entered = runtime.entered
+        cancelStage() // what it prepared was the old tree's (LLP 1072 T13)
         runtime.held = true
         presenter.reset()
         runtime.held = false

@@ -17,6 +17,27 @@ extension NodeView {
 
     package var isParagraph: Bool { kind == "text" }
 
+    // A walk of the node tree says what it walks (LLP 1072 T13). A reader
+    // (names, focus, the agent, derived reads of a header or a menu) walks the
+    // committed tree: `childNodes`, `committed`, `committedSubviews`. A
+    // walk that builds the tree (placement, the pixel grid, paint,
+    // appearance) walks every box: `structuralChildren`, `structural`.
+    // A subtree a staged batch prepares, or has taken down and not yet
+    // removed, is held: in the window, outside the committed tree.
+
+    /// The node boxes among `views` that a reader of the committed tree
+    /// finds. `reader`, a box in a held subtree, finds its own subtree.
+    static func committed(_ views: [PlatformView], reader: NodeView? = nil) -> [NodeView] {
+        let insideHeld = reader?.held == true
+        return views.compactMap { ($0 as? NodeView).flatMap { $0.held && !insideHeld ? nil : $0 } }
+    }
+    /// Every node box among `views`, held or not.
+    static func structural(_ views: [PlatformView]) -> [NodeView] { views.compactMap { $0 as? NodeView } }
+    /// The children a reader of this box finds (`committed`).
+    package var childNodes: [NodeView] { Self.committed(container.subviews, reader: self) }
+    /// Every child box, held or not (`structural`).
+    var structuralChildren: [NodeView] { Self.structural(container.subviews) }
+
     /// The node box this view stands in: the nearest node view above it,
     /// past the containers and scroll views a box holds its children in.
     var nodeSuperview: NodeView? {
@@ -256,4 +277,13 @@ extension NodeView {
     /// A shaped-text offset in the node's source text, and back (LLP 1053 G5).
     func sourceOffset(_ shaped: Int) -> Int { paragraphSpec().source.source(shaped) }
     func shapedOffset(_ source: Int) -> Int { paragraphSpec().source.collapsed(source) }
+}
+
+extension PlatformView {
+    /// `subviews` less the held node boxes, unless this view is in a held
+    /// subtree itself: a reader's descent (`NodeView.committed`).
+    var committedSubviews: [PlatformView] {
+        if (self as? NodeView)?.held == true { return subviews }
+        return subviews.filter { ($0 as? NodeView)?.held != true }
+    }
 }

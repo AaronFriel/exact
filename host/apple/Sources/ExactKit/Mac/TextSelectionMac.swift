@@ -174,6 +174,7 @@ package final class TextSelection {
     private func texts(in view: NSView, withinList: Bool = false, _ found: (NodeView) -> Void) {
         if view.isHidden { return }
         if let node = view as? NodeView {
+            if node.held { return }
             if withinList && presenter?.collections.owns(node.id) == true { return }
             if presenter?.session?.regions.owns(node) == true { return }
             if node.isParagraph { found(node); return }

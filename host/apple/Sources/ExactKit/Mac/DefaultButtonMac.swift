@@ -50,7 +50,7 @@ extension DialogHost {
         if let confirm = entry(ofRoute: dialog)?.header?.confirm { return confirm }
         var buttons: [NodeView] = []
         func walk(_ node: NodeView) {
-            for case let child as NodeView in node.container.subviews
+            for child in node.childNodes
             where !child.isHidden && child.style["display"]?.string != "none" && child.props["popover"] == nil {
                 if child.isButton { buttons.append(child) } else { walk(child) }
             }

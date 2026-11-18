@@ -134,7 +134,7 @@ final class BlockHost {
             let home = node.superview, siblings = home?.subviews ?? []
             let next = siblings.firstIndex(of: node).flatMap { $0 + 1 < siblings.count ? siblings[$0 + 1] : nil }
             // Its authored siblings, those already in containers of their own among them.
-            let nodes = home.map { authored($0.subviews.compactMap { $0 as? NodeView }, in: $0) } ?? []
+            let nodes = home.map { authored(NodeView.structural($0.subviews), in: $0) } ?? []
             let before = nodes.prefix { $0 !== node }.map { Sibling(node: $0) }
             turns += 1
             entries[node.id] = Entry(node: node, home: home, next: next, before: before, turn: turns, block: block, placement: placement, used: used,
@@ -185,7 +185,7 @@ final class BlockHost {
     /// Give the subtree back to the page, where its authored parent has it.
     func release(_ node: NodeView) {
         guard owns(node), let entry = entries[node.id] else { return }
-        let siblings = entry.home.map { authored($0.subviews.compactMap { $0 as? NodeView }, in: $0) } ?? []
+        let siblings = entry.home.map { authored(NodeView.structural($0.subviews), in: $0) } ?? []
         let following = siblings.drop { $0 !== node }.dropFirst().first { $0.superview === entry.home }
         entries[node.id] = nil
         used[node.id] = nil

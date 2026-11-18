@@ -66,7 +66,7 @@ extension NodeView {
                 let chevron = ["chevron.forward", "chevron.right"].contains(node.props["symbolName"] ?? "")
                 leaf.alphaValue = hidden && chevron ? 0 : 1
             }
-            for child in (view as? NodeView)?.container.subviews ?? view.subviews where child is NodeView { walk(child) }
+            for child in (view as? NodeView)?.structuralChildren ?? NodeView.structural(view.subviews) { walk(child) }
         }
         walk(self)
     }
@@ -96,7 +96,7 @@ extension NodeView {
             if let box { layer.insertSublayer(mark, above: box) } else { layer.insertSublayer(mark, at: 0) }
         }
         var leaf: NodeView = self
-        while let first = leaf.container.subviews.lazy.compactMap({ $0 as? NodeView }).first(where: { !$0.isHidden }) { leaf = first }
+        while let first = leaf.childNodes.first(where: { !$0.isHidden }) { leaf = first }
         let start = leaf === self ? frame.minX + number("padding_left") : holder.convert(leaf.bounds, from: leaf).minX
         let end = frame.maxX - number("padding_right"), edges = holder.bounds
         let left = min(max(start - 8, edges.minX), edges.minX + 10), right = max(min(end + 8, edges.maxX), edges.maxX - 10)

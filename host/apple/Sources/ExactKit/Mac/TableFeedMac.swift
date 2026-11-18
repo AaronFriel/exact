@@ -376,7 +376,7 @@ final class TableFeed: NSObject, NSTableViewDataSource, NSTableViewDelegate {
         table.feed = self
         // A list the runner does not window: its children are in its document, in order.
         if !presenter.collections.owns(id) {
-            children = list.container.subviews.compactMap { view in (view as? NodeView).flatMap { presenter.views[$0.id] === $0 ? $0 : nil } }
+            children = list.childNodes.filter { presenter.views[$0.id] === $0 }
         }
         sync()
     }
@@ -986,7 +986,7 @@ extension NodeView {
         if pressable { return self }
         guard let name = props["swipeContent"], !name.isEmpty else { return nil }
         func find(_ view: NSView) -> NodeView? {
-            for case let node as NodeView in (view as? NodeView)?.container.subviews ?? view.subviews {
+            for node in (view as? NodeView)?.childNodes ?? NodeView.committed(view.subviews) {
                 if node.props["id"] == name { return node.pressable ? node : nil }
                 if let found = find(node) { return found }
             }

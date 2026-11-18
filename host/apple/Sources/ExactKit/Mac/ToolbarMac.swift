@@ -388,7 +388,7 @@ final class WindowToolbarHost: NSObject, NSToolbarItemValidation {
     }
 
     private func children(_ node: NodeView) -> [NodeView] {
-        node.container.subviews.compactMap { $0 as? NodeView }
+        node.childNodes
     }
 
     /// A native button's prominent style is a prominent item, tinted by its
