@@ -392,6 +392,14 @@
         held: held ? true : undefined,
         listen: listen,
       });
+      // A request with effects arms the answer's held lease before it goes (LLP 1146 D5).
+      if (method !== "GET" && method !== "HEAD") {
+        try {
+          env.secretEffect(call);
+        } catch (e) {
+          return optionRefused(e);
+        }
+      }
       var error;
       try {
         error = binary.sendRequest(host, ticket, wire, bytes);

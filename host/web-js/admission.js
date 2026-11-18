@@ -268,14 +268,26 @@ export function createSecretFacade(store, admitted, keys) {
       seen.read = true;
       return !globalThis.__exactRender && admitsSecret(admitted, name) && !mustLock(admitted, name) ? store.get(name) ?? null : null;
     },
-    async exclusive(name, work) {
-      effect('store.exclusive()'); name = String(name); allowed(name);
-      if (mustLock(admitted, name)) return Promise.reject(unsupported(name));
-      const context = globalThis.__exact_async_context, owner = context?.current();
-      return store.exclusive(name, () => {
-        const before = context?.swap(owner);
-        try { return work(); } finally { context?.swap(before); }
-      });
+    exclusive(name, work) {
+      const context = globalThis.__exact_async_context, owner = context?.current(), call = owner?.[0] ?? owner?.[4];
+      // The answer's promise (ts-fetch.js `AnswerPromise`), so what follows the lease is still the answer's
+      const P = context?.Promise ?? Promise;
+      try { effect('store.exclusive()'); name = String(name); allowed(name); } catch (e) { return P.reject(e); }
+      if (mustLock(admitted, name)) return P.reject(unsupported(name));
+      // An answer holds one lease at a time, waiting or held, as on every host (LLP 1146 D5): none holds one name
+      // while it waits for another. The answer is the one running, or a promise reaction's (ts-fetch.js
+      // `AnswerPromise`); `arm` is ts-fetch.js's for a request with effects.
+      if (call?.lease) return P.reject(new Error('nested secret leases are unsupported'));
+      const lease = call ? (call.lease = { arm: null }) : null;
+      let leased;
+      try {
+        leased = P.resolve(store.exclusive(name, arm => {
+          if (lease) lease.arm = arm;
+          const before = context?.swap(owner);
+          try { return work(); } finally { context?.swap(before); }
+        }));
+      } catch (e) { leased = P.reject(e); }
+      return leased.finally(() => { if (call?.lease === lease) delete call.lease; });
     },
     has(name) { return seen.get(name) !== null; },
     locked(name) { effect('store.locked()'); seen.read = true; return false; },

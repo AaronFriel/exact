@@ -113,9 +113,86 @@ test("a new secret owner invalidates a credential left by an interrupted update"
     expect(await exclusiveSecret(store, 'test.', 'token', async () => store.map.get('token'))).toBeUndefined();
     expect(disk.size).toBe(0);
     disk.set('test.token', 'current');
-    await expect(exclusiveSecret(store, 'test.', 'token', async () => { throw new Error('interrupted'); })).rejects.toThrow('interrupted');
+    await expect(exclusiveSecret(store, 'test.', 'token', async arm => { arm(); throw new Error('interrupted'); })).rejects.toThrow('interrupted');
     expect(disk.size).toBe(0);
   } finally {
+    for (const [key, descriptor] of saved) { if (descriptor) Object.defineProperty(globalThis, key, descriptor); else delete globalThis[key]; }
+  }
+});
+
+// LLP 1146 D5, as on every host: recovery is armed by a lease's first write or request with effects, and only an
+// armed lease that fails loses the secret.
+test("a secret lease is armed by its first write, and a failed lease that never armed keeps the secret", async () => {
+  const { exclusiveSecret } = await import('../web/storage-environment.js');
+  const saved = ['navigator', 'localStorage'].map(k => [k, Object.getOwnPropertyDescriptor(globalThis, k)]);
+  const disk = new Map([['exact.secret.token', 'old']]), marker = 'exact.exclusive.exact.secret.token';
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: { getItem: k => disk.get(k) ?? null, setItem: (k, v) => disk.set(k, v), removeItem: k => disk.delete(k) } });
+  Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { locks: { request: async (_name, work) => work() } } });
+  Store.map = new Map(); Store.writes = []; Store.pending.clear();
+  try {
+    await expect(exclusiveSecret(Store, 'exact.secret.', 'token', async () => {
+      Store.set('token', 'old'); // keeping what it holds is no write
+      expect(disk.has(marker)).toBe(false);
+      throw new Error('before any write');
+    })).rejects.toThrow('before any write');
+    expect([...disk]).toEqual([['exact.secret.token', 'old']]);
+    await expect(exclusiveSecret(Store, 'exact.secret.', 'absent', async () => {
+      Store.set('absent', null); // nor is forgetting what it does not hold
+      expect(disk.has('exact.exclusive.exact.secret.absent')).toBe(false);
+      throw new Error('forgot nothing');
+    })).rejects.toThrow('forgot nothing');
+    await expect(exclusiveSecret(Store, 'exact.secret.', 'token', async () => {
+      Store.set('token', 'partial');
+      expect(disk.get(marker)).toBe('1');
+      throw new Error('after a write');
+    })).rejects.toThrow('after a write');
+    expect([...disk]).toEqual([]);
+  } finally {
+    Store.map = new Map(); Store.writes = []; Store.pending.clear();
+    for (const [key, descriptor] of saved) { if (descriptor) Object.defineProperty(globalThis, key, descriptor); else delete globalThis[key]; }
+  }
+});
+
+// One lease at a time in an answer (LLP 1146 D5): a lease asked for inside another is refused, where one Web Lock
+// would wait for the other forever, and another answer's waits its turn.
+test("an answer's lease inside its own is refused, and another answer's waits for it", async () => {
+  const { exclusiveSecret } = await import('../web/storage-environment.js');
+  const saved = ['navigator', 'localStorage', '__exact_async_context'].map(k => [k, Object.getOwnPropertyDescriptor(globalThis, k)]);
+  const disk = new Map([['exact.secret.token', 'old']]), held = new Map();
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: { getItem: k => disk.get(k) ?? null, setItem: (k, v) => disk.set(k, v), removeItem: k => disk.delete(k) } });
+  Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { locks: { request: (name, work) => {
+    const run = (held.get(name) ?? Promise.resolve()).then(() => work());
+    held.set(name, run.catch(() => {}));
+    return run;
+  } } } });
+  let current = null, reaction = null;
+  class Owned extends Promise {}
+  globalThis.__exact_async_context = { Promise: Owned, current: () => [current, null, '', null, reaction], swap(to) { const before = [current, null, '', null, reaction]; current = to[0]; reaction = to[4]; return before; } };
+  const store = createSecretFacade({ get: k => Store.get(k), set: (k, v) => Store.set(k, v), exclusive: (k, work) => exclusiveSecret(Store, 'exact.secret.', k, work) },
+    { version: 1, entries: [[1, "secret.keep token", ["secret-keep", "token"], null]], error: null, seal: "b22a759eedfe6bc2" }, () => null);
+  const as = (call, run) => { const before = current; current = call; try { return run(); } finally { current = before; } };
+  Store.map = new Map(); Store.writes = []; Store.pending.clear();
+  try {
+    const a = {}, b = {};
+    let inner, other;
+    let reacted;
+    const first = as(a, () => store.exclusive('token', () => {
+      inner = store.exclusive('token', async () => 'inner ran');
+      // A promise reaction's answer, as ts-fetch.js's AnswerPromise makes it current
+      reacted = (() => { const before = current; current = null; reaction = a; try { return store.exclusive('token', async () => 'reaction ran'); } finally { current = before; reaction = null; } })();
+      other = as(b, () => store.exclusive('token', async () => store.get('token')));
+      store.set('token', 'first');
+      return 'first';
+    }));
+    // What follows a lease is still its answer's: the lease answers the answer's promise.
+    expect(first).toBeInstanceOf(Owned);
+    expect(await first).toBe('first');
+    expect(await inner.catch(e => e.message)).toBe('nested secret leases are unsupported');
+    expect(await reacted.catch(e => e.message)).toBe('nested secret leases are unsupported');
+    expect(await other).toBe('first');
+    expect(await as(a, () => store.exclusive('token', async () => store.get('token')))).toBe('first');
+  } finally {
+    Store.map = new Map(); Store.writes = []; Store.pending.clear();
     for (const [key, descriptor] of saved) { if (descriptor) Object.defineProperty(globalThis, key, descriptor); else delete globalThis[key]; }
   }
 });
@@ -248,4 +325,46 @@ test("another tab's store write is taken unless this tab's own is owed", () => {
   Store.peer("token", "later");
   expect(Store.get("token")).toBe("mine");
   Store.writes = [];
+});
+
+// A request with effects arms its answer's lease before it goes (LLP 1146 D5), as a native host's park does; a GET
+// or HEAD does not. ts-fetch.js is copied beside an admission whose fetch answers at once.
+test("a lease's request with effects arms its recovery, and a safe one does not", async () => {
+  const { mkdtempSync, cpSync, writeFileSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { resolve } = await import('node:path');
+  const { pathToFileURL } = await import('node:url');
+  const dir = mkdtempSync(resolve(tmpdir(), 'exact-lease-fetch-'));
+  try {
+    cpSync(resolve(import.meta.dir, 'ts-fetch.js'), resolve(dir, 'ts-fetch.js'));
+    writeFileSync(resolve(dir, 'admission.js'), `export { ownWithout, redirectOf, socketProtocols } from ${JSON.stringify(pathToFileURL(resolve(import.meta.dir, 'admission.js')).href)};
+export class FetchError extends Error {} export const overlaying = { on: false }; export const inOverlay = what => new Error(what);
+export const signalDeadline = { arm: null }; export const fetchWith = async () => new Response('sent');\n`);
+    writeFileSync(resolve(dir, 'admission-data.js'), 'export const tsGrantSet = {};\n');
+    const tsf = await import(pathToFileURL(resolve(dir, 'ts-fetch.js')).href);
+    let arms = 0;
+    const call = { lease: { arm: () => { arms++; } } };
+    const sent = [];
+    // The last one from a promise reaction of the answer's (ts-fetch.js `AnswerPromise`)
+    for (const [input, init, field = 'call'] of [['https://api.test/a'], ['https://api.test/a', { method: 'head' }],
+      [new Request('https://api.test/a')], ['https://api.test/a', { method: 'post' }], [new Request('https://api.test/a', { method: 'DELETE' })],
+      ['https://api.test/a', { method: 'PUT' }, 'promiseCall']]) {
+      tsf.answering[field] = call;
+      const response = tsf.fetch(input, init);
+      tsf.answering[field] = null;
+      await response;
+      sent.push(arms);
+    }
+    expect(sent).toEqual([0, 0, 0, 1, 2, 3]);
+    // A request refused before it goes arms nothing.
+    tsf.answering.call = { ...call, mutation: true, turn: true, socketOps: [{}] };
+    const refused = tsf.fetch('https://api.test/a', { method: 'POST' });
+    tsf.answering.call = null;
+    expect(await refused.catch(e => e.message)).toBe(tsf.SOCKET_AND_FETCH);
+    tsf.answering.call = call;
+    const invalid = tsf.fetch('https://api.test/a', { method: 'POST', redirect: 'bad' });
+    tsf.answering.call = null;
+    expect(await invalid.catch(e => e.message)).toBe('redirect must be follow, manual or error');
+    expect(arms).toBe(3);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });

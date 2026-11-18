@@ -1,6 +1,7 @@
 # Two browser answers can deadlock while acquiring secret leases in opposite name order
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** A lease is its callback and an answer holds one: a lease inside the answer's own is refused on every host, and the wasm web host ends a completed lease before asking for the next.
 **Systems:** host/web/module-glue.js, js/src/prelude.js
 **Severity:** P3
 **Author:** Codex, from the parked secret lease ordering reviews
@@ -29,3 +30,21 @@ one acquisition order on names, release a completed lease's lock before asking
 for another name, or refuse a nested lease by name. A regression should use
 barriers around the two first grants and two second requests; it should not
 assert a hang as its success condition.
+
+The cycle did not need a nested lease. Two answers that each awaited one
+lease and then took another, in opposite orders, deadlocked the same way in
+both placements: the prelude folded the second request into the completed
+lease's turn, so the first name's Web Lock was still held.
+
+Native hosts settle the model. A native lease ends when its callback settles
+(op 25), and `store.exclusive` inside the answer's waiting or held lease is
+refused with "nested secret leases are unsupported" (`js/tests/it/secrets.rs`
+`a_lease_inside_a_lease_is_refused`). The wasm web host now does the same: the
+prelude refuses the nested lease in every realm and reports a completed lease
+with the next lease's request, so the glue persists that lease's writes and
+releases its lock before asking. A released name may be written by another
+holder before the answer's delivery, so later turns read it afresh and the
+delivery carries the value kept then. The JS web target refuses the nested
+lease too, finding the answer through `__exact_async_context` (LLP 1133.002
+D14); there a lease inside the same name's lease waited for itself forever.
+LLP 1146 D5 and LLP 1097 D7 record the rule.

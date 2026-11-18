@@ -845,7 +845,9 @@ export const Store = {
   // Outside a render, keeping what is already kept is no write, as the runner's `Store::set`.
   set(k, v) {
     if (globalThis.__exactRender) throw new Error("a render's store is empty and refuses writes"); // LLP 1048.000 D9
-    if (v != null && this.map.get(k) === v) return;
+    const same = v == null ? !this.map.has(k) : this.map.get(k) === v;
+    if (v != null && same) return;
+    if (!same) this.leased?.get(k)?.(); // a lease's write arms its recovery (storage-environment.js `exclusiveSecret`)
     if (v == null) this.map.delete(k);
     else this.map.set(k, v);
     this.writes.push([k, v]);
