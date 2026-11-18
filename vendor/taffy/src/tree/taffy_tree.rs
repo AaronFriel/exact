@@ -33,7 +33,9 @@ use crate::{compute::compute_block_layout, LayoutBlockContainer};
 #[cfg(feature = "flexbox")]
 use crate::{compute::compute_flexbox_layout, LayoutFlexboxContainer};
 #[cfg(feature = "grid")]
-use crate::{compute::compute_grid_layout, LayoutGridContainer};
+use crate::LayoutGridContainer;
+#[cfg(feature = "grid")]
+use super::grid_link::{self, GridView};
 
 #[cfg(all(feature = "detailed_layout_info", feature = "grid"))]
 use crate::compute::grid::DetailedGridInfo;
@@ -457,7 +459,7 @@ where
                     #[cfg(feature = "flexbox")]
                     Display::Flex => compute_flexbox_layout(tree, node_id, inputs),
                     #[cfg(feature = "grid")]
-                    Display::Grid => compute_grid_layout(tree, node_id, inputs),
+                    Display::Grid => tree.grid(node_id, inputs),
                     #[cfg(feature = "block_layout")]
                     _ => compute_block_layout(tree, node_id, inputs, None),
                     #[cfg(not(feature = "block_layout"))]
@@ -488,7 +490,7 @@ where
                 #[cfg(feature = "flexbox")]
                 (Display::Flex, true) => compute_flexbox_layout(tree, node_id, inputs),
                 #[cfg(feature = "grid")]
-                (Display::Grid, true) => compute_grid_layout(tree, node_id, inputs),
+                (Display::Grid, true) => tree.grid(node_id, inputs),
                 (_, false) => {
                     let node_key = node_id.into();
                     // EXACT PATCH 30: a multi-column leaf (a paragraph) reports its height
@@ -511,6 +513,18 @@ where
             tree.taffy.size_counts.computed(node_id, &inputs, &output);
             output
         })
+    }
+
+    /// EXACT PATCH 79: a grid container's layout, by the linked algorithm.
+    #[cfg(feature = "grid")]
+    fn grid(&mut self, node_id: NodeId, inputs: LayoutInput) -> LayoutOutput {
+        match grid_link::linked() {
+            Some(layout) => layout(&mut GridView(self), node_id, inputs),
+            None => {
+                debug_assert!(false, "a grid laid out where grid layout is not linked (taffy::link_grid)");
+                compute_block_layout(self, node_id, inputs, None)
+            }
+        }
     }
 
     /// EXACT PATCH 29: note that a recorded layout read `node`'s style or
@@ -624,7 +638,7 @@ where
         }
         match display {
             Display::Flex => compute_flexbox_layout(self, node_id, inputs),
-            Display::Grid => compute_grid_layout(self, node_id, inputs),
+            Display::Grid => self.grid(node_id, inputs),
             Display::Block => compute_block_layout(self, node_id, inputs, block_ctx),
             _ => compute_block_layout(self, node_id, inputs, None),
         }
@@ -655,9 +669,7 @@ where
                 }
                 output
             }
-            None if self.taffy.nodes[root.into()].style.display == Display::Grid => {
-                compute_grid_layout(self, root, inputs)
-            }
+            None if self.taffy.nodes[root.into()].style.display == Display::Grid => self.grid(root, inputs),
             None => compute_flexbox_layout(self, root, inputs),
         };
         if replayed.is_none() {
@@ -1226,6 +1238,20 @@ impl<NodeContext> TaffyTree<NodeContext> {
     /// Creates a new [`TaffyTree`] that can store `capacity` nodes before reallocation
     #[must_use]
     pub fn with_capacity(capacity: usize) -> Self {
+        #[cfg(feature = "grid")]
+        grid_link::link_grid();
+        Self::by_use_with_capacity(capacity)
+    }
+
+    /// EXACT PATCH 79: [`TaffyTree::new`], without linking the grid algorithm
+    /// ([`crate::link_grid`]), so that a binary that never links it carries none
+    /// of it.
+    #[must_use]
+    pub fn by_use() -> Self {
+        Self::by_use_with_capacity(16)
+    }
+
+    fn by_use_with_capacity(capacity: usize) -> Self {
         TaffyTree {
             // TODO: make this method const upstream,
             // so constructors here can be const

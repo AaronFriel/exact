@@ -2447,3 +2447,21 @@ minimum, as with `auto`.
 `min-width: max-content` beside a shorter length maximum on each layout
 among them) and `kernel/tests/it/size_cache.rs`'s `keyword` shapes, which
 compare layout with and without the size cache.
+
+## Patch 79: the grid algorithm through a registered pointer — Exact's
+
+LLP 1047.001 D10. `TaffyView`'s dispatch, its recorded layouts' visits and
+its memoized roots reach `compute_grid_layout` only through the pointer
+`link_grid` sets (`tree/grid_link.rs`), so a binary that never calls it
+carries none of the algorithm: an Apple app whose plan lays out no grid.
+`TaffyTree::new` and `with_capacity` link it, so every other user of a tree
+lays out grid as before; `TaffyTree::by_use` does not, and the kernel's
+trees use it. Unlinked, a grid container is laid out as a block (a debug
+assertion in a debug build): a host that links by use refuses a plan that
+lays out a grid before it lays anything out. The algorithm reads every view
+through one object type, `GridView` over `dyn GridTree`, so it is compiled
+once whatever measure function a tree is laid out with.
+
+**Held by** the grid and table suites, unchanged, and Apple's production link
+proof (`host/apple/link.test.mjs`): a production hello names no
+`taffy::compute::grid`.

@@ -37,14 +37,15 @@ pub fn linked() -> Uses {
     LINKED.get().copied().unwrap_or(ALL)
 }
 
-/// The kernel's style grammars a native host links by use (LLP 1047.001
-/// D3): each `Some` is registered at boot.
+/// The kernel's style grammars and grid layout, which a native host links
+/// by use (LLP 1047.001 D3, D10): each `Some` is registered at boot.
 #[derive(Clone, Copy)]
 pub struct Grammars {
     backdrop: Option<fn()>,
     segments: Option<fn()>,
     timelines: Option<fn()>,
     wide_colors: Option<fn()>,
+    grid: Option<fn()>,
 }
 
 impl Grammars {
@@ -72,6 +73,11 @@ impl Grammars {
                 None
             },
             wide_colors: Some(exact_kernel::style::link_wide_colors),
+            grid: if uses.has(Capability::Grid) {
+                Some(exact_kernel::layout::link_grid_layout)
+            } else {
+                None
+            },
         }
     }
 
@@ -82,6 +88,7 @@ impl Grammars {
             self.segments,
             self.timelines,
             self.wide_colors,
+            self.grid,
         ]
         .into_iter()
         .flatten()
@@ -277,7 +284,7 @@ impl<D: DataSource> Links<D> {
 /// The capabilities `plan` uses that `linked` lacks, by name; `None` when
 /// it links them all.
 pub fn missing(plan: &exact_plan::Plan, linked: Uses) -> Option<String> {
-    let missing = exact_runner::uses(plan).beyond(linked);
+    let missing = exact_runner::uses::apple_uses(plan).beyond(linked);
     (!missing.is_empty()).then(|| missing.to_string())
 }
 
@@ -331,5 +338,18 @@ mod tests {
         assert_eq!(missing(&grouped, without).as_deref(), Some("grouped_lists"));
         assert_eq!(missing(&grouped, ALL), None);
         assert_eq!(missing(&plain, Uses::NONE), None);
+        // A grid and a table both lay out by the grid algorithm (D10).
+        let without = Capability::ALL
+            .into_iter()
+            .filter(|c| *c != Capability::Grid)
+            .fold(Uses::NONE, Uses::with);
+        for view in [
+            "view display=\"grid\"\n      text \"a\"",
+            "table\n      tr\n        td\n          text \"a\"",
+        ] {
+            let plan = contract::compile(&format!("component A\n  view\n    {view}\n")).unwrap();
+            assert_eq!(missing(&plan, without).as_deref(), Some("grid"), "{view}");
+            assert_eq!(missing(&plan, ALL), None);
+        }
     }
 }

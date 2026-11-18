@@ -114,6 +114,11 @@ pub(crate) fn emit(
     assets.extend(rust_assets);
     assets.sort_by(|a, b| a["name"].as_str().cmp(&b["name"].as_str()));
     let mut graph = artifact_graph(&plan, &compat.inputs, &assets, pictures, target)?;
+    // What the binary links for its plan and, on Apple, its entries' plans,
+    // as `link::name_into` decides it.
+    let entry_plans = entries.values().map(|entry| &entry.plan);
+    let uses = crate::link::production_uses(&plan, entry_plans, &compat.inputs);
+    graph["uses"] = json!(uses.iter().map(|c| c.name()).collect::<Vec<_>>());
     if matches!(platform, "ios" | "macos") {
         let mut icons = apple_icons(&plan)?;
         for entry in entries.values() {
@@ -823,7 +828,7 @@ fn artifact_graph(
     });
     // The linked tier the plan uses (LLP 1047 D2), by name: a native build
     // whose plan is fixed links these and no other (LLP 1047.001 D2).
-    let uses: Vec<&str> = exact_runner::uses(plan)
+    let uses: Vec<&str> = crate::link::plan_uses(plan, inputs)
         .with_grants(inputs["grantCeiling"].as_str().unwrap_or(""))
         .iter()
         .map(|c| c.name())

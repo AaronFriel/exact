@@ -13,14 +13,17 @@ use exact_runner::{Capability, Uses};
 /// everything that binds it (the GPU module's card, the receipts) is written.
 ///
 /// Production links what the plan uses, what its grants allow, and the
-/// manifest's `link` ahead of use. Development and unknown grants link
-/// every capability (LLP 1047.001 D6). `EXACT_APPLE_LINK` selects `plan`
-/// or `all` explicitly, as Apple's build does. A bundle needing a capability
-/// this binary lacks is then another compatibility id: a binary change.
+/// manifest's `link` ahead of use; on Apple, whose boot admits a widget's
+/// entry plan against the same set, what `entries` use too. Development and
+/// unknown grants link every capability (LLP 1047.001 D6). `EXACT_APPLE_LINK`
+/// selects `plan` or `all` explicitly, as Apple's build does. A bundle
+/// needing a capability this binary lacks is then another compatibility id:
+/// a binary change.
 pub(crate) fn name_into(
     compat: &mut Compat,
     manifest: &contract::Manifest,
     out: &std::path::Path,
+    entries: &std::collections::BTreeMap<String, contract::snapshot::Entry>,
 ) -> Result<(), String> {
     println!("cargo:rerun-if-env-changed=EXACT_APPLE_LINK");
     let by_plan = std::env::var("EXACT_APPLE_LINK").map_or_else(
@@ -34,10 +37,9 @@ pub(crate) fn name_into(
         })?;
         let plan = exact_plan::Plan::decode(&bytes)
             .map_err(|e| format!("the baked plan is invalid: {e:?}"))?;
-        ahead(manifest)?.into_iter().fold(
-            exact_runner::uses(&plan).with_grants(ceiling.unwrap_or("")),
-            Uses::with,
-        )
+        let entries = entries.values().map(|entry| &entry.plan);
+        let uses = production_uses(&plan, entries, &compat.inputs);
+        ahead(manifest)?.into_iter().fold(uses, Uses::with)
     } else {
         Capability::ALL.into_iter().fold(Uses::NONE, Uses::with)
     };
@@ -45,6 +47,37 @@ pub(crate) fn name_into(
     compat.inputs["linked"] = serde_json::json!(names);
     compat.id = compatibility_digest(&compat.inputs);
     Ok(())
+}
+
+/// What a production artifact links for `plan`, with what its grants allow
+/// (`inputs`' ceiling); on Apple, with what the widget `entries` its boot
+/// admits use too.
+pub(crate) fn production_uses<'a>(
+    plan: &exact_plan::Plan,
+    entries: impl Iterator<Item = &'a exact_plan::Plan>,
+    inputs: &serde_json::Value,
+) -> Uses {
+    let uses = plan_uses(plan, inputs).with_grants(inputs["grantCeiling"].as_str().unwrap_or(""));
+    if !apple(inputs) {
+        return uses;
+    }
+    entries.fold(uses, |uses, entry| {
+        plan_uses(entry, inputs).iter().fold(uses, Uses::with)
+    })
+}
+
+/// What `plan` uses on the platform `inputs` name: on Apple, which links
+/// grid layout by use, [`exact_runner::uses::apple_uses`] (LLP 1047.001 D10).
+pub(crate) fn plan_uses(plan: &exact_plan::Plan, inputs: &serde_json::Value) -> Uses {
+    if apple(inputs) {
+        exact_runner::uses::apple_uses(plan)
+    } else {
+        exact_runner::uses(plan)
+    }
+}
+
+fn apple(inputs: &serde_json::Value) -> bool {
+    matches!(inputs["platform"].as_str(), Some("ios" | "macos"))
 }
 
 /// The Apple entry's text for what `compat` says the archive links
@@ -212,6 +245,25 @@ mod tests {
             refused.contains("markdwon") && refused.contains("markdown"),
             "{refused}"
         );
+    }
+
+    /// A widget's entry plan is admitted against its app's set on Apple, so
+    /// the set holds what the entry uses: here a table, laid out as a grid.
+    #[test]
+    fn an_apple_composition_links_what_a_widget_entry_uses() {
+        let app = contract::compile("component A\n  view\n    text \"a\"\n").unwrap();
+        let entry = contract::compile(
+            "component W\n  view\n    table\n      tr\n        td\n          text \"a\"\n",
+        )
+        .unwrap();
+        for (platform, grid) in [("ios", true), ("macos", true), ("linux", false)] {
+            let inputs = serde_json::json!({ "platform": platform, "grantCeiling": "" });
+            let uses = super::production_uses(&app, [&entry].into_iter(), &inputs);
+            assert_eq!(uses.has(Capability::Grid), grid, "{platform}");
+            assert!(
+                !super::production_uses(&app, std::iter::empty(), &inputs).has(Capability::Grid)
+            );
+        }
     }
 
     /// The manifest schema's `link` names are the roster's, in its order.

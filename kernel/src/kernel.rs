@@ -409,8 +409,16 @@ impl Kernel {
         engine(&mut self.layout)
     }
 
-    /// A kernel with the given host text measurer.
+    /// A kernel with the given host text measurer. It links grid layout
+    /// ([`crate::layout::link_grid_layout`]).
     pub fn new(measurer: Box<dyn TextMeasurer>) -> Self {
+        crate::layout::link_grid_layout();
+        Self::by_use(measurer)
+    }
+
+    /// [`Kernel::new`] for a host that links grid layout by use (LLP
+    /// 1047.001 D10): a grid needs the host to have linked it.
+    pub fn by_use(measurer: Box<dyn TextMeasurer>) -> Self {
         let mut kernel = Self::on_demand(measurer);
         kernel.layout = Some(Box::new(LayoutTree::new()));
         kernel.on_demand = false;
@@ -421,7 +429,7 @@ impl Kernel {
     /// for, when it builds one from the arena. For a host whose platform lays
     /// out (the browser): commits then create no engine nodes and derive no
     /// engine styles, and a kernel that never lays out links no engine code.
-    /// Layout, when asked for, is the same.
+    /// Layout, when asked for, is the same, a grid's once linked.
     pub fn on_demand(measurer: Box<dyn TextMeasurer>) -> Self {
         Kernel {
             arena: NodeArena::new(),
@@ -448,8 +456,10 @@ impl Kernel {
         Self::new(Box::new(MonospaceMeasurer::default()))
     }
 
-    /// [`Kernel::on_demand`] with the deterministic reference measurer.
+    /// [`Kernel::on_demand`] with the deterministic reference measurer,
+    /// linking grid layout as [`Kernel::new`] does.
     pub fn with_monospace_on_demand() -> Self {
+        crate::layout::link_grid_layout();
         Self::on_demand(Box::new(MonospaceMeasurer::default()))
     }
 

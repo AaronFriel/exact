@@ -70,7 +70,9 @@ pub enum Capability {
     /// `background-image` or `mask-image`.
     Gradients,
     /// CSS grid's track, placement and keyword grammars, for a plan that
-    /// binds any of the six grid rows.
+    /// binds any of the six grid rows. On Apple, which parses them always and
+    /// links layout by use, the grid algorithm instead, for a plan whose
+    /// layout can reach it ([`apple_uses`]).
     Grid,
     /// `frame` and `measure` (LLP 1051.000): a plan whose actions read
     /// geometry. Native hosts answer from the kernel; the web links a
@@ -559,6 +561,49 @@ pub fn uses(plan: &Plan) -> Uses {
     uses
 }
 
+/// What `plan` uses on Apple (LLP 1047.001 D10): [`uses`], with
+/// [`Capability::Grid`] the grid algorithm, which Apple links by use, for a
+/// plan whose layout can reach it ([`lays_out_grid`]). A native host parses
+/// the grid rows whatever it links, so a grid row alone does not need it.
+/// The browser lays out a grid itself, and the other native hosts link the
+/// algorithm whole, so for them the capability is the rows' grammars.
+pub fn apple_uses(plan: &Plan) -> Uses {
+    let uses = uses(plan).beyond(Uses::NONE.with(Capability::Grid));
+    if lays_out_grid(plan) {
+        uses.with(Capability::Grid)
+    } else {
+        uses
+    }
+}
+
+/// Whether laying out `plan` can reach the grid algorithm: a `display` that
+/// can be `grid`, or a node that can be a table's part (`table`, `caption`,
+/// a row group, `tr`, `th`, `td`), which the kernel lays out as a grid,
+/// with an anonymous table around a part outside one (LLP 1153 D7.3). A
+/// computed value counts as either.
+pub fn lays_out_grid(plan: &Plan) -> bool {
+    plan.bindings.iter().any(|binding| {
+        let can_be = |used: &dyn Fn(&str) -> bool| {
+            constant_str(plan, plan.code(binding.expr)).is_none_or(used)
+        };
+        match binding.kind {
+            BindingKind::Style => {
+                StyleId::from_bit(u32::from(binding.id)) == Some(StyleId::Display)
+                    && can_be(&|v| v.trim().eq_ignore_ascii_case("grid"))
+            }
+            BindingKind::Prop => {
+                PropId::from_wire(binding.id) == Some(PropId::SemanticTag)
+                    && can_be(&|v| {
+                        matches!(
+                            v,
+                            "table" | "caption" | "thead" | "tbody" | "tfoot" | "tr" | "th" | "td"
+                        )
+                    })
+            }
+        }
+    })
+}
+
 /// Whether a file input of `plan` can take iOS's photo picker: its `type`
 /// can be `file` and its `accept`, as the host reads it, is a non-empty list
 /// of only `image/…` and `video/…` types, or is computed. `showPicker` names
@@ -909,5 +954,45 @@ mod grant_tests {
         assert!(!Uses::NONE
             .with_grants("auth.callback app:/oauth")
             .has(Capability::AuthSession));
+    }
+}
+
+#[cfg(test)]
+mod grid_tests {
+    use super::{apple_uses, uses, Capability};
+
+    fn plan(view: &str) -> exact_plan::Plan {
+        let source = format!("component A\n  state wide = true\n  view\n    {view}\n");
+        contract::compile(&source).unwrap_or_else(|e| panic!("{source}: {e:?}"))
+    }
+
+    /// D10: Apple's `grid` covers every plan whose layout reaches the grid
+    /// algorithm; elsewhere it stays the grammars a grid row needs.
+    #[test]
+    fn apple_links_grid_layout_for_every_plan_that_lays_out_a_grid() {
+        let column = |attrs: &str| format!("column {attrs}\n      text \"a\"");
+        let table =
+            |attrs: &str| format!("table{attrs}\n      tr\n        td\n          text \"a\"");
+        let grid_rows = column("display=\"grid\" grid-template-columns=\"1fr 1fr\"");
+        let flex_rows = column("display=\"flex\" justify-items=\"center\"");
+        for (view, apple, everywhere) in [
+            ("text \"a\"".to_string(), false, false),
+            (column("display=\"flex\""), false, false),
+            (column("display=\"none\""), false, false),
+            // A computed value counts as a use of whatever it might select.
+            (column("display=(wide ? \"block\" : \"flex\")"), true, false),
+            (column("display=\"grid\""), true, false),
+            ("text \"a\" display=\"grid\"".to_string(), true, false),
+            (grid_rows, true, true),
+            // A grid row on a box that is no grid reaches no grid layout.
+            (flex_rows, false, true),
+            (table(""), true, false),
+            // A table that is a block holds an anonymous table, a grid too.
+            (table(" display=\"block\""), true, false),
+        ] {
+            let plan = plan(&view);
+            assert_eq!(apple_uses(&plan).has(Capability::Grid), apple, "{view}");
+            assert_eq!(uses(&plan).has(Capability::Grid), everywhere, "{view}");
+        }
     }
 }

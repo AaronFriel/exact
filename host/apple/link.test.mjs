@@ -1068,6 +1068,7 @@ agentSymbolCheck('production omits the agent while development links it (LLP 104
   // llvm-nm prefixes a symbol with its address and type; this positive control
   // proves the matcher is looking through that prefix before absence is useful.
   const line = (symbol) => new RegExp(`^[0-9a-fA-F]+\\s+\\S\\s+.*${symbol}`, 'm');
+  const GRID_LAYOUT = 'taffy::(?:compute::grid::|tree::grid_link::layout)';
   const app = resolveApp('hello'), bakes = requiredAgentHelloBakes();
   assert.ok(bakes.some(bake => bake.platform === 'iOS' && bake.trust === 'production'));
   assert.ok(bakes.some(bake => bake.platform === 'macOS' && bake.trust === 'production'));
@@ -1079,7 +1080,10 @@ agentSymbolCheck('production omits the agent while development links it (LLP 104
     if (bake.trust === 'production') {
       assert.match(symbols, line('ExactKit\\.FrameHealth\\.reportSource\\.getter'), `${bake.platform} positive control`);
       assert.doesNotMatch(symbols, line('ExactKit\\.Agent(?:[.( ]|$)'), `${bake.platform} production agent`);
+      // Hello lays out no grid, so its composition links no grid layout (LLP 1047.001 D10).
+      assert.doesNotMatch(symbols, line(GRID_LAYOUT), `${bake.platform} production grid layout`);
     } else {
+      assert.match(symbols, line(GRID_LAYOUT), `${bake.platform} grid layout`);
       assert.match(symbols, line(`static ExactKit\\.Agent\\.${bake.platform === 'iOS' ? 'startSocket' : 'startStdio'}`), `${bake.platform} carrier`);
       assert.match(symbols, line('ExactKit\\.Agent\\.accessibilityElementsTree'), `${bake.platform} accessibility`);
       assert.match(symbols, line('ExactKit\\.Agent\\.layout\\(\\)'), `${bake.platform} layout`);

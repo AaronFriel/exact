@@ -1273,7 +1273,7 @@ export const classifications = [
     ["runner:runner/src/hardened.rs", "is_runtime_line runtime_grants"],
     ["runner:runner/src/runner/persist.rs", "decode encode"],
     ["runner:runner/src/uses.rs",
-      "Capability::from_name Capability::name chooses_locale keeps_midi runs_sounds svg_filters svg_islands uses uses_midi uses_picture_in_picture Uses::beyond " +
+      "apple_uses Capability::from_name Capability::name chooses_locale keeps_midi lays_out_grid runs_sounds svg_filters svg_islands uses uses_midi uses_picture_in_picture Uses::beyond " +
       "Uses::has Uses::is_empty Uses::iter Uses::with Uses::with_grants zoomable zooms"],
   ]),
   group("holds", ["one-shot"], "held request/node until answer, cancellation or node retirement", "UI-owned",
