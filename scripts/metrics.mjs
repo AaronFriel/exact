@@ -1019,10 +1019,10 @@ const WEB_CORE_KIB = { realworld: 304, 'video-player': 249, caltrain: 310 };
 // CSS filter, gradients, SVG, images, lists, optional controls, flights,
 // sticky, pickers, traces, the wake lock, notifications, the host-event
 // mailbox, Live Activities, the wake carriers and the native module with its
-// hatches and Forma linked by use; hatch diagnostics, the agent dispatcher and the plan connection out
-// of production; grant reads, the motion handover and ibex2's transport
-// objects through their links; the metrics and device tables packed. Each is
-// that size plus ~100 KB.
+// hatches and Forma linked by use; hatch diagnostics, the agent dispatcher
+// and the plan connection out of production; grant reads, the motion
+// handover and ibex2's transport objects through their links; the metrics
+// and device tables packed. Each is that size plus ~100 KB.
 // The size row's target is 8 MB, 8,000,000 B (Charlie, 2026-11-17); the cuts
 // that reach it are issues/20261113-ios-hello-app-twice-its-binary-budget.md's.
 const IOS_HELLO_BYTES = { speed: 14_990_000, size: 9_650_000, balanced: 13_710_000 };
