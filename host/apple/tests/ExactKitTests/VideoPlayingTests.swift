@@ -3,6 +3,7 @@ import AVKit
 import ObjectiveC
 import XCTest
 @testable import ExactKit
+@testable import ExactVideo
 
 private var clockPlayer: AVPlayer?
 private var clockStatus = AVPlayer.TimeControlStatus.paused

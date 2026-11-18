@@ -1,5 +1,6 @@
 // @ref LLP 1042. AVKit belongs to an on-demand artifact, never ExactKit's link graph.
 import Foundation
+import ExactKit
 #if os(macOS)
 import AppKit
 #else
@@ -316,7 +317,7 @@ final class VideoView: VideoPlaying, VisibilityRefreshing {
         if !audible { holdSession(false) }
         if props["src"] != nil, let creationSeconds {
             self.creationSeconds = nil
-            HeavyLeaves.record("video", creationSeconds + CACurrentMediaTime() - started)
+            MediaLink.recordCreation("video", creationSeconds + CACurrentMediaTime() - started)
         }
         #endif
     }

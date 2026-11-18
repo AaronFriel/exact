@@ -307,3 +307,45 @@ fn a_background_transfers_names_select_wakes() {
         assert!(!uses(&plan).has(Capability::Wakes));
     }
 }
+
+/// D10: each of the media family's four products is linked by every plan
+/// whose run makes its output, and no other host's set moves.
+#[test]
+fn media_is_four_products_each_by_its_own_use() {
+    use Capability::{Midi, Sound, Video, WebViews};
+    let action = |act: &str, view: &str| {
+        contract::compile(&format!(
+            "component A\n  action go\n    {act}\n  view\n    {view}\n"
+        ))
+        .unwrap()
+    };
+    let button = "button \"b\" press=go";
+    for (plan, linked) in [
+        (plan("text \"a\""), vec![]),
+        (plan("video src=\"assets/a.mp4\""), vec![Video]),
+        (plan("audio src=\"assets/a.mp3\""), vec![Video]),
+        (
+            action(
+                "requestPictureInPicture(\"pic\")",
+                "image \"assets/a.png\" testId=\"pic\"",
+            ),
+            vec![Video],
+        ),
+        (plan("iframe src=\"https://example.test\""), vec![WebViews]),
+        (action("stopSounds()", button), vec![Sound]),
+        (action("requestMIDIAccess()", button), vec![Midi]),
+        (
+            action("sendMIDI(\"out\", [144, 60, 100])", button),
+            vec![Midi],
+        ),
+    ] {
+        for capability in [Video, WebViews, Sound, Midi] {
+            assert_eq!(
+                apple_uses(&plan).has(capability),
+                linked.contains(&capability),
+                "{capability:?} in {linked:?}"
+            );
+            assert!(!uses(&plan).has(capability), "{capability:?}");
+        }
+    }
+}

@@ -7,6 +7,7 @@
 // the caret. The partitioned frame's automation does the same
 // (`webarm/FrameAutomation.swift`).
 import Foundation
+import ExactKit
 
 enum GuestInput {
     /// A press at (`x`, `y`) in the guest's viewport, or on the element

@@ -58,6 +58,10 @@ let allCapabilities: [(name: String, target: String)] = [
     ("traces", "ExactTraces"),
     ("wake_lock", "ExactWakeLock"),
     ("content_regions", "ExactContentRegions"),
+    ("video", "ExactVideo"),
+    ("web_views", "ExactWebViews"),
+    ("sound", "ExactSound"),
+    ("midi", "ExactMIDI"),
 ]
 // What a family imports beyond ExactKit and CExact: another family's product,
 // which the roster links with it, or ExactCore's package API. Surfaces' Canvas
@@ -116,7 +120,6 @@ let agentSources = ProcessInfo.processInfo.environment["EXACT_UPDATE_TRUST"] == 
     "Mac/AgentMac.swift",
     "Mac/AgentMouseMac.swift",
     "Mac/AgentNativeMac.swift",
-    "Mac/AgentPictureInPictureMac.swift",
     "Mac/AgentStdio.swift",
 ] : []
 

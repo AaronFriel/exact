@@ -793,7 +793,7 @@ package final class Presenter {
             onMessage?(id, value)
         }
     }
-    func intrinsic(_ id: UInt32, _ size: CGSize?) { onIntrinsic?([(id, size)]) }
+    package func intrinsic(_ id: UInt32, _ size: CGSize?) { onIntrinsic?([(id, size)]) }
     /// What native containers cover of boxes (LLP 1075.003 §3.5).
     var onCovers: (([(UInt32, HostCover?)]) -> Void)?
     /// The border box a person dragged a box's `resize` grip to; nil keeps an axis (ResizeGrip.swift).

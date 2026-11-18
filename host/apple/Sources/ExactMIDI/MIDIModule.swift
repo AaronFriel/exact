@@ -14,6 +14,7 @@
 // the agent, whose clock is virtual: the runner answers a request itself
 // there.
 import Foundation
+import ExactKit
 import QuartzCore
 #if os(iOS)
 import UIKit

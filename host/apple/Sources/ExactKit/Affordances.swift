@@ -231,8 +231,8 @@ final class SymbolEffectState {
 /// The platform's haptics (LLP 1077 D14): `-exact-press-haptic`'s kinds and
 /// `haptic()`'s, which adds success, warning and error. macOS plays on a
 /// Force Touch trackpad.
-enum Haptics {
-    static func play(_ kind: String) {
+package enum Haptics {
+    package static func play(_ kind: String) {
         #if os(tvOS)
         // tvOS has no haptics.
         #elseif os(iOS)

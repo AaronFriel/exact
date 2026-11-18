@@ -6,6 +6,7 @@
 // `presentation="window"` or `"panel"` (LLP 1042 §9.1) floats it in Exact's own window on
 // macOS instead (`Mac/PictureInPictureWindowMac.swift`), which needs no arm.
 import Foundation
+import ExactKit
 
 typealias FloatCallback = @convention(c) (UnsafeMutableRawPointer?, UnsafePointer<UInt8>?, Int) -> Void
 

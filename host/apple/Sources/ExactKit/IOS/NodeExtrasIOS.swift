@@ -289,7 +289,7 @@ extension NodeView {
     }
     /// An image's pixels as a sublayer's contents (`applyImageLayer`).
     package var imageLayer: CALayer? { get { aside?.imageLayer } set { if newValue != nil || aside != nil { asideMade.imageLayer = newValue } } }
-    var imageSource: String? { get { aside?.imageSource } set { if newValue != nil || aside != nil { asideMade.imageSource = newValue } } }
+    package var imageSource: String? { get { aside?.imageSource } set { if newValue != nil || aside != nil { asideMade.imageSource = newValue } } }
     package var loadGeneration: Int { get { aside?.loadGeneration ?? 0 } set { if newValue != 0 || aside != nil { asideMade.loadGeneration = newValue } } }
     var paintGhosts: Int { get { aside?.paintGhosts ?? 0 } set { if newValue != 0 || aside != nil { asideMade.paintGhosts = newValue } } }
     var ghostParent: NodeView? { get { aside?.ghostParent } set { if newValue != nil || aside != nil { asideMade.ghostParent = newValue } } }
@@ -381,8 +381,8 @@ extension NodeView {
     var toldText: String? { get { extras?.toldText } set { if newValue != nil || extras != nil { more.toldText = newValue } } }
     /// A `value` that arrived while text was marked, applied when the composition ends.
     var pendingValue: String? { get { extras?.pendingValue } set { if newValue != nil || extras != nil { more.pendingValue = newValue } } }
-    var video: (any VideoPlaying)? { get { extras?.video } set { if newValue != nil || extras != nil { more.video = newValue } } }
-    package internal(set) var web: UIView? { get { extras?.web } set { if newValue != nil || extras != nil { more.web = newValue } } }
+    package var video: (any VideoPlaying)? { get { extras?.video } set { if newValue != nil || extras != nil { more.video = newValue } } }
+    package var web: UIView? { get { extras?.web } set { if newValue != nil || extras != nil { more.web = newValue } } }
     package var metal: MetalView? { get { extras?.metal } set { if newValue != nil || extras != nil { more.metal = newValue } } }
     package var canvasInput: CanvasInput? { get { extras?.canvasInput } set { if newValue != nil || extras != nil { more.canvasInput = newValue } } }
     package var overlay: PlainView? { get { extras?.overlay } set { if newValue != nil || extras != nil { more.overlay = newValue } } }

@@ -65,7 +65,7 @@ extension Agent {
         Thread { serve(fd: 0) }.start()
     }
 
-    var presenter: Presenter { session.presenter }
+    package var presenter: Presenter { session.presenter }
 
     /// A modal route's sheet has arrived or left by the time the input
     /// that asked for it returns (AppKit's `beginSheet` and `endSheet` do
@@ -429,7 +429,7 @@ extension Agent {
         return reply
     }
 
-    func view(_ req: [String: Any]) -> NodeView? {
+    package func view(_ req: [String: Any]) -> NodeView? {
         guard let id = req["id"] as? Int else { return nil }
         return presenter.textHost(UInt32(id))
     }
@@ -1172,7 +1172,7 @@ extension Agent {
     /// EXACT_AGENT_ACTIVATE=1 (only scripts/measure-controls.mjs sets it): an
     /// activated run, whose pictures say whether they were (ExactMac main.swift).
     nonisolated static let activated = ExactEnv.agentMode && ExactEnv.environment["EXACT_AGENT_ACTIVATE"] == "1"
-    static func ownWindowImage(_ number: Int) -> CGImage? { WindowServerPicture.ownWindow(number) }
+    package static func ownWindowImage(_ number: Int) -> CGImage? { WindowServerPicture.ownWindow(number) }
 
     /// The window server's own composite of `window` and `attached`, all
     /// this process's, in `window`'s frame: one over another as a person

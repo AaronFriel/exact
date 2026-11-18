@@ -3,6 +3,7 @@ import XCTest
 import ExactPresence
 @testable import ExactKit
 @testable import ExactPickers
+@testable import ExactWebViews
 
 // It compiles its plans with the Contract compiler through `Process`, which iOS lacks; the
 // generation rules it tests are shared code, run on macOS.

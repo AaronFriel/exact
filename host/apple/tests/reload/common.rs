@@ -31,6 +31,25 @@ pub const ACTIVITIES: &str = "shape ID\n  id: string\nshape S\n  n: number\ncomp
 pub const TRACING: &str =
     "component A\n  action go\n    startTrace_EXPERIMENTAL()\n  view\n    button \"b\" press=go\n";
 
+/// A plan whose button's press runs `act`.
+pub fn acted(act: &str) -> Vec<u8> {
+    contract::compile(&format!(
+        "component A\n  action go\n    {act}\n  view\n    button \"b\" press=go\n"
+    ))
+    .unwrap()
+    .encode()
+}
+
+/// The media family's four products, a plan for each (LLP 1047.001 D10).
+pub fn media() -> [(Vec<u8>, &'static str); 4] {
+    [
+        (plan("video src=\"assets/a.mp4\""), "video"),
+        (plan("iframe src=\"https://example.test\""), "web_views"),
+        (acted("stopSounds()"), "sound"),
+        (acted("requestMIDIAccess()"), "midi"),
+    ]
+}
+
 pub fn boot(bridge: &mut Bridge<NoData>, plan: &[u8]) {
     let out = bridge.boot(plan, NoData, Hooks::none(), 390.0, 844.0);
     let reply = String::from_utf8_lossy(bridge.output_bytes(out as usize)).into_owned();

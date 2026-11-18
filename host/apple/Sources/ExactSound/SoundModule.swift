@@ -6,6 +6,7 @@
 // (soundarm/, AVFAudio) is a dylib loaded on demand, never ExactKit's link
 // graph; nothing loads or plays under the agent, whose clock is virtual (D10).
 import Foundation
+import ExactKit
 import QuartzCore
 #if os(iOS) || os(tvOS)
 import AVFoundation

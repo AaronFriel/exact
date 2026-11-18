@@ -16,5 +16,9 @@ public enum ExactNativeViews {
         ExactFormaBinding.install()
         NativeModuleLink.make = { NativeViews() }
         NativeModuleLink.makeElements = { ElementHatches($0) }
+        // Speech, calls and capture claim the audio session.
+        #if os(iOS) || os(tvOS)
+        MediaLink.claimsAudioSession()
+        #endif
     }
 }

@@ -726,6 +726,10 @@ mod tests {
             "shape ID\n  id: string\ncomponent A\n  resource live = exactActivities() as shape ID\n  view\n    text \"a\"\n",
         )
         .unwrap();
+        let video = compile("video src=\"assets/a.mp4\"", "on = false");
+        let frame = compile("iframe src=\"https://example.test\"", "on = false");
+        let sound = compile("button \"b\" press=go", "stopSounds()");
+        let midi = compile("button \"b\" press=go", "requestMIDIAccess()");
         for (plan, name) in [
             (&tools, "tools"),
             (&view, "modules, native_views"),
@@ -744,6 +748,10 @@ mod tests {
             (&placed, "grid"),
             (&activity, "activities"),
             (&awake, "wake_lock"),
+            (&video, "video"),
+            (&frame, "web_views"),
+            (&sound, "sound"),
+            (&midi, "midi"),
         ] {
             assert_eq!(missing(plan, Uses::NONE).as_deref(), Some(name));
             assert_eq!(missing(plan, ALL), None);

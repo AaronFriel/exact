@@ -546,7 +546,7 @@ package final class Presenter {
     /// Everything the pump owes, now. The agent's wheel is synchronous — it
     /// reads the tree right after — and so is anything that must not observe
     /// a half-filled window (LLP 1012: an agent never waits).
-    func settlePump() {
+    package func settlePump() {
         pumpSchedule.cancel()
         // The agent reads the tree right after: every held leaf is made (LLP 1068 §5.1).
         leaves.settle()
@@ -1055,7 +1055,7 @@ package final class Presenter {
             onMessage?(id, value)
         }
     }
-    func intrinsic(_ id: UInt32, _ size: CGSize?) { onIntrinsic?([(id, size)]) }
+    package func intrinsic(_ id: UInt32, _ size: CGSize?) { onIntrinsic?([(id, size)]) }
     /// Symbols report after the batch that creates them: all sizes from a turn
     /// reach the runner under one layout, as on iOS, not a layout each.
     private struct QueuedIntrinsic { weak var view: NodeView?; let generation: Int; let size: CGSize? }

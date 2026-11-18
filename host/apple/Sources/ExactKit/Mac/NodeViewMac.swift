@@ -181,8 +181,8 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
     /// Natural extent from the kernel, before the CSS client-size minimum.
     package var content = CGSize.zero
     /// The platform view returned by the dlopened iframe arm (@ref LLP 1020 D3).
-    var video: (any VideoPlaying)?
-    package internal(set) var web: NSView? { didSet { if web !== oldValue { placeWeb() } } }
+    package var video: (any VideoPlaying)?
+    package var web: NSView? { didSet { if web !== oldValue { placeWeb() } } }
     /// A canvas node's Metal layer (LLP 1009).
     package var metal: MetalView?
     package var canvasInput: CanvasInput?
@@ -223,7 +223,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
     var symbolClip: NSView?
     var image: NSImage?
     package var raster: (any ImageLease)? { didSet { layerPaintCache = nil } }
-    var imageSource: String?
+    package var imageSource: String?
     package var loadGeneration = 0
     package var pressed = false { didSet { if pressed != oldValue { pressChanged() } } }
     var keyboardPressed = false
@@ -458,7 +458,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
     /// URL as is; a relative path under the asset root (`EXACT_ASSETS`, else
     /// the current directory) and never outside it; anything else (`file:`,
     /// `..` escaping the root) does not load.
-    static func resolveSource(_ source: String, app: ExactApp?) -> URL? {
+    package static func resolveSource(_ source: String, app: ExactApp?) -> URL? {
         if let u = URL(string: source), let scheme = u.scheme {
             return scheme == "http" || scheme == "https" ? u : nil
         }

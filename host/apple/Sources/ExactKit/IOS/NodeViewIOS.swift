@@ -526,7 +526,7 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
     /// the app bundle, which carries the app's `assets/` — a phone reads no
     /// other machine's paths) and never outside it; anything else (`file:`,
     /// `..` escaping the root) does not load.
-    static func resolveSource(_ source: String, app: ExactApp?) -> URL? {
+    package static func resolveSource(_ source: String, app: ExactApp?) -> URL? {
         if let u = URL(string: source), let scheme = u.scheme {
             return scheme == "http" || scheme == "https" ? u : nil
         }

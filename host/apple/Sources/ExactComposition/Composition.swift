@@ -87,6 +87,18 @@ import ExactWakeLock
 #if EXACT_LINK_CONTENT_REGIONS
 import ExactContentRegions
 #endif
+#if EXACT_LINK_VIDEO
+import ExactVideo
+#endif
+#if EXACT_LINK_WEB_VIEWS
+import ExactWebViews
+#endif
+#if EXACT_LINK_SOUND
+import ExactSound
+#endif
+#if EXACT_LINK_MIDI
+import ExactMIDI
+#endif
 public enum ExactComposition {
     public static let app: ExactApp = {
         AgentLink.install()
@@ -183,6 +195,18 @@ public enum ExactComposition {
         #endif
         #if EXACT_LINK_CONTENT_REGIONS
         ExactContentRegions.install()
+        #endif
+        #if EXACT_LINK_VIDEO
+        ExactVideo.install()
+        #endif
+        #if EXACT_LINK_WEB_VIEWS
+        ExactWebViews.install()
+        #endif
+        #if EXACT_LINK_SOUND
+        ExactSound.install()
+        #endif
+        #if EXACT_LINK_MIDI
+        ExactMIDI.install()
         #endif
     }
 }

@@ -212,11 +212,24 @@ pub enum Capability {
     /// The display held awake (LLP 1125 D11): a `wakelock` that can be
     /// `screen`. Native only.
     WakeLock,
+    /// Video and audio elements' players, and an image's picture in
+    /// picture, which the video arm carries (LLP 1098; LLP 1042 §9): a
+    /// `video` or `audio` node, or a plan that runs
+    /// `requestPictureInPicture`. Native only.
+    Video,
+    /// Iframes' web views (LLP 1020): an `iframe` node. Native only.
+    WebViews,
+    /// The voice table's output (LLP 1096; LLP 1125 D3): a plan that
+    /// [`runs_sounds`]. Native only.
+    Sound,
+    /// MIDI ports and the MIDI queue's output (LLP 1125 D6–D8): a plan that
+    /// [`keeps_midi`]. Native only.
+    Midi,
 }
 
 impl Capability {
     /// Every capability, in bit order.
-    pub const ALL: [Capability; 52] = [
+    pub const ALL: [Capability; 56] = [
         Capability::Markdown,
         Capability::Motion,
         Capability::Collections,
@@ -269,6 +282,10 @@ impl Capability {
         Capability::Activities,
         Capability::Wakes,
         Capability::WakeLock,
+        Capability::Video,
+        Capability::WebViews,
+        Capability::Sound,
+        Capability::Midi,
     ];
 
     /// The name an entry, a refusal and a report use.
@@ -326,6 +343,10 @@ impl Capability {
             Capability::Activities => "activities",
             Capability::Wakes => "wakes",
             Capability::WakeLock => "wake_lock",
+            Capability::Video => "video",
+            Capability::WebViews => "web_views",
+            Capability::Sound => "sound",
+            Capability::Midi => "midi",
         }
     }
 
@@ -366,7 +387,11 @@ impl Uses {
         .with(Capability::HostEvents)
         .with(Capability::Activities)
         .with(Capability::Wakes)
-        .with(Capability::WakeLock);
+        .with(Capability::WakeLock)
+        .with(Capability::Video)
+        .with(Capability::WebViews)
+        .with(Capability::Sound)
+        .with(Capability::Midi);
 
     /// This set and `capability`.
     pub const fn with(self, capability: Capability) -> Uses {

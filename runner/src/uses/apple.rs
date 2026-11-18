@@ -9,7 +9,10 @@
 //! What the bake alone can know (an image file's bytes, the app's module
 //! artifact) it adds to the set itself (`exact_bake`'s `production_uses`).
 
-use super::{constant_str, decoration_rows, runs_command, uses, Capability, Uses};
+use super::{
+    constant_str, decoration_rows, keeps_midi, runs_command, runs_sounds, uses,
+    uses_picture_in_picture, Capability, Uses,
+};
 use exact_kernel::{NodeType, PropId, StyleId};
 use exact_plan::{BindingKind, BindingsRow, Plan};
 
@@ -135,6 +138,18 @@ pub fn apple_uses(plan: &Plan) -> Uses {
             )
         }),
     );
+    // The media family's four products, each beside its loaded arm. An
+    // `audio` element is a `Video` node.
+    add(
+        Capability::Video,
+        has_node(plan, |t| t == NodeType::Video) || uses_picture_in_picture(plan),
+    );
+    add(
+        Capability::WebViews,
+        has_node(plan, |t| t == NodeType::WebView),
+    );
+    add(Capability::Sound, runs_sounds(plan));
+    add(Capability::Midi, keeps_midi(plan));
     // A swipe row, a reorder group, a reorder grip and a list whose rows
     // are cells (iOS draws them, LLP 1115.000 D16) reach the family without
     // a windowed list.

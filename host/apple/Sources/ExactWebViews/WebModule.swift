@@ -1,6 +1,7 @@
 // The Apple iframe arm's opaque C ABI (@ref LLP 1020 D3/D4). This file is
 // shared by both presenters and deliberately imports no WebKit.
 import CExact
+import ExactKit
 import Foundation
 
 #if os(macOS)

@@ -10,7 +10,7 @@ use exact_apple::link::{self, Uses};
 
 #[path = "reload/common.rs"]
 mod common;
-use common::{boot, digest, plan, source, NoData, ACTIVITIES, TRACING};
+use common::{boot, digest, media, plan, source, NoData, ACTIVITIES, TRACING};
 
 #[test]
 fn hellos_binary_refuses_a_reload_into_a_family_and_keeps_its_plan() {
@@ -51,7 +51,10 @@ fn hellos_binary_refuses_a_reload_into_a_family_and_keeps_its_plan() {
         (plan("input type=\"file\" id=\"f\""), "picker"),
         (source(TRACING), "traces"),
         (plan("text \"a\" wakelock=\"screen\""), "wake_lock"),
-    ] {
+    ]
+    .into_iter()
+    .chain(media())
+    {
         let len = bridge.input_write(&next);
         let out = bridge.prepare_plan(len, NoData, Hooks::none(), 390.0, 844.0);
         let reply = String::from_utf8_lossy(bridge.output_bytes(out as usize)).into_owned();
@@ -66,5 +69,20 @@ fn hellos_binary_refuses_a_reload_into_a_family_and_keeps_its_plan() {
             "a refused candidate is not committed: {reply}"
         );
         assert_eq!(digest(&mut bridge), before, "{names}");
+    }
+}
+
+/// A first boot of a plan that uses a family is refused too.
+#[test]
+fn hellos_binary_refuses_to_boot_a_media_plan() {
+    link::set(Uses::NONE);
+    for (plan, name) in media() {
+        let mut bridge = Bridge::<NoData>::new();
+        let out = bridge.boot(&plan, NoData, Hooks::none(), 390.0, 844.0);
+        let reply = String::from_utf8_lossy(bridge.output_bytes(out as usize)).into_owned();
+        assert!(
+            reply.contains(&format!("Unlinked(\\\"{name}\\\")")),
+            "{name}: {reply}"
+        );
     }
 }

@@ -17,6 +17,7 @@
 //   window is (Electron's `type: "panel"`), one for each image that asks.
 #if os(macOS)
 import AppKit
+import ExactKit
 import ImageIO
 
 final class PictureInPictureWindow: NSObject, NSWindowDelegate {

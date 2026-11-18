@@ -31,7 +31,7 @@ package enum BorderPaint {
     /// A private material/media layer owns its mask. Keep the circular fast
     /// path; percentages on non-square boxes need the resolved elliptical path.
     @discardableResult
-    static func clip(_ layer: CALayer, in rect: CGRect, radii: [CGSize]) -> CGFloat {
+    package static func clip(_ layer: CALayer, in rect: CGRect, radii: [CGSize]) -> CGFloat {
         let corners = reduced(radii, in: rect)
         let first = corners[0]
         let circular = first.width == first.height && corners.allSatisfy { $0 == first }

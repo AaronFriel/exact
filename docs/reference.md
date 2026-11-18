@@ -1500,6 +1500,10 @@ The generated `--embed` composition lists the capabilities to link.
 | `ExactTraces` | The traces an app records, and `ExactSession.startTrace()` and `stopTrace(maxBytes:)` | `ExactTraces.install()` |
 | `ExactWakeLock` | `wakelock="screen"` | `ExactWakeLock.install()` |
 | `ExactContentRegions` | Content regions an entry registers (the Mac's region controller) | `ExactContentRegions.install()` |
+| `ExactVideo` | `video` and `audio` elements' players; an image's picture in picture | `ExactVideo.install()` |
+| `ExactWebViews` | `iframe` web views | `ExactWebViews.install()` |
+| `ExactSound` | Declared sounds, sequences and the voice-table commands | `ExactSound.install()` |
+| `ExactMIDI` | MIDI ports and a sequence's MIDI output | `ExactMIDI.install()` |
 
 Development builds log a missing Markdown or drag installation once per session,
 with the product and installation call. Without it, Markdown remains literal

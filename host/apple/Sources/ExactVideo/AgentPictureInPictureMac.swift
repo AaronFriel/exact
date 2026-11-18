@@ -4,8 +4,9 @@
 // that window's controls or moves the pointer over it (`hover`), and
 // `screenshot <png> window pictureinpicture [<image>]` is the window server's
 // picture of it.
-#if os(macOS)
+#if os(macOS) && EXACT_AGENT
 import AppKit
+import ExactKit
 
 extension Agent {
     /// The images floating in this session in Exact's windows, each with its window.

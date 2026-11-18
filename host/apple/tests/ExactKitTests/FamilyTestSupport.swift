@@ -1,6 +1,7 @@
 @testable import ExactKit
 @testable import ExactControls
 @testable import ExactPickers
+@testable import ExactWebViews
 @testable import ExactImages
 @testable import ExactCollections
 #if os(macOS)
