@@ -580,7 +580,7 @@ if (rustLinked) {
 const secretNames = [...new Set([...tsGrantSet.entries, ...rustGrantSet.entries].filter(([, , grant]) => grant?.[0] === 'secret-keep').map(([, , grant]) => grant[1]))];
 writeFileSync(resolve(gen, 'admission-data.js'), `import {createGrantSet} from './admission.js';export const tsGrantSet=createGrantSet(${JSON.stringify(tsGrantSet)}),rustGrantSet=createGrantSet(${JSON.stringify(rustGrantSet)});\n`);
 // The app's launch modules that have a web service.
-const launchWeb = launchModules(appDir, manifest).filter(m => m.web);
+const launchWeb = launchModules(appDir, manifest, ['web']);
 if (launchWeb.length) {
   const marks = readFileSync(resolve(here, 'marks.js'), 'utf8');
   writeFileSync(resolve(gen, 'marks.js'), siteBase === '/' ? marks : marks.replace('function route(url) {', `import { appLocation } from './site.js';\nfunction route(url) {\n  url = appLocation(url);`));

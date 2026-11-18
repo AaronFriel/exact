@@ -728,7 +728,7 @@ export const classifications = [
       "exact_admitted_frame exact_advance exact_fire_native_timer exact_frame exact_frame_at exact_native_timers exact_present_frames exact_pump exact_set_live_clock " +
       "exact_prefer_presented exact_start_on_frame exact_tick exact_tick_at exact_timer_waits"],
     ["painted:host/painted/src/agent.rs", "clock_within"],
-    ["painted:host/painted/src/canvas.rs", "CanvasHost::frame"],
+    ["painted:host/painted/src/canvas.rs", "CanvasHost::frame CanvasHost::frame_held"],
     ["painted:host/painted/src/canvas/jni.rs", "Java_dev_exact_canvas_Native_frame Java_dev_exact_canvas_Native_picturePresented Java_dev_exact_canvas_Native_presentToken Java_dev_exact_canvas_Native_timerHeld Java_dev_exact_canvas_Native_timerObservation"],
     ["painted:host/painted/src/canvas/jni_frames.rs", "Java_dev_exact_canvas_Native_frameTurn"],
     ["painted:host/painted/src/canvas/timers.rs", "CanvasHost::held_timer_waits CanvasHost::timer_observation"],
@@ -994,7 +994,7 @@ export const classifications = [
   ]),
   group("inspection", ["subscription"], "session launch/trace journal and diagnostic subscriptions", "UI-owned",
     "host/painted/src/{journal,launch_marks}.rs record and report the current host launch and command events; they do not establish an independent operation outcome.", [
-    ["painted:host/painted/src/journal.rs", "after_startup Event::json host_command launch_parts_ran LaunchContext::new LaunchContext::state_dir post record subscribe wall"],
+    ["painted:host/painted/src/journal.rs", "after_startup Event::json file_digest host_command launch_parts_ran LaunchContext::new LaunchContext::state_dir post record subscribe wall"],
     ["painted:host/painted/src/launch_marks.rs",
       "boottime items LaunchMarks::activated LaunchMarks::done LaunchMarks::flipped LaunchMarks::launch_end LaunchMarks::line LaunchMarks::new LaunchMarks::report " +
       "LaunchMarks::submitted LaunchMarks::take_done LaunchMarks::timeout_ms LaunchMarks::turn"],
