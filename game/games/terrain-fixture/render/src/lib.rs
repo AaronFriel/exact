@@ -379,6 +379,7 @@ impl Passes {
                 .next(&mut budget, self.settings, tick, hz, self.water.dirty)
         {
             worked = true;
+            let small = unit.small();
             match unit {
                 Unit::Retire(origin) => {
                     self.retire(origin);
@@ -396,7 +397,9 @@ impl Passes {
                     self.workload.blended();
                 }
             }
-            budget.spent(|| view.time.deadline.is_some_and(|deadline| deadline.passed()));
+            budget.spent(small, || {
+                view.time.deadline.is_some_and(|deadline| deadline.passed())
+            });
         }
         if !self.water.dirty && !self.workload.retiring() {
             worked |= self.workload.blend_current();
@@ -819,7 +822,7 @@ mod tests {
                         input: None,
                     },
                 );
-                budget.spent(|| false);
+                budget.spent(false, || false);
             }
             (passes.sections.len(), passes.workload.pending(settings))
         };

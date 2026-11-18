@@ -116,7 +116,7 @@ function reading(before, end, durationMs, browser, refreshHz) {
     gpuMs: end?.gpuMs ?? null, timestampQueries: finish?.timestampQueries ?? null,
     thermalStateStart: start?.thermalState ?? null, thermalStateEnd: finish?.thermalState ?? null,
     thermalChanges: change(start, finish, 'thermalChanges'),
-    work: { unitsCompleted: change(start, finish, 'completed'), uploadBytes: change(start, finish, 'uploadBytes') },
+    work: { operationsCompleted: change(start, finish, 'completed'), uploadBytes: change(start, finish, 'uploadBytes') },
     sectionBuffers: finish?.sectionBuffers ? Object.fromEntries(bufferKeys.map(key =>
       [key, change(start?.sectionBuffers, finish.sectionBuffers, key)])) : null,
     refill: refillWindow(start, finish),
@@ -206,7 +206,7 @@ export async function readBench(session, config, commit) {
     device, os, refreshHz, headless, calibration: 'uncalibrated', warmupMs, windowMs,
     mountSampling: 'poll', pollMs, firstPicture: drawing ? firstPicture ?? timeout : null,
     fullWindow: fullWindow ?? timeout, paired: false,
-    sectionsPending: terrain?.pending ?? null, unitsCompleted: terrain?.completed ?? null,
+    sectionsPending: terrain?.pending ?? null, operationsCompleted: terrain?.completed ?? null,
     discarded: terrain?.discarded ?? null, kept: terrain?.kept ?? null,
     gpuBufferBytes: terrain?.gpuBufferBytes ?? null, peakGpuBufferBytes: terrain?.peakGpuBufferBytes ?? null,
     sectionBuffers: terrain?.sectionBuffers ?? null,
@@ -216,7 +216,7 @@ export async function readBench(session, config, commit) {
   };
 }
 
-const workMatches = (on, off) => Number.isFinite(on.unitsCompleted) && on.unitsCompleted === off.unitsCompleted
+const workMatches = (on, off) => Number.isFinite(on.operationsCompleted) && on.operationsCompleted === off.operationsCompleted
   && Number.isFinite(on.uploadBytes) && Number.isFinite(off.uploadBytes)
   && Math.abs(on.uploadBytes - off.uploadBytes) <= 0.02 * Math.min(on.uploadBytes, off.uploadBytes);
 

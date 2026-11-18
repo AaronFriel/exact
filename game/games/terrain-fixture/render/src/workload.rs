@@ -80,8 +80,23 @@ pub(crate) enum Unit<T> {
     Blend,
 }
 
+/// The reuse compares or retirements that make one unit of the allowance. Either is far cheaper
+/// than a mesh (a compare measured about 0.01 ms), and a chunk crossing of a full window at
+/// radius 40 queues 51,840 compares: counted one a unit, they take at least 810 frames at 64 a
+/// frame, whatever time the frames have left. A run shorter than this before a larger unit, or
+/// at the end of a call, is not charged, and the deadline is read after every operation.
+pub(crate) const SMALL_PER_UNIT: u32 = 64;
+
+impl<T> Unit<T> {
+    pub(crate) fn small(&self) -> bool {
+        matches!(self, Self::Retire(_))
+            || matches!(self, Self::Section(job) if job.kind == SectionWork::Compare)
+    }
+}
+
 pub(crate) struct FrameBudget {
     remaining: u32,
+    small: u32,
     deadline: bool,
     blended: bool,
     ran_section: bool,
@@ -94,14 +109,22 @@ impl FrameBudget {
                 Budget::Count(n) => allowance.min(n),
                 Budget::Deadline => allowance,
             },
+            small: 0,
             deadline: budget == Budget::Deadline,
             blended: false,
             ran_section: false,
         }
     }
 
-    pub(crate) fn spent(&mut self, deadline_passed: impl FnOnce() -> bool) {
-        self.remaining -= 1;
+    pub(crate) fn spent(&mut self, small: bool, deadline_passed: impl FnOnce() -> bool) {
+        self.small = if small {
+            (self.small + 1) % SMALL_PER_UNIT
+        } else {
+            0
+        };
+        if self.small == 0 {
+            self.remaining -= 1;
+        }
         if self.deadline && deadline_passed() {
             self.remaining = 0;
         }
@@ -738,7 +761,7 @@ mod tests {
         dirty: bool,
     ) -> Option<Unit<()>> {
         let unit = work.next(budget, settings, tick, 60, dirty)?;
-        budget.spent(|| false);
+        budget.spent(unit.small(), || false);
         Some(unit)
     }
 
@@ -954,7 +977,8 @@ mod tests {
         for crossing in 0..18 {
             let tick = 27 + 48 * crossing;
             work.advance(settings, tick, 60, true, 800.);
-            section_units(&mut work, settings, tick, 64);
+            // One unit is 64 of a crossing's 136 retirements: the queue falls behind.
+            section_units(&mut work, settings, tick, 1);
         }
         let pending = work
             .refills
@@ -984,6 +1008,23 @@ mod tests {
             assert_eq!(
                 section_units(&mut work, settings, 27, 3000),
                 [if compare { SECTION_COUNT - entering } else { 0 }, entering]
+            );
+        }
+    }
+
+    #[test]
+    fn decision_sixty_four_compares_or_retirements_spend_one_unit() {
+        let settings = flight(true);
+        // After a one-chunk shift: 136 retirements are two units and a remainder that costs
+        // nothing, 136 meshes are 136 units and 2,176 compares are 34.
+        for (allowance, compares) in [(172, 2176), (171, 2112)] {
+            let mut work = Workload::default();
+            work.advance(settings, 0, 60, true, 0.);
+            section_units(&mut work, settings, 0, 3000);
+            work.advance(settings, 27, 60, true, 16.);
+            assert_eq!(
+                section_units(&mut work, settings, 27, allowance),
+                [compares, 17 * 8]
             );
         }
     }
@@ -1019,14 +1060,26 @@ mod tests {
             work.next(&mut late, settings, 0, 60, true),
             Some(Unit::Section(_))
         ));
-        late.spent(|| true);
+        late.spent(false, || true);
         assert!(work.next(&mut late, settings, 0, 60, true).is_none());
 
+        // A passed deadline ends a run of small operations at its first.
+        let mut small = FrameBudget::new(Budget::Deadline, 64);
+        small.spent(true, || true);
+        assert_eq!(small.remaining, 0);
+        let mut small = FrameBudget::new(Budget::Deadline, 2);
+        for _ in 0..SMALL_PER_UNIT - 1 {
+            small.spent(true, || false);
+        }
+        assert_eq!(small.remaining, 2);
+        small.spent(true, || false);
+        assert_eq!(small.remaining, 1);
+
         let mut deadline = FrameBudget::new(Budget::Deadline, 64);
-        deadline.spent(|| true);
+        deadline.spent(false, || true);
         assert_eq!(deadline.remaining, 0);
         let mut count = FrameBudget::new(Budget::Count(8), 64);
-        count.spent(|| panic!("count budget read the clock"));
+        count.spent(false, || panic!("count budget read the clock"));
         assert_eq!(count.remaining, 7);
     }
 
@@ -1067,7 +1120,8 @@ mod tests {
 
         let entering = 17 * 8;
         work.advance(settings, 27, 60, true, 12.);
-        section_units(&mut work, settings, 27, entering as u32 + 1);
+        // Two units retire the sections that left; the third is one mesh.
+        section_units(&mut work, settings, 27, 3);
         work.advance(settings, 75, 60, true, 16.);
         assert_eq!(work.refills.started, 2);
         assert_eq!(work.refills.pending[&1].pending, entering - 1);
@@ -1183,7 +1237,7 @@ mod tests {
                 work.advance(settings, 0, 60, true, 0.);
                 section_units(&mut work, settings, 0, 3000);
                 work.advance(settings, 27, 60, true, 12.);
-                section_units(&mut work, settings, 27, 137);
+                section_units(&mut work, settings, 27, 3);
                 work.advance(settings, 75, 60, true, 16.);
                 let buffers = super::super::BufferStats {
                     created: 94,

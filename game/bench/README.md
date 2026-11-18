@@ -1730,34 +1730,48 @@ for LLP 1182.000 D4b. Its rows carry the uncalibrated label.
 Mac Studio (Apple M5 Ultra, 36 cores), macOS 27.2.1, a 1440 × 900 display at 75 Hz
 (13.33 ms), canvas 1280 × 720. Every row is `radius=40` under the live clock with
 `budget=deadline`: 20 s of warm-up, then three 60 s windows, and a figure with a
-range is the range across the three. The engine and fixture are `7dc6fdf8c`'s. The
-web rows are Google Chrome 158.0.8127.37 on WebGPU, `web` profile; the Metal rows
-are the macOS app, `host-dev` profile. The machine's one-minute load was 5 to 30
-during the rows. Uncalibrated: the switch values stand for a game's costs and were
-not fitted to one.
+range is the range across the three. The web rows are Google Chrome 158.0.8127.37
+on WebGPU, `web` profile; the Metal rows are the macOS app, `host-dev` profile.
+The machine's one-minute load was 4 to 22 during the rows, and 54 at the end of
+the Metal row with `move=fly light=8000`. Uncalibrated: the switch values stand
+for a game's costs and were not fitted to one. "Game guess" is `light=96000
+compare=on vertex=64 blend=window edits=4`.
 
-Flying crosses a chunk every 800 ms, and each crossing queues 648 sections.
-"Refill" is the time from a crossing to its last section installed.
+Flying crosses a chunk every 800 ms and walking every 4 s. A crossing retires 648
+sections, queues 648 and, with `compare=on`, queues a reuse compare for each of
+the 51,840 that stay. "Refill" is the time from a crossing to the last of its work.
+"`prepare` share" is the hook's `prepare` time over the window's 60 s.
 
-| Renderer | Switches | Window filled | Frame interval p50, p95 | `prepare` p95 | Encode p95 | Refills finished of 75 a window; time p50 | Sections pending at each window's end | Frames `prepare` ran past its budget | GPU frame p95 |
-|---|---|---|---|---|---|---|---|---|---|
-| Chrome, WebGPU | `move=fly` | 13.3 s | 13.34, 13.36 ms | 2.9–3.0 ms | 4.2–4.3 ms | 75, 75, 75; 280 ms | 0, 0, 0 | 0 | 0.36–0.37 ms |
-| Chrome, WebGPU | `move=fly light=8000 compare=on` | not in 60 s | 13.34, 13.36–13.37 ms | 8.7 ms | 10.5–10.6 ms | 0, 0, 35; 16.5 s | 51,152, 50,768, 50,448 | 17, 3, 18 | 0.38–0.39 ms |
-| Chrome, WebGPU | `move=fly light=96000 compare=on vertex=64 blend=window edits=4` | not in 60 s | 13.34, 13.36–13.45 ms | 12.1–12.3 ms | 14.0 ms | 0, 0, 0 | 52,488, 52,488, 52,488 | 3,652, 3,502, 3,434 of about 4,400 | 0.39 ms |
-| Metal | `move=fly` | 12.0 s | 13.33, 13.33 ms | 3.8–5.4 ms | 5.2–6.5 ms | 75, 75, 75; 280 ms | 0, 0, 0 | 0, 1, 0 | 0.43–0.48 ms |
-| Metal | `move=fly light=8000 compare=on` | not in 60 s | 13.33, 13.33 ms | 7.8–8.6 ms | 9.5–10.7 ms | 8, 10, 33; 15.6–16.5 s | 50,512, 50,512, 50,481 | 120, 60, 60 | 0.45 ms |
-| Metal | `move=fly light=96000 compare=on vertex=64 blend=window edits=4` | not in 60 s | 13.33, 13.33–21.36 ms | 12.2–12.4 ms | 13.6–13.7 ms | 0, 0, 0 | 50,458, 52,488, 52,488 | 2,049, 2,270, 2,087 of about 4,300 | 0.44–0.46 ms |
+| Renderer | Switches | Window filled | Frame interval p95 | `prepare` p50, p95 | `prepare` share | Refill p50; p95 | Refills finished of those started |
+|---|---|---|---|---|---|---|---|
+| Chrome, WebGPU | `move=fly` | 11.3 s | 13.35 ms | 0.02, 2.9 ms | 4 % | 147 ms; 147 ms | all |
+| Chrome, WebGPU | `move=fly light=8000 compare=on` | 16.5 s | 13.35 ms | 11.5, 11.9 ms | 80–81 % | 787–800 ms; 947–960 ms | all |
+| Chrome, WebGPU | `move=fly`, game guess | not in 60 s | 13.35 ms | 11.9, 12.5–12.6 ms | 87–88 % | none | 0 of 75 a window |
+| Chrome, WebGPU | `move=walk light=8000 compare=on` | 11.7 s | 13.35 ms | 0.02, 11.1–11.5 ms | 16–17 % | 800–840 ms; 814–1,040 ms | all |
+| Chrome, WebGPU | `move=walk`, game guess | 50.3 s | 13.35 ms | 9.0–9.2, 11.5–11.6 ms | 72 % | 1.33–1.35 s; 1.37–1.72 s | all |
+| Metal | `move=fly` | 11.3 s | 13.33 ms | 0.01, 3.6–3.8 ms | 5 % | 147 ms; 147 ms | all |
+| Metal | `move=fly light=8000 compare=on` | 11.6 s | 13.33–13.44 ms | 0.01–6.2, 11.1–12.0 ms | 30–37 % | 347–440 ms; 427–520 ms | all |
+| Metal | `move=fly`, game guess | 30.7 s | 26.67 ms | 11.8–11.9, 12.3–12.4 ms | 70–71 % | 547–573 ms; 587–3,854 ms | 75, 75, 72 of 75 |
+| Metal | `move=walk light=8000 compare=on` | 11.4 s | 13.33 ms | 0.01, 10.7–10.8 ms | 6 % | 347–360 ms; 427–453 ms | all |
+| Metal | `move=walk`, game guess | 28.2 s | 13.33 ms | 5.4–5.6, 11.9–12.1 ms | 46–49 % | 573–587 ms; 627–934 ms | all |
 
-With meshing alone a refill takes a third of a chunk crossing on both renderers.
-With lighting and the reuse compare on, the frame still holds the display period,
-because the hook stops at its deadline, and the work no longer fits: a refill that
-finishes takes twenty crossings, and at the larger light region nothing is installed
-at all. No row has an overload frame (`catchUp.overloadFrames`), and a tick costs
-0.03 ms.
+With meshing alone a refill takes a fifth of a chunk crossing. With lighting and
+the reuse compare on, the frame thread is the limit. In Chrome a flight at the
+smaller light region finishes each refill about when the next crossing starts, with
+four fifths of all time in `prepare`; at the game guess it finishes none. On Metal
+the same code runs about three times as fast, the refills fit, and at the game
+guess the frame no longer holds the display period: `prepare` runs to its deadline
+in most frames and a frame's blended upload is 9.5 MB. Walking fits everywhere.
+No web row has an overload frame (`catchUp.overloadFrames`), a Metal row has at
+most 4, and a tick costs 0.03 ms. The GPU's frame time has a p95 of 0.36 to 0.57 ms.
+
+A crossing that began while the window was first filling can stay counted as
+unfinished for the rest of a run (up to 7 here, 33 at the Metal game guess).
 
 Draw cost, from `--pair draw`: the same switches with `draw=on` and `draw=off`,
 which did equal work in every window. Each cell is the encode time's p50 with draws,
-without them, and the difference.
+without them, and the difference. These rows were taken at `3ea11d0d8`, when a
+retirement was a whole unit of the allowance.
 
 | Renderer | Switches | Draws a frame | Encode p50, `draw=on` | `draw=off` | Difference |
 |---|---|---|---|---|---|

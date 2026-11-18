@@ -146,7 +146,7 @@ test('records the state rings and refill observations across three windows', asy
     encodeMs: recorded.perf.encodeMs, frameMs: recorded.perf.frameMs, catchUp: recorded.perf.catchUp,
     budget: recorded.renderHooks.budget, uploadBytes: recorded.renderHooks.frame.uploadBytes,
     itemsDrawn: recorded.renderHooks.frame.itemsDrawn, gpuMs: recorded.gpuMs, timestampQueries: true,
-    work: { unitsCompleted: 70, uploadBytes: 10240 },
+    work: { operationsCompleted: 70, uploadBytes: 10240 },
     refill: {
       started: 1, finished: 1, unfinished: 1, finishedMs: { count: 1, p50: 28, p95: 28, max: 28 },
       oldestUnfinishedMs: 16, crossingIntervalMs: 800, backlogStart: 0, backlogEnd: 0,

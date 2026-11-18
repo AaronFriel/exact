@@ -45,10 +45,18 @@ display frame in two to four while it uploaded sections. A Mac row records the
 machine's load before and after, and marks itself when there was more load
 than cores.
 
-- The default `budget=deadline` stops after a completed unit when the live
+- The default `budget=deadline` stops after a completed operation when the live
   deadline has passed. `budget=count:N` skips the deadline check and still
   respects the engine's allowance. Section work takes priority over blended
   uploads.
+- A unit of the allowance is one mesh, one install, one dropped staged result,
+  one edit or one blended upload, or 64 reuse compares or retirements, which
+  are far cheaper (a compare measured about 0.01 ms). A run of fewer than 64
+  before a larger unit, or at the end of a call, costs nothing. With no
+  deadline (the agent's clock, or `budget=count:N`) a call can therefore do 64
+  times its allowance of them: 4,096 compares at the declared 64. The row's
+  `operationsCompleted` counts each compare, retirement, mesh, install and edit
+  as one, so it is not the allowance spent.
 - `light=N` visits N distinct cells per section, capped at 97,336 cells
   (46³ for one 16³ section with a 15-cell halo, LLP 1182 §2).
   The report includes the effective cell count.
@@ -76,4 +84,4 @@ The JSON row records separate CPU timing rings with `paired: false`. The trace
 export lacks per-frame prepare and total encode samples joined to tick CPU time
 and the display interval on the same frame. `--pair draw` runs `draw=on` and
 `draw=off` in order. It subtracts the corresponding encode statistics for each
-window if completed units match and uploaded bytes differ by at most 2%.
+window if completed operations match and uploaded bytes differ by at most 2%.
