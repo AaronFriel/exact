@@ -315,8 +315,8 @@ object Native {
     /** What [Orientation] asked of the activity for the session's orientation lock (LLP 1133.029 §8), JSON, whether
      * its resolution found a conflict, and a line for the journal or null. On the host's thread. */
     @JvmStatic external fun orientationApplied(applied: String, conflict: Boolean, line: String?)
-    /** The session's clock, ms, as of the host's last turn and moved on by the wall's outside the agent
-     * ([ExtensionContext.now]). Any thread. */
+    /** The frame clock, ms, retaining its monotonic origin across host turns ([ExtensionContext.now]). Under the
+     * agent, held virtual time; during a capture lease, the display's live time. Any thread. */
     @JvmStatic external fun now(): Double
 
     /** The file an `app:/data|cache|tmp/…` path names, or null (`ExtensionContext.file`). */

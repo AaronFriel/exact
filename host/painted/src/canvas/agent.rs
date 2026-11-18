@@ -84,6 +84,7 @@ pub(super) fn lend<D: DataSource>(
     let offset = started.elapsed().as_secs_f64() * 1000.0 - p.host().now();
     OFFSET.store(offset.to_bits(), Ordering::Relaxed);
     LENT.store(true, Ordering::Relaxed);
+    super::clock::set(super::clock::Clock::for_turn(started, None, offset));
     p.set_live_clock(Some(std::rc::Rc::new(move || {
         started.elapsed().as_secs_f64() * 1000.0 - offset
     })));
@@ -92,6 +93,8 @@ pub(super) fn lend<D: DataSource>(
 /// The lease ended: the driver's clock again, where the display left it.
 pub(super) fn unlend<D: DataSource>(p: &mut crate::presenter::Presenter<D>) {
     if LENT.swap(false, Ordering::Relaxed) {
+        let now = super::clock::hold(p.host().now());
+        p.tick(now);
         p.set_live_clock(None);
     }
 }
@@ -114,8 +117,10 @@ pub(crate) fn own_time<D: DataSource + Default>(
 ) {
     if std::env::var("EXACT_AGENT").as_deref() == Ok("1") {
         SEEK.store(true, Ordering::Relaxed);
+        super::clock::set(super::clock::Clock::Held(p.host().now()));
     } else {
         p.set_live_clock(Some(crate::presenter::wall_since(started)));
+        super::clock::set(super::clock::Clock::for_turn(started, None, 0.0));
     }
 }
 

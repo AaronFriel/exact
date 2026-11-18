@@ -46,7 +46,11 @@ impl<D: DataSource + Default> CanvasHost<D> {
                 .batch(files, self.origin_ns, super::monotonic_ns());
             self.p.request(crate::presenter::Request::Sound(body));
         }
-        crate::canvas::jni::jni_extensions::stamp(self.p.host().runner().now_ms());
+        super::clock::publish(
+            self.started,
+            super::agent::clock(&self.p),
+            super::agent::offset(),
+        );
         self.p.surfaces.publish_names();
         if let Some(names) = crate::canvas::jni::jni_extensions::take_bound() {
             self.bind_extensions(&names);

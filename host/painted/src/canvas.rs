@@ -168,6 +168,9 @@ pub mod agent;
 mod boot;
 #[path = "canvas/clip.rs"]
 mod clip;
+#[cfg(any(target_os = "android", test))]
+#[path = "canvas/clock.rs"]
+mod clock;
 #[cfg(target_os = "android")]
 #[path = "canvas/codec.rs"]
 mod codec;
@@ -1144,11 +1147,6 @@ const MOVES_MOUNTED: u32 = 6;
 
 #[cfg(target_os = "android")]
 impl<D: DataSource + Default> CanvasHost<D> {
-    fn now(&self) -> f64 {
-        agent::clock(&self.p)
-            .unwrap_or_else(|| self.started.elapsed().as_secs_f64() * 1000.0 - agent::offset())
-    }
-
     /// One turn: the presenter's work, then a recording when anything
     /// changed. `Some` is the new op stream (valid until the next call).
     pub fn frame(&mut self) -> Option<Vec<u32>> {
