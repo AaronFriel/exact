@@ -476,7 +476,7 @@ public final class ExactSession {
         if hasPublished({ !showsNothing($0) }) { out.append("published") }
         if canvasInFlight || canvasOwed || presenter.canvas2d.loadingCount > 0 { out.append("canvas") }
         #if os(iOS)
-        if SvgFilterLive.inFlight > 0 { out.append("svgPicture") }
+        if (SvgLink.drawing?() ?? 0) > 0 { out.append("svgPicture") }
         #endif
         return out
     }

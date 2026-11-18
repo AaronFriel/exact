@@ -674,7 +674,7 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
         // a `color-scheme` above it included (LLP 1034 §8).
         presenter?.session?.noteAppearance(self)
         // An `svg`'s paints are resolved into its scene's layers.
-        presenter?.svg.reappear(id, dark: drawsDark, clock: presenter?.session?.clock, tint: viewTint)
+        presenter?.svg?.reappear(id, dark: drawsDark, clock: presenter?.session?.clock, tint: viewTint)
         presenter?.requestTextPublication()
         if let presenter, superview === presenter.root { presenter.paintCanvas() }
     }

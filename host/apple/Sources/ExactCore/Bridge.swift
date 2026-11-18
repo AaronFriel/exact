@@ -352,7 +352,7 @@ package final class Runtime {
     /// picture is drawn in the commit that shows it. The same owner job reads
     /// `evaluatesFromDraw`.
     private func islands(_ batch: Batch) -> Batch {
-        let (svg, early) = on(busy: (UInt8(0), false)) { (exact_svg_islands(rt), exact_evaluates_from_draw(rt) != 0) }
+        let (svg, early) = on(busy: (UInt8(0), false)) { (CoreExports.svgIslands?(rt) ?? 0, exact_evaluates_from_draw(rt) != 0) }
         evaluatesFromDraw = early
         hooks.prewarmIslands?(svg)
         return batch

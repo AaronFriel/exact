@@ -1286,7 +1286,7 @@ public final class Agent {
     /// How many requests the runner and the presenter's pictures have in flight.
     func pendingCount() -> Int {
         #if os(iOS) || os(tvOS)
-        let pictures = SvgFilterLive.inFlight
+        let pictures = SvgLink.drawing?() ?? 0
         #else
         let pictures = 0
         #endif

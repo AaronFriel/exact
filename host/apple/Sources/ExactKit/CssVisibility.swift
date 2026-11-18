@@ -44,7 +44,7 @@ extension NodeView {
         if hidden { materialView?.effect = nil }
         else if materialView != nil, materialView?.effect == nil { updateMaterial() }
         #endif
-        presenter?.svg.boxVisibility(id, hidden: hidden, clock: presenter?.session?.clock)
+        presenter?.boxAnimations.boxVisibility(id, hidden: hidden, clock: presenter?.session?.clock)
         symbolView?.isHidden = hidden
         web?.isHidden = hidden
         metal?.isHidden = hidden

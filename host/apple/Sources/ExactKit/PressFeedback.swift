@@ -386,7 +386,7 @@ extension NodeView {
     /// scale takes them off until it lands.
     package func applyTransform() {
         let flying = flightLook?.scale != nil
-        anchorLayer(centre: presenter?.svg.playsTransform(id, flying: flying, clock: presenter?.session?.clock) == true)
+        anchorLayer(centre: presenter?.boxAnimations.playsTransform(id, flying: flying, clock: presenter?.session?.clock) == true)
         defer { refreshPressTranslation() }
         defer { overflowClipGeometryChanged() }
         let before = layer?.transform ?? CATransform3DIdentity

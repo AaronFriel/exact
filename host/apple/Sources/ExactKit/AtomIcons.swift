@@ -1,14 +1,13 @@
 // An inline atom's icon from an image source (LLP 1045.000 D2): an asset, an
 // `app:/` file, a `data:` URL or an http(s) URL, read as an `image` reads it
 // (`RasterInput.open`) and decoded at the pill's size off the main thread, an
-// SVG as the image host draws one (`exact_svg_image_scene`, `SvgIsland`).
+// SVG as the image host draws one (`SvgLink.documents`).
 // The editor and reader keep the icon's room empty until it arrives, then
 // restyle the field or invalidate the reader's layout and paint. An icon
 // that cannot be read is logged with the step that
 // failed, and its pill then keeps no room. A picture does not follow the
 // appearance, as a browser's `<img>` does not: an app gives a face another
 // source for another scheme.
-import CExact
 import CoreGraphics
 import Foundation
 import ImageIO
@@ -171,22 +170,17 @@ package enum AtomIcons {
     /// An SVG drawn into a square of `pixels`, its view box fitted as an
     /// `image` fits it at that size.
     private static func svg(_ bytes: Data, pixels: Int) throws -> CGImage {
-        var length = 0, flags: UInt32 = 0
         let side = Double(pixels)
-        let buffer = bytes.withUnsafeBytes { raw in
-            exact_svg_image_scene(raw.baseAddress?.assumingMemoryBound(to: UInt8.self), bytes.count, side, side, &length, &flags)
-        }
-        guard let buffer else { throw Failure.svg("no scene") }
-        defer { exact_svg_image_free(buffer, length) }
-        let data = Data(bytes: buffer, count: length)
+        guard let documents = SvgLink.documents else { throw Failure.svg("SVG is not linked") }
+        guard let (data, flags) = documents.scene(bytes, width: side, height: side) else { throw Failure.svg("no scene") }
         guard flags & 2 == 0 else { throw Failure.svg(String(decoding: data, as: UTF8.self)) }
         guard let spec = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw Failure.svg("its scene is not JSON") }
         let numbers = (spec["t"] as? [Any])?.compactMap { ($0 as? NSNumber)?.doubleValue } ?? []
         guard numbers.count == 6 else { throw Failure.svg("its scene has no transform") }
         let transform = CGAffineTransform(a: numbers[0], b: numbers[1], c: numbers[2], d: numbers[3], tx: numbers[4], ty: numbers[5])
         let render = {
-            SvgIsland.render(spec["els"] as? [Any] ?? [], rect: CGRect(x: 0, y: 0, width: side, height: side), w: pixels, h: pixels, k: 1,
-                             transform: transform, flip: true, dark: false, fonts: nil)?.makeImage()
+            documents.draw(spec["els"] as? [Any] ?? [], rect: CGRect(x: 0, y: 0, width: side, height: side), width: pixels, height: pixels, scale: 1,
+                           transform: transform, fonts: nil)?.makeImage()
         }
         // Text in it is drawn where the session's fonts are.
         guard let image = flags & 1 != 0 ? DispatchQueue.main.sync(execute: render) : render() else { throw Failure.drawn }

@@ -120,8 +120,10 @@ package final class Presenter {
     lazy var alerts = AlertHost(self)
     lazy var navigation = NavigationHost(presenter: self)
     lazy var backSwipe = BackSwipe(self)
-    /// SVG scenes and CSS animations (LLP 1055 D4, D7).
-    let svg = SvgHost()
+    /// SVG scenes (LLP 1055 D4), when the app links SVG.
+    let svg = SvgLink.make?()
+    /// Boxes' CSS animations (LLP 1055 D7).
+    let boxAnimations = BoxAnimations()
     /// Boxes under CSS `filter`, drawn again after each batch (LLP 1055.000 D14).
     let boxFilters = BoxFilters()
     let canvas2d: Canvas2DCanvases = SurfacesLink.installed?.canvas2D() ?? NoCanvas2D()
@@ -814,7 +816,7 @@ package final class Presenter {
         mouseDrags.transform.retire(id)
         mouseDrags.reorder.retire(id)
         session?.canvases.destroy(view: id)
-        svg.forget(id)
+        svg?.forget(id); boxAnimations.forget(id)
         canvas2d.forget(id)
         if forget { views[id]?.forget() }
         // Out of the map before out of the window: the editing-ended
@@ -1084,11 +1086,11 @@ package final class Presenter {
         if let e = batch.error { FileHandle.standardError.write(Data("exact: \(e)\n".utf8)) }
         if let text = session?.text {
             // SVG text shapes with the session's fonts (LLP 1055.000 D11).
-            svg.fonts = { [weak text] size, weight, family, italic in
-                (text?.font(size: size, weight: weight, family: family, italic: italic)).map { $0 as CTFont } ?? SvgScene.systemFonts(size, weight, family, italic)
+            svg?.useFonts { [weak text] size, weight, family, italic in
+                (text?.font(size: size, weight: weight, family: family, italic: italic)).map { $0 as CTFont }
             }
         }
-        svg.seek(clock: session?.clock)
+        svg?.seek(clock: session?.clock); boxAnimations.seek(clock: session?.clock)
         let outermost = !applying
         applying = true
         // Hatched nodes this batch destroys end first, while their views are
@@ -1218,9 +1220,9 @@ package final class Presenter {
             case .surface:
                 if let v = views[id] { session?.canvases.surface(view: v, name: op.payload["name"] as? String ?? "", values: op.payload["values"] as? Data ?? Data("[]".utf8)) }
             case .canvas2d: if let v = views[id] { canvas2d.apply(id, op.payload, layer: v.layer) }
-            case .svg: if let v = views[id] { svg.scene(id, op.payload, layer: v.layer, dark: v.drawsDark, clock: session?.clock, limit: v.style["dynamic_range_limit"]?.string, tint: v.viewTint) }
+            case .svg: if let v = views[id] { svg?.scene(id, op.payload, layer: v.layer, dark: v.drawsDark, clock: session?.clock, limit: v.style["dynamic_range_limit"]?.string, tint: v.viewTint) }
             case .animations:
-                svg.animations(id, op.payload, layer: views[id]?.layer, clock: session?.clock)
+                boxAnimations.animations(id, op.payload, layer: views[id]?.layer, clock: session?.clock)
                 views[id]?.applyTransform()
             case .command:
                 let name = op.payload["name"] as? String ?? ""

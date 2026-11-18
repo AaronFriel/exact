@@ -224,7 +224,7 @@ extension NodeView {
         #if os(macOS)
         if textRaster != nil && textRasterOverflowLayer == nil { own?.applyTextRange(limit: limit) }
         #endif
-        for l in own?.sublayers ?? [] where l.name == SvgHost.rootName { l.applyColorRange(limit: limit, deep: true) }
+        for l in own?.sublayers ?? [] where l.name == SvgLink.rootName { l.applyColorRange(limit: limit, deep: true) }
     }
 
     func paragraphHeadroom(drawing: Bool) -> Float {

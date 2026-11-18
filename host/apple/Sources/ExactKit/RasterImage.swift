@@ -1,7 +1,6 @@
 import Foundation
 import CoreGraphics
 import QuartzCore
-import CExact
 import ImageIO
 import ObjectiveC
 #if os(iOS)
@@ -109,11 +108,8 @@ package struct RasterMetadata: Equatable, Sendable {
         guard !prefix.isEmpty, prefix.count <= headerLimit, prefix.count <= encodedBytes else { throw RasterFailure.headerLimit }
         // An SVG, by its bytes (LLP 1011.001 D4): its root tag's size is the
         // natural size, rounded to the pixel counts the seam carries.
-        var size = [Double](repeating: 0, count: 2)
-        let isSVG = prefix.withUnsafeBytes { raw in
-            exact_svg_image_header(raw.baseAddress?.assumingMemoryBound(to: UInt8.self), prefix.count, &size) == 1
-        }
-        if isSVG {
+        if let svg = SvgLink.documents?.size(prefix: prefix) {
+            let size = [Double(svg.width), Double(svg.height)]
             var metadata = try validated(width: max(1, Int(size[0].rounded())), height: max(1, Int(size[1].rounded())), orientation: 1,
                                          encodedBytes: encodedBytes, headerBytes: prefix.count)
             metadata.svg = true
@@ -544,20 +540,16 @@ final class RasterImage: @unchecked Sendable {
 
     /// An SVG drawn at the plan's size (LLP 1011.001 D3, D4): the file
     /// parsed and resolved in Rust at the plan's size in CSS pixels, its scene
-    /// rendered as an island is (`SvgIsland.render`), on the main thread when
+    /// rendered as an island is (`SvgLink.documents`), on the main thread when
     /// it has text and here otherwise, using the image's own font stacks, into
     /// the plan's storage. Animation is ignored and nothing is dark: a
     /// picture does not follow the page's scheme, as a browser's `<img>`
     /// does not.
     fileprivate static func decodeSVG(_ bytes: Data, metadata: RasterMetadata, plan: RasterDecodePlan, owner: RasterOwner) throws -> RasterImage {
         let css = CGSize(width: Double(plan.width) / plan.scale, height: Double(plan.height) / plan.scale)
-        var length = 0, flags: UInt32 = 0
-        let buffer = bytes.withUnsafeBytes { raw in
-            exact_svg_image_scene(raw.baseAddress?.assumingMemoryBound(to: UInt8.self), bytes.count, css.width, css.height, &length, &flags)
+        guard let documents = SvgLink.documents, let (data, flags) = documents.scene(bytes, width: css.width, height: css.height) else {
+            throw RasterFailure.svg("the scene was not made")
         }
-        guard let buffer else { throw RasterFailure.svg("the scene was not made") }
-        defer { exact_svg_image_free(buffer, length) }
-        let data = Data(bytes: buffer, count: length)
         if flags & 2 != 0 { throw RasterFailure.svg(String(decoding: data, as: UTF8.self)) }
         guard let spec = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw RasterFailure.svg("the scene is not JSON") }
         let els = spec["els"] as? [Any] ?? []
@@ -569,8 +561,8 @@ final class RasterImage: @unchecked Sendable {
                 return CGContext(data: nil, width: plan.width, height: plan.height, bitsPerComponent: 8, bytesPerRow: plan.width * 4,
                                  space: CGColorSpace(name: CGColorSpace.sRGB)!, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
             }
-            return SvgIsland.render(els, rect: CGRect(origin: .zero, size: css), w: plan.width, h: plan.height, k: plan.scale,
-                                    transform: transform, flip: true, dark: false, fonts: flags & 1 != 0 ? SvgText.imageFonts(spec["fonts"]) : nil)
+            return documents.draw(els, rect: CGRect(origin: .zero, size: css), width: plan.width, height: plan.height, scale: plan.scale,
+                                  transform: transform, fonts: flags & 1 != 0 ? .some(spec["fonts"]) : .none)
         }
         let context = flags & 1 != 0 && !Thread.isMainThread ? DispatchQueue.main.sync(execute: render) : render()
         guard let context else { throw RasterFailure.svg("the picture did not render at \(plan.width)×\(plan.height)") }

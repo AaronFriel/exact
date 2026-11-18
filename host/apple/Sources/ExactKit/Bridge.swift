@@ -28,12 +28,7 @@ extension Runtime {
         self.init(hooks: RuntimeHooks(
             decodeBatch: { Batch.decode($0, resolver: $1) },
             prepareBatch: { $0.prepare() }, symbolMeasure: SymbolMeasure.measure,
-            prewarmIslands: { svg in
-                if svg & 1 != 0 { SvgRasterModule.prewarm() }
-                #if os(iOS) || os(tvOS)
-                if svg & 2 != 0 { SvgFilterMetal.prewarm() }
-                #endif
-            }))
+            prewarmIslands: SvgLink.prewarm))
     }
 
     func holdBegin(_ view: UInt32, property: UInt32, now: Double) -> (NativeHold?, Batch) {

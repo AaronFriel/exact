@@ -174,8 +174,10 @@ package final class Presenter {
     /// container (LLP 1047.001 D4): UIKit's types, not the core's.
     package var viewportScroll: UIScrollView { viewport }
     package var keyboardContainer: UIView? { modals.coordinateView ?? session?.view }
-    /// SVG scenes and CSS animations (LLP 1055 D4, D7).
-    let svg = SvgHost()
+    /// SVG scenes (LLP 1055 D4), when the app links SVG.
+    let svg = SvgLink.make?()
+    /// Boxes' CSS animations (LLP 1055 D7).
+    let boxAnimations = BoxAnimations()
     /// Boxes under CSS `filter`, drawn again after each batch (LLP 1055.000 D14).
     let boxFilters = BoxFilters()
     let canvas2d: Canvas2DCanvases = SurfacesLink.installed?.canvas2D() ?? NoCanvas2D()
@@ -879,11 +881,11 @@ package final class Presenter {
         if let e = batch.error { FileHandle.standardError.write(Data("exact: \(e)\n".utf8)) }
         if let text = session?.text {
             // SVG text shapes with the session's fonts (LLP 1055.000 D11).
-            svg.fonts = { [weak text] size, weight, family, italic in
-                (text?.font(size: size, weight: weight, family: family, italic: italic)).map { $0 as CTFont } ?? SvgScene.systemFonts(size, weight, family, italic)
+            svg?.useFonts { [weak text] size, weight, family, italic in
+                (text?.font(size: size, weight: weight, family: family, italic: italic)).map { $0 as CTFont }
             }
         }
-        svg.seek(clock: session?.clock)
+        svg?.seek(clock: session?.clock); boxAnimations.seek(clock: session?.clock)
         let outermost = !applying
         applying = true
         // Hatched nodes this batch destroys end first, so a reusable hatch has
@@ -1032,7 +1034,7 @@ package final class Presenter {
             case .svg: if views[id] != nil { applyGeometry(op) }
             case .animations:
                 if flats.isFlat(id) { flats.promote(id) }
-                svg.animations(id, op.payload, layer: views[id]?.layer, clock: session?.clock)
+                boxAnimations.animations(id, op.payload, layer: views[id]?.layer, clock: session?.clock)
             case .command:
                 let name = op.payload["name"] as? String ?? ""
                 if name == "preventDefault" { defaultPrevented = true; break }
@@ -1250,7 +1252,7 @@ package final class Presenter {
         listRowDependencies?.rowOwners.removeValue(forKey: id)
         focusEvents.removed(id)
         session?.canvases.destroy(view: id)
-        svg.forget(id)
+        svg?.forget(id); boxAnimations.forget(id)
         canvas2d.forget(id)
         if let view = views[id] { autofocusProcessed.remove(ObjectIdentifier(view)); leaving(view) }
         listViews.removeValue(forKey: id)
@@ -1359,7 +1361,7 @@ package final class Presenter {
             if v.props["navigationDetent"] != nil { modals.contentChanged(v) }
         case .fieldContent: applyContentGeometry(v, op)
         // A scene is laid out in its content box (its `viewBox` scaled to it)
-        case .svg: svg.scene(id, op.payload, layer: v.layer, dark: v.drawsDark, clock: session?.clock, limit: v.style["dynamic_range_limit"]?.string, tint: v.viewTint)
+        case .svg: svg?.scene(id, op.payload, layer: v.layer, dark: v.drawsDark, clock: session?.clock, limit: v.style["dynamic_range_limit"]?.string, tint: v.viewTint)
         default: break
         }
     }
