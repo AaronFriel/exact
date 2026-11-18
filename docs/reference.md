@@ -2789,9 +2789,10 @@ interrupted drive, the next drive refuses before resetting or opening its profil
 names the profile and PID; close that browser or use another store name. A drive also refuses when the profile's
 owner cannot be verified. A data module's `secret.keep` rides that same
 store: files under the named tree on Apple and Linux, `localStorage` in the named
-web profile. Apple native modules receive the same named data, cache and temporary
-roots across launches. A fresh drive clears them; the picker's temporary documents
-alone are cleared on each launch. A web drive with no `--storage` refuses app storage (`storage is unavailable
+web profile ([web sessions](recipes/web-sessions.md)). Apple native modules receive
+the same named data, cache and temporary roots across launches. A fresh drive clears
+them; the picker's temporary documents alone are cleared on each launch. A web drive
+with no `--storage` refuses app storage (`storage is unavailable
 in agent mode unless the drive names a scratch store (--storage <name>)`; a file
 read rejects `ENOENT` instead, as an empty store's) and keeps
 no secrets. The driver's `state.storage` says
@@ -6078,8 +6079,15 @@ impl DataSource for Scores {
 **secrets**: a session token, a key. Apple keeps them in the Keychain, Linux
 in a file per secret only the user can read (`0600`, under
 `$XDG_DATA_HOME/exact/<app id>/secrets`; not encrypted), Android in AES-GCM
-files with Android Keystore-wrapped keys, and the web in `localStorage`; Windows
-keeps them in memory for now. Opening Android's secret store deletes legacy
+files with Android Keystore-wrapped keys, and the web in origin-readable
+`localStorage`; Windows keeps them in memory for now.
+**For web refresh and session tokens, use a server-set HttpOnly, Secure cookie:**
+[web sign-in tokens and sessions](recipes/web-sessions.md) covers the shared
+native/web flow, selected at run time by `exactHost()` inside an answer
+(`'web'` or `'native'`, no grant; also on web workers). It refuses at module
+initialization and outside an answer; the bake leaves its answers for the host.
+Web `secret.keep` does not protect against injected scripts.
+Opening Android's secret store deletes legacy
 plaintext files without reading them; only encrypted entries are restored.
 The host reads secrets into a snapshot before boot, so a read is synchronous,
 and a scripted drive never keeps them. A best time is not

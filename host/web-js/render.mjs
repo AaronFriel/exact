@@ -24,6 +24,20 @@ import { buildBase, generationOf, withGenerationBase } from '../web/generations.
 import { lockHeld } from '../web/build-lock.mjs';
 
 const DEADLINE = 3000;
+const requestCredentials = (input, init) => {
+  const given = init?.credentials;
+  return String(given === undefined ? input instanceof Request ? input.credentials : 'same-origin' : given);
+};
+// Bun's Request discards `credentials` and reports `include`. Keep Fetch's effective value in the render realm.
+class RenderRequest extends Request {
+  constructor(input, init) {
+    super(input, init);
+    const credentials = requestCredentials(input, init);
+    if (!['omit', 'same-origin', 'include'].includes(credentials)) throw new TypeError('credentials must be omit, same-origin or include');
+    Object.defineProperty(this, 'credentials', { value: credentials });
+  }
+  clone() { return new RenderRequest(super.clone(), { credentials: this.credentials }); }
+}
 // Promise reactions and async functions run outside the host's callback wrapper. Their promise's realm owns the
 // rejection; an Error's realm also identifies a callback chained from a host promise, such as a response body read.
 const rejectionOwners = new WeakMap();
@@ -266,6 +280,11 @@ export function renderer(dist, { closed = false, read = path => readFileSync(res
     const stopTimer = id => { timers.delete(id); clearTimeout(id); };
     const fetchOwned = (input, init) => {
       if (disposed) return Promise.reject(owner.signal.reason);
+      const credentials = requestCredentials(input, init);
+      const url = input instanceof Request ? input.url : String(input);
+      // No visitor exists here. Decide before the HTTP cache or network can answer anonymously (LLP 1048.000 D9).
+      if (credentials === 'include' || (credentials === 'same-origin' && new URL(url).origin === ctx.__exactRenderOrigin))
+        return Promise.reject(Object.assign(new Error('fetch() with credentials'), { renderDeferred: true }));
       const given = init?.signal, signal = given === undefined && input instanceof Request ? input.signal : given;
       return fetched(input, { ...init, signal: signal ? AbortSignal.any([owner.signal, signal]) : owner.signal })
         .then(noted, error => { read.fresh = 0; throw error; });
@@ -286,7 +305,7 @@ export function renderer(dist, { closed = false, read = path => readFileSync(res
       innerWidth: 390, innerHeight: 844,
       matchMedia: media => ({ media, matches: prefers.has(media.replace(/\s+/g, '')), addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {} }),
       setTimeout: later, clearTimeout: stopTimer, queueMicrotask: fn => queueMicrotask(() => callback(fn)),
-      performance, console, Request, Response, Headers, URL, URLSearchParams, TextEncoder, TextDecoder, AbortController, AbortSignal,
+      performance, console, Request: RenderRequest, Response, Headers, URL, URLSearchParams, TextEncoder, TextDecoder, AbortController, AbortSignal,
       ReadableStream, WritableStream, TransformStream, CountQueuingStrategy, ByteLengthQueuingStrategy, CompressionStream, DecompressionStream,
       fetch: fetchOwned,
       crypto: { subtle: new Proxy(crypto.subtle, { get: (subtle, name) => !operations.has(name) ? Reflect.get(subtle, name) : (...a) => {
@@ -403,7 +422,7 @@ export function renderer(dist, { closed = false, read = path => readFileSync(res
   return render;
 }
 
-const refusedLine = ([name, api]) => `resource ${name} is pending: a page rendered on the server has no storage (${api}); the reader's page asks it`;
+const refusedLine = ([name, api]) => `resource ${name} is pending: ${api} needs the reader's device; the reader's page asks it`;
 
 /** A page per request for one built dist, as the Rust render server sends it (host/render/src/serve.rs, stream.rs):
  * `page(location, header)`, where `header(name)` reads a request header, answers `{ status, headers, body }`, the body

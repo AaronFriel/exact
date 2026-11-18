@@ -880,6 +880,8 @@ cpSync(resolve(here, 'transport.js'), resolve(gen, 'transport.js'));
 cpSync(resolve(here, 'clockin.js'), resolve(gen, 'clockin.js'));
 cpSync(resolve(here, 'midi.js'), resolve(gen, 'midi.js'));
 // The server bundle a JavaScript render runs (render.mjs), one script per VM context.
+let renderOrigin;
+try { renderOrigin = new URL(manifest.app?.origin).origin; } catch { /* No configured origin. */ }
 writeFileSync(resolve(gen, 'main-server.js'), [
   ...(ts ? ["import './held-hooks.js';"] : []),
   `import app${rustLinked || declared ? `, { ${[rustLinked && 'sources', declared && 'prepareSources'].filter(Boolean).join(', ')} }` : ''} from './app.js';`,
@@ -905,6 +907,7 @@ writeFileSync(resolve(gen, 'main-server.js'), [
   ] : []),
   // Two steps, so a server can send the page's head between them
   // (render.mjs): the app starts and names its route, then settles.
+  `globalThis.__exactRenderOrigin = ${JSON.stringify(renderOrigin)};`,
   'let t0, route, planResources;',
   'const prepare = async () => {',
   ...(ts ? [`  ts(data, ${mixed});`] : []),
@@ -950,8 +953,8 @@ writeFileSync(resolve(gen, 'main-server.js'), [
   `  const unfinished = () => answersAtWork(true)${ts ? ' || unfinishedIO()' : ''};`,
   // A stream or long poll holds the page until its first message, as on the render host (runner.rs `in_flight`): a long
   // poll's reply that carries none (a 204, a 503 to wait out) takes it out of `inflight`, for clocks, but not here.
-  // A stream whose body file the render refused as it opened started no request, and holds nothing (ts-data.js).
-  '  const unmessaged = t => !!t && (!!t.stream || !!t.req?.stream) && !t.messages && !t.closed && !t.ctl?.refused;',
+  // A stream refused storage or visitor credentials started no request, and holds nothing.
+  '  const unmessaged = t => !!t && (!!t.stream || !!t.req?.stream) && !t.messages && !t.closed && !t.refused && !t.ctl?.refused;',
   '  const outstanding = () => inflight.n > 0 || Resources.some(r => r.waiting || (r.pending() && unmessaged(r.ticket))) || answersAtWork() || looseOut() || (waitStatus && unfinished());',
   '  do await new Promise(r => setTimeout(r, 1)); while (outstanding() && performance.now() < end);',
   '  markBars(document.getElementById("exact-root")); // the bars the glue marks, so their symbols are the size they will be',
@@ -962,7 +965,7 @@ writeFileSync(resolve(gen, 'main-server.js'), [
   `    origin: ${JSON.stringify(manifest.app?.origin ?? null)}, status: Head.headStatus ?? null, time: clock.now, ...answers(planResources, types[2], sourceTypes),`,
   // Each resource whose source failed, with its message: the server's log names it (render.mjs), as the page cannot.
   '    failed: Resources.filter(r => r.failed).map(r => `${r.name}: ${r.error}`),',
-  // Each pending resource refused storage, by its request (admission.js) or call (ts-data.js), for the log.
+  // Each pending resource deferred to the reader's device, by its request or call, for the log.
   '    refused: Resources.filter(r => r.pending() && (r.ticket?.refused || (r.ticket?.call ?? r.ticket?.ctl)?.refused)).map(r => [r.name, r.ticket.refused ?? (r.ticket.call ?? r.ticket.ctl).refused]),',
   // `continuing`: work that outlives the render, whatever it waited for (a page with no status does not wait for an
   // answered source's I/O): the client asks every answer again (render.mjs `revalidate`). The answers the client asks
@@ -1020,7 +1023,7 @@ const scopedModule = (code, id) => {
   // string, which throws as on Hermes (`eval`, which no import may bind, is imported under a fresh name below).
   const bound = ['fetch', 'Date', 'Math', 'Intl', 'setTimeout', 'setInterval', 'requestAnimationFrame', 'requestIdleCallback',
     'clearTimeout', 'clearInterval', 'cancelAnimationFrame', 'cancelIdleCallback', 'performance', 'scheduler', 'XMLHttpRequest', 'WebSocket', 'EventSource', 'crypto', 'AbortSignal',
-    'Function', 'Promise', 'queueMicrotask', 'Response'];
+    'Function', 'Promise', 'queueMicrotask', 'Response', 'exactHost'];
   // The DOM and Node's globals are absent, as on Hermes (js/bake/src/typescript.mjs `packageRefusals`).
   const absent = ['window', 'self', 'frames', 'parent', 'top', 'opener', 'document', 'navigator', 'location', 'history', 'localStorage', 'sessionStorage',
     'indexedDB', 'HTMLElement', 'Element', 'getComputedStyle', 'customElements', 'alert', 'process', 'Buffer', 'global'];

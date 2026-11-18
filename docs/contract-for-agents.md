@@ -204,9 +204,10 @@ is unavailable in agent mode unless the drive names a scratch store (--storage
 <name>)`), so an app that keeps its data there does nothing on a write; a chosen document (`doc:/`)
 still opens under its grant. That store, and an authored test's own store, includes
 a data module's `secret.keep`: files in the named scratch tree on Apple and Linux,
-and the page's `localStorage` on the web. Apple native modules use that store's
-data, cache and temporary roots too; a fresh drive clears them, and only picked
-temporary documents are cleared on each launch. A nameless drive keeps no secrets.
+and the page's `localStorage` on the web ([web sessions](recipes/web-sessions.md)).
+Apple native modules use that store's data, cache and temporary roots too; a fresh
+drive clears them, and only picked temporary documents are cleared on each launch.
+A nameless drive keeps no secrets.
 To show what survives a restart on any host, use an authored test's `reload` step (below).
 
 The driver prints each reply in a short text form. A `tap` or `type` is one line
@@ -1521,6 +1522,15 @@ web, the page's `localStorage`, readable by any script on that origin; on Linux,
 unencrypted files in the app's data directory, retained across launches (an app
 without an ID keeps them in memory). A drive keeps it, by default,
 only in a named `--storage` store (`EXACT_STORE=real` gives an Apple drive, on a Mac, a simulator or a phone, the Keychain a normal launch reads).
+
+**Web refresh and session tokens belong in an HttpOnly, Secure cookie set by the
+app's server, which the page never reads.** Follow [web sign-in tokens and
+sessions](recipes/web-sessions.md) for SameSite, credentialed fetch, CSRF, rotation
+and logout, sharing the flow with native `secret.keep`. Inside an answer,
+`exactHost()` returns `'web'` or `'native'` at run time; no per-build transport
+setting is needed. This string store does not protect a web token from
+injected scripts. See the browser's [cookie attributes](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Set-Cookie).
+
 A secret that only the person in front of the device may read (an account's token
 behind Face ID) carries a policy on its line, `secret.keep token user-presence`
 (`biometry-any`, `biometry-current-set`, `device-credential`), then `optional` when
@@ -2039,8 +2049,11 @@ redirectTo }` to `{ redirect, state }`), one that completes it (`{ code, state
 hooks and browser session manager do not run in a data module. Call the
 mutations with `cx.mutation`, open `redirect` with `openAuthSession` (it and
 `authCallback` are declared for every app in `app.contract.d.ts`), keep the
-refresh token with `store.set` under a `secret.keep` grant, and give the access
-token to `cx.setAuth`. The mutations' names are the deployment's:
+refresh token with `store.set` under a `secret.keep` grant on native hosts, and
+give the access token to `cx.setAuth`. This direct token flow exposes web tokens
+to page scripts. For [web sessions](recipes/web-sessions.md), put the flow behind
+your server's HttpOnly cookie; `cx.setAuth` does not turn a bearer token into a
+cookie. The mutations' names are the deployment's:
 
 ```ts
 const SESSION = 'example.session';
