@@ -82,54 +82,75 @@ package final class SwipeActionsHost {
         for row in rows.values { row.discard() }
         rows.removeAll(); refusals.removeAll()
         #if os(iOS)
-        painted.reset(); openRow = nil
+        painted.reset(); openRows.removeAll()
         dismissal.view?.removeGestureRecognizer(dismissal)
         #endif
     }
     #if os(iOS)
-    /// The row whose swipe last opened on this screen, of any kind.
-    private(set) var openRow: UInt32?
-    /// On the view that holds the open row: a touch beginning there, off
-    /// the row, closes it.
-    private lazy var dismissal = Dismissal { [weak self] touches in
-        guard let self, let id = openRow, let owner = presenter.views[id] else { return false }
-        // Closed already, or closing, by its own tap, drag or action.
-        guard rows[id].map({ $0.projection?.configurationState.isSwiped == true }) ?? painted.isOpen(id) else { openRow = nil; return false }
-        // A touch on the open row is the row's: its actions, its own close.
-        guard touches.contains(where: { !owner.bounds.contains($0.location(in: owner)) }) else { return false }
-        openRow = nil
-        close(id)
-        return true
+    /// The rows whose swipes opened, of any kind, at most one a screen: a
+    /// row under a pushed screen stays open, as in UIKit's table, and is
+    /// the open row again once its screen shows. One can have closed by
+    /// itself and stay here: UIKit can reveal it again with no
+    /// `willBeginEditingRowAt` while its table has not yet ended editing.
+    private var openRows: [UInt32] = []
+    /// The open row on the screen that shows (tests and diagnostics).
+    var openRow: UInt32? { openRows.last { shows($0) } }
+    private func shows(_ id: UInt32) -> Bool {
+        presenter.views[id].map { !presenter.navigation.isInactiveRoute(containing: $0) } ?? false
     }
-    /// `id`'s swipe is opening: the row open before it closes, as UIKit
-    /// keeps one row open in a table or a list. UIKit coordinates only the
-    /// rows of one view, and these rows are in different views: each
-    /// projected row is a table of its own, each grouped list a collection
-    /// view, each painted row a scroll. So every row, whatever its kind,
-    /// reports here as its swipe opens and is closed from here, by its
-    /// kind's own dismissal.
+    /// Whether `id` shows its actions now.
+    private func revealed(_ id: UInt32) -> Bool {
+        rows[id].map { $0.projection?.configurationState.isSwiped == true } ?? painted.isOpen(id)
+    }
+    /// On the window: a touch beginning in the view that holds an open
+    /// row, off the row, closes it.
+    private lazy var dismissal = Dismissal { [weak self] touches in
+        guard let self else { return false }
+        let closing = openRows.filter { id in
+            guard let owner = self.presenter.views[id], self.rows[id]?.grouped != true, self.revealed(id) else { return false }
+            // The nearest scroll holding the row stands for UIKit's table
+            // (the screen, if none does); a touch on the row is the row's.
+            var holder = owner.superview
+            while let view = holder, !(view is UIScrollView) { holder = view.superview }
+            let view = holder ?? self.presenter.viewport
+            return touches.contains { $0.view.map { $0.isDescendant(of: view) && !$0.isDescendant(of: owner) } ?? false }
+        }
+        for id in closing { openRows.removeAll { $0 == id }; close(id) }
+        return !closing.isEmpty
+    }
+    /// `id`'s swipe is opening: the row open before it on this screen
+    /// closes, as UIKit keeps one row open in a table or a list. UIKit
+    /// coordinates only the rows of one view, and these rows are in
+    /// different views: each projected row is a table of its own, each
+    /// grouped list a collection view, each painted row a scroll. So every
+    /// row, whatever its kind, reports here as its swipe opens and is closed
+    /// from here, by its kind's own dismissal.
     ///
     /// UIKit also closes a revealed row on a touch elsewhere in its table or
     /// list and as that view scrolls, and leaves it open on a touch outside
     /// the view and through a push. A grouped row's list is that view. For
-    /// a projected or painted row it is the nearest scroll holding the row
-    /// (the screen, if none does), which `dismissal` watches.
+    /// a projected or painted row it is the nearest scroll holding the row,
+    /// which `dismissal` and `scrolling` read.
     func opening(_ id: UInt32) {
-        if let was = openRow, was != id { close(was, opening: id) }
-        openRow = id
-        dismissal.view?.removeGestureRecognizer(dismissal)
-        guard rows[id]?.grouped != true, let owner = presenter.views[id] else { return }
-        var holder = owner.superview
-        while let view = holder, !(view is UIScrollView) { holder = view.superview }
-        (holder ?? presenter.viewport).addGestureRecognizer(dismissal)
+        for was in openRows where was != id && (shows(was) || presenter.views[was] == nil) {
+            if presenter.views[was] != nil { close(was, opening: id) }
+            openRows.removeAll { $0 == was }
+        }
+        openRows.removeAll { $0 == id }
+        openRows.append(id)
+        if let window = presenter.views[id]?.window, dismissal.view !== window {
+            dismissal.view?.removeGestureRecognizer(dismissal)
+            window.addGestureRecognizer(dismissal)
+        }
     }
     /// The person scrolls `scroll` (`ElementScrolls.userScrolled`): a
     /// projected or painted row open in it closes, whatever the drag began on.
     func scrolling(_ scroll: UIScrollView) {
-        guard let id = openRow, rows[id]?.grouped != true, let owner = presenter.views[id],
-              owner.isDescendant(of: scroll), !scroll.isDescendant(of: owner) else { return }
-        openRow = nil
-        close(id)
+        for id in openRows where rows[id]?.grouped != true && revealed(id) {
+            guard let owner = presenter.views[id], owner.isDescendant(of: scroll), !scroll.isDescendant(of: owner) else { continue }
+            openRows.removeAll { $0 == id }
+            close(id)
+        }
     }
     /// `id`'s revealed actions close, by its kind's own dismissal.
     private func close(_ id: UInt32, opening: UInt32? = nil) {
@@ -665,7 +686,9 @@ package final class SwipeActionsHost {
             if owner.scroll == nil {
                 for case let sibling as NodeView in owner.subviews where sibling !== content { hide(sibling) }
             }
-            if priorSize != owner.bounds.size || host.presenter.navigation.isInactiveRoute(containing: owner) {
+            // A row at a new size closes; one under a pushed screen stays as
+            // it was, as UIKit's table keeps a revealed row through a push.
+            if priorSize != owner.bounds.size {
                 table.setEditing(false, animated: false)
             }
             priorSize = owner.bounds.size

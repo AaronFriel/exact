@@ -102,6 +102,8 @@ export function compileFixtures(root, run, env, dir, prefix, appId) {
   contract([resolve(root, 'host/apple/tests/fixtures/sticky-transition.contract'), '-o', env[`${prefix}_STICKY_TRANSITION_PLAN`] = resolve(dir, 'sticky-transition.plan')]);
   // SwipeScrollDragTests': swipeleft and swiperight rows and a scroller's drag events.
   contract([resolve(root, 'host/apple/tests/fixtures/swipe-scroll-drag.contract'), '-o', env[`${prefix}_SWIPE_SCROLL_DRAG_PLAN`] = resolve(dir, 'swipe-scroll-drag.plan')]);
+  // SwipeRoutesIOSTests: swipe rows in a route that pushes another.
+  contract([resolve(root, 'host/apple/tests/fixtures/swipe-push.contract'), '-o', env[`${prefix}_SWIPE_PUSH_PLAN`] = resolve(dir, 'swipe-push.plan')]);
   // SnapshotDriverTests' live tree: a bar and a ring under an ancestor's accent.
   contract([resolve(root, 'host/apple/tests/fixtures/live-accent.contract'), '-o', env[`${prefix}_LIVE_ACCENT_PLAN`] = resolve(dir, 'live-accent.plan')]);
   // HeldStateTests' own (a card that presses over a flat leaf), beside them.
