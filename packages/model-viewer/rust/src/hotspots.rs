@@ -73,6 +73,10 @@ pub struct Child {
 }
 #[derive(Default)]
 pub struct Hotspots {
+    pub reporting: bool,
+    pub occlusion_ms: Option<f64>,
+    pub occlusion_total_ms: f64,
+    pub occlusion_updates: u64,
     pub children: Vec<Child>,
     pub dirty: bool,
     tested_pose: Option<Pose>,
@@ -125,6 +129,7 @@ impl Hotspots {
                         .is_none_or(|t| frame.now_ms - t >= 100. || frame.now_ms < t))
         });
         let node_styles = model.map(|m| styles::resolve(&m.scene, &a.nodes));
+        let start = (self.reporting && retest).then(crate::timing::Stamp::now);
         for child in &mut self.children {
             child.placement = None;
             child.opacity = 1.;
@@ -206,11 +211,22 @@ impl Hotspots {
             };
         }
         if retest {
+            self.occlusion_ms = start.map(|s| s.elapsed());
+            if let Some(ms) = self.occlusion_ms {
+                self.occlusion_total_ms += ms;
+                self.occlusion_updates += 1;
+            }
             self.tested_pose = model.map(|m| m.camera.pose);
             self.tested_at = Some(frame.now_ms);
             self.generation = Some(generation);
             self.dirty = false;
         }
+    }
+
+    pub fn reset_timing(&mut self) {
+        self.occlusion_ms = None;
+        self.occlusion_total_ms = 0.;
+        self.occlusion_updates = 0;
     }
 }
 

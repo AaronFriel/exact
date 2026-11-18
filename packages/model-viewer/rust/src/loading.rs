@@ -1,3 +1,4 @@
+use crate::timing::Stamp;
 use crate::{camera::Camera, pick::Clip, Model, ModelViewer, Parsed};
 use exact_gpu::AssetError;
 use exact_model_gltf::glb;
@@ -67,6 +68,9 @@ impl ModelViewer {
     }
 
     pub(super) fn fail(&mut self, error: String) {
+        if let Some(timing) = &mut self.timing {
+            timing.arrival = None;
+        }
         self.source = match self.source.name() {
             Some(name) => Source::Ready {
                 name: name.into(),
@@ -81,6 +85,10 @@ impl ModelViewer {
     }
 
     pub(super) fn request(&mut self) {
+        self.hotspots.reset_timing();
+        if let Some(timing) = &mut self.timing {
+            *timing = Default::default();
+        }
         if let Some(name) = self.source.name() {
             self.assets.retired.push(name.into());
         }
@@ -121,6 +129,11 @@ impl ModelViewer {
     pub(super) fn deliver(&mut self, name: &str, bytes: Result<&[u8], AssetError>) {
         if self.source.name() != Some(name) {
             return;
+        }
+        self.hotspots.reset_timing();
+        if let Some(timing) = &mut self.timing {
+            *timing = Default::default();
+            timing.arrival = Some(Stamp::now());
         }
         let keep_camera = self.source.load().is_none_or(|load| load.keep_camera);
         if let Source::Ready { scene, .. } = std::mem::take(&mut self.source) {
@@ -184,11 +197,17 @@ impl ModelViewer {
             },
         );
         let limit = self.max_buffer_size;
+        let timed = self.timing.is_some();
+        let timing_session = self.timing_session;
         if self.seekable || cfg!(target_arch = "wasm32") {
+            let start = timed.then(Stamp::now);
+            let scene = glb::parse_with_limit(&bytes, limit);
             self.finish(Parsed {
                 sequence,
                 name,
-                scene: glb::parse_with_limit(&bytes, limit),
+                scene,
+                timing_session,
+                parse_ms: start.map(|s| s.elapsed()),
             });
         } else {
             #[cfg(not(target_arch = "wasm32"))]
@@ -198,11 +217,14 @@ impl ModelViewer {
                 match std::thread::Builder::new()
                     .name("model-viewer parse".into())
                     .spawn(move || {
+                        let start = timed.then(Stamp::now);
                         let scene = glb::parse_with_limit(&bytes, limit);
                         let _ = sender.send(Parsed {
                             sequence,
                             name: parsed_name,
                             scene,
+                            timing_session,
+                            parse_ms: start.map(|s| s.elapsed()),
                         });
                     }) {
                     Ok(handle) => self.parsers.push(handle),
@@ -241,6 +263,18 @@ impl ModelViewer {
         }
         let name = load.name;
         let sequence = load.sequence;
+        let start = self.timing.as_ref().map(|_| Stamp::now());
+        if let Some(timing) = &mut self.timing {
+            timing.parse_ms = result
+                .parse_ms
+                .filter(|_| result.timing_session == self.timing_session);
+            // Delivery copying, thread dispatch and waiting for a frame to poll the result.
+            timing.parse_wait_ms = timing
+                .arrival
+                .as_ref()
+                .zip(timing.parse_ms)
+                .map(|(arrival, parse)| (arrival.elapsed() - parse).max(0.));
+        }
         match result.scene {
             Ok(scene) => {
                 let mut camera = Camera::new(&scene, &self.arguments);
@@ -280,6 +314,9 @@ impl ModelViewer {
                 };
                 self.fail(error);
             }
+        }
+        if let Some(timing) = &mut self.timing {
+            timing.prepare_ms = start.map(|s| s.elapsed());
         }
     }
 

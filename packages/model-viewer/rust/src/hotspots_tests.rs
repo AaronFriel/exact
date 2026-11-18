@@ -209,13 +209,19 @@ fn hotspot_placements_track_the_camera_round_to_device_pixels_and_retire_childre
 #[test]
 fn hotspot_occlusion_is_throttled_in_motion_and_refreshed_at_rest_and_after_reload() {
     let (mut s, _) = anchored(r#"[[["label","Assembly","1m 0m 0m","0 0 1"]]]"#);
+    s.set_performance_reporting(true);
     update(&mut s, 0.);
+    let first_ms = s.hotspots.occlusion_ms.expect("occlusion was measured");
+    assert_eq!(s.hotspots.occlusion_updates, 1);
+    assert_eq!(s.hotspots.occlusion_total_ms, first_ms);
     assert_eq!(s.placement_opacity(0), 1.);
     let x = s.placement(0).unwrap().homography[2];
     let m = s.model_mut().unwrap();
     m.camera.pose.theta = std::f32::consts::PI;
     m.camera.goal.theta = std::f32::consts::PI + 0.1;
     update(&mut s, 50.);
+    assert_eq!(s.hotspots.occlusion_ms, Some(first_ms));
+    assert_eq!(s.hotspots.occlusion_updates, 1);
     assert_ne!(
         s.placement(0).unwrap().homography[2],
         x,
