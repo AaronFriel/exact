@@ -983,6 +983,8 @@ extension NavigationHost {
         // The field itself, which XCUITest finds as a search field and a
         // person types in, carries the test id (LLP 1116 D2).
         if bar.searchTextField.accessibilityIdentifier != field.props["testId"] { bar.searchTextField.accessibilityIdentifier = field.props["testId"] }
+        // Its name is the field's `aria-label`, as an `input`'s is; with none, UIKit's (the placeholder).
+        if bar.searchTextField.accessibilityLabel != field.props["accessibilityLabel"] { bar.searchTextField.accessibilityLabel = field.props["accessibilityLabel"] }
         #endif
     }
 
