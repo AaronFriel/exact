@@ -257,7 +257,7 @@ impl<D: DataSource> Runner<D> {
                 });
             }
         }
-        // A person's input stands (`admit.rs`): the implementation may take
+        // A person's input stands (`provenance.rs`): the implementation may take
         // the call as their act.
         if self.user_activation(origin) {
             body["userActivation"] = json!(true);

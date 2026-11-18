@@ -8,7 +8,7 @@
 //!
 //! - **Owned work.** An invocation owns the requests in flight, the armed
 //!   `then`s, the held module calls and the queued sends stamped with its
-//!   id (LLP 1133.023 D7, `admit.rs`). Sends waiting for the data source
+//!   id (LLP 1133.023 D7, `provenance.rs`). Sends waiting for the data source
 //!   to be ready (a cold boot's) are counted too, since none can be told
 //!   apart. A wake and a tool call (`calls.rs`) run one at a time.
 //! - **Done.** An invocation completes when it owns nothing; the wake ends
@@ -129,7 +129,7 @@ impl State {
 }
 
 struct Invocation {
-    /// Its invocation id (`admit.rs`).
+    /// Its invocation id (`provenance.rs`).
     id: u64,
     /// Its event, by `module_events` row.
     row: usize,

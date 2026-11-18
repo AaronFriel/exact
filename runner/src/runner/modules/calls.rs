@@ -12,7 +12,7 @@
 //!   `fails when` reads a pending resource, nor is the module's background
 //!   storage out (`busy`). A refusal here is certainty `none`.
 //! - **Dispatch:** the action runs as one commit of origin `tool`, stamped
-//!   with the call's invocation id (`admit.rs`), which every request,
+//!   with the call's invocation id (`provenance.rs`), which every request,
 //!   `then` and queued send it makes carries, and every commit that answers
 //!   one of those. The commands D4a skips are not run and are listed.
 //! - **Complete** when no work stamped with its id is in flight: `fails

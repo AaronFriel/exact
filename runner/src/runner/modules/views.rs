@@ -3,7 +3,7 @@
 //! names, the runner keeps its displayed state, by `wakelock`'s rule
 //! (`crate::wakelock::displayed`), and the values of the props its
 //! declaration marks as binding a device, each with the origin of the commit
-//! that changed it (`admit.rs`, D12). Each change goes to the extension whose
+//! that changed it (`provenance.rs`, D12). Each change goes to the extension whose
 //! implementation makes the view, when the host composes it (bound as in
 //! production or under the agent), through the native slot:
 //!

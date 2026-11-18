@@ -127,7 +127,7 @@ export function helperClassifications(group) {
   ]),
   group("native callbacks", ["one-shot", "subscription"], "module instance and granted handle or anchored invocation", "UI-owned",
     "The named public runner-crate source is the native callbacks API or its value/admission helper. runner/src/runner/modules/invoke.rs:1-22 anchors callbacks to handles/pending sends; Running::drop answers AbortError on session replacement. Final handlers may temporarily retain their anchor.", [
-    ["runner:runner/src/runner/modules/admit.rs", "CallOrigin::word"],
+    ["runner:runner/src/runner/provenance.rs", "CallOrigin::word"],
   ]),
   group("wakes", ["durable operation"], "app action/wake invocation until expiration or end", "durable",
     "runner/src/runner/modules/wakes.rs raises and expires action/wake invocations independently of a mounted view; declared/wake_list.rs allocates their references. Persistence after process exit is not established here.", [

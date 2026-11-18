@@ -44,7 +44,7 @@ pub(super) struct Checkpoint {
     /// Kept-answer lines made before this commit (`Keeping::refused`).
     refused: usize,
     /// Who each request and `then` is from (LLP 1133.023 D7).
-    origins: super::modules::OriginsSaved,
+    origins: super::provenance::OriginsSaved,
     /// The arguments refused a child's resource (LLP 1133.007 D13).
     refused_args: super::modules::Refused,
     /// What sends had written into instances before it (LLP 1035.005.004 D6).

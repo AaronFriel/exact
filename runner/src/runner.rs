@@ -140,7 +140,9 @@ mod apply;
 mod live_time;
 pub mod midi;
 mod modules;
-pub use modules::{AppState, CallHow, CallOrigin, PresenceAnswer, PresenceAsk, WakeHow};
+pub use modules::{AppState, CallHow, PresenceAnswer, PresenceAsk, WakeHow};
+mod provenance;
+pub use provenance::CallOrigin;
 #[cfg(test)]
 mod abort_tests;
 mod canvas_performance;
@@ -528,6 +530,9 @@ pub struct Runner<D: DataSource> {
     churn: query::Churn,
     /// The agent's preferred answers of native modules' sources (LLP 1124 D7).
     extensions: modules::Extensions,
+    /// Who each commit, request and armed `then` comes from, and the
+    /// invocation each is part of (`provenance.rs`).
+    origins: provenance::Origins,
     poisoned: bool,
     /// Evaluate every site on every update (the incremental update's reference; `set_full_evaluation`).
     full: bool,
@@ -919,6 +924,7 @@ impl<D: DataSource> Runner<D> {
             churn: Default::default(),
             activities: activities::Activities::default(),
             extensions: Default::default(),
+            origins: Default::default(),
             delivery,
             viewport,
             viewport_geometry,

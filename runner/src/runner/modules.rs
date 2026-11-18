@@ -27,6 +27,7 @@
 //! module's answers announces its sources' keys, so the host asks their
 //! readers again through [`Runner::apply_announced`].
 
+use super::provenance::CallOrigin;
 use super::{DataError, DataSource, Runner, RunnerError, Target};
 use crate::failure::FailureCode;
 use crate::request::{Answer, Dispatch, Outcome, Reply, Request, Response, Work};
@@ -67,9 +68,7 @@ mod substitute_tests;
 mod values;
 mod views;
 mod wakes;
-pub use admit::CallOrigin;
-pub(super) use admit::{Causes, OriginsSaved};
-use admit::{Origins, Route};
+use admit::Route;
 pub use calls::CallHow;
 pub use declared::AppState;
 pub(super) use declared::CHOSEN;
@@ -149,8 +148,6 @@ pub(super) struct Extensions {
     /// The argument groups each bound live source's implementation was
     /// asked for and not yet told are gone.
     groups: BTreeMap<String, BTreeSet<String>>,
-    /// Who each call comes from (`admit.rs`).
-    origins: Origins,
     /// Requests whose reply carries handles, by ticket (`handles.rs`).
     provisional: BTreeMap<u64, handles::Provisional>,
     /// Their replies, as they left the implementation.
@@ -239,7 +236,7 @@ struct Held {
     /// The call's body for the implementation, once the ticket allows it.
     forward: Option<Vec<u8>>,
     origin: CallOrigin,
-    /// The invocation it is part of (`admit.rs`); 0 for none.
+    /// The invocation it is part of (`provenance.rs`); 0 for none.
     id: u64,
     /// The call's arguments: a denial fails it only where they ask for what
     /// the permission gates (`permission.continues`), and which of an
