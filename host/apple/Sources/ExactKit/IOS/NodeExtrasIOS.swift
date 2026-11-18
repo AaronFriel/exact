@@ -56,10 +56,10 @@ final class NodeAside {
     var fitContentHeight: CGFloat?
     var image: UIImage?
     var raster: (any ImageLease)?
-    var imageLayer: CALayer?
+    package var imageLayer: CALayer?
     var imageSource: String?
-    var loadGeneration = 0
-    var buttonRasterView: UInt32?
+    package var loadGeneration = 0
+    package var buttonRasterView: UInt32?
     var paintGhosts = 0
     weak var ghostParent: NodeView?
 }
@@ -116,7 +116,7 @@ final class NodeExtras {
     var heightRecognizer: UIPanGestureRecognizer?
     var heightHold: DragInput?
     var contextTransform = CGAffineTransform.identity
-    var flightLook: FlightLook?
+    package var flightLook: FlightLook?
     var columnRecord: ColumnRecord?
     var liveText: String?
     var reorderPan: UIPanGestureRecognizer?
@@ -153,7 +153,7 @@ final class NodeExtras {
     var needsCapture: Bool = false
     var paintedThisTurn: Bool = false
     var placement: [Double]?
-    var symbolView: UIImageView?
+    package var symbolView: UIImageView?
     var symbolFound = false
     var symbolKey: String?
     var symbolRefusal: String?
@@ -276,9 +276,9 @@ extension NodeView {
     /// An image node's picture, once loaded (decoded off the main thread),
     /// the source it came from, and which load is current: a completion
     /// from an older load, or for a view that was destroyed, is dropped.
-    var buttonRasterView: UInt32? { get { aside?.buttonRasterView } set { if newValue != nil || aside != nil { asideMade.buttonRasterView = newValue } } }
+    package var buttonRasterView: UInt32? { get { aside?.buttonRasterView } set { if newValue != nil || aside != nil { asideMade.buttonRasterView = newValue } } }
     var image: UIImage? { get { aside?.image } set { if newValue != nil || aside != nil { asideMade.image = newValue } } }
-    var raster: (any ImageLease)? {
+    package var raster: (any ImageLease)? {
         get { aside?.raster }
         set {
             if newValue != nil || aside != nil { asideMade.raster = newValue }
@@ -287,9 +287,9 @@ extension NodeView {
         }
     }
     /// An image's pixels as a sublayer's contents (`applyImageLayer`).
-    var imageLayer: CALayer? { get { aside?.imageLayer } set { if newValue != nil || aside != nil { asideMade.imageLayer = newValue } } }
+    package var imageLayer: CALayer? { get { aside?.imageLayer } set { if newValue != nil || aside != nil { asideMade.imageLayer = newValue } } }
     var imageSource: String? { get { aside?.imageSource } set { if newValue != nil || aside != nil { asideMade.imageSource = newValue } } }
-    var loadGeneration: Int { get { aside?.loadGeneration ?? 0 } set { if newValue != 0 || aside != nil { asideMade.loadGeneration = newValue } } }
+    package var loadGeneration: Int { get { aside?.loadGeneration ?? 0 } set { if newValue != 0 || aside != nil { asideMade.loadGeneration = newValue } } }
     var paintGhosts: Int { get { aside?.paintGhosts ?? 0 } set { if newValue != 0 || aside != nil { asideMade.paintGhosts = newValue } } }
     var ghostParent: NodeView? { get { aside?.ghostParent } set { if newValue != nil || aside != nil { asideMade.ghostParent = newValue } } }
 
@@ -422,7 +422,7 @@ extension NodeView {
         let hidden = isHidden || drawnBySurface
         if picture.isHidden != hidden { CATransaction.begin(); CATransaction.setDisableActions(true); picture.isHidden = hidden; CATransaction.commit() }
     }
-    var symbolView: UIImageView? { get { extras?.symbolView } set { if newValue != nil || extras != nil { more.symbolView = newValue } } }
+    package var symbolView: UIImageView? { get { extras?.symbolView } set { if newValue != nil || extras != nil { more.symbolView = newValue } } }
     var symbolFound: Bool { get { extras?.symbolFound ?? false } set { if newValue || extras != nil { more.symbolFound = newValue } } }
     var symbolKey: String? { get { extras?.symbolKey } set { if newValue != nil || extras != nil { more.symbolKey = newValue } } }
     var symbolRefusal: String? { get { extras?.symbolRefusal } set { if newValue != nil || extras != nil { more.symbolRefusal = newValue } } }

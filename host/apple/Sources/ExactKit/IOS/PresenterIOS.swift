@@ -128,7 +128,7 @@ package final class Presenter {
         guard fixedGradients.count > 0 else { return }
         for node in fixedGradients.allObjects where node.window != nil { node.reaimFixedGradient() }
     }
-    var videoVisibility: VideoVisibilityHost?
+    package var videoVisibility: VideoVisibilityHost?
     lazy package var collections: any ListHosting = ListLink.make?(self) ?? NoLists()
     lazy var stickies: any StickyHosting = StickyLink.make?(self) ?? NoStickies()
     let tableGrid = TableGrid()
@@ -419,7 +419,7 @@ package final class Presenter {
     var onPress, onClose, onCancel: ((UInt32) -> Void)?
     var onChange: ((UInt32, String) -> Void)?
     /// Host intrinsic sizes, several at once under one layout.
-    var onIntrinsic: (([(UInt32, CGSize?)]) -> Void)?
+    package var onIntrinsic: (([(UInt32, CGSize?)]) -> Void)?
     /// A capability an action called (LLP 1005 §3), after its commit.
     var onCommand: ((String, [Any], UInt32?) -> Void)?
     /// A `key` handler called `preventDefault()` (`keyDown(at:_:)`, KeyEvents.swift).
@@ -732,7 +732,7 @@ package final class Presenter {
     /// window; the browser fires no blur on removal, so neither does this
     /// host), and never while a batch is being applied — it waits for the
     /// batch to finish, then goes if its view survived it.
-    private(set) var applying = false
+    private(set) package var applying = false
     private var waiting: [(UInt32?, () -> Void)] = []
     /// Paragraphs whose presented colour a batch changed, painted as it ends.
     var presentedText: Set<UInt32> = []

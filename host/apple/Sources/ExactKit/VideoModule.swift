@@ -2,10 +2,10 @@
 import Foundation
 #if os(macOS)
 import AppKit
-typealias MediaPlatformView = NSView
+package typealias MediaPlatformView = NSView
 #else
 import UIKit
-typealias MediaPlatformView = UIView
+package typealias MediaPlatformView = UIView
 #endif
 private typealias MediaCallback = @convention(c) (UnsafeMutableRawPointer?, UnsafePointer<UInt8>?, Int) -> Void
 private typealias MediaConfiguring = @convention(c) (UnsafeMutableRawPointer?, UnsafeMutableRawPointer?) -> Void
@@ -414,7 +414,8 @@ extension Presenter {
 
 /// Optional media policy. Scroll/layout notifications coalesce without app actions
 /// or a frame clock; only a threshold crossing changes the player's paused request.
-final class VideoVisibilityHost {
+package final class VideoVisibilityHost {
+    package init() {}
     #if os(iOS) || os(tvOS)
     private let scrolls = ScrollMembership()
     func changed(in scroll: UIScrollView) {
@@ -466,7 +467,7 @@ final class VideoVisibilityHost {
     }
     /// Rectangular intersection, as IntersectionObserver without trackVisibility:
     /// ancestor clipping and the viewport count; sibling occlusion/opacity do not.
-    static func fraction(_ view: MediaPlatformView) -> CGFloat {
+    package static func fraction(_ view: MediaPlatformView) -> CGFloat {
         guard let window = view.window, view.bounds.width > 0, view.bounds.height > 0 else { return 0 }
         #if os(macOS)
         guard let root = window.contentView else { return 0 }

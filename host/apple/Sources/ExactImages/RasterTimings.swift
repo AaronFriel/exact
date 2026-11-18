@@ -5,6 +5,7 @@
 // fling's late images survive the rows that scrolled past. Development builds
 // only; a production bake keeps nothing.
 import Foundation
+import ExactKit
 import QuartzCore
 
 final class RasterTimings {

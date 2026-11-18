@@ -42,6 +42,9 @@ import ExactEffects
 #if EXACT_LINK_SVG
 import ExactSvg
 #endif
+#if EXACT_LINK_IMAGES
+import ExactImages
+#endif
 public enum ExactComposition {
     public static let app: ExactApp = {
         AgentLink.install()
@@ -93,6 +96,9 @@ public enum ExactComposition {
         #endif
         #if EXACT_LINK_SVG
         ExactSvg.install()
+        #endif
+        #if EXACT_LINK_IMAGES
+        ExactImages.install()
         #endif
     }
 }

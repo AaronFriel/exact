@@ -6,6 +6,7 @@ import XCTest
 @testable import ExactKit
 @testable import ExactEffects
 @testable import ExactSvg
+@testable import ExactImages
 
 /// A box Core Animation can paint keeps no bitmap: background, one radius
 /// over a mask of corners, and a uniform border are layer properties; a

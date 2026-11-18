@@ -1,4 +1,5 @@
 import Foundation
+import ExactKit
 import CoreGraphics
 import QuartzCore
 import ImageIO
@@ -652,19 +653,3 @@ private func isAdoptable(_ thumbnail: CGImage, plan: RasterDecodePlan, space: CG
         && thumbnail.colorSpace.map { $0 == space } == true
 }
 
-/// Zeroed memory for a bitmap that lives only while `body` runs. A large
-/// one is pages returned to the system as it ends: a freed large malloc
-/// block can stay dirty in the allocator's cache, charged to the process,
-/// until it is reused. A small one is not worth the system calls.
-func withScratch<T>(_ count: Int, _ body: (UnsafeMutableRawPointer) throws -> T?) rethrows -> T? {
-    guard count > 0 else { return nil }
-    if count < 128 * 1024 {
-        guard let small = calloc(count, 1) else { return nil }
-        defer { free(small) }
-        return try body(small)
-    }
-    guard let pages = mmap(nil, count, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0),
-          pages != MAP_FAILED else { return nil }
-    defer { munmap(pages, count) }
-    return try body(pages)
-}

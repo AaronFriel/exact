@@ -1,4 +1,5 @@
 import Foundation
+import ExactKit
 
 /// Where remote and `data:` image bytes are spooled (`RasterInput`): one
 /// directory per process under `tmp/exact-raster/`, holding an exclusive

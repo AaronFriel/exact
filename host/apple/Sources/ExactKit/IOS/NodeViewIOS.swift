@@ -550,7 +550,7 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
 
     /// The lease is this load's: shown, its natural size answered for the
     /// loader to report (`RasterLoader.reconcile`, one report per turn).
-    func acceptRaster(_ lease: any ImageLease, generation: Int) -> CGSize? {
+    package func acceptRaster(_ lease: any ImageLease, generation: Int) -> CGSize? {
         guard loadGeneration == generation, let presenter, presenter.views[id] === self else { return nil }
         raster = lease; ImageLink.animated?.attach(self); applyImageLayer()
         self.setNeedsDisplay()
@@ -1407,7 +1407,7 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
     }
 
     /// The reduced radii; the layer fast path additionally requires circles.
-    func cornerSizes(in rect: CGRect, inset: CGFloat = 0) -> [CGSize] {
+    package func cornerSizes(in rect: CGRect, inset: CGFloat = 0) -> [CGSize] {
         BorderPaint.reduced(BorderPaint.radii(style, in: rect, inset: inset), in: rect)
     }
     func cornerRadii(in rect: CGRect, inset: CGFloat = 0) -> [CGFloat] {

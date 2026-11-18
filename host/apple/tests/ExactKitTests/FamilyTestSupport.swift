@@ -1,10 +1,11 @@
 @testable import ExactKit
+@testable import ExactImages
 
 // The built-in family implementations behind the core's link slots (LLP 1047.001 D10), for tests that read their internals.
 
 extension ExactSession {
     /// The session's image loader as the built-in implementation, for tests
-    /// that read its internals (`ImageLink.makeLoader`'s default).
+    /// that read its internals (`ExactImages` installs it).
     var loader: RasterLoader { rasters as! RasterLoader }
 }
 

@@ -1,4 +1,5 @@
 import Foundation
+import ExactKit
 import CExact
 import ExactCore
 #if os(macOS)

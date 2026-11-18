@@ -57,7 +57,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
     weak var paintParent: PaintView?
     weak var ghostParent: NodeView?
     let firstDraw: DrawReceipt?
-    let kind: String
+    package let kind: String
     var inlineText: [InlineText] = [] { didSet { inlineAccessibility = nil } }
     /// Its runs' elements, kept until the runs change, and what else made
     /// them (`textAccessibilityChildren`).
@@ -163,7 +163,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
     var lastAccessibilityWrite = AccessibilityWrite()
     var boxGradient: CAGradientLayer?
     var boxPattern: GradientPatternLayer?
-    var imageLayer: CALayer?
+    package var imageLayer: CALayer?
     /// While it flies as a shared element (LLP 1013.000 D4): where its image is drawn.
     package var flightLook: FlightLook?
     var materialView: NSView?
@@ -212,15 +212,15 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
     /// A template path's leaf instead of `symbolView` (IconShapeMac.swift).
     var symbolShape: IconShapeView? { didSet { layerPaintCache = nil } }
     /// Whether a symbol's leaf, either kind, is in this node.
-    var hasSymbolLeaf: Bool { symbolView != nil || symbolShape != nil }
+    package var hasSymbolLeaf: Bool { symbolView != nil || symbolShape != nil }
     var symbolFound = false
     var symbolKey: String?
     var symbolRefusal: String?
     var symbolClip: NSView?
     var image: NSImage?
-    var raster: (any ImageLease)? { didSet { layerPaintCache = nil } }
+    package var raster: (any ImageLease)? { didSet { layerPaintCache = nil } }
     var imageSource: String?
-    var loadGeneration = 0
+    package var loadGeneration = 0
     package var pressed = false { didSet { if pressed != oldValue { pressChanged() } } }
     var keyboardPressed = false
     var press = PressFeedback() // LLP 1061: the feedback `pressed` drives
@@ -477,7 +477,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
 
     /// The lease is this load's: shown, its natural size answered for the
     /// loader to report (`RasterLoader.reconcile`, one report per turn).
-    func acceptRaster(_ lease: any ImageLease, generation: Int) -> CGSize? {
+    package func acceptRaster(_ lease: any ImageLease, generation: Int) -> CGSize? {
         guard loadGeneration == generation, let presenter, presenter.views[id] === self else { return nil }
         // A redisplay doesn't re-ask the image layer for a replaced bitmap.
         raster = lease; ImageLink.animated?.attach(self); applyImageLayer()
@@ -848,7 +848,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
     /// The four channels a colour row carries, resolved. A fixed colour is
     /// the four; a `light-dark()` pair is two fours and this picks one
     /// (LLP 1034 D1). Anything else is not a colour.
-    func channels(_ key: String, dark: Bool? = nil) -> [Double]? {
+    package func channels(_ key: String, dark: Bool? = nil) -> [Double]? {
         style[key].flatMap { $0.channels(dark: dark ?? drawsDark, contrast: drawsHighContrast, elevated: window is SheetWindow, tint: ownTint(for: $0)) }
     }
 
@@ -1364,7 +1364,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
     }
 
     /// The reduced radii; the layer fast path additionally requires circles.
-    func cornerSizes(in rect: NSRect, inset: CGFloat = 0) -> [CGSize] {
+    package func cornerSizes(in rect: NSRect, inset: CGFloat = 0) -> [CGSize] {
         BorderPaint.reduced(BorderPaint.radii(style, in: rect, inset: inset), in: rect)
     }
     func cornerRadii(in rect: NSRect, inset: CGFloat = 0) -> [CGFloat] {

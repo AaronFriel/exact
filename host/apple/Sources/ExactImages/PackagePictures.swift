@@ -11,6 +11,7 @@
 // host loads it again) or revoke it (the host clears it from every view and
 // its cache, cancels its loads, drops a later reply, and fires `error`).
 import CoreGraphics
+import ExactKit
 import ExactCore
 import Foundation
 
@@ -31,24 +32,11 @@ final class PackagePictures: @unchecked Sendable {
     /// under an older one is dropped.
     private var generations: [String: Int] = [:]
 
-    /// The schemes a host owns, which are never a package's (`HOST_SCHEMES`,
-    /// contract/cli/src/declaration.rs).
-    private static let hostSchemes: Set<String> = ["app", "doc", "symbol", "data", "http", "https", "blob", "file", "asset"]
-
-    /// Whether `source` names a scheme a package may serve.
-    static func mayServe(_ source: String) -> Bool {
-        guard let colon = source.firstIndex(of: ":") else { return false }
-        let scheme = source[..<colon]
-        guard let first = scheme.first, first.isLetter, first.isLowercase,
-              scheme.allSatisfy({ ($0.isLetter && $0.isLowercase) || $0.isNumber || $0 == "-" }) else { return false }
-        return !hostSchemes.contains(String(scheme))
-    }
-
     /// The runner's admission of `source`, main thread: nil to load it
     /// (admitted, or no package's scheme), else why not. A retry checks
     /// without counting a new view/source admission.
     func admit(_ source: String, session: ExactSession, count: Bool = true) -> String? {
-        guard Self.mayServe(source), let answer = session.runtime.picture(source, count: count) else { return nil }
+        guard packageMayServe(source), let answer = session.runtime.picture(source, count: count) else { return nil }
         guard let name = answer["extension"] as? String else {
             return answer["message"] as? String ?? answer["error"] as? String ?? "refused"
         }
@@ -76,7 +64,7 @@ final class PackagePictures: @unchecked Sendable {
     func ask(_ source: String, session: ExactSession, width: Int, height: Int, fit: String,
              done: @escaping (Result<RasterInput, Error>) -> Void) {
         guard let (name, owned) = serving(source) else { return done(.failure(RasterFailure.unresolved)) }
-        guard let (module, entry) = session.natives.imageEntry() else {
+        guard let (module, entry) = session.packageImageEntry() else {
             return done(.failure(PackagePictureFailure(description: "this build's module serves no pictures")))
         }
         let asked = generation(source)
@@ -94,7 +82,6 @@ final class PackagePictures: @unchecked Sendable {
         json.withUnsafeBytes { entry(module, $0.bindMemory(to: UInt8.self).baseAddress, json.count, ctx, packageImageDone) }
     }
 }
-
 
 private final class PackagePictureReply {
     let then: (CGImage?, String?) -> Void

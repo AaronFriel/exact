@@ -4,6 +4,7 @@
 // at the display size one after another (`AnimatedFrames`). The players that
 // put them on screen are `AnimatedRasters.swift`.
 import CoreGraphics
+import ExactKit
 import Foundation
 import ImageIO
 

@@ -19,10 +19,10 @@ protocol HatchDiagnosing: AnyObject {
 /// production composition compiles no store (LLP 1047.001 D11): a session
 /// has none, its hatch calls go untimed, and the module's table has no
 /// diagnostics entry.
-enum HatchDiagnosticsLink {
+package enum HatchDiagnosticsLink {
     /// Whether this binary keeps diagnostics: a development composition, and
     /// not a production bake.
-    static let available: Bool = {
+    package static let available: Bool = {
         #if EXACT_AGENT
         return !ExactEnv.productionBake
         #else

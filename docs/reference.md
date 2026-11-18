@@ -1426,7 +1426,8 @@ The generated `--embed` composition lists the capabilities to link.
 | `ExactMarkdown` | Markdown text and editing | `ExactMarkdown.install()` |
 | `ExactDrag` | Reorder, height and transform drags | `ExactDrag.install()` |
 | `ExactGroupedLists` | Native grouped lists | `ExactGroupedLists.install()` |
-| `ExactSurfaces` | GPU and Canvas surfaces | `ExactSurfaces.install()` |
+| `ExactSurfaces` | GPU and Canvas surfaces | `ExactSurfaces.install()`; links `ExactImages`, which Canvas 2D images read through |
+| `ExactImages` | Image files, animated images and package pictures; icons in text | `ExactImages.install()` |
 | `ExactMediaPicker` | Native media picking | `ExactMediaPicker.install()` |
 | `ExactAuthSession` | Authentication sessions | `ExactAuthSession.install()` |
 | `ExactNumerals` | Numeric content transitions | `ExactNumerals.install()` |

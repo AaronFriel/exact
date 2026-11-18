@@ -7,6 +7,7 @@ import AppKit
 import UIKit
 #endif
 @testable import ExactKit
+@testable import ExactImages
 
 final class ImageRenderingTests: XCTestCase {
     private func sprite() throws -> CGImage {

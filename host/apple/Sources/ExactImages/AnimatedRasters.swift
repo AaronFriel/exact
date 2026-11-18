@@ -6,6 +6,7 @@
 // own: `evaluate` after each batch and each `clock` shows the frame the
 // clock says, decoding it there and then, so a screenshot is exact.
 import CoreGraphics
+import ExactKit
 import Foundation
 import QuartzCore
 #if os(macOS)

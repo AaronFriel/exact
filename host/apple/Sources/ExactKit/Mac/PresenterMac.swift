@@ -88,7 +88,7 @@ package final class Presenter {
     package var heightBindings: [UInt32: HeightDragBinding] = [:]
     package var transformBindings: [UInt32: TransformDragBinding] = [:]
     lazy package var transformGeometry = TransformGeometryHost(self)
-    var videoVisibility: VideoVisibilityHost?
+    package var videoVisibility: VideoVisibilityHost?
     lazy package var collections: any ListHosting = ListLink.make?(self) ?? NoLists()
     lazy var stickies: any StickyHosting = StickyLink.make?(self) ?? NoStickies()
     let tableGrid = TableGrid()
@@ -722,7 +722,7 @@ package final class Presenter {
     var onPress, onClose, onCancel: ((UInt32) -> Void)?
     var onChange: ((UInt32, String) -> Void)?
     /// Images' intrinsic sizes, several at once under one layout.
-    var onIntrinsic: (([(UInt32, CGSize?)]) -> Void)?
+    package var onIntrinsic: (([(UInt32, CGSize?)]) -> Void)?
     /// A capability an action called (LLP 1005 §3), after its commit.
     var onCommand: ((String, [Any], UInt32?) -> Void)?
     /// A `key` handler called `preventDefault()` (`keyDown(at:_:)`, KeyEvents.swift).
@@ -927,7 +927,7 @@ package final class Presenter {
     /// window; the browser fires no blur on removal, so neither does this
     /// host), and never while a batch is being applied — it waits for the
     /// batch to finish, then goes if its view survived it.
-    var applying = false
+    package var applying = false
     var isApplying: Bool { applying }
     /// Each painted popover's region not yet told the kernel, the latest, with the view it is for (`tellRegion`).
     var regionsUntold: [UInt32: (view: ObjectIdentifier?, block: HostBlock?)] = [:]
@@ -967,7 +967,7 @@ package final class Presenter {
     var afterBatchWork: [() -> Void] = []
     /// Work for after the batch being applied, or now: a hatch's act on an
     /// element never lands inside a batch (LLP 1075.003 §3.4).
-    func afterBatch(_ work: @escaping () -> Void) { if applying { afterBatchWork.append(work) } else { work() } }
+    package func afterBatch(_ work: @escaping () -> Void) { if applying { afterBatchWork.append(work) } else { work() } }
     private func send(_ id: UInt32, _ f: @escaping () -> Void) {
         guard !resetting, textHost(id) != nil else { return }
         if applying { waiting.append((id, f)) } else { f() }

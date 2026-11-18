@@ -43,10 +43,13 @@ let allCapabilities: [(name: String, target: String)] = [
     ("presence", "ExactPresence"),
     ("effects", "ExactEffects"),
     ("svg", "ExactSvg"),
+    ("images", "ExactImages"),
 ]
 // What a family imports beyond ExactKit and CExact: another family's product,
-// which the roster links with it, or ExactCore's package API.
-let capabilityNeeds: [String: [Target.Dependency]] = ["ExactSvg": ["ExactCore", "ExactEffects"]]
+// which the roster links with it, or ExactCore's package API. Surfaces' Canvas
+// 2D images fetch and decode through the images family's static API, which
+// needs no install.
+let capabilityNeeds: [String: [Target.Dependency]] = ["ExactSvg": ["ExactCore", "ExactEffects"], "ExactSurfaces": ["ExactImages"]]
 let capabilities = allCapabilities.filter { links($0.name) }
 
 // `swift test` builds every target a package declares, and the two UIKit

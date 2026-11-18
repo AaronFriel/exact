@@ -41,7 +41,7 @@ package enum MediaPickerLink {
 /// app's own file (D7): told by the library at boot and with each picked
 /// name, so a photo kept in `app:/data` shows after a relaunch with nothing
 /// picked (recipes F18).
-enum AppFiles {
+package enum AppFiles {
     private static let lock = NSLock()
     private static var roots: [String: URL] = [:]
     static func learn(_ reply: [String: Any]) {
@@ -60,13 +60,13 @@ enum AppFiles {
     /// Where an `app:/data|cache|tmp/…` path names, for a file the host
     /// writes there; nil for `..` or a root. A file the app names is read
     /// through `open` or `file`, never through this.
-    static func url(_ path: String) -> URL? {
+    package static func url(_ path: String) -> URL? {
         guard let at = place(path) else { return nil }
         return at.names.reduce(at.root) { $0.appendingPathComponent($1) }
     }
     /// The regular file `path` names, opened through no symbolic link
     /// (`AppFileWalk`), as `readFile` and a share open it; nil for any other.
-    static func open(_ path: String) -> FileHandle? {
+    package static func open(_ path: String) -> FileHandle? {
         lock.lock(); let roots = roots; lock.unlock()
         return AppFileWalk.open(path, roots: roots)
     }

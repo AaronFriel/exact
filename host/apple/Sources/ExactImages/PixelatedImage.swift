@@ -3,6 +3,7 @@ import AppKit
 #else
 import UIKit
 #endif
+import ExactKit
 
 /// The pixelated images whose tiles are installed. Their tiles cover only what
 /// the clipping ancestors show, so any ancestor's geometry change refreshes them.
