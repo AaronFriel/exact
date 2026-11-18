@@ -325,7 +325,7 @@ final class ModalHost: NSObject, UIAdaptivePresentationControllerDelegate {
     /// confirmation, which UIKit presents over it (HTML modal dialogs).
     func inertBehind(_ view: UIView) -> Bool {
         guard let top = coordinateView else { return false }
-        return !view.isDescendant(of: top) && !presenter.menus.sheets.shows(view) && !presenter.menus.confirmationShows(view)
+        return !view.isDescendant(of: top) && !presenter.dialogs.shows(view) && !presenter.menus.confirmationShows(view)
     }
     var owner: UIViewController? { layers.last?.controller }
     /// The presentations' navigations, live and retiring, bottom to top.

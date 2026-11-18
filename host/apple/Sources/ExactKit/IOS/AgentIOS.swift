@@ -462,7 +462,7 @@ extension Agent {
         if session.shareHost.agentBack(session) || session.picker.agentBackDocument() { return backReply(("sheet", "")) }
         #endif
         if let cancelled = presenter.menus.agentCancel() { return backReply(("dialog", cancelled ? "" : "the alert is still moving: `clock settle` first")) }
-        if let refused = presenter.menus.sheets.agentCancel() { return backReply(("dialog", refused)) }
+        if let refused = presenter.dialogs.agentCancel() { return backReply(("dialog", refused)) }
         if let refused = presenter.navigation.agentBack() { return backReply(("route", refused)) }
         return backReply(presenter.modals.agentDismiss().map { ("sheet", $0) })
     }

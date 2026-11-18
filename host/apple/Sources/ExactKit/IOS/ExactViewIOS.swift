@@ -367,7 +367,7 @@ public final class ExactView: UIView {
         // the page alone while a dialog sheet, which ends at the keys itself, is up.
         let covered = top.map { min(max(0, frame.maxY - max($0, frame.minY)), frame.height) } ?? 0
         keyboardCovers = covered
-        let overlap = presenter.menus.sheets.top == nil ? covered : 0
+        let overlap = presenter.dialogs.top == nil ? covered : 0
         presenter.setKeyboardInset(overlap)
         presenter.keyboardToolbars.ride(overlap: overlap)
         if top == nil { presenter.pinnedRoom.release() }
@@ -450,7 +450,7 @@ public final class ExactView: UIView {
         var insets = cover ? safe : .zero
         let keyboard = fitKeyboard(in: frame)
         if presenter.keyboardPolicy == "resizes-content", !presenter.navigation.wantsWholeView,
-           let top = keyboard.top, top < frame.maxY, presenter.menus.sheets.top == nil {
+           let top = keyboard.top, top < frame.maxY, presenter.dialogs.top == nil {
             frame.size.height = max(0, top - frame.minY)
             insets.bottom = 0
         }

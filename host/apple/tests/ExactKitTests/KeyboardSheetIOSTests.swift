@@ -97,7 +97,7 @@ final class KeyboardSheetIOSTests: XCTestCase {
         let session = try fixture(scene)
         let p = session.presenter
         p.press(try XCTUnwrap(named("open-note")).id)
-        until("the dialog sheet is presented") { self.named("note")?.field?.window != nil && p.menus.sheets.top != nil }
+        until("the dialog sheet is presented") { self.named("note")?.field?.window != nil && p.dialogHost.top != nil }
         let field = try XCTUnwrap(named("note")?.field)
         let shown = expectation(forNotification: UIResponder.keyboardDidShowNotification, object: nil)
         field.becomeFirstResponder()

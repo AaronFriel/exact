@@ -173,7 +173,7 @@ extension Presenter {
             }
             #if os(iOS) || os(tvOS)
             // Keys leave the sheet; eventParent's inertness walks stay inside it.
-            if let node = view as? NodeView, let parent = menus.sheets.authoredParent(of: node) { next = parent }
+            if let node = view as? NodeView, let parent = dialogs.authoredParent(of: node) { next = parent }
             else { next = menus.logicalParent(of: view) ?? eventParent(of: view) }
             #else
             next = eventParent(of: view)

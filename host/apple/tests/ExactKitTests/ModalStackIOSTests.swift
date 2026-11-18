@@ -629,8 +629,8 @@ final class ModalStackIOSTests: XCTestCase {
         until("the replacement route and restored dialog are both presented") {
             p.modalHost.routes.last?.node.id == 6 && presented().count == 2 && !p.modalHost.inTransition && !p.menus.inTransition
         }
-        XCTAssertTrue(p.menus.sheets.isOpen(dialog))
-        XCTAssertTrue(p.menus.sheets.top?.presentingViewController === p.modalHost.owner)
+        XCTAssertTrue(p.dialogHost.isOpen(dialog))
+        XCTAssertTrue(p.dialogHost.top?.presentingViewController === p.modalHost.owner)
         XCTAssertEqual(p.navigationHost.selectedKey, "replacement")
     }
 

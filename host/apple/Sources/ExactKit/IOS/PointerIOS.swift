@@ -253,7 +253,7 @@ extension Presenter {
     /// superview. `eventParent` stays inside a dialog's sheet: the walks on
     /// it also read inertness and visibility, which a modal dialog escapes.
     func pointerParent(of view: UIView) -> UIView? {
-        if let node = view as? NodeView, let parent = menus.sheets.authoredParent(of: node) { return parent }
+        if let node = view as? NodeView, let parent = dialogs.authoredParent(of: node) { return parent }
         return menus.logicalParent(of: view) ?? eventParent(of: view)
     }
 }

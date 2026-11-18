@@ -52,3 +52,10 @@ extension Presenter {
     var backSwipeHost: BackSwipe { backSwipe as! BackSwipe }
 }
 #endif
+
+#if os(iOS) || os(tvOS)
+extension Presenter {
+    /// The built-in dialog sheets (`DialogLink.make`'s default).
+    var dialogHost: DialogSheets { dialogs as! DialogSheets }
+}
+#endif

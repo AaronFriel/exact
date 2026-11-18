@@ -61,7 +61,7 @@ extension PopoverSheetIOSTests {
     func show(_ name: String = "form", in p: Presenter) throws -> DialogSheetController {
         p.dialogCommand("showModal", name)
         settle { !p.menus.inTransition }
-        let sheet = try XCTUnwrap(p.menus.sheets.top as? DialogSheetController)
+        let sheet = try XCTUnwrap(p.dialogHost.top as? DialogSheetController)
         XCTAssertNotNil(sheet.view.window)
         sheet.view.layoutIfNeeded()
         return sheet

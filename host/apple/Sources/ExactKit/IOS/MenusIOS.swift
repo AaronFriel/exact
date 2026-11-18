@@ -146,8 +146,8 @@ final class MenuHost {
     #endif
     /// The focus a native menu sets aside while it shows (MenuFocusIOS.swift).
     private(set) lazy var focus = MenuFocus(presenter: presenter!)
-    /// A `dialog` that is not a confirmation, as UIKit's sheet (DialogSheetIOS.swift).
-    private(set) lazy var sheets = DialogSheets(presenter: presenter!)
+    /// The presenter's dialog sheets (`DialogLink`).
+    private var sheets: any DialogHosting { presenter!.dialogs }
 
     private func isDialog(_ node: NodeView) -> Bool { node.props["semanticTag"] == "dialog" }
     func isConfirmation(_ node: NodeView) -> Bool {
@@ -1292,7 +1292,7 @@ final class MenuHost {
     /// LLP 1115.000 D11.5: a `dialog` that is not a confirmation by its rows
     /// is a sheet, its content laid out by the kernel (DialogSheetIOS.swift).
     func isSheet(_ node: NodeView) -> Bool {
-        isDialog(node) && node.props["popover"] == nil && (sheets.owns(node) || DialogSheets.paintsOwnSurface(node) || unconfirmable(node, modal: true) != nil)
+        isDialog(node) && node.props["popover"] == nil && (sheets.owns(node) || DialogShape.paintsOwnSurface(node) || unconfirmable(node, modal: true) != nil)
     }
     private func busy(_ controller: UIViewController) -> Bool {
         controller.presentedViewController != nil || controller.isBeingDismissed || controller.isBeingPresented
@@ -1354,7 +1354,7 @@ final class MenuHost {
         // has no other presentation here.
         // A dialog its author painted is the author's box in the top layer,
         // whatever its rows (LLP 1035.001 D11).
-        if let why = DialogSheets.paintsOwnSurface(pop) && isDialog(pop) ? "" : unconfirmable(pop, modal: modal) {
+        if let why = DialogShape.paintsOwnSurface(pop) && isDialog(pop) ? "" : unconfirmable(pop, modal: modal) {
             guard isDialog(pop), pop.props["popover"] == nil else { return refuse(why) }
             guard let controller = controller(for: source ?? pop), !busy(controller) else { return false }
             return sheets.show(pop, from: source, over: controller)

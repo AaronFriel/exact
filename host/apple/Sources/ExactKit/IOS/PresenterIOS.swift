@@ -143,6 +143,8 @@ package final class Presenter {
     lazy var accent = AppAccent(self)
     /// The native menu arm (LLP 1021 D3).
     lazy var menus = MenuHost(presenter: self)
+    /// A `dialog` that is not a confirmation, as UIKit's sheet (`DialogLink`).
+    lazy package var dialogs: any DialogHosting = DialogLink.make?(self) ?? NoDialogs(self)
     /// The `input`s the batch being applied makes in a closed box (`MenuHost.waitingFields`).
     var fieldsWaiting = Set<UInt32>()
     lazy var keyboardToolbars = KeyboardToolbars(self)
@@ -1127,7 +1129,7 @@ package final class Presenter {
                 case "flight": flightHost.present(id, x)
                 default: break
                 }
-            default: menus.sheets.applied(op); owners.applied(op)
+            default: dialogs.applied(op); owners.applied(op)
             }
         }
         for op in batch.ops {
@@ -1437,7 +1439,7 @@ extension Presenter {
     /// popover, a route (any, presented or pushed) and a grouped list's carried row to their authored parent; else its superview
     package func authoredParent(of view: UIView) -> UIView? {
         if let node = view as? NodeView {
-            if let p = menus.sheets.authoredParent(of: node) { return p }
+            if let p = dialogs.authoredParent(of: node) { return p }
             if navigation.routeSurfaces[node.id]?.node === node, let p = navigation.logicalParent(of: node) ?? navigation.container { return p }
         }
         return menus.logicalParent(of: view) ?? groupedLists?.logicalParent(of: view) ?? view.superview

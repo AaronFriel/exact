@@ -10,22 +10,36 @@ import XCTest
 /// unmounted and mounted again, and a list's scroll fills its rows alike.
 final class NavigationUnlinkedIOSTests: XCTestCase {
     func testAPageWithoutRoutesObservesTheSameWithoutNavigation() throws {
-        let unlinked = try lifecycle(linked: false)
-        let linked = try lifecycle(linked: true)
+        let unlinked = try lifecycle(linked: false, family: "navigation")
+        let linked = try lifecycle(linked: true, family: "navigation")
         XCTAssertEqual(unlinked, linked)
         XCTAssertEqual(linked.map { $0.contains("count presses 1") }, [false, true, true, true], "the press ran")
     }
 
-    private func lifecycle(linked: Bool) throws -> [String] {
+    /// The same page without the dialogs family (`NoDialogs`): no sheet is
+    /// presented, owned or a parent at any point.
+    func testAPageWithoutDialogsObservesTheSameWithoutTheDialogsFamily() throws {
+        let unlinked = try lifecycle(linked: false, family: "dialogs")
+        XCTAssertEqual(unlinked, try lifecycle(linked: true, family: "dialogs"))
+        XCTAssertTrue(unlinked.allSatisfy { $0.hasSuffix("sheets 0 0 none") }, unlinked.joined(separator: "\n"))
+        XCTAssertEqual(unlinked.map { $0.contains("count presses 1") }, [false, true, true, true], "the press ran")
+    }
+
+    private func lifecycle(linked: Bool, family: String) throws -> [String] {
         let path = try XCTUnwrap(ProcessInfo.processInfo.environment["EXACT_BUTTONS_PLAN"])
-        let make = NavigationLink.make, makeModals = NavigationLink.makeModals
-        if !linked { NavigationLink.make = nil; NavigationLink.makeModals = nil }
-        defer { NavigationLink.make = make; NavigationLink.makeModals = makeModals }
-        let session = ExactApp.shared.makeSession(label: "navigation-\(linked ? "linked" : "unlinked")")
+        let make = NavigationLink.make, makeModals = NavigationLink.makeModals, makeDialogs = DialogLink.make
+        if !linked, family == "navigation" { NavigationLink.make = nil; NavigationLink.makeModals = nil }
+        if !linked, family == "dialogs" { DialogLink.make = nil }
+        defer { NavigationLink.make = make; NavigationLink.makeModals = makeModals; DialogLink.make = makeDialogs }
+        let session = ExactApp.shared.makeSession(label: "\(family)-\(linked ? "linked" : "unlinked")")
         defer { session.destroy() }
         let p = session.presenter
-        XCTAssertEqual(p.navigation is NoNavigation, !linked)
-        XCTAssertEqual(p.modals is NoModals, !linked)
+        if family == "navigation" {
+            XCTAssertEqual(p.navigation is NoNavigation, !linked)
+            XCTAssertEqual(p.modals is NoModals, !linked)
+        } else {
+            XCTAssertEqual(p.dialogs is NoDialogs, !linked)
+        }
 
         let view = ExactView(session: session)
         let host = UIViewController()
@@ -55,6 +69,9 @@ final class NavigationUnlinkedIOSTests: XCTestCase {
                 "blocks \(p.owners.told.count)",
                 "scrollsToTop \(scrollers(in: p.viewport).filter(\.scrollsToTop).count)",
                 "surfaces \(p.modals.surfaces(includingRetiring: true).count)",
+                "dialog sheets own \(count.map(p.dialogs.owns) ?? false) parent \(count.flatMap(p.dialogs.authoredParent) != nil) shows \(count.map(p.dialogs.shows) ?? false) surfaces \(p.dialogs.surfaces(includingRetiring: true).count) resume \(p.dialogs.resumeAfterRouteDismissal())",
+                "dialog top \(p.dialogs.top != nil) moving \(p.dialogs.inTransition) press lifetime \(count.flatMap(p.dialogs.pressLifetime) != nil) keeps focus \(count.map { p.dialogs.preservesFocus($0.id) } ?? false)",
+                "sheets \(p.dialogs.presented.count) \(p.dialogs.containingBlocks.count) \(p.dialogs.topDialog.map { "#\($0.id)" } ?? "none")",
             ].joined(separator: ", "))
         }
 
