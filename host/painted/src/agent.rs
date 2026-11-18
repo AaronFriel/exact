@@ -125,7 +125,8 @@ fn tagged<D: DataSource>(p: &Presenter<D>, _line: &str, reply: String) -> String
 
 pub(crate) fn answer<D: DataSource>(p: &mut Presenter<D>, line: &str) -> String {
     // An agent's taps and contacts reach a canvas as a finger, as on the web
-    // and iOS. Explicit mouse/contextmenu use device mouse buttons (LLP 1015.000).
+    // and iOS. Explicit mouse and desktop contextmenu use device mouse buttons
+    // (LLP 1015.000); Android contextmenu is a recognized long press.
     p.agent_finger(!field_bool(line, "contextmenu") && !field_bool(line, "mouse"));
     let reply = answer_line(p, line);
     p.agent_finger(false);

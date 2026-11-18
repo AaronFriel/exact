@@ -6120,9 +6120,15 @@ taken after it is not a seeked run's.
 For a game canvas, JavaScript `s.tap("world", {mouse:true, at:[x,y]})` sends one
 primary mouse click on web, macOS, Windows, and Linux (on macOS any node takes
 it, so a click can land on a link inside a paragraph). `{contextmenu:true, at:[x,y]}`
-sends a right-click. Coordinates are relative to the target's top-left; omit
-`at` for its center. Both refuse invalid, covered, or offscreen points and held
-contacts. The CLI forms are `tap world mouse [at <x> <y>]` and `tap world contextmenu
+sends a right-click on desktop hosts and the web. On Android and iOS,
+`tap <target> contextmenu` delivers a recognized long press to the nearest node
+with a `contextmenu` handler or `contextPopover`. Its handler runs and its menu
+opens, where present; a handler needs no popover. Coordinates are relative to
+the target's top-left; omit `at` for its center. Invalid, covered, or offscreen
+points are refused. Mouse clicks also require held contacts to be released.
+Windows' headless agent refuses a field's native editing menu before changing
+its focus or selection; authored menus and handler cancellation still work.
+The CLI forms are `tap world mouse [at <x> <y>]` and `tap world contextmenu
 [at <x> <y>]`. `tap <target> auxclick` is the middle button and `clicks 3` a triple
 click (each press counting 1, 2, 3); every click form and a wheel take `at <x> <y>` and
 `modifiers Shift+Meta`, and `down … modifiers Shift` or `drag … modifiers Shift` holds
