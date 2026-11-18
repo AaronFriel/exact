@@ -306,10 +306,26 @@ extension CanvasesHost {
 
     /// The canvas's record, when the module has a new one, to the app.
     func publishRecord(_ e: Entry) {
-        guard live(e.view.id) === e, publishers[e.name] === e, let m = e.module, let take = m.published else { return }
+        guard live(e.view.id) === e, let m = e.module, let take = m.published else { return }
+        let empty = (m.presentationFlags?(e.id) ?? 0) & 4 != 0
+        #if os(macOS)
+        let layer = e.view.canvasMetal?.layer
+        #else
+        let layer = e.view.canvasMetal?.metalLayer
+        #endif
+        if empty {
+            #if os(macOS)
+            layer?.isHidden = true
+            #else
+            e.view.canvasMetal?.hidePicture()
+            #endif
+        }
         let length = take(e.id)
         if length != UInt32.max, let data = length == 0 ? Data() : m.output(length) {
-            surfaceRecord(e.name, String(decoding: data, as: UTF8.self))
+            if !empty, layer?.isHidden == true,
+               let record = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               record["presented"] as? Bool == true { layer?.isHidden = false }
+            if publishers[e.name] === e { surfaceRecord(e.name, String(decoding: data, as: UTF8.self)) }
         }
     }
 

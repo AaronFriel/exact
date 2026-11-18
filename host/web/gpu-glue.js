@@ -708,9 +708,11 @@ function messages(entry, drainAssets = true) {
   if (drainAssets) assets(entry);
   finishRestore(entry, gpu);
   reportRestore(entry);
+  const empty = (gpu.gpu_presentation_flags?.(entry.id) & 4) !== 0;
+  if (empty) entry.el.style.visibility = "hidden";
   const record = gpu.gpu_published(entry.id);
   if (record !== undefined && live(entry.view) === entry) {
-    if (!entry.terminal && entry.el.style.visibility === "hidden") {
+    if (!empty && !entry.terminal && entry.el.style.visibility === "hidden") {
       // Malformed records still reach the runner's refusal handling.
       try {
         if (JSON.parse(record)?.presented === true) entry.el.style.visibility = "";
