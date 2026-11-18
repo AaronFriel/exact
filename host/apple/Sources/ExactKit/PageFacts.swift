@@ -318,7 +318,7 @@ package enum PageFacts {
     static var frozen: Bool {
         if substituted { return agent.frozen }
         #if os(iOS) || os(tvOS)
-        return AppBackground.now && !AudioSession.backgroundExecutionEligible()
+        return AppBackground.now && !(MediaLink.audioSession?.backgroundExecutionEligible() ?? false)
         #else
         return false
         #endif
@@ -467,7 +467,7 @@ package enum AppBackground {
         case UIApplication.didEnterBackgroundNotification:
             guard cached != true else { return }
             cached = true
-            AudioSession.enteredBackground()
+            MediaLink.audioSession?.enteredBackground()
         case UIApplication.willEnterForegroundNotification, UIApplication.didBecomeActiveNotification: cached = false
         default: break
         }

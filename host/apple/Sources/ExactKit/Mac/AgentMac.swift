@@ -1230,7 +1230,7 @@ extension Agent {
         if let now = session.clock, session.canvases.waitUntilReady() { session.canvases.settle(now: now) }
         presenter.canvas2d.waitForReplays()
         guard let path = req["path"] as? String else { return ["malformed": true, "error": "screenshot needs a path"] }
-        if req["window"] as? String == "pictureinpicture" { return pictureInPictureShot(path, of: (req["id"] as? NSNumber)?.uint32Value) } // LLP 1042 §9.1
+        if req["window"] as? String == "pictureinpicture" { return MediaLink.pictureShot?(self, path, (req["id"] as? NSNumber)?.uint32Value) ?? ["error": "picture in picture is not linked"] } // LLP 1042 §9.1
         let v = presenter.navigation.split.agentRoot
         if req["window"] as? Bool == true {
             // The window server's picture of this window, with canvas pixels

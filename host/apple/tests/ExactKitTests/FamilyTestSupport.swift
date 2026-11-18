@@ -34,3 +34,8 @@ extension ExactSession {
     var regionHost: RegionController { regions as! RegionController }
 }
 #endif
+
+extension ExactSession {
+    /// The built-in web views (`MediaLink.makeWeb`'s default).
+    var webHost: WebViews { webviews as! WebViews }
+}

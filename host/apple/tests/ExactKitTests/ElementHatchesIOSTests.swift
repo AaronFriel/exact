@@ -115,7 +115,7 @@ final class ElementHatchesIOSTests: XCTestCase {
         let plan = try Data(contentsOf: URL(fileURLWithPath: try XCTUnwrap(env["EXACT_FIXTURE_PLAN"])))
         let session = ExactApp.shared.makeSession(label: "frame-configuration")
         sessions.append(session)
-        session.webviews.moduleLocation = { arm }
+        session.webHost.moduleLocation = { arm }
         let view = ExactView(session: session)
         let host = UIViewController()
         let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene
@@ -155,7 +155,7 @@ final class ElementHatchesIOSTests: XCTestCase {
         let plan = try Data(contentsOf: URL(fileURLWithPath: try XCTUnwrap(env["EXACT_FIXTURE_PLAN"])))
         let session = ExactApp.shared.makeSession(label: "frame-waits")
         sessions.append(session)
-        session.webviews.moduleLocation = { arm }
+        session.webHost.moduleLocation = { arm }
         // The module made before first pixel: its hatches connect at first pixel.
         session.nativeViews!.installArtifact(try XCTUnwrap(env["EXACT_FIXTURE_MODULE"]))
         let view = ExactView(session: session)

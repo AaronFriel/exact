@@ -177,7 +177,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
     /// Natural extent from the kernel, before the CSS client-size minimum.
     package var content = CGSize.zero
     /// The platform view returned by the dlopened iframe arm (@ref LLP 1020 D3).
-    var video: VideoView?
+    var video: (any VideoPlaying)?
     var web: NSView? { didSet { if web !== oldValue { placeWeb() } } }
     /// A canvas node's Metal layer (LLP 1009).
     package var metal: MetalView?
@@ -464,7 +464,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
     /// and original intrinsic geometry until a matching new backing is accepted.
     func loadImage(_ source: String) {
         let previousSource = imageSource, previousGeneration = loadGeneration
-        imageSource = source; PictureInPictureHost.changed(self)
+        imageSource = source; MediaLink.pictureChanged?(self)
         loadGeneration += 1
         if source.hasPrefix("symbol:") { presenter?.session?.rasters?.cancel(id); raster = nil; updateSymbol(); return }
         clearSymbol(); image = nil
@@ -498,7 +498,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
         loadGeneration += 1
         presenter?.session?.rasters?.cancel(id)
         raster = nil
-        imageSource = nil; PictureInPictureHost.gone(self)
+        imageSource = nil; MediaLink.pictureGone?(self)
         clearSymbol()
         image = nil
         video?.invalidate(); video = nil

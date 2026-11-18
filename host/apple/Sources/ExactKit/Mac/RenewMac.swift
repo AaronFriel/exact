@@ -90,7 +90,7 @@ extension Presenter {
         svg?.forget(id); boxAnimations.forget(id)
         flightHost.land(id)
         // The old item's image left the document: its floating window closes, as at a destroy.
-        PictureInPictureHost.gone(view)
+        MediaLink.pictureGone?(view)
         if let session, session.viewDark.removeValue(forKey: id) != nil { session.noteAppearance(view) }
         view.renew()
     }

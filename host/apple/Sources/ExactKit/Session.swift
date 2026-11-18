@@ -386,13 +386,13 @@ public final class ExactSession {
     var protocolHandlers: [[String: String]] = ExactEnv.appMetadata["ExactProtocolHandlers"] as? [[String: String]] ?? []
     private var textPressure: DispatchSourceMemoryPressure?
     let canvases: Canvases
-    let webviews: WebViews
+    let webviews: any WebHosting
     let natives: any NativeModuleHosting = NativeModuleLink.make?() ?? NoNativeModule()
     /// The file picker (LLP 1069.002).
     lazy var picker = Picker(session: self)
     /// The voice table's output (LLP 1096 D8); settable for tests.
-    lazy var sound = SoundOutput(self)
-    lazy var midi = MIDIOutput(self)
+    lazy var sound: any AudioOutputting = MediaLink.makeSound?(self) ?? NoAudioOutput()
+    lazy var midi: any AudioOutputting = MediaLink.makeMIDI?(self) ?? NoAudioOutput()
     var activityOutput: ActivityOutput?
     package let frames: Frames
     /// A session's presented frames (LLP 1079 D3); a production bake has one only while an app records.
@@ -553,7 +553,7 @@ public final class ExactSession {
                                bundled: { [weak app] source in app?.bundledAsset(source) }))
         presenter = Presenter()
         canvases = SurfacesLink.installed?.canvases() ?? NoCanvases()
-        webviews = WebViews()
+        webviews = MediaLink.makeWeb?() ?? NoWebViews()
         frames = Frames()
         presenter.session = self; RowReuse.adopt(self)
         #if os(iOS)
@@ -1154,8 +1154,8 @@ public final class ExactSession {
     package func apply(_ batch: Batch) {
         guard state != .destroyed, !batch.busy, !batch.held else { return }
         #if os(iOS) || os(tvOS)
-        AudioSession.beginPresentation()
-        defer { AudioSession.endPresentation() }
+        MediaLink.audioSession?.beginPresentation()
+        defer { MediaLink.audioSession?.endPresentation() }
         #endif
         defer { app.replacements.changed() }
         appliedBatches += 1

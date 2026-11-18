@@ -335,7 +335,7 @@ public final class Agent {
         case "tree":
             var tree = decorateTree(presenter.elements.decorateRegions(session.natives.decorate(session.webviews.tree(line))))
             #if os(macOS)
-            tree = decoratePictureInPicture(tree) // LLP 1042 §9.1
+            tree = MediaLink.pictureDecorate?(self, tree) ?? tree // LLP 1042 §9.1
             #endif
             emit(session.canvases.decorate(req, tree))
         case "layout": emit(tagged(inspectLayout(req) ?? layout(req))) // LLP 1080.001: `native`, `agree`
@@ -387,7 +387,7 @@ public final class Agent {
             } else if let control = req["pictureInPicture"] as? String {
                 // Exact's picture-in-picture window's controls (LLP 1042 §9.1).
                 #if os(macOS)
-                r = pictureInPictureTap(req, control: control)
+                r = MediaLink.pictureTap?(self, req, control) ?? ["error": "unsupported: picture in picture is not linked"]
                 #else
                 r = ["error": "unsupported: Exact's picture-in-picture window is the Mac's"]
                 #endif
