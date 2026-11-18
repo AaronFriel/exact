@@ -1222,3 +1222,16 @@ idle agent of its own, each agent with its own pool. A lease now takes the
 newest idle agent whose last requests went to the request's origin (the
 eight it remembers), so a request finds a connection another left open to
 it. Replay on a refresh.
+
+## Local patch 50, a URL the web would encode
+
+`fetch("…&details->>status=eq.open")` reaches a browser's server with `>`
+percent-encoded: the URL Standard's parser encodes what a query, a path or a
+fragment may not hold as written. The portable transport parses a URI and
+refused the request, "invalid uri character", so one line of app code worked
+on the web and Apple and failed on Android, Linux and Windows. `prepare_body`,
+which both the blocking and the asynchronous fetch pass a request through,
+replaces a URL that holds a character RFC 3986 gives no URI with the `url`
+crate's serialization of it. A URL that is already a URI is sent as written,
+so no request that worked changes. Replay on a refresh
+(`stdlib/fetch.rs`, `a_url_the_web_would_encode_is_sent_encoded`).
