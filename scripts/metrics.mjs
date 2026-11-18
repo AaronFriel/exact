@@ -1012,11 +1012,11 @@ const WEB_CORE_KIB = { realworld: 304, 'video-player': 249, caltrain: 310 };
 // These are a tripwire at main's size, not an accepted size: the core grew
 // about 0.3 MB a day for five weeks from October's ceilings, and once a row was
 // over, more growth was the same failure, so nothing attributed it. Each is
-// main at bfc7f585a (Xcode 27.2; grid layout linked by use, LLP 1047.001 §9
-// R3) plus ~100 KB.
+// main at 2c30ff62e (Xcode 27.2; grid layout linked by use and hatch
+// diagnostics out of production, LLP 1047.001 §9 R3 and A1) plus ~100 KB.
 // The size row's target is 8 MB, 8,000,000 B (Charlie, 2026-11-17); the cuts
 // that reach it are issues/20261113-ios-hello-app-twice-its-binary-budget.md's.
-const IOS_HELLO_BYTES = { speed: 19_440_000, size: 12_490_000, balanced: 17_210_000 };
+const IOS_HELLO_BYTES = { speed: 19_390_000, size: 12_440_000, balanced: 17_125_000 };
 
 // 8. Long: web bytes by capability (LLP 1047 D9), for the three apps the
 // size work tracks. Each app's app.wasm as shipped (raw, gzip, brotli-11),

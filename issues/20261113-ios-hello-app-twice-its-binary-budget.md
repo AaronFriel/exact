@@ -1,4 +1,4 @@
-# The iOS hello app is about 4.4 MB over its 8 MB size target
+# The iOS hello app is about 4.3 MB over its 8 MB size target
 
 **Status:** Open
 **Systems:** host/apple (iOS binary size), runner (native module seam), scripts/metrics.mjs
@@ -8,18 +8,18 @@
 
 `bun scripts/metrics.mjs --long` measures the hello app's stripped iOS simulator executable over an empty UIKit
 app's (LLP 1047.001 D8) and gates it at `IOS_HELLO_BYTES`. The size row's target is 8 MB, 8,000,000 B (Charlie,
-2026-11-17: "trying to get to 8MB is maybe worth it"). Main at bfc7f585a, measured on an M5 Max with Xcode 27.2:
+2026-11-17: "trying to get to 8MB is maybe worth it"). Main at 2c30ff62e, measured on an M5 Max with Xcode 27.2:
 
 | row | measured | ceiling | target |
 |---|---:|---:|---:|
-| optimized for size (the embed default) | 12,389,184 B | 12,490,000 B | 8,000,000 B |
-| balanced (the iOS and tvOS app default) | 17,106,480 B | 17,210,000 B | |
-| optimized for speed (the Mac default) | 19,336,976 B | 19,440,000 B | |
+| optimized for size (the embed default) | 12,340,048 B | 12,440,000 B | 8,000,000 B |
+| balanced (the iOS and tvOS app default) | 17,024,800 B | 17,125,000 B | |
+| optimized for speed (the Mac default) | 19,288,048 B | 19,390,000 B | |
 
 The ceilings are a tripwire at main's size plus about 100 KB, not an accepted size. A row over its ceiling says how
 far over in 100 KB steps (`VIOLATION by 0.2 MB`), and the async lane's failure carries the step, so each further
 step up is a new failure the lane attributes to the commit that took it, and a step down is not
-(`scripts/async-bisect.mjs`, `newFailures` and `holds`). The target needs about 4.4 MB more cut from the size build. Byte counts differ between Xcode versions, so
+(`scripts/async-bisect.mjs`, `newFailures` and `holds`). The target needs about 4.3 MB more cut from the size build. Byte counts differ between Xcode versions, so
 measure with the lane's.
 
 ## How to reproduce
@@ -241,6 +241,16 @@ runner's seams; §9.3: the order of work). Landed, size row:
 | R1: call provenance into the runner core (a move) | 24de53c85 | unchanged |
 | R4a: child processes and the work clock out of the modules (a move) | 6429d33fc | unchanged |
 | R3: grid layout linked by use (cut list C15) | bfc7f585a | 12,389,184 B |
+| R4b to R4e: wakes into the core; tool calls and presence secrets behind their seams (moves) | e50d50b66 | unchanged |
+| C0 S1, S2a: the core reaches SVG and CSS filter only through link slots (moves) | 0b09b06a4 | +96 B |
+| A1: hatch diagnostics out of the production composition | 2c30ff62e | 12,340,048 B |
+
+The rows after R3 are each lane's before-and-after on one Mac at its own base; main also grew about 33 KB from
+other work between bfc7f585a and 0b09b06a4. M1 attributed the Rust archive's 459 KB of unnamed constants: `url`'s
+host parsing reads 100,686 B of them (so cut-list row A1 is worth about 0.22 MB), panic location records and
+their file paths are 113,253 B (the panic-machinery ruling's), the kernel's `METRICS` table is 41,664 B, and the
+runner's `DEVICES` table about 20 KB. By direct bytes the list then reaches about 8.40 MB without the two
+rulings and about 7.84 MB with them.
 
 Two cuts on the list are rulings, not designs, and are not being built: frame health out of the production core
 (LLP 1079.000) and the panic machinery (nightly `build-std`, which LLP 1047.001 D9 declined).
