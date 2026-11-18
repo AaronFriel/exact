@@ -236,10 +236,10 @@ final class PressFeedbackMacTests: XCTestCase {
                                              "totalExtent": 600.0, "axis": "x", "rows": [[String: Any]]()]]],
         ]).ops.first?.collections
         let sideways = try XCTUnwrap(snapshots?.first)
-        p.collections.entries[2] = CollectionHost.Entry(sideways)
+        p.listHost.entries[2] = CollectionHost.Entry(sideways)
         XCTAssertFalse(v.isListRow)
         XCTAssertTrue(v.platformPressTints, "a carousel's card shows the press")
-        p.collections.entries[2] = nil
+        p.listHost.entries[2] = nil
         XCTAssertTrue(v.isListRow)
         // A native control keeps its own feedback: no wash is laid over it.
         let native = NodeView(id: 4, kind: "control", presenter: p)

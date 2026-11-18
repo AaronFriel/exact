@@ -71,7 +71,7 @@ final class OwnerScrollMacTests: XCTestCase {
         }
         session.drainFill()
         spin(0.1)
-        XCTAssertFalse(session.presenter.collections.fillLatency.isEmpty, "slices were built on the owner")
+        XCTAssertFalse(session.presenter.listHost.fillLatency.isEmpty, "slices were built on the owner")
         XCTAssertGreaterThan(list.subviewsDeep.count, 3, "the list still shows rows")
     }
 }

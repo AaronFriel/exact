@@ -1226,7 +1226,7 @@ final class NavigationTabsIOSTests: XCTestCase {
         // Unanimated, as under the agent's clock: whether the scroll runs is decided before it starts
         p.navigation.scrollsToTopAnimated = false
         let feed = { p.views.values.first { $0.props["testId"] == "feed" && $0.window != nil } }
-        let offset = { feed().flatMap { p.collections.geometry($0.id)?.offset } ?? .nan }
+        let offset = { feed().flatMap { p.listHost.geometry($0.id)?.offset } ?? .nan }
         func scroll(to y: Double) throws {
             let sv = try XCTUnwrap(feed()?.scroll)
             sv.setContentOffset(CGPoint(x: 0, y: CGFloat(y) - sv.adjustedContentInset.top), animated: false)

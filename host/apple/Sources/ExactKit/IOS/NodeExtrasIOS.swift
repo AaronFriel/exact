@@ -617,7 +617,7 @@ extension NodeView {
     /// clamped to the content as it is now (`CollectionHost.animationEnded`);
     /// nil with no target.
     func endedAtTarget(_ scrollView: UIScrollView) -> Bool? {
-        presenter?.collections.animationTargets[id].map { t -> Bool in
+        presenter?.collections.animationTarget(id).map { t -> Bool in
             let o = scrollView.contentOffset, i = scrollView.adjustedContentInset
             let x = min(max(t.x, -i.left), max(-i.left, scrollView.contentSize.width + i.right - scrollView.bounds.width))
             let y = min(max(t.y, -i.top), max(-i.top, scrollView.contentSize.height + i.bottom - scrollView.bounds.height))

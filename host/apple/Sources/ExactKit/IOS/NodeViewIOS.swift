@@ -718,7 +718,7 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
         if handlers.contains("scrolldragstart") { presenter?.scrollDrag(id, nil) }
         #if os(iOS)
         if #available(iOS 27.1, *) { presenter?.arrangements.cancelScrollHandoff(id) }
-        if swipeOwner { presenter?.swipeActions.painted.began(self) }
+        if swipeOwner { presenter?.swipeActions.paintedBegan(self) }
         #endif
     }
 
@@ -743,7 +743,7 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
         presenter.onScrolled?(id, Double(scrollView.contentOffset.x + room.left), Double(scrollView.contentOffset.y + room.top + pageBand.top))
         presenter.stickies.scrolled(id); presenter.collections.changed(id, user: true, sequenceAdvanced: true)
         #if os(iOS)
-        if swipeOwner, scrollView.isTracking { presenter.swipeActions.painted.scrolled(self) }
+        if swipeOwner, scrollView.isTracking { presenter.swipeActions.paintedScrolled(self) }
         #endif
         presenter.transformGeometry.changed()
         presenter.tipsScrolled()

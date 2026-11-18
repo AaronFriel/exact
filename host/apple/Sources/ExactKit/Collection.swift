@@ -127,7 +127,7 @@ struct CollectionTurnBudget {
 
 /// At most one pending callback and two feedback calls per main-queue turn.
 /// All caches are proportional to active collections and their mounted wrappers.
-package final class CollectionHost {
+final class CollectionHost: ListHosting {
     final class Entry {
         var snapshot: CollectionSnapshot
         var rowsAdded: UInt64 = 0
@@ -557,6 +557,15 @@ package final class CollectionHost {
         return nil
     }
     func owns(_ view: UInt32) -> Bool { entries[view] != nil }
+    var listIDs: [UInt32] { Array(entries.keys) }
+    func snapshot(_ id: UInt32) -> CollectionSnapshot? { entries[id]?.snapshot }
+    func mainOffset(_ id: UInt32) -> Double? { geometry(id)?.offset }
+    func animationTarget(_ id: UInt32) -> CGPoint? { animationTargets[id] }
+    #if os(iOS) || os(tvOS)
+    func drivesOffset(_ id: UInt32) -> Bool { offsetDrivers[id] != nil }
+    #else
+    func drivesOffset(_ id: UInt32) -> Bool { false }
+    #endif
     /// An inner list whose outer list moves builds only what it owes (LLP
     /// 1070 F2): a slice for its pending remainder would report and build
     /// nothing, once a frame for every mounted inner list.
@@ -1051,6 +1060,19 @@ package final class CollectionHost {
                 #endif
             }
             flushIfNeeded()
+        }
+    }
+}
+
+extension CollectionHost {
+    /// The row wrapper at or above `descendant`: what a ghost snapshots.
+    func wrapper(of descendant: UInt32) -> NodeView? {
+        guard let presenter, var node: NSObject = presenter.views[descendant] else { return nil }
+        while true {
+            if let view = node as? NodeView, presenter.views[view.id] === view,
+               entries.values.contains(where: { $0.snapshot.rows.contains { $0.view == view.id } }) { return view }
+            guard let parent = (node as? PlatformView)?.superview else { return nil }
+            node = parent
         }
     }
 }

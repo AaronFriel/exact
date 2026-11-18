@@ -599,19 +599,20 @@ package final class Runtime {
     /// owner before the reports after it, not waited for.
     package func listCovered(_ view: UInt32, start: Double, end: Double) {
         Owner.shared.post { [self] in
-            guard !destroyed else { return }
-            exact_list_covered(rt, view, start, end)
+            guard !destroyed, let covered = CoreExports.listCovered else { return }
+            covered(rt, view, start, end)
         }
     }
     /// A build-only report on the owner, not waited for (LLP 1072 §3):
     /// `done` runs on the owner with the decoded batch.
     package func collectionFeedbackAsync(_ bytes: Data, now: Double, done: @escaping (RuntimeCompletion) -> Void) {
         post(done: done) { [self] _ in
+            guard let feedback = CoreExports.collectionFeedback else { return Runtime.noFeedback }
             let n = write(bytes)
             #if DEBUG
             self.collectionFeedbackEntries += 1
             #endif
-            return read(exact_collection_feedback(rt, n, now))
+            return read(feedback(rt, n, now))
         }
     }
     /// Count each plan site's work for `perf` from now, if not yet (LLP 1079 D1).
@@ -643,11 +644,12 @@ package final class Runtime {
     /// Actual viewport/row observations using the runner's versioned LE wire.
     package func collectionFeedback(_ bytes: Data, now: Double) -> Batch {
         return on {
+            guard let feedback = CoreExports.collectionFeedback else { return Runtime.noFeedback }
             let n = write(bytes)
             #if DEBUG
             self.collectionFeedbackEntries += 1
             #endif
-            return read(exact_collection_feedback(rt, n, now))
+            return read(feedback(rt, n, now))
         }
     }
     package func dblclick(_ view: UInt32, now: Double) -> Batch { on { read(exact_dispatch(rt, view, 11, 0, now)) } }
@@ -956,17 +958,19 @@ package final class Runtime {
     package func setDisplayScale(_ scale: Double) -> Batch { on(layout: true) { read(exact_set_display_scale(rt, scale)) } }
     package func setPlace(locale: String, timeZone: String, seed: UInt64, formatLocale: String = "") -> Batch { on(layout: true) { read(exact_set_place(rt, write(locale + "\0" + timeZone + "\0" + String(seed) + "\0" + formatLocale)) ) } }
     package func listIndex(_ view: UInt32, key: String) -> Int? {
+        guard let listIndex = CoreExports.listIndex else { return nil }
         return on(busy: nil) {
             let n = write(key)
-            let index = exact_list_index(rt, view, UInt32(n))
+            let index = listIndex(rt, view, UInt32(n))
             return index == UInt32.max ? nil : Int(index)
         }
     }
     package func listText(_ view: UInt32, first: (String, Int, Int, Bool?)?, last: (String, Int, Int, Bool?)?) -> String {
+        guard let listText = CoreExports.listText else { return "" }
         return on(busy: "") {
             let a = first?.0 ?? "", b = last?.0 ?? ""
             let n = write(a + b)
-            let len = exact_list_text(rt, view, UInt32(a.utf8.count), UInt32(n), UInt32(first?.1 ?? 0), UInt32(first?.2 ?? 0), UInt32(last?.1 ?? 0), UInt32(last?.2 ?? 0), first?.3.map { $0 ? 1 : 0 } ?? UInt32.max, last?.3.map { $0 ? 1 : 0 } ?? UInt32.max)
+            let len = listText(rt, view, UInt32(a.utf8.count), UInt32(n), UInt32(first?.1 ?? 0), UInt32(first?.2 ?? 0), UInt32(last?.1 ?? 0), UInt32(last?.2 ?? 0), first?.3.map { $0 ? 1 : 0 } ?? UInt32.max, last?.3.map { $0 ? 1 : 0 } ?? UInt32.max)
             return String(decoding: Data(bytes: exact_out(rt), count: Int(len)), as: UTF8.self)
         }
     }

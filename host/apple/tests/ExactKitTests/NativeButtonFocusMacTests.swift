@@ -190,7 +190,7 @@ final class NativeButtonFocusMacTests: XCTestCase {
         XCTAssertTrue(window.firstResponder === first)
         XCTAssertEqual(focuses, [2])
         XCTAssertTrue(p.focusedNode === p.views[2])
-        XCTAssertEqual(p.collections.focusedView(), 2)
+        XCTAssertEqual(p.listHost.focusedView(), 2)
         XCTAssertTrue(p.keyTarget(first) === p.views[2])
         p.focusElement(["first"])
         XCTAssertEqual(focuses, [2], "no second becomeFirstResponder")
@@ -246,7 +246,7 @@ final class NativeButtonFocusMacTests: XCTestCase {
         XCTAssertTrue(p.focusedNode === node)
         p.apply(wireBatch([["op": "children", "id": 1, "ids": [3, 4]], ["op": "destroy", "id": 2]]))
         XCTAssertNil(p.focusedNode, "a removed native owner is no logical focus")
-        XCTAssertNil(p.collections.focusedView())
+        XCTAssertNil(p.listHost.focusedView())
     }
 
     func testRetainFocusKeepsThePreviousOwnerWhileAnAncestorHandlesThePress() throws {
@@ -333,7 +333,7 @@ final class NativeButtonFocusMacTests: XCTestCase {
                 let owner = p.keyView(of: try XCTUnwrap(p.views[id]))
                 XCTAssertTrue(window.firstResponder === owner, "Tab reaches native owner \(id), Keyboard navigation=\(enabled)")
                 XCTAssertTrue(p.focusedNode === p.views[id])
-                XCTAssertEqual(p.collections.focusedView(), id)
+                XCTAssertEqual(p.listHost.focusedView(), id)
                 if id < 7 {
                     XCTAssertFalse(try XCTUnwrap(p.views[id]).acceptsFirstResponder, "wrapper is not another focus owner")
                     XCTAssertTrue(owner.canBecomeKeyView)

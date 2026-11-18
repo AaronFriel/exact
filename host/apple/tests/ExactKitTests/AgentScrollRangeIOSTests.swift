@@ -297,8 +297,8 @@ final class AgentScrollRangeIOSTests: XCTestCase {
         XCTAssertNil(action["radii"], "the authored fallback is not the native action's geometry")
         XCTAssertTrue(owner.scrollDormant, "reading the range made no scroll view")
         XCTAssertNil(owner.scroll)
-        p.swipeActions.touch(owner)
-        XCTAssertNotNil(p.swipeActions.cell(of: owner))
+        p.swipeHost.touch(owner)
+        XCTAssertNotNil(p.swipeHost.cell(of: owner))
         XCTAssertNil(try node(agent.layout(), 4)["radii"], "projection still owns the action's corners")
     }
 }

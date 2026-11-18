@@ -17,13 +17,16 @@ import UIKit.UIGestureRecognizerSubclass
 /// own, which the list carries the row's views into. Its swipe is that
 /// cell's, as a hand-built list's is: the list asks `configuration` for its
 /// actions, and the row's controls stay hidden while the row is one.
-package final class SwipeActionsHost {
+final class SwipeActionsHost: SwipeActionsHosting {
     unowned let presenter: Presenter
     private var rows: [UInt32: Row] = [:]
     private var refusals: [UInt32: String] = [:]
     #if os(iOS)
     /// Rows whose actions keep their paint (PaintedSwipesIOS.swift).
     private(set) lazy var painted = PaintedSwipes(presenter)
+    func paintedBegan(_ owner: NodeView) { painted.began(owner) }
+    func paintedScrolled(_ owner: NodeView) { painted.scrolled(owner) }
+    func paintedWillEnd(_ owner: NodeView, _ scroll: UIScrollView, target: UnsafeMutablePointer<CGPoint>) { painted.willEnd(owner, scroll, target: target) }
     #endif
     private var observers: [NSObjectProtocol] = []
     init(_ presenter: Presenter) {

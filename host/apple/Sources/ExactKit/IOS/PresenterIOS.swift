@@ -129,7 +129,7 @@ package final class Presenter {
         for node in fixedGradients.allObjects where node.window != nil { node.reaimFixedGradient() }
     }
     var videoVisibility: VideoVisibilityHost?
-    lazy package var collections = CollectionHost(self)
+    lazy package var collections: any ListHosting = ListLink.make?(self) ?? NoLists()
     lazy var stickies = StickyHost(self)
     let tableGrid = TableGrid()
     lazy var pool = NodePool(self)
@@ -137,7 +137,8 @@ package final class Presenter {
     lazy var leaves = HeavyLeaves(self)
     lazy var flats = FlatLeaves(self)
     /// The native swipe rows (LLP 1008 §9), a grouped list's included.
-    package lazy var swipeActions = SwipeActionsHost(self); lazy var rowCells = RowCells(self)
+    package lazy var swipeActions: any SwipeActionsHosting = SwipeActionsLink.make?(self) ?? NoSwipeActions()
+    lazy var rowCells: any RowCellsHosting = SwipeActionsLink.makeRowCells?(self) ?? NoRowCells()
     lazy var accent = AppAccent(self)
     /// The native menu arm (LLP 1021 D3).
     lazy var menus = MenuHost(presenter: self)

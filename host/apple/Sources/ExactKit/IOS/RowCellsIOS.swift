@@ -35,8 +35,6 @@
 import UIKit
 
 extension NodeView {
-    /// A list whose rows are cells: Contract's mark.
-    var hasRowCells: Bool { kind == "list" && props["listRows"] == "true" }
     /// The nearest node view above this one.
     fileprivate var nodeAbove: NodeView? {
         var above = superview
@@ -150,7 +148,7 @@ final class RowGroundView: UIView {
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? { nil }
 }
 
-final class RowCells {
+final class RowCells: RowCellsHosting {
     /// UIKit's separator, as a plain list's cell draws it.
     static let separator = UIColor.separator
     /// A separator's thickness: a point, as measured on iOS 27 (earlier

@@ -430,7 +430,7 @@ final class KeyboardFormIOSTests: XCTestCase {
         let route = try node("route-log"), field = try node("bench-reps")
         let scroll = try XCTUnwrap(p.navigation.shownScroll(try node("form-list")))
         try focus(field, in: p)
-        p.collections.onFill?(route.id, Data())
+        p.listHost.onFill?(route.id, Data())
         XCTAssertTrue(session.fillInFlight)
         let rest = -scroll.adjustedContentInset.top
         scroll.contentOffset = CGPoint(x: 0, y: rest)

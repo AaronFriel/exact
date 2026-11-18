@@ -648,6 +648,8 @@ public final class ExactSession {
 
     /// Send a build-only slice to the owner; its batch comes back published.
     private func sendFill(_ view: UInt32, _ bytes: Data) {
+        // Without the list family's export there is no list to fill.
+        guard CoreExports.collectionFeedback != nil else { return }
         fillInFlight = true
         runtime.collectionFeedbackAsync(bytes, now: now()) { [weak self] batch in
             self?.publish(.fill(view), batch)
@@ -757,7 +759,7 @@ public final class ExactSession {
             presenter.collections.drain = { [weak self] in self?.drainFill() }
         }
         presenter.collections.onFeedback = { [weak self] bytes in
-            guard let self, state != .destroyed else { return }
+            guard let self, state != .destroyed, CoreExports.collectionFeedback != nil else { return }
             let batch = runtime.collectionFeedback(bytes, now: now())
             // A report inside the built window commits nothing: while a list
             // moves that is most frames. Skip the presenter's finalization

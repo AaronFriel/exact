@@ -89,7 +89,7 @@ package final class Presenter {
     package var transformBindings: [UInt32: TransformDragBinding] = [:]
     lazy package var transformGeometry = TransformGeometryHost(self)
     var videoVisibility: VideoVisibilityHost?
-    lazy package var collections = CollectionHost(self)
+    lazy package var collections: any ListHosting = ListLink.make?(self) ?? NoLists()
     lazy var stickies = StickyHost(self)
     let tableGrid = TableGrid()
     /// Heavy leaves held while their rows are far or flying (LLP 1068 §5.1).
@@ -407,7 +407,7 @@ package final class Presenter {
             if collections.animating.contains(id) { listTravel[id] = nil; continue }
             let port = scroll.contentView.bounds
             // Along the list's own axis (LLP 1070 H3): a row list travels on x.
-            let horizontal = collections.entries[id]?.snapshot.horizontal == true
+            let horizontal = collections.snapshot(id)?.horizontal == true
             let at = horizontal ? port.minX : port.minY
             var travel = listTravel[id] ?? ListTravel(top: at, time: now)
             let delta = at - travel.top, elapsed = now - travel.time
