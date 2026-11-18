@@ -94,8 +94,11 @@ macro_rules! host {
             $crate::launch_preloads::copy_name(index as usize, out, capacity)
         }
         /// The optional WatchConnectivity adapter's private store callback.
+        /// Its stores are the host's I/O: an archive without I/O has none to
+        /// sync, and refuses as a binary that can never accept the request.
         #[no_mangle]
         pub unsafe extern "C" fn exact_watch_store(plan: *const u8, plan_len: usize, input: *const u8, len: usize, seal: Option<$crate::watch_sync::Seal>, reply: $crate::watch_sync::Reply, context: usize) {
+            if EXACT_LINKS.io.is_none() { return $crate::watch_sync::refuse(reply, context); }
             // SAFETY: the optional adapter holds these buffers through the callback.
             unsafe { $crate::watch_sync::call(plan, plan_len, input, len, seal, reply, context) }
         }
