@@ -143,7 +143,7 @@ impl<D: DataSource> Runner<D> {
         if self.poisoned {
             return None;
         }
-        self.timer_deadline(self.wake_stops_timers(), self.other_timer_inputs())
+        self.timer_deadline(self.invocation_stops_timers(), self.other_timer_inputs())
     }
 
     /// A collection report changes no timer without a commit. Reuse its last
@@ -161,7 +161,7 @@ impl<D: DataSource> Runner<D> {
             native: self.clock.native_timers,
             waits: self.clock.waits,
             takeover: self.clock.takeover,
-            stopped: self.wake_stops_timers(),
+            stopped: self.invocation_stops_timers(),
             other: self.other_timer_inputs(),
         };
         let mut cached = self.clock.deadline.borrow_mut();
@@ -210,7 +210,8 @@ impl<D: DataSource> Runner<D> {
             .iter()
             .enumerate()
             .filter(|(i, _)| {
-                !(self.timer_row(*i).frame && self.clock.presenting) && !self.wake_stops_timers()
+                !(self.timer_row(*i).frame && self.clock.presenting)
+                    && !self.invocation_stops_timers()
             })
             .map(|(i, _)| self.timer_execution(i) + self.timer_row(i).tolerance_ms as f64)
             .chain(self.other_timer_due_ms())
@@ -245,7 +246,7 @@ impl<D: DataSource> Runner<D> {
             self.reask_due_ms(),
             // An answer waiting on its own timer (`data_timers.rs`).
             self.data_timer_due_ms()
-                .filter(|_| !self.wake_stops_timers()),
+                .filter(|_| !self.invocation_stops_timers()),
             self.then_due
                 .iter()
                 .copied()

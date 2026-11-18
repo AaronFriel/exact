@@ -29,7 +29,7 @@
 use super::super::super::{DataSource, Runner};
 use super::super::{Json, ModulesRow};
 use super::Listed;
-use crate::runner::modules::WakeHow;
+use crate::runner::wakes::WakeHow;
 use serde_json::{json, Map};
 
 /// The first backoff, and the longest (D1).

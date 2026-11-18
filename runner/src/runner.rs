@@ -140,10 +140,12 @@ mod apply;
 mod live_time;
 pub mod midi;
 mod modules;
-pub use modules::{AppState, CallHow, PresenceAnswer, PresenceAsk, WakeHow};
+pub use modules::{AppState, CallHow, PresenceAnswer, PresenceAsk};
 mod processes;
 mod provenance;
 pub use provenance::CallOrigin;
+mod wakes;
+pub use wakes::WakeHow;
 #[cfg(test)]
 mod abort_tests;
 mod canvas_performance;
@@ -536,6 +538,8 @@ pub struct Runner<D: DataSource> {
     origins: provenance::Origins,
     /// `@exact/child-process`'s children and the host's process work clock.
     processes: processes::Processes,
+    /// Wakes and background actions, running and to come (LLP 1133.017 D5).
+    wakes: wakes::Wakes,
     poisoned: bool,
     /// Evaluate every site on every update (the incremental update's reference; `set_full_evaluation`).
     full: bool,
@@ -929,6 +933,7 @@ impl<D: DataSource> Runner<D> {
             extensions: Default::default(),
             origins: Default::default(),
             processes: Default::default(),
+            wakes: Default::default(),
             delivery,
             viewport,
             viewport_geometry,

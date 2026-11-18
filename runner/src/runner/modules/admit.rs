@@ -52,6 +52,31 @@ impl<D: DataSource> Runner<D> {
             || (self.extensions.held.iter()).any(|h| h.id == id)
     }
 
+    /// Whether a host's implementation answers some name of `extension`.
+    pub(in crate::runner) fn implemented(&self, extension: &str) -> bool {
+        (self.plan.modules.iter())
+            .any(|m| self.plan.str(m.extension) == extension && self.route(m) != Route::Substitute)
+    }
+
+    /// Invocation `id`'s native statements are dropped: it expired.
+    pub(in crate::runner) fn drop_statements_of(&mut self, id: u64) {
+        (self.extensions.declared.statements.lock())
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&id);
+    }
+
+    /// Invocation `id`'s held calls end `AbortError` with `message`.
+    pub(in crate::runner) fn abort_held_of(&mut self, id: u64, message: &str) {
+        let held: Vec<(u64, u64)> = (self.extensions.held.iter())
+            .filter(|h| h.id == id && id != 0)
+            .map(|h| (h.token, h.hold))
+            .collect();
+        for (token, hold) in held {
+            self.retire_hold(hold);
+            self.release(token, json!({ "error": "AbortError", "message": message }));
+        }
+    }
+
     /// Resource row `i` is a new member's: its last poll answer no longer
     /// stands.
     pub(in crate::runner) fn forget_module_row(&mut self, i: usize) {

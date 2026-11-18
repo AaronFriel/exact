@@ -762,10 +762,11 @@ export const classifications = [
     ["web:host/web/src/abi/clock.rs", "exact_page_presented exact_prefer_presented"],
   ]),
   group("wakes", ["durable operation"], "app action/wake invocation until expiration or end", "durable",
-    "runner/src/runner/modules/wakes.rs raises and expires action/wake invocations independently of a mounted view; declared/wake_list.rs allocates their references. Persistence after process exit is not established here.", [
+    "runner/src/runner/wakes.rs raises and expires action/wake invocations independently of a mounted view; modules/declared/wake_list.rs allocates their references. Persistence after process exit is not established here.", [
     ["runner:runner/src/runner/modules/declared/wake_list.rs", "Runner::launch_wake#next_ticket:1"],
-    ["runner:runner/src/runner/modules/wakes.rs",
-      "Runner::declared_values Runner::ended_actions Runner::expire_action Runner::expire_wake Runner::raise_action Runner::raise_wake Runner::take_ended_actions " +
+    ["runner:runner/src/runner/modules/declared_actions.rs", "Runner::declared_values"],
+    ["runner:runner/src/runner/wakes.rs",
+      "Runner::ended_actions Runner::expire_action Runner::expire_wake Runner::raise_action Runner::raise_wake Runner::take_ended_actions " +
       "Runner::take_ended_wakes Runner::wake_state"],
   ]),
   group("widget reloads", ["durable operation"], "app widget timeline invalidation; no runner continuation", "durable",

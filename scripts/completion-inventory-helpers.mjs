@@ -101,7 +101,7 @@ export function helperClassifications(group) {
       "Store::take_answer_sockets Store::take_sockets Store::take_topics Store::take_writes Store::unparsed Store::with_grants"],
   ]),
   group("wakes", ["durable operation"], "app action/wake invocation until expiration or end", "durable",
-    "The named public runner-crate source is the wakes API or its value/admission helper. runner/src/runner/modules/wakes.rs raises and expires action/wake invocations independently of a mounted view; declared/wake_list.rs allocates their references. Persistence after process exit is not established here.", [
+    "The named public runner-crate source is the wakes API or its value/admission helper. runner/src/runner/wakes.rs raises and expires action/wake invocations independently of a mounted view; modules/declared/wake_list.rs allocates their references. Persistence after process exit is not established here.", [
     ["runner:runner/src/request.rs", "Request::wake"],
   ]),
   group("UI input", ["one-shot"], "current mounted view, action binding or interaction", "UI-owned",
@@ -130,7 +130,7 @@ export function helperClassifications(group) {
     ["runner:runner/src/runner/provenance.rs", "CallOrigin::word"],
   ]),
   group("wakes", ["durable operation"], "app action/wake invocation until expiration or end", "durable",
-    "runner/src/runner/modules/wakes.rs raises and expires action/wake invocations independently of a mounted view; declared/wake_list.rs allocates their references. Persistence after process exit is not established here.", [
+    "runner/src/runner/wakes.rs raises and expires action/wake invocations independently of a mounted view; modules/declared/wake_list.rs allocates their references. Persistence after process exit is not established here.", [
     ["runner:runner/src/runner/modules/declared/wake_list.rs", "Runner::wake_entry_ended#not_before:1 Runner::wake_entry_ended#not_before:2"],
   ]),
   group("presence", ["one-shot"], "outstanding presence call and secret generation", "UI-owned",
@@ -217,7 +217,7 @@ export function helperClassifications(group) {
     "Store::announce_topic records changed app topics; exact_peer_changed delivers them to another session. Canvas extension activation checks the current plan's declared action before raising its event.", [
     ["apple:host/apple/src/abi/exports.rs", "exact_peer_changed"],
     ["runner:runner/src/store.rs", "Store::announce_topic Store::take_announced"],
-    ["runner:runner/src/runner/modules/wakes.rs", "Runner::declares_action"],
+    ["runner:runner/src/runner/modules/declared_actions.rs", "Runner::declares_action"],
     ["painted:host/painted/src/canvas/jni_extensions.rs", "Java_dev_exact_canvas_Native_activate"],
     ["painted:host/painted/src/canvas/requests.rs", "CanvasHost::extension_activated"],
   ]),

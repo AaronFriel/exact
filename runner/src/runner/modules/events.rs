@@ -152,7 +152,7 @@ impl<D: DataSource> Runner<D> {
             }
         }
         // Then a wake's, one invocation at a time (LLP 1133.017 D5).
-        let (woke, error) = self.step_wakes();
+        let (woke, error) = self.step_invocations();
         receipts.extend(woke);
         (receipts, error)
     }

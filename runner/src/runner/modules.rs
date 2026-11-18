@@ -28,6 +28,7 @@
 //! readers again through [`Runner::apply_announced`].
 
 use super::provenance::CallOrigin;
+use super::wakes::WakeHow;
 use super::{DataError, DataSource, Runner, RunnerError, Target};
 use crate::failure::FailureCode;
 use crate::request::{Answer, Dispatch, Outcome, Reply, Request, Response, Work};
@@ -43,6 +44,7 @@ mod bound;
 mod calls;
 mod ceremony;
 mod declared;
+mod declared_actions;
 mod devices;
 mod disclosed;
 mod events;
@@ -66,7 +68,6 @@ mod stale;
 mod substitute_tests;
 mod values;
 mod views;
-mod wakes;
 use admit::Route;
 pub use calls::CallHow;
 pub use declared::AppState;
@@ -81,8 +82,6 @@ use values::{absent_is_none, fill, set_path};
 /// The key of the answer `decide` gives a send that lists what it answers,
 /// which its caller turns into the entry (`region_list.rs`, `listed_or`).
 const LISTS: &str = "exact:lists";
-pub use wakes::WakeHow;
-pub(super) use wakes::{EXPIRED, TOLD};
 
 /// The continuation tokens the runner keeps for its held module requests:
 /// a data source's count up from zero, far below, and its reserved ones
@@ -130,8 +129,6 @@ pub(super) struct Extensions {
     declared: declared::Declared,
     /// Module events not yet heard (D6).
     pub(super) events: events::Events,
-    /// Wakes, running and to come (LLP 1133.017 D5).
-    wakes: wakes::Wakes,
     /// Foreground-service claims under the agent (LLP 1133.033 D21).
     services: services::Services,
     /// What bound implementations disclose of their own objects (`disclosed.rs`).
@@ -1404,7 +1401,6 @@ impl<D: DataSource> Runner<D> {
         self.dispose_dropped();
         self.cancel_let_go();
         self.let_go_data_calls();
-        self.prune_origins();
         self.sheets_let_go();
         let gone: Vec<(u64, u64)> = (self.extensions.held.iter())
             .filter(|h| h.reply.is_none() && !self.sheet_kept(h.token))

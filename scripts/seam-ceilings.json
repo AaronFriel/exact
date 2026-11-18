@@ -1517,8 +1517,6 @@
         "runner/src/runner/mode.rs: Runner::set_mode",
         "runner/src/runner/mode.rs: Runner::set_modes",
         "runner/src/runner/modules/agent.rs: Runner::extension_agent",
-        "runner/src/runner/modules/wakes.rs: Runner::expire_action",
-        "runner/src/runner/modules/wakes.rs: Runner::expire_wake",
         "runner/src/runner/native_timers.rs: Runner::fire_native_timer",
         "runner/src/runner/page.rs: Runner::page_presented",
         "runner/src/runner/page.rs: Runner::prefer_presented",
@@ -1556,7 +1554,9 @@
         "runner/src/runner/viewport.rs: Runner::set_keyboard_height",
         "runner/src/runner/viewport.rs: Runner::set_preferences",
         "runner/src/runner/viewport.rs: Runner::set_view",
-        "runner/src/runner/viewport.rs: Runner::set_viewport"
+        "runner/src/runner/viewport.rs: Runner::set_viewport",
+        "runner/src/runner/wakes.rs: Runner::expire_action",
+        "runner/src/runner/wakes.rs: Runner::expire_wake"
       ]
     },
     "appleAbiExports": {

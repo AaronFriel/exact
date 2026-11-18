@@ -686,7 +686,7 @@ fn a_native_statement_is_owned_until_its_reply_or_expiry() {
             id,
         )
         .unwrap();
-        assert!(r.step_wakes().1.is_none());
+        assert!(r.step_invocations().1.is_none());
         assert!(
             !r.ended_actions()
                 .as_array()
@@ -709,7 +709,7 @@ fn a_native_statement_is_owned_until_its_reply_or_expiry() {
             .expect("the handler posted a notification")
             .send(super::response(&outcome));
         r.apply_announced();
-        assert!(r.step_wakes().1.is_none());
+        assert!(r.step_invocations().1.is_none());
         let ended = r.ended_actions();
         let mine: Vec<_> = ended
             .as_array()
@@ -734,7 +734,7 @@ fn a_native_statement_is_owned_until_its_reply_or_expiry() {
         },
     )
     .unwrap();
-    assert!(r.step_wakes().1.is_none());
+    assert!(r.step_invocations().1.is_none());
     assert_eq!(
         replies.lock().unwrap().len(),
         1,
@@ -754,7 +754,7 @@ fn a_native_statement_is_owned_until_its_reply_or_expiry() {
         .unwrap()
         .send(super::response(&serde_json::json!(null)));
     r.apply_announced();
-    assert!(r.step_wakes().1.is_none());
+    assert!(r.step_invocations().1.is_none());
     assert!(
         r.take_ended_wakes().is_empty(),
         "a late statement reply cannot end the wake twice"
@@ -809,7 +809,7 @@ fn every_action_ending_survives_a_single_turn_until_the_host_drains_it() {
         )
         .unwrap();
     }
-    assert!(r.step_wakes().1.is_none());
+    assert!(r.step_invocations().1.is_none());
     assert!(r.ended_actions().as_array().unwrap().is_empty());
     r.native_slot()
         .host(Some(Arc::new(|_: Vec<u8>, reply: crate::Reply| {
@@ -822,7 +822,7 @@ fn every_action_ending_survives_a_single_turn_until_the_host_drains_it() {
         .unwrap()
         .send(super::response(&serde_json::json!(null)));
     r.apply_announced();
-    assert!(r.step_wakes().1.is_none());
+    assert!(r.step_invocations().1.is_none());
     let ended = r.take_ended_actions();
     assert_eq!(
         ended.as_array().unwrap().len(),
@@ -1254,7 +1254,7 @@ fn a_host_activation_opens_the_activation_window_and_no_other_origin_does() {
     assert!(!activated(&mut r), "an event that is no activation");
     r.raise_wake("tide", "tide", "[]", crate::WakeHow::default())
         .unwrap();
-    assert!(r.step_wakes().1.is_none());
+    assert!(r.step_invocations().1.is_none());
     assert!(!activated(&mut r), "a wake");
     r.act_from(super::CallOrigin::Tool, "heard", vec![])
         .unwrap();

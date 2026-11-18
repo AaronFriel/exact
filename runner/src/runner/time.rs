@@ -331,7 +331,7 @@ impl<D: DataSource> Runner<D> {
                 continue;
             }
             // The platform expired a wake an implementation raised.
-            if let Some(expired) = topic.strip_prefix(super::modules::EXPIRED) {
+            if let Some(expired) = topic.strip_prefix(super::wakes::EXPIRED) {
                 let (more, error) = self.expire_told_wake(expired);
                 receipts.extend(more);
                 if let Some(error) = error {
@@ -340,7 +340,7 @@ impl<D: DataSource> Runner<D> {
                 continue;
             }
             // A wake a bound implementation raised (LLP 1133.017 D8).
-            if let Some(wake) = topic.strip_prefix(super::modules::TOLD) {
+            if let Some(wake) = topic.strip_prefix(super::wakes::TOLD) {
                 self.raise_told_wake(wake);
                 continue;
             }
