@@ -454,3 +454,11 @@ test('a web module is keyed by its app directory', async () => {
     expect(dirKey(resolve(dir, 'link'))).toBe(dirKey(other));
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+// LLP 1156.006.000 D16: a type-check error in a form no pattern knows is still said above its closing line, with what
+// an earlier diagnostic already took and Bun's trace left out.
+test('a failed type check keeps its error in a form no pattern knows', () => {
+  const unknown = 'Command failed: tsc --noEmit\napp.ts: the staged origin is not a string\n      at check (/x/typescript.mjs:1445:9)';
+  expect(webBuildFailure(`warning: one\n${unknown}\nerror: app: app.ts failed the type check every host's build runs\n`))
+    .toEqual(['warning: one', `Command failed: tsc --noEmit\napp.ts: the staged origin is not a string\nerror: app: app.ts failed the type check every host's build runs`]);
+});

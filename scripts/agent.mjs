@@ -365,14 +365,15 @@ export async function main(argv, injected = {}) {
   // The app's own server, if it has one (LLP 1116.008 D1): started under the store's lock, and stopped if the launch
   // fails.
   let served = null;
+  // A page served elsewhere keeps the API address its own build named, so its drive starts no server of this app's
+  // (LLP 1156.006.000 D16): one started here on an empty database would be read by nothing.
+  const elsewhere = host === 'web' && /^https?:\/\//.test(flags.url ?? '');
   const launch = async () => {
-    served = injected.driveServer
-      ? await injected.driveServer()
-      : await (
-          await import('./verify.mjs')
-        ).driveServer(resolveApp(flags.app).dir, flags.storage, undefined, {
-          fresh: fresh && (compares || !!flags.resetStorage),
-        });
+    if (elsewhere) {
+      const server = injected.driveServer ? null : (await import('./verify.mjs')).appServer(resolveApp(flags.app).dir);
+      if (server?.url) console.error(`agent: the page at ${flags.url} uses the API its build named; ${server.entry} is not started for this drive`);
+    } else if (injected.driveServer) served = await injected.driveServer();
+    else served = await (await import('./verify.mjs')).driveServer(resolveApp(flags.app).dir, flags.storage, undefined, { fresh: fresh && (compares || !!flags.resetStorage) });
     try {
       return await (injected.open ?? open)({
         host,

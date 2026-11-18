@@ -85,12 +85,18 @@ export function webBuildFailure(stderr) {
   const marker = /^(error|[A-Z]\w*Error|E[A-Z]+)\b:?/;
   const kept = (l) => marker.test(l.trim()) || /\): error TS\d+:|^(?:Error: )?(?:tsconfig: |module outside captured app: |source links are not captured: )|^note: /.test(l) || ambientDiagnostic(l) || compilerError(l) || packageRefusal(l) || /\bunoptimized$|\bnot on PATH\b|import\.meta\.env/.test(l);
   const message = [];
+  let last = -1; // the last line taken
   for (let i = 0; i < lines.length; i++) {
     if (!kept(lines[i])) continue;
+    // The type check says its error above its closing line (host/web-js/build.mjs), in whatever form the checker or
+    // its launch failed in: the lines since the last one taken are that error, so a form no pattern here knows is
+    // still said (LLP 1156.006.000 D16). Bun's trace stays out.
+    if (/^error: .*failed the type check\b/.test(lines[i])) message.push(...lines.slice(last + 1, i).filter((l) => l.trim() && !/^\s+at |^Bun v\d/.test(l)).slice(-40));
     message.push(lines[i]);
+    last = i;
     // Its excerpt (contract/cli/src/excerpt.rs): the source line, then the caret under it.
     if (compilerError(lines[i])) {
-      if (/^ \d+ \| /.test(lines[i + 1] ?? '')) message.push(...lines.slice(i + 1, i + 3)), i += 2;
+      if (/^ \d+ \| /.test(lines[i + 1] ?? '')) message.push(...lines.slice(i + 1, i + 3)), i += 2, last = i;
       continue;
     }
     // A marker with nothing after it says its message below, to the next diagnostic or Bun's trace: wasm-bindgen's
@@ -100,7 +106,7 @@ export function webBuildFailure(stderr) {
     while (end < lines.length && !kept(lines[end]) && !/^\s+at |^Bun v\d/.test(lines[end])) end++;
     while (end > i + 1 && !lines[end - 1].trim()) end--;
     message.push(...lines.slice(i + 1, end));
-    i = end - 1;
+    i = last = end - 1;
   }
   // The bundler's refusal, in the words the type check uses (`Error: ` is its wrapper).
   const reason = (message.length ? message : lines.slice(-3)).map((l) => l.replace(/^Error: (?=module outside captured app: )/, '')).join('\n');
