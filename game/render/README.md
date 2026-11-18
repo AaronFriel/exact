@@ -56,8 +56,9 @@ entities through `entities()` to get tick-interpolated `FrameView::pose`. Use
 `Pipelines<T>` for asynchronous candidate validation, `Needs::PENDING` until ready,
 and `error()` for a named rejected replacement. Never step or mutate the simulation.
 
-Stages are compute before shadows, opaque, background after sky, an optional
-surface continuation, and optional HDR post before bloom/tone. Geometry uses
+Stages are compute before shadows, opaque, `background` after sky for blended
+geometry that draws without sampling the scene, `surface` for geometry that
+samples the scene copy, and optional HDR post before bloom/tone. Geometry uses
 `Game::samples` (`Game::SAMPLES`, 4× MSAA by default; one under the `Low` rung of `Game::quality`); hooks use `FrameView.sample_count`. `SCENE_COPY` supplies resolved HDR and positive view-space depth (zero for
 sky); `FINAL_DEPTH` requests final sampled depth independently; `HDR_POST` supplies
 a distinct HDR output. Respect the active rectangle inside bucketed textures.
