@@ -403,7 +403,7 @@ final class HatchDiagnostics: HatchDiagnosing {
         var reply: [String: Any] = tags
         reply["hatches"] = by
         reply["calls"] = calls
-        reply["tickets"] = session?.natives.hatchClock.liveTickets ?? 0
+        reply["tickets"] = session?.natives.liveTickets ?? 0
         reply["counters"] = grouped(counterOrder) { counters[$0] ?? 0 }
         reply["timings"] = timed
         reply.merge(refusals) { a, _ in a }

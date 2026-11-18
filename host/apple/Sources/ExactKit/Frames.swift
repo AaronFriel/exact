@@ -108,7 +108,7 @@ package final class Frames: NSObject {
                 }
             }
         } else if motion || canvas2d || tasks { held = true }
-        if hatches, s.clock == nil { s.natives.hatchClock.presented(frameNow); ran = true }
+        if hatches, s.clock == nil { s.natives.hatchesPresented(frameNow); ran = true }
         // A canvas render that drew nothing, as without its drawable, draws when one lands, and the
         // first frame to see one waits until none does (`canvasDrawn`, or `canvasLost` when a waiting
         // canvas leaves). While it waits, a later callback's render of a waiting canvas changes only

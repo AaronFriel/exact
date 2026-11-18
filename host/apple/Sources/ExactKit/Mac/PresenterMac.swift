@@ -133,7 +133,7 @@ package final class Presenter {
     /// The one editor every `input`'s field of this session edits in (`FieldEditor`).
     lazy var fieldEditor = FieldEditor.make()
     /// Nodes marked `hatch="word"` (LLP 1075.003.000).
-    lazy var elements = ElementHatches(self)
+    lazy var elements: any ElementHatching = NativeModuleLink.makeElements?(self) ?? NoElementHatches()
     lazy var shortcuts = ShortcutHost(presenter: self)
     lazy var toolbar = WindowToolbarHost(self)
     /// What native presentations cover of boxes (LLP 1115.002 D8.1, CoversMac.swift).

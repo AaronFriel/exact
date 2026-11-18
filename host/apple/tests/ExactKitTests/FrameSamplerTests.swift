@@ -1218,7 +1218,7 @@ final class FrameSamplerTests: XCTestCase {
         session.sampler = nil
         HatchDiagnosticsLink.measuring = false
         let probes = { (session.hatchPerf()["calls"] as? [[String: Any]] ?? []).filter { $0["hatch"] as? String == "probe" }.count }
-        session.natives.timedHatch("probe", "tick") {}
+        session.nativeViews!.timedHatch("probe", "tick") {}
         XCTAssertEqual(probes(), 0, "no call is timed")
         session.log("before the trace")
         let url = try session.saveTrace().get()
@@ -1232,7 +1232,7 @@ final class FrameSamplerTests: XCTestCase {
         XCTAssertNotNil((trace["perf"] as? [String: Any])?["sites"], "the sites' work is kept")
         XCTAssertNotNil(session.sampler, "the trace started the frames")
         XCTAssertTrue(HatchDiagnosticsLink.measuring, "and the hatch timing")
-        session.natives.timedHatch("probe", "tick") {}
+        session.nativeViews!.timedHatch("probe", "tick") {}
         XCTAssertEqual(probes(), 1)
     }
 }

@@ -151,7 +151,7 @@ package final class Presenter {
     lazy var controls = ControlHost(self)
     lazy var fieldSelections = FieldSelections(self)
     /// Nodes marked `hatch="word"` (LLP 1075.003.000).
-    lazy var elements = ElementHatches(self)
+    lazy var elements: any ElementHatching = NativeModuleLink.makeElements?(self) ?? NoElementHatches()
     lazy var navigation = NavigationHost(presenter: self)
     #if os(tvOS)
     lazy var menuKey = MenuKey(presenter: self)

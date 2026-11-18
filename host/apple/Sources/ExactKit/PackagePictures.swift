@@ -95,8 +95,6 @@ final class PackagePictures: @unchecked Sendable {
     }
 }
 
-typealias PackageImageFn = @convention(c) (UnsafeMutableRawPointer?, UnsafePointer<UInt8>?, Int, UnsafeMutableRawPointer?,
-                                           (@convention(c) (UnsafeMutableRawPointer?, UnsafeMutableRawPointer?, UnsafePointer<UInt8>?, Int) -> Void)?) -> Void
 
 private final class PackagePictureReply {
     let then: (CGImage?, String?) -> Void

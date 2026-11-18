@@ -201,7 +201,7 @@ extension Presenter {
         if !w.limits.isEmpty { coverage["excluded"] = w.limits }
         var elements = w.elements
         // Each part, and whether the platform exposes an element for it: no finding either way (§3.5).
-        let parts = self.elements.regions.coverage(joined: Set(elements.compactMap { $0["part"] as? String }))
+        let parts = self.elements.regionCoverage(joined: Set(elements.compactMap { $0["part"] as? String }))
         if !parts.isEmpty { coverage["parts"] = parts }
         var ancestors: [[String: Any]] = []
         if let scope {
@@ -398,7 +398,7 @@ extension Presenter {
         e["id"] = id ?? NSNull()
         e["via"] = via
         // A hatch's part, joined by its bound view (LLP 1075.003.000.001 §3.5).
-        if let part = elements.regions.part(owning: obj) { e["part"] = part }
+        if let part = elements.regionPart(owning: obj) { e["part"] = part }
         var states: [String: Any] = [:]
         var native: [String: Any] = ["class": String(describing: type(of: obj))]
         #if os(iOS) || os(tvOS)

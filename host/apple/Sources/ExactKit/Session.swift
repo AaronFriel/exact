@@ -387,7 +387,7 @@ public final class ExactSession {
     private var textPressure: DispatchSourceMemoryPressure?
     let canvases: Canvases
     let webviews: WebViews
-    let natives = NativeViews()
+    let natives: any NativeModuleHosting = NativeModuleLink.make?() ?? NoNativeModule()
     /// The file picker (LLP 1069.002).
     lazy var picker = Picker(session: self)
     /// The voice table's output (LLP 1096 D8); settable for tests.
@@ -646,8 +646,7 @@ public final class ExactSession {
 
     /// Send a build-only slice to the owner; its batch comes back published.
     private func sendFill(_ view: UInt32, _ bytes: Data) {
-        // Without the list family's export there is no list to fill.
-        guard CoreExports.collectionFeedback != nil else { return }
+        guard CoreExports.collectionFeedback != nil else { return } // no list family, no list to fill
         fillInFlight = true
         runtime.collectionFeedbackAsync(bytes, now: now()) { [weak self] batch in
             self?.publish(.fill(view), batch)
@@ -1094,7 +1093,7 @@ public final class ExactSession {
         updateTimerState(batch)
         // Its transactions are reported once (LLP 1079 D3): account for them, at no presentation cost.
         sampler?.batch(batch.seq, ms: 0); logSkipped(batch); relayStore(batch)
-        if let q = batch.seq { natives.hatchClock.seq = q.1 } // its commits are the hatches' latest
+        if let q = batch.seq { natives.hatchSeq(q.1) } // its commits are the hatches' latest
         timerDue = batch.timerDueMs; timerLanding = batch.landing
         scheduleClock(due: batch.timerDueMs)
         // Fixed roots can emit no operations while their viewport changes.
@@ -1127,7 +1126,7 @@ public final class ExactSession {
             // Appearance already changed natively; retain its transaction accounting without rescheduling.
             if !ownerInFlight, changesNothing(batch), clockUnchanged(batch) {
                 sampler?.batch(batch.seq, ms: 0); logSkipped(batch)
-                if let q = batch.seq { natives.hatchClock.seq = q.1 }
+                if let q = batch.seq { natives.hatchSeq(q.1) }
             } else { apply(batch) }
         }
     }
@@ -1174,7 +1173,7 @@ public final class ExactSession {
         applying = true
         // What applying it cost, with its transactions, for the next sampled frame (LLP 1079 D3), told to the sampler there was when it began while the session keeps it: a recording the batch starts makes a new one, and one it stops lets a production bake's go.
         let timed = sampler, began = CACurrentMediaTime()
-        defer { if let timed, timed === sampler { timed.batch(batch.seq, ms: outermost ? (CACurrentMediaTime() - began) * 1000 : 0) }; if let q = batch.seq { natives.hatchClock.seq = q.1 }; logAlerts(batch.alerts); logJournal(batch.journal); relayStore(batch) }
+        defer { if let timed, timed === sampler { timed.batch(batch.seq, ms: outermost ? (CACurrentMediaTime() - began) * 1000 : 0) }; if let q = batch.seq { natives.hatchSeq(q.1) }; logAlerts(batch.alerts); logJournal(batch.journal); relayStore(batch) }
         defer { if outermost { recordFrameHealthApply(batch, began: began) } }
         if batch.facts { app.scheduleStatus() } // the app's own `setMode` or `setRootFontSize` (LLP 1122 D4)
         if let must = batch.mustFinish { finishHold.moved(must) }
@@ -1473,7 +1472,7 @@ public final class ExactSession {
         taskTimers.cancel(); clockTimer?.invalidate(); timerAdmissions.takeover()
         clockTimer = nil
         // A live hatch frame ticket would keep the link on through `run(false)`.
-        natives.hatchClock.reset()
+        natives.resetHatchClock()
         frames.run(false)
         sampler?.stop(); releaseSampler()
         frameHealth.destroy()

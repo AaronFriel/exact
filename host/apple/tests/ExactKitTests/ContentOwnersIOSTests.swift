@@ -562,7 +562,7 @@ final class ContentOwnersIOSTests: XCTestCase {
         guard let scene = hostedWindowScene() else { throw missing("scene", "arranged inset ownership needs a route in a window") }
         let (session, root, first, second, route, _) = try arrangedPeers(in: scene)
         let p = session.presenter, navigation = p.navigation
-        session.natives.hatchesConnected = true
+        session.nativeViews!.hatchesConnected = true
         route.hatched = true
         route.ownedScroll = second
         for pane in [first, second] {

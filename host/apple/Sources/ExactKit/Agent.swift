@@ -333,7 +333,7 @@ public final class Agent {
         switch op {
         case "tree" where req["ax"] as? Bool == true: emit(accessibilityElementsTree(req)) // LLP 1080.002
         case "tree":
-            var tree = decorateTree(presenter.elements.regions.decorate(session.natives.decorate(session.webviews.tree(line))))
+            var tree = decorateTree(presenter.elements.decorateRegions(session.natives.decorate(session.webviews.tree(line))))
             #if os(macOS)
             tree = decoratePictureInPicture(tree) // LLP 1042 §9.1
             #endif
@@ -897,7 +897,7 @@ public final class Agent {
     }
 
     private func clockStep(_ req: [String: Any]) -> [String: Any] {
-        session.natives.hatchClock.beginCommand()
+        session.natives.beginHatchCommand()
         // The end of an input under platform timing before any `clock`: its
         // `then`s land at the wall's now and the clock stays the wall's, so
         // the frame sampler keeps the display's cadence (LLP 1144 D1). Only
@@ -953,13 +953,13 @@ public final class Agent {
         // `context.after` (a gamepad effect's span) is set, so the clock goes
         // to it rather than the wall waiting for the reply.
         let deadline = Date(timeIntervalSinceNow: Agent.settleBound)
-        let hatches = session.natives.hatchClock
+        let hatches = session.natives
         if settle { waitForReplies(until: deadline, orAfter: true) }
         // Settle ends motion: every leaf held mid-fling is made (LLP 1068 §5.1).
         if settle { presenter.leaves.settle() }
         waitForImages()
         var target = req["to"] as? Double
-        if settle { target = max(from, self.settle() ?? from, pendingCount() > 0 ? hatches.nextAfter ?? from : from) }
+        if settle { target = max(from, self.settle() ?? from, pendingCount() > 0 ? hatches.hatchNextAfter ?? from : from) }
         guard var to = target, to.isFinite else { return ["malformed": true, "error": "clock needs \"to\" (ms) or \"settle\": true"] }
         guard to >= from else { return ["error": "the clock cannot go backwards (\(from) → \(to))"] }
         var rounds = 0, hatchDrains = 0
@@ -1033,7 +1033,7 @@ public final class Agent {
             if pendingCount() > 0 {
                 rounds += 1
                 if rounds >= 16 || Date() >= deadline { return reply(landed, false, reason: "requests") }
-                if let after = hatches.nextAfter { to = max(landed, after); continue }
+                if let after = hatches.hatchNextAfter { to = max(landed, after); continue }
                 waitForReplies(until: deadline, orAfter: true)
                 continue
             }
@@ -1167,16 +1167,16 @@ public final class Agent {
         // A seek stops at each hatch instant on the way (LLP 1075.003.000.001
         // §2.4): the runner is brought there, the ticks and `after`s due are
         // called on that instant's state, and what they asked is drained.
-        let clock = session.natives.hatchClock
-        while let instant = clock.nextInstant, instant <= to {
+        let clock = session.natives
+        while let instant = clock.hatchNextInstant, instant <= to {
             let batch = advanceRunner(to: max(instant, session.clock ?? instant), deadline: deadline, floor: floor)
             if batch.error != nil { return batch }
-            if let limit = clock.fire(at: session.clock ?? instant) {
+            if let limit = clock.fireHatchClock(at: session.clock ?? instant) {
                 return Batch(ops: [], timers: batch.timers, motion: batch.motion, clock: session.clock, error: limit)
             }
         }
         let batch = advanceRunner(to: to, deadline: deadline, floor: floor)
-        if batch.error == nil, let limit = clock.fire(at: session.clock ?? to) {
+        if batch.error == nil, let limit = clock.fireHatchClock(at: session.clock ?? to) {
             return Batch(ops: [], timers: batch.timers, motion: batch.motion, clock: session.clock, error: limit)
         }
         return batch
@@ -1193,7 +1193,7 @@ public final class Agent {
             let batch = session.runtime.advance(now: to, untilRequest: held)
             session.apply(batch)
             session.clock = max(floor, batch.clock ?? to)
-            if batch.error == nil, let limit = session.natives.hatchClock.refresh(at: session.clock ?? to) {
+            if batch.error == nil, let limit = session.natives.refreshHatchClock(at: session.clock ?? to) {
                 return Batch(ops: [], timers: batch.timers, motion: batch.motion, clock: session.clock, error: limit)
             }
             // A stop at `to` may leave a timer due there: only a plain advance ends.
@@ -1314,7 +1314,7 @@ public final class Agent {
     @discardableResult
     func waitForReplies(until deadline: Date, orAfter: Bool = false) -> Bool {
         while pendingCount() > 0 {
-            if orAfter && session.natives.hatchClock.nextAfter != nil { return false }
+            if orAfter && session.natives.hatchNextAfter != nil { return false }
             if Date() >= deadline { return false }
             RunLoop.main.run(until: Date(timeIntervalSinceNow: 0.02))
             session.apply(session.runtime.pump(now: session.now()))

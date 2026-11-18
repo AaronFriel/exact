@@ -151,3 +151,15 @@ final class HatchClock {
         }
     }
 }
+
+extension NativeViews {
+    func hatchSeq(_ seq: UInt64) { hatchClock.seq = seq }
+    func resetHatchClock() { hatchClock.reset() }
+    func beginHatchCommand() { hatchClock.beginCommand() }
+    func refreshHatchClock(at now: Double) -> String? { hatchClock.refresh(at: now) }
+    var hatchNextAfter: Double? { hatchClock.nextAfter }
+    var hatchNextInstant: Double? { hatchClock.nextInstant }
+    func fireHatchClock(at now: Double) -> String? { hatchClock.fire(at: now) }
+    @discardableResult func hatchesPresented(_ now: Double) -> Bool { hatchClock.presented(now) }
+    var liveTickets: Int { hatchClock.liveTickets }
+}
