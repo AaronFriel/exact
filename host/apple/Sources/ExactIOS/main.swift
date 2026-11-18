@@ -206,12 +206,12 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         }
         session = exact.makeSession(delegate: adapter, label: "main")
         // Before any scene connects: the delegate methods of the host events this build takes (LLP 1133.001.000 D2).
-        exact.installHostEvents(applicationDelegate: nil, sceneDelegate: SceneDelegate.self)
+        ExactComposition.installHostEvents(on: exact, applicationDelegate: nil, sceneDelegate: SceneDelegate.self)
         #if !os(tvOS)
         // A notification's background action that launched the app with no scene boots it with none (LLP 1133.004 stage 2).
-        exact.installNotificationClicks(boot: { $0.bootForWake() }, activate: nil)
+        ExactComposition.installNotificationClicks(on: exact, boot: { $0.bootForWake() }, activate: nil)
         // A wake that launched the app with no scene boots it with none (LLP 1133.017 D7).
-        exact.installWakes { session.bootForWake() }
+        ExactComposition.installWakes(on: exact) { session.bootForWake() }
         // A tool call that launched the app with no scene boots it the same way (LLP 1133.023 D7).
         exact.installReach { session.bootForWake() }
         #endif
@@ -226,7 +226,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
     }
     #if !os(tvOS)
     func application(_ application: UIApplication, handleEventsForBackgroundURLSession identifier: String, completionHandler: @escaping () -> Void) {
-        exact.handleTransferEvents(identifier, completion: completionHandler)
+        ExactComposition.handleTransferEvents(on: exact, identifier, completion: completionHandler)
     }
     #endif
     func application(_ application: UIApplication, configurationForConnecting connectingSceneSession: UISceneSession, options: UIScene.ConnectionOptions) -> UISceneConfiguration {
@@ -274,9 +274,9 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // @ref LLP 1038 D8 — consume the launch URL before constructing the view.
         #if !os(tvOS)
         let notificationResponse = connectionOptions.notificationResponse
-        if let notificationResponse { exact.openNotification(notificationResponse) }
+        if let notificationResponse { ExactComposition.openNotification(on: exact, notificationResponse) }
         // A taken host event that launched the app (an accepted iCloud share); the URLs below route as ever.
-        exact.hostEvents(connectionOptions: connectionOptions)
+        ExactComposition.hostEvents(on: exact, connectionOptions: connectionOptions)
         #endif
         let contexts = connectionOptions.urlContexts.map(\.url).sorted { $0.absoluteString < $1.absoluteString }
         let activities = connectionOptions.userActivities.filter { $0.activityType == NSUserActivityTypeBrowsingWeb }

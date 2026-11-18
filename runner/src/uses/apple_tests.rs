@@ -217,3 +217,62 @@ fn a_bundled_image_source_is_the_bakes_to_read() {
         assert_eq!(source.can_be_svg(), bundled.is_none());
     }
 }
+
+/// A Live Activity's sends and its resource select `activities`; a plan
+/// without them does not.
+#[test]
+fn activities_are_a_plan_that_starts_or_reads_one() {
+    let source = |body: &str| {
+        format!("shape ID\n  id: string\nshape S\n  n: number\ncomponent A\n{body}  view\n    text \"a\"\n")
+    };
+    let sends = source("  mutation started as shape ID\n  action start\n    send started = startActivity(\"k\", S(n=1))\n");
+    let reads = source("  resource live = exactActivities() as shape ID\n");
+    for (text, selected) in [(sends, true), (reads, true), (source(""), false)] {
+        let plan = contract::compile(&text).unwrap_or_else(|e| panic!("{text}: {e:?}"));
+        assert_eq!(
+            apple_uses(&plan).has(Capability::Activities),
+            selected,
+            "{text}"
+        );
+        assert!(
+            !uses(&plan).has(Capability::Activities),
+            "the web's set names none"
+        );
+    }
+}
+
+/// The families the system reaches through the app are selected by grants.
+#[test]
+fn notifications_host_events_and_wakes_are_their_grants() {
+    use super::apple_grant_uses as grants;
+    use Capability::{HostEvents, Notifications, Wakes};
+    assert!(grants("device.notifications purpose.n\ndevice.push").has(Notifications));
+    assert!(grants("device.cloudkit").has(HostEvents));
+    for line in [
+        "device.background-sync",
+        "device.periodic-background-sync",
+        "device.geolocation-background purpose.p",
+    ] {
+        assert!(grants(line).has(Wakes), "{line}");
+    }
+    assert!(grants("net.fetch https://a/\ndevice.camera purpose.c").is_empty());
+}
+
+/// A background transfer asks no device grant: its names select the
+/// transfer carrier; another source does not.
+#[test]
+fn a_background_transfers_names_select_wakes() {
+    for (name, selected) in [
+        ("backgroundFetchIds", true),
+        ("backgroundFetch", true),
+        ("geofences", true),
+        ("battery", false),
+    ] {
+        let plan = built(|b| {
+            let ty = b.primitive(TypeKind::Number);
+            b.source(name, &[], ty);
+        });
+        assert_eq!(apple_uses(&plan).has(Capability::Wakes), selected, "{name}");
+        assert!(!uses(&plan).has(Capability::Wakes));
+    }
+}

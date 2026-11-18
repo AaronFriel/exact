@@ -24,6 +24,7 @@
 //   app be suspended at once.
 import CExact
 import Foundation
+import ExactKit
 import CryptoKit
 import Security
 #if canImport(UIKit)
@@ -408,10 +409,7 @@ extension NotificationPresenter {
     /// expiration handler, as UIKit requires.
     func expire(_ open: OpenAction, in session: ExactSession) {
         guard !open.finished else { return }
-        session.heldModuleEvents.removeAll { json in
-            let event = (try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [String: Any]
-            return event?["background"] as? String == open.id
-        }
+        session.dropHeldBackgroundAction(open.id)
         if open.raised && open.generation == session.generation { session.expireBackgroundAction(open.id) }
         settle(session, ended: [open.id])
     }

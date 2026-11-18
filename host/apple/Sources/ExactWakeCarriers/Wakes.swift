@@ -31,6 +31,7 @@
 // A wake that arrives with no module ready is held, and `boot` (the app's
 // host, ExactIOS/main.swift) boots a session for it with no view (D7).
 import Foundation
+import ExactKit
 import os
 #if os(iOS)
 import BackgroundTasks

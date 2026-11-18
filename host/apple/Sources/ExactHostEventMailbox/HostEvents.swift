@@ -22,10 +22,11 @@
 // `reply` this sets, `{items: [NSObject]}`, removing them) and hears later
 // ones as `exact.hostEvents.arrived` (`userInfo` `{event, session}`). A
 // package's test delivers one by posting `exact.hostEvents.deliver` with
-// `{event, payload, session?}`. The mailbox is ExactKit's, so it outlives a
-// module reload. Every entry may be called on any thread; the mailbox is
+// `{event, payload, session?}`. The mailbox is the host's (this product), so
+// it outlives a module reload. Every entry may be called on any thread; the mailbox is
 // read and written on the main thread only.
 import Foundation
+import ExactKit
 import ObjectiveC
 
 enum HostEvents {

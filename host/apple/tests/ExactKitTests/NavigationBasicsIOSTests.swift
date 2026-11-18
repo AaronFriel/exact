@@ -2,6 +2,7 @@
 import UIKit
 import XCTest
 @testable import ExactKit
+@testable import ExactNotifications
 import ExactGroupedLists
 
 /// LLP 1075.003 §9.10 over the native fixture's Chat and Photo routes: a

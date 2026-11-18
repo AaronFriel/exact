@@ -78,6 +78,40 @@ pub fn apple_uses(plan: &Plan) -> Uses {
                 && can_be(plan, &b, |v| v.trim().eq_ignore_ascii_case("sticky"))
         }),
     );
+    // A background transfer (`@exact/background-transfer`) asks no device
+    // grant, and listing or removing a geofence (`@exact/geofencing`) needs
+    // only the foreground location one: their names select the carriers. A
+    // module's names are all declared when it is used. A package whose
+    // implementation reaches `context.transfers`, `context.regions` or
+    // `context.wakes` belongs here, or asks a background grant.
+    add(
+        Capability::Wakes,
+        plan.sources.iter().any(|row| {
+            matches!(
+                plan.str(row.name),
+                "backgroundFetch"
+                    | "backgroundFetchRegistration"
+                    | "backgroundFetchIds"
+                    | "abortBackgroundFetch"
+                    | "retireBackgroundFetch"
+                    | "backgroundFetchStatus"
+                    | "addGeofence"
+                    | "removeGeofence"
+                    | "geofences"
+                    | "geofencingStatus"
+            )
+        }),
+    );
+    // A Live Activity's sends, or the resource that reads them.
+    add(
+        Capability::Activities,
+        plan.sources.iter().any(|row| {
+            matches!(
+                plan.str(row.name),
+                "startActivity" | "updateActivity" | "endActivity" | "exactActivities"
+            )
+        }),
+    );
     // A swipe row, a reorder group, a reorder grip and a list whose rows
     // are cells (iOS draws them, LLP 1115.000 D16) reach the family without
     // a windowed list.
@@ -92,6 +126,26 @@ pub fn apple_uses(plan: &Plan) -> Uses {
         .into_iter()
         .any(|id| binds(plan, BindingKind::Prop, id as u16)),
     );
+    uses
+}
+
+/// What a data module's `grants` select of the native roster on Apple: the
+/// families the system reaches through the app, not the plan, which the
+/// bake adds to the plan's set (a composition input, LLP 1047.001 D2).
+pub fn apple_grant_uses(grants: &str) -> Uses {
+    let mut uses = Uses::NONE;
+    for line in grants.lines() {
+        uses = match line.split_whitespace().next() {
+            Some("device.notifications") => uses.with(Capability::Notifications),
+            Some("device.cloudkit") => uses.with(Capability::HostEvents),
+            Some(
+                "device.background-sync"
+                | "device.periodic-background-sync"
+                | "device.geolocation-background",
+            ) => uses.with(Capability::Wakes),
+            _ => uses,
+        };
+    }
     uses
 }
 

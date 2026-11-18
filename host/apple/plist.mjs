@@ -237,7 +237,7 @@ export function packageKeys(bound, target) {
 /** The host events a package's Apple implementation may take (`"hostEvents"`, LLP 1133.001.000 D2): a call the system
  * makes on the app's or the scene's delegate, which ExactKit holds until the package drains it. Each names its
  * platforms, the device grant it needs signed, and the Info.plist keys that ask the system to deliver it, written only
- * where it is taken, so an app claims to receive only what something takes. ExactKit's `HostEvents.swift` installs
+ * where it is taken, so an app claims to receive only what something takes. The host event mailbox's `HostEvents.swift` installs
  * the selectors of the same names; a test keeps the two lists alike. A package that needs another event amends this
  * list. */
 export const HOST_EVENTS = new Map([

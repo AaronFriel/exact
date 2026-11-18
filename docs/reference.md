@@ -1491,6 +1491,10 @@ The generated `--embed` composition lists the capabilities to link.
 | `ExactControls` | Switches, checkboxes, radios, ranges, selects, dates, progress and segmented tablists | `ExactControls.install()` |
 | `ExactFlights` | Shared-element flights (`sharedElement`) | `ExactFlights.install()` |
 | `ExactSticky` | `position: sticky` | `ExactSticky.install()` |
+| `ExactNotifications` | Notifications, their actions and push registration | `ExactNotifications.install()`; the app delegate calls `ExactApp.installNotificationClicks` before launch completes |
+| `ExactHostEventMailbox` | Host events a package takes (an accepted iCloud share) | `ExactHostEventMailbox.install()`; the app delegate calls `ExactApp.installHostEvents` before any scene connects |
+| `ExactActivities` | Live Activities | `ExactActivities.install()` |
+| `ExactWakeCarriers` | Wakes, background transfers and monitored regions | `ExactWakeCarriers.install()`; the app delegate calls `ExactApp.installWakes` before launch completes, and `ExactApp.handleTransferEvents` |
 
 Development builds log a missing Markdown or drag installation once per session,
 with the product and installation call. Without it, Markdown remains literal

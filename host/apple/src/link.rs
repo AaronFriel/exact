@@ -654,6 +654,10 @@ mod tests {
             "box grid-column=(on ? \"1 / span 2\" : \"auto\")",
             "on = false",
         );
+        let activity = contract::compile(
+            "shape ID\n  id: string\ncomponent A\n  resource live = exactActivities() as shape ID\n  view\n    text \"a\"\n",
+        )
+        .unwrap();
         for (plan, name) in [
             (&tools, "tools"),
             (&view, "modules, native_views"),
@@ -668,6 +672,7 @@ mod tests {
             (&flying, "transitions, flights"),
             (&stuck, "sticky"),
             (&placed, "grid"),
+            (&activity, "activities"),
         ] {
             assert_eq!(missing(plan, Uses::NONE).as_deref(), Some(name));
             assert_eq!(missing(plan, ALL), None);

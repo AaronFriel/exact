@@ -1,5 +1,6 @@
 // The one notification delegate a process has (LLP 1133.004 D7), in
-// ExactKit so an embedder gets it with the session. It is set at launch,
+// ExactNotifications: an embedder links that product and calls
+// `ExactApp.installNotificationClicks` before launch completes. It is set at launch,
 // before the system can deliver a launching click, which a module's
 // implementation could not be: a module is made when its session boots.
 // A click on content a module posted (`@exact/notifications`) carries the
@@ -15,6 +16,7 @@
 // too, as a browser shows a page's, and sounds only when its content has a
 // sound (a silent post has none).
 import Foundation
+import ExactKit
 #if !os(tvOS)
 import UserNotifications
 #endif

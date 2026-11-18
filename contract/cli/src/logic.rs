@@ -632,7 +632,11 @@ pub fn web_linked(plan: &exact_plan::Plan, inputs: &serde_json::Value) -> String
             | Capability::Traces
             | Capability::Controls
             | Capability::Flights
-            | Capability::Sticky => {}
+            | Capability::Sticky
+            | Capability::Notifications
+            | Capability::HostEvents
+            | Capability::Activities
+            | Capability::Wakes => {}
         }
     }
     entry

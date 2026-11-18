@@ -16,10 +16,16 @@ impl exact_runner::DataSource for NoData {
 }
 
 pub fn plan(view: &str) -> Vec<u8> {
-    contract::compile(&format!("component A\n  view\n    {view}\n"))
-        .unwrap()
-        .encode()
+    source(&format!("component A\n  view\n    {view}\n"))
 }
+
+pub fn source(text: &str) -> Vec<u8> {
+    contract::compile(text).unwrap().encode()
+}
+
+/// A plan that can start a Live Activity, which only the activities family
+/// serves; it reads nothing at boot, so its candidate is not held for data.
+pub const ACTIVITIES: &str = "shape ID\n  id: string\nshape S\n  n: number\ncomponent A\n  mutation started as shape ID\n  action start\n    send started = startActivity(\"k\", S(n=1))\n  view\n    text \"a\"\n";
 
 pub fn boot(bridge: &mut Bridge<NoData>, plan: &[u8]) {
     let out = bridge.boot(plan, NoData, Hooks::none(), 390.0, 844.0);

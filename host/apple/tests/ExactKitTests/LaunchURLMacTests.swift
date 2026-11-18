@@ -5,6 +5,7 @@ import ObjectiveC
 import XCTest
 import UserNotifications
 @testable import ExactKit
+@testable import ExactNotifications
 
 private final class StubNotification: UNNotification {
     static var requestValue: UNNotificationRequest!

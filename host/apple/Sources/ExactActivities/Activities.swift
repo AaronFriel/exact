@@ -1,5 +1,6 @@
 // @ref LLP 1126.001 WP9 — the app imports no ActivityKit. Its arm loads on demand.
 import Foundation
+import ExactKit
 
 typealias ActivityCallback = @convention(c) (UnsafeMutableRawPointer?, UnsafePointer<UInt8>?, Int) -> Void
 

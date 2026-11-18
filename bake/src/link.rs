@@ -138,6 +138,10 @@ pub(crate) fn production_uses<'a>(
         return plan_uses(plan, inputs).iter().fold(grants, Uses::with);
     }
     let plans: Vec<&exact_plan::Plan> = std::iter::once(plan).chain(entries).collect();
+    let grants =
+        exact_runner::uses::apple_grant_uses(inputs["grantCeiling"].as_str().unwrap_or(""))
+            .iter()
+            .fold(grants, Uses::with);
     let mut uses = plans.iter().fold(grants, |uses, plan| {
         plan_uses(plan, inputs).iter().fold(uses, Uses::with)
     });

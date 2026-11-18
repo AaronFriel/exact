@@ -22,6 +22,7 @@
 // wake is done; and again at each later launch, once a module is ready,
 // until the package retires it.
 import Foundation
+import ExactKit
 
 public enum TransferCarrier {
     struct Record: Codable {

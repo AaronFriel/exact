@@ -186,7 +186,7 @@ public final class ExactApp {
         let live = Set(sessionRefs.compactMap { $0.session?.label })
         let named = label.isEmpty ? (1...).lazy.map { "session-\($0)" }.first { !live.contains($0) }! : label
         let s = ExactSession(app: self, label: named)
-        s.delegate = delegate; ModuleSeamLink.listen?() // before its packages can register or drain
+        s.delegate = delegate; ModuleSeamLink.listenPush?(); ModuleSeamLink.listenHostEvents?() // before its packages can register or drain
         replacements.attach(s)
         sessionRefs.append(WeakSession(s))
         sessionRefs.removeAll { $0.session == nil }
@@ -346,7 +346,7 @@ public final class ExactSession {
     /// The generation whose deferred data has activated (or failed to): the
     /// agent's `clock data` waits for it before a test's first step.
     var dataGeneration: Int?
-    var dataActivated: Bool { dataGeneration == generation }
+    package var dataActivated: Bool { dataGeneration == generation }
     var pendingActivation: (generation: Int, token: UInt64)? // retried on the session's wake
     /// The generation whose data source `prepareData` or `evaluateFromDraw` activated on the owner, and whether it still runs there.
     var preparedGeneration: Int?, dataPreparing = false

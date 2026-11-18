@@ -20,6 +20,7 @@
 // a later launch's is after its first pixel. One written while its region is
 // in a wake is offered when that wake ends.
 import Foundation
+import ExactKit
 #if os(iOS) || os(macOS)
 import CoreLocation
 #endif

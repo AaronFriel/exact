@@ -15,7 +15,9 @@ use exact_plan::{BindingKind, EventKind, Opcode, Plan, Stdlib, StrId};
 use std::fmt;
 
 mod apple;
-pub use apple::{apple_uses, data_url, image_sources, lays_out_grid, ImageSource};
+pub use apple::{
+    apple_grant_uses, apple_uses, data_url, image_sources, lays_out_grid, ImageSource,
+};
 
 /// A capability beyond the core, linked into an artifact only when its plan
 /// uses it (LLP 1047 §4's roster, as each one moves behind its seam).
@@ -188,11 +190,29 @@ pub enum Capability {
     /// `position: sticky` (LLP 1083 D4): a plan whose `position` can be
     /// `sticky`. Native only.
     Sticky,
+    /// Notifications: posting, the delegate that shows one in front and
+    /// opens a click, declared actions and push registration. Selected by a
+    /// `device.notifications` grant, which push needs too. Native only.
+    Notifications,
+    /// Host events (LLP 1133.001.000 D2): a system call on the app's or the
+    /// scene's delegate that a package takes, held until it does. Selected
+    /// by a grant a listed event needs signed (`device.cloudkit`). Native
+    /// only.
+    HostEvents,
+    /// Live Activities: a plan that starts, updates or ends one, or reads
+    /// them (`exactActivities`). Native only.
+    Activities,
+    /// Wakes, background transfers and monitored regions (LLP 1133.017,
+    /// LLP 1133.021 D14), which can launch the app with no scene. Selected by
+    /// a background grant (`device.background-sync`,
+    /// `device.periodic-background-sync`, `device.geolocation-background`)
+    /// or a background transfer's or a geofence's names. Native only.
+    Wakes,
 }
 
 impl Capability {
     /// Every capability, in bit order.
-    pub const ALL: [Capability; 47] = [
+    pub const ALL: [Capability; 51] = [
         Capability::Markdown,
         Capability::Motion,
         Capability::Collections,
@@ -240,6 +260,10 @@ impl Capability {
         Capability::Controls,
         Capability::Flights,
         Capability::Sticky,
+        Capability::Notifications,
+        Capability::HostEvents,
+        Capability::Activities,
+        Capability::Wakes,
     ];
 
     /// The name an entry, a refusal and a report use.
@@ -292,6 +316,10 @@ impl Capability {
             Capability::Controls => "controls",
             Capability::Flights => "flights",
             Capability::Sticky => "sticky",
+            Capability::Notifications => "notifications",
+            Capability::HostEvents => "host_events",
+            Capability::Activities => "activities",
+            Capability::Wakes => "wakes",
         }
     }
 
@@ -327,7 +355,11 @@ impl Uses {
         .with(Capability::Traces)
         .with(Capability::Controls)
         .with(Capability::Flights)
-        .with(Capability::Sticky);
+        .with(Capability::Sticky)
+        .with(Capability::Notifications)
+        .with(Capability::HostEvents)
+        .with(Capability::Activities)
+        .with(Capability::Wakes);
 
     /// This set and `capability`.
     pub const fn with(self, capability: Capability) -> Uses {

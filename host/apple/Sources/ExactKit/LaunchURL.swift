@@ -90,7 +90,7 @@ extension ExactSession {
 
     /// A notification's location and a host URL share the cold and warm
     /// incoming-route path, without requiring a URL scheme.
-    @discardableResult func openLocation(_ incoming: String) -> Bool {
+    @discardableResult package func openLocation(_ incoming: String) -> Bool {
         guard state != .destroyed else { return false }
         return openIncoming(runtime.location(of: incoming))
     }

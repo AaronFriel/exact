@@ -204,6 +204,15 @@ extension ExactSession {
     /// runner then holds each event to its own bound).
     static let heldModuleEventBound = 256
 
+    /// A background action's events still held for first pixel are dropped
+    /// when its time runs out (NotifyActions.swift).
+    package func dropHeldBackgroundAction(_ id: String) {
+        heldModuleEvents.removeAll { json in
+            let event = (try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [String: Any]
+            return event?["background"] as? String == id
+        }
+    }
+
     /// A module event the platform reported for this session (LLP 1133.004
     /// D6): held from launch until first pixel and the data's activation,
     /// then raised into the runner and heard in order, once. `activation` is
@@ -211,7 +220,7 @@ extension ExactSession {
     /// own UI. `background` makes it a notification's background action
     /// the person chose (LLP 1133.004 stage 2): the host's id for it, whether
     /// the session was booted for it, and whether no view is seen.
-    func raiseModuleEvent(extension name: String, event: String, args: String, activation: Bool,
+    package func raiseModuleEvent(extension name: String, event: String, args: String, activation: Bool,
                           background: (id: String, cold: Bool, hidden: Bool)? = nil) {
         guard state != .destroyed else { return }
         var body: [String: Any] = ["extension": name, "event": event, "args": (try? JSONSerialization.jsonObject(with: Data(args.utf8))) ?? [],

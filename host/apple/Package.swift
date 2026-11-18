@@ -49,6 +49,10 @@ let allCapabilities: [(name: String, target: String)] = [
     ("controls", "ExactControls"),
     ("flights", "ExactFlights"),
     ("sticky", "ExactSticky"),
+    ("notifications", "ExactNotifications"),
+    ("host_events", "ExactHostEventMailbox"),
+    ("activities", "ExactActivities"),
+    ("wakes", "ExactWakeCarriers"),
 ]
 // What a family imports beyond ExactKit and CExact: another family's product,
 // which the roster links with it, or ExactCore's package API. Surfaces' Canvas

@@ -10,7 +10,7 @@ use exact_apple::link::{self, Uses};
 
 #[path = "reload/common.rs"]
 mod common;
-use common::{boot, digest, plan, NoData};
+use common::{boot, digest, plan, source, NoData, ACTIVITIES};
 
 #[test]
 fn hellos_binary_refuses_a_reload_into_a_family_and_keeps_its_plan() {
@@ -18,39 +18,39 @@ fn hellos_binary_refuses_a_reload_into_a_family_and_keeps_its_plan() {
     let mut bridge = Bridge::<NoData>::new();
     boot(&mut bridge, &plan("text \"Hello world\""));
     let before = digest(&mut bridge);
-    for (view, names) in [
-        ("text \"a\" filter=\"blur(2px)\"", "effects"),
+    for (next, names) in [
+        (plan("text \"a\" filter=\"blur(2px)\""), "effects"),
         (
-            "svg viewBox=\"0 0 10 10\"\n      circle cx=5 cy=5 r=4",
+            plan("svg viewBox=\"0 0 10 10\"\n      circle cx=5 cy=5 r=4"),
             "effects, svg",
         ),
         // An SVG `data:` image, which only its bytes say is one.
         (
-            "image \"data:image/svg+xml,%3Csvg%2F%3E\"",
+            plan("image \"data:image/svg+xml,%3Csvg%2F%3E\""),
             "effects, svg, images",
         ),
-        ("view hatch=\"avatar\"", "native_views"),
-        ("input type=\"checkbox\"", "controls"),
+        (plan("view hatch=\"avatar\""), "native_views"),
+        (plan("input type=\"checkbox\""), "controls"),
         (
-            "row role=\"tablist\"\n      button \"a\" role=\"tab\"",
+            plan("row role=\"tablist\"\n      button \"a\" role=\"tab\""),
             "controls",
         ),
         (
-            "column sharedElement=\"hero\"\n      text \"a\"",
+            plan("column sharedElement=\"hero\"\n      text \"a\""),
             "transitions, flights",
         ),
         (
-            "column position=\"sticky\" top=0\n      text \"a\"",
+            plan("column position=\"sticky\" top=0\n      text \"a\""),
             "sticky",
         ),
+        (source(ACTIVITIES), "activities"),
     ] {
-        let next = plan(view);
         let len = bridge.input_write(&next);
         let out = bridge.prepare_plan(len, NoData, Hooks::none(), 390.0, 844.0);
         let reply = String::from_utf8_lossy(bridge.output_bytes(out as usize)).into_owned();
         assert!(
             reply.contains(&format!("Unlinked(\\\"{names}\\\")")),
-            "{view}: {reply}"
+            "{names}: {reply}"
         );
         let out = bridge.commit_plan();
         let reply = String::from_utf8_lossy(bridge.output_bytes(out as usize)).into_owned();
@@ -58,6 +58,6 @@ fn hellos_binary_refuses_a_reload_into_a_family_and_keeps_its_plan() {
             reply.contains("error"),
             "a refused candidate is not committed: {reply}"
         );
-        assert_eq!(digest(&mut bridge), before, "{view}");
+        assert_eq!(digest(&mut bridge), before, "{names}");
     }
 }

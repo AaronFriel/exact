@@ -1,13 +1,11 @@
 // @ref LLP 1047.001 D10 — the module seam's session-side families (cut list
-// B2): notification actions and responses, push registration, host events
-// and live activities. The core reaches them only through what this file
-// declares. Without them a session declares no notification categories
-// (it is ready at once), holds no background action, registers for no push,
-// hears no host event and sends no activity. The slots' defaults are
-// today's. The host executables install wakes, notification clicks and host
-// events through `ExactApp`'s public calls in the families' files; they are
-// the composition's, and import the families' targets once they move.
-
+// B2), each its own product: notifications (with push registration), host
+// events and live activities. The core reaches them only through what this
+// file declares; each family's `install()` sets its slots. Without one a
+// session declares no notification categories (it is ready at once), holds
+// no background action, registers for no push, hears no host event and
+// sends no activity. Wakes, transfers and regions reach the core through
+// none of these: the composition's launch hooks install them.
 /// What a session asks of notifications (NotifyActions.swift).
 package protocol NotificationHosting: AnyObject {
     /// Registration of the plan's categories, before data code runs; `ready` follows.
@@ -46,15 +44,17 @@ package protocol ActivityOutputting: AnyObject {
 /// The slots are set before any session is made, and read on the main thread.
 package enum ModuleSeamLink {
     /// Notification actions and responses.
-    package static var notifications: (any NotificationHosting)? = BuiltInNotifications()
-    /// Push registration and host events, listened for as a session is made.
-    package static var listen: (() -> Void)? = { PushRegistration.listen(); HostEvents.listen() }
+    package static var notifications: (any NotificationHosting)?
+    /// Push registration, listened for as a session is made.
+    package static var listenPush: (() -> Void)?
+    /// Host events, listened for as a session is made.
+    package static var listenHostEvents: (() -> Void)?
     /// A session ended: the host events queued for it go to the first live
     /// session, which hears that they arrived; with none, they stay held.
-    package static var sessionEnded: ((String) -> Void)? = { HostEvents.ended($0) }
+    package static var sessionEnded: ((String) -> Void)?
     /// Whether the app ships the activity arm, and a session's activity output.
-    package static var activitiesPackaged: (() -> Bool)? = { ActivityLibrary.packaged }
-    package static var makeActivities: ((ExactSession) -> any ActivityOutputting)? = { ActivityOutput($0) }
+    package static var activitiesPackaged: (() -> Bool)?
+    package static var makeActivities: ((ExactSession) -> any ActivityOutputting)?
 }
 
 extension ExactSession {

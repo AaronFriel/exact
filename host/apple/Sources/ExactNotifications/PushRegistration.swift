@@ -15,6 +15,7 @@
 // until the package asks, so an app that does not import it has neither. Every entry may be called on any
 // thread; the store is read and written on the main thread only.
 import Foundation
+import ExactKit
 #if os(iOS)
 import ObjectiveC
 import UIKit

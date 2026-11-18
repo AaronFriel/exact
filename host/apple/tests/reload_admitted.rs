@@ -6,23 +6,47 @@ use exact_apple::abi::{Bridge, Hooks};
 
 #[path = "reload/common.rs"]
 mod common;
-use common::{boot, digest, plan, NoData};
+use common::{boot, digest, plan, source, NoData, ACTIVITIES};
 
 #[test]
 fn an_all_linked_binary_reloads_from_hello_into_each_family() {
-    for view in [
-        "text \"a\" filter=\"blur(2px)\"",
-        "svg viewBox=\"0 0 10 10\"\n      circle cx=5 cy=5 r=4",
-        "view hatch=\"avatar\"",
-        "input type=\"checkbox\"",
-        "row role=\"tablist\"\n      button \"a\" role=\"tab\"",
-        "column sharedElement=\"hero\"\n      text \"a\"",
-        "column position=\"sticky\" top=0\n      text \"a\"",
+    for (view, next) in [
+        ("filter", plan("text \"a\" filter=\"blur(2px)\"")),
+        (
+            "svg",
+            plan(
+                "svg viewBox=\"0 0 10 10\"
+      circle cx=5 cy=5 r=4",
+            ),
+        ),
+        ("hatch", plan("view hatch=\"avatar\"")),
+        ("checkbox", plan("input type=\"checkbox\"")),
+        (
+            "tablist",
+            plan(
+                "row role=\"tablist\"
+      button \"a\" role=\"tab\"",
+            ),
+        ),
+        (
+            "flight",
+            plan(
+                "column sharedElement=\"hero\"
+      text \"a\"",
+            ),
+        ),
+        (
+            "sticky",
+            plan(
+                "column position=\"sticky\" top=0
+      text \"a\"",
+            ),
+        ),
+        ("activities", source(ACTIVITIES)),
     ] {
         let mut bridge = Bridge::<NoData>::new();
         boot(&mut bridge, &plan("text \"Hello world\""));
         let before = digest(&mut bridge);
-        let next = plan(view);
         let len = bridge.input_write(&next);
         bridge.prepare_plan(len, NoData, Hooks::none(), 390.0, 844.0);
         let out = bridge.commit_plan();

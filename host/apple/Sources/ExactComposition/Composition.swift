@@ -60,6 +60,18 @@ import ExactNativeViews
 #if EXACT_LINK_CONTROLS
 import ExactControls
 #endif
+#if EXACT_LINK_NOTIFICATIONS
+import ExactNotifications
+#endif
+#if EXACT_LINK_HOST_EVENTS
+import ExactHostEventMailbox
+#endif
+#if EXACT_LINK_ACTIVITIES
+import ExactActivities
+#endif
+#if EXACT_LINK_WAKES
+import ExactWakeCarriers
+#endif
 public enum ExactComposition {
     public static let app: ExactApp = {
         AgentLink.install()
@@ -129,6 +141,18 @@ public enum ExactComposition {
         #endif
         #if EXACT_LINK_CONTROLS
         ExactControls.install()
+        #endif
+        #if EXACT_LINK_NOTIFICATIONS
+        ExactNotifications.install()
+        #endif
+        #if EXACT_LINK_HOST_EVENTS
+        ExactHostEventMailbox.install()
+        #endif
+        #if EXACT_LINK_ACTIVITIES
+        ExactActivities.install()
+        #endif
+        #if EXACT_LINK_WAKES
+        ExactWakeCarriers.install()
         #endif
     }
 }

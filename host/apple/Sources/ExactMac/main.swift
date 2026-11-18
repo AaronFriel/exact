@@ -727,8 +727,8 @@ final class Delegate: NSObject, NSApplicationDelegate {
     func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool { true }
     func applicationWillFinishLaunching(_ notification: Notification) {
         LaunchKind.install()
-        exact.installNotificationClicks(boot: nil, activate: { session in windows.first { $0.session === session }?.front() })
-        exact.installWakes()
+        ExactComposition.installNotificationClicks(on: exact, boot: nil, activate: { session in windows.first { $0.session === session }?.front() })
+        ExactComposition.installWakes(on: exact)
         exact.installReach()
     }
     /// The Dock menu, one menu: the manifest's shortcuts, then the app's (LLP
@@ -883,7 +883,7 @@ final class Delegate: NSObject, NSApplicationDelegate {
 let delegate = Delegate()
 // Before the delegate is set: the methods of the host events this build takes, an app-wide one going to the
 // front window's session (LLP 1133.001.000 D2).
-exact.installHostEvents(applicationDelegate: Delegate.self, sceneDelegate: nil, session: { frontWindow()?.session })
+ExactComposition.installHostEvents(on: exact, applicationDelegate: Delegate.self, sceneDelegate: nil, session: { frontWindow()?.session })
 app.delegate = delegate
 
 // A supervisor's SIGTERM follows the same cancellable quit as the menu
