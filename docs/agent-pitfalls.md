@@ -1207,6 +1207,21 @@ price: answers arrive `Later`, outside the action's transaction (LLP 1027.002 D1
   non-mixable playback session's media, and audio stops at the lock without the
   mode. `"playback-mix"` does not qualify. (LLP 1098 D8.)
 
+## GPU surfaces
+
+- **A record's named fields reach the wrong surface arguments.** Records cross
+  into a GPU surface by position, not by field name. Import the package's
+  shapes (`ModelNode` and `ModelHotspot` for `@exact/model-viewer`); if you
+  declare a shorter shape, keep its fields in the package's declaration order.
+  (Model viewer's record parsing tests, LLP 1133.039 D1.)
+- **A model viewer stops a page scrolling over it.** A canvas that takes input
+  owns every touch and wheel in its box. `cameraControls=true` reserves that
+  input at mount; `disableZoom=true` does not return the wheel to the page.
+  Leave controls unsaid for a passive model, or room beside an interactive
+  one for scrolling. Changing mode needs another canvas mount, as in the
+  [scrolling fixture](../packages/model-viewer/test/fixture/scrolling.contract).
+  (Model viewer scrolling drives, LLP 1133.039 D9.)
+
 ## Input
 
 - **A keyboard shortcut does nothing.** Two causes, both as on the web.

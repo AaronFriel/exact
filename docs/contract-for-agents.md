@@ -3497,6 +3497,12 @@ instantiates does not link its views' implementations.
 
 ### A package's GPU surfaces
 
+To show a static glTF model, add `@exact/model-viewer` from
+`packages/model-viewer` in this checkout. Its `modelViewer` surface supplies
+the camera, picking, node styles, faded-behind rendering, clipping and
+hotspot labels as Exact children. See [the model viewer recipe](recipes/model-viewer.md)
+for a runnable example, file sources and the surface record (LLP 1133.039).
+
 Any package may declare `gpu` beside `views` in its main `exact.json` (LLP 1153.003 D5):
 
 ```json
@@ -3568,6 +3574,106 @@ error names each attempt's failure. An incompatible `exactGpu` requirement stops
 build before resolution. Neither input lock changes.
 The app commits no Rust files for a package. Modules load only when their surfaces mount;
 package WGSL is compiled into the crate, rather than shipped through `gpu.shaderRoots`.
+
+### Model viewer
+
+`cameraOrbit` is azimuth, polar angle from the top, then radius. Angles take
+`deg` or `rad`; lengths take `m`, `cm` or `mm`. A radius of `100%` fits a
+sphere around the target; `105%` leaves a margin. Unsaid, the orbit is
+`"0deg 75deg 105%"`, `cameraTarget="auto auto auto"` centres the model, and
+`fieldOfView="auto"` frames at 30°. A narrow canvas widens the vertical
+field of view to keep the model in frame. Zoom changes radius.
+
+Changing the orbit, target or field of view animates to that view.
+`postMessage("reset", "modelViewer")` returns to those authored values after
+a drag, including when a view button writes the same values again. The
+record's settled camera values can be saved and bound back as a named view.
+`interpolationDecay` is milliseconds, 50 by default; use 0 to jump, including
+when the app honours the person's reduced-motion preference.
+
+`cameraControls` is off unless written. On, drag to orbit, pinch or wheel to
+zoom, two-finger drag or a modified/right-button drag to pan; focused, use
+arrows, Shift + arrows and Page Up/Down. `disablePan` and `disableZoom` stop
+those camera moves. The canvas reserves all touches and wheels in its box
+at mount, even with zoom disabled. In a scrolling page, leave room beside
+it to scroll. To change input mode, mount another canvas, as
+[the scrolling fixture](../packages/model-viewer/test/fixture/scrolling.contract)
+does. With controls off, that fixture picks from `pointerup` by posting
+`pick <offsetX> <offsetY>` to the surface.
+
+Each `ModelNode` styles its named node and descendants. A deeper entry wins;
+for the same name, the last wins. The whole entry wins, without merging
+fields. `color=""` keeps material colours; otherwise use a CSS colour, with
+`opacity` from 0 to 1 and `visibility="visible"` or `"hidden"`. System
+colours such as `AccentColor` need platform context and are refused.
+Unnamed nodes use `#<index>`; duplicate names share a style.
+
+For the faded-behind style, mark the shell `occluder` and its inner parts
+`revealed`. The inner part draws at `occludedOpacity` where the shell hides
+it. Occluders are always opaque: use `occlusion="none"` when you want a
+translucent shell instead. A tap picks the revealed part through an
+occluder, but ordinary opaque geometry in front still blocks it. Hidden and
+clipped geometry, and non-occluders at zero opacity, cannot be picked.
+`message=pick` receives the deepest mesh node's name, or `""` for a miss.
+
+`clipPosition` is a point on the plane, in model coordinates; its `auto`
+axes use the model's centre. `clipNormal` points towards the half that
+stays. `""` disables it. Drawing, picking and hotspot anchors share the cut;
+the cut faces are not filled.
+
+A `ModelHotspot` anchors a direct canvas child by `testId`. Its position is
+in model coordinates; `position=""` uses the node subtree's bounding-box
+centre. `normal=""` skips the facing test. Labels follow the camera and dim
+to `minHotspotOpacity` (0.25 by default) behind opaque geometry outside
+their own subtree, or when their normal faces away. They stay pressable
+and accessible while dimmed; off-canvas, behind-camera, hidden-node and
+clipped anchors hide them. Write a named group and label on the canvas,
+and give hotspot buttons the same picking action as the model. On the web,
+a label that writes `filter` overrides its occlusion fade; put that filter
+on a child inside the label instead. iOS keyboard focus skips hotspots;
+VoiceOver can reach them. View buttons provide a touch alternative to orbit.
+
+`src` also accepts `app:/data/…`, `app:/cache/…` and `app:/tmp/…`. Data code
+downloads or imports a GLB, writes it under its `fs.write` grant, and returns
+the path to bind. Reading that path needs no surface grant. See
+[the fixture's cacheModel source](../packages/model-viewer/test/fixture/app.ts)
+and its scrolling route for a file created at runtime. Direct `https:`
+sources are refused. Names are ASCII, at most 128 bytes after removing
+`assets/`, with no `.` or `..` path part; files are at most 64 MiB.
+
+The reader supports `KHR_mesh_quantization` and `EXT_meshopt_compression`.
+It draws static triangles with material base colours. `OPAQUE` (the default)
+ignores material alpha; `MASK` keeps or drops the whole primitive at
+`alphaCutoff` (0.5 by default). Both use material opacity 1; `BLEND` uses
+the base colour factor's alpha. Node style `opacity` multiplies that material
+opacity, except for occluders, which stay opaque. Textures, animation, skins
+and morph targets are ignored. `.gltf`, sparse accessors and other required
+extensions are refused. On the web, parsing blocks the page once; native
+parsing runs off the frame thread.
+
+Read `exactSurface("modelViewer")` with the imported `ModelViewerState`:
+
+| Field | Use |
+|---|---|
+| `presented` | Hide the loader after the current picture is presented. |
+| `src`, `loaded`, `error` | The bound source, whether it loaded, and its error sentence (`""` on success). |
+| `triangles` | The displayed model's triangle count. |
+| `nodes` | Names and parent names (`""` at a root), for a parts list. |
+| `cameraOrbit`, `cameraTarget`, `fieldOfView` | The last settled camera, ready to save as a view. |
+| `cameraView` | `front`, `right`, `back` or `left`, optionally prefixed `upper-` or `lower-`. |
+
+A replacement keeps the old picture while loading. Failure clears it and
+sets `presented=true`, `loaded=false` and `error`. The empty frame ends the
+loader; show the error text that remains. The record belongs to the first
+live canvas of that surface name; each canvas's picks still reach its own
+handler. Import the package's shapes: records entering a GPU surface are
+positional, so their declaration order matters.
+
+The generated fixture is the tested model. Web drawing needs WebGPU. tvOS
+shows the model and accepts app view buttons, but has no remote orbit or
+focusable hotspots. Linux has no screen-reader bridge. Android, Windows and
+physical-phone behaviour remain unqualified; watchOS and the terminal have
+no GPU surface.
 
 ### Native SDK dependencies
 
