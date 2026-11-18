@@ -1,4 +1,4 @@
-# The iOS hello app is about 4.3 MB over its 8 MB size target
+# The iOS hello app is about 3.8 MB over its 8 MB size target
 
 **Status:** Open
 **Systems:** host/apple (iOS binary size), runner (native module seam), scripts/metrics.mjs
@@ -8,18 +8,18 @@
 
 `bun scripts/metrics.mjs --long` measures the hello app's stripped iOS simulator executable over an empty UIKit
 app's (LLP 1047.001 D8) and gates it at `IOS_HELLO_BYTES`. The size row's target is 8 MB, 8,000,000 B (Charlie,
-2026-11-17: "trying to get to 8MB is maybe worth it"). Main at d00405a8d, measured on an M5 Max with Xcode 27.2:
+2026-11-17: "trying to get to 8MB is maybe worth it"). Main at c80a452b8, measured on an M5 Max with Xcode 27.2:
 
 | row | measured | ceiling | target |
 |---|---:|---:|---:|
-| optimized for size (the embed default) | 12,290,976 B | 12,390,000 B | 8,000,000 B |
-| balanced (the iOS and tvOS app default) | 16,975,664 B | 17,075,000 B | |
-| optimized for speed (the Mac default) | 19,238,960 B | 19,340,000 B | |
+| optimized for size (the embed default) | 11,825,920 B | 11,925,000 B | 8,000,000 B |
+| balanced (the iOS and tvOS app default) | 16,362,640 B | 16,465,000 B | |
+| optimized for speed (the Mac default) | 18,038,960 B | 18,140,000 B | |
 
 The ceilings are a tripwire at main's size plus about 100 KB, not an accepted size. A row over its ceiling says how
 far over in 100 KB steps (`VIOLATION by 0.2 MB`), and the async lane's failure carries the step, so each further
 step up is a new failure the lane attributes to the commit that took it, and a step down is not
-(`scripts/async-bisect.mjs`, `newFailures` and `holds`). The target needs about 4.3 MB more cut from the size build. Byte counts differ between Xcode versions, so
+(`scripts/async-bisect.mjs`, `newFailures` and `holds`). The target needs about 3.8 MB more cut from the size build. Byte counts differ between Xcode versions, so
 measure with the lane's.
 
 ## How to reproduce
@@ -246,6 +246,12 @@ runner's seams; §9.3: the order of work). Landed, size row:
 | R4f: native modules behind their seam (a move) | 734742f72 | unchanged |
 | the kernel's metrics share one value pool | 863eb0dbb | 12,307,392 B |
 | device lines checked without the device table's build facts | d00405a8d | 12,290,976 B |
+| R4g: Apple links native modules, tool calls and presence secrets by use (cut list B1) | c80a452b8 | 11,825,920 B |
+
+R4g took 481,888 B off the size row against the list's estimate of about 250,000 B (629,808 B off balanced and
+1,265,968 B off speed): `runner::modules` went from 370,556 B of code to 8,104 B, the drop code of its state,
+which stays a concrete field of the runner. The core kept about 33 KB of what was in `modules/`: provenance,
+wakes and background actions, child processes and the unlinked seam.
 
 The rows after R3 are each lane's before-and-after on one Mac at its own base; main also grew about 33 KB from
 other work between bfc7f585a and 0b09b06a4. M1 attributed the Rust archive's 459 KB of unnamed constants: `url`'s
