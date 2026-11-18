@@ -185,7 +185,7 @@ public final class ExactApp {
         let live = Set(sessionRefs.compactMap { $0.session?.label })
         let named = label.isEmpty ? (1...).lazy.map { "session-\($0)" }.first { !live.contains($0) }! : label
         let s = ExactSession(app: self, label: named)
-        s.delegate = delegate; PushRegistration.listen(); HostEvents.listen() // before its packages can register or drain
+        s.delegate = delegate; ModuleSeamLink.listen?() // before its packages can register or drain
         replacements.attach(s)
         sessionRefs.append(WeakSession(s))
         sessionRefs.removeAll { $0.session == nil }
@@ -194,7 +194,7 @@ public final class ExactApp {
     func forget(_ session: ExactSession) {
         replacements.destroyed(session)
         sessionRefs.removeAll { $0.session == nil || $0.session === session }
-        HostEvents.ended(session.label)
+        ModuleSeamLink.sessionEnded?(session.label)
     }
 
     /// Connect to the app URL (LLP 1023 D1–D3): the envelope resolved, the
@@ -393,7 +393,7 @@ public final class ExactSession {
     /// The voice table's output (LLP 1096 D8); settable for tests.
     lazy var sound: any AudioOutputting = MediaLink.makeSound?(self) ?? NoAudioOutput()
     lazy var midi: any AudioOutputting = MediaLink.makeMIDI?(self) ?? NoAudioOutput()
-    var activityOutput: ActivityOutput?
+    var activityOutput: (any ActivityOutputting)?
     package let frames: Frames
     /// A session's presented frames (LLP 1079 D3); a production bake has one only while an app records.
     var sampler: FrameSampler?
@@ -546,7 +546,7 @@ public final class ExactSession {
         let runtime = Runtime()
         runtime.useNativeTimers(true)
         LocalNetworkFact.install() // before the first boot reads the fact (LLP 1133.036 D8)
-        if ActivityLibrary.packaged { runtime.linkActivities() }
+        if ModuleSeamLink.activitiesPackaged?() == true { runtime.linkActivities() }
         // Motion starts at the first frame that shows it, until an agent owns the clock (LLP 1003.001 D7).
         if !ExactEnv.agentFreezes { _ = runtime.startOnFrame(true, at: 0) }
         core = SessionCore(runtime: runtime, text: TextEngine.pair(resolve: { [weak app] source in app?.resolveAsset(source) }, read: { [weak app] source in app?.assetBytes(source) },
@@ -922,7 +922,7 @@ public final class ExactSession {
             sampler?.reset(); frameHealth.reset() // a new runner numbers its transactions afresh (LLP 1079 D3)
             // A fresh boot over a running app (the dev menu's reload from the baked plan) starts the views over; the library already replaced its host.
             routerOp = nil
-            replaceBackgroundActions()
+            notificationHost.replaceBackgroundActions(self)
             if booted { awaitingTree = true; resetHeld(); viewsEpoch += 1; forgetAppearances(); presenter.launchAutofocusReleased = false } // a fresh boot's autofocus waits again
             booted = true; app.liveBooted(self)
             text.commitFonts()
@@ -1023,7 +1023,7 @@ public final class ExactSession {
         text = candidate.text
         text.commitFonts()
         updateToken = candidate.token
-        replaceBackgroundActions()
+        notificationHost.replaceBackgroundActions(self)
         return batch
     }
 
@@ -1194,7 +1194,7 @@ public final class ExactSession {
         regions.prepare(batch)
         #endif
         for op in outputs.activities {
-            if activityOutput == nil { activityOutput = ActivityOutput(self) }
+            if activityOutput == nil { activityOutput = ModuleSeamLink.makeActivities?(self) }
             activityOutput?.enqueue(op.payload)
         }
         for op in outputs.surfaces { pendingSurfaceWork.append((op.payload, generation)) }

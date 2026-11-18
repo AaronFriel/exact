@@ -23,6 +23,14 @@ package enum CoreExports {
     package static var collectionFixedSize: ((ExactRuntime, UInt32, UInt32, UInt32, UInt32) -> Double)?
     package static var collectionSnap: ((ExactRuntime, UInt32, Double, Double, Double, Double, Double) -> Double)?
     package static var collectionSnapStop: ((ExactRuntime, UInt32, Double, Double, Double, Double, Double) -> Double)?
+    /// The events native extensions raised (LLP 1133.004 D6), notification
+    /// actions among them; absent, the session hears none and does not ask.
+    package static var moduleEvent: ((ExactRuntime, Int) -> UInt32)? = exact_module_event
+    /// The activity arm's link; absent, the runtime links none.
+    package static var linkActivities: ((ExactRuntime) -> Void)? = exact_link_activities
+    /// The activity arm's snapshots and send completions; absent, no activity
+    /// output exists to ask.
+    package static var activities: ((ExactRuntime, Int) -> UInt32)? = exact_activities
 }
 
 extension Runtime {
