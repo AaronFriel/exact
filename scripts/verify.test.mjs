@@ -933,7 +933,7 @@ test('the largest text pass leaves native menu substitutes out of page scrolling
     { id: 11, type: 'Text', props: { testId: 'below-fold' } },
   ];
   const observation = { viewport: { w: 390, h: 844 }, items: [{ id: 1 }], advice: [{ kind: 'menu', id: 9 }] };
-  const s = { host: 'web', resize: async () => {}, prefer: async () => {}, clock: async () => {},
+  const s = { host: 'web', state: async () => ({}), resize: async () => {}, prefer: async () => {}, clock: async () => {},
     op: async req => req.op === 'tree' ? { nodes } : observation,
     carrier: { reveal: async id => { revealed.push(id); return { scrolled: false }; } } };
   const result = await largestText(s, 'menu open');

@@ -39,9 +39,11 @@ alert or a push. Test the refusal too; never wait in real time (pin `epoch`, `ti
 
 ## Before you call it done
 
-`verify` (`verify ios`) runs the tests, then `check`s the first screen and test ends,
-light and dark at two widths. On the web it reloads each end: a changed saved value is a
-finding; a field marked invalid by `aria-invalid` is a draft. It also checks a relaunch on that storage. Screenshots: `.exact/verify/`. A clean `verify` is
-done; a screen no test ends on is not checked, so end a test there. A finding that is the design
-is listed, not counted, with `"verify": {"accept": [{"finding": "contrast", "node": "<testId>",
-"why": "…"}]}` in app.json. Investigate with `agent web --storage s1 …`.
+`verify` (`verify ios`) checks the first screen, test ends and a relaunch, light and dark.
+A modal alert at a test's end gets one finding: answer it to check the page beneath,
+also at the largest text size. Anchored popovers stay checked. Web reloads check saved
+values even with an alert open; changed values are findings, and an `aria-invalid`
+field is a draft. Screenshots: `.exact/verify/`. End a test on each screen to check it.
+Accept a design finding in app.json: `"verify": {"accept":
+[{"finding": "contrast", "node": "<testId>", "why": "…"}]}`.
+Drive: `agent web --storage s1 …`.
