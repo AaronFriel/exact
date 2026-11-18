@@ -8,13 +8,13 @@
 
 `bun scripts/metrics.mjs --long` measures the hello app's stripped iOS simulator executable over an empty UIKit
 app's (LLP 1047.001 D8) and gates it at `IOS_HELLO_BYTES`. The size row's target is 8 MB, 8,000,000 B (Charlie,
-2026-11-17: "trying to get to 8MB is maybe worth it"). Main at 2c30ff62e, measured on an M5 Max with Xcode 27.2:
+2026-11-17: "trying to get to 8MB is maybe worth it"). Main at d00405a8d, measured on an M5 Max with Xcode 27.2:
 
 | row | measured | ceiling | target |
 |---|---:|---:|---:|
-| optimized for size (the embed default) | 12,340,048 B | 12,440,000 B | 8,000,000 B |
-| balanced (the iOS and tvOS app default) | 17,024,800 B | 17,125,000 B | |
-| optimized for speed (the Mac default) | 19,288,048 B | 19,390,000 B | |
+| optimized for size (the embed default) | 12,290,976 B | 12,390,000 B | 8,000,000 B |
+| balanced (the iOS and tvOS app default) | 16,975,664 B | 17,075,000 B | |
+| optimized for speed (the Mac default) | 19,238,960 B | 19,340,000 B | |
 
 The ceilings are a tripwire at main's size plus about 100 KB, not an accepted size. A row over its ceiling says how
 far over in 100 KB steps (`VIOLATION by 0.2 MB`), and the async lane's failure carries the step, so each further
@@ -188,7 +188,7 @@ of risk within each tranche. The tranches are independent unless the table says 
 | **R** | **rulings, not designs** | | | | | | |
 | R1 | frame health (card, overlay, sampler, report) | 300,936 | P (LLP 1079.000: every build) | the four-finger dev menu, `ExactSession.stopTrace` | a ruling that production links it only on request, or loads it | high | ruling |
 | R2 | the Rust panic machinery (backtrace symbolization) | 106,876 (`gimli`, `addr2line`, `rustc_demangle`, `object`, `std::backtrace_rs`) | O | std's panic handler prints a backtrace, even with `panic=abort` | nightly `build-std` with `panic_immediate_abort`; D9 declined nightly `build-std` | high | ruling |
-| R3 | Rust unwind tables | part of 206,516 (`__eh_frame` 92,948, `__unwind_info` 112,568) | O for Rust under `panic=abort` | the compiler emits them | `-C force-unwind-tables=no` for the Rust archive: a compiler lever, measured under D9 | low | ruling |
+| R3 | Rust unwind tables | 0 | O | measured 2026-11-18: `-C force-unwind-tables=no` reaches rustc and changes no row or section by a byte under fat LTO; what remains is the prebuilt standard library's | only with R2's `build-std` | high | ruling |
 
 ## Totals
 
@@ -204,15 +204,13 @@ joins the runner lane, and the icon pass stays in the core. Its ordering gives t
 | lanes R and A, and family lanes F1 to F3 (HatchDiagnostics' ≈43 KB counted once, in A1) | 2.80 MB | 9.69 MB |
 | navigation with modals, menus, fields | 1.18 MB | 8.52 MB |
 | frame health and the panic machinery (two rulings) | 0.41 MB | 8.11 MB |
-| Rust unwind tables (a D9 lever, not counted until measured after the cuts) | ≈0.09 MB | ≈8.0 MB |
 
-**Does it reach 8,000,000 B?** Plausibly, not demonstrably.
-- **By direct bytes** every step and two rulings reach about 8.1 MB. The last 0.1 MB needs the unwind-table lever, the
-  overhead that shrinks with the cuts, or what M1 finds.
+**Does it reach 8,000,000 B?** With the two rulings, on paper; without them, only if the overhead comes out.
+- **By direct bytes**, with what M1 attributed (Progress, below), every step reaches about 8.40 MB, and the two
+  rulings take it to about 7.84 MB.
 - **The unmeasured overhead** could add 0.3 to 0.4 MB. That covers the standard-library specializations, outlined
-  functions and Swift metadata serving only removed families.
-- **So does the unattributed Rust.** The first step, M1, attributes the 459 KB of unnamed Rust constants, and may
-  change the order.
+  functions and Swift metadata serving only removed families. Each tranche's link map measures it.
+- **The table above** is the list's first totals, before M1; the unwind-table lever it once counted saves nothing.
 
 **What the next tranche past the families costs in design.**
 - **Navigation, modals, menus and fields** need `NodeView` to keep no delegate conformance or `@objc` action for a
@@ -244,6 +242,10 @@ runner's seams; §9.3: the order of work). Landed, size row:
 | R4b to R4e: wakes into the core; tool calls and presence secrets behind their seams (moves) | e50d50b66 | unchanged |
 | C0 S1, S2a: the core reaches SVG and CSS filter only through link slots (moves) | 0b09b06a4 | +96 B |
 | A1: hatch diagnostics out of the production composition | 2c30ff62e | 12,340,048 B |
+| A3: the calc serializer (cut list A3; under a 16 KB page on this row) | 5269a0603 | unchanged |
+| R4f: native modules behind their seam (a move) | 734742f72 | unchanged |
+| the kernel's metrics share one value pool | 863eb0dbb | 12,307,392 B |
+| device lines checked without the device table's build facts | d00405a8d | 12,290,976 B |
 
 The rows after R3 are each lane's before-and-after on one Mac at its own base; main also grew about 33 KB from
 other work between bfc7f585a and 0b09b06a4. M1 attributed the Rust archive's 459 KB of unnamed constants: `url`'s
