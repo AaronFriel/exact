@@ -14,6 +14,15 @@ pub trait VisitSpans {
     fn visit_spans(&mut self, visit: &mut impl FnMut(&mut Span));
 }
 
+impl VisitSpans for StateOperand {
+    fn visit_spans(&mut self, visit: &mut impl FnMut(&mut Span)) {
+        match self {
+            Self::Literal(value) => value.visit_spans(visit),
+            Self::State(_) => {}
+        }
+    }
+}
+
 impl VisitSpans for Span {
     fn visit_spans(&mut self, visit: &mut impl FnMut(&mut Span)) {
         visit(self);

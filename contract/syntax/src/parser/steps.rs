@@ -422,34 +422,6 @@ impl Parser {
         })
     }
 
-    /// A state's name, then fields and list indexes at any depth, joined by
-    /// `.` (`gateway.state`, `rows.0`: feed F10, drums R7).
-    fn state_path(&mut self) -> R<String> {
-        let (mut name, _) = self.ident()?;
-        while self.eat_punct(".") {
-            name.push('.');
-            match self.peek_kind().clone() {
-                TokenKind::Number(n)
-                    if n.fract() == 0.0 && (0.0..=u32::MAX as f64).contains(&n) =>
-                {
-                    self.next();
-                    name.push_str(&format!("{}", n as u64));
-                }
-                TokenKind::Ident(_) => name.push_str(&self.ident()?.0),
-                other => {
-                    return self.err(
-                        "syntax-expected-name",
-                        format!(
-                            "expected a field or a list index after `.`, found {}",
-                            describe(&other)
-                        ),
-                    );
-                }
-            }
-        }
-        Ok(name)
-    }
-
     /// `clock until state <path> == <literal> within <ms>` (rules/DEFERRED.md,
     /// "Agent API", 2026-10-26), after `until`: the driver's own words, the
     /// literal as JSON text.
@@ -1259,36 +1231,7 @@ impl Parser {
                         self.expect_word("failures")?;
                         Step::ExpectNoFailures { span }
                     }
-                    "state" => {
-                        let name = self.state_path()?;
-                        let comparison = if self.eat_punct("==") {
-                            StateComparison::Equal
-                        } else if self.eat_punct(">=") {
-                            StateComparison::AtLeast
-                        } else if self.eat_punct("<=") {
-                            StateComparison::AtMost
-                        } else if self.at_ident("in") {
-                            self.next();
-                            StateComparison::In
-                        } else {
-                            return self.err("syntax-expected-step", "`expect state` takes `==`, `>=`, `<=`, or `in`");
-                        };
-                        let value = match comparison {
-                            StateComparison::AtLeast | StateComparison::AtMost => Expr::Number(self.step_number("a numeric bound")?, span),
-                            StateComparison::In => {
-                                let mut values = vec![self.state_literal()?];
-                                while !matches!(self.peek_kind(), TokenKind::Newline | TokenKind::Dedent | TokenKind::Eof) {
-                                    values.push(self.state_literal()?);
-                                }
-                                Expr::List(values, span)
-                            }
-                            StateComparison::Equal => self.state_literal()?,
-                        };
-                        if !matches!(self.peek_kind(), TokenKind::Newline | TokenKind::Dedent | TokenKind::Eof) {
-                            return self.err("syntax-expected-step", "`expect state` compares literals, not expressions");
-                        }
-                        Step::ExpectState { name, comparison, value, span }
-                    }
+                    "state" => self.expect_state(span)?,
                     other => {
                         // r32 t1 tried `expect value` for a field.
                         let hint = if other == "value" || other == "checked" {

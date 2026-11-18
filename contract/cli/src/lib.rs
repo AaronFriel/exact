@@ -60,6 +60,7 @@ mod surface;
 use surface::fact_shape;
 mod symbols;
 pub use contract_analyze::SuggestionCheck;
+pub use properties::check_test_states_path;
 pub use properties::{check_properties_path, check_suggestions_path, properties, tests};
 mod tests_json;
 pub use tests_json::{authored_json, tests_json};

@@ -582,15 +582,44 @@ export async function serverRequest(base, st) {
 /** A launch line's op and the `open` option it sets (`size` aside: it is two numbers). */
 const LAUNCH = { epoch: 'epoch', 'time-zone': 'timeZone', locale: 'locale', seed: 'seed' };
 
-/** Literal comparisons in a scripted state assertion; numeric bounds never coerce another JSON type. */
+/** Comparisons never coerce JSON types; equality and membership are structural. */
 export function stateHolds(got, step) {
   const equal = value => equalJson(got, value);
   switch (step.comparison) {
     case 'equal': return equal(step.value);
-    case 'at-least': return typeof got === 'number' && got >= step.value;
-    case 'at-most': return typeof got === 'number' && got <= step.value;
-    case 'in': return step.value.some(equal);
+    case 'not-equal': return !equal(step.value);
+    case 'at-least': return typeof got === 'number' && typeof step.value === 'number' && got >= step.value;
+    case 'at-most': return typeof got === 'number' && typeof step.value === 'number' && got <= step.value;
+    case 'in': return Array.isArray(step.value) && step.value.some(equal);
     default: throw new Error(`unknown state comparison ${step.comparison}`);
+  }
+}
+
+/** Both paths read one state reply. A missing path fails before inequality can negate equality. */
+export function stateExpectation(state, step) {
+  const bag = { ...state.resources, ...state.derives, ...state.slots };
+  const read = name => {
+    const [root, ...fields] = name.split('.');
+    if (!Object.hasOwn(bag, root)) return { message: `no state named "${root}"` };
+    let value = bag[root], path = root;
+    for (const field of fields) {
+      if (value === null || typeof value !== 'object' || !Object.hasOwn(value, field)) {
+        const description = value !== null && typeof value === 'object' && !Array.isArray(value)
+          ? `its fields: ${Object.keys(value).join(', ')}` : `it is ${JSON.stringify(value).slice(0, 200)}`;
+        return { message: `${path} has no field "${field}" (${description})` };
+      }
+      value = value[field]; path += `.${field}`;
+    }
+    return { value };
+  };
+  const got = read(step.name);
+  if (got.message) return got;
+  const expected = step.state === undefined ? { value: step.value } : read(step.state);
+  if (expected.message) return expected;
+  if (!stateHolds(got.value, { ...step, value: expected.value })) {
+    const operator = { equal: step.state === undefined ? '' : '== ', 'not-equal': '!= ', 'at-least': '>= ', 'at-most': '<= ', in: 'in ' }[step.comparison];
+    const operand = step.state === undefined ? JSON.stringify(expected.value) : `state ${step.state} (${JSON.stringify(expected.value)})`;
+    return { message: `${step.name} is ${JSON.stringify(got.value)}, expected ${operator}${operand}` };
   }
 }
 
@@ -1070,20 +1099,8 @@ export async function runTests({ host, browser, file, plan, app, size, env, webD
           }
           case 'expect-state': {
             const state = await s.state(undefined, undefined, false, false, { reveal: true });
-            const bag = { ...(state.resources ?? {}), ...(state.derives ?? {}), ...(state.slots ?? {}) };
-            // A field or a list index at any depth, `name.field` or `rows.0` (feed F10, drums R7).
-            const [name, ...fields] = st.name.split('.');
-            if (!(name in bag)) { failures.push(`${at}: no state named "${name}"`); break; }
-            let got = bag[name], path = name, missing = null;
-            for (const field of fields) {
-              if (got === null || typeof got !== 'object' || !(field in got)) { missing = field; break; }
-              got = got[field]; path += `.${field}`;
-            }
-            if (missing != null) { await fail(`${at}: ${path} has no field "${missing}" (${got !== null && typeof got === 'object' && !Array.isArray(got) ? `its fields: ${Object.keys(got).join(', ')}` : `it is ${JSON.stringify(got).slice(0, 200)}`})`); break; }
-            if (!stateHolds(got, st)) {
-              const operator = {equal: '', 'at-least': '>= ', 'at-most': '<= ', in: 'in '}[st.comparison];
-              await fail(`${at}: ${st.name} is ${JSON.stringify(got)}, expected ${operator}${JSON.stringify(st.value)}`);
-            }
+            const f = stateExpectation(state, st);
+            if (f) await fail(`${at}: ${f.message}`);
             break;
           }
           case 'expect-wakelock': {

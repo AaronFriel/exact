@@ -584,7 +584,7 @@ fn check_state_literal(value: &mut Expr) -> R<()> {
 fn state_literal_error(span: Span) -> SyntaxError {
     SyntaxError {
         id: "syntax-expected-step",
-        message: "`expect state` compares value literals, not expressions: a number, string, bool, `none`, `some(literal)`, list, or shape with literal fields".into(),
+        message: "`expect state` compares a literal or `state <path>`; literals are numbers, strings, bools, `none`, `some(literal)`, lists, or shapes with literal fields".into(),
         span,
     }
 }

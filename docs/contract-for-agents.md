@@ -6531,12 +6531,18 @@ options, and a checkbox with a `checked` binding `true` or `false`; else its des
 `expect state name == <literal>`, where `name` may go on into a record's fields
 (`board.active.present`) or a list index (`rows.0`). A literal is a number (negative
 allowed), string, bool, `none`, `some(literal)`, list (`["a", "b"]`, `[[1, -2], []]`),
-or shape with literal fields (`Point(x=1, y=-2)`). Equality compares the whole value
-structurally. Numeric bounds use `>=` or `<=` (`expect state offset >= 90`
-and `expect state offset <= 110`); they require a number, without coercing strings or bools.
+or shape with literal fields (`Point(x=1, y=-2)`). `==` and `!=` compare the whole value
+structurally (`expect state shown != "hint"`). Numeric bounds use `>=` or `<=`
+(`expect state offset >= 90` and `expect state offset <= 110`); they require a number, without coercing strings or bools.
 `expect state mode in "idle" "ready"` checks literal membership; alternatives use the same
-literals as `==`, separated by spaces. A mismatch prints the actual and expected values. `expect wakelock held|released` reads
-`state.wakelock.held`: the runner's record of displayed elements requesting the
+literals as `==`, separated by spaces. Every operator also accepts a state path on the
+right: `expect state pinned == state locked`, `expect state offset >= state minimum`,
+or `expect state mode in state allowedModes`. Both paths read the same state reply.
+Bounds require two numbers; `in` requires a list whose element type matches the left.
+Incompatible path types fail compilation with both types named. A missing path on
+either side fails, including with `!=`; a present `none` compares as a value. A
+mismatch prints both values and the right-hand path when present.
+`expect wakelock held|released` reads `state.wakelock.held`: the runner's record of displayed elements requesting the
 lock, not whether the OS or browser granted it. A mismatch names the holding
 view ids and their testIds when present, or says nothing holds it.
 A failed expect names any resource that
