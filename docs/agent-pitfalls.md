@@ -106,6 +106,12 @@ This list holds what the [agent guide](contract-for-agents.md)'s rules don't mak
   (Bake-off round 28, mood journal: 50.9 points against 47.4 on iOS; Chrome alike, with
   `border-box` too.)
 
+- **A column with `width="100%"` inside a dialog stays narrow in an iOS sheet.**
+  The dialog has `fit-content` width, as in HTML, so the child's percentage resolves
+  against that dialog's width. Put `width="100%" box-sizing="border-box"` on
+  the `dialog` itself to fill the sheet between its side insets. Verified on an
+  iPhone 17 Pro simulator, iOS 27.0 (#845).
+
 - **A root with `min-height="100%"` and `overflow-y="auto"` does not scroll itself.**
   `min-height` lets the box grow with its in-flow content (CSS), so it has nothing to
   scroll and the document scrolls instead: on the web a screenshot shows only the first
