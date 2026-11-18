@@ -551,7 +551,7 @@ pub struct Runner<D: DataSource> {
     /// Tool calls, running and to come (LLP 1133.023 D7).
     calls: calls::Calls,
     /// Locked secrets: the host's backend and the calls on it.
-    presence: presence_secrets::Presence,
+    presence: seams::PresenceState,
     /// The host's target, once it said ([`Runner::set_module_target`]).
     module_target: Option<String>,
     /// The optional parts this runner links, for its plan.
@@ -948,7 +948,7 @@ impl<D: DataSource> Runner<D> {
             processes: Default::default(),
             wakes: Default::default(),
             calls: Default::default(),
-            presence: Default::default(),
+            presence: seams::PresenceState(seams.presence.state()),
             module_target: None,
             seams,
             delivery,

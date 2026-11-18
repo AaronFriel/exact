@@ -334,7 +334,7 @@ impl<D: DataSource> Bridge<D> {
             if h.runner_mut().collected_aborts() {
                 x.notify();
             }
-            presenter.presences(h.runner_mut().take_presence_asks());
+            presenter.presences(h.runner_mut().take_presence_asks_json());
             h.runner_mut().publish_sockets(|batch| x.socket(batch)); // LLP 1016.000 D7
             presenter.prepend_to(s);
         }

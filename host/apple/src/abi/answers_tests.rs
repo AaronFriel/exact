@@ -82,8 +82,17 @@ fn each_production_export_answers_as_the_dispatcher() {
             Bridge::answer_ticket,
         ),
     ];
+    // `perf`'s numbers are measured work, which differs from run to run.
+    let shape = |reply: String, request: &str| match request.contains("\"perf\"") {
+        true => reply.replace(|c: char| c.is_ascii_digit() || c == '.', ""),
+        false => reply,
+    };
     for (request, export) in cases {
-        let general = reply(&mut booted(), request, Bridge::agent);
-        assert_eq!(reply(&mut booted(), request, export), general, "{request}");
+        let general = shape(reply(&mut booted(), request, Bridge::agent), request);
+        assert_eq!(
+            shape(reply(&mut booted(), request, export), request),
+            general,
+            "{request}"
+        );
     }
 }

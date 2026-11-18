@@ -567,7 +567,7 @@ export const classifications = [
     ["painted:host/painted/src/presence.rs", "Host::track_presence"],
     ["painted:host/painted/src/presenter.rs", "Presenter::service_commit"],
     ["runner:runner/src/runner/presence_secrets.rs", "LinkedPresence::presence_call#next:1"],
-    ["runner:runner/src/runner/seams.rs", "Runner::presence_answer Runner::presence_reply Runner::take_presence_asks"],
+    ["runner:runner/src/runner/seams.rs", "Runner::presence_answer Runner::presence_reply Runner::take_presence_asks Runner::take_presence_asks_json"],
     ["web:host/web/src/abi.rs", "exact_presence"],
   ]),
   group("presence storage", ["durable operation"], "app/account secret generation and backend queue", "durable",

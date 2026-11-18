@@ -633,10 +633,10 @@ impl Batch {
     /// (LLP 1133.010 D13), and, with a `service`, the item the host reads
     /// after it, one op per ask. Nothing secret: the value comes back by
     /// `exact_presence`.
-    pub fn presences(&mut self, asks: Vec<exact_runner::presence::PresenceAsk>) {
+    pub fn presences(&mut self, asks: Vec<String>) {
         for ask in asks {
             self.ops
-                .push(format!("{{\"op\":\"presence\",{}", &ask.json()[1..]));
+                .push(format!("{{\"op\":\"presence\",{}", &ask[1..]));
         }
     }
 

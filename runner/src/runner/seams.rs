@@ -20,6 +20,7 @@ use crate::request::{Dispatch, Work};
 use crate::{HoldAnswer, StoreWrite};
 use exact_plan::ModulesRow;
 use serde_json::{json, Value as Json};
+use std::any::Any;
 
 /// What a runner links of its optional parts, chosen by an entry's
 /// composition (LLP 1047.001 D11): every part for the plain boots
@@ -129,11 +130,24 @@ struct NoTools;
 
 impl<D: DataSource> Tools<D> for NoTools {}
 
+/// The presence seam's state, owned by the runner as the native modules'
+/// is ([`super::module_seam::ModuleState`]): its type is the presence
+/// code's own, made by the linked seam ([`PresenceSecrets::state`]) and
+/// reached only by that code (`presence_secrets.rs`), so a binary without
+/// presence holds none of its code, its drop included.
+pub(in crate::runner) struct PresenceState(pub(in crate::runner) Box<dyn Any>);
+
 /// The presence seam (LLP 1047.001 D11 item 4): locked secrets, the
 /// person's check and the host's backend (`presence_secrets.rs`). Each
 /// provided method is the answer with no presence name: nothing is kept
 /// locked, and a store's presence call is refused.
 pub trait PresenceSecrets<D: DataSource> {
+    /// The presence state for a new runner, which it keeps: none here. A
+    /// seam's other methods run on the state its own `state` made, so an
+    /// implementation that delegates them delegates this too.
+    fn state(&self) -> Box<dyn Any> {
+        Box::new(())
+    }
     /// [`Runner::install_presence`].
     fn install_presence(&self, _: &mut Runner<D>, _: Backend, _: Option<String>) {}
     /// Whether this session keeps locked secrets.
@@ -148,6 +162,10 @@ pub trait PresenceSecrets<D: DataSource> {
     fn presence_rebound(&self, _: &mut Runner<D>) {}
     /// [`Runner::take_presence_asks`].
     fn take_presence_asks(&self, _: &mut Runner<D>) -> Vec<PresenceAsk> {
+        Vec::new()
+    }
+    /// [`Runner::take_presence_asks_json`].
+    fn take_presence_asks_json(&self, _: &mut Runner<D>) -> Vec<String> {
         Vec::new()
     }
     /// [`Runner::presence_answer`].
@@ -375,6 +393,13 @@ impl<D: DataSource> Runner<D> {
     pub fn take_presence_asks(&mut self) -> Vec<PresenceAsk> {
         let p = self.seams.presence;
         p.take_presence_asks(self)
+    }
+
+    /// [`Runner::take_presence_asks`], each as its JSON
+    /// ([`PresenceAsk::json`]), for a host that only sends them on.
+    pub fn take_presence_asks_json(&mut self) -> Vec<String> {
+        let p = self.seams.presence;
+        p.take_presence_asks_json(self)
     }
 
     /// How a check the host made ended. A call let go meanwhile is dropped.
