@@ -51,7 +51,15 @@ package protocol NavigationHosting: AnyObject {
     /// The platform's dismissal of a modal route; nil when it went, else why not.
     @discardableResult func dismiss(_ route: NodeView) -> String?
 
+    // A modal route in its sheet, on the core's top-layer stack (`DialogHost`).
+    /// The sheet's own rows round the route: its title, Back, cancel and confirm.
+    func makeRouteChrome() -> (any SheetChrome)?
+    func adoptRouteSheet(_ entry: DialogHost.Entry, _ sheet: DialogSheet)
+    func releaseRouteSheet(_ entry: DialogHost.Entry)
+
     #if EXACT_AGENT
+    /// `state.navigation.sheet` for a modal route painted in the window; nil with none.
+    var paintedModalObservation: [String: Any]? { get }
     /// A route or tabpanel this host hid, which it inerts with it.
     func hides(_ node: NodeView) -> Bool
     func inspectionOwns(_ view: NSView) -> Bool
@@ -135,6 +143,33 @@ package protocol BackSwiping: AnyObject {
     func swiped(deltaX: CGFloat) -> Bool
 }
 
+/// A route's sheet's own rows round the route it holds (navigation's `RouteChrome`).
+package protocol SheetChrome: NSView {
+    func hold(_ content: BlockView)
+    func size(around size: CGSize) -> CGSize
+    /// The height the rows take from the sheet's content.
+    var rows: CGFloat { get }
+    /// Whether `view` is one of the rows' own views.
+    func owns(_ view: NSView) -> Bool
+    /// The rows' buttons Tab reaches after the route's own stops.
+    var stops: [NSView] { get }
+    var backButton: NSButton { get }
+    var cancelButton: NSButton { get }
+    var confirmButton: NSButton { get }
+}
+
+/// What a route's sheet shows of its header (navigation's `SheetHeader`).
+package protocol SheetHeading {
+    var heading: NodeView? { get }
+    var title: String { get }
+    var cancel: NodeView? { get }
+    var confirm: NodeView? { get }
+    /// The header shows nothing else: its whole box is the platform's.
+    var whole: Bool { get }
+    /// The header's nodes the sheet's own rows stand for.
+    var stoodFor: [NodeView] { get }
+}
+
 /// The slots are set before any session is made, and read on the main thread.
 package enum NavigationLink {
     package static var make: ((Presenter) -> any NavigationHosting)? = { NavigationHost(presenter: $0) }
@@ -195,8 +230,12 @@ package final class NoNavigation: NavigationHosting {
     package func goBack() -> Bool { false }
     package func goForward() -> Bool { false }
     package func dismiss(_ route: NodeView) -> String? { "its stack has no navigation root" }
+    package func makeRouteChrome() -> (any SheetChrome)? { nil }
+    package func adoptRouteSheet(_ entry: DialogHost.Entry, _ sheet: DialogSheet) {}
+    package func releaseRouteSheet(_ entry: DialogHost.Entry) {}
 
     #if EXACT_AGENT
+    package var paintedModalObservation: [String: Any]? { nil }
     package func hides(_ node: NodeView) -> Bool { false }
     package func inspectionOwns(_ view: NSView) -> Bool { false }
     package func agentBack() -> (way: String, refused: String)? { nil }

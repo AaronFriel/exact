@@ -8,9 +8,9 @@ import AppKit
 /// chrome it is painted in the page over a backdrop, as it was. A modal route
 /// is a sheet by the same means (D7.4, RouteSheetMac.swift): an entry here
 /// whose node is the route, which navigation shows and takes away.
-final class DialogHost {
+package final class DialogHost {
     private(set) weak var presenter: Presenter?
-    final class Entry {
+    package final class Entry {
         var dialog: NodeView
         /// Its authored parent: the container of the node it was lifted out
         /// of, as that node has it now (`MenuHost.Entry.parent`).
@@ -28,7 +28,7 @@ final class DialogHost {
         /// of its header, and the header's nodes hidden while it does.
         let route: Bool
         var routeBase: NodeView?
-        var header: SheetHeader?
+        var header: (any SheetHeading)?
         var stoodFor: [NodeView] = []
         init(_ dialog: NodeView, previous: NSView?, route: Bool = false) {
             self.dialog = dialog; self.previous = previous; self.route = route
@@ -457,5 +457,53 @@ final class DialogBackdrop: NSView {
         if downOutside, outside(event) { host?.outside() }
     }
     override func scrollWheel(with event: NSEvent) {}
+}
+
+extension DialogHost {
+    /// The entry of a modal route in its sheet.
+    func entry(ofRoute node: NodeView) -> Entry? { entries.first { $0.route && $0.dialog === node } }
+    /// Whether the open top modal is a route's sheet, not a dialog.
+    var routeActive: Bool { entries.last?.route == true }
+
+    /// The parent supplies the percentage basis and automatic-size ceiling.
+    /// Routes subtract their chrome and retain authored sizes through Fit;
+    /// ordinary dialogs keep AtMost. Layout rows stay in the kernel.
+    func block(of entry: Entry) -> HostBlock? {
+        guard var most = maximum else { return nil }
+        if entry.route, let chrome = entry.sheet?.chrome { most.height = max(0, most.height - chrome.rows) }
+        return entry.route ? .fit(most) : .atMost(most)
+    }
+
+    /// The driver's tap on an authored button a sheet's row stands for:
+    /// the row's own click. Nil when `node` is no such button.
+    func activate(_ node: NodeView) -> Bool? {
+        guard let entry = entries.last(where: { $0.route && ($0.header?.cancel === node || $0.header?.confirm === node) }),
+              let chrome = entry.sheet?.chrome else { return nil }
+        let button = entry.header?.cancel === node ? (chrome.backButton.isHidden ? chrome.cancelButton : chrome.backButton) : chrome.confirmButton
+        guard entry === entries.last, presenter?.alerts.presented == nil, !button.isHidden, button.isEnabled, !node.inert else { return false }
+        button.performClick(nil)
+        return true
+    }
+
+    /// Whether `node` is shown by a sheet's own row: the heading its title, a button its push button.
+    func rowShows(_ node: NodeView) -> String? {
+        guard let header = entries.last(where: { $0.route && $0.header?.stoodFor.isEmpty == false && ($0.header?.heading === node || $0.header?.cancel === node || $0.header?.confirm === node) })?.header else { return nil }
+        return header.heading === node ? "title" : "NSButton"
+    }
+
+    #if EXACT_AGENT
+    /// `state.navigation.sheet` (the agent): the top modal route's presentation.
+    var routeObservation: [String: Any]? {
+        guard let presenter else { return nil }
+        if let entry = entries.last(where: \.route) {
+            let id = { (node: NodeView?) -> Any in node.map { Int($0.id) } ?? NSNull() }
+            let size = entry.sheet?.window.contentView?.frame.size ?? .zero
+            return ["route": Int(entry.dialog.id), "presentation": "sheet", "title": entry.header?.title ?? NSNull(),
+                    "cancel": id(entry.header?.cancel), "confirm": id(entry.header?.confirm), "header": entry.header.map { $0.whole ? "projected" : "partly" } ?? "authored",
+                    "size": [InspectionValue.r2(size.width), InspectionValue.r2(size.height)], "closedby": dismissalOwner(of: entry.dialog).props["closedby"] ?? "closerequest"]
+        }
+        return presenter.navigation.paintedModalObservation
+    }
+    #endif
 }
 #endif

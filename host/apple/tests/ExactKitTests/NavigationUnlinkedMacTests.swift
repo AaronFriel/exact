@@ -95,5 +95,62 @@ final class NavigationUnlinkedMacTests: XCTestCase {
         try note("column hidden")
         return seen
     }
+    /// A `dialog` shown modally is on the core's top-layer stack, as a sheet
+    /// or painted, the same with navigation or without it: the page behind
+    /// it blocked, its field focused, and all of it given back as it closes.
+    func testADialogOpensAndClosesTheSameWithoutNavigation() throws {
+        for painted in [true, false] {
+            let unlinked = try dialog(linked: false, painted: painted)
+            XCTAssertEqual(unlinked, try dialog(linked: true, painted: painted))
+            XCTAssertEqual(unlinked, ["open #3 sheet \(!painted) blocks page true button inert true focus field true in page false",
+                                      "open none sheet false blocks page false button inert false focus field false in page true"], "painted \(painted)")
+        }
+    }
+
+    private func dialog(linked: Bool, painted: Bool) throws -> [String] {
+        let make = NavigationLink.make, sidebar = NavigationLink.makeSidebar, swipe = NavigationLink.makeBackSwipe
+        if !linked { NavigationLink.make = nil; NavigationLink.makeSidebar = nil; NavigationLink.makeBackSwipe = nil }
+        defer { NavigationLink.make = make; NavigationLink.makeSidebar = sidebar; NavigationLink.makeBackSwipe = swipe }
+        _ = NSApplication.shared
+        let p = Presenter()
+        XCTAssertEqual(p.navigation is NoNavigation, !linked)
+        p.dialogs.painted = painted
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 500, height: 400), styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        self.window = window
+        window.contentView = p.viewport
+        window.makeKeyAndOrderFront(nil)
+        p.apply(wireBatch([
+            ["op": "create", "id": 1, "kind": "view"],
+            ["op": "create", "id": 2, "kind": "button", "props": ["commandfor": "form", "command": "show-modal"]],
+            ["op": "create", "id": 3, "kind": "view", "props": ["semanticTag": "dialog", "id": "form", "closedby": "any"]],
+            ["op": "create", "id": 4, "kind": "input", "props": ["value": "draft", "autofocus": "true"]],
+            ["op": "children", "id": 1, "ids": [2, 3]], ["op": "children", "id": 3, "ids": [4]], ["op": "roots", "ids": [1]],
+            ["op": "frame", "id": 1, "x": 0, "y": 0, "w": 500, "h": 400],
+            ["op": "frame", "id": 2, "x": 10, "y": 10, "w": 80, "h": 30],
+            ["op": "frame", "id": 3, "x": 0, "y": 0, "w": 240, "h": 150],
+            ["op": "frame", "id": 4, "x": 10, "y": 10, "w": 200, "h": 30],
+        ]))
+        let page = try XCTUnwrap(p.views[1]), button = try XCTUnwrap(p.views[2]), dialog = try XCTUnwrap(p.views[3]), field = try XCTUnwrap(p.views[4])
+        func focused() -> Bool {
+            p.focusedNode === field || (field.window?.firstResponder as? NSView).map { $0 === field || $0.isDescendant(of: field) || field.field?.currentEditor() === $0 } == true
+        }
+        func settle(_ done: () -> Bool) {
+            let deadline = Date().addingTimeInterval(5)
+            while !done(), Date() < deadline { RunLoop.main.run(mode: .default, before: Date().addingTimeInterval(0.02)) }
+        }
+        func note() -> String {
+            let sheet = p.dialogs.entries.last?.sheet.map { $0.window.isVisible } ?? false
+            return "open \(p.dialogs.active.map { "#\($0.id)" } ?? "none") sheet \(sheet) blocks page \(p.dialogs.blocks(button)) button inert \(button.inert) focus field \(focused()) in page \(dialog.superview === page.container || dialog.superview === page)"
+        }
+        var seen: [String] = []
+        p.dialogs.show(dialog)
+        settle { p.dialogs.active === dialog && focused() && (painted || p.dialogs.entries.last?.sheet?.window.isVisible == true) }
+        seen.append(note())
+        p.dialogs.close(dialog)
+        settle { p.dialogs.active == nil && (dialog.superview === page.container || dialog.superview === page) }
+        seen.append(note())
+        return seen
+    }
 }
 #endif

@@ -46,7 +46,7 @@
 import AppKit
 
 /// What a sheet shows of a modal route's header.
-struct SheetHeader {
+struct SheetHeader: SheetHeading {
     /// Its heading: none for a header of buttons alone, whose title row is empty.
     let header: NodeView, heading: NodeView?
     /// The heading's words: the sheet's title row.
@@ -132,7 +132,7 @@ final class RouteChromeButton: NSButton, InspectionOwned {
 
 /// A modal route's sheet, as its window's content: the title row, the
 /// route's own content, and the row of buttons, in SwiftUI's measures.
-final class RouteChrome: NSView {
+final class RouteChrome: NSView, SheetChrome {
     private(set) weak var content: BlockView?
     package let title = NSTextField(labelWithString: "")
     let back = RouteChromeButton(title: "Back", target: nil, action: nil)
@@ -301,10 +301,6 @@ extension NavigationHost {
 }
 
 extension DialogHost {
-    /// The entry of a modal route in its sheet.
-    func entry(ofRoute node: NodeView) -> Entry? { entries.first { $0.route && $0.dialog === node } }
-    /// Whether the open top modal is a route's sheet, not a dialog.
-    var routeActive: Bool { entries.last?.route == true }
 
     /// After a batch, never inside one (AppKit turns the main queue while a
     /// sheet arrives or leaves): the modal routes navigation shows as
@@ -348,7 +344,7 @@ extension DialogHost {
     private func replace(_ entry: Entry, with route: NodeView, header: SheetHeader?) {
         guard let presenter, let sheet = entry.sheet else { return }
         sheet.window.makeFirstResponder(nil)
-        sheet.chrome?.thaw()
+        sheet.routeChrome?.thaw()
         let previous = entry.dialog
         release(entry)
         presenter.blocks.release(previous)
@@ -369,19 +365,19 @@ extension DialogHost {
 
     /// The sheet's window was made for `entry`: its rows press the authored buttons.
     func adopt(_ entry: Entry, _ sheet: DialogSheet) {
-        sheet.chrome?.onPress = { [weak self, weak entry] id in
+        sheet.routeChrome?.onPress = { [weak self, weak entry] id in
             guard let self, let entry, self.entries.contains(where: { $0 === entry }),
                   let node = self.presenter?.views[id], node === entry.header?.cancel || node === entry.header?.confirm else { return }
             self.presenter?.press(id, fromNativeMenu: true)
         }
-        presenter?.blocks.onDestroyed = { [weak self] node in self?.entry(ofRoute: node)?.sheet?.chrome?.freeze() }
-        project(entry, entry.header, fits: false)
+        presenter?.blocks.onDestroyed = { [weak self] node in self?.entry(ofRoute: node)?.sheet?.routeChrome?.freeze() }
+        project(entry, entry.header as? SheetHeader, fits: false)
     }
 
     /// What `entry`'s sheet shows of its route's header now: the rows, the
     /// header's nodes they stand for hidden, and those boxes the platform's.
     func project(_ entry: Entry, _ header: SheetHeader?, fits: Bool = true) {
-        guard let presenter, let sheet = entry.sheet, let chrome = sheet.chrome else { return }
+        guard let presenter, let sheet = entry.sheet, let chrome = sheet.routeChrome else { return }
         entry.header = header
         let next = header?.stoodFor ?? []
         for node in entry.stoodFor where !next.contains(where: { $0 === node }) && live(node) { node.isHidden = false }
@@ -423,45 +419,19 @@ extension DialogHost {
         presenter?.covers.report("route-sheet", covers)
     }
 
-    /// The parent supplies the percentage basis and automatic-size ceiling.
-    /// Routes subtract their chrome and retain authored sizes through Fit;
-    /// ordinary dialogs keep AtMost. Layout rows stay in the kernel.
-    func block(of entry: Entry) -> HostBlock? {
-        guard var most = maximum else { return nil }
-        if entry.route, let chrome = entry.sheet?.chrome { most.height = max(0, most.height - chrome.rows) }
-        return entry.route ? .fit(most) : .atMost(most)
-    }
 
-    /// The driver's tap on an authored button a sheet's row stands for:
-    /// the row's own click. Nil when `node` is no such button.
-    func activate(_ node: NodeView) -> Bool? {
-        guard let entry = entries.last(where: { $0.route && ($0.header?.cancel === node || $0.header?.confirm === node) }),
-              let chrome = entry.sheet?.chrome else { return nil }
-        let button = entry.header?.cancel === node ? (chrome.back.isHidden ? chrome.cancel : chrome.back) : chrome.confirm
-        guard entry === entries.last, presenter?.alerts.presented == nil, !button.isHidden, button.isEnabled, !node.inert else { return false }
-        button.performClick(nil)
-        return true
-    }
 
-    /// Whether `node` is shown by a sheet's own row: the heading its title, a button its push button.
-    func rowShows(_ node: NodeView) -> String? {
-        guard let header = entries.last(where: { $0.route && $0.header?.stoodFor.isEmpty == false && ($0.header?.heading === node || $0.header?.cancel === node || $0.header?.confirm === node) })?.header else { return nil }
-        return header.heading === node ? "title" : "NSButton"
-    }
 
-    /// `state.navigation.sheet` (the agent): the top modal route's presentation.
-    var routeObservation: [String: Any]? {
-        guard let presenter else { return nil }
-        if let entry = entries.last(where: \.route) {
-            let id = { (node: NodeView?) -> Any in node.map { Int($0.id) } ?? NSNull() }
-            let size = entry.sheet?.window.contentView?.frame.size ?? .zero
-            return ["route": Int(entry.dialog.id), "presentation": "sheet", "title": entry.header?.title ?? NSNull(),
-                    "cancel": id(entry.header?.cancel), "confirm": id(entry.header?.confirm), "header": entry.header.map { $0.whole ? "projected" : "partly" } ?? "authored",
-                    "size": [InspectionValue.r2(size.width), InspectionValue.r2(size.height)], "closedby": dismissalOwner(of: entry.dialog).props["closedby"] ?? "closerequest"]
-        }
-        // Without navigation no modal route is painted in the window.
-        guard let navigation = presenter.navigation as? NavigationHost, let painted = navigation.paintedModal else { return nil }
-        return ["route": Int(painted.id), "presentation": "painted", "kept": navigation.keptSheets[painted.id] ?? NSNull()]
-    }
+}
+
+extension RouteChrome {
+    var backButton: NSButton { back }
+    var cancelButton: NSButton { cancel }
+    var confirmButton: NSButton { confirm }
+}
+
+extension DialogSheet {
+    /// The route's sheet's own rows, while the sheet holds a modal route.
+    var routeChrome: RouteChrome? { chrome as? RouteChrome }
 }
 #endif

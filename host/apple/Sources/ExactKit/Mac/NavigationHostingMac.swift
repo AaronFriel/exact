@@ -7,6 +7,14 @@ import AppKit
 extension NavigationHost: NavigationHosting {
     var stackSplit: any StackSplitting { split }
     func keepsForExit(_ id: UInt32) -> Bool { transitions.keeps(id) }
+    func makeRouteChrome() -> (any SheetChrome)? { RouteChrome() }
+    func adoptRouteSheet(_ entry: DialogHost.Entry, _ sheet: DialogSheet) { presenter.dialogs.adopt(entry, sheet) }
+    func releaseRouteSheet(_ entry: DialogHost.Entry) { presenter.dialogs.release(entry) }
+    #if EXACT_AGENT
+    var paintedModalObservation: [String: Any]? {
+        paintedModal.map { ["route": Int($0.id), "presentation": "painted", "kept": keptSheets[$0.id] ?? NSNull()] }
+    }
+    #endif
 }
 
 extension SplitHost: StackSplitting {
