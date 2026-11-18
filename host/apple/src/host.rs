@@ -196,6 +196,9 @@ pub(crate) struct Mirror {
 pub struct Host<D: DataSource> {
     pub(crate) preloads: Option<Box<dyn crate::launch_preloads::LaunchWork>>,
     pub(crate) launch_store: Option<std::sync::Arc<crate::launch_preloads::StoreWatch>>,
+    /// Tell the app's widgets its store changed: the I/O link's, which keeps
+    /// the store they read; none without I/O.
+    widget_changed: Option<fn(&str)>,
     boot_requests: Vec<RequestOut>,
     preload_content: Vec<String>,
     preload_accepted: bool,
@@ -593,6 +596,7 @@ impl<D: DataSource> Host<D> {
             .unwrap_or_default();
         let mut host = Host {
             launch_store: None,
+            widget_changed: links.io.map(|io| io.widget_changed),
             preloads,
             boot_requests,
             preload_content,

@@ -178,6 +178,8 @@ pub struct IoLinks {
     /// Copy an app file a share names for the sheet, under the app's
     /// `fs.read` grants: [`crate::picker::share_copy`].
     pub share_copy: ShareCopy,
+    /// Tell the app's widgets its store changed: [`crate::store::widget_changed`].
+    pub widget_changed: fn(&str),
 }
 
 /// How [`IoLinks`] copies an app file a share names (`{"path","to"}`) under
@@ -218,6 +220,7 @@ impl IoLinks {
         start: crate::executor::start_io,
         write_file: crate::host::canvas_capture::write,
         share_copy: crate::picker::share_copy,
+        widget_changed: crate::store::widget_changed,
     };
 }
 

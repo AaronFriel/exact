@@ -151,6 +151,7 @@ pub use presence_secrets::{PresenceAnswer, PresenceAsk};
 mod processes;
 mod provenance;
 mod seams;
+pub(crate) use processes::refusal as process_refusal;
 pub use provenance::CallOrigin;
 pub use seams::{ModuleLinks, PresenceSecrets, TextAxes, Tools};
 mod wakes;
