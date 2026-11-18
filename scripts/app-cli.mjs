@@ -70,6 +70,12 @@ export function compilerWarnings(text, cwd = process.cwd()) {
  * surface that shows part of a failed build's output starts at the first, the cause the later ones may follow from. */
 export const compilerError = (line) => /^.+:\d+:\d+ \[[\w-]+\] /.test(line);
 
+/** Which Exact checkout an app's command runs, and its commit: the launcher's own answer (`help`, each build). */
+export const checkoutLine = (exact2) => {
+  const commit = spawnSync('git', ['-C', exact2, 'rev-parse', '--short=9', 'HEAD'], { encoding: 'utf8' }).stdout?.trim();
+  return `Exact checkout: ${exact2}${commit ? ` at ${commit}` : ''}`;
+};
+
 /** What a failed JS-target web build (`host/web-js/build.mjs`) said that is the app's to act on, from its stderr: the
  * types app.ts imports when rewritten, warnings, the diagnostics, then the compiler's warnings. Every compiler error is
  * kept with its quoted line and caret, as `contract build` prints them. Cargo's progress, a rustc warning's excerpt and
@@ -312,7 +318,9 @@ async function verbRun({ dir, name, game = false, exact2, args }, reply) {
   if (asked !== null) {
     const help = await import(resolve(exact2, 'scripts/help.mjs')).catch(() => null);
     if (!help) { console.error(`no Exact checkout at ${exact2}: EXACT names the checkout`); return 1; }
-    return help.printHelp(asked, { verbs: Object.keys(verbs), own, all: rest.includes('all') });
+    const code = help.printHelp(asked, { verbs: Object.keys(verbs), own, all: rest.includes('all') });
+    if (asked === '' && code === 0) console.log(`\n${checkoutLine(exact2)}`);
+    return code;
   }
   if (verb === 'web' && rest.includes('--ready') && !game) {
     console.error('web --ready waits for a game\'s dev loop, which serves while it builds; an app\'s web prints its URL once it serves');
@@ -397,6 +405,9 @@ async function verbRun({ dir, name, game = false, exact2, args }, reply) {
     const error = (await import(resolve(exact2, 'scripts/help.mjs'))).appleBuildRefusal(rest);
     if (error) { console.error(error); reply?.({ code: 'build_failed', error }); return log(2); }
   }
+  // A long build says which Exact it builds with: a worktree's launcher can resolve the main tree's checkout, and a
+  // fix tested against another one is not in the build (LLP 1156.006.000 D12).
+  if (['ios', 'mac', 'linux', 'windows', 'android', 'share', 'web-build'].includes(verb)) console.error(`exact: ${checkoutLine(exact2)}`);
   // A native verb names its platform in app.json the first time, after that platform's setup rows, and keeps the
   // generated workspace current unless the app authored one (LLP 1153 D1.2; scripts/app-shells.mjs). A drive's
   // host counts (`test ios`). Absent from a checkout that lacks the module (the scaffold's test SDK), it is skipped.
