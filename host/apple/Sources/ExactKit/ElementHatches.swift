@@ -193,7 +193,7 @@ final class ElementHatches {
         // counts the rest, so a fling does not flood the journal.
         let quiet = entry.inList && (calls[word]?[event.name] ?? 0) > 1
         // A development build notices a recognizer the call added and did not declare (§3.4).
-        let had = HatchDiagnostics.measuring && event != .ended ? regions.recognizers(under: entry.node) : nil
+        let had = HatchDiagnosticsLink.measuring && event != .ended ? regions.recognizers(under: entry.node) : nil
         let reusable = presenter.session?.natives.elementHatch(entry.node, event: event.rawValue, platform: Self.platform(of: entry.node, presenter), quiet: quiet) ?? false
         if let had { regions.undeclared(under: entry.node, by: "element \(word)") { had.contains(ObjectIdentifier($0)) } }
         // A frame's arm says what the call changed of what it owns (LLP 1020.002 §9).
@@ -252,7 +252,7 @@ final class ElementHatches {
     /// `state.hatches`: under `words`, per word, how many are live, what they
     /// gave up, and the calls so far (LLP 1075.003.000.001 §3.3: words are
     /// apart from the reply's other fields, so no word can be taken for one).
-    func observation(_ diagnostics: HatchDiagnostics?) -> [String: Any] {
+    func observation(_ diagnostics: (any HatchDiagnosing)?) -> [String: Any] {
         var live: [String: Int] = [:], reused: [String: Int] = [:]
         for entry in nodes.values {
             let word = entry.node.props["hatch"] ?? ""

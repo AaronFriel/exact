@@ -56,8 +56,9 @@ let intentFileSettings: [SwiftSetting] = intentFiles ? [.define("EXACT_INTENT_FI
 // Core Animation's filter keys (`backdropRects`).
 let devTools: [SwiftSetting] = ProcessInfo.processInfo.environment["EXACT_UPDATE_TRUST"] == "production" ? [] : [.define("EXACT_INSPECT"), .define("EXACT_AGENT")]
 // A production trust bake cannot enter agent mode (LLP 1069.007 D2), so its
-// ExactKit target does not compile the carrier or inspection implementation.
-// Development keeps the same sources and API it has always had.
+// ExactKit target does not compile the carrier or inspection implementation,
+// nor hatch diagnostics (LLP 1047.001 D11). Development keeps the same
+// sources and API it has always had.
 let agentSources = ProcessInfo.processInfo.environment["EXACT_UPDATE_TRUST"] == "production" ? [
     "ActivityAgent.swift",
     "Agent.swift",
@@ -70,6 +71,7 @@ let agentSources = ProcessInfo.processInfo.environment["EXACT_UPDATE_TRUST"] == 
     "AgentScrollProbe.swift",
     "AgentSensors.swift",
     "AgentSocketStartup.swift",
+    "HatchDiagnostics.swift",
     "IOS/AgentAimIOS.swift",
     "IOS/AgentCheckIOS.swift",
     "IOS/AgentFlatIOS.swift",

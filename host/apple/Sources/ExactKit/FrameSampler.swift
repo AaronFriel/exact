@@ -491,7 +491,7 @@ final class FrameSampler: NSObject {
         lateCount += 1
         missed += record.missed
         // The hatches that ran in it: the sample's own interval, `(now − interval, now]`.
-        record.hatches = session?.hatchDiagnostics.window(from: now - record.interval / 1000, to: now)
+        record.hatches = session?.natives.diagnostics?.window(from: now - record.interval / 1000, to: now)
         record.phases = HostPhases.shared.window(from: now - record.interval / 1000, to: now)
         if record.hatches != nil || record.phases != nil { records[records.count - 1] = record }
         keepRecorded(record, scrolled)
@@ -683,7 +683,7 @@ extension ExactSession {
             "frames": frames,
             "perf": perf,
             // The hatches (LLP 1075.003.000.001 §3.3), read in this same turn, so the sections agree.
-            "hatches": ["state": presenter.elements.observation(hatchDiagnostics), "perf": hatchPerf()],
+            "hatches": ["state": presenter.elements.observation(natives.diagnostics), "perf": natives.diagnostics?.perf(of: self) ?? [:]],
         ]
         trace.merge(traceSnapshot()) { _, snapshot in snapshot }
         do {
@@ -715,7 +715,7 @@ extension ExactSession {
     /// Save Trace, ask.
     func measurePerf(frameSampler: Bool = true) {
         guard FrameSampler.measured else { return }
-        HatchDiagnostics.measuring = true
+        HatchDiagnosticsLink.measuring = true
         if frameSampler, sampler == nil { sampler = FrameSampler(session: self) }
         runtime.measureWork()
     }

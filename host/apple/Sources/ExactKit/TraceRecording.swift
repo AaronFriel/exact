@@ -68,7 +68,7 @@ extension ExactSession {
     /// Record each display-link callback from now until `stopTrace`.
     public func startTrace() {
         if sampler == nil { sampler = FrameSampler(session: self) }
-        if HatchDiagnostics.available { HatchDiagnostics.measuring = true }
+        if HatchDiagnosticsLink.available { HatchDiagnosticsLink.measuring = true }
         guard sampler?.beginRecording() == true else {
             releaseSampler()
             log("startTrace_EXPERIMENTAL refused: a recording is running, or the window has no display link")
@@ -334,7 +334,7 @@ extension FrameSampler {
             "segments": segments,
             "late": lateJSON,
             "lateShown": "\(lateJSON.count) of \(lateCount)",
-            "hatches": HatchDiagnostics.available ? "timed" : "not timed in a production build",
+            "hatches": HatchDiagnosticsLink.available ? "timed" : "not timed in a production build",
         ]
         if let render { out["render"] = render.merging(["columns": renderColumns]) { a, _ in a } }
         return out

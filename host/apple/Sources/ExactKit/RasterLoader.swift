@@ -303,7 +303,7 @@ final class RasterLoader {
     /// A presented frame (the frame sampler's): each loading image whose box
     /// shows starts its blank time.
     func sampleBlank() {
-        guard HatchDiagnostics.available else { return }
+        guard HatchDiagnosticsLink.available else { return }
         let loading = interests.filter { !$0.value.delivered && ($0.value.failure == nil || $0.value.held) }
         guard !loading.isEmpty || !deferred.isEmpty else { return }
         // A decode that finished waits here for the main thread to deliver it:

@@ -40,7 +40,7 @@ final class RasterTimings {
     var clock: () -> Double = CACurrentMediaTime
 
     func asked(_ view: UInt32) {
-        guard HatchDiagnostics.available else { return }
+        guard HatchDiagnosticsLink.available else { return }
         live[view] = Stamps(asked: clock())
     }
     func admitted(_ view: UInt32) { stamp(view) { if $0.admitted == nil { $0.admitted = self.clock() } } }

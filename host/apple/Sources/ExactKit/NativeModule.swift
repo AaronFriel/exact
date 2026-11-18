@@ -417,9 +417,10 @@ private let nativeNowCallback: NativeTable.NowFn = { host in
 }
 
 final class NativeViews {
-    weak var session: ExactSession? { didSet { hatchDiagnostics.attach(session) } }
-    /// What Exact times of each hatch call and what hatch code records (LLP 1075.003.000.001 §3.1–3.2).
-    let hatchDiagnostics = HatchDiagnostics()
+    weak var session: ExactSession? { didSet { diagnostics?.attach(session) } }
+    /// What Exact times of each hatch call and what hatch code records (LLP
+    /// 1075.003.000.001 §3.1–3.2): none in a production composition.
+    let diagnostics = HatchDiagnosticsLink.store()
     /// This session's slot in the crash breadcrumb (§4.4), and the count of
     /// times its hatches have connected: a record's incarnation.
     var crumbSlot: Int?, hatchIncarnation: UInt32 = 0

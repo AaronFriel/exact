@@ -160,7 +160,7 @@ extension NativeViews {
         let walked: PlatformView? = window
         #endif
         let regions = session?.presenter.elements.regions
-        let had = HatchDiagnostics.measuring && scopes.windowExclusive && event != 2 ? walked.flatMap { regions?.recognizers(under: $0) } : nil
+        let had = HatchDiagnosticsLink.measuring && scopes.windowExclusive && event != 2 ? walked.flatMap { regions?.recognizers(under: $0) } : nil
         timedHatch("window", moment) {
             json.withUnsafeBytes { j in
                 call(instance, event, raw(scopes.windowExclusive ? window : nil), raw(scene), j.bindMemory(to: UInt8.self).baseAddress, UInt32(json.count))

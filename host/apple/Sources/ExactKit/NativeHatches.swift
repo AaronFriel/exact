@@ -315,14 +315,6 @@ private let hatchToolbarItem: HatchToolbarFn = { host, toolbar, item in
     #endif
 }
 
-private typealias HatchRecordFn = @convention(c) (UnsafeMutableRawPointer?, UInt32, UInt32, UnsafePointer<UInt8>?, UInt32, UnsafePointer<UInt8>?, UInt32, Double, UnsafePointer<UInt8>?, UInt32) -> UInt64
-
-private let hatchRecord: HatchRecordFn = { host, kind, node, scope, scopeLength, name, nameLength, value, text, textLength in
-    guard let store = HatchDiagnostics.store(for: ExactRuntime(UInt(bitPattern: host))) else { return 0 }
-    return store.record(kind: kind, node: node, scope: hatchText(scope, scopeLength), name: hatchText(name, nameLength), value: value,
-                        text: text.map { Data(bytes: $0, count: Int(textLength)) } ?? Data())
-}
-
 private typealias HatchFormaFn = @convention(c) (UnsafeMutableRawPointer?, UnsafeMutableRawPointer?, UnsafePointer<UInt8>?, UInt32, UnsafeMutablePointer<UInt8>?, UInt32) -> UInt32
 
 /// `forma(host, view, request, len, out, cap) → len` (LLP 1121 D12): a
@@ -398,15 +390,6 @@ private let hatchPicture: HatchPictureFn = { host, kind, bytes, length in
     if Thread.isMainThread { apply() } else { DispatchQueue.main.async(execute: apply) }
 }
 
-/// The diagnostics' call table, which a development build's host table names.
-private let hatchDiagnosticsTable: UnsafeRawPointer = {
-    let t = UnsafeMutableRawPointer.allocate(byteCount: 16, alignment: 8)
-    t.initializeMemory(as: UInt8.self, repeating: 0, count: 16)
-    t.storeBytes(of: UInt32(16), as: UInt32.self)
-    t.storeBytes(of: unsafeBitCast(hatchRecord, to: UnsafeRawPointer.self), toByteOffset: 8, as: UnsafeRawPointer.self)
-    return UnsafeRawPointer(t)
-}()
-
 /// Queries a loaded service and returns its JSON answer to the app module.
 private let hatchService: @convention(c) (UnsafeMutableRawPointer?, UnsafePointer<UInt8>?, UInt32, UnsafePointer<UInt8>?, UInt32, UnsafeMutableRawPointer?,
                                           @convention(c) (UnsafeMutableRawPointer?, UnsafePointer<UInt8>?, UInt32) -> Void) -> Void = { _, module, moduleLength, json, length, context, reply in
@@ -430,7 +413,7 @@ private let hatchHostTable: UnsafeRawPointer = {
     t.storeBytes(of: unsafeBitCast(hatchLog, to: UnsafeRawPointer.self), toByteOffset: 24, as: UnsafeRawPointer.self)
     t.storeBytes(of: unsafeBitCast(hatchDelegate, to: UnsafeRawPointer.self), toByteOffset: 32, as: UnsafeRawPointer.self)
     t.storeBytes(of: unsafeBitCast(hatchToolbarItem, to: UnsafeRawPointer.self), toByteOffset: 40, as: UnsafeRawPointer.self)
-    if HatchDiagnostics.available { t.storeBytes(of: hatchDiagnosticsTable, toByteOffset: 48, as: UnsafeRawPointer.self) }
+    if let diagnostics = HatchDiagnosticsLink.table { t.storeBytes(of: diagnostics, toByteOffset: 48, as: UnsafeRawPointer.self) }
     t.storeBytes(of: unsafeBitCast(hatchInputText, to: UnsafeRawPointer.self), toByteOffset: 56, as: UnsafeRawPointer.self)
     t.storeBytes(of: unsafeBitCast(hatchFrames, to: UnsafeRawPointer.self), toByteOffset: 64, as: UnsafeRawPointer.self)
     t.storeBytes(of: unsafeBitCast(hatchAfter, to: UnsafeRawPointer.self), toByteOffset: 72, as: UnsafeRawPointer.self)
@@ -484,7 +467,7 @@ extension NativeViews {
     func timedHatch<T>(_ scope: String, _ moment: String, site: Int? = nil, counts: Bool = true, _ body: () -> T) -> T {
         if let crumbSlot { HatchBreadcrumb.shared?.push(crumbSlot, name: scope, moment: moment, incarnation: hatchIncarnation) }
         defer { if let crumbSlot { HatchBreadcrumb.shared?.pop(crumbSlot) } }
-        guard let store = session?.hatchDiagnostics else { return body() }
+        guard let store = session?.natives.diagnostics else { return body() }
         return store.timed(scope, moment, site: site, counts: counts, body)
     }
 
@@ -531,7 +514,7 @@ extension NativeViews {
     /// node's last call finds what its first kept, the runner's node being
     /// gone by then.
     private func planSite(_ id: UInt32, ended: Bool) -> Int? {
-        guard HatchDiagnostics.measuring, let session else { return nil }
+        guard HatchDiagnosticsLink.measuring, let session else { return nil }
         if ended { return hatchSites.removeValue(forKey: id) ?? nil }
         if let known = hatchSites[id] { return known }
         let reply = try? JSONSerialization.jsonObject(with: Data(session.agent("{\"op\":\"node\",\"id\":\(id)}").utf8)) as? [String: Any]
@@ -558,7 +541,7 @@ extension NativeViews {
             }
         }
         // A span its hatch left open ends with the node, abandoned.
-        if event == 2 { session?.hatchDiagnostics.ended(node: node.id) }
+        if event == 2 { session?.natives.diagnostics?.ended(node: node.id) }
         return flags & 1 != 0
     }
 
@@ -577,7 +560,7 @@ extension NativeViews {
     /// called: its frame clock and diagnostics work from here.
     func openHatches(_ connect: HatchConnectFn, _ module: UnsafeMutableRawPointer) {
         // A new module is a new incarnation: its counts start at nothing.
-        session?.hatchDiagnostics.reset()
+        session?.natives.diagnostics?.reset()
         takeBreadcrumb()
         connect(module, hatchHostTable)
     }
