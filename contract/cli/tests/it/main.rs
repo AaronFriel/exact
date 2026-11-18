@@ -253,6 +253,7 @@ mod sdk_root;
 mod search;
 mod search_tab;
 mod segments;
+mod shader;
 mod shadow_and_case;
 mod shape_cycles;
 mod share;

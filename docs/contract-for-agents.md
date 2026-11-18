@@ -3519,6 +3519,20 @@ The app adds the package with `bun exact.mjs add <directory or @scope/name>` and
 including conflicts with `gpu.modules`. A placed surface may take up to `arity` positional
 arguments; the surface checks named arguments and defaults.
 
+A surface may add `"wgsl": "src"` to name the argument carrying an app shader
+(LLP 1181 D9). A string literal there must name a file under `assets/`. The compiler
+validates it as plain WGSL without optional WebGPU features, with one fragment
+entry, built-in inputs only, one `@location(0) vec4f` output and at most one
+resource: a uniform struct at group 0, binding 0. Members may be `f32`, `i32`,
+`u32` or `vec2f`–`vec4f`, without aliases,
+`@align` or `@size`. `time` and `devicePixelRatio` must be `f32`; `resolution` must
+be `vec2f`. `src`, `maxFps` and `animationPlayState` are reserved surface arguments.
+Other named arguments bind members, with a CSS colour accepted for a `vec4f`.
+The compiler checks literal values and compares the uniform reader's layout with
+naga. Failures report `analyze-surface-shader` at the shader declaration or canvas,
+with file, line and column. Computed sources and values are checked when they bind;
+surfaces without `wgsl` keep their own validation.
+
 `targets` names hosts among `web`, `macos`, `ios`, `tvos`, `android`, `linux` and
 `windows`, and defaults to all of them; the watch draws no GPU surface. An omitted host
 builds no artifact for the package, and its canvases there are drawn as they would be
