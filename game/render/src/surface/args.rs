@@ -116,8 +116,7 @@ impl<G: Game, P: Executor, const ASSETS: bool, H: crate::Hooks> WorldSurface<G, 
                 if let Some((_, feed)) = &mut self.render {
                     feed.reset();
                 }
-                self.perf.restart();
-                self.gpu_timing = None;
+                self.restart_perf();
             }
         } else {
             let mut sim = Sim::from_values(values).map_err(SurfaceError)?;

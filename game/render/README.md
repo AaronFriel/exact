@@ -83,11 +83,15 @@ the assembled sources, rejects duplicate stems/symlinks and ships ordinary shade
 assets. Compose the corresponding reflected slices with `exact_gpu::shader_packs!`.
 No manual copy or private game dependency is needed in public engine code.
 
-Tree/state report stages. `world.renderHooks` contains CPU rings, attachment-byte
-estimates and separate engine/game creation counts before/after readiness; absent
-raw-device reporting is `null`. Raw hook draws/dispatches are neither culled nor
-counted in the engine’s draw/triangle counters. `world.gpuMs` (below) names each hook
-stage; unsupported finer intervals are `null`.
+Implement `frame_work()` to report cumulative `FrameWork` since the hook was
+made (LLP 1182.000 D1). Count draw calls the hook issues in opaque, background,
+surface and post. Count submitted triangles as index count divided by three
+(vertex count for non-indexed triangle lists), times instances. Count the bytes
+given to `write_buffer`, `write_texture` and `create_buffer_init` in any stage.
+Count an item once per frame when it draws, even across layers. Use `item_name()`
+to name that unit. Compute dispatches and engine draws for custom materials do
+not enter these counts. Raw hook draws and dispatches are neither culled nor
+counted in the engine's draw and triangle counters.
 
 ## Culling
 
@@ -919,7 +923,7 @@ artistic scale rather than candela, and at 0 only the range window, a spot's con
 N·L shape it (three.js `decay`). Decays 2 and 0 take no `pow` in the shader.
 Missing materials/environment use defaults.
 
-Performance samples appear only in `state.world.perf`: live frame stamps, tick,
+`state.world.perf` reports live frame stamps, tick,
 feed, encode (frame input through submit), pipeline and ticks/frame distributions.
 `pipelineMs` is the time a live frame spent creating render and compute pipelines
 on its thread (`perf::pipeline`): in the host's asset preparation before it, its feed
@@ -1178,6 +1182,21 @@ hierarchy, local-pose, job, palette and quad buffers; core transform/geometry ar
 instrumentation is outside this slice. `ready` is exactly an empty `readyReasons` set; named declaration and render
 failures are included. Headless state has `ready: false`, reason
 `no device`, and zero GPU work; it is simulation evidence only.
+
+`state.world.renderHooks` reports stages, CPU rings, attachment-byte estimates,
+and engine and game creation counts before and after readiness.
+`reportedWork` is `null` without `work()` reporting. `frame` is `null` without
+frame work reporting. A frame report names the unit in `items` and supplies
+`draws`, `triangles`, `uploadBytes` and `itemsDrawn` rings. The first read or a
+decrease in any counter sets a baseline. Frames that run hook
+stages sample the difference, including zero, under either clock; a frame whose
+encode failed samples the work its stages did. A look frame advances the baseline
+and adds no sample: its work is attributed to no frame. Percentiles require arming. Unarmed rings keep `count`, `mean` and
+`max`. `perf_reset` clears the rings and keeps the baseline. Restoring or
+restarting the world clears those totals and releases ring storage while keeping
+the baseline. Device loss drops the frame work and hook CPU rings with the renderer.
+The web live world row shows the largest draws, triangles, upload bytes and ticks in a
+frame. `world.gpuMs` names each hook stage; unsupported finer intervals are `null`.
 
 Both asset fixture proofs exercise same-device restores after ready and compare
 work across ordinary and paranoid ticks. Their web-only response instrumentation

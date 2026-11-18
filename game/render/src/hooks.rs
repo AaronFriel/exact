@@ -232,6 +232,19 @@ impl HookWork {
     }
 }
 
+/// Game-reported counters cumulative since this hook value was made (LLP 1182.000 D1).
+#[derive(Clone, Copy, Debug, Default)]
+pub struct FrameWork {
+    /// Draw calls issued by the hook in opaque, background, surface, and post.
+    pub draws: u64,
+    /// Submitted triangles, including instances, before culling or clipping.
+    pub triangles: u64,
+    /// Bytes passed to `write_buffer`, `write_texture`, and `create_buffer_init`.
+    pub upload_bytes: u64,
+    /// Game-defined items that issued a draw, counted once per frame across layers.
+    pub items: u64,
+}
+
 /// Optional game rendering. Every callback borrows resources for this frame only.
 /// @ref llp/1046.006.000-render-hooks.rfc.md#d1-the-shape-a-type-parameter-like-presentation
 pub trait Hooks: Default {
@@ -269,6 +282,14 @@ pub trait Hooks: Default {
     /// Cumulative work performed through the raw GPU handles.
     fn work(&self) -> Option<HookWork> {
         None
+    }
+    /// Cumulative draw and upload counts, read after the last hook stage of a frame.
+    fn frame_work(&self) -> Option<FrameWork> {
+        None
+    }
+    /// Name of the game-defined unit counted by `FrameWork::items`.
+    fn item_name(&self) -> &'static str {
+        "items"
     }
     /// Custom shading for loaded unskinned opaque model materials.
     fn materials(&self) -> &[CustomMaterial] {

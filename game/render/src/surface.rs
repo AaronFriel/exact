@@ -186,9 +186,19 @@ impl<G: Game, P: Executor, const ASSETS: bool, H: crate::Hooks> WorldSurface<G, 
         self.dirty = true;
         self.error = None;
         self.reported = false;
+        self.restart_perf();
+        Ok(())
+    }
+    fn restart_perf(&mut self) {
         self.perf.restart();
         self.gpu_timing = None;
-        Ok(())
+        if let Some(metrics) = self
+            .render
+            .as_mut()
+            .and_then(|(renderer, _)| renderer.hook_metrics.as_mut())
+        {
+            metrics.disarm();
+        }
     }
     fn finish_restore(&mut self) {
         if self.sim.as_ref().is_some_and(|s| !s.is_loading()) {
@@ -900,7 +910,12 @@ impl<G: Game, P: Executor, const ASSETS: bool, H: crate::Hooks> Surface
             if H::ENABLED {
                 if let Some((renderer, _)) = &self.render {
                     if let Some(metrics) = &renderer.hook_metrics {
-                        metrics.append(&mut reply, self.hooks.work(), self.hooks.needs());
+                        metrics.append(
+                            &mut reply,
+                            self.hooks.work(),
+                            self.hooks.needs(),
+                            self.hooks.item_name(),
+                        );
                     }
                 }
             }
