@@ -150,7 +150,7 @@ pub use runner::{
     RESIZE_UNDELIVERED, TIMER_FIRE_LIMIT, VIRTUAL_FRAME_MS,
 };
 pub use runner::{AppState, Forma, LiveApplied, LiveRefusal, Place};
-pub use runner::{CallHow, ModuleLinks, Modules, PresenceSecrets, Tools, WakeHow};
+pub use runner::{CallHow, ModuleLinks, Modules, PresenceSecrets, TextAxes, Tools, WakeHow};
 pub use runner::{ModuleIdentity, ModuleInstance};
 pub use upload::{UPLOAD_PROGRESS, UPLOAD_SENDING};
 /// The binding core's names (LLP 1121 D12): what `contract forma gen rust`

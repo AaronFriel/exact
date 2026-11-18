@@ -1,6 +1,5 @@
 //! `scrollIntoView` (LLP 1070.000): the command an action states, and the
 //! agent's `tap … into`, both run here, never by a host.
-use super::text_axes::AxesBefore;
 use super::*;
 use crate::instance::collection::{Align, IntoView, IntoViewStatus};
 
@@ -229,7 +228,7 @@ impl<D: DataSource> Runner<D> {
                     Ok(())
                 })?;
                 self.prepare_live_times(&mut phase);
-                axes = AxesBefore::join(axes, self.prepare_text_axes(&phase), &created);
+                axes = self.join_text_axes(axes, self.prepare_text_axes(&phase), &created);
                 created.extend(created_views(&phase));
                 self.kernel.continue_document_commit(&phase)?;
                 self.settle_into_view_phase(&mut effects);
@@ -252,7 +251,7 @@ impl<D: DataSource> Runner<D> {
         let mut cleanup = self.reconcile_reorder()?;
         if !cleanup.is_empty() {
             self.prepare_live_times(&mut cleanup);
-            axes = AxesBefore::join(axes, self.prepare_text_axes(&cleanup), &created);
+            axes = self.join_text_axes(axes, self.prepare_text_axes(&cleanup), &created);
             self.kernel.continue_document_commit(&cleanup)?;
             ops.extend(cleanup);
         }

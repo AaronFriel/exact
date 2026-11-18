@@ -464,6 +464,13 @@ impl<D: DataSource> Links<D> {
                 } else {
                     exact_runner::ModuleLinks::<D>::NONE.presence
                 },
+                // As `RunnerLinks::text_axes`, which makes their engine.
+                text_axes: if uses.has(Capability::Transitions) || uses.has(Capability::Animations)
+                {
+                    exact_runner::ModuleLinks::<D>::ALL.text_axes
+                } else {
+                    exact_runner::ModuleLinks::<D>::NONE.text_axes
+                },
             },
             turn: TurnLinks::of(uses),
         }

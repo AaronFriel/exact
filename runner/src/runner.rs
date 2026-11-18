@@ -151,7 +151,7 @@ mod processes;
 mod provenance;
 mod seams;
 pub use provenance::CallOrigin;
-pub use seams::{ModuleLinks, PresenceSecrets, Tools};
+pub use seams::{ModuleLinks, PresenceSecrets, TextAxes, Tools};
 mod wakes;
 pub use wakes::WakeHow;
 #[cfg(test)]
@@ -586,7 +586,7 @@ pub struct Runner<D: DataSource> {
     // @ref LLP 1027.000.000 — the date, once the host says it.
     time: crate::time::WallTime,
     live_times: live_time::LiveTimes,
-    text_axes: text_axes::TextAxes,
+    text_axes: seams::TextAxesState,
     place: crate::time::Place,
     host_direction: Option<exact_kernel::Direction>, // the platform's, told at launch ([`Runner::direction`])
     surface_records: exact_kernel::SortedMap<String, String>,
@@ -958,7 +958,7 @@ impl<D: DataSource> Runner<D> {
             presented: crate::page::Presented::at_boot(),
             time: crate::time::launch_time(),
             live_times: Default::default(),
-            text_axes: Default::default(),
+            text_axes: seams::TextAxesState(seams.text_axes.state()),
             place: launched_place.clone().unwrap_or_default(),
             window_name: crate::time::launch_window_name(),
             host_direction: crate::time::launch_direction(),
