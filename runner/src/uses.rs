@@ -296,9 +296,15 @@ impl Uses {
             if exact_grants::line_presence(line).is_some() {
                 uses = uses.with(Capability::Presence);
             }
+            // The listener's and the data executor's own lines, outside the
+            // I/O grammar, admit work the executor runs.
+            if exact_grants::process::is_process_line(line.trim()) {
+                uses = uses.with(Capability::Io);
+            }
             uses = match line.split_whitespace().next() {
                 Some("sqlite.open") => uses.with(Capability::Sqlite),
                 Some("auth.session") => uses.with(Capability::AuthSession),
+                Some("net.listen" | "env.launch") => uses.with(Capability::Io),
                 _ => uses,
             };
         }
@@ -908,6 +914,19 @@ mod grant_tests {
             let uses = super::uses(&plan);
             assert!(uses.has(Capability::Surfaces));
             assert_eq!(uses.has(Capability::Io), keep);
+        }
+    }
+
+    #[test]
+    fn the_listener_and_the_processes_link_io() {
+        for grants in [
+            "net.listen unix:/tmp/exact-listen-fixture",
+            "process.spawn /usr/bin/git",
+        ] {
+            assert!(
+                Uses::NONE.with_grants(grants).has(Capability::Io),
+                "{grants}"
+            );
         }
     }
 

@@ -51,15 +51,24 @@ pub(crate) fn name_into(
 
 /// What a production artifact links for `plan`, with what its grants allow
 /// (`inputs`' ceiling); on Apple, with what the widget `entries` its boot
-/// admits use too.
+/// admits use too, and the I/O executor for a source placed on a worker.
 pub(crate) fn production_uses<'a>(
     plan: &exact_plan::Plan,
     entries: impl Iterator<Item = &'a exact_plan::Plan>,
     inputs: &serde_json::Value,
 ) -> Uses {
-    let uses = plan_uses(plan, inputs).with_grants(inputs["grantCeiling"].as_str().unwrap_or(""));
+    let mut uses =
+        plan_uses(plan, inputs).with_grants(inputs["grantCeiling"].as_str().unwrap_or(""));
     if !apple(inputs) {
         return uses;
+    }
+    // A source placed on a worker answers through continuations, which the
+    // executor runs (LLP 1027.002 D1).
+    if ["rustPlacement", "typescriptPlacement"]
+        .iter()
+        .any(|key| inputs[key] == "worker")
+    {
+        uses = uses.with(Capability::Io);
     }
     entries.fold(uses, |uses, entry| {
         plan_uses(entry, inputs).iter().fold(uses, Uses::with)
@@ -275,6 +284,83 @@ mod tests {
             let inputs = serde_json::json!({ "platform": platform, "grantCeiling": "" });
             let uses = super::production_uses(&hello, std::iter::empty(), &inputs);
             assert_eq!(uses, exact_runner::Uses::NONE, "{platform}: {uses}");
+        }
+    }
+
+    /// A Rust data source that hands out host work (`Request::continuation`)
+    /// has the executor run it, which an Apple production binary links only
+    /// with `io`. Neither its plan nor its grants need show that, so such an
+    /// app names `io` in its manifest's `link`; without it the work never
+    /// runs and the resource waits for ever. The sources are read as text:
+    /// what a source hands out is in no declaration.
+    #[test]
+    fn an_app_whose_source_hands_out_host_work_links_io() {
+        use std::path::Path;
+        fn sources(dir: &Path, text: &mut String) {
+            for entry in std::fs::read_dir(dir).unwrap().flatten() {
+                let path = entry.path();
+                let name = path.to_string_lossy();
+                if path.is_dir() {
+                    sources(&path, text);
+                } else if name.ends_with(".rs") && !name.ends_with("_tests.rs") {
+                    text.push_str(&std::fs::read_to_string(&path).unwrap());
+                }
+            }
+        }
+        let apps = Path::new(env!("CARGO_MANIFEST_DIR")).join("../apps");
+        let dirs: Vec<_> = std::fs::read_dir(&apps)
+            .unwrap()
+            .flatten()
+            .map(|e| e.path())
+            .collect();
+        let crate_dir = |name: &str| {
+            dirs.iter().map(|app| app.join("data")).find(|data| {
+                std::fs::read_to_string(data.join("Cargo.toml"))
+                    .is_ok_and(|toml| toml.contains(&format!("name = \"{name}\"")))
+            })
+        };
+        let mut unlinked = Vec::new();
+        for app in dirs.iter().filter(|app| app.join("apple").is_dir()) {
+            let Ok(manifest) = contract::Manifest::read(app) else {
+                continue;
+            };
+            let Some(data) = manifest.json["rust"]["data"]["crate"]
+                .as_str()
+                .and_then(crate_dir)
+            else {
+                continue;
+            };
+            let mut text = String::new();
+            sources(&data.join("src"), &mut text);
+            if text.contains("Request::continuation(")
+                && !ahead(&manifest).unwrap().contains(&Capability::Io)
+            {
+                unlinked.push(app.file_name().unwrap().to_string_lossy().into_owned());
+            }
+        }
+        assert_eq!(unlinked, Vec::<String>::new());
+    }
+
+    /// A source placed on a worker answers through the executor, so an Apple
+    /// composition links I/O for it.
+    #[test]
+    fn a_worker_placement_links_io_on_apple() {
+        let app = contract::compile("component A\n  view\n    text \"a\"\n").unwrap();
+        for language in ["rustPlacement", "typescriptPlacement"] {
+            for (platform, placed, io) in [
+                ("ios", "worker", true),
+                ("macos", "worker", true),
+                ("ios", "main", false),
+                ("linux", "worker", false),
+            ] {
+                let inputs = serde_json::json!({ "platform": platform, language: placed });
+                let uses = super::production_uses(&app, std::iter::empty(), &inputs);
+                assert_eq!(
+                    uses.has(Capability::Io),
+                    io,
+                    "{language} {platform} {placed}"
+                );
+            }
         }
     }
 

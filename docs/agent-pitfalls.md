@@ -1949,6 +1949,18 @@ price: answers arrive `Later`, outside the action's transaction (LLP 1027.002 D1
   `-exact-control-size` and `-exact-corner-style` are admitted only on an
   explicit native button, including through classes. (LLP 1069.011.001 D12–D14.)
 
+- **A Rust data source's continuation never runs in an Apple production build
+  (or a development one built `--link plan`) and its resource waits for ever.**
+  `clock data` says `requests still in flight` and `state` shows the resource
+  under `pending`; the logs say `continuation 1 (doc): executor token 1` and
+  nothing after. Cause: a `Request::continuation` runs on the host's executor,
+  which a production composition links only with `io` (LLP 1047.001, "The
+  host's I/O by use"), and neither the plan nor the grants need show that it
+  is needed. Fix: name it in `app.json`, `"link": ["io"]` (LLP 1047 D8), as
+  Markdown, Markdown Stress and the LLP reader do. `exact-bake`'s `an_app_whose_source_hands_out_host_work_links_io`
+  holds the apps under `apps/` whose own source names `Request::continuation`
+  to it; a source placed on a worker links I/O by itself.
+
 - **Natively, a Snapback resource or mutation fails with `native call outside an
   answer` while the same app works on the web.** Seen with five resources
   opening one `Snapback.switcher` partition at launch, and with a `setTyping`
