@@ -12,6 +12,7 @@ use crate::clip::ClipPath;
 use crate::svg::filter::FilterList;
 
 /// A row's grammar: its value, or `None` when CSS refuses the text.
+#[cfg(not(test))]
 type Grammar<T> = fn(&str) -> Option<T>;
 
 #[cfg(not(test))]
