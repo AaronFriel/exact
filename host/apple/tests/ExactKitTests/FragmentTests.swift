@@ -158,9 +158,9 @@ final class FragmentTests: XCTestCase {
         XCTAssertEqual(gap("moves"), 0, accuracy: 1, "the fill completion resumes the fragment without another batch")
     }
 
-    /// @ref LLP 1153 D5.1 — a page that arrives with no fragment opens each scroller in it where it opens: its start,
-    /// the offset its `scrollTop` gives, or, under `scroll-restoration="manual"`, where it was.
-    func testAPageThatArrivesOpensWhereItsScrollersOpen() throws {
+    /// @ref LLP 1153 D5.1 — a page that arrives with no fragment starts each scroller in it over: at its start, at the
+    /// offset its `scrollTop` gives, or, under `scroll-restoration="manual"`, where it was.
+    func testAPageThatArrivesStartsItsScrollersOver() throws {
         try fixture()
         try releasePicture()
         XCTAssertTrue(session.navigate("/page/1"))

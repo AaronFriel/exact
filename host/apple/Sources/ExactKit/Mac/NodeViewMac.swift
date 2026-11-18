@@ -955,7 +955,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
     var followedScroll: (top: CGFloat, end: Bool)?
     /// The scroll anchor chosen before a batch (`ScrollAnchoringMac.swift`).
     var scrollAnchor: (node: NodeView, y: CGFloat)?
-    func applyPendingScroll() {
+    func applyPendingScroll(instant: Bool = false) {
         defer { pendingScrollTop = nil; pendingScrollLeft = nil }
         guard let sv = scroll, let doc = sv.documentView else { return }
         guard hasScrollLayoutBox else {
@@ -982,7 +982,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
         // reader's own scroll. Under the agent's frozen clock it lands at once,
         // so `layout` reads the target.
         // It holds the scroller's `scrollend`, and owns its offset, until it lands, as a reveal does.
-        if style["scroll_behavior"]?.string == "smooth" && !ExactEnv.agentFreezes {
+        if !instant && style["scroll_behavior"]?.string == "smooth" && !ExactEnv.agentFreezes {
             let token = UUID(), end = scrollEnd ?? ScrollEnd()
             scrollEnd = end; end.elementAnimation = token; end.hold()
             NSAnimationContext.runAnimationGroup({ _ in sv.contentView.animator().setBoundsOrigin(target) }, completionHandler: { [weak self] in
