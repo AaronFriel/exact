@@ -155,6 +155,9 @@ pub struct Links<D: DataSource> {
     /// What the motion engine plays: everything, or settled values only
     /// when the plan animates nothing.
     pub engine: &'static exact_motion::EngineLinks,
+    /// The runner's optional parts: native modules, tool calls and presence
+    /// secrets (LLP 1047.001 D11).
+    pub modules: exact_runner::ModuleLinks<D>,
 }
 
 impl<D: DataSource> Clone for Links<D> {
@@ -166,6 +169,7 @@ impl<D: DataSource> Clone for Links<D> {
             grammars: self.grammars,
             io: self.io,
             engine: self.engine,
+            modules: self.modules,
         }
     }
 }
@@ -179,6 +183,7 @@ impl<D: DataSource> Links<D> {
         grammars: Grammars::ALL,
         io: Some(IoLinks::LINKED),
         engine: &exact_motion::EngineLinks::ALL,
+        modules: exact_runner::ModuleLinks::ALL,
     };
 
     /// What `uses` needs; evaluated in a `const`, so nothing else is named.
@@ -276,6 +281,23 @@ impl<D: DataSource> Links<D> {
                 &exact_motion::EngineLinks::ALL
             } else {
                 &exact_motion::EngineLinks::SETTLE
+            },
+            modules: exact_runner::ModuleLinks {
+                modules: if uses.has(Capability::Modules) {
+                    exact_runner::ModuleLinks::<D>::ALL.modules
+                } else {
+                    exact_runner::ModuleLinks::<D>::NONE.modules
+                },
+                tools: if uses.has(Capability::Tools) {
+                    exact_runner::ModuleLinks::<D>::ALL.tools
+                } else {
+                    exact_runner::ModuleLinks::<D>::NONE.tools
+                },
+                presence: if uses.has(Capability::Presence) {
+                    exact_runner::ModuleLinks::<D>::ALL.presence
+                } else {
+                    exact_runner::ModuleLinks::<D>::NONE.presence
+                },
             },
         }
     }
