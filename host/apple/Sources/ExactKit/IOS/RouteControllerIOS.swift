@@ -88,6 +88,9 @@ final class RouteController: UIViewController, UIScrollViewDelegate {
     }
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
+        #if os(iOS)
+        if navigationItem.largeTitleDisplayMode == .always { reopenTitle() }
+        #endif
         appeared?()
     }
     required init?(coder: NSCoder) { nil }

@@ -574,9 +574,11 @@ extension NavigationHost {
 }
 
 extension RouteController {
-    /// A large title at rest stays open when the text size changes. UIKit
-    /// draws the title at the new size in the bar's old height, which grows
-    /// only when the list is pulled: at the largest size the title ran under
+    /// A large title at rest opens after its route appears, once UIKit has
+    /// given its scroller the bar's insets. The same repair keeps it open
+    /// when the text size changes. UIKit draws the title at the new size in
+    /// the bar's old height, which grows only when the list is pulled:
+    /// at the largest size the title ran under
     /// the bar's buttons (meal-planner, bake-off round 34), and a hand-built
     /// bar clips it the same way. A scroller at its start is pulled open on
     /// the next turn, after UIKit's layout, as a title that turns large

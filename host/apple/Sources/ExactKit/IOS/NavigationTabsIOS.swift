@@ -797,6 +797,10 @@ extension NavigationHost {
             for _ in 0..<4 {
                 let top = sv.adjustedContentInset.top
                 sv.contentOffset = PixelGrid.offset(CGPoint(x: sv.contentOffset.x, y: -top - nav.navigationBar.frame.height), in: sv, clamped: false)
+                // UIKit 26 can defer the bar's layout after an unanimated pull.
+                nav.navigationBar.setNeedsLayout()
+                nav.view.setNeedsLayout()
+                nav.navigationBar.layoutIfNeeded()
                 nav.view.layoutIfNeeded()
                 if sv.adjustedContentInset.top <= top + 0.5 { break }
             }
