@@ -170,6 +170,20 @@ pub enum Clock {
     /// Look ahead by the display period, aligning the tick origin to its lattice.
     Live,
 }
+/// Observe the accepted tick loop without predicting its advance.
+#[doc(hidden)]
+pub trait TickObserver {
+    /// Ticks still to run, including this one.
+    fn before_tick(&mut self, _left: u64) {}
+    /// Ticks still to run after this tick and its propagation.
+    fn after_tick(&mut self, world: &World, left: u32);
+}
+impl<F: FnMut(&World, u32)> TickObserver for F {
+    fn after_tick(&mut self, world: &World, left: u32) {
+        self(world, left);
+    }
+}
+
 #[derive(Clone, Default, Data)]
 struct Queued {
     #[data(skip)]
@@ -534,6 +548,16 @@ impl<G: Game> Sim<G> {
         clock: Clock,
         after: impl FnMut(&World, u32),
     ) -> Result<(), String> {
+        self.bind_observed(values, at_ms, clock, after)
+    }
+    #[doc(hidden)]
+    pub fn bind_observed(
+        &mut self,
+        values: &[Value],
+        at_ms: Option<f64>,
+        clock: Clock,
+        observer: impl TickObserver,
+    ) -> Result<(), String> {
         if at_ms.is_some_and(|at| !at.is_finite()) {
             return Err("bind clock must be finite".into());
         }
@@ -549,7 +573,7 @@ impl<G: Game> Sim<G> {
             } else {
                 Clock::Seekable
             };
-            self.advance_with(at, clock, after);
+            self.advance_observed(at, clock, observer);
         }
         if restart {
             let mut world = Self::build(&args, self.world.assets.clone());
@@ -826,7 +850,16 @@ impl<G: Game> Sim<G> {
         &mut self,
         now_ms: f64,
         clock: Clock,
-        mut after: impl FnMut(&World, u32),
+        after: impl FnMut(&World, u32),
+    ) -> u32 {
+        self.advance_observed(now_ms, clock, after)
+    }
+    #[doc(hidden)]
+    pub fn advance_observed(
+        &mut self,
+        now_ms: f64,
+        clock: Clock,
+        mut observer: impl TickObserver,
     ) -> u32 {
         assert!(now_ms.is_finite(), "host clock must be finite");
         if self.setup_pending {
@@ -920,6 +953,8 @@ impl<G: Game> Sim<G> {
             self.world.observe(&mut self.observations[0]);
         }
         while self.world.tick() < target {
+            let left = target - self.world.tick();
+            observer.before_tick(left);
             self.world.spans.borrow_mut().begin(self.world.tick() + 1);
             self.world.begin_tick();
             self.input.clear_edges();
@@ -992,7 +1027,8 @@ impl<G: Game> Sim<G> {
                     self.last_epoch.set(self.world.mutation_epoch());
                 }
             }
-            after(
+            // A tick may load a world at another tick: count what is left now.
+            observer.after_tick(
                 &self.world,
                 u32::try_from(target - self.world.tick()).unwrap_or(u32::MAX),
             );

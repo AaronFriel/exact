@@ -56,9 +56,7 @@ thread_local! {
     // has spent creating pipelines since the last `pipeline_ms`.
     static PIPELINES: std::cell::Cell<(bool, f64)> = const { std::cell::Cell::new((false, 0.)) };
 }
-/// Times this thread's pipeline creation from zero while it lives, when `on`:
-/// a seekable frame reads no clock, so it times nothing. Every return of the
-/// timed work stops it.
+/// Times pipeline creation on this thread until the scope ends.
 pub(crate) struct PipelineTiming;
 impl PipelineTiming {
     pub fn start(on: bool) -> Self {
@@ -138,17 +136,17 @@ pub(crate) struct Perf {
     pub encode: Ring,
     /// Of the frame's feed and encode, the time creating pipelines on its thread.
     pub pipeline: Ring,
-    /// Pipeline time from the renderer's making to the first frame log; None
-    /// once a seekable frame, which times nothing, came between.
+    /// Pipeline time from renderer creation to the first frame log, if measured.
     pub pipeline_ready: Option<f64>,
-    /// Pipeline time not yet in a frame's: a frame that stopped before
-    /// encoding, the `Game::PREPARE` warm-up after the last submit. The next
-    /// drawn frame counts it.
-    pub pipeline_pending: f64,
-    /// Whether the last rendered frame was live, so its warm-up may be timed,
-    /// and whether one is rendering now (its own timing covers what it prepares).
+    pub pipeline_ready_seekable: bool,
+    /// Pipeline time for the next drawn frame of each clock mode.
+    pipeline_pending: [f64; 2],
+    /// Whether the last rendered frame was live, for submission accounting.
     pub live: bool,
     pub rendering: bool,
+    /// Reused for pipeline warm-up after submission.
+    pub measure_frame: bool,
+    cpu_seekable: bool,
     pub ticks: Ring,
     ticks_owed: Ring,
     catch_up: CatchUp,
@@ -171,6 +169,34 @@ pub(crate) struct Perf {
 impl Perf {
     pub fn armed(&self) -> bool {
         !self.frame.values.is_empty()
+    }
+    // LLP 1182.000 D3. An unsampled clock change leaves the window readable.
+    pub fn begin_cpu_sample(
+        &mut self,
+        seekable: bool,
+        hooks: Option<&mut crate::hooks::metrics::Metrics>,
+    ) {
+        if self.cpu_seekable == seekable || !self.armed() {
+            return;
+        }
+        self.cpu_seekable = seekable;
+        for ring in [
+            &mut self.tick,
+            &mut self.feed,
+            &mut self.encode,
+            &mut self.pipeline,
+        ] {
+            ring.clear();
+        }
+        if let Some(hooks) = hooks {
+            hooks.clear_cpu();
+        }
+    }
+    pub fn keep_pipeline_time(&mut self, seekable: bool) {
+        self.pipeline_pending[usize::from(seekable)] += pipeline_ms();
+    }
+    pub fn frame_pipeline_time(&mut self, seekable: bool) -> f64 {
+        pipeline_ms() + std::mem::take(&mut self.pipeline_pending[usize::from(seekable)])
     }
     pub fn arm(&mut self) {
         for r in [
@@ -196,11 +222,7 @@ impl Perf {
             &mut self.ticks_owed,
         ] {
             r.values.resize(16384, 0.0);
-            r.count = 0;
-            r.sum = 0.0;
-            r.max = 0.0;
-            r.len = 0;
-            r.next = 0;
+            r.clear();
         }
         self.last_live = None;
         self.catch_up = CatchUp {
@@ -311,6 +333,8 @@ impl Perf {
     }
     pub fn append(&self, out: &mut String) {
         out.push_str(",\"perf\":{\"wallClock\":true");
+        let clock = if self.cpu_seekable { "agent" } else { "live" };
+        write!(out, ",\"clock\":\"{clock}\"").unwrap();
         write!(out, ",\"armed\":{}", self.armed()).unwrap();
         write!(out, ",\"pixels\":[{},{}]", self.pixels.0, self.pixels.1).unwrap();
         for (name, ring) in [

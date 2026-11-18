@@ -41,6 +41,18 @@ impl Metrics {
             }
         }
     }
+    pub fn clear_cpu(&mut self) {
+        for ring in &mut self.cpu {
+            ring.clear();
+        }
+    }
+    #[cfg(test)]
+    pub fn cpu_storage(&self) -> [(*const f64, usize); 6] {
+        self.cpu
+            .each_ref()
+            .map(|ring| (ring.values.as_ptr(), ring.values.capacity()))
+    }
+
     pub fn disarm(&mut self) {
         self.armed = false;
         self.cpu = Default::default();
@@ -49,8 +61,19 @@ impl Metrics {
         }
     }
 
-    pub fn record_stages(&mut self, times: [Option<f64>; 6], hooks: &impl Hooks, ready: bool) {
+    pub fn record_stages(
+        &mut self,
+        times: [Option<f64>; 6],
+        hooks: &impl Hooks,
+        ready: bool,
+        cpu: Option<(&mut crate::perf::Perf, bool)>,
+    ) {
         let work = hooks.work();
+        if let Some((perf, seekable)) = cpu {
+            if times.iter().any(Option::is_some) {
+                perf.begin_cpu_sample(seekable, Some(self));
+            }
+        }
         for (ring, time) in self.cpu.iter_mut().zip(times) {
             if let Some(ms) = time {
                 ring.push(ms);
@@ -208,7 +231,7 @@ mod tests {
         let mut metrics = Metrics::default();
         metrics.arm(false);
         let hooks = CreationsOnly;
-        metrics.record_stages([None; 6], &hooks, true);
+        metrics.record_stages([None; 6], &hooks, true, None);
         metrics.record_frame(&hooks, true, true);
         let hooks = read(&metrics, hooks.work(), hooks.item_name());
         assert_eq!(hooks["reportedWork"]["beforeReady"]["buffers"], 1);
@@ -342,7 +365,7 @@ mod tests {
         let work = [3, 36, 96, 1];
         record(&mut metrics, work, true);
         record(&mut metrics, work.map(|value| value * 2), true);
-        metrics.record_stages([Some(1.); 6], &reporter(work), true);
+        metrics.record_stages([Some(1.); 6], &reporter(work), true, None);
 
         metrics.disarm();
         assert!(!metrics.armed);

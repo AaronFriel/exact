@@ -1270,7 +1270,7 @@ test('perf frames live lends the clock to the wall for its window and measures w
   try {
     await import('./frames.js');
     let clock = 500;
-    const advanced = [], gpu = [], requests = [];
+    const advanced = [], gpu = [], requests = [], order = [];
     const perf = { frameMs: { p50: 16.7 } }, renderHooks = { frame: { draws: { max: 3, count: 1 } } };
     const glue = readFileSync(new URL('./gpu-glue.js', import.meta.url), 'utf8');
     const api = parseSync('gpu-glue.js', glue).program.body
@@ -1278,9 +1278,9 @@ test('perf frames live lends the clock to the wall for its window and measures w
     const { start, end } = api.properties.find(node => node.key.name === 'live');
     const live = glue.slice(start, end);
     const collector = vm.runInNewContext(`({ ${live} })`, {
-      liveWindow: false, gpu: { gpu_seekable: seek => gpu.push(seek) },
+      liveWindow: false, gpu: { gpu_seekable: seek => { gpu.push(seek); order.push(`seek ${seek}`); } },
       surfaces: new Map([[7, { id: 1, view: 7 }]]), schedule() {},
-      agent: (view, request) => (requests.push([view, request]), { world: { perf, renderHooks } }),
+      agent: (view, request) => (requests.push([view, request]), order.push("state"), { world: { perf, renderHooks } }),
     });
     const window = globalThis.exact.liveFrames({ ms: 200, origin: () => 0, log() {}, clock: () => clock,
       advance: to => { advanced.push(to); clock = to; },
@@ -1294,6 +1294,7 @@ test('perf frames live lends the clock to the wall for its window and measures w
     }
     const reply = await window;
     expect(gpu).toEqual([false, true]); // the world left the seek for its own frames, and came back
+    expect(order).toEqual(["seek false", "state", "state", "seek true"]); // the closing read is taken while still live
     expect(requests).toEqual([[7, { op: 'state', perf_reset: true }], [7, { op: 'state', perf: true }]]);
     expect(reply.live).toEqual({ ms: 200, from: 500, to: 700 });
     expect(advanced.at(-1)).toBe(700); // the runner followed the wall to the window's end, and no further

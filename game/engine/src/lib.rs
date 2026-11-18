@@ -68,6 +68,8 @@ pub use placed::{CanvasChild, Facing, Placed, PlacedPlane};
 pub use present::{Present, PresentRead, PresentationComponent};
 pub use rng::{RangeValue, Rng};
 pub use scene::*;
+#[doc(hidden)]
+pub use sim::TickObserver;
 pub use sim::{Clock, Game, LiveGap, Now, Paranoid, PointerSample, Sim};
 pub use spring::Spring;
 pub use sprite::{Sprite, SpriteAnimation};

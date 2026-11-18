@@ -13,6 +13,7 @@ use exact_game::{Clock, Data, Game, Sim, World};
 use exact_gpu::{
     wgpu, AssetError, Frame, InputEvent, Lifecycle, Restore, Surface, SurfaceError, Value,
 };
+use render::observer;
 
 /// Optional presentation executor. The default `()` links no executor code.
 /// Implementations must use a discarding output whenever `seekable` is true.
@@ -274,67 +275,6 @@ impl<G: Game, P: Executor, const ASSETS: bool, H: crate::Hooks> WorldSurface<G, 
         ))
     }
 }
-#[allow(clippy::too_many_arguments)]
-fn observer<'a, const ASSETS: bool>(
-    render: &'a mut Option<(crate::renderer::RendererWithAssets<ASSETS>, Feed)>,
-    placed: &'a mut crate::placed::Placements,
-    perf: &'a mut Perf,
-    trace: &'a mut Option<crate::trace::Trace>,
-    error: &'a mut Option<SurfaceError>,
-    hook_poses: &'a mut crate::hooks::Poses,
-    measure: bool,
-    ticks: u32,
-) -> impl FnMut(&World, u32) + 'a {
-    let mut start = (measure && (1..=240).contains(&ticks)).then(Stamp::now);
-    move |world, left| {
-        if let Some(start) = &start {
-            if left < 240 {
-                let ms = start.elapsed();
-                perf.tick.push(ms);
-                if let Some(report) = &mut perf.reporting {
-                    report.phases[0].push(ms);
-                }
-                if let Some(trace) = trace {
-                    trace.times[0] += ms;
-                }
-            }
-        }
-        if left < 2 && error.is_none() {
-            hook_poses.sync(world);
-            if let Err(e) = if ASSETS {
-                placed.feed(world)
-            } else {
-                placed.feed_primitive(world)
-            } {
-                *error = Some(SurfaceError(e.to_string()));
-            }
-            if let Some((renderer, feed)) = render {
-                if let Some(trace) = trace {
-                    trace.feed(world);
-                }
-                let upload = measure.then(Stamp::now);
-                if let Err(e) = feed.feed(world, renderer) {
-                    *error = Some(SurfaceError(e.to_string()));
-                }
-                if let Some(upload) = upload {
-                    let ms = upload.elapsed();
-                    perf.feed.push(ms);
-                    if let Some(report) = &mut perf.reporting {
-                        report.phases[1].push(ms);
-                    }
-                    if let Some(trace) = trace {
-                        trace.times[1] += ms;
-                    }
-                }
-            }
-        }
-        // Even the last observer can run on an advance-only frame.
-        if left < 2 {
-            render::retain_primes(render, placed, true);
-        }
-        start = (measure && left > 0 && left <= 240).then(Stamp::now);
-    }
-}
 impl<G: Game, P: Executor, const ASSETS: bool, H: crate::Hooks> Surface
     for WorldSurface<G, P, ASSETS, H>
 {
@@ -504,10 +444,10 @@ impl<G: Game, P: Executor, const ASSETS: bool, H: crate::Hooks> Surface
         if self.perf.rendering {
             return self.prepare_now(device, queue, format);
         }
-        let timing = crate::perf::PipelineTiming::start(!self.seekable);
+        let timing = crate::perf::PipelineTiming::start(!self.seekable || self.perf.armed());
         self.prepare_now(device, queue, format);
         drop(timing);
-        self.perf.pipeline_pending += crate::perf::pipeline_ms();
+        self.perf.keep_pipeline_time(self.seekable);
     }
     fn carry(&mut self) -> Result<Option<Vec<u8>>, SurfaceError> {
         self.sim
@@ -595,7 +535,8 @@ impl<G: Game, P: Executor, const ASSETS: bool, H: crate::Hooks> Surface
     ) -> bool {
         // Pipeline time a frame leaves unread (it stopped before encoding)
         // counts in this canvas's next drawn frame.
-        let timing = crate::perf::PipelineTiming::start(!frame.seekable);
+        self.perf.measure_frame = !frame.seekable || self.perf.armed();
+        let timing = crate::perf::PipelineTiming::start(self.perf.measure_frame);
         self.perf.live = !frame.seekable;
         self.perf.rendering = true;
         let wants = self.render_frame(frame, device, queue, encoder, target, format);
@@ -612,7 +553,7 @@ impl<G: Game, P: Executor, const ASSETS: bool, H: crate::Hooks> Surface
             }
         }
         drop(timing);
-        self.perf.pipeline_pending += crate::perf::pipeline_ms();
+        self.perf.keep_pipeline_time(frame.seekable);
         wants
     }
     fn frame_ready(&self) -> bool {
@@ -777,7 +718,8 @@ impl<G: Game, P: Executor, const ASSETS: bool, H: crate::Hooks> Surface
             }
             Ok(None) => {}
         }
-        let mut reply = sim.agent_with_inspector(
+        let measure = (self.seekable && self.perf.armed()).then_some(Clock::Seekable);
+        let mut reply = sim.agent_observed(
             request,
             observer(
                 &mut self.render,
@@ -786,8 +728,8 @@ impl<G: Game, P: Executor, const ASSETS: bool, H: crate::Hooks> Surface
                 &mut self.trace,
                 &mut self.error,
                 &mut self.hook_poses,
-                false,
-                0,
+                measure,
+                None,
             ),
             P::inspect,
         );
@@ -832,10 +774,8 @@ impl<G: Game, P: Executor, const ASSETS: bool, H: crate::Hooks> Surface
         // its own Data decoder to distinguish state from tree/error/entity replies.
         let state = world_state(&reply);
         if state {
-            let span_since = crate::perf::PerfRequest::parse(request)
-                .ok()
-                .and_then(|r| r.span_since);
-            if let Ok(r) = crate::perf::PerfRequest::parse(request) {
+            let perf_request = crate::perf::PerfRequest::parse(request).ok();
+            if let Some(r) = &perf_request {
                 if r.perf || r.perf_reset {
                     crate::perf::measure_spans(sim, r.perf_reset);
                 }
@@ -863,6 +803,8 @@ impl<G: Game, P: Executor, const ASSETS: bool, H: crate::Hooks> Surface
                     }
                 }
             }
+            let (span_since, trace_export) =
+                perf_request.map_or((None, false), |r| (r.span_since, r.trace_export));
             reply.truncate(reply.len() - 2);
             reply.push_str(if self.device {
                 ",\"device\":true"
@@ -876,10 +818,7 @@ impl<G: Game, P: Executor, const ASSETS: bool, H: crate::Hooks> Surface
             reply.push_str(",\"tickSpans\":");
             reply.push_str(&sim.spans_json(span_since));
             reply.push('}');
-            let trace_events = crate::perf::PerfRequest::parse(request)
-                .ok()
-                .filter(|q| q.trace_export)
-                .map(|_| sim.trace_events_json());
+            let trace_events = trace_export.then(|| sim.trace_events_json());
             let work = self
                 .render
                 .as_ref()

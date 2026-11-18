@@ -1239,12 +1239,16 @@ const api = {
   /// A live window opens (`perf frames live`, frames.js): each world leaves the seek for its own frame loop
   /// at the page's lent clock with empty, armed rings. Closing returns the world's perf and hook diagnostics.
   live(on) {
-    liveWindow = on; gpu?.gpu_seekable(!on);
+    liveWindow = on;
+    // Closing reads each world while it is still live: after the seek returns, a due tick would
+    // run as agent work and start a new CPU window in place of the one being read (LLP 1182.000 D3).
+    if (on) gpu?.gpu_seekable(false);
     const worlds = [];
     for (const entry of surfaces.values()) if (entry.id && !entry.terminal) {
       const world = agent(entry.view, { op: "state", ...(on ? { perf_reset: true } : { perf: true }) })?.world;
       if (!on && world?.perf) worlds.push({ canvas: entry.view, perf: world.perf, renderHooks: world.renderHooks });
     }
+    if (!on) gpu?.gpu_seekable(true);
     schedule();
     return worlds;
   },

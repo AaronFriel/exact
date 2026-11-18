@@ -923,8 +923,15 @@ artistic scale rather than candela, and at 0 only the range window, a spot's con
 N·L shape it (three.js `decay`). Decays 2 and 0 take no `pow` in the shader.
 Missing materials/environment use defaults.
 
-`state.world.perf` reports live frame stamps, tick,
-feed, encode (frame input through submit), pipeline and ticks/frame distributions.
+`state.world.perf.frameMs` measures intervals between consecutive live frames; a
+seekable frame between two starts the interval again. `tickMs`,
+`feedMs`, `encodeMs` and `pipelineMs` measure CPU work on live frames and, once
+perf is armed, under the agent's clock. `perf.clock` is `"live"` or `"agent"`
+and identifies the CPU rings' clock mode. The first CPU sample of the other
+mode clears the world and hook CPU rings in place. The previous window stays
+readable until that sample arrives. Display intervals and tick counts carry
+across CPU windows. A redraw at the same clock time is a frame and is sampled
+when CPU timing is enabled.
 `ticksPerFrame` counts ticks run. `catchUp` counts live host gaps over 250 ms, the
 most a frame admits. `clampFrames` and `clampMs` count excess time consumed by a
 running clock after a submitted live frame of the same unpaused picture. `idleFrames`
@@ -935,22 +942,27 @@ live scheduler's advance target with the full host gap minus the tick at the sta
 of the advance, when the gap exceeds 250 ms and the clock is running. Other drawn
 frames use the ticks run: seekable frames, a paused clock, which asks for none, and
 a wake from rest, which discards its gap before the scheduler reads it. A timed
-bind and an advance-only frame update the `catchUp` counters and add no ring sample.
+bind and an advance-only frame update `catchUp` without adding tick count samples.
 `overloadFrames` counts live frames, timed binds and advance-only frames that run
 more than `ceil(display period in seconds × HZ) + 1` ticks when the display period
 is known.
 The first logs the ticks owed and run, the ticks per display period, the clamped
 and idle time, and `perf world:<surface>`.
-`pipelineMs` is the time a live frame spent creating render and compute pipelines
-on its thread (`perf::pipeline`): in the host's asset preparation before it, its feed
-and encode, frames before it that stopped short of drawing, and the `Game::PREPARE`
-warm-up after the previous submit. A worker compiling a live-settings variant stalls
-no frame and is not counted. The log's `game renderer first frame encoded` line
+`pipelineMs` is the time a measured frame spent creating render and compute pipelines
+on its thread (`perf::pipeline`), including the host's asset preparation, feed
+and encode, earlier frames that stopped short of drawing, and the `Game::PREPARE`
+warm-up after the previous submit. Pipelines made in a measured agent request
+or timed bind count toward the next drawn frame in that mode, and pending time
+waits for a frame of its own mode. A worker compiling a live-settings variant
+stalls no frame and is not counted. The log's `game renderer first frame encoded` line
 gives the same time from the renderer's making to that frame as `pipeline_ms=`
-(`untimed` when the renderer was made, or a frame drawn, on the agent's clock).
-Driver work a pipeline defers to its first use is GPU or encode time, not this. CPU sample
-rings retain 16,384 values. Seekable renders, agent advances and timed binds make
-no CPU frame perf clock calls unless tick spans are armed; samples do not enter hashes.
+(`untimed` when that interval was outside CPU measurement or crossed clock modes).
+CPU sample rings retain 16,384 values. On a canvas under the agent's clock, when
+armed, a frame, an agent request or a timed bind samples the last 240 ticks of its
+advance and the feed that follows them. Under the live clock a request and a bind
+time nothing. Unarmed seekable renders and advances make no CPU perf clock calls.
+The tick, feed and encode times in `exactCanvasPerformance` and the trace come
+from live frames only. Samples stay outside hashes and scheduling.
 `perf world:<surface>` arms exclusive tick spans, exposed in
 `state.world.perf.tickSpans`: name, source line, p50, p95, maximum and per-tick
 mean milliseconds. `tick.other` completes the tick. `tickSpans.tickMs` measures
@@ -969,7 +981,7 @@ end), tonemap, depth resolves, the water's shafts and hook stages; the transluce
 blended models) and inside-pass hook stages where the device times inside passes.
 A pass the frame did not run is not read. GPU timings also fill under the agent's
 virtual clock (seekable frames), so `state world perf:true` then `clock +ms` times
-an offscreen frame there; CPU frame rings stay live-only. Arming allocates the query set and
+an offscreen frame there. Arming allocates the query set and
 readback buffers; an unarmed canvas creates none. GPU intervals overlap; do not sum
 them. The allocation-free claim covers
 only the `steady_sim_feed_and_frame_inputs_allocate_nothing` moving-cube/camera/light
@@ -1201,6 +1213,10 @@ failures are included. Headless state has `ready: false`, reason
 
 `state.world.renderHooks` reports stages, CPU rings, attachment-byte estimates,
 and engine and game creation counts before and after readiness.
+`cpuMs` times each stage of a frame whose encode succeeds, on a live frame or,
+when armed, under the agent's clock. These rings clear along with the other CPU rings when `perf.clock`
+changes. A look frame is not timed: it adds no sample to these rings or to the
+world's, and leaves `perf.clock` as it was.
 `reportedWork` is `null` without `work()` reporting. `frame` is `null` without
 frame work reporting. A frame report names the unit in `items` and supplies
 `draws`, `triangles`, `uploadBytes` and `itemsDrawn` rings. The first read or a

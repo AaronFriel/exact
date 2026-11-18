@@ -86,7 +86,8 @@ impl<G: Game, P: Executor, const ASSETS: bool, H: crate::Hooks> WorldSurface<G, 
                 self.perf.record_gap(sim.take_live_gap(), picture);
             }
             let start = sim.world().tick();
-            sim.bind_with(
+            let measure = (self.seekable && self.perf.armed()).then_some(Clock::Seekable);
+            sim.bind_observed(
                 values,
                 at_ms,
                 if self.seekable {
@@ -101,8 +102,8 @@ impl<G: Game, P: Executor, const ASSETS: bool, H: crate::Hooks> WorldSurface<G, 
                     &mut self.trace,
                     &mut self.error,
                     &mut self.hook_poses,
-                    false,
-                    0,
+                    measure,
+                    None,
                 ),
             )
             .map_err(SurfaceError)?;

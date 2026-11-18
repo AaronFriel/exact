@@ -22,6 +22,7 @@ pub(super) struct Resolved {
     /// the target (resolving into it at 4x), and no tone pass follows.
     pub direct: bool,
     pub bilinear: bool,
+    pub measure: bool,
     /// CPU stage times: prepare, compute, opaque, background, surface, post.
     pub times: [Option<f64>; 6],
     /// Engine draws beyond the retained per-batch count.
@@ -61,6 +62,7 @@ impl<const ASSETS: bool> RendererWithAssets<ASSETS> {
             None,
             crate::HookTime::default(),
             &Default::default(),
+            None,
         )
         .expect("empty hooks cannot refuse")
     }
@@ -100,6 +102,7 @@ impl<const ASSETS: bool> RendererWithAssets<ASSETS> {
         world: Option<&exact_game::World>,
         time: crate::HookTime,
         poses: &crate::hooks::Poses,
+        cpu: Option<(&mut crate::perf::Perf, bool)>,
     ) -> Result<Stats, RenderError> {
         if self.probe.is_none() {
             self.end_look();
@@ -118,6 +121,7 @@ impl<const ASSETS: bool> RendererWithAssets<ASSETS> {
             world,
             time,
             poses,
+            cpu,
             &mut ran_hook_stage,
         );
         if H::ENABLED {
@@ -144,6 +148,7 @@ impl<const ASSETS: bool> RendererWithAssets<ASSETS> {
         world: Option<&exact_game::World>,
         time: crate::HookTime,
         poses: &crate::hooks::Poses,
+        cpu: Option<(&mut crate::perf::Perf, bool)>,
         ran_hook_stage: &mut bool,
     ) -> Result<Stats, RenderError> {
         self.upload_overrides(frame);
@@ -163,9 +168,10 @@ impl<const ASSETS: bool> RendererWithAssets<ASSETS> {
             poses,
         };
         let mut times = [None; 6];
+        let measure = cpu.is_some();
         let needs = if H::ENABLED {
             *ran_hook_stage = world.is_some();
-            self.prepare_hooks(hooks, world, &view, &mut times)?;
+            self.prepare_hooks(hooks, world, &view, &mut times, measure)?;
             hooks.needs()
         } else {
             crate::Needs::NONE
@@ -174,7 +180,7 @@ impl<const ASSETS: bool> RendererWithAssets<ASSETS> {
             self.hook_metrics
                 .as_mut()
                 .unwrap()
-                .record_stages(times, hooks, false);
+                .record_stages(times, hooks, false, cpu);
             return Ok(self.encode_assets(encoder, target, size_px, frame));
         }
         if H::ENABLED && ASSETS {
@@ -348,6 +354,7 @@ impl<const ASSETS: bool> RendererWithAssets<ASSETS> {
             .and_then(|s| s.shadows)
             .is_some_and(|s| matches!(s.filter, crate::ShadowFilter::Bilinear { .. }));
         let mut state = Resolved {
+            measure,
             bilinear,
             size,
             needs,
@@ -407,7 +414,7 @@ impl<const ASSETS: bool> RendererWithAssets<ASSETS> {
         }
         if H::ENABLED {
             *ran_hook_stage = true;
-            let start = (!time.seekable).then(crate::perf::Stamp::now);
+            let start = measure.then(crate::perf::Stamp::now);
             timing::encoder_stamp(&self.device, encoder, frame.timestamps, 17, false);
             hooks
                 .compute(encoder, &view)
@@ -485,7 +492,7 @@ impl<const ASSETS: bool> RendererWithAssets<ASSETS> {
             self.encode_post(encoder, target, &mut state, frame, hooks, &view)?;
         }
         self.cull.copy_counts(&self.device, encoder);
-        Ok(self.finish_stats(hooks, &state))
+        Ok(self.finish_stats(hooks, &state, cpu))
     }
 
     /// Whether this frame draws straight into the target, with no HDR image (README
@@ -589,6 +596,7 @@ impl<const ASSETS: bool> RendererWithAssets<ASSETS> {
         world: Option<&exact_game::World>,
         view: &crate::FrameView<'_>,
         times: &mut [Option<f64>; 6],
+        measure: bool,
     ) -> Result<(), RenderError> {
         let device = &self.device;
         let binding = self
@@ -618,7 +626,7 @@ impl<const ASSETS: bool> RendererWithAssets<ASSETS> {
             frame_binding: &binding.bind,
             frame_layout: &binding.layout,
         };
-        let start = (!view.time.seekable).then(crate::perf::Stamp::now);
+        let start = measure.then(crate::perf::Stamp::now);
         hooks
             .prepare(&gpu, view, &crate::RenderWorld(world))
             .map_err(|e| hook_error("prepare", e))?;
@@ -864,7 +872,12 @@ impl<const ASSETS: bool> RendererWithAssets<ASSETS> {
         }
     }
 
-    fn finish_stats<H: crate::Hooks>(&mut self, hooks: &H, state: &Resolved) -> Stats {
+    fn finish_stats<H: crate::Hooks>(
+        &mut self,
+        hooks: &H,
+        state: &Resolved,
+        cpu: Option<(&mut crate::perf::Perf, bool)>,
+    ) -> Stats {
         let mut stats = self.counts;
         stats.draws += state.draws;
         stats.instances += self.quads.instances() + state.hull_instances;
@@ -900,6 +913,7 @@ impl<const ASSETS: bool> RendererWithAssets<ASSETS> {
                 state.times,
                 hooks,
                 !needs.contains(crate::Needs::PENDING) && hooks.error().is_none(),
+                cpu,
             );
         }
         stats
@@ -1042,6 +1056,7 @@ mod tests {
                 Some(&world),
                 crate::HookTime::default(),
                 &Default::default(),
+                None,
             );
             assert!(failed.unwrap_err().to_string().contains("look failed"));
             drop(encoder);
