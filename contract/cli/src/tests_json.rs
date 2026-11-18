@@ -639,6 +639,7 @@ fn state_literal(value: &Expr, s: &mut String) {
         Expr::Number(n, _) => s.push_str(&format!("{n}")),
         Expr::Str(t, _) => q(t, s),
         Expr::Bool(b, _) => s.push_str(&format!("{b}")),
+        Expr::Some(inner, _) => state_literal(inner, s),
         Expr::List(items, _) => {
             s.push('[');
             for (i, item) in items.iter().enumerate() {
@@ -649,6 +650,22 @@ fn state_literal(value: &Expr, s: &mut String) {
             }
             s.push(']');
         }
-        _ => s.push_str("null"),
+        Expr::Call(_, fields, _) => {
+            s.push('{');
+            for (i, field) in fields.iter().enumerate() {
+                let Expr::NamedArg(name, value, _) = field else {
+                    unreachable!("state literal fields are named")
+                };
+                if i > 0 {
+                    s.push(',');
+                }
+                q(name, s);
+                s.push(':');
+                state_literal(value, s);
+            }
+            s.push('}');
+        }
+        Expr::None(_) => s.push_str("null"),
+        _ => unreachable!("state expectations contain only literals"),
     }
 }

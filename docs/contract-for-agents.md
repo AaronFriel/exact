@@ -6372,12 +6372,14 @@ size in points, from the box `layout <target>` prints: `expect layout "status-ma
 fails for a glyph a column stretched), `expect text "id" == "…"`
 (the node's text; a control's value, so a `select` reads its chosen value, not its
 options, and a checkbox with a `checked` binding `true` or `false`; else its descendants' — a button's label — else a field's value), and
-`expect state name == <number|string|bool|none|[]>`, where `name` may go on into
-a record's fields (`board.active.present`) or a list index (`rows.0`), and the
-number may be negative (`== -3`). Numeric bounds use `>=` or `<=` (`expect state offset >= 90`
+`expect state name == <literal>`, where `name` may go on into a record's fields
+(`board.active.present`) or a list index (`rows.0`). A literal is a number (negative
+allowed), string, bool, `none`, `some(literal)`, list (`["a", "b"]`, `[[1, -2], []]`),
+or shape with literal fields (`Point(x=1, y=-2)`). Equality compares the whole value
+structurally. Numeric bounds use `>=` or `<=` (`expect state offset >= 90`
 and `expect state offset <= 110`); they require a number, without coercing strings or bools.
 `expect state mode in "idle" "ready"` checks literal membership; alternatives use the same
-literals as `==`, separated by spaces. A mismatch names the value read. `expect wakelock held|released` reads
+literals as `==`, separated by spaces. A mismatch prints the actual and expected values. `expect wakelock held|released` reads
 `state.wakelock.held`: the runner's record of displayed elements requesting the
 lock, not whether the OS or browser granted it. A mismatch names the holding
 view ids and their testIds when present, or says nothing holds it.

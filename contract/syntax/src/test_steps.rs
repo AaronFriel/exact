@@ -379,8 +379,7 @@ pub enum Step {
     },
     /// `expect state name <comparison> literal`: a slot, derive, or resource from the
     /// `state` reply, or a field of one (`name.field.field`, feed F10), or a
-    /// list index (`rows.0`, drums R7), compared to a number (negative
-    /// included), string, bool, or `none`.
+    /// list index (`rows.0`, drums R7), compared to a value literal.
     ExpectState {
         /// The declaration's name, then fields and list indexes, joined by `.`.
         name: String,

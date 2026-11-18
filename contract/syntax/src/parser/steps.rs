@@ -1438,31 +1438,3 @@ fn iso_date(s: &str) -> bool {
         })
         && (b.len() == 10 || b[10] == b'T')
 }
-
-impl Parser {
-    fn state_literal(&mut self) -> R<Expr> {
-        let span = self.peek().span;
-        if self.at_punct("-") || matches!(self.peek_kind(), TokenKind::Number(_)) {
-            return self
-                .step_number("a literal number")
-                .map(|n| Expr::Number(n, span));
-        }
-        let token = self.next();
-        match token.kind {
-            TokenKind::Str(value) => Ok(Expr::Str(value, span)),
-            TokenKind::Ident(word) if word == "true" || word == "false" => {
-                Ok(Expr::Bool(word == "true", span))
-            }
-            TokenKind::Ident(word) if word == "none" => Ok(Expr::None(span)),
-            TokenKind::Punct("[") => {
-                self.expect_punct("]")?;
-                Ok(Expr::List(Vec::new(), span))
-            }
-            _ => Err(SyntaxError {
-                id: "syntax-expected-step",
-                message: "`expect state` takes a number, a string, a bool, `none`, or `[]`".into(),
-                span,
-            }),
-        }
-    }
-}

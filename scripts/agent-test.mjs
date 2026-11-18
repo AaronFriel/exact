@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { faultRequest as rawFaultRequest, preferGroups } from './agent-prefer.mjs';
 import { open } from './agent.mjs';
 import { duringOp } from './agent-drag.mjs';
+import { equalJson } from '../host/web-js/declared-values.js';
 import { perfDelta } from './agent-inspect.mjs';
 import { driveStore, faultSpecOf, launchFacts } from './agent-launch.mjs';
 import { macSandboxed } from './agent-build.mjs';
@@ -578,7 +579,7 @@ const LAUNCH = { epoch: 'epoch', 'time-zone': 'timeZone', locale: 'locale', seed
 
 /** Literal comparisons in a scripted state assertion; numeric bounds never coerce another JSON type. */
 export function stateHolds(got, step) {
-  const equal = value => JSON.stringify(got) === JSON.stringify(value);
+  const equal = value => equalJson(got, value);
   switch (step.comparison) {
     case 'equal': return equal(step.value);
     case 'at-least': return typeof got === 'number' && got >= step.value;

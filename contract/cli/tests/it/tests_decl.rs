@@ -1216,6 +1216,45 @@ fn a_perf_block_refuses_the_wall_clock_and_counts_need_a_block() {
 }
 
 #[test]
+fn state_expectations_accept_value_literals() {
+    let tests = contract::tests(
+        r#"test "two items are picked"
+  expect state picks == ["a", "b"]
+  expect state grid == [
+    [1, -2],
+    [3, 4,],
+    [],
+  ]
+  expect state empty == []
+  expect state picked == some(["a", "b"])
+  expect state row == Row(id="a", position=Point(x=1, y=-2))
+  expect state flags == [none, some(true), some(false)]
+  expect state label == `Hi`
+"#,
+    )
+    .unwrap();
+    let json: serde_json::Value = serde_json::from_str(&contract::tests_json(&tests)).unwrap();
+    let values: Vec<_> = json[0]["steps"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|step| step["value"].clone())
+        .collect();
+    assert_eq!(
+        values,
+        vec![
+            serde_json::json!(["a", "b"]),
+            serde_json::json!([[1, -2], [3, 4], []]),
+            serde_json::json!([]),
+            serde_json::json!(["a", "b"]),
+            serde_json::json!({"id": "a", "position": {"x": 1, "y": -2}}),
+            serde_json::json!([null, true, false]),
+            serde_json::json!("Hi"),
+        ]
+    );
+}
+
+#[test]
 fn state_steps_compare_numeric_bounds_and_literal_membership() {
     use contract_syntax::StateComparison as C;
     let tests = contract::tests("test \"bounds\"\n  expect state offset >= -2\n  expect state offset <= 2\n  expect state rows.0 in 0 -2 2\n  expect state choice in \"ready\" false none []\n").unwrap();
@@ -1246,7 +1285,13 @@ fn state_steps_compare_numeric_bounds_and_literal_membership() {
         "offset in",
         "offset in 1 + 2",
         "offset == computed",
-        "offset == [1, 2]",
+        "offset == [computed]",
+        "offset == [1 + 2]",
+        "offset == some(computed)",
+        "offset == some(1 + 2)",
+        "offset == Row(id=computed)",
+        "offset == Row(id=1, id=2)",
+        "offset == compute(1)",
     ] {
         assert!(
             contract::tests(&format!("test \"bad\"\n  expect state {line}\n")).is_err(),

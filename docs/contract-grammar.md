@@ -852,7 +852,7 @@ step          = "tap" "midi" STRING ( HEX { HEX } | "clock" NUMBER NUMBER ) NL
               | "expect" "refusal" STRING NL          (* one observed refusal of the named mutation slot *)
               | "expect" "text" STRING "==" STRING NL
               | "expect" "state" IDENT { "." ( IDENT | NUMBER ) }
-                  ( "==" test-value | ( ">=" | "<=" ) [ "-" ] NUMBER | "in" test-value { test-value } ) NL
+                  ( "==" state-literal | ( ">=" | "<=" ) [ "-" ] NUMBER | "in" state-literal { state-literal } ) NL
               | "expect" "sound" ( "has" | "missing" ) STRING
                   [ "at" NUMBER ] [ "gain" NUMBER ] [ "ends" NUMBER ]
                   [ "playbackRate" NUMBER ] [ "pan" [ "-" ] NUMBER ] [ "by" IDENT ] NL
@@ -863,6 +863,10 @@ step          = "tap" "midi" STRING ( HEX { HEX } | "clock" NUMBER NUMBER ) NL
 midi-fact     = "midi.state" ( "prompt" | "granted" | "denied" | "unavailable" )
               | ( "midi.inputs" | "midi.outputs" ) STRING ;  (* names, comma-separated *)
 HEX           = HEXDIGIT HEXDIGIT ;                  (* one byte, as in 90 3c 64 *)
+state-literal = [ "-" ] NUMBER | STRING | "true" | "false" | "none"
+              | "some" "(" state-literal ")"
+              | "[" [ state-literal { "," state-literal } [ "," ] ] "]"
+              | IDENT "(" [ IDENT "=" state-literal { "," IDENT "=" state-literal } [ "," ] ] ")" ;
 test-value    = [ "-" ] NUMBER | STRING | "true" | "false" | "none" | "[" "]" ;
 scalar        = [ "-" ] NUMBER | STRING | "true" | "false" | "null" ;
 METHOD        = "GET" | "POST" | "PUT" | "PATCH" | "DELETE" ;
@@ -1189,8 +1193,12 @@ to a motion's end.
 value, not its options), else its descendants' text in order (a button's label),
 else a field's value. `expect state name.field` reads a field of a record at any
 depth, and `name.0` a list index (a whole number from 0); a missing field fails
-naming the fields there. The value is a number, including a negative (`== -3`),
-a string, a bool, `none`, or `[]` — not an expression (`-1 + 2` is refused).
+naming the fields there. The expected value uses the expression grammar's literals:
+numbers, including negatives (`== -3`), strings, bools, `none`, `some(literal)`,
+lists (`["a", "b"]`, `[[1, -2], []]`), and shapes with literal fields
+(`Point(x=1, y=-2)`). Lists and shapes may span lines and keep a trailing comma.
+Equality is structural, with no type coercion; a mismatch prints the actual and
+expected values. Computed expressions (`-1 + 2`, `[count]`) are refused.
 `expect wakelock held` and `expect wakelock released` compare `state.wakelock.held`.
 This is the runner's holder record: displayed elements requesting the lock, not
 whether the OS or browser granted it. A failure names the holding view ids and
