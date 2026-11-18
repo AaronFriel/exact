@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { awaitBuildOutput, WEB_STD, WEB_SIZE, WEB_TOOLCHAIN, injectedProfiles, resolveApp, wasmRemapFlags, webToolchainEnv } from '../../scripts/app.mjs';
 import { rustDataOf, undeclaredDataCrate } from '../../scripts/app-shells.mjs';
 import { appCrates } from '../../scripts/cargo-check.mjs';
-import { withHostDeployment } from '../../scripts/filesystem.mjs';
+import { SETUP_FETCHES, withHostDeployment } from '../../scripts/filesystem.mjs';
 import { replaceBuild } from '../web/serve.mjs';
 import { proofInputs } from '../../game/inputs.mjs';
 import { keptProducts } from '../../scripts/kept.mjs';
@@ -74,7 +74,8 @@ function optimized(opt, input, output, label) {
   // Not optimized: a leaf is not kept for other checkouts (`buildLeaf`).
   unoptimized.add(output);
   if (input !== output) cpSync(input, output);
-  process.stderr.write(`${label}: ${opt.error?.code === 'ENOENT' ? `wasm-opt not on PATH (binaryen: brew install binaryen, or ${BINARYEN_DOWNLOAD})` : `wasm-opt failed: ${(opt.stderr ?? '').trim().split('\n').at(-1)}`}; unoptimized\n`);
+  // `warning: ` so the web build's filter of this piped child's lines passes it on (LLP 1156.006.000 D10).
+  process.stderr.write(`warning: ${label}: ${opt.error?.code === 'ENOENT' ? `wasm-opt not on PATH (binaryen: brew install binaryen, or ${BINARYEN_DOWNLOAD})` : `wasm-opt failed: ${(opt.stderr ?? '').trim().split('\n').at(-1)}`}; shipped unoptimized\n`);
   return output;
 }
 function optimize(input, output, label) {
@@ -187,7 +188,7 @@ export function buildModule(app, out = resolve(MODULES, app), draw = false, dir 
       keep(resolve(crate, 'src/lib.rs'), lib);
       prepareModule(wasm, done, { manifest: manifestPath, targetDir: resolved.target, profile: 'web' }, () => {
         const args = [`+${WEB}`, 'build', '--locked', '--offline', '--profile', 'web', '--target', 'wasm32-unknown-unknown', '--manifest-path', manifestPath, ...injectedProfiles({ manifest }, workspace), ...LINK_FLAGS()];
-        if (spawnSync('cargo', args, { stdio: ['ignore', 'inherit', 'inherit'], env: { ...process.env, CARGO_TARGET_DIR: resolved.target, EXACT_RUST_SHAPES: '1' } }).status !== 0) throw new Error(`${app}: the module did not build`);
+        if (spawnSync('cargo', args, { stdio: ['ignore', 'inherit', 'inherit'], env: { ...process.env, CARGO_TARGET_DIR: resolved.target, EXACT_RUST_SHAPES: '1' } }).status !== 0) throw new Error(`${app}: the module did not build; if Cargo says above that it could not download a crate offline, ${SETUP_FETCHES}`);
       });
       return done;
     } finally { release(); }

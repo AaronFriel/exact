@@ -46,7 +46,7 @@ import { buildRust, rustFiles, rustCards, rustPackage } from '../../scripts/rust
 import { webAppManifest, webDist, copyShaders, bakeOutput, bakeWatchEnv, buildBake, contractLast, readBake, verifyBakeFiles, developmentBuildEnv, resolveApp, webToolchainEnv } from '../../scripts/app.mjs';
 import { buildEditor, buildFlow, compilerSet } from '../web-js/module.mjs';
 import { RustMissing, WEB_CRATES, rustMissing, setMetadata } from '../../scripts/tools.mjs';
-import { closeFilesystemReader } from '../../scripts/filesystem.mjs';
+import { closeFilesystemReader, offlineMiss } from '../../scripts/filesystem.mjs';
 import { guardFlags, reportBuilt } from '../../scripts/help.mjs';
 import { BINARYEN_DOWNLOAD, optimizeWasm, splitStages, unsplitReason } from './stages.mjs';
 import { interfaceStyle, launchBackground, schemeHead, withInterfaceStyle, withLook } from './look.mjs';
@@ -66,7 +66,9 @@ function webMetadata(workspace) {
   const result = spawnSync('cargo', ['metadata', '--locked', '--offline', '--format-version', '1'], {
     cwd: workspace, env: developmentBuildEnv(), encoding: 'utf8', maxBuffer: 128 << 20,
   });
-  if (result.error || result.status !== 0) throw new Error(`web build: cargo metadata in ${workspace}: ${result.stderr || result.error?.message}`);
+  // No cargo: the one line `contract` gives, not a stack trace (LLP 1156.006.000 D10).
+  if (result.error?.code === 'ENOENT') throw new RustMissing('exact-web-js');
+  if (result.error || result.status !== 0) throw new Error(`web build: cargo metadata in ${workspace}: ${result.stderr || result.error?.message}${offlineMiss(result.stderr)}`);
   const metadata = JSON.parse(result.stdout);
   const paths = ['Cargo.toml', 'Cargo.lock', '.cargo/config.toml', '.cargo/config'].map(file => resolve(workspace, file));
   paths.push(...metadata.packages.filter(pkg => !pkg.source).map(pkg => pkg.manifest_path));
