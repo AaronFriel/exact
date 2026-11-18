@@ -740,6 +740,8 @@ final class IframeWindowsTests: XCTestCase {
         let page = folder.appendingPathComponent("page.pdf")
         answer(["path": page.path])
         spin { self.run(web, "window.printed") as? String == "done" }
+        // AppKit finishes the saved file after `didRun`, which answers the page.
+        spin { PDFDocument(url: page) != nil }
         XCTAssertEqual(PDFDocument(url: page)?.pageCount, 1)
         XCTAssertTrue(PDFDocument(url: page)?.string?.contains("new tab") == true)
 
