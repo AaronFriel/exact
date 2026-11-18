@@ -7,7 +7,7 @@ import UIKit
 
 extension NavigationHost {
     /// Whether the search bar draws `tablist` (`SegmentHost` steps aside).
-    func scopes(tablist: NodeView) -> Bool { controllers.values.contains { $0.scoped === tablist } }
+    package func scopes(tablist: NodeView) -> Bool { controllers.values.contains { $0.scoped === tablist } }
 
     #if EXACT_INSPECT
     /// A route's title, subtitle or search scope control and the segment drawn for `tab`.

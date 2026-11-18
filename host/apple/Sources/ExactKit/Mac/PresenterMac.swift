@@ -38,7 +38,7 @@ package final class Presenter {
     var inlineOwners: [UInt32: (owner: UInt32, index: Int)] = [:]
     private(set) var chrome = ChromeIndex()
     /// Views leaving with their exit, by id (LLP 1063, `PresenceMac.swift`).
-    var leaving: [UInt32: Leaving] = [:]
+    package var leaving: [UInt32: Leaving] = [:]
     /// The shared elements in flight (LLP 1013.000, `FlightLink`).
     package lazy var flightHost: any FlightHosting = FlightLink.make?(self) ?? NoFlights()
     /// Views whose drawn origin a batch moved (`PixelGridMac.swift`).
@@ -921,9 +921,9 @@ package final class Presenter {
     /// A select's, range's or date's new value (LLP 1069.001 D4): HTML's
     /// `input` as it moves, `change` as it is committed.
     var onControlValue: ((UInt32, String, Bool, Bool) -> Void)?
-    func controlValue(_ id: UInt32, _ value: String, input: Bool, change: Bool) { onControlValue?(id, value, input, change) }
+    package func controlValue(_ id: UInt32, _ value: String, input: Bool, change: Bool) { onControlValue?(id, value, input, change) }
     /// A select's options and the one it shows, read from the kernel.
-    var selectOptions: ((UInt32) -> SelectMenu)?
+    package var selectOptions: ((UInt32) -> SelectMenu)?
     var buttonFace: ((UInt32) -> ButtonFace)?
 
     /// An event a view reports: sent only while the presenter still has the

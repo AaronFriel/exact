@@ -6,6 +6,7 @@
 // the person put it (LLP 1069.001 D4, amended 2026-10-04).
 #if os(macOS)
 import AppKit
+import ExactKit
 
 extension ControlHost {
     func makeRange() -> NSControl {

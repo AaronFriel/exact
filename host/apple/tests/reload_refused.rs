@@ -30,6 +30,11 @@ fn hellos_binary_refuses_a_reload_into_a_family_and_keeps_its_plan() {
             "effects, svg, images",
         ),
         ("view hatch=\"avatar\"", "native_views"),
+        ("input type=\"checkbox\"", "controls"),
+        (
+            "row role=\"tablist\"\n      button \"a\" role=\"tab\"",
+            "controls",
+        ),
     ] {
         let next = plan(view);
         let len = bridge.input_write(&next);

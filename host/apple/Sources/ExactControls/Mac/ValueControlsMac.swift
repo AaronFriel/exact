@@ -5,6 +5,7 @@
 // changes, keeping the person's choice until then (D4, amended 2026-10-04).
 #if os(macOS)
 import AppKit
+import ExactKit
 
 extension ControlHost {
     func makeValueControl(_ kind: String) -> NSControl {
@@ -69,7 +70,7 @@ extension ControlHost {
     func chose(_ id: UInt32, _ value: String) {
         guard presenter.views[id] != nil else { return }
         // The shown title can resize even when the action writes no bound value.
-        defer { sync() }
+        defer { self.sync() }
         let before = presenter.selectOptions?(id)
         presenter.controlValue(id, value, input: true, change: true)
         // The bound value is shown when it changes, as the web build's select:
@@ -91,6 +92,7 @@ extension ControlHost {
         return true
     }
 
+    #if EXACT_AGENT
     /// The agent's `type <id> <value>` (D9): the choice a menu would make.
     func type(_ node: NodeView, _ value: String) -> [String: Any]? {
         if let slider = controls[node.id] as? NSSlider {
@@ -117,6 +119,7 @@ extension ControlHost {
         chose(node.id, chosen)
         return ["typed": Int(node.id), "value": popup.selectedItem?.representedObject as? String ?? "", "delivery": "host-activation", "native": "control"]
     }
+    #endif
 
     func valueObservation(_ control: NSControl) -> [String: Any]? {
         if let slider = control as? NSSlider {

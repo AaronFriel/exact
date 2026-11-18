@@ -13,6 +13,7 @@
 // tint either: it draws in the system accent.
 #if os(macOS)
 import AppKit
+import ExactKit
 
 /// An indicator a click passes through, to its node and then its
 /// ancestors' `press`, as a box's content does (UIKit's indicator and bar

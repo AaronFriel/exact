@@ -8,6 +8,7 @@
 // person's choice showing (x2apps kanban2 #5).
 #if os(iOS)
 import UIKit
+import ExactKit
 
 extension ControlHost {
     func makeDate(_ kind: String) -> UIControl {

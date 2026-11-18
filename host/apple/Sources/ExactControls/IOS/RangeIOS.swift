@@ -7,6 +7,7 @@
 // the person put it until the bound value changes (D4, amended).
 #if os(iOS)
 import UIKit
+import ExactKit
 
 extension ControlHost {
     func makeRange() -> UIControl {

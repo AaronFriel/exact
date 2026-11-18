@@ -4,6 +4,7 @@
 // Exact's (`Radios.swift`), so AppKit neither checks it nor groups it.
 #if os(macOS)
 import AppKit
+import ExactKit
 
 /// A radio's cell: a click leaves its state alone and only sends the
 /// action, so the host sees the state from before the click and decides.

@@ -10,6 +10,7 @@
 // node's `accent-color` (none leaves UIKit's tint), at HTML's fraction.
 #if os(iOS) || os(tvOS)
 import UIKit
+import ExactKit
 
 extension ControlHost {
     /// The shorter side at which the large indicator replaces the medium

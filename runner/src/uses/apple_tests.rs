@@ -145,7 +145,7 @@ fn each_native_entry_is_selected_by_the_rows_that_reach_its_family() {
         ("input type=\"checkbox\" role=\"switch\"", Controls, true),
         ("input type=\"range\"", Controls, true),
         ("progress value=0.5", Controls, true),
-        ("input type=\"number\"", Controls, true),
+        ("input type=\"number\"", Controls, false),
         ("input type=\"text\"", Controls, false),
         (
             "row role=\"tablist\"\n      button \"a\" press=go",

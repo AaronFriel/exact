@@ -5,6 +5,7 @@
 // (D4). `appearance: none` draws nothing native.
 #if os(macOS)
 import AppKit
+import ExactKit
 
 class AriaButtonCellMac: NSButtonCell {
     override func accessibilityAttributeValue(_ attribute: NSAccessibility.Attribute) -> Any? {
@@ -146,7 +147,9 @@ final class BuiltInControlKinds: ControlKinding {
     func progressObservation(_ node: NodeView) -> [String: Any]? { host.progressObservation(node) }
     func radioOn(_ control: NSControl) -> Bool { host.radioOn(control) }
     func showRadio(_ id: UInt32, _ on: Bool) { host.showRadio(id, on) }
+    #if EXACT_AGENT
     func type(_ node: NodeView, _ value: String) -> [String: Any]? { host.type(node, value) }
+    #endif
 
     /// The agent reads AppKit's own checkboxes and radios.
     static func drawnToggle(_ object: AnyObject) -> (radio: Bool, on: Bool)? { nil }

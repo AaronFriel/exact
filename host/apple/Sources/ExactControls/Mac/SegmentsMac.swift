@@ -5,6 +5,7 @@
 // @ref LLP 1116.004 D5.2 — a radio group of radios is the same control.
 #if os(macOS)
 import AppKit
+import ExactKit
 
 private final class SegmentAccessibility: NSAccessibilityElement, InspectionOwned {
     weak var control: ExactSegmentedControl?
@@ -176,7 +177,7 @@ final class SegmentHost: SegmentHosting {
         // The root tablist the window's sidebar shows is no segmented control (LLP 1115.002 D3),
         // nor a header's that the window's toolbar shows as its own group (D2).
         let owners = (presenter.carrying("role:tablist") + presenter.carrying("role:radiogroup")).filter {
-            $0.props["accessibilityOrientation"] != "vertical" && !presenter.sidebar.adopts($0) && !presenter.toolbar.adopts($0) &&
+            $0.props["accessibilityOrientation"] != "vertical" && !presenter.chromeAdopts(tablist: $0) &&
                 !($0.wrote("appearance") && $0.style["appearance"]?.string == "none")
         }
         let live = Set(owners.map(\.id))

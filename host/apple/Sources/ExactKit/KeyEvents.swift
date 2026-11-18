@@ -10,10 +10,10 @@
 // (#140).
 #if canImport(AppKit)
 import AppKit
-typealias KeyPlatformView = NSView
+package typealias KeyPlatformView = NSView
 #else
 import UIKit
-typealias KeyPlatformView = UIView
+package typealias KeyPlatformView = UIView
 #endif
 
 extension NodeView {
@@ -23,7 +23,7 @@ extension NodeView {
     /// 2026-10-04). A pressable with an `href` is the web's `<a>`, which
     /// `disabled` does not touch either. A press is still refused on any
     /// disabled node.
-    var formDisabled: Bool {
+    package var formDisabled: Bool {
         disabled && ["button", "input", "textarea", "control"].contains(kind)
             && !(kind == "button" && props["href"] != nil)
     }
@@ -152,7 +152,7 @@ extension Presenter {
         logicalAncestry(of: view).contains { $0 === ancestor }
     }
     /// `view` and its authored ancestors (`eventParent`).
-    func logicalAncestry(of view: KeyPlatformView) -> UnfoldFirstSequence<KeyPlatformView> {
+    package func logicalAncestry(of view: KeyPlatformView) -> UnfoldFirstSequence<KeyPlatformView> {
         sequence(first: view, next: { self.eventParent(of: $0) })
     }
     private func keyEvent(_ handler: String, at target: NodeView?, _ press: KeyPress, inline: UInt32? = nil) -> Bool {

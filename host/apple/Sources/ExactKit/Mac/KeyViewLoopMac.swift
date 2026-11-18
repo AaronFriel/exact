@@ -38,7 +38,7 @@ extension NodeView {
     /// on, every control, a button, a pressable, a radio group's or tablist's
     /// one stop and a reorder grip included. (A text field's stop is its own
     /// view's, and AppKit's.)
-    var tabStop: Bool {
+    package var tabStop: Bool {
         if let index = explicitTabIndex { return index >= 0 && roleTabStop != false }
         return (KeyboardNavigation.on || takesKeysOfItsOwn) && tabbable
     }

@@ -1,5 +1,6 @@
 #if os(iOS)
 import UIKit
+import ExactKit
 
 /// What VoiceOver reads for an empty compact picker in place of one of
 /// UIKit's own elements for it. UIKit's element computes its value from the

@@ -50,7 +50,7 @@ struct SheetHeader {
     /// Its heading: none for a header of buttons alone, whose title row is empty.
     let header: NodeView, heading: NodeView?
     /// The heading's words: the sheet's title row.
-    let title: String
+    package let title: String
     /// The one that cancels, and the one that confirms.
     let cancel: NodeView?, confirm: NodeView?
     /// The header shows nothing else: its whole box is the platform's.
@@ -134,7 +134,7 @@ final class RouteChromeButton: NSButton, InspectionOwned {
 /// route's own content, and the row of buttons, in SwiftUI's measures.
 final class RouteChrome: NSView {
     private(set) weak var content: BlockView?
-    let title = NSTextField(labelWithString: "")
+    package let title = NSTextField(labelWithString: "")
     let back = RouteChromeButton(title: "Back", target: nil, action: nil)
     var onBack: (() -> Void)?
     let cancel: NSButton = RouteChromeButton(title: "", target: nil, action: nil), confirm: NSButton = RouteChromeButton(title: "", target: nil, action: nil)

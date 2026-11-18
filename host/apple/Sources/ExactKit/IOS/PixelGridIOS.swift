@@ -136,7 +136,7 @@ extension Presenter {
     /// The scale to place a box under `parent` at: the parent's own, so a
     /// flying subtree the display-scale pass left stays on one grid until it
     /// lands; else the display's.
-    func gridScale(under parent: GridOrigin) -> CGFloat { parent.scale > 0 ? CGFloat(parent.scale) : gridScale }
+    package func gridScale(under parent: GridOrigin) -> CGFloat { parent.scale > 0 ? CGFloat(parent.scale) : gridScale }
 
     /// The absolute origin `view` is placed from: that of the node whose
     /// children it is among (for a row a grouped list carried into its cell,

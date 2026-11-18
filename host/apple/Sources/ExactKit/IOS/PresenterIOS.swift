@@ -8,7 +8,7 @@ import CoreText
 import os
 package final class Presenter {
     var documentLanguage = ""
-    var documentDirection = "ltr"
+    package var documentDirection = "ltr"
     /// The direction Exact's controllers take (`turnChrome`): nil until the document is told its language.
     var chromeDirection: UITraitEnvironmentLayoutDirection?
     // A disabled signposter still allocates interval state; callers check its log first.
@@ -83,7 +83,7 @@ package final class Presenter {
     package var views: [UInt32: NodeView] = [:]
     lazy var focusEvents = FocusEvents(self)
     /// Views leaving with their exit, by id (LLP 1063, `PresenceIOS.swift`).
-    var leaving: [UInt32: Leaving] = [:]
+    package var leaving: [UInt32: Leaving] = [:]
     /// The shared elements in flight (LLP 1013.000, `FlightLink`).
     package lazy var flightHost: any FlightHosting = FlightLink.make?(self) ?? NoFlights()
     private(set) var chrome = ChromeIndex()
@@ -726,9 +726,9 @@ package final class Presenter {
     /// A select's, range's or date's new value (LLP 1069.001 D4): HTML's
     /// `input` as it moves, `change` as it is committed.
     var onControlValue: ((UInt32, String, Bool, Bool) -> Void)?
-    func controlValue(_ id: UInt32, _ value: String, input: Bool, change: Bool) { send(id) { [self] in onControlValue?(id, value, input, change) } }
+    package func controlValue(_ id: UInt32, _ value: String, input: Bool, change: Bool) { send(id) { [self] in onControlValue?(id, value, input, change) } }
     /// A select's options and the one it shows, read from the kernel.
-    var selectOptions: ((UInt32) -> SelectMenu)?
+    package var selectOptions: ((UInt32) -> SelectMenu)?
     var buttonFace: ((UInt32) -> ButtonFace)?
 
     /// An event a view reports: sent only while the presenter still has the
@@ -766,7 +766,7 @@ package final class Presenter {
     }
     package func key(_ id: UInt32, _ press: KeyPress) { send(id) { [self] in onKey?(id, press) } }
     func clipboard(_ id: UInt32, _ kind: UInt32, _ text: String) { send(id) { [self] in onClipboard?(id, kind, text) } }
-    func contextmenu(_ id: UInt32) { send(id) { [self] in onContextmenu?(id) } }
+    package func contextmenu(_ id: UInt32) { send(id) { [self] in onContextmenu?(id) } }
     /// A `contextmenu` with its point (studio diary R22): kind 10 and its line.
     func contextmenu(_ id: UInt32, line: String) { send(id) { [self] in onClipboard?(id, 10, line) } }
     func dblclick(_ id: UInt32) { send(id) { [self] in onDblclick?(id) } }
@@ -806,7 +806,7 @@ package final class Presenter {
     /// them: all sizes from a turn reach the runner under one layout.
     private struct QueuedIntrinsic { weak var view: NodeView?; let generation: Int; let size: CGSize? }
     private var intrinsicSizes: [QueuedIntrinsic] = []
-    func queueIntrinsicSize(_ view: NodeView, generation: Int, _ size: CGSize?) {
+    package func queueIntrinsicSize(_ view: NodeView, generation: Int, _ size: CGSize?) {
         if intrinsicSizes.isEmpty {
             DispatchQueue.main.async { [weak self] in self?.flushIntrinsicSizes() }
         }
@@ -1435,7 +1435,7 @@ extension CGRect {
 extension Presenter {
     /// The view a view is under in the authored tree, where UIKit holds it elsewhere: a dialog's sheet, a lifted
     /// popover, a route (any, presented or pushed) and a grouped list's carried row to their authored parent; else its superview
-    func authoredParent(of view: UIView) -> UIView? {
+    package func authoredParent(of view: UIView) -> UIView? {
         if let node = view as? NodeView {
             if let p = menus.sheets.authoredParent(of: node) { return p }
             if navigation.controllers[node.id]?.node === node, let p = navigation.logicalParent(of: node) ?? navigation.container { return p }

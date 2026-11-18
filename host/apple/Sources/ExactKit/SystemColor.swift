@@ -250,7 +250,7 @@ extension SystemColor {
 extension BatchValue {
     /// Whether the value names the view's tint (`AccentColor`, `Highlight`)
     /// anywhere: a colour, a palette's, a shadow's.
-    var namesTint: Bool {
+    package var namesTint: Bool {
         switch self {
         case .object(let o): return o["sys"]?.string?.hasPrefix("@tint") == true || o.values.contains { $0.namesTint }
         case .array(let a): return a.contains { $0.namesTint }
@@ -260,7 +260,7 @@ extension BatchValue {
 
     /// The share of the tint a colour is when it is the tint (`AccentColor` 1, `Highlight` 0.2);
     /// nil for any other value
-    var tintAlpha: Double? {
+    package var tintAlpha: Double? {
         guard case .object(let o) = self, let name = o["sys"]?.string, name.hasPrefix("@tint") else { return nil }
         return SystemColor.tintShare(name)
     }
@@ -294,7 +294,7 @@ extension SystemColor {
     /// The tint at `alpha` as UIKit draws it (`UIColor.tintColor`): resolved by the tint of the view
     /// it is drawn in, so it follows that tint and dims with it. One object per alpha, so writing it
     /// again changes nothing.
-    static func tint(_ alpha: Double) -> UIColor {
+    package static func tint(_ alpha: Double) -> UIColor {
         if alpha >= 1 { return .tintColor }
         lock.lock(); defer { lock.unlock() }
         if let made = tints[alpha] { return made }
@@ -423,7 +423,7 @@ extension NodeView {
     }
 
     /// `uiColor` of the colour this node's author wrote for row `key`; nil where the author wrote none
-    func ownUIColor(_ key: String) -> UIColor? { ownColor(key) == nil ? nil : uiColor(key) }
+    package func ownUIColor(_ key: String) -> UIColor? { ownColor(key) == nil ? nil : uiColor(key) }
 
     /// The node's `accent-color` for UIKit to draw, nil where it has none (or `auto`): the tint as
     /// UIKit draws it at the accent's share, since an authored accent is the node's tint
@@ -437,14 +437,14 @@ extension NodeView {
     /// checkbox): nil, so the view draws in the tint, which the accent is (`applyAccentTint`), but a
     /// share of the tint (`Highlight`) as UIKit's tint at that share, since UIKit follows no view's
     /// own tint made from the one above it
-    var accentShare: UIColor? {
+    package var accentShare: UIColor? {
         style["accent_color"]?.tintAlpha.flatMap { $0 < 1 ? SystemColor.tint($0) : nil }
     }
 
     /// The colour of row `key` as a UIKit view's own tint, nil where it is unset or the tint itself,
     /// which the view inherits; else as written, the tint in it by `carriedTint`, since UIKit follows
     /// no view's own tint made from the one above it
-    func ownTintColor(_ key: String) -> UIColor? {
+    package func ownTintColor(_ key: String) -> UIColor? {
         guard let row = style[key], row.tintAlpha != 1 else { return nil }
         return row.cgColor(dark: drawsDark, contrast: drawsHighContrast, elevated: drawsElevated, tint: row.namesTint ? carriedTint : nil).map { UIColor(cgColor: $0) }
     }

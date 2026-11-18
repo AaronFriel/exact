@@ -541,7 +541,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
 
     /// Where children go: the scroll document view, or this view; a glass
     /// group innermost (`GlassGroup.swift`).
-    var container: NSView { glassGroupContent ?? baseContainer }
+    package var container: NSView { glassGroupContent ?? baseContainer }
     package var grid: GridPlace? // where layout put this box and where it is drawn (`PixelGridMac.swift`)
 
     // @ref LLP 1001 §1 — two semantic materials, not sampled blur constants.

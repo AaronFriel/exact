@@ -2,6 +2,7 @@
 import UIKit
 import XCTest
 @testable import ExactKit
+@testable import ExactControls
 
 /// LLP 1115 wave 1 on UIKit: what the author leaves unsaid is the
 /// platform's. A colour a control only inherits is not its own; an unset

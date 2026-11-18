@@ -2,6 +2,7 @@
 import UIKit
 import XCTest
 @testable import ExactKit
+@testable import ExactControls
 
 /// The presence ops on UIKit (LLP 1063): `exit` keeps a leaving view where
 /// it was, above its old siblings, inert and out of every lookup, while the

@@ -7,6 +7,7 @@
 // few) is the same segmented control, its selection `aria-checked`.
 #if os(iOS) || os(tvOS)
 import UIKit
+import ExactKit
 
 private final class ExactSegmentedControl: LabelledSegmentedControl {
     let ownerID: UInt32
@@ -444,7 +445,7 @@ final class SegmentHost: NSObject, UIGestureRecognizerDelegate, UITabBarDelegate
         // none` keeps either one's authored tabs or radios.
         let owners = presenter.carrying("role:tablist").filter {
             $0.props["accessibilityRole"] == "tablist" &&
-                $0.props["accessibilityOrientation"] != "vertical" && !presenter.navigation.adopts(tablist: $0) && !presenter.navigation.scopes(tablist: $0) &&
+                $0.props["accessibilityOrientation"] != "vertical" && !presenter.navigationAdopts(tablist: $0) && !presenter.navigationScopes(tablist: $0) &&
                 !($0.wrote("appearance") && $0.style["appearance"]?.string == "none")
         } + presenter.carrying("role:radiogroup").filter {
             $0.props["accessibilityRole"] == "radiogroup" && $0.props["accessibilityOrientation"] != "vertical" &&
@@ -453,7 +454,7 @@ final class SegmentHost: NSObject, UIGestureRecognizerDelegate, UITabBarDelegate
         // One tablist at most (`NavigationHost.adoptedTablist`), known by its view: after a restart the
         // new tablist has the old one's id. The old one is shown again only while the presenter holds it:
         // a leaving view keeps its look until its exit ends.
-        let adopted = presenter.carrying("role:tablist").first { presenter.navigation.adopts(tablist: $0) }
+        let adopted = presenter.carrying("role:tablist").first { presenter.navigationAdopts(tablist: $0) }
         if adopted !== adoptedList {
             if let old = adoptedList, presenter.views[old.id] === old { old.hiddenByHost = false }
             adopted?.hiddenByHost = true
@@ -569,7 +570,7 @@ final class SegmentHost: NSObject, UIGestureRecognizerDelegate, UITabBarDelegate
     /// Agent activation names the authored tab even though UIKit owns its pixels.
     func activate(_ node: NodeView, before: (CGPoint?) -> Bool = { _ in true }) -> Bool? {
         // A segment in the route's bar takes precedence over its hidden content control.
-        if let shown = presenter.navigation.barSegment(node) {
+        if let shown = presenter.navigationBarSegment(node) {
             guard !node.disabled, !node.ariaUnavailable else { return false }
             let point = shown.control.convert(CGPoint(x: shown.segment.midX, y: shown.segment.midY), to: nil)
             guard before(point), !node.disabled, !node.inert, !node.ariaUnavailable, presenter.views[node.id] === node else { return false }
@@ -590,7 +591,7 @@ final class SegmentHost: NSObject, UIGestureRecognizerDelegate, UITabBarDelegate
     /// box in it — its segment view's, else an equal share. Nil for a node no
     /// segmented control draws (a tab bar's items are UIKit's private views).
     func drawn(_ node: NodeView) -> (control: UIControl, segment: CGRect)? {
-        if let scope = presenter.navigation.barSegment(node) { return scope }
+        if let scope = presenter.navigationBarSegment(node) { return scope }
         guard let entry = members.first(where: { $0.value.contains(node.id) }), let control = controls[entry.key],
               let index = entry.value.firstIndex(of: node.id), control.numberOfSegments == entry.value.count else { return nil }
         let views = control.segmentViews

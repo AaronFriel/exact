@@ -331,7 +331,7 @@ extension NodeView {
 
     /// Where a native control sits: the isolation container's content when
     /// the glass-group pass made one (D9), else the node.
-    var controlMount: NSView {
+    package var controlMount: NSView {
         if #available(macOS 26.0, *), let isolation = glassIsolation as? NSGlassEffectContainerView, let content = isolation.contentView {
             return content
         }
@@ -405,7 +405,7 @@ extension NodeView {
 
     /// Whether the author wrote the style row `key` on this node (it is false of a value the node only
     /// inherits and of a row the compiler implied), as iOS reads it.
-    func wrote(_ key: String) -> Bool {
+    package func wrote(_ key: String) -> Bool {
         guard case .array(let rows)? = style["written"] else { return false }
         return rows.contains(.string(key))
     }

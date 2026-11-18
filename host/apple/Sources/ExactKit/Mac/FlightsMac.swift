@@ -17,7 +17,7 @@ struct FlightSource {
     var fit: CGRect?
     var natural: CGSize?
     /// The leaver's decoded image (`FlightLook.stand`), held for the flight.
-    var raster: (any ImageLease)?
+    package var raster: (any ImageLease)?
 }
 
 final class Flight {

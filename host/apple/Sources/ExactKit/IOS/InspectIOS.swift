@@ -9,7 +9,7 @@
 #if EXACT_INSPECT && os(iOS)
 import UIKit
 
-enum InspectHost {
+package enum InspectHost {
     /// The overlay on each window inspect mode is on in.
     nonisolated(unsafe) private static var overlays: [ObjectIdentifier: InspectOverlay] = [:]
     nonisolated(unsafe) private(set) weak static var app: ExactApp?
@@ -168,7 +168,7 @@ enum InspectHost {
     /// trailing, so right to left in a right-to-left layout; in the bar's
     /// coordinates; copies drawn for its glass are one box): what a tab bar
     /// shows for its items, which UIKit gives no frame.
-    static func buttonBoxes(in bar: UIView) -> [CGRect] {
+    package static func buttonBoxes(in bar: UIView) -> [CGRect] {
         var boxes: [CGRect] = [], pending: [UIView] = bar.subviews
         while !pending.isEmpty {
             let v = pending.removeFirst()

@@ -14,6 +14,8 @@ fn an_all_linked_binary_reloads_from_hello_into_each_family() {
         "text \"a\" filter=\"blur(2px)\"",
         "svg viewBox=\"0 0 10 10\"\n      circle cx=5 cy=5 r=4",
         "view hatch=\"avatar\"",
+        "input type=\"checkbox\"",
+        "row role=\"tablist\"\n      button \"a\" role=\"tab\"",
     ] {
         let mut bridge = Bridge::<NoData>::new();
         boot(&mut bridge, &plan("text \"Hello world\""));

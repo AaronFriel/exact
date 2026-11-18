@@ -8,6 +8,7 @@
 // A tap never moves its own state: the group is Exact's (`Radios.swift`).
 #if os(iOS) || os(tvOS)
 import UIKit
+import ExactKit
 
 final class ExactRadio: ExactCheckbox {
     weak var owner: NodeView?

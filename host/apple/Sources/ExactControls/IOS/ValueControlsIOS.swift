@@ -6,6 +6,7 @@
 // changes, keeping the person's choice until then (D4, amended 2026-10-04).
 #if os(iOS) || os(tvOS)
 import UIKit
+import ExactKit
 
 #if os(iOS)
 private final class SelectButtonIOS: UIButton {
@@ -144,12 +145,9 @@ extension ControlHost {
         // (hidden, `visibility: hidden`, or no area) is no label.
         let seen = { (v: NodeView) in !v.isHidden && !v.cssVisibilityHidden && v.layoutBounds.width > 0 && v.layoutBounds.height > 0 }
         let before: [CGRect]
-        if let ids = presenter.flats.children(of: parent.id) {
-            before = ids.prefix { $0 != owner.id }.compactMap { id in
-                if let leaf = presenter.flats.leaves[id] { return leaf.layout.width > 0 && leaf.layout.height > 0 ? leaf.layout : nil }
-                return presenter.views[id].flatMap { seen($0) ? $0.frame : nil }
-            }
-        } else { before = parent.container.subviews.compactMap { $0 as? NodeView }.prefix { $0 !== owner }.filter(seen).map(\.frame) }
+        if let children = presenter.laidOutChildren(of: parent.id, shown: seen) {
+            before = children.prefix { $0.id != owner.id }.compactMap(\.frame)
+        } else { before = parent.container.subviews.compactMap { $0 as? NodeView }.prefix { $0 !== owner }.filter(seen).map { $0.frame } }
         guard !before.isEmpty else { return nil }
         let box = owner.frame
         return before.contains { $0.maxX <= box.minX + 0.5 || $0.minX >= box.maxX - 0.5 ? $0.minY < box.maxY && $0.maxY > box.minY : false }
@@ -256,6 +254,7 @@ extension ControlHost {
                 "reason": "the iOS carrier opens no menu (UIKit presents one under a finger); `type <id> <value>` chooses"]
     }
 
+    #if EXACT_AGENT
     /// The agent's `type <id> <value>` (D9): the choice a menu would make.
     func type(_ node: NodeView, _ value: String) -> [String: Any]? {
         #if !os(tvOS)
@@ -282,6 +281,7 @@ extension ControlHost {
         chose(node.id, chosen)
         return ["typed": Int(node.id), "value": picked[node.id] ?? menus[node.id]?.chosenValue ?? "", "delivery": "host-activation", "native": "control"]
     }
+    #endif
 
     /// Whether a checkbox or a switch is on.
     func checked(_ control: UIControl) -> Bool {

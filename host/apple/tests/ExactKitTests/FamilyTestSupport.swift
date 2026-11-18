@@ -1,4 +1,5 @@
 @testable import ExactKit
+@testable import ExactControls
 @testable import ExactImages
 @testable import ExactCollections
 
@@ -24,7 +25,7 @@ extension Presenter {
 #endif
 
 extension Presenter {
-    /// The built-in segment host (`ControlLink.makeSegments`' default).
+    /// The segment host `ExactControls.install()` puts in `ControlLink.makeSegments`.
     var segmentHost: SegmentHost { segments as! SegmentHost }
 }
 

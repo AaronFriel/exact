@@ -680,7 +680,7 @@ extension NodeView {
     /// The press's handoff begins first, so an autofocus its `focus` handler
     /// mounts may take the focus; the caller tells it when the press's
     /// dispatch has returned (PressHandoffIOS).
-    func focusForPress(target: NodeView?) -> PressHandoff? {
+    package func focusForPress(target: NodeView?) -> PressHandoff? {
         guard let presenter else { return nil }
         let handoff = presenter.beginPress(control: target.map { $0.textArea ?? $0.field ?? $0 })
         guard !presenter.contextRetainsFocus(self) else { return handoff }

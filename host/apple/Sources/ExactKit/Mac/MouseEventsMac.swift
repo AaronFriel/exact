@@ -610,7 +610,7 @@ extension NSControl {
     /// nothing; AppKit sends the release on to the node. Chrome sends
     /// `contextmenu` from each, and changes none but a range, whose down
     /// moves its value first.
-    func contextClicked(_ event: NSEvent) -> Bool {
+    package func contextClicked(_ event: NSEvent) -> Bool {
         var view = superview
         while let at = view, !(at is NodeView) { view = at.superview }
         guard let node = view as? NodeView, node.contextClick(event) else { return false }

@@ -170,9 +170,11 @@ pub fn image_sources(plan: &Plan) -> Vec<ImageSource<'_>> {
 }
 
 /// Whether `plan` can show an optional native control: a `Control` whose
-/// `type` can be other than a button or a file input (the picker's), a
-/// number field's stepper, or a segmented control (a `tablist` or a
-/// `radiogroup`, which Apple's segment host takes).
+/// `type` can be other than a button or a file input (the picker's), which
+/// covers a `progress` and a grouped list row's toggle, whose target is one;
+/// or a segmented control (a `tablist` or a `radiogroup`, which Apple's
+/// segment host takes, a tab container's adopted tablist included). A number
+/// field's stepper is the core's (`NumberStepping`).
 fn uses_controls(plan: &Plan) -> bool {
     let prop = |node: &exact_plan::NodesRow, id: PropId| {
         node.bindings
@@ -185,9 +187,6 @@ fn uses_controls(plan: &Plan) -> bool {
         .any(|node| match NodeType::from_wire(node.node_type) {
             Some(NodeType::Control) => prop(&node, PropId::Type)
                 .is_none_or(|t| can_be(plan, &t, |v| !matches!(v, "button" | "file"))),
-            Some(NodeType::TextInput) => {
-                prop(&node, PropId::Type).is_some_and(|t| can_be(plan, &t, |v| v == "number"))
-            }
             _ => false,
         })
         || plan.bindings.iter().any(|b| {

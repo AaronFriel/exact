@@ -8,6 +8,7 @@
 // person's choice showing, where it used to clear it (x2apps kanban2 #5).
 #if os(macOS)
 import AppKit
+import ExactKit
 
 extension ControlHost {
     func makeDate(_ kind: String) -> NSControl {

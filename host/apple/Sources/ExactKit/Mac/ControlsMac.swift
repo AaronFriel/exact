@@ -7,23 +7,23 @@ import AppKit
 
 extension NSControl {
     /// The node whose box holds this control.
-    var ownerNode: NodeView? { sequence(first: self as NSView, next: \.superview).lazy.compactMap { $0 as? NodeView }.first }
-    var ariaUnavailableFromNode: Bool { ownerNode?.ariaUnavailable ?? false }
+    package var ownerNode: NodeView? { sequence(first: self as NSView, next: \.superview).lazy.compactMap { $0 as? NodeView }.first }
+    package var ariaUnavailableFromNode: Bool { ownerNode?.ariaUnavailable ?? false }
 }
 
 package final class ControlHost: NSObject {
-    unowned let presenter: Presenter
-    var controls: [UInt32: NSControl] = [:]
+    package unowned let presenter: Presenter
+    package var controls: [UInt32: NSControl] = [:]
     /// Which control each node shows (`ControlKinds`), to remake it when that changes.
-    var kinds: [UInt32: String] = [:]
+    package var kinds: [UInt32: String] = [:]
     /// The size last reported per control, so each is published once.
     private var reported: [UInt32: CGSize] = [:]
     /// Sizes measured and not yet reported (`reportMeasured`).
     private var measured: [(UInt32, CGSize?)] = []
     /// A select's menu as last built, so a batch that leaves it alone does not rebuild it.
-    var menus: [UInt32: SelectMenu] = [:]
+    package var menus: [UInt32: SelectMenu] = [:]
     /// A range's last reported value while it moves, so each is sent once.
-    var lastRange: [UInt32: String] = [:]
+    package var lastRange: [UInt32: String] = [:]
     /// Each native button's face as the runner last gave it. A face is the
     /// button's viewless contents, which change only in a batch that says so
     /// (`Batch.controls`), and its own props, which change only in a batch
@@ -43,7 +43,7 @@ package final class ControlHost: NSObject {
     func facesChanged() { faces.removeAll() }
     /// A range's bound value last written into it: written again only when
     /// it changes (LLP 1069.001 D4, amended 2026-10-04).
-    var appliedRange: [UInt32: String] = [:]
+    package var appliedRange: [UInt32: String] = [:]
     /// A radio's group from the kernel (`exact_radio_group`; x2apps survey #2).
     var radioGroup: ((UInt32) -> RadioGroup)?
     /// A painted group's keys from the kernel (`exact_role_keys`; LLP 1166.000 D2).
@@ -51,21 +51,21 @@ package final class ControlHost: NSObject {
     /// Each `progress`'s spinner (ProgressMac.swift): a view, not a
     /// control, so beside `controls`; and those turning, which AppKit does
     /// not say.
-    var spinners: [UInt32: NSProgressIndicator] = [:]
-    var animating: Set<UInt32> = []
+    package var spinners: [UInt32: NSProgressIndicator] = [:]
+    package var animating: Set<UInt32> = []
     /// Each determinate `progress`'s bar (LLP 1116 D8), beside them.
-    var bars: [UInt32: NSProgressIndicator] = [:]
+    package var bars: [UInt32: NSProgressIndicator] = [:]
 
     init(_ presenter: Presenter) { self.presenter = presenter }
 
     /// The kinds other than a native button.
     lazy var family: any ControlKinding = ControlLink.make?(self) ?? NoControlKinds()
 
-    func isOn(_ control: NSControl) -> Bool {
+    package func isOn(_ control: NSControl) -> Bool {
         ((control as? NSSwitch)?.state ?? (control as? NSButton)?.state) == .on
     }
 
-    func setOn(_ control: NSControl, _ on: Bool) {
+    package func setOn(_ control: NSControl, _ on: Bool) {
         let state: NSControl.StateValue = on ? .on : .off
         if let s = control as? NSSwitch, s.state != state { s.state = state }
         if let b = control as? NSButton, b.state != state { b.state = state }
@@ -92,7 +92,7 @@ package final class ControlHost: NSObject {
         return made
     }
 
-    func sync() {
+    package func sync() {
         let owners = ControlKinds.indexed.flatMap { presenter.carrying($0) }.filter { $0.kind == "control" }
         let live = Set(owners.map(\.id))
         // A leaving control keeps drawing until its exit ends (LLP 1069.011 D9).
@@ -182,8 +182,9 @@ package final class ControlHost: NSObject {
         }
     }
 
+    #if EXACT_AGENT
     /// The agent's `tap` (LLP 1069.001 D9): the control's own activation.
-    func activate(_ node: NodeView) -> Bool? {
+    package func activate(_ node: NodeView) -> Bool? {
         // A native button takes the ordinary click path (LLP 1069.011 D10).
         guard let control = controls[node.id], !(control is NativeButtonMac) else { return nil }
         guard control.window != nil, control.isEnabled, !node.inert, !control.isHiddenOrHasHiddenAncestor else { return false }
@@ -196,6 +197,7 @@ package final class ControlHost: NSObject {
         if let b = control as? NativeButtonMac { return nativeObservation(b) }
         return family.observation(control)
     }
+    #endif
 
     func reset() {
         for control in controls.values { control.removeFromSuperview() }

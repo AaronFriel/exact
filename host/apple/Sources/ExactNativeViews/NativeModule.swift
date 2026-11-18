@@ -424,7 +424,7 @@ final class NativeViews: NativeModuleHosting {
     /// Each hatched node's plan site, once asked (`planSite`, NativeHatches.swift).
     var hatchSites: [UInt32: Int?] = [:]
     /// The app and window scopes: the embedder's grants and what each was told (ScopeHatches.swift).
-    let scopes = HatchScopes()
+    package let scopes = HatchScopes()
     /// The hatches' frame tickets and `after`s on the session clock (HatchClock.swift).
     let hatchClock = HatchClock()
     /// `EXACT_HATCHES=off` (a development build only, §2.6): the module loads

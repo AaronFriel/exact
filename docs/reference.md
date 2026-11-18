@@ -1488,6 +1488,7 @@ The generated `--embed` composition lists the capabilities to link.
 | `ExactEffects` | CSS `filter` on a box | `ExactEffects.install()` |
 | `ExactSvg` | SVG elements, SVG images and icons (links `ExactEffects` too) | `ExactSvg.install()` |
 | `ExactNativeViews` | The app's native module, native views and hatches | `ExactNativeViews.install()` |
+| `ExactControls` | Switches, checkboxes, radios, ranges, selects, dates, progress and segmented tablists | `ExactControls.install()` |
 
 Development builds log a missing Markdown or drag installation once per session,
 with the product and installation call. Without it, Markdown remains literal

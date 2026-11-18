@@ -10,6 +10,7 @@
 // D13.3).
 #if os(iOS) || os(tvOS)
 import UIKit
+import ExactKit
 
 /// The checklist mark: an SF Symbol circle scaled with the body text, filled
 /// and checked when on (tvOS: a 16×16 rounded square). A radio is drawn on
@@ -224,7 +225,9 @@ final class BuiltInControlKinds: ControlKinding {
     func progressObservation(_ node: NodeView) -> [String: Any]? { host.progressObservation(node) }
     func radioOn(_ control: UIControl) -> Bool { host.radioOn(control) }
     func showRadio(_ id: UInt32, _ on: Bool) { host.showRadio(id, on) }
+    #if EXACT_AGENT
     func type(_ node: NodeView, _ value: String) -> [String: Any]? { host.type(node, value) }
+    #endif
     func unopened(_ node: NodeView) -> [String: Any]? { host.unopened(node) }
     #if os(iOS)
     func rangeKey(_ node: NodeView, _ key: String, phase: String?, repeats: Bool) -> [String: Any]? { host.rangeKey(node, key, phase: phase, repeats: repeats) }

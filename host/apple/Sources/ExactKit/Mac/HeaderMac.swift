@@ -51,7 +51,7 @@ struct WindowHeader {
     let route: NodeView, header: NodeView, heading: NodeView?
     /// The heading's text: the window's title, under an authored document
     /// title (the head's) and over the app's name.
-    let title: String
+    package let title: String
     /// The header's buttons before its heading, which lead the bar after
     /// Back as navigational items, and those after it, its trailing items.
     let leading: [NodeView], trailing: [NodeView]

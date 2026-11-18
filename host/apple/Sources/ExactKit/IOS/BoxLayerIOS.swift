@@ -344,7 +344,7 @@ extension NodeView {
     /// The web's box: background and border inside the border box, a
     /// uniform border following the curve, the radius clipping children only
     /// where the overflow clips.
-    func applyBoxLayer() {
+    package func applyBoxLayer() {
         defer { syncEllipticalClip(); applyColorRanges() }
         let authored = presenter?.segments.control(of: id) == nil && !groundIsSheets ? cgColor("background_color") : nil
         let ground = authored == nil ? fieldGround : nil

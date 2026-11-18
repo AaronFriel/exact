@@ -3,6 +3,7 @@ import ExactCore
 import UIKit
 import XCTest
 @testable import ExactKit
+@testable import ExactControls
 @testable import ExactCollections
 
 /// A batch that only builds, moves or drops a virtualized list's rows (a

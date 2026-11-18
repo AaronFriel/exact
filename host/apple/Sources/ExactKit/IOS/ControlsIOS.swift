@@ -6,32 +6,32 @@
 import UIKit
 
 package final class ControlHost: NSObject {
-    unowned let presenter: Presenter
-    var controls: [UInt32: UIControl] = [:]
+    package unowned let presenter: Presenter
+    package var controls: [UInt32: UIControl] = [:]
     /// Which control each node shows (`ControlKinds`), to remake it when that changes.
-    var kinds: [UInt32: String] = [:]
+    package var kinds: [UInt32: String] = [:]
     /// The size last reported per control, so each is published once.
     private var reported: [UInt32: CGSize] = [:]
     /// Sizes measured and not yet reported (`reportMeasured`).
     private var measured: [(UInt32, CGSize?)] = []
     /// A select's menu as last built, so a batch that leaves it alone does not rebuild it.
-    var menus: [UInt32: SelectMenu] = [:]
+    package var menus: [UInt32: SelectMenu] = [:]
     /// A range's last reported value while it moves, so each is sent once.
-    var lastRange: [UInt32: String] = [:]
+    package var lastRange: [UInt32: String] = [:]
     /// A range's bound value last written into it: written again only when
     /// it changes (LLP 1069.001 D4, amended 2026-10-04).
-    var appliedRange: [UInt32: String] = [:]
+    package var appliedRange: [UInt32: String] = [:]
     /// A radio's group from the kernel (`exact_radio_group`; x2apps survey #2).
     var radioGroup: ((UInt32) -> RadioGroup)?
     /// A painted group's keys from the kernel (`exact_role_keys`; LLP 1166.000 D2).
     var roleKeys: ((_ view: UInt32, _ key: String?, _ focused: UInt32?) -> RoleKeys?)?
     /// A select's choice the bound value has not caught up with yet.
-    var picked: [UInt32: String] = [:]
+    package var picked: [UInt32: String] = [:]
     /// Each `progress`'s activity indicator (ProgressIOS.swift): a view,
     /// not a control, so beside `controls`.
-    var spinners: [UInt32: UIActivityIndicatorView] = [:]
+    package var spinners: [UInt32: UIActivityIndicatorView] = [:]
     /// Each determinate `progress`'s bar (LLP 1116 D8), beside them.
-    var bars: [UInt32: UIProgressView] = [:]
+    package var bars: [UInt32: UIProgressView] = [:]
     /// Each native button's face as the runner last gave it: what its
     /// control shows, and what `NodeView.face` tells every other reader (a
     /// tab bar or navigation bar item, a menu row, an accessibility label).
@@ -172,7 +172,7 @@ package final class ControlHost: NSObject {
     /// ancestors, and those whose props or style it changed or that it put
     /// under another parent; a control nothing at or in changed, nor at or
     /// above touched, stands as the last sync left it (`stands`).
-    func sync(contents: Bool = true, changed: Set<UInt32>? = nil, touched: Set<UInt32> = []) {
+    package func sync(contents: Bool = true, changed: Set<UInt32>? = nil, touched: Set<UInt32> = []) {
         if contents { faces.removeAll() }
         // A face read with no control (a tab's, a menu row's) goes with its view.
         for id in faces.keys where controls[id] == nil && presenter.views[id] == nil { faces.removeValue(forKey: id) }
@@ -305,8 +305,9 @@ package final class ControlHost: NSObject {
         return true
     }
 
+    #if EXACT_AGENT
     /// The agent's `tap` (LLP 1069.001 D9): the control's own activation.
-    func activate(_ node: NodeView, before: (CGPoint?) -> Bool = { _ in true }) -> Bool? {
+    package func activate(_ node: NodeView, before: (CGPoint?) -> Bool = { _ in true }) -> Bool? {
         // A native button takes the ordinary tap path (LLP 1069.011 D10).
         guard let control = controls[node.id], !(control is NativeButtonIOS) else { return nil }
         guard control.window != nil, control.isEnabled, !node.inert else { return false }
@@ -321,6 +322,7 @@ package final class ControlHost: NSObject {
         if let b = control as? NativeButtonIOS { return nativeObservation(b) }
         return family.observation(control)
     }
+    #endif
 
     func reset() {
         for control in controls.values { control.removeFromSuperview() }

@@ -7,9 +7,9 @@
 #if os(macOS)
 import AppKit
 
-struct Leaving {
+package struct Leaving {
     let view: NodeView
-    let members: [NodeView]
+    package let members: [NodeView]
 }
 
 extension Presenter {

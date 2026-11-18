@@ -177,8 +177,9 @@ pub enum Capability {
     /// calls the public API. Native only.
     Traces,
     /// The optional native controls: switches, checkboxes, radios, sliders,
-    /// pop-up selects, date pickers, progress, steppers and segmented
-    /// controls. A plain button is the core's. Native only.
+    /// pop-up selects, date pickers, progress and segmented controls. A
+    /// plain button and a number field's stepper are the core's. Native
+    /// only.
     Controls,
 }
 

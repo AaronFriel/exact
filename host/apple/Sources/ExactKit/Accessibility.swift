@@ -44,7 +44,7 @@ extension NodeView {
 extension NodeView {
     /// A button: a custom one (`kind == "button"`) or a native one, under any
     /// role (LLP 1069.011.000 D1).
-    var isButton: Bool { kind == "button" || isNativeButton }
+    package var isButton: Bool { kind == "button" || isNativeButton }
     /// Its face, as the kernel reads it (LLP 1069.011.000 D1); nil when the
     /// presenter cannot read one. UIKit's presenter keeps a native button's
     /// until a batch changes it (`ControlHost.face`); a custom button's face
@@ -318,7 +318,7 @@ extension NodeView {
     /// keydown (LLP 1069.001, amended 2026-11-16). The agent's held key sends
     /// one half at a time: `phase` "down" is the keydown and its `step`, a
     /// repeated one where `repeats`, and "up" the keyup.
-    func adjustKeys(up: Bool, vertical: Bool = false, phase: String? = nil, repeats: Bool = false, step: () -> Void = {}) {
+    package func adjustKeys(up: Bool, vertical: Bool = false, phase: String? = nil, repeats: Bool = false, step: () -> Void = {}) {
         guard let presenter else { return }
         let key = if vertical {
             up ? "ArrowUp" : "ArrowDown"
@@ -745,7 +745,7 @@ extension UIView {
 
 /// What an authored tab shows as one segment of the system's segmented
 /// control (LLP 1035.001 D10): its one image, or its words.
-enum SegmentFace: Equatable { case image(NodeView), symbol(String), title(String) }
+package enum SegmentFace: Equatable { case image(NodeView), symbol(String), title(String) }
 
 extension NodeView {
     /// How this tab shows as a segment, or nil when a segment cannot show
@@ -755,7 +755,7 @@ extension NodeView {
     /// (LLP 1116 D6). An icon beside a label, a badge, or any other node
     /// keeps the authored rendering — the web's, where a role never changes
     /// what is drawn.
-    var segmentFace: SegmentFace? {
+    package var segmentFace: SegmentFace? {
         // A native button's face, not views (LLP 1069.011.000 D4): a symbol
         // alone (named by its label), or a title.
         if isNativeButton {

@@ -18,7 +18,7 @@ private final class RowBezel: NSButton {
 }
 
 extension NodeView {
-    var inGroupedForm: Bool {
+    package var inGroupedForm: Bool {
         for view in sequence(first: self as NSView, next: \.superview) {
             if let node = view as? NodeView, node.kind == "list" { return node.props["listStyle"] != nil }
         }

@@ -278,7 +278,7 @@ extension NodeView {
     /// the source it came from, and which load is current: a completion
     /// from an older load, or for a view that was destroyed, is dropped.
     package var buttonRasterView: UInt32? { get { aside?.buttonRasterView } set { if newValue != nil || aside != nil { asideMade.buttonRasterView = newValue } } }
-    var image: UIImage? { get { aside?.image } set { if newValue != nil || aside != nil { asideMade.image = newValue } } }
+    package var image: UIImage? { get { aside?.image } set { if newValue != nil || aside != nil { asideMade.image = newValue } } }
     package var raster: (any ImageLease)? {
         get { aside?.raster }
         set {
@@ -605,7 +605,7 @@ extension NodeView {
     /// LLP 1115 §2, "what the author writes wins": the colour row `key` when
     /// its author wrote it on this node, a platform colour and one equal to
     /// its parent's included. Nil leaves the control the platform's (D4).
-    func ownColor(_ key: String) -> BatchValue? { wrote(key) ? style[key] : nil }
+    package func ownColor(_ key: String) -> BatchValue? { wrote(key) ? style[key] : nil }
     /// A field's text: its own `color`, else the design's `FieldText`, else
     /// the platform's; an inherited colour never tints a field (LLP 1115 D4,
     /// LLP 1121 D9).

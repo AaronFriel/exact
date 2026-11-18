@@ -18,7 +18,7 @@ import UIKit
 /// through it, when no destination is left in the tree and no deferred
 /// sync owes it, or at the next contact, key, typed text, focus choice (Tab,
 /// `focus(id)`) or the scene leaving the foreground.
-final class PressHandoff {
+package final class PressHandoff {
     /// The responder the press left focused (`focusForPress`): the innermost
     /// node that asked for focus, a field the press focused, else the
     /// press's target.
@@ -39,7 +39,7 @@ final class PressHandoff {
     /// pushes is its destination.
     var working: Bool { dispatching || syncing }
     /// The press's dispatch returned.
-    func dispatched() {
+    package func dispatched() {
         dispatching = false
         settle()
     }

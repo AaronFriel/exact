@@ -24,7 +24,7 @@ struct FlightSource {
     var fit: CGRect?
     var natural: CGSize?
     /// The leaver's decoded image (`FlightLook.stand`), held for the flight.
-    var raster: (any ImageLease)?
+    package var raster: (any ImageLease)?
     /// The root of the presentation the leaver was in: a flight from an
     /// overlay over the routes into a route flies over that overlay.
     weak var root: UIView?

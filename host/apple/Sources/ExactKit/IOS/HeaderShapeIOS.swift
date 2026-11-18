@@ -182,7 +182,7 @@ struct HeaderShape: Equatable {
     }
     let header: NodeView
     let heading: NodeView?
-    let title: String
+    package let title: String
     let level: Int
     let leading: [Item], trailing: [Item]
     /// The header's `input type="search"`, if it has one: the item's
