@@ -654,13 +654,35 @@ mod tests {
                 archive.restored(),
                 matches!(
                     mode.as_str(),
-                    "warm" | "shader" | "seed" | "reopen" | "late" | "late-seed"
+                    "warm" | "shader" | "seed" | "reopen" | "late" | "late-seed" | "refused"
                 )
             );
             let late_path = path.with_extension(format!("{mode}-late"));
             let late = matches!(mode.as_str(), "late" | "late-seed").then(|| {
                 PipelineCache::shared_disk(&gpu.device, Some(Disk::new(late_path.clone(), 2)))
             });
+            if mode == "refused" {
+                // Metal refusing to serialize the restored archive after an addition:
+                // this process's snapshot directory is made unwritable.
+                use std::os::unix::fs::PermissionsExt;
+                let own = std::env::temp_dir()
+                    .join("exact-metal")
+                    .join(std::process::id().to_string());
+                let set =
+                    |mode| std::fs::set_permissions(&own, std::fs::Permissions::from_mode(mode));
+                set(0o500).unwrap();
+                pipelines(gpu, true);
+                cache.save_metal();
+                let mut state = cache.shared.as_ref().unwrap().disk.lock().unwrap();
+                state.disks[0].reap(true);
+                set(0o700).unwrap();
+                assert_eq!(state.disks[0].saved, 0);
+                assert!(
+                    !path.exists(),
+                    "an archive that cannot be written again goes"
+                );
+                return;
+            }
             pipelines(gpu, mode == "shader");
             let (hits, misses) = archive.counts();
             assert_eq!(
@@ -751,6 +773,8 @@ mod tests {
         run("stopped");
         assert!(!marker.exists());
         run("warm");
+        run("refused");
+        run("cold");
         run("wrong-key");
         std::fs::write(&path, b"corrupt").unwrap();
         run("corrupt");

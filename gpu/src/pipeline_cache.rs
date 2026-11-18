@@ -44,9 +44,22 @@ impl Shared {
         for disk in &mut persistence.disks {
             let device = self._device.clone();
             let archive = archive.clone();
+            let path = disk.path.clone();
             disk.save(added, advance_frame, move || {
                 let _device = device;
-                archive.data()
+                let data = archive.data();
+                // Metal can refuse to serialize an archive restored from a file once
+                // pipelines were added to it (a state of its shader cache, macOS 27.2);
+                // the file would then never grow. Without it the next launch starts
+                // an archive afresh, which Metal serializes.
+                if data.is_none() && archive.restored() {
+                    if let Err(error) = std::fs::remove_file(&path) {
+                        if error.kind() != io::ErrorKind::NotFound {
+                            eprintln!("GPU module pipeline cache removal failed: {error}");
+                        }
+                    }
+                }
+                data
             });
         }
         true
