@@ -58,10 +58,11 @@ impl<D: DataSource> Runner<D> {
         if s.placeholder || s.slept {
             return false;
         }
-        let context = self.resource_row(i).context as usize;
-        let identity = |a: &[Value]| a.len().saturating_sub(context).min(a.len());
-        let asked = s.answered_args();
-        asked[..identity(asked)] == now[..identity(now)]
+        // The row's count, not each list's: a kept seed's list holds only
+        // the identifying arguments (LLP 1027.005 D6).
+        let n = self.identity_len(i);
+        let asked = s.answered_args().get(..n);
+        asked.is_some_and(|asked| now.get(..n) == Some(asked))
     }
 
     /// The pending flags `pending(x)` reads, from the tickets in flight and

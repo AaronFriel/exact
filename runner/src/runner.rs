@@ -214,6 +214,14 @@ impl ResourceState {
     fn answered_args(&self) -> &[Value] {
         self.answered_for.as_deref().unwrap_or(&self.args)
     }
+
+    /// This state, idle (LLP 1161.002 D2) and kept across idleness: no
+    /// answer until a fresh one after the wake (LLP 1161.001 D1).
+    fn sleeping(mut self) -> Self {
+        self.asleep = true;
+        self.slept = true;
+        self
+    }
 }
 
 /// What a boot starts from besides the plan and the launch.

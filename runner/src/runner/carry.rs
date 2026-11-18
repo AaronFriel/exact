@@ -31,7 +31,7 @@ pub struct Carried {
     pub resources: Vec<(String, String, Vec<Value>, Value)>,
     /// Kept entries waiting for their identifying arguments (LLP 1027.005
     /// D3, 2026-11-13): (resource name, source name, identifying arguments,
-    /// digest of the stored entry, whether its seed slept while idle).
+    /// digest of the stored entry, whether it was kept across idleness).
     pub waiting: Vec<(String, String, Vec<Value>, u64, bool)>,
     /// The resources whose answer came from a stream still open: a
     /// replacement that takes the answer shows it and asks again, opening
@@ -39,6 +39,10 @@ pub struct Carried {
     pub streams: Vec<String>,
     /// (Resource name, source name) pairs whose answer depends on the store.
     pub store_readers: Vec<(String, String)>,
+    /// (Resource name, source name) pairs whose answers are kept (LLP 1027
+    /// D4): the store readers and what the plan keeps whatever it reads
+    /// (`kept::keeps_answers`). A reload keeps only their kept entries.
+    pub keepers: Vec<(String, String)>,
     /// Of `store_readers`, those asked in the run that carried them, and
     /// whether each read what the store holds: one that only drew randomness
     /// is not asked again by a store change after the reload either
@@ -75,6 +79,7 @@ impl Carried {
         self.waiting = validated.waiting;
         self.streams = validated.streams;
         self.store_readers = validated.store_readers;
+        self.keepers = validated.keepers;
         self.read_contents = validated.read_contents;
         self
     }
@@ -115,6 +120,18 @@ impl<D: super::DataSource> super::Runner<D> {
             launch,
         )
         .map(Runner::linking_every_device)
+    }
+
+    /// (Resource name, source name) of each declared resource `which` names.
+    fn declared_where(&self, which: impl Fn(usize) -> bool) -> Vec<(String, String)> {
+        (0..self.declared_resources().len())
+            .filter(|&i| which(i))
+            .map(|i| {
+                let row = &self.plan.resources[i];
+                let (name, source) = (self.plan.str(row.name), self.plan.str(row.source));
+                (name.to_string(), source.to_string())
+            })
+            .collect()
     }
 
     /// Session identity for a fresh reboot, without carrying application state.
@@ -184,18 +201,10 @@ impl<D: super::DataSource> super::Runner<D> {
                     _ => None,
                 })
                 .collect(),
-            store_readers: self
-                .resource_rows()
-                .take(self.declared_resources().len())
-                .enumerate()
-                .filter(|(i, _)| self.resources[*i].store_reader)
-                .map(|(_, resource)| {
-                    (
-                        self.plan.str(resource.name).to_string(),
-                        self.plan.str(resource.source).to_string(),
-                    )
-                })
-                .collect(),
+            store_readers: self.declared_where(|i| self.resources[i].store_reader),
+            keepers: self.declared_where(|i| {
+                self.resources[i].store_reader || super::kept::keeps_answers(&self.plan, i)
+            }),
             read_contents: self
                 .resource_rows()
                 .take(self.declared_resources().len())

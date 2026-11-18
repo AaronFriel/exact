@@ -60,6 +60,13 @@ impl<D: DataSource> Runner<D> {
         (0..self.resources.len()).map(|i| self.resource_row(i))
     }
 
+    /// How many of resource `i`'s arguments identify its answer: the call's
+    /// own, before its `with` context (LLP 1027.005 D1, D6).
+    pub(super) fn identity_len(&self, i: usize) -> usize {
+        let row = self.resource_row(i);
+        row.args.len as usize - usize::from(row.context)
+    }
+
     /// Whether a change to the store asks resource `i` again: its own ask
     /// read what the store holds, not only randomness, since a draw asks
     /// nothing again (LLP 1069.005 D2). A reader the plan marked, whose reads
