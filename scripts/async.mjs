@@ -22,7 +22,7 @@ import { Graph, LANE_DISTS, PARITY, Repo, WEB_APPS, commands, gameAppleLeg, pari
 import { INPUTS, Inputs, Store, checkEnv, decide, outcomeOf } from './async-inputs.mjs';
 import { main as issue } from './issue.mjs';
 import { noteOf, publish, stoppedEarly } from './known.mjs';
-import { bisectAffected, probeOutcomes } from './async-bisect.mjs';
+import { bisectAffected, newFailures, probeOutcomes } from './async-bisect.mjs';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -465,8 +465,11 @@ export function failures(name, log, status) {
     if (rerun && !failed.length) found.add(`${name}: ${rerun[1]} did not finish`);
     if (rerun) for (const t of failed.splice(0)) found.add(`${name}: ${rerun[1]} ${t}`);
   }
-  // metrics rows: a VIOLATION, or a measurement whose build FAILED.
-  if (name === 'metrics' || name === 'web-bytes') for (const m of log.matchAll(/^[ \t]+(\S[^\n]*?)[ \t]{2,}(?:FAILED\b|[^\n]*\bVIOLATION\b)/gm)) found.add(`${name}: ${m[1]} ${/\bVIOLATION\b/.test(m[0]) ? 'VIOLATION' : 'FAILED'}`);
+  // metrics rows: a VIOLATION, which a byte-budget row names with how far over (async-bisect.mjs `holds`), or a
+  // measurement whose build FAILED.
+  if (name === 'metrics' || name === 'web-bytes') for (const m of log.matchAll(/^[ \t]+(\S[^\n]*?)[ \t]{2,}(?:FAILED\b|[^\n]*\bVIOLATION\b( by \d+(?:\.\d+)? MB\b)?)/gm)) {
+    found.add(`${name}: ${m[1]} ${/\bVIOLATION\b/.test(m[0]) ? `VIOLATION${m[2] ?? ''}` : 'FAILED'}`);
+  }
   for (const m of log.matchAll(/Test Case '-\[(\S+) (\S+)\]' failed/g)) found.add(`${name}: ${m[1]} ${m[2]} failed`);
   // xcodebuild's parallel testing names a failure by class and method only. A test it reports failed in 0.000 s did
   // not run: its test process had crashed, and xcodebuild fails each test that process still held (2026-11-12: 377
@@ -710,8 +713,7 @@ async function once(state) {
   if (!pending.length && !full) return;
   const since = state.last, result = await check(tip, since, { base: since, full });
   retainSkippedFailures(state.failures ?? [], result, state.owners ?? {});
-  const baseline = state.failures === undefined, before = new Set(state.failures ?? []);
-  const fresh = result.failures.filter(f => !before.has(f));
+  const baseline = state.failures === undefined, fresh = newFailures(state.failures ?? [], result.failures);
   console.log(`${tip.slice(0, 8)} ${result.subject}: ${result.failures.length} failure(s), ${baseline ? 'baseline' : `${fresh.length} new`}`);
   if (fresh.length && !baseline) {
     try { result.attribution = await attribute(result, fresh, since, pending); }
