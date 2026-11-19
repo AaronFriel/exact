@@ -537,7 +537,8 @@ let moduleStorage = false, rustGrants = '', rustGrantSet = normalizeGrants('Rust
 if (rustLinked) {
   mkdirSync(resolve(out, 'rust/wasm'), { recursive: true });
   const from = opt('--data') ?? (opt('--plan') && dirname(resolve(opt('--plan'))));
-  const built = from && existsSync(resolve(from, 'rust/wasm/app.module.wasm')) ? resolve(from, 'rust/wasm/app.module.wasm') : buildModule(app, resolve(gen, 'rust-module'), canvas2d, appDir);
+  const built = from && existsSync(resolve(from, 'rust/wasm/app.module.wasm')) ? resolve(from, 'rust/wasm/app.module.wasm')
+    : buildModule(app, resolve(gen, 'rust-module'), canvas2d, appDir, { dev: devReload });
   cpSync(built, resolve(out, 'rust/wasm/app.module.wasm'));
   if (devReload) devLogic.push(['rust', createHash('sha256').update(readFileSync(resolve(out, 'rust/wasm/app.module.wasm'))).digest('hex')]);
   // The module's crates outside the app's directory (a path dependency) are inputs the dev loop watches, as the
