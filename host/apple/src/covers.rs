@@ -141,7 +141,9 @@ impl<D: DataSource> Host<D> {
             if let Err(e) = self.layout(&mut batch) {
                 error.get_or_insert(e);
             }
-            self.canvas_turn(&mut batch);
+            if let Some(canvas) = self.turn.canvas {
+                (canvas.turn)(self, &mut batch);
+            }
         }
         self.finish(batch, error)
     }

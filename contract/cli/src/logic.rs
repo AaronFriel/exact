@@ -675,6 +675,7 @@ pub fn apple_linked(uses: exact_runner::Uses, host: &str) -> String {
         (Capability::Presence, "presence_exports"),
         (Capability::Svg, "svg_exports"),
         (Capability::ContentRegions, "content_region_exports"),
+        (Capability::Surfaces, "canvas_exports"),
     ] {
         if uses.has(capability) {
             entry.push_str(&format!("{apple}::{group}!();\n"));
@@ -897,6 +898,11 @@ mod tests {
         assert!(
             regions.contains("::exact_apple::content_region_exports!();"),
             "{regions}"
+        );
+        let canvas = super::apple_linked(Uses::NONE.with(Capability::Surfaces), "exact_apple");
+        assert!(
+            canvas.contains("::exact_apple::canvas_exports!();"),
+            "{canvas}"
         );
         let markdown = super::apple_linked(Uses::NONE.with(Capability::Markdown), "exact_apple");
         assert!(

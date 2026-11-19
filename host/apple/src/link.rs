@@ -292,7 +292,46 @@ pub struct TurnLinks<D: DataSource> {
     /// Linked by `drag`; where it is not, no handle is ever registered, so
     /// the turn has none to reconcile or emit and an entry point refuses.
     pub drag: Option<DragLinks<D>>,
+    /// Canvas 2D and canvas captures (LLP 1056; `canvas2d.rs`,
+    /// `canvas_capture.rs`). Linked by `surfaces`; where it is not, a plan
+    /// has no canvas, so a turn has no canvas work and surface work is the
+    /// presenter's alone.
+    pub canvas: Option<CanvasLinks<D>>,
 }
+
+/// [`TurnLinks::canvas`]'s parts, each where the host reaches it.
+pub struct CanvasLinks<D: DataSource> {
+    /// After a turn's layout: geometry, due draws and their lists, or the
+    /// word that a deferred draw is owed.
+    pub turn: fn(&mut crate::Host<D>, &mut crate::batch::Batch),
+    /// A frame's tick: geometry, due draws and their lists.
+    pub draw_turn: fn(&mut crate::Host<D>, &mut crate::batch::Batch),
+    /// A display frame reached the canvases that asked for one.
+    pub frame: fn(&mut crate::Host<D>),
+    /// Whether a canvas wants the next frame and a deferred draw is owed,
+    /// onto every batch.
+    pub onto: fn(&crate::Host<D>, &mut crate::batch::Batch),
+    /// At boot: this device's canvas limits.
+    pub limits: fn(&mut crate::Host<D>),
+    /// At boot: the app's Core Text measurer for Canvas 2D, with its context.
+    pub text: fn(&mut crate::Host<D>, crate::canvas_text::CanvasTextFn, *mut std::ffi::c_void),
+    /// Surface work for the presenter, a canvas capture as its own op.
+    pub surface_work:
+        fn(&mut crate::Host<D>, &mut crate::batch::Batch, &exact_runner::RequestOut, Option<&str>),
+    /// At a turn's end: the captures that waited, and those let go.
+    pub captures: fn(&mut crate::Host<D>, &mut crate::batch::Batch),
+    /// The presenter's image for a capture (`fulfill_surface` kind 8).
+    pub captured:
+        fn(&mut crate::Host<D>, u64, &[u8], Option<AppFileWrite>) -> exact_runner::Outcome,
+}
+
+impl<D: DataSource> Clone for CanvasLinks<D> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<D: DataSource> Copy for CanvasLinks<D> {}
 
 /// [`TurnLinks::drag`]'s parts, each where the host reaches it.
 pub struct DragLinks<D: DataSource> {
@@ -441,6 +480,21 @@ impl<D: DataSource> TurnLinks<D> {
                     height_begin: crate::Host::<D>::height_drag_begin_linked,
                     height_update: crate::Host::<D>::height_drag_update_linked,
                     height_release: crate::Host::<D>::dispatch_height_measured_linked,
+                })
+            } else {
+                None
+            },
+            canvas: if uses.has(Capability::Surfaces) {
+                Some(CanvasLinks {
+                    turn: crate::Host::<D>::canvas_turn,
+                    draw_turn: crate::Host::<D>::canvas_draw_turn,
+                    frame: crate::Host::<D>::canvas_frame,
+                    onto: crate::Host::<D>::canvas_onto,
+                    limits: crate::Host::<D>::canvas_limits,
+                    text: crate::Host::<D>::set_canvas_text,
+                    surface_work: crate::Host::<D>::canvas_surface_work,
+                    captures: crate::Host::<D>::canvas_captures_turn,
+                    captured: crate::Host::<D>::canvas_captured,
                 })
             } else {
                 None
@@ -844,6 +898,7 @@ mod tests {
             &widget,
         )
         .unwrap();
+        let canvas = compile("canvas surface=dot() width=40 height=40", "on = false");
         for (plan, name) in [
             (&tools, "tools"),
             (&view, "modules, native_views"),
@@ -870,6 +925,7 @@ mod tests {
             (&midi, "midi"),
             (&selectable, "text_selection"),
             (&entry, "widgets"),
+            (&canvas, "surfaces"),
         ] {
             assert_eq!(missing(plan, Uses::NONE).as_deref(), Some(name));
             assert_eq!(missing(plan, ALL), None);

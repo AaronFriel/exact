@@ -522,7 +522,7 @@ public final class ExactSession {
     weak package var transformInputHold: DragInput?
     func trackInputHold(_ hold: SwipeHold) { inputHolds.add(hold) }
     func retireInputHold(_ hold: SwipeHold) { inputHolds.remove(hold) }
-    var pendingSurfaceRecords: [(String, String?, Bool)] = []
+    var pendingSurfaceRecords: [(Runtime) -> Batch] = []
     var pendingSurfaceWork: [([String: Any], Int)] = []
     /// Authentication sessions this session opened (`Auth.swift`, LLP 1069.006).
     let authSessions = AuthSessions()
@@ -565,38 +565,17 @@ public final class ExactSession {
         frameHealth.attach(self)
         core.measure(with: text)
         installControlText()
-        // LLP 1056 D8, D9: Canvas 2D measures with this engine and draws the
-        // handles this session decodes.
-        if let measure = SurfacesLink.installed?.canvasTextMeasure { runtime.setCanvasText(measure) }
+        // LLP 1056 D8, D9: Canvas 2D measures with this engine, draws the
+        // handles this session decodes and backs at the display's scale (D4).
         presenter.canvas2d.textEngine = { [weak self] in self?.text }
         presenter.canvas2d.assetBytes = { [weak app] in app?.assetBytes($0) }
-        presenter.canvas2d.onImage = { [weak self] src, image in
-            guard let self, self.state != .destroyed else { return }
-            self.apply(self.runtime.canvasImage(src, width: image?.width ?? 0, height: image?.height ?? 0, ok: image != nil))
-        }
-        presenter.canvas2d.onRelease = { [weak self] src in
-            guard let self, self.state != .destroyed else { return }
-            self.runtime.canvasImageReleased(src)
-        }
         presenter.canvas2d.onReplayEnded = { [weak self] in self?.workEnded() }
-        presenter.canvas2d.onHeld = { [weak self] view, held in
-            guard let self, self.state != .destroyed else { return }
-            self.runtime.canvasHeld(view, held)
-        }
-        // LLP 1056 D4: Canvas 2D backs its bitmaps at the display's scale.
         #if canImport(UIKit)
         let scale = presenter.viewport.traitCollection.displayScale
         #else
         let scale = devicePixelScale
         #endif
-        _ = runtime.canvasDisplay(scale: max(1, scale), memory: ProcessInfo.processInfo.physicalMemory)
-        // A window on another display corrects it; the canvases redraw (D4).
-        presenter.canvas2d.onScale = { [weak self] scale in
-            DispatchQueue.main.async {
-                guard let self, self.state != .destroyed else { return }
-                self.apply(self.runtime.canvasDisplay(scale: scale, memory: ProcessInfo.processInfo.physicalMemory))
-            }
-        }
+        SurfacesLink.installed?.wire(self, scale: max(1, scale))
         ExactSession.live[runtime.rt] = WeakSession(self)
         runtime.setWake(ExactSession.wake, ctx: UnsafeMutableRawPointer(bitPattern: UInt(runtime.rt)))
         natives.installAppModule()
@@ -656,14 +635,14 @@ public final class ExactSession {
     /// flight draws in its own turn, so none is asked for meanwhile; its
     /// batch says whether one is still owed.
     func askCanvasDraw() {
-        guard canvasOwed, !canvasAsked, !canvasInFlight else { return }
+        guard let surfaces = SurfacesLink.installed, canvasOwed, !canvasAsked, !canvasInFlight else { return }
         canvasAsked = true
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             canvasAsked = false
             guard state != .destroyed, canvasOwed, !canvasInFlight, !tickInFlight else { return }
             canvasInFlight = true
-            runtime.canvasDrawAsync { [weak self] completion in self?.publish(.canvas, completion) }
+            surfaces.draw(runtime) { [weak self] completion in self?.publish(.canvas, completion) }
         }
     }
 
@@ -760,7 +739,7 @@ public final class ExactSession {
                                   range: { [weak self] id, start, end in self?.presenter.rangeFrame(id, start: start, end: end) })
         if ExactSession.asyncFills {
             // @ref LLP 1072 §8.5 — main does not wait for a canvas's draw.
-            runtime.canvasDefer(true)
+            SurfacesLink.installed?.deferDraws(runtime)
             presenter.collections.onFill = { [weak self] view, bytes in self?.sendFill(view, bytes) }
             presenter.collections.filling = { [weak self] in self?.fillInFlight ?? false }
             presenter.collections.drain = { [weak self] in self?.drainFill() }
@@ -1250,8 +1229,8 @@ public final class ExactSession {
         drain()
         if outermost {
             while !pendingSurfaceRecords.isEmpty {
-                let (name, json, performance) = pendingSurfaceRecords.removeFirst()
-                apply(performance ? runtime.canvasPerformanceRecord(name, json) : runtime.surfaceRecord(name, json))
+                let record = pendingSurfaceRecords.removeFirst()
+                apply(record(runtime))
             }
             drainReports()
             presenter.collections.flushIfNeeded()

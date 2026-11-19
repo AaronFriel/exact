@@ -81,8 +81,9 @@ impl<D: DataSource> Host<D> {
         let (mut batch, error) = self.resize_rounds(batch, error);
         self.route_overflow.settled =
             error.is_none() && !batch.layout_provisional && !self.layout_owed;
-        self.drain_canvas_captures(&mut batch);
-        self.forget_canvas_captures();
+        if let Some(canvas) = self.turn.canvas {
+            (canvas.captures)(self, &mut batch);
+        }
         self.state_onto(&mut batch);
         self.write_batch(batch, error.as_deref(), true)
     }

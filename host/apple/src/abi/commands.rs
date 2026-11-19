@@ -241,8 +241,8 @@ impl<D: DataSource> Bridge<D> {
     pub(super) fn presenter_hooks(&self, host: &mut crate::host::Host<D>, hooks: &super::Hooks) {
         host.runner_mut()
             .set_inline_geometry(self.inline_geometry.clone());
-        if let Some(f) = hooks.canvas_text {
-            host.set_canvas_text(f, hooks.ctx);
+        if let (Some(f), Some(canvas)) = (hooks.canvas_text, host.turn.canvas) {
+            (canvas.text)(host, f, hooks.ctx);
         }
         host.set_canvas_deferred(self.canvas_deferred);
         host.runner_mut().use_native_timers(self.native_timers);

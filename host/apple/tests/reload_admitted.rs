@@ -71,6 +71,7 @@ fn an_all_linked_binary_reloads_from_hello_into_each_family() {
             plan("column navigationKey=\"a\" navigationHistory=\"back\"\n      text \"a\""),
         ),
         ("selectable text", plan("text \"a\" user-select=\"text\"")),
+        ("canvas", plan("canvas surface=dot() width=40 height=40")),
     ]
     .into_iter()
     .chain(media().map(|(next, name)| (name, next)))

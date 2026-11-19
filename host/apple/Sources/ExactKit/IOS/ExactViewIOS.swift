@@ -621,7 +621,7 @@ public final class ExactView: UIView {
         session.rasters?.fit(size: bounds.size, scale: scale)
         if scale != lastDisplayScale {
             lastDisplayScale = scale
-            session.apply(session.runtime.canvasDisplay(scale: scale, memory: ProcessInfo.processInfo.physicalMemory))
+            if let surfaces = SurfacesLink.installed { session.apply(surfaces.display(session.runtime, scale: scale)) }
             session.rasters?.displayChanged()
             session.tellDisplayScale() // a hairline is one device pixel of this display (LLP 1115.000 D10.3)
             session.presenter.regridAll()

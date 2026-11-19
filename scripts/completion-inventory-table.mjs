@@ -195,7 +195,7 @@ export const classifications = [
   ]),
   group("canvas draws", ["subscription"], "canvas lifetime, generation and in-flight draw sequence", "UI-owned",
     "runner/src/runner/canvas2d.rs binds a subscription in the existing canvas record at its first draw in a backing-store generation. Async draw replies carry that authority through deliver; integer canvas_reply recovers the same binding. Generation changes reset it. Existing lifetime/generation/sequence and structural checks remain. Capture and presentation callbacks retain their existing paths.", [
-    ["apple:host/apple/src/abi/exports.rs", "exact_canvas_defer exact_canvas_display exact_canvas_draw exact_canvas_held exact_canvas_performance_record exact_canvas_performance_requested exact_canvas_snapshotted exact_set_canvas_text"],
+    ["apple:host/apple/src/canvas_exports.rs", "exact_canvas_defer exact_canvas_display exact_canvas_draw exact_canvas_held exact_canvas_performance_record exact_canvas_performance_requested exact_canvas_snapshotted exact_set_canvas_text"],
     ["painted:host/painted/src/canvas/jni.rs", "Java_dev_exact_canvas_Native_canvasBuffer Java_dev_exact_canvas_Native_canvasFrame"],
     ["painted:host/painted/src/host_canvas.rs", "Host::canvas_wants_frame"],
     ["painted:host/painted/src/scale.rs", "Host::canvas_performance_record"],
@@ -214,7 +214,7 @@ export const classifications = [
   ]),
   group("canvas images", ["one-shot"], "image source and the canvas lifetimes that requested it", "UI-owned",
     "runner/src/runner/canvas2d.rs:1360-1380 updates only canvases still held by this runner; image source strings themselves carry no session capability.", [
-    ["apple:host/apple/src/abi/exports.rs", "exact_canvas_image exact_canvas_image_released"],
+    ["apple:host/apple/src/canvas_exports.rs", "exact_canvas_image exact_canvas_image_released"],
     ["painted:host/painted/src/host_canvas.rs", "Host::canvas_picture_changed Host::sync_canvases"],
     ["runner:runner/src/runner/canvas2d.rs", "Runner::canvas_fonts_loaded Runner::canvas_image Runner::canvas_image_named Runner::canvas_image_released Runner::canvas_images_pending Runner::take_canvas_image_requests"],
     ["web:host/web/src/canvas2d.rs", "exact_canvas_image"],

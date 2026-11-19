@@ -71,6 +71,7 @@ fn hellos_binary_refuses_a_reload_into_a_family_and_keeps_its_plan() {
             plan("column navigationKey=\"a\" navigationHistory=\"back\"\n      text \"a\""),
             "navigation",
         ),
+        (plan("canvas surface=dot() width=40 height=40"), "surfaces"),
     ]
     .into_iter()
     .chain(media())
@@ -94,9 +95,10 @@ fn hellos_binary_refuses_a_reload_into_a_family_and_keeps_its_plan() {
 
 /// A first boot of a plan that uses a family is refused too.
 #[test]
-fn hellos_binary_refuses_to_boot_a_media_plan() {
+fn hellos_binary_refuses_to_boot_a_media_or_canvas_plan() {
     link::set(Uses::NONE);
-    for (plan, name) in media() {
+    let canvas = (plan("canvas surface=dot() width=40 height=40"), "surfaces");
+    for (plan, name) in media().into_iter().chain([canvas]) {
         let mut bridge = Bridge::<NoData>::new();
         let out = bridge.boot(&plan, NoData, Hooks::none(), 390.0, 844.0);
         let reply = String::from_utf8_lossy(bridge.output_bytes(out as usize)).into_owned();

@@ -146,8 +146,9 @@ impl<D: DataSource> Host<D> {
         batch.seq = self.runner.seq_range();
         batch.alerts = self.runner.take_alerts();
         batch.journal = self.runner.take_journal();
-        batch.canvas_frames(self.runner.canvas_wants_frame());
-        self.canvas_owed_onto(batch);
+        if let Some(canvas) = self.turn.canvas {
+            (canvas.onto)(self, batch);
+        }
     }
 
     fn withhold_layout(&mut self) {

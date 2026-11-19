@@ -151,7 +151,9 @@ impl<D: DataSource> Host<D> {
             return self.commit_into(&[Timed { at_ms, receipt }], error, batch);
         }
         let laid_out = self.layout(&mut batch).err();
-        self.canvas_turn(&mut batch);
+        if let Some(canvas) = self.turn.canvas {
+            (canvas.turn)(self, &mut batch);
+        }
         self.finish(batch, error.or(laid_out))
     }
 
@@ -306,7 +308,9 @@ impl<D: DataSource> Host<D> {
                     return self.finish(batch, error);
                 }
                 let laid_out = self.layout(&mut batch).err();
-                self.canvas_turn(&mut batch);
+                if let Some(canvas) = self.turn.canvas {
+                    (canvas.turn)(self, &mut batch);
+                }
                 self.finish(batch, error.or(laid_out))
             }
         }
