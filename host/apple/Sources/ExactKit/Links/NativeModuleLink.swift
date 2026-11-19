@@ -290,7 +290,7 @@ extension Presenter {
         }
     }
     /// Heavy leaves after a batch that moved views.
-    package func leavesMoved() { leaves.batchApplied(moved: true) }
+    package func leavesMoved() { leaves?.batchApplied(moved: true) }
     #if os(macOS)
     /// The window's toolbar, which toolbar hatches add to.
     package var windowToolbar: NSToolbar? { toolbar.toolbar }

@@ -972,7 +972,7 @@ public final class Agent {
         let hatches = session.natives
         if settle { waitForReplies(until: deadline, orAfter: true) }
         // Settle ends motion: every leaf held mid-fling is made (LLP 1068 §5.1).
-        if settle { presenter.leaves.settle() }
+        if settle { presenter.leaves?.settle() }
         waitForImages()
         var target = req["to"] as? Double
         if settle { target = max(from, self.settle() ?? from, pendingCount() > 0 ? hatches.hatchNextAfter ?? from : from) }

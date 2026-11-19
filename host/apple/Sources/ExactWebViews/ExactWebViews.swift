@@ -3,9 +3,11 @@
 // its plan has an `iframe`, and installs it before any session is made; the
 // core reaches it only through `MediaLink`.
 import ExactKit
+import ExactHeavyLeaves
 
 public enum ExactWebViews {
     public static func install() {
+        ExactHeavyLeaves.install()
         MediaLink.makeWeb = { WebViews() }
     }
 }

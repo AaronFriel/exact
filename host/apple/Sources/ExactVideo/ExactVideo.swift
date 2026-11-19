@@ -4,9 +4,11 @@
 // `video` or `audio` element or asks for picture in picture, and installs it
 // before any session is made; the core reaches it only through `MediaLink`.
 import ExactKit
+import ExactHeavyLeaves
 
 public enum ExactVideo {
     public static func install() {
+        ExactHeavyLeaves.install()
         MediaLink.makeVideo = { VideoView(owner: $0) }
         #if os(iOS) || os(tvOS)
         MediaLink.claimsAudioSession()

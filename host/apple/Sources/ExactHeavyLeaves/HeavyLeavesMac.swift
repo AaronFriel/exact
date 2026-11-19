@@ -22,10 +22,11 @@
 // within the same apply, as it was made at init before.
 #if os(macOS)
 import AppKit
+import ExactKit
 
-final class HeavyLeaves {
+package final class HeavyLeaves: HeavyLeafHolding {
     unowned let presenter: Presenter
-    init(_ presenter: Presenter) { self.presenter = presenter }
+    package init(_ presenter: Presenter) { self.presenter = presenter }
 
     /// The kinds this may hold.
     static let held: Set<String> = ["video", "iframe", "native"]
@@ -33,7 +34,7 @@ final class HeavyLeaves {
     nonisolated(unsafe) private static var cold = Set<String>()
     /// A creation of `kind` took `seconds`. The process's first of each kind
     /// pays for loading and is left out.
-    static func record(_ kind: String, _ seconds: TimeInterval) {
+    package static func record(_ kind: String, _ seconds: TimeInterval) {
         if cold.insert(kind).inserted { return }
         var s = samples[kind] ?? []
         s.append(seconds)
@@ -60,7 +61,7 @@ final class HeavyLeaves {
     /// a video's player and an iframe's web view are made now, or held; a
     /// native module's box is registered (its view is made at its first
     /// props, `NativeViews`).
-    func embed(_ node: NodeView) {
+    package func embed(_ node: NodeView) {
         if node.kind == "native", let natives = presenter.session?.natives, natives.holds == nil {
             natives.holds = { [weak self] owner in self?.hold(owner) ?? false }
             natives.measured = { kind, seconds in HeavyLeaves.record(kind, seconds) }
@@ -72,7 +73,7 @@ final class HeavyLeaves {
     /// A batch applied: rows are placed now, so a leaf in no collection's row
     /// is made at once, and leaves near the viewport are made in the same
     /// frame as their rows.
-    func batchApplied(moved: Bool) {
+    package func batchApplied(moved: Bool) {
         // An animation frame's batch makes and moves no row: nothing comes
         // near or goes far, and a waiting leaf is the tick's (`start`).
         guard moved else { return }
@@ -83,7 +84,7 @@ final class HeavyLeaves {
         if !pending.isEmpty { start() }
     }
     /// The list moved: a held leaf may have come near, a made one gone far.
-    func scrolled() {
+    package func scrolled() {
         hideFar()
         if !pending.isEmpty { start() }
     }
@@ -133,7 +134,7 @@ final class HeavyLeaves {
     }
     /// After the node's create ops: a video whose box waits on its metadata
     /// is made now after all.
-    func created(_ node: NodeView) {
+    package func created(_ node: NodeView) {
         guard node.kind == "video", pending[node.id] != nil else { return }
         let definite = [node.style["width"], node.style["height"]].allSatisfy { v in
             v.map { $0 != .null && $0.string != "auto" } ?? false
@@ -142,10 +143,10 @@ final class HeavyLeaves {
     }
     /// A click landed on a held leaf's box: it is made at once (a
     /// pointer-down is not motion).
-    func pressed(_ node: NodeView) {
+    package func pressed(_ node: NodeView) {
         if pending[node.id]?.node === node { release(node.id) }
     }
-    func isPending(_ node: NodeView) -> Bool { pending[node.id]?.node === node }
+    package func isPending(_ node: NodeView) -> Bool { pending[node.id]?.node === node }
     /// The frame interval, seconds.
     private var frame: TimeInterval {
         1 / Double(max(60, presenter.viewport.window?.screen?.maximumFramesPerSecond ?? 60))
@@ -203,8 +204,8 @@ final class HeavyLeaves {
         presenter.elements.realized(node)
     }
     /// The agent's settle, and a reset: every waiting leaf is made (or dropped).
-    func settle() { for id in pending.keys.sorted() { release(id) } }
-    func reset() {
+    package func settle() { for id in pending.keys.sorted() { release(id) } }
+    package func reset() {
         pending.removeAll(); link?.invalidate(); link = nil
     }
 
@@ -233,7 +234,7 @@ final class HeavyLeaves {
     }
 
     /// `state`'s part: the leaves waiting, and the counts since launch.
-    var observation: [String: Any] {
+    package var observation: [String: Any] {
         ["pendingLeaves": pending.keys.sorted().map(Int.init), "deferred": deferred, "released": released, "cancelled": cancelled,
          "costMs": Self.samples.keys.reduce(into: [String: Double]()) { $0[$1] = Self.cost($1).map { ($0 * 10_000).rounded() / 10 } }]
     }

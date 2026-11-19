@@ -265,7 +265,7 @@ extension Agent {
         // The scene's title as UIKit holds it (LLP 1048.003 D1; the app sets it).
         let window: [String: Any] = ["title": presenter.session?.view?.window?.windowScene?.title ?? NSNull()]
         // The list pool and the leaves it holds mid-fling (LLP 1068 §6, §5.1).
-        var pool = presenter.pool.observation.merging(presenter.leaves.observation) { a, _ in a }.merging(presenter.flats.observation) { a, _ in a }
+        var pool = presenter.pool.observation.merging(presenter.leaves?.observation ?? [:]) { a, _ in a }.merging(presenter.flats.observation) { a, _ in a }
         pool["native"] = session.natives.observation
         let kernelState = (try? JSONSerialization.jsonObject(with: Data(session.agent("{\"op\":\"state\"}").utf8))) as? [String: Any]
         let kernelLayout = kernelState?["kernelLayout"] as? [String: Any] ?? [:]
@@ -416,7 +416,7 @@ extension Agent {
         if let t = host.textArea { native["editor"] = String(describing: Swift.type(of: t)); native["firstResponder"] = t.isFirstResponder }
         if let m = host.materialKind { native["effect"] = m; if m != "backdrop" { native["material"] = Materials.agentMaterial(m) } }
         host.glassAgentFields(&native)
-        if presenter.leaves.isPending(host) { native["pending"] = true }
+        if presenter.leaves?.isPending(host) == true { native["pending"] = true }
         // Read the owned bar's geometry independently of its accessibility representation
         let navigation = presenter.navigation
         let tabs = navigation.adopts(tablist: host) ? navigation.tabController : nil

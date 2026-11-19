@@ -160,13 +160,6 @@ package enum MediaLink {
     package static var pictureGone: ((NodeView) -> Void)?
 }
 
-#if os(iOS) || os(tvOS)
-extension MediaLink {
-    /// A player's creation time, recorded as the core's heavy leaves record
-    /// theirs (HeavyLeavesIOS.swift).
-    package static func recordCreation(_ kind: String, _ seconds: TimeInterval) { HeavyLeaves.record(kind, seconds) }
-}
-#endif
 
 #if os(macOS) && EXACT_AGENT
 extension MediaLink {

@@ -69,7 +69,7 @@ let allCapabilities: [(name: String, target: String)] = [
 // which the roster links with it, or ExactCore's package API. Surfaces' Canvas
 // 2D images fetch and decode through the images family's static API, which
 // needs no install.
-let capabilityNeeds: [String: [Target.Dependency]] = ["ExactCollections": ["ExactCore"], "ExactContentRegions": ["ExactCore"], "ExactPickers": ["ExactCore"], "ExactTraces": ["ExactCore"], "ExactNativeViews": ["ExactFormaBinding"], "ExactSvg": ["ExactCore", "ExactEffects", "ExactAnimations"], "ExactSurfaces": ["ExactImages"], "ExactGradients": ["ExactCore"], "ExactNavigation": ["ExactCore"]]
+let capabilityNeeds: [String: [Target.Dependency]] = ["ExactCollections": ["ExactCore"], "ExactContentRegions": ["ExactCore"], "ExactPickers": ["ExactCore"], "ExactTraces": ["ExactCore"], "ExactNativeViews": ["ExactFormaBinding", "ExactHeavyLeaves"], "ExactVideo": ["ExactHeavyLeaves"], "ExactWebViews": ["ExactHeavyLeaves"], "ExactSvg": ["ExactCore", "ExactEffects", "ExactAnimations"], "ExactSurfaces": ["ExactImages"], "ExactGradients": ["ExactCore"], "ExactNavigation": ["ExactCore"]]
 // The host lowers a box's transitions, drags and motion to the same
 // `animations` op as its CSS animations, which ExactAnimations plays, so any
 // of them links that product without the keyframe grammar the `animations`
@@ -163,6 +163,7 @@ let core: [Target] = [
     // The binding core (LLP 1121 D12): no roster row of its own; the native
     // module family answers a module's bindings through it, and links it.
     .target(name: "ExactFormaBinding", dependencies: ["ExactKit", "CExact"], path: "Sources/ExactFormaBinding", swiftSettings: devTools),
+    .target(name: "ExactHeavyLeaves", dependencies: ["ExactKit"], path: "Sources/ExactHeavyLeaves", swiftSettings: devTools),
 ] + allCapabilities.map {
     .target(name: $0.target, dependencies: ["ExactKit", "CExact"] + (capabilityNeeds[$0.target] ?? []), path: "Sources/\($0.target)", swiftSettings: devTools)
 } + [
@@ -209,7 +210,7 @@ let tests: [Target] = [
     // (`ExactTestsInstall`, `TestsInstall.swift`).
     .target(name: "ExactTestsInstall", path: "tests/ExactTestsInstall"),
     .testTarget(name: "ExactKitTests", dependencies: ["ExactWatchSync", "ExactPackage", "MediaCaptureImplementation", "SignInImplementation", "PasskeysImplementation", "ExactWidgetTimeline", "ExactCore", "ExactSnapshot", "ExactKit", "ExactUpdates", "ExactComposition", "ExactTestsInstall"]
-                + allCapabilities.map { .target(name: $0.target) } + ["ExactFormaBinding", "ExactSoundRender", "ExactNowPlaying", "ExactShare", "ExactSharePlain"], path: "tests/ExactKitTests",
+                + allCapabilities.map { .target(name: $0.target) } + ["ExactFormaBinding", "ExactHeavyLeaves", "ExactSoundRender", "ExactNowPlaying", "ExactShare", "ExactSharePlain"], path: "tests/ExactKitTests",
                 resources: [.copy("ColorFixtures"), .copy("SnapshotFixtures")], swiftSettings: devTools + gallerySettings + caltrainSettings),
 ]
 

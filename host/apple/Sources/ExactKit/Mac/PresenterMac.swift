@@ -99,7 +99,8 @@ package final class Presenter {
     package lazy var stickies: any StickyHosting = StickyLink.make?(self) ?? NoStickies()
     let tableGrid = TableGrid()
     /// Heavy leaves held while their rows are far or flying (LLP 1068 §5.1).
-    lazy var leaves = HeavyLeaves(self)
+    /// The heavy leaves' hold, when a product that makes heavy leaves is linked.
+    package lazy var leaves: HeavyLeafHolding? = LeavesLink.make?(self)
     lazy package var selection = TextSelection(self)
     let textRasters = TextRasterizer()
     lazy var mouseSwipe = MouseSwipe(self)
@@ -397,7 +398,7 @@ package final class Presenter {
         var top: CGFloat, time: TimeInterval, velocity: Double = 0, step: Double = 0
     }
     private var listTravel: [UInt32: ListTravel] = [:]
-    func listVelocity(_ id: UInt32) -> Double {
+    package func listVelocity(_ id: UInt32) -> Double {
         guard !ExactEnv.agentMode, let travel = listTravel[id],
               CACurrentMediaTime() - travel.time < 0.15 else { return 0 }
         return travel.velocity
@@ -470,7 +471,7 @@ package final class Presenter {
         // there is nothing to report, and nothing here reads or writes the
         // scroll view again until AppKit next calls in.
         sampleListTravel()
-        leaves.scrolled()
+        leaves?.scrolled()
         // Only what is already on screen without paint; the rest is pumped.
         textPending = refreshVisibleText(limit: 0) || textPending
         if textPending {
@@ -545,7 +546,7 @@ package final class Presenter {
     package func settlePump() {
         pumpSchedule.cancel()
         // The agent reads the tree right after: every held leaf is made (LLP 1068 §5.1).
-        leaves.settle()
+        leaves?.settle()
         // Match the previous bounded native-feedback depth while keeping
         // background admission out of this synchronous agent boundary.
         for _ in 0..<8 {
@@ -668,7 +669,7 @@ package final class Presenter {
         reorders.abandon()
         collections.reset()
         tables.reset()
-        leaves.reset()
+        leaves?.reset()
         autofocusProcessed.removeAll()
         menus.reset()
         dialogs.reset()
@@ -936,7 +937,7 @@ package final class Presenter {
     /// host), and never while a batch is being applied — it waits for the
     /// batch to finish, then goes if its view survived it.
     package var applying = false
-    var isApplying: Bool { applying }
+    package var isApplying: Bool { applying }
     /// Each painted popover's region not yet told the kernel, the latest, with the view it is for (`tellRegion`).
     var regionsUntold: [UInt32: (view: ObjectIdentifier?, block: HostBlock?)] = [:]
     /// The dev loop's status pill (DevPill.swift), while one shows.
@@ -1132,7 +1133,7 @@ package final class Presenter {
                 if let boxFilters, !boxFilters.isEmpty { boxFilters.render() }
                 ImageLink.pixelated?.refresh(in: self)
                 ShadowStand.followAll()
-                leaves.batchApplied(moved: moved)
+                leaves?.batchApplied(moved: moved)
                 flushFragment()
             }
             // Only scheduled: the hit-test is the next display frame's.
@@ -1368,7 +1369,7 @@ package final class Presenter {
         views[v.id] = v
         elements.created(v)
         if v.kind == "list" { listViews[v.id] = v }
-        if v.kind == "video" { leaves.created(v) }
+        if v.kind == "video" { leaves?.created(v) }
     }
 
     /// A `children` op. A child in `leaving`, which the batch destroys, stays for its `destroy` (`retire`).

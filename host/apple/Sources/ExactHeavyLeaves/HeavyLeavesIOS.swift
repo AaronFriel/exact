@@ -32,17 +32,18 @@
 // video only when its box does not wait on its metadata (both sides set).
 #if os(iOS) || os(tvOS)
 import UIKit
+import ExactKit
 
-final class HeavyLeaves: NSObject, UIGestureRecognizerDelegate {
+package final class HeavyLeaves: NSObject, UIGestureRecognizerDelegate, HeavyLeafHolding {
     unowned let presenter: Presenter
-    init(_ presenter: Presenter) { self.presenter = presenter }
+    package init(_ presenter: Presenter) { self.presenter = presenter }
 
     /// The kinds this may hold.
     static let held: Set<String> = ["video", "iframe", "native"]
     private static var samples: [String: [TimeInterval]] = [:]
     private static var cold = Set<String>()
     /// A creation of `kind` took `seconds`.
-    static func record(_ kind: String, _ seconds: TimeInterval) {
+    package static func record(_ kind: String, _ seconds: TimeInterval) {
         if cold.insert(kind).inserted { return }
         var s = samples[kind] ?? []
         s.append(seconds)
@@ -66,7 +67,7 @@ final class HeavyLeaves: NSObject, UIGestureRecognizerDelegate {
     /// a video's player and an iframe's web view are made now, or held; a
     /// native module's box is registered (its view is made at its first
     /// props, `NativeViews`).
-    func embed(_ node: NodeView) {
+    package func embed(_ node: NodeView) {
         if node.kind == "native", let natives = presenter.session?.natives, natives.holds == nil {
             natives.holds = { [weak self] owner in self?.hold(owner) ?? false }
             natives.measured = { kind, seconds in HeavyLeaves.record(kind, seconds) }
@@ -77,7 +78,7 @@ final class HeavyLeaves: NSObject, UIGestureRecognizerDelegate {
 
     /// A batch applied: rows are placed now, so leaves near the viewport
     /// are made, in the same frame as their rows.
-    func batchApplied(moved: Bool) {
+    package func batchApplied(moved: Bool) {
         // An animation frame's batch makes and moves no row: nothing comes
         // near or goes far, and a waiting leaf is the tick's (`start`).
         guard moved else { return }
@@ -87,7 +88,7 @@ final class HeavyLeaves: NSObject, UIGestureRecognizerDelegate {
         if !pending.isEmpty { start() }
     }
     /// The list moved: a held leaf may have come near, a made one gone far.
-    func scrolled() {
+    package func scrolled() {
         guard !pending.isEmpty || presenter.session?.natives.isEmpty == false else { return }
         hideFar()
         if !pending.isEmpty { start() }
@@ -126,7 +127,7 @@ final class HeavyLeaves: NSObject, UIGestureRecognizerDelegate {
     /// frame, in a collection's row, while that list moves.
     func hold(_ node: NodeView) -> Bool {
         guard Self.held.contains(node.kind), pending[node.id] == nil, !presenter.swipeActions.assistive,
-              presenter.pool.list(creating: node.id) ?? list(holding: node) != nil else { return false }
+              presenter.listCreating(node.id) ?? list(holding: node) != nil else { return false }
         let press = UILongPressGestureRecognizer(target: self, action: #selector(pressed(_:)))
         press.minimumPressDuration = 0
         press.cancelsTouchesInView = false
@@ -140,14 +141,14 @@ final class HeavyLeaves: NSObject, UIGestureRecognizerDelegate {
     }
     /// After the node's create ops: a video whose box waits on its metadata
     /// is made now after all.
-    func created(_ node: NodeView) {
+    package func created(_ node: NodeView) {
         guard node.kind == "video", pending[node.id] != nil else { return }
         let definite = [node.style["width"], node.style["height"]].allSatisfy { v in
             v.map { $0 != .null && $0.string != "auto" } ?? false
         }
         if !definite { release(node.id) }
     }
-    func isPending(_ node: NodeView) -> Bool { pending[node.id]?.node === node }
+    package func isPending(_ node: NodeView) -> Bool { pending[node.id]?.node === node }
     /// The frame interval, seconds.
     private var frame: TimeInterval {
         1 / Double(max(60, presenter.viewport.window?.screen.maximumFramesPerSecond ?? 60))
@@ -205,8 +206,8 @@ final class HeavyLeaves: NSObject, UIGestureRecognizerDelegate {
         presenter.elements.realized(node)
     }
     /// The agent's settle, and a reset: every waiting leaf is made (or dropped).
-    func settle() { for id in pending.keys.sorted() { release(id) } }
-    func reset() {
+    package func settle() { for id in pending.keys.sorted() { release(id) } }
+    package func reset() {
         for entry in pending.values { entry.press.view?.removeGestureRecognizer(entry.press) }
         pending.removeAll(); FrameClock.shared.drop(self)
     }
@@ -235,10 +236,10 @@ final class HeavyLeaves: NSObject, UIGestureRecognizerDelegate {
         guard press.state == .began, let id = pending.first(where: { $0.value.press === press })?.key else { return }
         release(id)
     }
-    func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
+    package func gestureRecognizer(_ g: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
 
     /// `state`'s part of the pool section.
-    var observation: [String: Any] {
+    package var observation: [String: Any] {
         ["pendingLeaves": pending.keys.sorted().map(Int.init), "deferred": deferred, "released": released, "cancelled": cancelled,
          "costMs": Self.samples.keys.reduce(into: [String: Double]()) { $0[$1] = Self.cost($1).map { ($0 * 10_000).rounded() / 10 } }]
     }

@@ -131,7 +131,10 @@ package final class Presenter {
     let tableGrid = TableGrid()
     lazy var pool = NodePool(self)
     /// Heavy leaves held mid-fling (LLP 1068 §5.1).
-    lazy var leaves = HeavyLeaves(self)
+    /// The heavy leaves' hold, when a product that makes heavy leaves is linked.
+    package lazy var leaves: HeavyLeafHolding? = LeavesLink.make?(self)
+    /// The list whose row is creating node `id` now, for the hold.
+    package func listCreating(_ id: UInt32) -> NodeView? { pool.list(creating: id) }
     package lazy var flats = FlatLeaves(self)
     /// The native swipe rows (LLP 1008 §9), a grouped list's included.
     package lazy var swipeActions: any SwipeActionsHosting = SwipeActionsLink.make?(self) ?? NoSwipeActions()
@@ -372,7 +375,7 @@ package final class Presenter {
         menus.reset()
         swipeActions.reset(); rowCells.reset()
         pool.reset()
-        leaves.reset()
+        leaves?.reset()
         flats.reset()
         #if os(iOS)
         if #available(iOS 27.1, *) { arrangements.reset() }
@@ -664,9 +667,9 @@ package final class Presenter {
     let textRasters = TextRasterizer()
     /// Clip geometry memoized for one text refresh (`TextClips`), else nil.
     var textClips: TextClips?
-    func listVelocity(_ id: UInt32) -> Double { scrollPump.velocity(id) }
+    package func listVelocity(_ id: UInt32) -> Double { scrollPump.velocity(id) }
     func settlePump() {
-        leaves.settle()
+        leaves?.settle()
         scrollPump.settle()
         textRasters.settleVisible(textViews.values.filter { textIsVisible($0) })
     }
@@ -920,7 +923,7 @@ package final class Presenter {
                 waiting = []
                 for (id, f) in q where id.map({ textHost($0) != nil }) ?? true { f() }
                 scrollPump.batchApplied()
-                ApplyProfile.time("pass.leaves") { leaves.batchApplied(moved: moved) }
+                ApplyProfile.time("pass.leaves") { leaves?.batchApplied(moved: moved) }
                 #if os(iOS)
                 if !rowFill || statusBarOwed || !chrome.ids("statusBarStyle").isEmpty || !chrome.ids("systemBarsHidden").isEmpty { resolveStatusBar() }
                 textSelection.batchEnded()
@@ -993,7 +996,7 @@ package final class Presenter {
                 if reused != nil { v.finishReuse() } else { v.embedFrame(self) }
                 views[id] = v
                 elements.created(v)
-                if v.kind == "video" { leaves.created(v) }
+                if v.kind == "video" { leaves?.created(v) }
                 if v.kind == "list" { listViews[id] = v }
                 if v.isParagraph { textViews[id] = v; noteOwedText(v) }
             case .paragraph:

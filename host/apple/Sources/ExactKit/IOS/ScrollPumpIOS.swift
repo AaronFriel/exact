@@ -215,7 +215,7 @@ package final class ScrollPump: NSObject, UIScrollViewDelegate {
         // The frame sampler measures a scroll's frames, UIKit's deceleration's included
         p.session?.sampler?.activity()
         armRest(after: Self.restDelay)
-        p.leaves.scrolled()
+        p.leaves?.scrolled()
         p.menus.rehostPopovers()
         // What this frame shows has its text before it commits. A pass
         // follows only for work owed: a paragraph still without all its
