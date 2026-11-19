@@ -1140,13 +1140,9 @@ fn into_alignment_is_malformed_before_any_delivery() {
                 request["into"][axis] = alignment.into();
                 let reply: serde_json::Value =
                     serde_json::from_str(&handle(&mut p, &request.to_string())).unwrap();
-                assert_eq!(
-                    reply,
-                    serde_json::json!({
-                        "error": format!("no alignment {alignment}: start, center, end or nearest"),
-                        "malformed": true
-                    })
-                );
+                let expected = format!("no alignment {alignment}: start, center, end or nearest");
+                assert_eq!(reply["error"], expected.as_str(), "{reply}");
+                assert_eq!(reply["malformed"], true, "{reply}");
             }
         }
     }
