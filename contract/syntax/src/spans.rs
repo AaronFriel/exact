@@ -115,7 +115,7 @@ macro_rules! structs {
     )* };
 }
 structs! {
-    NameSpans { names, sources }
+    NameSpans { names, sources, view_ranges }
     File { names, routes, uses, fonts, sounds, shapes, styles, decorations, decoration_scopes, atoms, atom_scopes, keyframes, timelines, color_profiles, theme, design, package_designs, library, library_packages, fns, sources, modules, tests, properties, launch, components, members, deferred }
     KeyframesDecl { name, frames, span }
     TimelineDecl { name, span }
@@ -151,7 +151,7 @@ structs! {
     MembersLine { path, at, span }
     Anatomy { parts, marks }
     PartDecl { name, groups, span }
-    Mark { part, span, node, own }
+    Mark { part, span, literal, node, own }
     Params { identity, package, root, list }
     ComponentParam { name, kind, default, default_span, attrs, span }
     ParamAttr { name, value, span }

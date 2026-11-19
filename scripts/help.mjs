@@ -428,7 +428,10 @@ artifacts under game/target only. Ports none. Runs to completion.`,
                                           tag, attribute, CSS property and function); each name's entry in
                                           turn, a recipe whole, a pattern's summary; exit 1 if one is unknown
   fmt [--check | --stdout | --stdin] <file.contract> · fmt --uses <file.contract>
-  symbols <file.contract> [--name <name>] · sources <file.contract>
+  symbols <file.contract> [--editor] [--name <name>]
+  symbols <file.contract> --editor [--component <name>] [--tag <tag>] [--has <attr> …] [--where 'attr=expression' …] [--match <text> …] [--or <filters> …]
+    bun exact.mjs contract symbols app.contract --editor --component Editor --tag button --match 'Save draft' --or --component Preview --tag button --match Cancel
+  sources <file.contract>
   build … --stdin · symbols … --stdin     the file's text is stdin's (an editor's unsaved buffer), read as
                                           if saved at <file.contract>; app.ts is not type-checked against it
   test <file.test.contract>               the compiled tests, as JSON (bun exact.mjs test runs them)
@@ -705,8 +708,12 @@ const VARIANT_VERBS = new Set(['web', 'web-build', 'serve', 'test', 'agent', 've
  * every one it starts, as `--sim` sets EXACT_SIM, so the flag wins over an exported value; the app the verb resolves
  * then claims the selection (scripts/variants.mjs `claimVariant`). Returns `args`. Here, beside `guardFlags`, because
  * copied SDKs carry this module alone. */
-export function takeVariant(args, env = process.env) {
-  for (let i = args.indexOf('--variant'); i !== -1; i = args.indexOf('--variant')) {
+export function takeVariant(args, env = process.env, takesValue = () => false) {
+  for (let i = 0; i < args.length;) {
+    if (args[i] !== '--variant') {
+      i += takesValue(args[i]) ? 2 : 1;
+      continue;
+    }
     const name = args[i + 1];
     if (name === undefined || name.startsWith('-')) throw new Error('--variant needs a name: one of app.json\'s "variants"');
     env.EXACT_VARIANT = name;

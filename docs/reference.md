@@ -265,6 +265,30 @@ of its name and, for a string literal value, `string` with the value and its
 place, quotes included. A button's one argument, which becomes its `text` child, is no element
 of its own. A `--name` query has no `elements`.
 
+Add an element filter to `symbols --editor` to return just the matching
+`elements` across the source graph. `--component` matches the declared name,
+and `--tag` accepts the authored or compiler tag. Repeat `--has <attr>` and
+`--where 'attr=expression'` to require written attributes and exact source
+values. Use `--has` for a bare attribute such as `multiple`. Repeat
+`--match <text>` to look up several
+case-sensitive substrings in one pass. A match can occur in the tag, a written
+attribute name or value, or a positional text expression such as an option
+label or a button's direct text child. Use `--or` to start an independent filter
+group. An element that satisfies any group appears once, in source order
+within its file.
+
+```sh
+contract symbols app.contract --editor --component Editor --tag button --match 'Save draft' \
+  --or --component Preview --tag button --match Cancel
+```
+
+Filtered elements include `binding` on attributes with other written values,
+`text` for text expressions, and `context` for enclosing `if` and `for` headers,
+outermost first. An `if` reports which branch contains the element. Each entry
+includes its authored `source` and range in the element's file. An `end_line`
+appears when the range crosses a line. Element filters can be used with
+`--stdin` and are separate from `--name` queries.
+
 When the program is refused, `symbols` still prints what it found, adds an
 `errors` array of the refusals in `build --json`'s form, writes them to stderr
 and exits 1. A declaration or member the syntax refused is absent, and so is

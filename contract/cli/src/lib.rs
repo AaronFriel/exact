@@ -94,7 +94,9 @@ pub use sources::{
     code_beside, design_name_error, design_path, with_contract_texts, with_design_text, GraphBase,
     Package, Source, SourceGraph,
 };
-pub use symbols::{editor_symbols_json, symbols_json, PartialSymbols};
+pub use symbols::{
+    editor_elements_json, editor_symbols_json, symbols_json, ElementFilters, PartialSymbols,
+};
 pub use typescript::{design_exports, typescript, typescript_exporting, typescript_sources};
 /// The app's strings tables (LLP 1060 D1), `None` for an app without a
 /// `strings` directory, every refusal in one message: the bake reads grant

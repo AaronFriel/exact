@@ -12,6 +12,9 @@ pub struct NameSpans {
     pub names: BTreeMap<Span, Span>,
     /// Data source name in a resource or send, keyed by its construct.
     pub sources: BTreeMap<Span, Span>,
+    /// Authored view ranges for focused symbol lookups, keyed by control
+    /// keyword, attribute name or positional expression span.
+    pub view_ranges: BTreeMap<Span, (Span, Span)>,
 }
 impl NameSpans {
     /// The exact identifier range, or the construct when it already names a token.
