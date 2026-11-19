@@ -1538,13 +1538,18 @@ the person chooses whether it is locked; the app grants `device.local-auth <purp
 and depends on `@exact/local-auth` (LLP 1133.010). Its value is never in the store:
 `store.get` throws `InvalidAccessError` while it is locked, `await store.unlock(name,
 { reason })` shows the platform's sheet and answers the value, `store.has` and
-`store.locked` say what is kept, and `store.protect(name)` and `store.unprotect(name,
-{ reason })` turn an `optional` lock on and off. `store.set` keeps every write in the
-name's state, a rotated token's too. Keep the value out of every answer: an answer is
-kept and shown. `authenticate(reason=)` from the same package is the check alone: it
-gates a screen, never a secret. The web keeps no locked secret yet: a name that must
-be locked is refused there, and `localAuthStatus().presenceSecrets` is false. Under the
-agent the sheet is a `presence` ticket (`tap @presence allow`, `cancel`, `fail`,
+`store.locked` say what is kept. `await store.protect(name)` turns an `optional` lock
+on without a prompt on iOS, iPadOS, Android, and macOS builds provisioned for the
+data-protection Keychain. It rejects without a prompt when locked secrets are unavailable.
+For a switch that asks for confirmation, call `authenticate(reason=)` from
+`@exact/local-auth` first and wait for it to succeed before calling `store.protect`.
+The store's presence policy controls access to the secret.
+`await store.unprotect(name, { reason })` shows the platform's sheet before turning
+the lock off. `store.set` keeps every write in the name's state, a rotated token's too.
+Keep the value out of every answer: an answer is kept and shown. The web keeps no
+locked secret yet: a name that must be locked is refused there, and
+`localAuthStatus().presenceSecrets` is false. Under the agent the sheet is a
+`presence` ticket (`tap @presence allow`, `cancel`, `fail`,
 `lockout`, `invalidated`), after Face ID's `permission` ticket while it is `prompt`.
 The compiler accepting a source call does not provide its implementation. Check
 its arguments, declared result, grants, storage access, and bake-time behavior.
