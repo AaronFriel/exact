@@ -1,6 +1,7 @@
 # The iOS hello app is about 2.1 MB over its 8 MB size target
 
-**Status:** Open
+**Status:** Closed
+**Resolution:** The size row measures 7,871,008 B at f607bac14 (12,489,072 B at 02639b8ea), under the 8,000,000 B target, with each Apple family linked by use (LLP 1047.001 §9); its ceiling is 7,970,000 B.
 **Systems:** host/apple (iOS binary size), runner (native module seam), scripts/metrics.mjs
 **Severity:** P2
 **Author:** Claude (Opus 5.5), async lane triage
@@ -8,19 +9,20 @@
 
 `bun scripts/metrics.mjs --long` measures the hello app's stripped iOS simulator executable over an empty UIKit
 app's (LLP 1047.001 D8) and gates it at `IOS_HELLO_BYTES`. The size row's target is 8 MB, 8,000,000 B (Charlie,
-2026-11-17: "trying to get to 8MB is maybe worth it"). Main at e27820042, measured on an M5 Max with Xcode 27.2:
+2026-11-17: "trying to get to 8MB is maybe worth it"). Main at f607bac14, measured on an M5 Max with Xcode 27.2:
 
 | row | measured | ceiling | target |
 |---|---:|---:|---:|
-| optimized for size (the embed default) | 8,345,408 B | 8,450,000 B | 8,000,000 B |
-| balanced (the iOS and tvOS app default) | 12,242,144 B | 12,350,000 B | |
-| optimized for speed (the Mac default) | 13,479,040 B | 13,580,000 B | |
+| optimized for size (the embed default) | 7,871,008 B | 7,970,000 B | 8,000,000 B |
+| balanced (the iOS and tvOS app default) | 11,640,832 B | 11,740,000 B | |
+| optimized for speed (the Mac default) | 12,795,968 B | 12,900,000 B | |
 
 The ceilings are a tripwire at main's size plus about 100 KB, not an accepted size. A row over its ceiling says how
 far over in 100 KB steps (`VIOLATION by 0.2 MB`), and the async lane's failure carries the step, so each further
 step up is a new failure the lane attributes to the commit that took it, and a step down is not
-(`scripts/async-bisect.mjs`, `newFailures` and `holds`). The target needs about 2.1 MB more cut from the size build. Byte counts differ between Xcode versions, so
-measure with the lane's.
+(`scripts/async-bisect.mjs`, `newFailures` and `holds`). The size build was 12,489,072 B when the cuts began
+(02639b8ea) and is under the target now; the Progress table lists each cut. Byte counts differ between Xcode
+versions, so measure with the lane's.
 
 ## How to reproduce
 
@@ -282,6 +284,16 @@ runner's seams; §9.3: the order of work). Landed, size row:
 | the runner's voice table, transport and MIDI queue a seam | 1db527b8e | −66,320 B |
 | what Core Animation plays for a box its own product | 10dea87d0 | −16,784 B |
 | N1: navigation with route modals its own product (cut list C2) | e27820042 | −635,152 B, to 8,345,408 B |
+| the lists' reorder and snapshot decoding the lists family's | d84905dd5 | −66,096 B |
+| the Rust host's drags and the gradient serializer linked by use | 78a758b23 | −33,200 B |
+| the heavy leaves' hold a target of video, web views and native views | bba0b3a7d | −33,040 B |
+| transform and height drag handles the drag product's | 16a8c2c6e | −49,648 B |
+| iOS text selection its own product | 330f7d957 | −67,024 B |
+| widget publication its own product, the headless session the snapshot module's | 756a622eb | −117,584 B |
+| Canvas 2D's host turn, captures and exports linked by use | 06984a58d | −33,152 B |
+| C11: the tool door its own product | b23af37ec | −16,544 B |
+| C9: the content index its own product | bebd075f9 | −71,808 B, to 7,904,944 B |
+| icons in text the Markdown product's | f607bac14 | −17,504 B, to 7,871,008 B |
 
 A second link map, at 51002ee77, measured what the first declined to claim: the overhead (standard-library
 specializations, outlined functions, metadata, unwind sections) leaves with the families at 0.17 B for each direct
@@ -335,4 +347,5 @@ rulings and about 7.84 MB with them.
 Two cuts on the list are rulings, not designs, and are not being built: frame health out of the production core
 (LLP 1079.000) and the panic machinery (nightly `build-std`, which LLP 1047.001 D9 declined).
 
-This closes when the size row is at or under 8,000,000 B and its ceiling has come down with it.
+The size row is at 7,871,008 B and its ceiling at 7,970,000 B, both under the 8,000,000 B target. What is built
+or traced below that and not landed, and the runs the fleet could not do, are in QUEUE.md.
