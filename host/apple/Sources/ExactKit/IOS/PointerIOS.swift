@@ -294,11 +294,11 @@ import UIKit
 
 /// The responder hop taken on down, not a gesture recognizer. Weak view and
 /// touch references leave UIKit's original hit and contact lifetime intact.
-final class PressContact {
+package final class PressContact {
     weak var touch: UITouch?
     package let incarnation: UInt64
     weak var responder: UIResponder?
-    weak var responderContact: PressContact?
+    package weak var responderContact: PressContact?
     var responderIncarnation: UInt64?
     var responderUsesCanvas = false
     /// Whether this contact’s down was taken here rather than forwarded.
@@ -337,7 +337,7 @@ final class PressContact {
         return downstream.routeActive
     }
     var routesToCanvas: Bool { responderUsesCanvas || responderContact?.routesToCanvas == true }
-    var routesBubbledPress: Bool { bubbled || responderContact?.routesBubbledPress == true }
+    package var routesBubbledPress: Bool { bubbled || responderContact?.routesBubbledPress == true }
 }
 
 extension NodeView {
@@ -386,7 +386,7 @@ extension NodeView {
     /// Retirement, reparenting and disable cancel the old chain while its
     /// identities are still available. A late terminal callback cannot clear
     /// a new contact or a new incarnation's feedback.
-    func cancelPressContact(reparenting: Bool = false) {
+    package func cancelPressContact(reparenting: Bool = false) {
         let hit = promotedLayoutHit
         promotedLayoutHit = nil
         hit?.cancel()

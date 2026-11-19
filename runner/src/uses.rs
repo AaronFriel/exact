@@ -247,11 +247,17 @@ pub enum Capability {
     /// an entity parameter offers. Selected by that package's names. Native
     /// only.
     ContentIndex,
+    /// HTML's `dialog` shown as UIKit's sheet, or as the author's box in the
+    /// top layer when its author paints it (LLP 1115.000 D11.5, LLP 1035.001
+    /// D11): a node that can be a `dialog`. iOS and tvOS only: the Mac's
+    /// top-layer stack, which a sheet route shares, presents a `dialog` in its
+    /// core ([`Uses::MAC_CORE`]).
+    Dialogs,
 }
 
 impl Capability {
     /// Every capability, in bit order.
-    pub const ALL: [Capability; 60] = [
+    pub const ALL: [Capability; 61] = [
         Capability::Markdown,
         Capability::Motion,
         Capability::Collections,
@@ -312,6 +318,7 @@ impl Capability {
         Capability::TextSelection,
         Capability::Widgets,
         Capability::ContentIndex,
+        Capability::Dialogs,
     ];
 
     /// The name an entry, a refusal and a report use.
@@ -377,6 +384,7 @@ impl Capability {
             Capability::TextSelection => "text_selection",
             Capability::Widgets => "widgets",
             Capability::ContentIndex => "content_index",
+            Capability::Dialogs => "dialogs",
         }
     }
 
@@ -425,7 +433,13 @@ impl Uses {
         .with(Capability::Navigation)
         .with(Capability::TextSelection)
         .with(Capability::Widgets)
-        .with(Capability::ContentIndex);
+        .with(Capability::ContentIndex)
+        .with(Capability::Dialogs);
+
+    /// The native roster's entries the Mac's core presents itself, which a
+    /// macOS set never names: a `dialog` is an entry of the top-layer stack
+    /// a sheet route presents in too.
+    pub const MAC_CORE: Uses = Uses::NONE.with(Capability::Dialogs);
 
     /// This set and `capability`.
     pub const fn with(self, capability: Capability) -> Uses {

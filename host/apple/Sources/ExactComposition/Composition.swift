@@ -117,6 +117,9 @@ import ExactToolDoor
 #if EXACT_LINK_CONTENT_INDEX
 import ExactIndexMirror
 #endif
+#if EXACT_LINK_DIALOGS
+import ExactDialogs
+#endif
 public enum ExactComposition {
     public static let app: ExactApp = {
         AgentLink.install()
@@ -243,6 +246,9 @@ public enum ExactComposition {
         #endif
         #if EXACT_LINK_CONTENT_INDEX
         ExactIndexMirror.install()
+        #endif
+        #if EXACT_LINK_DIALOGS
+        ExactDialogs.install()
         #endif
     }
 }

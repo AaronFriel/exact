@@ -166,8 +166,8 @@ fn text_selection_is_a_user_select_that_can_be_text_or_all() {
 #[test]
 fn each_native_entry_is_selected_by_the_rows_that_reach_its_family() {
     use Capability::{
-        Collections, Controls, Effects, Flights, Images, NativeViews, Navigation, Sticky, Svg,
-        Traces,
+        Collections, Controls, Dialogs, Effects, Flights, Images, NativeViews, Navigation, Sticky,
+        Svg, Traces,
     };
     let plain = "column\n      text \"a\"\n      button \"b\" press=go";
     for (view, capability, selected) in [
@@ -227,6 +227,17 @@ fn each_native_entry_is_selected_by_the_rows_that_reach_its_family() {
             true,
         ),
         ("row role=\"tablist\"\n      button \"a\" role=\"tab\"", Navigation, false),
+        (plain, Dialogs, false),
+        ("dialog id=\"d\"\n      text \"a\"", Dialogs, true),
+        // A confirmation by its rows too: the host tells its shape when it
+        // opens, and any `dialog` its author paints is a sheet.
+        (
+            "dialog id=\"d\" role=\"alertdialog\" aria-label=\"Clear?\"\n      button \"Clear\" press=go commandfor=\"d\" command=\"close\"\n      button \"Cancel\" commandfor=\"d\" command=\"close\"",
+            Dialogs,
+            true,
+        ),
+        // ARIA's role alone is no HTML dialog (`lower-dialog-role`).
+        ("column role=\"dialog\"", Dialogs, false),
         ("input type=\"text\"", Controls, false),
         (
             "row role=\"tablist\"\n      button \"a\" press=go",

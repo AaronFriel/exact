@@ -1511,6 +1511,7 @@ The generated `--embed` composition lists the capabilities to link.
 | `ExactNavigation` | Route stacks, tabs and their bars, route modals; on the Mac route sheets, the list beside its detail, Back and Forward, the root tabs as the sidebar | `ExactNavigation.install()` |
 | `ExactTextSelection` | iOS's selection of text a `user-select` of `text` or `all` makes selectable (the Mac's is in `ExactKit`, and every Mac composition names it) | `ExactTextSelection.install()` |
 | `ExactWidgetPublication` | Widgets and Live Activities: the app's publication of its entries to the App Group and its observation of the store they write | `ExactWidgetPublication.install()` |
+| `ExactDialogs` | iOS and tvOS: a `dialog` shown by `showModal()` as UIKit's sheet, or as the author's box when it paints its surface; any `dialog` in the plan links it. On the Mac the core presents a `dialog` | `ExactDialogs.install()` |
 
 Development builds log a missing Markdown or drag installation once per session,
 with the product and installation call. Without it, Markdown remains literal

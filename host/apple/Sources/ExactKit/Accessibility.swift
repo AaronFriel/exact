@@ -1209,7 +1209,7 @@ private struct FocusTree {
 extension Presenter {
     /// The node holding the focus: itself, its field (through its editor on
     /// AppKit) or its text area.
-    var focusedNode: NodeView? {
+    package var focusedNode: NodeView? {
         views.values.filter { node in
             #if os(macOS)
             guard let responder = node.window?.firstResponder else { return false }

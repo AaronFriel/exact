@@ -76,7 +76,7 @@ extension Presenter {
     /// except that a presented route, a dialog's sheet and a lifted popover
     /// bubble to their authored parent outside the presentation. The agent
     /// and accessibility activation take the same steps as a real touch.
-    func listenerParent(of view: UIView) -> UIView? {
+    package func listenerParent(of view: UIView) -> UIView? {
         if let node = view as? NodeView, let parent = dialogs.authoredParent(of: node) { return parent }
         if let parent = menus.logicalParent(of: view) { return parent }
         if let node = view as? NodeView, navigation.routeSurfaces[node.id]?.node === node, modals.mounts(node) {
@@ -189,6 +189,9 @@ package struct TopLayerBox {
     let frame: TopLayerFrame?
     let modal: UIViewController?
     var backdrop: (bounds: CGRect, excluding: CGRect?)? = nil
+    package init(view: UIView, frame: TopLayerFrame?, modal: UIViewController?, backdrop: (bounds: CGRect, excluding: CGRect?)? = nil) {
+        (self.view, self.frame, self.modal, self.backdrop) = (view, frame, modal, backdrop)
+    }
 }
 
 /// Each route's root laid out in its controller's view (LLP 1123 D2): the
@@ -450,7 +453,7 @@ extension Presenter {
 
     /// A rectangle in the viewport's coordinates, less its scrolling: where
     /// a person sees it in the viewport, as the runner reads a top-layer box.
-    func viewportPoints(_ rect: CGRect) -> CGRect {
+    package func viewportPoints(_ rect: CGRect) -> CGRect {
         rect.offsetBy(dx: -viewport.pageOrigin.x, dy: -viewport.pageOrigin.y)
     }
 }

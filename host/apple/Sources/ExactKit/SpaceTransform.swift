@@ -203,9 +203,9 @@ extension NodeView {
 #endif
 
 #if os(iOS) || os(tvOS)
-typealias SpaceView = UIView
+package typealias SpaceView = UIView
 #else
-typealias SpaceView = NSView
+package typealias SpaceView = NSView
 #endif
 
 extension NodeView {
@@ -249,7 +249,7 @@ extension NodeView {
 
     /// Layout supplies the untransformed overflow; the presenter adds boxes
     /// carried outside it by transforms, stopping at each clipping boundary.
-    func documentOverflow(in document: SpaceView) -> CGRect {
+    package func documentOverflow(in document: SpaceView) -> CGRect {
         var reach = drawnRect(CGRect(origin: .zero, size: content), in: document)
         // Each box goes with whether it or a box above it carries drawn
         // points. Below none, the platform's conversion is `drawnRect`, and

@@ -76,6 +76,7 @@ fn an_all_linked_binary_reloads_from_hello_into_each_family() {
         ("canvas", plan("canvas surface=dot() width=40 height=40")),
         ("tools", source(TOOLS)),
         ("content_index", source(SEARCH)),
+        ("dialog", plan("dialog id=\"d\"\n      text \"a\"")),
     ]
     .into_iter()
     .chain(media().map(|(next, name)| (name, next)))

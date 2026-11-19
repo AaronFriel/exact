@@ -97,6 +97,34 @@ fn hellos_binary_refuses_a_reload_into_a_family_and_keeps_its_plan() {
     }
 }
 
+/// A `dialog` is the dialogs family's on iOS and tvOS, and on the Mac the
+/// core's top layer presents it, so hello's binary takes it there.
+#[test]
+fn a_dialog_is_refused_only_where_its_family_presents_it() {
+    link::set(Uses::NONE);
+    let mut bridge = Bridge::<NoData>::new();
+    boot(&mut bridge, &plan("text \"Hello world\""));
+    let next = plan("dialog id=\"d\"\n      text \"a\"");
+    let len = bridge.input_write(&next);
+    let out = bridge.prepare_plan(len, NoData, Hooks::none(), 390.0, 844.0);
+    let reply = String::from_utf8_lossy(bridge.output_bytes(out as usize)).into_owned();
+    let mac = cfg!(target_os = "macos");
+    assert_eq!(reply.contains("Unlinked(\\\"dialogs\\\")"), !mac, "{reply}");
+    let before = digest(&mut bridge);
+    let out = bridge.commit_plan();
+    let reply = String::from_utf8_lossy(bridge.output_bytes(out as usize)).into_owned();
+    assert!(!reply.contains("Unlinked"), "{reply}");
+    assert!(
+        mac || reply.contains("error"),
+        "a refused candidate is not committed: {reply}"
+    );
+    assert_eq!(
+        digest(&mut bridge) != before,
+        mac,
+        "the Mac commits it; elsewhere hello's plan stays"
+    );
+}
+
 /// A first boot of a plan that uses a family is refused too.
 #[test]
 fn hellos_binary_refuses_to_boot_a_media_or_canvas_plan() {

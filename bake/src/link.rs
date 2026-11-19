@@ -51,8 +51,11 @@ pub(crate) fn name_into(
         Capability::ALL.into_iter().fold(Uses::NONE, Uses::with)
     };
     // The native roster is Apple's: another platform's set, and so its id,
-    // never names it, whatever a manifest links ahead.
-    let uses = if apple(&compat.inputs) {
+    // never names it, whatever a manifest links ahead; a macOS set never
+    // names what the Mac's core presents itself.
+    let uses = if compat.inputs["platform"] == "macos" {
+        uses.beyond(Uses::MAC_CORE)
+    } else if apple(&compat.inputs) {
         uses
     } else {
         uses.beyond(Uses::NATIVE)
@@ -94,7 +97,8 @@ pub(crate) fn composed<'a>(
 /// linked ahead links the pickers' family (`picker`), since a later plan's
 /// document pickers or photo picker present through it. A plan's own uses need no such rule: its document-picker
 /// commands and file inputs select `picker` themselves, and its drops,
-/// pastes and `requestPermission` need only the core's `doc:` table.
+/// pastes and `requestPermission` need only the core's `doc:` table. On the
+/// Mac, what its core presents itself ([`Uses::MAC_CORE`]) is never linked.
 fn linked_ahead(uses: Uses, ahead: Vec<Capability>, inputs: &serde_json::Value) -> Uses {
     let presents = ahead
         .iter()
@@ -108,6 +112,9 @@ fn linked_ahead(uses: Uses, ahead: Vec<Capability>, inputs: &serde_json::Value) 
     }
     if apple(inputs) && presents {
         uses = uses.with(Capability::Picker);
+    }
+    if inputs["platform"] == "macos" {
+        uses = uses.beyond(Uses::MAC_CORE);
     }
     uses
 }
@@ -239,9 +246,11 @@ fn ships_module(app: &std::path::Path, platform: &str) -> bool {
 
 /// What `plan` uses on the platform `inputs` name: on Apple, which links
 /// grid layout by use and the native roster, [`exact_runner::uses::apple_uses`]
-/// (LLP 1047.001 D10).
+/// (LLP 1047.001 D10), less on the Mac what its core presents itself.
 pub(crate) fn plan_uses(plan: &exact_plan::Plan, inputs: &serde_json::Value) -> Uses {
-    if apple(inputs) {
+    if inputs["platform"] == "macos" {
+        exact_runner::uses::apple_uses(plan).beyond(Uses::MAC_CORE)
+    } else if apple(inputs) {
         exact_runner::uses::apple_uses(plan)
     } else {
         exact_runner::uses(plan)
@@ -552,6 +561,36 @@ mod tests {
             false,
         );
         assert_eq!(entry.unwrap(), Some(serde_json::json!(["widgets"])));
+    }
+
+    /// A `dialog` needs the dialogs family on iOS and tvOS (an `ios` bake);
+    /// on the Mac the core presents it, even when the manifest links it ahead.
+    #[test]
+    fn a_dialog_requires_its_family_except_on_the_mac() {
+        let hello = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../apps/hello");
+        let mut manifest = contract::Manifest::read(&hello).unwrap();
+        let dialog =
+            contract::compile("component D\n  view\n    dialog id=\"d\"\n      text \"a\"\n")
+                .unwrap();
+        for (platform, ahead, required) in [
+            ("ios", false, serde_json::json!(["dialogs"])),
+            ("macos", false, serde_json::json!(["text_selection"])),
+            ("macos", true, serde_json::json!(["text_selection"])),
+        ] {
+            if ahead {
+                manifest.json["link"] = serde_json::json!(["dialogs"]);
+            }
+            let inputs = serde_json::json!({ "platform": platform, "grantCeiling": "" });
+            let got = super::apple_requirement(
+                &hello,
+                &dialog,
+                std::iter::empty(),
+                &inputs,
+                &manifest,
+                false,
+            );
+            assert_eq!(got.unwrap(), Some(required), "{platform} {ahead}");
+        }
     }
 
     /// A source that declares host work (LLP 1047.001 D12) and one placed on

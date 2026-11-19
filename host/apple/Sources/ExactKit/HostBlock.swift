@@ -9,7 +9,7 @@ package struct HostBlock: Equatable {
     /// One axis: a size, a maximum, a limit for automatic content fitting, or
     /// the region a `position-area` option places the box in (fit-content
     /// across, min-content winning; its content's height down).
-    enum Axis: Equatable {
+    package enum Axis: Equatable {
         case size(CGFloat), atMost(CGFloat), fit(CGFloat), region(CGFloat)
         fileprivate var wire: (length: CGFloat, policy: CGFloat) {
             switch self {
@@ -21,12 +21,13 @@ package struct HostBlock: Equatable {
         }
     }
     /// The ordered flips composed into physical side indices, low two bits first.
-    struct Tactic: Hashable {
+    package struct Tactic: Hashable {
         var sides: UInt32 = 228 // top, right, bottom, left
-        static let none = Tactic()
+        package static let none = Tactic()
     }
     var width: Axis, height: Axis
     var tactic: Tactic = .none
+    package init(width: Axis, height: Axis, tactic: Tactic = .none) { (self.width, self.height, self.tactic) = (width, height, tactic) }
     /// A pane's: the block is its size.
     package static func size(_ size: CGSize) -> HostBlock { HostBlock(width: .size(size.width), height: .size(size.height)) }
     /// A sheet's: as large as its content, at most this.

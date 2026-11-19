@@ -36,7 +36,8 @@ package final class FlatLeaf {
     var paint: FlatPaint
     /// Its frame drawn, on the device's pixel grid, in its parent's drawn
     /// coordinates, and as layout sent it (`PixelGridIOS.swift`).
-    var frame = CGRect.zero, layout = CGRect.zero
+    var frame = CGRect.zero
+    package internal(set) var layout = CGRect.zero
     /// Its absolute origin on the grid, which its children are placed from.
     var origin = GridOrigin.zero
     /// Its content box and padding as layout sent them (`fieldContent`),

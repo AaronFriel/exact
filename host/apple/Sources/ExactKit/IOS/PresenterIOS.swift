@@ -116,7 +116,7 @@ package final class Presenter {
     /// Reordering a list's rows: the lists family's (`ReorderLink`).
     lazy package var reorders: any ReorderHosting = ReorderLink.make?(self) ?? NoReorders()
     lazy package var transformGeometry = TransformGeometryHost(self)
-    lazy var nativeGeometry = NativeGeometry(self)
+    package lazy var nativeGeometry = NativeGeometry(self)
     /// Nodes showing a `background-attachment: fixed` gradient (LLP 1066
     /// D7): re-aimed at the viewport when anything scrolls or a batch lands.
     let fixedGradients = NSHashTable<NodeView>.weakObjects()
@@ -545,7 +545,7 @@ package final class Presenter {
     }
 
     /// A hatch's `focus()` on the node it resolved (LLP 1075.003 §3.4).
-    func focusNode(_ target: NodeView) { focus(target, selectText: false) }
+    package func focusNode(_ target: NodeView) { focus(target, selectText: false) }
 
     /// Whether `target` has a box to focus. A header's search field is the
     /// bar's, which UIKit collapses to no height until it is pulled down or

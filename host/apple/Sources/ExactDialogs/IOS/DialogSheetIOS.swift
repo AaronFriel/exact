@@ -27,6 +27,7 @@
 // as UIKit dims beneath a sheet. `closedby="any"` closes it on a tap
 // outside its box; Escape and VoiceOver's escape are its close request.
 #if os(iOS) || os(tvOS)
+import ExactKit
 import UIKit
 
 final class DialogSheetController: UIViewController, UIGestureRecognizerDelegate, UIScrollViewDelegate {
@@ -435,7 +436,7 @@ final class DialogSheets: NSObject, UIAdaptivePresentationControllerDelegate, Di
     }
     var topDialog: NodeView? { entries.last { !$0.closing }?.dialog }
     var containingBlocks: [(UInt32, HostBlock)] {
-        entries.compactMap { entry in
+        entries.compactMap { entry -> (UInt32, HostBlock)? in
             let scroller = entry.controller.scroller
             guard scroller.window != nil, !scroller.bounds.isEmpty,
                   let height = entry.controller.availableHeight, height > 0 else { return nil }
@@ -479,7 +480,7 @@ final class DialogSheets: NSObject, UIAdaptivePresentationControllerDelegate, Di
     /// card clips it without rescaling its descendants (LLP 1051.000 D1).
     var presented: [TopLayerBox] {
         guard let presenter else { return [] }
-        return entries.compactMap { entry in
+        return entries.compactMap { entry -> TopLayerBox? in
             let controller = entry.controller
             guard !entry.closing, !controller.isBeingDismissed,
                   let view = controller.viewIfLoaded, view.window != nil else { return nil }

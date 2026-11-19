@@ -92,7 +92,7 @@ final class NodeExtras {
     var nativeActiveRefusals: [String: String] = [:]
     /// The tint its authored `accent-color` gives its subtree (`applyAccentTint`)
     var authoredAccentTint: UIColor?
-    var pressContact: PressContact?
+    package var pressContact: PressContact?
     var inlinePressed: UInt32?
     /// A Markdown link pressed in this text: its target, followed on release over it.
     var linkPressed: String?
@@ -313,7 +313,7 @@ extension NodeView {
         set { if !newValue.isEmpty || extras != nil { more.nativeActiveRefusals = newValue } }
     }
     var inlinePressed: UInt32? { get { extras?.inlinePressed } set { if newValue != nil || extras != nil { more.inlinePressed = newValue } } }
-    var pressContact: PressContact? { get { extras?.pressContact } set { if newValue != nil || extras != nil { more.pressContact = newValue } } }
+    package var pressContact: PressContact? { get { extras?.pressContact } set { if newValue != nil || extras != nil { more.pressContact = newValue } } }
     var linkPressed: String? { get { extras?.linkPressed } set { if newValue != nil || extras != nil { more.linkPressed = newValue } } }
     var svgPressed: UInt32? { get { extras?.svgPressed } set { if newValue != nil || extras != nil { more.svgPressed = newValue } } }
     package var clipPath: CGPath? { get { extras?.clipPath } set { if newValue != nil || extras != nil { more.clipPath = newValue } } }

@@ -1,5 +1,6 @@
 @testable import ExactKit
 @testable import ExactNavigation
+@testable import ExactDialogs
 @testable import ExactControls
 @testable import ExactPickers
 @testable import ExactWebViews
@@ -70,7 +71,7 @@ extension Presenter {
 
 #if os(iOS) || os(tvOS)
 extension Presenter {
-    /// The built-in dialog sheets (`DialogLink.make`'s default).
+    /// The dialog sheets `ExactDialogs` installs.
     var dialogHost: DialogSheets { dialogs as! DialogSheets }
 }
 #endif

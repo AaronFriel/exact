@@ -700,9 +700,13 @@ impl<D: DataSource> Links<D> {
 /// The capabilities `plan` uses that `linked` lacks, by name; `None` when
 /// it links them all. A `data:` image that is an SVG uses SVG, as the bake
 /// counts it, so a plan applied after the bake is held to the same rule; a
-/// bundled asset's bytes are the bake's alone to read.
+/// bundled asset's bytes are the bake's alone to read. On the Mac, what its
+/// core presents itself ([`Uses::MAC_CORE`]) is never missing.
 pub fn missing(plan: &exact_plan::Plan, linked: Uses) -> Option<String> {
     let mut uses = exact_runner::uses::apple_uses(plan);
+    if cfg!(target_os = "macos") {
+        uses = uses.beyond(Uses::MAC_CORE);
+    }
     let data_svg = exact_runner::uses::image_sources(plan)
         .iter()
         .any(|source| {
@@ -935,6 +939,18 @@ mod tests {
             assert_eq!(missing(plan, Uses::NONE).as_deref(), Some(name));
             assert_eq!(missing(plan, ALL), None);
         }
+    }
+
+    /// A `dialog` is the dialogs family's on iOS and tvOS; the Mac's core
+    /// presents it in its top layer.
+    #[test]
+    fn a_dialog_is_missing_only_where_its_family_presents_it() {
+        let dialog =
+            contract::compile("component A\n  view\n    dialog id=\"d\"\n      text \"a\"\n")
+                .unwrap();
+        let expected = (!cfg!(target_os = "macos")).then_some("dialogs");
+        assert_eq!(missing(&dialog, Uses::NONE).as_deref(), expected);
+        assert_eq!(missing(&dialog, ALL), None);
     }
 
     /// The grammars a native artifact links by use follow the use-set; Apple

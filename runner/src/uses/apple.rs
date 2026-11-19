@@ -234,6 +234,17 @@ pub fn apple_uses(plan: &Plan) -> Uses {
             )
         }),
     );
+    // HTML's `dialog`: the host makes it a sheet unless its rows make it a
+    // confirmation when it opens (`MenuHost.isSheet`), and the author's box
+    // whatever its rows once its author paints it, so any `dialog` can be one.
+    add(
+        Capability::Dialogs,
+        plan.bindings.iter().any(|b| {
+            b.kind == BindingKind::Prop
+                && b.id == PropId::SemanticTag as u16
+                && can_be(plan, &b, |v| v == "dialog")
+        }),
+    );
     // A swipe row, a reorder group, a reorder grip and a list whose rows
     // are cells (iOS draws them, LLP 1115.000 D16) reach the family without
     // a windowed list.
