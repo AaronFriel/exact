@@ -1,10 +1,16 @@
 # Exact
 
-**Write CSS and declarative UI once. Ship real native apps on the web, iOS, macOS, and Linux — with Android and Windows in early form — and let coding agents build, run, see, and test them on every platform.**
+**The all-platform app framework. Agent native. Built for speed. No compromises.**
 
-Exact is a cross-platform app framework built around a simple split: you describe interfaces in **Contract**, a small declarative language using CSS layout and property names, and you write data logic in **TypeScript or Rust** (or declare plain HTTP reads directly in Contract with no data code at all).
+Exact is an **all-platform** framework for building real apps on the web, iOS, macOS, and Linux — with Android and Windows in early form, plus tvOS, watchOS, and the terminal.
 
-On the web, Exact compiles your app to one ES module over a ~20 KB runtime that drives the browser's own DOM and CSS. On iOS and macOS, it renders real UIKit and AppKit views and system controls. On Linux, Android, and Windows, Exact's painter draws the interface directly. No platform uses a webview or a JavaScript bridge in the UI, and no app JavaScript runs before the first frame.
+Exact is not a "cross-platform" framework. Cross-platform tools usually trade away each platform's strengths to maintain a lowest common denominator. Exact takes the opposite approach: build something **excellent on every platform on its own terms** — real DOM on the web, real UIKit on iOS, real AppKit on macOS, direct GPU/CPU rendering on Linux, Android, and Windows. Being **all-platform** is simply the side effect of getting every platform right from one source.
+
+Everything in Exact is built around three priorities:
+
+1. **[Agent Native](#1-agent-native)** — Built from the ground up so coding agents can build, run, see, operate, and verify real apps on every platform through one deterministic loop.
+2. **[Speed is King](#2-speed-is-king)** — 100 ms cold starts, 100 ms edit-to-present reloads, zero app JavaScript before first pixel, and a ~20 KB web runtime, held to hard budgets.
+3. **[No Compromises — Build Exactly What You Want](#3-no-compromises--build-exactly-what-you-want)** — Native platform controls with zero tells when you leave presentation unsaid; full creative control over layout, motion, graphics, shaders, and native platform objects whenever you want it.
 
 > [!NOTE]
 > Exact is pre-1.0 and changes daily. There is no packaged release, API stability guarantee, or backwards-compatibility layer yet — you build from a checkout of this repository.
@@ -27,28 +33,32 @@ On the web, Exact compiles your app to one ES module over a ~20 KB runtime that 
   </tr>
 </table>
 
-<sub>One <code>app.contract</code>, three hosts, captured by Exact's agent driver. <a href="https://github.com/expo/exact-templates/tree/main/softwear">Softwear</a> is a demo store from <a href="https://github.com/expo/exact-templates">exact-templates</a> (it displays Alternative Apparel's catalog, is not affiliated with that brand, and takes no orders or payments).</sub>
+<sub>One source, three platforms, captured by Exact's agent driver. <a href="https://github.com/expo/exact-templates/tree/main/softwear">Softwear</a> is a demo store from <a href="https://github.com/expo/exact-templates">exact-templates</a> (it displays Alternative Apparel's catalog, is not affiliated with that brand, and takes no orders or payments).</sub>
 
-### Supported platforms
+### Platforms
 
-| Platform | Status | Rendering |
+| Platform | Status | How it renders |
 |---|---|---|
-| **Web** | Works | Browser DOM and CSS (~20 KB runtime, zero layout engine shipped) |
+| **Web** | Works | Browser DOM (~20 KB runtime, zero layout engine shipped) |
 | **iOS** | Works (Simulator & device) | UIKit views, native controls, and system bars |
 | **macOS** | Works | AppKit views and native controls (no SwiftUI) |
 | **Linux** | Works | Exact's GPU/CPU painter on DRM/KMS consoles or headless |
 | **Android** | [Early](#early-android-and-windows) | Exact's painter on Android Canvas, with native Android text fields |
 | **Windows** | [Early](#early-android-and-windows) | Exact's painter in Fluent style on DirectX 11 or CPU |
 
-The repository also includes a **tvOS** variant of the iOS host, a **watchOS** host backed by SwiftUI, and a **terminal** host (`exact-terminal`) for apps written for the command line.
+The repository also ships a **tvOS** variant of the iOS host, a **watchOS** host backed by SwiftUI, and a **terminal** host (`exact-terminal`) for command-line apps.
 
 ### Contents
 
 - [Why Exact?](#why-exact)
+  - [1. Agent Native](#1-agent-native)
+  - [2. Speed is King](#2-speed-is-king)
+  - [3. No Compromises — Build Exactly What You Want](#3-no-compromises--build-exactly-what-you-want)
+  - [All-platform vs. cross-platform](#all-platform-vs-cross-platform)
 - [Quick start](#quick-start)
-- [Contract by example](#contract-by-example)
+- [The agent loop](#the-agent-loop)
+- [How an Exact app is written](#how-an-exact-app-is-written)
 - [How it works](#how-it-works)
-- [Built for coding agents](#built-for-coding-agents)
 - [Example apps](#example-apps)
 - [What works today, and what doesn't yet](#what-works-today-and-what-doesnt-yet)
 - [Building for iOS on Linux and WSL](#building-for-ios-on-linux-and-wsl)
@@ -58,19 +68,18 @@ The repository also includes a **tvOS** variant of the iOS host, a **watchOS** h
 
 ## Why Exact?
 
-Cross-platform frameworks usually force a trade-off: either you draw custom pixels everywhere and fight platform conventions, or you bridge a JavaScript UI tree across native views and pay for it at startup and runtime. Exact takes a different path built on three ideas.
+### 1. Agent Native
 
-### 1. Write the web, ship the platform
+Most frameworks bolt AI support on afterward with docs and wrapper scripts. Exact is designed around the agent loop so coding agents — and the humans directing them — can go from edit to verified native app on every platform without babysitting.
 
-Precedence is **author → platform → CSS default**. One test settles any dispute: *would someone who knows the platform notice?* If so, the platform wins.
+- **One driver operates every platform.** The same 10 operations (`tree`, `screenshot`, `tap`, `type`, `state`, `layout`, `logs`, `clock`, `prefer`, `perf`) drive the web, macOS, iOS Simulator, physical iPhones, Linux, Android, and Windows through `scripts/agent.mjs`.
+- **Deterministic, seekable time.** In driven mode, time only advances when the driver moves the clock (`clock +60000`, `clock settle`). Agents and tests never `sleep()` waiting for animations or network timers, and never flake on timing.
+- **One-command verification.** `bun exact.mjs verify` (and `verify ios`) builds the app, runs all authored tests, checks light and dark mode, multiple screen widths, accessibility trees, dynamic-type overflow, and scroll feel in a single structured report.
+- **Built to fit in context and fail clearly.** UI is declared in **Contract**, a compact, strictly typed language with no hidden side effects, no data races, and one explicit boundary to app logic. An entire app fits in a model's context window; development builds map every rendered node back to its declaring line; and the compiler reports up to 20 structured, actionable diagnostics per run.
 
-- **Layout and property names are CSS's.** A bare node behaves like a bare `<div>` (`display: block`, `box-sizing: content-box`, `flex-direction: row`, `flex-shrink: 1`). Property names use standard CSS spelling (`font-size`, `object-fit`, `text-overflow`, `line-clamp`, `light-dark()`, `env(safe-area-inset-top)`). Native layout, SVG, Canvas 2D, and authored motion are tested against Chrome.
-- **What you leave unsaid is the platform's.** Leave colors, font sizes, and control chrome off your views, and each host supplies its own: 17 pt label text and UIKit buttons on iOS, 13 pt labels and AppKit controls on macOS, the user's defaults on the web. Saying less makes an app look more at home.
-- **Platform strengths stay reachable.** Exact doesn't restrict you to the lowest common denominator: native modules expose platform widgets (such as MapKit), and access hatches hand your native code the underlying `UIView`, navigation controller, or DOM element.
+### 2. Speed is King
 
-### 2. Fast by construction
-
-Startup and iteration speed are enforced as hard budgets in [`rules/RULES.md`](rules/RULES.md), measured hourly, and regressions are bisected to the breaking commit.
+Startup speed and feedback speed are hard architectural constraints, not tuning passes added later. Every budget in [`rules/RULES.md`](rules/RULES.md) is checked continuously — the gate on every change, the rest hourly — and regressions are bisected automatically to the breaking commit.
 
 | Budget | Target |
 |---|---|
@@ -81,33 +90,41 @@ Startup and iteration speed are enforced as hard budgets in [`rules/RULES.md`](r
 | Blocking gate, warm, after a one-crate edit | 30 s |
 
 How Exact hits those numbers:
-- **Zero compilation or JS at boot.** Constant data is baked into the compiled plan at build time for the first frame. TypeScript is precompiled to Hermes bytecode and loads only after the first pixel.
-- **Pay only for what you use.** GPU canvases (`wgpu`), the Markdown editor, text-around-shapes, and browser SQLite are separate artifacts loaded on demand — never feature flags bloated into a core binary.
-- **A ~20 KB web runtime.** On the RealWorld ("Conduit") benchmark, Exact's web build ships 26 KB of code against React 19's 81 KB and becomes interactive ~300 ms before React SSR finishes hydrating.
+- **Zero compilation or app JS on the boot path.** Constant data is baked into the compiled plan at build time so the first frame paints immediately. TypeScript compiles to Hermes bytecode ahead of time and loads only after the first pixel.
+- **No webviews, no UI bridge.** Native hosts execute the compiled plan directly in Rust; the web host compiles the plan to a single ES module over a ~20 KB DOM runtime.
+- **Pay only for what you use.** Heavy capabilities — `wgpu` GPU canvases, the Markdown editor, text-around-shapes, browser SQLite, and the optional game engine — ship as separate on-demand artifacts rather than bloating every app.
+- **Measured against real apps.** On the RealWorld ("Conduit") benchmark, Exact's web build ships 26 KB of code against React 19's 81 KB and becomes interactive ~300 ms before React SSR finishes hydrating.
 
-### 3. One deterministic loop for humans and agents
+### 3. No Compromises — Build Exactly What You Want
 
-Exact assumes much of your app may be written or maintained with coding agents. Every host — web, iOS (Simulator and physical iPhone), macOS, Linux, Android, and Windows — speaks the same 10-operation driver (`scripts/agent.mjs`). In driven mode, time only advances when the driver moves the clock, so tests never sleep and never flake on timing.
+Exact refuses the classic false choice between "looks native, can't customize" and "fully custom, feels foreign." It makes every platform first-class so you never have to settle:
 
-### Compared with React Native and Flutter
+- **Native excellence with zero tells.** Precedence is **author → platform → default**. One test settles any dispute: *would someone who knows the platform notice?* Leave colors, type sizes, and control chrome unsaid and each host uses its real controls, bars, typography, gestures, haptics, keyboard behavior, and accessibility — UIKit on iOS, AppKit on macOS, the browser's own DOM on the web. Saying less makes an app feel completely at home.
+- **Full creative control when you want it.** When you *do* want a bespoke design, Exact gives you the full power of web-standard layout and styling (verified against Chrome), complete SVG, Canvas 2D on every host, spring physics and velocity-preserving gestures, text flowing around arbitrary shapes, custom fonts, and `wgpu` GPU shaders (Metal on Apple, WebGPU on the web).
+- **Direct access to every platform's native APIs.** Over 60 first-party packages in [`packages/`](packages) expose camera, passkeys, HealthKit, notifications, geolocation, maps, payments, speech, and more. Need a custom platform widget like MapKit? Drop in a *native module* (`exact-map`) backed by Swift, Kotlin, or Rust. Need to configure the exact `UIView`, navigation controller, or DOM node Exact created? Attach an *access hatch* (`hatch="name"`) and receive the real platform object directly.
+- **Choose your data stack.** Write app logic in **TypeScript** (running on Hermes natively and the browser engine on the web) or **Rust** (native or Wasm, with live replacement), or declare plain HTTP/GraphQL reads directly in Contract so native builds link no JavaScript engine at all.
+
+### All-platform vs. cross-platform
+
+Traditional cross-platform frameworks try to unify platforms by drawing their own world over every OS or bridging one runtime across disparate UI trees. Exact instead focuses on making each platform native, fast, and complete on its own — and **all-platform** falls out as a side effect.
 
 | | **Exact** | **React Native** | **Flutter** |
 |---|---|---|---|
-| **UI language** | Contract (declarative, no I/O) | JSX / React (JS or TS) | Dart widgets |
-| **Data / logic** | TypeScript, Rust, or declared HTTP | JavaScript / TypeScript | Dart |
-| **Layout model** | CSS (Chrome as reference) | Yoga (column-first, no shrink) | Custom constraint model |
+| **Approach** | All-platform: native excellence on each host, one source | Cross-platform JS bridge / JSI over native views | Cross-platform custom rendering engine |
+| **Agent workflow** | Built-in 10-op driver + seekable clock on every host | External tools per platform | `integration_test` |
+| **JS before first frame** | None (baked first frame, bytecode loaded after paint) | JS bundle boots before UI | N/A (Dart AOT) |
 | **Native controls** | UIKit / AppKit on Apple; painted on Linux, Android, Windows (native Android text fields) | Native views on iOS & Android | Custom-drawn widgets everywhere |
-| **Web output** | DOM & CSS (~20 KB ES module) | Separate `react-native-web` library | Canvas / WebAssembly |
-| **JS before first frame** | None | JS bundle boots before UI | N/A (Dart AOT) |
-| **Cross-host test driver** | Built-in, unified, seekable clock | External tools per platform | `integration_test` |
+| **Web output** | Browser DOM (~20 KB ES module) | Separate `react-native-web` library | Canvas / WebAssembly |
+| **UI & logic** | Contract UI + TypeScript, Rust, or zero-JS HTTP | JSX / React (JS or TS) | Dart widgets & logic |
+| **Layout** | Web-standard CSS (Chrome as reference) | Yoga (column-first, no shrink) | Custom constraint model |
 
-**Honest trade-offs:** React Native and Flutter are mature, with versioned releases, huge communities, and rich plugin ecosystems (`npm` and `pub.dev`). Exact has none of those yet. There is no JSX/React layer, React Native and Flutter plugins do not work (platform APIs come from first-party packages in [`packages/`](packages), while data modules can import pure-JS npm packages), and Android and Windows are early.
+**Honest trade-offs:** React Native and Flutter are mature ecosystems with versioned releases, massive communities, and vast plugin registries (`npm` and `pub.dev`). Exact is pre-1.0 and changes daily: there is no packaged CLI or JSX/React layer, React Native and Flutter plugins do not work (data modules can import pure-JS npm packages, while platform APIs come from [`packages/`](packages)), and Android and Windows are early.
 
 ---
 
 ## Quick start
 
-These instructions target macOS on Apple Silicon. Linux supports the web dev loop, the Linux host, and [iOS cross-compilation](#building-for-ios-on-linux-and-wsl). Windows supports the web dev loop and the Windows host (use WSL 2 with Ubuntu 24.04 for iOS cross-builds).
+These steps target macOS on Apple Silicon. Linux supports the web dev loop, the Linux host, and [iOS cross-compilation](#building-for-ios-on-linux-and-wsl). Windows supports the web dev loop and the Windows host (use WSL 2 with Ubuntu 24.04 for iOS builds).
 
 ### 1. Prerequisites
 
@@ -116,7 +133,7 @@ These instructions target macOS on Apple Silicon. Linux supports the web dev loo
   ```sh
   curl -fsSL https://bun.sh/install | BUN_INSTALL=~/.bun-1.4.2 bash -s bun-v1.4.2
   ```
-- **Xcode & Swift** *(macOS Apple builds only)*: Swift 6.4+ and the platform SDKs you target — macOS 26.0, iOS 27.1, or tvOS 27.0 ([`host/apple/devices.mjs`](host/apple/devices.mjs)). `DEVELOPER_DIR` or `TOOLCHAINS` overrides `xcrun`'s default.
+- **Xcode & Swift** *(macOS Apple builds only)*: Swift 6.4+ and the SDKs for each platform you target — macOS 26.0, iOS 27.1, or tvOS 27.0 ([`host/apple/devices.mjs`](host/apple/devices.mjs)). `DEVELOPER_DIR` or `TOOLCHAINS` overrides `xcrun`'s default.
 
 ### 2. Clone and run one-time setup
 
@@ -126,9 +143,22 @@ cd exact
 bun scripts/exact.mjs setup
 ```
 
-`setup` installs everything else once: the pinned Rust toolchains and targets, `wasm-bindgen`, Binaryen (`~/.cache/exact/binaryen`), Bun dependencies, Playwright's Chromium for web driving (`CHROME` overrides it), offline crate caches, and attested Hermes bundles for TypeScript apps on native hosts. Run `bun scripts/exact.mjs setup --check` at any time to see what is missing without modifying your machine.
+`setup` provisions the rest once: pinned Rust toolchains and targets, `wasm-bindgen`, Binaryen (`~/.cache/exact/binaryen`), Bun dependencies, Playwright's Chromium (`CHROME` overrides it), offline crate caches, and attested Hermes bundles for TypeScript apps on native hosts. Run `bun scripts/exact.mjs setup --check` at any time to check prerequisites without changing your machine.
 
-### 3. Create and run your first app
+### 3. Let a coding agent build your first app
+
+On a Mac with Xcode, Rust, and Bun installed, give Claude Code (or another coding agent) this prompt:
+
+```text
+Clone https://github.com/expo/exact and follow its README to make a new Exact
+app with `exact new`. Run `bun scripts/exact.mjs setup` once first. Make a todo
+list where I can add items, check them off, delete them, and see how many are
+left. Put the view in Contract and keep the list in `app.ts`. Write an
+`app.test.contract`, pass it on web, macOS, and the iOS Simulator with
+`scripts/agent.mjs`, then open the app for me on all three.
+```
+
+### 4. Or create and run one yourself
 
 ```sh
 bun scripts/exact.mjs new ../hello          # or `bun link` once, then `exact new ../hello`
@@ -140,17 +170,17 @@ bun exact.mjs mac --run                     # native macOS app
 bun exact.mjs ios --run                     # iOS Simulator (--device --run for a connected iPhone)
 ```
 
-`exact new` scaffolds a standalone app: `app.contract` (UI), `app.ts` (data), `app.json` (manifest), and `app.test.contract` (tests). Native builds compile inside `.exact/shells/` referencing your Exact checkout by path.
+`exact new` scaffolds a standalone app: `app.contract` (UI), `app.ts` (data), `app.json` (manifest), and `app.test.contract` (tests). Native builds compile inside `.exact/shells/`, referencing your Exact checkout by path.
 
-- **Build times:** The first web run compiles the toolchain in a few minutes; after that, edits rebuild and reload in ~100 ms. A first native macOS or iOS build takes 10–15 minutes on a laptop; subsequent builds take 1–2 minutes.
-- **Picking a simulator:** Set `EXACT_SIM` to a simulator name or UDID (or pass `--sim`) and keep it set for `agent.mjs ios`.
-- **Inspecting visually:** Tests verify behavior, not visual overflow. Run `bun exact.mjs agent <host> "screenshot out.png"` (or `bun exact.mjs verify`) to capture and check screenshots on each host.
-- **Next reading:** Read [`docs/start-here.md`](docs/start-here.md) for apps or [`docs/start-here-site.md`](docs/start-here-site.md) for websites. That single guide is the only required reading; everything else in [`docs/`](docs) is lookup reference.
+- **Build times:** The first web run builds the toolchain in a few minutes; edits then rebuild and reload in ~100 ms. A first native macOS or iOS build takes 10–15 minutes on a laptop; subsequent builds take 1–2 minutes.
+- **Choosing a simulator:** Set `EXACT_SIM` to a simulator name or UDID (or pass `--sim`) and keep it set for `agent.mjs ios`.
+- **Check pixels, not just assertions:** Run `bun exact.mjs verify` or `bun exact.mjs agent <host> "screenshot out.png"` to inspect rendered layouts on every host.
+- **Next reading:** [`docs/start-here.md`](docs/start-here.md) for apps or [`docs/start-here-site.md`](docs/start-here-site.md) for websites. That single guide is the only required reading; everything else in [`docs/`](docs) is lookup reference.
 
 <details>
 <summary>Run an included example app, serve on LAN, or upgrade an existing app</summary>
 
-**Run Caltrain (the v1 reference app) from the Exact checkout:**
+**Run Caltrain (the v1 reference app) directly from the Exact checkout:**
 ```sh
 bun host/web/dev.mjs                    # Web at http://127.0.0.1:8765/
 bun host/apple/build.mjs --run          # macOS
@@ -158,13 +188,13 @@ bun host/apple/build.mjs --ios --run    # iOS Simulator
 bun scripts/build-linux.mjs caltrain    # Linux (DRM/KMS console or headless)
 ```
 
-Add `--lan` to `dev.mjs` to open the dev server from a phone on your local network (unrecognized `Host` headers receive `421` to prevent DNS rebinding; use `--allow-host <name>` for tunnels). For Linux KMS rotation (`EXACT_ROTATE`) and VNC (`EXACT_VNC`), see [`docs/reference.md`](docs/reference.md#linux-kms-rotation-and-vnc).
+Add `--lan` to `dev.mjs` to open the page from a phone on your local network (unrecognized `Host` headers receive `421` against DNS rebinding; use `--allow-host <name>` for tunnels). For Linux KMS rotation (`EXACT_ROTATE`) and VNC (`EXACT_VNC`), see [`docs/reference.md`](docs/reference.md#linux-kms-rotation-and-vnc).
 
-**Run or install repo apps on macOS:**
+**Run or install in-repo apps on macOS:**
 ```sh
 bun scripts/exact.mjs list
 bun scripts/exact.mjs run markdown README.md
-bun scripts/exact.mjs install markdown  # puts `mdview` on PATH
+bun scripts/exact.mjs install markdown  # installs `mdview` on PATH
 ```
 
 **Upgrade an app created with an older checkout:**
@@ -178,24 +208,37 @@ See [Upgrading an inherited app](docs/start-here.md#upgrading-an-inherited-app) 
 
 </details>
 
-### 4. Or hand it to a coding agent
+---
 
-On a Mac with Xcode, Rust, and Bun installed, give Claude Code (or another coding agent) this prompt:
+## The agent loop
 
-```text
-Clone https://github.com/expo/exact and follow its README to make a new Exact
-app with `exact new`. Run `bun scripts/exact.mjs setup` once first. Make a todo
-list where I can add items, check them off, delete them, and see how many are
-left. Put the view in Contract and keep the list in `app.ts`. Write an
-`app.test.contract`, pass it on web, macOS, and the iOS Simulator with
-`scripts/agent.mjs`, then open the app for me on all three.
+Driving any built host uses one consistent command surface (`bun scripts/agent.mjs --help` lists every operation and flag):
+
+```sh
+# Drive an app from the Exact checkout
+bun host/web/build.mjs caltrain-web
+bun scripts/agent.mjs web tree "tap change-station" "type station-search Palo" \
+  "clock +60000" state "screenshot out.png"
+bun scripts/agent.mjs web --test apps/caltrain/app.test.contract
+
+# Drive an external app created with `exact new`
+EXACT_APP_DIR=../hello bun host/web/build.mjs hello-web
+EXACT_APP_DIR=../hello bun scripts/agent.mjs web --app hello tree "screenshot hello.png"
 ```
+
+- **Switch hosts with one argument:** Swap `web` for `macos`, `ios`, `linux`, `android`, or `windows` once that host is built. Android reader drives refuse film capture and play layers only with `--live` (record with `adb shell screenrecord`).
+- **Film motion deterministically:** `"screenshot film.png over 600 every 50"` advances the seekable clock and outputs a contact sheet (use `.apng` for an animation).
+- **No stale-build traps:** The driver refuses to drive a build older than its sources and prints the exact rebuild command.
+- **Performance tracing:** `perf` attributes work by plan site, `perf frames` reports game frame pacing, and `trace` inspects captures saved from a running app or connected phone.
+- **Opt-in friction notes:** An app's `AGENTS.md` asks agents to log rough edges with `bun exact.mjs feedback note "<what happened>"`. Notes stay local in `.exact/` with only Exact's commit and the last command's verb, exit code, and duration — never code or command output. Sending to Expo is opt-in (`bun exact.mjs feedback never` disables it per project; `EXACT_FEEDBACK=0` disables it machine-wide; see [`docs/diary.md`](docs/diary.md)).
 
 ---
 
-## Contract by example
+## How an Exact app is written
 
-The smallest useful Exact app is a single file. It declares no color, font, or size, so each platform draws its own native button:
+Exact separates declarative UI (**Contract**) from data logic (**TypeScript**, **Rust**, or declarative HTTP). Contract uses standard CSS layout and property names so agents and web developers already know the vocabulary — without shipping a browser engine to native platforms.
+
+The smallest useful app is a single file. It specifies no color, font, or size, so every platform draws its own native button:
 
 ```contract
 component App
@@ -209,7 +252,7 @@ component App
 
 ### A complete Todo app
 
-Here is a full app across three files — `app.contract` (UI), `app.ts` (data), and `app.test.contract` (cross-platform test). Replace the generated files in an `exact new` app to run it on web, macOS, and iOS.
+Three files — `app.contract` (UI), `app.ts` (data), and `app.test.contract` (all-platform test). Replace the starter files in an `exact new` app to run and test it on web, macOS, and iOS.
 
 ```contract
 // app.contract — view, state, and actions. No colors or control sizes:
@@ -312,11 +355,11 @@ test "add, finish and delete"
   </tr>
 </table>
 
-The view never mutates the list directly. Actions `send` a typed *mutation* across the data seam, `app.ts` updates state and returns a checked shape, and `refreshes todos` re-reads the list. To persist across launches, grant `sqlite.open app:/data/todos.db` and use `storage.sqlite` (see [Fieldnotes](apps/fieldnotes)).
+The view never mutates the list directly. Actions `send` a typed *mutation* across the data seam, `app.ts` updates its state and returns a validated shape, and `refreshes todos` re-reads the list. To persist across launches, grant `sqlite.open app:/data/todos.db` and use `storage.sqlite` (see [Fieldnotes](apps/fieldnotes)).
 
-If a source is a single HTTP request, you don't need `app.ts` at all: declare the `source` in `app.contract` with its URL and JSON pointer, and native builds link no JavaScript engine. See [the declared-source recipe](docs/recipes/declared-source.md) and [Weather Now](apps/weather-now).
+If a source is a single HTTP request, skip `app.ts` altogether: declare the `source` in `app.contract` with its URL and JSON pointer, and native builds link no JavaScript engine. See [the declared-source recipe](docs/recipes/declared-source.md) and [Weather Now](apps/weather-now).
 
-### Language at a glance
+### Contract at a glance
 
 | Construct | Purpose |
 |---|---|
@@ -327,21 +370,17 @@ If a source is a single HTTP request, you don't need `app.ts` at all: declare th
 | `source` | Declarative HTTP/GraphQL source in Contract itself — no `app.ts` required. |
 | `action` / `task` | State transitions (`action`) and scheduled work (`every(1000, tick)`, `after(ms, a)`, `every(frame, a)`). |
 | `view` | Indented elements, `if … else`, keyed `for … key=…`, `match`, and component calls. |
-| `style` / `class=` | Named CSS property sets with no cascade; inline node attributes win. |
+| `style` / `class=` | Named property sets with no cascade; inline node attributes win. |
 | `fn` & stdlib | Pure single-expression helpers (no recursion) plus standard string/array methods (`xs.map`, `s.trim()`, `formatDate`, `formatNumber`; full list in [`plan/tables/format.json`](plan/tables/format.json)). |
 | `routes` | Router with retained per-tab stacks (`open`, `push`, `replace`, `back`, `top`). |
 | `font` / `use` | Compile-time font declarations and imports from sibling `.contract` files. |
 | `testId` | Stable handle for tests, the agent driver, and accessibility tools. |
 
-### Intentional boundaries
+### Guardrails that buy speed and reliability
 
-- **No JavaScript or I/O in views.** Expressions are pure. Side effects happen only in actions (state writes, `send`, `refresh`, or commands like `focus()` and `share()`).
-- **No loops in actions, no `await`.** Lists belong in keyed `for` views, transforms in `derive` or `fn`, and async/heavy work in data sources. Because plans are static and pure, they can be baked, diffed, inspected, and executed identically across hosts.
-- **Native modules and access hatches, not escape hatches.** Need a platform widget like MapKit? Register a hyphenated *native module* tag (`exact-map`) backed by Swift, Kotlin, or Rust. Need to configure the underlying `UIView`, navigation controller, or DOM element Exact created? Mark the node `hatch="name"` to receive it via an *access hatch*.
-
-### Compiler diagnostics
-
-Contract reports up to 20 independent errors per run and tells you the web-standard spelling when you guess wrong:
+- **No JavaScript or I/O in views.** Expressions are pure. Effects occur only in actions (state writes, `send`, `refresh`, or commands like `focus()` and `share()`).
+- **No loops in actions, no `await`.** Lists belong in keyed `for` views, transforms in `derive` or `fn`, and async or heavy work in data sources. Because plans are static and pure, they bake cleanly, start fast, and run identically everywhere.
+- **Compiler that teaches back.** One `contract build` reports up to 20 independent errors with stable IDs and exact suggestions:
 
 ```sh
 $ cargo run -q -p contract -- build app.contract
@@ -349,7 +388,7 @@ app.contract:4:5 [type-assign] `count` is `number`, cannot assign `string`
 app.contract:7:23 [lower-unknown-attr] `text` has no attribute `size`; `size` is spelled `font-size` here, the web's name
 ```
 
-Subcommands include `build --json`, `symbols`, `fmt` (source-preserving), `vocab` (tag/property card), `types` (`app.contract.d.ts`), and `rust` (Rust shape bindings). Learn more in [`docs/contract-for-humans.md`](docs/contract-for-humans.md), [`docs/contract-for-agents.md`](docs/contract-for-agents.md), [`docs/contract-grammar.md`](docs/contract-grammar.md), and [`docs/recipes/`](docs/recipes/).
+Other CLI subcommands: `build --json`, `symbols`, `fmt` (source-preserving), `vocab` (tag/property card), `types` (`app.contract.d.ts`), and `rust` (Rust shape bindings). Deep dives: [`docs/contract-for-humans.md`](docs/contract-for-humans.md), [`docs/contract-for-agents.md`](docs/contract-for-agents.md), [`docs/contract-grammar.md`](docs/contract-grammar.md), and [`docs/recipes/`](docs/recipes/).
 
 ---
 
@@ -372,38 +411,11 @@ flowchart LR
 ```
 
 1. **Contract compiler (`contract/`):** Four passes (syntax → types → analysis → lowering) compile `.contract` files into a *plan* of tables and bytecode. Constant data is baked into the plan at build time so the first frame needs nothing else.
-2. **Web target (`host/web-js/`):** Compiles the plan ahead of time into a single ES module over a ~20 KB runtime. The browser handles layout, CSS transitions, and painting directly.
-3. **Runner & kernel (`runner/`, `kernel/`):** On native hosts, a Rust VM executes the plan, manages keyed component instances, timers on a seekable clock, and the typed data seam. A columnar node arena computes CSS layout via a patched [Taffy](vendor/taffy/EXACT-PATCHES.md) using host text measurement (CoreText on Apple, cosmic-text/Parley on painted hosts).
-4. **Hosts (`host/`):** Apple hosts link a Rust static library under AppKit/UIKit presenters (`ExactKit`). Linux, Android, and Windows share Exact's painter (`host/painted/`, `host/ink/`).
-5. **Data seam (`js/`, `logic/`, `data/`):** TypeScript runs on precompiled Hermes bytecode natively and in the browser's JS engine on the web. Rust data crates run natively (or Wasm on web/iOS) and support live replacement. Declared HTTP sources require no data module at all. Capability **grants** gate network, files, SQLite, camera, and secrets.
-6. **Packages & add-ons (`packages/`, `gpu/`, `game/`):** Over 60 first-party packages expose platform APIs (camera, notifications, passkeys, geolocation, health, payments, speech, etc.). Optional heavy capabilities — `wgpu` GPU canvases, the Markdown editor, text-around-shapes, and the [game engine](game/README.md) — load on demand as separate artifacts.
-
----
-
-## Built for coding agents
-
-Every part of Exact's toolchain is designed so an AI coding agent can close the loop from edit to verified native app without a human babysitting it:
-
-- **One driver, every host:** `scripts/agent.mjs` exposes 10 operations — `tree`, `screenshot`, `tap`, `type`, `state`, `layout`, `logs`, `clock`, `prefer`, `perf` — across web, macOS, iOS (Simulator and physical device), Linux, Android, and Windows. Run `bun scripts/agent.mjs --help` for all flags.
-- **Seekable clock:** Time only moves when the agent says so (`clock +60000` or `clock settle`), eliminating flaky waits and making motion testable (`"screenshot film.png over 600 every 50"` captures a contact sheet or `.apng`).
-- **One-command verification:** `bun exact.mjs verify` (or `verify ios`) builds the app, runs all `*.test.contract` files, checks light/dark mode, multiple widths, accessibility trees, dynamic-type overflow, and scroll feel in a single structured report.
-- **Machine-readable everything:** `contract build --json` emits stable error IDs and ranges; development builds carry source maps from any rendered node back to its declaring line; the driver refuses stale builds and names the rebuild command.
-
-```sh
-# Drive an app directly from the Exact checkout
-bun host/web/build.mjs caltrain-web
-bun scripts/agent.mjs web tree "tap change-station" "type station-search Palo" \
-  "clock +60000" state "screenshot out.png"
-bun scripts/agent.mjs web --test apps/caltrain/app.test.contract
-
-# Or drive an external app created with `exact new`
-EXACT_APP_DIR=../hello bun host/web/build.mjs hello-web
-EXACT_APP_DIR=../hello bun scripts/agent.mjs web --app hello tree "screenshot hello.png"
-```
-
-Swap `web` for `macos`, `ios`, `linux`, `android`, or `windows` once that host is built. Android reader drives refuse film capture and play layers only with `--live` (record with `adb shell screenrecord`).
-
-**Agent friction notes:** An app's `AGENTS.md` invites agents to log rough edges with `bun exact.mjs feedback note "<what happened>"`. Notes stay local in `.exact/` with only Exact's commit and the last command's verb, exit code, and duration — never code or command output. Sending to Expo is opt-in (`bun exact.mjs feedback never` disables it per project; `EXACT_FEEDBACK=0` disables it machine-wide; see [`docs/diary.md`](docs/diary.md)).
+2. **Web target (`host/web-js/`):** Compiles the plan ahead of time into one ES module over a ~20 KB runtime. The browser handles layout, transitions, and painting directly.
+3. **Runner & layout kernel (`runner/`, `kernel/`):** On native hosts, a Rust VM executes the plan, manages keyed component instances, timers on a seekable clock, and the typed data seam. A columnar node arena computes layout via a patched [Taffy](vendor/taffy/EXACT-PATCHES.md) with host text measurement (CoreText on Apple, cosmic-text/Parley on painted hosts).
+4. **Native hosts (`host/`):** Apple hosts link a Rust static library under AppKit/UIKit presenters (`ExactKit`). Linux, Android, and Windows share Exact's painter (`host/painted/`, `host/ink/`).
+5. **Data seam (`js/`, `logic/`, `data/`):** TypeScript runs on precompiled Hermes bytecode natively and in the browser's engine on the web. Rust data crates run natively (or Wasm on web/iOS) and support live replacement. Capability **grants** gate network, files, SQLite, camera, and secrets.
+6. **Packages & on-demand artifacts (`packages/`, `gpu/`, `game/`):** Over 60 first-party packages expose native platform capabilities, while heavy add-ons (`wgpu` GPU canvases, Markdown editor, text-around-shapes, and the [game engine](game/README.md)) load only when used.
 
 ---
 
@@ -413,11 +425,11 @@ All in-repo apps live under [`apps/`](apps). Run any of them on the web with `bu
 
 ### Best apps to learn from
 
-Start with **[Shelf](apps/shelf)** — it specifies no colors or font sizes (`scripts/no-tells.mjs` enforces it), showing how an app that defers presentation to the platform looks native everywhere.
+Start with **[Shelf](apps/shelf)** — it specifies no colors or font sizes (`scripts/no-tells.mjs` enforces it), showing how leaving presentation to the platform produces a native look on every host.
 
 | App | What it demonstrates |
 |---|---|
-| [Shelf](apps/shelf) | Platform-native presentation with zero hardcoded colors or font sizes |
+| [Shelf](apps/shelf) | Zero-tell native presentation with no hardcoded colors or font sizes |
 | [Caltrain](apps/caltrain) | Rust data crate, authored tests, routes, Canvas 2D map, optional GPU sky |
 | [Weatherlight](apps/weatherlight) | TypeScript data with `fetch`, grants, and a `wgpu` sky shader |
 | [Weather Now](apps/weather-now) | Declarative HTTP sources in Contract — no `app.ts`, no JS engine |
@@ -470,7 +482,7 @@ All screenshots below were captured on the web host by `scripts/agent.mjs`.
   </tr>
   <tr valign="top">
     <td><a href="apps/reflow"><b>Reflow</b></a><br>Typography studies after Cheng Lou's Pretext demos: text flowing around moving orbs, a dragon, masonry, and magazine spreads.</td>
-    <td><a href="apps/textflow"><b>Textflow</b></a><br>CSS <code>shape-outside</code> and <code>wrap-flow</code> editorial layouts powered by one Rust walker shared across all hosts.</td>
+    <td><a href="apps/textflow"><b>Textflow</b></a><br>Text wrapping around arbitrary shapes via <code>shape-outside</code> and <code>wrap-flow</code>, powered by one Rust walker shared by every host.</td>
   </tr>
   <tr>
     <td><img src="docs/screenshots/markdown.webp" width="420" alt="Markdown reader"></td>
@@ -499,7 +511,7 @@ All screenshots below were captured on the web host by `scripts/agent.mjs`.
 | [Type Tour](apps/typetour) | Type specimen for Expose fonts | Zero JavaScript |
 | [Map Demo](apps/map-demo) | Native modules: MapKit on Apple, OpenStreetMap on web | |
 | [Carousel](apps/carousel) | Horizontal virtualized list of 25,000 cards | |
-| [Motion Gallery](apps/motion-gallery) | Animated GIF/WebP and CSS keyframes across hosts | |
+| [Motion Gallery](apps/motion-gallery) | Animated GIF/WebP and keyframe animations across hosts | |
 | [Update Lab](apps/update-lab) | Live replacement of Contract, TypeScript, and Rust in a running app | Hand-testing lab |
 | [Messages Stress](apps/messages-stress), [Completion Storm](apps/completion-storm), [Markdown Stress](apps/markdown-stress) | 100k-message histories, 128 parallel requests, 4 MiB documents | Opt-in stress workloads |
 | [Native Fixture](apps/native-fixture), [Auth Fixture](apps/auth-fixture) | Native module interface; OAuth (PAR, DPoP, PKCE) against local server | Test fixtures |
@@ -514,9 +526,9 @@ All screenshots below were captured on the web host by `scripts/agent.mjs`.
 ### Working
 
 - **Core hosts & embedding:** Web, iOS, macOS, and Linux, plus `ExactKit` for embedding Exact sessions inside existing Swift apps.
-- **Layout & typography:** CSS block, flex, grid, multi-column, `position: static`, `aspect-ratio`, declared fonts, and text flowing around shapes (`shape-outside`).
+- **Layout & typography:** Block, flex, grid, multi-column, `position: static`, `aspect-ratio`, declared fonts, and text flowing around shapes (`shape-outside`).
 - **Paint & GPU:** Gradients, shadows, `backdrop-filter`, glass materials, full SVG, Canvas 2D on every host, and lazy-loaded `wgpu` GPU canvases.
-- **Motion & gestures:** CSS transitions, springs, `@keyframes`, pan/swipe/pinch gestures with release velocity, layout transitions, exit animations, and drag-linked timelines (scroll-linked timelines are not yet wired).
+- **Motion & gestures:** Transitions, springs, `@keyframes`, pan/swipe/pinch gestures with release velocity, layout transitions, exit animations, and drag-linked timelines (scroll-linked timelines are not yet wired).
 - **Lists:** Vertical and horizontal virtualized lists, plus native grouped lists (`list appearance="auto"`) with platform separators, highlights, and swipe actions.
 - **Controls, media & camera:** Standard inputs, `select`, a WYSIWYG Markdown editor (web, macOS, iOS), animated images, video, file pickers, share sheets, and camera capture/recording via [`@exact/camera`](packages/camera/exact.json) and [`@exact/recording`](packages/recording/README.md) on web, iOS, macOS, and Android.
 - **Data, storage & auth:** TypeScript (main thread or worker), Rust, and zero-JS declared HTTP sources; grant-checked `fetch`, streams, files, SQLite (native and browser), Keychain secrets, OAuth sign-in, and per-tab routing.
@@ -575,7 +587,7 @@ Linux defaults to an ARM64 simulator target (`EXACT_IOS_SIM_ARCH=x86_64` selects
 
 Before contributing to Exact itself, read [`rules/RULES.md`](rules/RULES.md) and [`rules/DEFERRED.md`](rules/DEFERRED.md) (coding agents should also read [`AGENTS.md`](AGENTS.md)).
 
-- **One 30-second blocking gate:** Stage your changes and run `bun scripts/gate.mjs` (format, file-size caps, boot-graph count, incremental Cargo check, and fast unit suites). Everything heavier — full builds, affected suites, Contract difftests, app drives, XCTests, and cross-platform builds — runs hourly via `bun scripts/async.mjs`, which bisects regressions automatically.
+- **One 30-second blocking gate:** Stage your changes and run `bun scripts/gate.mjs` (format, file-size caps, boot-graph count, incremental Cargo check, and fast unit suites). Everything heavier — full builds, affected suites, Contract difftests, app drives, XCTests, and platform builds — runs hourly via `bun scripts/async.mjs`, which bisects regressions automatically.
 - **Verify by running:** Use `bun scripts/smoke.mjs <web|macos|ios|linux>` or `scripts/agent.mjs` to verify behavior on real hosts.
 - **Delete; don't deprecate:** No compatibility shims before 1.0, and no committed generated files.
 - **Documentation & issues:** Operational details live in [`docs/reference.md`](docs/reference.md). Issues are tracked on GitHub and under [`issues/`](issues) ([details](docs/issues.md)); see [`CONTRIBUTING.md`](CONTRIBUTING.md). Architectural decisions are recorded in numbered LLPs in the private `expo/exact-llp` repository (cloned into `llp/` by maintainers); public guides live in [`docs/`](docs).
@@ -586,8 +598,8 @@ Before contributing to Exact itself, read [`rules/RULES.md`](rules/RULES.md) and
 |---|---|
 | [`kernel/`](kernel) | Columnar node arena, wire frames, Taffy layout, and [`kernel/tables/schema.json`](kernel/tables/schema.json) (single authority for node types, properties, and opcodes) |
 | [`contract/`](contract) | Contract compiler (`syntax` → `types` → `analyze` → `lower`), CLI, and corpus |
-| [`plan/`](plan), [`runner/`](runner) | Plan binary format and cross-platform VM |
-| [`motion/`](motion) | CSS transitions, springs, and the seekable clock for native hosts |
+| [`plan/`](plan), [`runner/`](runner) | Plan binary format and VM that executes it on native hosts |
+| [`motion/`](motion) | Transitions, springs, and the seekable clock for native hosts |
 | [`host/`](host) | `web/`, `web-js/`, `apple/` (`ExactKit`, AppKit, UIKit), `linux/`, `painted/`, `ink/`, `windows/`, `android/`, `terminal/`, `render/` |
 | [`js/`](js), [`logic/`](logic), [`data/`](data) | TypeScript/Hermes executor, Rust logic modules, and the typed data seam |
 | [`packages/`](packages) | First-party platform packages (camera, notifications, passkeys, geolocation, maps, health, etc.) |
