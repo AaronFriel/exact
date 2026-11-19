@@ -348,4 +348,38 @@ Two cuts on the list are rulings, not designs, and are not being built: frame he
 (LLP 1079.000) and the panic machinery (nightly `build-std`, which LLP 1047.001 D9 declined).
 
 The size row is at 7,871,008 B and its ceiling at 7,970,000 B, both under the 8,000,000 B target. What is built
-or traced below that and not landed, and the runs the fleet could not do, are in QUEUE.md.
+or traced below that and not landed, and what the moves still owe, are in QUEUE.md.
+
+## Checked after closing
+
+Main at 83d7bcfd3, 2026-11-19.
+
+**Real input.** Production builds for the iOS simulator, each linked by its own plan, were driven with real HID
+events: a simulator (iPhone 18 Pro, iOS 27.0) inside a macOS guest whose SSH process may post events, so a click
+in the guest is a touch in the simulator.
+
+| app | what a touch did |
+|---|---|
+| hello | launches and draws |
+| Caltrain | a button opens the station list; a tapped field takes hardware keys; a tap pushes the web deck (an `iframe`); a left-edge swipe goes back |
+| Shelf | a segment filters; a row pushes its detail; an edge swipe pops it; a row swipe reveals Delete; `+` presents the route sheet, where typed text, a stepper and Save add the book to the list |
+| Markdown | a long press selects a word, with handles and Copy; Open… presents the document picker |
+| interaction gallery | a tapped photo opens its viewer; a held drag moves it and release sends it back; a card dragged by its grip to the list's edge scrolls the list and drops in a new place ("Placed photo-00000 at position 3") |
+| orientation fixture | Dialog presents the `dialog` sheet; Close leaves the page pixel-identical |
+| UI gallery | a grouped row pushes; a segment switches; the bar's back button pops; a long press lifts a tag with its menu |
+
+A long press on a link in the Markdown reader selects its word rather than offering the link's menu; the build at
+bba0b3a7d, before text selection moved, does the same. Caltrain's widget is listed in the simulator's widget
+gallery, draws its preview there, and on the home screen shows the app's published times. On the Mac (macOS 27.2
+in a guest), production Markdown Stress in its windowed mode takes a real drag as a selection across lines and a
+drag of the scroller's knob as a scroll that mounts the blocks it reaches.
+
+**The suites.** The gate passes (29.8 s). Production iOS, the all-linked development iOS build, tvOS and production
+macOS build. The reload tests, the runner (963), the Apple host (608), the kernel (662) and the production link
+test pass. The whole Mac and iOS XCTest suites ran, and every failure was rerun and compared with 02639b8ea,
+where the cuts began: none is one of these moves', and QUEUE.md names each with the commit it starts at.
+
+**The list engine's seam.** `bun scripts/metrics.mjs --scaling` at 3fd3821cb, before the seam, and at main, three
+runs each on an idle x86-64 Linux box: reorder, bump and topology at 300, 3,000 and 10,000 rows are within 3 % in
+runner update and layout time, with batches byte-identical. `--list-memory --collections`, eighteen repeats each:
+the median ratio over its phases is 1.006, and twenty full traversals of 1,000 and of 25,000 rows are 1.02.
