@@ -14,8 +14,8 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
 import { createServer, request } from 'node:http';
-import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, utimesSync, watch, writeFileSync } from 'node:fs';
-import { basename, dirname, relative, resolve } from 'node:path';
+import { copyFileSync, existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, utimesSync, watch as fsWatch, writeFileSync } from 'node:fs';
+import { basename, dirname, relative, resolve, sep } from 'node:path';
 import { acceptsHTML, appDocumentPath, webRequestURL } from '../../scripts/origin.mjs';
 import { appDigest, compilerError, compilerWarnings, INPUT_TREE, OUTPUT, listenOn, oneScheme } from '../../scripts/agent-launch.mjs';
 import { builtSettings } from '../../js/bake/src/__exact_env.mjs';
@@ -51,8 +51,11 @@ const CHECKPOINT_BYTES = 16 * 1024 * 1024, CHECKPOINTS = 8;
 const root = resolve(fileURLToPath(new URL('../..', import.meta.url)));
 // (What a build in `dist` keeps beside it, `dist.gen` and the rest, is no source: beside.mjs.)
 const skipped = new RegExp(String.raw`(^|\/)(target|dist|${besidePattern()}|node_modules|conformance)(\/|$)|(^|\/)\.|\.md$`);
+// Input rules and manifest paths use `/`, while fs.watch reports native separators.
+const watch = (path, options, notify) => fsWatch(path, options, (event, name) => notify(event, name == null ? name : name.replaceAll(sep, '/')));
+const backendFile = (name) => /^\.exact(?:\/backend-origin)?$/.test(name);
 /** The files beside app.json a setting is read from (`import.meta.env`, LLP 1153 D4): inputs, though dot files. */
-const settingsFile = (name) => /^\.env(?:\.local)?$/.test(String(name));
+const settingsFile = (name) => /^\.env(?:\.local)?$/.test(name);
 /** Whether an entry or its link target changed from `since` (ms) until now.
  * A replaced link counts even when its target is older. Status changes also
  * catch an older file renamed over an input. Future timestamps do not prove an
@@ -268,9 +271,14 @@ export async function devJs({ app, dist, port, host, origins, gate, lan, allowHo
   // once the watchers are on.
   let built, startMoved = false;
   for (let moved = false, tries = 1; ; moved = false, tries++) {
-    const input = (name) => name && ((!skipped.test(String(name)) && String(name) !== 'app.contract.d.ts') || /^\.exact(?:[\\/]backend-origin)?$/.test(String(name)) || settingsFile(name));
     const begun = Date.now();
-    const early = [watch(app.dir, { recursive: true }, (_, name) => { if (!moved && input(name) && movedSince(resolve(app.dir, String(name)), begun)) moved = true; }), watch(resolve(root, 'host/web-js'), { recursive: true }, (_, name) => { if (!moved && name && !skipped.test(String(name)) && movedSince(resolve(root, 'host/web-js', String(name)), begun)) moved = true; })];
+    const earlyWatch = (base, input) => watch(base, { recursive: true }, (_, name) => {
+      if (!moved && name && input(name) && movedSince(resolve(base, name), begun)) moved = true;
+    });
+    const early = [
+      earlyWatch(app.dir, name => (!skipped.test(name) && name !== 'app.contract.d.ts') || backendFile(name) || settingsFile(name)),
+      earlyWatch(resolve(root, 'host/web-js'), name => !skipped.test(name)),
+    ];
     try { built = await build(app, dist, () => false, null, tries < 3 ? () => moved : null, () => stopping); } finally { for (const w of early) w.close(); }
     if (stopping) await shutdown;
     startMoved = moved;
@@ -753,31 +761,31 @@ export async function devJs({ app, dist, port, host, origins, gate, lan, allowHo
   // a path not modified since the last build started is no edit.
   const changed = (base, skip = skipped, fresh = true) => (_, name) => {
     if (stopping) return;
+    const path = resolve(base, name ?? '');
     // A compiler input remains watched in dot directories and node_modules.
-    if (name && skip.test(String(name)) && !compilerInput(resolve(base, String(name)))
-      && !(base === app.dir && (/^\.exact(?:[\\/]backend-origin)?$/.test(String(name)) || settingsFile(name)))) return;
+    if (name && skip.test(name) && !compilerInput(path)
+      && !(base === app.dir && (backendFile(name) || settingsFile(name)))) return;
     // `.exact/` is an input only for `backend-origin`: the loop's own design
     // server makes the directory for its lock, which is none. An event for
     // either is an edit when that file's bytes (or its being there) differ
     // from the last build's, whatever its time says.
     let backendMoved = false;
-    if (base === app.dir && /^\.exact(?:[\\/]backend-origin)?$/.test(String(name))) {
+    if (base === app.dir && backendFile(name)) {
       if (backendOf() === backendSeen) return;
       backendMoved = true;
     }
     // The declarations a build writes beside app.ts, for an editor.
-    if (base === app.dir && String(name) === 'app.contract.d.ts') return;
+    if (base === app.dir && name === 'app.contract.d.ts') return;
     // An editor's temporary for a design beside it (an atomic save writes
     // `app.forma.tmp` and renames it over `app.forma`; its event can come
     // before or after the rename): never an input, whenever it comes.
-    if (name && temporaryOfDesign(resolve(base, String(name)))) return;
+    if (name && temporaryOfDesign(path)) return;
     // Crates can include any extension; declared inputs and input trees also keep their output-looking files.
-    if (base === app.dir && OUTPUT.test(String(name)) && !outputIsInput(String(name))) return;
+    if (base === app.dir && OUTPUT.test(name) && !outputIsInput(name)) return;
     // A package's events are all edits: a link replaced by one to an older
     // file is newer than nothing, and its target's time says nothing of it.
-    if (fresh && name && !backendMoved && !movedSince(resolve(base, String(name)), since)) return;
+    if (fresh && name && !backendMoved && !movedSince(path, since)) return;
     if (!timer) saved = Date.now();
-    const path = resolve(base, String(name ?? ''));
     edited.add(path);
     // A resident start that failed is tried again at the next request after
     // an edit: any, once it has exited; one to the app, which it builds
@@ -804,15 +812,15 @@ export async function devJs({ app, dist, port, host, origins, gate, lan, allowHo
   for (const file of new Set([...hostModuleSources(root, ['host/web/navigation.js']),
     ...['index.html', 'neutral.css', 'look.mjs', 'scheme.js'].map(name => `host/web/${name}`)])) {
     const path = resolve(root, file);
-    watchers.push(watch(path, changed(dirname(path))));
+    watchers.push(watch(path, {}, changed(dirname(path))));
   }
   // Compiler source trees and recorded files, wherever installed or linked.
   const packages = new Set();
   const compilerSources = new Set();
   // A source, or a directory holding one (its event names the directory).
-  const compilerInput = path => compilerSources.has(path) || [...compilerSources].some(s => s.startsWith(path + '/') || s.startsWith(path + '\\'));
+  const compilerInput = path => compilerSources.has(path) || [...compilerSources].some(s => s.startsWith(path + sep));
   const watchPackages = ({ trees = [], shallow = [], sources = [], roots = [] } = {}) => {
-    for (const source of sources) compilerSources.add(source);
+    for (const source of sources) compilerSources.add(resolve(source));
     for (const dir of trees) {
       if (packages.has(dir) || !existsSync(dir)) continue;
       packages.add(dir);
@@ -826,7 +834,7 @@ export async function devJs({ app, dist, port, host, origins, gate, lan, allowHo
       const key = `shallow:${dir}:${entry}`;
       if (packages.has(key) || !existsSync(dir)) continue;
       packages.add(key);
-      watchers.push(watch(dir, (_, name) => { if (String(name) === entry) changed(dir, /^$/, false)(_, name); }));
+      watchers.push(watch(dir, {}, (event, name) => { if (name === entry) changed(dir, /^$/, false)(event, name); }));
     }
     // Cargo reads can produce macOS notifications too. Its sources need a
     // changed entry or link target, rather than every notification. An
@@ -838,8 +846,8 @@ export async function devJs({ app, dist, port, host, origins, gate, lan, allowHo
       packages.add(key);
       const notify = changed(dir);
       watchers.push(watch(at, { recursive: !file }, (event, name) => {
-        if (file && String(name) !== basename(file)) return;
-        const path = name == null ? dir : resolve(dir, String(name));
+        if (file && name !== basename(file)) return;
+        const path = resolve(dir, name ?? '');
         if (!compilerInput(path) && !existsSync(path)) return;
         notify(event, name);
       }));
@@ -856,7 +864,7 @@ export async function devJs({ app, dist, port, host, origins, gate, lan, allowHo
   // built again now, its edits seen by the watchers from here.
   if (startMoved) { edited.add(resolve(app.dir, 'app.contract')); rebuild(); }
   // The one TypeScript configuration app.ts is checked with (js/bake/src/typescript.mjs).
-  watchers.push(watch(resolve(root, 'js/bake/src/typescript.mjs'), changed(resolve(root, 'js/bake/src'))));
+  watchers.push(watch(resolve(root, 'js/bake/src/typescript.mjs'), {}, changed(resolve(root, 'js/bake/src'))));
   // The page's side: reload on a new build, the errors of a failed one in an
   // overlay, and a beacon when the reloaded page's runtime is up. Its build
   // channel (as host/web/dev.js's): a pin's scheme is the system's, a rule
