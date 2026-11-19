@@ -470,7 +470,7 @@ public final class ExactView: NSView {
         // `light-dark()` pair puts no op on the wire when the scheme turns.
         session.presenter.toolbar.sync()
         // The app's `setScheme` arrives here, as the system's does; iOS's, through `tellPreferences` (LLP 1122 D4).
-        session.app.scheduleStatus()
+        session.app.buildFactsMoved()
     }
 }
 

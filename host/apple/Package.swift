@@ -84,7 +84,8 @@ let devTools: [SwiftSetting] = ProcessInfo.processInfo.environment["EXACT_UPDATE
 // ExactKit target does not compile the carrier or inspection implementation,
 // nor hatch diagnostics (LLP 1047.001 D11), nor the plan from a URL and its
 // live design: network plan loading is compiled only into dev-capable hosts
-// (LLP 1023 §8). Development keeps the same sources and API it has always had.
+// (LLP 1023 §8), nor the build channel that reports to the design server
+// over it. Development keeps the same sources and API it has always had.
 let agentSources = ProcessInfo.processInfo.environment["EXACT_UPDATE_TRUST"] == "production" ? [
     "ActivityAgent.swift",
     "Agent.swift",
@@ -97,6 +98,7 @@ let agentSources = ProcessInfo.processInfo.environment["EXACT_UPDATE_TRUST"] == 
     "AgentScrollProbe.swift",
     "AgentSensors.swift",
     "AgentSocketStartup.swift",
+    "BuildChannel.swift",
     "HatchDiagnostics.swift",
     "LiveDesign.swift",
     "PlanURL.swift",

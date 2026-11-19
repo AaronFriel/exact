@@ -933,7 +933,7 @@ public final class ExactSession {
             routerOp = nil
             notificationHost.replaceBackgroundActions(self)
             if booted { awaitingTree = true; resetHeld(); viewsEpoch += 1; forgetAppearances(); presenter.launchAutofocusReleased = false } // a fresh boot's autofocus waits again
-            booted = true; app.liveBooted(self)
+            booted = true; app.buildSessionBooted(self)
             text.commitFonts()
             appFileRoots = AppFiles.learn(runtime) // before the first frame's `app:/` images load (LLP 1069.002 D7)
         }
@@ -1043,7 +1043,7 @@ public final class ExactSession {
         awaitingTree = true // the tint a reset gives back is reported with the new tree
         resetHeld(); viewsEpoch += 1 // the teardown reaches no runtime; what it set off waits for `treeIsIn` (ResetGate)
         forgetAppearances()
-        booted = true; app.liveBooted(self)
+        booted = true; app.buildSessionBooted(self)
         app.lifecycle?.generationStarted(app, token: updateToken)
         autofocusHeld = restart
         sampler?.reset(); frameHealth.reset() // a new runner numbers its transactions afresh (LLP 1079 D3)
@@ -1199,7 +1199,7 @@ public final class ExactSession {
         let timed = sampler, began = CACurrentMediaTime()
         defer { if let timed, timed === sampler { timed.batch(batch.seq, ms: outermost ? (CACurrentMediaTime() - began) * 1000 : 0) }; logAlerts(batch.alerts); logJournal(batch.journal); relayStore(batch) }
         defer { if outermost { recordFrameHealthApply(batch, began: began) } }
-        if batch.facts { app.scheduleStatus() } // the app's own `setMode` or `setRootFontSize` (LLP 1122 D4)
+        if batch.facts { app.buildFactsMoved() } // the app's own `setMode` or `setRootFontSize` (LLP 1122 D4)
         if let must = batch.mustFinish { finishHold.moved(must) }
         HostLog.capabilities(self, batch)
         let outputs = SessionBatchOps(batch.ops)
