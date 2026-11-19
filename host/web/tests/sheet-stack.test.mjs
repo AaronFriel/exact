@@ -39,6 +39,24 @@ const stackPage = async (browser, options, source = read('../navigation.js')) =>
   return page;
 };
 
+for (const engine of ['chromium', 'firefox', 'webkit']) test(`${engine}: a component keeps a narrow dialog's actions at its foot`, async () => {
+  const browser = await suiteBrowser(engine);
+  try {
+    const page = await stackPage(browser, { viewport: { width: 400, height: 800 }, reducedMotion: 'reduce' });
+    for (const height of [200, 2000]) {
+      const [direct, wrapped] = await page.evaluate(height => {
+        const route = document.getElementById('first');
+        route.innerHTML = `<header><h2>Edit</h2><button>Save</button></header><div style="overflow:auto"><div style="height:${height}px">Content</div></div>`;
+        const direct = layout(route);
+        route.innerHTML = `<div style="display:flex;flex-direction:column">${route.innerHTML}</div>`;
+        return [direct, layout(route)];
+      }, height);
+      expect(direct.reachable).toBe(true);
+      expect(wrapped).toEqual(direct);
+    }
+  } finally { await browser.close(); }
+}, 90000);
+
 // iPadOS 27, two UIKit form sheets of one size: the covered one loses 16 pt per side and rises 10 pt, or as far as the
 // 32 pt it keeps from its window's top lets it; the next is 20 pt shorter than it is alone, which for one with a
 // preferred content size is that size, and its top stands 20 pt below the covered one's. So a card is 20 px shorter,
