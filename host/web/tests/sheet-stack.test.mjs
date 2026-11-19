@@ -739,6 +739,28 @@ for (const engine of ['chromium', 'firefox', 'webkit']) test(`${engine}: a dialo
   } finally { await browser.close(); }
 }, 90000);
 
+for (const engine of ['chromium', 'firefox', 'webkit']) test(`${engine}: a sheet scrim follows its stack between the root and a tabpanel`, async () => {
+  const browser = await suiteBrowser(engine);
+  try {
+    const page = await stackPage(browser, { viewport: { width: 400, height: 800 } });
+    const states = await page.evaluate(() => {
+      const nav = document.getElementById('nav'), routes = [...nav.children];
+      const scrim = el => el.getAttribute('data-exact-scrim');
+      const direct = scrim(nav);
+      nav.innerHTML = '<div role="tablist"><button role="tab" aria-controls="panel">Inbox</button></div><div role="tabpanel" id="panel">Loading</div>';
+      const panel = document.getElementById('panel');
+      select('2');
+      const loading = [scrim(nav), scrim(panel)];
+      panel.replaceChildren(...routes); select('2');
+      const tabbed = [scrim(nav), scrim(panel)];
+      nav.firstElementChild.remove();
+      panel.replaceChildren('Loading'); nav.append(...routes); select('2');
+      return [direct, loading, tabbed, [scrim(nav), scrim(panel)]];
+    });
+    expect(states).toEqual(['on', ['off', null], ['off', 'on'], ['on', 'off']]);
+  } finally { await browser.close(); }
+}, 90000);
+
 // A stack whose routes have all left goes, though the root they stood in stays: here two sheets of two sizes, so the
 // page is dimmed again, and then every child of the root replaced by a placeholder. A projection finds no route to
 // frame and leaves the root as it was; the stack's dim, its rules, its watch and its listener go all the same, at
@@ -774,6 +796,7 @@ for (const then of ['a projection', 'a resize']) test(`${engine}: a stack whose 
     const left = then === 'a projection' ? await page.evaluate(() => { replaced(); select('3'); return held(); })
       : (await page.evaluate(() => replaced()), await page.setViewportSize({ width: 1000, height: 1000 }), await page.evaluate(async () => { await new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done))); return held(); }));
     expect(left).toEqual({ dims: '', geometry: false, watched: 0, rules: 0, hears: 0 });
+    if (then === 'a projection') expect(await page.locator('#nav').getAttribute('data-exact-scrim')).toBe('off');
     await page.close();
   } finally { await browser.close(); }
 }, 90000);

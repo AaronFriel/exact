@@ -191,6 +191,13 @@ function selectedDetent(route) {
   }
   return chosen;
 }
+// Keep the scrim on its stack's parent so it can fade out after the last sheet leaves.
+function setScrim(parent, modal) {
+  const value = modal ? "on" : "off", previous = parent.getAttribute("data-exact-scrim");
+  if (value !== previous && (modal || previous !== null)) {
+    parent.setAttribute("data-exact-scrim", value);
+  }
+}
 /** The frame of `routes[index]`: its own detent, or its sheet's when it was pushed inside one; written only where it
  * changed. `shownIn` is the sheet each route shows in (`sheetAt`), `inUse` the sheets something shown is in,
  * `selected` the stack's shown route. The projection frames a stack's routes in order, and with the last one the
@@ -1234,8 +1241,13 @@ export const navigation = {
     }
     for (const { nav, key, at, list, panels, stacks, facts } of projections) {
       if (TABS) {
-        for (const panel of managed.get(nav) ?? []) {
+        const previous = managed.get(nav) ?? [];
+        if (SHEETS && panels.length && !previous.length) {
+          setScrim(nav, false);
+        }
+        for (const panel of previous) {
           if (!panels.includes(panel)) {
+            SHEETS && setScrim(panel, false);
             panel.style.visibility = "";
             setInert(panel, !!panel.authoredInert);
           }
@@ -1244,7 +1256,14 @@ export const navigation = {
       }
       if (key === undefined) {
         // No route is framed, so no stack of sheets is reached: one whose routes have left this root goes here.
-        SHEETS && sheetsLeft();
+        if (SHEETS) {
+          for (const [stack, routes] of stacks.entries()) {
+            if (!routes.length) {
+              setScrim(panels[stack] ?? nav, false);
+            }
+          }
+          sheetsLeft();
+        }
         continue;
       }
       // Every tab but the selected one stays mounted, hidden and inert.
@@ -1271,11 +1290,8 @@ export const navigation = {
           }
         }
         const modal = over[presented], beneath = routes.findLastIndex((r, i) => i < presented && !over[i]);
-        // The scrim under a presented sheet is its stack's parent's (neutral.css): written once a sheet has shown, so
-        // it fades out as the last one leaves.
-        const scrim = routes[presented]?.getAttribute("navigationPresentation") === "modal" ? "on" : "off", parent = viewParent(routes[0]);
-        if (SHEETS && parent && parent.getAttribute("data-exact-scrim") !== scrim && (scrim === "on" || parent.hasAttribute("data-exact-scrim"))) {
-          parent.setAttribute("data-exact-scrim", scrim);
+        if (SHEETS) {
+          setScrim(panels[stack] ?? nav, routes[presented]?.getAttribute("navigationPresentation") === "modal");
         }
         detailRows(routes, found);
         if (stack === at && list) {
