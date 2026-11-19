@@ -1,6 +1,6 @@
 // Reader atoms share the editor's icon source, metrics and placement (LLP 1045.000 D4).
-import CExact
 import CoreText
+import ExactKit
 #if os(macOS)
 import AppKit
 #else
@@ -51,30 +51,8 @@ extension TextEngine {
     }
 }
 
-extension NodeView {
-    /// A success changes paint; a failure also removes the reserved advance.
-    func atomIconReady(geometryChanged: Bool) {
-        invalidateText()
-        #if os(macOS)
-        needsDisplay = true
-        #else
-        setNeedsDisplay()
-        #endif
-        guard geometryChanged, let session = presenter?.session, session.booted,
-              session.state != .destroyed, !session.atomIconRemeasurePending else { return }
-        session.atomIconRemeasurePending = true
-        // All completions already queued on main share one geometry update.
-        DispatchQueue.main.async { [weak session] in
-            guard let session else { return }
-            session.atomIconRemeasurePending = false
-            guard session.booted, session.state != .destroyed else { return }
-            session.apply(session.runtime.on { session.runtime.read(exact_text_scale_changed(session.runtime.rt)) })
-        }
-    }
-}
-
 /// Immutable pixels captured before a line reaches any background painter.
-final class TextAtomIcon: NSObject, @unchecked Sendable {
+final class TextAtomIcon: NSObject, TextAtomIconPainting, @unchecked Sendable {
     let image: CGImage?
     let tinted: Bool
     let side: CGFloat, gap: CGFloat, capHeight: CGFloat
@@ -99,24 +77,19 @@ final class TextAtomIcon: NSObject, @unchecked Sendable {
         return CGRect(x: x + (rtl ? gap : 0) + (side - width) / 2,
                       y: (capHeight - height) / 2, width: width, height: height)
     }
-    static func draw(_ line: CTLine, in context: CGContext, ink: CGColor? = nil) {
-        for run in CTLineGetGlyphRuns(line) as! [CTRun] { draw(run, in: context, ink: ink) }
-    }
-    static func draw(_ run: CTRun, in context: CGContext, ink: CGColor? = nil) {
+    func draw(_ run: CTRun, in context: CGContext, ink: CGColor?) {
+        guard let image else { return }
         let attrs = CTRunGetAttributes(run) as NSDictionary
-        guard attrs[NSAttributedString.Key.exactHidden] as? Bool != true,
-              let icon = attrs[NSAttributedString.Key.exactAtomIcon] as? TextAtomIcon,
-              let image = icon.image, CTRunGetGlyphCount(run) > 0 else { return }
         var position = CGPoint.zero
         CTRunGetPositions(run, CFRange(location: 0, length: 1), &position)
-        let rect = icon.frame(at: position.x)
+        let rect = frame(at: position.x)
         context.saveGState()
         if let font = attrs[kCTFontAttributeName] {
             let font = font as! CTFont
-            context.clip(to: CGRect(x: position.x, y: -CTFontGetDescent(font), width: icon.side + icon.gap,
+            context.clip(to: CGRect(x: position.x, y: -CTFontGetDescent(font), width: side + gap,
                                     height: CTFontGetAscent(font) + CTFontGetDescent(font) - 1))
         }
-        if icon.tinted {
+        if tinted {
             context.clip(to: rect, mask: image)
             let color = ink ?? (attrs[NSAttributedString.Key.foregroundColor] as? PlatformColor)?.cgColor
                 ?? (attrs[kCTForegroundColorAttributeName] as! CGColor?) ?? CGColor(gray: 0, alpha: 1)
@@ -126,6 +99,3 @@ final class TextAtomIcon: NSObject, @unchecked Sendable {
     }
 }
 
-extension NSAttributedString.Key {
-    static let exactAtomIcon = NSAttributedString.Key("ExactAtomIcon")
-}

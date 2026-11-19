@@ -1474,12 +1474,12 @@ The generated `--embed` composition lists the capabilities to link.
 
 | Product | Capability | Installation |
 | --- | --- | --- |
-| `ExactMarkdown` | Markdown text and editing | `ExactMarkdown.install()` |
+| `ExactMarkdown` | Markdown text and editing, and its atoms' icons in text | `ExactMarkdown.install()` |
 | `ExactCollections` | Windowed lists, swipe rows, reordering rows (grips and groups) and iOS list row cells | `ExactCollections.install()` |
 | `ExactDrag` | Height and transform drags | `ExactDrag.install()` |
 | `ExactGroupedLists` | Native grouped lists | `ExactGroupedLists.install()` |
 | `ExactSurfaces` | GPU and Canvas surfaces | `ExactSurfaces.install()`; links `ExactImages`, which Canvas 2D images read through |
-| `ExactImages` | Image files, animated images and package pictures; icons in text | `ExactImages.install()` |
+| `ExactImages` | Image files, animated images and package pictures; the files icons in text read | `ExactImages.install()` |
 | `ExactPickers` | File inputs' picker, `saveFile` and the File System Access pickers | `ExactPickers.install()` |
 | `ExactMediaPicker` | Native media picking (the composition links `ExactPickers` with it) | `ExactMediaPicker.install()` |
 | `ExactAuthSession` | Authentication sessions | `ExactAuthSession.install()` |

@@ -267,7 +267,7 @@ extension NodeView {
                                   color: ink,
                                   language: presenter?.documentLanguage ?? "", flow: !flowShapes.isEmpty) { runs in
             guard props["markup"] == "markdown", let text else { return runs }
-            return text.atomIcons(runs, node: self)
+            return MarkdownLink.installed?.atomIcons(text, runs, node: self) ?? runs
         }
         spec.gatherShadows()
         cachedTextSpec = spec

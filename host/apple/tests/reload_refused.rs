@@ -55,6 +55,7 @@ fn hellos_binary_refuses_a_reload_into_a_family_and_keeps_its_plan() {
         (source(TRACING), "traces"),
         (plan("text \"a\" wakelock=\"screen\""), "wake_lock"),
         (plan("text \"a\" user-select=\"text\""), "text_selection"),
+        (plan("text \"**a**\" markup=\"markdown\""), "markdown"),
         (source(ANIMATED), "animations"),
         (
             plan("column navigationKey=\"a\"\n      text \"a\""),

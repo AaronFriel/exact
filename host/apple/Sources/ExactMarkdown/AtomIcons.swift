@@ -9,6 +9,7 @@
 // appearance, as a browser's `<img>` does not: an app gives a face another
 // source for another scheme.
 import CoreGraphics
+import ExactKit
 import Foundation
 import ImageIO
 #if os(macOS)

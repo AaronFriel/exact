@@ -55,6 +55,7 @@ fn an_all_linked_binary_reloads_from_hello_into_each_family() {
         ("file input", plan("input type=\"file\" id=\"f\"")),
         ("trace", source(TRACING)),
         ("wake lock", plan("text \"a\" wakelock=\"screen\"")),
+        ("markdown", plan("text \"**a**\" markup=\"markdown\"")),
         (
             "route",
             plan("column navigationKey=\"a\"\n      text \"a\""),
