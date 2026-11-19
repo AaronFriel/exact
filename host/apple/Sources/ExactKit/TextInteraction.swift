@@ -47,7 +47,7 @@ extension NodeView {
         #endif
     }
     // Accessibility needs the source, not a colour-resolved layout specification.
-    var paragraphText: String {
+    package var paragraphText: String {
         props["text"] ?? inlineText.lazy.filter(\.paints).map(\.text).joined()
     }
     /// What is spoken: hidden inline runs are omitted. `paragraphText` stays
@@ -62,7 +62,7 @@ extension NodeView {
     /// `text`, the slice of this paragraph's shaped text (`paragraphSpec`)
     /// from UTF-16 offset `start`, as it is copied: each image's U+FFFC its
     /// `aria-label` (LLP 1011.002 D4), omitting atom icons and their joiners.
-    func copiedText(_ text: String, from start: Int) -> String {
+    package func copiedText(_ text: String, from start: Int) -> String {
         let runs = paragraphSpec().runs
         guard runs.contains(where: { $0.box != nil }) else { return text }
         var labels = inlineText.filter { $0.lightRun.box != nil }.map(\.spoken).makeIterator()

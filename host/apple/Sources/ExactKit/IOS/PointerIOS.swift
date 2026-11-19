@@ -38,7 +38,8 @@ final class PointerRecognizer: UIGestureRecognizer {
     /// A sheet mount's observer for the presented route's logical
     /// ancestors: its node is the listener each touch resolves to.
     weak var relay: MountRelay?
-    weak var selection: SelectionDocument?
+    /// The shared selection surface this recognizer is on.
+    weak var selection: (any SharedSelectionSurface)?
     private var touch: UITouch?
     /// The held touch's id, DOM's `pointerId`: the mouse is 1, so a touch
     /// counts on from 2, a new one for each contact.
@@ -92,7 +93,7 @@ final class PointerRecognizer: UIGestureRecognizer {
             source.flatMap { LayoutHits.touched($0, at: touch.location(in: nil)) }
         }
         if touch == nil, let selection, let first = touches.first {
-            node = selection.paragraph(at: first.location(in: selection.surface)).flatMap { paragraph in
+            node = selection.paragraph(under: first).flatMap { paragraph in
                 guard let owner = selection.owner else { return nil }
                 // The owner and its ancestors already observe the physical surface.
                 return sequence(first: paragraph as UIView, next: { paragraph.presenter?.pointerParent(of: $0) ?? $0.superview })
@@ -140,8 +141,8 @@ final class PointerRecognizer: UIGestureRecognizer {
         } else if !lifetimes.allSatisfy({ $0() }) { presenter?.cancelledPressTouches.add(first) }
     }
     private static func source(_ touch: UITouch) -> UIView? {
-        guard let surface = touch.view as? SelectionSurface else { return touch.view }
-        return surface.input?.document?.paragraph(at: touch.location(in: surface)) ?? surface
+        guard let surface = touch.view as? any SharedSelectionSurface else { return touch.view }
+        return surface.paragraph(under: touch) ?? surface
     }
     /// One bubbling dispatch to `nodes`, innermost first, each still the
     /// tree's when its turn comes, until a handler calls `stopPropagation()`.
@@ -755,7 +756,7 @@ extension NodeView {
     /// action prevented (`Presenter.preventedTouches`): the view it went down
     /// on, and those it is in, until a turn after its lift (LLP 1005 §3).
     /// An action's own `focus()` (`Presenter.authoredFocus`) still reaches it.
-    func keepsFocus(from view: UIView) -> Bool {
+    package func keepsFocus(from view: UIView) -> Bool {
         guard presenter?.authoredFocus != true else { return false }
         return presenter?.preventedTouches.allObjects.contains { touch in touch.view.map { $0 === view || $0.isDescendant(of: view) } ?? false } ?? false
     }

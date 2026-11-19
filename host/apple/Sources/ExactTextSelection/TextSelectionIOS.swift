@@ -21,10 +21,12 @@
 // UIKit's. A shared input expands the selection across the element's paragraphs.
 #if os(iOS)
 import CoreText
+import ExactCore
+import ExactKit
 import UIKit
 
 /// The paragraphs that hold a text interaction, and the one selection.
-final class TextSelectionHost {
+final class TextSelectionHost: TextSelecting {
     private weak var presenter: Presenter?
     /// Oldest first.
     private(set) var texts: [SelectableText] = []
@@ -49,11 +51,14 @@ final class TextSelectionHost {
         return nil
     }
 
-    /// A touch hit-tested to `node` (`NodeView.hitTest`): selectable text
-    /// takes its interaction now, in time for this touch.
     func touched(_ node: NodeView) {
         guard text(for: node) == nil, admits(node) else { return }
         install(node)
+    }
+    func surface(for node: NodeView) -> UIView? { text(for: node)?.document?.surface }
+    func hasSelection(in node: NodeView) -> Bool { text(for: node)?.selected.length ?? 0 > 0 }
+    func interactionHolds(_ gesture: UIGestureRecognizer, on paragraph: NodeView) -> Bool {
+        text(for: paragraph)?.interaction.gesturesForFailureRequirements.contains { $0 === gesture } == true
     }
     @discardableResult
     func install(_ node: NodeView) -> SelectableText {
@@ -70,13 +75,12 @@ final class TextSelectionHost {
         texts.append(made)
         return made
     }
-    /// The node is leaving (destroyed, or parked for another row).
     func remove(_ node: NodeView) { if let held = text(for: node) { drop(held) } }
     private func drop(_ held: SelectableText) {
         texts.removeAll { $0 === held }
         held.detach()
     }
-    /// A batch was applied: text that changed drops its selection, text
+    /// After a batch: text that changed drops its selection, text
     /// that is no longer selectable gives its interaction back, and a
     /// selection whose paragraph was laid out again is shown where it is.
     func batchEnded() {
@@ -108,13 +112,20 @@ final class TextSelectionHost {
         }
         return held.reportable
     }
-    /// Copy: the selected text to the pasteboard. False with nothing selected.
     @discardableResult
     func copy(_ node: NodeView) -> Bool {
         guard let chosen = text(for: node)?.selectedText, !chosen.isEmpty else { return false }
         pasteboard.string = chosen
         return true
     }
+    #if EXACT_AGENT
+    func agentSelect(_ hit: UIView, at point: CGPoint, event: String) -> [String: Any]? {
+        guard let node = hit as? NodeView, admits(node) else { return nil }
+        if event == "contextmenu", node.contextMenuSource(at: node.convert(point, from: nil)) != nil { return nil }
+        guard let found = selectWord(in: node, at: node.convert(point, from: nil)) else { return nil }
+        return ["text": found.text, "start": found.range.location, "end": NSMaxRange(found.range)]
+    }
+    #endif
 }
 
 final class SelectablePosition: UITextPosition {
@@ -497,48 +508,4 @@ final class SelectableText: UIResponder, UITextInput, UITextInteractionDelegate 
     func copyDocument() { host.pasteboard.string = selectedText }
 }
 
-extension Presenter {
-    /// The agent's `tap <id> dblclick` or `contextmenu` on selectable text,
-    /// `point` in the window: the word there is selected, as a double tap
-    /// or a long press selects it, and the reply's `selection` says what
-    /// (`text`, and `start` and `end` in the node's own text, as
-    /// `selectionchange` has them). Nil when `hit` is not selectable text,
-    /// has no word there, or a long press belongs to its own or a row's menu.
-    func agentSelect(_ hit: UIView, at point: CGPoint, event: String) -> [String: Any]? {
-        guard let node = hit as? NodeView, textSelection.admits(node) else { return nil }
-        if event == "contextmenu", node.contextMenuSource(at: node.convert(point, from: nil)) != nil { return nil }
-        guard let found = textSelection.selectWord(in: node, at: node.convert(point, from: nil)) else { return nil }
-        return ["text": found.text, "start": found.range.location, "end": NSMaxRange(found.range)]
-    }
-
-}
-
-extension NodeView {
-    /// A touch hit-tested here (`hitTest`): selectable text is made ready
-    /// for it.
-    func touchedText() { presenter?.textSelection.touched(self) }
-    /// A row's menu wins a long press over selectable text; an authored
-    /// menu on the paragraph itself is the nearest menu. Disabled controls
-    /// or inert ancestry admit neither one.
-    var contextMenuSource: NodeView? { contextMenuSource(at: nil) }
-
-    func contextMenuSource(at point: CGPoint?) -> NodeView? {
-        guard let presenter, presenter.menus.eligible(self, contextMenu: true) else { return nil }
-        var next: UIView? = self
-        while let view = next {
-            if let node = view as? NodeView,
-               node.hasOwnContextMenu || point.map({ node.inlineContextTarget(at: node.convert($0, from: self)) != nil }) == true { return node }
-            next = presenter.listenerParent(of: view)
-        }
-        return nil
-    }
-    /// Dynamic failure ordering follows the current row, including a menu
-    /// added or removed after this paragraph took its text interaction.
-    package func gestureRecognizer(_ gesture: UIGestureRecognizer, shouldBeRequiredToFailBy other: UIGestureRecognizer) -> Bool {
-        guard gesture === contextRecognizer, let paragraph = other.view as? NodeView,
-              paragraph.contextMenuSource(at: other.location(in: paragraph)) === self,
-              let text = presenter?.textSelection.text(for: paragraph) else { return false }
-        return text.interaction.gesturesForFailureRequirements.contains { $0 === other }
-    }
-}
 #endif

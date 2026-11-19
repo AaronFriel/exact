@@ -711,7 +711,7 @@ extension Agent {
             if event == "dblclick", req["touch"] as? Bool == true, let zoomed = NodeView.zoomDoubleTap(hit, at: p) {
                 return ["tapped": Int(zoomed.id), "dblclick": "touch", "delivery": "recognized", "scrollZoom": Double(zoomed.scroll?.zoomScale ?? 1), "at": at]
             }
-            selection = presenter.agentSelect(hit, at: p, event: event)
+            selection = presenter.textSelection.agentSelect(hit, at: p, event: event)
             #endif
             // Delivered (a handler heard it, or it selected): a long press or a double tap lets a hold where it landed go (HeldState.swift).
             let landed = { MainActor.assumeIsolated { HeldState.input(at: hit) } }
@@ -776,7 +776,7 @@ extension Agent {
         if v.kind == "iframe" { return delivered(session.webviews.tap(v, request: req, at: at), hit) }
         #if os(iOS)
         // A finger on a number input's stepper steps it (LLP 1116.007 D4).
-        if plain, let text = hit as? NodeView, presenter.textSelection.text(for: text)?.selected.length ?? 0 > 0 {
+        if plain, let text = hit as? NodeView, presenter.textSelection.hasSelection(in: text) {
             presenter.textSelection.clear()
             return delivered(["tapped": Int(text.id), "at": at, "selection": "cleared"], hit)
         }

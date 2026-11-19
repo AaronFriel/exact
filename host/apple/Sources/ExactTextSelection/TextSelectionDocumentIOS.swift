@@ -1,4 +1,5 @@
 #if os(iOS)
+import ExactKit
 import UIKit
 
 /// One text input over prose that shares a selectable container. Its surface
@@ -55,12 +56,7 @@ final class SelectionDocument {
         surface.isAccessibilityElement = false
         surface.layer.zPosition = -1e6
         owner.container.insertSubview(surface, at: 0)
-        let pointer = PointerRecognizer(target: nil, action: nil)
-        pointer.selection = self
-        pointer.cancelsTouchesInView = false
-        pointer.delaysTouchesBegan = false
-        pointer.delaysTouchesEnded = false
-        surface.addGestureRecognizer(pointer)
+        surface.observePointers()
     }
     func contains(_ node: NodeView) -> Bool { parts.contains { $0.node === node } }
     func settle(host: TextSelectionHost) -> Bool {
@@ -144,9 +140,11 @@ final class SelectionDocument {
     }
 }
 
-final class SelectionSurface: UIView {
+final class SelectionSurface: UIView, SharedSelectionSurface {
     weak var input: SelectableText?
     private weak var touched: NodeView?
+    var owner: NodeView? { input?.document?.owner }
+    func paragraph(under touch: UITouch) -> NodeView? { input?.document?.paragraph(at: touch.location(in: self)) }
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         let hit = super.hitTest(point, with: event)
         return hit === self ? nil : hit

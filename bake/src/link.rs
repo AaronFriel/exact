@@ -173,7 +173,10 @@ pub(crate) fn production_uses<'a>(
 ///   (`host_work`, LLP 1047.001 D12), one placed on a worker, which answers
 ///   through continuations (LLP 1027.002 D1), or a native module's calls;
 /// - the native module family, which loads a module's Swift implementation,
-///   with the runner's module seam (`modules`).
+///   with the runner's module seam (`modules`);
+/// - on the Mac, text selection, whatever the plan: AppKit's document text
+///   is selectable when its author says nothing (LLP 1115 D8), so the Mac's
+///   selection is in its core and the family's product is iOS's alone.
 fn dependents(uses: Uses, inputs: &serde_json::Value, host_work: bool) -> Uses {
     if !apple(inputs) {
         return uses;
@@ -182,6 +185,9 @@ fn dependents(uses: Uses, inputs: &serde_json::Value, host_work: bool) -> Uses {
         .iter()
         .any(|key| inputs[key] == "worker");
     let mut uses = uses;
+    if inputs["platform"] == "macos" {
+        uses = uses.with(Capability::TextSelection);
+    }
     if host_work || placed || uses.has(Capability::Modules) {
         uses = uses.with(Capability::Io);
     }
@@ -440,7 +446,8 @@ mod tests {
     }
 
     /// Production hello, the size row's app, links nothing beyond the core
-    /// (LLP 1047.001 D10): every roster entry is absent from its binary.
+    /// (LLP 1047.001 D10): every roster entry is absent from its binary but,
+    /// on the Mac, text selection, which is the Mac's core.
     #[test]
     fn production_hello_links_no_capability() {
         let hello = contract::compile(include_str!("../../apps/hello/app.contract")).unwrap();
@@ -449,7 +456,11 @@ mod tests {
             let inputs = serde_json::json!({ "platform": platform, "grantCeiling": "" });
             let uses =
                 super::production_uses(&hello_dir, &hello, std::iter::empty(), &inputs, false);
-            assert_eq!(uses, exact_runner::Uses::NONE, "{platform}: {uses}");
+            let core = match platform {
+                "macos" => exact_runner::Uses::NONE.with(Capability::TextSelection),
+                _ => exact_runner::Uses::NONE,
+            };
+            assert_eq!(uses, core, "{platform}: {uses}");
         }
     }
 
@@ -479,7 +490,7 @@ mod tests {
         assert_eq!(required("ios", false), Some(serde_json::json!(["grid"])));
         assert_eq!(
             required("macos", true),
-            Some(serde_json::json!(["grid", "io"]))
+            Some(serde_json::json!(["grid", "io", "text_selection"]))
         );
         assert_eq!(required("linux", true), None);
         let mut linking = manifest.clone();

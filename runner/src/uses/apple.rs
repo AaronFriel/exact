@@ -21,7 +21,8 @@ use exact_plan::{BindingKind, BindingsRow, EventKind, Plan};
 /// layout that can reach the algorithm ([`lays_out_grid`]) selects,
 /// [`Capability::Effects`] a box's `filter` or what SVG uses,
 /// [`Capability::Drag`] a height or transform drag (a reorder is the
-/// lists'), and the native roster's entries. The browser lays out a grid itself, and the
+/// lists'), and the native roster's entries. [`Capability::TextSelection`] is
+/// iOS's reading; the bake adds it to every Mac set. The browser lays out a grid itself, and the
 /// other native hosts link the algorithm whole, so for them the capability
 /// is the rows' grammars.
 pub fn apple_uses(plan: &Plan) -> Uses {
@@ -118,6 +119,22 @@ pub fn apple_uses(plan: &Plan) -> Uses {
             b.kind == BindingKind::Style
                 && StyleId::from_bit(u32::from(b.id)) == Some(StyleId::PositionType)
                 && can_be(plan, &b, |v| v.trim().eq_ignore_ascii_case("sticky"))
+        }),
+    );
+    // iOS selects only text its author made selectable (LLP 1115.000 D11.6):
+    // a `user-select` that can be `text` or `all`, on a box or an inline
+    // run (`contain`, which the compiler refuses, reads as `text`). A
+    // decoration table paints a `textarea`, whose text is the field's.
+    add(
+        Capability::TextSelection,
+        plan.bindings.iter().any(|b| {
+            b.kind == BindingKind::Style
+                && StyleId::from_bit(u32::from(b.id)) == Some(StyleId::UserSelect)
+                && can_be(plan, &b, |v| {
+                    ["text", "all", "contain"]
+                        .iter()
+                        .any(|k| v.trim().eq_ignore_ascii_case(k))
+                })
         }),
     );
     // A background transfer (`@exact/background-transfer`) asks no device

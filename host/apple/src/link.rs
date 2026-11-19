@@ -810,6 +810,10 @@ mod tests {
             "column navigationKey=\"a\" navigationPresentation=\"modal\"",
             "on = false",
         );
+        let selectable = compile(
+            "text \"a\" user-select=(on ? \"text\" : \"auto\")",
+            "on = false",
+        );
         let placed = compile(
             "box grid-column=(on ? \"1 / span 2\" : \"auto\")",
             "on = false",
@@ -846,6 +850,7 @@ mod tests {
             (&frame, "web_views"),
             (&sound, "sound"),
             (&midi, "midi"),
+            (&selectable, "text_selection"),
         ] {
             assert_eq!(missing(plan, Uses::NONE).as_deref(), Some(name));
             assert_eq!(missing(plan, ALL), None);

@@ -231,11 +231,16 @@ pub enum Capability {
     /// navigation root's or a route's props (`navigationBack`,
     /// `navigationKey`, `navigationPresentation` and the rest). Native only.
     Navigation,
+    /// Selecting non-editable text (LLP 1115.000 D11.6): a `user-select`
+    /// that can be `text` or `all`, which iOS needs to make text
+    /// selectable. Native only; the Mac's set always names it, since
+    /// AppKit's document text is selectable unsaid.
+    TextSelection,
 }
 
 impl Capability {
     /// Every capability, in bit order.
-    pub const ALL: [Capability; 57] = [
+    pub const ALL: [Capability; 58] = [
         Capability::Markdown,
         Capability::Motion,
         Capability::Collections,
@@ -293,6 +298,7 @@ impl Capability {
         Capability::Sound,
         Capability::Midi,
         Capability::Navigation,
+        Capability::TextSelection,
     ];
 
     /// The name an entry, a refusal and a report use.
@@ -355,6 +361,7 @@ impl Capability {
             Capability::Sound => "sound",
             Capability::Midi => "midi",
             Capability::Navigation => "navigation",
+            Capability::TextSelection => "text_selection",
         }
     }
 
@@ -400,7 +407,8 @@ impl Uses {
         .with(Capability::WebViews)
         .with(Capability::Sound)
         .with(Capability::Midi)
-        .with(Capability::Navigation);
+        .with(Capability::Navigation)
+        .with(Capability::TextSelection);
 
     /// This set and `capability`.
     pub const fn with(self, capability: Capability) -> Uses {

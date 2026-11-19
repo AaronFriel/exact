@@ -7,6 +7,9 @@ import ExactCore
 @testable import ExactKit
 @testable import ExactImages
 @testable import ExactMarkdown
+#if os(iOS)
+@testable import ExactTextSelection
+#endif
 #if os(macOS)
 import AppKit
 #else
@@ -567,14 +570,14 @@ final class AtomReaderIconTests: XCTestCase {
         session.presenter.selection.copy()
         XCTAssertEqual(NSPasteboard.general.string(forType: .string), expected)
         #else
-        session.presenter.textSelection.touched(node)
-        let selection = try XCTUnwrap(session.presenter.textSelection.text(for: node))
+        session.presenter.selectionHost.touched(node)
+        let selection = try XCTUnwrap(session.presenter.selectionHost.text(for: node))
         selection.selectedTextRange = SelectableRange(NSRange(location: 0, length: shown.utf16.count))
         let board = UIPasteboard.withUniqueName()
         defer { UIPasteboard.remove(withName: board.name) }
-        session.presenter.textSelection.pasteboard = board
+        session.presenter.selectionHost.pasteboard = board
         XCTAssertEqual(selection.selectedText, expected)
-        XCTAssertTrue(session.presenter.textSelection.copy(node))
+        XCTAssertTrue(session.presenter.selectionHost.copy(node))
         XCTAssertEqual(board.string, expected)
         #endif
     }

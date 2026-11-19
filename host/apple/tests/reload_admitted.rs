@@ -67,6 +67,7 @@ fn an_all_linked_binary_reloads_from_hello_into_each_family() {
             "history",
             plan("column navigationKey=\"a\" navigationHistory=\"back\"\n      text \"a\""),
         ),
+        ("selectable text", plan("text \"a\" user-select=\"text\"")),
     ]
     .into_iter()
     .chain(media().map(|(next, name)| (name, next)))

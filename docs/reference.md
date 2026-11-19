@@ -1506,6 +1506,7 @@ The generated `--embed` composition lists the capabilities to link.
 | `ExactMIDI` | MIDI ports and a sequence's MIDI output | `ExactMIDI.install()` |
 | `ExactAnimations` | What Core Animation plays for a box: its CSS animations (`animation`, `@keyframes`), transitions, drags and spring motion, so any of `animations`, `transitions`, `motion`, `drag` or `timelines` links it; SVG's element animations play through it too | `ExactAnimations.install()` |
 | `ExactNavigation` | Route stacks, tabs and their bars, route modals; on the Mac route sheets, the list beside its detail, Back and Forward, the root tabs as the sidebar | `ExactNavigation.install()` |
+| `ExactTextSelection` | iOS's selection of text a `user-select` of `text` or `all` makes selectable (the Mac's is in `ExactKit`, and every Mac composition names it) | `ExactTextSelection.install()` |
 
 Development builds log a missing Markdown or drag installation once per session,
 with the product and installation call. Without it, Markdown remains literal

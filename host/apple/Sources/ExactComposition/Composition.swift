@@ -105,6 +105,9 @@ import ExactAnimations
 #if EXACT_LINK_NAVIGATION
 import ExactNavigation
 #endif
+#if EXACT_LINK_TEXT_SELECTION
+import ExactTextSelection
+#endif
 public enum ExactComposition {
     public static let app: ExactApp = {
         AgentLink.install()
@@ -219,6 +222,9 @@ public enum ExactComposition {
         #endif
         #if EXACT_LINK_NAVIGATION
         ExactNavigation.install()
+        #endif
+        #if EXACT_LINK_TEXT_SELECTION
+        ExactTextSelection.install()
         #endif
     }
 }

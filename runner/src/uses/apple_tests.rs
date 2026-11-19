@@ -129,6 +129,37 @@ fn a_wake_lock_is_a_wakelock_that_can_be_screen() {
     assert!(!uses(&plan("text \"a\" wakelock=\"screen\"")).has(Capability::WakeLock));
 }
 
+/// D10: iOS selects text only where `user-select` says `text` or `all`,
+/// on a box, an inline run or through a class; a computed value can be
+/// either, and `none` or `auto` select nothing.
+#[test]
+fn text_selection_is_a_user_select_that_can_be_text_or_all() {
+    let selects = |source: &str| {
+        let plan = contract::compile(source).unwrap_or_else(|e| panic!("{source}: {e:?}"));
+        apple_uses(&plan).has(Capability::TextSelection)
+    };
+    let view = |view: &str| format!("component A\n  state wide = true\n  view\n    {view}\n");
+    for (source, selected) in [
+        (view("text \"a\""), false),
+        (view("text \"a\" user-select=\"text\""), true),
+        (view("column user-select=\"all\"\n      text \"a\""), true),
+        (view("text\n      text \"Folder: \"\n      text \"/tmp\" user-select=\"all\""), true),
+        (view("text \"a\" user-select=(wide ? \"none\" : \"text\")"), true),
+        (view("text \"a\" user-select=\"none\""), false),
+        (view("text \"a\" user-select=\"auto\""), false),
+        // An article is the Mac's document text, not iOS's.
+        (view("article\n      text \"a\""), false),
+        (
+            "style Prose\n  user-select=\"text\"\n\ncomponent A\n  view\n    text \"a\" class=Prose\n".to_string(),
+            true,
+        ),
+    ] {
+        assert_eq!(selects(&source), selected, "{source}");
+    }
+    let plan = plan("text \"a\" user-select=\"text\"");
+    assert!(!uses(&plan).has(Capability::TextSelection));
+}
+
 /// D10: each native roster entry is selected by the rows that reach its
 /// family's code, a computed value by whatever it can be, and a plain text
 /// and button plan by none; no other host's set moves.

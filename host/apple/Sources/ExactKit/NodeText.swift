@@ -92,7 +92,7 @@ extension NodeView {
     }
     var paragraphOwner: NodeView { self }
 
-    func paragraphLayout() -> Paragraph? {
+    package func paragraphLayout() -> Paragraph? {
         #if os(macOS)
         if readerParagraph != nil || presenter?.session?.regions.owns(self) == true { return nil }
         #endif
@@ -153,7 +153,7 @@ extension NodeView {
     /// The props a paragraph's spec reads (`paragraphSpec`): setting one
     /// invalidates what was laid out from the old value, whoever asked first.
     static let paragraphProps: Set<String> = ["text", "markup", "atoms", "atomFaces", "atomStyles", "href", "fitScale"]
-    func paragraphSpec() -> Spec {
+    package func paragraphSpec() -> Spec {
         if let spec = cachedTextSpec { return spec }
         #if os(macOS)
         // In a table's selected row that AppKit draws emphasized, a role's ink is the selected item's (TableInkMac.swift).
@@ -275,8 +275,8 @@ extension NodeView {
     }
 
     /// A shaped-text offset in the node's source text, and back (LLP 1053 G5).
-    func sourceOffset(_ shaped: Int) -> Int { paragraphSpec().source.source(shaped) }
-    func shapedOffset(_ source: Int) -> Int { paragraphSpec().source.collapsed(source) }
+    package func sourceOffset(_ shaped: Int) -> Int { paragraphSpec().source.source(shaped) }
+    package func shapedOffset(_ source: Int) -> Int { paragraphSpec().source.collapsed(source) }
 }
 
 extension PlatformView {
