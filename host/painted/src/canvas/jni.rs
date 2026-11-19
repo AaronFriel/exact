@@ -322,6 +322,7 @@ macro_rules! canvas_jni {
             pub unsafe extern "system" fn Java_dev_exact_canvas_Native_frame(
                 env: *mut JNIEnv,
                 _class: jclass,
+                vsync: jboolean,
             ) -> jobject {
                 // The first frame the booting thread painted; then what a driver's
                 // request painted and the reader has not taken (`canvas/agent.rs`);
@@ -333,7 +334,7 @@ macro_rules! canvas_jni {
                 // app's own took it), never a stream queued before.
                 let own = waiting.is_none();
                 let ops = waiting.or_else(|| {
-                    $crate::canvas::agent::after_turn(with(|h| h.frame()).flatten())
+                    $crate::canvas::agent::after_turn(with(|h| h.frame(vsync == JNI_TRUE)).flatten())
                 });
                 if own {
                     $crate::presenter::preferences::scrub_frame_drawn();
@@ -408,10 +409,12 @@ macro_rules! canvas_jni {
             pub unsafe extern "system" fn Java_dev_exact_canvas_Native_animating(
                 _env: *mut JNIEnv,
                 _class: jclass,
+                vsync_only: jboolean,
             ) -> jboolean {
+                let vsync_only = vsync_only == JNI_TRUE;
                 // A stream a driver's request left is owed a turn to be taken in.
-                let waiting = $crate::canvas::agent::waiting();
-                flag(waiting || with(|h| h.animating()).unwrap_or(false))
+                let waiting = !vsync_only && $crate::canvas::agent::waiting();
+                flag(waiting || with(|h| h.animating(vsync_only)).unwrap_or(false))
             }
 
             /// One request of the agent API (LLP 1012; `canvas/agent.rs`), a

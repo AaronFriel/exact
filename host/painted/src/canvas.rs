@@ -1149,7 +1149,7 @@ const MOVES_MOUNTED: u32 = 6;
 impl<D: DataSource + Default> CanvasHost<D> {
     /// One turn: the presenter's work, then a recording when anything
     /// changed. `Some` is the new op stream (valid until the next call).
-    pub fn frame(&mut self) -> Option<Vec<u32>> {
+    pub fn frame(&mut self, vsync: bool) -> Option<Vec<u32>> {
         self.p.timer_visibility(false);
         // After the first frame: the windows' lead, realized off the frame.
         if self.painted_once && !self.lead && !self.responding {
@@ -1161,7 +1161,7 @@ impl<D: DataSource + Default> CanvasHost<D> {
         let p = &mut self.p;
         let _frame = Section::begin(c"exact frame");
         p.hold_collections(self.scrolled);
-        let frame = self.frame_held(now);
+        let frame = self.frame_held(now, vsync);
         self.p.hold_collections(false);
         if std::mem::take(&mut self.responding) {
             self.p.slice_collections(None, 0.0);
@@ -1169,7 +1169,7 @@ impl<D: DataSource + Default> CanvasHost<D> {
         frame
     }
 
-    fn frame_held(&mut self, now: f64) -> Option<Vec<u32>> {
+    fn frame_held(&mut self, now: f64, vsync: bool) -> Option<Vec<u32>> {
         // A frame a scroll step asks for: replies and pictures arrive through
         // [`CanvasHost::poll`] when their fds wake, so this one skips them.
         let quick = self.scrolled;
@@ -1189,7 +1189,7 @@ impl<D: DataSource + Default> CanvasHost<D> {
         }
         // The presenter's clock: the runner's frame tasks and timers, and
         // the hatches' tickets and `after`s.
-        if let Some(e) = p.reader_clock(now, agent::clock(p).is_none()) {
+        if let Some(e) = p.reader_clock(now, agent::clock(p).is_none(), vsync) {
             eprintln!("exact: {e}");
         }
         if quick {
@@ -1351,11 +1351,13 @@ impl<D: DataSource + Default> CanvasHost<D> {
         if self.p.module_pending() {
             self.p.first_pixel();
         }
-        updated || self.animating()
+        updated || self.animating(false)
     }
-    /// Whether another display frame is wanted.
-    pub fn animating(&self) -> bool {
-        // A moved paint owes a paint: the frame after scrolling stops.
+    /// Whether more work is wanted, or only work that must wait for vsync.
+    pub fn animating(&self, vsync_only: bool) -> bool {
+        if vsync_only {
+            return agent::clock(&self.p).is_none() && self.p.wants_frames();
+        }
         self.p.dirty()
             || self.p.scroll_end_due().is_some_and(|due| due <= self.now())
             || self.p.needs_animation_frame()

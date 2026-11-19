@@ -136,7 +136,9 @@ impl<D: DataSource + Default> CanvasHost<D> {
     /// Android's visibility and execution eligibility, composed by `Exact.executionEligible`
     /// from Activity and promoted service ownership. Release gated streams before returning.
     pub fn page_hidden(&mut self, hidden: bool, eligible: bool) {
-        self.force |= self.p.page_execution(hidden, eligible);
+        self.force |= self
+            .p
+            .page_execution(hidden, eligible, super::agent::seekable());
     }
 
     /// Whether the data module is active (`Native.dataActive`): 1, 0 while

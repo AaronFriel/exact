@@ -212,6 +212,7 @@ open class ExactActivity : Activity() {
     }
 
     private lateinit var requests: Requests
+    internal fun soundState() = requests.soundState()
 
     /** System Back goes where the app's routes send it ([Native.back], LLP 1115.001 D6). The callback is registered
      * only while the host says Back has somewhere to go in the app ([Requests.back]): at the first screen there is
@@ -570,7 +571,7 @@ open class ExactActivity : Activity() {
     }
 
     /** A driver's launch: the window's frames are measured for `perf frames` while it shows (LLP 1079.000 §6.2). */
-    private val measured by lazy { android.system.Os.getenv("EXACT_AGENT") == "1" }
+    private val measured by lazy { agentCarried() }
 
     /** The device a `perf frames report` names. */
     private fun frameIdentity(owner: Owner) {

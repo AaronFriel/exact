@@ -50,7 +50,8 @@ object Native {
      * in the window (x, y, width, height, in pixels), the colour behind it and in the edges it keeps out of (ARGB),
      * and 1 when its scheme is dark (the bars' icons are then light). */
     @JvmStatic external fun chrome(): IntArray?
-    @JvmStatic external fun frame(): ByteBuffer?
+    /** Publish pending work. A Choreographer turn also delivers frame tasks. */
+    @JvmStatic external fun frame(vsync: Boolean): ByteBuffer?
     @JvmStatic external fun poll(): Boolean
     /** Advance tasks without recording a frame; milliseconds until the next task, or -1 while idle. */
     @JvmStatic external fun background(applying: Boolean): Double
@@ -76,7 +77,8 @@ object Native {
     /** The frame rates GPU canvases ask for (`Surface::max_fps`) that changed since last asked: view and rate (0: the
      * display's) pairs, or null. */
     @JvmStatic external fun frameRates(): IntArray?
-    @JvmStatic external fun animating(): Boolean
+    /** Whether a turn is needed. With [vsyncOnly], whether it needs a Choreographer callback. */
+    @JvmStatic external fun animating(vsyncOnly: Boolean = false): Boolean
     @JvmStatic external fun owed(): Boolean
     /** The collection pass a scroll left; `limit` >= 0 slices it (rows past what shows per list), the scrolled list
      * leading toward `velocity` px/s. Bit 0: a paint is wanted; bit 1: rows are left for another slice. */
@@ -345,8 +347,8 @@ object Native {
      * `hatches::reader::act`'s): its answer, a ticket for a registration, -1 when refused. */
     @JvmStatic external fun hatchAct(node: Int, kind: Int, text: String?): Long
     /** One request of the agent API (LLP 1012), a JSON line as UTF-8, and its answer the same way: the Linux
-     * host's own handler (`host/painted/src/canvas/agent.rs`), on the host's thread. From the first one the host's turns
-     * run at the driver's clock, which only a `clock` request moves. [AgentDrive] calls it for a driver over adb. */
+     * host's handler (`host/painted/src/canvas/agent.rs`), on the host's thread. A seekable drive owns the clock
+     * except during a frame capture. A `--live` drive uses the display clock from boot. [AgentDrive] serves adb. */
     @JvmStatic external fun agent(line: ByteArray): ByteArray
     /** What an [ExactForma] asks (LLP 1121 D12), on the host's thread: `{"view": id or 0, "names": [..]}`, answered
      * `{"inputs": "<u64>", "colors": {name: ARGB or null}}`, each colour as exact2 paints it at that view (its pinned

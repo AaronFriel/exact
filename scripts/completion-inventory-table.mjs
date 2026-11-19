@@ -1279,6 +1279,7 @@ export const classifications = [
   group("session lifecycle", ["one-shot"], "session creation, boot, replacement or teardown; no independent completion", "UI-owned",
     "The named public runner-crate source is the session lifecycle API or its value/admission helper. Runner boot constructs session state (runner/src/runner.rs); host ABI buffers and configuration belong to that runtime handle.", [
     ["runner:runner/src/activation.rs", "offers_tools runtime_kept wake"],
+    ["runner:runner/src/agent.rs", "carried"],
     ["runner:runner/src/device.rs", "device_grants granted is_device_line keeps_no_answers permissions_policy"],
     ["runner:runner/src/runner/links.rs", "Runner::covers"],
     ["runner:runner/src/grants.rs", "admitting admitting_request declared Grants::lines Grants::presence Grants::secrets launch_names normalized_json parse parse_with redacted refusal session_admits validate with_declared"],
@@ -1298,7 +1299,7 @@ export const classifications = [
   ]),
   group("inspection", ["one-shot"], "synchronous session inspection or diagnostics; no delivered completion", "UI-owned",
     "The named public runner-crate source is the inspection API or its value/admission helper. The declaration reads or reports the current session. It does not establish a durable operation.", [
-    ["runner:runner/src/agent.rs", "base64 frames handle holds logs logs_request node node_request picker shown_value state state_with tags tree tree_request unbase64"],
+    ["runner:runner/src/agent.rs", "base64 frames handle holds logs logs_request node node_request picker shown_value state state_at state_with tags tree tree_request unbase64"],
     ["runner:runner/src/json.rs", "error field_bool field_num field_str num quote typed_json untyped_json"],
     ["runner:runner/src/agent/row.rs", "row_json"],
     ["runner:runner/src/agent/tree.rs", "tagged"],

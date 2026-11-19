@@ -864,6 +864,8 @@ tests take about two seconds on the web host. Each operation is one shell argume
 quote it: `"type new-todo Buy milk"` types `Buy milk` (everything after the target is
 the text). `"screenshot film.png over 600 every 50"` films motion as a contact sheet; use
 an `.apng` name to get an animation.
+Android reader drives refuse film and play layers only with `--live`. Record a live drive
+or normal run with `adb shell screenrecord`.
 
 To drive an app made with `exact new` from this checkout, point `EXACT_APP_DIR` at it:
 

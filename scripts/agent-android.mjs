@@ -202,6 +202,7 @@ const quote = (s) => `'${String(s).replace(/'/g, "'\\''")}'`;
  * the app's server on this Mac are reached through `adb reverse` for the drive (`reversedPorts`). */
 export function androidDeploy(app, bin, env) {
   if (bin.endsWith('.apk')) return readerDeploy(app, bin, env);
+  if (env.EXACT_AGENT === 'live') throw new Error('android --live requires the reader APK. Set EXACT_ANDROID_BIN to an APK.');
   const serial = androidDevice(env), tool = adb(env);
   const base = `/data/local/tmp/exact/${app.id}`, home = `${base}/home`;
   const dir = `${base}/run-${process.pid}-${Date.now().toString(36)}`, exe = basename(bin);
@@ -637,6 +638,16 @@ async function prepareAndroidScreen(tool, serial) {
   }
 }
 
+export async function readerReply(request, ask, wait = Bun.sleep) {
+  const reply = await ask();
+  if (request?.op === 'tap' && request.phase === 'hold') {
+    // The host owns this decision, including while a capture borrows a seekable drive's clock.
+    const { waitMs } = JSON.parse(reply);
+    if (waitMs > 0) await wait(waitMs);
+  }
+  return reply;
+}
+
 /** The reader carrier's process: launch the app with a driver's socket (the shell's `agent=<name>` extra), have
  * adb forward it, and carry the protocol's lines between this process's stdio and the app. Every line is the app's
  * to answer but `screenshot`, whose picture is the device's (`screencap`), tagged as the app tags a reply. The
@@ -673,8 +684,8 @@ async function relay([serial, id, vars, encodedLease]) {
     } catch (error) { console.error(error.message); }
     sh('logcat', '-c');
     // Clear only the app's task; a permission dialog in another task survives and is reported above.
-    // `lower=0`: the engine samples every animation, so none plays on the reader's own clock.
-    const started = sh('shell', ['am', 'start', '-W', '--activity-clear-task', '-n', `${id}/dev.exact.app.MainActivity`, '--es', 'agent', name, '--es', 'lower', '0', ...extras, intent].join(' '));
+    const lower = launch.EXACT_AGENT === 'live' ? '1' : '0';
+    const started = sh('shell', ['am', 'start', '-W', '--activity-clear-task', '-n', `${id}/dev.exact.app.MainActivity`, '--es', 'agent', name, '--es', 'lower', lower, ...extras, intent].join(' '));
     if (started.status !== 0 || /Error/.test(started.stdout + started.stderr)) throw new Error(`am start ${id}: ${(started.stderr || started.stdout).trim()}`);
     port = Number(sh('forward', 'tcp:0', `localabstract:${name}`).stdout.trim());
     if (!port) throw new Error('adb forward gave no port');
@@ -704,11 +715,10 @@ async function relay([serial, id, vars, encodedLease]) {
       let req = null;
       try { req = JSON.parse(line); } catch {}
       if (req?.op === 'quit') return done(0);
-      if (req?.op !== 'screenshot') {
+      if (req?.op !== 'screenshot') return say(await readerReply(req, () => {
         socket.write(line + '\n');
-        const reply = await answer();
-        return say(reply);
-      }
+        return answer();
+      }));
       if (req.film) return say(JSON.stringify({ error: 'the reader carrier films nothing: its picture is a screencap of the device' }));
       await new Promise((r) => setTimeout(r, SHOT_SETTLE_MS));
       const shot = sh('shell', `screencap -p ${quote(req.path)}`);

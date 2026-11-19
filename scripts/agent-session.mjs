@@ -535,6 +535,10 @@ export async function open({
      * for 16 rounds. Timers fire on the way, each at its own time; motion is seeked, never played. The clock lands
      * where the runner says; a timer's refusal is the error. */
     async clock(spec = 'settle', round = 0, down = null) {
+      if (env.EXACT_AGENT === 'live') {
+        const error = '--live runs the app on the wall clock, which the driver does not hold. Let real time pass between operations (perf frames live <ms> waits and measures), or drive without --live to move the clock.';
+        throw Object.assign(new Error(error), { reply: { error, code: 'live-clock' } });
+      }
       // `held`, `until`: agent-held.mjs
       if (/^held(\s|$)/.test(String(spec))) return heldClock(s, String(spec).split(/\s+/).slice(1));
       if (/^until(\s|$)/.test(String(spec))) return untilClock(s, String(spec));

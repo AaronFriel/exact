@@ -2345,7 +2345,7 @@ available. `--live` uses normal scheduling and the wall clock: `performanceNow()
 timers advance in real time between operations, and `perf frames` records real frames
 (with `--touch platform` on the simulator, a drag is a real touch and the `scroll`
 source observes it). The driver never holds the clock, so `clock` is refused; let time
-pass with `perf frames live <ms>`. A phone is not supported: its carrier is agent mode,
+pass with `perf frames live <ms>`. A physical iPhone uses agent mode,
 and a real drag there needs an XCTest runner on the device. `--storage` chooses its
 scratch store. Set
 `EXACT_STORE=real` in the launch environment to use the app's real secret and preference
@@ -2355,6 +2355,10 @@ app files. `state.observation` reports clock mode, scheduling and substitutions.
 `--timing platform` alone keeps agent execution substitutions. A substituted run does not establish production-equivalent performance,
 and callback timing does not prove compositor presentation. `layout` distinguishes target
 and presented geometry; an unavailable presentation remains explicit.
+
+On Android, `bun scripts/agent.mjs android --live` drives the reader APK on platform time
+with layer playback enabled. `clock` and `screenshot … over … every …` are refused. See
+[Driving the reader](../host/android/README.md#driving-the-reader-llp-1107-d1) for the recording command.
 
 ## Generate TypeScript data-source types
 
@@ -4175,12 +4179,14 @@ each voice ended is the same on every host and under the driver's clock
 | Android | AAudio with the shared C mixer in `libexact_sound.so`, loaded at the first play; scheduled by the stream's output timestamp, with gain, playback rate, pan, live changes and cancellation |
 | Linux, Windows | no Contract sound output: the runner keeps the voice record |
 
-Under the driver no scheduled sound plays on any host (`output: "agent"`). The
-runner initializes `state.sounds.output` to `"agent"`; Linux and Windows
-leave it there even outside the driver. Android's state reader is available
-only under the driver and retains `"agent"`; it does not expose AAudio's output
-state or latency. Outside the driver, macOS, iOS and tvOS
-replace it with an object whose `kind` is `"avaudioengine"` and whose `state` is `"closed"`,
+Seekable drives keep Contract sounds silent (`output: "agent"`). Android
+reader drives with `--live` play sounds through AAudio and read voice state
+on platform time.
+Their `state.sounds.output` reports `kind: "aaudio"`, the stream's state and,
+while running, its estimated output latency in seconds. The runner initializes
+the field to `"agent"`. Linux and Windows retain that value in ordinary
+launches. When macOS, iOS and tvOS enable audio output, they report
+an object whose `kind` is `"avaudioengine"` and whose `state` is `"closed"`,
 `"running"`, `"stopped"` or `"failed"`. Both web targets report an object with
 `kind: "web-audio"` and the audio context's `state` once the output loads; before
 that, the JS target reports `{kind: "web-audio", state: "loading"}` and the wasm
