@@ -451,6 +451,16 @@ export function routeFlags(root) {
 }
 // LLP 1153 D8 — both runtimes' agent `tree` flags an element as the projection left the page, for one read: 1 (`inactive`) under a route or panel `unselected` names, which a split's list beside its detail is not; 2 (`hidden` too) where the projection hid that route, every one but a page a sheet covers
 const routesOf = (nav) => stacksOf(nav).find((routes) => routes.some((r) => r.getAttribute("navigationKey") === nav.getAttribute("navigationKey"))) ?? [];
+/** The selected stack through its top. Inputs can read it before this module has projected the tree. */
+export function focusStack(nav) {
+  const key = nav.getAttribute("navigationKey"), projected = shownRoutes.get(nav), top = projected?.at(-1);
+  if (top && top.getAttribute("navigationKey") === key &&
+      projected.every((route) => route.isConnected && nav.contains(route) && !route.hasAttribute("data-exiting"))) {
+    return projected;
+  }
+  const routes = routesOf(nav);
+  return routes.slice(0, routes.findIndex((route) => route.getAttribute("navigationKey") === key) + 1);
+}
 const selectedRoute = (nav) => routesOf(nav).find((r) => r.getAttribute("navigationKey") === nav.getAttribute("navigationKey"));
 const browserIndex = () => globalThis.navigation?.currentEntry?.index ?? null;
 export function historyURL(path) {
@@ -1255,6 +1265,7 @@ export const navigation = {
         managed.set(nav, panels);
       }
       if (key === undefined) {
+        shownRoutes.delete(nav);
         // No route is framed, so no stack of sheets is reached: one whose routes have left this root goes here.
         if (SHEETS) {
           for (const [stack, routes] of stacks.entries()) {
