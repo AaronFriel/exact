@@ -2,9 +2,9 @@
 
 **The all-platform app framework. Agent native. Built for speed. No compromises.**
 
-Exact is an **all-platform** framework for building real apps on the web, iOS, macOS, and Linux — with Android and Windows in early form, plus tvOS, watchOS, and the terminal.
+Exact is an **all-platform** framework for building real apps on the web, iOS, macOS, Android, and Linux — with Windows in active development, plus tvOS, watchOS, Android TV, and the terminal.
 
-Exact is not a "cross-platform" framework. Cross-platform tools usually trade away each platform's strengths to maintain a lowest common denominator. Exact takes the opposite approach: build something **excellent on every platform on its own terms** — real DOM on the web, real UIKit on iOS, real AppKit on macOS, direct GPU/CPU rendering on Linux, Android, and Windows. Being **all-platform** is simply the side effect of getting every platform right from one source.
+Exact is not a "cross-platform" framework. Cross-platform tools usually trade away each platform's strengths to maintain a lowest common denominator. Exact takes the opposite approach: build something **excellent on every platform on its own terms** — real DOM on the web, real UIKit on iOS, real AppKit on macOS, hardware-accelerated Material 3 rendering with native Android views on Android, and direct GPU/CPU rendering on Linux and Windows. Being **all-platform** is simply the side effect of getting every platform right from one source.
 
 Everything in Exact is built around three priorities:
 
@@ -43,10 +43,10 @@ Everything in Exact is built around three priorities:
 | **iOS** | Works (Simulator & device) | UIKit views, native controls, and system bars |
 | **macOS** | Works | AppKit views and native controls (no SwiftUI) |
 | **Linux** | Works | Exact's GPU/CPU painter on DRM/KMS consoles or headless |
-| **Android** | [Early](#early-android-and-windows) | Exact's painter on Android Canvas, with native Android text fields |
-| **Windows** | [Early](#early-android-and-windows) | Exact's painter in Fluent style on DirectX 11 or CPU |
+| **Android** | [Works](#android) (Material 3 polish in progress) | Hardware-accelerated Android Canvas (`RenderNode`) with Material 3 styling, native `EditText`, dialogs, and Compose date pickers |
+| **Windows** | [Early](#early-windows) | DirectX 11 (`ink`) or CPU painter (neutral look + Fluent symbols) with native file dialogs, IME, and UI Automation |
 
-The repository also ships a **tvOS** variant of the iOS host, a **watchOS** host backed by SwiftUI, and a **terminal** host (`exact-terminal`) for command-line apps.
+The repository also ships **tvOS** and **watchOS** hosts, **Android TV** support in the Android APK, and a **terminal** host (`exact-terminal`) for command-line apps.
 
 ### Contents
 
@@ -113,12 +113,12 @@ Traditional cross-platform frameworks try to unify platforms by drawing their ow
 | **Approach** | All-platform: native excellence on each host, one source | Cross-platform JS bridge / JSI over native views | Cross-platform custom rendering engine |
 | **Agent workflow** | Built-in 10-op driver + seekable clock on every host | External tools per platform | `integration_test` |
 | **JS before first frame** | None (baked first frame, bytecode loaded after paint) | JS bundle boots before UI | N/A (Dart AOT) |
-| **Native controls** | UIKit / AppKit on Apple; painted on Linux, Android, Windows (native Android text fields) | Native views on iOS & Android | Custom-drawn widgets everywhere |
+| **Native controls** | UIKit / AppKit on Apple; Material 3 + native `EditText`/dialogs on Android; painted on Linux & Windows | Native views on iOS & Android | Custom-drawn widgets everywhere |
 | **Web output** | Browser DOM (~20 KB ES module) | Separate `react-native-web` library | Canvas / WebAssembly |
 | **UI & logic** | Contract UI + TypeScript, Rust, or zero-JS HTTP | JSX / React (JS or TS) | Dart widgets & logic |
 | **Layout** | Web-standard CSS (Chrome as reference) | Yoga (column-first, no shrink) | Custom constraint model |
 
-**Honest trade-offs:** React Native and Flutter are mature ecosystems with versioned releases, massive communities, and vast plugin registries (`npm` and `pub.dev`). Exact is pre-1.0 and changes daily: there is no packaged CLI or JSX/React layer, React Native and Flutter plugins do not work (data modules can import pure-JS npm packages, while platform APIs come from [`packages/`](packages)), and Android and Windows are early.
+**Honest trade-offs:** React Native and Flutter are mature ecosystems with versioned releases, massive communities, and vast plugin registries (`npm` and `pub.dev`). Exact is pre-1.0 and changes daily: there is no packaged CLI or JSX/React layer, React Native and Flutter plugins do not work (data modules can import pure-JS npm packages, while platform APIs come from [`packages/`](packages)), Windows is still early, and Android's Material 3 polish is still being completed.
 
 ---
 
@@ -405,7 +405,8 @@ flowchart LR
   P --> R["Rust runner<br/>+ layout kernel (Taffy)"]
   R --> M["macOS<br/>AppKit + CoreText"]
   R --> I["iOS<br/>UIKit + CoreText"]
-  R --> L["Linux / Android / Windows<br/>Exact painter"]
+  R --> A["Android<br/>HWUI Canvas + Material 3<br/>+ native EditText & dialogs"]
+  R --> L["Linux / Windows<br/>Exact painter (GPU / CPU)"]
   D -.->|typed answers, checked against shapes| W
   D -.-> R
 ```
@@ -413,7 +414,7 @@ flowchart LR
 1. **Contract compiler (`contract/`):** Four passes (syntax → types → analysis → lowering) compile `.contract` files into a *plan* of tables and bytecode. Constant data is baked into the plan at build time so the first frame needs nothing else.
 2. **Web target (`host/web-js/`):** Compiles the plan ahead of time into one ES module over a ~20 KB runtime. The browser handles layout, transitions, and painting directly.
 3. **Runner & layout kernel (`runner/`, `kernel/`):** On native hosts, a Rust VM executes the plan, manages keyed component instances, timers on a seekable clock, and the typed data seam. A columnar node arena computes layout via a patched [Taffy](vendor/taffy/EXACT-PATCHES.md) with host text measurement (CoreText on Apple, cosmic-text/Parley on painted hosts).
-4. **Native hosts (`host/`):** Apple hosts link a Rust static library under AppKit/UIKit presenters (`ExactKit`). Linux, Android, and Windows share Exact's painter (`host/painted/`, `host/ink/`).
+4. **Native hosts (`host/`):** Apple hosts link a Rust static library under AppKit/UIKit presenters (`ExactKit`). Android replays Rust's paint stream onto HWUI `RenderNode`s alongside native `EditText` fields, `Dialog`/`PopupWindow` surfaces, and Compose pickers (`host/android/`). Linux and Windows draw directly via Exact's shared painter (`host/painted/`, `host/ink/`).
 5. **Data seam (`js/`, `logic/`, `data/`):** TypeScript runs on precompiled Hermes bytecode natively and in the browser's engine on the web. Rust data crates run natively (or Wasm on web/iOS) and support live replacement. Capability **grants** gate network, files, SQLite, camera, and secrets.
 6. **Packages & on-demand artifacts (`packages/`, `gpu/`, `game/`):** Over 60 first-party packages expose native platform capabilities, while heavy add-ons (`wgpu` GPU canvases, Markdown editor, text-around-shapes, and the [game engine](game/README.md)) load only when used.
 
@@ -525,25 +526,34 @@ All screenshots below were captured on the web host by `scripts/agent.mjs`.
 
 ### Working
 
-- **Core hosts & embedding:** Web, iOS, macOS, and Linux, plus `ExactKit` for embedding Exact sessions inside existing Swift apps.
+- **Core hosts & embedding:** Web, iOS, macOS, Android (including Android TV and home-screen widgets), and Linux, plus `ExactKit` for embedding Exact sessions inside existing Swift apps.
 - **Layout & typography:** Block, flex, grid, multi-column, `position: static`, `aspect-ratio`, declared fonts, and text flowing around shapes (`shape-outside`).
 - **Paint & GPU:** Gradients, shadows, `backdrop-filter`, glass materials, full SVG, Canvas 2D on every host, and lazy-loaded `wgpu` GPU canvases.
 - **Motion & gestures:** Transitions, springs, `@keyframes`, pan/swipe/pinch gestures with release velocity, layout transitions, exit animations, and drag-linked timelines (scroll-linked timelines are not yet wired).
 - **Lists:** Vertical and horizontal virtualized lists, plus native grouped lists (`list appearance="auto"`) with platform separators, highlights, and swipe actions.
 - **Controls, media & camera:** Standard inputs, `select`, a WYSIWYG Markdown editor (web, macOS, iOS), animated images, video, file pickers, share sheets, and camera capture/recording via [`@exact/camera`](packages/camera/exact.json) and [`@exact/recording`](packages/recording/README.md) on web, iOS, macOS, and Android.
-- **Data, storage & auth:** TypeScript (main thread or worker), Rust, and zero-JS declared HTTP sources; grant-checked `fetch`, streams, files, SQLite (native and browser), Keychain secrets, OAuth sign-in, and per-tab routing.
+- **Data, storage & auth:** TypeScript (main thread or worker), Rust, and zero-JS declared HTTP sources; grant-checked `fetch`, streams, files, SQLite (native and browser), Keychain/encrypted secrets, OAuth sign-in, and per-tab routing.
 - **Server-side web rendering:** Pre-render pages at build time or per request in Rust and adopt the DOM in place instead of hydrating.
-- **Over-the-air delivery:** `scripts/deploy.mjs` and `scripts/push.mjs` publish web builds and signed native update bundles fetched after first pixel. Compatible Contract and TypeScript updates can be published to existing iOS streams even from Linux. `exact release` signs and notarizes macOS apps.
+- **Over-the-air delivery:** `scripts/deploy.mjs` and `scripts/push.mjs` publish web builds and signed native update bundles fetched after first pixel on Apple, Linux, and Android (opt-in via `deploy.store.android: "A"`). Compatible Contract and TypeScript updates can be published to existing iOS streams even from Linux. `exact release` signs and notarizes macOS apps.
 
-### Early: Android and Windows
+### Android
 
-- **Android:** Builds, installs, runs tests, and drives on emulators and physical phones (`bun exact.mjs android`, `test android`, `agent android`, and `android --bundle` for signed release AABs; see [the phone release recipe](docs/recipes/mobile-build.md)). Requires the Android SDK, Rust target `aarch64-linux-android`, and the Android Hermes bundle installed by `exact setup`.
-- **Windows:** Runs apps using Exact's `ink` DirectX 11 painter by default (or CPU painter for games; configurable via `host.windows.painter` and `EXACT_PAINTER`, detailed in [`docs/reference.md`](docs/reference.md#windows-painter)). [Windows Desk](apps/windows-desk/README.md) demonstrates Win32 controls over Contract; general Windows control parity and over-the-air delivery are still in progress.
+Android runs real apps on emulators and physical phones (`bun exact.mjs android`, `test android`, `agent android`, `verify android`), supports live dev-loop reloads (`android --run --url …`), and packages signed Play Store App Bundles (`android --bundle`; see [the phone release recipe](docs/recipes/mobile-build.md)). It needs the Android SDK, Rust target `aarch64-linux-android` (or `x86_64-linux-android`), and the Android Hermes bundle installed by `exact setup`.
+
+- **What works:** Material 3 styling (dynamic color on Android 12+, baseline Material 3 on Android 10–11, filled/icon/segmented buttons, filled text fields, ripples, top app & navigation bars, modal bottom sheets with detents, Material route transitions, shared elements, and Android 14+ predictive Back); real `EditText` fields, native `Dialog`/`PopupWindow` alerts and menus, Compose date/time pickers, `wgpu` GPU canvases, `RenderEffect` GPU filters, home-screen widgets, Android TV from the same APK, 42 first-party packages (camera, recording, FCM/Expo push, geolocation, passkeys, NFC, payments, health, maps, etc.), `--variant` builds, opt-in signed OTA updates (`deploy.store.android: "A"` for plans, assets, and TypeScript), and ~90 ms median cold starts.
+- **Still in progress:** Remaining Material 3 control parity, full TalkBack verification on physical devices, and layout `check` / largest-text / scroll checks in `verify android`.
+
+### Early: Windows
+
+Windows builds, runs, and drives apps on Windows 11 x64 (`bun exact.mjs windows [--run]`, `test windows`, `agent windows`, `verify windows`; x64 and ARM64 cross-compile in the hourly lane).
+
+- **What works:** Exact's `ink` GPU painter on a DirectX 11 composition swap chain by default (or the CPU painter for games; configurable via `host.windows.painter` and `EXACT_PAINTER`, detailed in [`docs/reference.md`](docs/reference.md#windows-painter)), native Common Item File Dialogs, UI Automation via AccessKit, IME composition, system theme and high-contrast palettes, notification-area (tray) status icons with painted menus, Jump Lists, Win32 tooltips, clipboard (text and images), global hotkeys, single-instance/`keepRunning`, touch and pinch zoom, gamepad input, and 11 first-party packages.
+- **Still in progress:** Controls currently paint in Exact's neutral look with Fluent symbol shapes (full Fluent 2 control styling, integrated title bar, and DWM Mica backdrop are in progress; [Windows Desk](apps/windows-desk/README.md) remains a Win32-control prototype), no update store or over-the-air delivery yet, no `--variant` builds, fewer first-party packages, and `verify windows` does not yet run layout `check`, accessibility-tree checks, or largest-text checks.
 
 ### Not yet, or out by design
 
 - **No JSX or React tier:** Nothing runs JavaScript above the data seam.
-- **Mixed production code updates:** Signed over-the-air delivery supports plans, assets, and one module type (TypeScript or Rust on Apple, Rust on Linux; Windows has no update store yet). Delivering TypeScript and Rust together is not yet implemented.
+- **Mixed production code updates:** Signed over-the-air delivery supports plans, assets, and one module type (TypeScript or Rust on Apple; TypeScript on Android when `deploy.store.android: "A"`; Rust on Linux; Windows has no update store yet). Delivering TypeScript and Rust together is not yet implemented.
 - **Markdown editor off web and Apple:** Linux, Windows, and Android show plain source. Linux also lacks a Thai/Lao/Khmer/Myanmar word segmenter.
 - **Deferred on purpose for v1:** Gesture arenas, general layout animation, grid/masonry virtualization, a general webview beyond `iframe`, a GUI devtools panel, and a packaged CLI.
 
