@@ -6,8 +6,11 @@ a few paragraphs, such as `apps/markdown/assets/listen-fixture.md`.
 
 - iPhone: `bun host/apple/build.mjs --ios --device markdown-apple --run`
 
-The reader has no Android build. On an Android phone, steps 3 and 4 are
-for whichever app first speaks there.
+The reader has no Android build, so on Android steps 3 and 4 are run in
+whichever app speaks there. Step 4 with `transient` has been seen on
+Android 14 with Google's engine: the other app's music ducks while the
+app speaks and returns to full volume after it (#1030). Step 3, and a
+podcast stopping under `playback` or `transient-solo`, have not.
 
 Each step says what to do and what should happen.
 
