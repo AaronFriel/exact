@@ -8,13 +8,13 @@
 
 `bun scripts/metrics.mjs --long` measures the hello app's stripped iOS simulator executable over an empty UIKit
 app's (LLP 1047.001 D8) and gates it at `IOS_HELLO_BYTES`. The size row's target is 8 MB, 8,000,000 B (Charlie,
-2026-11-17: "trying to get to 8MB is maybe worth it"). Main at 36d7baf41, measured on an M5 Max with Xcode 27.2:
+2026-11-17: "trying to get to 8MB is maybe worth it"). Main at e27820042, measured on an M5 Max with Xcode 27.2:
 
 | row | measured | ceiling | target |
 |---|---:|---:|---:|
-| optimized for size (the embed default) | 9,550,448 B | 9,650,000 B | 8,000,000 B |
-| balanced (the iOS and tvOS app default) | 13,604,704 B | 13,710,000 B | |
-| optimized for speed (the Mac default) | 14,890,512 B | 14,990,000 B | |
+| optimized for size (the embed default) | 8,345,408 B | 8,450,000 B | 8,000,000 B |
+| balanced (the iOS and tvOS app default) | 12,242,144 B | 12,350,000 B | |
+| optimized for speed (the Mac default) | 13,479,040 B | 13,580,000 B | |
 
 The ceilings are a tripwire at main's size plus about 100 KB, not an accepted size. A row over its ceiling says how
 far over in 100 KB steps (`VIOLATION by 0.2 MB`), and the async lane's failure carries the step, so each further
@@ -276,6 +276,12 @@ runner's seams; §9.3: the order of work). Landed, size row:
 | C9: the pickers their own product | 83f6a7e1e | −54,768 B |
 | C11: traces their own product | 0d103a3bf | −82,928 B |
 | C9: the wake lock its own product | 36d7baf41 | under a page, to 9,550,448 B |
+| C13: content regions linked only by an entry that registers one, with their Rust behind a seam | a4c46784a | −215,744 B |
+| no build channel, development plan or development link in production | 90bf0223f | −69,056 B |
+| C8: video, web views, sound and MIDI their own products | 44df8d345 | −201,232 B |
+| the runner's voice table, transport and MIDI queue a seam | 1db527b8e | −66,320 B |
+| what Core Animation plays for a box its own product | 10dea87d0 | −16,784 B |
+| N1: navigation with route modals its own product (cut list C2) | e27820042 | −635,152 B, to 8,345,408 B |
 
 A second link map, at 51002ee77, measured what the first declined to claim: the overhead (standard-library
 specializations, outlined functions, metadata, unwind sections) leaves with the families at 0.17 B for each direct
