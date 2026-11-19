@@ -1,4 +1,4 @@
-//! UI Automation over the presenter's accessibility model; dormant until requested.
+//! UI Automation over the presenter's accessibility model.
 use accesskit::{
     Action, ActionData, Affine, Node, NodeId, Rect, Role, TreeId, TreeInfo, TreeUpdate,
 };
@@ -6,10 +6,12 @@ use accesskit_winit::{Adapter, WindowEvent as AccessEvent};
 use exact_kernel::PropId;
 use exact_painted::{
     presenter::access::{act, role},
+    presenter::top::StatusMenu,
     Presenter,
 };
 use exact_runner::{DataSource, FieldSelection, SelectionDirection};
 use std::collections::BTreeMap;
+use std::rc::Rc;
 use unicode_segmentation::UnicodeSegmentation;
 use winit::{
     event::WindowEvent,
@@ -36,7 +38,8 @@ impl From<accesskit_winit::Event> for Event {
 }
 
 mod model;
-use model::map_node;
+pub(crate) use model::dismiss_popup;
+use model::{map_node, MenuSnapshot};
 
 const ROOT: NodeId = NodeId(0);
 
@@ -358,13 +361,13 @@ fn text_offsets(text: &str, mut offset: u32) -> (Vec<u8>, Vec<u32>) {
 /// A raw popup uses the page's node mapping and AccessKit's HWND adapter.
 pub(super) struct MenuAccess {
     adapter: accesskit_windows::SubclassingAdapter,
+    snapshot: Rc<MenuSnapshot>,
 }
 
-struct MenuActivation(EventLoopProxy<Event>);
+struct MenuActivation(Rc<MenuSnapshot>);
 impl accesskit::ActivationHandler for MenuActivation {
     fn request_initial_tree(&mut self) -> Option<TreeUpdate> {
-        let _ = self.0.send_event(Event::Wake);
-        None
+        Some(self.0.tree())
     }
 }
 struct MenuActions(EventLoopProxy<Event>);
@@ -376,39 +379,37 @@ impl accesskit::ActionHandler for MenuActions {
 
 impl MenuAccess {
     pub fn new(window: accesskit_windows::HWND, proxy: EventLoopProxy<Event>) -> Self {
+        let snapshot = Rc::new(MenuSnapshot::default());
         Self {
             adapter: accesskit_windows::SubclassingAdapter::new(
                 window,
-                MenuActivation(proxy.clone()),
+                MenuActivation(snapshot.clone()),
                 MenuActions(proxy),
             ),
+            snapshot,
         }
     }
 
-    pub fn sync<D: DataSource>(&mut self, p: &mut Presenter<D>, scale: f64) {
-        let Some(menu) = p.status_menu() else {
-            return;
-        };
-        if let Some(events) = self.adapter.update_if_active(|| {
-            p.reader_access(1., true);
-            model::menu_tree(
-                p.access_told(),
-                &menu.label,
-                menu.size,
-                scale,
-                p.access_focus(),
-                true,
-            )
-        }) {
-            events.raise();
+    pub fn update<D: DataSource>(
+        &mut self,
+        p: &Presenter<D>,
+        menu: &StatusMenu,
+        scale: f64,
+    ) -> Option<accesskit_windows::QueuedEvents> {
+        if !self.snapshot.is_open() {
+            self.adapter.activate_for_listeners();
         }
+        // WM_GETOBJECT can arrive during a window call. Its handler can read
+        // the menu's last presented content without borrowing the presenter.
+        if !self.snapshot.refresh(p, menu, scale) {
+            return None;
+        }
+        self.adapter.update_if_active(|| self.snapshot.tree())
     }
 
     pub fn hide(&mut self) {
-        if let Some(events) = self
-            .adapter
-            .update_if_active(|| model::menu_tree(&[], "", (0., 0.), 1., None, false))
-        {
+        self.snapshot.close();
+        if let Some(events) = self.adapter.update_if_active(|| self.snapshot.tree()) {
             events.raise();
         }
     }

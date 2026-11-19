@@ -402,6 +402,7 @@ export const classifications = [
       "Presenter::hosts Presenter::image_fd Presenter::images Presenter::node_count Presenter::page Presenter::paragraph Presenter::pending Presenter::rect_of " +
       "Presenter::repaint Presenter::scroll_of Presenter::text Presenter::viewport Presenter::wants_display_frames Presenter::wheel"],
     ["painted:host/painted/src/presenter/access.rs", "Presenter::access_reset Presenter::access_told Presenter::access_tree Presenter::reader_access"],
+    ["painted:host/painted/src/presenter/access/surface.rs", "PopupAccess::nodes Presenter::popup_access"],
     ["painted:host/painted/src/presenter/ahead.rs", "Presenter::foresee_press Presenter::foreseen_at Presenter::forget_press Presenter::scratch"],
     ["painted:host/painted/src/presenter/alert.rs", "Presenter::alert_inputs"],
     ["painted:host/painted/src/presenter/back.rs", "Presenter::back_goes"],
@@ -1144,10 +1145,10 @@ export const classifications = [
   group("UI input", ["one-shot"], "current mounted view, action binding or interaction", "UI-owned",
     "The named painted adapter reads or updates the current Presenter through the runner or its Host forwarding API. runner/src/runner/event.rs dispatches through a mounted view and its action binding; no independent operation identity is supplied. contact.rs feedback_contains checks the live node's tracking shape for contact_press, pointer_moved feedback and pointer_lift activation.", [
     ["painted:host/painted/src/presenter/access.rs",
-      "Presenter::access_bar_node Presenter::access_bottom Presenter::access_control Presenter::access_emit Presenter::access_hint Presenter::access_inline_words " +
+      "Presenter::access_bar_info Presenter::access_bottom Presenter::access_control Presenter::access_emit Presenter::access_hint Presenter::access_inline_words " +
       "Presenter::access_key Presenter::access_label Presenter::access_name Presenter::access_top Presenter::access_words"],
     ["painted:host/painted/src/presenter/access/menu.rs", "Presenter::access_choose Presenter::access_menu Presenter::access_menu_focus"],
-    ["painted:host/painted/src/presenter/access/surface.rs", "Presenter::access_surface"],
+    ["painted:host/painted/src/presenter/access/surface.rs", "Presenter::surface_menu_flags Presenter::surface_scroll_label"],
     ["painted:host/painted/src/presenter/access/walk.rs", "Presenter::access_walk Presenter::access_walk_contents"],
     ["painted:host/painted/src/presenter/addressed_tap.rs",
       "Presenter::is_inside Presenter::lands_in Presenter::lands_in_press Presenter::press_reach Presenter::takes_press Presenter::touch_activation_contains " +

@@ -146,6 +146,8 @@ struct Open {
     serial: u32,
     /// Moved on whenever its picture or its place changes.
     revision: u32,
+    /// The revision at which the layout was last measured.
+    measured: u32,
     key: NodeKey,
     node: ViewId,
     kind: SurfaceKind,
@@ -287,6 +289,11 @@ impl<D: DataSource> Presenter<D> {
             pressed: open.pressed,
             texts: open.layout.texts(),
         })
+    }
+
+    pub(super) fn popup_layout(&self) -> Option<(u32, u32, f32)> {
+        let open = self.top.open.as_ref().filter(|open| open.detached)?;
+        Some((open.serial, open.measured, open.layout.content_offset()))
     }
 
     /// Whether a surface is open: the page is then inert.
@@ -547,6 +554,7 @@ impl<D: DataSource> Presenter<D> {
         self.top.open = Some(Open {
             serial,
             revision: 0,
+            measured: 0,
             key,
             node: id,
             modal,
@@ -1204,6 +1212,7 @@ impl<D: DataSource> Presenter<D> {
                 open.layout.reveal_menu_target(index);
             }
             open.revision += 1;
+            open.measured = open.revision;
         }
         if anchor != open.anchor {
             open.anchor = anchor;

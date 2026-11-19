@@ -10,6 +10,8 @@
 //! accessibility service is on. It is made again only when a commit, a
 //! paint, a scroll, a bar or the top layer moved on since the last one, and
 //! told only when it differs from what was last told.
+//! Detached menus retain their presented data for the native window's first
+//! query and build nodes only when requested.
 //!
 //! **What a node is.** From the kernel's tree, as the Apple hosts read it
 //! (`Accessibility.swift`): a pressable is one element named by its label,
@@ -46,6 +48,8 @@
 mod menu;
 mod surface;
 mod walk;
+
+pub use surface::PopupAccess;
 
 use super::requests::string;
 use super::scrollers::Scroller;
@@ -365,6 +369,7 @@ struct Scope {
 }
 
 /// A tree being built.
+#[derive(Default)]
 struct Build {
     out: Vec<Node>,
     used: BTreeSet<i32>,
@@ -379,6 +384,13 @@ struct Build {
     limits: BTreeMap<ViewId, f32>,
     /// An open popover's root, which the page's walk passes over.
     top: Option<ViewId>,
+}
+
+#[derive(Clone)]
+struct BarNodeInfo {
+    id: i32,
+    disabled: bool,
+    hint: String,
 }
 
 impl Build {
@@ -781,9 +793,21 @@ impl<D: DataSource> Presenter<D> {
         name: String,
         (rect, frame): (Rect4, [f32; 4]),
     ) -> i32 {
+        b.bar_node(
+            view,
+            parent,
+            role,
+            flags,
+            name,
+            [frame[0] + rect.0, frame[1] + rect.1, rect.2, rect.3],
+            self.access_bar_info(view),
+        )
+    }
+
+    fn access_bar_info(&self, view: ViewId) -> BarNodeInfo {
         let kernel = self.host.kernel();
         let node = kernel.node(view);
-        let said = node.as_ref().map(|n| {
+        let disabled = node.as_ref().is_some_and(|n| {
             let mut at = Some(n.id);
             let mut disabled = None;
             while let (None, Some(id)) = (disabled, at) {
@@ -795,31 +819,15 @@ impl<D: DataSource> Presenter<D> {
             }
             disabled.unwrap_or(false)
         });
-        let id = b.unique(if view == 0 {
-            UP
-        } else {
-            identity(kernel, view)
-        });
-        b.out.push(Node {
-            id,
-            parent,
-            view,
-            role,
-            flags: flags
-                | if said == Some(true) {
-                    flag::DISABLED
-                } else {
-                    0
-                },
-            rect: [frame[0] + rect.0, frame[1] + rect.1, rect.2, rect.3],
-            range: [0.0; 3],
-            set: (0, 0),
-            grid: [0; 4],
-            name,
-            value: String::new(),
+        BarNodeInfo {
+            id: if view == 0 {
+                UP
+            } else {
+                identity(kernel, view)
+            },
+            disabled,
             hint: node.map(|n| self.access_hint(&n)).unwrap_or_default(),
-        });
-        id
+        }
     }
 
     /// The top app bar's nodes: the Up arrow, the leading buttons, the
