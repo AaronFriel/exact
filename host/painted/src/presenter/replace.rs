@@ -104,6 +104,7 @@ impl<D: DataSource> Presenter<D> {
             boxes_page: _,
             boxes_serial: _,
             dirty: _,
+            picture_dirty: _,
             image_paint_pending: _,
             field_reveal: _,
             last_frame_succeeded: _,
