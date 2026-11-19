@@ -134,6 +134,9 @@ export function install(modules) {
   Hosts.observe = (name, severity, ...rest) => record('app.event', { name, severity, attributes: pairs(rest) });
   Hosts.observeAttributes = (...rest) => record('app.attributes', { attributes: pairs(rest) });
   Hosts.observeError = (message, type) => record('app.error', { source: 'reportedByUser', message, type: type ?? 'ContractError' });
+  // A number that is not finite is none, as the native hosts' command JSON has it.
+  const finite = n => (Number.isFinite(n) ? n : undefined);
+  Hosts.observeFeedback = (id, message, rating, min, max, ...rest) => record('app.feedback', { id, message, rating: finite(rating), min: finite(min), max: finite(max), attributes: pairs(rest) });
   globalThis.exact = Object.assign(globalThis.exact ?? {}, { observe: () => ({ marks: { ...marks }, outcome, trace, events: events.length }) });
   return {
     mounted() {
