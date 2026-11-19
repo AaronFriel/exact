@@ -241,8 +241,8 @@ package final class ReplacementQueue {
         if composing(sessions) { return "composition" }
         #endif
         if pressed(sessions) { return "pointer" }
-        // A reorder the keyboard lifted holds no button (`ReorderGroupHold`).
-        if sessions.contains(where: { $0.presenter.reorderGroup?.active == true }) { return "gesture" }
+        // A grouped reorder the keyboard lifted holds no button.
+        if sessions.contains(where: { $0.presenter.reorders.groupActive }) { return "gesture" }
         #if os(macOS)
         // A loop AppKit runs for a menu, a control's press or a scroller keeps its events from every view.
         if !trackpad.isEmpty || RunLoop.main.currentMode == .eventTracking { return "gesture" }

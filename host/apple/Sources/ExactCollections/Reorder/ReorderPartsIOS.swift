@@ -1,6 +1,8 @@
 // Dropping across lists on UIKit (LLP 1094 D6): the ghost is a snapshot in
 // the window, its port facts and scrollers in window coordinates (y down).
 #if os(iOS) || os(tvOS)
+import ExactCore
+import ExactKit
 import UIKit
 
 /// The lifted row's stand-in, above everything in the window.
@@ -129,33 +131,21 @@ extension NodeView {
 
     /// A grouped grip's drag (D6): the ghost's session, not Arrange's.
     package func reorderGroupDragged(_ gesture: UIGestureRecognizer, point: CGPoint) -> Bool {
-        let mine = presenter?.reorderGroup.map { $0.handle === self } ?? false
+        let mine = presenter?.reorderHost?.group.map { $0.handle === self } ?? false
         guard mine || (gesture.state == .began && reorderGroupList != nil) else { return false }
         switch gesture.state {
         case .began:
             if !mine { _ = ReorderGroupHold(self, point: point, ghost: true) }
         case .changed:
-            presenter?.reorderGroup?.move(point)
+            presenter?.reorderHost?.group?.move(point)
         case .ended:
-            presenter?.reorderGroup?.move(point)
-            presenter?.reorderGroup?.finish(cancel: false)
+            presenter?.reorderHost?.group?.move(point)
+            presenter?.reorderHost?.group?.finish(cancel: false)
         case .cancelled, .failed:
-            presenter?.reorderGroup?.cancel()
+            presenter?.reorderHost?.group?.cancel()
         default: break
         }
         return true
-    }
-
-    /// "Move earlier", "Move later", "Move to previous list", "Move to next
-    /// list" on a grouped grip (D9).
-    package override var accessibilityCustomActions: [UIAccessibilityCustomAction]? {
-        get {
-            guard reorderGroupList != nil else { return super.accessibilityCustomActions }
-            return ReorderGroupStep.actions.map { name, step in
-                UIAccessibilityCustomAction(name: name) { [weak self] _ in self?.reorderAction(step) ?? false }
-            }
-        }
-        set { super.accessibilityCustomActions = newValue }
     }
 }
 #endif

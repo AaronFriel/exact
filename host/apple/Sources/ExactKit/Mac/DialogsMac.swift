@@ -155,7 +155,7 @@ package final class DialogHost {
         dialog.isHidden = false
         layout()
         presenter.mouseSwipe.cancel(); presenter.mouseDrags.height.cancel()
-        presenter.mouseDrags.transform.cancel(); presenter.mouseDrags.reorder.cancel()
+        presenter.mouseDrags.transform.cancel(); presenter.reorders.mouse.cancel()
         presenter.mouseLayoutPan.abandon(); presenter.selection.clear()
         presenter.session?.canvases.cancelMovedControls()
         refreshInputGates()

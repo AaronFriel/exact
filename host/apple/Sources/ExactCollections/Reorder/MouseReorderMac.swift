@@ -1,5 +1,6 @@
 // Arrange on AppKit: a vertical mouse drag that starts inside a `reorderFor`
 // handle. A press, field or text area nearer the pointer keeps the click.
+import ExactCore
 import ExactKit
 import CExact
 #if os(macOS)
@@ -23,7 +24,7 @@ final class MouseReorder {
         escape = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             if event.keyCode == 53, self?.hold != nil { self?.cancel(); return nil }
             // A grouped drag cancels before its drop; a hold ignores it (LLP 1094 D8).
-            if event.keyCode == 53, self?.grouped == true, self?.presenter?.reorderGroup?.active == true { self?.cancel(); return nil }
+            if event.keyCode == 53, self?.grouped == true, self?.presenter?.reorderHost?.group?.active == true { self?.cancel(); return nil }
             return event
         }
         inactive = NotificationCenter.default.addObserver(forName: NSWindow.didResignKeyNotification,
@@ -56,7 +57,7 @@ final class MouseReorder {
     func drag(_ event: NSEvent) -> Bool {
         guard let candidate, let presenter, presenter.views[candidate.id] === candidate else { return false }
         let point = event.locationInWindow
-        if grouped { presenter.reorderGroup?.move(point); return true }
+        if grouped { presenter.reorderHost?.group?.move(point); return true }
         if hold == nil, candidate.reorderGroupList != nil {
             // A grouped grip lifts past the slop in any direction (LLP 1094 D6).
             guard hypot(point.x - origin.x, point.y - origin.y) > Gesture.slop else { return false }
@@ -67,12 +68,12 @@ final class MouseReorder {
             // lifts: returning nil swallows them before a view sees them.
             contact = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDragged, .leftMouseUp]) { [weak self] event in
                 guard let self, grouped else { return event }
-                if event.type == .leftMouseUp { _ = up(event) } else { presenter.reorderGroup?.move(event.locationInWindow) }
+                if event.type == .leftMouseUp { _ = up(event) } else { presenter.reorderHost?.group?.move(event.locationInWindow) }
                 return nil
             }
             presenter.selection.clear()
             for node in presenter.views.values where node.pressed { node.pressed = false }
-            presenter.reorderGroup?.move(point)
+            presenter.reorderHost?.group?.move(point)
             return true
         }
         if hold == nil {
@@ -96,8 +97,8 @@ final class MouseReorder {
             grouped = false; contact = nil
             // The monitor consumes this up before NodeView can release the pointer.
             presenter?.pointerSource?.pointerReleased(event)
-            presenter?.reorderGroup?.move(event.locationInWindow)
-            presenter?.reorderGroup?.finish(cancel: false)
+            presenter?.reorderHost?.group?.move(event.locationInWindow)
+            presenter?.reorderHost?.group?.finish(cancel: false)
             return true
         }
         guard let held = hold else { return false }
@@ -112,7 +113,7 @@ final class MouseReorder {
         prior?.cancel()
         // A grouped session, a key's too, cancels before its drop (D8).
         grouped = false; contact = nil
-        presenter?.reorderGroup?.cancel()
+        presenter?.reorderHost?.group?.cancel()
     }
     func retire(_ id: UInt32) {
         guard candidate?.id == id else { return }

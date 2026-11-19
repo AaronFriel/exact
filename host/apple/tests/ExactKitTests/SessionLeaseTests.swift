@@ -54,9 +54,9 @@ final class SessionLeaseTests: XCTestCase {
     private func logs(_ session: ExactSession) -> String { session.agent(#"{"op":"logs","since":0}"#) }
 
     func testMissingCapabilitiesAreReportedOncePerSession() throws {
-        let markdown = MarkdownLink.installed, drag = DragLink.installed
-        MarkdownLink.installed = nil; DragLink.installed = nil
-        defer { MarkdownLink.installed = markdown; DragLink.installed = drag }
+        let markdown = MarkdownLink.installed, reorders = ReorderLink.make
+        MarkdownLink.installed = nil; ReorderLink.make = nil
+        defer { MarkdownLink.installed = markdown; ReorderLink.make = reorders }
         let session = try session()
         let batch = wireBatch([
             ["op": "create", "id": 900, "kind": "text", "props": ["markup": "markdown", "text": "**bold**"]],
@@ -65,7 +65,7 @@ final class SessionLeaseTests: XCTestCase {
         session.apply(batch)
         session.apply(wireBatch([["op": "props", "id": 900, "set": ["markup": "markdown"]]]))
         let journal = logs(session)
-        for product in ["ExactMarkdown", "ExactDrag"] {
+        for product in ["ExactMarkdown", "ExactCollections"] {
             XCTAssertEqual(journal.components(separatedBy: "link \(product) and call \(product).install()").count - 1, 1, journal)
         }
     }

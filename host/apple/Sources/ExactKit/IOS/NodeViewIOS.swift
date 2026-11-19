@@ -179,6 +179,7 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
             let direction = velocity == .zero ? pan.translation(in: self) : velocity
             return direction == .zero || !allowsTouchPan(direction)
         }
+        if let reorder = presenter?.reorders.shouldBegin(self, gesture) { return reorder }
         if let drag = DragLink.installed?.shouldBegin(self, gesture) { return drag }
         if gesture === heightRecognizer, let pan = gesture as? UIPanGestureRecognizer {
             let velocity = pan.velocity(in: window), translation = pan.translation(in: window)
@@ -391,7 +392,7 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
         set { super.accessibilityContainerType = newValue }
     }
     /// It hears focus, blur, keys or clipboard events (`focusEvents`), names a tabindex, or is a canvas taking input
-    private var asksForFocus: Bool { reorderKeys || explicitTabIndex != nil || canvases?.wantsInput(id) == true || !handlers.isDisjoint(with: Self.focusEvents) }
+    private var asksForFocus: Bool { presenter?.reorders.takesKeys(self) == true || explicitTabIndex != nil || canvases?.wantsInput(id) == true || !handlers.isDisjoint(with: Self.focusEvents) }
     /// A tap focuses only a node that asked for focus: UIKit's buttons never become first responder from a
     /// touch, though Tab and `focus(id)` reach them
     var focusesOnPress: Bool { canBecomeFirstResponder && asksForFocus }

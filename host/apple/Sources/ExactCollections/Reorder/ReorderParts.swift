@@ -1,6 +1,7 @@
-// What a reorder in a List and a grouped list's reorder (`ReorderGroup`)
-// share (LLP 1094 D6; LLP 1047.001 D4: the core keeps it, the drag
-// capability and grouped lists both use it).
+// What a reorder in a List and a reorder across a `reorderGroup`'s lists
+// (`ReorderGroup`) share (LLP 1094 D6).
+import ExactCore
+import ExactKit
 import Foundation
 
 /// The runtime's three Arrange calls (`exact.h`); a test substitutes its own.

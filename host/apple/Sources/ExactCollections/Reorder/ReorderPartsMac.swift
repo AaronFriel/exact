@@ -1,5 +1,7 @@
 #if os(macOS)
 import AppKit
+import ExactCore
+import ExactKit
 
 // Dropping across lists on AppKit (LLP 1094 D6): the ghost is the row's
 // cached display in a topmost image view; facts are in window coordinates,
@@ -135,14 +137,6 @@ extension NodeView {
     /// Where focus goes after a keyboard or custom-action move (D9).
     func focusAfterReorder() {
         if acceptsFirstResponder { window?.makeFirstResponder(self) }
-    }
-    /// "Move earlier", "Move later", "Move to previous list", "Move to next
-    /// list" on a grouped grip (D9).
-    package override func accessibilityCustomActions() -> [NSAccessibilityCustomAction]? {
-        guard reorderGroupList != nil else { return super.accessibilityCustomActions() }
-        return ReorderGroupStep.actions.map { name, step in
-            NSAccessibilityCustomAction(name: name) { [weak self] in self?.reorderAction(step) ?? false }
-        }
     }
 }
 #endif

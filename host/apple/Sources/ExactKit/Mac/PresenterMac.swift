@@ -107,12 +107,8 @@ package final class Presenter {
     /// The mouse drags (LLP 1047.001 D4: the Drag module's, when linked).
     lazy var mouseDrags = DragLink.installed?.mouseDrags(self) ?? .none
     lazy var mouseChain = MouseChain(self)
-    /// The one Arrange contact, until its source settles; a test's calls.
-    package var reorder: ReorderLift?
-    package var reorderCalls: ReorderCalls?
-    /// A grouped session (LLP 1094), until its ghost lands; a test's calls.
-    package var reorderGroup: ReorderGroupHold?
-    var reorderGroupCalls: ReorderGroupCalls?
+    /// Reordering a list's rows: the lists family's (`ReorderLink`).
+    lazy package var reorders: any ReorderHosting = ReorderLink.make?(self) ?? NoReorders()
     private var scrollObserver: NSObjectProtocol?
     private var visibleText: [UInt32: NSRect] = [:]
     private var textViewportIndex: TextViewportIndex?
@@ -668,9 +664,8 @@ package final class Presenter {
         mouseLayoutPan.abandon()
         mouseDrags.height.cancel()
         mouseDrags.transform.cancel()
-        mouseDrags.reorder.cancel()
-        reorder?.abandon()
-        reorderGroup?.abandon()
+        reorders.mouse.cancel()
+        reorders.abandon()
         collections.reset()
         tables.reset()
         leaves.reset()
@@ -826,7 +821,7 @@ package final class Presenter {
         mouseLayoutPan.retire(id)
         mouseDrags.height.retire(id)
         mouseDrags.transform.retire(id)
-        mouseDrags.reorder.retire(id)
+        reorders.mouse.retire(id)
         session?.canvases.destroy(view: id)
         if forget { svg?.forget(id) }
         boxAnimations.forget(id)

@@ -404,7 +404,7 @@ extension NodeView {
         // A lifted Arrange row moves by its frame: AppKit paints and culls a
         // view where its frame is, never where its layer was moved. So does
         // a sticky box by its scroll offset (LLP 1083).
-        let lift = presenter?.reorder?.lifts(id) == true ? translate : .zero
+        let lift = presenter?.reorders.lifts(id) == true ? translate : .zero
         let shift = CGPoint(x: lift.x + stickyOffset.x, y: lift.y + stickyOffset.y)
         if shift != arrangeShift {
             // Recorded first: moving the frame can lay the view out again,

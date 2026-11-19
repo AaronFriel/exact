@@ -364,3 +364,31 @@ fn media_is_four_products_each_by_its_own_use() {
         }
     }
 }
+
+/// On Apple a reorder is the lists family's: a reorder grip selects
+/// `Collections` and not `Drag`, which only a height or transform drag
+/// selects. Elsewhere a grip still names `drag`.
+#[test]
+fn apple_links_drag_for_height_and_transform_drags_only() {
+    use Capability::{Collections, Drag};
+    let grip = plan("column id=\"rows\" height=200\n      column reorderFor=\"rows\" height=20");
+    assert!(apple_uses(&grip).has(Collections));
+    assert!(!apple_uses(&grip).has(Drag));
+    assert!(uses(&grip).has(Drag));
+    let sheet = plan(
+        "column id=\"sheet\" box-sizing=\"border-box\" height=200\n      column heightDragFor=\"sheet\" height=20",
+    );
+    assert!(apple_uses(&sheet).has(Drag));
+    let photo = plan(
+        "column id=\"photo\" box-sizing=\"border-box\" width=100 height=100\n      column transformDragFor=\"photo\"",
+    );
+    assert!(apple_uses(&photo).has(Drag));
+    // A list's `reorderdrop` is the reorder's too.
+    let dropped = contract::compile(
+        "component A\n  state rows = [\"a\", \"b\"]\n  action receive(item: string, before: option<string>)\n    rows = rows\n  view\n    list id=\"rows\" virtualized=true estimated-item-height=20 height=100 reorderdrop=receive\n      for x in rows key=x\n        column reorderFor=\"rows\" height=20\n          text x\n",
+    )
+    .unwrap();
+    assert!(apple_uses(&dropped).has(Collections));
+    assert!(!apple_uses(&dropped).has(Drag));
+    assert!(uses(&dropped).has(Drag));
+}

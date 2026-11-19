@@ -97,7 +97,7 @@ package final class Presenter {
         chrome.note(view.id, props: view.props)
         ScrollMembership.epoch &+= 1
         AriaCarriers.note(view, of: self)
-        DragLink.installed?.updateReorderGesture(view)
+        reorders.updateGesture(view)
         view.updateRefresh()
         view.relook()
     }
@@ -113,12 +113,8 @@ package final class Presenter {
     var inlineOwners: [UInt32: (owner: UInt32, index: Int)] = [:]
     package var heightBindings: [UInt32: HeightDragBinding] = [:]
     package var transformBindings: [UInt32: TransformDragBinding] = [:]
-    /// The one Arrange contact, until its source settles; a test's calls.
-    package var reorder: ReorderLift?
-    package var reorderCalls: ReorderCalls?
-    /// A grouped session (LLP 1094), until its ghost lands; a test's calls.
-    package var reorderGroup: ReorderGroupHold?
-    var reorderGroupCalls: ReorderGroupCalls?
+    /// Reordering a list's rows: the lists family's (`ReorderLink`).
+    lazy package var reorders: any ReorderHosting = ReorderLink.make?(self) ?? NoReorders()
     lazy package var transformGeometry = TransformGeometryHost(self)
     lazy var nativeGeometry = NativeGeometry(self)
     /// Nodes showing a `background-attachment: fixed` gradient (LLP 1066
@@ -363,8 +359,7 @@ package final class Presenter {
         flightHost.reset()
         canvasKey = nil
         session?.transformInputHold?.cancel()
-        reorder?.abandon()
-        reorderGroup?.abandon()
+        reorders.abandon()
         session?.rasters?.reset()
         collections.reset(); elementScrolls.cancelAll()
         autofocusProcessed.removeAll()

@@ -296,7 +296,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
             return
         }
         let held = KeyCodes.held(event.modifierFlags)
-        if reorderKey(name) || presenter?.controls.roleKey(self, name, held: held) == true || presenter?.controls.radioKey(self, name, held: held) == true { return }
+        if presenter?.reorders.key(self, name) == true || presenter?.controls.roleKey(self, name, held: held) == true || presenter?.controls.radioKey(self, name, held: held) == true { return }
         let presses = name == " " || name == "Enter" && pressesOnReturn
         if isButton, !pressable, presses {
             activateNative()

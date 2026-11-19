@@ -14,23 +14,39 @@ use super::{
     uses_picture_in_picture, Capability, Uses,
 };
 use exact_kernel::{NodeType, PropId, StyleId};
-use exact_plan::{BindingKind, BindingsRow, Plan};
+use exact_plan::{BindingKind, BindingsRow, EventKind, Plan};
 
 /// What `plan` uses on Apple: [`uses`], with [`Capability::Grid`] the grid
 /// rows' grammars and the grid algorithm together, which a grid row or a
 /// layout that can reach the algorithm ([`lays_out_grid`]) selects,
-/// [`Capability::Effects`] a box's `filter` or what SVG uses, and the
-/// native roster's entries. The browser lays out a grid itself, and the
+/// [`Capability::Effects`] a box's `filter` or what SVG uses,
+/// [`Capability::Drag`] a height or transform drag (a reorder is the
+/// lists'), and the native roster's entries. The browser lays out a grid itself, and the
 /// other native hosts link the algorithm whole, so for them the capability
 /// is the rows' grammars.
 pub fn apple_uses(plan: &Plan) -> Uses {
-    let mut uses = uses(plan).beyond(Uses::NONE.with(Capability::Effects));
+    let mut uses = uses(plan).beyond(Uses::NONE.with(Capability::Effects).with(Capability::Drag));
     let mut add = |capability, used: bool| {
         if used {
             uses = uses.with(capability);
         }
     };
     add(Capability::Grid, lays_out_grid(plan));
+    // A height or transform drag is the drag family's; a reorder is the
+    // lists' (`Capability::Collections`, below), and its motion is `Motion`.
+    add(
+        Capability::Drag,
+        binds(plan, BindingKind::Prop, PropId::HeightDragFor as u16)
+            || binds(plan, BindingKind::Prop, PropId::TransformDragFor as u16)
+            || plan.handlers.iter().any(|h| {
+                matches!(
+                    h.event,
+                    EventKind::Heightrelease
+                        | EventKind::Transformgeometry
+                        | EventKind::Transformrelease
+                )
+            }),
+    );
     // A box's `filter`, bound or in a decoration table, is the family's;
     // `clip-path`, which the web's entry counts too, is the core's mask on
     // Apple.

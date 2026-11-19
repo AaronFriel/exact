@@ -3,6 +3,7 @@
 // mouse drag on macOS); Rust holds the lifted row and asks the collection for
 // the gap; this maps the pointer, keeps the handle's interaction pin until the
 // source has settled, raises the row and scrolls the List at its edges.
+import ExactCore
 import ExactKit
 import CExact
 import Foundation
@@ -47,7 +48,7 @@ final class ReorderHold {
         guard let presenter = handle.presenter, SwipeInput.allows(handle),
               !(handle.props["reorderFor"] ?? "").isEmpty,
               presenter.session?.isApplyingPresentation != true,
-              let calls = presenter.reorderCalls ?? presenter.session?.runtime,
+              let calls = presenter.reorderHost?.calls ?? presenter.session?.runtime,
               let list = presenter.collections.owningCollection(handle.id) else { return nil }
         self.presenter = presenter; self.handle = handle; self.calls = calls
         generation = presenter.session?.generation
@@ -63,8 +64,8 @@ final class ReorderHold {
         guard state.phase == "active", state.list == list else {
             presenter.collections.releaseInteractionLater(ifCurrent: pin); return nil
         }
-        presenter.reorder?.abandon()
-        presenter.reorder = self
+        presenter.reorderHost?.lift?.abandon()
+        presenter.reorderHost?.lift = self
         velocity.record(time: time, y: 0)
         raise(true)
     }
@@ -72,11 +73,11 @@ final class ReorderHold {
     private static func apply(_ batch: Batch, _ presenter: Presenter) {
         if let session = presenter.session { session.apply(batch); return }
         // Sessionless (a test's calls): only the Arrange state is routed.
-        for op in batch.ops where op.op == .reorder { presenter.reorder?.observe(ReorderState(op.payload)) }
+        for op in batch.ops where op.op == .reorder { presenter.reorderHost?.lift?.observe(ReorderState(op.payload)) }
     }
     private var now: Double { presenter?.session?.now() ?? CACurrentMediaTime() * 1000 }
     private var live: Bool {
-        guard let presenter, presenter.reorder === self else { return false }
+        guard let presenter, presenter.reorderHost?.lift === self else { return false }
         guard let generation else { return true }
         return presenter.session?.generation == generation && presenter.session?.runtime.destroyed == false
     }
@@ -135,13 +136,13 @@ final class ReorderHold {
     func abandon() {
         guard phase != .finished else { return }
         phase = .finished; stopEdge(); raise(false)
-        if presenter?.reorder === self { presenter?.reorder = nil }
+        if presenter?.reorderHost?.lift === self { presenter?.reorderHost?.lift = nil }
     }
 
     private func finished() {
         phase = .finished; stopEdge(); raise(false)
         presenter?.collections.releaseInteractionLater(ifCurrent: pin)
-        if presenter?.reorder === self { presenter?.reorder = nil }
+        if presenter?.reorderHost?.lift === self { presenter?.reorderHost?.lift = nil }
     }
 
     /// Whether `view` is this contact's lifted row (until it finishes).

@@ -1233,8 +1233,7 @@ public final class ExactSession {
         if !batch.canvasImagesDropped.isEmpty { presenter.canvas2d.drop(batch.canvasImagesDropped) }
         if !batch.canvasImages.isEmpty { presenter.canvas2d.load(batch.canvasImages) }
         ImageLink.animated?.poke()
-        for op in outputs.reorders { presenter.reorder?.observe(ReorderState(op.payload)); presenter.reorderGroup?.observe(ReorderGroupState(op.payload)) }
-        presenter.reorder?.raiseLifted()
+        presenter.reorders.observe(outputs.reorders)
         followRunner(batch)
         // The GPU module: after the first painted frame, only when a canvas exists.
         if firstDrawMs != nil {

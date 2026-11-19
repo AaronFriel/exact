@@ -256,7 +256,7 @@ final class MouseChain {
     /// Rule 4's rank on one node, the tie-break after depth.
     var ranked: [MouseRecognizer] {
         guard let p = presenter else { return [] }
-        return [p.mouseDrags.reorder, p.mouseDrags.transform, p.mouseDrags.height, p.mouseLayoutPan, p.mouseSwipe]
+        return [p.reorders.mouse, p.mouseDrags.transform, p.mouseDrags.height, p.mouseLayoutPan, p.mouseSwipe]
     }
     /// Arms every recognizer once per event (forwarding reaches the
     /// ancestors' overrides with the same event). The `press` arms too, as on

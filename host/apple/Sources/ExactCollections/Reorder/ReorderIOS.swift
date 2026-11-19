@@ -2,6 +2,7 @@
 // keeps the List's pan off a vertical contact starts on the drag itself;
 // any handle starts on a long press, which the List's pan beats by moving
 // first (scroll always wins).
+import ExactCore
 import ExactKit
 import CExact
 #if os(iOS) || os(tvOS)
@@ -33,7 +34,7 @@ extension NodeView {
         if gesture === reorderPress { return SwipeInput.allows(self) }
         guard gesture === reorderPan, let pan = gesture as? UIPanGestureRecognizer else { return nil }
         // A grouped grip lifts on a move in any direction (LLP 1094 D6).
-        if reorderGroupList != nil { return SwipeInput.allows(self) && (presenter?.reorderGroup == nil || presenter?.reorderGroup?.isLanding == true) }
+        if reorderGroupList != nil { return SwipeInput.allows(self) && (presenter?.reorderHost?.group == nil || presenter?.reorderHost?.group?.isLanding == true) }
         let v = pan.velocity(in: window), t = pan.translation(in: window)
         let vertical = HeightDragDirection.accepts(velocityX: Double(v.x), velocityY: Double(v.y),
             translationX: Double(t.x), translationY: Double(t.y))

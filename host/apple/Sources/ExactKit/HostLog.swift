@@ -20,9 +20,11 @@ package enum HostLog {
             if MarkdownLink.installed == nil, op.props["markup"] == "markdown" {
                 missing("ExactMarkdown")
             }
-            if DragLink.installed == nil,
-               op.op == .heightDrag || op.op == .transformDrag || !(op.props["reorderFor"] ?? "").isEmpty {
+            if DragLink.installed == nil, op.op == .heightDrag || op.op == .transformDrag {
                 missing("ExactDrag")
+            }
+            if ReorderLink.make == nil, !(op.props["reorderFor"] ?? "").isEmpty {
+                missing("ExactCollections")
             }
         }
     }

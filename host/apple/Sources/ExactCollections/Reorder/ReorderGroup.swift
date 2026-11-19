@@ -9,6 +9,8 @@
 // ghost springs onto the row (or fades when the row went) and the session
 // finishes. A key's or custom action's session has no ghost.
 import CExact
+import ExactCore
+import ExactKit
 import Foundation
 import QuartzCore
 #if os(macOS)
@@ -123,16 +125,16 @@ package final class ReorderGroupHold {
 
     /// Pin the grip, snapshot its row (before the runner hides it), and lift.
     package init?(_ handle: NodeView, point: CGPoint, ghost drawn: Bool) {
-        handle.presenter?.reorderGroup?.landNow()
+        handle.presenter?.reorderHost?.group?.landNow()
         // Said, as the web says it (LLP 1102 §3.17): a drive's reply reads like a success otherwise.
-        if handle.presenter?.reorderGroup != nil {
+        if handle.presenter?.reorderHost?.group != nil {
             handle.presenter?.session?.log("reorder: a drag refused: the last drop is held until its move shows (LLP 1094 D8); a person waits for the card to land; a drive waits with `clock settle` before the next drag")
         }
         guard let presenter = handle.presenter, SwipeInput.allows(handle),
-              presenter.reorderGroup == nil, presenter.reorder == nil,
+              presenter.reorderHost?.group == nil, presenter.reorderHost?.lift == nil,
               presenter.session?.isApplyingPresentation != true,
               let (list, group) = handle.reorderGroupList,
-              let calls = presenter.reorderGroupCalls ?? presenter.session?.runtime else { return nil }
+              let calls = presenter.reorderHost?.groupCalls ?? presenter.session?.runtime else { return nil }
         self.presenter = presenter; self.handle = handle; self.calls = calls; self.group = group
         pointerDriven = drawn
         generation = presenter.session?.generation
@@ -149,7 +151,7 @@ package final class ReorderGroupHold {
             Self.apply(batch, presenter)
             presenter.collections.releaseInteractionLater(ifCurrent: pin); return nil
         }
-        presenter.reorderGroup = self
+        presenter.reorderHost?.group = self
         if let ghost {
             self.ghost = ghost
             ghost.show()
@@ -163,11 +165,11 @@ package final class ReorderGroupHold {
 
     private static func apply(_ batch: Batch, _ presenter: Presenter) {
         if let session = presenter.session { session.apply(batch); return }
-        for op in batch.ops where op.op == .reorder { presenter.reorderGroup?.observe(ReorderGroupState(op.payload)) }
+        for op in batch.ops where op.op == .reorder { presenter.reorderHost?.group?.observe(ReorderGroupState(op.payload)) }
     }
     private var now: Double { presenter?.session?.now() ?? CACurrentMediaTime() * 1000 }
     private var live: Bool {
-        guard let presenter, presenter.reorderGroup === self else { return false }
+        guard let presenter, presenter.reorderHost?.group === self else { return false }
         guard let generation else { return true }
         return presenter.session?.generation == generation && presenter.session?.runtime.destroyed == false
     }
@@ -287,7 +289,7 @@ package final class ReorderGroupHold {
             state = ReorderGroupState(["group": true, "token": String(state.token), "phase": "finished"])!
         }
         presenter?.collections.releaseInteractionLater(ifCurrent: pin)
-        if presenter?.reorderGroup === self { presenter?.reorderGroup = nil }
+        if presenter?.reorderHost?.group === self { presenter?.reorderHost?.group = nil }
     }
 
     private func focusAfter(row: UInt32?) {
@@ -343,7 +345,7 @@ extension NodeView {
     func reorderKey(_ name: String) -> Bool {
         guard reorderKeys, let presenter else { return false }
         // A landing session yields to a new lift (LLP 1102 §3.18): Space below ends it first.
-        if let hold = presenter.reorderGroup, !hold.isLanding {
+        if let hold = presenter.reorderHost?.group, !hold.isLanding {
             guard hold.handle === self else { return false }
             if let step = ReorderGroupStep(key: name) { hold.step(step); return true }
             switch name {
