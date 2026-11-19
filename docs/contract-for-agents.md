@@ -7652,9 +7652,14 @@ state` compare against the text and print it masked. What the app stores (its da
 module, its store) is the app's own; an `app.test.contract` `type … append` into a
 filled password field is refused.
 
-`aria-busy=(not ready)` marks a region as still loading: assistive technology
-hears it, and time to interactive (`modules/observe`) waits until no element is
-busy.
+`aria-busy=(not ready)` marks a region as loading for assistive technology.
+The launch ledger used by `modules/observe` waits for busy elements before
+recording time to interactive. On Apple and the JavaScript web target, a
+mounted busy element holds `clock settle`, including inside a closed `dialog`.
+An indeterminate `progress` implies `aria-busy`. The settle reply names each
+busy element by test ID or view ID. Use `layout <id>` to find its source line in
+a development build. Use `clock +1` to run a task due a commit later while
+settle is blocked.
 
 `border`, `border-top/right/bottom/left` take CSS width/style/color in any order,
 resetting omitted components to medium/none/currentcolor. Widths are px/pt,
