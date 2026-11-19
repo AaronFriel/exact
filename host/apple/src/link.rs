@@ -826,6 +826,24 @@ mod tests {
         let frame = compile("iframe src=\"https://example.test\"", "on = false");
         let sound = compile("button \"b\" press=go", "stopSounds()");
         let midi = compile("button \"b\" press=go", "requestMIDIAccess()");
+        let widget = contract::Widget {
+            kind: "card".into(),
+            title: None,
+            description: None,
+            families: vec!["systemSmall".into()],
+            watch_families: vec![],
+            component: "Card".into(),
+            props: "Props".into(),
+            refresh: "refresh".into(),
+            requires_secrets: false,
+            preview: serde_json::json!({"title": "preview"}),
+            configuration: None,
+        };
+        let entry = contract::snapshot::compile(
+            "shape Props\n  title: string\ncomponent Card\n  props\n    title: string\n  view\n    text title\n",
+            &widget,
+        )
+        .unwrap();
         for (plan, name) in [
             (&tools, "tools"),
             (&view, "modules, native_views"),
@@ -844,13 +862,14 @@ mod tests {
             (&routed, "navigation"),
             (&sheet, "navigation"),
             (&placed, "grid"),
-            (&activity, "activities"),
+            (&activity, "activities, widgets"),
             (&awake, "wake_lock"),
             (&video, "video"),
             (&frame, "web_views"),
             (&sound, "sound"),
             (&midi, "midi"),
             (&selectable, "text_selection"),
+            (&entry, "widgets"),
         ] {
             assert_eq!(missing(plan, Uses::NONE).as_deref(), Some(name));
             assert_eq!(missing(plan, ALL), None);

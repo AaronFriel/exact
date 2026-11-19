@@ -54,6 +54,33 @@ pub fn media() -> [(Vec<u8>, &'static str); 4] {
     ]
 }
 
+/// A widget's entry plan: only the widgets family boots one (LLP 1126 D2).
+pub fn entry() -> Vec<u8> {
+    let widget = contract::Widget {
+        kind: "card".into(),
+        title: None,
+        description: None,
+        families: vec!["systemSmall".into()],
+        watch_families: vec![],
+        component: "Card".into(),
+        props: "Props".into(),
+        refresh: "refresh".into(),
+        requires_secrets: false,
+        preview: serde_json::json!({"title": "preview"}),
+        configuration: None,
+    };
+    let card = "shape Props\n  title: string\ncomponent Card\n  props\n    title: string\n  view\n    text title\n";
+    contract::snapshot::compile(card, &widget).unwrap().encode()
+}
+
+/// Boot `entry` as the headless session does, and its reply.
+pub fn boot_entry(entry: &[u8]) -> String {
+    let mut bridge = Bridge::<NoData>::new();
+    bridge.input_write(&[entry, b"card"].concat());
+    let out = bridge.boot_entry(entry.len(), 4, 0, 0, NoData, Hooks::none(), 158.0, 158.0);
+    String::from_utf8_lossy(bridge.output_bytes(out as usize)).into_owned()
+}
+
 pub fn boot(bridge: &mut Bridge<NoData>, plan: &[u8]) {
     let out = bridge.boot(plan, NoData, Hooks::none(), 390.0, 844.0);
     let reply = String::from_utf8_lossy(bridge.output_bytes(out as usize)).into_owned();

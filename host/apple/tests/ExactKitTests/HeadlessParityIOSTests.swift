@@ -1,6 +1,8 @@
 #if os(iOS)
 import UIKit
 import XCTest
+import ExactCore
+import ExactSnapshot
 @testable import ExactKit
 
 final class HeadlessParityIOSTests: XCTestCase {

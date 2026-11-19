@@ -313,6 +313,39 @@ fn activities_are_a_plan_that_starts_or_reads_one() {
     }
 }
 
+/// An entry's plan and a Live Activity's sends select `widgets`; an app's
+/// own plan does not.
+#[test]
+fn widgets_are_an_entry_plan_or_activities() {
+    let widget = contract::Widget {
+        kind: "card".into(),
+        title: None,
+        description: None,
+        families: vec!["systemSmall".into()],
+        watch_families: vec![],
+        component: "Card".into(),
+        props: "Props".into(),
+        refresh: "refresh".into(),
+        requires_secrets: false,
+        preview: serde_json::json!({"title": "preview"}),
+        configuration: None,
+    };
+    let card = "shape Props\n  title: string\ncomponent Card\n  props\n    title: string\n  view\n    text title\n";
+    let entry = contract::snapshot::compile(card, &widget).unwrap();
+    let app = contract::compile("component A\n  view\n    text \"a\"\n").unwrap();
+    let activity = contract::compile(
+        "shape ID\n  id: string\ncomponent A\n  resource live = exactActivities() as shape ID\n  view\n    text \"a\"\n",
+    )
+    .unwrap();
+    for (plan, selected) in [(&entry, true), (&activity, true), (&app, false)] {
+        assert_eq!(apple_uses(plan).has(Capability::Widgets), selected);
+        assert!(
+            !uses(plan).has(Capability::Widgets),
+            "the web's set names none"
+        );
+    }
+}
+
 /// The families the system reaches through the app are selected by grants.
 #[test]
 fn notifications_host_events_and_wakes_are_their_grants() {

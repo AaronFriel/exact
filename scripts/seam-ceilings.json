@@ -1496,7 +1496,7 @@
         "host/apple/soundarm/SoundArm.swift: exact_sound_engine",
         "host/apple/soundarm/SoundArm.swift: exact_sound_op",
         "host/apple/soundarm/SoundArm.swift: exact_sound_open",
-        "host/apple/Sources/ExactCore/WidgetContainer.swift: exact_widget_reload",
+        "host/apple/Sources/ExactWidgetPublication/WidgetPublication.swift: exact_widget_reload",
         "host/apple/src/abi/answers.rs: exact_answer_ticket",
         "host/apple/src/abi/answers.rs: exact_app_roots",
         "host/apple/src/abi/answers.rs: exact_declared",

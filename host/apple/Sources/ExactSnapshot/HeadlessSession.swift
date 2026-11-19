@@ -2,6 +2,7 @@
 import Foundation
 import CoreText
 import CExact
+import ExactCore
 
 /// A session that produces laid-out values and creates no platform views.
 /// Calls are serialized on Exact's owner thread; Core Text objects stay there.
@@ -111,11 +112,6 @@ public final class HeadlessSession {
         public let nodes: [UInt32: Node]
         public init(size: CGSize, roots: [UInt32], nodes: [UInt32: Node]) { self.size = size; self.roots = roots; self.nodes = nodes }
     }
-    public struct Failure: Error, CustomStringConvertible {
-        public let description: String
-        public init(description: String) { self.description = description }
-    }
-
     package let core: SessionCore
     private var rootFontSize: Double
     private var nodes: [UInt32: Node] = [:]
@@ -221,7 +217,7 @@ public final class HeadlessSession {
         let module = try moduleRoot.map { try Data(contentsOf: $0.appendingPathComponent("typescript/app.hbc"), options: .mappedIfSafe) } ?? Data()
         let bytes = core.runtime.entryTimeline(at: date.timeIntervalSince1970 * 1000, configuration: configuration, deadline: deadline, receipt: receipt, module: module)
         if let object = try JSONSerialization.jsonObject(with: bytes) as? [String: Any], let error = object["error"] as? String {
-            throw Failure(description: error)
+            throw ExactFailure(description: error)
         }
         return bytes
     }
@@ -291,7 +287,7 @@ public final class HeadlessSession {
     package func previewTimeline(at date: Date, configuration: Data? = nil) throws -> [String: Any] {
         let bytes = core.runtime.previewTimeline(at: date.timeIntervalSince1970 * 1000, configuration: configuration)
         let result = try JSONSerialization.jsonObject(with: bytes) as? [String: Any] ?? [:]
-        if let error = result["error"] as? String { throw Failure(description: error) }
+        if let error = result["error"] as? String { throw ExactFailure(description: error) }
         return result
     }
     /// Advance a pure snapshot without activating the host's deferred I/O.
@@ -421,10 +417,10 @@ public final class HeadlessSession {
     private func turn(size: CGSize? = nil, _ body: () throws -> Batch) throws -> Snapshot {
         try Owner.shared.sync {
             Result {
-                guard !core.runtime.destroyed else { throw Failure(description: "headless session is closed") }
+                guard !core.runtime.destroyed else { throw ExactFailure(description: "headless session is closed") }
                 core.text.refusedMarkdown = nil
                 let batch = try body()
-                if let error = batch.error { throw Failure(description: error) }
+                if let error = batch.error { throw ExactFailure(description: error) }
                 if !batch.busy { timerDue = batch.timerDueMs }
                 if let size { self.size = size }
                 try apply(batch)
@@ -504,12 +500,12 @@ public final class HeadlessSession {
         if let id = core.text.refusedMarkdown {
             let name = nodes[id]?.props["testId"] ?? nodes[id]?.props["id"] ?? String(id)
             core.runtime.destroy()
-            throw Failure(description: "headless node \(name) (#\(id)) requires a Markdown expansion through TextPresentation")
+            throw ExactFailure(description: "headless node \(name) (#\(id)) requires a Markdown expansion through TextPresentation")
         }
     }
 
     private func snapshotOnOwner() throws -> Snapshot {
-        guard !core.runtime.destroyed else { throw Failure(description: "headless session is closed") }
+        guard !core.runtime.destroyed else { throw ExactFailure(description: "headless session is closed") }
         return Snapshot(size: size, roots: roots, nodes: nodes)
     }
 }

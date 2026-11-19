@@ -88,10 +88,11 @@ pub(crate) fn composed<'a>(
 }
 
 /// `uses` with what the manifest links `ahead`. On Apple, an SVG linked
-/// ahead links box effects' engine too, which SVG's filters run on; and
-/// `documents` or `media_picker` linked ahead links the pickers' family
-/// (`picker`), since a later plan's document pickers or photo picker present
-/// through it. A plan's own uses need no such rule: its document-picker
+/// ahead links box effects' engine too, which SVG's filters run on;
+/// `activities` linked ahead links the widgets family, whose generation a
+/// later plan's activity sends name; and `documents` or `media_picker`
+/// linked ahead links the pickers' family (`picker`), since a later plan's
+/// document pickers or photo picker present through it. A plan's own uses need no such rule: its document-picker
 /// commands and file inputs select `picker` themselves, and its drops,
 /// pastes and `requestPermission` need only the core's `doc:` table.
 fn linked_ahead(uses: Uses, ahead: Vec<Capability>, inputs: &serde_json::Value) -> Uses {
@@ -101,6 +102,9 @@ fn linked_ahead(uses: Uses, ahead: Vec<Capability>, inputs: &serde_json::Value) 
     let mut uses = ahead.into_iter().fold(uses, Uses::with);
     if apple(inputs) && uses.has(Capability::Svg) {
         uses = uses.with(Capability::Effects);
+    }
+    if apple(inputs) && uses.has(Capability::Activities) {
+        uses = uses.with(Capability::Widgets);
     }
     if apple(inputs) && presents {
         uses = uses.with(Capability::Picker);
@@ -504,6 +508,14 @@ mod tests {
             ahead.unwrap(),
             Some(serde_json::json!(["effects", "grid", "svg"]))
         );
+        // Activities linked ahead bring the publication their sends name.
+        linking.json["link"] = serde_json::json!(["activities"]);
+        let ahead =
+            super::apple_requirement(&hello, &table, std::iter::empty(), &inputs, &linking, false);
+        assert_eq!(
+            ahead.unwrap(),
+            Some(serde_json::json!(["grid", "activities", "widgets"]))
+        );
         let svg = contract::compile(
             "component S\n  view\n    svg viewBox=\"0 0 10 10\"\n      circle cx=5 cy=5 r=4\n",
         )
@@ -511,6 +523,35 @@ mod tests {
         let drawn =
             super::apple_requirement(&hello, &svg, std::iter::empty(), &inputs, &manifest, false);
         assert_eq!(drawn.unwrap(), Some(serde_json::json!(["effects", "svg"])));
+        // An entry's plan, as the publisher asks it of each pushed entry,
+        // needs the binary that publishes entries.
+        let widget = contract::Widget {
+            kind: "card".into(),
+            title: None,
+            description: None,
+            families: vec!["systemSmall".into()],
+            watch_families: vec![],
+            component: "Card".into(),
+            props: "Props".into(),
+            refresh: "refresh".into(),
+            requires_secrets: false,
+            preview: serde_json::json!({"title": "preview"}),
+            configuration: None,
+        };
+        let entry = contract::snapshot::compile(
+            "shape Props\n  title: string\ncomponent Card\n  props\n    title: string\n  view\n    text title\n",
+            &widget,
+        )
+        .unwrap();
+        let entry = super::apple_requirement(
+            &hello,
+            &entry,
+            std::iter::empty(),
+            &inputs,
+            &manifest,
+            false,
+        );
+        assert_eq!(entry.unwrap(), Some(serde_json::json!(["widgets"])));
     }
 
     /// A source that declares host work (LLP 1047.001 D12) and one placed on

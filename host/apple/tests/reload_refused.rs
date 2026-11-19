@@ -1,6 +1,6 @@
 //! LLP 1047.001 D5 on a reload: an archive whose linked set is hello's (no
 //! family) refuses a plan that uses a family before anything changes, and the
-//! running plan stays. This proves admission, not what the archive omits: the
+//! running plan stays; it refuses an entry's boot the same way. This proves admission, not what the archive omits: the
 //! test binary carries every family. Its own process, since an archive's linked set is the
 //! process's (`exact_apple::link::set`); `reload_admitted.rs` is the
 //! all-linked case.
@@ -10,7 +10,9 @@ use exact_apple::link::{self, Uses};
 
 #[path = "reload/common.rs"]
 mod common;
-use common::{boot, digest, media, plan, source, NoData, ACTIVITIES, ANIMATED, TRACING};
+use common::{
+    boot, boot_entry, digest, entry, media, plan, source, NoData, ACTIVITIES, ANIMATED, TRACING,
+};
 
 #[test]
 fn hellos_binary_refuses_a_reload_into_a_family_and_keeps_its_plan() {
@@ -43,7 +45,7 @@ fn hellos_binary_refuses_a_reload_into_a_family_and_keeps_its_plan() {
             plan("column position=\"sticky\" top=0\n      text \"a\""),
             "sticky",
         ),
-        (source(ACTIVITIES), "activities"),
+        (source(ACTIVITIES), "activities, widgets"),
         (
             plan("column background-image=\"linear-gradient(red, blue)\""),
             "gradients",
@@ -103,4 +105,13 @@ fn hellos_binary_refuses_to_boot_a_media_plan() {
             "{name}: {reply}"
         );
     }
+}
+
+/// An entry boots only where the widgets family is linked: on hello's
+/// binary its boot is refused by name.
+#[test]
+fn hellos_binary_refuses_to_boot_an_entry() {
+    link::set(Uses::NONE);
+    let reply = boot_entry(&entry());
+    assert!(reply.contains("Unlinked(\\\"widgets\\\")"), "{reply}");
 }

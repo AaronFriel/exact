@@ -781,8 +781,8 @@ export const classifications = [
       "Runner::take_ended_wakes Runner::wake_state"],
   ]),
   group("widget reloads", ["durable operation"], "app widget timeline invalidation; no runner continuation", "durable",
-    "host/apple/Sources/ExactCore/WidgetContainer.swift exact_widget_reload asks WidgetCenter to reload app timelines; no requesting view or visit owns the invalidation.", [
-    ["apple:host/apple/Sources/ExactCore/WidgetContainer.swift", "exact_widget_reload"],
+    "host/apple/Sources/ExactWidgetPublication/WidgetPublication.swift exact_widget_reload asks WidgetCenter to reload app timelines; no requesting view or visit owns the invalidation.", [
+    ["apple:host/apple/Sources/ExactWidgetPublication/WidgetPublication.swift", "exact_widget_reload"],
   ]),
   group("declared operations", ["durable operation"], "app reference reserved in app state; process-local today", "durable",
     "runner/src/runner/modules/declared/app_list.rs app_reference locks app_state under the app ID and advances its reference beyond the session counter; no view owns it.", [

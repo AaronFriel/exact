@@ -320,7 +320,7 @@ function syncFile(from, to) {
 }
 const writeIfChanged = (path, text) => { if (!existsSync(path) || readFileSync(path, 'utf8') !== text) writeFileSync(path, text); };
 /** The reload artifact has no app-specific inputs. Reuse it until its source or target changes. */
-export function widgetReload({ directory, triple, sdk, device, platform = 'ios', production = false, runApple, source = resolve(pkg, 'Sources/ExactCore/WidgetContainer.swift') }) {
+export function widgetReload({ directory, triple, sdk, device, platform = 'ios', production = false, runApple, source = resolve(pkg, 'Sources/ExactWidgetPublication/WidgetPublication.swift') }) {
   // One file per digest: apps sharing `directory` may ask for different triples at once.
   const digest = createHash('sha256').update(readFileSync(source)).update(JSON.stringify([triple, sdk, production])).digest('hex').slice(0, 16);
   const binary = resolve(directory, `widget-reload-${digest}`, 'libexact_widget_reload.dylib');

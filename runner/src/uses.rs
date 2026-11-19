@@ -236,11 +236,17 @@ pub enum Capability {
     /// selectable. Native only; the Mac's set always names it, since
     /// AppKit's document text is selectable unsaid.
     TextSelection,
+    /// A widget's or a Live Activity's entry (LLP 1126 D2, D8): the app's
+    /// publication of its generations to the App Group and the observation
+    /// of the store the extension writes; an entry boots only where it is
+    /// linked. An entry's plan (`snapshot_entry`) selects it, and so do Live
+    /// Activities, whose sends name the published generation. Native only.
+    Widgets,
 }
 
 impl Capability {
     /// Every capability, in bit order.
-    pub const ALL: [Capability; 58] = [
+    pub const ALL: [Capability; 59] = [
         Capability::Markdown,
         Capability::Motion,
         Capability::Collections,
@@ -299,6 +305,7 @@ impl Capability {
         Capability::Midi,
         Capability::Navigation,
         Capability::TextSelection,
+        Capability::Widgets,
     ];
 
     /// The name an entry, a refusal and a report use.
@@ -362,6 +369,7 @@ impl Capability {
             Capability::Midi => "midi",
             Capability::Navigation => "navigation",
             Capability::TextSelection => "text_selection",
+            Capability::Widgets => "widgets",
         }
     }
 
@@ -408,7 +416,8 @@ impl Uses {
         .with(Capability::Sound)
         .with(Capability::Midi)
         .with(Capability::Navigation)
-        .with(Capability::TextSelection);
+        .with(Capability::TextSelection)
+        .with(Capability::Widgets);
 
     /// This set and `capability`.
     pub const fn with(self, capability: Capability) -> Uses {

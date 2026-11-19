@@ -141,7 +141,6 @@ public final class ExactApp {
         #endif
         assetRoot = URL(fileURLWithPath: ExactEnv.environment["EXACT_ASSETS"] ?? fallback, isDirectory: true)
         resolver = AssetResolver(root: assetRoot)
-        observeSharedStore()
     }
     /// The immutable Rust executor policy carried by this binary's bake.
     public var rustPolicy: (mode: String, target: String) {
@@ -169,7 +168,7 @@ public final class ExactApp {
     }
     func firstPixel(_ token: UInt64) {
         lifecycle?.firstPixel(self, token: token)
-        WidgetContainer.publishAfterFirstPixel(resolver)
+        WidgetLink.publication?.publishAfterFirstPixel(resolver)
     }
     /// Refresh generic delivery facts after a composition-owned event.
     public func refreshDelivery() {
@@ -187,6 +186,7 @@ public final class ExactApp {
         let named = label.isEmpty ? (1...).lazy.map { "session-\($0)" }.first { !live.contains($0) }! : label
         let s = ExactSession(app: self, label: named)
         s.delegate = delegate; ModuleSeamLink.listenPush?(); ModuleSeamLink.listenHostEvents?() // before its packages can register or drain
+        observeSharedStoreOnce()
         replacements.attach(s)
         sessionRefs.append(WeakSession(s))
         sessionRefs.removeAll { $0.session == nil }

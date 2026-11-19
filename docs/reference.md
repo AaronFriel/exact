@@ -1494,7 +1494,7 @@ The generated `--embed` composition lists the capabilities to link.
 | `ExactSticky` | `position: sticky` | `ExactSticky.install()` |
 | `ExactNotifications` | Notifications, their actions and push registration | `ExactNotifications.install()`; the app delegate calls `ExactApp.installNotificationClicks` before launch completes |
 | `ExactHostEventMailbox` | Host events a package takes (an accepted iCloud share) | `ExactHostEventMailbox.install()`; the app delegate calls `ExactApp.installHostEvents` before any scene connects |
-| `ExactActivities` | Live Activities | `ExactActivities.install()` |
+| `ExactActivities` | Live Activities (links `ExactWidgetPublication`, whose generation their sends name) | `ExactActivities.install()` |
 | `ExactWakeCarriers` | Wakes, background transfers and monitored regions | `ExactWakeCarriers.install()`; the app delegate calls `ExactApp.installWakes` before launch completes, and `ExactApp.handleTransferEvents` |
 | `ExactGradients` | CSS gradients: `background-image` and `mask-image` | `ExactGradients.install()` |
 | `ExactTraces` | The traces an app records, and `ExactSession.startTrace()` and `stopTrace(maxBytes:)` | `ExactTraces.install()` |
@@ -1507,6 +1507,7 @@ The generated `--embed` composition lists the capabilities to link.
 | `ExactAnimations` | What Core Animation plays for a box: its CSS animations (`animation`, `@keyframes`), transitions, drags and spring motion, so any of `animations`, `transitions`, `motion`, `drag` or `timelines` links it; SVG's element animations play through it too | `ExactAnimations.install()` |
 | `ExactNavigation` | Route stacks, tabs and their bars, route modals; on the Mac route sheets, the list beside its detail, Back and Forward, the root tabs as the sidebar | `ExactNavigation.install()` |
 | `ExactTextSelection` | iOS's selection of text a `user-select` of `text` or `all` makes selectable (the Mac's is in `ExactKit`, and every Mac composition names it) | `ExactTextSelection.install()` |
+| `ExactWidgetPublication` | Widgets and Live Activities: the app's publication of its entries to the App Group and its observation of the store they write | `ExactWidgetPublication.install()` |
 
 Development builds log a missing Markdown or drag installation once per session,
 with the product and installation call. Without it, Markdown remains literal

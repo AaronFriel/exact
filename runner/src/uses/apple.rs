@@ -162,14 +162,18 @@ pub fn apple_uses(plan: &Plan) -> Uses {
         }),
     );
     // A Live Activity's sends, or the resource that reads them.
+    let activities = plan.sources.iter().any(|row| {
+        matches!(
+            plan.str(row.name),
+            "startActivity" | "updateActivity" | "endActivity" | "exactActivities"
+        )
+    });
+    add(Capability::Activities, activities);
+    // An entry's plan boots only in a binary that publishes entries; a Live
+    // Activity's sends name the generation that publication makes.
     add(
-        Capability::Activities,
-        plan.sources.iter().any(|row| {
-            matches!(
-                plan.str(row.name),
-                "startActivity" | "updateActivity" | "endActivity" | "exactActivities"
-            )
-        }),
+        Capability::Widgets,
+        !plan.snapshot_entry.is_empty() || activities,
     );
     // The media family's four products, each beside its loaded arm. An
     // `audio` element is a `Video` node.

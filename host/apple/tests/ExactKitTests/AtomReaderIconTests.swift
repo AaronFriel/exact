@@ -4,6 +4,7 @@ import ImageIO
 import IOSurface
 import CExact
 import ExactCore
+import ExactSnapshot
 @testable import ExactKit
 @testable import ExactImages
 @testable import ExactMarkdown

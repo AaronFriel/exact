@@ -469,7 +469,7 @@ public enum DevMenu {
             lines.append("plan: baked")
         }
         lines.append("app dir: \(ExactApp.shared.assetRoot.path)")
-        if let failure = WidgetContainer.publicationFailure { lines.append("widget generation: \(failure)") }
+        if let failure = WidgetLink.publication?.publicationFailure { lines.append("widget generation: \(failure)") }
         if let session {
             let size = session.presenter.viewportSize
             lines.append("session: \(session.label) · viewport: \(Int(size.width))×\(Int(size.height)) · \(session.viewCount) views")
