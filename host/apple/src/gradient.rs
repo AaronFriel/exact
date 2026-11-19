@@ -114,6 +114,9 @@ pub unsafe fn resolve(
         Geometry::Conic { center, from } => format!("\"arc\":[{},{},{}]", center.0, center.1, from),
     };
     let mut json = gradient_json(&ramp);
+    if json.is_empty() {
+        return 0;
+    }
     json.pop();
     json.push(',');
     json.push_str(&placement);
@@ -206,6 +209,27 @@ use crate::style::num;
 /// the dark scheme interpolates otherwise): a live painter resolves it against
 /// its view, while snapshots retain the session's resolved colours.
 pub(crate) fn gradient_json(g: &exact_kernel::gradient::Gradient) -> String {
+    #[cfg(not(test))]
+    return JSON.get().map_or_else(String::new, |json| json(g));
+    #[cfg(test)]
+    gradient_json_linked(g)
+}
+
+/// [`gradient_json`], once linked ([`link_json`]). This crate's own tests
+/// serialize directly.
+#[cfg(not(test))]
+static JSON: std::sync::OnceLock<fn(&exact_kernel::gradient::Gradient) -> String> =
+    std::sync::OnceLock::new();
+
+/// Link the serializer a box's gradient crosses by, with the gradient grammar
+/// (`gradients`): a gradient value exists only where that grammar parsed one,
+/// so an archive without it never serializes one (LLP 1047 D2).
+pub(crate) fn link_json() {
+    #[cfg(not(test))]
+    let _ = JSON.set(gradient_json_linked);
+}
+
+fn gradient_json_linked(g: &exact_kernel::gradient::Gradient) -> String {
     use exact_kernel::gradient::{premultiplied_ramp, Direction, Length};
     // Its session's overrides now, while that session is bound: the
     // presenter resolves the rest later, outside any (LLP 1121 stage 5).

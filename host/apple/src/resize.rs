@@ -110,7 +110,9 @@ impl<D: DataSource> Host<D> {
         self.group_after_commit(&mut batch);
         self.persist();
         self.emit_language(&mut batch);
-        self.emit_transform_drags(&mut batch);
+        if let Some(drag) = self.turn.drag {
+            (drag.emit_transforms)(self, &mut batch);
+        }
         self.present(&mut batch, false);
         (batch, error.or(arrange))
     }
@@ -159,7 +161,9 @@ impl<D: DataSource> Host<D> {
             error = error.or(e).or(arrange);
             self.persist();
             self.emit_language(&mut batch);
-            self.emit_transform_drags(&mut batch);
+            if let Some(drag) = self.turn.drag {
+                (drag.emit_transforms)(self, &mut batch);
+            }
             self.present(&mut batch, false);
         }
         self.resize_pending = self.runner.resize_settled();
@@ -241,7 +245,9 @@ impl<D: DataSource> Host<D> {
         let arrange = self.arrange_after_commit(&mut batch);
         self.persist();
         self.emit_language(&mut batch);
-        self.emit_transform_drags(&mut batch);
+        if let Some(drag) = self.turn.drag {
+            (drag.emit_transforms)(self, &mut batch);
+        }
         self.present(&mut batch, false);
         self.resize_rounds(batch, error.or(arrange))
     }

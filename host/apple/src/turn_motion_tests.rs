@@ -144,3 +144,66 @@ fn a_plan_that_moves_links_the_turn_motion_and_runs_as_everything_linked() {
         );
     }
 }
+
+const HEIGHT_DRAG: &str = r#"component App
+  state open = true
+  action release(height: number, velocity: number)
+    open = false
+  view
+    box id="sheet" testId="sheet" height=200 box-sizing="border-box"
+      box testId="header" heightDragFor="sheet" heightrelease=release
+"#;
+
+/// The drags link with `drag` (`TurnLinks::drag`), which every handler that
+/// registers a drag handle selects; a still plan links none of it. An
+/// archive without it registers no handle and refuses the drag entry points,
+/// and one with it begins the drag.
+#[test]
+fn drags_link_with_drag_and_an_archive_without_refuses_their_entry_points() {
+    assert!(TurnLinks::<NoData>::of(uses(STILL)).drag.is_none());
+    let used = uses(HEIGHT_DRAG);
+    assert!(used.has(crate::link::Capability::Drag));
+    assert!(TurnLinks::<NoData>::of(used).drag.is_some());
+    let begin = |turn: TurnLinks<NoData>| {
+        let plan = contract::compile(HEIGHT_DRAG).unwrap().encode();
+        let (mut host, _) = Host::boot_stored_after_decode(
+            PlanBytes::Copied(&plan),
+            NoData,
+            Box::new(MonospaceMeasurer::default()),
+            scale::LaunchLayout::NONE,
+            exact_runner::Viewport::sized(800.0, 900.0),
+            None,
+            Vec::new(),
+            None,
+            None,
+            None,
+            None,
+            "/",
+            false,
+            None,
+            Links { turn, ..Links::ALL },
+            None,
+            |_| Ok(()),
+        )
+        .unwrap();
+        host.commit_boot();
+        let header = host.runner.kernel().find_by_test_id("header")[0];
+        let sheet = host.runner.kernel().find_by_test_id("sheet")[0];
+        let begun = host.height_drag_begin(header, sheet, 5_000.0);
+        let entries = [
+            host.transform_motion(&[0; 120]).finish(),
+            host.height_drag_update(1, 120.0, 5_016.0),
+            host.dispatch_height_measured(1, 120.0, 5_032.0),
+            host.dispatch_height_held(1, 120.0, 0.0, 5_048.0),
+        ];
+        (host.height_handles.len(), begun, entries)
+    };
+    let (handles, linked, _) = begin(TurnLinks::of(used));
+    assert_eq!(handles, 1);
+    assert!(linked.contains("\"token\""), "{linked}");
+    let (handles, unlinked, entries) = begin(TurnLinks::of(crate::link::Uses::NONE));
+    assert_eq!(handles, 0, "no handle is registered without the link");
+    for refused in std::iter::once(&unlinked).chain(&entries) {
+        assert!(refused.contains("links no drag"), "{refused}");
+    }
+}

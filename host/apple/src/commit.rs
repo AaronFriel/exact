@@ -169,7 +169,9 @@ impl<D: DataSource> Host<D> {
                 (motion.seed_layout)(self, &t.receipt, &mut batch);
             }
             self.sync_paint(&t.receipt, &mut batch);
-            self.reconcile_height_handles(&mut batch, true);
+            if let Some(drag) = self.turn.drag {
+                (drag.reconcile_heights)(self, &mut batch, true);
+            }
             let synced = self.sync_height_owner();
             debug_assert!(synced.is_ok(), "validated height sync");
             if let Some(motion) = self.turn.motion {
@@ -179,8 +181,10 @@ impl<D: DataSource> Host<D> {
             }
             // Latest target/declaration must reach the held slot before an
             // invalidated header cancels it (negative delays sample at once).
-            self.cancel_invalid_height_drag();
-            self.reconcile_transform_drags(&mut batch);
+            if let Some(drag) = self.turn.drag {
+                (drag.cancel_invalid_height)(self);
+                (drag.reconcile_transforms)(self, &mut batch);
+            }
         }
         self.repaint_renewed(&repaint, &mut batch);
         let seek = self.engine.advance(self.engine_time(self.now_ms));
@@ -222,7 +226,9 @@ impl<D: DataSource> Host<D> {
     pub(super) fn commit_finish(&mut self, mut batch: Batch, error: Option<String>) -> String {
         self.persist();
         self.emit_language(&mut batch);
-        self.emit_transform_drags(&mut batch);
+        if let Some(drag) = self.turn.drag {
+            (drag.emit_transforms)(self, &mut batch);
+        }
         self.present(&mut batch, false);
         self.finish(batch, error)
     }

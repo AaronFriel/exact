@@ -56,6 +56,12 @@ pub struct Grammars {
     clip_path_grammar: Option<fn()>,
 }
 
+/// The gradient grammar and the serializer its values cross by.
+fn link_gradients() {
+    exact_kernel::style::link_gradients();
+    crate::gradient::link_json();
+}
+
 /// The grid rows' grammars and the algorithm, which Apple links together
 /// (D10).
 fn link_grid() {
@@ -114,7 +120,7 @@ impl Grammars {
                 None
             },
             gradient_grammar: if uses.has(Capability::Gradients) {
-                Some(exact_kernel::style::link_gradients)
+                Some(link_gradients)
             } else {
                 None
             },
@@ -281,7 +287,49 @@ pub struct TurnLinks<D: DataSource> {
     /// and list moves. Linked when anything can move, as the engine is;
     /// where nothing moves each finds nothing to do, so it is not linked.
     pub motion: Option<TurnMotion<D>>,
+    /// The drags: a transform drag's and a height drag's handles, packets,
+    /// pairs and holds (LLP 1057; `transform_drag.rs`, `height_drag.rs`).
+    /// Linked by `drag`; where it is not, no handle is ever registered, so
+    /// the turn has none to reconcile or emit and an entry point refuses.
+    pub drag: Option<DragLinks<D>>,
 }
+
+/// [`TurnLinks::drag`]'s parts, each where the host reaches it.
+pub struct DragLinks<D: DataSource> {
+    /// A created view's transform-drag handlers.
+    pub register_transform:
+        fn(&mut crate::Host<D>, exact_kernel::ViewId, exact_kernel::NodeKey, bool, bool),
+    /// After a commit: the transform handles' bindings.
+    pub reconcile_transforms: fn(&mut crate::Host<D>, &mut crate::batch::Batch),
+    /// The transform handles' geometry and pairs, after layout or a hold.
+    pub emit_transforms: fn(&mut crate::Host<D>, &mut crate::batch::Batch),
+    /// A hold that ended was a member of a transform pair.
+    pub member_ended: fn(&mut crate::Host<D>, u64),
+    /// One transform packet (`exact_transform_motion`).
+    pub transform_motion: fn(&mut crate::Host<D>, &[u8]) -> crate::batch::WrappedBatch,
+    /// A created view's `heightrelease` handler.
+    pub track_height_handle: fn(&mut crate::Host<D>, exact_kernel::ViewId),
+    /// At boot, after a commit and for an explicit height owner: the height
+    /// handles and the owner they make.
+    pub reconcile_heights: fn(&mut crate::Host<D>, &mut crate::batch::Batch, bool),
+    /// A held height drag whose header no longer qualifies ends.
+    pub cancel_invalid_height: fn(&mut crate::Host<D>),
+    /// `exact_height_drag_begin`.
+    pub height_begin:
+        fn(&mut crate::Host<D>, exact_kernel::NodeKey, exact_kernel::NodeKey, f64) -> String,
+    /// `exact_height_drag_update`.
+    pub height_update: fn(&mut crate::Host<D>, u64, f64, f64) -> String,
+    /// `exact_height_drag_release`.
+    pub height_release: fn(&mut crate::Host<D>, u64, f64, f64) -> String,
+}
+
+impl<D: DataSource> Clone for DragLinks<D> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<D: DataSource> Copy for DragLinks<D> {}
 
 /// [`TurnLinks::motion`]'s parts, each where the turn reaches it.
 pub struct TurnMotion<D: DataSource> {
@@ -376,6 +424,23 @@ impl<D: DataSource> TurnLinks<D> {
                     heights: crate::Host::<D>::sync_height_transitions,
                     height_samples: crate::Host::<D>::collect_height_samples,
                     track_height: crate::Host::<D>::track_height_transition,
+                })
+            } else {
+                None
+            },
+            drag: if uses.has(Capability::Drag) {
+                Some(DragLinks {
+                    register_transform: crate::Host::<D>::register_transform_drag,
+                    reconcile_transforms: crate::Host::<D>::reconcile_transform_drags,
+                    emit_transforms: crate::Host::<D>::emit_transform_drags,
+                    member_ended: crate::Host::<D>::transform_member_ended,
+                    transform_motion: crate::Host::<D>::transform_motion_linked,
+                    track_height_handle: crate::Host::<D>::track_height_handle,
+                    reconcile_heights: crate::Host::<D>::reconcile_height_handles,
+                    cancel_invalid_height: crate::Host::<D>::cancel_invalid_height_drag,
+                    height_begin: crate::Host::<D>::height_drag_begin_linked,
+                    height_update: crate::Host::<D>::height_drag_update_linked,
+                    height_release: crate::Host::<D>::dispatch_height_measured_linked,
                 })
             } else {
                 None

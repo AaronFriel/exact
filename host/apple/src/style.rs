@@ -244,12 +244,12 @@ pub(crate) fn style_json_rows(
                 true
             }
             // @ref LLP 1077 D2 — a mask is a gradient, as the background's.
-            RowValue::MaskImage(g) => match g.gradient() {
-                Some(g) => {
-                    out.push_str(&gradient_json(g));
+            RowValue::MaskImage(g) => match g.gradient().map(gradient_json) {
+                Some(json) if !json.is_empty() => {
+                    out.push_str(&json);
                     true
                 }
-                None => false,
+                _ => false,
             },
             // `backdrop-filter`: ordered typed operations, never reparsed by Swift.
             RowValue::BackdropFilter(list) if list.is_none() => false,
@@ -373,15 +373,19 @@ pub(crate) fn style_json_rows(
             RowValue::BackgroundImage(g) => match g.layers() {
                 [] => false, // `none`: nothing to paint
                 [one] => {
-                    out.push_str(&gradient_json(one));
-                    true
+                    let json = gradient_json(one);
+                    out.push_str(&json);
+                    !json.is_empty()
                 }
                 layers => {
                     let parts: Vec<String> = layers.iter().map(gradient_json).collect();
-                    out.push('[');
-                    out.push_str(&parts.join(","));
-                    out.push(']');
-                    true
+                    let whole = !parts.iter().any(String::is_empty);
+                    if whole {
+                        out.push('[');
+                        out.push_str(&parts.join(","));
+                        out.push(']');
+                    }
+                    whole
                 }
             },
             // The timelines' axes are the host's to place (timeline_scroll.rs).

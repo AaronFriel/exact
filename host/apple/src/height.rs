@@ -115,8 +115,10 @@ impl<D: DataSource> Host<D> {
         let mut batch = Batch::new();
         // Publish retirement/rebinding now, without auto-selecting over explicit
         // None. Ordinary future receipts may admit authored handles again.
-        self.reconcile_height_handles(&mut batch, false);
-        self.cancel_invalid_height_drag();
+        if let Some(drag) = self.turn.drag {
+            (drag.reconcile_heights)(self, &mut batch, false);
+            (drag.cancel_invalid_height)(self);
+        }
         let error = self.height_layout_if_needed(&mut batch).err();
         self.present(&mut batch, false);
         Ok(HeightOwnerChange {

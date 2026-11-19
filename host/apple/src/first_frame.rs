@@ -47,7 +47,9 @@ impl<D: DataSource> Host<D> {
         // Only suspended ancestor mappings need a settle recheck. Normal
         // photo Translate/Scale frames keep the existing cheap tick path.
         if self.transform_drags.mapping_pending {
-            self.emit_transform_drags(&mut batch);
+            if let Some(drag) = self.turn.drag {
+                (drag.emit_transforms)(self, &mut batch);
+            }
         }
         match self.heard_present() {
             Ok(Some(receipt)) => {

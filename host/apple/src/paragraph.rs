@@ -433,16 +433,19 @@ impl<D: DataSource> Host<D> {
         let env = self.runner.kernel().env_of(id);
         let (style, _skipped) = style::style_json_for(&node, &env);
         let handlers: Vec<&str> = events.iter().copied().filter_map(handler_name).collect();
-        if handlers.contains(&"heightrelease") {
-            self.track_height_handle(id);
-        }
-        if handlers.contains(&"transformgeometry") || handlers.contains(&"transformrelease") {
-            self.transform_drags.insert(
-                id,
-                key,
-                handlers.contains(&"transformgeometry"),
-                handlers.contains(&"transformrelease"),
-            );
+        if let Some(drag) = self.turn.drag {
+            if handlers.contains(&"heightrelease") {
+                (drag.track_height_handle)(self, id);
+            }
+            if handlers.contains(&"transformgeometry") || handlers.contains(&"transformrelease") {
+                (drag.register_transform)(
+                    self,
+                    id,
+                    key,
+                    handlers.contains(&"transformgeometry"),
+                    handlers.contains(&"transformrelease"),
+                );
+            }
         }
         let pairs: Vec<(&str, String)> = props.iter().map(|(k, v)| (*k, v.clone())).collect();
         batch.create(id, kind, &pairs, &style, &handlers);

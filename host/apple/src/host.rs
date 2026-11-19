@@ -752,14 +752,18 @@ impl<D: DataSource> Host<D> {
             (motion.boot)(&mut host, &sync);
         }
         host.boot_paint(&order);
-        host.reconcile_height_handles(&mut batch, true);
+        if let Some(drag) = host.turn.drag {
+            (drag.reconcile_heights)(&mut host, &mut batch, true);
+        }
         host.layout(&mut batch).map_err(HostError::Layout)?;
         host.canvas_limits();
         host.canvas_turn(&mut batch);
         // A failed first layout is a refused boot, not a partially committed
         // host. In particular, no candidate secret writes escape before this
         // point on a dev reload.
-        host.emit_transform_drags(&mut batch);
+        if let Some(drag) = host.turn.drag {
+            (drag.emit_transforms)(&mut host, &mut batch);
+        }
         host.present(&mut batch, true);
         let (mut batch, _) = host.resize_rounds(batch, None);
         host.state_onto(&mut batch);
