@@ -41,6 +41,15 @@ macro_rules! host {
         $crate::host!(@core $data, $plan, $compat, $delivery, $api, $new, $region, $crate::link::ALL);
     };
     (@core $data:ty, $plan:expr, $compat:expr, $delivery:expr, $api:expr, $new:expr, $region:expr, $linked:expr) => {
+        /// Link this archive's style grammars now, as a session's boot does:
+        /// for a caller that reads style values through an export before any
+        /// session, as the XCTest bundle's install hook does
+        /// (`tests/ExactTestsInstall`). Its grammars are the ones its boot
+        /// links already, so it adds none (LLP 1047 D2).
+        #[no_mangle]
+        pub extern "C" fn exact_link_grammars() {
+            $crate::link::Grammars::of($linked).link();
+        }
         /// A textarea's decorations resolved against its text (LLP 1114.007).
         #[no_mangle]
         pub extern "C" fn exact_field_decorations(input: *const u8, len: usize, count: *mut usize) -> *const u8 {

@@ -665,7 +665,7 @@ export const classifications = [
     "Runner boot constructs session state (runner/src/runner.rs); host ABI buffers and configuration belong to that runtime handle. painted snapshot.rs Session::boot constructs one entry session; runner/entry.rs slots validates the props and configuration carried into it.", [
     ["apple:host/apple/src/abi/exports.rs",
       "exact_boot exact_boot_entry exact_boot_plan exact_check_prepared exact_commit_plan exact_create exact_destroy exact_discard_plan exact_in " +
-      "exact_on_document_forgotten exact_out exact_prepare_plan"],
+      "exact_link_grammars exact_on_document_forgotten exact_out exact_prepare_plan"],
     ["painted:host/painted/src/activation.rs", "Host::data_pending"],
     ["painted:host/painted/src/canvas/boot.rs", "CanvasHost::boot"],
     ["painted:host/painted/src/canvas/jni.rs",
