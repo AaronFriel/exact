@@ -185,6 +185,14 @@ export const sizeWarning = (name, bytes, costs = '') => (bytes <= APP_JS_WARN_BY
  * module builds into one Cargo target, where one crate name from two directories is one product and one claim. */
 export const dirKey = (dir) => createHash('sha256').update(realpathSync(dir)).digest('hex').slice(0, 12);
 
+// A path as a TOML basic string. JSON's escapes are TOML's, so a Windows path's
+// backslashes (`C:\Users`) are not read as escapes.
+const tomlString = (path) => JSON.stringify(path);
+
+// The workspace's `[patch.crates-io]` table, its vendor paths made absolute for a crate outside the workspace.
+const workspacePatch = (ws) => ws.slice(ws.indexOf('[patch.crates-io]')).split('\n[')[0]
+  .replace(/path = "(vendor[^"]*)"/g, (_, path) => `path = ${tomlString(resolve(root, path))}`);
+
 /** Cargo's module at `wasm`, optimized to `<out>/app.module.wasm`. */
 function module(manifest, name, out, label, writeInputs, dev = false) {
   const wasm = resolve(TARGET, 'wasm32-unknown-unknown/release', `${name}.wasm`), done = resolve(out, 'app.module.wasm');
@@ -259,7 +267,7 @@ export function buildModule(app, out, draw = false, dir = resolve(root, 'apps', 
   mkdirSync(resolve(crate, 'src'), { recursive: true });
   const writeInputs = () => {
     const ws = readFileSync(resolve(root, 'Cargo.toml'), 'utf8');
-    const patch = ws.slice(ws.indexOf('[patch.crates-io]')).split('\n[')[0].replace(/path = "vendor/g, `path = "${root}/vendor`);
+    const patch = workspacePatch(ws);
     keep(resolve(crate, 'Cargo.toml'), `[package]
 name = "${packageName}"
 version = "0.1.0"
@@ -268,8 +276,8 @@ publish = false
 [lib]
 crate-type = ["cdylib"]
 [dependencies]
-${data.krate} = { path = "${dataCrate}" }
-exact-logic-abi = { path = "${resolve(root, 'logic/abi')}" }
+${data.krate} = { path = ${tomlString(dataCrate)} }
+exact-logic-abi = { path = ${tomlString(resolve(root, 'logic/abi'))} }
 [profile.release]
 opt-level = "z"
 lto = "fat"
@@ -342,7 +350,7 @@ export async function moduleGrants(path) {
  * alone from a wasm module the page fetches on its first Markdown node. */
 export function buildMarkdown({ own = false, out = resolve(MODULES, 'markdown'), keepFresh = false } = {}) {
   const ws = readFileSync(resolve(root, 'Cargo.toml'), 'utf8');
-  const patch = ws.slice(ws.indexOf('[patch.crates-io]')).split('\n[')[0].replace(/path = "vendor/g, `path = "${root}/vendor`);
+  const patch = workspacePatch(ws);
   return buildLeaf('markdown', 'exact-web-capabilities', 'host/web-capabilities', { out, keepFresh, own, patch, lib: `//! Generated: Markdown pieces for the JS runtime.
 static mut OUT: Vec<u8> = Vec::new();
 #[no_mangle]
@@ -468,7 +476,7 @@ publish = false
 [lib]
 crate-type = ["cdylib"]
 [dependencies]
-${pkg} = { path = "${resolve(root, dir)}" }
+${pkg} = { path = ${tomlString(resolve(root, dir))} }
 [profile.release]
 opt-level = "z"
 lto = "fat"
