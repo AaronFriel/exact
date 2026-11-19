@@ -306,6 +306,20 @@ selection (about 56 KB), the transition and gradient grammars with the height, e
 smaller remnants. With the five largest the list ends between 7.53 and 7.71 MB.
 Frame health is about 0.43 MB and the panic machinery about 0.24 MB; neither ruling is needed for the target.
 
+A fourth link map, at 4e67058fd (8,345,408 B, with navigation, media and content regions out), prices what is
+left. The third map's ratios were too high (a direct byte leaves with about 0.22 B of overhead, not 0.42); its
+steps came in above their prices because it filed direct bytes under the wrong owner (closures and
+specializations under the first type they name, methods on `Host` and `Runner` as core). What was built at that
+point and not yet landed (the lists remnants, both halves of drag, tools, the content index, widgets out of the
+core) ends at 7.99 MB, and text selection at 7.92 MB; the iOS dialog sheet, menus, fields, icons in text, the
+heavy leaves' hold and share end near 7.28 MB, or 7.44 MB if each family takes only its own types. Below that, what
+no step owned is about 0.22 MB, each linked by use: Canvas 2D and canvas capture (about 45 KB), arrangement
+(about 40 KB), shadows, masks, materials and backdrop (about 37 KB), bars in edge slots and route-change marks
+(about 26 KB), glass groups (about 23 KB), snapping and zoom (about 22 KB). Past those, what is left in the node
+view, presenter, session and runtime is members of a few KB each, and cutting there would be shaving: the rest of
+a half megabyte below the list's end needs one of the two rulings (frame health, about 0.43 MB on the row with
+the dev menu and the agent's `state` reader that only it keeps; the panic machinery, about 0.24 MB).
+
 R4g took 481,888 B off the size row against the list's estimate of about 250,000 B (629,808 B off balanced and
 1,265,968 B off speed): `runner::modules` went from 370,556 B of code to 8,104 B, the drop code of its state,
 which 40b2d2c8c then put behind the seam. The core kept about 33 KB of what was in `modules/`: provenance,
