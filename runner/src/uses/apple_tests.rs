@@ -488,3 +488,31 @@ fn apple_links_drag_for_height_and_transform_drags_only() {
     assert!(!apple_uses(&dropped).has(Drag));
     assert!(uses(&dropped).has(Drag));
 }
+
+/// A link the host's own context menu serves links sharing, as a plan's
+/// `share` does; a link that menu refuses does not, and the web's set moves
+/// for neither.
+#[test]
+fn a_link_with_the_hosts_menu_links_sharing() {
+    for (href, linked) in [
+        ("https://example.com", true),
+        ("HTTP://example.com", true),
+        ("/about", true),
+        ("about#top", true),
+        ("mailto:a@example.com", false),
+        ("tel:123", false),
+        ("", false),
+    ] {
+        let plan = plan(&format!("link href=\"{href}\"\n      text \"a\""));
+        assert_eq!(apple_uses(&plan).has(Capability::Share), linked, "{href:?}");
+        assert!(!uses(&plan).has(Capability::Share), "{href:?}");
+    }
+    let computed = contract::compile(
+        "component A\n  state u = \"x\"\n  view\n    link href=u\n      text \"a\"\n",
+    )
+    .unwrap();
+    assert!(
+        apple_uses(&computed).has(Capability::Share),
+        "a computed href can be any"
+    );
+}

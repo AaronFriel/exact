@@ -10,6 +10,7 @@ import UIKit
 import AppKit
 #endif
 import Foundation
+import ExactKit
 
 /// The share extension's inbox (D4): `<group>/shares/<uuid>/`, each complete
 /// once its `share.json` is there.

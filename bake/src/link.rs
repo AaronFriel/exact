@@ -170,6 +170,10 @@ pub(crate) fn production_uses<'a>(
     if plans.iter().any(|plan| bundles_svg(app, plan)) {
         uses = uses.with(Capability::Svg).with(Capability::Effects);
     }
+    // A share target's received shares are the sharing product's to claim.
+    if inputs["shareTarget"] == true {
+        uses = uses.with(Capability::Share);
+    }
     // The app's own module artifact is loaded by the native module family.
     if ships_module(app, inputs["platform"].as_str().unwrap_or("")) {
         uses = uses.with(Capability::NativeViews);

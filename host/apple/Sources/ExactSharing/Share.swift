@@ -15,6 +15,7 @@
 // too: a window screenshot shows it, `back` or `tap @t cancel` closes it,
 // and its outcome answers the hold, journalled as the agent's answer is.
 import CExact
+import ExactKit
 #if canImport(UIKit)
 import UIKit
 #else
@@ -94,6 +95,11 @@ final class BuiltInShare: ShareHosting {
     func share(_ session: ExactSession, _ args: [Any], source: UInt32?) { session.share(args, source: source) }
     func claimCold(_ session: ExactSession) { session.claimColdShare() }
     func land(_ session: ExactSession) { session.landColdShare() }
+    #if os(iOS)
+    func shareLink(_ url: URL, from view: UIView, at rect: CGRect, log: @escaping (String) -> Void) {
+        ShareSheet.present([url], title: nil, from: view, at: rect, outcome: log)
+    }
+    #endif
     #if EXACT_AGENT
     func answered(_ session: ExactSession, _ reply: [String: Any]) { ShareSheet.answered(reply, in: session) }
     func receive(_ session: ExactSession, _ request: [String: Any]) -> [String: Any] { session.receiveShare(request) }

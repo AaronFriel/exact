@@ -3,6 +3,7 @@ import UIKit
 import XCTest
 @testable import ExactKit
 @testable import ExactDialogs
+@testable import ExactSharing
 @testable import ExactNavigation
 @testable import ExactCollections
 @testable import ExactNativeViews

@@ -313,9 +313,9 @@ public final class ExactApp {
 
 }
 
-struct WeakSession {
-    weak var session: ExactSession?
-    init(_ s: ExactSession) { session = s }
+package struct WeakSession {
+    package weak var session: ExactSession?
+    package init(_ s: ExactSession) { session = s }
 }
 
 /// One runner, one plan, one clock (LLP 1031 D1).

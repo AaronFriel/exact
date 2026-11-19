@@ -33,6 +33,8 @@ pub fn apple_uses(plan: &Plan) -> Uses {
         }
     };
     add(Capability::Grid, lays_out_grid(plan));
+    // A link's own context menu offers Share (`ExactSharing`).
+    add(Capability::Share, has_link_menu(plan));
     // A height or transform drag is the drag family's; a reorder is the
     // lists' (`Capability::Collections`, below), and its motion is `Motion`.
     add(
@@ -399,6 +401,27 @@ fn uses_controls(plan: &Plan) -> bool {
 /// accepts, or a computed one, which can be anything.
 fn can_be(plan: &Plan, binding: &BindingsRow, used: impl Fn(&str) -> bool) -> bool {
     constant_str(plan, plan.code(binding.expr)).is_none_or(used)
+}
+
+/// Whether a link can get the host's own context menu, as
+/// `NodeView.hasLinkMenu` decides on iOS: an `href` that is not empty and
+/// is `http:`, `https:` or has no scheme (resolved against the app's origin).
+fn has_link_menu(plan: &Plan) -> bool {
+    plan.bindings.iter().any(|b| {
+        b.kind == BindingKind::Prop
+            && b.id == PropId::Href as u16
+            && can_be(plan, &b, |href| {
+                let scheme = href.split_once(':').map(|(s, _)| s).filter(|s| {
+                    s.starts_with(|c: char| c.is_ascii_alphabetic())
+                        && s.chars()
+                            .all(|c| c.is_ascii_alphanumeric() || "+-.".contains(c))
+                });
+                !href.is_empty()
+                    && scheme.is_none_or(|s| {
+                        s.eq_ignore_ascii_case("http") || s.eq_ignore_ascii_case("https")
+                    })
+            })
+    })
 }
 
 fn has_node(plan: &Plan, of: impl Fn(NodeType) -> bool) -> bool {

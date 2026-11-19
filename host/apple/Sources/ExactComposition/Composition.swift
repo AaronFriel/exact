@@ -120,6 +120,9 @@ import ExactIndexMirror
 #if EXACT_LINK_DIALOGS
 import ExactDialogs
 #endif
+#if EXACT_LINK_SHARE
+import ExactSharing
+#endif
 public enum ExactComposition {
     public static let app: ExactApp = {
         AgentLink.install()
@@ -249,6 +252,9 @@ public enum ExactComposition {
         #endif
         #if EXACT_LINK_DIALOGS
         ExactDialogs.install()
+        #endif
+        #if EXACT_LINK_SHARE
+        ExactSharing.install()
         #endif
     }
 }

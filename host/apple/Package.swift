@@ -69,6 +69,7 @@ let allCapabilities: [(name: String, target: String)] = [
     ("tools", "ExactToolDoor"),
     ("content_index", "ExactIndexMirror"),
     ("dialogs", "ExactDialogs"),
+    ("share", "ExactSharing"),
 ]
 // What a family imports beyond ExactKit and CExact: another family's product,
 // which the roster links with it, or ExactCore's package API. Surfaces' Canvas
