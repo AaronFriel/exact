@@ -86,10 +86,10 @@ pub use logic::{
 };
 pub use manifest::{Activity, Choices, Configuration, Manifest, Parameter, RustData, Widget};
 pub use map::{plan_digest, SourceMap};
-pub use module_rust::module_rust;
+pub use module_rust::{build_module_rust, module_rust, module_rust_path};
 pub use preload::preload_expression;
 pub use resolve::Origin;
-pub use rust::{build_rust, compile_path_for_rust, rust};
+pub use rust::{build_rust, compile_path_for_rust, rust, write_output};
 pub use sources::{
     code_beside, design_name_error, design_path, with_contract_texts, with_design_text, GraphBase,
     Package, Source, SourceGraph,

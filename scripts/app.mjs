@@ -1,7 +1,7 @@
 import { bindGpuProduct, bakeSelection } from './app-shells.mjs';
 export { bindGpuProduct, bakeSelection } from './app-shells.mjs';
 import { takeLock } from '../host/web/build-lock.mjs';
-import { refreshCargoRustShapes } from './cargo-dep-info.mjs';
+import { refreshCargoRustBindings } from './cargo-dep-info.mjs';
 import { capturePrivacyManifest } from '../host/apple/privacy.mjs';
 import { appleMetadataProblem } from '../host/apple/plist.mjs';
 import { appleImplementations } from '../js/bake/src/typescript.mjs';
@@ -1246,7 +1246,7 @@ export function buildBake(app, platform, target, options = {}) {
   // `kind` names another crate for the platform's cohort: Android's Canvas host bakes as Linux from `<app>-android`.
   const kind=options.kind??platformCrateKind(app.dir,platform), apple=['apple','ios','macos','tvos'].includes(kind);
   let env=withHostDeployment({...process.env,...options.env});env.CARGO_TARGET_DIR=app.target;env.EXACT_BAKE_OUTPUT=options.output??bakeOutput(app,env);
-  env.EXACT_RUST_SHAPES = '1';
+  env.EXACT_RUST_BINDINGS = '1';
   const privacyManifests = apple ? [capturePrivacyManifest(resolve(app.dir, 'PrivacyInfo.xcprivacy'))] : [], watch = target.includes('apple-watchos');
   if(platform==='web'||watch)env=webToolchainEnv(env,{linksWasm:target==='wasm32-unknown-unknown'&&!options.check});
   if(options.analysis && env.EXACT_UPDATE_TRUST==='production')env.EXACT_BAKE_ANALYSIS='1';else delete env.EXACT_BAKE_ANALYSIS;
@@ -1282,7 +1282,7 @@ export function buildBake(app, platform, target, options = {}) {
   for(const {pkg,unit} of selected) {
     if (pkg.id === graph.root.id && pkg.targets.some(t => t.kind.includes('custom-build'))) env.EXACT_BAKE_PACKAGE_DIR = realpathSync(dirname(pkg.manifest_path));
     const profile = (gpuPackage(pkg) ? options.gpuProfile : null) ?? options.profile ?? (platform === 'web' ? 'web' : 'release');
-    refreshCargoRustShapes(env.CARGO_TARGET_DIR,target,profile,[...graph.packages.values()],env,graph.metadata.build_directory);
+    refreshCargoRustBindings(env.CARGO_TARGET_DIR,target,profile,[...graph.packages.values()],env,graph.metadata.build_directory);
     // The GPU bake can create the first asset directory (for a typed level).
     Object.assign(env, bakeWatchEnv(app));
     // The app's own web artifact builds std for size; a GPU crate keeps the toolchain's std.

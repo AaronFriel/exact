@@ -343,7 +343,7 @@ test('a Rust module holds its Cargo product claim from writing inputs through ca
   try {
     const env = { TARGET: dir, WEB: 'fixture', createHash, readFileSync, writeFileSync,
       WASM_OPT: () => 'fixture', OPT: [],
-      moduleMetadata: () => ({ metadata: { packages: [] }, locked: false }), refreshCargoRustShapes() {},
+      moduleMetadata: () => ({ metadata: { packages: [] }, locked: false }), refreshCargoRustBindings() {},
       resolve, dirname: path => resolve(path, '..'), realpathSync, mkdirSync, cpSync, existsSync, statSync, awaitBuildOutput, moduleDepInfo: new Map(),
       fresh: () => false, cargoWasm() {
         expect(lockHeld(lock)).toBe(true);

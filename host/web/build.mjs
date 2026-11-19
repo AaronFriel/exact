@@ -54,7 +54,7 @@ import { webIconLinks, webThemeColors } from '../../scripts/app-icons.mjs';
 import { appManifestDigest, appSources, buildFileCards, copyStaticTreeIfPresent, listAssets, hostingNotes, planRouteTable, publicFileCards, replaceBuild, webEnvelope, moduleCards, MODULE_FILES } from './serve.mjs';
 import { foreignBeside } from './generations.mjs';
 import { writeLinkFiles } from './association.mjs';
-import { cargoInputPaths, compilerPaths, rustShapeInputs } from '../../scripts/cargo-dep-info.mjs';
+import { cargoInputPaths, compilerPaths, rustBindingInputs } from '../../scripts/cargo-dep-info.mjs';
 import { captureWebProducts, contractReadReceipt } from '../../scripts/web-build.mjs';
 
 const SDK_ROOT = fileURLToPath(new URL('../..', import.meta.url));
@@ -183,7 +183,7 @@ export function webSourceRoots(app, js, render = 'rust') {
           const pkg = packages.find(pkg => pkg.name === name);
           if (pkg) {
             const stdout = readFileSync(path, 'utf8');
-            for (const input of [...cargoInputPaths(stdout, dirname(pkg.manifest_path)), ...rustShapeInputs(stdout)]) add(input, true);
+            for (const input of [...cargoInputPaths(stdout, dirname(pkg.manifest_path)), ...rustBindingInputs(stdout)]) add(input, true);
           }
         }
       } else if (entry.name.endsWith('.json') && basename(dir) === 'kept') {

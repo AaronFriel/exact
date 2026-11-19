@@ -81,6 +81,7 @@ fn usage() -> String {
   contract fmt --uses <file.contract>
   contract types <file.contract> [-o <app.d.ts>] [--check]
   contract rust <file.contract> [-o <shapes.rs>]
+  contract module-rust <file.contract> [-o <modules.rs>]
   contract test <file.test.contract>
   contract lean <file.contract> [--components] [--name <ident>] [-o <file.lean>]
   {verify}
@@ -145,6 +146,12 @@ fn run() -> ExitCode {
                 .map_err(|mut all| all.swap_remove(0).to_string())?;
             contract::rust(&plan, &call_records).map_err(|e| format!("{}: {e}", path.display()))
         }),
+        Some("module-rust") => types(
+            &args[1..],
+            "module-rust",
+            "modules.rs",
+            contract::module_rust_path,
+        ),
         _ => {
             eprintln!("{}", usage());
             ExitCode::from(2)
@@ -353,8 +360,7 @@ fn sources(args: &[String]) -> ExitCode {
     }
 }
 
-/// `contract types` (TypeScript) or `contract rust` (Rust structs): the
-/// data seam's shapes, derived from the plan.
+/// TypeScript declarations or Rust bindings derived from the plan.
 fn types(
     args: &[String],
     command: &str,

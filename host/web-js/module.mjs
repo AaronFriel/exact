@@ -23,7 +23,7 @@ import { keptProducts } from '../../scripts/kept.mjs';
 import { RustMissing, fromSet, fromSets, fetchedAllowed, launch, rustMissing, freshCompiler } from '../../scripts/tools.mjs';
 import { EXE } from '../../scripts/paths.mjs';
 export { EXE };
-import { buildScriptDir, crateDir, depInfoOf, fresh as cargoFresh, refreshCargoRustShapes } from '../../scripts/cargo-dep-info.mjs';
+import { buildScriptDir, crateDir, depInfoOf, fresh as cargoFresh, refreshCargoRustBindings } from '../../scripts/cargo-dep-info.mjs';
 export { buildScriptDir, crateDir, depInfoOf, freshCompiler };
 export const fresh = (product, dep, also = []) => cargoFresh(product, dep, also);
 import { BINARYEN_DOWNLOAD } from '../web/stages.mjs';
@@ -107,7 +107,7 @@ function replace(path, write) {
 }
 const cargoWasmArgs = (manifest) => [`+${WEB}`, 'build', '--release', '--target', 'wasm32-unknown-unknown', '--manifest-path', manifest, ...LINK_FLAGS()];
 function cargoWasm(manifest, args) {
-  return spawnSync('cargo', [...cargoWasmArgs(manifest), ...args], { stdio: ['ignore', 'inherit', 'inherit'], env: { ...process.env, CARGO_TARGET_DIR: TARGET, EXACT_RUST_SHAPES: '1' } });
+  return spawnSync('cargo', [...cargoWasmArgs(manifest), ...args], { stdio: ['ignore', 'inherit', 'inherit'], env: { ...process.env, CARGO_TARGET_DIR: TARGET, EXACT_RUST_BINDINGS: '1' } });
 }
 /** The dep-info and generated wrapper of each module, by its staged path. */
 const moduleDepInfo = new Map();
@@ -214,9 +214,9 @@ function module(manifest, name, out, label, writeInputs, dev = false) {
 // module beside Cargo's artifact so a new stage need not optimize it again.
 function prepareModule(wasm, done, { manifest, targetDir, profile, dev }, build) {
   const cached = wasm.replace(/\.wasm$/, '.optimized.wasm'), from = `${cached}.from`;
-  const env = { ...process.env, CARGO_TARGET_DIR: targetDir, EXACT_RUST_SHAPES: '1' };
+  const env = { ...process.env, CARGO_TARGET_DIR: targetDir, EXACT_RUST_BINDINGS: '1' };
   const { metadata, locked } = moduleMetadata(manifest, env, dev);
-  refreshCargoRustShapes(targetDir, 'wasm32-unknown-unknown', profile, metadata.packages, env, metadata.build_directory);
+  refreshCargoRustBindings(targetDir, 'wasm32-unknown-unknown', profile, metadata.packages, env, metadata.build_directory);
   build(locked);
   // Cargo may restore an older artifact when features change back.
   const id = createHash('sha256').update(readFileSync(wasm)).update(JSON.stringify([WASM_OPT(), OPT])).digest('hex');
@@ -252,7 +252,7 @@ export function buildModule(app, out, draw = false, dir = resolve(root, 'apps', 
       keep(resolve(crate, 'src/lib.rs'), lib);
       prepareModule(wasm, done, { manifest: manifestPath, targetDir: resolved.target, profile: 'web' }, () => {
         const args = [`+${WEB}`, 'build', '--locked', '--offline', '--profile', 'web', '--target', 'wasm32-unknown-unknown', '--manifest-path', manifestPath, ...injectedProfiles({ manifest }, workspace), ...LINK_FLAGS()];
-        if (spawnSync('cargo', args, { stdio: ['ignore', 'inherit', 'inherit'], env: { ...process.env, CARGO_TARGET_DIR: resolved.target, EXACT_RUST_SHAPES: '1' } }).status !== 0) throw new Error(`${app}: the module did not build; if Cargo says above that it could not download a crate offline, ${SETUP_FETCHES}`);
+        if (spawnSync('cargo', args, { stdio: ['ignore', 'inherit', 'inherit'], env: { ...process.env, CARGO_TARGET_DIR: resolved.target, EXACT_RUST_BINDINGS: '1' } }).status !== 0) throw new Error(`${app}: the module did not build; if Cargo says above that it could not download a crate offline, ${SETUP_FETCHES}`);
       });
       return done;
     } finally { release(); }
