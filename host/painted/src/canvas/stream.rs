@@ -481,13 +481,13 @@ mod tests {
     }
 
     #[test]
-    fn iframe_sandbox_presence_survives_the_canvas_stream() {
+    fn iframe_sandbox_and_allocation_survive_the_canvas_stream() {
         use crate::presenter::{PainterChoice, Presenter};
 
         for sandbox in [None, Some(""), Some("allow-scripts")] {
             let attribute = sandbox.map_or(String::new(), |s| format!(" sandbox=\"{s}\""));
             let source = format!(
-                "component App\n  view\n    iframe src=\"https://example.com/\" width=100 height=100{attribute}\n"
+                "component App\n  view\n    iframe src=\"https://example.com/\" width=100 height=100 testId=\"frame\"{attribute}\n"
             );
             let (mut p, error) = Presenter::boot_with_fixture_fonts(
                 &crate::test_plan(&source),
@@ -518,6 +518,10 @@ mod tests {
             assert_eq!(frames.len(), 1);
             assert_eq!(frames[0]["src"], "https://example.com/");
             assert_eq!(frames[0].get("sandbox"), Some(&serde_json::json!(sandbox)));
+            let key = p.host().kernel().find_by_test_id("frame")[0];
+            assert_eq!(frames[0]["slot"], key.index);
+            assert_eq!(frames[0]["generation"], key.generation);
+            assert_eq!(frames[0]["session"], p.brush.native_session);
         }
     }
 

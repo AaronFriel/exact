@@ -210,6 +210,9 @@ impl Painter {
                 serde_json::json!({
                     "src": p.str(PropId::Src),
                     "sandbox": p.str(PropId::Sandbox),
+                    "generation": node.key.generation,
+                    "slot": node.key.index,
+                    "session": self.native_session,
                 }),
             ),
             NodeType::NativeView => (

@@ -90,6 +90,11 @@ impl<D: DataSource + Default> CanvasHost<D> {
             .reader_module_event(id, key, session, kind, payload, now);
     }
 
+    /// The reader's iframe finished a document (LLP 1020 §10).
+    pub fn frame_loaded(&mut self, id: u32, key: exact_kernel::NodeKey, session: u64) {
+        self.force |= self.p.reader_frame_loaded(id, key, session);
+    }
+
     /// A media element's event or state (LLP 1042.001 D7), only for the
     /// session and allocation whose element the reader still holds.
     #[allow(clippy::too_many_arguments)]

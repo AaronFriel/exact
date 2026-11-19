@@ -27,8 +27,15 @@ An `iframe` with `sandbox`, including `sandbox=""`, is refused before a WebView 
 names `iframe <id>: sandbox is unsupported on Android`. Adding `sandbox` destroys the frame's existing WebView.
 
 A frame whose renderer ends, by a crash or because Android reclaimed it, keeps the app running: its WebView is
-destroyed and a new one loads its `src`, with no event, as Apple's hosts re-serve a frame whose content process ended
-(LLP 1020 D2). The log names `iframe <id>: the page's renderer crashed; loading its src again`.
+destroyed and a new one silently reloads its `src` (LLP 1020 D2). The log names `iframe <id>: the page's renderer
+crashed; loading its src again`. The frame reports `load` for completed documents, including error pages.
+AndroidX's navigation listener identifies each document separately. With web messaging, the reader observes
+the document's load from document start when available, or from the main-frame commit on older providers.
+The reader also checks readiness after finish callbacks and waits for a committed network error page to load.
+On providers that lack both a navigation listener and document-start scripts, such as WebView 91, a guest can
+navigate from its load handler before the commit-time probe runs. If the provider also omits the outgoing
+document's finish callback, the reader misses that document's load.
+A pooled WebView waits for its own silent cleanup before it can be reused.
 
 ## Where it came from
 

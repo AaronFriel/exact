@@ -1,6 +1,7 @@
 package dev.exact.canvas
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Matrix
@@ -14,12 +15,19 @@ import android.view.TextureView
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.RenderProcessGoneDetail
+import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
+import androidx.webkit.Navigation
+import androidx.webkit.NavigationListener
+import androidx.webkit.Page
+import androidx.webkit.WebViewCompat
+import androidx.webkit.WebViewFeature
 import org.json.JSONObject
 import java.io.File
+import java.util.UUID
 import kotlin.math.roundToInt
 
 /**
@@ -614,32 +622,38 @@ class Natives(
 
     /** Op 28 seen while ingesting a stream: make or update the element; [row] draws it (0: not in a row). */
     fun ensure(id: Int, kind: Int, w: Int, h: Int, props: String, row: Int, fullWindow: Boolean = false, layer: Int? = null) {
+        val json = if (kind in 0..2) JSONObject(props) else null
         // A top-level WebView cannot enforce an iframe's sandbox (LLP 1020 D2).
-        if (kind == 1 && !JSONObject(props).isNull("sandbox")) {
+        if (kind == 1 && json?.isNull("sandbox") == false) {
             elements[id]?.let { release(it, reuse = false) }
             android.util.Log.w("exact", "iframe $id: sandbox is unsupported on Android")
             return
         }
-        val json = if (kind == 2 || kind == 0) JSONObject(props) else null
         val module = if (kind == 2) json?.optString("module") else null
         val generation = json?.optInt("generation") ?: 0
         val slot = json?.optInt("slot") ?: 0
         val session = json?.optLong("session") ?: 0L
         var e = elements[id]
-        if (e == null || e.kind != kind || ((kind == 2 || kind == 0) && (e.generation != generation || e.slot != slot || e.module != module || e.session != session))) {
+        if (e == null || e.kind != kind || (json != null &&
+                (e.generation != generation || e.slot != slot || e.module != module || e.session != session))) {
             e?.let { release(it) }
             val created = if (lazy && row != 0 && ((kind == 0 && videos != null && lazyVideo) || kind == 1 || (kind == 2 && modules.containsKey(module)))) {
                 Element(id, kind, standIn, RenderNode("exact native")).also {
-                    it.parked = true; it.module = module
-                    it.generation = generation; it.slot = slot; it.session = session
+                    it.parked = true
                     waiting++
                 }
-            } else create(id, kind, props) ?: return
-            if (kind == 0) { created.generation = generation; created.slot = slot; created.session = session }
+            } else create(id, kind, json ?: JSONObject(props)) ?: return
+            created.module = module
+            created.generation = generation
+            created.slot = slot
+            created.session = session
             e = created
             elements[id] = e
             nodes = null
-            if (!e.parked) byView[e.view] = e
+            if (!e.parked) {
+                byView[e.view] = e
+                if (kind == 2) bindEvents(e)
+            }
         }
         e.fullWindow = fullWindow && row == 0
         if (!e.fullWindow) e.presentation.failed = false
@@ -722,7 +736,11 @@ class Natives(
             if (!e.parked || !(!e.placed || e.rows.any { show.contains(it) })) continue
             // None kept to lend: one still held by a row that has left [show] (kept only against coming back) is
             // lent on, before another is made.
-            val none = when (e.kind) { 0 -> videoPool.isEmpty(); 1 -> webPool.isEmpty(); else -> pool[e.module]?.isEmpty() != false }
+            val none = when (e.kind) {
+                0 -> videoPool.isEmpty()
+                1 -> readyWeb() < 0
+                else -> pool[e.module]?.isEmpty() != false
+            }
             if (none) {
                 // Then one held by a row near but out of view (behind, or ahead of this one): a view is made only
                 // when every other is in view, or this row is. Otherwise this one waits for the next call. (A
@@ -869,7 +887,8 @@ class Natives(
         5 -> hatched?.invoke(id, context)?.also { (it.parent as? android.view.ViewGroup)?.removeView(it) }
         3 -> if (buffered && !refused) View(context) else TextureView(context).apply { isOpaque = false }
         0 -> videoPool.removeLastOrNull() ?: videoView()
-        1 -> webPool.removeLastOrNull()?.apply { settings.javaScriptEnabled = true; onResume() } ?: webView()
+        1 -> readyWeb().takeIf { it >= 0 }?.let { webPool.removeAt(it) }
+            ?.apply { settings.javaScriptEnabled = true; onResume() } ?: webView()
         else -> {
             val name = json.optString("module")
             val module = modules[name]
@@ -882,18 +901,196 @@ class Natives(
         }
     }
 
+    private fun readyWeb(): Int = webPool.indexOfLast { (it.webViewClient as FrameClient).readyToLend }
+
+    private class FrameLoad(var url: String, val silent: Boolean, val failed: Boolean = false)
+
+    private inner class FrameClient(
+        private val view: WebView,
+        private val hasNavigationListener: Boolean,
+    ) : WebViewClient(), NavigationListener {
+        private val documents = if (!hasNavigationListener &&
+            WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
+            FrameDocuments(view, ::reportLoad)
+        } else null
+        private val loading = HashSet<Page>()
+        private var recovery: Navigation? = null
+        private var starting: FrameLoad? = null
+        private var finishing: FrameLoad? = null
+        private var fragmentFinish: String? = null
+        private var cleanupUrl: String? = null
+        private var recoveryRequested = false
+        var recoveryPending = false
+        var readyToLend = false
+            private set
+
+        fun requestLoad(silently: Boolean) {
+            readyToLend = false
+            recoveryPending = false
+            cleanupUrl = null
+            // The old callbacks can be queued even after WebView has committed the recovery page.
+            recoveryRequested = silently || (!hasNavigationListener && recoveryRequested && view.originalUrl != null)
+            if (!recoveryRequested) documents?.observeFromStart()
+        }
+
+        fun beginCleanup(): String {
+            val url = "data:text/html,%3C!--${UUID.randomUUID()}--%3E"
+            readyToLend = false
+            recoveryPending = false
+            loading.clear()
+            documents?.reset()
+            recoveryRequested = false
+            starting = null
+            finishing = null
+            fragmentFinish = null
+            cleanupUrl = url
+            return url
+        }
+
+        // A guest's navigations stay in its frame, as in a browser's; a file only under the asset root.
+        override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
+            !Sources.navigable(request.url.scheme, request.url.path, assets)
+
+        override fun onNavigationStarted(navigation: Navigation) {
+            if (recoveryRequested && !navigation.wasInitiatedByPage() && !navigation.isSameDocument) {
+                recoveryRequested = false
+                recovery = navigation
+            }
+        }
+
+        override fun onNavigationCompleted(navigation: Navigation) {
+            if (navigation === recovery) {
+                recovery = null
+                return
+            }
+            if (!navigation.isSameDocument && byView.containsKey(view)) {
+                navigation.page?.let(loading::add)
+            }
+        }
+
+        override fun onPageDeleted(page: Page) {
+            loading.remove(page)
+        }
+
+        override fun onPageLoadEvent(page: Page) {
+            if (!loading.remove(page)) return
+            reportLoad()
+        }
+
+        private fun reportLoad() {
+            val e = byView[view] ?: return
+            reportLoad(e, e.eventBinding)
+        }
+
+        private fun reportLoad(e: Element, binding: Int) {
+            android.os.Handler(context.mainLooper).post {
+                // An accepted load belongs to the element even if its renderer has been replaced.
+                if (elements[e.id] === e && e.eventBinding == binding) {
+                    Exact.frameLoaded(e.id, e.slot, e.generation, e.session)
+                }
+            }
+        }
+
+        override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
+            if (hasNavigationListener || cleanupUrl != null || !byView.containsKey(view)) return
+            starting = FrameLoad(url, recoveryRequested)
+            recoveryRequested = false
+        }
+
+        override fun doUpdateVisitedHistory(view: WebView, url: String, isReload: Boolean) {
+            if (hasNavigationListener || cleanupUrl != null) return
+            val start = starting
+            if (start != null) {
+                starting = null
+                start.url = url
+                finishing = start
+                fragmentFinish = null
+            } else {
+                val page = finishing ?: return
+                // Chromium also sends onPageFinished after a change to the current document's fragment.
+                fragmentFinish = url.takeIf { it != page.url && it.substringBefore('#') == page.url.substringBefore('#') }
+                page.url = url
+            }
+            val page = finishing ?: return
+            if (page.silent) {
+                if (start != null) documents?.observeFromStart()
+                return
+            }
+            if (page.failed) {
+                // The error document's URL differs from the failed navigation's URL in WebViewClient.
+                if (start != null) observeError(page)
+            } else {
+                documents?.observe(url)
+            }
+        }
+
+        override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError?) {
+            if (hasNavigationListener || cleanupUrl != null || !request.isForMainFrame || !byView.containsKey(view)) return
+            // The error's onPageFinished can precede the error document's commit.
+            starting = FrameLoad(request.url.toString(), starting?.silent ?: recoveryRequested, failed = true)
+            recoveryRequested = false
+        }
+
+        override fun onPageFinished(view: WebView, url: String) {
+            if (cleanupUrl != null) {
+                if (url == cleanupUrl && view in webPool) readyToLend = true
+                return
+            }
+            if (hasNavigationListener) return
+            if (url == fragmentFinish) {
+                fragmentFinish = null
+                return
+            }
+            // Check readiness because an aborted navigation can finish with the pending document's URL.
+            val page = finishing?.takeIf { it.url == url && starting?.url != url } ?: return
+            if (page.failed) return
+            if (page.silent) {
+                finishing = null
+            } else if (documents != null) {
+                documents.observe(url, atFinish = true)
+            } else {
+                verifyLoad(page, url)
+            }
+        }
+
+        private fun observeError(page: FrameLoad) {
+            val url = "chrome-error://chromewebdata/"
+            if (documents != null) documents.observe(url) else verifyLoad(page, url)
+        }
+
+        private fun verifyLoad(page: FrameLoad, url: String) {
+            if (finishing !== page) return
+            val e = byView[view] ?: return
+            val binding = e.eventBinding
+            view.evaluateJavascript(frameDocumentReady(url)) {
+                if (finishing !== page || (!page.failed && page.url != url)) {
+                    return@evaluateJavascript
+                }
+                if (it == "true") {
+                    finishing = null
+                    reportLoad(e, binding)
+                } else if (it == "false" && page.failed && byView[view] === e) {
+                    // Older providers have no document message channel and can omit a second finish callback.
+                    view.postOnAnimation { verifyLoad(page, url) }
+                }
+            }
+        }
+
+        // Android ends the app with the renderer unless this answers true.
+        override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
+            rendererGone(view, detail.didCrash())
+            return true
+        }
+    }
+
     private fun webView(): WebView = WebView(context).apply {
         settings.javaScriptEnabled = true
-        webViewClient = object : WebViewClient() {
-            // A guest's navigations stay in its frame, as in a browser's; a file only under the asset root.
-            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
-                !Sources.navigable(request.url.scheme, request.url.path, assets)
-
-            // Android ends the app with the renderer unless this answers true.
-            override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
-                rendererGone(view, detail.didCrash())
-                return true
-            }
+        val hasNavigationListener = WebViewFeature.isFeatureSupported(WebViewFeature.NAVIGATION_LISTENER)
+        val client = FrameClient(this, hasNavigationListener)
+        webViewClient = client
+        if (hasNavigationListener) {
+            // Take the navigation identity before a new src can supersede a recovery request.
+            WebViewCompat.addNavigationListener(this, { it.run() }, client)
         }
         isVerticalScrollBarEnabled = false; isHorizontalScrollBarEnabled = false
         overScrollMode = View.OVER_SCROLL_NEVER
@@ -914,31 +1111,28 @@ class Natives(
         if (e == null) return
         android.util.Log.w("exact", "iframe ${e.id}: the page's renderer ${if (crashed) "crashed" else "was ended by Android"}; loading its src again")
         val fresh = webView()
+        val client = fresh.webViewClient as FrameClient
+        client.recoveryPending = true
         addView(fresh, LayoutParams(1, 1))
         e.view = fresh
         byView[fresh] = e
         if (e.paused) fresh.onPause()
         if (e.w > 0 && e.h > 0) place(e)
         if (refresh()) frame()
-        val props = e.props
-        e.props = ""
         // Loaded after every view of the renderer has been told and outside WebView's report of its end. A new
         // `src`, a park or a release in between takes the frame instead.
-        android.os.Handler(context.mainLooper).post { if (elements[e.id] === e && e.view === fresh && e.props.isEmpty()) { apply(e, props); if (refresh()) frame() } }
+        android.os.Handler(context.mainLooper).post {
+            if (byView[fresh] === e && client.recoveryPending) {
+                loadFrame(e, JSONObject(e.props).optString("src"), silently = true)
+                if (refresh()) frame()
+            }
+        }
     }
 
-    private fun create(id: Int, kind: Int, props: String): Element? {
-        val json = JSONObject(props)
+    private fun create(id: Int, kind: Int, json: JSONObject): Element? {
         val view = obtain(kind, json, id) ?: return null
         if (view.parent == null) addView(view, LayoutParams(1, 1))
         val e = Element(id, kind, view, RenderNode("exact native"))
-        if (kind == 2) {
-            e.module = json.optString("module")
-            e.generation = json.optInt("generation")
-            e.session = json.optLong("session")
-            e.slot = json.optInt("slot")
-            bindEvents(e)
-        }
         if (pooled(kind)) held++
         if (kind == 3) { if (view is TextureView) listen(e, view) else e.buffers = true; frameRate(e) }
         return e
@@ -1069,6 +1263,24 @@ class Natives(
     private fun moduleProps(json: JSONObject): JSONObject =
         json.optString("props").takeIf { it.isNotEmpty() }?.let { runCatching { JSONObject(it) }.getOrNull() } ?: JSONObject()
 
+    private fun loadFrame(e: Element, src: String, silently: Boolean = false) {
+        val web = e.view as WebView
+        val source = Sources.frame(src, assets)
+        val client = web.webViewClient as FrameClient
+        client.requestLoad(silently)
+        fun load(url: String) = web.loadUrl(url, Sources.frameHeaders(url))
+        // A remote page or the error page reads no file; a pooled view may have shown a local one.
+        web.settings.allowFileAccess = source is Source.Local
+        when (source) {
+            is Source.Remote -> load(source.url)
+            is Source.Local -> load(Uri.fromFile(source.file).toString() + source.suffix)
+            is Source.Refused -> {
+                android.util.Log.w("exact", "iframe ${e.id}: ${source.why}")
+                web.loadDataWithBaseURL(null, Sources.errorPage(source.why), "text/html", "utf-8", null)
+            }
+        }
+    }
+
     private fun apply(e: Element, props: String) {
         val old = e.props.takeIf { it.isNotEmpty() }?.let { JSONObject(it) }
         val json = JSONObject(props)
@@ -1100,20 +1312,7 @@ class Natives(
             }
             1 -> {
                 val src = json.optString("src")
-                if (old?.optString("src") != src) {
-                    val web = e.view as WebView
-                    val s = Sources.frame(src, assets)
-                    // A remote page or the error page reads no file; a pooled view may have shown a local one.
-                    web.settings.allowFileAccess = s is Source.Local
-                    when (s) {
-                        is Source.Remote -> web.loadUrl(s.url, Sources.frameHeaders(s.url))
-                        is Source.Local -> web.loadUrl(Uri.fromFile(s.file).toString() + s.suffix)
-                        is Source.Refused -> {
-                            android.util.Log.w("exact", "iframe ${e.id}: ${s.why}")
-                            web.loadDataWithBaseURL(null, Sources.errorPage(s.why), "text/html", "utf-8", null)
-                        }
-                    }
-                }
+                if (old?.optString("src") != src) loadFrame(e, src)
             }
             // A hatch gave the node another view.
             5 -> if (old != null && old.optInt("gen") != json.optInt("gen")) {
@@ -1221,14 +1420,17 @@ class Natives(
             lifecycle.unbind(e.view)
             pool.getOrPut(e.module!!) { ArrayList() }.add(e.view)
         } else if (e.kind == 1 && reuse && webPool.size < WEB_POOL && webs) {
-            webPool.add((e.view as WebView).apply {
+            val web = e.view as WebView
+            webPool.add(web)
+            web.apply {
                 // onPause alone keeps JavaScript running; a lent view must hold no active guest.
+                val cleanup = (webViewClient as FrameClient).beginCleanup()
                 stopLoading()
                 settings.javaScriptEnabled = false
                 settings.allowFileAccess = false
-                loadUrl("about:blank")
+                loadUrl(cleanup)
                 onPause()
-            })
+            }
         } else {
             lifecycle.destroyed(e.view)
             module?.destroy(e.view)
