@@ -242,11 +242,16 @@ pub enum Capability {
     /// linked. An entry's plan (`snapshot_entry`) selects it, and so do Live
     /// Activities, whose sends name the published generation. Native only.
     Widgets,
+    /// The content index (LLP 1133.023 D4, D9): the mirror
+    /// `@exact/search-index` writes, Spotlight's index of it, and the entries
+    /// an entity parameter offers. Selected by that package's names. Native
+    /// only.
+    ContentIndex,
 }
 
 impl Capability {
     /// Every capability, in bit order.
-    pub const ALL: [Capability; 59] = [
+    pub const ALL: [Capability; 60] = [
         Capability::Markdown,
         Capability::Motion,
         Capability::Collections,
@@ -306,6 +311,7 @@ impl Capability {
         Capability::Navigation,
         Capability::TextSelection,
         Capability::Widgets,
+        Capability::ContentIndex,
     ];
 
     /// The name an entry, a refusal and a report use.
@@ -370,6 +376,7 @@ impl Capability {
             Capability::Navigation => "navigation",
             Capability::TextSelection => "text_selection",
             Capability::Widgets => "widgets",
+            Capability::ContentIndex => "content_index",
         }
     }
 
@@ -417,7 +424,8 @@ impl Uses {
         .with(Capability::Midi)
         .with(Capability::Navigation)
         .with(Capability::TextSelection)
-        .with(Capability::Widgets);
+        .with(Capability::Widgets)
+        .with(Capability::ContentIndex);
 
     /// This set and `capability`.
     pub const fn with(self, capability: Capability) -> Uses {

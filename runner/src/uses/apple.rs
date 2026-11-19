@@ -216,6 +216,24 @@ pub fn apple_uses(plan: &Plan) -> Uses {
         .into_iter()
         .any(|id| binds(plan, BindingKind::Prop, id as u16)),
     );
+    // `@exact/search-index`'s names: only that package writes the content
+    // index. Without it the store refuses a change (`NotSupportedError`), a
+    // generated entity query answers none, and a search result an earlier
+    // build indexed opens the app where it starts. A package whose
+    // implementation reaches `context.contentIndex` belongs here, as the
+    // wakes' names do.
+    add(
+        Capability::ContentIndex,
+        plan.sources.iter().any(|row| {
+            matches!(
+                plan.str(row.name),
+                "setContentIndex"
+                    | "addContentIndexEntry"
+                    | "deleteContentIndexEntry"
+                    | "contentIndexEntries"
+            )
+        }),
+    );
     // A swipe row, a reorder group, a reorder grip and a list whose rows
     // are cells (iOS draws them, LLP 1115.000 D16) reach the family without
     // a windowed list.

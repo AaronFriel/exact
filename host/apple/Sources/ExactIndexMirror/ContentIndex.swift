@@ -1,4 +1,7 @@
-// The content index's mirror and Spotlight (LLP 1133.023 D4, D9, D15 item 2).
+// The content index's mirror and Spotlight (LLP 1133.023 D4, D9, D15 item 2;
+// LLP 1047.001 D10, the roster's `content_index`). Only `@exact/search-index`
+// writes the mirror, so an app's composition links it when its plan names
+// one of that package's sends or its source.
 //
 // The mirror is what the app set, kept in its container: Spotlight's index
 // cannot be read back, and the system asks the app to index everything again
@@ -18,8 +21,11 @@
 //   `.delete` `{id}`: `error` set to the web's name on a refusal.
 // - `exact.contentIndex.entries`: `entries`, all of them.
 // - `exact.contentIndex.query` `{kind, ids?, matching?}`: `entries`.
-// - `exact.contentIndex.open` `{url}`: opens an entry's location.
+//
+// Each observer marks the body `taken`. An entity's `exact.contentIndex.open`
+// is the core's (`ExactApp.installReach`).
 import ExactCore
+import ExactKit
 import Foundation
 import os
 #if canImport(CoreSpotlight) && !os(tvOS)
@@ -61,6 +67,7 @@ public enum ExactContentIndex {
         func on(_ name: String, _ handle: @escaping (NSMutableDictionary) -> Void) {
             center.addObserver(forName: Notification.Name("exact.contentIndex." + name), object: nil, queue: nil) { note in
                 guard let body = note.object as? NSMutableDictionary else { return }
+                body["taken"] = true
                 if Thread.isMainThread { handle(body) } else { DispatchQueue.main.sync { handle(body) } }
             }
         }
@@ -76,7 +83,6 @@ public enum ExactContentIndex {
         on("query") { body in
             body["entries"] = query(kind: body["kind"] as? String ?? "", ids: body["ids"] as? [String], matching: body["matching"] as? String)
         }
-        on("open") { body in if let url = body["url"] as? String { open(url) } }
         #if canImport(CoreSpotlight) && !os(tvOS)
         index.indexDelegate = Reindexer.shared
         DispatchQueue.main.async { finishPending() }
@@ -184,13 +190,6 @@ public enum ExactContentIndex {
     /// when the mirror no longer has it (the app then opens at its start).
     public static func location(ofItem identifier: String) -> String? {
         load().entries.first { key($0) == identifier }?["url"]?.string
-    }
-
-    /// Open an entry's location in the app's session: a launch location
-    /// before its boot, a navigation after (LLP 1133.023 D1).
-    public static func open(_ url: String) {
-        guard let session = ExactApp.shared.sessions.first(where: { $0.state != .destroyed }) else { return }
-        _ = session.openLocation(url)
     }
 
     // MARK: Spotlight

@@ -429,6 +429,27 @@ fn media_is_four_products_each_by_its_own_use() {
     }
 }
 
+/// Only `@exact/search-index` writes the content index: its names select it.
+#[test]
+fn the_search_indexs_names_select_the_content_index() {
+    for (name, selected) in [
+        ("setContentIndex", true),
+        ("contentIndexEntries", true),
+        ("battery", false),
+    ] {
+        let plan = built(|b| {
+            let ty = b.primitive(TypeKind::Number);
+            b.source(name, &[], ty);
+        });
+        assert_eq!(
+            apple_uses(&plan).has(Capability::ContentIndex),
+            selected,
+            "{name}"
+        );
+        assert!(!uses(&plan).has(Capability::ContentIndex));
+    }
+}
+
 /// On Apple a reorder is the lists family's: a reorder grip selects
 /// `Collections` and not `Drag`, which only a height or transform drag
 /// selects. Elsewhere a grip still names `drag`.

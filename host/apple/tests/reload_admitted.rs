@@ -8,8 +8,8 @@ use exact_apple::abi::{Bridge, Hooks};
 #[path = "reload/common.rs"]
 mod common;
 use common::{
-    boot, boot_entry, digest, entry, media, plan, source, NoData, ACTIVITIES, ANIMATED, TOOLS,
-    TRACING,
+    boot, boot_entry, digest, entry, media, plan, source, NoData, ACTIVITIES, ANIMATED, SEARCH,
+    TOOLS, TRACING,
 };
 
 #[test]
@@ -74,6 +74,7 @@ fn an_all_linked_binary_reloads_from_hello_into_each_family() {
         ("selectable text", plan("text \"a\" user-select=\"text\"")),
         ("canvas", plan("canvas surface=dot() width=40 height=40")),
         ("tools", source(TOOLS)),
+        ("content_index", source(SEARCH)),
     ]
     .into_iter()
     .chain(media().map(|(next, name)| (name, next)))

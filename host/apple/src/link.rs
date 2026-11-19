@@ -899,6 +899,10 @@ mod tests {
         )
         .unwrap();
         let canvas = compile("canvas surface=dot() width=40 height=40", "on = false");
+        let searched = contract::compile(
+            "shape E\n  id: string\ncomponent A\n  resource all = contentIndexEntries() as shape E\n  view\n    text \"a\"\n",
+        )
+        .unwrap();
         for (plan, name) in [
             (&tools, "tools"),
             (&view, "modules, native_views"),
@@ -926,6 +930,7 @@ mod tests {
             (&selectable, "text_selection"),
             (&entry, "widgets"),
             (&canvas, "surfaces"),
+            (&searched, "content_index"),
         ] {
             assert_eq!(missing(plan, Uses::NONE).as_deref(), Some(name));
             assert_eq!(missing(plan, ALL), None);

@@ -11,8 +11,8 @@ use exact_apple::link::{self, Uses};
 #[path = "reload/common.rs"]
 mod common;
 use common::{
-    boot, boot_entry, digest, entry, media, plan, source, NoData, ACTIVITIES, ANIMATED, TOOLS,
-    TRACING,
+    boot, boot_entry, digest, entry, media, plan, source, NoData, ACTIVITIES, ANIMATED, SEARCH,
+    TOOLS, TRACING,
 };
 
 #[test]
@@ -74,6 +74,7 @@ fn hellos_binary_refuses_a_reload_into_a_family_and_keeps_its_plan() {
         ),
         (plan("canvas surface=dot() width=40 height=40"), "surfaces"),
         (source(TOOLS), "tools"),
+        (source(SEARCH), "content_index"),
     ]
     .into_iter()
     .chain(media())

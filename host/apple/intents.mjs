@@ -5,11 +5,11 @@
 // The generated code imports only AppIntents and Foundation. It reaches the
 // host through `NotificationCenter`, the channel the host and an app's
 // modules already share in the process: `exact.tools.call` for a call, which
-// ExactToolDoor observes (ExactTools.swift), and `exact.contentIndex.query`
-// for an entity query and `exact.contentIndex.open` for an entity's
-// location, which ExactKit observes (ContentIndex.swift). So it compiles beside
-// the SwiftPM build, not inside it, and needs no ExactKit module to compile
-// against.
+// ExactToolDoor observes (ExactTools.swift), `exact.contentIndex.query` for
+// an entity query, which ExactIndexMirror observes (ContentIndex.swift), and
+// `exact.contentIndex.open` for an entity's location, which ExactKit
+// observes (ShortcutItems.swift). So it compiles beside the SwiftPM build,
+// not inside it, and needs no ExactKit module to compile against.
 import { dirname, resolve } from 'node:path';
 import { existsSync, mkdirSync, rmSync, readFileSync, readdirSync, writeFileSync, cpSync } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -76,7 +76,7 @@ export function intentsSource(faces, entities = {}) {
 import AppIntents
 import Foundation${faces.some(f => Object.values(f.face.parameters ?? {}).some(p => p.type === 'file')) ? '\nimport UniformTypeIdentifiers' : ''}
 
-/// The host's door (ExactToolDoor's ExactTools.swift) and mirror (ExactKit's ContentIndex.swift).
+/// The host's door (ExactToolDoor's ExactTools.swift) and mirror (ExactIndexMirror's ContentIndex.swift).
 enum ExactDoor {
     struct Refusal: Error, CustomLocalizedStringResourceConvertible {
         let message: String
@@ -197,7 +197,7 @@ ${phrased.map(({ signature, face }) => `        AppShortcut(intent: ${typeName(s
 }
 `);
   }
-  // What ExactKit calls by name, since it cannot name the generated types: an Objective-C class is kept by the link.
+  // What ExactIndexMirror calls by name, since it cannot name the generated types: an Objective-C class is kept by the link.
   out.push(`
 @objc(ExactIntentsHooks) final class ExactIntentsHooks: NSObject {
     /// The index changed: App Shortcuts whose phrases name a parameter learn its values (D9).

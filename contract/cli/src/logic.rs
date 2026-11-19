@@ -644,7 +644,8 @@ pub fn web_linked(plan: &exact_plan::Plan, inputs: &serde_json::Value) -> String
             | Capability::Midi
             | Capability::Navigation
             | Capability::TextSelection
-            | Capability::Widgets => {}
+            | Capability::Widgets
+            | Capability::ContentIndex => {}
         }
     }
     entry

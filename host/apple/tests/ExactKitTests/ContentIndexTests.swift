@@ -3,6 +3,7 @@ import XCTest
 import ExactCore
 @testable import ExactKit
 @testable import ExactToolDoor
+@testable import ExactIndexMirror
 
 /// The content index's mirror and the door's answers with no session (LLP 1133.023 D4, D9, D7).
 final class ContentIndexTests: XCTestCase {

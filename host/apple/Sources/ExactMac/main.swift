@@ -756,9 +756,9 @@ final class Delegate: NSObject, NSApplicationDelegate {
             if target.session.openURL(url) { target.front() }
             return true
         }
-        guard let location = ExactContentIndex.location(of: userActivity) else { return false }
+        guard let location = ExactComposition.location(of: userActivity) else { return false }
         (frontWindow() ?? openWindow()).front()
-        ExactContentIndex.open(location)
+        exact.open(location: location)
         return true
     }
     override init() {

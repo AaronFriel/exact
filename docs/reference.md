@@ -1497,6 +1497,7 @@ The generated `--embed` composition lists the capabilities to link.
 | `ExactActivities` | Live Activities (links `ExactWidgetPublication`, whose generation their sends name) | `ExactActivities.install()` |
 | `ExactActivities` | Live Activities | `ExactActivities.install()` |
 | `ExactToolDoor` | The tool door: the system's calls of the plan's tools | `ExactToolDoor.install()`; the app delegate calls `ExactApp.installToolDoor` before launch completes |
+| `ExactIndexMirror` | The content index `@exact/search-index` writes: its mirror, Spotlight, entity queries | `ExactIndexMirror.install()`; the app delegate calls `ExactApp.installContentIndex` before launch completes |
 | `ExactWakeCarriers` | Wakes, background transfers and monitored regions | `ExactWakeCarriers.install()`; the app delegate calls `ExactApp.installWakes` before launch completes, and `ExactApp.handleTransferEvents` |
 | `ExactGradients` | CSS gradients: `background-image` and `mask-image` | `ExactGradients.install()` |
 | `ExactTraces` | The traces an app records, and `ExactSession.startTrace()` and `stopTrace(maxBytes:)` | `ExactTraces.install()` |

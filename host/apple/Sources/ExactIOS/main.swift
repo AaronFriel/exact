@@ -285,8 +285,8 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             : environment["EXACT_LAUNCH_URL"].flatMap { URL(string: $0) }.map { [$0] } ?? []
         // A quick action or a search result that launched the app is its launch location (LLP 1133.023 D3, D4).
         #if !os(tvOS)
-        if let item = connectionOptions.shortcutItem, let location = ExactShortcuts.location(of: item) { ExactContentIndex.open(location) }
-        for activity in connectionOptions.userActivities { if let location = ExactContentIndex.location(of: activity) { ExactContentIndex.open(location) } }
+        if let item = connectionOptions.shortcutItem, let location = ExactShortcuts.location(of: item) { exact.open(location: location) }
+        for activity in connectionOptions.userActivities { if let location = ExactComposition.location(of: activity) { exact.open(location: location) } }
         #endif
         // A file is a document from Files ("Open in"), opened in place
         // (LLP 1069.010 slice 4); it lands once the session has booted.
@@ -335,14 +335,14 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     func scene(_ scene: UIScene, continue userActivity: NSUserActivity) {
         if userActivity.activityType == NSUserActivityTypeBrowsingWeb, let url = userActivity.webpageURL { open([url]) }
         #if !os(tvOS)
-        if let location = ExactContentIndex.location(of: userActivity) { ExactContentIndex.open(location) }
+        if let location = ExactComposition.location(of: userActivity) { exact.open(location: location) }
         #endif
     }
     #if !os(tvOS)
     /// A quick action while the app runs (LLP 1133.023 D3).
     func windowScene(_ windowScene: UIWindowScene, performActionFor shortcutItem: UIApplicationShortcutItem, completionHandler: @escaping (Bool) -> Void) {
         guard let location = ExactShortcuts.location(of: shortcutItem) else { return completionHandler(false) }
-        ExactContentIndex.open(location)
+        exact.open(location: location)
         completionHandler(true)
     }
     #endif
