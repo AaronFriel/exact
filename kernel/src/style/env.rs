@@ -346,6 +346,8 @@ pub struct Env {
     /// own ([`crate::Kernel::set_root_font_size`]), which the next commit
     /// writes here; [`crate::Kernel::set_env`] keeps it.
     pub root_font_size: f32,
+    /// The node's computed font size, for object-position lengths in em.
+    pub font_size: f32,
     /// The session root's `--exact-safe-area-inset-*` (LLP 1123 D9), top
     /// right bottom left: the insets of the area the document covers, set
     /// apart from `env()` by a host whose document covers its view while
@@ -404,6 +406,7 @@ impl Env {
             default_padding: None,
             titlebar_area: None,
             root_font_size: crate::style::relative::MEDIUM,
+            font_size: crate::style::relative::MEDIUM,
             root_local: None,
             local: None,
             properties: None,
@@ -851,11 +854,16 @@ pub fn parse(text: &str) -> Result<Option<Dimension>, EnvRefusal> {
 pub fn browser_css(c: super::Comparison, out: &mut String) {
     let mut text = String::new();
     c.css(&mut text);
+    browser_text(&text, out);
+}
+
+/// Translate region names in a CSS value, including fallbacks inside functions.
+pub fn browser_text(text: &str, out: &mut String) {
     if !text.contains("-exact-") && !text.contains('\\') {
-        out.push_str(&text);
+        out.push_str(text);
         return;
     }
-    let mut input = cssparser::ParserInput::new(&text);
+    let mut input = cssparser::ParserInput::new(text);
     rename_regions(&mut cssparser::Parser::new(&mut input), out);
 }
 
@@ -892,17 +900,27 @@ fn rename_regions(p: &mut cssparser::Parser<'_, '_>, out: &mut String) {
 
 /// Whether a style reads a viewport or environment length.
 pub fn uses_env(style: &crate::StyleProps) -> bool {
-    style.mask.iter().any(|id| {
+    let reads = |d: &Dimension| {
         matches!(
-            style.get(id),
-            crate::RowValue::Dimension(
-                Dimension::Env(..)
-                    | Dimension::Region(..)
-                    | Dimension::Segment(..)
-                    | Dimension::Viewport(..)
-                    | Dimension::Compare(..)
-            )
+            d,
+            Dimension::Env(..)
+                | Dimension::Region(..)
+                | Dimension::Segment(..)
+                | Dimension::Viewport(..)
+                | Dimension::Compare(..)
         )
+    };
+    style.mask.iter().any(|id| match style.get(id) {
+        crate::RowValue::Dimension(d) => reads(&d),
+        crate::RowValue::ObjectPosition(p) => {
+            reads(&p.x)
+                || reads(&p.y)
+                || p.calculations()
+                    .into_iter()
+                    .flatten()
+                    .any(|c| reads(&Dimension::Compare(c)))
+        }
+        _ => false,
     })
 }
 
@@ -910,10 +928,20 @@ pub fn uses_env(style: &crate::StyleProps) -> bool {
 /// calculation or a grid template that holds a `rem`, or a calculation that
 /// reads a custom property, which may hold one (LLP 1123 D5).
 pub(crate) fn root_font_readers(style: &crate::StyleProps) -> crate::StyleMask {
+    let reads =
+        |d: &Dimension| matches!(d, Dimension::Compare(c) if c.reads_rem() || c.reads_custom());
     let mut rows = crate::StyleMask::EMPTY;
     for id in style.mask.iter() {
         let reads = match style.get(id) {
-            crate::RowValue::Dimension(Dimension::Compare(c)) => c.reads_rem() || c.reads_custom(),
+            crate::RowValue::Dimension(d) => reads(&d),
+            crate::RowValue::ObjectPosition(p) => {
+                reads(&p.x)
+                    || reads(&p.y)
+                    || p.calculations()
+                        .into_iter()
+                        .flatten()
+                        .any(|c| reads(&Dimension::Compare(c)))
+            }
             _ => match id {
                 crate::StyleId::GridTemplateColumns => style.rare.grid_template_columns.reads_rem(),
                 crate::StyleId::GridTemplateRows => style.rare.grid_template_rows.reads_rem(),

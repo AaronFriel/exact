@@ -1056,7 +1056,10 @@ impl<D: DataSource> Host<D> {
                     continue;
                 }
                 let size = crate::paint::look::symbol_size(&node);
-                sizes.push((node.id, (size > 0.).then_some((size, size))));
+                sizes.push((
+                    node.id,
+                    (size > 0.).then(|| crate::paint::look::symbol_natural(&node)),
+                ));
             }
         }
         for (view, size) in sizes {

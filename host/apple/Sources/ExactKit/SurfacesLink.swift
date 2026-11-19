@@ -151,7 +151,7 @@ package protocol Canvas2DCanvases: AnyObject {
     func apply(_ id: UInt32, _ payload: [String: Any], layer parent: CALayer?)
     /// Places the bitmap of `id` at `box`, its view's content box, clipped
     /// to the content edge's `radii`; every later bitmap shows there too.
-    func place(_ id: UInt32, in box: CGRect, radii: [CGSize])
+    func place(_ id: UInt32, in box: CGRect, radii: [CGSize], placement: @escaping (CGSize) -> CGRect)
     func forget(_ id: UInt32)
     func load(_ srcs: [String])
     /// Lets go handles no mounted canvas asks for any more.
@@ -280,7 +280,7 @@ final class NoCanvas2D: Canvas2DCanvases {
     var onReplayEnded: (() -> Void)?
     var loadingCount: Int { 0 }
     func apply(_ id: UInt32, _ payload: [String: Any], layer parent: CALayer?) {}
-    func place(_ id: UInt32, in box: CGRect, radii: [CGSize]) {}
+    func place(_ id: UInt32, in box: CGRect, radii: [CGSize], placement: @escaping (CGSize) -> CGRect) {}
     func forget(_ id: UInt32) {}
     func load(_ srcs: [String]) {}
     func drop(_ srcs: [String]) {}

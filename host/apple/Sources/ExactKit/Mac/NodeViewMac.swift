@@ -1421,9 +1421,9 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
             // natural size, `scale-down` the smaller of none and contain;
             // an unknown value is the initial `fill`.
             let fit = style["object_fit"]?.string ?? "fill"
-            let content = contentBox()
+            let content = flightLook?.contentClip ?? contentBox()
             guard let ctx = NSGraphicsContext.current?.cgContext else { return }
-            let rect = flightLook?.image ?? RasterGeometry.rect(natural: bitmap.naturalSize, content: content, fit: fit)
+            let rect = flightLook?.image ?? RasterGeometry.rect(natural: bitmap.naturalSize, content: content, fit: fit, position: style["object_position"]?.array)
             ctx.saveGState()
             path.addClip()
             clipToContentEdge(ctx, content)

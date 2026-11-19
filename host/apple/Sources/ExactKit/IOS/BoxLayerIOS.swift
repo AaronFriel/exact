@@ -145,15 +145,16 @@ extension NodeView {
             imageLayer?.removeFromSuperlayer(); imageLayer = nil; return
         }
         if let look = flightLook {
-            // Flying (LLP 1013.000 D4): the whole image where the flight
-            // puts it; the view's own bounds and radius clip it.
+            guard let crop = RasterGeometry.crop(look.image, to: look.contentClip ?? bounds, flipped: true) else {
+                imageLayer?.removeFromSuperlayer(); imageLayer = nil; return
+            }
             CATransaction.begin(); CATransaction.setDisableActions(true)
             defer { CATransaction.commit() }
             let l = imageLayer ?? NodeImageLayer()
             if l.superlayer !== layer { imageLayer = l; insertBoxSublayer(l) }
             l.sublayers?.forEach { $0.removeFromSuperlayer() }
-            l.frame = look.image
-            l.contentsRect = CGRect(x: 0, y: 0, width: 1, height: 1)
+            l.frame = crop.shown
+            l.contentsRect = crop.unit
             l.contentsGravity = .resize
             let frame = ImageLink.animated?.frame(for: self) ?? bitmap.image
             if (l.contents as AnyObject?) !== frame { l.contents = frame }
@@ -165,7 +166,7 @@ extension NodeView {
         }
         let content = contentBox()
         let fit = style["object_fit"]?.string ?? "fill"
-        let rect = RasterGeometry.rect(natural: bitmap.naturalSize, content: content, fit: fit)
+        let rect = RasterGeometry.rect(natural: bitmap.naturalSize, content: content, fit: fit, position: style["object_position"]?.array)
         let pixels = ImageLink.animated?.frame(for: self) ?? bitmap.image
         let shown = rect.intersection(content)
         let radii = cornerRadii(in: bounds)

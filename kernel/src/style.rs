@@ -928,6 +928,8 @@ pub enum RowValue<'a> {
     Transform(&'a crate::svg::TransformList),
     /// CSS `transform-origin` (LLP 1055.000 D5).
     TransformOrigin(&'a crate::svg::TransformOrigin),
+    /// CSS `object-position`, relative to the space left by the object.
+    ObjectPosition(&'a crate::object::Position),
     /// SVG `paint-order` (LLP 1055.000 D7).
     PaintOrder(&'a crate::svg::PaintOrder),
     /// SVG `marker-start`, `marker-mid`, `marker-end` (LLP 1055.000 D9).

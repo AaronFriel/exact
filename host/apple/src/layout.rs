@@ -232,6 +232,7 @@ impl<D: DataSource> Host<D> {
                     }),
             );
         let (w, h) = self.viewport;
+        let environment = self.runner.kernel().env();
         for root in self.runner.roots() {
             // A miss has filled its cache on main before returning. Re-run
             // silently, collecting both receipts so a final unchanged frame
@@ -265,6 +266,22 @@ impl<D: DataSource> Host<D> {
                     return Err("layout: field chrome remained provisional after three passes; batch refused before presentation".into());
                 }
             }
+        }
+        if environment != self.runner.kernel().env() {
+            let readers: Vec<_> = self
+                .preorder()
+                .into_iter()
+                .filter(|&id| {
+                    self.runner
+                        .kernel()
+                        .node(id)
+                        .is_some_and(|node| exact_kernel::uses_env(node.style))
+                })
+                .collect();
+            for id in readers {
+                self.update(id, batch);
+            }
+            self.emit_paragraphs(batch);
         }
         self.height_projection.clear();
         self.height_projection

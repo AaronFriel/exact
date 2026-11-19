@@ -78,16 +78,12 @@ pub(crate) fn container_at(arena: &NodeArena, slot: u32) -> (f32, f32) {
 fn node_rows(style: &StyleProps) -> StyleMask {
     let mut rows = StyleMask::EMPTY;
     for id in style.mask.iter().filter(|id| !OVERRIDES.contains(id)) {
-        let RowValue::Dimension(d) = style.get(id) else {
-            continue;
-        };
-        let reads = match &d {
-            Dimension::Compare(c) => {
+        let row = style.get(id);
+        if calc::reads_plain_container(&row)
+            || calc::in_row(row).any(|c| {
                 c.reads_local() || c.reads_custom() || c.reads_observed() || c.reads_container()
-            }
-            d => d.reads_container(),
-        };
-        if reads {
+            })
+        {
             rows.set(id);
         }
     }
@@ -286,7 +282,7 @@ pub(crate) fn declarations(style: &StyleProps) -> SafeAreaProperties {
 /// The environment `slot`'s lengths, `style`, resolve against: the
 /// arena's, unless they read a local inset ([`env_at`]).
 pub(crate) fn env_for<'a>(arena: &'a NodeArena, slot: u32, style: &StyleProps) -> Cow<'a, Env> {
-    match reads_node(style) {
+    match reads_node(style) || style.mask.has(StyleId::ObjectPosition) {
         true => env_at(arena, slot),
         false => Cow::Borrowed(arena.env()),
     }
@@ -318,6 +314,7 @@ pub(crate) fn env_for_reservations<'a>(
 /// viewport's where it is `None`.
 fn env_with_containers(arena: &NodeArena, slot: u32, from: Option<u32>) -> Cow<'_, Env> {
     let mut env = arena.env().clone();
+    env.font_size = arena.computed_source(slot, StyleId::FontSize).font_size;
     env.local = Some(local_at(arena, slot));
     env.properties = Some(properties_at(arena, slot, &arena.effective_style(slot)));
     env.observed = Some(arena.observations.input(slot));
@@ -365,7 +362,7 @@ fn read_names(style: &StyleProps) -> Vec<Arc<str>> {
 /// [`read_names`], into `out`.
 pub(crate) fn read_names_into(style: &StyleProps, out: &mut Vec<Arc<str>>) {
     for id in style.mask.iter() {
-        if let RowValue::Dimension(Dimension::Compare(c)) = style.get(id) {
+        for c in calc::in_row(style.get(id)) {
             c.properties(out);
         }
     }
@@ -408,18 +405,19 @@ impl<'a> Depends<'a> {
     pub(crate) fn reader(&mut self, slot: u32) -> bool {
         let style = self.arena.style(slot);
         style.mask.iter().any(|id| {
-            let RowValue::Dimension(Dimension::Compare(c)) = style.get(id) else {
-                return false;
-            };
             if OVERRIDES.contains(&id) {
                 return false;
             }
             // A text reads what its `env()` calls leave, as its row reads it
-            c.tree(|t| self.takes(slot, t)).unwrap_or_else(|| {
-                match c.substituted(self.arena.env()) {
-                    Some(Dimension::Compare(s)) => s.tree(|t| self.takes(slot, t)).unwrap_or(false),
-                    _ => false,
-                }
+            calc::in_row(style.get(id)).any(|c| {
+                c.tree(|t| self.takes(slot, t)).unwrap_or_else(|| {
+                    match c.substituted(self.arena.env()) {
+                        Some(Dimension::Compare(s)) => {
+                            s.tree(|t| self.takes(slot, t)).unwrap_or(false)
+                        }
+                        _ => false,
+                    }
+                })
             })
         })
     }

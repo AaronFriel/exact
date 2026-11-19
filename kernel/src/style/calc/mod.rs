@@ -11,18 +11,46 @@
 mod parse;
 pub(crate) mod simplify;
 mod substitute;
+pub(crate) use substitute::position_tokens;
 mod text;
 pub(crate) use text::ident;
 mod wire;
 
 pub use parse::nonnegative_row;
-pub(crate) use parse::{grid, is_env, names_math, parse, refusal, signed, substitutes, Refused};
+pub(crate) use parse::{
+    grid, is_env, length_percentage, names_math, parse, refusal, signed, substitutes, Refused,
+};
 
 use super::env::{self, Edge, Env, Region, SegmentVar, TitleBarVar};
 use super::intern::{Table, Value};
 use super::{Dimension, StyleId, ViewportUnit};
 use std::sync::Arc;
 use std::sync::{LazyLock, Mutex};
+
+/// The calculations in a length row or either coordinate of a position row.
+pub(crate) fn in_row(row: super::RowValue<'_>) -> impl Iterator<Item = Comparison> {
+    let calculation = |d: &Dimension| match d {
+        Dimension::Compare(c) => Some(c.clone()),
+        _ => None,
+    };
+    match row {
+        super::RowValue::Dimension(d) => [calculation(&d), None],
+        super::RowValue::ObjectPosition(p) => p.calculations(),
+        _ => [None, None],
+    }
+    .into_iter()
+    .flatten()
+}
+
+/// Whether a row directly holds a container length.
+pub(crate) fn reads_plain_container(row: &super::RowValue<'_>) -> bool {
+    let reads = |d: &Dimension| matches!(d, Dimension::Viewport(..)) && d.reads_container();
+    match row {
+        super::RowValue::Dimension(d) => reads(d),
+        super::RowValue::ObjectPosition(p) => reads(&p.x) || reads(&p.y),
+        _ => false,
+    }
+}
 
 /// The values CSS Values 4 §10.8 has a UA support in one calculation, as
 /// written, and the levels of parentheses and functions: the kernel's

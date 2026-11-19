@@ -618,7 +618,7 @@ final class ModalHost: NSObject, UIAdaptivePresentationControllerDelegate {
         guard let image = zoomImage(target),
               let natural = image.raster?.image.naturalSize ?? fallbackNatural, natural.width > 0, natural.height > 0 else { return box }
         let content = image.contentBox()
-        let drawn = RasterGeometry.rect(natural: natural, content: content, fit: image.style["object_fit"]?.string ?? "fill")
+        let drawn = RasterGeometry.rect(natural: natural, content: content, fit: image.style["object_fit"]?.string ?? "fill", position: image.style["object_position"]?.array)
         return image.convert(drawn.intersection(content), to: zoomed)
     }
 

@@ -6,6 +6,10 @@ use super::{property, StyleId};
 pub(super) fn push(out: &mut String, id: StyleId, press: bool) -> bool {
     use StyleId::*;
     match id {
+        ObjectPosition => out.push_str(
+            "--exact-object-position:50% 50%;object-position:var(--exact-tint-offset,50% 50%);",
+        ),
+        ObjectFit => out.push_str("object-fit:unset;--exact-tint-size:100% 100%;"),
         TintColor | ExitAnimation | DragTimeline | AnimationTimeline | AnimationRange
         | TimelineScope | SafeAreaProperties | LayoutTransition | PressScale | PressHaptic
         | ControlSize | ControlCornerStyle | Fit | LineClamp | RotateAxis | TranslateZ

@@ -20,12 +20,12 @@
 
 use super::owner::{self, OVERRIDES};
 use crate::arena::NodeArena;
-use crate::generated::{StyleCodec, StyleId, StyleProps};
+use crate::generated::{StyleId, StyleProps};
 use crate::id::IdHasher;
 use crate::sorted::SlotSet;
 use crate::style::calc::{self, EnvTerm, Node};
 use crate::style::targets::Target;
-use crate::style::{Dimension, Edge, RowValue};
+use crate::style::{Dimension, Edge};
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::hash::BuildHasherDefault;
@@ -82,16 +82,15 @@ impl Readers {
         for id in style.mask.iter() {
             // Skip the inset overrides: `local_at` resolves them for the subtree,
             // whose readers are indexed
-            if id.codec() != StyleCodec::Dimension || OVERRIDES.contains(&id) {
+            if OVERRIDES.contains(&id) {
                 continue;
             }
-            let RowValue::Dimension(d) = style.get(id) else {
-                continue;
-            };
-            container |= d.reads_container();
-            if let Dimension::Compare(c) = d {
+            let row = style.get(id);
+            container |= calc::reads_plain_container(&row);
+            for c in calc::in_row(row) {
                 local |= c.reads_local();
                 properties |= c.reads_custom();
+                container |= c.reads_container();
                 observes |= c.observed_components();
                 targets.extend(c.targets_read());
             }
@@ -355,15 +354,14 @@ fn reads_edges(arena: &NodeArena, slot: u32, edges: [bool; 4]) -> bool {
     };
     let defined = |name: &str| resolved.get(name).is_some();
     style.mask.iter().any(|id| {
-        if id.codec() != StyleCodec::Dimension || OVERRIDES.contains(&id) {
+        if OVERRIDES.contains(&id) {
             return false;
         }
-        let RowValue::Dimension(Dimension::Compare(c)) = style.get(id) else {
-            return false;
-        };
-        let any = |e: usize| edges[e] && c.reads_local_edge(Edge::ALL[e]);
-        c.tree(|t| read_where_taken(t, edges, &defined))
-            .unwrap_or_else(|| (0..4).any(any))
+        calc::in_row(style.get(id)).any(|c| {
+            let any = |e: usize| edges[e] && c.reads_local_edge(Edge::ALL[e]);
+            c.tree(|t| read_where_taken(t, edges, &defined))
+                .unwrap_or_else(|| (0..4).any(any))
+        })
     })
 }
 

@@ -558,7 +558,13 @@ impl Painter {
         };
         // A kept row's slot is painted again outside the node's walk.
         let _accent = super::accent_scope(node);
-        if let Some(dst) = object_fit(img.natural(), node.style.object_fit, content) {
+        if let Some(dst) = object_fit(
+            img.natural(),
+            object_fit_of(node),
+            &node.style.object_position,
+            content,
+            &walk.scene.kernel.env_of(node.id),
+        ) {
             let shown = (walk.scene.presented)(node.id);
             let tint = image_tint(node, &shown, self.dark);
             self.backend.image(

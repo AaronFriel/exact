@@ -332,7 +332,8 @@ final class FaceSymbolIOSTests: XCTestCase {
             let node = try XCTUnwrap(p.views[id]), leaf = try XCTUnwrap(node.symbolView)
             node.layoutSymbol()
             XCTAssertEqual(node.bounds.size, region.size)
-            XCTAssertEqual(leaf.frame, node.contentBox())
+            XCTAssertEqual(leaf.frame.midX, node.contentBox().midX, accuracy: 0.001)
+            XCTAssertEqual(leaf.frame.midY, node.contentBox().midY, accuracy: 0.001)
         }
         let boxes = try inked(w, in: regions)
         for (offset, context) in [(0, "page"), (cases.count, "authored button")] {

@@ -574,10 +574,10 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
             // What the image says is its node's (`aria-label`), never the
             // name UIKit gives the symbol, which a cell gathering its
             // children's words would read ("checkmark.circle" is "selected").
-            SymbolEffectState.of(leaf).pathTemplate = nil
+            SymbolEffectState.of(leaf).clearPathTemplate()
             showSymbol(image, on: leaf); leaf.isAccessibilityElement = false; leaf.accessibilityElementsHidden = true; leaf.isUserInteractionEnabled = false
             // The symbol's size when the kernel's measurer could not say
-            presenter?.queueIntrinsicSize(self, generation: generation, props["symbolAsset"] != nil ? image?.size : SymbolMeasure.size(name, points: points, weight: weight))
+            presenter?.queueIntrinsicSize(self, generation: generation, (props["symbolAsset"] != nil || props["symbolPath"] != nil) ? image?.size : SymbolMeasure.size(name, points: points, weight: weight))
         }
         symbolView?.preferredSymbolConfiguration = symbolConfiguration(SymbolMeasure.configuration(points: points, weight: weight))
         if let leaf = symbolView { applySymbolEffect(leaf) }
@@ -1448,8 +1448,8 @@ package final class NodeView: UIView, UITextViewDelegate, UITextFieldDelegate, U
             // natural size, `scale-down` the smaller of none and contain;
             // an unknown value is the initial `fill`.
             let fit = style["object_fit"]?.string ?? "fill"
-            let content = contentBox()
-            let rect = flightLook?.image ?? RasterGeometry.rect(natural: bitmap.naturalSize, content: content, fit: fit)
+            let content = flightLook?.contentClip ?? contentBox()
+            let rect = flightLook?.image ?? RasterGeometry.rect(natural: bitmap.naturalSize, content: content, fit: fit, position: style["object_position"]?.array)
             ctx.saveGState()
             path.addClip()
             clipToContentEdge(ctx, content)

@@ -19,13 +19,17 @@ public final class CalculatedLength: Equatable {
     }
     /// Interpret the private length wire only in a style, never app payloads.
     package static func decode(_ style: NodeStyle) -> NodeStyle {
-        var resolved = style
-        for (key, value) in style {
-            guard case .object(let object) = value,
-                  let calculation = CalculatedLength(object) else { continue }
-            resolved[key] = .calculation(calculation)
+        style.mapValues { value in
+            if case .array(let coordinates) = value {
+                return .array(coordinates.map(decodeLength))
+            }
+            return decodeLength(value)
         }
-        return resolved
+    }
+    private static func decodeLength(_ value: BatchValue) -> BatchValue {
+        guard case .object(let object) = value,
+              let calculation = CalculatedLength(object) else { return value }
+        return .calculation(calculation)
     }
     deinit { exact_calc_destroy(context) }
     public func length(basis: CGFloat) -> CGFloat { CGFloat(exact_calc_resolve(context, Double(basis))) }

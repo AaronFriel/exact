@@ -146,6 +146,18 @@ pub(crate) fn parse(text: &str) -> Result<Option<Dimension>, Refused> {
     }
 }
 
+/// A CSS length-percentage, including a unitless zero outside math functions.
+pub(crate) fn length_percentage(text: &str) -> Option<Dimension> {
+    let mut input = ParserInput::new(text);
+    let mut p = Parser::new(&mut input);
+    if matches!(p.next(), Ok(Token::Number { value, .. }) if *value == 0.0) && p.is_exhausted() {
+        return Some(Dimension::Points(0.0));
+    }
+    calculation(text, true, false)
+        .ok()
+        .map(|node| super::dimension(super::simplify::simplify(node)))
+}
+
 /// Grid's length-percentage calculations use the same grammar and limits,
 /// without viewport or environment dependencies; a `rem` is the root font
 /// size's, which the arena's environment carries. Canonical CSS can add

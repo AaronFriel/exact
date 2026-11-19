@@ -217,6 +217,11 @@ final class SymbolEffectState {
     var effect = "none"
     var value: String?
     var pathTemplate: SymbolImage?
+    var pathTemplateGeometry: (size: CGSize, crop: CGRect)?
+    func clearPathTemplate() {
+        pathTemplate = nil
+        pathTemplateGeometry = nil
+    }
     var inkSource: SymbolImage?, inkImage: SymbolImage?
     var inkColor: PlatformColor?
     private static var key = 0
