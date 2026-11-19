@@ -24,7 +24,7 @@ export const HOST_WEB_GLUE = [
 
 /** `code`, the source of `file`, with each constant in `names` that it declares true written false, so the bundler
  * drops what the constant gates; one it no longer declares fails the build by name. */
-function writeFalse(code, file, names) {
+export function writeFalse(code, file, names) {
   for (const name of names) {
     const said = new RegExp(`(?<=\\bconst |, )${name} = true\\b`);
     if (!said.test(code)) throw new Error(`${file}: glue.mjs replaces a line it no longer has: ${name} = true`);
