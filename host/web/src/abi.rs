@@ -1269,6 +1269,8 @@ macro_rules! host {
             EXACT_BRIDGE.with(|b| b.borrow_mut().set_update(code))
         }
 
+        /// The agent's substitute for the screen reader's state, which a
+        /// browser never reports (`Bridge::set_screen_reader`; LLP 1039 D10).
         #[no_mangle]
         pub extern "C" fn exact_set_screen_reader(code: u32) {
             EXACT_BRIDGE.with(|b| b.borrow_mut().set_screen_reader(code));
