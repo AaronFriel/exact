@@ -21,15 +21,17 @@
 // - `exact.contentIndex.open` `{url}`: opens an entry's location.
 import ExactCore
 import Foundation
+import os
 #if canImport(CoreSpotlight) && !os(tvOS)
 import CoreSpotlight
-import os
 import UniformTypeIdentifiers
 #endif
 
 public enum ExactContentIndex {
     /// D4's limits: past them a change refuses `QuotaExceededError`.
     static let most = 5_000, textBytes = 1_024
+    /// A line to the system log (category `search`).
+    static func log(_ line: String) { Logger(subsystem: "dev.exact", category: "search").log("\(line, privacy: .public)") }
     private struct Mirror: Codable {
         var entries: [[String: JSONValue]] = []
         /// Keys whose change Spotlight has not acknowledged.
@@ -98,7 +100,7 @@ public enum ExactContentIndex {
             publishToWidgets(m)
             return true
         } catch {
-            ExactTools.log(nil, "contentIndex: the mirror was not written: \(error.localizedDescription)")
+            ExactContentIndex.log("contentIndex: the mirror was not written: \(error.localizedDescription)")
             return false
         }
     }
@@ -117,7 +119,7 @@ public enum ExactContentIndex {
             try ContentIndexEntries.publish(offered, root: root)
             published = offered
         } catch {
-            ExactTools.log(nil, "contentIndex: the widgets' list was not written: \(error.localizedDescription)")
+            ExactContentIndex.log("contentIndex: the widgets' list was not written: \(error.localizedDescription)")
         }
     }
 
@@ -232,12 +234,12 @@ public enum ExactContentIndex {
         let done = { (keys: [String]) in DispatchQueue.main.async { acknowledge(keys, stamp: stamp) } }
         if !changed.isEmpty {
             index.indexSearchableItems(changed.map(item)) { error in
-                if let error { ExactTools.log(nil, "contentIndex: Spotlight refused \(changed.count) entries: \(error.localizedDescription)") } else { done(changed.map(key)) }
+                if let error { ExactContentIndex.log("contentIndex: Spotlight refused \(changed.count) entries: \(error.localizedDescription)") } else { done(changed.map(key)) }
             }
         }
         if !gone.isEmpty {
             index.deleteSearchableItems(withIdentifiers: gone) { error in
-                if let error { ExactTools.log(nil, "contentIndex: Spotlight kept \(gone.count) removed entries: \(error.localizedDescription)") } else { done(gone) }
+                if let error { ExactContentIndex.log("contentIndex: Spotlight kept \(gone.count) removed entries: \(error.localizedDescription)") } else { done(gone) }
             }
         }
     }

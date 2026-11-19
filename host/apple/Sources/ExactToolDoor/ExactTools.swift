@@ -1,10 +1,10 @@
 // The tool door (LLP 1133.023 D7, D15 item 4): what a system's call of a
 // tool reaches. The generated intents module (host/apple/intents.mjs) posts
 // `exact.tools.call` `{tool, args, door, digest, reply}`, an
-// `NSMutableDictionary` this marks `taken`, and an app's own native intent
-// calls `ExactTools.call` directly. Either way the call is handed to the
-// session's runner, which runs it as an invocation of origin `tool`
-// (runner/src/runner/calls.rs), and the door polls it by id until it
+// `NSMutableDictionary` this marks `taken`, and a launch part that imports
+// ExactToolDoor calls `ExactTools.call` directly. Either way the call is
+// handed to the session's runner, which runs it as an invocation of origin
+// `tool` (runner/src/runner/calls.rs), and the door polls it by id until it
 // ends or a reload replaces that runner. The module posts
 // `exact.tools.cancel` with the same dictionary when the system cancels the
 // intent's task: the call's `Cancellation`, which the dictionary carries,
@@ -15,6 +15,7 @@
 // A call that launched the app with no scene boots the session with none,
 // as a wake does (LLP 1133.017 D7): `boot`, which the app's host sets.
 import CExact
+import ExactKit
 import Foundation
 import os
 #if os(iOS)
@@ -67,7 +68,6 @@ public enum ExactTools {
             DispatchQueue.main.async { pickedPath(name: name, reply: reply) }
         }
         #endif
-        ExactContentIndex.install()
     }
 
     #if EXACT_INTENT_FILES

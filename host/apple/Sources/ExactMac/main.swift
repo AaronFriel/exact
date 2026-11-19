@@ -735,7 +735,7 @@ final class Delegate: NSObject, NSApplicationDelegate {
         LaunchKind.install()
         ExactComposition.installNotificationClicks(on: exact, boot: nil, activate: { session in windows.first { $0.session === session }?.front() })
         ExactComposition.installWakes(on: exact)
-        exact.installReach()
+        ExactComposition.installReach(on: exact)
     }
     /// The Dock menu, one menu: the manifest's shortcuts, then the app's (LLP
     /// 1133.023 D3), then the front window's session's `-exact-menu="dock"`

@@ -2184,7 +2184,7 @@ including `DEBUG` for its debug configuration. On Linux, authored `openAppWhenRu
 introduced iOS/macOS availability and scalar parameter defaults are preserved; defaults that
 cannot be represented exactly and unsupported declarations fail the build.
 Linux builds also refuse more than one App Shortcuts provider across modules and generated faces.
-A launch part can import ExactKit and call the public `ExactTools.call` door (LLP 1133.023 D15).
+A launch part can import ExactToolDoor, which a plan with a tool links, and call the public `ExactTools.call` door (LLP 1133.023 D15).
 The `--extensions` selection applies to native and generated intents alike.
 On Linux, native `IntentFile` content types may use `UTType(importedAs:)` or the constants
 `.image`, `.png`, `.jpeg`, `.heic`, `.heif` and `.data`.

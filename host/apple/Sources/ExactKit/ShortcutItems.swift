@@ -95,15 +95,14 @@ public enum ExactShortcuts {
 
 extension ExactApp {
     /// The system's ways in that a package's code does not keep (LLP
-    /// 1133.023 D15 item 1): the tool door, the content index's mirror and
-    /// the icon's menu. Install at launch, before the app finishes launching.
-    /// `boot` boots a session with no view for a call that launched the app
-    /// with none.
-    public func installReach(boot: (() -> Void)? = nil) {
-        ExactTools.boot = boot
-        ExactTools.install()
+    /// 1133.023 D15 item 1): the icon's menu and the content index, which
+    /// `@exact/search-index` writes with no tool. Install at launch, before
+    /// the app finishes launching. The tool door is its own product
+    /// (`installToolDoor`).
+    public func installReach() {
         #if !os(tvOS)
         ExactShortcuts.install()
         #endif
+        ExactContentIndex.install()
     }
 }

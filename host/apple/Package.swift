@@ -66,6 +66,7 @@ let allCapabilities: [(name: String, target: String)] = [
     ("navigation", "ExactNavigation"),
     ("text_selection", "ExactTextSelection"),
     ("widgets", "ExactWidgetPublication"),
+    ("tools", "ExactToolDoor"),
 ]
 // What a family imports beyond ExactKit and CExact: another family's product,
 // which the roster links with it, or ExactCore's package API. Surfaces' Canvas
@@ -168,9 +169,12 @@ let core: [Target] = [
     .target(name: "ExactFormaBinding", dependencies: ["ExactKit", "CExact"], path: "Sources/ExactFormaBinding", swiftSettings: devTools),
     .target(name: "ExactHeavyLeaves", dependencies: ["ExactKit"], path: "Sources/ExactHeavyLeaves", swiftSettings: devTools),
 ] + allCapabilities.map {
-    .target(name: $0.target, dependencies: ["ExactKit", "CExact"] + (capabilityNeeds[$0.target] ?? []), path: "Sources/\($0.target)", swiftSettings: devTools)
+    .target(name: $0.target, dependencies: ["ExactKit", "CExact"] + (capabilityNeeds[$0.target] ?? []), path: "Sources/\($0.target)",
+            // The tool door answers a file face's landing, compiled only for one (`EXACT_INTENT_FILES`).
+            swiftSettings: devTools + ($0.target == "ExactToolDoor" ? intentFileSettings : []))
 } + [
-    .target(name: "ExactLaunchParts", dependencies: ["ExactKit"], path: launchParts,
+    // A launch part may call the tool door (`ExactTools.call`), which a plan with a tool links.
+    .target(name: "ExactLaunchParts", dependencies: ["ExactKit"] + (links("tools") ? ["ExactToolDoor"] : []), path: launchParts,
             swiftSettings: launchPartsTarget.map { [.unsafeFlags(["-target", $0])] } ?? []),
     .target(name: "ExactComposition", dependencies: [.target(name: "ExactKit")] + (composition == "updating" ? [.target(name: "ExactUpdates")] : [])
                 + capabilities.map { .target(name: $0.target) } + watchSyncDependency,

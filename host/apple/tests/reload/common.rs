@@ -27,6 +27,9 @@ pub fn source(text: &str) -> Vec<u8> {
 /// plays.
 pub const ANIMATED: &str = "keyframes spin\n  from opacity=0\n  to opacity=1\ncomponent A\n  view\n    text \"a\" animation=\"spin 1s infinite\"\n";
 
+/// A plan with a tool, which only the tool door and the runner's tool seam serve.
+pub const TOOLS: &str = "component A\n  state n = 0\n  tool bump writes \"Add one.\" = bump\n  action bump\n    n = n + 1\n  view\n    text \"a\"\n";
+
 /// A plan that can start a Live Activity, which only the activities family
 /// serves; it reads nothing at boot, so its candidate is not held for data.
 pub const ACTIVITIES: &str = "shape ID\n  id: string\nshape S\n  n: number\ncomponent A\n  mutation started as shape ID\n  action start\n    send started = startActivity(\"k\", S(n=1))\n  view\n    text \"a\"\n";

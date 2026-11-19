@@ -67,6 +67,17 @@ extension ExactComposition {
         #endif
     }
 
+    /// The system's ways in a package's code does not keep: the icon's menu
+    /// and the content index in every app, and the tool door when the plan
+    /// has a tool; `boot` takes a tool call that launched the app with no scene
+    /// (LLP 1133.023 D7, D15).
+    public static func installReach(on app: ExactApp, boot: (() -> Void)? = nil) {
+        app.installReach()
+        #if EXACT_LINK_TOOLS
+        app.installToolDoor(boot: boot)
+        #endif
+    }
+
     /// A background transfer session's events; without the wakes family
     /// there is no such session, and the system is told at once.
     public static func handleTransferEvents(on app: ExactApp, _ identifier: String, completion: @escaping () -> Void) {

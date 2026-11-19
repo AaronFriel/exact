@@ -3,10 +3,11 @@
 // and the App Intents metadata the system reads from the bundle.
 //
 // The generated code imports only AppIntents and Foundation. It reaches the
-// host through `NotificationCenter`, the channel ExactKit and an app's
-// modules already share in the process (ExactTools.swift): `exact.tools.call`
-// for a call, `exact.contentIndex.query` for an entity query and
-// `exact.contentIndex.open` for an entity's location. So it compiles beside
+// host through `NotificationCenter`, the channel the host and an app's
+// modules already share in the process: `exact.tools.call` for a call, which
+// ExactToolDoor observes (ExactTools.swift), and `exact.contentIndex.query`
+// for an entity query and `exact.contentIndex.open` for an entity's
+// location, which ExactKit observes (ContentIndex.swift). So it compiles beside
 // the SwiftPM build, not inside it, and needs no ExactKit module to compile
 // against.
 import { dirname, resolve } from 'node:path';
@@ -75,7 +76,7 @@ export function intentsSource(faces, entities = {}) {
 import AppIntents
 import Foundation${faces.some(f => Object.values(f.face.parameters ?? {}).some(p => p.type === 'file')) ? '\nimport UniformTypeIdentifiers' : ''}
 
-/// The host's door and mirror, through the channel ExactKit observes (ExactTools.swift).
+/// The host's door (ExactToolDoor's ExactTools.swift) and mirror (ExactKit's ContentIndex.swift).
 enum ExactDoor {
     struct Refusal: Error, CustomLocalizedStringResourceConvertible {
         let message: String

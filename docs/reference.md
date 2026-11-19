@@ -1495,6 +1495,8 @@ The generated `--embed` composition lists the capabilities to link.
 | `ExactNotifications` | Notifications, their actions and push registration | `ExactNotifications.install()`; the app delegate calls `ExactApp.installNotificationClicks` before launch completes |
 | `ExactHostEventMailbox` | Host events a package takes (an accepted iCloud share) | `ExactHostEventMailbox.install()`; the app delegate calls `ExactApp.installHostEvents` before any scene connects |
 | `ExactActivities` | Live Activities (links `ExactWidgetPublication`, whose generation their sends name) | `ExactActivities.install()` |
+| `ExactActivities` | Live Activities | `ExactActivities.install()` |
+| `ExactToolDoor` | The tool door: the system's calls of the plan's tools | `ExactToolDoor.install()`; the app delegate calls `ExactApp.installToolDoor` before launch completes |
 | `ExactWakeCarriers` | Wakes, background transfers and monitored regions | `ExactWakeCarriers.install()`; the app delegate calls `ExactApp.installWakes` before launch completes, and `ExactApp.handleTransferEvents` |
 | `ExactGradients` | CSS gradients: `background-image` and `mask-image` | `ExactGradients.install()` |
 | `ExactTraces` | The traces an app records, and `ExactSession.startTrace()` and `stopTrace(maxBytes:)` | `ExactTraces.install()` |

@@ -213,7 +213,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         // A wake that launched the app with no scene boots it with none (LLP 1133.017 D7).
         ExactComposition.installWakes(on: exact) { session.bootForWake() }
         // A tool call that launched the app with no scene boots it the same way (LLP 1133.023 D7).
-        exact.installReach { session.bootForWake() }
+        ExactComposition.installReach(on: exact) { session.bootForWake() }
         #endif
         // The one session owns its window and the process (LLP 1075.003.000.001 §2.1.1).
         session.hatchesOwnWindow = true

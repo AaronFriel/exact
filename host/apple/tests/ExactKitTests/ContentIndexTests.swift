@@ -2,6 +2,7 @@
 import XCTest
 import ExactCore
 @testable import ExactKit
+@testable import ExactToolDoor
 
 /// The content index's mirror and the door's answers with no session (LLP 1133.023 D4, D9, D7).
 final class ContentIndexTests: XCTestCase {
@@ -11,6 +12,7 @@ final class ContentIndexTests: XCTestCase {
         super.setUp()
         directory = FileManager.default.temporaryDirectory.appendingPathComponent("content-index-\(UUID().uuidString)")
         ExactContentIndex.file = directory.appendingPathComponent("exact-content-index.json")
+        ExactContentIndex.install()
         ExactTools.install()
     }
     override func tearDown() {
