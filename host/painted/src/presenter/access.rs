@@ -587,10 +587,6 @@ impl<D: DataSource> Presenter<D> {
         if node.node_type == NodeType::Text {
             return self.access_inline_words(node);
         }
-        let face = self.host.kernel().press_face(node.id);
-        if let Some(title) = face.and_then(|face| face.title.or(face.label)) {
-            return title;
-        }
         let words = self.access_words(node, false);
         match node.props.str(PropId::Title) {
             Some(title) if words.trim().is_empty() && !title.is_empty() => title.to_string(),

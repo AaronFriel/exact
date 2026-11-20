@@ -1088,6 +1088,23 @@ fn a_title_describes_or_names() {
     assert_eq!(hint("Redo"), "");
 }
 
+#[test]
+fn button_name_includes_nested_text_in_reading_order() {
+    let source = r#"component App
+  view
+    button
+      column
+        text "Increase text size"
+        text "Writing"
+        text "Layout hint" aria-hidden=true
+      text "Shortcut"
+"#;
+    let mut p = boot(source, (320., 600.), 0);
+    let nodes = read(&mut p);
+    let button = nodes.iter().find(|n| n.role == role::BUTTON).unwrap();
+    assert_eq!(button.name, "Increase text size Writing Shortcut");
+}
+
 /// A Markdown text is read as its reader draws it (LLP 1045,
 /// "Accessibility"): syntax hidden, a link by its text, a footnote by its
 /// `[n]`, a rule by its line, and an atom, which this reader draws as its
