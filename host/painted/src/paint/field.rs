@@ -661,11 +661,7 @@ impl Painter {
             let painted = material::FieldText::painted(&paragraph, (ox, oy), ts);
             self.labels.value(node.id, painted);
         }
-        let text_clip = if multiline {
-            (content.0, padding.rect.1, content.2, padding.rect.3)
-        } else {
-            content
-        };
+        let text_clip = if multiline { padding.rect } else { content };
         if let Some(shadows) = shadows {
             let ink = self.capture_field_ink(
                 walk.scene.kernel,

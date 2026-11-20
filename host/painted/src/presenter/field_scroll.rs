@@ -390,6 +390,45 @@ mod tests {
     }
 
     #[test]
+    fn a_scrolled_textarea_paints_the_first_glyph_inside_its_horizontal_padding() {
+        let source = r##"component App
+  view
+    textarea id="editor" value="M\n0123456789012345678901234567890123456789" width=200 height=90 box-sizing="border-box" appearance="none" border="none" padding="16px 28px" color="#000000" background-color="#ffffff" font-size=16 line-height=1.6 white-space="pre"
+"##;
+        let (mut p, error) = Presenter::boot_with_fixture_fonts(
+            &crate::test_plan(source),
+            (),
+            (240., 120.),
+            1.,
+            PathBuf::new(),
+            PainterChoice::Cpu,
+        )
+        .unwrap();
+        assert!(error.is_none(), "{error:?}");
+        let first_line = |p: &mut Presenter<()>| {
+            let frame = p.frame();
+            (0..180)
+                .filter(|&x| (16..42).any(|y| frame.pixel(x, y).unwrap().red() < 128))
+                .collect::<Vec<_>>()
+        };
+        let at_start = first_line(&mut p);
+        assert!(at_start.first().is_some_and(|&x| x >= 28));
+        for dx in [23., -23.] {
+            p.scroll_element_by(&[
+                exact_plan::Value::str("editor"),
+                exact_plan::Value::Number(dx),
+                exact_plan::Value::Number(0.),
+            ]);
+            let expected = if dx > 0. {
+                at_start.iter().map(|x| x - 23).collect()
+            } else {
+                at_start.clone()
+            };
+            assert_eq!(first_line(&mut p), expected, "scroll by {dx}");
+        }
+    }
+
+    #[test]
     fn first_click_on_horizontally_scrolled_textarea_hits_visible_text_not_old_caret() {
         let source = r##"component App
   state body = "LEFT EDGE | abcdefghijklmnopqrstuvwxyz | ABCDEFGHIJKLMNOPQRSTUVWXYZ | RIGHT EDGE"
