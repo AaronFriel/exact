@@ -64,6 +64,57 @@ fn edited_field_ink_matches_full_layout_across_wraps_chunks_and_font_changes() {
         old = next;
     }
 }
+#[test]
+fn edited_width_matches_fresh_shaping_after_lines_move_wrap_or_change_face() {
+    let mut engine = engine();
+    let spec = |text: &str, size| {
+        let style = StyleProps::default().with_rows(|rows| {
+            rows.white_space = exact_kernel::WhiteSpace::PreWrap;
+            rows.font_size = size;
+        });
+        crate::paint::text_spec(&style, text)
+    };
+    let tail = "unchanged words wrapping here";
+    let mut old = engine.edited_field(&spec(&format!("a\n{tail}"), 13.), Some(65.), None);
+    for (value, width, size, shared) in [
+        (format!("abc\r\n{tail}"), 65., 13., true),
+        (format!("abc\n\nمرحبا\n{tail}"), 65., 13., true),
+        (format!("abc\u{2029}{tail}"), 65., 13., true),
+        (format!("中🙂\n{tail}"), 65., 13., false),
+        (format!("b\n{tail}"), 120., 13., false),
+        (format!("b\ná\n{tail}"), 120., 19., false),
+    ] {
+        let next_spec = spec(&value, size);
+        let next = engine.edited_field(&next_spec, Some(width), Some(&old));
+        let actual = next.lines();
+        if shared {
+            let last_glyphs = |p: &Paragraph| {
+                let lines = p.lines();
+                lines.glyphs_of(lines.lines.last().unwrap()).as_ptr()
+            };
+            assert_eq!(
+                last_glyphs(&next),
+                last_glyphs(&old),
+                "unchanged positioned glyphs"
+            );
+        }
+        let fresh = engine.layout(&next_spec, Some(width));
+        let expected = fresh.lines();
+        assert_eq!((next.width, next.height), (fresh.width, fresh.height));
+        assert_eq!(next.baselines, fresh.baselines);
+        assert_eq!(next.bottoms, fresh.bottoms);
+        assert_eq!(actual.lines, expected.lines);
+        assert_eq!(actual.faces.len(), expected.faces.len());
+        for (a, b) in actual.faces.iter().zip(&expected.faces) {
+            assert_eq!(a.id(), b.id());
+            assert_eq!(a.coords, b.coords);
+        }
+        for (a, b) in actual.lines.iter().zip(&expected.lines) {
+            assert_eq!(actual.glyphs_of(a), expected.glyphs_of(b));
+        }
+        old = next;
+    }
+}
 fn cache_card(p: &Paragraph) -> BTreeMap<GlyphKey, Option<(i32, i32, u32, u32)>> {
     p.source
         .catalog

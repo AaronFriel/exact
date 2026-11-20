@@ -971,6 +971,7 @@ export const classifications = [
       "Cache::identity_owned Cache::insert Cache::intrinsic Cache::invalidate_families Cache::maintain Cache::prepare_handoff Cache::release_handoff Cache::residency " +
       "Cache::retiring Cache::set_intrinsic Cache::set_source Cache::source Cache::spec Cache::superseding Cache::trim deferring_eviction"],
     ["painted:host/painted/src/text/catalog_recipe.rs", "Recipe::attach Recipe::catalog Recipe::fonts"],
+    ["painted:host/painted/src/text/field_lines.rs", "Glyphs::is_empty Glyphs::len"],
     ["painted:host/painted/src/text/flow.rs", "FlowLayout::capacity_bytes Paragraph::flow_incomplete Paragraph::flow_line_height Paragraph::fragments TextEngine::paragraph_flow"],
     ["painted:host/painted/src/text/fonts.rs", "Described::info Registry::add Registry::source"],
     ["painted:host/painted/src/text/ink.rs", "Cache::bytes Cache::from_index Cache::matches Cache::prepare Cache::reset Index::build Index::glyphs Index::viewport Index::visit"],

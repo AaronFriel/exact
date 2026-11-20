@@ -899,7 +899,7 @@ mod clip_masks {
 mod cached_placements;
 
 #[test]
-fn typing_at_the_start_of_a_textarea_indexes_only_the_edited_line() {
+fn typing_at_the_start_of_a_textarea_shapes_places_and_indexes_only_the_edited_line() {
     use crate::presenter::{PainterChoice, Presenter};
 
     let document = ("x".repeat(63) + "\n").repeat(32);
@@ -928,6 +928,9 @@ fn typing_at_the_start_of_a_textarea_indexes_only_the_edited_line() {
     p.frame();
     for (i, ch) in "abcd".chars().enumerate() {
         let before = ink::build_work();
+        let shaped = shaping::shape_line_calls();
+        let broken = shaping::break_calls().1;
+        let placed = lines::EXTRACTED.with(std::cell::Cell::get);
         p.key(Some(ch), false, 100. + i as f64);
         p.frame();
         let value = p
@@ -940,6 +943,13 @@ fn typing_at_the_start_of_a_textarea_indexes_only_the_edited_line() {
             .unwrap();
         assert!(value.starts_with(&"abcd"[..=i]));
         assert_eq!(value.len(), document.len() + i + 1);
+        assert_eq!(shaping::shape_line_calls() - shaped, 1, "shapes after {ch}");
+        assert_eq!(shaping::break_calls().1 - broken, 1, "breaks after {ch}");
+        assert_eq!(
+            lines::EXTRACTED.with(std::cell::Cell::get) - placed,
+            64 + i,
+            "placements after {ch}"
+        );
         let visited = ink::build_work().glyphs - before.glyphs;
         assert_eq!(visited, 64 + i, "keystroke {ch}");
     }

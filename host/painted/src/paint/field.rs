@@ -60,6 +60,7 @@ impl PaintedField {
     ) -> (f32, f32) {
         let content = Self::editor_size(kernel, node);
         let stamp = node.paragraph_stamp();
+        let prior = previous.map(|field| field.paragraph.as_ref());
         let previous = previous.filter(|f| {
             f.stamp
                 .as_ref()
@@ -94,7 +95,7 @@ impl PaintedField {
                 &spec
             }
         };
-        text.paragraph(spec, Some(content.0))
+        text.edited_field(spec, Some(content.0), prior)
             .textarea_scroll_max(value, content)
     }
 
@@ -226,7 +227,11 @@ impl PaintedField {
         if let Some(decorations) = &self.decorations {
             spec = decorations.project(spec, value).spec;
         }
-        let paragraph = text.paragraph(&spec, self.multiline.then_some(self.content.2));
+        let paragraph = text.edited_field(
+            &spec,
+            self.multiline.then_some(self.content.2),
+            self.multiline.then_some(self.paragraph.as_ref()),
+        );
         let mut field = Self::new(
             paragraph,
             value,
@@ -478,6 +483,10 @@ impl Painter {
             (node.id, 0),
             &spec,
             multiline.then_some(content.2),
+            self.field_text
+                .get(&node.id)
+                .filter(|_| multiline)
+                .map(|f| f.paragraph.as_ref()),
         );
         walk.text.insert(node.key, paragraph.clone());
         let mut oy = content.1

@@ -1,6 +1,7 @@
 //! Editing geometry from the immutable glyphs and CSS line boxes used to paint a field.
-use super::Paragraph;
+use super::{Paragraph, Spec, TextEngine};
 use exact_kernel::{Direction, TextAlign};
+use std::rc::Rc;
 use unicode_segmentation::UnicodeSegmentation;
 
 type Rect = (f32, f32, f32, f32);
@@ -62,6 +63,58 @@ pub(crate) fn line_left(align: TextAlign, direction: Direction, width: f32, w: f
         _ => 0.,
     };
     share * (width - w)
+}
+
+#[derive(Clone, Copy)]
+pub(super) enum WidthUse<'a> {
+    Measure,
+    Paint,
+    Field(Option<&'a Paragraph>),
+}
+
+impl<'a> WidthUse<'a> {
+    fn field(engine: &TextEngine, spec: &Spec, previous: Option<&'a Paragraph>) -> Self {
+        Self::Field(previous.filter(|p| {
+            Rc::ptr_eq(&engine.catalog, &p.source.catalog)
+                && matches!(spec.runs.as_slice(), [r] if r.inline.is_none() && r.edges.is_empty())
+                && super::cache::same_style(spec, &p.source.spec)
+        }))
+    }
+
+    pub(super) fn previous(self) -> Option<&'a Paragraph> {
+        match self {
+            Self::Field(p) => p,
+            _ => None,
+        }
+    }
+}
+
+impl TextEngine {
+    /// [`TextEngine::paragraph`] for a text that replaces the one `owner`
+    /// (a field's node and which of its texts) showed before: the replaced
+    /// one is not kept ([`super::cache::Cache::superseding`]).
+    pub(crate) fn paragraph_replacing(
+        &mut self,
+        owner: (u32, u8),
+        spec: &Spec,
+        width: Option<f32>,
+        previous: Option<&Paragraph>,
+    ) -> Rc<Paragraph> {
+        let key = self.paragraphs.identity(spec);
+        let p = self.layout_paragraph(width, key, WidthUse::field(self, spec, previous));
+        self.paragraphs.superseding(owner, key);
+        p
+    }
+
+    pub(crate) fn edited_field(
+        &mut self,
+        spec: &Spec,
+        width: Option<f32>,
+        previous: Option<&Paragraph>,
+    ) -> Rc<Paragraph> {
+        let key = self.paragraphs.identity(spec);
+        self.layout_paragraph(width, key, WidthUse::field(self, spec, previous))
+    }
 }
 
 impl Paragraph {

@@ -119,8 +119,10 @@ impl From<Option<f32>> for Width {
 #[derive(Default)]
 struct Payloads {
     sources: HashSet<*const super::shaping::ShapeData>,
+    hard_lines: HashSet<*const super::shaping::LineShape>,
     flows: HashSet<*const ShapedSource>,
     lines: HashSet<*const super::Lines>,
+    glyph_blocks: HashSet<*const super::lines::Block>,
     baselines: HashSet<*const Vec<f32>>,
     indexes: HashSet<*const super::ink::Index>,
     strokes: HashSet<*const Paragraph>,
@@ -134,7 +136,17 @@ impl Payloads {
             0
         };
         flow + if self.sources.insert(Arc::as_ptr(&source.data)) {
-            source.accessible_capacity_bytes
+            let shared: usize = source
+                .data
+                .lines
+                .iter()
+                .filter(|line| {
+                    Arc::strong_count(&line.shape) > 1
+                        && !self.hard_lines.insert(Arc::as_ptr(&line.shape))
+                })
+                .map(|line| line.bytes + size_of::<super::shaping::LineShape>())
+                .sum();
+            source.accessible_capacity_bytes - shared
         } else {
             0
         }
@@ -147,7 +159,10 @@ impl Payloads {
         }
         if let Some(lines) = p.record.get() {
             if self.lines.insert(Arc::as_ptr(lines)) {
-                bytes += lines.capacity_bytes();
+                bytes += lines.capacity_bytes()
+                    - lines
+                        .glyphs
+                        .previously_counted_bytes(&mut self.glyph_blocks);
             }
         }
         // Baselines, bottoms and a flow travel together.
