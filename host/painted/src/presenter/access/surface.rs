@@ -71,6 +71,7 @@ struct PopupContent {
 struct PopupMetadata {
     info: BTreeMap<ViewId, BarNodeInfo>,
     menu_flags: BTreeMap<ViewId, i32>,
+    menu_targets: BTreeMap<exact_kernel::NodeKey, bool>,
 }
 
 impl PopupAccess {
@@ -128,13 +129,19 @@ impl<D: DataSource> Presenter<D> {
         }
         let shown = self.surface()?;
         let select = self.select_surface().is_some();
-        let ancestors = self.status_menu_ancestors();
+        let ancestors = previous
+            .map(|p| p.content.ancestors.clone())
+            .unwrap_or_else(|| self.status_menu_ancestors());
         let has_container = select || shown.scroll.is_some();
         let metadata = previous
             .map(|p| p.content.metadata.clone())
             .unwrap_or_default();
         {
-            let PopupMetadata { info, menu_flags } = &mut *metadata.borrow_mut();
+            let PopupMetadata {
+                info,
+                menu_flags,
+                menu_targets,
+            } = &mut *metadata.borrow_mut();
             let mut remember = |view| {
                 info.entry(view)
                     .or_insert_with(|| self.access_bar_info(view));
@@ -153,7 +160,7 @@ impl<D: DataSource> Presenter<D> {
                     if !select {
                         menu_flags
                             .entry(row.node)
-                            .or_insert_with(|| self.surface_menu_flags(row));
+                            .or_insert_with(|| self.surface_menu_flags(row, menu_targets));
                     }
                 }
             });
@@ -189,6 +196,7 @@ impl<D: DataSource> Presenter<D> {
         let Some(shown) = self.surface() else {
             return 0;
         };
+        let menu_targets = RefCell::new(BTreeMap::new());
         build_surface(
             b,
             &shown,
@@ -196,7 +204,7 @@ impl<D: DataSource> Presenter<D> {
             &self.status_menu_ancestors(),
             || self.surface_scroll_label(shown.node),
             |view| self.access_bar_info(view),
-            |row| self.surface_menu_flags(row),
+            |row| self.surface_menu_flags(row, &mut menu_targets.borrow_mut()),
         )
     }
 
@@ -208,7 +216,11 @@ impl<D: DataSource> Presenter<D> {
             .unwrap_or_default()
     }
 
-    fn surface_menu_flags(&self, row: &Row) -> i32 {
+    fn surface_menu_flags(
+        &self,
+        row: &Row,
+        menu_targets: &mut BTreeMap<exact_kernel::NodeKey, bool>,
+    ) -> i32 {
         let mut flags = 0;
         if self
             .host
@@ -218,14 +230,15 @@ impl<D: DataSource> Presenter<D> {
         {
             flags |= flag::CHECKABLE;
         }
-        if row
-            .opens
-            .and_then(|key| self.host.kernel().node_by_key(key))
-            .is_some_and(|target| {
-                matches!(self.surface_plan(target.id, false), Some(Plan::Menu(_)))
-            })
-        {
-            flags |= flag::EXPANDABLE;
+        if let Some(key) = row.opens {
+            let opens_menu = *menu_targets.entry(key).or_insert_with(|| {
+                self.host.kernel().node_by_key(key).is_some_and(|target| {
+                    matches!(self.surface_plan(target.id, false), Some(Plan::Menu(_)))
+                })
+            });
+            if opens_menu {
+                flags |= flag::EXPANDABLE;
+            }
         }
         flags
     }
@@ -477,5 +490,68 @@ mod tests {
         let start = initial.nodes().0;
         assert!(start.iter().any(|node| node.view == first));
         assert!(!start.iter().any(|node| node.view == last));
+    }
+
+    #[test]
+    fn popup_access_caches_submenu_targets_per_key_and_reuses_ancestors() {
+        let triggers = (0..6)
+            .map(|i| {
+                format!(
+                    "        button id=\"open-{i}\" popovertarget=\"sub\"\n          text \"Open {i}\"\n"
+                )
+            })
+            .collect::<String>();
+        let sub_rows = (0..30)
+            .map(|i| format!("        button press=pick({i})\n          text \"Sub {i}\"\n"))
+            .collect::<String>();
+        let source = format!(
+            "component App
+  state selected = 0
+  action pick(item: number)
+    selected = item
+  view
+    column
+      button id=\"tray\" -exact-menu=\"status\" popovertarget=\"menu\"
+        text \"Ember\"
+      column id=\"menu\" popover=\"auto\" role=\"menu\"
+{triggers}      column id=\"sub\" popover=\"auto\" role=\"menu\"
+{sub_rows}"
+        );
+        let (mut p, error) = Presenter::boot_with(
+            &crate::test_plan(&source),
+            (),
+            (300., 400.),
+            1.,
+            PathBuf::new(),
+            PainterChoice::Cpu,
+        )
+        .unwrap();
+        assert!(error.is_none(), "{error:?}");
+        p.serve_overlays();
+        p.frame();
+        let kernel = p.host.kernel();
+        let tray = kernel.node_by_key(kernel.find_by_id("tray")[0]).unwrap().id;
+        let sub_key = kernel.find_by_id("sub")[0];
+        assert!(p.open_status_menu(tray, (300., 180.), false, false, 0.));
+        let root = p.popup_access(None).unwrap();
+        let meta = root.content.metadata.borrow();
+        // Six buttons share one submenu target: classified once per NodeKey.
+        assert_eq!(meta.menu_targets.len(), 1);
+        assert_eq!(meta.menu_targets.get(&sub_key), Some(&true));
+        assert!(meta
+            .menu_flags
+            .values()
+            .all(|f| (*f & flag::EXPANDABLE) != 0));
+        drop(meta);
+        // Opening the submenu and scrolling retains its ancestor row while serial and epoch match.
+        let trigger = p.surface().unwrap().targets[0].node;
+        let _ = p.tap(trigger);
+        let sub_initial = p.popup_access(Some(&root)).unwrap();
+        assert_eq!(sub_initial.content.ancestors.len(), 1);
+        assert_eq!(sub_initial.content.ancestors[0].node, trigger);
+        p.status_menu_wheel(f32::MAX);
+        let sub_scrolled = p.popup_access(Some(&sub_initial)).unwrap();
+        assert_eq!(sub_scrolled.content.ancestors.len(), 1);
+        assert_eq!(sub_scrolled.content.ancestors[0].node, trigger);
     }
 }

@@ -124,8 +124,6 @@
 - **The agent warns that a fetch fault matches no granted origin for an app outside the repo, yet the fault takes effect** (2026-11-14, `host/web-js/longpoll.test.mjs`). Its grant detection reads "none" for an app `exact new` made; find where it looks for the app's grants.
 - **A second `game/prove.mjs` run of the same game is refused** (2026-11-14). `claimTargetCrates` (`scripts/app.mjs`) records the previous run's snapshot, `artifacts/prove/run-*/src`, as owning the game's crates, and `prove.mjs` never removes it, so the next run stops with "holds the crates forest-* of the app in …".
 - **Forest's web proof fails its visual check on main** (2026-11-14). `bun game/prove.mjs forest --hosts linux,web` passes every pin, but the night scene's web frames read as near-black (mean luminance 0.003). Exempt the night scene in the game's `app.json`, or find why it renders dark.
-- **`exact-painted`'s game wheel test fails on main** (2026-11-14). `surfaces::control_tests::wheel::game_wheel_is_one_relative_sample_without_focus_or_contact_changes` expects a wheel sample without modifier keys; the event now carries `altKey`, `ctrlKey`, `metaKey` and `shiftKey`.
-- **`js-runtime.test.mjs`'s Intl number test fails on main** (2026-11-14). "decimal, currency and percent numbers are Intl's" throws `JSON Parse error: Invalid digits after decimal point` at `host/web/tests/js-runtime.test.mjs:717`.
 - **Authored will-change**: branch `issues/543` at `75d79531b` (built and reviewed five rounds; #543 landed as automatic promotion; open question: native backdrop root).
 - **Markdown Stress's macOS content-region trial is refused under the agent** (2026-11-14). `EXACT_CONTENT_REGION=1048576 bun scripts/agent.mjs macos --app markdown-stress "clock settle" logs` logs `content-region: stale or malformed region request` and stays on "Preparing exact content…": the Swift snapshot names a request the Rust side no longer has pending. Same at 2556e2fac, before the flowed-text work.
 - **A nested scroll view inside an Apple content region does not clip the raster's text** (2026-11-14, `host/apple/src/content_region/host.rs`). The raster clips to the owner and its scroll port only; text inside an inner `overflow: scroll` box draws past it.
@@ -183,7 +181,6 @@
 - **UIKit cover boot clearance.** `CoverBootIOSTests.testTheCoverRootUsesTheWholeViewInItsFirstSettlement` passes its initial viewport checks but expects bottom clearance 0 where the route reports 50 on iPhone 17 Pro, iOS 27.0. Literal and child-derived `viewport-fit="cover"` fail identically. Reconcile the assertion with `NavigationCoversIOS.routeEdges`.
 - **An iOS drive can refuse a fresh simulator before launch** (2026-11-13, iOS 27.0). `withAccessibilityRuntime` in `host/apple/touches.mjs` recognizes missing-default errors containing "does not exist" or "not found". A new simulator answers "Could not find key" for `ApplicationAccessibilityEnabled`, so a drive requesting `tree --ax` stops before launch. Initializing that preference to false on the lane's simulator let the drive run.
 - **A Mac reader's second deferred context menu does not open** (2026-11-13). `TextSelectionMacTests.testASecondaryClickTheReaderMustPlaceOpensTheMenuOncePlaced` times out on its second and third menus, then retains the earlier word range. Reproduced with `TextSelectionMac.swift` from `2e3d283b4` on macOS 27.0.1, alongside the fixed-list implementation.
-- **`host/web/tests/dev-scheduler.test.mjs` fails three cases on main** (2026-11-13): the generated-game-arguments, game-edit and declared-source-file cases throw `ReferenceError: basename is not defined` from the `changedPath` they slice out of `host/web/dev.mjs`; the test's sandbox does not provide `basename`.
 - **The JS target admits a module call its `origin: {"none": [...]}` rule refuses** (2026-11-14, found by reading; not yet reproduced). A module declaration's `origin` may be `{"none": ["device", "wake" or "tool"]}` (`contract/cli/src/declaration.rs`), which the runner refuses while any of those is among the call's causes (`runner/src/runner/modules/admit.rs`, LLP 1133.035 D16 item 6). `admit` in `host/web-js/modules.js` reads `app`, `person` and `whenAny` only, so on the web such a call is admitted whatever its origin. The JS target also keeps one origin per commit, request, queued send and `then`, not the set of causes the runner keeps (`Causes`). Two places still miss an origin: data code's own fetches carry their answer's origin (`ts-fetch.js` `fetchWith`), where a request with prompt risk from data code takes the least privileged in flight as its module calls do (`modules.js` `dataOrigin`, LLP 1133.002 D12); and a commit's tail that a view transition defers (`rt.js` `tail`) restores its invocation but not its origin. Read the rule there, and keep a commit's origin, invocation and causes as one value that one helper restores, as the runner's `as_invocation_caused` does.
 - **The JS target's permission decisions differ from the runner's in less common declarations** (2026-11-14, found in review; not yet reproduced). `host/web-js/permissions.js` picks a permission by an argument's presence (`permissionBy`) as the runner does, but not by its value, for each or for any: a supported row with `permissionValue` reads no selected permission, so neither its `whilePrompt` nor its denial; one with `permissionEach` answers where the runner holds while any selected permission is `prompt`; and one with `permissionAny` can gate on the wrong permission. `decidePermission` (`host/web-js/modules.js`) lets admission `none` pass before a status source answers its status, reads `ungranted` before admission `request` passes a call, and has no check of a sampled source's availability, where the runner answers `NotSupportedError` before any permission (`runner/src/runner/modules.rs`). On a sampled source a permission answer that is a value (`whilePrompt`, `ungranted`) is replaced by a sample, where the runner answers it as it is and still starts the source's grid and records its cursor. It holds an asking call only in `prompt`, where the runner also holds in `unknown` for a permission whose fact is the host's (`asks_in`, `runner/src/runner/modules/network.rs`), and `prefer` refuses that state and a group of permissions (`health`, which the runner expands to each `health.*`). A status's web override (`sub.web.state`, local-auth's) keeps its state where the runner writes the permission's. A held send resumes only into a hold or an answer, so a span the runner keeps (`after` a `duration`) resolves at once with no value; a grant applies the fields its grant line maps (`allow`) but not the runner's literal and target-specific fields or its base coupling; and a ticket's `limited` choice is refused. In both implementations a held send of admission `request` without `deniedAnswers` fails when denied, where a fresh one answers the status.
 - **Data code's origin on the JS target folds in less than the runner's `data_origin`** (2026-11-14, found in review; not yet reproduced). `modules.js` admits data code's module calls under the least privileged of the call's own origin, the commit's and `inFlight`: a device handler's requests, by an in-flight count (`deviceBase`) that a later reply can bring back down while the handler's request still waits, and an active wake. The runner folds in every pending ticket's origin and every running handler's (`data_origin`, `runner/src/runner/provenance.rs`, and `tool_origin`, `runner/src/runner/modules/invoke.rs`): a tool's request still waiting, a stream that has had its first message and stays open, and a module-invoked handler (`data.tool`, `host/web-js/ts-data.js`) that awaits. A fold by tickets reads only those still owned (`t.held()`, a parallel mutation's included): a ticket a later commit let go still sits in the clock's sets until its promise settles (`host/web-js/held.js`).
@@ -192,7 +189,6 @@
 
 - **A Mac list's fast fling still misses 120 Hz** (2026-11-12, #383; LLP 1078 §5.1). On a 5,120-row table list of two-paragraph rows, eight trackpad flings of 3,000 points through the window server, Instruments' Animation Hitches measure 56 to 270 ms of hitch a second of scrolling in the release build (115 to 515 before "A rebound Mac row writes only what changed of its paint and accessibility" and the two commits before it, in the same interleaved rounds at load averages 8 to 63). A hand-built `NSTableView` of the same rows measures 3 to 47 on this shared machine, so it, not "under 5", is the bar here. The main thread spends about 1.4 ms a rebound row (7.9 s over about 5,800 rows), the hand-built table about 0.5. In Time Profiler's main-thread samples over the flings (xctrace, which does not perturb the app as `sample` does), AppKit's display and commit of the layers are half (3,266 of 6,445): each rebound paragraph is drawn again in `draw` on the main thread (0.044 ms, making a typesetter for paint attributes the owner's measurement lacked, LLP 1072 #7), AppKit rebuilds its layer tree (6%) and tracking areas (6%) for rows moving between table cells, and `wantsUpdateLayer` asks `canRasterText` at every display (2%). The text pass is 11%; the table feed with AppKit's table layout, and the ops, are the rest. Tried and not kept: building ahead by how late the main thread ran (fewer rescues, more hitch), and asynchronous fills on the Mac (LLP 1072 stage 5: the frame harness's held-scroll frames about 30% cheaper, but hitch time 220 to 404 against 66 to 154, as a rescue lands the slice in flight inside AppKit's scroll synchronizer). Next: paint a rebound row's paragraphs from the owner's shape so `draw` makes no typesetter; keep a rebound row in the cell the table hands its new item instead of moving it; answer `wantsUpdateLayer` without `canRasterText`; a rescue that does not wait for a slice in flight, then asynchronous fills again. Measure with `TableFeedPerfMacTests`' harness (`EXACT_TABLE_PERF`, frames back to back, steadier under load than the window server) and with Animation Hitches interleaved with the hand-built table.
 - **The router sweep has three failures of its own** (2026-11-12, seen landing the q0535 sweep fix; each also on its base). `host/web/tests/navigation.mjs`'s "Markdown reader only navigates supported parsed URL protocols" fails on both targets every run: it gets `HTTP://example.test/x` where it expects `http://…`, and relative links are not resolved to absolute URLs. On the JS target (`navigation::browser_session_history_on_the_js_target`) two cases fail now and then: "tabs retain ids and push history" (`select retained top pushes`, 3 !== 4; 1 of 9 runs on base), which reads `history.length` right after a tap without waiting for it to change, and "focused route teardown ignores retired blur but preserves live blur" (teardown console errors; 2 of 9).
-- **The docs lookup test truncates the sheet recipe before its sheet declaration** (2026-11-12, reproduced with origin/main files). `bun test scripts/exact.test.mjs --test-name-pattern "docs prints"` fails because `exact docs sheet` prints the recipe's first 40 lines, before `navigationPresentation="sheet"`. Make the selected excerpt contain the requested example.
 - **`check` reports a Markdown ordered or task list as clipped at the largest text size, where nothing is cut off** (2026-11-12, run). A `text markup="markdown"` holding `1. …` is "11 px wider than its box" at the web's 53 px root, and one holding `- [ ] …` 15 px; on an iOS 27.1 simulator at the largest accessibility size the task item is 4 pt wider. Screenshots on both hosts show every marker and line whole, and a bullet list is not reported. `verify` counts these as problems, and an agent spent three attempts on them. Each marker hangs in an indent of 40 that does not grow with the text (`LIST_INDENT`, `markdown/src/pieces.rs`), so test first whether `check` counts the marker's advance, its trailing space included. Make `check` count only ink outside the box.
 - **An app's first agent drive on iOS stops as stale after building it** (2026-11-12, 8 of 9 drives). In apps made by `exact new` that had a web build and no iOS build, `bun exact.mjs agent ios …` built the app ("there is no build yet") and then stopped with exit 3, "ios build is stale", naming `target/bake-compiled/*.rs`. Run again, each drive worked. Make a drive's own build count as current.
 
@@ -236,7 +232,6 @@
 - **Shelf's test file fails three tests on macOS on main** (2026-11-12).
 - **`exact-data` tests share machine state across checkouts** (2026-11-12). Its lock and kept-document tests fail when two checkouts on one machine run them at once.
 - **`exact-painted --lib` exhausts worker slots at the default 96 test threads** (2026-11-12). The asynchronous-core tests run out of slots; use 16 threads until the tests isolate their workers.
-- **Two failures in `exact-js` outside the gate** (2026-11-12, run on a clean origin/main `03f072db`). `cargo test -p exact-js --test it caltrain::identity_and_grants_are_the_bakes_and_the_modules_agree` fails: `781410aa` gave Caltrain `exactTime` and the test's list was not updated. `cargo clippy -p exact-js --all-targets -- -D warnings` fails at `js/src/bootstrap_tests.rs:111` (`needless_borrows_for_generic_args`). `exact-js` is not in `default-members`, so the six checks see neither; the async lane's `--workspace` runs do.
 - **A launch's setting, where it is not yet given or named** (2026-11-12, LLP 1153.002). An iOS drive does not pass a marked name on as `SIMCTL_CHILD_<NAME>`, so setting it in the driver's environment still reads as a changed build. Only a `fetch` refusal names the setting an origin came from; a `net.websocket` one does not. The Rust render binaries read their own process's environment under `--serve`, which `serve`'s check (LLP 1153 D4.6) does not cover.
 
 - **The photo-upload executor test can miss the uploads it must feed** (2026-11-11). `a_burst_of_photo_uploads_goes_three_at_a_time_and_leaves_other_streams_their_places` gathers open uploads before feeding them; uploads that open after that gather get no feed, and the test waits five seconds for an outcome that needs one. It failed 7 of 12 runs of the unchanged executor on a 96-core Linux machine.
@@ -1180,22 +1175,7 @@ sits on that list carries the trade it would take.
    §5's declared deviation); and an action cannot branch on a key or hover
    payload — actions have assignment and command statements, no `if` and no
    string `match` — so `key=` today can only record the key.
-3. **Weird Castle's asks** (Charlie, 2026-08-30: the app lives in `~/projects/weird-castle`
-   on exact2 by path; `scripts/app.mjs`). In order: **asynchronous data settlement** —
-   LLP 1016 (RFC, **Accepted** 2026-08-30 after a three-model panel: a `mutation` slot +
-   `send`, `refresh` for queries; built the same day end to end — runner, compiler, the
-   browser and `ibex2::host` executors, the agent's `settle`, Weird Castle's real `loginV2`
-   against api.castle.xyz on three hosts; the Linux executor followed the same day (LLP 1016 §2,
-   ibex OQ2 resolved), the token across launches is LLP 1018) for the runner's reserved
-   shape (LLP 1005 §7): a data source
-   answers now or hands back a request, the host executes it (`ibex2::host` on native,
-   the browser's `fetch` on the web), one ABI call brings the answer in, a pending
-   resource is `none` meanwhile, bake tolerates it — the first out-of-process resource
-   is `loginV2` at api.castle.xyz; **password masking** and **Enter to submit** landed 2026-08-30 — the
-   kernel rows are the web's `type` and `inputMode` (LLP 1017 P9's sweep spells them
-   literally later), honored on web/macOS/iOS; `submit` is the seventh event, the web's
-   implicit submission; a session across launches is LLP 1018 (another session's lane).
-4. **Markdown viewer follow-ups** (LLP 1033, macOS milestone 2026-09-05):
+3. **Markdown viewer follow-ups** (LLP 1033, macOS milestone 2026-09-05):
    iOS selection and link gestures; iOS/web file-opening adapters; heading anchors,
    tables, and syntax highlighting. macOS drag selection across paragraphs and copy
    now use CoreText's existing lines. Keyboard selection extension still needs
@@ -1255,11 +1235,9 @@ sits on that list carries the trade it would take.
   stable, run `editors/content-mapper`'s tests with a pinned `tsc` (`EXACT_TSC71`).
 - **On iOS a scroller that hides one axis cannot reveal a target past it on that axis** (2026-11-13, Astra's review of the fragment scroll): an ordinary `overflow-x: hidden; overflow-y: auto` scroller (`host/apple/Sources/ExactKit/IOS/NodeViewIOS.swift` ~1343) does not move to a horizontally offscreen target on `scrollIntoView`. A projected route under a scrolling navigation root now keeps that axis's extent and locks the person's drag on it (`NavigationIOS`); the ordinary scroller needs the same.
 - **A header title's avatar keeps the accent behind an alert on iOS** (2026-11-13, left by the tint-edges fix): `HeaderTitleView.avatar` is drawn baked, as a bar badge was, and is not redrawn when UIKit dims the tint. A bar badge now records its tint parts and redraws them dimmed (`BadgeFace`, `UIColor.dimmedTint(share:)`); the avatar needs the same.
-- **A one-axis overflow clip is not walked for document overflow on Apple** (2026-11-13, Grok's review of the one-axis clip box): `host/apple/Sources/ExactKit/SpaceTransform.swift` ~259 does not walk a node that clips one axis, so `documentOverflow` misses a descendant placed past the node on its visible axis.
 - **Drive iOS scroll drags with a real touch** (2026-11-10): `SwipeScrollDragTests` passes on a simulator, but no `--touch platform` drive has flicked a scroller with `scrolldragstart` and `scrolldragend`. Check that a flick fires one start and one end with UIKit's velocity and target.
 
 - **Evaluate a component's computed prop once across an instance's bindings** (2026-10-18; worth ~2 points of euxy's playing CPU): repeated reads within one binding, a forwarded argument or an inject now share one evaluation (`contract/syntax/src/inline/use_node.rs`, mirrored in `semantics/Contract/Expand.lean`). A prop read by two bindings of one element, such as its text and `aria-label`, is still evaluated by each. Each binding is its own program and a refusal unsets only that binding, so sharing across them needs a plan value cached per element or instance that holds a result or a refusal and unsets each binding that reads it: the plan format, lowering, the runner, the web JS runtime and the Lean render semantics and proofs.
-- **Bold Text on Material popup typography** (2026-10-24; LLP 1115.000 D12.3): `host/painted/src/presenter/top/look.rs` builds dialog and menu paragraphs at fixed weights (400 for headline/body, 500 for labels), and its popup symbols stroke at a fixed regular weight (`(1.1 + 300.0 / 400.0)`, ~line 298). Confirmed in `paragraph`: it takes neither a node nor the preference; `Inputs` carries only scheme, font scale and window size. Carry the applicable Bold Text setting into surface layout and its cache inputs, and step these host-assigned weights once for measurement and paint.
 - **scrollend gaps on the hosts that have it** (2026-10-13; LLP 1005):
   - Apple unbracketed moves use a 100 ms `DispatchWorkItem`; known instant commands and discrete wheel notches should complete without that quiet delay.
   - Apple visible layout clamps can arm an end through `scrollEndMoved`; classify clamps separately from scroll operations.
@@ -1419,30 +1397,7 @@ sits on that list carries the trade it would take.
   wgpu exposed one. Tried and declined on the way: capture at 2× (slower), `CARenderer`
   on the live overlay (crashes — a layer is in one tree only), `drawHierarchy` (no gain).
   2026-10-23 (lane q1022/u): Parked outside the assigned scope; physical performance qualification also owed. No source change. GPU module binding and child capture now live in Sources/ExactSurfaces, not ExactKit. gpu_child_metal requires both that binding and a gpu/ ABI/implementation change. macOS capture replacement requires ExactSurfaces' capture executor plus an AppKit shadow implementation. The shared Metal-event wait also requires wgpu in
-- **Canvas children** → LLP 1014 (RFC, Accepted) — built 2026-08-29, LLP 1014.000
-  transcribes it: kernel, corpus, the web wrapper, the macOS overlay and capture with
-  D4's four sources, the smoke's steps 6a, 9, and 10 with the readback fixture (native:
-  `caltrain-gpu` `tests/children.rs`; per host: `scripts/fixtures/canvas-sky.*.png`,
-  cross-host mean 1.48/255 as measured — a first number for 1009 §4.1); the line map's
-  stations as children (the second use); the render tail measured and closed (0.5 ms
-  steady; occluded windows now skip rendering); Accepted 2026-08-29, the §5 take applied
-  (the three gradient rows are out — 1009's proposal for the same door). 2026-08-30:
-  the app inside the sky (glass/ink/crt materials, the previous-children crossfade,
-  nested canvases by readback) and D5 built — per-child textures, placements with
-  depth, hit-testing and accessibility through them, the card deck (LLP 1014.000 §1a,
-  §1b); two code reviews folded the same day (§1c: placements are the only place a
-  placed child is; `clock`/`tap`/`type` settle the canvases before replying; a resize
-  shows at once; the ABI checks its pointers). Left: Chrome's flag as the oracle for
-  children *through* a surface; a hermetic test of the glass crossfade; LLP 1013 on
-  this machinery. Delete this line then.
-
-- **Menus** → LLP 1021 (RFC, Draft 2026-08-30): the Popover API by its HTML names
-  (`popover`, `popovertarget`, `id`, `aria-checked`, `hr`), open state host state like
-  scroll, the top layer outside every canvas capture; a menu-shaped popover may present
-  as UIMenu/NSMenu with selection dispatching by view id, kernel-painted under
-  `EXACT_AGENT`. First consumer: Weird Castle's account switcher (today a hand-rolled
-  overlay with no light dismiss). M1 web+kernel · M2 Apple/Linux · M3 the switcher.
-  Messages Add now preserves focus; its rich native attachment popover remains owed.
+- **Menus** (LLP 1021 D2): Messages' rich native attachment popover overlaid on the keyboard remains owed.
   Three UIKit probes stop short of keyboard-overlaid painting; matching the box
   alone passed falsely (`/tmp/messages-attachment-menu/probe/`, LLP 1021 D2).
 
@@ -1455,14 +1410,6 @@ sits on that list carries the trade it would take.
   `plain` tier — persisted slots, with Caltrain's "last station"; `me`; the iOS
   first-launch keychain wipe; the data-protection keychain on macOS (a bundle and a
   profile); the Linux file store when that host links ibex2.
-- **Executable instance rows: lowering proof** (LLP 1017.000 P4c):
-  `VmRows` models calls and `LowerCheck` validates root- and arm-owned bodies
-  against checked substitution in live instance frames and stores, including
-  descendant readers. Its resource accounting and exact counter transfer now
-  match the runner. Prove the sharing correspondence, including the matcher's
-  binder and owner conditions and transitive calls; then prove the model's
-  runner refinement after the other owner-model lanes land.
-
 - **Plan / runner** (LLP 1005 §8): cached per-instance derives or resources inside `each`. At-read instance
   expressions share executable rows without caching their values.
 - **Contract** (LLP 1006 §8): inlining budget; `contract` blocks as assertions;
@@ -1524,13 +1471,6 @@ sits on that list carries the trade it would take.
   skipped) moves `contentSize` again at the end.
 
 - **Chrome conformance steps for Paste and Match Style and for a clipboard event with nothing focused** (2026-10-21, PR #901; moved here 2026-10-23 as the take for LLP 1133.006's clipboard `write`, `rules/DEFERRED.md`). The driver's `type <id> paste` dispatches a synthetic `ClipboardEvent` at the focus or the target, so it never reaches `<body>`, and it has no Paste and Match Style; both were checked by hand in Chrome over CDP (`Input.dispatchKeyEvent` with `commands: ["paste"]` and `["pasteAndMatchStyle"]`). A driver operation for an edit command, sent as CDP's `commands`, would let `host/web-js/conformance` hold them.
-
-- The serial runtime owner + env()/keyboard lane is parked on `parked/runtime-owner`
-  (2583be3, base 17350d0 — pre-fonts) and the main worktree is clean of it. LLP 1022
-  holds the measurements (fails the macOS smoke ~6 of 8; macOS boot +26 ms for a
-  shell frame; iOS −27 ms from the prepare overlap), the four cherry-picks worth
-  taking without the owner thread, and the conditions for reviving it. A revival
-  rebases across 43b0c0c and lands only through a green smoke.
 
 - LLP 1023 Stage 1 leftovers, each small: the physical-iPhone typed-URL run (the
   phone was asleep on landing day — `bun host/apple/build.mjs --device --run`, then
@@ -1606,17 +1546,6 @@ physical-display native sweeps remain follow-ups; the first slice drives AppKit
 and the Linux headless CPU renderer without claiming display frame timing.
 
 - Public UI coverage (LLP 1035.006): select the first settings slice (labels, buttons, switches, checkboxes, radio groups, and text entry), choose each platform's disposition, then implement and hand-check the concrete examples. The ordered catalog distinguishes accepted support from reviewed deferrals; drafting it does not admit every excluded capability.
-
-- Markdown origin integration validation (2026-09-18): the third full Rust test
-  run passed 1,555 tests, with four failures and eight ignored. Height/transform
-  hand-built plan tests still treat event tag 18 as unknown, but media now uses
-  it for `loadedmetadata` (three failures); the Apple ownership fixture's Cargo
-  project inherited the repository workspace because the diagnostic `TMPDIR`
-  was inside this worktree (one failure). A separate Messages Linux bake lost
-  its filesystem-helper reply after the preceding workspace build passed.
-  Full-workspace repair is stopped at the three-round rule; native reader
-  verification continues separately. Evidence: `target/markdown-comparison/
-  origin-integration/workspace-round3-*` in the original checkout.
 
 - Video (LLP 1042): verify PiP/AirPlay on physical devices. Linux carries an explicitly unavailable video box.
 
@@ -1805,9 +1734,6 @@ and the Linux headless CPU renderer without claiming display frame timing.
 - Changing an in-flight upload's finite `with` context makes a worker source's reply miss its original argument key (`data/src/placed.rs`, `parse_with`); the main-thread source takes the new context.
 
 - The web JS auth hold outlives a superseded mutation when its replacement does not call `openAuthSession` (`host/web-js/auth.js`). Replacing a sign-in mutation with a synchronous cancellation leaves its auth ticket in `state.pending`; a late callback can resume the old source and write its session. A browser regression test reproduced both effects. The supersession cleanup runs only when another auth session opens. Match the runner's let-go behavior.
-- Update the JS web target's socket-protocol test fixtures: `held-count.test.mjs` omits `socketProtocols` from its admission stub, and `build.mjs`'s empty-set grant exports omit it. Both suites fail on origin/main's sources before their assertions (two tests each).
-- JavaScript runtime Clippy: remove the needless borrow passed to `with_canvas_surfaces` in `js/src/bootstrap_tests.rs`; `cargo clippy -p exact-js --all-targets -- -D warnings` rejects it.
-- The Caltrain JavaScript identity fixture omits `exactTime` from its expected sources (`js/tests/it/caltrain.rs:101`); the full runtime suite and the isolated test fail with that extra built-in source. Update the expected built-ins.
 - `SheetSurfaceMacTests.testAuthoredGroundMatchesAnAppKitSheetInDarkMode` should report an unavailable window-server reference capture before reading its pixel colour. On a locked or asleep display it fails at `SheetSurfaceMacTests.swift:20` with no NSColor.
 - A `target/` with hundreds of thousands of files in `debug/deps` makes socket tests time out on a test binary's first run on a Mac. Seen 2026-11-14 with two worktrees at about 700 GB and 600,000 to 760,000 files each: after a relink, twelve `launch_preloads` tests of `exact-apple` failed at their 10 s wait and every later run of the same binary passed; with `target/` deleted and rebuilt the suite passed first time in under 2 s, against 13 to 20 s. Which step is slow in a large `deps` is not known. Until it is, delete a worktree's `target/` when it passes a few hundred gigabytes.
 
@@ -1823,11 +1749,10 @@ and the Linux headless CPU renderer without claiming display frame timing.
 - **In a checkout with no `node_modules`, `bun host/apple/build.mjs` spins at full CPU and prints nothing** (2026-11-17, Bun 1.4.2, macOS). Without an install Bun resolves packages by auto-install, and importing `host/apple/build.mjs` then busy-waits before its first line, on this Mac and on durand alike, for at least 2 h. Since `7ffe182e1` (#695) its graph statically imports `rolldown/utils` (`host/web/serve.mjs` → `host/web-js/content-names.mjs`); the smallest graph that spins is a module beside `build.mjs` holding `import '../../js/bake/src/typescript.mjs'; import 'rolldown/utils';`, and in the other order it loads. After `bun install --frozen-lockfile` the import takes milliseconds. A fresh `git worktree add` has no `node_modules`, so every lane that builds in one hits it. Refuse to start without an install (a check at the scripts' entry, or `install.auto = "disable"` in a `bunfig.toml`: `bun --no-install` turns the spin into "Cannot find module 'rolldown/utils'"), and report the spin to Bun with that repro.
 - **The Mac glass-capture fix has not run on macOS 26.6** (2026-11-14; `GlassGroupMacTests` and the agent drive in `issues/closed/20261113-macos-agent-viewport-screenshot-white-under-glass-overlay.md`). It was run on macOS 27.0.1, the only version on the machine that built it.
 
-- Extract and package App Intents metadata for app-authored native modules and launch parts, including apps without generated tool faces (remaining native-intent discovery in #709; LLP 1133.023 D8).
 - **`drop stream` under races its tests do not make** (2026-11-18, one reviewer of two; none reproduced). A TypeScript mapper suspended at an `await` when its stream is dropped may still run the code after it (`host/web-js/ts-stream.js`, `runner/src/runner/mapper_turns.rs`). A drop that arrives after a real close is queued behind a mapper replaces the close with the fault. The browser JS host answers the step before an error mapper that awaits has landed, and discards a frame received in the same turn as the drop. The wasm host can hold the abort of a POST stream behind an exit animation's batch (`host/web/wasm/commit.js`). The step matches a request that is issued and not yet open. Whether the JS target's Rust adapter reads a byte stream buffered, as the wasm host does, is unread.
 - **`smoke.mjs ios` fails its clock section on main** (2026-11-16, seen qualifying #425 and reproduced on its base). After `clock +60000` the iOS state reads `clock` 60100, not 60000, and the journal shows 21 timers fired across 3 advances where the check (`scripts/smoke.mjs:653`) expects sixty, the last at 60000. The countdowns still step correctly. Find whether the iOS host advances the virtual clock by 100 ms outside the seek and coalesces the seek's timer fires, and fix whichever side is wrong.
 - **An `else quote()` placeholder differs between the runner and Lean at boot** (2026-11-16, seen fixing #769). #769 made both engines materialize `else empty(…)` placeholders with one function; a quoted placeholder takes the separate placeholder-row path, which the Lean emitter does not carry, so the two-engine verifier disagrees at boot for a resource that writes one. Carry it the same way and add it to `semantics/corpus/resources/`.
 
 - Linux KMS: present Ink directly through `VK_KHR_display`, with dumb buffers as the fallback and screenshots retaining the displayed pixels (#145).
 - **A `dialog` that can only be a confirmation still links `ExactDialogs`** (2026-11-18, LLP 1047.001 §9.23). The roster selects `dialogs` for any node that can be a `dialog` (`runner/src/uses/apple.rs`), since the host tells a confirmation from a sheet by its rows only when it opens (`MenuHost.isSheet`). Agents and Duo Lab have only `alertdialog` confirmations, which iOS presents as alerts, and link about 137 KB they never run. Lowering already checks a literal, unpainted `alertdialog`'s rows (`check_menu_shapes`, `contract/lower/src/menus.rs`) but passes values known only at run time; if it marked the confirmations it proved whole, the roster could leave those out.
-- **A painted host builds its UI Automation menu snapshot with no client listening** (2026-11-19, seen landing #607). Opening a tray menu prepares each submenu target once per button that opens it, and a scroll in a submenu rebuilds its hidden parent's plan (`host/painted/src/presenter/access/surface.rs`). With 12 buttons on one 4,000-row submenu that is 300–390 ms before the flyout shows, and 19 ms per wheel event under a 4,000-row parent. Build the snapshot when a client asks, once per distinct target and kernel epoch, and reuse retained ancestor rows while the popup serial and epoch match.
+- **Windows UI Automation refreshes its menu snapshot with no client listening** (2026-11-19, seen landing #607). `host/painted/src/presenter/access/surface.rs` now caches submenu target classification per `NodeKey` and reuses retained ancestor rows while popup serial and kernel epoch match; `host/windows/src/accessibility/model.rs` still calls `popup_access` eagerly on open and scroll rather than deferring until a UIA client asks.

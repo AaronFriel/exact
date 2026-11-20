@@ -508,7 +508,7 @@ try {
   // follows Cargo metadata's selected library target, through capture.
   const libraries = apps.map((app, i) => {
     const name = ['alpha-beta-apple','alpha_beta-apple'][i];
-    writeFileSync(resolve(app.dir,'Cargo.toml'), `[package]\nname = "${name}"\nversion = "0.1.0"\nedition = "2021"\n[lib]\npath = "lib.rs"\ncrate-type = ["staticlib"]\n`);
+    writeFileSync(resolve(app.dir,'Cargo.toml'), `[workspace]\n[package]\nname = "${name}"\nversion = "0.1.0"\nedition = "2021"\n[lib]\npath = "lib.rs"\ncrate-type = ["staticlib"]\n`);
     writeFileSync(resolve(app.dir,'lib.rs'), `#[no_mangle] pub extern "C" fn alpha() -> u32 { ${i} }`);
     const metadata = spawnSync('cargo',['metadata','--no-deps','--format-version','1','--manifest-path',resolve(app.dir,'Cargo.toml')],{encoding:'utf8',env:{...process.env}});
     assert.equal(metadata.status,0,metadata.stderr);
