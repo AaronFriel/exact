@@ -475,6 +475,8 @@ structure RCx where
   tabs : TabCx := {}
   /-- What the instances' requests ask (LLP 1035.005.004 D2). -/
   oracle : Oracle := {}
+  /-- A changed source invalidates its readers in each live component. -/
+  changedSource : Option String := none
 
 def RCx.enter (cx : RCx) (node : Nat) (key : Value) (dup : Nat) : RCx :=
   { cx with
@@ -556,7 +558,8 @@ def csettleOwned (fuel : Nat) (cx : RCx) (C : CComponent) (f : Frame) (id : Inst
             changed := true
       if !changed then return s
       go n s
-  go (rs.length + 2) slots
+  let forget := rs.filterMap fun r => if cx.changedSource == some r.source then some (ownedArgs r.name) else none
+  go (rs.length + 2) (slots.filter fun (x, _) => !forget.contains x)
 
 /-- Resolve literal props, injects and component derives as expansion
 does. A local or state read remains a read even when its value is constant. -/
@@ -707,11 +710,12 @@ def rootEnv (p : CProgram) (slots : List (String × Value)) (st : Settled) (now 
 keeping the instances `prev` holds; `every` when the host builds every tab
 panel (`Oracle.everyTab`). -/
 def renderRoot (p : CProgram) (slots : List (String × Value)) (st : Settled) (now : F64)
-    (prev : Store) (view : List CVNode := []) (every : Bool := false) (oracle : Oracle := {}) :
+    (prev : Store) (view : List CVNode := []) (every : Bool := false) (oracle : Oracle := {})
+    (changedSource : Option String := none) :
     Result (List CVNode × Store) :=
   let env : CEnv := { prog := p, root := rootEnv p slots st now, store := [] }
   crenderTabs fuel {
-    env, prev, oracle, frame := .root, comp := p.root.name, path := [],
+    env, prev, oracle, changedSource, frame := .root, comp := p.root.name, path := [],
     provides := p.root.provides.map fun (x, e) => (x, e, .root, []),
     fill := .none, tabs := { opened := Tabs.visited (ctabIndex view), every } }
 
@@ -901,8 +905,19 @@ def cstep (p : CProgram) (o : Oracle) (c : CConfig) : Observe.Event → CConfig 
   | .clock ms => cadvance p o c (c.now + ms)
   | .other t e v => cdispatchAt p o c t e v
 
-/-- `Contract.Observe.run` for the unexpanded file. -/
-def crun (p : CProgram) (o : Oracle) (events : List Observe.Event) : List String := Id.run do
+/-- Ask the root and component readers of a changed source again in the same render. -/
+def csourceChanged (p : CProgram) (o : Oracle) (c : CConfig) (source : String) : CConfig × Outcome :=
+  let rp := rootProgram p
+  let names := (rp.resources.filter (·.source == source)).map (·.name)
+  match settle rp o c.slots c.now c.settled names with
+  | .error e => (c, .refused e)
+  | .ok st =>
+    match renderRoot p c.slots st c.now c.store c.view o.everyTab o (some source) with
+    | .error e => ({ c with settled := st, poisoned := true }, .poisoned e)
+    | .ok (view, live) => ({ c with settled := st, view, store := live }, .ok)
+
+/-- Observe the same script against the unexpanded component tree. -/
+def crun (p : CProgram) (o : Oracle) (events : List Observe.ScriptEvent) : List String := Id.run do
   let rp := rootProgram p
   let (c, out) := cboot p o
   match out with
@@ -910,9 +925,14 @@ def crun (p : CProgram) (o : Oracle) (events : List Observe.Event) : List String
   | _ => return ["== boot", Observe.outcome out]
   let mut acc := Observe.lines rp "boot" c.toConfig out 0
   let mut c := c
+  let mut o := o
   for e in events do
     let before := c.commands.length
-    let (c', out) := cstep p o c e
+    o := e.oracle rp.resources o
+    let (c', out) := match e, e.event with
+      | .answerSource source _ _, _ => csourceChanged p o c source
+      | _, some event => cstep p o c event
+      | _, none => (c, Outcome.ok)
     acc := acc ++ Observe.lines rp e.label c'.toConfig out before
     c := c'
     match out with

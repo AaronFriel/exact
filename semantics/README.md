@@ -467,7 +467,8 @@ DIVERGE apps/counter/app.contract: increments
 `OUTSIDE` means the semantics doesn't model a construct the app uses
 ("What the semantics leaves out"), not that something is wrong. `NOTE`
 means a test's `expect` fails against the seeded oracle's data instead of
-the app's own, which is information and not a failure. `--types` also
+the app's own. A test that supplies an `answer source` opts into the oracle's
+data. A failed expectation in its authored run prints `FAIL` and fails verification. `--types` also
 runs the Lean checker on the program. `--prove <Module>` regenerates
 `Apps/<Module>.lean` and builds `Apps/Proofs/<Module>.lean` (the next
 section). `contract verify` runs `cargo run -p contract-difftest --

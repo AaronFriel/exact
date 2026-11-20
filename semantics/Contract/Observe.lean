@@ -333,18 +333,26 @@ inductive ScriptEvent where
   | clock (ms : F64)
   | other (target event : String) (payload : Option Value)
   | land
+  | answerSource (source label : String) (calls : Oracle)
+
+/-- Replace the answers to this source. Other sources keep their answers and host facts. -/
+def ScriptEvent.oracle (resources : List ResourceDecl) (o : Oracle) : ScriptEvent → Oracle
+  | .answerSource source _ calls =>
+    { o with answers := calls.answers ++ o.answers.filter (·.1 != source),
+             facts := o.facts.filter fun (name, _) => !resources.any fun r => r.source == source && r.name == name }
+  | _ => o
 
 def ScriptEvent.event : ScriptEvent → Option Event
   | .tap t => .some (.tap t)
   | .change t s => .some (.change t s)
   | .clock ms => .some (.clock ms)
   | .other t e v => .some (.other t e v)
-  | .land => .none
+  | .land | .answerSource .. => .none
 
 def ScriptEvent.label (e : ScriptEvent) : String :=
-  match e.event with
-  | .some event => event.label
-  | .none => "land"
+  match e with
+  | .answerSource _ label _ => label
+  | _ => e.event.map Event.label |>.getD "land"
 
 #guard ScriptEvent.land.label == "land"
 
@@ -401,6 +409,28 @@ private def typingProgram (events : List String) : Program :=
     holds (step p {} c (.change "field" "typed"))
       && holds (stepTrace p {} c (.change "field" "typed")).1
 
+/-- One source announcement refreshes every live reader in one commit. A child instance
+forgets the arguments of its own request, so its next render asks again. -/
+def sourceChanged (p : Program) (o : Oracle) (c : Config) (source : String) :
+    (Config × Outcome) × List Ran := Id.run do
+  let reads := p.resources.filter fun r => r.source == source &&
+    (r.owner.isNone || c.store.any fun (_, slots) => (lookup r.name slots).isSome)
+  if reads.isEmpty then return ((c, .ok), [])
+  let names := reads.map (·.name)
+  let keys := names.map ownedArgs
+  let store := c.store.map fun (id, slots) => (id, slots.filter fun (x, _) => !keys.contains x)
+  let result := match update p o c.slots store c.now c.settled names c.view with
+    | .error e => (c, Outcome.refused e)
+    | .ok (st, rendered) =>
+      let (view, live) := rendered.toOption.getD ([], [])
+      match gateStep p c.slots st c.now c.timers live view with
+      | .error e => (c, .refused e)
+      | .ok timers =>
+        match rendered with
+        | .ok _ => (({ c with settled := st, store := live, view, timers }.unstall).armNexts p, .ok)
+        | .error e => ({ c with settled := st, poisoned := true, queued := [], stalled := [], nexts := [] }, .poisoned e)
+  return (result, [⟨"source", source, result.2⟩])
+
 /-- Boot, then every script event. The originals own the state and outcome;
 a traced twin that disagrees replaces the configuration with a failing line. -/
 def runScript (p : Program) (o : Oracle) (events : List ScriptEvent) : List String := Id.run do
@@ -410,13 +440,18 @@ def runScript (p : Program) (o : Oracle) (events : List ScriptEvent) : List Stri
   | _ => return ["== boot", outcome out]
   let mut acc := lines p "boot" c out 0
   let mut c := c
+  let mut o := o
   for e in events do
+    o := e.oracle p.resources o
     let before := c.commands.length
-    let (label, result, twin, ran) := match e.event with
-      | .some ev =>
+    let (label, result, twin, ran) := match e, e.event with
+      | .answerSource source label _, _ =>
+        let (result, ran) := sourceChanged p o c source
+        (label, result, result, ran)
+      | _, .some ev =>
         let (twin, ran) := stepTrace p o c ev
         (ev.label, step p o c ev, twin, ran)
-      | .none =>
+      | _, .none =>
         let (result, ran) := land p o c
         (e.label, result, result, ran)
     let (c', out) := result

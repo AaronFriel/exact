@@ -8,8 +8,8 @@
 //
 //   bun semantics/difftest/js/drive.mjs <batch.json>
 //
-// The batch: { compiler, work, cases: [{ file, events, hostSources: [name…],
-// answers: [[source, [arg…], answer]…], facts: {resource: value} }] }, every
+// The batch: { compiler, work, cases: [{ file, events, hostSources: [name…], launchAnswers?: [name…],
+// answers: [[revision, source, [arg…], answer]…], facts: {resource: value} }] }, every
 // number as {"$": "<16 hex digits of IEEE bits>"}. Prints one JSON line per
 // case: {lines} (the observation), {outside} (exact-web-js refused the
 // program: outside the JS target) or {error} (the driver failed).
@@ -168,8 +168,8 @@ function entry(dir) {
     "import app from './app.js';",
     ...(existsSync(flag) ? [`import { install as sounds } from './sounds.js'; sounds(${readFileSync(flag, 'utf8')});`] : []),
     "import names, { types } from './names.js';",
-    "import { data, journal, clock, advance, Hosts, inflight, Mutations, Sounds } from './rt.js';",
-    'globalThis.__drive = { app, names, types, data, journal, clock, advance, Hosts, inflight, Mutations, Sounds };',
+    "import { data, journal, clock, advance, Hosts, inflight, Mutations, Sounds, Resources, sourceChanged, commit } from './rt.js';",
+    'globalThis.__drive = { app, names, types, data, journal, clock, advance, Hosts, inflight, Mutations, Sounds, Resources, sourceChanged, commit };',
   ].join('\n'));
 }
 
@@ -232,23 +232,26 @@ async function drive(code, c, hostSources) {
   };
   ctx.__trig = { sin: x => answer('sin', x), cos: x => answer('cos', x) };
   vm.runInContext(code, ctx, { filename: 'app.js' });
-  const { app, names, types, data, journal, clock, advance, Hosts, Mutations, Sounds } = ctx.__drive;
+  const { app, names, types, data, journal, clock, advance, Hosts, Mutations, Sounds, Resources, sourceChanged, commit } = ctx.__drive;
   const notes = [];
   // The runner's transcript answers every call; one it never made is a divergence.
-  const answers = new Map(c.answers.map(([source, args, answer]) => [source + key(decode(args)), answer]));
+  const revisions = new Map((c.launchAnswers ?? []).map(source => [source, 0]));
+  const answerKey = (revision, source, args) => JSON.stringify([revision, source, key(args)]);
+  const answers = new Map(c.answers.map(([revision, source, args, answer]) => [answerKey(revision, source, decode(args)), answer]));
   const unanswered = (source, args) => {
     notes.push(`# js: the oracle has no answer for ${source}${key(args)}`);
     const e = new Error(`the oracle has no answer for ${source}`); e.refuse = true; throw e;
   };
   data.answer = (source, args) => {
-    const k = source + key(args);
+    const k = answerKey(revisions.get(source) ?? 0, source, args);
     return answers.has(k) ? { v: decode(answers.get(k)) } : unanswered(source, args);
   };
   // The host's facts (viewport, page, time…) as the runner answered them at
   // boot: the module's own readers of the page (facts.js) assign in vain.
   data.reserved = {};
   for (const s of new Set(hostSources)) {
-    const f = (source, args, name) => name in c.facts ? decode(c.facts[name]) : unanswered(source, args);
+    const f = (source, args, name) => revisions.has(source) ? data.answer(source, args).v
+      : name in c.facts ? decode(c.facts[name]) : unanswered(source, args);
     Object.defineProperty(data.reserved, s, { get: () => f, set() {}, enumerable: true });
   }
   // Every command, in order: the runtime's own and any it does not carry.
@@ -390,6 +393,11 @@ async function drive(code, c, hostSources) {
         && (!options || options.some(o => !o.hasAttribute('disabled') && optionValue(o) === text));
       const event = e?.$listeners?.input?.length ? 'input' : 'change';
       if (!deliverable || !e.$listeners?.[event]?.length) refused = true; else { e.value = text; fire(e, event); }
+    } else if (ev.answer !== undefined) {
+      out.push(`== ${ev.label}`);
+      revisions.set(ev.answer, (revisions.get(ev.answer) ?? 0) + 1);
+      const readers = Resources.filter(r => !r.gone && r.source === ev.answer);
+      if (readers.length) commit(() => { for (const r of readers) sourceChanged(r, ev.answer); }, 'changed');
     } else if (ev.land) {
       out.push('== land');
       advance(clock.now, false, undefined, false);

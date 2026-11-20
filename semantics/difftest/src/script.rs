@@ -22,6 +22,9 @@ pub enum Event {
     Land,
     /// The landing belonging to an input; printed and replayed as `land`.
     InputLand,
+    /// A test's `answer source` line after boot: the source answers this
+    /// JSON from now on, and every resource reading it is asked again.
+    Answer(String, String),
 }
 
 /// What a corpus test expects of the runner after the steps before it.
@@ -79,6 +82,9 @@ pub struct Case {
     pub prerendered: bool,
     /// Fixed host facts supplied before boot.
     pub launch: exact_runner::time::Launch,
+    /// What each source a test's leading `answer source` lines name answers
+    /// from boot on, as JSON text, by source.
+    pub answers: Vec<(String, String)>,
 }
 
 /// A corpus case: a [`Case`] whose script also holds expectations.
@@ -115,6 +121,24 @@ pub struct Delivery {
     pub expansion: Option<std::path::PathBuf>,
 }
 
+/// Replay each change with the calls its source answered until its next change.
+pub fn lean_events(events: &[Event], oracle: Option<&crate::oracle::Oracle>) -> Vec<String> {
+    let mut revisions = std::collections::BTreeMap::new();
+    events
+        .iter()
+        .map(|e| {
+            let calls = if let Event::Answer(source, _) = e {
+                let revision = revisions.entry(source).or_insert(0);
+                *revision += 1;
+                oracle.map_or_else(String::new, |o| o.calls_text(Some(source), *revision))
+            } else {
+                String::new()
+            };
+            e.lean(&calls)
+        })
+        .collect()
+}
+
 impl Event {
     /// The step's label, exactly as `Contract.Observe.ScriptEvent.label` prints it.
     pub fn label(&self) -> String {
@@ -129,11 +153,12 @@ impl Event {
                 format!("clock +{}", exact_runner::stdlib::format_number(*ms))
             }
             Event::Land | Event::InputLand => "land".into(),
+            Event::Answer(source, json) => format!("answer source {source} with {json}"),
         }
     }
 
     /// The event as a `Contract.Observe.ScriptEvent` term.
-    pub fn lean(&self) -> String {
+    fn lean(&self, calls: &str) -> String {
         use contract::lean::string;
         match self {
             Event::Tap(t) => format!("(.tap {})", string(t)),
@@ -142,6 +167,12 @@ impl Event {
                 format!("(.clock (F64.ofBits 0x{:016x}))", ms.to_bits())
             }
             Event::Land | Event::InputLand => "(.land)".into(),
+            Event::Answer(source, _) => format!(
+                "(.answerSource {} {} (OracleText.parse! {}))",
+                string(source),
+                string(&self.label()),
+                string(calls)
+            ),
         }
     }
 }
@@ -177,6 +208,25 @@ pub fn scripted(
         .collect()
 }
 
+/// Validate every authored answer, including those after a host-only step.
+pub(crate) fn check_answers(
+    plan: &exact_plan::Plan,
+    test: &contract_syntax::TestDecl,
+) -> Result<(), String> {
+    for step in &test.steps {
+        if let Step::AnswerSource {
+            source,
+            value,
+            span,
+        } = step
+        {
+            crate::oracle::check_answer(plan, source, value)
+                .map_err(|e| format!("{}:{}: test {:?}: {e}", span.line, span.col, test.name))?;
+        }
+    }
+    Ok(())
+}
+
 /// One `test` block as a scripted case over the program `source`, which
 /// may be another file's (an `app.test.contract` beside its
 /// `app.contract`). Inputs include a following `land`; settles expand from
@@ -191,6 +241,7 @@ pub fn test_case(
     let mut items = Vec::new();
     let mut delivery = Delivery::default();
     let (mut epoch, mut zone) = (None, None);
+    let mut answers = Vec::new();
     let mut leading = true;
     let mut launch_steps = 0;
     for step in &t.steps {
@@ -207,6 +258,11 @@ pub fn test_case(
                     continue;
                 }
                 Step::Size { .. } => {
+                    launch_steps += 1;
+                    continue;
+                }
+                Step::AnswerSource { source, value, .. } => {
+                    answers.push((source.clone(), value.clone()));
                     launch_steps += 1;
                     continue;
                 }
@@ -255,11 +311,21 @@ pub fn test_case(
             stored: false,
             prerendered: false,
             launch: crate::launch::facts(epoch, zone)?,
+            answers,
         },
         items,
         delivery,
     };
-    crate::settle::expand(&mut script, plan)?;
+    let compiled;
+    let plan = match plan {
+        Some(plan) => plan,
+        None => {
+            compiled = crate::compile(&script.case)?;
+            &compiled
+        }
+    };
+    check_answers(plan, t).map_err(|e| format!("{file}:{e}"))?;
+    crate::settle::expand(&mut script, Some(plan))?;
     if let Some((span, kind, _)) = script.delivery.stopped.as_ref().filter(|(_, kind, _)| {
         matches!(
             kind.as_str(),
@@ -299,6 +365,9 @@ fn deliver(step: &Step) -> Result<Option<Item>, String> {
             append: false,
             ..
         } => Item::Event(Event::Type(target.clone(), text.clone())),
+        Step::AnswerSource { source, value, .. } => {
+            Item::Event(Event::Answer(source.clone(), value.clone()))
+        }
         Step::Clock { arg, span } if arg.starts_with("until ") => until(arg, *span)?,
         Step::Clock { arg, .. } if arg == "data" => Item::Event(Event::Land),
         Step::Clock { arg, .. } => match arg.strip_prefix('+').map(str::parse::<f64>) {
@@ -390,6 +459,7 @@ fn delivered_kind(kind: &str) -> bool {
         kind,
         "Tap"
             | "Type"
+            | "AnswerSource"
             | "Clock"
             | "ExpectState"
             | "ExpectText"
@@ -483,9 +553,9 @@ mod tests {
     #[test]
     fn land_printers_use_the_semantics_label() {
         assert_eq!(Event::Land.label(), "land");
-        assert_eq!(Event::Land.lean(), "(.land)");
+        assert_eq!(Event::Land.lean(""), "(.land)");
         assert_eq!(Event::InputLand.label(), Event::Land.label());
-        assert_eq!(Event::InputLand.lean(), Event::Land.lean());
+        assert_eq!(Event::InputLand.lean(""), Event::Land.lean(""));
         // The corpus runs this term and compares the resulting label byte for byte.
         let s = scripted(
             "label",

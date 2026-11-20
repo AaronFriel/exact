@@ -125,11 +125,18 @@ pub(crate) fn boot(
     let every = oracle.prerendered;
     let launch = oracle.launch.clone();
     let mut r = exact_runner::time::launching_with(launch, || {
-        Runner::boot_stored(
+        Runner::boot_with_delivery_linked(
+            exact_runner::RunnerLinks::ALL,
+            exact_runner::ModuleLinks {
+                source_answer: Some(Oracle::platform_answer),
+                ..exact_runner::ModuleLinks::ALL
+            },
             plan,
             oracle,
             Kernel::with_monospace(),
+            None,
             snapshot,
+            Default::default(),
             Default::default(),
             "/",
         )
@@ -137,6 +144,7 @@ pub(crate) fn boot(
     // A module's per-target answers are the web's, as the JS target gives them, not those of the machine the
     // runner was built for: Photo Editor's wallet can pay on macOS and cannot on Linux, so a walk there never
     // reached its print sizes (#465). The answers boot asked for are asked again for the web.
+    r.set_device_links(exact_runner::runner::DeviceLinks::ALL);
     r.set_module_target("web");
     if let (_, Some(error)) = r.apply_announced() {
         return Err(error);
@@ -261,7 +269,7 @@ impl Driver {
                     // Only what the runner answers itself: one of the app's
                     // sources may be asked nothing at boot (a closed `when`,
                     // LLP 1161.002) and asked of the oracle later.
-                    if answers_itself(&plan, res) {
+                    if answers_itself(&plan, res) && !r.data().scripted(plan.str(res.source)) {
                         let name = plan.str(res.name);
                         // Only an answer: a read held, refused or failed shows
                         // its placeholder, which `failed`, `pending` and
@@ -307,7 +315,19 @@ impl Driver {
         state(r, &self.plan, &mut before);
         let mut out = vec![format!("== {}", event.label())];
         let journaled = r.journal_start() + r.journal().count();
-        let ((result, receipts), ran) = r.trace_commits(|r| apply(r, event));
+        let ((result, receipts), mut ran) = r.trace_commits(|r| apply(r, event));
+        if let Event::Answer(source, _) = event {
+            if receipts > 0 || result.is_err() {
+                let outcome = if r.is_poisoned() {
+                    "poisoned"
+                } else if result.is_err() {
+                    "refused"
+                } else {
+                    "ok"
+                };
+                ran.push(format!("ran source {source} {outcome}"));
+            }
+        }
         let traced = ran
             .iter()
             .filter(|l| l.starts_with("ran ") && l.ends_with(" ok"))
@@ -482,12 +502,14 @@ fn module_moved(r: &mut Runner<Oracle>, plan: &Plan) -> Vec<String> {
     let facts = facts.borrow();
     facts
         .iter()
-        .filter(|(name, _, _)| {
+        .filter(|(name, _, boot)| {
             plan.resources.iter().any(|res| {
-                plan.str(res.name) == name && plan.module_named(plan.str(res.source)).is_some()
-            })
+                let source = plan.str(res.source);
+                plan.str(res.name) == name
+                    && plan.module_named(source).is_some()
+                    && !r.data().scripted(source)
+            }) && r.resource(name).map(value) != Some(value(boot))
         })
-        .filter(|(name, _, boot)| r.resource(name).map(value) != Some(value(boot)))
         .map(|(name, _, _)| {
             format!("{MODULE_MOVED}: resource {name} no longer holds its boot answer")
         })
@@ -539,6 +561,17 @@ pub(crate) fn apply(
         Event::Land | Event::InputLand => {
             let a = r.land_then();
             (a.error.map_or(Ok(()), Err), a.receipts.len())
+        }
+        Event::Answer(source, json) => {
+            if let Err(why) = r.data().answer(source, json) {
+                let error = exact_runner::DataError::Interface(why);
+                let resource = source.clone();
+                return (Err(exact_runner::RunnerError::Data { resource, error }), 0);
+            }
+            match r.changed(exact_runner::ResourceChange::Source(source)) {
+                Ok(receipt) => (Ok(()), usize::from(receipt.is_some())),
+                Err(e) => (Err(e), 0),
+            }
         }
     }
 }
