@@ -968,7 +968,7 @@ export const classifications = [
     ["painted:host/painted/src/text/catalog_recipe.rs", "Recipe::attach Recipe::catalog Recipe::fonts"],
     ["painted:host/painted/src/text/flow.rs", "FlowLayout::capacity_bytes Paragraph::flow_incomplete Paragraph::flow_line_height Paragraph::fragments TextEngine::paragraph_flow"],
     ["painted:host/painted/src/text/fonts.rs", "Described::info Registry::add Registry::source"],
-    ["painted:host/painted/src/text/ink.rs", "Cache::bytes Cache::from_index Cache::matches Cache::reset Index::build Index::glyphs Index::viewport Index::visit"],
+    ["painted:host/painted/src/text/ink.rs", "Cache::bytes Cache::from_index Cache::matches Cache::prepare Cache::reset Index::build Index::glyphs Index::viewport Index::visit"],
     ["painted:host/painted/src/text/inline.rs", "Ownership::base Ownership::cluster_pieces Ownership::new Ownership::pieces"],
     ["painted:host/painted/src/text/lines.rs", "Face::id LayoutGlyph::pixel LayoutGlyph::range LayoutGlyph::run Lines::capacity_bytes Lines::glyphs_of"],
     ["painted:host/painted/src/text/markup.rs", "expand target"],

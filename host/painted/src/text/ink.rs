@@ -1,7 +1,7 @@
 //! CPU-only conservative ink selection. Full shaping and GPU paint stay intact.
 use super::catalog::{subpixel, Catalog, FaceKey, GlyphKey};
 use super::lines::{LayoutGlyph, Lines};
-use super::Paragraph;
+use super::{GlyphRun, Paragraph, RunPaint, TextEngine};
 use std::mem::size_of;
 use std::rc::{Rc, Weak};
 use std::sync::Arc;
@@ -9,7 +9,7 @@ use tiny_skia::Transform;
 
 pub(super) const MAX_BYTES: usize = 8 * 1024 * 1024;
 const ENVELOPES: usize = 256;
-const GLYPHS_PER_CHUNK: usize = 128;
+pub(super) const GLYPHS_PER_CHUNK: usize = 128;
 // Beyond this range float/integer conversion and inversion use the full path.
 const COORD_LIMIT: f64 = 16_777_216.0;
 
@@ -128,6 +128,14 @@ impl Cache {
         self.catalog = Rc::downgrade(catalog);
         self.scale = scale.to_bits();
     }
+    pub fn prepare(&mut self, catalog: &mut Catalog, paragraph: &Paragraph, scale: f32) -> bool {
+        if self.matches(&catalog.ink_catalog, scale) {
+            return false;
+        }
+        self.reset(&catalog.ink_catalog, scale);
+        self.index = Index::build(catalog, paragraph, scale).map(Into::into);
+        true
+    }
     pub fn bytes(&self) -> usize {
         self.index.as_ref().map_or(0, |index| index.bytes())
     }
@@ -152,6 +160,32 @@ impl std::ops::Deref for IndexOwner {
             Self::Local(index) => index,
             Self::Prepared(layout) => &layout.index,
         }
+    }
+}
+
+impl TextEngine {
+    pub(crate) fn physical_glyph_runs(
+        &mut self,
+        paragraph: &Paragraph,
+        palette: &[RunPaint],
+        origin: (f32, f32),
+        scale: f32,
+        clip: Option<(Transform, [f32; 4])>,
+    ) -> Vec<GlyphRun> {
+        let mut cache = paragraph.ink.borrow_mut();
+        let visible = clip
+            .filter(|_| paragraph.layouts().glyphs.len() > GLYPHS_PER_CHUNK)
+            .and_then(|(transform, [x, y, w, h])| {
+                cache.prepare(&mut paragraph.source.catalog.borrow_mut(), paragraph, scale);
+                let index = cache.index.as_deref()?;
+                Some((
+                    index,
+                    index.viewport(origin, scale, transform, (x, y, w, h))?,
+                ))
+            });
+        Self::glyph_runs_mapped(paragraph, palette, visible, |g, baseline| {
+            exact_ink::glyph::position(g.x, g.y, baseline, origin, scale)
+        })
     }
 }
 

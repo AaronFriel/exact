@@ -1097,8 +1097,7 @@ impl TextEngine {
         mask: Option<&Mask>,
         clip: (f32, f32, f32, f32),
     ) -> std::ops::Range<u32> {
-        // Glyph positions already carry device scale. The GPU stream is separate
-        // and remains full; only this CPU loop selects conservative ink spans.
+        // Glyph positions already carry device scale.
         let glyph_ts = transform.pre_scale(1.0 / scale, 1.0 / scale);
         let height = target.height();
         let mut rows = if glyph_ts.is_identity() {
@@ -1109,13 +1108,10 @@ impl TextEngine {
         paragraph.layouts();
         let mut catalog = paragraph.source.catalog.borrow_mut();
         let mut cache = paragraph.ink.borrow_mut();
-        if !cache.matches(&catalog.ink_catalog, scale) {
-            cache.reset(&catalog.ink_catalog, scale);
-            #[cfg(test)]
-            {
-                self.ink_builds += 1;
-            }
-            cache.index = ink::Index::build(&mut catalog, paragraph, scale).map(Into::into);
+        let _rebuilt = cache.prepare(&mut catalog, paragraph, scale);
+        #[cfg(test)]
+        if _rebuilt {
+            self.ink_builds += 1;
         }
         let paint = PixmapPaint::default();
         let slots = ink::slots(&mut catalog, paragraph.layouts());
@@ -1187,36 +1183,38 @@ impl TextEngine {
     /// points from the paragraph's top-left, the same numbers the raster
     /// path snaps to pixels.
     pub fn glyph_runs(&mut self, paragraph: &Paragraph, palette: &[RunPaint]) -> Vec<GlyphRun> {
-        self.glyph_runs_mapped(paragraph, palette, |g, baseline| (g.x, baseline + g.y))
-    }
-
-    pub(crate) fn physical_glyph_runs(
-        &mut self,
-        paragraph: &Paragraph,
-        palette: &[RunPaint],
-        origin: (f32, f32),
-        scale: f32,
-    ) -> Vec<GlyphRun> {
-        self.glyph_runs_mapped(paragraph, palette, |g, baseline| {
-            exact_ink::glyph::position(g.x, g.y, baseline, origin, scale)
+        Self::glyph_runs_mapped(paragraph, palette, None, |g, baseline| {
+            (g.x, baseline + g.y)
         })
     }
 
     fn glyph_runs_mapped(
-        &mut self,
         paragraph: &Paragraph,
         palette: &[RunPaint],
+        visible: Option<(&ink::Index, ink::Bounds)>,
         position: impl Fn(&LayoutGlyph, f32) -> (f32, f32),
     ) -> Vec<GlyphRun> {
         type Key = (u16, u32, usize);
         type Runs = Vec<(Key, Vec<(u32, f32, f32)>)>;
         let mut runs: Runs = Vec::new();
-        for (g, baseline, _) in paragraph.paint_glyphs(palette) {
+        let mut add = |g: &LayoutGlyph, baseline| {
             let key = (g.face, g.font_size.to_bits(), g.run());
             let (x, y) = position(g, baseline);
             match runs.last_mut() {
                 Some((k, glyphs)) if *k == key => glyphs.push((g.glyph_id, x, y)),
                 _ => runs.push((key, vec![(g.glyph_id, x, y)])),
+            }
+        };
+        if let Some((index, query)) = visible {
+            index.visit(query, |chunk| {
+                let (glyphs, baseline) = index.glyphs(paragraph, chunk);
+                for glyph in glyphs {
+                    add(glyph, baseline);
+                }
+            });
+        } else {
+            for (glyph, baseline, _) in paragraph.paint_glyphs(palette) {
+                add(glyph, baseline);
             }
         }
         let catalog = paragraph.source.catalog.borrow();
