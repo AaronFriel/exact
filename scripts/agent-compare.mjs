@@ -9,7 +9,8 @@
 // white first). Two cells match when each lies within INK of the other's 3×3 neighbourhood, so anti-aliasing and
 // sub-point offsets do not count.
 import { MalformedOperation } from './agent-keys.mjs';
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { basename, relative, resolve } from 'node:path';
 import { crop, decodePng, encodePng, shrink } from './png.mjs';
 import { scaledLines } from './agent-inspect.mjs';
@@ -491,6 +492,47 @@ export function referenceScale(ref, w, h) {
   if (Math.abs(sx - sy) / sx > 0.01) throw new MalformedOperation(`compare: the reference is ${ref.width}×${ref.height} px and the screen ${w}×${h} pt, not one shape (another device, or a capture without its status bar?)`);
   if (ref.width < w || ref.height < h) throw new MalformedOperation(`compare: the reference is ${ref.width}×${ref.height} px, under a pixel a point of the ${w}×${h}-pt screen`);
   return sx;
+}
+
+/** The current viewport in points and its unscaled PNG. */
+async function viewportPixels(s) {
+  const dir = mkdtempSync(resolve(tmpdir(), 'exact-viewport-'));
+  try {
+    const shot = await s.screenshot(resolve(dir, 'viewport.png'));
+    if (!(shot.w > 0 && shot.h > 0)) throw new Error('the host returned an empty viewport');
+    return { png: decodePng(readFileSync(shot.screenshot)), w: shot.w, h: shot.h };
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+}
+
+/** Apple can sample extended-range layers. Other graphical hosts supply the displayed sRGB PNG. */
+export async function samplePoints(s, points, strict = false) {
+  if (['mac', 'macos', 'ios', 'tvos', 'host', 'host-ios'].includes(s.host))
+    return s.op({ op: 'sample', points, strict });
+  const { png, w, h } = await viewportPixels(s);
+  const values = points.map(([x, y]) => {
+    if (!(x >= 0 && x < w && y >= 0 && y < h)) throw new Error(`sample (${x}, ${y}) is outside the ${w}×${h} viewport`);
+    const i = 4 * (Math.floor(y * png.height / h) * png.width + Math.floor(x * png.width / w));
+    return Array.from(png.data.subarray(i, i + 4), v => v / 255);
+  });
+  return { space: 'srgb', values };
+}
+
+/** Compare the target's border box on the same point grid as a full-screen reference. */
+export async function compareBox(s, box, path) {
+  const { png, w, h } = await viewportPixels(s);
+  if (!(box.w > 0 && box.h > 0 && box.x >= 0 && box.y >= 0 && box.x + box.w <= w && box.y + box.h <= h))
+    throw new Error('the full border box must be visible in the viewport to compare it');
+  const pos = (v, pixels, points) => Math.round(v * pixels / points);
+  const x = pos(box.x, png.width, w), y = pos(box.y, png.height, h);
+  const width = pos(box.x + box.w, png.width, w) - x, height = pos(box.y + box.h, png.height, h) - y;
+  const cols = Math.round(box.w), rows = Math.round(box.h);
+  if (cols < 1 || rows < 1 || width < cols || height < rows) throw new Error('the capture needs at least one pixel per point of the target');
+  const ref = decodePng(readFileSync(path));
+  referenceScale(ref, cols, rows);
+  const result = compareGrids(grid(ref, cols, rows), grid(crop(png, x, y, width, height), cols, rows));
+  if (result.match === 1) return null;
+  const first = result.mask.indexOf(1);
+  return `${Math.round((1 - result.match) * cols * rows)} of ${cols * rows} points differ from ${path}, first at (${first % cols}, ${Math.floor(first / cols)})`;
 }
 
 /** The CLI's `screenshot <png> compare <reference.png>` (`args` after `screenshot`). On an iOS simulator the capture is

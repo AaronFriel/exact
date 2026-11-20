@@ -1193,6 +1193,12 @@ impl Parser {
                         span,
                     },
                     "layout" => self.expect_layout(span)?,
+                    "sample" => self.expect_sample(span)?,
+                    "screenshot" => {
+                        let target = self.str_lit("a testId")?;
+                        self.expect_word("matches")?;
+                        Step::ExpectScreenshot { target, reference: self.str_lit("a reference PNG path")?, span }
+                    }
                     "text" => {
                         let target = self.str_lit("a testId")?;
                         let other = match self.peek_kind() {

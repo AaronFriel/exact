@@ -857,6 +857,8 @@ step          = "tap" "midi" STRING ( HEX { HEX } | "clock" NUMBER NUMBER ) NL
               | "expect" "tree" ( "has" | "missing" ) STRING NL
               | "expect" ( "disabled" | "enabled" ) STRING NL  (* a control's `disabled` (LLP 1116.010 D3) *)
               | "expect" "focused" STRING NL         (* the node that holds the keyboard focus *)
+              | "expect" "sample" STRING "at" NUMBER NUMBER "==" STRING [ "within" NUMBER ] NL
+              | "expect" "screenshot" STRING "matches" STRING NL
               | "expect" "layout" STRING measure ( "==" | "<=" | ">=" ) ( [ "-" ] NUMBER | "layout" STRING measure ) [ "within" NUMBER ] NL
                                                      (* the border box, in viewport points *)
               | "expect" "refusal" STRING NL          (* one observed refusal of the named mutation slot *)
@@ -1006,6 +1008,17 @@ does nothing, and fails its step on every host, `send is disabled`: say what the
 with `expect disabled`, then `expect enabled` once what enables it has happened. `expect
 focused "picker"` passes when that node holds the keyboard focus, as every host's tree marks it
 (`[focused]` in `agent <host> tree`): after a key moves the focus, or a dialog returns it.
+
+`expect sample "badge" at 4 5 == "#1280e0" within 2` reads a painted pixel
+four points from the left and five from the top of the badge. Colors are
+sRGB `#rrggbb` (opaque) or `#rrggbbaa`. The optional tolerance is the
+largest allowed difference in each 8-bit channel, from 0 through 255.
+
+`expect screenshot "badge" matches "refs/badge.png"` compares the visible
+border box with a PNG relative to the test file. The full box must be in
+the viewport. It uses the driver's screenshot comparison on a one-point
+grid, with the same tolerance for anti-aliasing. A mismatch reports the
+first differing point relative to the box.
 
 `expect layout "status-mark" height <= 24` bounds a node's laid-out `width` or `height` with
 `==`, `<=` or `>=`. The size is that of the box `agent <host> layout <target>` prints as `space

@@ -338,6 +338,29 @@ fn step_json(step: &Step, s: &mut String) {
             q(target, s);
             s.push_str(&format!(",\"disabled\":{disabled}"));
         }
+        Step::ExpectSample {
+            target,
+            x,
+            y,
+            color,
+            tolerance,
+            ..
+        } => {
+            s.push_str("{\"op\":\"expect-sample\",\"target\":");
+            q(target, s);
+            s.push_str(&format!(
+                ",\"x\":{x},\"y\":{y},\"tolerance\":{tolerance},\"color\":"
+            ));
+            q(color, s);
+        }
+        Step::ExpectScreenshot {
+            target, reference, ..
+        } => {
+            s.push_str("{\"op\":\"expect-screenshot\",\"target\":");
+            q(target, s);
+            s.push_str(",\"reference\":");
+            q(reference, s);
+        }
         Step::ExpectFocused { target, .. } => {
             s.push_str("{\"op\":\"expect-focused\",\"target\":");
             q(target, s);

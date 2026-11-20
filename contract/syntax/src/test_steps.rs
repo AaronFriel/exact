@@ -335,6 +335,30 @@ pub enum Step {
         /// Where.
         span: Span,
     },
+    /// Compare a painted pixel at an offset from a node's top-left corner.
+    ExpectSample {
+        /// The node's testId.
+        target: String,
+        /// Viewport points from the left.
+        x: f64,
+        /// Viewport points from the top.
+        y: f64,
+        /// The expected sRGB hex color.
+        color: String,
+        /// Maximum difference in each 8-bit channel.
+        tolerance: u8,
+        /// Where.
+        span: Span,
+    },
+    /// Compare a node's visible border box with a reference PNG.
+    ExpectScreenshot {
+        /// The node's testId.
+        target: String,
+        /// PNG relative to the authored test.
+        reference: String,
+        /// Where.
+        span: Span,
+    },
     /// `expect refusal "mutation"`: the named send must be refused.
     ExpectRefusal {
         /// Mutation name, as reported by the runner.

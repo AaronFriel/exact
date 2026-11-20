@@ -27,7 +27,7 @@
 //   clock <ms|+ms|+ms real [until <path>]|settle|data|held [<target>…] [<n>s]|until state <path> == <literal> within
 //     <ms>> (+ms real until: a test harness's signal file, ending the real wait early; until state: the wall clock, the
 //     clock frozen, until state reads the JSON literal) | resize <w>x<h> | resize <w> <h> | post [<surface>] <text>
-//     (type <surface> message <text>: a world's Input::messages) | close | sample <x> <y> […] (extended linear sRGB
+//     (type <surface> message <text>: a world's Input::messages) | close | sample <x> <y> […] (extended linear sRGB on Apple, screenshot sRGB elsewhere
 //     under view points, LLP 1100 D12) | prefer <media feature or page fact> <value> […] | perf [<target>] [during
 //     "<op>" …] | perf frames [late <n>] | perf hatches [during "<op>" …] | perf streams [start]
 //   bun scripts/agent.mjs trace <file> | trace --phone <name|udid> | trace --device | trace --pid <pid> [--plan
@@ -81,7 +81,7 @@ import { guardFlags } from './help.mjs';
 import { relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { checkOp } from './agent-check.mjs';
-import { compareScreenshot, referenceNote } from './agent-compare.mjs';
+import { compareScreenshot, referenceNote, samplePoints } from './agent-compare.mjs';
 import { parseDrag, heldRead } from './agent-drag.mjs';
 import { driveNotes, runTests, reloadWeb, fetchOrigins, loopbackOrigins, faultRequest } from './agent-test.mjs';
 import { phone } from '../host/apple/devices.mjs';
@@ -542,7 +542,7 @@ export async function main(argv, injected = {}) {
         const n = args.map(Number);
         if (!n.length || n.length % 2 || n.some(v => !Number.isFinite(v)))
           throw new MalformedOperation("sample <x> <y> [<x> <y> …]: view points; layout <target> gives a node's frame");
-        r = await s.op({ op: 'sample', points: n.flatMap((v, i) => (i % 2 ? [] : [[v, n[i + 1]]])) });
+        r = await samplePoints(s, n.flatMap((v, i) => (i % 2 ? [] : [[v, n[i + 1]]])));
         break;
       }
       case 'resize':

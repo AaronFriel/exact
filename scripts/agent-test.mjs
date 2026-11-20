@@ -11,6 +11,7 @@ import { faultRequest as rawFaultRequest, preferGroups } from './agent-prefer.mj
 import { open } from './agent.mjs';
 import { duringOp } from './agent-drag.mjs';
 import { equalJson } from '../host/web-js/declared-values.js';
+import { compareBox, samplePoints } from './agent-compare.mjs';
 import { perfDelta } from './agent-inspect.mjs';
 import { driveStore, faultSpecOf, launchFacts } from './agent-launch.mjs';
 import { macSandboxed } from './agent-build.mjs';
@@ -119,6 +120,31 @@ export async function layoutExpectation(s, nodes, st) {
   const expected = rhs.said ? `${rhs.said} (${rhs.value})` : rhs.value;
   const within = st.tolerance === undefined ? '' : ` within ${st.tolerance} pt`;
   return { message: `${lhs.said} is ${lhs.value}, expected ${sign}${expected}${within} (its box is ${lhs.size})` };
+}
+
+async function paintExpectation(s, st, file) {
+  const nodes = (await s.tree()).nodes, node = targetNode(nodes, st.target);
+  if (!node) return `no view carries testId "${st.target}"${unopenedHint(nodes)}`;
+  if (node.unshown) return `testId "${st.target}" is in the tree, but ${node.unshown}`;
+  const space = (await s.layout(node.id)).node?.space, box = space?.viewport;
+  if (!box) return space?.unavailable ?? `the host reports no viewport box for "${st.target}"`;
+  if (st.op === 'expect-screenshot') return compareBox(s, box, resolve(dirname(file), st.reference));
+  if (!(st.x >= 0 && st.x < box.w && st.y >= 0 && st.y < box.h))
+    return `sample (${st.x}, ${st.y}) is outside "${st.target}" (${box.w}×${box.h})`;
+  const sampled = await samplePoints(s, [[box.x + st.x, box.y + st.y]], true);
+  if (sampled.error) return sampled.error;
+  const rgba = sampled.values?.[0];
+  if (!['extended-linear-srgb', 'srgb'].includes(sampled.space) || rgba?.length !== 4 || !rgba.every(Number.isFinite))
+    return `the host returned no sRGB pixel for "${st.target}"`;
+  const bytes = rgba.map((v, i) => {
+    if (i < 3 && sampled.space === 'extended-linear-srgb') v = v <= 0.0031308 ? 12.92 * v : 1.055 * v ** (1 / 2.4) - 0.055;
+    return Math.round(Math.max(0, Math.min(1, v)) * 255);
+  });
+  const expected = st.color.slice(1).match(/../g).map(c => parseInt(c, 16));
+  if (expected.length === 3) expected.push(255);
+  if (bytes.every((v, i) => Math.abs(v - expected[i]) <= st.tolerance)) return null;
+  const actual = '#' + bytes.map(b => b.toString(16).padStart(2, '0')).join('');
+  return `"${st.target}" at (${st.x}, ${st.y}) is ${actual}, expected ${st.color} within ${st.tolerance} per channel`;
 }
 
 /** A press on a disabled control does nothing, and each host said so its own way (the web's silently, a native one in the words of the view
@@ -1104,6 +1130,12 @@ export async function runTests({ host, browser, file, plan, app, size, env, webD
           case 'expect-focused': {
             const f = focusedExpectation((await s.tree()).nodes, st.target);
             if (f) await fail(`${at}: ${f.message}`);
+            break;
+          }
+          case 'expect-sample':
+          case 'expect-screenshot': {
+            const message = await paintExpectation(s, st, file);
+            if (message) await fail(`${at}: ${message}`);
             break;
           }
           case 'expect-layout': {

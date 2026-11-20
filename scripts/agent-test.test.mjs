@@ -8,6 +8,7 @@ import { createInterface } from 'node:readline';
 import { Readable } from 'node:stream';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { encodePng } from './png.mjs';
 import { join } from 'node:path';
 import { failureMark, backendFetchPrefixes, churnLines, disabledExpectation, focusedExpectation, layoutExpectation, nativeFetchOrigins, NO_FAILURES, perfExpectation, pickHint, propertyHolds, testMutationClock, refusalExpectation, refuseDisabled, reloadWeb, runTests, serverRequest, testScope, textExpectation, treeExpectation, unarranged } from './agent-test.mjs';
 import { axFindings } from './agent-ax.mjs';
@@ -68,7 +69,7 @@ test('device properties see boot, typing and clock changes, and reset stays betw
         text "Toggle"
       input testId="field" value=textValue input=edit
       button "Enable" testId="enable" press=enable
-      box testId="inset" height="env(safe-area-inset-bottom)"
+      box testId="inset" width=40 height="env(safe-area-inset-bottom)" background-color="#1280e0"
 `);
   writeFileSync(file, `always "ready stays"
   expect state ready stays true
@@ -128,11 +129,16 @@ test "boot only"
 `);
     const boot = await runTests({ host: 'web', file, app: dir, webDist: dist, url: `http://127.0.0.1:${server.address().port}/` });
     expect(boot.failed).toBe(1);
+    const image = (r, g, b) => encodePng({ width: 40, height: 34, data: Buffer.from(Array.from({length: 40 * 34}, () => [r, g, b, 255]).flat()) });
+    writeFileSync(join(dir, 'inset.png'), image(18, 128, 224));
+    writeFileSync(join(dir, 'other.png'), image(250, 250, 0));
     writeFileSync(file, `test "bounded clock"
   prefer safe-area "47 0 34 0"
   expect layout "inset" height == 34
   expect layout "inset" left == layout "field" left within 0.5
   expect layout "inset" top >= layout "field" bottom
+  expect sample "inset" at 5 10 == "#1381dfff" within 1
+  expect screenshot "inset" matches "inset.png"
   reload
   expect layout "inset" height == 34
   prefer safe-area "0 0 12 0"
@@ -145,9 +151,17 @@ test "boot only"
 test "wrong lower bound"
   expect layout "inset" height == 0
   expect state n >= 1
+test "wrong paint"
+  prefer safe-area "0 0 34 0"
+  expect sample "inset" at 5 10 == "#1381df"
+  expect screenshot "inset" matches "other.png"
 `);
     const bounds = await runTests({ host: 'web', file, app: dir, webDist: dist, url: `http://127.0.0.1:${server.address().port}/` });
-    expect([bounds.passed, bounds.failed]).toEqual([1, 1]);
+    expect(bounds.results[0].failures).toEqual([]);
+    expect([bounds.passed, bounds.failed]).toEqual([1, 2]);
+    const paintErrors = bounds.results[2].failures.join('\n');
+    expect(paintErrors).toContain('#1280e0ff');
+    expect(paintErrors).toContain('1360 of 1360 points differ');
     expect(bounds.results[1].failures.join('\n')).toContain('n is 0, expected >= 1');
 
     expect(boot.results[0].failures.join('\n')).toContain('at step 0: boot');

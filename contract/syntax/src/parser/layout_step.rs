@@ -86,4 +86,41 @@ impl Parser {
             span,
         })
     }
+    pub(super) fn expect_sample(&mut self, span: Span) -> R<Step> {
+        let target = self.str_lit("a testId")?;
+        self.expect_word("at")?;
+        let x = self.step_number("an offset from the left in points")?;
+        let y = self.step_number("an offset from the top in points")?;
+        self.expect_punct("==")?;
+        let color = self.str_lit("a hex color")?;
+        if !color.strip_prefix('#').is_some_and(|hex| {
+            matches!(hex.len(), 6 | 8) && hex.bytes().all(|b| b.is_ascii_hexdigit())
+        }) {
+            return self.err(
+                "syntax-expected-step",
+                "sample color takes #rrggbb or #rrggbbaa",
+            );
+        }
+        let tolerance = if self.at_ident("within") {
+            self.next();
+            let n = self.step_number("a per-channel tolerance from 0 to 255")?;
+            if !(0.0..=255.0).contains(&n) || n.fract() != 0.0 {
+                return self.err(
+                    "syntax-expected-step",
+                    "sample tolerance is a whole number from 0 to 255",
+                );
+            }
+            n as u8
+        } else {
+            0
+        };
+        Ok(Step::ExpectSample {
+            target,
+            x,
+            y,
+            color,
+            tolerance,
+            span,
+        })
+    }
 }
