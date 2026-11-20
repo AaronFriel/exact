@@ -289,13 +289,16 @@ impl Recorder {
         }
     }
 
-    /// Whether a drawing within `bounds` (page space) would be clipped away
-    /// entirely: outside some clip's rectangle (the list's overscan rows, out
-    /// of its viewport). Such drawings are not recorded at all.
+    /// The reader can move a retained layer past a clip around it. Only clips
+    /// recorded inside the layer can permanently hide its content.
+    fn recording_clips(&self) -> impl Iterator<Item = &Clip> {
+        self.clips.iter().skip(self.layers.clips_outside())
+    }
+
+    /// Whether the drawing's page bounds lie outside a recorded clip.
     pub(super) fn culled(&self, bounds: Option<Rect4>) -> bool {
         let Some(b) = bounds else { return false };
-        self.clips
-            .iter()
+        self.recording_clips()
             .any(|c| c.page.is_some_and(|(r, _)| !overlaps(b, r)))
     }
 
@@ -303,7 +306,7 @@ impl Recorder {
     /// scroller moved out of its page's view).
     pub(super) fn clipped_out(&self) -> bool {
         let mut left: Option<Rect4> = None;
-        for (r, _) in self.clips.iter().filter_map(|c| c.page) {
+        for (r, _) in self.recording_clips().filter_map(|c| c.page) {
             let meet = left.map_or(r, |l| intersect(l, r));
             if meet.2 <= 0.0 || meet.3 <= 0.0 {
                 return true;
