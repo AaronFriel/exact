@@ -1,5 +1,6 @@
 //! A box with corner radii and shapes: what a background, a border and a clip are cut to.
 use super::{border, Rect4};
+use std::rc::Rc;
 use vello::kurbo::{BezPath, PathEl};
 
 /// A rectangle with per-corner radii (top-left, top-right, bottom-right,
@@ -48,6 +49,10 @@ impl Shape {
     /// Whether any corner is rounded.
     pub fn rounded(&self) -> bool {
         self.radii.iter().any(|r| r.0 > 0.0 && r.1 > 0.0)
+    }
+
+    pub(super) fn rounded_outline(&self) -> Option<Rc<exact_kernel::svg::Path>> {
+        self.rounded().then(|| Rc::new(hit_outline(self)))
     }
 
     /// The same box inset on every side (radii shrink with it).
@@ -107,7 +112,7 @@ fn point(x: f32, y: f32) -> vello::kurbo::Point {
 /// A resolved outline and the map from viewport points into its own space.
 #[derive(Debug, Clone)]
 pub(super) struct HitClip {
-    path: std::rc::Rc<exact_kernel::svg::Path>,
+    path: Rc<exact_kernel::svg::Path>,
     even_odd: bool,
     pub(super) inverse: Option<[f32; 9]>,
 }
@@ -144,14 +149,20 @@ pub(super) fn overflow_hits(
     ts: tiny_skia::Transform,
     hit_ts: tiny_skia::Transform,
 ) {
-    if !shape.rounded() || boxes.is_empty() {
+    // An upright rectangle is already represented by the intersected bounds.
+    let upright = [ts, hit_ts].iter().all(|t| t.kx == 0. && t.ky == 0.);
+    if boxes.is_empty() || (upright && !shape.rounded()) {
         return;
     }
+    path_hits(boxes, hit_outline(shape), false, ts, hit_ts);
+}
+
+fn hit_outline(shape: &Shape) -> exact_kernel::svg::Path {
     use super::border::PathOp;
     use exact_kernel::svg::{Path, Seg};
     let mut ops = Vec::new();
     border::shape_path(&mut ops, shape);
-    let path = Path(
+    Path(
         ops.into_iter()
             .map(|op| match op {
                 PathOp::Move(x, y) => Seg::Move(x, y),
@@ -160,8 +171,7 @@ pub(super) fn overflow_hits(
                 PathOp::Close => Seg::Close,
             })
             .collect(),
-    );
-    path_hits(boxes, path, false, ts, hit_ts);
+    )
 }
 
 fn path_hits(
@@ -172,7 +182,7 @@ fn path_hits(
     hit_ts: tiny_skia::Transform,
 ) {
     let clip = HitClip {
-        path: std::rc::Rc::new(path),
+        path: Rc::new(path),
         even_odd,
         inverse: ts
             .invert()
@@ -191,6 +201,23 @@ fn path_hits(
 }
 
 impl super::PaintedBox {
+    /// Whether the point survives the border's corner cutouts, in hit space.
+    pub(crate) fn inside_rounded_border(&self, x: f32, y: f32) -> bool {
+        let Some(outline) = &self.rounded_border else {
+            return true;
+        };
+        let (x, y) = self
+            .projective
+            .map_or((x, y), |(inv, ..)| crate::placement::map(&inv, x, y));
+        self.affine
+            .and_then(|(ts, _)| ts.invert())
+            .is_some_and(|inverse| {
+                let mut point = tiny_skia::Point::from_xy(x, y);
+                inverse.map_point(&mut point);
+                outline.contains((point.x, point.y), false)
+            })
+    }
+
     /// Whether a point (viewport points) is inside the box and its clip.
     pub fn contains(&self, x: f32, y: f32) -> bool {
         if self.hit.is_some() {

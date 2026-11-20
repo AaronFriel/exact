@@ -351,6 +351,7 @@ impl Painter {
                 let flatten = self.flatten.replace(node.id);
                 let mut child_walk = Walk {
                     scene: walk.scene,
+                    scrollbar_cover: walk.scrollbar_cover,
                     hit_space: None,
                     boxes: Vec::new(),
                     text: BTreeMap::new(),
@@ -400,6 +401,7 @@ impl Painter {
         painter.backend.begin(iw, ih, self.scale);
         let mut child_walk = Walk {
             scene: walk.scene,
+            scrollbar_cover: walk.scrollbar_cover,
             hit_space: None,
             boxes: Vec::new(),
             text: BTreeMap::new(),

@@ -50,6 +50,7 @@ impl Painter {
         painter.placements.remove(&id);
         let mut child_walk = Walk {
             scene: walk.scene,
+            scrollbar_cover: walk.scrollbar_cover,
             hit_space: None,
             boxes: Vec::new(),
             text: BTreeMap::new(),

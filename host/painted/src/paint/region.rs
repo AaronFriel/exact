@@ -128,6 +128,7 @@ struct NodePaint {
     key: NodeKey,
     id: ViewId,
     pointer_hit: bool,
+    scrollbar: bool,
     paint: BoxPaint,
     payload: Payload,
     opacity: f32,
@@ -481,6 +482,7 @@ impl Picture {
                 pointer_hit: node
                     .computed_row(exact_kernel::StyleId::PointerEvents, |s| s.pointer_events)
                     != exact_kernel::PointerEvents::None,
+                scrollbar: node.style.scrollbar_width != exact_kernel::ScrollbarWidth::None,
                 paint,
                 payload,
                 opacity,
@@ -843,6 +845,11 @@ impl<'a> Replay<'a> {
                     let parent = r.transform;
                     if r.live_hit {
                         walk.boxes.push(PaintedBox {
+                            rounded_border: if walk.scrollbar_cover {
+                                g.outer.rounded_outline()
+                            } else {
+                                None
+                            },
                             shape_clips: Vec::new(),
                             pointer_hit: n.pointer_hit,
                             projective: None,
@@ -964,6 +971,11 @@ impl<'a> Replay<'a> {
                         painter.backend.pop_clip();
                         clip = clips.pop().unwrap();
                     }
+                    if let Some(bounds) = self.picture.scroll.get(&n.key).filter(|_| {
+                        painter.scrollbars.enabled && r.live_hit && n.pointer_hit && n.scrollbar
+                    }) {
+                        painter.place_scrollbars(walk, start, n.key, *bounds, false);
+                    }
                     if n.css_clip.has_path() && css_clips.pop().unwrap() {
                         painter.backend.pop_clip();
                     }
@@ -986,6 +998,7 @@ mod hit_tests {
             let ts = Transform::from_rotate_at(degrees, 50.0, 50.0);
             let rect = (0.0, 0.0, 100.0, 100.0);
             let mut b = PaintedBox {
+                rounded_border: None,
                 shape_clips: Vec::new(),
                 pointer_hit: true,
                 id: 1,

@@ -735,6 +735,7 @@ impl Painter {
                     tape.replay(self.backend.as_mut(), &mut self.text.borrow_mut(), *ts)
                 }
                 Item::Hit(id, rect) => walk.boxes.push(PaintedBox {
+                    rounded_border: None,
                     shape_clips: Vec::new(),
                     id: *id,
                     pointer_hit: true,
@@ -785,9 +786,13 @@ impl Painter {
         let texts = std::mem::take(&mut walk.text);
         let fields = std::mem::take(&mut walk.fields);
         let inline = std::mem::take(&mut walk.inline);
+        let scrollbars = std::mem::take(&mut self.scrollbars.enabled);
+        let scrollbar_cover = std::mem::take(&mut walk.scrollbar_cover);
         let recording = self.kept.recording.replace(recorder.clone());
         self.node_at(walk, id, ts, offset, None);
         self.kept.recording = recording;
+        self.scrollbars.enabled = scrollbars;
+        walk.scrollbar_cover = scrollbar_cover;
         (walk.text, walk.fields, walk.inline) = (texts, fields, inline);
         walk.boxes.truncate(boxes);
         self.rows_resume(rows);

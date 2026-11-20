@@ -310,6 +310,8 @@ pub struct PaintedBox {
     pub scroll: Option<(f32, f32)>,
     /// Generic pointer eligibility of this painted scene, including inheritance.
     pub(crate) pointer_hit: bool,
+    /// Rounded box or control face in local space, used for scrollbar coverage.
+    rounded_border: Option<Rc<exact_kernel::svg::Path>>,
     shape_clips: Vec<shape::HitClip>,
     projective: Option<ProjectiveHit>,
     affine: Option<(Transform, Rect4)>,
@@ -474,6 +476,8 @@ pub struct Painter {
 
 struct Walk<'a, 'b> {
     scene: &'b Scene<'a>,
+    /// Offscreen boxes can cover the frame's scrollbars too.
+    scrollbar_cover: bool,
     hit_space: Option<(Transform, Option<Rect4>)>,
     boxes: Vec<PaintedBox>,
     text: BTreeMap<exact_kernel::NodeKey, Rc<Paragraph>>,
@@ -806,6 +810,7 @@ impl Painter {
         self.backend.shared_frame(&self.shared);
         let mut walk = Walk {
             scene,
+            scrollbar_cover: self.scrollbars.enabled,
             hit_space: None,
             boxes: Vec::with_capacity(self.boxes_hint),
             text: BTreeMap::new(),
@@ -817,6 +822,7 @@ impl Painter {
             reveal: None,
             dialog: None,
         };
+        let old_bars = std::mem::take(&mut self.scrollbars.bars);
         self.rows_begin(&walk);
         let kept = self.kept_places(&walk, None, scene.roots);
         let space = Transform::from_translate(-scene.page.0, -scene.page.1);
@@ -831,7 +837,6 @@ impl Painter {
         self.paint_ghost(&mut walk);
         self.paint_alert(&mut walk);
         self.rows_end();
-        self.paint_scrollbars(&walk);
         if let Some(menu) = &scene.menu {
             self.menu(menu);
         }
@@ -865,6 +870,7 @@ impl Painter {
             self.field_text = walk.fields;
             self.inline_text = walk.inline;
         } else {
+            self.scrollbars.bars = old_bars;
             self.discard_rows();
             drop(walk.text);
         }
@@ -989,6 +995,7 @@ impl Painter {
         let visible = paints(walk.scene.kernel, id, walk.reveal);
         let hit_start = walk.boxes.len();
         walk.boxes.push(PaintedBox {
+            rounded_border: None,
             shape_clips: Vec::new(),
             id,
             pointer_hit: node
@@ -1079,6 +1086,7 @@ impl Painter {
         offset: (f32, f32),
         clip_rect: Option<Rect4>,
     ) {
+        let owner = walk.boxes.len() - 1;
         let paints_self = paints(walk.scene.kernel, node.id, walk.reveal);
         let shown = (walk.scene.presented)(node.id);
         // Paint motion's values over the captured box (LLP 1055.000 D6,
@@ -1132,6 +1140,7 @@ impl Painter {
         // and a text's own lines (CSS Overflow 3 §3).
         let (ox, oy) = effective_overflow(node);
         let clip = field::overflow_clip(&surface.outer, paint.widths, (ox, oy));
+        let mut cover = surface.outer;
         match node.node_type {
             NodeType::Text => {
                 if let Some(clip) = &clip {
@@ -1219,7 +1228,9 @@ impl Painter {
                     control::select_label(walk.scene.kernel, node, walk.scene.chosen.get(&node.id));
                 let focused = walk.scene.focus == Some(node.id);
                 let label = label.as_deref().unwrap_or("");
-                self.field_control(walk, node, content, &outer, focused, ts, label, true);
+                cover = self
+                    .field_control(walk, node, content, &outer, focused, ts, label, true)
+                    .unwrap_or(cover);
             }
             // @ref LLP 1069.001 D7 — a date control is a field showing its
             // value (`control::date_text`); `type` sets it.
@@ -1232,7 +1243,9 @@ impl Painter {
                 let chosen = walk.scene.chosen.get(&node.id);
                 let shown = control::date_text(node, chosen, self.dates.as_ref());
                 let focused = walk.scene.focus == Some(node.id);
-                self.field_control(walk, node, content, &outer, focused, ts, &shown, false);
+                cover = self
+                    .field_control(walk, node, content, &outer, focused, ts, &shown, false)
+                    .unwrap_or(cover);
             }
             NodeType::Control if node.props.str(PropId::Type) == Some("range") => {
                 self.range_control(node, content, ts, walk.scene.chosen.get(&node.id))
@@ -1251,7 +1264,7 @@ impl Painter {
                     .kernel
                     .button_face_style(node.id)
                     .expect("button");
-                self.button_control(node, surface.outer.rect, ts, &face, &rows, walk);
+                cover = self.button_control(node, surface.outer.rect, ts, &face, &rows, walk);
             }
             NodeType::Control
                 if look::neutral() && node.props.str(PropId::Type) == Some("file") =>
@@ -1268,6 +1281,9 @@ impl Painter {
                 self.mark_ripple(node, content, held, ts);
             }
             _ => {}
+        }
+        if walk.scrollbar_cover {
+            walk.boxes[owner].rounded_border = cover.rounded_outline();
         }
         // Children, moved by this box's scroll offset when it scrolls.
         if let Some((hit_ts, hit_clip)) = walk.hit_space.as_mut() {
@@ -1324,6 +1340,7 @@ impl Painter {
             self.backend.canvas(&pixels, rect, &clips, ts);
         }
         self.hosted_view(node, rect, ts);
+        self.paint_scrollbars(walk, node, owner, (ox, oy));
     }
 }
 

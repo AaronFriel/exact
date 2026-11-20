@@ -759,6 +759,7 @@ impl<D: DataSource> Presenter<D> {
         self.hover_point = at;
         let mut under = Vec::new();
         let hit = at.and_then(|(x, y)| self.hit(x, y));
+        self.refresh_scrollbar_hover();
         // Its `:hover` looks follow the same point, a resting one's too (LLP 1121 D8).
         self.refresh_looks(Some(hit));
         let mut node = hit;

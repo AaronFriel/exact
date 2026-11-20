@@ -189,6 +189,13 @@ pub use scrollers::{Scroller, Under, PAGE};
 pub use stage::SHEET_HANDLE;
 pub use window::{Chrome, Window};
 
+#[derive(PartialEq, Eq)]
+enum PaintHit {
+    Published,
+    Current,
+    ScrollbarCover,
+}
+
 /// The presenter: one host, its painter, and the host state.
 pub struct Presenter<D: DataSource> {
     /// Scrolled lists whose collection turn waits for the frame (see
@@ -1207,42 +1214,44 @@ impl<D: DataSource> Presenter<D> {
 
     /// The deepest painted box under a point (viewport points), through every clip.
     pub fn hit(&mut self, x: f32, y: f32) -> Option<ViewId> {
-        self.hit_with_visibility(x, y, false)
+        self.hit_with_visibility(x, y, PaintHit::Published)
     }
 
     /// Ordinary mouse releases use current CSS eligibility even before the
     /// next display flip. Retained regions keep their picture's hit policy.
     pub(super) fn hit_after_pointerdown(&mut self, x: f32, y: f32) -> Option<ViewId> {
-        self.hit_with_visibility(x, y, true)
+        self.hit_with_visibility(x, y, PaintHit::Current)
     }
 
-    fn hit_with_visibility(&mut self, x: f32, y: f32, current: bool) -> Option<ViewId> {
+    fn hit_with_visibility(&mut self, x: f32, y: f32, mode: PaintHit) -> Option<ViewId> {
         // Under an open surface of the top layer the page is inert.
         if !self.display.contains(x, y) || (self.top_open() && self.alert.is_none()) {
             return None;
         }
         self.boxes();
-        self.painted_hit(x, y, current)
+        self.painted_hit(&self.boxes, x, y, mode)
             .map(|id| self.inline_hit(id, x, y).unwrap_or(id))
     }
 
-    /// Hit-test the latest paint; [`Self::hit`] refreshes its boxes first.
-    pub(super) fn painted_hit(&self, x: f32, y: f32, current: bool) -> Option<ViewId> {
-        self.boxes
+    /// Hit-test a slice of the latest paint, in front-to-back order.
+    fn painted_hit(&self, boxes: &[PaintedBox], x: f32, y: f32, mode: PaintHit) -> Option<ViewId> {
+        boxes
             .iter()
             .map(PaintedBox::for_hit)
             .rev()
             .filter(|b| {
                 self.alert_allows(b.id)
                     && !self.host.flying(b.id)
-                    && (b.contains(x, y) && crate::paint::hits(self.host.kernel(), b, x, y)
+                    && (b.contains(x, y)
+                        && crate::paint::hits(self.host.kernel(), b, x, y)
+                        && (mode != PaintHit::ScrollbarCover || b.inside_rounded_border(x, y))
                         || crate::paint::slop_hits(self.host.kernel(), b, x, y))
                     && !self.host.route_visibility(b.id).1
                     && self.display.allows(self.host.kernel(), b.id)
             })
             .find_map(|b| {
                 let mut hit = b.clone();
-                if current && !self.brush.region_blocks_action(b.id) {
+                if mode == PaintHit::Current && !self.brush.region_blocks_action(b.id) {
                     let node = self.host.kernel().node(b.id)?;
                     hit.pointer_hit = node
                         .computed_row(exact_kernel::StyleId::PointerEvents, |s| s.pointer_events)

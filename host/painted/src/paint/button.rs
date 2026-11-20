@@ -761,7 +761,7 @@ impl Painter {
         face: &exact_kernel::PressFace,
         rows: &ButtonFaceStyle,
         walk: &super::Walk<'_, '_>,
-    ) {
+    ) -> Shape {
         let focused = walk.scene.focus == Some(node.id) && self.ringless != Some(node.id);
         let mut ancestor = node.parent;
         let mut menu_row = false;
@@ -1224,6 +1224,7 @@ impl Painter {
         if focused && !disabled && !super::control::ringless(node) {
             self.field_ring(&shape, accent, ts);
         }
+        shape
     }
 }
 
