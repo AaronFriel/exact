@@ -53,7 +53,7 @@ extension NavigationHost {
         }.filter { !$0.isEmpty }
         let drawn = shown.map { $0.node.convert($0.node.bounds, to: root) }.filter { !$0.isEmpty }
         var owned = Set(tabPanels + (tablistAppearanceNone ? [] : [adoptedTablist].compactMap { $0 }))
-        if let footer = hiddenSidebarFooter { owned.insert(footer.id) }
+        if let footer = sidebarFooter() { owned.insert(footer.id) }
         let area = holder.convert(holder.bounds, to: root)
         let before = besideOwner === owner ? besideInsets : .zero
         var changed = false, reach = UIEdgeInsets.zero, above: [NodeView] = []
@@ -194,12 +194,11 @@ extension NavigationHost {
     /// page that did not ask to cover it — and the header a bar replaces,
     /// reported when they change, after the batch being applied.
     func reportCovers() {
-        let footer = phoneSidebarFooter()
-        hideSidebarFooter(footer)
+        projectSidebarFooter(sidebarFooter())
         let above = clearBesideRoutes()
         var changes: [(UInt32, HostCover?)] = []
         var wanted: [UInt32: HostCover] = [:]
-        if let footer { wanted[footer.id] = .whole }
+        if let hiddenSidebarFooter { wanted[hiddenSidebarFooter.id] = .whole }
         var extras: [ObjectIdentifier: (UIScrollView, top: CGFloat, bottom: CGFloat)] = [:]
         for c in controllers.values where presenter.views[c.node.id] === c.node {
             // A lifted header takes no room, on a stack yet or not (`coverLifted`).

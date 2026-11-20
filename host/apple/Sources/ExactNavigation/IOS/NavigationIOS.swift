@@ -99,6 +99,10 @@ final class NavigationHost: NSObject, UINavigationControllerDelegate, UIGestureR
     private var selectedRouteCount = 0
     var adoptedTablist: UInt32?
     weak var hiddenSidebarFooter: NodeView?
+    #if os(iOS)
+    var sidebarFooterPane: MeasuredPaneView?
+    weak var sidebarFooterHome: NodeView?
+    #endif
     var tablistAppearanceNone = false
     /// Where the authored tablist was when its covers were last measured.
     var measuredTablist: CGRect?
