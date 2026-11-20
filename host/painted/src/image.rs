@@ -543,7 +543,12 @@ impl Images {
                 view.lease = None;
                 self.bitmaps.remove(id);
             }
-            if source.len() > 4096 {
+            let limit = if source.starts_with("data:") {
+                exact_raster::MAX_DATA_URL_BYTES
+            } else {
+                4096
+            };
+            if source.len() > limit {
                 if let Some((request, _)) = view.request.take() {
                     self.backend.cancel(request);
                 }
@@ -564,7 +569,7 @@ impl Images {
                         key: view.key.view,
                         source: source.to_owned(),
                         assignment: view.assignment,
-                        error: Some("a source over 4096 bytes".into()),
+                        error: Some(format!("a source over {limit} bytes")),
                     });
                 }
                 continue; // Deliberately keep only the previously accepted picture.
