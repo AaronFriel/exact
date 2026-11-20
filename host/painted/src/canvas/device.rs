@@ -202,7 +202,7 @@ fn pack_chrome(c: Chrome, scale: f32) -> [i32; 6] {
         px(c.frame[2]),
         px(c.frame[3]),
         i32::from_be_bytes([a, r, g, b]),
-        i32::from(c.dark)
+        i32::from(c.navigation_light_icons)
             | (i32::from(c.status_light_icons) << 1)
             | (i32::from(c.bars_hidden) << 2),
     ]
@@ -214,7 +214,7 @@ mod tests {
 
     #[test]
     fn chrome_keeps_geometry_and_argb_and_packs_independent_bar_bits() {
-        for (dark, status_light_icons, bars_hidden, flags) in [
+        for (navigation_light_icons, status_light_icons, bars_hidden, flags) in [
             (false, false, false, 0),
             (true, false, false, 1),
             (false, true, false, 2),
@@ -225,7 +225,8 @@ mod tests {
             let chrome = Chrome {
                 frame: [1.25, 2.5, 100., 200.],
                 background: [0x12, 0x34, 0x56, 0xff],
-                dark,
+                dark: !navigation_light_icons,
+                navigation_light_icons,
                 status_light_icons,
                 bars_hidden,
             };

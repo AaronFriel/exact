@@ -51,8 +51,10 @@ pub struct Chrome {
     /// browser carries the root's background over the whole canvas; else the
     /// platform's surface for the scheme (`Canvas`, LLP 1115 D2).
     pub background: [u8; 4],
-    /// Whether the page's scheme is dark: the navigation bar's icons are light then.
+    /// Whether the page's scheme is dark.
     pub dark: bool,
+    /// Light Android navigation icons, resolved independently of the status bar.
+    pub navigation_light_icons: bool,
     /// Light status bar icons, resolved independently of the scheme (LLP 1105 D7).
     pub status_light_icons: bool,
     /// Whether the system bars give way to the page (`system-bars-hidden`,
@@ -283,6 +285,7 @@ impl<D: DataSource> Presenter<D> {
                     .map(|c| crate::paint::rgba(c.resolve(dark)))
             })
             .filter(|c| c[3] == 255);
+        let bars = self.status_bar();
         Chrome {
             frame: self
                 .window
@@ -290,8 +293,9 @@ impl<D: DataSource> Presenter<D> {
                 .unwrap_or([0.0, 0.0, self.viewport.0, self.viewport.1]),
             background: authored.unwrap_or_else(|| crate::paint::page_color(dark)),
             dark,
-            status_light_icons: self.status_bar().light_icons,
-            bars_hidden: self.status_bar().hidden,
+            status_light_icons: bars.light_icons,
+            navigation_light_icons: bars.navigation_light_icons,
+            bars_hidden: bars.hidden,
         }
     }
 

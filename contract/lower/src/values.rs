@@ -1024,12 +1024,17 @@ pub(crate) fn check_prop_value(
             );
         }
     }
-    if prop == PropId::StatusBarStyle
+    if matches!(prop, PropId::StatusBarStyle | PropId::NavigationBarStyle)
         && matches!(value, Expr::Str(s, _) if !matches!(s.as_str(), "light-content" | "dark-content" | "auto"))
     {
+        let attr = if prop == PropId::StatusBarStyle {
+            "status-bar-style"
+        } else {
+            "navigation-bar-style"
+        };
         return err(
             "lower-attr-value",
-            "`status-bar-style` takes \"light-content\" (light text, for a dark surface), \"dark-content\" or \"auto\"",
+            format!("`{attr}` takes \"light-content\" (light icons on a dark surface), \"dark-content\" or \"auto\""),
             span,
         );
     }

@@ -697,6 +697,7 @@ pub fn attr(name: &str) -> Option<AttrTarget> {
         // `env(safe-area-inset-*)` lengths carry the insets.
         "viewport-fit" => AttrTarget::Prop(p("viewportFit")),
         // The status bar's text over this node's screen, from state (LLP 1105).
+        "navigation-bar-style" => AttrTarget::Prop(p("navigationBarStyle")),
         "status-bar-style" => AttrTarget::Prop(p("statusBarStyle")),
         "status-bar-animation" => AttrTarget::Prop(p("statusBarAnimation")),
         // The status bar and the home indicator give way to this node's screen.
