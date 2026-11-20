@@ -357,4 +357,97 @@ mod tests {
         p.set_focus(None, 1.);
         assert_eq!(p.caret_frame(), None);
     }
+
+    #[test]
+    fn multiline_textarea_paints_scrolling_text_through_vertical_padding() {
+        let source = r##"component App
+  view
+    textarea testId="editor" value="VVVVV\nVVVVV\nVVVVV\nVVVVV\nVVVVV\nVVVVV\nVVVVV\nVVVVV\nVVVVV\nVVVVV\nVVVVV\nVVVVV\nVVVVV\nVVVVV\nVVVVV\n" width=300 height=200 box-sizing="border-box" appearance="none" border-width=0 padding="10px 4px 64px" background-color="#ffffff" color="#000000" font-size=14 line-height="20px"
+"##;
+        let (mut p, error) = Presenter::boot_with_fixture_fonts(
+            &crate::test_plan(source),
+            (),
+            (320., 220.),
+            1.,
+            PathBuf::new(),
+            PainterChoice::Cpu,
+        )
+        .unwrap();
+        assert!(error.is_none(), "{error:?}");
+        let frame = p.frame();
+        // Content box ends at y = 200 - 64 = 136; rows 8..10 paint inside the
+        // bottom padding strip (y = 140..195) just as in Chrome.
+        let dark_in_bottom_padding = (140..195).any(|y| {
+            (4..80).any(|x| {
+                let px = frame.pixel(x, y).unwrap();
+                px.red() < 200 || px.green() < 200 || px.blue() < 200
+            })
+        });
+        assert!(
+            dark_in_bottom_padding,
+            "expected textarea ink to paint into vertical padding below y=136"
+        );
+    }
+
+    #[test]
+    fn first_click_on_horizontally_scrolled_textarea_hits_visible_text_not_old_caret() {
+        let source = r##"component App
+  state body = "LEFT EDGE | abcdefghijklmnopqrstuvwxyz | ABCDEFGHIJKLMNOPQRSTUVWXYZ | RIGHT EDGE"
+  view
+    column width=300 height=240 padding=12 gap=10 background-color="#ffffff"
+      button "Park" id="park" testId="park" width=80 height=30
+      textarea id="field" testId="field" value=body width=180 height=120 padding=8 white-space="pre" overflow-x="auto" overflow-y="auto" font-size=16
+"##;
+        let (mut p, error) = Presenter::boot_with_fixture_fonts(
+            &crate::test_plan(source),
+            (),
+            (300., 240.),
+            1.,
+            PathBuf::new(),
+            PainterChoice::Cpu,
+        )
+        .unwrap();
+        assert!(error.is_none(), "{error:?}");
+        p.frame();
+        let (park, field) = {
+            let k = p.host.kernel();
+            (
+                k.node_by_key(k.find_by_test_id("park")[0]).unwrap().id,
+                k.node_by_key(k.find_by_test_id("field")[0]).unwrap().id,
+            )
+        };
+        let rect = p.rect_of(field).unwrap();
+        let click = (rect.0 + 36., rect.1 + 16.);
+        // First measure with caret near 0.
+        p.set_focus(Some(park), 0.);
+        p.mark_field(field, &p.field_text(field), FieldSelection::caret(0), false);
+        p.scroll_to(field, (0., 0.));
+        p.frame();
+        p.pointer_down(click.0, click.1, 10.).unwrap();
+        p.pointer_up(click.0, click.1, 15.).unwrap();
+        let near_offset = p.field_selection(field).start;
+        // Now place caret far right (offset 70), scroll back to left edge, blur
+        // onto Park, and click the exact same visible point.
+        p.set_focus(Some(park), 20.);
+        p.mark_field(
+            field,
+            &p.field_text(field),
+            FieldSelection::caret(70),
+            false,
+        );
+        p.scroll_to(field, (0., 0.));
+        p.frame();
+        assert_eq!(p.scroll_of(field).0, 0.);
+        p.pointer_down(click.0, click.1, 30.).unwrap();
+        p.pointer_up(click.0, click.1, 35.).unwrap();
+        let far_offset = p.field_selection(field).start;
+        assert_eq!(
+            far_offset, near_offset,
+            "clicking visible text must not jump to old caret before hit-testing"
+        );
+        assert!(
+            near_offset < 12,
+            "expected offset near LEFT EDGE, got {near_offset}"
+        );
+    }
 }

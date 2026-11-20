@@ -567,6 +567,11 @@ impl Painter {
             let painted = material::FieldText::painted(&paragraph, (ox, oy), ts);
             self.labels.value(node.id, painted);
         }
+        let text_clip = if multiline {
+            (content.0, padding.rect.1, content.2, padding.rect.3)
+        } else {
+            content
+        };
         if let Some(shadows) = shadows {
             let ink = self.capture_field_ink(
                 walk.scene.kernel,
@@ -581,16 +586,16 @@ impl Painter {
                 (ox, oy),
                 ts,
                 None,
-                Some((content, padding.rect)),
+                Some((text_clip, padding.rect)),
             );
         } else {
-            self.backend.push_clip(&Shape::rect(content), ts);
+            self.backend.push_clip(&Shape::rect(text_clip), ts);
             let mut engine = self.text.borrow_mut();
             self.backend
                 .text(&mut engine, &paragraph, &palette, (ox, oy), ts);
             self.backend.pop_clip();
         }
-        self.backend.push_clip(&Shape::rect(content), ts);
+        self.backend.push_clip(&Shape::rect(text_clip), ts);
         if let Some(composition) = &composition {
             let line = 1. / self.scale.max(1.);
             let mut underline = |start, end, dotted| {
@@ -600,7 +605,7 @@ impl Painter {
                 for rect in field.geometry.underlines(start, end, line) {
                     let rect = field.place(rect);
                     if dotted {
-                        let visible = super::intersect(rect, content);
+                        let visible = super::intersect(rect, text_clip);
                         let step = line * 2.;
                         let mut x = rect.0 + ((visible.0 - rect.0) / step).ceil() * step;
                         while visible.3 > 0. && x < visible.0 + visible.2 {
