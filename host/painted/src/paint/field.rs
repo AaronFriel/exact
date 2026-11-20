@@ -119,6 +119,9 @@ impl PaintedField {
         decorations: Option<Rc<FieldDecorations>>,
         previous: Option<&PaintedField>,
     ) -> Self {
+        if let Some(previous) = previous.filter(|_| multiline) {
+            paragraph.reuse_field_ink(&previous.paragraph);
+        }
         let left = |width| line_left(spec.align, spec.direction, content.2, width);
         let empty_x = left(0.);
         let first_x = left(spec.text_indent)

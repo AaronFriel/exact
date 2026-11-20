@@ -3,6 +3,67 @@ use super::*;
 use std::collections::{BTreeMap, BTreeSet};
 
 const BINS: [u8; 4] = [0, 1, 2, 3];
+
+#[test]
+fn edited_field_ink_matches_full_layout_across_wraps_chunks_and_font_changes() {
+    let mut engine = engine();
+    let paragraph = |engine: &mut TextEngine, value: &str, width: f32, size: f32| {
+        let style = StyleProps::default().with_rows(|rows| {
+            rows.white_space = exact_kernel::WhiteSpace::PreWrap;
+            rows.font_size = size;
+        });
+        let spec = crate::paint::text_spec(&style, value);
+        engine.paragraph(&spec, Some(width))
+    };
+    let long = "w".repeat(257);
+    let body = format!("first\n{long}\n\nעברית\ne\u{301}nd");
+    let edited = body.replacen("first", "1st", 1);
+    let short = edited.replace(&long, "w");
+    let extended = edited.replace(&long, &"z".repeat(258));
+    let reflow = short.replace("1st", &"word ".repeat(23));
+    let mut old = paragraph(&mut engine, &body, 4000., 14.);
+    old.paint_bounds(1.25).unwrap();
+    for (text, width, size, scale, expected) in [
+        (edited.as_str(), 4000., 14., 1.25, Some(3)),
+        (short.as_str(), 4000., 14., 1.25, Some(1)),
+        (extended.as_str(), 4000., 14., 1.25, Some(258)),
+        (reflow.as_str(), 100., 14., 1.25, None),
+        (short.as_str(), 100., 14., 1.25, None),
+        (body.as_str(), 100., 19., 1.25, None),
+        (short.as_str(), 100., 19., 2., None),
+    ] {
+        let next = paragraph(&mut engine, text, width, size);
+        let before = ink::build_work();
+        next.reuse_field_ink(&old);
+        next.paint_bounds(scale).unwrap();
+        let work = delta(before);
+        assert_eq!(work.attempts, 1);
+        if let Some(expected) = expected {
+            assert_eq!(work.glyphs, expected);
+        }
+        let oracle = ink::Index::uncached_oracle(
+            &mut next.source.catalog.borrow_mut(),
+            &next,
+            scale,
+            ink::MAX_BYTES,
+        )
+        .unwrap();
+        next.ink
+            .borrow()
+            .index
+            .as_deref()
+            .unwrap()
+            .assert_same_numeric(&oracle);
+        compare(
+            &mut engine,
+            &next,
+            &palette(),
+            View::at(-12.25, scale),
+            None,
+        );
+        old = next;
+    }
+}
 fn cache_card(p: &Paragraph) -> BTreeMap<GlyphKey, Option<(i32, i32, u32, u32)>> {
     p.source
         .catalog

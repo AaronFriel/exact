@@ -897,3 +897,50 @@ mod clip_masks {
 
 #[path = "cached_placement_tests.rs"]
 mod cached_placements;
+
+#[test]
+fn typing_at_the_start_of_a_textarea_indexes_only_the_edited_line() {
+    use crate::presenter::{PainterChoice, Presenter};
+
+    let document = ("x".repeat(63) + "\n").repeat(32);
+    let app = r#"component Host
+  state document = DOC
+  action edit(next: string)
+    document = next
+  view
+    textarea id="editor" testId="field" value=document input=edit width="100%" height=620 white-space="pre" font-family="monospace" font-size=14 appearance="none"
+"#.replace("DOC", &serde_json::to_string(&document).unwrap());
+    let (mut p, error) = Presenter::boot_with_fixture_fonts(
+        &crate::test_plan(&app),
+        (),
+        (800., 680.),
+        1.,
+        Default::default(),
+        PainterChoice::Cpu,
+    )
+    .unwrap();
+    assert!(error.is_none(), "{error:?}");
+    let k = p.host().kernel();
+    let field = k.node_by_key(k.find_by_test_id("field")[0]).unwrap().id;
+    assert!(p.set_focus(Some(field), 0.).is_none());
+    use exact_plan::Value;
+    p.set_selection_range(&[Value::str("editor"), Value::Number(0.), Value::Number(0.)]);
+    p.frame();
+    for (i, ch) in "abcd".chars().enumerate() {
+        let before = ink::build_work();
+        p.key(Some(ch), false, 100. + i as f64);
+        p.frame();
+        let value = p
+            .host()
+            .kernel()
+            .node(field)
+            .unwrap()
+            .props
+            .str(exact_kernel::PropId::Value)
+            .unwrap();
+        assert!(value.starts_with(&"abcd"[..=i]));
+        assert_eq!(value.len(), document.len() + i + 1);
+        let visited = ink::build_work().glyphs - before.glyphs;
+        assert_eq!(visited, 64 + i, "keystroke {ch}");
+    }
+}

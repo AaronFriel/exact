@@ -1064,12 +1064,19 @@ fn fingerprint(spec: &Spec) -> u64 {
     h.finish()
 }
 fn equal(a: &Spec, b: &Spec) -> bool {
+    same_style(a, b)
+        && a.strut.text == b.strut.text
+        && a.runs.iter().zip(&b.runs).all(|(a, b)| a.text == b.text)
+}
+
+pub(super) fn same_style(a: &Spec, b: &Spec) -> bool {
     a.align == b.align
         && a.overflow_wrap == b.overflow_wrap
         && a.white_space == b.white_space
         && a.text_wrap_style == b.text_wrap_style
         && a.direction == b.direction
         && a.line_clamp == b.line_clamp
+        && a.text_indent.to_bits() == b.text_indent.to_bits()
         && a.text_box_trim == b.text_box_trim
         && a.text_box_edge == b.text_box_edge
         && a.runs.len() == b.runs.len()
@@ -1077,8 +1084,7 @@ fn equal(a: &Spec, b: &Spec) -> bool {
             .chain(&a.runs)
             .zip(std::iter::once(&b.strut).chain(&b.runs))
             .all(|(a, b)| {
-                a.text == b.text
-                    && a.size.to_bits() == b.size.to_bits()
+                a.size.to_bits() == b.size.to_bits()
                     && a.weight == b.weight
                     && a.family == b.family
                     && a.italic == b.italic
@@ -1090,6 +1096,11 @@ fn equal(a: &Spec, b: &Spec) -> bool {
                     && a.font_variant_numeric == b.font_variant_numeric
                     && a.font_variant_ligatures == b.font_variant_ligatures
                     && a.font_features == b.font_features
+                    && a.indent.to_bits() == b.indent.to_bits()
+                    && a.hang == b.hang
+                    && a.mark == b.mark
+                    && a.href == b.href
+                    && a.bold_text == b.bold_text
                     && a.inline == b.inline
                     && a.edges == b.edges
             })
