@@ -318,6 +318,13 @@ pub enum Step {
         /// Where.
         span: Span,
     },
+    /// `background <ms>` moves the app to the background and back through iOS.
+    Background {
+        /// Elapsed wall time with the app away.
+        ms: u32,
+        /// Where.
+        span: Span,
+    },
     /// `resize 800x600`: the window (a desktop's, the browser's), mid-test,
     /// as the driver's `resize` (reader: repagination on resize).
     Resize {

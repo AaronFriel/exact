@@ -12,7 +12,7 @@ import { linuxRebuild, macSandboxed, nativeBuild, ownVerb, planOverride, rebuild
 import { refuseStale, refuseBackendOrigin, refuseBinaryBackend, proofProductChanges, unchecked, packagedBuildChanges, depInfoChanges, depInfoNewer, newerThan, shown, bakedSettingChanges, watchedNewer } from './agent-launch.mjs';
 import { androidBinary, androidDeploy, apkRecord } from './agent-android.mjs';
 import { nativeKey, mouseContact } from './agent-keys.mjs';
-import { jsonLines, hangup, waitAtMost, bootRefusal, REPLY_MS } from './agent-wire.mjs';
+import { activateIOS, backgroundIOS, jsonLines, hangup, waitAtMost, bootRefusal, REPLY_MS } from './agent-wire.mjs';
 import { platformWheel } from './agent-wheel.mjs';
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 
@@ -235,6 +235,7 @@ export async function openStdio({ host, plan, world, size, app, env: extra = {},
     };
     return {
       host, reader: android && bin.endsWith('.apk'), boot: ready.boot, hostLines, gpuMs: () => null, sessions: ready.sessions ?? null, state, plan,
+      background: device ? ms => backgroundIOS(lines, ms, a.id, bundle => activateIOS(['devicectl', 'device', 'process', 'launch', '--device', ph.udid], bundle)) : undefined,
       ask, reveal: (id) => ask({ op: 'reveal', id }),
       async input(id, kind, opts) {
         if (kind === 'key') {

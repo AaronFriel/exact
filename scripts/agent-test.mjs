@@ -1091,6 +1091,7 @@ export async function runTests({ host, browser, file, plan, app, size, env, webD
             delivered(await s.type(`@${ticket}`, location)); input = st.line; break;
           }
           case 'clipboard': delivered(await s.type(st.target, { clipboard: st.edit, text: st.text })); input = st.line; break;
+          case 'background': await s.background(st.ms); input = null; break;
           case 'clock': await s.clock(st.arg); input = null; loaded = true; if (/^\+?\d/.test(st.arg)) unpolled = null; break;
           // The driver writes through the app's server as another person (LLP 1116.006 D8), not the app: nothing it
           // shows changes until it reads again.

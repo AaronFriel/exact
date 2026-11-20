@@ -166,6 +166,7 @@ impl Parser {
         for step in &steps {
             let refused = match step {
                 Step::Perf { .. } | Step::ExpectPerf { .. } => Some("a `perf` block measures steps; its `expect perf` lines follow it, and blocks do not nest".to_string()),
+                Step::Background { .. } => Some("`background` waits on iOS and the wall clock, so it cannot run in a `perf` block".to_string()),
                 // `clock +N real`, `clock held` and `clock until` let real
                 // time pass while the agent's clock stands.
                 Step::Clock { arg, .. }
@@ -848,6 +849,13 @@ impl Parser {
                     );
                 }
                 Step::Authorize { cancel, span }
+            }
+            "background" => {
+                let ms = self.step_number("the time away in milliseconds")?;
+                if ms.fract() != 0. || !(0.0..=i32::MAX as f64).contains(&ms) {
+                    return self.err("syntax-expected-step", "background takes a whole number of milliseconds from 0 through 2147483647");
+                }
+                Step::Background { ms: ms as u32, span }
             }
             "clock" => {
                 let arg = match self.peek_kind().clone() {

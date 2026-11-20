@@ -312,6 +312,9 @@ fn step_json(step: &Step, s: &mut String) {
             s.push_str(",\"text\":");
             q(text, s);
         }
+        Step::Background { ms, .. } => {
+            s.push_str(&format!("{{\"op\":\"background\",\"ms\":{ms}"));
+        }
         Step::Clock { arg, .. } => {
             s.push_str("{\"op\":\"clock\",\"arg\":");
             q(arg, s);
@@ -723,4 +726,19 @@ fn state_literal(value: &Expr, s: &mut String) {
         Expr::None(_) => s.push_str("null"),
         _ => unreachable!("state expectations contain only literals"),
     }
+}
+
+#[cfg(test)]
+#[test]
+fn an_ios_background_interval_is_a_real_time_test_step() {
+    let parsed = crate::tests("test \"resume\" on ios\n  background 1250\n").unwrap();
+    let json: serde_json::Value = serde_json::from_str(&crate::tests_json(&parsed)).unwrap();
+    assert_eq!(
+        json[0]["steps"][0],
+        serde_json::json!({"op":"background", "ms":1250, "line":2})
+    );
+    for ms in ["", "-1", "0.5", "2147483648"] {
+        assert!(crate::tests(&format!("test \"t\"\n  background {ms}\n")).is_err());
+    }
+    assert!(crate::tests("test \"t\"\n  perf\n    background 100\n").is_err());
 }
