@@ -339,6 +339,54 @@ component Counter
   });
 }, 60000);
 
+test('one card mount reads direct and computed props and reports traps at their own sites', async () => {
+  const source = `component App
+  state n = 2
+  state m = 3
+  derive settled = n + 4
+  action bump
+    n = n + 1
+  action overflow
+    n = 65537
+  view
+    column
+      Card(count=n, id="direct")
+      Card(count=settled, id="settled")
+      Card(count=n * m + 1, id="product")
+      Card(count=(m > 0 ? n + m : 0), id="branch")
+      Card(count=range(n).length, id="steps")
+      button "Bump" press=bump testId="bump"
+      button "Overflow" press=overflow testId="overflow"
+component Card
+  props
+    count: number
+    id: string
+  view
+    column testId=id aria-label="Shared numeric card"
+      text \`total \${count}\`
+      text \`again \${count}\`
+`;
+  const traps = [];
+  for (const sites of [false, true]) {
+    await pageFor(source, async (page, js) => {
+      if (!sites) expect(js.split('"Shared numeric card"').length - 1).toBe(1);
+      const cards = page.getByLabel('Shared numeric card');
+      const totals = ns => ns.map(n => `total ${n}again ${n}`);
+      expect(await cards.allTextContents()).toEqual(totals([2, 6, 7, 5, 2]));
+      await page.getByTestId('bump').click();
+      expect(await cards.allTextContents()).toEqual(totals([3, 7, 10, 6, 3]));
+      await page.getByTestId('overflow').click();
+      expect(await cards.allTextContents()).toEqual([...totals([65537, 65541, 196612, 65540]), '']);
+      const lines = await page.evaluate(async () => (await import('/rt.js')).journal
+        .filter(line => line.includes('text trapped Trap(IterationLimit'))
+        .map(line => line.replace(/^t=\S+ /, '')));
+      expect(lines).toHaveLength(2);
+      traps.push(lines);
+    }, sites ? ['--sites'] : []);
+  }
+  expect(traps[0]).toEqual(traps[1]);
+}, 60000);
+
 test('shared action code writes its own slot and reports the name of the failing action', async () => {
   const source = `component App
   state n = 2

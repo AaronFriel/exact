@@ -5,7 +5,20 @@ use std::{collections::HashMap, fmt::Write as _, rc::Rc};
 #[derive(Clone, Hash, Eq, PartialEq)]
 enum Value {
     Js(Rc<str>),
+    /// The getter ignores its caller's instruction. Any other use may supply it.
+    NoPc,
     Param(usize),
+    /// A parameter of the function being rendered, bound inside the enclosing template.
+    Local(Rc<str>),
+}
+
+impl Value {
+    fn resolve<'a>(&'a self, args: &'a [Value]) -> &'a Value {
+        match self {
+            Self::Param(i) => &args[*i],
+            value => value,
+        }
+    }
 }
 
 #[derive(Clone, Hash, Eq, PartialEq)]
@@ -21,6 +34,7 @@ enum Part {
     Js(Box<str>),
     Site(u32),
     Value(Value),
+    GetterArgs { shared: bool, pc: Value },
     Call(Call),
 }
 
@@ -33,7 +47,7 @@ impl Part {
     }
     fn values(&mut self) -> &mut [Value] {
         match self {
-            Self::Value(value) => std::slice::from_mut(value),
+            Self::Value(value) | Self::GetterArgs { pc: value, .. } => std::slice::from_mut(value),
             Self::Call(call) => &mut call.args,
             _ => &mut [],
         }
@@ -49,17 +63,21 @@ struct Template {
 }
 
 struct Column {
-    fixed: Option<Rc<str>>,
+    fixed: Option<Value>,
     /// First occurrence with the same argument at every call seen so far.
     first: usize,
 }
 
 impl Template {
-    fn observe(&mut self, args: &[Rc<str>]) {
+    fn observe(&mut self, args: &[Value]) {
         let mut firsts = HashMap::new();
         for (i, (column, arg)) in self.columns.iter_mut().zip(args).enumerate() {
-            if column.fixed.as_ref() != Some(arg) {
-                column.fixed = None;
+            if *arg != Value::NoPc {
+                if column.fixed == Some(Value::NoPc) {
+                    column.fixed = Some(arg.clone());
+                } else if column.fixed.as_ref() != Some(arg) {
+                    column.fixed = None;
+                }
             }
             column.first = *firsts.entry((column.first, arg)).or_insert(i);
         }
@@ -114,6 +132,17 @@ impl Templates {
                     Part::Site(site.parse().expect("site"))
                 } else if let Some(js) = op.strip_prefix("v:") {
                     Part::Value(Value::Js(js.into()))
+                } else if let Some(pc) = op.strip_prefix("g:").or_else(|| op.strip_prefix("b:")) {
+                    Part::GetterArgs {
+                        shared: op.starts_with('b'),
+                        pc: if pc.is_empty() {
+                            Value::NoPc
+                        } else {
+                            Value::Js(pc.into())
+                        },
+                    }
+                } else if op == "no-pc" {
+                    Part::Value(Value::NoPc)
                 } else {
                     let i: usize = op.parse().expect("template call");
                     Part::Call(self.calls[i].clone())
@@ -164,10 +193,7 @@ impl Templates {
         let mut args = Vec::new();
         for value in body.iter_mut().flat_map(Part::values) {
             let i = args.len();
-            let Value::Js(js) = std::mem::replace(value, Value::Param(i)) else {
-                unreachable!()
-            };
-            args.push(js);
+            args.push(std::mem::replace(value, Value::Param(i)));
         }
         let params: Option<Rc<str>> = params.map(Into::into);
         let index = self.index.entry(params.clone()).or_default();
@@ -197,7 +223,7 @@ impl Templates {
         self.calls.push(Call {
             id,
             base,
-            args: args.into_iter().map(Value::Js).collect(),
+            args,
             parent: parent.map(Into::into),
         });
         format!("\0{call}\0")
@@ -254,12 +280,12 @@ impl Templates {
                     .columns
                     .iter()
                     .map(|column| {
-                        if let Some(js) = &column.fixed {
-                            render.operand(js)
+                        if let Some(value) = &column.fixed {
+                            value.clone()
                         } else {
                             let next = captures.len();
                             let index = captures.entry(column.first).or_insert(next);
-                            Rc::from(format!("{env}[{index}]"))
+                            Value::Local(format!("{env}[{index}]").into())
                         }
                     })
                     .collect();
@@ -296,27 +322,31 @@ struct Render<'a> {
 }
 
 impl Render<'_> {
-    fn operand(&self, js: &Rc<str>) -> Rc<str> {
-        if self.enclosing {
-            Rc::from(format!("\0v:{js}\0"))
-        } else {
-            js.clone()
-        }
-    }
-
-    fn value(&self, value: &Value, args: &[Rc<str>]) -> Rc<str> {
+    fn operand(&self, value: &Value) -> Rc<str> {
         match value {
-            Value::Js(js) => self.operand(js),
-            Value::Param(i) => args[*i].clone(),
+            Value::Js(js) if self.enclosing => format!("\0v:{js}\0").into(),
+            Value::Js(js) | Value::Local(js) => js.clone(),
+            Value::NoPc if self.enclosing => "\0no-pc\0".into(),
+            Value::NoPc => "null".into(),
+            Value::Param(_) => unreachable!("unresolved template parameter"),
         }
     }
 
-    fn expand(&self, body: &[Part], base: Base, args: &[Rc<str>], out: &mut String) {
+    fn expand(&self, body: &[Part], base: Base, args: &[Value], out: &mut String) {
         for part in body {
             match part {
                 Part::Js(js) => out.push_str(js),
                 Part::Site(n) => out.push_str(&base.plus(*n).js()),
-                Part::Value(value) => out.push_str(&self.value(value, args)),
+                Part::Value(value) => out.push_str(&self.operand(value.resolve(args))),
+                Part::GetterArgs { shared, pc } => {
+                    let (capture, pc) = match pc.resolve(args) {
+                        Value::Js(js) => (self.enclosing, Some(js.as_ref())),
+                        Value::Local(js) => (false, Some(js.as_ref())),
+                        Value::NoPc => (self.enclosing, None),
+                        Value::Param(_) => unreachable!("unresolved getter instruction"),
+                    };
+                    out.push_str(&crate::code::getter_args(capture, *shared, pc));
+                }
                 Part::Call(call) => {
                     let t = &self.templates.bodies[call.id];
                     if let Some(name) = &self.names[call.id] {
@@ -328,7 +358,7 @@ impl Render<'_> {
                             .iter()
                             .enumerate()
                             .filter(|(i, column)| column.fixed.is_none() && column.first == *i)
-                            .map(|(i, _)| self.value(&call.args[i], args))
+                            .map(|(i, _)| self.operand(call.args[i].resolve(args)))
                             .collect();
                         if !captures.is_empty() {
                             inputs.push(format!("[{}]", captures.join(",")));
@@ -343,7 +373,7 @@ impl Render<'_> {
                         }
                     } else {
                         let values: Vec<_> =
-                            call.args.iter().map(|v| self.value(v, args)).collect();
+                            call.args.iter().map(|v| v.resolve(args).clone()).collect();
                         let base = base.plus(call.base.unwrap_or(0));
                         let Some(params) = &t.params else {
                             self.expand(&t.body, base, &values, out);

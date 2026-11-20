@@ -79,6 +79,20 @@ impl Scope {
     }
 }
 
+/// Signals and settled derives ignore arguments. An at-read derive charges
+/// its caller's budget and reports the instruction that read it.
+pub(crate) fn getter_args(capture: bool, shared: bool, pc: Option<&str>) -> String {
+    if capture {
+        let op = if shared { 'b' } else { 'g' };
+        format!("\0{op}:{}\0", pc.unwrap_or(""))
+    } else if let Some(pc) = pc {
+        let budget = if shared { "$budget" } else { "undefined" };
+        format!("({budget},{pc})")
+    } else {
+        "()".into()
+    }
+}
+
 /// One region frame's getters.
 #[derive(Clone, Default)]
 pub struct Frame {
@@ -536,35 +550,28 @@ impl Translator<'_> {
                 Opcode::Some | Opcode::Unwrap => {}
                 Opcode::LoadSlot => {
                     let slot = &self.plan.slots[x.args[0] as usize];
-                    if slot.owner.is_some() {
+                    let getter = if slot.owner.is_some() {
                         let rows = self
                             .scope
                             .rows
                             .clone()
                             .ok_or("a row slot read with no row in force")?;
-                        self.push(format!(
-                            "{rows}[{}]()",
-                            self.scope.operand(x.args[0].to_string())
-                        ))
+                        format!("{rows}[{}]", self.scope.operand(x.args[0].to_string()))
                     } else {
-                        self.push(format!(
-                            "{}()",
-                            self.scope.operand(format!("s_{}", x.args[0]))
-                        ))
-                    }
+                        self.scope.operand(format!("s_{}", x.args[0]))
+                    };
+                    let args = getter_args(self.scope.capture, self.shared, None);
+                    self.push(format!("{getter}{args}"))
                 }
                 Opcode::LoadDerive => {
-                    if self.plan.unsettled_body(x.args[0] as u32).is_some() {
+                    let pc = if self.plan.unsettled_body(x.args[0] as u32).is_some() {
                         self.uses.budget("$enter");
-                        self.push(format!(
-                            "{}({},{})",
-                            self.scope.derive(x.args[0] as usize),
-                            if self.shared { "$budget" } else { "undefined" },
-                            x.pc
-                        ));
+                        Some(x.pc.to_string())
                     } else {
-                        self.push(format!("{}()", self.scope.derive(x.args[0] as usize)));
-                    }
+                        None
+                    };
+                    let args = getter_args(self.scope.capture, self.shared, pc.as_deref());
+                    self.push(format!("{}{args}", self.scope.derive(x.args[0] as usize)));
                 }
                 Opcode::LoadResource => {
                     let r = self.resource(x.args[0])?;
