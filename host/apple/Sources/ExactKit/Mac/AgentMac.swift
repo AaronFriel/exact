@@ -341,6 +341,9 @@ extension Agent {
         let b = presenter.inlineFrame(UInt32(id)) ?? box(host, region: local)
         var space: [String: Any] = ["viewport": rect(b), "local": ["w": Agent.r2(local.width), "h": Agent.r2(local.height)],
                                     "capture": ["scale": Agent.r2(host.pixelScale ?? 1)]]
+        if let baseline = host.firstPaintedBaseline(presenter.inlineText(UInt32(id))) {
+            space["baseline"] = Agent.r2(box(host, region: CGRect(origin: baseline, size: .zero)).minY)
+        }
         if let w = host.window, let content = w.contentView {
             let inWindow = host.convert(local, to: nil)
             space["window"] = rect(NSRect(x: inWindow.origin.x, y: content.frame.height - inWindow.maxY, width: inWindow.width, height: inWindow.height))

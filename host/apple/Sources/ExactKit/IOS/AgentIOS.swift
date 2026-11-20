@@ -396,6 +396,9 @@ extension Agent {
         let b = (presenter.inlineFrame(UInt32(id)) ?? box(host, region: local)).offsetBy(dx: shift.x, dy: shift.y)
         var space: [String: Any] = ["viewport": rect(b), "local": ["w": Agent.r2(local.width), "h": Agent.r2(local.height)],
                                     "capture": ["scale": Agent.r2(vp.window?.screen.scale ?? vp.traitCollection.displayScale)]]
+        if let baseline = host.firstPaintedBaseline(presenter.inlineText(UInt32(id))) {
+            space["baseline"] = Agent.r2(box(host, region: CGRect(origin: baseline, size: .zero)).minY + shift.y)
+        }
         if let w = host.window {
             let inWindow = host.convert(local, to: w)
             space["window"] = rect(inWindow)

@@ -238,6 +238,39 @@ extension NodeView {
         return merged
     }
 
+    /// The start of the first rendered text baseline in the paragraph view's coordinates.
+    func firstPaintedBaseline(_ run: InlineText?) -> CGPoint? {
+        guard isParagraph, let text else { return nil }
+        let box = paragraphBox()
+        #if os(macOS)
+        if let reader = readerParagraph {
+            guard run == nil, reader.hasPixels, let geometry = reader.accepted?.metadata,
+                  let first = geometry.baselines.first else { return nil }
+            return CGPoint(x: box.minX, y: box.minY + geometry.source.painted(first))
+        }
+        let scale = pixelScale ?? 1
+        #else
+        let scale = traitCollection.displayScale
+        #endif
+        guard let paragraph = paragraphLayout() else { return nil }
+        if let run {
+            guard run.range.length > 0, let rect = inlineRects(run).first(where: { $0.width > 0 }) else { return nil }
+            let fit = props["fitScale"].flatMap(Float.init) ?? 1
+            let font = text.font(run.run(dark: drawsDark).scaled(fit)) as CTFont
+            let (above, _) = CSSLineBox.content(font, scale: paragraph.lineScale)
+            return CGPoint(x: rect.minX, y: rect.minY + above + run.lightRun.backgroundAbove)
+        }
+        guard let line = paragraph.lines.firstIndex(where: { CTLineGetGlyphCount($0) > 0 }) else { return nil }
+        var point = CGPoint(x: box.minX + paragraph.origin(line, align: paragraphSpec().align, width: box.width),
+                            y: TextEngine.paintedLine(paragraph.baselines[line], top: box.minY, scale: scale, lineScale: paragraph.lineScale))
+        if let fragments = columnRecord?.fragments, !fragments.isEmpty {
+            guard let fragment = fragments.first(where: { $0.lines.contains(line) }) else { return nil }
+            point.x += fragment.dx
+            point.y += fragment.dy
+        }
+        return point
+    }
+
     func inlineBounds(_ run: InlineText) -> CGRect? {
         let rect = inlineRects(run).reduce(CGRect.null) { $0.union($1) }
         return rect.isNull ? nil : rect
