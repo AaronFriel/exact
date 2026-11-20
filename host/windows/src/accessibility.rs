@@ -226,6 +226,13 @@ impl Access {
                 props.is_some_and(|props| props.str(PropId::SemanticTag) == Some("textarea"));
             let readonly = props.is_some_and(|props| props.bool(PropId::Editable) == Some(false));
             let mut node = map_node(&source, origin, password, multiline, readonly);
+            if source.role == role::SLIDER {
+                if let Some(props) = props.filter(|p| p.str(PropId::Type) == Some("range")) {
+                    let (small, large) = exact_kernel::Range::of(props).keyboard_steps();
+                    node.set_numeric_value_step(small);
+                    node.set_numeric_value_jump(large);
+                }
+            }
             if source.role == role::HEADING {
                 set_heading_level(&mut node, props.and_then(|props| props.heading()));
             }
