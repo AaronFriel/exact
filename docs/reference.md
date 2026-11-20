@@ -2081,6 +2081,13 @@ trust and needs one of two variables, and refuses without either:
 absent `android` is `"0"`, so set `"A"` for each platform that takes updates
 before its release build.
 
+When `push` discovers a missing head with signed release history, it stops
+before publishing to any stream. Run `deploy` to repair the head.
+Keep the original production build receipt so `deploy` can restore missing
+binary input evidence that matches the signed digest and byte length. On
+Apple and Linux a fresh bake can also supply matching evidence. Deploy can
+restore that evidence at the current sequence when the bundle is current.
+
 ### What `deploy` publishes
 
 `deploy` builds each platform's update, which takes minutes, and its dry run
@@ -2292,10 +2299,12 @@ asset index holds one card per asset (name, URL, SHA-256, length) and the
 entry plans' `plans` map, at most 4 MiB, about 20,000 cards; its card URLs
 resolve against the index's own URL. The web build prints both sizes against
 their bounds with the asset count (`exact.json 0.6 KiB of 64.0 KiB, assets.json
-101.2 KiB of 4096.0 KiB for 537 assets`); a build, a dev generation or a
-publish whose file would pass its bound is refused with the same numbers.
+101.2 KiB of 4096.0 KiB for 537 assets`). When publishing a stream, an
+oversized envelope reports its size, limit and largest field. An oversized
+asset index reports its size, limit and asset count.
 Every client checks the index against the envelope's card before it reads a
-card, and a signed head covers the index through its digest.
+card, and a signed head covers the index through its digest. A signed stream
+head also names the frozen cohort receipt by URL, SHA-256 and byte length.
 
 Agent replies carry `generation`, `epoch`, `incarnation` and `clock` (LLP 1029.000.002 D10).
 `generation` starts at 1 and advances once for each committed replacement or
