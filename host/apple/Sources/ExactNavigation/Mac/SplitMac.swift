@@ -398,7 +398,10 @@ final class SplitHost {
         func above(_ view: NSView?) -> NodeView? {
             view.flatMap { sequence(first: $0, next: \.superview).dropFirst().first { $0 is NodeView } as? NodeView }
         }
-        func section(_ view: NodeView?) -> Bool { view?.props["semanticTag"] == "section" && above(view) === list }
+        func section(_ view: NodeView?) -> Bool {
+            guard view?.props["semanticTag"] == "section", let parent = above(view) else { return false }
+            return parent === list || parent.props["listItemKey"] != nil && above(parent) === list
+        }
         let grouped = list.props["listStyle"] != nil
         var view: NodeView? = node
         while let row = view, row !== list {
