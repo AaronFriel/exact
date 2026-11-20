@@ -271,6 +271,58 @@ test('nested slot arms share mount code and keep each row and arm instance', asy
   expect(reports[0]).toEqual(reports[1]);
 }, 60000);
 
+test('a shared slot frame reads the getter declared for its card in each keyed row', async () => {
+  const source = `component App
+  state limit = 2
+  action overflow
+    limit = 65537
+  view
+    column
+      button "Overflow" press=overflow testId="overflow"
+      for n in [1, 4] key=n
+        column
+          Meter(count=range(limit + n).length)
+            text "A"
+          Meter(count=range(limit + n + 1).length)
+            text "B"
+            text n.toString()
+          Meter(count=range(limit + n + 2).length)
+            if n == 1
+              text "C"
+component Meter
+  props
+    count: number
+  slot
+  view
+    column aria-label="Row meter"
+      text \`(\${count})\`
+      children
+      for suffix in ["!"] key=suffix
+        Suffix(value=count + 1, suffix=suffix)
+component Suffix
+  props
+    value: number
+    suffix: string
+  view
+    text \`[\${value}]\${suffix}\`
+`;
+  const reports = [];
+  for (const sites of [false, true]) {
+    await pageFor(source, async (page, js) => {
+      if (!sites) expect(js.split('"Row meter"')).toHaveLength(2);
+      expect(await page.getByLabel('Row meter').allTextContents()).toEqual([
+        '(3)A[4]!', '(4)B1[5]!', '(5)C[6]!', '(6)A[7]!', '(7)B4[8]!', '(8)[9]!',
+      ]);
+      await page.getByTestId('overflow').click();
+      const trapped = await page.evaluate(async () => (await import('/rt.js')).journal
+        .filter(line => line.includes('IterationLimit')).map(line => line.replace(/^t=\S+ /, '')).sort());
+      expect(trapped).toHaveLength(12);
+      reports.push(trapped);
+    }, sites ? ['--sites'] : []);
+  }
+  expect(reports[0]).toEqual(reports[1]);
+}, 60000);
+
 test.each([true, false])('repeated components bind their own props, actions and state (conditional %s)', async conditional => {
   const source = `component App
   state left = "Left"

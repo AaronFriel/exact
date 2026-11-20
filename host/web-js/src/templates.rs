@@ -10,6 +10,8 @@ enum Value {
     Param(usize),
     /// A parameter of the function being rendered, bound inside the enclosing template.
     Local(Rc<str>),
+    /// A lexical getter passed between mounts within the scope that declared it.
+    Binding(usize, Rc<str>),
 }
 
 impl Value {
@@ -134,6 +136,15 @@ impl Templates {
                     Part::Site(site.parse().expect("site"))
                 } else if let Some(js) = op.strip_prefix("v:") {
                     Part::Value(Value::Js(js.into()))
+                } else if let Some(binding) = op.strip_prefix('l') {
+                    let (depth, name) = binding.split_once(':').expect("lexical binding");
+                    let depth = depth.parse().expect("binding depth");
+                    if self.depth < depth {
+                        // The surrounding arm introduces this name in its own body.
+                        Part::Js(name.into())
+                    } else {
+                        Part::Value(Value::Binding(depth, name.into()))
+                    }
                 } else if let Some(pc) = op.strip_prefix("g:").or_else(|| op.strip_prefix("b:")) {
                     Part::GetterArgs {
                         shared: op.starts_with('b'),
@@ -357,6 +368,10 @@ impl Render<'_> {
     fn operand(&self, value: &Value) -> Rc<str> {
         match value {
             Value::Js(js) if self.enclosing => format!("\0v:{js}\0").into(),
+            Value::Binding(depth, js) if self.enclosing && self.templates.depth > *depth => {
+                crate::code::lexical_operand(js, *depth).into()
+            }
+            Value::Binding(_, js) => js.clone(),
             Value::Js(js) | Value::Local(js) => js.clone(),
             Value::NoPc if self.enclosing => "\0no-pc\0".into(),
             Value::NoPc => "null".into(),
@@ -375,7 +390,9 @@ impl Render<'_> {
                         Value::Js(js) => (self.enclosing, Some(js.as_ref())),
                         Value::Local(js) => (false, Some(js.as_ref())),
                         Value::NoPc => (self.enclosing, None),
-                        Value::Param(_) => unreachable!("unresolved getter instruction"),
+                        Value::Param(_) | Value::Binding(..) => {
+                            unreachable!("invalid getter instruction")
+                        }
                     };
                     out.push_str(&crate::code::getter_args(capture, *shared, pc));
                 }
