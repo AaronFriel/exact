@@ -846,9 +846,9 @@ export const classifications = [
       "background_priority console fast_cores fast_set Handle::send Handle::stop log redirect_stdio release_library_pages release_library_pages_after " +
       "release_module_pages_too section_begin section_end start trace"],
     ["painted:host/painted/src/app.rs",
-      "boot_presenter boot_presenter_after_layout_device boot_presenter_with_device boot_presenter_with_metal Config::from_env Config::from_env_static Config::headless " +
+      "boot_presenter boot_presenter_with_metal boot_window_presenter Config::from_env Config::from_env_static Config::headless " +
       "Config::initial_window_background Config::painter Config::use_updates Config::windowed Config::windowed_from_env incoming_location launch_argument launch_location " +
-      "prepare_environment print_baked_receipt row_reuse_from_env run_headless show_material_look show_neutral_look"],
+      "prepare_environment prepare_window_painter print_baked_receipt row_reuse_from_env run_headless show_material_look show_neutral_look"],
     ["painted:host/painted/src/canvas/codec.rs", "attach"],
     ["painted:host/painted/src/canvas/legacy.rs", "attach decode glyph"],
     ["painted:host/painted/src/canvas/presence.rs", "attach"],

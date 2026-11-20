@@ -190,6 +190,17 @@ pub(super) fn run<D: DataSource + Default + 'static>(
         eprintln!("exact-windows: update-store delivery is not implemented; bake store level 0");
         return 1;
     }
+    let frame_limit = match std::env::var("EXACT_AGENT_WINDOW_FRAMES") {
+        Ok(value) => match value.parse::<u64>() {
+            Ok(count @ 1..=10_000) => Some(count),
+            _ => {
+                eprintln!("exact-windows: EXACT_AGENT_WINDOW_FRAMES requires 1..=10000");
+                return 1;
+            }
+        },
+        Err(_) => None,
+    };
+    let login = crate::desktop::login_launch(&std::env::args().collect::<Vec<_>>());
     let device = std::env::var("EXACT_INK_DEVICE").ok();
     let direct = direct_device(
         exact_painted::presenter::PainterChoice::from_env(
@@ -197,21 +208,24 @@ pub(super) fn run<D: DataSource + Default + 'static>(
         ),
         device.as_deref(),
     );
-    let preparing = if Config::windowed_from_env()
-        && direct
-        && !exact_ink::device::d3d11::startup_watchdog::after_layout()
-    {
-        match exact_ink::device::d3d11::Startup::start(
-            exact_ink::device::direct_d3d11(device.as_deref()).unwrap(),
-        ) {
-            Ok(p) => Some(p),
-            Err(error) => {
-                eprintln!("exact-windows: {error}");
-                return 1;
-            }
+    let launch = app::prepare_window_painter(login, frame_limit.is_some(), || {
+        if !Config::windowed_from_env()
+            || !direct
+            || exact_ink::device::d3d11::startup_watchdog::after_layout()
+        {
+            return Ok(None);
         }
-    } else {
-        None
+        exact_ink::device::d3d11::Startup::start(
+            exact_ink::device::direct_d3d11(device.as_deref()).unwrap(),
+        )
+        .map(Some)
+    });
+    let (hidden, preparing) = match launch {
+        Ok(launch) => launch,
+        Err(error) => {
+            eprintln!("exact-windows: {error}");
+            return 1;
+        }
     };
     // A distributed app locates data beside its executable, never in its caller's cwd.
     if std::env::var_os("EXACT_ASSETS").is_none() {
@@ -244,17 +258,6 @@ pub(super) fn run<D: DataSource + Default + 'static>(
     // The presenter makes the hatches' value after its first frame is shown.
     config.hatches = composed.hatches;
     config.packages = composed.packages;
-    // Config has already stripped EXACT_AGENT_* for a production bake.
-    let frame_limit = match std::env::var("EXACT_AGENT_WINDOW_FRAMES") {
-        Ok(value) => match value.parse::<u64>() {
-            Ok(count @ 1..=10_000) => Some(count),
-            _ => {
-                eprintln!("exact-windows: EXACT_AGENT_WINDOW_FRAMES requires 1..=10000");
-                return 1;
-            }
-        },
-        Err(_) => None,
-    };
     let first_tap = std::env::var("EXACT_AGENT_WINDOW_TAP").ok();
     if first_tap.is_some()
         && frame_limit.is_none()
@@ -370,7 +373,7 @@ pub(super) fn run<D: DataSource + Default + 'static>(
         refit_after_scale: false,
         closing: false,
         keep_running: opening.keep_running,
-        hidden: false,
+        hidden,
         instance,
         tray: None,
         presents: Default::default(),
@@ -588,7 +591,7 @@ impl<D: DataSource + Default + 'static> App<D> {
         if self.frame_limit.is_some() {
             p.repaint();
         }
-        let painting = p.dirty();
+        let painting = p.dirty() || self.frames == 0;
         let paint = Instant::now();
         if let Some(previous) = self.caret.take_previous_frame() {
             p.recycle_frame(previous);
@@ -949,39 +952,33 @@ impl<D: DataSource + Default + 'static> ApplicationHandler<crate::accessibility:
             }
         }
         boot_phase("native-hooks-ready");
-        let mut direct = false;
+        let mut direct = self.direct;
         exact_runner::page::set_awaits_present(true);
-        let booted = if let Some(preparing) = self.preparing.take() {
-            app::boot_presenter_with_device::<D>(&mut self.config, viewport, preparing)
-        } else if self.direct && exact_ink::device::d3d11::startup_watchdog::after_layout() {
-            app::boot_presenter_after_layout_device::<D>(&mut self.config, viewport)
-        } else {
-            app::boot_presenter::<D>(&mut self.config, viewport)
-        };
+        let booted = app::boot_window_presenter::<D>(
+            &mut self.config,
+            viewport,
+            self.hidden,
+            self.preparing.take(),
+            self.direct && exact_ink::device::d3d11::startup_watchdog::after_layout(),
+        );
         boot_phase("presenter-ready");
         match booted {
             Ok((mut p, warning)) => {
-                if let Ok(handle) = window.window_handle() {
-                    if let RawWindowHandle::Win32(_) = handle.as_raw() {
-                        let owned =
-                            match exact_ink::device::d3d11::Window::from_owner(window.clone()) {
-                                Ok(owned) => owned,
-                                Err(e) => {
-                                    self.fail(events, e.to_string());
-                                    return;
-                                }
-                            };
-                        let attached = p.attach_painter_window(owned, [size.width, size.height]);
-                        match attached {
-                            Ok(attached) => direct = attached,
-                            Err(e) => {
-                                self.fail(events, e);
-                                return;
-                            }
+                if !self.hidden {
+                    let attached = exact_ink::device::d3d11::Window::from_owner(window.clone())
+                        .map_err(|e| e.to_string())
+                        .and_then(|owned| {
+                            p.attach_painter_window(owned, [size.width, size.height])
+                        });
+                    match attached {
+                        Ok(attached) => direct = attached,
+                        Err(e) => {
+                            self.fail(events, e);
+                            return;
                         }
                     }
+                    boot_phase("composition-ready");
                 }
-                boot_phase("composition-ready");
                 p.host_mut().runner_mut().set_row_reuse(true);
                 if let Some(scale) = self.appearance.text_scale() {
                     if let Some(error) = p.set_text_scale(scale) {
@@ -1019,7 +1016,6 @@ impl<D: DataSource + Default + 'static> ApplicationHandler<crate::accessibility:
                 apply_title(&mut self.title, &p, &window, &self.name);
                 self.presenter = Some(p);
                 self.tray_start();
-                self.hidden = self.launches_hidden();
                 let hidden = self.hidden;
                 let can_open_files = self.dialogs.available();
                 self.tell_page(|page| {

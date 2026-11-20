@@ -8,9 +8,9 @@
 //! against Close minimizing to the notification area
 //! ([Notifications and the notification area](https://learn.microsoft.com/windows/win32/uxguide/winenv-notification)).
 //! The app's own `close()` still closes it. A login item registered
-//! `hidden` shows no window at its launch (D6): a frame painted to pixels
-//! that nothing presents is the launch's first pixel, and nothing is drawn
-//! into the window until it shows. A later launch of the app
+//! `hidden` shows no window at its launch (D6). Its offscreen CPU frame
+//! stands for first pixel. The selected painter opens when the window is
+//! first ready to draw. A later launch of the app
 //! (`crate::instance`) or a bare `focus()` shows it.
 use super::*;
 use crate::instance::{Claim, Handed, Instance};
@@ -159,13 +159,6 @@ impl<D: DataSource + Default + 'static> App<D> {
             eprintln!("exact-windows: page: {error}");
         }
         p.surface_lifecycle(unseen, !self.focused);
-    }
-
-    /// Whether this launch shows no window: the login item's, registered
-    /// `hidden` (LLP 1133.025 D6). A measured run always shows its window.
-    pub(super) fn launches_hidden(&self) -> bool {
-        let args: Vec<String> = std::env::args().collect();
-        self.frame_limit.is_none() && crate::desktop::login_launch(&args) == Some(true)
     }
 
     /// While the window is hidden: a frame painted to pixels that nothing

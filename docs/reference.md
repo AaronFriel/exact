@@ -76,6 +76,8 @@ the build refuses and names the SDK and `"cpu"` remedies.
 for their headless drives unless `EXACT_PAINTER` is set. Those screenshots
 do not qualify the window's composition path.
 A direct `EXACT_SMOKE=1` launch uses the app's painter choice.
+A Windows login item started with `--login hidden` paints its offscreen launch
+frame on the CPU and opens the selected painter when its window first draws.
 Linux and Android still opt into ink per platform; Android refuses it until
 its Vulkan presenter is implemented. Apple keeps the native host by default;
 `host.macos.presenter: "painted"` builds the ink carrier for development,

@@ -151,6 +151,8 @@ impl<D: DataSource> Presenter<D> {
             window: _,
             segments: _,
             choice: _,
+            #[cfg(any(windows, test))]
+                deferred_painter: _,
             fonts_ms: _,
             painter: _,
             refusal_turn: _,

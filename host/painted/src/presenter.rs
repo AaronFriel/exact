@@ -381,6 +381,8 @@ pub struct Presenter<D: DataSource> {
     pub(crate) display: display_frame::State,
     /// Requested painter (`Auto` may change its mind after a failed frame).
     choice: PainterChoice,
+    #[cfg(any(windows, test))]
+    pub(crate) deferred_painter: Option<PainterBoot>,
     /// Boot font-scan milliseconds: the machine's cost, not the app's.
     pub fonts_ms: f64,
     /// The painter, for the report.
@@ -700,6 +702,8 @@ impl<D: DataSource> Presenter<D> {
             last_frame_succeeded: false,
             display: display_frame::State::default(),
             choice,
+            #[cfg(any(windows, test))]
+            deferred_painter: None,
             fonts_ms,
             painter,
             updates: None,
