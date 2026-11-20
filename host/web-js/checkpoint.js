@@ -349,7 +349,7 @@ export function prepareDev() {
     let pendingFocus = cp.focus, frame = null, done = false;
     const until = cp.restoreUntil ?? Date.now() + 10000;
     const reader = new Map(), armed = new Map(), positions = new WeakMap();
-    let inputFrame = null, held = false;
+    let cancelRelease, keyboard = false, held = false;
     const listPending = record => scrolls.some(s => Object.values(s.axes).some(a => a.anchor?.list
       && (!a.started || scroller(s)?.$list?.target || scroller(s)?.$list?.correction))
       && s.path?.length < record.path?.length && s.path.every((at, i) => at === record.path[i]));
@@ -377,15 +377,21 @@ export function prepareDev() {
     const offsets = { left: 'scrollLeft', top: 'scrollTop' };
     const positionOf = el => Object.fromEntries(Object.entries(offsets).map(([name, property]) => [name, el[property]]));
     const releaseInput = () => {
-      if (inputFrame !== null) cancelAnimationFrame(inputFrame);
-      inputFrame = null;
+      cancelRelease?.();
       if (held) return;
-      // Compositor scrolling can follow the input's first rendering opportunity.
-      inputFrame = requestAnimationFrame(() => {
-        inputFrame = requestAnimationFrame(() => { inputFrame = null; armed.clear(); });
-      });
+      if (keyboard) {
+        // A native smooth keyboard scroll can start several frames after the key.
+        // Allow the same quiet interval as scroll following (LLP 1070.000 §2.6).
+        const timer = setTimeout(() => armed.clear(), 300);
+        cancelRelease = () => clearTimeout(timer);
+      } else {
+        // Compositor scrolling can follow the first frame after pointer or wheel input.
+        let frame = requestAnimationFrame(() => { frame = requestAnimationFrame(() => armed.clear()); });
+        cancelRelease = () => cancelAnimationFrame(frame);
+      }
     };
     const input = e => {
+      keyboard = e.type === 'keydown';
       if (e.type === 'pointerdown' || e.type === 'touchstart') held = true;
       // A middle-click can keep autoscrolling after the button is released.
       if ((e.type === 'pointerup' && e.button !== 1) || ['pointercancel', 'touchend', 'touchcancel'].includes(e.type)) held = false;
@@ -438,7 +444,7 @@ export function prepareDev() {
       keep(() => false);
       reader.clear();
       armed.clear();
-      if (inputFrame !== null) cancelAnimationFrame(inputFrame);
+      cancelRelease?.();
       observer.disconnect();
       window.removeEventListener('pagehide', end);
       document.removeEventListener('focusin', focused, true);
