@@ -1120,8 +1120,7 @@ impl<D: DataSource> Runner<D> {
         let mut ids = std::mem::take(&mut runner.ids);
         ids.tabs.carried = carried.map(|c| c.panels.clone()).unwrap_or_default();
         let (tree, ops, surfaces, notes, shown) = {
-            let mut u = Update::new(runner.env(&[], &[]), &runner.sites, &mut ids);
-            u.fonts = Some(runner.fonts.clone());
+            let mut u = runner.instance_update(&mut ids);
             u.discard = runner.kernel.is_detached();
             let tree = Tree::create(&mut u)?;
             (tree, u.ops, u.surfaces, u.notes, u.shown)

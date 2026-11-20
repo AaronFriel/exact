@@ -1692,6 +1692,7 @@ string, and a decoration paints only: the field measures, wraps, edits and undoe
 as it does without one, so a declaration takes only what `::highlight()` admits, `color`,
 `background-color`, `text-decoration` (`text-decoration-line`) and `text-shadow`; any other
 property is a compile error. Declarations are scoped and imported like styles.
+On Linux and Windows, a decoration's Forma colour follows the textarea's app mode.
 
 ```text
 decoration mention color="light-dark(#1083fe, #208bfe)"
