@@ -1303,10 +1303,10 @@ below the status bar (expo/exact#234).
 It slides up as it opens (350 ms, emphasized decelerate) and down as it leaves (200 ms, emphasized accelerate) from
 where it was, its last drawing kept for that (`paint/tape.rs`), so a sheet the app closes slides out too. A drag
 on its handle, a header or a form's rows moves it once past the system's 8 dp slop, letting go of what the
-finger pressed. Over a vertical scroller, a sheet with several detents takes an upward drag below its tallest
-detent and a downward drag when the scroll chain is at its start and none hears `refresh`. A short or empty
-refreshing list keeps its pulls, as does a single-detent sheet's list. A horizontal drag retires the pending sheet
-drag. Let go and the sheet rests on the detent its speed carries it to, or leaves the window. A drag that began
+finger pressed. Dragging up on a vertical list raises a sheet with several detents. Once the sheet reaches its
+tallest detent, the rest of the same movement scrolls the list. Dragging down scrolls the list and its parents to
+their start before lowering the sheet. A list that hears `refresh` keeps its downward pull, even when short or
+empty. A single-detent sheet leaves scrolling to its list. A horizontal drag retires the pending sheet drag. Let go and the sheet rests on the detent its speed carries it to, or leaves the window. A drag that began
 on a module view that disallowed interception is the view's
 ("Pickers and hatches" above). A tap on the scrim dismisses it. Either dismissal closes the sheet whole, with any route
 pushed inside it: a root that hears `navigate` is sent to the location beneath the sheet, else Back goes once for

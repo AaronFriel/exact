@@ -162,6 +162,7 @@ object Native {
      * `scrolldragend`): at ([vx], [vy]) px/s, positive as its offset grows, and, with [rest], to come to rest at
      * ([restX], [restY]) px; [flings] when it threw a fling. From the start until the lift, or the fling's end
      * ([flingEnded]), the scroller's moves owe no `scrollend`. */
+    @JvmStatic external fun sheetDrag(index: Int, generation: Int, top: Float, ended: Boolean, velocity: Float)
     @JvmStatic external fun scrollDrag(id: Int, ended: Boolean, vx: Float, vy: Float, rest: Boolean, restX: Float, restY: Float, flings: Boolean)
     /** A pull to refresh of scroller [id] was let go of past its threshold: its `refresh` ([Refresh]). */
     @JvmStatic external fun refresh(id: Int)

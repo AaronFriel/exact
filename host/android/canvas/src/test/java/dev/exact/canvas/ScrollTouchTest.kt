@@ -61,6 +61,8 @@ class ScrollTouchTest {
     class Host {
         companion object {
             @JvmStatic @Implementation fun __staticInitializer__() {}
+            val sheetPositions = ArrayList<Pair<Float, Boolean>>()
+            @JvmStatic @Implementation fun sheetDrag(id: Int, generation: Int, top: Float, ended: Boolean, velocity: Float) { sheetPositions.add(top to ended) }
             val fieldInputs = ArrayList<Int>()
             @JvmStatic @Implementation fun fieldInput(id: Int, generation: Int, kind: Int) { fieldInputs.add(kind) }
             @JvmStatic @Implementation fun fieldAction(id: Int, generation: Int, action: Int) {}
@@ -160,6 +162,26 @@ class ScrollTouchTest {
         text.onCreateInputConnection(android.view.inputmethod.EditorInfo())!!.deleteSurroundingText(1, 0)
         assertTrue(Host.fieldInputs.isNotEmpty())
         assertTrue(Host.fieldInputs.all { it == 0 })
+    }
+
+    @Test fun oneDragRaisesTheSheetScrollsTheListAndHandsBackTheUnusedTravel() {
+        for (soon in listOf(true, false)) {
+            setUp()
+            Host.sheetPositions.clear()
+            val words = reply(scroller(1, 0f)).also { it[0] = 32 or 6 } +
+                intArrayOf(7, 1, 100f.toRawBits(), 0f.toRawBits(), 400f.toRawBits())
+            down(400f)
+            if (soon) answer(words)
+            move(250f)
+            if (soon) assertEquals(50f - slop, thread.moved.getValue(1), 0.01f)
+            move(340f)
+            up(340f)
+            if (!soon) answer(words)
+            assertEquals(0f, Host.sheetPositions.first().first, 0.01f)
+            assertEquals(40f + slop, Host.sheetPositions.last().first, 0.01f)
+            assertTrue(Host.sheetPositions.last().second)
+            assertEquals(0f, thread.moved.getValue(1), 0.01f)
+        }
     }
 
     @Test fun aNestedSheetClaimsOnlyItsFingerDirectionAndLeavesTheListsFling() {
