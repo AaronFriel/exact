@@ -50,7 +50,11 @@ import java.util.concurrent.atomic.AtomicInteger
 class BackgroundTransferTest {
     @Implements(android.system.Os::class)
     class Environment {
-        companion object { @JvmStatic @Implementation fun environ(): Array<String> = emptyArray() }
+        companion object {
+            var fresh = false
+            @JvmStatic @Implementation fun environ(): Array<String> = emptyArray()
+            @JvmStatic @Implementation fun getenv(name: String): String? = if (name == "EXACT_AGENT_STORAGE_FRESH" && fresh) "1" else null
+        }
     }
 
     @Implements(Native::class, isInAndroidSdk = false)
@@ -130,6 +134,7 @@ class BackgroundTransferTest {
         base = Files.createTempDirectory("transfer-module").toFile()
         Session.root = base
         Session.agent = false
+        Environment.fresh = false
         Session.scratch = false
         Session.linked = true
         Session.wakes.clear()
@@ -665,6 +670,43 @@ class BackgroundTransferTest {
         assertEquals(0, call("backgroundFetchIds").getJSONArray("exact:answer").length())
         assertEquals("visitor", start().getString("id"))
         assertEquals(2, transfers.namespaces().count { it.agent })
+    }
+
+    @Test fun aFreshDriveCancelsOnlyItsOwnTransfersAndCanReuseTheirIds() {
+        open()
+        start()
+        close()
+        Session.scratch = true // --bind selects the package while the drive owns its storage.
+        Session.root = File(base, "other")
+        open()
+        start()
+        close()
+        val keep = platform.jobs.toSet()
+        Session.root = File(base, "drive")
+        open()
+        start()
+        val previous = (platform.jobs - keep).single().first
+        close()
+        process()
+        // A worker entered first. A fresh drive still retires this generation.
+        transfers.enter(previous.namespace)
+        Environment.fresh = true
+        open()
+        assertEquals(0, call("backgroundFetchIds").getJSONArray("exact:answer").length())
+        assertEquals(keep, platform.jobs)
+        assertNull(store.get(previous))
+        assertEquals("visitor", start().getString("id"))
+        val replacement = (platform.jobs - keep).single().first
+        assertNotEquals(previous, replacement)
+        close()
+        open()
+        assertEquals(listOf("visitor"), transfers.ids(previous.namespace))
+        assertNotNull(store.get(replacement))
+        close()
+        Session.scratch = false
+        Session.root = base
+        open()
+        assertEquals(1, call("backgroundFetchIds").getJSONArray("exact:answer").length())
     }
 
     @Test fun aRetirementWhoseCleanupFailsSaysSoAndIsTriedAgain() {

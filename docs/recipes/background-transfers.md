@@ -24,14 +24,12 @@ that cannot remove them (a locked secret store) rejects with `UnknownError`
 and the id stays taken: call it again.
 `packages/background-transfer/test` is a whole example.
 
-On Android a transfer runs as WorkManager work that waits for a network.
-Three stops by the system or five network failures in a row, with no
-response kept between them, end it as `fetch-error`. A drive's transfers
-are its own, with `--bind background-transfer` too.
+On Android, WorkManager waits for a network. Three system stops or five consecutive
+network failures without a kept response end in `fetch-error`. A drive owns its transfers
+even with `--bind background-transfer`. `--reset-storage` cancels its jobs and frees its ids.
 
-A start within five seconds of a person's press, key or notification tap,
-while the app shows, is that person's transfer (a timer inside that window
-counts, as on the web). Android 14 and later run it as a
+A transfer started within five seconds of a press, key or notification tap while the
+app shows is person-initiated, including one started by a timer. Android 14 and later run it as a
 user-initiated job with a notification (a tap raises
 `backgroundfetchclick`) and no time limit, Android 12 and 13 as foreground
 work started while the app shows. The system's stops never fail it: after three it
