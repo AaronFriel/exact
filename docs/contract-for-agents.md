@@ -4312,6 +4312,9 @@ main navigationKey=`${top(nav).id}` navigationBack="close" navigate=follow displ
   detail the window's title and subtitle are the detail's, as in System Settings, and
   the list's heading stays over its rows; beside a sidebar (three columns) the list's
   heading is the title and the detail's stays in its pane, as in Mail.
+- In the Mac's list column, a sectioned list that keeps its rows mounted uses
+  an inset AppKit table. Each section header is a group row. A link in the
+  section body selects its row and opens the detail. The footer has no table row.
 - On the Mac a window toolbar the app declares (`row role="toolbar"
   toolbarPlacement="window"` of action buttons and at most one heading) has Customize
   Toolbar when every button in it has an `id` of its own: the ids are the items'
