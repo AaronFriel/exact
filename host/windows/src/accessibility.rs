@@ -39,7 +39,7 @@ impl From<accesskit_winit::Event> for Event {
 
 mod model;
 pub(crate) use model::dismiss_popup;
-use model::{map_node, MenuSnapshot};
+use model::{map_node, set_heading_level, MenuSnapshot};
 
 const ROOT: NodeId = NodeId(0);
 
@@ -227,6 +227,9 @@ impl Access {
                 props.is_some_and(|props| props.str(PropId::SemanticTag) == Some("textarea"));
             let readonly = props.is_some_and(|props| props.bool(PropId::Editable) == Some(false));
             let mut node = map_node(&source, origin, password, multiline, readonly);
+            if source.role == role::HEADING {
+                set_heading_level(&mut node, props.and_then(|props| props.heading()));
+            }
             let native = self
                 .embedded
                 .get(&source.view)

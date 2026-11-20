@@ -12,6 +12,15 @@ use exact_painted::{
 use exact_runner::DataSource;
 use std::cell::{Cell, RefCell};
 
+/// Map a 1-based ARIA heading level (`Props::heading`) onto AccessKit's
+/// 0-based `level` property, which `accesskit-windows` exposes as both
+/// `UIA_LevelPropertyId` and `UIA_HeadingLevelPropertyId`.
+pub(super) fn set_heading_level(node: &mut Node, level: Option<i64>) {
+    if let Some(level) = level.and_then(|l| usize::try_from(l - 1).ok()) {
+        node.set_level(level);
+    }
+}
+
 pub(super) fn map_node(
     source: &Source,
     origin: (f32, f32),
@@ -468,6 +477,12 @@ mod tests {
             let node = map_node(&source(from), (0., 0.), false, false, false);
             assert_eq!(node.role(), to, "role {from}");
         }
+        let mut h1 = map_node(&source(role::HEADING), (0., 0.), false, false, false);
+        set_heading_level(&mut h1, Some(1));
+        assert_eq!(h1.level(), Some(0));
+        let mut h2 = map_node(&source(role::HEADING), (0., 0.), false, false, false);
+        set_heading_level(&mut h2, Some(2));
+        assert_eq!(h2.level(), Some(1));
     }
 
     /// A select is a combobox with UI Automation's ExpandCollapse, and its
