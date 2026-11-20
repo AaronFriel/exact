@@ -44,6 +44,7 @@ function nodeDetail(id, plan = false) {
   const r = exact.gpu?.placementHidden(el) ? new DOMRect() : host.viewBox(el);
   node.space = {
     viewport: rect(r),
+    ...(node.type === "Text" ? { baseline: host.textBaseline(el) } : {}),
     local: {
       w: r2(el.clientWidth),
       h: r2(el.clientHeight)
@@ -245,7 +246,7 @@ export function agentInputReady() {
     return Promise.resolve();
   }
   return host.agentInputLoading ??= loadAfterPaint("./agent-input.js", "agentInput").then((helpers) => {
-    ({guestOutline: host.guestOutline, guestTap: host.guestTap, guestType: host.guestType, reveal: host.reveal, backButton: host.backButton, viewBox: host.viewBox, layoutBoxes: host.layoutBoxes, scrollRange: host.scrollRange, selectAll: host.selectAll, typeControl: host.typeControl, glidesSettled: host.glidesSettled, scrollsSeen: host.scrollsSeen} = helpers);
+    ({guestOutline: host.guestOutline, guestTap: host.guestTap, guestType: host.guestType, reveal: host.reveal, backButton: host.backButton, viewBox: host.viewBox, textBaseline: host.textBaseline, layoutBoxes: host.layoutBoxes, scrollRange: host.scrollRange, selectAll: host.selectAll, typeControl: host.typeControl, glidesSettled: host.glidesSettled, scrollsSeen: host.scrollsSeen} = helpers);
     helpers.watchGlides?.();
     // a scroller gliding on its own holds `clock settle` (agent-input.js)
   });

@@ -83,7 +83,7 @@ function dropStreams(prefix) {
 }
 import { inertAncestor, displayMode, environment, navigation, routeFlags, foldEnv, preferFold, preferDisplayMode, typedControl, settleValue, animationClock, pageReporter } from './navigation.js';
 import { backButton } from './input-glue.js';
-import { guestOutline, guestTap, guestType, viewBox, reveal, selectAll, scrollRange, typeControl, watchGlides, glidesSettled, scrollsSeen } from './agent-input.js';
+import { guestOutline, guestTap, guestType, viewBox, textBaseline, reveal, selectAll, scrollRange, typeControl, watchGlides, glidesSettled, scrollsSeen } from './agent-input.js';
 // A zoomable scroller's zoom and range (zoom.js, LLP 1057.001.000 §6).
 const zoomOf = e => (e.$zoomRange ? { scrollZoom: e.$zoom, minZoom: e.$zoomRange[0], maxZoom: e.$zoomRange[1] } : {});
 watchGlides();
@@ -297,7 +297,7 @@ export function install(exact) {
       ...(globalThis.exact?.pressShown?.(el) ? { press_shown: exact.pressShown(el) } : {}),
       // A development build names the element's plan node (emit.rs `data-site`).
       ...(el.dataset?.site != null ? { site: Number(el.dataset.site) } : {}),
-      space: { viewport: rect(r), local: { w: r2(el.clientWidth), h: r2(el.clientHeight) }, capture: { scale: devicePixelRatio } },
+      space: { viewport: rect(r), ...(n.type === 'Text' ? { baseline: textBaseline(el) } : {}), local: { w: r2(el.clientWidth), h: r2(el.clientHeight) }, capture: { scale: devicePixelRatio } },
       // A box a multi-column flow fragments: one rect per column (LLP 1093 D12).
       ...(el.getClientRects().length > 1 ? { column_fragments: [...el.getClientRects()].map(rect) } : {}),
       scroll, clip,

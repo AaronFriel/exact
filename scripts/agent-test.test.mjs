@@ -69,6 +69,9 @@ test('device properties see boot, typing and clock changes, and reset stays betw
         text "Toggle"
       input testId="field" value=textValue input=edit
       button "Enable" testId="enable" press=enable
+      row align-items="baseline"
+        text "Small" testId="small" font-size=12
+        text "Large" testId="large" font-size=32
       box testId="inset" width=40 height="env(safe-area-inset-bottom)" background-color="#1280e0"
 `);
   writeFileSync(file, `always "ready stays"
@@ -137,6 +140,9 @@ test "boot only"
   expect layout "inset" height == 34
   expect layout "inset" left == layout "field" left within 0.5
   expect layout "inset" top >= layout "field" bottom
+  expect layout "small" baseline == layout "large" baseline
+  expect layout "small" baseline >= layout "small" top
+  expect layout "small" baseline <= layout "small" bottom
   expect sample "inset" at 5 10 == "#1381dfff" within 1
   expect screenshot "inset" matches "inset.png"
   reload
@@ -152,6 +158,7 @@ test "wrong lower bound"
   expect layout "inset" height == 0
   expect state n >= 1
 test "wrong paint"
+  expect layout "inset" baseline >= 0
   prefer safe-area "0 0 34 0"
   expect sample "inset" at 5 10 == "#1381df"
   expect screenshot "inset" matches "other.png"
@@ -160,6 +167,7 @@ test "wrong paint"
     expect(bounds.results[0].failures).toEqual([]);
     expect([bounds.passed, bounds.failed]).toEqual([1, 2]);
     const paintErrors = bounds.results[2].failures.join('\n');
+    expect(paintErrors).toContain('the host reports no text baseline');
     expect(paintErrors).toContain('#1280e0ff');
     expect(paintErrors).toContain('1360 of 1360 points differ');
     expect(bounds.results[1].failures.join('\n')).toContain('n is 0, expected >= 1');

@@ -105,7 +105,9 @@ export async function layoutExpectation(s, nodes, st) {
     const space = (await s.layout(n.id)).node?.space;
     if (!space?.viewport) return { message: `${said} is unknown: ${space?.unavailable ?? 'the host reports no box for it'}` };
     const { x, y, w, h } = space.viewport;
-    const values = { width: w, height: h, x, left: x, y, top: y, right: x + w, bottom: y + h, centerX: x + w / 2, centerY: y + h / 2 };
+    if (dimension === 'baseline' && !Number.isFinite(space.baseline))
+      return { message: `${said} is unknown: the host reports no text baseline for it` };
+    const values = { baseline: space.baseline, width: w, height: h, x, left: x, y, top: y, right: x + w, bottom: y + h, centerX: x + w / 2, centerY: y + h / 2 };
     return { value: round(values[dimension]), said, size: `${round(w)}×${round(h)}` };
   }
   const lhs = await measure(st);

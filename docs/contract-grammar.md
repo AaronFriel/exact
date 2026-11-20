@@ -874,7 +874,7 @@ step          = "tap" "midi" STRING ( HEX { HEX } | "clock" NUMBER NUMBER ) NL
               | "expect" "midi" ( "sent" | "missing" ) STRING HEX { HEX } [ "at" NUMBER ] NL
               | "expect" "mediasession" ( IDENT "==" ( STRING | "none" )
                   | ( "has" | "missing" ) STRING ) NL ;
-measure       = "width" | "height" | "x" | "y" | "left" | "right" | "top" | "bottom" | "centerX" | "centerY" ;
+measure       = "width" | "height" | "x" | "y" | "left" | "right" | "top" | "bottom" | "centerX" | "centerY" | "baseline" ;
 midi-fact     = "midi.state" ( "prompt" | "granted" | "denied" | "unavailable" )
               | ( "midi.inputs" | "midi.outputs" ) STRING ;  (* names, comma-separated *)
 HEX           = HEXDIGIT HEXDIGIT ;                  (* one byte, as in 90 3c 64 *)
@@ -1030,7 +1030,9 @@ keep `==` for a size the app sets.
 The same step reads `x` or `left`, `y` or `top`, `right`, `bottom`, `centerX`, and
 `centerY` in viewport coordinates. Compare two boxes with
 `expect layout "icon" centerY == layout "label" centerY within 0.5`. The
-optional tolerance is in points and defaults to zero.
+optional tolerance is in points and defaults to zero. On the web, `baseline`
+reads the first rendered text baseline in viewport points. A box without a reported
+text baseline fails the assertion.
 
 Each test is a session of its own, opened with its
 launch lines: `size 1200x800`, `epoch "2026-09-21T12:00:00Z"`, `time-zone

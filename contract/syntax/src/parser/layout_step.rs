@@ -6,6 +6,7 @@ impl Parser {
     fn layout_dimension(&mut self) -> R<String> {
         const MEASURES: &[&str] = &[
             "width", "height", "x", "y", "left", "right", "top", "bottom", "centerX", "centerY",
+            "baseline",
         ];
         if let TokenKind::Ident(word) = self.peek_kind() {
             if MEASURES.contains(&word.as_str()) {
@@ -17,7 +18,7 @@ impl Parser {
         self.err(
             "syntax-expected-step",
             format!(
-                "`expect layout` needs a size (width, height), edge (left, right, top, bottom), position (x, y) or center (centerX, centerY), found {}",
+                "`expect layout` needs a size (width, height), edge (left, right, top, bottom), position (x, y), center (centerX, centerY) or text baseline, found {}",
                 describe(self.peek_kind())
             ),
         )
