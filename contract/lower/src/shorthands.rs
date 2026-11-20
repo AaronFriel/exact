@@ -863,11 +863,19 @@ pub fn style_values(name: &str, value: &Expr) -> Result<Vec<(StyleId, Expr)>, Lo
 /// (`` `${pad}px 0` ``) are split in [`sides`]; a computed single value
 /// (`padding=pad`) is every side's, and a computed list that reaches a row
 /// is refused there.
-pub(crate) fn computed_list<'e>(
+pub(crate) fn computed_list(
+    l: &Lowerer<'_>,
+    scope: &Scope,
     name: &str,
-    value: &'e Expr,
-    body: &dyn Fn(&str) -> Option<&'e Expr>,
+    value: &Expr,
 ) -> Result<(), LowerError> {
+    #[derive(Clone, Copy)]
+    struct Sources<'s, 'e> {
+        fns: &'s BTreeMap<&'e str, (&'e FnDecl, &'e Expr)>,
+        derives: &'e [contract_syntax::Binding],
+        component: &'s Scope,
+        scope: Option<&'s Scope>,
+    }
     /// The `let`s in scope: each name and its value.
     type Env<'e> = Vec<(&'e str, &'e Expr)>;
     /// The texts a computed value can spell, one per way its `?:`, `match`
@@ -875,7 +883,7 @@ pub(crate) fn computed_list<'e>(
     /// when they are too many or the calls too deep to tell.
     fn texts<'e>(
         e: &'e Expr,
-        body: &dyn Fn(&str) -> Option<&'e Expr>,
+        body: Sources<'_, 'e>,
         env: &mut Env<'e>,
         depth: u8,
     ) -> Option<Vec<String>> {
@@ -926,13 +934,45 @@ pub(crate) fn computed_list<'e>(
                 env.pop();
                 out?
             }
-            Expr::Ident(name, _) => match env.iter().rev().find(|(n, _)| n == name) {
-                Some(&(_, value)) => texts(value, body, env, depth)?,
-                None => vec!["x".into()],
-            },
-            Expr::Call(f, _, _) => match body(f) {
-                // A `fn`'s parameters are computed parts; its `let`s its own.
-                Some(b) if depth < 8 => texts(b, body, &mut Vec::new(), depth + 1)?,
+            Expr::Ident(name, _) => {
+                if let Some(i) = env.iter().rposition(|(n, _)| n == name) {
+                    texts(env[i].1, body, &mut env[..i].to_vec(), depth)?
+                } else {
+                    let mut name = name;
+                    let mut scope = body.scope;
+                    loop {
+                        let Some((contract_types::Ref::Derive(i), ty)) =
+                            scope.and_then(|s| s.lookup(name))
+                        else {
+                            break vec!["x".into()];
+                        };
+                        if *ty == Ty::Number {
+                            break vec!["x".into()];
+                        }
+                        let value = &body.derives[i as usize].expr;
+                        scope = Some(body.component);
+                        if let Expr::Ident(alias, _) = value {
+                            name = alias;
+                            continue;
+                        }
+                        if depth >= 8 {
+                            return None;
+                        }
+                        break texts(value, Sources { scope, ..body }, &mut Vec::new(), depth + 1)?;
+                    }
+                }
+            }
+            Expr::Call(f, _, _) => match body.fns.get(f.as_str()) {
+                // A function's parameters and local bindings have their own scope.
+                Some((_, b)) if depth < 8 => texts(
+                    b,
+                    Sources {
+                        scope: None,
+                        ..body
+                    },
+                    &mut Vec::new(),
+                    depth + 1,
+                )?,
                 Some(_) => return None,
                 None => vec!["x".into()],
             },
@@ -941,23 +981,14 @@ pub(crate) fn computed_list<'e>(
     }
     // Whether a computed value may hold more than `most` values, or cannot
     // be told not to.
-    fn more<'e>(
-        e: &'e Expr,
-        body: &dyn Fn(&str) -> Option<&'e Expr>,
-        env: &mut Env<'e>,
-        most: usize,
-    ) -> bool {
+    fn more<'e>(e: &'e Expr, body: Sources<'_, 'e>, env: &mut Env<'e>, most: usize) -> bool {
         texts(e, body, env, 0)
             .is_none_or(|all| all.iter().any(|t| box_sides::values(t).len() > most))
     }
     // Where the value builds a list that is not split at compile time: a
     // literal arm and a template's own white space are ([`sides`]); a
     // `fn`'s result, a `let`'s value and a concatenation are not.
-    fn lists<'e>(
-        e: &'e Expr,
-        body: &dyn Fn(&str) -> Option<&'e Expr>,
-        env: &mut Env<'e>,
-    ) -> Option<Span> {
+    fn lists<'e>(e: &'e Expr, body: Sources<'_, 'e>, env: &mut Env<'e>) -> Option<Span> {
         match e {
             Expr::Str(..) => None,
             // Refused only where an interpolation adds a value: its white
@@ -984,6 +1015,12 @@ pub(crate) fn computed_list<'e>(
             e => more(e, body, env, 1).then(|| e.span()),
         }
     }
+    let body = Sources {
+        fns: &l.fns,
+        derives: &l.root.derives,
+        component: &l.sharing.root_scope,
+        scope: Some(scope),
+    };
     let Some(span) = lists(value, body, &mut Vec::new()) else {
         return Ok(());
     };
