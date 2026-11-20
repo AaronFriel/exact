@@ -4367,6 +4367,12 @@ output becomes noisy (for example, headphones are unplugged). A transient focus
 loss also stops effects; new effects may play after focus returns. A permanent
 loss waits until the activity returns to the foreground.
 
+On Android, `@exact/speech-synthesis` requests audio focus for its speech queue.
+Set `speak`'s `audioSessionType` to `transient` to let music duck, or to
+`transient-solo` to pause the other player temporarily so it can resume when
+speech ends. Use `playback` for sustained listening. It takes permanent focus,
+so the listener must restart the other player. [Android audio focus](https://developer.android.com/media/optimize/audio-focus).
+
 The Android arm decodes declared WAVs at first play. It uses
 [AAudio's speaker timestamp](https://developer.android.com/ndk/reference/group/audio#aaudiostream_gettimestamp)
 to place frames; startup waits up to 100 ms for that timestamp, then uses the
