@@ -94,6 +94,7 @@ struct App<D: DataSource> {
     hidden: bool,
     /// The app's one instance, which later launches reach.
     instance: Option<crate::instance::Instance>,
+    cold_documents: Vec<String>,
     tray: Option<tray::Tray>,
     presents: presents::Presents,
 }
@@ -270,10 +271,12 @@ pub(super) fn run<D: DataSource + Default + 'static>(
         crate::displays::install_headless();
         return crate::clipboard::run_headless::<D>(&mut config, started);
     }
-    let instance = match lifecycle::claim(frame_limit.is_some(), compat, name) {
+    let args = crate::instance::arguments();
+    let instance = match lifecycle::claim(frame_limit.is_some(), compat, name, &args) {
         Ok(instance) => instance,
         Err(code) => return code,
     };
+    let cold_documents = lifecycle::cold_documents(&mut config, compat, &args);
     boot_phase("config-ready");
     if std::env::var_os("EXACT_SIZE").is_none() {
         config.size = (opening.width, opening.height);
@@ -375,6 +378,7 @@ pub(super) fn run<D: DataSource + Default + 'static>(
         keep_running: opening.keep_running,
         hidden,
         instance,
+        cold_documents,
         tray: None,
         presents: Default::default(),
     };

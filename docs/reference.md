@@ -779,6 +779,13 @@ refused (studio diary R14; notes diary). When nothing takes the path, the
 host says why — no `open-file` field, or the `change` the app refused, and the
 refusal — on stderr and in the journal. `exact uninstall <app>` takes both halves away.
 
+On Windows, pass local files to the executable to open them in the app's
+window. A cold launch and a later launch both deliver a `change` to the one
+mounted field with `testId="open-file"` and a `change` handler, once per file
+in argument order. Relative filenames resolve in the launching process's
+working directory. An app that reads filenames in its Rust startup code can
+move that logic into the handler to receive cold and warm opens once each.
+
 Widget entries are top-level `app.json` `widgets` rows. For example:
 
 ```json

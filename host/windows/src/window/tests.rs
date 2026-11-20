@@ -202,6 +202,7 @@ fn direct_window_blinks_without_a_softbuffer_surface() {
         keep_running: false,
         hidden: false,
         instance: None,
+        cold_documents: Vec::new(),
         tray: None,
         presents: Default::default(),
     };
@@ -345,6 +346,7 @@ fn windowless_app(proxy: EventLoopProxy<crate::accessibility::Event>, plan: &[u8
         keep_running: false,
         hidden: false,
         instance: None,
+        cold_documents: Vec::new(),
         tray: None,
         presents: Default::default(),
     }
