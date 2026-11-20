@@ -6949,9 +6949,9 @@ A runtime choice with a bundled-font literal is refused so it cannot silently
 select an installed face with the same name; write bundled choices as literals.
 
 A `text` with `selectionchange=act` hears the reader's real text selection
-on the web, macOS, iOS and Android. `action act(s: Selection)` gets `s.text`, `s.start` and
+on the web, macOS, iOS, Android and Linux. `action act(s: Selection)` gets `s.text`, `s.start` and
 `s.end` in the node's own text ("" at 0, 0 when nothing there is selected).
-On web and macOS, `s.rects` is a list of `Geometry` snapshots for the selected
+On web, macOS and Linux, `s.rects` is a list of `Geometry` snapshots for the selected
 fragments in viewport space. It is empty when cleared. iOS and Android report an empty list.
 `removeAllRanges()` clears the reader selection, and
 `setSelectionRange(id, start, end[, direction])` selects a `text` on web and
@@ -7273,8 +7273,10 @@ selection clears the selection, as in a text view. On Android a long press on
 `user-select="text"` selects a word. The handles adjust the selection within
 one paragraph, and the floating toolbar offers Copy, Share and Select all.
 An inline or enclosing `all` selects its text as a unit. Dragging the paragraph
-away from a handle scrolls its container. Linux, Windows and tvOS have no text
-selection, so `text` and `all` change nothing there. `contain` is refused by
+away from a handle scrolls its container. On Linux, drag the mouse across
+opted-in text to select it, or click a run marked `all` to select that run.
+Ctrl+C copies the visible text when the host supplies a clipboard.
+Windows and tvOS have no text selection, so `text` and `all` change nothing there. `contain` is refused by
 name: no native host has it. These rows take literals
 or choices of literals, so unsupported runtime values cannot bypass the check.
 
