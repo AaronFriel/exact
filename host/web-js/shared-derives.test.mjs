@@ -338,3 +338,41 @@ component Counter
     expect(await right.textContent()).toBe(conditional ? 'Right! count 0' : 'Right! count 1');
   });
 }, 60000);
+
+test('shared action code writes its own slot and reports the name of the failing action', async () => {
+  const source = `component App
+  state n = 2
+  state left = ""
+  state right = ""
+  action writeLeft(label: string)
+    left = \`\${label} results \${range(n).length}\`
+  action writeRight(caption: string)
+    right = \`\${caption} results \${range(n).length}\`
+  action overflow
+    n = 65537
+  view
+    column
+      button "Left" testId="first" press=writeLeft("First")
+      button "Right" testId="second" press=writeRight("Second")
+      button "Overflow" testId="overflow" press=overflow
+      text left testId="left"
+      text right testId="right"
+`;
+  for (const sites of [false, true]) {
+    await pageFor(source, async (page, js) => {
+      expect(js.split('" results "').length - 1).toBe(sites ? 2 : 1);
+      await page.getByTestId('second').click();
+      expect(await page.getByTestId('right').textContent()).toBe('Second results 2');
+      expect(await page.getByTestId('left').textContent()).toBe('');
+      await page.getByTestId('first').click();
+      expect(await page.getByTestId('left').textContent()).toBe('First results 2');
+      await page.getByTestId('overflow').click();
+      for (const [id, name] of [['second', 'writeRight'], ['first', 'writeLeft']]) {
+        await page.getByTestId(id).click();
+        const line = await page.evaluate(async () =>
+          (await import('/rt.js')).journal.filter(entry => entry.includes('IterationLimit')).at(-1));
+        expect(line).toContain(`action "${name}"`);
+      }
+    }, sites ? ['--sites'] : []);
+  }
+}, 60000);

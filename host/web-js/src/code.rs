@@ -34,7 +34,7 @@ pub struct Scope {
     pub frames: Vec<Frame>,
     /// Arm-owned derives are lexical bindings. Their local names are independent of the plan row.
     pub local_derives: std::rc::Rc<BTreeMap<usize, String>>,
-    /// Release mount functions can take root getters, handlers and literals as arguments.
+    /// Emit root getters, handlers and literals as operands a shared body can take as arguments.
     pub capture: bool,
     /// Whether this is an action body (writes and commands are allowed).
     pub action: bool,
@@ -57,6 +57,17 @@ impl Scope {
             format!("\0v:{js}\0")
         } else {
             js
+        }
+    }
+
+    fn row_member(&self, rows: &str, name: String) -> String {
+        if self.capture {
+            format!(
+                "{rows}[{}]",
+                self.operand(serde_json::to_string(&name).unwrap())
+            )
+        } else {
+            format!("{rows}.{name}")
         }
     }
 
@@ -300,7 +311,10 @@ pub fn evaluated(f: String, scope: &Scope, before: usize, uses: &mut Uses) -> St
 /// A scope whose label is only constructed if this evaluation traps.
 pub fn evaluation(scope: &Scope, label: String, instance: bool) -> Scope {
     Scope {
-        evaluation: Some((serde_json::to_string(&label).unwrap(), instance)),
+        evaluation: Some((
+            scope.operand(serde_json::to_string(&label).unwrap()),
+            instance,
+        )),
         ..scope.clone()
     }
 }
@@ -365,22 +379,22 @@ impl Translator<'_> {
     /// instance in force (LLP 1035.005.004 D1).
     fn resource(&self, i: u64) -> Result<String, String> {
         if self.plan.resources[i as usize].owner.is_none() {
-            return Ok(format!("r_{i}"));
+            return Ok(self.scope.operand(format!("r_{i}")));
         }
         let rows = (self.scope.rows.as_ref())
             .ok_or("a child's resource read with no instance in force")?;
-        Ok(format!("{rows}.r{i}"))
+        Ok(self.scope.row_member(rows, format!("r{i}")))
     }
 
     /// Mutation `i`'s object: the root's `m_<i>`, or a child's, the
     /// instance's in force (LLP 1035.005.004 D6).
     fn mutation(&self, i: u64) -> Result<String, String> {
         if self.plan.mutations[i as usize].owner.is_none() {
-            return Ok(format!("m_{i}"));
+            return Ok(self.scope.operand(format!("m_{i}")));
         }
         let rows = (self.scope.rows.as_ref())
             .ok_or("a child's mutation used with no instance in force")?;
-        Ok(format!("{rows}.m{i}"))
+        Ok(self.scope.row_member(rows, format!("m{i}")))
     }
 
     fn push(&mut self, e: String) {
@@ -766,7 +780,7 @@ impl Translator<'_> {
                             .ok_or("a row slot write with no row in force")?;
                         format!("{rows}[{}]", self.scope.operand(x.args[0].to_string()))
                     } else {
-                        format!("s_{}", x.args[0])
+                        self.scope.operand(format!("s_{}", x.args[0]))
                     };
                     self.out.push_str(&format!("{w}({target},{v});"));
                 }

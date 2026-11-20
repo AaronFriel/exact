@@ -16,6 +16,8 @@ use exact_web::host::template::Parts;
 use std::collections::HashMap;
 use std::fmt::Write as _;
 
+#[path = "actions.rs"]
+mod actions;
 #[path = "answers.rs"]
 mod answers;
 #[path = "commands.rs"]
@@ -42,6 +44,8 @@ mod mutations;
 mod named_records;
 #[path = "navigation.rs"]
 mod navigation;
+#[path = "templates.rs"]
+mod templates;
 #[cfg(test)]
 pub(crate) use input::ALL as INPUT;
 #[cfg(test)]
@@ -134,7 +138,7 @@ struct Em<'a> {
     parts: Vec<Option<Parts>>,
     uses: Uses,
     out: String,
-    mount_templates: mount_templates::Templates,
+    mount_templates: templates::Templates,
     next_local_element: Option<u32>,
     repeated_nodes: Vec<bool>,
     classes: Vec<String>,
@@ -297,10 +301,6 @@ pub fn emit(plan: &Plan, site_attrs: bool, dev_reload: bool) -> Result<Output, S
     em.heights = em.drag_targets(PropId::HeightDragFor);
     em.transforms = em.drag_targets(PropId::TransformDragFor);
     let top = Scope::default();
-    let action = Scope {
-        action: true,
-        ..Scope::default()
-    };
     let mut body = String::new();
     // The route table, and the router slot filled from the location before
     // any initializer (LLP 1038 D5).
@@ -459,62 +459,7 @@ pub fn emit(plan: &Plan, site_attrs: bool, dev_reload: bool) -> Result<Output, S
     for i in late_mutations {
         body.push_str(&mutations::declaration(plan, i, &mut em.uses));
     }
-    for (i, r) in plan.actions.iter().enumerate() {
-        // An action that touches row slots takes the row in force first.
-        let rows = code::touches_rows(plan, plan.code(r.body));
-        let scope = Scope {
-            rows: rows.then(|| "$r".to_string()),
-            ..action.clone()
-        };
-        let mut f = code::function(
-            plan,
-            plan.code(r.body),
-            &code::evaluation(&scope, format!("action {:?}", plan.str(r.name)), false),
-            r.params.len as usize,
-            &mut em.uses,
-        )
-        .map_err(|e| format!("action {}: {e}", plan.str(r.name)))?;
-        if rows {
-            em.row_actions.insert(i);
-            f = f.replacen('(', "($r,", 1).replace("($r,)", "($r)");
-        }
-        // The parameters' types: an argument outside its type is refused,
-        // as the runner refuses it (ArgumentType), before the body runs. A
-        // hidden parameter (`@capture:…`, a child's captured prop) is the
-        // compiler's argument: its numbers need not be finite.
-        let types: Vec<String> = r
-            .params
-            .iter()
-            .map(|p| {
-                let param = plan.param(p);
-                let code = type_code_numeric(plan, param.ty, plan.str(param.name).starts_with('@'));
-                serde_json::to_string(&code).unwrap()
-            })
-            .collect();
-        // A string parameter's name, which an argument past MAX_STRING
-        // names (the runner's StringTooLong, LLP 1090 D6).
-        let names: Vec<String> = r
-            .params
-            .iter()
-            .map(|p| match type_code(plan, plan.param(p).ty).as_str() {
-                "s" => serde_json::to_string(plan.str(plan.param(p).name)).unwrap(),
-                _ => "0".into(),
-            })
-            .collect();
-        let act = em.uses.rt("act");
-        if types.is_empty() {
-            let _ = write!(body, "const a_{i}={act}({f});");
-        } else {
-            let tail = if names.iter().any(|n| n != "0") {
-                format!(",{},[{}]", rows as u8, names.join(","))
-            } else if rows {
-                ",1".into()
-            } else {
-                String::new()
-            };
-            let _ = write!(body, "const a_{i}={act}({f},[{}]{tail});", types.join(","));
-        }
-    }
+    em.declare_actions(&mut body)?;
     for i in 0..plan.mutations.len() {
         body.push_str(&mutations::root_then(plan, i, &top, &mut em.uses)?);
     }

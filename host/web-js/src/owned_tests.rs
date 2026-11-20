@@ -61,7 +61,7 @@ fn each_instance_makes_and_refreshes_its_own_request() {
         js.contains(".r0=own(r_0,()=>res(\"works#1\",\"subjectWorks\""),
         "{js}"
     );
-    assert!(js.contains("R($r.r0)"), "{js}");
+    assert!(js.contains(r#"R($r["r0"])"#), "{js}");
     assert!(js.contains("\"/0=\"+rowPath($k)"), "{js}");
     assert!(js.contains("+\"/1:0\""), "{js}");
     assert_eq!(js.matches("const $q").count(), 2, "{js}");
@@ -181,8 +181,8 @@ fn each_instance_makes_its_own_mutations() {
         )),
         "{js}"
     );
-    assert!(js.contains("M($r.m0,\"detect\""), "{js}");
-    assert!(js.contains(&format!("{owner}.m0.p()")), "{js}");
+    assert!(js.contains(r#"M($r["m0"],"detect""#), "{js}");
+    assert!(js.contains(&format!(r#"{owner}["m0"].p()"#)), "{js}");
 }
 
 /// A use outside every region answers into a late root slot: its mutation is
