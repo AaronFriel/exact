@@ -224,6 +224,11 @@ impl Geometry {
         (x, line.top, 1., line.height)
     }
 
+    /// The editable last line may follow the paragraph's final hard break.
+    pub(crate) fn height(&self) -> f32 {
+        self.lines.last().map_or(0., |line| line.top + line.height)
+    }
+
     pub(crate) fn horizontal_bounds(&self) -> (f32, f32) {
         self.lines
             .iter()

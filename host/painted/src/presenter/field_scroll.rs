@@ -124,7 +124,8 @@ mod tests {
         let value = (1..=12)
             .map(|n| format!("line {n}"))
             .collect::<Vec<_>>()
-            .join("\n");
+            .join("\n")
+            + "\n";
         let (mut p, id) = fixture("textarea", &value);
         assert_caret_in_field(&mut p, id);
         let end = p.scroll_of(id).1;
@@ -149,6 +150,7 @@ mod tests {
         p.hold_modifier("ControlLeft", true);
         p.field_key(id, "End", 2.);
         p.hold_modifier("ControlLeft", false);
+        assert_caret_in_field(&mut p, id);
         p.field_key(id, "!", 3.);
         assert_caret_in_field(&mut p, id);
         assert!(p.field_text(id).ends_with('!'));

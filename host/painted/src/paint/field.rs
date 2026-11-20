@@ -100,6 +100,11 @@ impl PaintedField {
             } else {
                 ((paragraph.width + 1. - content.2).max(0.), 0.)
             };
+        let height = if multiline {
+            paragraph.height.max(geometry.height())
+        } else {
+            paragraph.height
+        };
         Self {
             geometry,
             value: value.to_owned(),
@@ -110,7 +115,7 @@ impl PaintedField {
             origin,
             scroll: (0., 0.),
             right_caret_inset,
-            scroll_max: (scroll_width, (paragraph.height - content.3).max(0.)),
+            scroll_max: (scroll_width, (height - content.3).max(0.)),
             transform,
             decorations,
         }
