@@ -1025,7 +1025,9 @@ name its own; either way they override the drive's flags. Media preferences
 a module's permission (`prefer permission.notifications granted`, `denied` or
 `prompt`) also lead a test or the file, and may change between steps. Other
 single-value page facts, such as `prefer online false`, use the drive's parser
-and aliases; quote numeric values. Folds (`posture`, `segments`, `gap`), mode
+and aliases; quote numeric values. On the Chromium web host, `prefer safe-area "47 0 34 0"`
+sets the top, right, bottom and left safe-area insets in whole CSS pixels. The
+browser applies them to CSS `env()` values. Native hosts use the device's insets. Folds (`posture`, `segments`, `gap`), mode
 pins and extension substitutes are drive-only for now. Defaults
 merge by resolved fact name, so aliases override each other; duplicate leading
 lines for one fact are errors. A bad name or value fails that test at its line.

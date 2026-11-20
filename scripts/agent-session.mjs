@@ -744,6 +744,7 @@ export async function open({
         if (Object.values(g).some(v => Object.keys(v).length)) replies[k] = await s.op({ op: 'prefer', ...g });
       if (Object.keys(replies).length && ![media, page, fold, mode].some(g => Object.keys(g).length))
         return replies.extension ?? replies.midi;
+      if (Object.hasOwn(page, 'safe-area') && host !== 'web') throw new Error(`prefer safe-area: the ${host} host uses the device's insets; choose web with Chromium to set them`);
       if (carrier.prefer) return s.tagged(await carrier.prefer(media, page, fold, mode));
       return s.op(preferOp(media, page, fold, mode));
     },

@@ -68,6 +68,7 @@ test('device properties see boot, typing and clock changes, and reset stays betw
         text "Toggle"
       input testId="field" value=textValue input=edit
       button "Enable" testId="enable" press=enable
+      box testId="inset" height="env(safe-area-inset-bottom)"
 `);
   writeFileSync(file, `always "ready stays"
   expect state ready stays true
@@ -95,14 +96,16 @@ test "reload is observed"
   const compiler = join(process.env.CARGO_TARGET_DIR ?? join(root, 'target'), 'debug', 'contract');
   const compile = spawnSync(compiler, ['build', contract, '-o', plan], { cwd: root, encoding: 'utf8' });
   expect(compile.status, compile.stderr).toBe(0);
-  const build = spawnSync(process.execPath, ['host/web-js/build.mjs', 'caltrain', '--plan', plan, '--out', dist, '--render', 'none'], { cwd: root, encoding: 'utf8' });
+  writeFileSync(join(dir, 'app.json'), JSON.stringify({ name: 'Properties', app: { id: 'test.properties', name: 'Properties' }, host: { web: {} }, rust: false }));
+  const build = spawnSync(process.execPath, ['host/web-js/build.mjs', 'properties', '--plan', plan, '--out', dist, '--render', 'none'],
+    { cwd: root, env: { ...process.env, EXACT_APP_DIR: dir }, encoding: 'utf8' });
   expect(build.status, build.stderr).toBe(0);
   const server = createServer((req, res) => serveBuildTree(dist, req, res));
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   try {
     // Each step is said before it runs and each result as it lands, in order (agent.mjs prints them as they come).
     const heard = [];
-    const r = await runTests({ host: 'web', file, app: 'caltrain', url: `http://127.0.0.1:${server.address().port}/`,
+    const r = await runTests({ host: 'web', file, app: dir, webDist: dist, url: `http://127.0.0.1:${server.address().port}/`,
       atLine: ({ index, line, last, op }) => heard.push(`${index} ${line}/${last} ${op}`), atResult: (t) => heard.push(`= ${t.name}`) });
     expect(heard).toEqual(['0 14/16 tap', '0 15/16 type', '0 16/16 clock', '= the three observations', '1 18/18 type', '= a fresh history', '2 20/21 tap', '2 21/21 reload', '= reload is observed']);
     expect(heard.filter(h => h.startsWith('= ')).length).toBe(r.results.length);
@@ -123,18 +126,25 @@ test "reload is observed"
 test "boot only"
   expect state n == 0
 `);
-    const boot = await runTests({ host: 'web', file, app: 'caltrain', url: `http://127.0.0.1:${server.address().port}/` });
+    const boot = await runTests({ host: 'web', file, app: dir, webDist: dist, url: `http://127.0.0.1:${server.address().port}/` });
     expect(boot.failed).toBe(1);
     writeFileSync(file, `test "bounded clock"
+  prefer safe-area "47 0 34 0"
+  expect layout "inset" height == 34
+  reload
+  expect layout "inset" height == 34
+  prefer safe-area "0 0 12 0"
+  expect layout "inset" height == 12
   clock +100
   expect state n >= 1
   expect state n <= 1
   expect state n in 0 1
   expect state textValue in "" "ok"
 test "wrong lower bound"
+  expect layout "inset" height == 0
   expect state n >= 1
 `);
-    const bounds = await runTests({ host: 'web', file, app: 'caltrain', url: `http://127.0.0.1:${server.address().port}/` });
+    const bounds = await runTests({ host: 'web', file, app: dir, webDist: dist, url: `http://127.0.0.1:${server.address().port}/` });
     expect([bounds.passed, bounds.failed]).toEqual([1, 1]);
     expect(bounds.results[1].failures.join('\n')).toContain('n is 0, expected >= 1');
 

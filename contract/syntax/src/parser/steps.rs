@@ -1390,6 +1390,7 @@ fn prefer_key(name: &str) -> &str {
         "keyboard-navigation",
         "bold-text",
         "root-font-size",
+        "safe-area",
         "display-scale",
         "gpu-tier",
         "posture",

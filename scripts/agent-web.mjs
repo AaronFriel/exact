@@ -487,6 +487,7 @@ async function openWebUnlocked({
     };
     // Display preferences are the agent's from launch, never the machine's (LLP 1069.007 D2); `prefer` changes them.
     const emulated = { ...LAUNCH_MEDIA };
+    let safeArea;
     await call('Emulation.setEmulatedMedia', {
       features: Object.entries(emulated).map(([name, value]) => ({ name, value })),
     });
@@ -580,6 +581,10 @@ async function openWebUnlocked({
        * never the last session's `prefer` (LLP 1069.007 D2; agent-prefer.mjs). */
       async reset({ keep = false, failFetch, epoch, session = false } = {}) {
         if (session) {
+          if (safeArea !== undefined) {
+            await call('Emulation.setSafeAreaInsetsOverride', { insets: {} });
+            safeArea = undefined;
+          }
           await carryDisplayMode(null);
           for (const name of Object.keys(emulated)) delete emulated[name];
           Object.assign(emulated, LAUNCH_MEDIA);
@@ -637,7 +642,20 @@ async function openWebUnlocked({
       // the browser's emulation through CDP, the glue's substitute where it offers none (agent-prefer.mjs)
       async prefer(media, page, fold, mode) {
         if (media['display-mode'] != null) await carryDisplayMode(media['display-mode']);
-        return preferWeb({ media, page, fold, mode, emulated, call, evaluate, frame, ask, scale });
+        const { 'safe-area': edges, ...otherPage } = page;
+        if (edges !== undefined) {
+          const [top, right, bottom, left] = edges.split(' ').map(Number);
+          try {
+            await call('Emulation.setSafeAreaInsetsOverride', { insets: { top, right, bottom, left } });
+          } catch (error) {
+            throw new Error(`prefer safe-area: this browser could not set the insets: ${error.message}`);
+          }
+          safeArea = edges;
+          await frame();
+        }
+        const reply = await preferWeb({ media, page: otherPage, fold, mode, emulated, call, evaluate, frame, ask, scale });
+        if (safeArea !== undefined) reply.page = { ...reply.page, 'safe-area': safeArea };
+        return reply;
       },
       // A click with modifiers named holds them as a keyboard does (`heldForClick`; Charlie, 2026-10-07).
       input(id, kind, opts) {
