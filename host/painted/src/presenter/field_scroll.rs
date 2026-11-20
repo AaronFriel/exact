@@ -120,6 +120,28 @@ mod tests {
     }
 
     #[test]
+    fn scrolled_selection_keeps_the_visible_parts_of_the_full_range() {
+        let value = "אב 😀 a line long enough to wrap in the field\r\n\n".repeat(16);
+        let (mut p, id) = fixture("textarea", &value);
+        p.frame();
+        let geometry = &p.brush.field_text[&id].geometry;
+        let len = value.encode_utf16().count() as u32;
+        for (start, end) in [(0, len), (3, len - 5)] {
+            let all = geometry.highlight(start, end, None);
+            let bottom = all.last().unwrap().1;
+            for top in [-100., 0., 57.5, bottom - 24., bottom + 200.] {
+                let clip = top..top + 48.;
+                let expected: Vec<_> = all
+                    .iter()
+                    .copied()
+                    .filter(|r| r.1 + r.3 >= clip.start && r.1 <= clip.end)
+                    .collect();
+                assert_eq!(geometry.highlight(start, end, Some(clip)), expected);
+            }
+        }
+    }
+
+    #[test]
     fn multiline_caret_reveals_scrolls_and_hits_the_visible_text() {
         let value = (1..=12)
             .map(|n| format!("line {n}"))

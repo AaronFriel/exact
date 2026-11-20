@@ -1,7 +1,7 @@
 //! Editing geometry from the immutable glyphs and CSS line boxes used to paint a field.
 use super::{Paragraph, Spec, TextEngine};
 use exact_kernel::{Direction, TextAlign};
-use std::rc::Rc;
+use std::{ops::Range, rc::Rc};
 use unicode_segmentation::UnicodeSegmentation;
 
 type Rect = (f32, f32, f32, f32);
@@ -466,17 +466,33 @@ impl Geometry {
         Some(rects)
     }
 
-    pub(crate) fn highlight(&self, start: u32, end: u32) -> Vec<Rect> {
-        self.marks(start, end, |line| (line.top, line.height))
+    pub(crate) fn highlight(&self, start: u32, end: u32, visible: Option<Range<f32>>) -> Vec<Rect> {
+        let lines = visible.map_or(0..self.lines.len(), |clip| {
+            let first = self
+                .lines
+                .partition_point(|l| l.top + l.height < clip.start);
+            let count = self.lines[first..].partition_point(|l| l.top <= clip.end);
+            first..first + count
+        });
+        self.marks(start, end, lines, |line| (line.top, line.height))
     }
 
     pub(crate) fn underlines(&self, start: u32, end: u32, thickness: f32) -> Vec<Rect> {
-        self.marks(start, end, |line| (line.baseline + thickness, thickness))
+        self.marks(start, end, 0..self.lines.len(), |line| {
+            (line.baseline + thickness, thickness)
+        })
     }
 
-    fn marks(&self, start: u32, end: u32, vertical: impl Fn(&Line) -> (f32, f32)) -> Vec<Rect> {
+    fn marks(
+        &self,
+        start: u32,
+        end: u32,
+        lines: Range<usize>,
+        vertical: impl Fn(&Line) -> (f32, f32),
+    ) -> Vec<Rect> {
         let mut rects: Vec<Rect> = Vec::new();
-        for (index, line) in self.lines.iter().enumerate() {
+        for index in lines {
+            let line = &self.lines[index];
             let (top, height) = vertical(line);
             let mut pieces: Vec<_> = line
                 .spans

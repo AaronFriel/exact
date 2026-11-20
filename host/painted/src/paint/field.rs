@@ -667,7 +667,8 @@ impl Painter {
         // native editor underlines that clause without a selection background.
         if let Some(s) = selection.filter(|_| !cfg!(target_os = "windows") || composition.is_none())
         {
-            self.field_highlight(&field, s);
+            let top = padding.rect.1 - oy;
+            self.field_highlight(&field, s, top..top + padding.rect.3);
         }
         if !placeholder {
             let painted = material::FieldText::painted(&paragraph, (ox, oy), ts);
