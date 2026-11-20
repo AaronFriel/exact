@@ -698,6 +698,7 @@ export const classifications = [
     ["render:host/render/src/requests.rs", "render_with_at"],
     ["render:host/render/src/serve.rs", "document expire_renders Server::addr Server::bind Server::run Server::stopper Stopper::stop"],
     ["render:host/render/src/source.rs", "Anonymous::new"],
+    ["runner:runner/src/page.rs", "Platform::boot"],
     ["runner:runner/src/runner.rs", "Runner::auth_mut Runner::boot Runner::data Runner::kernel_mut Runner::set_full_evaluation Runner::set_row_reuse"],
     ["runner:runner/src/runner/carry.rs", "Runner::boot_carrying Runner::carry Runner::reboot_sequence Carried::with_validated_answers"],
     ["runner:runner/src/runner/checkpoint.rs", "Runner::boot_checkpoint Runner::boot_checkpoint_linked"],
@@ -1388,6 +1389,7 @@ export const classifications = [
   group("request lifecycle", ["one-shot", "subscription", "durable operation"], "pending ticket, queued turn or held executor request", "UI-owned",
     "The named public runner-crate source is the request lifecycle API or its value/admission helper. runner/src/runner/admission.rs and in_flight.rs tie admission, aborts and retirement to pending tickets. Retained effectful work is separately represented by module_work.rs.", [
     ["runner:runner/src/commands.rs", "request"],
+    ["runner:runner/src/page.rs", "Platform::name"],
     ["runner:runner/src/process.rs", "declared_name ProcessOp::declared ProcessOp::name ProcessOp::size Request::is_process Request::process summary"],
     ["runner:runner/src/request_http.rs", "CacheMode::name CacheMode::parse Redirect::name Redirect::parse Request::prefetch Request::prefetch_refusal Request::preload Request::preload_refusal"],
     ["runner:runner/src/request_preload.rs", "Launch::new LaunchRequest::new Preload::fill"],

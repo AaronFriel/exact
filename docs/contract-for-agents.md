@@ -5429,6 +5429,14 @@ screen is never `high`, nor is any iOS or Android device natively. A game's rend
 read it to offer a quality setting. A native host answers its GPU module's tier
 once the module loads (`high` before it). Under the agent it is `high` from launch, and
 `prefer gpu-tier low` substitutes it and remakes each world's renderer at its rung.
+`exactPage().platform` identifies the host from the first frame. Declare
+`platform: string` or an enum over the following values in the page resource's shape.
+The native hosts report
+`ios`, `macos`, `tvos`, `watchos`, `android`, `linux` or `windows`.
+A browser or server-rendered web page reports `web`, a terminal app reports
+`terminal`, and a runner booted without a host reports `headless`. A browser
+on an Android phone therefore reports `web`.
+
 `exactPage` answers `visibilityState`, `frozen`, `onLine`, `canShare`,
 `canShareFiles` and `canSharePictures` (whether `share(files=…)` takes
 `app:/` files and an element's `"#id"`; the web never takes a picture),
