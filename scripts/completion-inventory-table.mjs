@@ -844,7 +844,7 @@ export const classifications = [
     "The named host/painted source configures or constructs the current host, platform services or render backend. These entries create no independent durable completion owner.", [
     ["painted:host/painted/src/android_hint.rs", "colocate fast_thread input session"],
     ["painted:host/painted/src/android.rs",
-      "background_priority console fast_cores fast_set Handle::send Handle::stop log redirect_stdio release_library_pages release_library_pages_after " +
+      "background_priority baked baked_canvas_surfaces baked_grants console fast_cores fast_set Handle::send Handle::stop log redirect_stdio release_library_pages release_library_pages_after " +
       "release_module_pages_too section_begin section_end start trace"],
     ["painted:host/painted/src/app.rs",
       "boot_presenter boot_presenter_with_metal boot_window_presenter Config::from_env Config::from_env_static Config::headless " +

@@ -9,7 +9,7 @@ import { appleRunBinary, appleArtifacts, assertAppleIdentity } from '../host/app
 import { phone, phoneBridge, phoneStartupFailure, forwardedEnv, crashReports, displayPictureReply } from '../host/apple/devices.mjs';
 import { resolveApp, executableName, linuxBinary, bakeOutput, bakeTarget } from './app.mjs';
 import { linuxRebuild, macSandboxed, nativeBuild, ownVerb, planOverride, rebuildCommand, refuseBuild } from './agent-build.mjs';
-import { refuseStale, refuseBackendOrigin, refuseBinaryBackend, proofProductChanges, unchecked, packagedBuildChanges, depInfoChanges, depInfoNewer, newerThan, shown, bakedSettingChanges } from './agent-launch.mjs';
+import { refuseStale, refuseBackendOrigin, refuseBinaryBackend, proofProductChanges, unchecked, packagedBuildChanges, depInfoChanges, depInfoNewer, newerThan, shown, bakedSettingChanges, watchedNewer } from './agent-launch.mjs';
 import { androidBinary, androidDeploy, apkRecord } from './agent-android.mjs';
 import { nativeKey, mouseContact } from './agent-keys.mjs';
 import { jsonLines, hangup, waitAtMost, bootRefusal, REPLY_MS } from './agent-wire.mjs';
@@ -32,13 +32,21 @@ export function androidRebuild(a, reader) {
   return ownVerb(a, reader ? `android${abis}` : 'android --headless') ?? `bun scripts/agent-android.mjs build ${a.name}${reader ? ` --apk${abis}` : ''}`;
 }
 /** What changed since the APK was built, by the record its build left (agent-android.mjs `apkRecord`): each library's
- * inputs by its Cargo dep-info (the Rust, and the plan's and the module's sources the bake watched), the Kotlin by
- * time, and the icons by digest, so a deleted icon is a change too. */
+ * Cargo inputs and separate bake inputs, the Kotlin by time, and the icons by digest. */
 export function apkChanges(a, apk) {
   const record = apkRecord(a, apk);
   if (!record?.libraries?.length) return [`${apk} (no complete ABI build record beside it: build it again)`];
   const since = Date.parse(record.started), digest = (file) => { try { return createHash('sha256').update(readFileSync(file)).digest('hex'); } catch { return null; } };
-  return [...new Set(record.libraries.flatMap(library => depInfoNewer(since, library, library.replace(/\.so$/, '.d'), record.workspace))),
+  const baked = (record.bakes ?? []).flatMap(({ paths, missing, watchedDirectories, products }) => {
+    const bound = new Map(products.map(({path, sha256}) => [path, sha256]));
+    return [
+      ...watchedNewer(Date.parse(record.bakeStarted), paths.filter(path => !missing.includes(path) && !bound.has(path)),
+        watchedDirectories, bound, [a.target]),
+      ...[...bound].filter(([path, sha256]) => digest(path) !== sha256).map(([path]) => shown(path)),
+      ...missing.filter(existsSync).map(shown),
+    ];
+  });
+  return [...new Set([...baked, ...record.libraries.flatMap(library => depInfoNewer(since, library, library.replace(/\.so$/, '.d'), record.workspace))]),
     ...newerThan(since, record.sources.filter((root) => !root.sha256)),
     ...record.sources.filter((root) => root.sha256 && digest(root.file) !== root.sha256).map((root) => shown(root.file))];
 }

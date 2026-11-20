@@ -300,7 +300,7 @@ pub fn ahead(manifest: &contract::Manifest) -> Result<Vec<Capability>, String> {
         .collect()
 }
 
-/// Take the Rust sources of an Apple bake made before Cargo. The build
+/// Take the Rust sources of a linked Apple or Android bake. The build
 /// script calls this before baking and returns when it answers true.
 /// `files` names generated Rust inputs; a bake must preserve their times
 /// when their bytes do not change. Without EXACT_BAKED, bake normally.
@@ -312,7 +312,7 @@ pub fn take_linked(files: &[&str]) -> Result<bool, String> {
     use sha2::{Digest, Sha256};
     use std::{env, fs, path::PathBuf, process::Command};
     println!("cargo:rerun-if-env-changed=EXACT_BAKED");
-    let Some(baked) = env::var_os("EXACT_BAKED").map(PathBuf::from) else {
+    let Some(mut baked) = env::var_os("EXACT_BAKED").map(PathBuf::from) else {
         return Ok(false);
     };
     if env::var_os("EXACT_RUST_BAKE").is_some() {
@@ -320,10 +320,43 @@ pub fn take_linked(files: &[&str]) -> Result<bool, String> {
     }
     let out = PathBuf::from(env::var_os("OUT_DIR").ok_or("build requires OUT_DIR")?);
     let executable = env::current_exe().map_err(|e| e.to_string())?;
+    let android = env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("android");
+    if android {
+        println!(
+            "cargo:rerun-if-changed={}",
+            baked.join(".cargo-watch").display()
+        );
+        let out_path = out.to_str().ok_or("Cargo OUT_DIR is not UTF-8")?;
+        baked = baked.join(format!("{:x}", Sha256::digest(out_path.as_bytes())));
+    }
+    let loader_path = if cfg!(windows) {
+        "PATH"
+    } else if cfg!(target_os = "macos") {
+        "DYLD_FALLBACK_LIBRARY_PATH"
+    } else {
+        "LD_LIBRARY_PATH"
+    };
     let variables: std::collections::BTreeMap<_, _> = env::vars()
         .filter(|(key, _)| {
             key.starts_with("CARGO_CFG_")
                 || key.starts_with("CARGO_FEATURE_")
+                || (android
+                    && (key == loader_path
+                        || key.starts_with("CARGO_PKG_")
+                        || key.starts_with("DEP_")
+                        || matches!(
+                            key.as_str(),
+                            "CARGO"
+                                | "CARGO_MANIFEST_PATH"
+                                | "CARGO_MANIFEST_LINKS"
+                                | "CARGO_ENCODED_RUSTFLAGS"
+                                | "NUM_JOBS"
+                                | "RUSTC"
+                                | "RUSTDOC"
+                                | "RUSTC_WRAPPER"
+                                | "RUSTC_WORKSPACE_WRAPPER"
+                                | "RUSTC_LINKER"
+                        )))
                 || matches!(
                     key.as_str(),
                     "TARGET" | "HOST" | "PROFILE" | "OPT_LEVEL" | "DEBUG" | "CARGO_MANIFEST_DIR"
@@ -334,6 +367,10 @@ pub fn take_linked(files: &[&str]) -> Result<bool, String> {
         "executable": executable, "cwd": env::current_dir().map_err(|e| e.to_string())?,
         "env": variables, "sha256": format!("{:x}", Sha256::digest(fs::read(&executable).map_err(|e| e.to_string())?)),
     });
+    if android {
+        registration["out"] = serde_json::json!(out);
+        registration["files"] = serde_json::json!(files);
+    }
     fs::create_dir_all(&baked).map_err(|e| e.to_string())?;
     let registry = baked.join("rust-baker.json");
     let mut previous: serde_json::Value = fs::read(&registry)
@@ -353,6 +390,7 @@ pub fn take_linked(files: &[&str]) -> Result<bool, String> {
             .as_millis());
         let result = Command::new(&executable)
             .env("EXACT_RUST_BAKE", "1")
+            .env("EXACT_BAKED", &baked)
             .env("OUT_DIR", &baked)
             .output()
             .map_err(|e| e.to_string())?;
@@ -367,13 +405,26 @@ pub fn take_linked(files: &[&str]) -> Result<bool, String> {
         .map_err(|e| e.to_string())?
         .lines()
     {
-        if line.starts_with("cargo:warning=") || line.starts_with("cargo::warning=") {
+        let Some((name, _)) = line
+            .strip_prefix("cargo::")
+            .or_else(|| line.strip_prefix("cargo:"))
+            .and_then(|line| line.split_once('='))
+        else {
+            continue;
+        };
+        // The separate Android bake owns its input watches. Cargo still owns
+        // the compiler and linker directives emitted by the build script.
+        if name == "warning"
+            || (android && !matches!(name, "rerun-if-changed" | "rerun-if-env-changed"))
+        {
             println!("{line}");
         }
     }
     for file in files {
         let from = baked.join(file);
-        println!("cargo:rerun-if-changed={}", from.display());
+        if !android {
+            println!("cargo:rerun-if-changed={}", from.display());
+        }
         let bytes = fs::read(from).map_err(|e| e.to_string())?;
         let to = out.join(file);
         if fs::read(&to).ok().as_deref() != Some(&bytes) {

@@ -169,6 +169,20 @@ update` once its `app.json` names Android. That verb is `build <app> --apk --ins
 runs the tests, the first screen and the relaunch with screenshots light and dark, without `check`, which this host
 does not observe for yet.
 
+Standard development APKs carry the plan, compatibility document, and any Hermes
+bytecode and module receipt in a separate read-only native image. The host reads
+TypeScript grants and the Canvas 2D roster from that receipt. The bake runs before the host build.
+Cargo watches the generated Rust, and a change confined to the baked data replaces
+only the data image. Android's linker maps it at launch. Each Cargo build unit
+has its own bake. Release builds embed the bake in the Canvas library. An
+authored workspace splits automatically when its build script and library entry
+match the generated shell. A custom build script can opt in with
+`exact_js_bake::take_android_linked` or `exact_bake::host::take_android_linked` at
+entry and return when it answers true. The `exact_bake` helper takes the names of
+the additional generated Rust files the entry includes. Cargo applies the compiler
+and linker directives from the separate bake and relinks when the native objects
+or archives they name change.
+
 **In a dev loop** (LLP 1122 D4): `bun exact.mjs android --run --url http://127.0.0.1:<port>/`, with the loop
 (`bun exact.mjs web`) running, launches the app following it. By hand: give the launch the loop's page URL as
 `x_dev_plan` (exact2's `EXACT_DEV_PLAN`), through `adb reverse` since the loop serves this Mac's loopback only:
@@ -200,9 +214,9 @@ which `exact setup` installs.
 ## A TypeScript data module (LLP 1115.001 §5.2)
 
 Shelf (`apps/shelf`) is the app that defines "Android works", and its data is `app.ts`. Its library
-(`apps/shelf/android`) is Caltrain's with two differences: the build script is the Linux host's JavaScript bake
-(`exact_js_bake::build(.., "linux")`: the plan, the module as Hermes bytecode, its identity and grants), and the
-library links `exact-js` and with it the lean Hermes VM, from the pinned Ibex release's Android Hermes bundle, which
+(`apps/shelf/android`) runs `exact_js_bake::build_android`, which uses the Linux host's JavaScript bake
+to produce the plan and Hermes bytecode. The library links `exact-js` with the lean Hermes VM from the
+pinned Ibex release's Android Hermes bundle, which
 `exact setup` installs and verifies as it does the other targets' (LLP 1107 §4.1). One built from an Ibex checkout
 with `bun scripts/hermes-android.mjs build` takes its place (`agent-android.mjs` hands it to Cargo).
 The local builder selects API 29, the oldest supported Android, for both Hermes and ICU.

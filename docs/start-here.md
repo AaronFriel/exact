@@ -157,10 +157,13 @@ required tool, device or simulator is unavailable, report that target as unteste
 |---|---|---|
 |Web|`bun exact.mjs verify web`|`bun exact.mjs web`|
 |iOS|`bun exact.mjs verify ios`|`bun exact.mjs ios --run`|
-|Android|`bun exact.mjs verify android`|`bun exact.mjs android --run`|
+|Android|`bun exact.mjs verify android`|Start `bun exact.mjs web`, then run `bun exact.mjs android --run --url http://127.0.0.1:8765/` in another terminal.|
 |Windows|`bun exact.mjs verify windows`|`bun exact.mjs windows --run`|
 |macOS|`bun exact.mjs test macos`, then `bun exact.mjs agent macos --chrome platform "clock data" "screenshot .exact/mac.png window"` (`check` is the web's and iOS's)|`bun exact.mjs mac --run`|
 |Linux|`bun exact.mjs linux`, then `bun exact.mjs test linux`|The Linux host is headless; inspect it with `bun exact.mjs agent linux tree` after building.|
+
+For Android live iteration, use the port the web loop prints. Saving a Contract
+or `app.ts` edit updates the running app without rebuilding the APK.
 
 A bare `bun exact.mjs verify`, `test` or `agent` runs on a target `app.json` names:
 the web when it names the web or nothing, else the first that runs on this machine (iOS,
