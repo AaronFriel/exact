@@ -94,7 +94,7 @@ export const classifications = [
     ["runner:runner/src/runner/page.rs", "Runner::page Runner::reads_page_field Runner::set_page"],
     ["runner:runner/src/runner/resize.rs", "Runner::resize_delivered Runner::resize_due Runner::resize_settled"],
     ["runner:runner/src/native_geometry.rs", "chain geometry is_geometry project query templates unsettled"],
-    ["runner:runner/src/runner/geometry_facts.rs", "Runner::deliver_geometry#chain:1 Runner::deliver_geometry#generation:1"],
+    ["runner:runner/src/runner/geometry_facts.rs", "Runner::deliver_geometry#chain:1"],
     ["runner:runner/src/runner/root_font.rs", "Runner::display_scale Runner::host_root_font_size Runner::root_font_size Runner::set_bold_text Runner::set_display_scale Runner::set_root_font_size"],
     ["runner:runner/src/runner/shown.rs", "Runner::place_blocks Runner::top_layer Runner::top_layer_backdrop Runner::top_layer_frames"],
     ["runner:runner/src/runner/surface_record.rs", "Runner::set_surface_record Runner::surface_refusals"],
@@ -437,7 +437,7 @@ export const classifications = [
     ["painted:host/painted/src/presenter/scroll_end.rs", "Presenter::tracks_scroll_end"],
     ["painted:host/painted/src/presenter/scrollbar.rs", "Presenter::refresh_scrollbar_preferences"],
     ["painted:host/painted/src/presenter/shortcuts.rs", "Presenter::shortcut_buttons"],
-    ["painted:host/painted/src/presenter/split.rs", "current_row owner Presenter::associate_split_row Presenter::read_split Presenter::split_press Presenter::validate_split_rows State::retained_list"],
+    ["painted:host/painted/src/presenter/split.rs", "Presenter::associate_split_row Presenter::read_split Presenter::split_press Presenter::validate_split_rows State::retained_list"],
     ["painted:host/painted/src/presenter/stage.rs", "Presenter::motion_off"],
     ["painted:host/painted/src/presenter/status_bar.rs", "Presenter::resolve_status_bar Presenter::status_bar"],
     ["painted:host/painted/src/presenter/swipe.rs", "Presenter::swipe_candidate Presenter::swipe_ways"],
@@ -1153,7 +1153,7 @@ export const classifications = [
     "The named painted adapter reads or updates the current Presenter through the runner or its Host forwarding API. runner/src/runner/event.rs dispatches through a mounted view and its action binding; no independent operation identity is supplied. contact.rs feedback_contains checks the live node's tracking shape for contact_press, pointer_moved feedback and pointer_lift activation.", [
     ["painted:host/painted/src/presenter/access.rs",
       "Presenter::access_bar_info Presenter::access_bottom Presenter::access_control Presenter::access_emit Presenter::access_hint Presenter::access_inline_words " +
-      "Presenter::access_key Presenter::access_label Presenter::access_name Presenter::access_top Presenter::access_words"],
+      "Presenter::access_key Presenter::access_label Presenter::access_top Presenter::access_words"],
     ["painted:host/painted/src/presenter/access/menu.rs", "Presenter::access_choose Presenter::access_menu Presenter::access_menu_focus"],
     ["painted:host/painted/src/presenter/access/surface.rs", "Presenter::surface_menu_flags Presenter::surface_scroll_label"],
     ["painted:host/painted/src/presenter/access/walk.rs", "Presenter::access_walk Presenter::access_walk_contents"],
