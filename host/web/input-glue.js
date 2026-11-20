@@ -107,7 +107,7 @@ function roveArrow(root, event) {
   // An arrow steps from the focused member whatever its state; Home and End go to the first and last usable one.
   const menu = group.matches(MENUS), all = roversOf(group), usable = all.filter(radioUsable), live = all.filter(item => item === el || usable.includes(item));
   if (!open && !all.includes(el)) return false;
-  const vertical = menu || group.getAttribute("aria-orientation") === "vertical" || viewParent(group)?.hasAttribute("data-exact-sidebar"), rtl = getComputedStyle(group).direction === "rtl";
+  const vertical = menu || group.getAttribute("aria-orientation") === "vertical" || group.hasAttribute("data-exact-sidebar-tabs"), rtl = getComputedStyle(group).direction === "rtl";
   const step = (vertical ? { ArrowDown: 1, ArrowUp: -1 } : { ArrowRight: rtl ? -1 : 1, ArrowLeft: rtl ? 1 : -1 })[key];
   const next = open ? live.at(key === "ArrowDown" || key === "Home" ? 0 : -1) : step ? live[(live.indexOf(el) + step + live.length) % live.length] : key === "Home" ? usable[0] ?? el : key === "End" ? usable.at(-1) ?? el : null;
   if (!next) return false;
