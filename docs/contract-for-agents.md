@@ -2432,11 +2432,12 @@ fires once, on the list the row lands in, with the dragged row's key, then the
 key it lands before (`none` at the end) and, for an action taking one more
 parameter, `ReorderEvent { from, to }`. The action decides where the row goes: a board whose cards join the bottom
 of the column they are dropped on ignores that key when `from != to`. A board
-is columns in a plain horizontal `scroll`, each a header, a grouped list
-(`flex=1 min-height=…`: the list is the drop target, where the lifted card's centre
-is inside its scroll box, so space below a list that only fits its rows does not
-take the card: a release there lands at the last gap the drag passed over, in the
-card's own column when it crossed no other list) and its quick-add; give each grip `touch-action="none"`
+has columns in a horizontal `scroll`, each with a header, a grouped list and
+a quick-add. Give the list `flex=1 min-height=…` so its scroll box fills the
+available height. The finger or pointer chooses the list under it, even with
+a grip at the edge of a wide card. The lifted card's centre chooses the gap
+within that list. Releasing over a header or gutter uses the last gap the
+drag reached. Give each grip `touch-action="none"`
 and no `press`, `pan`, `pointerdown` or `key` of its own, so the host's keys
 (Space, the arrows, Enter, Escape) work on it. The host draws the lifted row,
 holds the drop until the move shows (a second at most) and scrolls the lists
