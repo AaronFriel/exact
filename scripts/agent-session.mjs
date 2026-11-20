@@ -87,7 +87,7 @@ export async function open({
   scale,
   port,
   ax = false,
-} = {}) {
+} = {}, { openDevice = openStdio } = {}) {
   browser ??= 'chrome';
   if (!['chrome', 'firefox', 'webkit'].includes(browser))
     throw new Error(`browser: chrome, firefox or webkit, not ${browser}`);
@@ -126,7 +126,8 @@ export async function open({
   // and `screenshot <png> window` draws them, a presented sheet's too; a tap naming a tab or a header button the bars
   // stand for presses it (`native: "tab-bar-item"`, `"bar-button-item"`). The default paints the authored header and
   // tablist, which the tree, layout and every tap address as on the web; a header node the bar would not show is
-  // marked `unshown` in the tree, struck through in a screenshot, and fails an `expect` or a `tap` (LLP 1116 D2).
+  // marked `unshown` in the tree and screenshot reply, struck through in an app render, and fails an `expect` or
+  // a `tap` (LLP 1116 D2).
   // macOS: AppKit's sidebar for a root tab bar, `native: "sidebar-row"` (LLP 1115.002 D3); a `dialog` as its sheet and
   // a popover that is no menu as AppKit's popover, windows of their own that `screenshot <png> window` draws over the
   // window (D7.2, D7.3).
@@ -182,7 +183,7 @@ export async function open({
     } else env = { ...(env ?? {}), EXACT_LAUNCH_URL: url };
   }
   const carrier = device
-    ? await openStdio({ host: 'ios', plan, world, size, env, app, device, phone: pick, onProcess })
+    ? await openDevice({ host: 'ios', plan, world, size, env, app, device, phone: pick, onProcess })
     : // `documents` are the Mac's command line, a terminal's route in (LLP
       // 1033 D3); each window's session then routes by its label (LLP 1069.010).
       host === 'macos' || host === 'mac'
@@ -775,14 +776,13 @@ export async function open({
         writeFileSync(resolve(path), bytes);
         return s.tagged({ ...metadata, screenshot: resolve(path) });
       }
-      // `window status` (iOS): with the status bar as the device shows it, to compare with a `simctl io` reference
-      // (euxy FRICTION 5).
+      // `window status` (iOS): with the status bar, to compare with a display reference (euxy FRICTION 5).
       if (form === 'status' && !(target === true && ['ios', 'host-ios'].includes(host)))
-        throw new MalformedOperation("screenshot <png> window status: an iOS simulator's window with its status bar");
+        throw new MalformedOperation("screenshot <png> window status: the iOS window with its status bar");
       // `window app` (iOS): the app's own drawing alone, never the display's (smoke's canvas readback, whose reference
       // is one).
       if (form === 'app' && !(target === true && ['ios', 'host-ios'].includes(host)))
-        throw new MalformedOperation("screenshot <png> window app: an iOS simulator's window as the app draws it");
+        throw new MalformedOperation("screenshot <png> window app: the iOS window as the app draws it");
       // `window pictureinpicture` (macOS): Exact's picture-in-picture window, outside the app's (LLP 1042 §9.1).
       if (form === 'pictureinpicture' && !(target === true && ['macos', 'mac'].includes(host)))
         throw new MalformedOperation(
@@ -799,18 +799,27 @@ export async function open({
         if (r.error) throw new Error(r.error);
         return s.tagged(r);
       }
-      if (form !== undefined && form !== 'status' && form !== 'app')
+      if (form === 'display' && !(target === true && ['ios', 'host-ios'].includes(host)))
+        throw new MalformedOperation('screenshot <png> display: the iOS display');
+      if (form !== undefined && !['status', 'app', 'display'].includes(form))
         throw new MalformedOperation(`screenshot: unknown form ${form}`);
       if (typeof target === 'string')
         return worldTells(
           s,
           await s.op({ op: 'screenshot', ...(await s.target(target)), world: true, path: resolve(path) }),
         );
-      const r = await carrier.screenshot(resolve(path), target, film, form === 'status', form === 'app');
-      if (scale === undefined) return worldTells(s, await s.tagged(r)); // a drawing world's tells (LLP 1127.000 D1)
-      const { image, shrunk } = s.scaled(r);
-      if (shrunk) writeFileSync(r.screenshot, encodePng(image));
-      return worldTells(s, await s.tagged({ ...r, scale }));
+      const area = form === 'display' ? 'display' : target;
+      let r = await carrier.screenshot(resolve(path), area, film || !!s.held, {
+        status: form === 'status', own: form === 'app', skipMotion: !!(s.contact || s.held),
+      });
+      if (r.captureSpace === 'screen' && r.scale === null) return r;
+      if (scale !== undefined) {
+        const { image, shrunk } = s.scaled(r);
+        if (shrunk) writeFileSync(r.screenshot, encodePng(image));
+        r = { ...r, scale };
+      }
+      if (r.captureSpace === 'screen' && r.front !== true) return r;
+      return worldTells(s, await s.tagged(r)); // a drawing world's tells (LLP 1127.000 D1)
     },
     scaled(r) {
       return scaledScreenshot(r, scale, host);

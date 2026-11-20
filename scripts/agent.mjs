@@ -1,8 +1,9 @@
 #!/usr/bin/env bun
-//   tree | layout | state | logs [--all] | check [light|dark|both] | screenshot <png> [window
-//     [status|app|pictureinpicture [<image>]]] (an iOS simulator's window: the display's pixels when they are this
-//     app's, still; `app` the app's own drawing; `pictureinpicture` Exact's floating window on macOS, the image's where
-//     several float) | screenshot <png> compare <reference.png> | screenshot <png|apng> over <ms> every <ms> [window] |
+//   tree | layout | state | logs [--all] | check [light|dark|both] | screenshot <png> [display|window
+//     [status|app|pictureinpicture [<image>]]] (iPhone stills take the display. A simulator window takes the display
+//     while it shows the settled app. `window app` takes the app's drawing. On macOS `pictureinpicture` takes Exact's
+//     floating window, the image's where several float.) | screenshot <png> compare <reference.png> |
+//     screenshot <png|apng> over <ms> every <ms> [window] |
 //     screenshot <path> <canvas> save | screenshot <png> <canvas> from <yaw> <pitch> <distance> | from top <height> |
 //     from camera [over <ms> every <ms>] (a world's look frame, LLP 1127.000) | state <canvas> draws | look · state
 //     <canvas>:<entity> visible
@@ -273,8 +274,8 @@ export async function main(argv, injected = {}) {
             'state',
             'logs [--all]',
             'check [light|dark|both] (what is wrong with the screen, in text: run it before a screenshot)',
-            "screenshot <png> [window [status|app|pictureinpicture [<image>]]] (an iOS simulator's window: the display's pixels when they are this app's, still; `app` the app's own drawing; `pictureinpicture` Exact's floating window on macOS)",
-            "screenshot <png> compare <reference.png> (where and on which nodes the screen differs from it, drawn in <png>.diff.png and the regions up close in <png>.regions.png; an iOS simulator's window with its bars, elsewhere the viewport)",
+            "screenshot <png> [display|window [status|app|pictureinpicture [<image>]]] (iPhone stills and iOS `display` take the display. A simulator window takes the display while it shows the settled app. `window app` takes the app's drawing. On macOS `pictureinpicture` takes Exact's floating window.)",
+            'screenshot <png> compare <reference.png> (differences by node, drawn in <png>.diff.png and <png>.regions.png. On iOS the capture includes the system bars.)',
             'screenshot <png|apng> over <ms> every <ms> [window] (Android reader refuses film. Record --live with adb shell screenrecord.)',
             'screenshot <path> <canvas> save',
             'screenshot <png> <canvas> from <yaw> <pitch> <distance>',
@@ -509,13 +510,15 @@ export async function main(argv, injected = {}) {
           if (args[1] !== 'window' || args.length > 4)
             throw new MalformedOperation('screenshot <png> window pictureinpicture [<image>]');
           r = await s.screenshot(args[0], true, 'pictureinpicture', false, args[3]);
+        } else if (args[1] === 'display' && args[2] !== 'save') {
+          if (args.length !== 2) throw new MalformedOperation('screenshot <png> display');
+          r = await s.screenshot(args[0], true, 'display');
         } else
           r = await s.screenshot(
             args[0] ?? 'screenshot.png',
-            args[2] === 'save' ? args[1] : args[1] === 'display' ? 'display' : args[1] === 'window',
+            args[2] === 'save' ? args[1] : args[1] === 'window',
             args[2],
-            !!s.held,
-          ); // inside a held touch, as it stands
+          );
         break;
       case 'tap':
         // The contact's phases (LLP 1035.003 D1) read as `tap move …`,

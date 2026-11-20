@@ -12,7 +12,7 @@ import { MalformedOperation } from './agent-keys.mjs';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, relative, resolve } from 'node:path';
-import { crop, decodePng, encodePng, shrink } from './png.mjs';
+import { crop, decodePng, encodePng, readSrgbPng, shrink } from './png.mjs';
 import { scaledLines } from './agent-inspect.mjs';
 
 const INK = 40; // a channel difference (of 255) beyond the other image's neighbourhood that makes a cell differ
@@ -535,9 +535,9 @@ export async function compareBox(s, box, path) {
   return `${Math.round((1 - result.match) * cols * rows)} of ${cols * rows} points differ from ${path}, first at (${first % cols}, ${Math.floor(first / cols)})`;
 }
 
-/** The CLI's `screenshot <png> compare <reference.png>` (`args` after `screenshot`). On an iOS simulator the capture is
- *  the window with its status bar, as a device screenshot is (`window` and `window status` may be said); elsewhere the
- *  viewport, rotated onto the panel's axes on Linux. */
+/** The CLI's `screenshot <png> compare <reference.png>` (`args` after `screenshot`). On iOS the capture includes the
+ *  status bar (`window` and `window status` may be said). Other hosts capture the viewport, rotated onto the panel's
+ *  axes on Linux. */
 export function compareScreenshot(s, args) {
   const at = args.indexOf('compare'), [path, ...form] = args.slice(0, at), reference = args[at + 1];
   const ios = ['ios', 'host-ios'].includes(s.host);
@@ -546,9 +546,10 @@ export function compareScreenshot(s, args) {
   return compareOp(s, resolve(reference), () => s.screenshot(path, ios, ios ? 'status' : undefined));
 }
 
-/** What a capture's reply says it left out or could not do, a line each. */
+/** The capture's pixel source and any differences from the presentation, a line each. */
 function captureNotes(shot) {
   const out = [];
+  if (shot.pixels) out.push(`pixels=${JSON.stringify(shot.pixels)}`);
   for (const k of ['note', 'chromeNote', 'unshownNote']) if (typeof shot[k] === 'string') out.push(shot[k]);
   if (shot.notShown?.windows?.length) out.push(`not in the capture, as windows of their own: ${shot.notShown.windows.join(', ')} (the reference may show them)`);
   if (shot.imagesPending) out.push(`${shot.imagesPending} image${shot.imagesPending === 1 ? ' was' : 's were'} still loading`);
@@ -562,8 +563,9 @@ function captureNotes(shot) {
  *  reply with `compare`, `diff`, `side`, `close` and `text`. */
 export async function compareOp(s, referencePath, take) {
   let ref;
-  try { ref = decodePng(readFileSync(referencePath)); } catch (e) { throw new MalformedOperation(`compare ${referencePath}: ${e.code === 'ENOENT' ? 'no such file' : e.message}`); }
+  try { ref = readSrgbPng(referencePath); } catch (e) { throw new MalformedOperation(`compare ${referencePath}: ${e.code === 'ENOENT' ? 'no such file' : e.message}`); }
   let shot = await take();
+  if (shot.captureSpace === 'screen' && shot.scale === null) throw new Error(`compare: ${shot.note}`);
   const w = Math.round(shot.w);
   // A web page's reference as wide as the viewport and taller, a design's capture of the whole page: the viewport
   // takes the reference's height for the capture and the nodes read beside it, and its own back after.
@@ -573,29 +575,30 @@ export async function compareOp(s, referencePath, take) {
   let layout, tree, png;
   try {
     referenceScale(ref, w, h);
-    png = decodePng(readFileSync(shot.screenshot));
+    png = readSrgbPng(shot.screenshot);
     if (png.width < w || png.height < h) throw new Error(`compare: the capture is ${png.width}×${png.height} px for ${w}×${h} pt; take it at a pixel a point or more`);
     layout = await s.layout(undefined, undefined, s.host === 'web' ? { picture: true } : {}); tree = await s.tree();
   } finally {
     if (h !== back) await s.resize(w, back);
   }
   const notes = captureNotes(shot);
-  // A window capture (iOS) holds the viewport where the window has it, read from a node's own spaces; a viewport drawn
-  // smaller than its points (`--size`) has no such offset.
+  // A viewport drawn at another size than its points needs more than a translation into the picture.
+  const captureSpace = shot.captureSpace ?? (shot.window ? 'window' : null);
   let origin = [0, 0], placed = true;
-  if (shot.window) {
+  if (captureSpace) {
     const probe = (layout.nodes ?? []).find((n) => n.w > 0 && n.h > 0);
     const space = probe ? (await s.op({ op: 'layout', id: probe.id }).catch(() => null))?.node?.space : null;
-    if (space?.window && space?.viewport && (Math.abs(space.window.w - space.viewport.w) > 0.5 || Math.abs(space.window.h - space.viewport.h) > 0.5))
+    const box = space?.[captureSpace], viewport = space?.viewport;
+    if (box && viewport && (Math.abs(box.w - viewport.w) > 0.5 || Math.abs(box.h - viewport.h) > 0.5))
       throw new MalformedOperation('compare: the viewport is drawn at another size than its points (--size): compare at the device\'s own size');
-    if (space?.window && space?.viewport) origin = [space.window.x - space.viewport.x, space.window.y - space.viewport.y];
-    else { placed = false; notes.push('no node is named: the host gave no node\'s place in the window'); }
+    if (box && viewport) origin = [box.x - viewport.x, box.y - viewport.y];
+    else { placed = false; notes.push(`no node is named: the host gave no node's place in ${captureSpace} coordinates`); }
   }
   const nodes = placed ? viewNodes(layout, tree, origin, shot) : [];
-  // The rows other processes draw on a device (its status bar and home indicator), never scored: the window's safe area.
-  const top = shot.window ? Math.ceil(Math.max(shot.safeArea?.top ?? 0, typeof shot.statusBar === 'number' ? shot.statusBar : 0)) : 0;
-  const bottom = shot.window ? Math.ceil(shot.safeArea?.bottom ?? 0) : 0;
-  if (shot.window && !shot.safeArea) notes.push('the host gave no safe area: only a status bar it named is left out');
+  // Skip status bar and home indicator rows where the capture gives their insets.
+  const top = captureSpace ? Math.ceil(Math.max(shot.safeArea?.top ?? 0, typeof shot.statusBar === 'number' ? shot.statusBar : 0)) : 0;
+  const bottom = captureSpace ? Math.ceil(shot.safeArea?.bottom ?? 0) : 0;
+  if (captureSpace && !shot.safeArea) notes.push(top ? 'the host gave only the status bar height' : 'the host gave no safe-area or status bar height');
   const A = grid(ref, w, h), B = grid(png, w, h), result = compareGrids(A, B, { top, bottom });
   const base = shot.screenshot.replace(/\.png$/i, ''), diff = `${base}.diff.png`, side = `${base}.side.png`, near = closeUp(ref, png, result);
   writeFileSync(diff, encodePng(diffImage(A, B, result)));

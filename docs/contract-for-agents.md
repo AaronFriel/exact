@@ -223,6 +223,22 @@ record, even where a view carries the same name. Every other reply is one line t
 1206×2622 at its own 3, 402×874 with `--scale 1`, one pixel a point as on the
 web, at about a ninth of the pixels. An app's `bun exact.mjs agent ios|macos`
 takes `--scale 1` unless told otherwise; ask for more only to check fine pixels.
+On a physical iPhone (`agent ios --device`), a still screenshot takes the display
+through Xcode (`pixels="display"`), including video, system bars and the visible
+software keyboard. Its dimensions are in screen points (`captureSpace="screen"`)
+when the app can confirm them. Otherwise the driver keeps the original PNG at
+its native pixel size and reports those dimensions with `scale: null`.
+A still taken during a held contact also uses the display and skips the motion wait.
+The driver checks app focus before and after capture. If focus changes or it
+cannot confirm focus, the reply notes that the display may show another app
+or a system overlay. Scaling a display still keeps its embedded RGB colour profile.
+`check` uses the same display source on a phone. If the capture cannot be
+matched to the app's observation, `check` retries once and reports an
+incomplete check if the retry fails.
+`window app` and timed films take the app's drawing (`pixels="app"`).
+On a simulator, `screenshot <png> display` takes the full screen and reports the
+same screen geometry and keyboard fields. A display reply names authored header
+nodes UIKit's navigation bar omits under `unshown`.
 On a simulator a `window` screenshot's pixels are the display's (`pixels="display"`):
 glass, blur and the keyboard as the device draws them. So are a plain one's where glass
 or a blur lies in the page; where the display cannot be read (the app not in front, an
@@ -4227,8 +4243,8 @@ main navigationKey=`${top(nav).id}` navigationBack="close" navigate=follow displ
   `screenshot "file" window` draws them (`display` reads the simulator's screen as it
   is, a system alert over the app included), and a tap naming a tab or a header control
   presses it through its bar (`native: "tab-bar-item"`, `"bar-button-item"`). The
-  bars' own motion runs on real time (`clock +300 real` before a screenshot); the
-  software keyboard, another window, is not drawn.
+  bars' own motion runs on real time (`clock +300 real` before a screenshot).
+  The software keyboard belongs to the system and is outside the app's drawing.
 - On the Mac a root tablist placed as above (the root column's last child) is the
   window's sidebar: AppKit's source list, one row a tab, with its button in the
   toolbar and View ▸ Show Sidebar. Under the agent on `macos` the authored tablist

@@ -549,7 +549,11 @@ extension Agent {
 
         roots.forEach { walk($0, alpha: 1, held: false) }
         let dark = vp.traitCollection.userInterfaceStyle == .dark
-        var reply: [String: Any] = ["viewport": rect(port), "capture": ["window": true, "w": r2(win.bounds.width), "h": r2(win.bounds.height)],
+        let space = win.screen.coordinateSpace
+        let origin = win.convert(win.bounds.origin, to: space)
+        let screen = ["x": r2(origin.x), "y": r2(origin.y), "w": r2(space.bounds.width), "h": r2(space.bounds.height)]
+        let capture: [String: Any] = ["window": true, "w": r2(win.bounds.width), "h": r2(win.bounds.height), "screen": screen]
+        var reply: [String: Any] = ["viewport": rect(port), "capture": capture,
                                     "scheme": dark ? "dark" : "light", "target": 44, "items": items]
         if let keyboard { reply["keyboard"] = r2(keyboard) }
         if !platformMenus.isEmpty { reply["advice"] = platformMenus.map { ["kind": "menu", "id": Int($0.popover.id), "context": $0.context] } }

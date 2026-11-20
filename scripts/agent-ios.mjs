@@ -383,18 +383,12 @@ async function openIOSOwned({ a, bundle, id, dev, plan, size, extra, session, ho
         if (r.error) throw new Error(r.error);
         return r;
       },
-      // `own`: the app's drawing alone, never the display's (smoke's canvas readback); `window === 'display'`: the
-      // display as it is (`displayAsIs`).
-      async screenshot(path, window = false, film = false, status = false, own = false) {
+      async screenshot(path, window = false, film = false, { status = false, own = false, skipMotion = false } = {}) {
+        if (window === 'display') return simulatorDisplay(dev.udid, () => displayAsIs(ask, path, dev.udid, { skipMotion }));
         const take = async () => {
-          const r = await ask({
-            op: 'screenshot',
-            path,
-            window: window === 'display' || window,
-            ...(film ? { film } : {}),
-          });
+          const motion = skipMotion && !film ? { skipMotion } : {};
+          const r = await ask({ op: 'screenshot', path, window, ...motion, ...(film ? { film } : {}) });
           if (r.error) throw new Error(r.error);
-          if (window === 'display' && !film) return displayAsIs(r, path, dev.udid);
           const bar = r.statusBar;
           if (!status) delete r.statusBar;
           // The host draws the window (with an alert or sheet up, or asked); its pixels are then the display's, `simctl
@@ -406,7 +400,7 @@ async function openIOSOwned({ a, bundle, id, dev, plan, size, extra, session, ho
             return own
               ? (delete r.materials, r)
               : withMaterials(r, path, async p => {
-                  const w = await ask({ op: 'screenshot', path: p, window: true });
+                  const w = await ask({ op: 'screenshot', path: p, window: true, ...motion });
                   if (w.error) throw new Error(w.error);
                   return withDisplay(w, p, dev.udid, w.statusBar ?? 0, { probe });
                 });
