@@ -1030,7 +1030,7 @@ keep `==` for a size the app sets.
 The same step reads `x` or `left`, `y` or `top`, `right`, `bottom`, `centerX`, and
 `centerY` in viewport coordinates. Compare two boxes with
 `expect layout "icon" centerY == layout "label" centerY within 0.5`. The
-optional tolerance is in points and defaults to zero. On the web, `baseline`
+optional tolerance is in points and defaults to zero. On graphical hosts, `baseline`
 reads the first rendered text baseline in viewport points. A box without a reported
 text baseline fails the assertion.
 

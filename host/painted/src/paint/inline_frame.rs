@@ -119,6 +119,20 @@ impl PaintedInline {
         self.bounds(view, Transform::identity())
     }
 
+    pub(crate) fn local_baseline(&self, view: ViewId) -> Option<(f32, f32)> {
+        let run = self.captured.runs.get(&view)?;
+        let p = &self.captured.paragraph;
+        let (line, rect) = p
+            .inline_rects(run.runs.clone(), run.metrics, run.reach)
+            .into_iter()
+            .find(|(_, rect)| rect.2 > 0.)?;
+        let (_, origin) = self
+            .placements
+            .iter()
+            .find(|(lines, _)| lines.contains(&line))?;
+        Some((origin.0 + rect.0, origin.1 + p.baselines()[line]))
+    }
+
     fn bounds(&self, view: ViewId, transform: Transform) -> Option<Rect4> {
         let run = self.captured.runs.get(&view)?;
         let fragments =

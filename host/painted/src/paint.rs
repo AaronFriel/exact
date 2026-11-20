@@ -304,6 +304,8 @@ pub struct PaintedBox {
     pub id: ViewId,
     /// The box.
     pub rect: Rect4,
+    /// The first text baseline in the scroll plane of this painted box.
+    pub(crate) baseline: Option<(f32, f32)>,
     /// The clip, `None` when unclipped.
     pub clip: Option<Rect4>,
     /// The scroll offset for a scroll container.
@@ -991,15 +993,12 @@ impl Painter {
             let (ox, oy) = effective_overflow(&node);
             ox != Overflow::Visible || oy != Overflow::Visible
         };
-        // CSS `visibility` is inherited and per element: a hidden box keeps
-        // its geometry, paints nothing of its own, and is not a hit. A
-        // descendant that computes `visible` still paints and is hit.
-        // `opacity: 0` is the one that blanks the group. A ghost asks
-        // `revealed` (LLP 1094): the wrapper's inherited hidden shows, and
-        // a node that sets its own hidden does not.
+        // A hidden box keeps its geometry. A visible descendant still paints and takes hits.
+        // A ghost reveals the wrapper's inherited visibility (LLP 1094).
         let visible = paints(walk.scene.kernel, id, walk.reveal);
         let hit_start = walk.boxes.len();
         walk.boxes.push(PaintedBox {
+            baseline: None,
             rounded_border: None,
             shape_clips: Vec::new(),
             id,
@@ -1154,7 +1153,8 @@ impl Painter {
                 if let Some(clip) = &clip {
                     self.backend.push_clip(clip, ts);
                 }
-                self.text_node(walk, node, &geometry, rect, ts);
+                let baseline = self.text_node(walk, node, &geometry, rect, ts);
+                walk.boxes[owner].baseline = baseline;
                 if clip.is_some() {
                     self.backend.pop_clip();
                 }

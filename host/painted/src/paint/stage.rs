@@ -735,6 +735,7 @@ impl Painter {
                     tape.replay(self.backend.as_mut(), &mut self.text.borrow_mut(), *ts)
                 }
                 Item::Hit(id, rect) => walk.boxes.push(PaintedBox {
+                    baseline: None,
                     rounded_border: None,
                     shape_clips: Vec::new(),
                     id: *id,

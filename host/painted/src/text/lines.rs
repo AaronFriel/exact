@@ -13,6 +13,18 @@ use parley::FontData;
 use std::sync::Arc;
 
 impl super::Paragraph {
+    pub(crate) fn baseline_at(&self, origin: (f32, f32)) -> Option<(f32, f32)> {
+        let lines = self.lines();
+        lines
+            .lines
+            .iter()
+            .zip(self.baselines())
+            .find_map(|(line, y)| {
+                let glyph = lines.glyphs_of(line).first()?;
+                Some((origin.0 + glyph.x, origin.1 + y))
+            })
+    }
+
     /// A fragment's ink, retaining original line indices and coordinates.
     /// Lines assigned to other columns have no glyphs or inline boxes.
     pub(crate) fn line_fragment(&self, range: std::ops::Range<usize>) -> Self {

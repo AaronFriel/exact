@@ -845,6 +845,7 @@ impl<'a> Replay<'a> {
                     let parent = r.transform;
                     if r.live_hit {
                         walk.boxes.push(PaintedBox {
+                            baseline: None,
                             rounded_border: if walk.scrollbar_cover {
                                 g.outer.rounded_outline()
                             } else {
@@ -903,6 +904,10 @@ impl<'a> Replay<'a> {
                             painter.paint_svg(s, n.clips(), n.paint.content_shape(g), parent);
                         }
                         Payload::Text(p, inline, commands) => {
+                            if r.live_hit {
+                                walk.boxes.last_mut().unwrap().baseline =
+                                    p.baseline_at((g.content.0, g.content.1));
+                            }
                             if let Some(inline) = inline {
                                 walk.inline.insert(
                                     n.id,
@@ -998,6 +1003,7 @@ mod hit_tests {
             let ts = Transform::from_rotate_at(degrees, 50.0, 50.0);
             let rect = (0.0, 0.0, 100.0, 100.0);
             let mut b = PaintedBox {
+                baseline: None,
                 rounded_border: None,
                 shape_clips: Vec::new(),
                 pointer_hit: true,
