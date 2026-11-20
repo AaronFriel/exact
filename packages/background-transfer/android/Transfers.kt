@@ -56,7 +56,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 internal interface Platform {
     val conditions: Conditions
     /** Evidence of a force-stop since the last [acknowledge]. */
-    fun stopped(): Boolean
+    fun stopped(registrations: Set<Key> = emptySet()): Boolean
     /** Whether the device rebooted or the package was updated since [namespace]'s last [acknowledge]. */
     fun restarted(namespace: Namespace): Boolean
     /** The registrations of [namespace] whose user-initiated job the platform holds, pending or running. */
@@ -185,7 +185,7 @@ internal class Transfers(
     }
 
     private fun entry(namespace: Namespace, fresh: Boolean = false) =
-        Enter(namespace, platform.stopped(), platform.restarted(namespace), platform.held(namespace), platform.conditions, fresh)
+        Enter(namespace, platform.stopped(synchronized(store) { durable.records.keys }), platform.restarted(namespace), platform.held(namespace), platform.conditions, fresh)
 
     /** Called on the session executor. Cleanup runs on the control and operation executors, outside the store monitor. */
     fun emptyScratch(namespace: Namespace) {
