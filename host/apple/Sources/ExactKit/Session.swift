@@ -461,9 +461,8 @@ public final class ExactSession {
     // main instead, and runs after the slice lands, in order.
     private(set) var fillInFlight = false { didSet { releaseWaitingFirings() } }
     typealias IdleWork = (views: Int?, work: () -> Void, cancelled: (() -> Void)?, cause: AnyObject?)
-    /// The work waiting, in the order asked (work asked while a slice lands, while work waits or while it runs joins the
-    /// end, so nothing runs ahead of work asked before it), and whether a drain of it runs (`runWaitingWork`)
-    var afterFill: [IdleWork] = [], draining = false
+    /// Work waiting for a slice or a batch to finish, in request order. A stale slice releases its work next turn.
+    var afterFill: [IdleWork] = [], draining = false, idleScheduled = false
     /// A slice's batch is applying, ahead of the work that waited for it
     var fillLanding = false
     private(set) var viewsEpoch = 0
@@ -667,7 +666,7 @@ public final class ExactSession {
         // A reply the slices released (`afterFill`) may have left a deadline
         // due: it advances once they have landed, unless a batch waits on them.
         // Sizes measured as they applied are reported as it ends, whether its last batch applied or was skipped (`reportMeasured`).
-        defer { landing = false; if !applying { reportMeasured() }; workEnded(); if !holdingReports { advanceIfDue() } }
+        defer { landing = false; runWaitingWork(); if !applying { reportMeasured() }; workEnded(); if !holdingReports { advanceIfDue() } }
         while true {
             let first = min(published.earliest ?? limit, limit)
             if let index = nextLanding(before: first) {
@@ -736,7 +735,7 @@ public final class ExactSession {
         fillLanding = false
         if state != .destroyed { presenter.collections.landed(view, at: ProcessInfo.processInfo.systemUptime) }
         guard stale else { return runWaitingWork() }
-        DispatchQueue.main.async { [weak self] in self?.runWaitingWork() }
+        scheduleWaitingWork()
     }
 
     /// Land every session's slice in flight.
@@ -1104,6 +1103,7 @@ public final class ExactSession {
         }
         // What the pass did that a scroll moves (`scrolledWithoutPass`).
         if scrolled { presenter.scrolledWithoutPass() }
+        runWaitingWork()
         drainReports()
         workEnded()
         advanceIfDue()
@@ -1161,6 +1161,7 @@ public final class ExactSession {
             guard !drained else { return }
             drained = true; insideApply = false
             if !landing, !pending.isEmpty { landFill() }
+            runWaitingWork()
             if transaction { CATransaction.commit() }
         }
         defer { drain() }
