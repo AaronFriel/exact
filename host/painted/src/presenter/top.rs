@@ -11,7 +11,8 @@
 //! and MenuFlyout over the window (`top/overlay.rs`). Every other `dialog`
 //! and popover on Windows, and every one on the Linux desktop, is the
 //! author's subtree, laid out by the kernel and painted in the window
-//! (`alert.rs`, LLP 1115.004 D10.7); Android refuses those for now.
+//! (`alert.rs`, LLP 1115.004 D10.7), and so is a dialog on Android whose
+//! author painted its surface (LLP 1035.001 D11); Android refuses the rest.
 //!
 //! **How a surface is painted.** Not by the kernel's layout of the authored
 //! rows, which no native host shows either. The shape rule (`top/shape.rs`)
@@ -488,7 +489,17 @@ impl<D: DataSource> Presenter<D> {
         let pop = (target.and_then(|key| kernel.node_by_key(key)))
             .map(|node| (node.id, node.key, node.parent));
         let plan = pop.and_then(|(id, ..)| self.surface_plan(id, modal));
-        if self.top.overlay.enabled && plan.is_none() {
+        // A dialog whose author painted its surface (its own background
+        // colour or image) is the author's box in HTML's top layer, not a
+        // window of the platform's (LLP 1035.001 D11, as on iOS): on a shell
+        // that makes windows it is painted in the page, as on the desktop
+        // hosts (alert.rs). A chooser and a plain dialog stay refused here.
+        let painted = modal
+            && pop.and_then(|(id, ..)| kernel.node(id)).is_some_and(|n| {
+                n.style.written.has(exact_kernel::StyleId::BackgroundColor)
+                    || n.style.written.has(exact_kernel::StyleId::BackgroundImage)
+            });
+        if plan.is_none() && (self.top.overlay.enabled || (painted && self.has_windows())) {
             return self.alert_present(target, name, invoker, point, modal, now_ms);
         }
         let shows =
@@ -497,7 +508,7 @@ impl<D: DataSource> Presenter<D> {
             (None, _) => Some("no live node has that id"),
             (Some((_, _, parent)), _) if !shows(parent) => Some("it is on a route that does not show"),
             (_, Some(Plan::Menu(_))) if modal => Some("it is a menu, which its invoker opens"),
-            (_, None) => Some("this host presents an alert-shaped alertdialog (text, one cancel, at most three buttons) and a menu popover (button rows); authored dialogs and popovers are presented on desktop hosts, but not yet in Android's windows (LLP 1115.001 D10)"),
+            (_, None) => Some("this host presents an alert-shaped alertdialog (text, one cancel, at most three buttons) and a menu popover (button rows); this host presents an authored dialog only when its author painted its surface (a background colour or image, LLP 1035.001 D11); a chooser, a plain dialog and a popover that is no menu are not built (LLP 1115.001 D10)"),
             _ => None,
         };
         let (Some((id, key, _)), Some(plan), None) = (pop, plan, refusal) else {

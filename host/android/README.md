@@ -1146,8 +1146,14 @@ tree, so it is written twice; it belongs in shared Rust.
   the error role, a line where the author wrote `hr`. It hangs under its invoker from the invoker's start, ends at
   the invoker's end where that does not fit, and opens upward where there is no room below (Compose's
   `DropdownMenuPositionProvider`); a context menu opens where the finger is.
-- Anything else (a chooser with no text, a sheet, a `dialog` its author lays out, a popover that is no menu) is
-  refused in the journal, and nothing opens.
+- *A dialog whose author painted its surface* (its own `background-color` or `background-image`, of any rows, a field
+  included) is no window of the platform's but the author's box in HTML's top layer (LLP 1035.001 D11, as on iOS):
+  the subtree laid out by the kernel and painted in the page's own stream over a scrim, as on the Linux desktop and
+  Windows (`alert.rs`, LLP 1115.004 D10.7). The page under it is inert, Back is its close request, `closedby="any"`
+  closes it on a tap outside its box, a field in it is the reader's `EditText` like any other (it rides above the
+  keyboard), and the focus returns to its invoker when it closes.
+- Anything else (a chooser with no text, a sheet, a `dialog` its author lays out on the platform's surface, a popover
+  that is no menu) is refused in the journal, and nothing opens.
 
 **How a window is painted: a second stream, in a second view.** A surface is no part of the page's stream. exact2
 measures and paints it through a recorder of its own, and the words go to the reader inside the statement of the
@@ -1236,8 +1242,8 @@ Not built of D10:
 
 - **Accessibility.** `uiautomator dump` shows an open alert as a window of its own holding one focused
   `android.view.View` with no text, description or children: TalkBack lands on it and has nothing to read (D13).
-- **A text field inside a dialog.** The shape rule admits text and buttons only, so a dialog with an `input` is no
-  alert and is refused; nothing hosts a field in a surface's window.
+- **A text field inside a surface's window.** The shape rule admits text and buttons only, so a dialog with an
+  `input` is no alert and is refused, unless its author painted its surface (above).
 - A bottom sheet for a chooser or a `dialog` its author lays out (a `modal` route is one: [Sheets](#sheets-and-route-motion-llp-1115001-d10-d12)), submenus as cascades (a row that opens another
   menu replaces the first), a menu or a dialog taller than the window (it is not scrolled), a raster image in a
   menu row.
