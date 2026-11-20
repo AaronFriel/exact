@@ -52,6 +52,8 @@ pub(super) fn map_node(
         role::DESCRIPTION_LIST => Role::DescriptionList,
         role::TERM => Role::Term,
         role::DEFINITION => Role::Definition,
+        role::LIST => Role::List,
+        role::LIST_ITEM => Role::ListItem,
         _ => Role::GenericContainer,
     };
     let mut node = Node::new(role);
@@ -460,6 +462,8 @@ mod tests {
             (role::DEFINITION, Role::Definition),
             (role::LIST_BOX, Role::ListBox),
             (role::OPTION, Role::ListBoxOption),
+            (role::LIST, Role::List),
+            (role::LIST_ITEM, Role::ListItem),
         ] {
             let node = map_node(&source(from), (0., 0.), false, false, false);
             assert_eq!(node.role(), to, "role {from}");

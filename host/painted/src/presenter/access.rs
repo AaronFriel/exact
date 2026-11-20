@@ -125,9 +125,13 @@ pub mod role {
     /// A `video` or `audio`, named by its author: where a reader hosts
     /// its player's controller, the controller's own view stands here.
     pub const MEDIA: i32 = 31;
+    /// A static `list` (`role="list"`, `ul`, `ol`).
+    pub const LIST: i32 = 32;
+    /// An item of a static list (`role="listitem"`, `li`).
+    pub const LIST_ITEM: i32 = 33;
 }
 
-/// A table's or a description list's element as its role (HTML-AAM): a
+/// A table's, list's, or description list's element as its role (HTML-AAM): a
 /// node that holds what it heads or holds, named by its author, if at all.
 fn structure_role(node: &NodeRef<'_>) -> Option<i32> {
     if node.node_type != exact_kernel::NodeType::View {
@@ -143,6 +147,8 @@ fn structure_role(node: &NodeRef<'_>) -> Option<i32> {
         "dl" => role::DESCRIPTION_LIST,
         "dt" => role::TERM,
         "dd" => role::DEFINITION,
+        "ul" | "ol" => role::LIST,
+        "li" => role::LIST_ITEM,
         _ => return None,
     })
 }
@@ -932,6 +938,7 @@ impl<D: DataSource> Presenter<D> {
             .filter_map(|n| match n.role {
                 role::TABLIST => Some((n.id, role::TAB)),
                 role::DESCRIPTION_LIST => Some((n.id, role::TERM)),
+                role::LIST => Some((n.id, role::LIST_ITEM)),
                 _ => None,
             })
             .collect();

@@ -372,8 +372,8 @@ internal class Access(private val host: View) {
                 info.isHeading = n.role != CELL
                 if (n.row > 0 && n.column > 0) info.collectionItemInfo = item(n.row - 1, n.column - 1, false, n.rows, n.columns, n.role != CELL)
             }
-            // A description list is a list of its terms, each placed among them below.
-            DESCRIPTION_LIST -> if (n.of > 0) info.collectionInfo = collection(n.of, 1, AccessibilityNodeInfo.CollectionInfo.SELECTION_MODE_NONE)
+            // A description list or static list counts its items below.
+            DESCRIPTION_LIST, LIST -> if (n.of > 0) info.collectionInfo = collection(n.of, 1, AccessibilityNodeInfo.CollectionInfo.SELECTION_MODE_NONE)
         }
         if (n.role != TAB && n.role != CELL && n.role != COLUMN_HEADER && n.role != ROW_HEADER && n.of > 0 && n.at > 0) {
             val sideways = nodes[n.parent]?.has(SIDEWAYS) == true
@@ -622,6 +622,8 @@ internal class Access(private val host: View) {
         const val OPTION = 29
         const val SPIN_BUTTON = 30
         const val MEDIA = 31
+        const val LIST = 32
+        const val LIST_ITEM = 33
 
         /** A node's flags (`presenter::access::flag`). */
         const val CLICK = 1

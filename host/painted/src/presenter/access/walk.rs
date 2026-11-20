@@ -158,9 +158,10 @@ impl<D: DataSource> Presenter<D> {
             // @ref LLP 1115.000 D12.5 — a heading by its role, never by an
             // `aria-level` alone (the kernel's `Props::heading`).
             let heading = node.props.heading().is_some();
-            let role = match (text, heading) {
-                (true, true) => role::HEADING,
-                (true, false) => role::TEXT,
+            let role = match (text, heading, aria) {
+                (true, true, _) => role::HEADING,
+                (true, false, Some("listitem")) => role::LIST_ITEM,
+                (true, false, _) => role::TEXT,
                 _ => role::IMAGE,
             };
             if let Some(own) = self.access_emit(b, &scope, &node, role, 0, [0.0; 3], name) {
@@ -256,29 +257,29 @@ impl<D: DataSource> Presenter<D> {
                     scope.shift.1 += was.1 - s.offset.1;
                 }
                 scope.parent = own;
-            } else if let Some(role) = structure_role(&node).filter(|_| aria.is_none()) {
+            } else if let Some(role) = match aria {
+                Some("list") => Some(role::LIST),
+                Some("listitem") => Some(role::LIST_ITEM),
+                Some("tablist") => Some(role::TABLIST),
+                None => structure_role(&node),
+                _ => None,
+            } {
                 let words = (label.unwrap_or_default(), String::new());
                 if let Some(own) =
                     self.access_emit(b, &scope, &node, role, 0, [0.0; 3], || Some(words))
                 {
                     scope.parent = own;
                 }
-            } else if aria == Some("tablist")
-                || Self::access_live(&node) != 0
+            } else if Self::access_live(&node) != 0
                 || (label.is_some()
                     && matches!(
                         aria,
                         Some("group" | "radiogroup" | "region" | "dialog" | "alertdialog")
                     ))
             {
-                let role = if aria == Some("tablist") {
-                    role::TABLIST
-                } else {
-                    role::GROUP
-                };
                 let words = (label.unwrap_or_default(), String::new());
                 if let Some(own) =
-                    self.access_emit(b, &scope, &node, role, 0, [0.0; 3], || Some(words))
+                    self.access_emit(b, &scope, &node, role::GROUP, 0, [0.0; 3], || Some(words))
                 {
                     scope.parent = own;
                 }
