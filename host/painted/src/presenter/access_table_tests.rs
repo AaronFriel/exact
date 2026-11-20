@@ -179,7 +179,7 @@ fn static_list_and_listitem_roles_preserve_names_and_nested_controls() {
       row role="listitem" aria-label="Deleted line"
         text "Old text"
         button "Undo" press=undo
-      row role="listitem" aria-label="Blank line" min-height=20
+      row role="listitem" aria-label="Blank line"
         text " " aria-hidden=true
       text "New text" role="listitem" aria-label="Added line"
 "#;
@@ -208,6 +208,7 @@ fn static_list_and_listitem_roles_preserve_names_and_nested_controls() {
             ("Added line", list.id, (3, 3)),
         ]
     );
+    assert_eq!(items[1].rect[3], 0.);
     let undo = told
         .nodes
         .iter()

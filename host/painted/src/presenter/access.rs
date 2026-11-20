@@ -642,7 +642,8 @@ impl<D: DataSource> Presenter<D> {
             painted.rect.2,
             painted.rect.3,
         );
-        let shows = intersect(rect, scope.clip)?;
+        let shows = intersect(rect, scope.clip)
+            .or_else(|| walk::empty_item_bounds(rect, scope.clip, node, role))?;
         let (name, value) = words()?;
         let id = b.unique(match scope.hash {
             Some(hash) => rowed(hash),

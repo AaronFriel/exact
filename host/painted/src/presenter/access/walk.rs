@@ -1,5 +1,31 @@
 use super::*;
 
+/// A labelled empty item still belongs to the list. Keep its real bounds so
+/// keyboard and screen-reader navigation can find it without adding a hit area.
+pub(super) fn empty_item_bounds(
+    rect: Rect4,
+    clip: Rect4,
+    node: &NodeRef<'_>,
+    role: i32,
+) -> Option<Rect4> {
+    if role != role::LIST_ITEM
+        || (rect.2 != 0. && rect.3 != 0.)
+        || !node
+            .props
+            .str(PropId::AccessibilityLabel)
+            .is_some_and(|s| !s.trim().is_empty())
+    {
+        return None;
+    }
+    let axis = |a: f32, length: f32, start: f32, extent: f32| {
+        let (lo, hi) = (a.max(start), (a + length).min(start + extent));
+        (hi > lo || (length == 0. && a >= start && a < start + extent)).then_some((lo, hi - lo))
+    };
+    let (x, w) = axis(rect.0, rect.2, clip.0, clip.2)?;
+    let (y, h) = axis(rect.1, rect.3, clip.1, clip.3)?;
+    Some((x, y, w, h))
+}
+
 impl<D: DataSource> Presenter<D> {
     /// Walk `id` and what is under it into the tree.
     pub(super) fn access_walk(&self, b: &mut Build, id: ViewId, scope: Scope) {
@@ -258,8 +284,12 @@ impl<D: DataSource> Presenter<D> {
                 }
                 scope.parent = own;
             } else if let Some(role) = match aria {
-                Some("list") => Some(role::LIST),
-                Some("listitem") => Some(role::LIST_ITEM),
+                // A virtual row lends its place to the first accessible child.
+                // The native list already publishes its own scroll container.
+                Some("list") if node.node_type != NodeType::List => Some(role::LIST),
+                Some("listitem") if node.props.str(PropId::ListItemKey).is_none() => {
+                    Some(role::LIST_ITEM)
+                }
                 Some("tablist") => Some(role::TABLIST),
                 None => structure_role(&node),
                 _ => None,
