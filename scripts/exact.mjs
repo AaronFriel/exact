@@ -1285,7 +1285,7 @@ const TOPICS = {
   deploy: 'Recipe: porting an app, a release build, splitting the work',
   accessibility: 'Native views: accessibility', strings: 'Recipe: app.json, assets and modules',
   list: 'Recipe: list rows: search, swipe, filter and long-press', midi: 'MIDI: `exactMIDI`, `sendMIDI`, `midimessage`',
-  'sign-in provider': 'Sign-in providers (`@exact/oauth`)',
+  'sign-in provider': 'Sign-in providers (`@exact/oauth`)', transition: 'Recipe: motion', storage: 'Recipe: files, SQLite and grants',
 };
 
 const STOP = new Set(['a', 'an', 'and', 'by', 'for', 'in', 'it', 'its', 'of', 'on', 'or', 'the', 'to', 'you']);
