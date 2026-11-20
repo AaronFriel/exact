@@ -130,14 +130,16 @@ function find(record) {
 const port = el => ({ left: 0, top: 0,
   right: el === document.scrollingElement ? innerWidth : el.clientWidth,
   bottom: el === document.scrollingElement ? innerHeight : el.clientHeight });
+function paddingAndBorder(css, axis) {
+  return (axis ? ['Top', 'Bottom'] : ['Left', 'Right']).reduce((sum, side) =>
+    sum + (parseFloat(css[`padding${side}`]) || 0) + (parseFloat(css[`border${side}Width`]) || 0), 0);
+}
 function dimensions(node) {
   const css = getComputedStyle(node);
   return ['width', 'height'].map((name, i) => {
     let value = parseFloat(css[name]);
     if (!Number.isFinite(value)) return node[i ? 'offsetHeight' : 'offsetWidth'];
-    if (css.boxSizing !== 'border-box') {
-      for (const side of i ? ['Top', 'Bottom'] : ['Left', 'Right']) value += (parseFloat(css[`padding${side}`]) || 0) + (parseFloat(css[`border${side}Width`]) || 0);
-    }
+    if (css.boxSizing !== 'border-box') value += paddingAndBorder(css, i);
     return value;
   });
 }
@@ -154,6 +156,37 @@ function layoutPosition(node) {
   }
   return { left, top };
 }
+// An outer SVG has no offsetParent. If it shares the scroller’s coordinate
+// system, its screen matrix gives the projection of both border boxes. Under
+// an affine transform the centre of each projects to the centre of its bounds.
+function svgBox(el, node) {
+  if (el === document.scrollingElement) return null;
+  for (let n = node; n !== el; n = n.parentElement) if (!n || transformed(n)) return null;
+  const m = node.getScreenCTM();
+  if (!m) return null;
+  const [w, h] = dimensions(node), [pw, ph] = dimensions(el);
+  let { a, b, c, d } = m;
+  const vb = node.viewBox.animVal;
+  if (vb.width && vb.height) {
+    const css = getComputedStyle(node);
+    let sx = (w - paddingAndBorder(css, 0)) / vb.width, sy = (h - paddingAndBorder(css, 1)) / vb.height;
+    const aspect = node.preserveAspectRatio.animVal;
+    if (aspect.align !== aspect.SVG_PRESERVEASPECTRATIO_NONE)
+      sx = sy = aspect.meetOrSlice === aspect.SVG_MEETORSLICE_SLICE ? Math.max(sx, sy) : Math.min(sx, sy);
+    a /= sx; b /= sx; c /= sy; d /= sy;
+  }
+  const det = a * d - b * c;
+  if (!det) return null;
+  const r = node.getBoundingClientRect(), p = el.getBoundingClientRect();
+  // Perspective can give boxes at different positions different projections.
+  const agrees = (bounds, width, height) => Math.abs(bounds.width - Math.abs(a) * width - Math.abs(c) * height) < 0.1
+    && Math.abs(bounds.height - Math.abs(b) * width - Math.abs(d) * height) < 0.1;
+  if (!agrees(p, pw, ph) || !agrees(r, w, h)) return null;
+  const dx = r.left + r.width / 2 - p.left - p.width / 2, dy = r.top + r.height / 2 - p.top - p.height / 2;
+  const left = (d * dx - c * dy) / det + (pw - w) / 2 - el.clientLeft;
+  const top = (a * dy - b * dx) / det + (ph - h) / 2 - el.clientTop;
+  return { left, top, right: left + w, bottom: top + h };
+}
 // Scroll Anchoring §2.2 measures within the scrolling box, before transforms
 // on that box or its ancestors. Client rects retain subpixels and descendant
 // transforms only when no outer transform projects them into screen space.
@@ -166,9 +199,9 @@ function box(el, node) {
     const r = node.getBoundingClientRect(), p = page ? { left: 0, top: 0 } : el.getBoundingClientRect();
     const left = r.left - p.left - (page ? 0 : el.clientLeft), top = r.top - p.top - (page ? 0 : el.clientTop);
     result = { left, top, right: left + r.width, bottom: top + r.height };
+  } else if (node instanceof SVGSVGElement) {
+    result = svgBox(el, node);
   } else {
-    // SVG has no offset box. An unmeasurable candidate falls back to another
-    // viable anchor, its recorded ancestor, or the numeric scroll offset.
     const at = layoutPosition(node), origin = layoutPosition(el);
     if (!at || !origin || !el.clientWidth || !el.clientHeight) return null;
     let left = at.left - origin.left - (page ? 0 : el.clientLeft), top = at.top - origin.top - (page ? 0 : el.clientTop);
@@ -179,7 +212,7 @@ function box(el, node) {
     const [width, height] = dimensions(node);
     result = { left, top, right: left + width, bottom: top + height };
   }
-  return Object.values(result).every(Number.isFinite) ? result : null;
+  return result && Object.values(result).every(Number.isFinite) ? result : null;
 }
 const scrollContainer = n => {
   const s = getComputedStyle(n);

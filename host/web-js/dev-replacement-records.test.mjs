@@ -789,6 +789,8 @@ test.each([
   ])),
 ].map(args => [...args, 'chromium']).concat([
   ['ancestor-rotate', 'svg', 'rotate:180deg', 'firefox'],
+  ['ancestor', 'svg-stretch', 'rotate(27deg) scale(1.3,2.5)', 'chromium'],
+  ['ancestor', 'svg-viewbox', 'scaleY(-2)', 'firefox'],
 ]))('replacement records match browser anchoring through a transformed %s with an %s anchor (%s, %s)', async (mode, kind, transform, engine) => {
   const server = replacementRecordsServer();
   let browser;
@@ -799,10 +801,13 @@ test.each([
     const result = await page.evaluate(async ({ mode, kind, transform }) => {
       const rt = await import('/rt.js'), { prepareDev } = await import('/checkpoint.js');
       const root = document.getElementById('exact-root');
+      const svgHeight = mode.startsWith('anchor') ? 100 : 1000;
+      const viewBox = kind === 'svg-stretch' ? 'viewBox="0 0 400 100" preserveAspectRatio="none"'
+        : kind === 'svg-viewbox' ? 'viewBox="0 0 100 50"' : '';
       const content = height => `<div data-carry-type="Column" style="${mode.startsWith('ancestor') ? `${mode === 'ancestor' ? `transform:${transform}` : transform};transform-origin:top left` : ''}">
         <div data-carry-type="Column" id="port" style="height:100px;width:200px;overflow:auto;${mode.startsWith('self') ? `${mode === 'self' ? `transform:${transform}` : transform};transform-origin:top left` : ''}">
           <div data-carry-type="Column" id="above" style="height:${height}px"></div>
-          ${kind.startsWith('svg') ? `<svg data-carry-type="Svg" width="200" height="100" ${kind === 'svg-viewbox' ? 'viewBox="0 0 100 50"' : ''} style="display:block;${mode.startsWith('anchor') ? `transform:${transform};transform-origin:${mode === 'anchor-origin' ? '20px 10px' : 'top left'}` : ''}"><rect width="200" height="100"/></svg>` : '<div data-carry-type="Column" style="height:100px">Anchor</div>'}
+          ${kind.startsWith('svg') ? `<svg data-carry-type="Svg" width="200" height="${svgHeight}" ${viewBox} style="display:block;${mode.startsWith('anchor') ? `transform:${transform};transform-origin:${mode === 'anchor-origin' ? '20px 10px' : 'top left'}` : ''}"><rect width="200" height="${svgHeight}"/></svg>` : '<div data-carry-type="Column" style="height:100px">Anchor</div>'}
           <div data-carry-type="Column" style="height:1000px"></div>
         </div></div>`;
       const frame = () => new Promise(ok => requestAnimationFrame(() => requestAnimationFrame(ok)));
