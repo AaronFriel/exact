@@ -134,20 +134,22 @@ impl Em<'_> {
                     self.out.push_str(&path);
                     let decl = self.owned(*arm, &format!("$a{arm}"), &mut sc, carry.as_deref())?;
                     self.out.push_str(&decl);
-                    let outer_names = self.arm_element;
-                    self.arm_element = (!self.site_attrs && !self.dev_reload).then_some(0);
+                    let outer_names = self.next_local_element;
+                    self.next_local_element = (!self.site_attrs && !self.dev_reload).then_some(0);
                     let binds = !path.is_empty() || !decl.is_empty() || (k == 0 && bound.is_some());
                     self.template_scope(binds, |em| em.children(em.sites.of_arm(*arm), "p", &sc))?;
-                    self.arm_element = outer_names;
+                    self.next_local_element = outer_names;
                     let built = std::mem::replace(&mut self.out, saved);
                     let params = match (&bound, k) {
-                        (Some(b), 0) => format!("(p,{b})"),
+                        (Some(b), 0) => format!("p,{b}"),
                         _ => "p".into(),
                     };
-                    bodies.push(
-                        self.arm_templates
-                            .arm(format!("{params}=>{{{built}}}"), region_site(plan, r)),
-                    );
+                    bodies.push(self.mount_templates.mount(
+                        &params,
+                        built,
+                        None,
+                        Some(region_site(plan, r)),
+                    ));
                 }
                 while bodies.len() < 2 {
                     bodies.push("0".into());

@@ -109,7 +109,7 @@ for (const stateful of [false, true]) {
     if (stateful) source = source.replace('  derive label', '  state suffix = "!"\n  derive label').replace('value + "!"', 'value + suffix');
     await pageFor(source, async (page, js) => {
       // The wrapper belongs to the owning arm, before its deeper when arm.
-      expect(js).toMatch(/p=>\{(?:const \$a\d+=\{\};)?const d_L\d+_\d+=\(\$budget/);
+      expect(js).toMatch(/(?:p|\(p\))=>\{(?:const \$a\d+=\{\};)?const d_L\d+_\d+=\(\$budget/);
       expect(await page.locator('#exact-root').textContent()).toContain('first!');
       expect(await page.locator('#exact-root').textContent()).toContain('a!');
       await page.getByTestId('change').click();
@@ -271,7 +271,7 @@ test('nested slot arms share mount code and keep each row and arm instance', asy
   expect(reports[0]).toEqual(reports[1]);
 }, 60000);
 
-test('repeated component arms bind their own props, actions and state', async () => {
+test.each([true, false])('repeated components bind their own props, actions and state (conditional %s)', async conditional => {
   const source = `component App
   state left = "Left"
   state right = "Right"
@@ -300,8 +300,7 @@ component Card
     pick: action
     shown: bool
   view
-    if shown
-      Counter(title=title, id=id, description=description, pick=pick)
+    ${conditional ? 'if shown\n      ' : ''}Counter(title=title, id=id, description=description, pick=pick)
 component Counter
   props
     title: string
@@ -333,9 +332,9 @@ component Counter
     await left.click();
     expect(await page.getByTestId('who').textContent()).toBe('Left');
     await page.getByTestId('toggle').click();
-    expect(await page.getByTestId('right').count()).toBe(0);
+    expect(await right.count()).toBe(conditional ? 0 : 1);
     await page.getByTestId('toggle').click();
-    expect(await left.textContent()).toBe('Left count 0');
-    expect(await right.textContent()).toBe('Right! count 0');
+    expect(await left.textContent()).toBe(conditional ? 'Left count 0' : 'Left count 1');
+    expect(await right.textContent()).toBe(conditional ? 'Right! count 0' : 'Right! count 1');
   });
 }, 60000);

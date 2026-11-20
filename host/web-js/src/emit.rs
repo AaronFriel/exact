@@ -18,8 +18,6 @@ use std::fmt::Write as _;
 
 #[path = "answers.rs"]
 mod answers;
-#[path = "arm_templates.rs"]
-mod arm_templates;
 #[path = "commands.rs"]
 mod commands;
 #[path = "each.rs"]
@@ -36,6 +34,8 @@ pub(crate) mod lower;
 mod markdown;
 #[path = "motion.rs"]
 mod motion;
+#[path = "mount_templates.rs"]
+mod mount_templates;
 #[path = "mutations.rs"]
 mod mutations;
 #[path = "named_records.rs"]
@@ -134,8 +134,9 @@ struct Em<'a> {
     parts: Vec<Option<Parts>>,
     uses: Uses,
     out: String,
-    arm_templates: arm_templates::Templates,
-    arm_element: Option<u32>,
+    mount_templates: mount_templates::Templates,
+    next_local_element: Option<u32>,
+    repeated_nodes: Vec<bool>,
     classes: Vec<String>,
     /// Each distinct set of state looks (LLP 1121 D8), `data-exact-looks` index plus one.
     looks: Vec<Vec<(u8, String)>>,
@@ -255,8 +256,13 @@ pub fn emit(plan: &Plan, site_attrs: bool, dev_reload: bool) -> Result<Output, S
         parts,
         uses: Uses::default(),
         out: String::new(),
-        arm_templates: Default::default(),
-        arm_element: None,
+        mount_templates: Default::default(),
+        next_local_element: None,
+        repeated_nodes: if site_attrs || dev_reload {
+            Vec::new()
+        } else {
+            sites::repeated_nodes(plan, &sites)
+        },
         classes: Vec::new(),
         looks: Vec::new(),
         press_paint: false,
@@ -899,7 +905,7 @@ impl Em<'_> {
     fn children(&mut self, list: &[Site], parent: &str, scope: &Scope) -> Result<(), String> {
         for s in list.iter().copied() {
             match s {
-                Site::Node(n) => self.node(n, parent, scope)?,
+                Site::Node(n) => self.mount_node(n, parent, scope)?,
                 Site::Region(r) => self.region(r, parent, scope)?,
             }
         }
@@ -1106,7 +1112,7 @@ impl Em<'_> {
                 "h"
             });
         let status_owner = self.answers.status_owner(i);
-        let e = match &mut self.arm_element {
+        let e = match &mut self.next_local_element {
             Some(next) if !status_owner => {
                 let name = format!("v{next}");
                 *next += 1;
@@ -1114,9 +1120,10 @@ impl Em<'_> {
             }
             _ => format!("e{i}"),
         };
+        let style_class = scope.operand(class.clone());
         let _ = write!(
             self.out,
-            "const {e}={h}({parent},\"{element}\",{class},{attrs_js},{text});"
+            "const {e}={h}({parent},\"{element}\",{style_class},{attrs_js},{text});"
         );
         // Its children go in the zoom's layer.
         let zoomable = exact_runner::uses::zoomable(plan, NodesId(i));

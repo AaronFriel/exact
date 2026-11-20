@@ -920,7 +920,7 @@ fn bound_animation_stacking_matches_kernel() {
     let js = crate::emit::emit(&plan, false, false).unwrap().js;
     assert_eq!(js.matches("const maxStops =").count(), 1);
     assert_eq!(js.matches("const easingWord =").count(), 1);
-    assert_eq!(js.matches("($animationStacks)(v)").count(), 2);
+    assert_eq!(js.matches("($animationStacks)(v)").count(), 1);
     let mut values: Vec<String> = [
         "1s EASE",
         "EASE 1s",

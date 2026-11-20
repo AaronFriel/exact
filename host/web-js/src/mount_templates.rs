@@ -1,4 +1,4 @@
-//! Conditional arms share a mount function within their lexical scope. Root
+//! Repeated subtrees share a mount function within their lexical scope. Root
 //! getters, handlers and literal props may differ at each call. The function
 //! takes those differences as arguments and creates fresh elements and effects.
 
@@ -17,6 +17,7 @@ struct Call {
     id: usize,
     base: Option<u32>,
     args: Vec<Value>,
+    parent: Option<Box<str>>,
 }
 
 #[derive(Clone, Hash, Eq, PartialEq)]
@@ -24,20 +25,20 @@ enum Part {
     Js(Box<str>),
     Site(u32),
     Value(Value),
-    Arm(Call),
+    Mount(Call),
 }
 
 impl Part {
     fn site(&mut self) -> Option<&mut u32> {
         match self {
-            Self::Site(n) | Self::Arm(Call { base: Some(n), .. }) => Some(n),
+            Self::Site(n) | Self::Mount(Call { base: Some(n), .. }) => Some(n),
             _ => None,
         }
     }
     fn values(&mut self) -> &mut [Value] {
         match self {
             Self::Value(value) => std::slice::from_mut(value),
-            Self::Arm(call) => &mut call.args,
+            Self::Mount(call) => &mut call.args,
             _ => &mut [],
         }
     }
@@ -45,6 +46,7 @@ impl Part {
 
 struct Template {
     body: Rc<[Part]>,
+    params: Rc<str>,
     site: bool,
     columns: Vec<Column>,
 }
@@ -71,7 +73,7 @@ impl Template {
 pub(super) struct Templates {
     depth: usize,
     bodies: Vec<Template>,
-    index: HashMap<Rc<[Part]>, usize>,
+    index: HashMap<Rc<str>, HashMap<Rc<[Part]>, usize>>,
     calls: Vec<Call>,
 }
 
@@ -116,21 +118,29 @@ impl Templates {
                 } else if let Some(js) = op.strip_prefix("v:") {
                     Part::Value(Value::Js(js.into()))
                 } else {
-                    let i: usize = op.parse().expect("arm call");
-                    Part::Arm(self.calls[i].clone())
+                    let i: usize = op.parse().expect("mount call");
+                    Part::Mount(self.calls[i].clone())
                 });
             }
         }
         result
     }
 
-    pub fn arm(&mut self, source: String, parent_site: u32) -> String {
+    pub fn mount(
+        &mut self,
+        params: &str,
+        source: String,
+        parent: Option<&str>,
+        parent_site: Option<u32>,
+    ) -> String {
         let mut body = self.parts(&source);
         // A region subject can report its enclosing element. Two uses under
         // the same element move their descendants while keeping that site.
-        for part in &mut body {
-            if matches!(part, Part::Site(n) if *n == parent_site) {
-                *part = Part::Value(Value::Js(parent_site.to_string().into()));
+        if let Some(parent) = parent_site {
+            for part in &mut body {
+                if matches!(part, Part::Site(n) if *n == parent) {
+                    *part = Part::Value(Value::Js(parent.to_string().into()));
+                }
             }
         }
         let base = body.iter_mut().filter_map(Part::site).map(|n| *n).min();
@@ -148,14 +158,17 @@ impl Templates {
             };
             args.push(js);
         }
-        let id = match self.index.get(body.as_slice()) {
+        let params: Rc<str> = params.into();
+        let index = self.index.entry(params.clone()).or_default();
+        let id = match index.get(body.as_slice()) {
             Some(&id) => id,
             None => {
                 let id = self.bodies.len();
                 let body: Rc<[Part]> = body.into();
-                self.index.insert(body.clone(), id);
+                index.insert(body.clone(), id);
                 self.bodies.push(Template {
                     body,
+                    params,
                     site: base.is_some(),
                     columns: args
                         .iter()
@@ -174,6 +187,7 @@ impl Templates {
             id,
             base,
             args: args.into_iter().map(Value::Js).collect(),
+            parent: parent.map(Into::into),
         });
         format!("\0{call}\0")
     }
@@ -185,28 +199,32 @@ impl Templates {
         }
         let view = self.parts(view);
         let mut uses = vec![0usize; self.bodies.len()];
-        for part in self.bodies.iter().flat_map(|t| t.body.iter()).chain(&view) {
-            if let Part::Arm(call) = part {
+        for part in &view {
+            if let Part::Mount(call) = part {
                 uses[call.id] += 1;
             }
         }
-        // Count edges in the shared graph. A child of one shared parent can
-        // stay inline there, however often that parent is called.
-        let names: Vec<_> = self
-            .bodies
-            .iter()
-            .enumerate()
-            .map(|(i, t)| {
-                let name = format!("$v{i}");
-                let len: usize = t
-                    .body
-                    .iter()
-                    .map(|p| if let Part::Js(js) = p { js.len() } else { 1 })
-                    .sum();
-                let n = uses[i];
-                (n > 1 && (n - 1) * len > 8 + (n + 1) * name.len()).then_some(name)
-            })
-            .collect();
+        // Children are interned first. An inlined parent copies its children
+        // to every use. A shared parent emits them once.
+        let mut names = vec![None; self.bodies.len()];
+        for (i, t) in self.bodies.iter().enumerate().rev() {
+            let n = uses[i];
+            let name = format!("$v{i}");
+            let len: usize = t
+                .body
+                .iter()
+                .map(|p| if let Part::Js(js) = p { js.len() } else { 1 })
+                .sum();
+            let share = n > 1 && (n - 1).saturating_mul(len) > 8 + (n + 1) * name.len();
+            if share {
+                names[i] = Some(name);
+            }
+            for part in t.body.iter() {
+                if let Part::Mount(call) = part {
+                    uses[call.id] += if share { 1 } else { n };
+                }
+            }
+        }
         let render = Render {
             templates: &self,
             names: &names,
@@ -241,12 +259,10 @@ impl Templates {
                 if !captures.is_empty() {
                     params.push(env);
                 }
-                write!(out, "const {name}=").unwrap();
-                if !params.is_empty() {
-                    write!(out, "({})=>", params.join(",")).unwrap();
-                }
+                params.push(t.params.to_string());
+                write!(out, "const {name}=({})=>{{", params.join(",")).unwrap();
                 render.expand(&t.body, Base::Relative(0), &values, out);
-                out.push(';');
+                out.push_str("};");
             }
         }
         let base = if enclosing {
@@ -289,7 +305,7 @@ impl Render<'_> {
                 Part::Js(js) => out.push_str(js),
                 Part::Site(n) => out.push_str(&base.plus(*n).js()),
                 Part::Value(value) => out.push_str(&self.value(value, args)),
-                Part::Arm(call) => {
+                Part::Mount(call) => {
                     let t = &self.templates.bodies[call.id];
                     if let Some(name) = &self.names[call.id] {
                         out.push_str(name);
@@ -305,13 +321,26 @@ impl Render<'_> {
                         if !captures.is_empty() {
                             inputs.push(format!("[{}]", captures.join(",")));
                         }
-                        if !inputs.is_empty() {
-                            write!(out, "({})", inputs.join(",")).unwrap();
+                        if let Some(parent) = &call.parent {
+                            inputs.push(parent.to_string());
+                            write!(out, "({});", inputs.join(",")).unwrap();
+                        } else if !inputs.is_empty() {
+                            write!(out, ".bind(null,{})", inputs.join(",")).unwrap();
                         }
                     } else {
                         let values: Vec<_> =
                             call.args.iter().map(|v| self.value(v, args)).collect();
+                        match call.parent.as_deref() {
+                            Some("p") => out.push('{'),
+                            // The parent can have the same local name as a child.
+                            Some(parent) => write!(out, "{{const p={parent};{{").unwrap(),
+                            None => write!(out, "({})=>{{", t.params).unwrap(),
+                        }
                         self.expand(&t.body, base.plus(call.base.unwrap_or(0)), &values, out);
+                        out.push('}');
+                        if call.parent.as_deref().is_some_and(|p| p != "p") {
+                            out.push('}');
+                        }
                     }
                 }
             }
@@ -320,8 +349,36 @@ impl Render<'_> {
 }
 
 impl Em<'_> {
+    pub(super) fn mount_node(
+        &mut self,
+        node: u32,
+        parent: &str,
+        scope: &Scope,
+    ) -> Result<(), String> {
+        if !self
+            .repeated_nodes
+            .get(node as usize)
+            .copied()
+            .unwrap_or(false)
+        {
+            return self.node(node, parent, scope);
+        }
+        let saved = std::mem::take(&mut self.out);
+        let outer = self.next_local_element.replace(0);
+        let scope = Scope {
+            capture: true,
+            ..scope.clone()
+        };
+        self.node(node, "p", &scope)?;
+        self.next_local_element = outer;
+        let body = std::mem::replace(&mut self.out, saved);
+        let mount = self.mount_templates.mount("p", body, Some(parent), None);
+        self.out.push_str(&mount);
+        Ok(())
+    }
+
     pub(super) fn site_number(&self, n: u32) -> String {
-        if self.arm_element.is_some() {
+        if self.next_local_element.is_some() {
             format!("\0s{n}\0")
         } else {
             n.to_string()
@@ -335,7 +392,7 @@ impl Em<'_> {
         what: String,
         instance: bool,
     ) -> Scope {
-        if self.arm_element.is_none() {
+        if self.next_local_element.is_none() {
             return code::evaluation(scope, format!("site {n} {what}"), instance);
         }
         let suffix = serde_json::to_string(&format!(" {what}")).unwrap();
@@ -356,14 +413,14 @@ impl Em<'_> {
         if !new_scope {
             return render(self);
         }
-        let outer = std::mem::take(&mut self.arm_templates);
-        self.arm_templates.depth = outer.depth + 1;
+        let outer = std::mem::take(&mut self.mount_templates);
+        self.mount_templates.depth = outer.depth + 1;
         let saved = std::mem::take(&mut self.out);
         render(self)?;
         let built = std::mem::replace(&mut self.out, saved);
-        std::mem::replace(&mut self.arm_templates, outer).write(
+        std::mem::replace(&mut self.mount_templates, outer).write(
             &built,
-            self.arm_element.is_some(),
+            self.next_local_element.is_some(),
             &mut self.out,
         );
         Ok(())
