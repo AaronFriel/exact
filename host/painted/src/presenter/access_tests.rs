@@ -755,14 +755,14 @@ fn an_open_surface_is_the_whole_tree_and_the_page_under_it_is_not_in_it() {
             (role::HEADING, "Remove Book?"),
             (role::BUTTON, "Cancel"),
             (role::BUTTON, "Remove"),
+            (role::ALERT_DIALOG, "Remove Book?"),
         ]
     );
-    assert_eq!(
-        alert.nodes[0].role,
-        role::HEADING,
-        "the headline is read first"
-    );
-    assert!(alert.nodes.iter().all(|n| n.parent == 0));
+    let (dialog, contents) = alert.nodes.split_first().unwrap();
+    assert_eq!((dialog.role, dialog.parent), (role::ALERT_DIALOG, 0));
+    assert_ne!(dialog.flags & flag::MODAL, 0);
+    assert_eq!(contents[0].role, role::HEADING);
+    assert!(contents.iter().all(|n| n.parent == dialog.id));
     // Cancel closes it, and the page is the tree again.
     let cancel = named(&alert.nodes, "Cancel").id;
     assert!(p.access_act(cancel, act::CLICK, 0.0, 0.0));
