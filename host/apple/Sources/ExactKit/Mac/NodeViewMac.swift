@@ -67,7 +67,7 @@ package final class NodeView: NSView, NSTextViewDelegate, NSTextFieldDelegate {
     /// them (`textAccessibilityChildren`).
     var inlineKeyViews: [UInt32: InlineKeyView] = [:]
     var inlineAccessibility: (key: String?, elements: [NSAccessibilityElement])?
-    var inlinePressed: UInt32?
+    var inlinePressed: (id: UInt32, down: NSPoint)?
     /// An SVG element a click in this `svg` went down on (LLP 1055.000 D17).
     var svgPressed: UInt32?
     /// Its button went down as a Control-click's context click (X85).

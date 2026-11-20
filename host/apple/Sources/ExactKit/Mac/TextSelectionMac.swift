@@ -405,9 +405,11 @@ package final class TextSelection {
     private func atomic(_ node: NodeView) -> Bool { node.selectAllElement != nil || node.inlineText.contains(where: \.selectsAll) }
     /// The paragraph the last press landed in: its release follows a link there.
     private weak var pressed: NodeView?
+    private var clickOrigin: NSPoint?
     func begin(_ node: NodeView, event: NSEvent) {
         requested = nil
         pressed = node
+        clickOrigin = event.clickCount == 1 ? event.locationInWindow : nil
         guard selectable(node) else { clear(); return }
         let clicks = event.clickCount
         // A Shift-click extends what is selected, as in an `NSTextView`
@@ -556,6 +558,10 @@ package final class TextSelection {
     }
 
     func drag(_ event: NSEvent) {
+        if let clickOrigin {
+            if event.withinDragSlop(of: clickOrigin) { return }
+            self.clickOrigin = nil
+        }
         if pendingBegin { deferredDrag = event; return }
         guard anchor != nil || list != nil else { return }
         if let anchor {
