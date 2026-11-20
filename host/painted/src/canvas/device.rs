@@ -178,8 +178,8 @@ impl<D: DataSource + Default> CanvasHost<D> {
     /// What the reader draws around the page, when that is not what it was
     /// last given: where the page is in the window (x, y, width, height, in
     /// pixels), the colour behind it and in the edges it keeps out of
-    /// (ARGB), and three bits: bit 0 is the dark scheme (light navigation
-    /// icons); bit 1 requests light status bar icons; bit 2 hides the
+    /// (ARGB), and three bits. Bit 0 requests light navigation icons.
+    /// Bit 1 requests light status bar icons. Bit 2 hides the
     /// system bars (LLP 1105 D7). `None` while nothing changed.
     pub fn chrome(&mut self) -> Option<[i32; 6]> {
         let now = pack_chrome(self.p.chrome(), self.scale);

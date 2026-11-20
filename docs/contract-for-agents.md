@@ -7622,8 +7622,9 @@ name="color-scheme">` before the first paint. Android, Linux and Windows follow 
 status bar: of what the bar sits over, the declaration painted on top wins.
 `auto` follows the winner's `color-scheme`, else the page's scheme; without a valid
 declaration the bar follows the page's scheme. On Android, `navigation-bar-style` takes the same three values for the
-navigation buttons or gesture handle. It resolves independently in the same
-scope and defaults to the page's scheme (LLP 1105 D7). Android's modal routes are
+navigation buttons. It resolves independently in the same scope and defaults to
+the page's scheme (LLP 1105 D7). With gesture navigation, Android can choose the
+handle colour from what the page actually paints. Android's modal routes are
 pages that cover the bar; native sheet detents and transition completion are not
 available there (see `host/android/README.md`, Edge to edge). On iOS a flip shows in
 its batch's frame after navigation settles, and `status-bar-animation="fade"` fades
