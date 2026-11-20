@@ -1449,6 +1449,11 @@ Watch builds keep the watch executable's, complication extension's and runtime
 framework's dSYMs in `<name>.dSYMs/Watch/`. Mac builds keep module library and
 framework dSYMs outside the app too, including the bare products' shared runtime
 at `<namespace>/ExactCore.framework.dSYM`.
+
+To keep Spotlight from indexing build intermediates on your Mac, add the checkout's
+or app's `target/` directory to Spotlight's Search Privacy settings. Keep the release
+dSYMs for the executable, frameworks and extensions in an indexed archive so Xcode can
+find the matching symbols for a crash report. [Apple's guide to symbolication](https://developer.apple.com/documentation/xcode/adding-identifiable-symbol-names-to-a-crash-report).
 A production build links its Rust
 with fat LTO and, when its plan is fixed, leaves out the loaded modules the
 plan cannot reach (LLP 1036.000 §5–§10). `--bundle` prints the stable Mac bundle at
