@@ -669,9 +669,12 @@ public final class ExactSession {
         // Sizes measured as they applied are reported as it ends, whether its last batch applied or was skipped (`reportMeasured`).
         defer { landing = false; if !applying { reportMeasured() }; workEnded(); if !holdingReports { advanceIfDue() } }
         while true {
-            while let first = published.earliest, first < limit, let next = published.next() { takePublished(next) }
-            guard let index = nextLanding(before: limit) else { break }
-            land(pending.remove(at: index))
+            let first = min(published.earliest ?? limit, limit)
+            if let index = nextLanding(before: first) {
+                land(pending.remove(at: index))
+            } else if first < limit, let next = published.next() {
+                takePublished(next)
+            } else { break }
         }
         // What was made after the batch being applied lands after it, in a turn of its own.
         if published.claimDrain() { DispatchQueue.main.async { [weak self] in self?.landPublished() } }
@@ -1108,7 +1111,7 @@ public final class ExactSession {
 
     /// Reports laid-out control sizes after earlier owner batches land (LLP 1034 T4); an in-flight slice leaves the report to its landing.
     func reportMeasured() {
-        guard !holdingReports, !(applying || landing || fillInFlight) || !(ownerInFlight || hasPublished()) else { return }
+        guard !holdingReports, !landing, !(applying || fillInFlight) || !(ownerInFlight || hasPublished()) else { return }
         presenter.controls.reportMeasured()
     }
 
