@@ -47,6 +47,7 @@ impl<D: DataSource + Default + 'static> App<D> {
             }
             crate::orientation::apply(p);
             p.hatch_turn();
+            p.poll_images();
             if let Some(e) = p.admit_idle_timer(self.started.elapsed().as_secs_f64() * 1000.0) {
                 eprintln!("exact-windows: {e}");
             }

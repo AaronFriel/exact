@@ -1094,15 +1094,11 @@ impl<D: DataSource + Default + 'static> ApplicationHandler<crate::accessibility:
             self.about_to_wait(events);
             return;
         }
-        // Executor, image and hatch wakes need a display turn; polling the
-        // executor alone does not service all three. Timers take the branch above.
-        if matches!(event, crate::accessibility::Event::Wake) {
-            if counters::enabled() {
-                self.service_causes |= counters::WORKER;
-            }
-            if let Some(window) = &self.window {
-                window.request_redraw();
-            }
+        // Executor, image, tray, appearance and hatch wakes are serviced in
+        // `about_to_wait`, which requests a redraw only when the presenter
+        // becomes dirty or needs continuous frames.
+        if matches!(event, crate::accessibility::Event::Wake) && counters::enabled() {
+            self.service_causes |= counters::WORKER;
         }
         if let crate::accessibility::Event::Access(event) = event {
             if let (Some(access), Some(p), Some(window)) =
