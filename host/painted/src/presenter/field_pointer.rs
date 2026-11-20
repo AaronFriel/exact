@@ -214,6 +214,7 @@ impl<D: DataSource> Presenter<D> {
             cursor.upstream,
         );
         drag.scroll = Some(scroll);
+        self.field_reveal = true;
         Some(())
     }
 
