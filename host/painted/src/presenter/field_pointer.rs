@@ -7,11 +7,21 @@ use field::{byte_at, utf16_len};
 use unicode_segmentation::UnicodeSegmentation;
 
 #[derive(Clone, Copy)]
-enum Unit {
+pub(super) enum Unit {
     Character,
     Word,
     Paragraph,
     Password,
+}
+
+impl Unit {
+    pub(super) fn for_clicks(clicks: u32) -> Self {
+        match clicks {
+            0 | 1 => Self::Character,
+            2 => Self::Word,
+            _ => Self::Paragraph,
+        }
+    }
 }
 
 pub(super) struct Drag {
@@ -37,7 +47,7 @@ impl Drag {
     }
 }
 
-fn range(value: &str, at: u32, unit: Unit) -> (u32, u32) {
+pub(super) fn range(value: &str, at: u32, unit: Unit) -> (u32, u32) {
     // The painted geometry supplies a valid UTF-16 insertion offset.
     match unit {
         Unit::Character => (at, at),
@@ -113,11 +123,7 @@ impl<D: DataSource> Presenter<D> {
         let unit = if clicks > 1 && node.props.str(PropId::Type) == Some("password") {
             Unit::Password
         } else {
-            match clicks {
-                0 | 1 => Unit::Character,
-                2 => Unit::Word,
-                _ => Unit::Paragraph,
-            }
+            Unit::for_clicks(clicks)
         };
         let value = self.field_text(id);
         let Some(cursor) = self.field_pointer_hit(id, &value, point, unit, None) else {

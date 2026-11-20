@@ -2566,7 +2566,8 @@ made selectable (`user-select="text"`), by a long press, a double tap and the
 selection's handles. On Android a long press selects a word in an opted-in
 paragraph. Dragging its handles changes the selected range and Select all
 takes the paragraph's selectable text. On Linux, dragging the mouse selects
-text in opted-in paragraphs. For Markdown, the offsets count UTF-16 units
+text in opted-in paragraphs. Double-click selects a word and triple-click selects
+a paragraph, including text that wraps onto another line. For Markdown, the offsets count UTF-16 units
 in the rendered text. Ctrl+C copies the visible text, with a newline between
 paragraphs, when the host supplies a clipboard. In a
 `user-select="all"` element one click (a long press on Android or iOS,

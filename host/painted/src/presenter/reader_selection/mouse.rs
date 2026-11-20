@@ -2,6 +2,7 @@
 //! paragraphs in the selected interval need glyph geometry.
 use super::*;
 use crate::paint::inline_frame::{selection::Highlight, PaintedInline};
+use crate::presenter::field_pointer::Unit;
 use exact_runner::geometry::GeometryAnswer;
 
 #[derive(Clone)]
@@ -9,6 +10,7 @@ struct Anchor {
     key: NodeKey,
     value: Rc<str>,
     offsets: Range<u32>,
+    unit: Unit,
 }
 
 #[derive(Default)]
@@ -50,7 +52,7 @@ impl<D: DataSource> Presenter<D> {
         .then_some(p)
     }
 
-    fn reader_anchor(&self, hit: NodeKey, x: f32, y: f32) -> Option<Anchor> {
+    fn reader_anchor(&self, hit: NodeKey, x: f32, y: f32, unit: Unit) -> Option<Anchor> {
         let id = self.reader_paragraph(self.host.kernel().node_by_key(hit)?.id)?;
         if self.boxes.iter().find(|b| b.id == id)?.projected() {
             return None;
@@ -60,29 +62,46 @@ impl<D: DataSource> Presenter<D> {
         let character = p.selection_hit(x, y, true)?;
         let parts = self.selection_parts(shaped);
         let part = parts.iter().find(|p| p.range.contains(&character))?;
-        let offset = p
-            .selection_hit(x, y, false)?
-            .clamp(part.range.start, part.range.end);
+        let offsets = match unit {
+            Unit::Paragraph => {
+                let (start, end) = field_pointer::range(&shaped.value, character, unit);
+                start..end
+            }
+            _ if part.atomic.is_some() => part.range.clone(),
+            Unit::Word => {
+                let (start, end) = field_pointer::range(&shaped.value, character, unit);
+                start.max(part.range.start)..end.min(part.range.end)
+            }
+            _ => {
+                let at = p
+                    .selection_hit(x, y, false)?
+                    .clamp(part.range.start, part.range.end);
+                at..at
+            }
+        };
         Some(Anchor {
             key,
             value: shaped.value.clone(),
-            offsets: if part.atomic.is_some() {
-                part.range.clone()
-            } else {
-                offset..offset
-            },
+            offsets,
+            unit,
         })
     }
 
-    pub(in crate::presenter) fn begin_reader_drag(&mut self, hit: Option<NodeKey>, x: f32, y: f32) {
+    pub(in crate::presenter) fn begin_reader_drag(
+        &mut self,
+        hit: Option<NodeKey>,
+        x: f32,
+        y: f32,
+        clicks: u32,
+    ) {
         if crate::PLATFORM != exact_runner::page::Platform::Linux || self.contact_is_direct() {
             return;
         }
-        let anchor = hit.and_then(|key| self.reader_anchor(key, x, y));
+        let anchor = hit.and_then(|key| self.reader_anchor(key, x, y, Unit::for_clicks(clicks)));
         self.mouse_selection.anchor = anchor.clone();
         self.mouse_selection.moved = false;
         if let Some(a) = anchor.filter(|a| !a.offsets.is_empty()) {
-            self.select_to(&a, a.key, a.offsets.end);
+            self.select_to(&a, a.key, a.offsets.clone());
         } else {
             self.apply_mouse_selection(Default::default(), Vec::new(), Default::default());
         }
@@ -129,9 +148,12 @@ impl<D: DataSource> Presenter<D> {
                 .filter(|id| self.boxes.iter().any(|b| b.id == *id && !b.projected()))
                 .or_else(|| self.nearest_paragraph(x, y));
             if let Some(p) = target.and_then(|id| self.brush.inline_text.get(&id)) {
-                if let (Some(key), Some(offset)) = (p.selection_key(), p.selection_hit(x, y, false))
+                let character = !matches!(anchor.unit, Unit::Character);
+                if let (Some((key, shaped)), Some(hit)) =
+                    (p.selectable(), p.selection_hit(x, y, character))
                 {
-                    self.select_to(&anchor, key, offset);
+                    let (start, end) = field_pointer::range(&shaped.value, hit, anchor.unit);
+                    self.select_to(&anchor, key, start..end);
                 }
             }
         }
@@ -142,7 +164,7 @@ impl<D: DataSource> Presenter<D> {
         &self,
         anchor: &Anchor,
         end: NodeKey,
-        offset: u32,
+        target: Range<u32>,
     ) -> Vec<(ViewId, Range<u32>)> {
         let kernel = self.host.kernel();
         let Some(start) = kernel.node_by_key(anchor.key).filter(|n| {
@@ -155,7 +177,7 @@ impl<D: DataSource> Presenter<D> {
         if end == anchor.key {
             return vec![(
                 start.id,
-                anchor.offsets.start.min(offset)..anchor.offsets.end.max(offset),
+                anchor.offsets.start.min(target.start)..anchor.offsets.end.max(target.end),
             )];
         }
         let Some(end) = kernel.node_by_key(end) else {
@@ -169,9 +191,9 @@ impl<D: DataSource> Presenter<D> {
             return Vec::new();
         };
         let (first, last, from, to) = if a < b {
-            (a, b, anchor.offsets.start, offset)
+            (a, b, anchor.offsets.start, target.end)
         } else {
-            (b, a, offset, anchor.offsets.end)
+            (b, a, target.start, anchor.offsets.end)
         };
         let mut ranges: Vec<_> = ids[first..=last]
             .iter()
@@ -182,11 +204,11 @@ impl<D: DataSource> Presenter<D> {
         ranges
     }
 
-    fn select_to(&mut self, anchor: &Anchor, end: NodeKey, offset: u32) {
+    fn select_to(&mut self, anchor: &Anchor, end: NodeKey, target: Range<u32>) {
         let mut marks = BTreeMap::new();
         let mut reports = BTreeMap::new();
         let mut order = Vec::new();
-        for (id, range) in self.paragraph_ranges(anchor, end, offset) {
+        for (id, range) in self.paragraph_ranges(anchor, end, target) {
             let Some(p) = self.selectable_paragraph(id) else {
                 continue;
             };

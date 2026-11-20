@@ -499,6 +499,16 @@ impl<D: DataSource> Presenter<D> {
     /// synthesis; then the node's `pointerdown` (LLP 1005 §3), which the
     /// contact never waits for.
     pub fn pointer_down(&mut self, x: f32, y: f32, now_ms: f64) -> Result<bool, String> {
+        self.pointer_down_counted(x, y, now_ms, 1)
+    }
+
+    fn pointer_down_counted(
+        &mut self,
+        x: f32,
+        y: f32,
+        now_ms: f64,
+        clicks: u32,
+    ) -> Result<bool, String> {
         // Before anything routes it: a scrollbar's, a sheet's or a menu's
         // press makes no contact, and holds a replacement all the same.
         self.pressed |= 1;
@@ -562,7 +572,7 @@ impl<D: DataSource> Presenter<D> {
                                         && c.candidate.is_none()
                                 })
                                 .and_then(|c| c.hit);
-                            self.begin_reader_drag(target, x, y);
+                            self.begin_reader_drag(target, x, y, clicks);
                         }
                         Ok(taken)
                     }
