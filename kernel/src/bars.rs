@@ -558,6 +558,8 @@ impl Tree for Live<'_> {
 pub struct RootTabs {
     /// The `tablist`.
     pub tablist: ViewId,
+    /// The footer sharing a root-level `nav` with this tablist (LLP 1115.002 item 5).
+    pub footer: Option<ViewId>,
     /// Its tabs that name one of the root's tabpanels with `aria-controls`.
     pub tabs: Vec<ViewId>,
     /// The panel each names: one tab's stack.
@@ -701,7 +703,19 @@ impl crate::arena::NodeArena {
                     .str(PropId::Rel)
                     .is_some_and(|rel| rel_has(rel, "search"))
             });
+            let footer = self.parent(list).and_then(|nav| {
+                if self.parent(nav) != Some(root)
+                    || self.props(nav).str(PropId::SemanticTag) != Some("nav")
+                    || self.children(nav).len() != 2
+                {
+                    return None;
+                }
+                self.children(nav).iter().copied().find(|&child| {
+                    child != list && self.props(child).str(PropId::SemanticTag) == Some("footer")
+                })
+            });
             (!named.is_empty()).then_some(RootTabs {
+                footer: footer.map(|slot| self.local_id(slot)),
                 tablist: self.local_id(list),
                 tabs,
                 panels: named,

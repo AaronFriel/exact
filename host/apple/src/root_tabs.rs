@@ -42,10 +42,9 @@ impl<D: DataSource> Host<D> {
     /// (`Runner::panels_need_navigation`), read from the plan, so it is known
     /// for a tab not built yet. `unsaid`: the app left the bar's placement
     /// unsaid, by the web's rule for its own sidebar (`host/web/navigation.js`
-    /// `unsaidBar`, LLP 1116.004 D1.1): the tablist is a direct child of the
-    /// root, not vertical, in flow in the root's flex column, and itself a
-    /// row. It is read here because the layout rows it asks of never cross to
-    /// the presenter (`style::presenter_ignores`). `covered`: the tablist is
+    /// `placeTabBar`, LLP 1116.004 D1.1): a horizontal bar in the root's
+    /// flex column, directly or in the nav it shares with its sidebar footer.
+    /// The layout rows that decide this stay in the kernel (`style::presenter_ignores`). `covered`: the tablist is
     /// covered whole, as the boot covers one a tab bar replaces (`closed.rs`).
     fn root_tabs_json(&self, root: ViewId) -> Option<String> {
         let list = |ids: &[ViewId]| ids.iter().map(u32::to_string).collect::<Vec<_>>().join(",");
@@ -53,14 +52,25 @@ impl<D: DataSource> Host<D> {
         let tabs = kernel.root_tabs(root)?;
         let (node, bar) = (kernel.node(root)?, kernel.node(tabs.tablist)?);
         let column = |d| matches!(d, FlexDirection::Column | FlexDirection::ColumnReverse);
-        let unsaid = node.children().contains(&tabs.tablist)
+        let in_flow = |p| matches!(p, PositionType::Static | PositionType::Relative);
+        let footer = tabs.footer.filter(|&footer| {
+            bar.parent
+                .and_then(|id| kernel.node(id))
+                .is_some_and(|nav| {
+                    in_flow(nav.layout_position())
+                        && (nav.style.display == Display::Block
+                            || nav.style.display == Display::Flex
+                                && column(nav.style.flex_direction))
+                })
+                && kernel
+                    .node(footer)
+                    .is_some_and(|foot| in_flow(foot.layout_position()))
+        });
+        let unsaid = (node.children().contains(&tabs.tablist) || footer.is_some())
             && bar.props.str(PropId::AccessibilityOrientation) != Some("vertical")
             && node.style.display == Display::Flex
             && column(node.style.flex_direction)
-            && matches!(
-                bar.layout_position(),
-                PositionType::Static | PositionType::Relative
-            )
+            && in_flow(bar.layout_position())
             && !column(bar.style.flex_direction);
         let arena = kernel.arena();
         let covered =
@@ -71,8 +81,9 @@ impl<D: DataSource> Host<D> {
             .map(bool::to_string)
             .collect::<Vec<_>>()
             .join(",");
+        let footer = footer.map_or_else(String::new, |id| format!(",\"footer\":{id}"));
         Some(format!(
-            "{{\"root\":{root},\"tablist\":{},\"tabs\":[{}],\"panels\":[{}],\"navigation\":[{navigation}],\"unsaid\":{unsaid},\"covered\":{covered}}}",
+            "{{\"root\":{root},\"tablist\":{},\"tabs\":[{}],\"panels\":[{}],\"navigation\":[{navigation}],\"unsaid\":{unsaid},\"covered\":{covered}{footer}}}",
             tabs.tablist,
             list(&tabs.tabs),
             list(&tabs.panels)
