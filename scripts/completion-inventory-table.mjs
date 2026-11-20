@@ -111,8 +111,9 @@ export const classifications = [
     ["apple:host/apple/src/abi/exports.rs", "exact_dispatch"],
     ["painted:host/painted/src/canvas/access.rs", "CanvasHost::access CanvasHost::access_act CanvasHost::access_off"],
     ["painted:host/painted/src/canvas/field.rs", "CanvasHost::field_action CanvasHost::field_composing CanvasHost::field_edited CanvasHost::field_focused CanvasHost::field_input CanvasHost::field_scrolled CanvasHost::field_selected"],
-    ["painted:host/painted/src/canvas/input.rs", "CanvasHost::finger CanvasHost::scroll CanvasHost::touch CanvasHost::touching"],
+    ["painted:host/painted/src/canvas/input.rs", "CanvasHost::finger CanvasHost::reader_selection CanvasHost::scroll CanvasHost::touch CanvasHost::touching"],
     ["painted:host/painted/src/canvas/jni.rs",
+      "Java_dev_exact_canvas_Native_readerSelection " +
       "Java_dev_exact_canvas_Native_accessAct Java_dev_exact_canvas_Native_fieldAction Java_dev_exact_canvas_Native_fieldComposing " +
       "Java_dev_exact_canvas_Native_fieldEdited Java_dev_exact_canvas_Native_fieldFocused Java_dev_exact_canvas_Native_fieldInput " +
       "Java_dev_exact_canvas_Native_fieldScrolled Java_dev_exact_canvas_Native_fieldSelected Java_dev_exact_canvas_Native_finger Java_dev_exact_canvas_Native_scroll Java_dev_exact_canvas_Native_touch " +
@@ -139,6 +140,8 @@ export const classifications = [
     ["painted:host/painted/src/presenter/desktop_access.rs",
       "Presenter::access_focus Presenter::access_focus_node Presenter::access_origin Presenter::access_select Presenter::access_selection Presenter::access_text " +
       "Presenter::access_view"],
+    ["painted:host/painted/src/presenter/reader_selection.rs",
+      "Presenter::reader_select Presenter::replace_selection Presenter::selection_policy Presenter::selection_reports"],
     ["painted:host/painted/src/presenter/edit_menu.rs", "Presenter::edit_menu_action Presenter::edit_menu_at Presenter::edit_menu_key Presenter::edit_menu_valid Presenter::field_menu_default Presenter::open_edit_menu"],
     ["painted:host/painted/src/presenter/events.rs",
       "Presenter::clear_removed_focus Presenter::cursor_at Presenter::focus_place Presenter::follow_pointer Presenter::hold_modifier Presenter::hover " +

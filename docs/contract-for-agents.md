@@ -6928,10 +6928,10 @@ A runtime choice with a bundled-font literal is refused so it cannot silently
 select an installed face with the same name; write bundled choices as literals.
 
 A `text` with `selectionchange=act` hears the reader's real text selection
-on the web, macOS and iOS: `action act(s: Selection)` gets `s.text`, `s.start` and
+on the web, macOS, iOS and Android. `action act(s: Selection)` gets `s.text`, `s.start` and
 `s.end` in the node's own text ("" at 0, 0 when nothing there is selected).
 On web and macOS, `s.rects` is a list of `Geometry` snapshots for the selected
-fragments in viewport space; empty when cleared (and on iOS).
+fragments in viewport space. It is empty when cleared. iOS and Android report an empty list.
 `removeAllRanges()` clears the reader selection, and
 `setSelectionRange(id, start, end[, direction])` selects a `text` on web and
 macOS using source UTF-16 offsets. Both report changed parts through
@@ -7245,8 +7245,11 @@ paragraph (one selection is one paragraph there). An inline run that says
 `all` is selectable in text that is not (a label, a `header`), alone, on
 all three. Text that presses (`press=`) still presses on each click or
 tap; on macOS it does not select, and on iOS a tap while it holds a
-selection clears the selection, as in a text view. Linux, Windows, Android
-and tvOS have no text
+selection clears the selection, as in a text view. On Android a long press on
+`user-select="text"` selects a word. The handles adjust the selection within
+one paragraph, and the floating toolbar offers Copy, Share and Select all.
+An inline or enclosing `all` selects its text as a unit. Dragging the paragraph
+away from a handle scrolls its container. Linux, Windows and tvOS have no text
 selection, so `text` and `all` change nothing there. `contain` is refused by
 name: no native host has it. These rows take literals
 or choices of literals, so unsupported runtime values cannot bypass the check.

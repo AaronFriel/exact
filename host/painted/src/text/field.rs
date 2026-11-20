@@ -244,6 +244,30 @@ impl Geometry {
         (x, line.top, 1., line.height)
     }
 
+    #[cfg(any(target_os = "android", test))]
+    pub(crate) fn selection_edge(&self, offset: u32, trailing: bool) -> (usize, Rect, bool) {
+        let cursor = Cursor {
+            offset,
+            upstream: trailing,
+        };
+        let index = self.line_index(cursor);
+        let Some(line) = self.lines.get(index) else {
+            return (index, self.caret(cursor), false);
+        };
+        let span = line.spans.iter().find(|s| {
+            if trailing {
+                s.end == offset
+            } else {
+                s.start == offset
+            }
+        });
+        if let Some(s) = span {
+            let x = if trailing { s.right } else { s.left };
+            return (index, (x, line.top, 0., line.height), s.right < s.left);
+        }
+        (index, self.caret(cursor), false)
+    }
+
     pub(crate) fn horizontal_bounds(&self) -> (f32, f32) {
         self.lines
             .iter()

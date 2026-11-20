@@ -2545,9 +2545,11 @@ Nothing selected
 there is `text: ""` with `start == end == 0` and `rects: []`; it fires while a drag moves,
 once per change. The web and macOS select text; iOS selects text its author
 made selectable (`user-select="text"`), by a long press, a double tap and the
-selection's handles; Linux has no text selection on a `text`, so it never
-fires there. In a `user-select="all"` element one click (on iOS a long press
-or a double tap) selects the whole element, and a selection that reaches
+selection's handles. On Android a long press selects a word in an opted-in
+paragraph. Dragging its handles changes the selected range and Select all
+takes the paragraph's selectable text. Linux has no text selection on a
+`text`, so it never fires there. In a `user-select="all"` element one click (a long press on Android or iOS,
+or a double tap on iOS) selects the whole element, and a selection that reaches
 into it takes all of it.
 
 On web and macOS, `removeAllRanges()` clears the reader's selection. Each
@@ -2559,8 +2561,8 @@ CSS whitespace collapsing. `backward` puts the anchor at the end,
 as `Selection.setBaseAndExtent` does. The command replaces the page's previous
 selection and fires `selectionchange` for changed parts without focusing a
 field. An unchanged part does not fire again. These two commands on reader
-text remain unsupported on iOS and Linux; iOS selection events carry an empty
-rectangle list.
+text are available on web and macOS. On iOS and Android selection events carry
+an empty rectangle list.
 
 Rectangles are snapshots at that event, not live layout facts. On the web they
 are the paragraph's selected `Range.getClientRects()`; macOS uses the same
