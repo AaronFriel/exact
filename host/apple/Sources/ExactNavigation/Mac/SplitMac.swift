@@ -303,6 +303,7 @@ final class SplitHost {
         }
         rowOf = rowOf.filter { presenter.views[$0.key] != nil }
         seen = seen.filter { presenter.views[$0] != nil }
+        presenter.tables.setSplitList(controller != nil && capable ? shown?.table : nil)
         guard let controller, capable else {
             release { _ in true }
             showPlaceholder(nil); veil(nil); mark(nil)
