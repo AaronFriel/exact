@@ -796,7 +796,7 @@ export async function runTests({ host, browser, file, plan, app, size, env, webD
     // A test's launch lines lead its steps and override the drive's flags (habits F7).
     // The drive's `--fail-fetch` is every test's, with its own leading `fail fetch` lines added (LLP 1103 D3).
     const facts = { size, seed, locale, formatLocale, timeZone, epoch, failFetch };
-    const lines = [], preferences = [];
+    const lines = [], preferences = [], stored = [];
     const media = {}, permissions = {}; // the latest of each, which a `reload` applies again
     let beforeData = false, leading = 0, reset = null, opensAt = null; // `at`'s location, where the app opens (LLP 1153 D5)
     // `fail fetch` lines that lead the steps are armed before the app's first data load (LLP 1103 D3).
@@ -809,6 +809,7 @@ export async function runTests({ host, browser, file, plan, app, size, env, webD
     for (const st of t.steps) {
       if (st.op === 'before-data') beforeData = true;
       else if (st.op === 'fresh') reset = st;
+      else if (st.op === 'stored') stored.push([st.name, st.json]);
       else if (st.op === 'fail-fetch') { early(st); facts.failFetch = [facts.failFetch, st.times == null ? st.prefix : `${st.prefix}\t${st.times}`].filter(Boolean).join('\n'); if (st.times != null) armed.set(st.prefix, st.line); }
       else if (st.op === 'answer-fetch') facts.failFetch = [facts.failFetch, faultSpecOf([{prefix: st.prefix, hits: 0, armed: true, response: st.response}])].filter(Boolean).join('\n');
       else if (st.op === 'size') facts.size = [st.width, st.height];
@@ -818,6 +819,11 @@ export async function runTests({ host, browser, file, plan, app, size, env, webD
       else break;
       lines.push(st.line);
       leading++;
+    }
+    if (stored.length) {
+      // A fixture and its reload share the named scratch store, even under a live driver's EXACT_STORE=real.
+      fixture.EXACT_STORE = 'memory';
+      Object.assign(fresh, fixture, { EXACT_AGENT_STORED: JSON.stringify(stored) });
     }
     if (host === 'web' && opensAt && /^https?:\/\//.test(url ?? '')) opensAt = new URL(opensAt, url).href;
     // Replay uses the already-resolved facts, including an authored `epoch now` (LLP 1116.007 D3.4).
@@ -993,7 +999,7 @@ export async function runTests({ host, browser, file, plan, app, size, env, webD
         if (INPUTS.has(st.op)) await settleFired();
         if (st.op === 'type') { typed.add(st.target); touched.add(st.target); } else if (INPUTS.has(st.op) || st.op === 'reload') typed.clear();
         switch (st.op) {
-          case 'size': case 'at': case 'epoch': case 'time-zone': case 'locale': case 'seed': case 'before-data': case 'fresh': break; // the session opened with it
+          case 'size': case 'at': case 'epoch': case 'time-zone': case 'locale': case 'seed': case 'before-data': case 'fresh': case 'stored': break; // the session opened with it
           case 'prefer': if (n >= leading) await prefer(st); break;
           // A driver fault (LLP 1103): a leading one was a launch line; a later one arms (or re-arms) now, a `pass` stops it.
           case 'fail-fetch': {
@@ -1113,7 +1119,7 @@ export async function runTests({ host, browser, file, plan, app, size, env, webD
             const tree = await s.tree();
             const f = treeExpectation(tree.nodes, st.target, st.present);
             // The first step of a test that waited for data cannot see the boot's loading view (authoring bench).
-            const first = !beforeData && t.steps.slice(0, t.steps.indexOf(st)).every((p) => p.op in LAUNCH || p.op === 'size' || p.op === 'at' || p.op === 'prefer');
+            const first = !beforeData && n === leading;
             if (f?.unshown) failures.push(`${at}: ${f.message}`);
             else if (f) await fail(`${at}: ${f.message}${first && st.present ? ' (the test waited for the app\'s data before its first step; `before data`, a launch line, starts without that wait)' : ''}`);
             break;

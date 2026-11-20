@@ -490,7 +490,7 @@ impl Parser {
         })
     }
 
-    /// A JSON value from its tokens, as JSON text: a request's body. Its
+    /// A JSON value from its tokens, as JSON text. Its
     /// brackets may span lines.
     fn json_value(&mut self) -> R<String> {
         let token = self.next();
@@ -523,9 +523,9 @@ impl Parser {
                 return Err(SyntaxError {
                     id: "syntax-expected-step",
                     message: format!(
-                        "a request's body is JSON (an object, a list, a string, a number, true, false or null), not {}",
-                        describe(&other)
-                    ),
+                    "expected a JSON object, list, string, number, true, false or null, found {}",
+                    describe(&other)
+                ),
                     span: token.span,
                 })
             }
@@ -539,7 +539,7 @@ impl Parser {
                 return self.err(
                     "syntax-expected-step",
                     format!(
-                    "expected `tap`, `type`, `pick`, `authorize`, `presence`, `clock`, `resize`, `reload`, `close`, `back`, `screenshot`, `fail fetch`, `answer fetch`, `pass fetch`, `prefer`, `request`, `expect`, or a launch line (`size`, `epoch`, `time-zone`, `locale`, `seed`, `fresh`, `before data`, `fail fetch`), found {}",
+                    "expected `tap`, `type`, `pick`, `authorize`, `presence`, `clock`, `resize`, `reload`, `close`, `back`, `screenshot`, `fail fetch`, `answer fetch`, `pass fetch`, `prefer`, `request`, `expect`, or a launch line (`size`, `epoch`, `time-zone`, `locale`, `seed`, `stored`, `fresh`, `before data`, `fail fetch`), found {}",
                     describe(&other)
                 ),
                 )
@@ -1012,6 +1012,11 @@ impl Parser {
                 }
                 Step::At { location, span }
             }
+            "stored" => Step::Stored {
+                name: self.ident()?.0,
+                value: self.json_value()?,
+                span,
+            },
             "seed" => {
                 let seed = self.step_number("the seed, a whole number")?;
                 // Below 2^32, as every host draws it (LLP 1116.005 D5).
@@ -1271,7 +1276,7 @@ impl Parser {
                 return Err(SyntaxError {
                     id: "syntax-expected-step",
                     message: format!(
-                    "expected `tap`, `type`, `pick`, `authorize`, `presence`, `clock`, `resize`, `reload`, `close`, `back`, `screenshot`, `prefer`, `request`, `expect`, or a launch line (`size`, `epoch`, `time-zone`, `locale`, `seed`, `fresh`, `before data`), found `{other}`"
+                    "expected `tap`, `type`, `pick`, `authorize`, `presence`, `clock`, `resize`, `reload`, `close`, `back`, `screenshot`, `prefer`, `request`, `expect`, or a launch line (`size`, `epoch`, `time-zone`, `locale`, `seed`, `stored`, `fresh`, `before data`), found `{other}`"
                 ),
                     span,
                 })
@@ -1312,13 +1317,14 @@ fn during_read(op: &str) -> bool {
 
 /// The words of a test's launch lines, which a test file may also write at
 /// its top level for every test in it (habits F7, calendar F13).
-pub(super) const LAUNCH: [&str; 11] = [
+pub(super) const LAUNCH: [&str; 12] = [
     "size",
     "at",
     "epoch",
     "time-zone",
     "locale",
     "seed",
+    "stored",
     "fresh",
     "before",
     "fail",
@@ -1336,6 +1342,7 @@ pub(super) fn launch_word(step: &Step) -> &'static str {
         Step::TimeZone { .. } => "time-zone",
         Step::Locale { .. } => "locale",
         Step::Seed { .. } => "seed",
+        Step::Stored { .. } => "stored",
         Step::Fresh { .. } => "fresh",
         Step::BeforeData { .. } => "before data",
         Step::FailFetch { .. } => "fail fetch",
@@ -1357,6 +1364,9 @@ pub fn same_launch(a: &Step, b: &Step) -> bool {
         Step::FailFetch { prefix: y, .. } | Step::AnswerFetch { prefix: y, .. },
     ) = (a, b)
     {
+        return x == y;
+    }
+    if let (Step::Stored { name: x, .. }, Step::Stored { name: y, .. }) = (a, b) {
         return x == y;
     }
     if let (Step::Prefer { name: x, .. }, Step::Prefer { name: y, .. }) = (a, b) {

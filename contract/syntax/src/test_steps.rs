@@ -238,6 +238,15 @@ pub enum Step {
         /// Where.
         span: Span,
     },
+    /// A persisted state in the test's initial store (LLP 1116 D5).
+    Stored {
+        /// The state name, including names used by earlier builds.
+        name: String,
+        /// The value as JSON text.
+        value: String,
+        /// Where.
+        span: Span,
+    },
     /// `seed 7`: the session's `exactTime().seed`, `--seed`.
     Seed {
         /// A whole number from 0 through 2^32 − 1.

@@ -187,6 +187,12 @@ fn step_json(step: &Step, s: &mut String) {
         Step::Seed { seed, .. } => {
             s.push_str(&format!("{{\"op\":\"seed\",\"value\":{seed}"));
         }
+        Step::Stored { name, value, .. } => {
+            s.push_str("{\"op\":\"stored\",\"name\":");
+            q(name, s);
+            s.push_str(",\"json\":");
+            q(value, s);
+        }
         Step::Fresh { seed, .. } => {
             s.push_str("{\"op\":\"fresh\",\"seed\":");
             match seed {

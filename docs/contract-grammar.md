@@ -807,6 +807,7 @@ launch        = "size" NUMBER "x" NUMBER NL          (* written 1200x800 *)
               | "at" STRING NL                       (* the location it opens at, "/item/7#moves" *)
               | "locale" STRING NL                   (* a BCP 47 tag, "fr-FR" *)
               | "seed" NUMBER NL                     (* 0 through 2^32 - 1 *)
+              | "stored" IDENT json NL                (* initial JSON for a persisted state in this test *)
               | "fresh" [ STRING ] NL                (* the Snapback dev server emptied first, seeded from the file *)
               | "before" "data" NL                   (* the first step does not wait for data *)
               | "prefer" IDENT { "." IDENT } ( IDENT | STRING ) NL
