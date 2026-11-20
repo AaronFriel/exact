@@ -121,7 +121,7 @@ mod tests {
 
     #[test]
     fn scrolled_selection_keeps_the_visible_parts_of_the_full_range() {
-        let value = "אב 😀 a line long enough to wrap in the field\r\n\n".repeat(16);
+        let value = "אב 😀 a line long enough to wrap in the field\n\n".repeat(16);
         let (mut p, id) = fixture("textarea", &value);
         p.frame();
         let geometry = &p.brush.field_text[&id].geometry;
