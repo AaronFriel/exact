@@ -213,6 +213,35 @@ fn word_and_paragraph_units_preserve_unicode_and_password_privacy() {
 }
 
 #[test]
+fn off_edge_mouse_moves_keep_the_scroll_rate_of_a_stationary_drag() {
+    let value = "word word word word\n".repeat(150);
+    let run = |sideways: &[f32]| {
+        let (mut p, id) = fixture(&value, "");
+        let (x, y) = point(&mut p, id, 22, 0.2);
+        let rect = p.rect_of(id).unwrap();
+        let below = rect.1 + rect.3 + 200.;
+        p.pointer_down_with_clicks(x, y, 0., 1).unwrap();
+        p.pointer_move(x, below, 1.).unwrap();
+        p.frame();
+        assert_eq!(p.scroll_of(id).1, 0.);
+        let initial = p.field_selection(id);
+        for frame in 1..=12 {
+            let now = f64::from(frame * 16);
+            p.tick(now);
+            for dx in sideways {
+                p.pointer_move(x + dx, below, now).unwrap();
+            }
+            p.frame();
+        }
+        let end = p.field_selection(id);
+        assert_eq!(end.start, initial.start);
+        assert!(end.end > initial.end && p.scroll_of(id).1 > 0.);
+        (end, p.scroll_of(id))
+    };
+    assert_eq!(run(&[1., 0., 1., 0.]), run(&[]));
+}
+
+#[test]
 fn holding_a_selection_beyond_the_textarea_scrolls_until_the_pointer_returns_or_releases() {
     let value = (0..150)
         .map(|n| format!("Line {n} sample text"))

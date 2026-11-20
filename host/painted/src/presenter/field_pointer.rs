@@ -187,10 +187,11 @@ impl<D: DataSource> Presenter<D> {
     fn extend_field_selection(
         &mut self,
         id: ViewId,
-        drag: &Drag,
-        autoscroll: Option<(f32, f32)>,
+        drag: &mut Drag,
+        scroll: (f32, f32),
     ) -> Option<()> {
-        let cursor = self.field_pointer_hit(id, &drag.value, drag.point, drag.unit, autoscroll)?;
+        let cursor =
+            self.field_pointer_hit(id, &drag.value, drag.point, drag.unit, Some(scroll))?;
         let current = range(&drag.value, cursor.offset, drag.unit);
         self.mark_pointer_selection(
             id,
@@ -198,6 +199,7 @@ impl<D: DataSource> Presenter<D> {
             selection(drag.anchor, current),
             cursor.upstream,
         );
+        drag.scroll = Some(scroll);
         Some(())
     }
 
@@ -209,10 +211,11 @@ impl<D: DataSource> Presenter<D> {
             return false;
         };
         if drag.point != (x, y) {
-            drag.scroll = None;
             drag.point = (x, y);
             drag.moved = true;
-            if self.extend_field_selection(id, &drag, None).is_none() {
+            // A mouse sample selects at the visible edge. Only a frame advances the scroll.
+            let scroll = drag.scroll.unwrap_or_else(|| self.scroll_of(id));
+            if self.extend_field_selection(id, &mut drag, scroll).is_none() {
                 return false;
             }
         }
@@ -267,11 +270,8 @@ impl<D: DataSource> Presenter<D> {
             (old.0 + velocity.0 * dt).clamp(0., max.0),
             (old.1 + velocity.1 * dt).clamp(0., max.1),
         );
-        if old != next {
-            if self.extend_field_selection(id, &drag, Some(next)).is_none() {
-                return;
-            }
-            drag.scroll = Some(next);
+        if old != next && self.extend_field_selection(id, &mut drag, next).is_none() {
+            return;
         }
         self.field_drag = Some(drag);
     }
