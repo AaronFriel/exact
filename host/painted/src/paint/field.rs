@@ -168,6 +168,11 @@ impl PaintedField {
                     masked,
                     geometry_x.0,
                     geometry_x.1,
+                    previous
+                        .filter(|old| {
+                            multiline && old.multiline && !old.masked && !old.value.is_empty()
+                        })
+                        .map(|old| (old.paragraph.as_ref(), old.geometry.as_ref())),
                 ))
             });
         let (scroll_max, right_caret_inset) = if multiline {

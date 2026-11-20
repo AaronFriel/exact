@@ -554,12 +554,23 @@ mod tests {
             "unchanged textarea must reuse its cached Geometry across unrelated redraws"
         );
         p.set_focus(Some(editor), 10.);
-        p.type_text(editor, "x").unwrap();
+        p.mark_field(
+            editor,
+            &p.field_text(editor),
+            FieldSelection::caret(0),
+            false,
+        );
+        p.key(Some('x'), false, 11.);
+        assert!(p.field_text(editor).starts_with("xline one"));
         p.frame();
         let third = p.brush.field_text[&editor].geometry.clone();
         assert!(
             !std::rc::Rc::ptr_eq(&first, &third),
-            "editing the textarea must rebuild Geometry"
+            "the edited row changes the field geometry"
         );
+        assert!(!third.shares_spans(0, &first, 0));
+        for row in 1..4 {
+            assert!(third.shares_spans(row, &first, row), "unchanged row {row}");
+        }
     }
 }

@@ -131,7 +131,7 @@ impl PaintedInline {
                 start = end;
             }
             Shaped {
-                geom: Geometry::new(p, &value, false, 0., 0.),
+                geom: Geometry::new(p, &value, false, 0., 0., None),
                 value: value.into(),
                 authored: source.authored.clone(),
                 runs,
