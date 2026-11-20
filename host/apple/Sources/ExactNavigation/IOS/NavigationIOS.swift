@@ -98,6 +98,7 @@ final class NavigationHost: NSObject, UINavigationControllerDelegate, UIGestureR
     /// How many routes the selected stack declared at the last projection.
     private var selectedRouteCount = 0
     var adoptedTablist: UInt32?
+    weak var hiddenSidebarFooter: NodeView?
     var tablistAppearanceNone = false
     /// Where the authored tablist was when its covers were last measured.
     var measuredTablist: CGRect?

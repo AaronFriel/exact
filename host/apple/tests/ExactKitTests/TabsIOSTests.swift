@@ -207,6 +207,21 @@ final class TabsIOSTests: XCTestCase {
         until("Saved shown") { self.topRoute(session) == "route-saved" }
     }
 
+    func testThePhonesTabBarHidesTheSidebarFooterAndReturnsItsControls() throws {
+        guard UIDevice.current.userInterfaceIdiom == .phone else { throw XCTSkip("the phone's bottom tab bar") }
+        let session = try fixture("EXACT_SEARCH_TABS_PLAN")
+        let footer = try node(session, "sidebar-footer"), account = try node(session, "account")
+        let navigation = session.presenter.navigationHost, agent = Agent(session: session)
+        until("the platform bar takes the footer out of layout") { navigation.covers[footer.id] == .whole }
+        XCTAssertTrue(footer.isHidden)
+        XCTAssertNotNil(agent.tap(["id": Int(account.id)])["error"])
+        let change = try node(session, "change-bar")
+        XCTAssertNil(agent.tap(["id": Int(change.id)])["error"])
+        until("the app-drawn bar gives the footer back") { navigation.covers[footer.id] == nil && !footer.isHidden }
+        XCTAssertNil(agent.tap(["id": Int(account.id)])["error"])
+        until("Account selects Saved") { self.topRoute(session) == "route-saved" }
+    }
+
     /// The search tab's face and form follow its author: with its symbol,
     /// label and field gone it is UIKit's own again, the magnifying glass and
     /// "Search", and a landing page that activates nothing.

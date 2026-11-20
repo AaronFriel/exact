@@ -834,6 +834,7 @@ extension NavigationHost {
     /// What holds the tabs goes: its stacks are retired, the authored
     /// tablist paints again.
     func retireTabs() {
+        hideSidebarFooter(nil)
         siblings.putAllBack()
         // The tablist's hold on the bar goes with its container (§3.7).
         tablistRoot = nil
@@ -895,6 +896,21 @@ extension NavigationHost {
         guard tablistAppearanceNone, !syncing, let view = presenter.session?.view,
               let list = adoptedTablist.flatMap({ presenter.views[$0] }) else { return }
         if list.convert(list.bounds, to: view) != measuredTablist { reportCovers() }
+    }
+
+    /// The sidebar footer has no place in the iPhone's bottom tab bar (LLP 1115.002 item 5).
+    func phoneSidebarFooter() -> NodeView? {
+        guard UIDevice.current.userInterfaceIdiom == .phone, let tabs = tabController, tabOwner === tabs,
+              let root = container, let shape = presenter.rootTabs[root.id], let footer = shape.footer,
+              let list = presenter.views[shape.tablist], adopts(tablist: list) else { return nil }
+        return presenter.views[footer]
+    }
+
+    func hideSidebarFooter(_ node: NodeView?) {
+        guard hiddenSidebarFooter !== node else { return }
+        if let old = hiddenSidebarFooter, presenter.views[old.id] === old { old.hiddenByHost = false }
+        node?.hiddenByHost = true
+        hiddenSidebarFooter = node
     }
 
     /// Whether a tab container takes this tablist's place.
