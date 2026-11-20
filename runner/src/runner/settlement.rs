@@ -1331,10 +1331,11 @@ impl<D: DataSource> Runner<D> {
             // A resource later in plan order may have written after an
             // earlier reader settled. Repeat against the tentative states;
             // the writer's state already carries the new revision, so it
-            // does not refresh itself, and a reader asleep behind a closed
-            // gate asks nothing (LLP 1161.002 D2).
+            // does not refresh itself, and only live readers can ask again
+            // (LLP 1161.002 D2).
             let stale_store_reader = states.iter().enumerate().any(|(i, state)| {
                 self.asks_on_store_change(i)
+                    && !self.settles_to_nothing(i)
                     && !self.asks_again_after_reply(i)
                     && state
                         .as_ref()
