@@ -1,9 +1,12 @@
 package dev.exact.video
 
 import android.app.Activity
+import android.net.Uri
 import android.os.Looper
 import android.view.View
 import android.widget.FrameLayout
+import androidx.media3.common.C
+import androidx.media3.common.Player
 import androidx.media3.ui.PlayerView
 import dev.exact.canvas.MediaSink
 import org.json.JSONArray
@@ -19,6 +22,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import org.robolectric.util.ReflectionHelpers
 import java.time.Duration
 
 /** The record's rules (LLP 1042.001 D1, D3, D5, D8) as a player follows them, with no media loaded. */
@@ -42,6 +46,30 @@ class MediaPlayerTest {
         .apply { for ((k, v) in pairs) put(k, v ?: JSONObject.NULL) }
 
     @After fun release() { made.forEach { it.release() }; shadowOf(Looper.getMainLooper()).idle() }
+
+    @Test fun streamingPlaybackKeepsWifiAwake() {
+        assertEquals(C.WAKE_MODE_NETWORK, playbackWakeMode(Uri.parse("https://example.com/radio.mp3")))
+        assertEquals(C.WAKE_MODE_NETWORK, playbackWakeMode(Uri.parse("HTTP://example.com/radio.mp3")))
+        assertEquals(C.WAKE_MODE_LOCAL, playbackWakeMode(Uri.parse("file:///radio.mp3")))
+    }
+
+    @Test fun backgroundPlaybackAudioLetsTheDisplaySleepByDefault() {
+        val playback = MediaPlayer(RuntimeEnvironment.getApplication()) { null }.also { made += it }
+        val standard = player()
+        for (p in listOf(playback, standard)) {
+            val audio = props("audio" to true, "controls" to true)
+            p.update(audio, 640, 360, null)
+            ReflectionHelpers.callInstanceMethod<Player.Listener>(p, "listener").onIsPlayingChanged(true)
+            assertEquals(p === standard, p.view.keepScreenOn)
+            p.update(audio.put("preventsDisplaySleepDuringVideoPlayback", true), 640, 360, null)
+            assertTrue(p.view.keepScreenOn)
+
+            p.update(props(), 640, 360, null)
+            assertTrue(p.view.keepScreenOn)
+            p.update(props("preventsDisplaySleepDuringVideoPlayback" to false), 640, 360, null)
+            assertFalse(p.view.keepScreenOn)
+        }
+    }
 
     @Test fun anUnchangedPausedFalseAfterARebuildIsNoRequestToPlay() {
         val first = player(); val events = Events()
@@ -112,6 +140,19 @@ class MediaPlayerTest {
         assertTrue(p.engaged)
         p.shown(false)
         assertFalse(p.snapshot()!!.paused)
+    }
+
+    @Test fun optedOutMutedAutoplayAudioControlsPauseOutOfView() {
+        val p = player()
+        val events = Events()
+        p.bind(events)
+        p.update(props("audio" to true, "controls" to true, "autoplay" to true, "muted" to true), 300, 54, null)
+        p.shown(true)
+        assertFalse(p.snapshot()!!.paused)
+        p.shown(false)
+        assertTrue(p.snapshot()!!.paused)
+        p.shown(true)
+        assertEquals(listOf("play", "pause", "play"), events.names.filter { it == "play" || it == "pause" })
     }
 
     @Test fun theStopPausesAWatchedVideoAndHoldsAFeedVideoForWhenItIsSeen() {

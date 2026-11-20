@@ -113,6 +113,19 @@ impl<D: DataSource + Default> CanvasHost<D> {
             .reader_media(id, key, session, event, payload, state, now);
     }
 
+    /// Authored updates for an audio player whose reader is stopped.
+    #[cfg(target_os = "android")]
+    pub fn background_audio(
+        &self,
+        id: u32,
+        key: exact_kernel::NodeKey,
+        session: u64,
+    ) -> Option<String> {
+        self.p
+            .background_audio(id, key, session)
+            .map(|props| props.to_string())
+    }
+
     /// The reader's answer to request `id`, or its cancellation (`None`).
     pub fn answer(&mut self, id: u32, answer: Option<&str>) {
         self.p.answer_request(id, answer);

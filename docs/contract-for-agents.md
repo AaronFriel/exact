@@ -5450,7 +5450,7 @@ in order before suspension. Returning does not restore a discarded start.
 | Host | `frozen` producer |
 |---|---|
 | Web (both targets) | Page Lifecycle `freeze`/`resume` on `document`, where fired; false elsewhere |
-| Android | Stopped Activity with no successfully promoted foreground-service claim; a started Activity or promoted service keeps it false |
+| Android | Stopped activity without a promoted foreground service carrying a live claim or playing media |
 | Linux desktop | Constant false |
 | Windows desktop | Constant false |
 | iOS and tvOS | Background without active audio eligible for background execution; an idle playback category grants nothing |

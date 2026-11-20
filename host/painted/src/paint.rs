@@ -379,6 +379,7 @@ pub struct Painter {
     pub(crate) window_canvas: Option<ViewId>,
     pub(crate) direct_canvases: std::collections::BTreeSet<ViewId>,
     pub(crate) media: native::Media,
+    boxless_audio: Option<Vec<ViewId>>,
     pub(crate) alert: Option<alert::Picture>,
     /// The text engine, shared with the kernel's measurer.
     pub text: Shared,
@@ -492,6 +493,7 @@ struct Walk<'a, 'b> {
     /// row inherits from its wrapper shows, one its own nodes set does not
     /// (`lift.rs`; b6 review B4).
     reveal: Option<ViewId>,
+    alert: Option<exact_kernel::NodeKey>,
     dialog: Option<ViewId>,
 }
 
@@ -536,6 +538,7 @@ impl Painter {
             window_canvas: None,
             direct_canvases: Default::default(),
             media: Default::default(),
+            boxless_audio: None,
             text,
             scale,
             dark: false,
@@ -820,6 +823,7 @@ impl Painter {
             replay,
             ranks: self.ranks.clone(),
             reveal: None,
+            alert: self.alert.as_ref().map(|a| a.key),
             dialog: None,
         };
         let old_bars = std::mem::take(&mut self.scrollbars.bars);
@@ -923,12 +927,13 @@ impl Painter {
         if walk.skip == Some(node.key) || node.node_type.is_svg_element() {
             return;
         }
-        if (walk.scene.hidden)(id)
-            || (self.alert.as_ref().is_some_and(|a| a.key == node.key) && walk.dialog != Some(id))
-            || node.is_inline_run()
-            || node.style.display == Display::None
+        if (walk.scene.hidden)(id) || walk.draws_alert_elsewhere(&node) || node.is_inline_run() {
+            return;
+        }
+        if node.style.display == Display::None
             || (node.props.str(PropId::SemanticTag) == Some("dialog") && walk.dialog != Some(id))
         {
+            self.boxless_audio(walk, &node);
             return;
         }
         // The roles drawn in the accent read the nearest authored
@@ -1037,7 +1042,7 @@ impl Painter {
         // walk records its boxes) and draws through a backend that draws nothing.
         // Visibility is not that: only this box's own paint is skipped.
         let drawn = (opacity <= 0.0)
-            .then(|| std::mem::replace(&mut self.backend, Box::new(layer::Unpainted)));
+            .then(|| self.replace_picture_backend(walk.scene.kernel, Box::new(layer::Unpainted)));
         if drawn.is_none() && opacity < 1.0 {
             self.backend.push_opacity(opacity);
         }
@@ -1070,7 +1075,7 @@ impl Painter {
             self.backend.pop_mask(&Shape::rect((x, y, w, h)), mask, ts);
         }
         match drawn {
-            Some(backend) => self.backend = backend,
+            Some(picture) => drop(self.restore_picture_backend(walk.scene.kernel, picture)),
             None if opacity < 1.0 => self.backend.pop_opacity(),
             None => {}
         }
@@ -1142,6 +1147,9 @@ impl Painter {
         let clip = field::overflow_clip(&surface.outer, paint.widths, (ox, oy));
         let mut cover = surface.outer;
         match node.node_type {
+            NodeType::Video if native::is_audio(node) && (content.2 <= 0.0 || content.3 <= 0.0) => {
+                self.record_boxless_audio(node);
+            }
             NodeType::Text => {
                 if let Some(clip) = &clip {
                     self.backend.push_clip(clip, ts);

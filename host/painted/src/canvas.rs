@@ -470,16 +470,6 @@ impl Recorder {
         }
     }
 
-    fn rect_radii(&mut self, s: &Shape) {
-        for v in [s.rect.0, s.rect.1, s.rect.2, s.rect.3] {
-            self.f(v);
-        }
-        for (rx, ry) in s.radii {
-            self.f(rx);
-            self.f(ry);
-        }
-    }
-
     fn path(&mut self, ops: &[PathOp]) {
         self.ops.push(ops.len() as u32);
         for op in ops {
@@ -730,6 +720,12 @@ impl Backend for Recorder {
         direct: bool,
     ) {
         self.native_element(id, kind, shape, ts, props, direct);
+    }
+
+    fn boxless_audio(&mut self, id: ViewId, props: &str) {
+        self.transform(Transform::identity());
+        let empty = Shape::rect((0., 0., 0., 0.));
+        self.record_native(id, crate::paint::NativeKind::Video, &empty, props);
     }
 
     fn canvas(&mut self, pixels: &Arc<Pixmap>, dst: Rect4, clips: &[Shape], ts: Transform) {

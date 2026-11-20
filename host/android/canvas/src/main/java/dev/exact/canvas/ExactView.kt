@@ -253,6 +253,7 @@ class ExactView(context: Context, private val live: Boolean, private val onFirst
         frames.removeFrameCallback(sampler); samplerPosted = false
         frames.removeFrameCallback(holder); holdFrom = 0L
         removeCallbacks(timer); removeCallbacks(refiner)
+        pendingStream = null
         if (host && owner == null && started) schedule()
     }
 
@@ -404,7 +405,7 @@ class ExactView(context: Context, private val live: Boolean, private val onFirst
         keys?.connection(info)
 
     override fun onDraw(canvas: Canvas) {
-        if (!started) return
+        if (!started || !running) return
         val owned = owner != null
         if (owned) takeOwned() else if (taken) taken = false else take()
         android.os.Trace.beginSection("exact replay")
@@ -471,18 +472,21 @@ class ExactView(context: Context, private val live: Boolean, private val onFirst
         owner?.presented(t, at) ?: run { if (Native.picturePresented(t, at)) pump() }
     }
     override fun onAttachedToWindow() { super.onAttachedToWindow(); presents.attach() }
+    internal fun stopMainWakes() {
+        removeCallbacks(timer)
+        wakes?.close()
+        wakes = null
+    }
     override fun onDetachedFromWindow() {
         presents.detach()
         running(false, host = false)
-        removeCallbacks(timer)
+        stopMainWakes()
         scrolling.stopped()
         val frames = android.view.Choreographer.getInstance()
         for (callback in listOf(laterFrame, regroupFrame, turn, sampler, holder)) frames.removeFrameCallback(callback)
         laterPosted = false; regrouping = false; turnPosted = false; samplerPosted = false; holdFrom = 0L
         warmer.destroy()
         worker.shutdown()
-        wakes?.close()
-        wakes = null
         super.onDetachedFromWindow()
     }
     /** warm=0: a press that changes nothing draws no frame, to compare. */
@@ -491,6 +495,7 @@ class ExactView(context: Context, private val live: Boolean, private val onFirst
     /** Every stream the owner published since the last take: each paint ingested in order, the last move applied after
      * the last paint; the feed's group then drawn where the scrolls the owner has not applied put it. */
     private fun takeOwned(): Boolean {
+        if (!running) return false
         val o = owner ?: return false
         val began = System.nanoTime()
         var any = false
@@ -892,6 +897,7 @@ class ExactView(context: Context, private val live: Boolean, private val onFirst
     private var pendingStream: IntBuffer? = null
     /** A new stream, if exact2 has one: made ready to replay. Whether there was one. */
     private fun take(vsync: Boolean = false): Boolean {
+        if (!running) return false
         val stream = pendingStream ?: run {
             android.os.Trace.beginSection("exact native frame")
             val fresh = Native.frame(vsync)
@@ -1038,11 +1044,12 @@ class ExactView(context: Context, private val live: Boolean, private val onFirst
         // What this turn asked of the platform (a press's haptic, the keyboard for a field it focused).
         asking()
         wakes?.sync()
-        if (!running) {
-            val due = Native.background(false)
+        val backgroundDue = if (!running) Native.background(false) else null
+        BackgroundAudio.reconcileOnMain()
+        if (backgroundDue != null) {
             asking()
             removeCallbacks(timer)
-            if (due >= 0) postDelayed(timer, kotlin.math.ceil(due).toLong())
+            if (backgroundDue >= 0) postDelayed(timer, kotlin.math.ceil(backgroundDue).toLong())
             return
         }
         if (!timerIdlePosted && Native.timerHeld() and 16 != 0) {
@@ -1280,7 +1287,7 @@ class ExactView(context: Context, private val live: Boolean, private val onFirst
     private var streamFrame = false
     private val laterFrame: android.view.Choreographer.FrameCallback = android.view.Choreographer.FrameCallback {
         laterPosted = false
-        if (worker.isShutdown) return@FrameCallback
+        if (!running || worker.isShutdown) return@FrameCallback
         makeSoon()
         if (streamFrame) {
             streamFrame = false

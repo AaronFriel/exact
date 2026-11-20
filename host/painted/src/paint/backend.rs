@@ -310,6 +310,17 @@ pub trait Backend {
         _direct: bool,
     ) {
     }
+    /// An audio player whose element has no visible controls to place.
+    fn boxless_audio(&mut self, id: ViewId, props: &str) {
+        self.native(
+            id,
+            NativeKind::Video,
+            &Shape::rect((0., 0., 0., 0.)),
+            Transform::identity(),
+            props,
+            false,
+        );
+    }
     /// Paint a paragraph with its top-left at `origin`.
     fn text(
         &mut self,

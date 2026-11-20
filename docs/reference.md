@@ -4393,8 +4393,19 @@ to place frames; startup waits up to 100 ms for that timestamp, then uses the
 stream's buffer size as a latency estimate if none is available. Late effects
 start from their attack. The idle stream closes after its last frames reach the
 speaker and releases its focus claim. A failed open or disconnected stream is
-reported; a play at least one second after the failure tries again. Background
-playback, MIDI output and timed sequence haptics on Android remain unavailable.
+reported; a play at least one second after the failure tries again. MIDI output
+and timed sequence haptics on Android remain unavailable.
+
+On Android, `"audio_session": "playback"` lets an audible `audio` element
+keep playing when the user goes Home or locks the device. Android's foreground
+media service shows the playback notification and supplies a system pause
+control. An audio element with empty bounds can play, including inside
+a closed dialog or a canvas that composites its children. `exactPage().frozen`
+stays false while the playback service is in the foreground. Pausing in the app
+or through the system ends background playback for that element, as does
+removing it or reaching the end of its source. Opted-in audio lets the display
+sleep by default. Android pauses a `video` when the activity stops and keeps
+its position.
 
 The Mac has no session. A development run with `EXACT_SOUND_CHECK=1` taps the
 engine's main mixer and journals (and prints) how far each onset after a
@@ -4519,6 +4530,7 @@ recently started playing, across every session of a process on Apple.
 | --- | --- |
 | web (both targets) | `navigator.mediaSession`: the metadata (the artwork resolved as the page resolves an asset), the handlers, the declared `playbackState` and `setPositionState`; the browser decides where it shows (Chrome's media hub, the system's Now Playing) and routes the media keys; under the driver too, in the driver's own browser |
 | macOS, iOS, tvOS | `MPNowPlayingInfoCenter` and `MPRemoteCommandCenter`, from the video arm (AVKit's own publication is off while a claimant owns the session); under the driver nothing is assigned and `state.mediaSession.published` is `"agent"` |
+| Android | the system playback session follows audible `audio` with `audio_session: "playback"`; Contract metadata and custom actions stay in `state.mediaSession` |
 | Linux, Windows | none: the record only (`published: "none"`, no `play` or `pause`) |
 
 On iOS the lock screen and Control Center show only a non-mixable playback

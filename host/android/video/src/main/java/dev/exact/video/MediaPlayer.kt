@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Matrix
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.view.ContextThemeWrapper
@@ -45,7 +46,12 @@ import kotlin.math.roundToLong
  * it is lent to. Main thread.
  */
 @OptIn(UnstableApi::class)
-class MediaPlayer(private val context: Context) : VideoPlayer {
+class MediaPlayer(
+    private val context: Context,
+    private val claimPlayback: ((Player) -> AutoCloseable?)?,
+) : VideoPlayer {
+    constructor(context: Context) : this(context, null)
+
     private val selector = DefaultTrackSelector(context)
     private val exo: ExoPlayer = ExoPlayer.Builder(context)
         .setTrackSelector(selector)
@@ -99,6 +105,8 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
     private var seekLanded = false
     private var claim: AudioClaim? = null
     private val focusType: String? = audioSession(context).takeIf { it == "playback" }
+    private var playback: AutoCloseable? = null
+    private var wakeMode = C.WAKE_MODE_NONE
     private val access = context.getSystemService(AccessibilityManager::class.java)
     /** exact2's focus is on this controller: it holds the window's focus, so keys reach Media3's own handling (D4). */
     private var held = false
@@ -108,6 +116,7 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
     override val view: View get() = frame
     override val lendable: Boolean get() = controls == null
     override val engaged: Boolean get() = !projection.paused && !eligible()
+    override val backgroundPlayback: Boolean get() = playback != null
     override val controller: View? get() = controls
 
     init {
@@ -125,6 +134,7 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
         projection.load(restoring = false, paused = true)
         tick(false)
         releaseFocus()
+        closePlayback()
         exo.playWhenReady = false
         exo.stop()
         exo.clearMediaItems()
@@ -160,7 +170,7 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
         volume = props.optDouble("volume", 1.0).toFloat().coerceIn(0f, 1f)
         exo.volume = if (muted) 0f else volume
         exo.repeatMode = if (props.optBoolean("loop")) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
-        keepAwake = props.optBoolean("preventsDisplaySleepDuringVideoPlayback", true)
+        keepAwake = props.optBoolean("preventsDisplaySleepDuringVideoPlayback", !audio || claimPlayback == null)
         frame.keepScreenOn = keepAwake && projection.playing
         timed = props.optBoolean("timeupdate")
         tick(exo.isPlaying)
@@ -188,6 +198,7 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
             projection.event("error", "not-allowed")
         }
         applied = props
+        syncPlayback()
         pushState()
     }
 
@@ -295,9 +306,10 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
         else if (inView && resumes) { resumes = false; play(Ask.RULE) }
     }
 
-    /** Chrome's off-screen rule holds: a muted video its `autoplay` started, `paused` unbound, no other play or pause. */
+    /** The off-screen rule applies to muted autoplay until another play or pause. */
     private fun eligible(props: JSONObject? = applied) =
-        props != null && !overridden && props.optBoolean("autoplay") && props.optBoolean("muted") && props.isNull("paused")
+        (!audio || claimPlayback == null) && props != null && !overridden &&
+            props.optBoolean("autoplay") && props.optBoolean("muted") && props.isNull("paused")
 
     override fun snapshot(): MediaRecord.Resume? {
         if (src.isEmpty()) return null
@@ -312,6 +324,7 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
         if (!projection.paused) { val rule = eligible(); projection.pause(); if (rule) resumes = true }
         exo.playWhenReady = false
         releaseFocus()
+        closePlayback()
         tick(false)
     }
 
@@ -321,6 +334,7 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
         full.leave()
         tick(false)
         releaseFocus()
+        closePlayback()
         exo.release()
     }
 
@@ -546,6 +560,7 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
         override fun onEvents(player: Player, events: Player.Events) {
             // A seek within what is buffered lands without leaving STATE_READY.
             if (seekLanded && projection.seeking && exo.playbackState == Player.STATE_READY) { seekLanded = false; projection.seekDone() }
+            syncPlayback()
             pushState()
         }
     }
@@ -622,6 +637,29 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
 
     private fun releaseFocus() { claim?.release(); claim = null }
 
+    private fun syncPlayback() {
+        val running = exo.playbackState == Player.STATE_BUFFERING || exo.playbackState == Player.STATE_READY
+        if (claimPlayback == null || sink == null || !audio || muted || volume <= 0f || !exo.playWhenReady || !running) {
+            closePlayback()
+            return
+        }
+        if (playback == null) playback = claimPlayback.invoke(exo)
+        if (playback != null) setWakeMode(playbackWakeMode(exo.currentMediaItem?.localConfiguration?.uri))
+    }
+
+    private fun closePlayback() {
+        val previous = playback ?: return
+        playback = null
+        previous.close()
+        setWakeMode(C.WAKE_MODE_NONE)
+    }
+
+    private fun setWakeMode(mode: Int) {
+        if (mode == wakeMode) return
+        wakeMode = mode
+        exo.setWakeMode(mode)
+    }
+
     /** The picture's frame: the texture fills it and the captions sit on the picture's rect (D5). */
     @SuppressLint("ViewConstructor")
     private class Frame(context: Context) : FrameLayout(context) {
@@ -645,4 +683,9 @@ class MediaPlayer(private val context: Context) : VideoPlayer {
                 .metaData?.getString("dev.exact.audioSession")
         }.getOrNull() ?: "ambient"
     }
+}
+
+internal fun playbackWakeMode(uri: Uri?): Int = when (uri?.scheme?.lowercase()) {
+    "http", "https" -> C.WAKE_MODE_NETWORK
+    else -> C.WAKE_MODE_LOCAL
 }

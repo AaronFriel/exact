@@ -111,7 +111,7 @@ internal class Owner(private val hwbuf: Boolean, private val fast: Boolean, prio
             try { work() } finally {
                 handler.post {
                     timerReports.mainWork--
-                    if (Native.timerObservation(readerScrolling, readerSampling, timerReports.applying, false)) produce() else schedule()
+                    if (running && Native.timerObservation(readerScrolling, readerSampling, timerReports.applying, false)) produce() else schedule()
                 }
             }
         }
@@ -119,7 +119,7 @@ internal class Owner(private val hwbuf: Boolean, private val fast: Boolean, prio
     fun timerReader(view: Any) {
         handler.post {
             timerReports.replace(view)
-            Native.timerObservation(false, false, true, false)
+            if (running) Native.timerObservation(false, false, true, false)
         }
     }
     /** The reader's report: what it is doing, the last publication it ingested ([applied]) and, when it ingested any
@@ -129,7 +129,7 @@ internal class Owner(private val hwbuf: Boolean, private val fast: Boolean, prio
         handler.post {
             if (ended != 0L && timing) try { Native.frameLanded(applied, began, ended) } catch (e: UnsatisfiedLinkError) { timing = false }
             if (!timerReports.report(view, scrolling, sampling, applied)) return@post
-            if (Native.timerObservation(scrolling, sampling, timerReports.applying, false)) produce() else schedule()
+            if (running && Native.timerObservation(scrolling, sampling, timerReports.applying, false)) produce() else schedule()
         }
     }
 
@@ -332,6 +332,10 @@ internal class Owner(private val hwbuf: Boolean, private val fast: Boolean, prio
             if (on == running) return@post
             running = on
             if (on) { produce(); return@post }
+            // Start adopts a fresh reader and reannounces its drawing from the running host.
+            queue.clear()
+            made.clear()
+            timerReports.retire()
             choreographer?.let { turns.remove(it) }; turnPosted = false
             idle()
             handler.removeCallbacks(again)
@@ -619,12 +623,14 @@ internal class Owner(private val hwbuf: Boolean, private val fast: Boolean, prio
         activated()
         wakes?.sync()
         if (!running) {
-            val due = Native.background(timerReports.applying)
+            val due = Native.background(timerReports.mainWork != 0)
+            BackgroundAudio.reconcile(::postMain)
             requests()
             handler.removeCallbacks(timer)
             if (due >= 0) handler.postDelayed(timer, kotlin.math.ceil(due).toLong())
             return
         }
+        BackgroundAudio.reconcile(::postMain)
         // One producer at a time. A turn asked for when an overrunning turn began is for the vsync that passed
         // during it, and runs as soon as this returns: that is the retry, and `again` only stands in where no turn
         // is asked for. With nothing animating, none is left asked for.
@@ -679,6 +685,7 @@ internal object Exact {
     var unshown = false
     /** The activity whose view reads the host now. */
     var reader: java.lang.ref.WeakReference<ExactActivity>? = null
+        set(value) { field = value; BackgroundAudio.updateMainThreadWakes() }
 
     /** Main thread, when an answer was published in time (the reader draws it this frame). */
     var answered: () -> Unit = {}
@@ -763,10 +770,15 @@ internal object Exact {
      * what that changed. */
     var turned: () -> Unit = {}
 
+    private fun mainThreadTurned() {
+        turned()
+        BackgroundAudio.reconcileOnMain()
+    }
+
     /** What a hosted text field tells exact2 ([Fields], LLP 1115.001 D8), on exact2's thread and in order. */
     private fun field(f: () -> Unit) {
         val o = owner
-        if (o != null) { o.input(); o.call(f) } else { f(); turned() }
+        if (o != null) { o.input(); o.call(f) } else { f(); mainThreadTurned() }
     }
 
     fun moduleEvent(id: Int, slot: Int, generation: Int, session: Long, kind: String, payload: String) =
@@ -795,7 +807,7 @@ internal object Exact {
     fun surface(serial: Int, what: Int, x: Float, y: Float) {
         val o = owner
         if (o != null) { if (what != 2) o.input(); o.call { Native.surface(serial, what, x, y) } }
-        else { Native.surface(serial, what, x, y); turned() }
+        else { Native.surface(serial, what, x, y); mainThreadTurned() }
     }
 
     /** What happened in bar [which] ([Bars], [Native.bar], LLP 1115.001 D11): told on exact2's thread, in order.
@@ -803,7 +815,7 @@ internal object Exact {
     fun bar(which: Int, what: Int, x: Float, y: Float) {
         val o = owner
         if (o != null) { if (what != 2) o.input(); o.call { Native.bar(which, what, x, y) } }
-        else { Native.bar(which, what, x, y); turned() }
+        else { Native.bar(which, what, x, y); mainThreadTurned() }
     }
 
     /** What an accessibility service asks of node [id] of the tree exact2 last told ([Access], [Native.accessAct],
@@ -811,14 +823,14 @@ internal object Exact {
      * done. exact2 then publishes what it changed. */
     fun accessAct(id: Int, action: Int, value: Float): Boolean {
         val o = owner
-        return if (o != null) { o.input(); o.sync { Native.accessAct(id, action, value) } } else Native.accessAct(id, action, value).also { turned() }
+        return if (o != null) { o.input(); o.sync { Native.accessAct(id, action, value) } } else Native.accessAct(id, action, value).also { mainThreadTurned() }
     }
 
     /** What a hatch's handle asks of node [node] ([ExactElement]): on exact2's thread, waited for, as an
      * accessibility service's act is; exact2 runs it between its turns and publishes what it changed. */
     fun hatchAct(node: Int, kind: Int, text: String?): Long {
         val o = owner
-        return if (o != null) { o.input(); o.sync { Native.hatchAct(node, kind, text) } } else Native.hatchAct(node, kind, text).also { turned() }
+        return if (o != null) { o.input(); o.sync { Native.hatchAct(node, kind, text) } } else Native.hatchAct(node, kind, text).also { mainThreadTurned() }
     }
 
     /** When the last touch lifted, or was held long enough to be a long press ([android.os.SystemClock.uptimeMillis]):
@@ -834,7 +846,7 @@ internal object Exact {
     /** A package calls an app handler on the host's thread and publishes what it changed. */
     fun invoke(body: String): Int = owner?.sync {
         try { Native.invoke(body) } catch (e: UnsatisfiedLinkError) { -1 }
-    } ?: Native.invoke(body).also { turned() }
+    } ?: Native.invoke(body).also { mainThreadTurned() }
 
     /** What the extensions tell exact2 ([Native.changed], [Native.bindExtensions]): on exact2's thread, in order. */
     fun changed(topic: String) { val o = owner; if (o != null) o.hand(OwnerReplies.Handed.Changed(topic)) else Native.changed(topic) }
@@ -851,7 +863,7 @@ internal object Exact {
     fun presence(answer: String) { val o = owner; if (o != null) o.call { Native.presence(answer) } else Native.presence(answer) }
     private var pageHidden = false
     /** Execution sources: a started Activity, or a successfully promoted microphone, call or screen-capture
-     * foreground service with a live claim. Agent claims grant no device execution. */
+     * foreground service with a live claim, or an active media playback service. Agent claims grant no device execution. */
     internal fun executionEligible(): Boolean = !pageHidden || Claims.keepsExecution
     /** The page freeze drops gated streams before returning; socket close handshakes finish asynchronously. */
     fun hidden(hidden: Boolean) { pageHidden = hidden; publishExecution() }
@@ -868,7 +880,7 @@ internal object Exact {
         val hidden = pageHidden
         val eligible = executionEligible()
         val o = owner
-        if (o != null) o.sync { Native.hidden(hidden, eligible) } else { Native.hidden(hidden, eligible); turned() }
+        if (o != null) o.sync { Native.hidden(hidden, eligible) } else { Native.hidden(hidden, eligible); mainThreadTurned() }
     }
     /** The store's writes on disk before the activity goes to the background, so a kill after its stop loses none
      * committed before (exact2 writes them on a thread of its own): at most [ms]. Whether every commit was written

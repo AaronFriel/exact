@@ -130,7 +130,7 @@ class OwnerBackgroundTest {
             assertFalse(thread.isAlive)
         }
     }
-    @Test fun stoppedOwnerReportsUnappliedPublicationsAndUnknownReaders() {
+    @Test fun stoppedOwnerDiscardsPaintButWaitsForOutstandingMainThreadWork() {
         Host.due = SystemClock.uptimeMillis() + 30000
         val owner = Owner(false, false, 0) { "0" }
         val thread = Owner::class.java.getDeclaredField("thread").apply { isAccessible = true }.get(owner) as HandlerThread
@@ -141,22 +141,15 @@ class OwnerBackgroundTest {
             owner.ask {
                 reports.replace(reader)
                 reports.report(reader, false, false, 0)
-                reports.publish()
+                val publication = reports.publish()
+                owner.queue.add(Owner.Pub(publication, null, false, 0, 0, null, null, null, null))
                 assertEquals(0, reports.mainWork)
             }
             owner.running(false)
             owner.ask { }
-            assertTrue("an unapplied publication blocks background idle", Host.applying)
-            owner.call { reports.report(reader, false, false, reports.publication) }
-            owner.ask { }
-            assertFalse("an acknowledged publication no longer blocks idle", Host.applying)
-            owner.call { reports.replace(Any()) }
-            owner.ask { }
-            assertTrue("an unknown replacement reader blocks idle", Host.applying)
-            owner.call {
-                reports.report(reports.reader!!, false, false, reports.publication)
-                reports.mainWork++
-            }
+            assertFalse("the discarded publication no longer blocks idle", Host.applying)
+            assertTrue(owner.queue.isEmpty())
+            owner.call { reports.mainWork++ }
             owner.ask { }
             assertTrue("outstanding main-thread work blocks idle", Host.applying)
         } finally {

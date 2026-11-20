@@ -297,7 +297,10 @@ open class ExactActivity : Activity() {
      * sent it. A new one adopts the host, which paints everything again for it; the app is as it was.
      */
     private fun read() {
-        natives?.let { nativeState = it.lifecycle.save(); it.destroyAll() }
+        natives?.let {
+            nativeState = it.lifecycle.save()
+            it.destroyAll(keepPlayback = true)
+        }
         fields?.leaving()
         root.removeAllViews()
         // Before the host boots: its first layout measures the app's text fields in a field of this activity's
@@ -602,8 +605,7 @@ open class ExactActivity : Activity() {
         if (reads()) Extensions.stopped(isChangingConfigurations)
         view.running(false, reads())
         natives?.lifecycle?.event(ViewLifecycle.STOP)
-        // Videos pause and let go of their decoders; each keeps its place for the reader made at the next start.
-        natives?.stopMedia()
+        natives?.stopMedia(allowBackground = !isFinishing && reads())
         // Behind the hide, the pads' release and the stop of the turns (none queued after it), what they and anything
         // since the pause committed is on disk before Android may kill it.
         if (!Exact.drainStore()) android.util.Log.w("exact", "the store's writes did not finish before the stop")
@@ -699,11 +701,12 @@ open class ExactActivity : Activity() {
     private fun release() {
         hatchReader?.takeIf { it.activity === this }?.activity = null
         requests.surfaces?.destroy()
-        natives?.destroyAll()
+        natives?.destroyAll(keepPlayback = !isFinishing)
         natives = null
         fields?.leaving()
         if (Fields.context === this) Fields.context = null
         if (!reads()) return
+        if (::view.isInitialized) view.stopMainWakes()
         Exact.reader = null
         Exact.owner?.let { it.published = {}; it.asked = null; it.chrome = {} }
         Exact.answered = {}

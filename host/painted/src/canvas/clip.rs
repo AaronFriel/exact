@@ -100,6 +100,16 @@ impl Clip {
 }
 
 impl Recorder {
+    pub(super) fn rect_radii(&mut self, s: &Shape) {
+        for v in [s.rect.0, s.rect.1, s.rect.2, s.rect.3] {
+            self.f(v);
+        }
+        for (rx, ry) in s.radii {
+            self.f(rx);
+            self.f(ry);
+        }
+    }
+
     pub(super) fn native_element(
         &mut self,
         id: ViewId,
@@ -139,6 +149,16 @@ impl Recorder {
                 self.direct.at = Some(self.ops.len());
             }
         }
+        self.record_native(id, kind, shape, props);
+    }
+
+    pub(super) fn record_native(
+        &mut self,
+        id: ViewId,
+        kind: crate::paint::NativeKind,
+        shape: &Shape,
+        props: &str,
+    ) {
         self.ops.extend([NATIVE, id, kind as u32]);
         self.rect_radii(shape);
         self.string(props);
@@ -587,6 +607,24 @@ mod direct_tests {
 
     fn surface(r: &mut Recorder, shape: &Shape, ts: Transform, opaque_sdr: bool) {
         r.native(91, NativeKind::Surface, shape, ts, "{}", opaque_sdr);
+    }
+
+    #[test]
+    fn a_clipped_empty_hatch_does_not_make_a_native_view() {
+        let mut r = Recorder::new();
+        r.begin(300., 300., 1.);
+        let ts = Transform::identity();
+        r.push_clip(&Shape::rect((0., 0., 100., 100.)), ts);
+        let before = r.ops.len();
+        r.native(
+            91,
+            NativeKind::Hatch,
+            &Shape::rect((200., 200., 0., 0.)),
+            ts,
+            "{}",
+            false,
+        );
+        assert_eq!(r.ops.len(), before);
     }
     fn direct(r: &mut Recorder) -> bool {
         r.finish().unwrap();

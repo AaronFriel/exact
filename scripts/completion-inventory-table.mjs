@@ -471,13 +471,14 @@ export const classifications = [
     ["web:host/web/src/abi/mode.rs", "exact_design_rows"],
   ]),
   group("media and sensors", ["subscription"], "current MIDI/sound/video/sensor session, element allocation, device handle or scheduled sample", "UI-owned",
-    "runner/src/runner/modules/samples.rs and runner/src/midi.rs number live sensor/device work; sound.rs owns voice/haptic IDs. Android Natives.kt posts player events/state through Native.media and CanvasHost::media; presenter/media.rs reader_media accepts only the current native session and video node key. commands.rs routes media commands to live video keys; content_region/presenter.rs calls sync_media to dirty changed player rows and retire missing keys. No persisted operation record is created.", [
+    "runner/src/runner/modules/samples.rs and runner/src/midi.rs number live sensor/device work; sound.rs owns voice/haptic IDs. Android posts player reports through Native.media. Detached audio reads committed props through Native.backgroundAudio. Both validate the current native session and media allocation. commands.rs routes media commands to live video keys; content_region/presenter.rs calls sync_media to dirty changed player rows and retire missing keys. No persisted operation record is created.", [
     ["apple:host/apple/src/abi/exports.rs", "exact_midi"],
     ["apple:host/apple/src/executor.rs", "exact_local_network_report"],
     ["painted:host/painted/src/canvas/jni.rs", "Java_dev_exact_canvas_Native_media"],
-    ["painted:host/painted/src/canvas/requests.rs", "CanvasHost::media"],
+    ["painted:host/painted/src/canvas/jni_frames.rs", "Java_dev_exact_canvas_Native_backgroundAudio"],
+    ["painted:host/painted/src/canvas/requests.rs", "CanvasHost::background_audio CanvasHost::media"],
     ["painted:host/painted/src/midi.rs", "Host::drain_outputs Host::extension_agent Host::midi_agent Host::midi_host"],
-    ["painted:host/painted/src/presenter/media.rs", "Presenter::media_command Presenter::reader_media Presenter::sync_media"],
+    ["painted:host/painted/src/presenter/media.rs", "Presenter::background_audio Presenter::media_command Presenter::reader_media Presenter::sync_media"],
     ["painted:host/painted/src/presenter/preferences.rs", "Presenter::extension_agent Presenter::midi_agent"],
     ["runner:runner/src/midi.rs", "Midi::push#next:1 Midi::retract_seq#next:1 Midi::ticks#next:1"],
     ["runner:runner/src/runner/audio_seam.rs", "Runner::end_sounds Runner::midi_agent Runner::midi_host Runner::plays_audio Runner::take_midi Runner::take_sounds Runner::transport_playing"],
