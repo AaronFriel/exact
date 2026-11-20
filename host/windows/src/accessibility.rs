@@ -68,6 +68,27 @@ impl Access {
         self.adapter.process_event(window, event);
     }
 
+    #[cfg(test)]
+    pub(crate) fn root_label(&self) -> Option<&str> {
+        self.nodes.get(&ROOT)?.label()
+    }
+
+    pub fn set_title(&mut self, title: &str) {
+        let Some(root) = self.nodes.get_mut(&ROOT) else {
+            return;
+        };
+        if root.label() == Some(title) {
+            return;
+        }
+        root.set_label(title);
+        self.adapter.update_if_active(|| TreeUpdate {
+            nodes: vec![(ROOT, root.clone())],
+            tree: None,
+            tree_id: TreeId::ROOT,
+            focus: self.focus,
+        });
+    }
+
     pub fn event<D: DataSource>(
         &mut self,
         p: &mut Presenter<D>,

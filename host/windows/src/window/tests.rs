@@ -152,6 +152,7 @@ fn direct_window_blinks_without_a_softbuffer_surface() {
         proxy: events.create_proxy(),
         accessibility: None,
         name: "Ink caret regression".into(),
+        title: WindowTitle::default(),
         min_size: (1., 1.),
         config: Config::from_env(&plan, ""),
         window: Some(window),
@@ -278,7 +279,7 @@ fn early_redraws_preserve_cadence_and_stalls_resume_without_catch_up() {
     );
 }
 
-fn windowless_app(events: &EventLoop<crate::accessibility::Event>, plan: &[u8]) -> App<()> {
+fn windowless_app(proxy: EventLoopProxy<crate::accessibility::Event>, plan: &[u8]) -> App<()> {
     let started = Instant::now();
     let (p, _) = Presenter::boot_with(
         plan,
@@ -291,9 +292,10 @@ fn windowless_app(events: &EventLoop<crate::accessibility::Event>, plan: &[u8]) 
     .unwrap();
     App {
         service_causes: 0,
-        proxy: events.create_proxy(),
+        proxy,
         accessibility: None,
         name: "Frame scheduling regression".into(),
+        title: WindowTitle::default(),
         min_size: (1., 1.),
         config: Config::from_env(plan, ""),
         window: None,
@@ -349,13 +351,11 @@ fn windowless_app(events: &EventLoop<crate::accessibility::Event>, plan: &[u8]) 
 }
 
 #[allow(deprecated)]
-pub(crate) fn about_to_wait_honors_retry_pending_redraw_and_earlier_timer(
-    events: EventLoop<crate::accessibility::Event>,
-) {
+pub(crate) fn run_carrier_tests(events: EventLoop<crate::accessibility::Event>) {
     let plan = contract::compile("component App\n  view\n    text \"idle\"\n")
         .unwrap()
         .encode();
-    let mut app = windowless_app(&events, &plan);
+    let mut app = windowless_app(events.create_proxy(), &plan);
     let mut checked = false;
     events.run(|event, events| {
         if !matches!(event, winit::event::Event::AboutToWait) { return; }
@@ -386,10 +386,106 @@ pub(crate) fn about_to_wait_honors_retry_pending_redraw_and_earlier_timer(
         app.presenter = Some(p);
         app.wait(events, |_| (Some(retry), Some(retry)));
         assert_eq!(events.control_flow(), ControlFlow::WaitUntil(app.started + Duration::from_secs_f64(wake / 1000.)));
+        document_title_reaches_the_window_without_drawing(events, app.proxy.clone());
         checked = true;
         events.exit();
     }).unwrap();
     assert!(checked);
+}
+
+fn document_title_reaches_the_window_without_drawing(
+    events: &ActiveEventLoop,
+    proxy: EventLoopProxy<crate::accessibility::Event>,
+) {
+    let plan = contract::compile(
+        r#"component App
+  state step = 0
+  state timed = false
+  derive title = timed ? "Timed document" : step == 0 ? "First document" : step == 1 ? "Second document 📄" : ""
+  derive body = timed ? "Updated text" : "Initial text"
+  action next
+    step = (step + 1) % 4
+  action rename
+    timed = true
+  task timer mount
+    after(60000, rename)
+  view
+    column
+      if step != 3
+        head title=title
+      button "Next" press=next testId="next"
+      text body
+"#,
+    )
+    .unwrap()
+    .encode();
+    let mut app = windowless_app(proxy.clone(), &plan);
+    let initial_frames = app.frames;
+    let window = Rc::new(
+        events
+            .create_window(
+                Window::default_attributes()
+                    .with_title(&app.name)
+                    .with_visible(false)
+                    .with_inner_size(LogicalSize::new(160., 80.)),
+            )
+            .unwrap(),
+    );
+    app.window = Some(window.clone());
+    app.hidden = true;
+    let mut access = crate::accessibility::Access::new(events, &window, proxy);
+    let p = app.presenter.as_mut().unwrap();
+    access.event(
+        p,
+        &window,
+        &app.name,
+        accesskit_winit::WindowEvent::InitialTreeRequested,
+    );
+    app.accessibility = Some(access);
+    let kernel = p.host().kernel();
+    let next = kernel
+        .node_by_key(kernel.find_by_test_id("next")[0])
+        .unwrap()
+        .id;
+    let titles = [
+        Some("First document"),
+        Some("Second document 📄"),
+        Some(""),
+        None,
+        Some("First document"),
+    ];
+    for (step, title) in titles.into_iter().enumerate() {
+        if step > 0 {
+            let p = app.presenter.as_mut().unwrap();
+            assert_eq!(
+                p.host_mut()
+                    .dispatch_at(next, exact_runner::Event::Press, 0.),
+                None
+            );
+        }
+        app.wait(events, |_| (None, None));
+        let title = title.unwrap_or(&app.name);
+        assert_eq!(window.title(), title);
+        assert_eq!(
+            app.accessibility.as_ref().unwrap().root_label(),
+            Some(title)
+        );
+    }
+    assert_eq!(app.frames, initial_frames);
+
+    app.started -= Duration::from_secs(60);
+    app.wait(events, |_| (None, None));
+    let p = app.presenter.as_mut().unwrap();
+    let access = app.accessibility.as_mut().unwrap();
+    assert_eq!(window.title(), "Timed document");
+    assert_eq!(access.root_label(), Some("Timed document"));
+    assert!(p.access_told().iter().any(|n| n.name == "Initial text"));
+    assert!(p.dirty());
+
+    p.frame();
+    access.sync(p, &window, "Timed document");
+    assert!(p.access_told().iter().any(|n| n.name == "Updated text"));
+    assert_eq!(access.root_label(), Some("Timed document"));
 }
 
 #[test]

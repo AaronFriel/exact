@@ -105,6 +105,7 @@ pub mod transfer;
 #[path = "canvas/travel.rs"]
 mod travel;
 mod wake;
+pub mod window_title;
 mod zone;
 
 /// Install the window event-loop wake for native work, images and text results.

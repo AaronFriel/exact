@@ -1519,12 +1519,19 @@ shows a full retained navigation stack and tab UI.
 
 A `head` element declares document metadata: `title`, `description`, `canonical`,
 `image`, `robots`, and `status` (a literal 404, 410 or 503). The innermost active
-declaration wins field by field. Use `scroll document` for document scrolling and
-ordinary `scroll` for an inner scrollport; both need a bound. Route rows can
-declare `render`, `activate`, `paint` and `pages` policies; these interact with
-the site's build/render pipeline, not just its client-side view. Leave `activate`
-unsaid unless a page needs otherwise: a rendered page then loads no script until
-the reader acts, when nothing on it needs the runtime sooner
+declaration wins field by field. The title updates the browser tab, the macOS
+window and the iOS scene. On Windows, it sets the window caption and the
+window's UI Automation name. An empty title clears both, and removing the title
+restores the app name. On Android, it sets the activity title. An empty title
+clears it, and removing the title restores the activity label. AOSP's desktop
+caption displays the application label.
+[AOSP window decoration source](https://android.googlesource.com/platform/frameworks/base.git/+/f4e211cf82c8c3bffa3afd671e66c95eafdd28ad/libs/WindowManager/Shell/src/com/android/wm/shell/windowdecor/DesktopModeWindowDecoration.java#780)
+
+Use `scroll document` for document scrolling and ordinary `scroll` for an inner
+scrollport. Both need a bound. Route rows can declare `render`, `activate`,
+`paint` and `pages` policies for the site's build, rendering and client-side view.
+Leave `activate` unsaid unless a page needs otherwise: a rendered page then
+loads no script until the reader acts, when nothing on it needs the runtime sooner
 (LLP 1048.007). Follow
 [the document corpus](../contract/corpus/document.contract) and
 [the document tests](../contract/cli/tests/it/document.rs) for accepted policy

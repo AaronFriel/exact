@@ -3,6 +3,7 @@ use exact_ink::counters;
 use exact_painted::{
     app::{self, Config},
     presenter::PointerKind,
+    window_title::WindowTitle,
     Presenter,
 };
 use exact_runner::DataSource;
@@ -37,6 +38,7 @@ struct App<D: DataSource> {
     proxy: EventLoopProxy<crate::accessibility::Event>,
     accessibility: Option<crate::accessibility::Access>,
     name: String,
+    title: WindowTitle,
     min_size: (f32, f32),
     config: Config,
     window: Option<Rc<Window>>,
@@ -110,6 +112,19 @@ impl<D: DataSource> Drop for App<D> {
         self.caret.clear();
         self.tooltip = Default::default();
     }
+}
+
+fn apply_title<D: DataSource>(
+    title: &mut WindowTitle,
+    p: &Presenter<D>,
+    window: &Window,
+    name: &str,
+) -> bool {
+    if !title.update(p.host().runner()) {
+        return false;
+    }
+    window.set_title(title.caption(name));
+    true
 }
 
 fn system_theme<D: DataSource>(p: &mut Presenter<D>, theme: Theme, agent: bool) {
@@ -307,6 +322,7 @@ pub(super) fn run<D: DataSource + Default + 'static>(
         proxy,
         accessibility: None,
         name: name.to_owned(),
+        title: WindowTitle::default(),
         min_size: (opening.min_width, opening.min_height),
         config,
         window: None,
@@ -768,8 +784,9 @@ impl<D: DataSource + Default + 'static> App<D> {
             self.jump_list_started = true;
             crate::jump_list::start(self.config.compat.clone());
         }
+        apply_title(&mut self.title, p, window, &self.name);
         if let Some(access) = &mut self.accessibility {
-            access.sync(p, window, &self.name);
+            access.sync(p, window, self.title.caption(&self.name));
         }
         let accessible_at = frame_started.elapsed().as_secs_f64() * 1000.;
         self.ime.sync(window, p);
@@ -999,6 +1016,7 @@ impl<D: DataSource + Default + 'static> ApplicationHandler<crate::accessibility:
                 if let Some(warning) = warning {
                     eprintln!("exact-windows: {warning}");
                 }
+                apply_title(&mut self.title, &p, &window, &self.name);
                 self.presenter = Some(p);
                 self.tray_start();
                 self.hidden = self.launches_hidden();
@@ -1098,7 +1116,12 @@ impl<D: DataSource + Default + 'static> ApplicationHandler<crate::accessibility:
                     return;
                 }
                 p.advance(self.started.elapsed().as_secs_f64() * 1000.);
-                access.event(p, window, &self.name, event.window_event);
+                access.event(
+                    p,
+                    window,
+                    self.title.caption(&self.name),
+                    event.window_event,
+                );
             }
         }
         self.about_to_wait(events);

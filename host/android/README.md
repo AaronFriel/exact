@@ -661,10 +661,12 @@ capability has a call of its own.
 | 18 | a file input's `showPicker` (LLP 1069.002) | the input node, `multiple` (1 or 0), the count of `accept` types, then each type as a string | the system photo picker when its filters fit and it is available, otherwise `ACTION_OPEN_DOCUMENT`; offers HEIC/HEIF for conversion as below and copies the selected URIs into the app's cache off the UI thread (`FilePicker`) | a JSON array of `{path, name, type, extension, extensions, converted, name_type}` records: staging path, display name, nullable MIME type and storage extension, the chooser's mapping of extension tokens to MIME types, whether conversion occurred, and Android's MIME for the display-name suffix. Null or an empty array cancels; other text is a refusal reason. The presenter copies into `app:/tmp/picked/`, removes the reader's copies, and fires `change` or journals the refusal and fires `cancel` |
 | 19 | end an auth wait | one word: the request id from kind 17 | removes the wait; the browser owns its tab | none |
 | 20 | a signed update activated with its own assets (LLP 1030.006 D1, D5) | the generation's asset directory as a string, empty for the APK's | opens every video and page again, and the next sound batch its files, under `Native.assetRoot()` (`AssetRoot`); calls `Native.drew()` after its next drawing, which makes the new generation's boot good | none |
+| 22 | the active `head` title (LLP 1048.003 D1) | a string, including an empty string, or no words when no active `head` sets a title | sets the activity's window title, restoring the activity's original label when no title is set | none |
 
-Kinds 5, 6, 7, 8, 13 and 14 are statements of the app's state, told when it changes and anew to a reader made again; exact2
-reads them as the queue is taken (`Presenter::tell_shell`), Back, the wake lock and the orientation lock only after a
-commit or (Back) when a surface opens or closes, and none of them during a scroll's own frames.
+Kinds 5, 6, 7, 8, 13, 14 and 22 are statements of the app's state, told when it changes and anew to a reader made
+again. `Presenter::tell_shell` reads them as the queue is taken. Back, the wake lock, the orientation lock and the
+window title are read after a commit. Opening or closing a surface also updates Back. None of these statements are
+read during a scroll's own frames.
 
 For sound diagnostics in a debuggable APK, capture `adb logcat -v monotonic -s exact:D AAudio:D AudioTrack:D`
 alongside emulator PCM and `dumpsys audio` / `dumpsys media.audio_flinger`. The `sound` lines give foreground
