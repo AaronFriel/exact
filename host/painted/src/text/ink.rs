@@ -9,6 +9,7 @@ use tiny_skia::Transform;
 
 pub(super) const MAX_BYTES: usize = 8 * 1024 * 1024;
 const ENVELOPES: usize = 256;
+const GLYPHS_PER_CHUNK: usize = 128;
 // Beyond this range float/integer conversion and inversion use the full path.
 const COORD_LIMIT: f64 = 16_777_216.0;
 
@@ -228,7 +229,9 @@ pub(super) struct Index {
     #[cfg(test)]
     pub(super) lifetime: std::sync::Arc<()>,
     spans: Vec<Bounds>,
-    lines: usize,
+    // Only long lines need a map from leaves to (visual line, first glyph).
+    chunks: Vec<(usize, usize)>,
+    leaf_count: usize,
     leaves: usize,
     // Bounds on inputs to the CPU's f32 baseline arithmetic, not CSS line boxes.
     max_input: f64,
@@ -275,67 +278,92 @@ impl Index {
         if !scale.is_finite() || scale <= 0.0 {
             return None;
         }
-        let (leaves, nodes) = storage(p.baselines.len(), limit)?;
+        let lines = p.layouts();
+        if p.baselines.len() != lines.lines.len() {
+            return None;
+        }
+        let chunked = lines
+            .lines
+            .iter()
+            .any(|line| lines.glyphs_of(line).len() > GLYPHS_PER_CHUNK);
+        let chunk_count = if chunked {
+            lines.lines.iter().try_fold(0usize, |n, line| {
+                n.checked_add(lines.glyphs_of(line).len().div_ceil(GLYPHS_PER_CHUNK))
+            })?
+        } else {
+            0
+        };
+        let leaf_count = if chunked {
+            chunk_count
+        } else {
+            lines.lines.len()
+        };
+        let metadata = chunk_count.checked_mul(size_of::<(usize, usize)>())?;
+        let (leaves, nodes) = storage(leaf_count, limit.checked_sub(metadata)?)?;
         let mut result = Self {
             #[cfg(test)]
             lifetime: std::sync::Arc::new(()),
             spans: Vec::new(),
-            lines: 0,
+            chunks: Vec::new(),
+            leaf_count,
             leaves,
             max_input: 0.0,
         };
         result.spans.try_reserve_exact(nodes).ok()?;
+        result.chunks.try_reserve_exact(chunk_count).ok()?;
         if result.bytes() > limit {
             return None;
         }
         result.spans.resize(nodes, Bounds::EMPTY);
-        let lines = p.layouts();
         let slots = slots(engine, lines);
-        for line in &lines.lines {
-            let n = result.lines;
-            let baseline = *p.baselines.get(n)?;
-            result.lines += 1;
-            let mut span = Bounds::EMPTY;
-            for glyph in lines.glyphs_of(line) {
-                #[cfg(test)]
-                count(|n| n.glyphs += 1);
-                let (x, y) = (glyph.x, glyph.y);
-                if !x.is_finite() || !y.is_finite() || !baseline.is_finite() {
-                    span = Bounds::ALL;
-                    continue;
-                }
-                result.max_input = result
-                    .max_input
-                    .max(f64::from(x).abs())
-                    .max(f64::from(y).abs())
-                    .max(f64::from(baseline).abs());
-                let (mut key, _, _) =
-                    physical(glyph, slots[glyph.face as usize], (0.0, 0.0), scale);
-                key.x_bin = 0;
-                key.y_bin = 0;
-                let bound = match envelopes.binary_search_by_key(&key, |(k, _)| *k) {
-                    Ok(i) => envelopes[i].1,
-                    Err(_) => {
-                        let bound = envelope_of(engine, key);
-                        if envelopes.len() == ENVELOPES {
-                            envelopes.clear();
-                        }
-                        let i = envelopes
-                            .binary_search_by_key(&key, |(k, _)| *k)
-                            .unwrap_err();
-                        envelopes.insert(i, (key, bound));
-                        bound
+        for (line_no, line) in lines.lines.iter().enumerate() {
+            let baseline = p.baselines[line_no];
+            for (chunk, glyphs) in lines.glyphs_of(line).chunks(GLYPHS_PER_CHUNK).enumerate() {
+                let mut span = Bounds::EMPTY;
+                for glyph in glyphs {
+                    #[cfg(test)]
+                    count(|n| n.glyphs += 1);
+                    let (x, y) = (glyph.x, glyph.y);
+                    if !x.is_finite() || !y.is_finite() || !baseline.is_finite() {
+                        span = Bounds::ALL;
+                        continue;
                     }
+                    result.max_input = result
+                        .max_input
+                        .max(f64::from(x).abs())
+                        .max(f64::from(y).abs())
+                        .max(f64::from(baseline).abs());
+                    let (mut key, _, _) =
+                        physical(glyph, slots[glyph.face as usize], (0.0, 0.0), scale);
+                    key.x_bin = 0;
+                    key.y_bin = 0;
+                    let bound = match envelopes.binary_search_by_key(&key, |(k, _)| *k) {
+                        Ok(i) => envelopes[i].1,
+                        Err(_) => {
+                            let bound = envelope_of(engine, key);
+                            if envelopes.len() == ENVELOPES {
+                                envelopes.clear();
+                            }
+                            let i = envelopes
+                                .binary_search_by_key(&key, |(k, _)| *k)
+                                .unwrap_err();
+                            envelopes.insert(i, (key, bound));
+                            bound
+                        }
+                    };
+                    span = span.union(bound.translated(
+                        f64::from(x) * f64::from(scale),
+                        (f64::from(baseline) + f64::from(y)) * f64::from(scale),
+                    ));
+                }
+                let leaf = if chunked {
+                    result.chunks.push((line_no, chunk * GLYPHS_PER_CHUNK));
+                    result.chunks.len() - 1
+                } else {
+                    line_no
                 };
-                span = span.union(bound.translated(
-                    f64::from(x) * f64::from(scale),
-                    (f64::from(baseline) + f64::from(y)) * f64::from(scale),
-                ));
+                result.spans[leaves + leaf] = span;
             }
-            result.spans[leaves + n] = span;
-        }
-        if result.lines != p.baselines.len() {
-            return None;
         }
         for i in (1..leaves).rev() {
             result.spans[i] = result.spans[2 * i].union(result.spans[2 * i + 1]);
@@ -345,11 +373,14 @@ impl Index {
 
     pub(super) fn bytes(&self) -> usize {
         self.spans.capacity() * size_of::<Bounds>()
+            + self.chunks.capacity() * size_of::<(usize, usize)>()
     }
 
-    pub fn glyphs<'a>(&self, p: &'a Paragraph, line: usize) -> (&'a [LayoutGlyph], f32) {
+    pub fn glyphs<'a>(&self, p: &'a Paragraph, chunk: usize) -> (&'a [LayoutGlyph], f32) {
+        let (line, first) = self.chunks.get(chunk).copied().unwrap_or((chunk, 0));
+        let glyphs = p.layouts().glyphs_of(&p.layouts().lines[line]);
         (
-            p.layouts().glyphs_of(&p.layouts().lines[line]),
+            &glyphs[first..(first + GLYPHS_PER_CHUNK).min(glyphs.len())],
             p.baselines[line],
         )
     }
@@ -441,9 +472,9 @@ impl Index {
                 return 1;
             }
             if node >= index.leaves {
-                let line = node - index.leaves;
-                if line < index.lines {
-                    draw(line);
+                let chunk = node - index.leaves;
+                if chunk < index.leaf_count {
+                    draw(chunk);
                 }
                 1
             } else {
@@ -548,7 +579,7 @@ impl Index {
             self.spans.iter().map(bits).collect::<Vec<_>>(),
             other.spans.iter().map(bits).collect::<Vec<_>>()
         );
-        assert_eq!(self.lines, other.lines);
+        assert_eq!(self.chunks, other.chunks);
     }
 }
 #[cfg(test)]
@@ -588,7 +619,8 @@ mod tests {
         let index = Index {
             lifetime: std::sync::Arc::new(()),
             spans: vec![Bounds::EMPTY, Bounds::ALL, Bounds::ALL, Bounds::ALL],
-            lines: 2,
+            chunks: Vec::new(),
+            leaf_count: 2,
             leaves: 2,
             max_input: 0.0,
         };

@@ -1163,8 +1163,8 @@ impl TextEngine {
                 .viewport(origin, scale, glyph_ts, clip)
                 .map(|query| (index, query))
         }) {
-            let _nodes = index.visit(query, |line| {
-                let (glyphs, baseline) = index.glyphs(paragraph, line);
+            let _nodes = index.visit(query, |chunk| {
+                let (glyphs, baseline) = index.glyphs(paragraph, chunk);
                 for g in glyphs {
                     draw(g, baseline, palette[g.run()]);
                 }

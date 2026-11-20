@@ -168,6 +168,24 @@ fn wrapped_top_middle_and_end_match_pixels_without_prefix_glyph_visits() {
 }
 
 #[test]
+fn a_long_unwrapped_line_paints_only_the_visible_chunks_in_glyph_order() {
+    let mut engine = engine();
+    let p = engine.layout(&spec(&"abcdef café אבג ".repeat(400)), None);
+    assert_eq!(p.baselines.len(), 1);
+    for x in [0., -p.width * 0.5, 320. - p.width] {
+        let view = View {
+            origin: (x + 0.25, 10.),
+            ..View::at(0., 1.)
+        };
+        let visited = compare(&mut engine, &p, &palette(), view, None);
+        assert!(
+            (1..=3 * 128).contains(&visited),
+            "{x}: visited {visited} glyphs"
+        );
+    }
+}
+
+#[test]
 fn fractional_origins_scales_and_transforms_preserve_overhanging_ink() {
     let mut engine = engine();
     let mut s = spec(&"fjy Áé W\n".repeat(80));
