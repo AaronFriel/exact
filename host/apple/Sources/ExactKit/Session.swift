@@ -16,18 +16,23 @@ import QuartzCore
 /// (LLP 1012 — the driver owns the clock), a smoke run prints and exits.
 public enum ExactEnv {
     /// The process's environment. A production bake never enters agent mode
-    /// (LLP 1069.007 D2, ruled) and takes no module override (LLP 1024 D5):
-    /// its `EXACT_AGENT`, `EXACT_AGENT_*`, `EXACT_HATCHES` and
-    /// `EXACT_MODULES` variables are dropped here, from the process too,
-    /// before this host or its library reads one.
-    public static let environment: [String: String] = {
-        var environment = ProcessInfo.processInfo.environment
-        let agent = environment.keys.filter { ["EXACT_AGENT", "EXACT_HATCHES", "EXACT_MODULES"].contains($0) || $0.hasPrefix("EXACT_AGENT_") }.sorted()
-        guard !agent.isEmpty, productionBake else { return environment }
-        FileHandle.standardError.write(Data("exact: a production build ignores \(agent.joined(separator: ", ")) (LLP 1069.007 D2, LLP 1024 D5)\n".utf8))
-        for key in agent { environment[key] = nil; unsetenv(key) }
+    /// (LLP 1069.007 D2, ruled) and takes no module or plan override (LLP 1024
+    /// D5, LLP 1047.001 §9.13): its `EXACT_AGENT`, `EXACT_AGENT_*`,
+    /// `EXACT_HATCHES`, `EXACT_MODULES`, `EXACT_PLAN` and `EXACT_DEV_PLAN`
+    /// variables are dropped here, from the process too, before this host or
+    /// its library reads one.
+    public static let environment: [String: String] = sanitize(ProcessInfo.processInfo.environment, production: productionBake)
+    static package func sanitize(_ raw: [String: String], production: Bool, unset: (String) -> Void = { unsetenv($0) }) -> [String: String] {
+        var environment = raw
+        let dropped = environment.keys.filter {
+            ["EXACT_AGENT", "EXACT_HATCHES", "EXACT_MODULES", "EXACT_PLAN", "EXACT_DEV_PLAN"].contains($0)
+                || $0.hasPrefix("EXACT_AGENT_")
+        }.sorted()
+        guard !dropped.isEmpty, production else { return environment }
+        FileHandle.standardError.write(Data("exact: a production build ignores \(dropped.joined(separator: ", ")) (LLP 1069.007 D2, LLP 1024 D5)\n".utf8))
+        for key in dropped { environment[key] = nil; unset(key) }
         return environment
-    }()
+    }
     /// Whether this binary was baked with `EXACT_UPDATE_TRUST=production`
     /// (`BakedCompatibility.production`).
     static package let productionBake = BakedCompatibility.production(BakedCompatibility.json)
