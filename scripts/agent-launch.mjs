@@ -1155,11 +1155,14 @@ export function receiptChanges(receipt, app, { hashed = false, launch, retained 
 /** What a web build of `app` reads, modified after `since` (every file by default):
  * the app's own files and the build's Cargo dependency roots, as shown paths. */
 export function webInputs(app, js, since = -Infinity, roots = webSourceRoots(app, js), sourceInputs) {
+  const excluded = roots.filter(root => root?.exclude).map(root => resolve(root.exclude));
+  const skipTarget = path => excluded.some(item => within(item, path));
+  const active = roots.filter(root => !root?.exclude);
   // Each package is a root of its own; an enclosing package does not consume its other nested crates.
-  const dependencies = () => newerThan(since, roots, path => existsSync(resolve(path, 'Cargo.toml')));
+  const dependencies = () => newerThan(since, active, path => existsSync(resolve(path, 'Cargo.toml')) || skipTarget(path));
   if (app.manifest?.game) {
     const files = proofInputFiles(ROOT, app.dir).map(file => resolve(ROOT, file));
-    const admitted = since === -Infinity ? files : files.filter(file => statSync(file, {throwIfNoEntry:false})?.mtimeMs > since);
+    const admitted = (since === -Infinity ? files : files.filter(file => statSync(file, {throwIfNoEntry:false})?.mtimeMs > since)).filter(file => !skipTarget(file));
     const extra = dependencies().map(file => resolve(ROOT, file));
     const all = [...new Set([...admitted, ...extra])];
     return {app:all.filter(file => within(app.dir, file)), shared:all.filter(file => !within(app.dir, file))};
@@ -1168,7 +1171,7 @@ export function webInputs(app, js, since = -Infinity, roots = webSourceRoots(app
   const ignored = notBuildInput(app.dir, shaderWatchRoots(app), null, existsSync(resolve(app.dir,'app.ts')) ? new Set(files) : null);
   const backend = resolve(app.dir, '.exact/backend-origin');
   const hosts = otherHosts(app, ['web']);
-  const appFiles = newerThan(since, [app.dir], path => hosts(path) || ignored(path));
+  const appFiles = newerThan(since, [app.dir], path => hosts(path) || ignored(path) || skipTarget(path));
   const loaded = files.filter(file => since === -Infinity || statSync(file, {throwIfNoEntry:false})?.mtimeMs > since);
   appFiles.push(...loaded.filter(file => within(app.dir,file)).map(shown));
   const extra = dependencies();
