@@ -131,6 +131,8 @@ test "boot only"
     writeFileSync(file, `test "bounded clock"
   prefer safe-area "47 0 34 0"
   expect layout "inset" height == 34
+  expect layout "inset" left == layout "field" left within 0.5
+  expect layout "inset" top >= layout "field" bottom
   reload
   expect layout "inset" height == 34
   prefer safe-area "0 0 12 0"
@@ -561,6 +563,10 @@ test('expect layout bounds the width or height `layout <target>` prints, and say
   expect(asked).toEqual([6, 6, 6, 2, 2, 2, 6]);
   expect((await step('gone', 'height', 'at-most', 24)).message).toBe('height of "gone" is absent (no view carries that testId)');
   expect(await step('tagline', 'height', 'at-most', 24)).toEqual({ message: `testId "tagline" is in the tree, but ${why}`, unshown: true });
+  const relative = { target: 'status-mark', dimension: 'centerY', comparison: 'equal',
+    value: { target: 'fixed-mark', dimension: 'bottom' }, tolerance: 136 };
+  expect(await layoutExpectation(s, tree, relative)).toBeNull();
+  expect((await layoutExpectation(s, tree, { ...relative, tolerance: 135 })).message).toContain('bottom of "fixed-mark" (19) within 135 pt');
   const boxless = (id) => layoutExpectation(s, [{ id, type: 'View', props: { testId: 'boxless' } }], { target: 'boxless', dimension: 'width', comparison: 'at-most', value: 1 });
   expect((await boxless(8)).message).toBe('width of "boxless" is unknown: native swipe action is not revealed');
   expect((await boxless(9)).message).toBe('width of "boxless" is unknown: the host reports no box for it');

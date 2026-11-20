@@ -846,26 +846,26 @@ fn a_test_asserts_which_node_has_the_focus() {
 
 #[test]
 fn a_test_bounds_a_nodes_laid_out_width_or_height() {
-    let src = "test \"t\"\n  expect layout \"status-mark\" height <= 24\n  expect layout \"status-mark\" width >= 12.5\n  expect layout \"rule\" height == 1\n";
+    let src = "test \"t\"\n  expect layout \"status-mark\" height <= 24\n  expect layout \"status-mark\" width >= 12.5\n  expect layout \"rule\" height == 1\n  expect layout \"icon\" centerY == layout \"label\" centerY within 0.5\n  expect layout \"off\" left <= -10\n";
     let tests = contract::tests(src).unwrap();
-    assert!(matches!(
-        &tests[0].steps[0],
-        Step::ExpectLayout { target, dimension, comparison: StateComparison::AtMost, value, .. }
-            if target == "status-mark" && dimension == "height" && *value == 24.0
-    ));
     let json = contract::tests_json(&tests);
     for step in [
         "{\"op\":\"expect-layout\",\"target\":\"status-mark\",\"dimension\":\"height\",\"comparison\":\"at-most\",\"value\":24,\"line\":2}",
         "{\"op\":\"expect-layout\",\"target\":\"status-mark\",\"dimension\":\"width\",\"comparison\":\"at-least\",\"value\":12.5,\"line\":3}",
         "{\"op\":\"expect-layout\",\"target\":\"rule\",\"dimension\":\"height\",\"comparison\":\"equal\",\"value\":1,\"line\":4}",
+        "{\"op\":\"expect-layout\",\"target\":\"icon\",\"dimension\":\"centerY\",\"comparison\":\"equal\",\"value\":{\"target\":\"label\",\"dimension\":\"centerY\"},\"tolerance\":0.5,\"line\":5}",
     ] {
         assert!(json.contains(step), "{step}\n{json}");
     }
     for (rest, says) in [
-        ("\"mark\" x <= 24", "reads `width` or `height`, not `x`"),
+        ("\"mark\" depth <= 24", "needs a size"),
         ("\"mark\" height < 24", "takes `==`, `<=` or `>=`"),
         ("\"mark\" height <= 24px", "in points, written bare"),
         ("\"mark\" height <= -1", "a size of 0 or more"),
+        (
+            "\"mark\" right == layout \"label\" right within -1",
+            "tolerance must be nonnegative",
+        ),
         ("mark height <= 24", "a testId"),
     ] {
         let e = contract::tests(&format!("test \"t\"\n  expect layout {rest}\n")).unwrap_err();

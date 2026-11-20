@@ -347,14 +347,28 @@ fn step_json(step: &Step, s: &mut String) {
             dimension,
             comparison,
             value,
+            tolerance,
             ..
         } => {
             s.push_str("{\"op\":\"expect-layout\",\"target\":");
             q(target, s);
             s.push_str(&format!(
-                ",\"dimension\":\"{dimension}\",\"comparison\":\"{}\",\"value\":{value}",
+                ",\"dimension\":\"{dimension}\",\"comparison\":\"{}\",\"value\":",
                 comparison_name(*comparison)
             ));
+            match value {
+                contract_syntax::LayoutOperand::Points(n) => s.push_str(&n.to_string()),
+                contract_syntax::LayoutOperand::BoxMeasure { target, dimension } => {
+                    s.push_str("{\"target\":");
+                    q(target, s);
+                    s.push_str(",\"dimension\":");
+                    q(dimension, s);
+                    s.push('}');
+                }
+            }
+            if let Some(tolerance) = tolerance {
+                s.push_str(&format!(",\"tolerance\":{tolerance}"));
+            }
         }
         Step::ExpectText { target, value, .. } => {
             s.push_str("{\"op\":\"expect-text\",\"target\":");

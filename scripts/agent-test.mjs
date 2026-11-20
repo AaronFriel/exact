@@ -94,19 +94,31 @@ export function focusedExpectation(nodes, target) {
   return { message: `expected "${target}" focused, ${was}` };
 }
 
-/** `expect layout <target> width|height ==|<=|>= <points>`: null when the size holds, else `{ message }`. The
- * size is the box `layout <target>` reports, `node.space.viewport` (LLP 1012: viewport points, presentation transforms
- * folded in), at the reply's two decimals. A node the shipped app does not show fails as `expect text` has it; a host
- * with no box for the node says why (`space.unavailable`: an iOS swipe action not revealed). */
+/** Read presented boxes in viewport points. Both sides of a comparison use the same tree snapshot. */
 export async function layoutExpectation(s, nodes, st) {
-  const n = targetNode(nodes, st.target), said = `${st.dimension} of "${st.target}"`;
-  if (!n) return { message: `${said} is absent (no view carries that testId${unopenedHint(nodes)})` };
-  if (n.unshown) return { message: `testId "${st.target}" is in the tree, but ${n.unshown}`, unshown: true };
-  const space = (await s.layout(n.id)).node?.space, box = space?.viewport;
-  if (!box) return { message: `${said} is unknown: ${space?.unavailable ?? 'the host reports no box for it'}` };
-  const r2 = (v) => Math.round(v * 100) / 100, w = r2(box.w), h = r2(box.h), got = st.dimension === 'width' ? w : h;
-  if (stateHolds(got, st)) return null;
-  return { message: `${said} is ${got}, expected ${{ equal: '', 'at-least': '>= ', 'at-most': '<= ' }[st.comparison]}${st.value} (its box is ${w}×${h})` };
+  const round = v => Math.round(v * 100) / 100;
+  async function measure({ target, dimension }) {
+    const n = targetNode(nodes, target), said = `${dimension} of "${target}"`;
+    if (!n) return { message: `${said} is absent (no view carries that testId${unopenedHint(nodes)})` };
+    if (n.unshown) return { message: `testId "${target}" is in the tree, but ${n.unshown}`, unshown: true };
+    const space = (await s.layout(n.id)).node?.space;
+    if (!space?.viewport) return { message: `${said} is unknown: ${space?.unavailable ?? 'the host reports no box for it'}` };
+    const { x, y, w, h } = space.viewport;
+    const values = { width: w, height: h, x, left: x, y, top: y, right: x + w, bottom: y + h, centerX: x + w / 2, centerY: y + h / 2 };
+    return { value: round(values[dimension]), said, size: `${round(w)}×${round(h)}` };
+  }
+  const lhs = await measure(st);
+  if (lhs.message) return lhs;
+  const rhs = typeof st.value === 'number' ? { value: st.value } : await measure(st.value);
+  if (rhs.message) return rhs;
+  const delta = lhs.value - rhs.value;
+  const tolerance = st.tolerance ? st.tolerance + Number.EPSILON * Math.max(1, Math.abs(lhs.value), Math.abs(rhs.value)) : 0;
+  const holds = { equal: Math.abs(delta) <= tolerance, 'at-least': delta >= -tolerance, 'at-most': delta <= tolerance };
+  if (holds[st.comparison]) return null;
+  const sign = { equal: '', 'at-least': '>= ', 'at-most': '<= ' }[st.comparison];
+  const expected = rhs.said ? `${rhs.said} (${rhs.value})` : rhs.value;
+  const within = st.tolerance === undefined ? '' : ` within ${st.tolerance} pt`;
+  return { message: `${lhs.said} is ${lhs.value}, expected ${sign}${expected}${within} (its box is ${lhs.size})` };
 }
 
 /** A press on a disabled control does nothing, and each host said so its own way (the web's silently, a native one in the words of the view

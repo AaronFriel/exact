@@ -857,8 +857,8 @@ step          = "tap" "midi" STRING ( HEX { HEX } | "clock" NUMBER NUMBER ) NL
               | "expect" "tree" ( "has" | "missing" ) STRING NL
               | "expect" ( "disabled" | "enabled" ) STRING NL  (* a control's `disabled` (LLP 1116.010 D3) *)
               | "expect" "focused" STRING NL         (* the node that holds the keyboard focus *)
-              | "expect" "layout" STRING ( "width" | "height" ) ( "==" | "<=" | ">=" ) NUMBER NL
-                                                     (* its laid-out size, in points *)
+              | "expect" "layout" STRING measure ( "==" | "<=" | ">=" ) ( [ "-" ] NUMBER | "layout" STRING measure ) [ "within" NUMBER ] NL
+                                                     (* the border box, in viewport points *)
               | "expect" "refusal" STRING NL          (* one observed refusal of the named mutation slot *)
               | "expect" "text" STRING "==" STRING NL
               | "expect" "state" state-path
@@ -872,6 +872,7 @@ step          = "tap" "midi" STRING ( HEX { HEX } | "clock" NUMBER NUMBER ) NL
               | "expect" "midi" ( "sent" | "missing" ) STRING HEX { HEX } [ "at" NUMBER ] NL
               | "expect" "mediasession" ( IDENT "==" ( STRING | "none" )
                   | ( "has" | "missing" ) STRING ) NL ;
+measure       = "width" | "height" | "x" | "y" | "left" | "right" | "top" | "bottom" | "centerX" | "centerY" ;
 midi-fact     = "midi.state" ( "prompt" | "granted" | "denied" | "unavailable" )
               | ( "midi.inputs" | "midi.outputs" ) STRING ;  (* names, comma-separated *)
 HEX           = HEXDIGIT HEXDIGIT ;                  (* one byte, as in 90 3c 64 *)
@@ -1013,6 +1014,10 @@ in (LLP 1012). A failure names the size and the box, so an image a column stretc
 width fails its test: `height of "status-mark" is 310, expected <= 24 (its box is 420×310)`.
 A size that comes from text, a platform control or the window differs by host: bound it, and
 keep `==` for a size the app sets.
+The same step reads `x` or `left`, `y` or `top`, `right`, `bottom`, `centerX`, and
+`centerY` in viewport coordinates. Compare two boxes with
+`expect layout "icon" centerY == layout "label" centerY within 0.5`. The
+optional tolerance is in points and defaults to zero.
 
 Each test is a session of its own, opened with its
 launch lines: `size 1200x800`, `epoch "2026-09-21T12:00:00Z"`, `time-zone

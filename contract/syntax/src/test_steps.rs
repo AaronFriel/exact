@@ -25,6 +25,20 @@ pub enum StateOperand {
     State(String),
 }
 
+/// The right side of a comparison in viewport points.
+#[derive(Debug, Clone, PartialEq)]
+pub enum LayoutOperand {
+    /// A viewport coordinate or length.
+    Points(f64),
+    /// A measurement on another node.
+    BoxMeasure {
+        /// The other node's testId.
+        target: String,
+        /// The coordinate or size to measure.
+        dimension: String,
+    },
+}
+
 /// `test "name"` with steps: the agent API's own operations (LLP 1012) and
 /// `expect` lines that read their replies — compiled to a script the agent
 /// driver runs against the real hosts; never a second evaluator (LLP 1017 P7).
@@ -355,18 +369,18 @@ pub enum Step {
         /// Where.
         span: Span,
     },
-    /// `expect layout "testId" width|height ==|<=|>= n`: the node's laid-out size, the
-    /// width or height of the box the agent's `layout <target>` reports (LLP 1012:
-    /// viewport points, two decimals, presentation transforms folded in).
+    /// A comparison between measurements of presented boxes in viewport points (LLP 1012).
     ExpectLayout {
         /// The node, by `testId`.
         target: String,
-        /// `width` or `height`.
+        /// The measurement to read from the box.
         dimension: String,
         /// `Equal`, `AtLeast` or `AtMost`.
         comparison: StateComparison,
-        /// The size, in points.
-        value: f64,
+        /// The expected measurement.
+        value: LayoutOperand,
+        /// The allowed difference, in viewport points.
+        tolerance: Option<f64>,
         /// Where.
         span: Span,
     },
