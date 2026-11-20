@@ -674,9 +674,6 @@ typedef ExactInlineFrame (*ExactRangeFrameFn)(void *ctx, uint32_t view, uint32_t
  * clientHeight in CSS pixels. Returns zero when the textarea is unavailable. */
 typedef uint32_t (*ExactScrollMetricsFn)(void *ctx, uint32_t view, double *six);
 void exact_set_text_geometry(ExactRuntime rt, ExactInlineFrameFn read, ExactRangeFrameFn range, ExactScrollMetricsFn metrics, void *ctx);
-static inline void exact_set_inline_geometry(ExactRuntime rt, ExactInlineFrameFn read, ExactRangeFrameFn range, void *ctx) {
-    exact_set_text_geometry(rt, read, range, NULL, ctx);
-}
 /* A textarea's decorations (LLP 1114.007): UTF-8 JSON {record, current, styles} in,
  * {provisional, spans, styles} out, valid until the next call on this thread; null when
  * the request does not parse. */
