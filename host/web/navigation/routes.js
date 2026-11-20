@@ -198,6 +198,35 @@ function setScrim(parent, modal) {
     parent.setAttribute("data-exact-scrim", value);
   }
 }
+// The first vertical scroller on the last in-flow child's chain owns the bottom inset, as in
+// kernel/cover.rs (LLP 1116 D2). A form control scrolls its own value.
+const bottomScrollers = new WeakMap();
+function bottomScroller(route) {
+  let el = route.lastElementChild;
+  while (el) {
+    const style = getComputedStyle(el);
+    if (style.display === "none" || style.position === "absolute" || style.position === "fixed") {
+      el = el.previousElementSibling;
+      continue;
+    }
+    if (el.matches("textarea, select")) return null;
+    if (style.overflowY === "auto" || style.overflowY === "scroll") return el;
+    el = el.lastElementChild;
+  }
+  return null;
+}
+function sheetScroller(route, inSheet) {
+  const previous = bottomScrollers.get(route), current = inSheet ? bottomScroller(route) : null;
+  if (previous === current || (!previous && !current)) return;
+  previous?.removeAttribute("data-exact-bottom-inset");
+  if (current) {
+    bottomScrollers.set(route, current);
+    current.setAttribute("data-exact-bottom-inset", "");
+  } else {
+    bottomScrollers.delete(route);
+  }
+  route.toggleAttribute("data-exact-bottom-scroller", !!current);
+}
 /** The frame of `routes[index]`: its own detent, or its sheet's when it was pushed inside one; written only where it
  * changed. `shownIn` is the sheet each route shows in (`sheetAt`), `inUse` the sheets something shown is in,
  * `selected` the stack's shown route. The projection frames a stack's routes in order, and with the last one the
@@ -229,6 +258,7 @@ function sheetFrame(routes, index, shownIn, inUse, selected) {
   if (route.style.getPropertyValue("--exact-sheet-detent") !== (chosen?.css ?? "")) {
     route.style.setProperty("--exact-sheet-detent", chosen?.css ?? "");
   }
+  sheetScroller(route, inUse.has(at));
   if (index === routes.length - 1) {
     stackSheets(routes, shownIn, inUse, selected);
   }
