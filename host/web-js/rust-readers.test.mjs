@@ -349,6 +349,12 @@ test("a Rust source's store read reaches rt.js whether its call answers or fails
     fails = true;
     expect(() => data.answer('reader', [], store)).toThrow('nothing kept');
     expect([drew, data.threwRead()]).toEqual([2, false]);
+    for (const mutation of [false, true]) {
+      let error;
+      try { data.answer('reader', [], store, 'receipt', mutation); } catch (e) { error = e; }
+      expect(error?.message).toBe('nothing kept');
+      expect(error.refuse).toBe(!mutation);
+    }
     delete globalThis.__exactDrew; draws = 0;
     [read, fails] = [true, false];
     expect(data.answer('reader', [], store).store).toBe(true);

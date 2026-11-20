@@ -1476,8 +1476,14 @@ or an explicit assignment clears it. A `parallel` mutation's belongs to its late
 send to conclude: a send's failure shows unless a later send has already answered
 or failed, and an earlier send's success, which does not land in the slot then,
 leaves a later send's failure standing. A failed request retains its previous value,
-does not retry, and does not run `then`. A synchronous throw that refuses the sending
-action still rolls that action back; only an admitted request's failure persists.
+does not retry, and does not run `then`. When a Rust mutation source returns
+`BadArguments` or `Unavailable`, the sending action commits and
+`failure(receipt)` reports `error` with the source's message. An unknown
+source or a call that fails the declared argument checks still refuses the action.
+
+A resource whose source answers outside its declared shape reports `shape`
+and keeps the previous value or its `else` placeholder. A resource with
+neither refuses the commit because it has no value to display.
 
 Finite string parameters are written `enum<"draft", "published">`. Members must be
 quoted, distinct strings, with at least one member. A literal call argument must be a
