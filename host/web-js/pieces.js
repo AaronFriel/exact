@@ -327,6 +327,9 @@ export function onReorder(e) {
   onEnd(() => motion(m => m.gone(id)));
   motion(m => m.reorderHandle(e));
 }
+export function onReorderTarget(e, f) {
+  e.$reordertargetchange = f;
+}
 export function onDrop(e, f) {
   e.$reorderdrop = f;
   motion(() => {});

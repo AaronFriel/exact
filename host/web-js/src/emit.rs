@@ -1395,7 +1395,9 @@ impl Em<'_> {
                 EventKind::Reachstart | EventKind::Reachend => {
                     return Err(contract::collection_edge_refusal(h.event.name()))
                 }
-                EventKind::Reorderdrop if virtualized => self.motion = true,
+                EventKind::Reorderdrop | EventKind::Reordertargetchange if virtualized => {
+                    self.motion = true
+                }
                 k => {
                     return Err(format!(
                         "node {i}: the `{}` event is not in the JS target",

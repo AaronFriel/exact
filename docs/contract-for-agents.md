@@ -2437,7 +2437,12 @@ a quick-add. Give the list `flex=1 min-height=…` so its scroll box fills the
 available height. The finger or pointer chooses the list under it, even with
 a grip at the edge of a wide card. The lifted card's centre chooses the gap
 within that list. Releasing over a header or gutter uses the last gap the
-drag reached. Give each grip `touch-action="none"`
+drag reached. To highlight that column, bind
+`reordertargetchange=highlight(col)` on each grouped list. Its action takes
+the bound column and a boolean. The source becomes the target on lift. When
+another list takes over, the old list receives `false` and the new list
+receives `true`. Drop and cancel clear the highlight. Keyboard and
+accessibility moves use the same signal. Give each grip `touch-action="none"`
 and no `press`, `pan`, `pointerdown` or `key` of its own, so the host's keys
 (Space, the arrows, Enter, Escape) work on it. The host draws the lifted row,
 holds the drop until the move shows (a second at most) and scrolls the lists

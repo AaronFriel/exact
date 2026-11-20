@@ -652,7 +652,8 @@ pub fn uses(plan: &Plan) -> Uses {
             EventKind::Heightrelease
             | EventKind::Transformgeometry
             | EventKind::Transformrelease
-            | EventKind::Reorderdrop => {
+            | EventKind::Reorderdrop
+            | EventKind::Reordertargetchange => {
                 uses = uses.with(Capability::Motion).with(Capability::Drag);
             }
             // Dropped and pasted files become `doc:` handles (studio diary

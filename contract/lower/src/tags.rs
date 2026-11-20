@@ -565,6 +565,7 @@ pub fn attr(name: &str) -> Option<AttrTarget> {
         "heightrelease" => AttrTarget::Handler("heightrelease"),
         "transformgeometry" => AttrTarget::Handler("transformgeometry"),
         "transformrelease" => AttrTarget::Handler("transformrelease"),
+        "reordertargetchange" => AttrTarget::Handler("reordertargetchange"),
         "reorderdrop" => AttrTarget::Handler("reorderdrop"),
         "reorderFor" => AttrTarget::Prop(p("reorderFor")),
         "reorderGroup" => AttrTarget::Prop(p("reorderGroup")),

@@ -401,6 +401,7 @@ pub struct Runner<D: DataSource> {
     resources: Vec<resources::ResourceRow>,
     tree: Option<Tree>,
     reorder_owner: Option<exact_kernel::NodeKey>,
+    reorder_target: Option<exact_kernel::NodeKey>,
     reorder_ops: Vec<exact_kernel::Op>,
     /// The wide colours the queued patches hold, kept from the table's sweep.
     reorder_kept: exact_kernel::style::wide::Keep,
@@ -900,6 +901,7 @@ impl<D: DataSource> Runner<D> {
             tree: None,
             bake_warnings: Vec::new(),
             reorder_owner: None,
+            reorder_target: None,
             reorder_ops: Vec::new(),
             reorder_kept: Default::default(),
             design: None,
