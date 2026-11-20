@@ -17,9 +17,10 @@
  * @ref LLP 1174 D1 D3 D4 D5
  */
 import { spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
-import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
+import { createHash, createPrivateKey, createPublicKey, sign, verify } from 'node:crypto';
+import { parseArgs } from 'node:util';
+import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
 import { basename, dirname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { compilerPaths, cargoInputPaths, crateDir, depInfoOf, freshCompiler } from './cargo-dep-info.mjs';
@@ -28,6 +29,7 @@ import { cargoEnvironment, cargoOnPath } from './cargo-check.mjs';
 import { builtFilesystemHelper, offlineMiss } from './filesystem.mjs';
 import { digest, lockClosure, seen, workspaceManifest } from './kept.mjs';
 import { EXE, within } from './paths.mjs';
+import { canonicalBytes } from './deploy-signing.mjs';
 
 export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -306,21 +308,130 @@ async function keep() {
   for (const { dir: old } of sets().slice(4)) rmSync(old, { recursive: true, force: true });
   console.log(`tools: kept the set for ${short(commit)} in ${entry.replace(homedir(), '~')}`);
   for (const [name, product] of Object.entries(products)) console.log(`  ${name}: ${(product.size / 1e6).toFixed(1)} MB, ${product.inputs.length} inputs`);
+  return { dir: entry, manifest };
 }
 
+/** Authenticate before using any path or input named by a remote manifest (LLP 1174 D4.2). */
+export function readToolManifest(bytes, id, triple, publicKey) {
+  if (sha(bytes) !== id) throw new Error('tool manifest digest differs from its lookup');
+  const manifest = JSON.parse(bytes.toString('utf8'));
+  if (manifest.kind !== 'exact-tool-set' || manifest.version !== 1 || manifest.triple !== triple || manifest.source !== 'fetched')
+    throw new Error(`tool manifest is not a version 1 set for ${triple}`);
+  const signature = Buffer.from(manifest.signature ?? '', 'base64');
+  if (publicKey.asymmetricKeyType !== 'ed25519' || signature.length !== 64 || !verify(null, canonicalBytes(manifest), publicKey, signature))
+    throw new Error('tool manifest signature does not match the producer key');
+  return manifest;
+}
+
+/** Run the stripped compilers and inventory their output with the helper that ships beside them. */
+function runProducts({ dir, manifest }) {
+  const work = mkdtempSync(resolve(tmpdir(), 'exact-tools-run-'));
+  const run = (name, args, input) => {
+    const path = resolve(dir, manifest.products[name].file);
+    const result = spawnSync(path, args, { cwd: work, env: toolEnv(), encoding: 'utf8', input });
+    if (result.error || result.status !== 0) throw new Error(`${name} failed on the producer: ${result.error?.message ?? result.stderr}`);
+    return result.stdout;
+  };
+  try {
+    writeFileSync(resolve(work, 'app.contract'), 'component App\n  view\n    text "Hello"\n');
+    run('contract', ['build', 'app.contract', '-o', 'app.plan']);
+    run('exact-web-js', ['js', 'app.plan', '-o', 'web']);
+    const inventory = JSON.parse(run('exact-filesystem', [], JSON.stringify({ op: 'inventory', root: resolve(work, 'web') }) + '\n'));
+    if (!(inventory.value?.['app.js']?.bytes > 0)) throw new Error('the compilers and filesystem helper did not produce and inventory app.js');
+    for (const product of Object.values(manifest.products).filter(p => p.file.endsWith('.wasm'))) {
+      new WebAssembly.Module(readFileSync(resolve(dir, product.file)));
+    }
+  } finally {
+    rmSync(work, { recursive: true, force: true });
+  }
+}
+
+/** Make every product and its signed manifest available before publishing either lookup. */
+export async function publishToolSet(origin, set, privateKey) {
+  const { blobPath, streamPath } = await import('./origin.mjs');
+  if (privateKey.asymmetricKeyType !== 'ed25519') throw new Error('the tools producer needs an Ed25519 private key');
+  const { manifest, dir } = set;
+  const { commit } = manifest;
+  if (!/^[0-9a-f]{40}(?:[0-9a-f]{24})?$/.test(commit)) throw new Error('tool lookup needs a full Git commit');
+  if (manifest.source !== 'built' || manifest.triple !== hostTriple()) throw new Error('only a set built on this producer can be published');
+  const stream = { channel: 'tools', compatibilityId: manifest.triple }, base = streamPath(stream);
+  const remote = { ...manifest, kind: 'exact-tool-set', source: 'fetched' };
+  remote.signature = sign(null, canonicalBytes(remote), privateKey).toString('base64');
+  const bytes = Buffer.from(JSON.stringify(remote)), id = sha(bytes);
+  for (const [name, product] of Object.entries(manifest.products)) {
+    if (basename(product.file) !== product.file || !within(dir, resolve(dir, product.file))) throw new Error(`invalid product file for ${name}`);
+    const body = readFileSync(resolve(dir, product.file));
+    if (body.length !== product.size || sha(body) !== product.sha256) throw new Error(`${name} differs from the built tool set`);
+    await origin.put(blobPath(product.sha256), body, { immutable: true });
+  }
+  await origin.put(`${base}/manifests/${id}.json`, bytes, { immutable: true });
+  const recentPath = `${base}/recent.json`;
+  await origin.withLock(stream, async () => {
+    const saved = await origin.get(recentPath);
+    const recent = saved === null ? [] : JSON.parse(saved.toString('utf8'));
+    if (!Array.isArray(recent) || recent.some(digest => typeof digest !== 'string' || !/^[0-9a-f]{64}$/.test(digest)))
+      throw new Error(`${recentPath} does not contain tool manifest digests`);
+    await origin.put(`${base}/commits/${commit}.json`, Buffer.from(JSON.stringify(id)));
+    await origin.put(recentPath, Buffer.from(JSON.stringify([id, ...recent.filter(other => other !== id)].slice(0, 8))));
+  });
+  return id;
+}
+
+async function publish(args) {
+  const { values } = parseArgs({ args, options: { origin: { type: 'string' }, key: { type: 'string' } } });
+  if (!values.origin || !values.key) throw new Error('publish needs --origin <directory> and --key <producer.pem>');
+  if (hostTriple() !== 'aarch64-apple-darwin') throw new Error('publish builds and runs the native tool set on the Apple Silicon producer');
+  if (/^[a-z][a-z\d+.-]*:\/\//i.test(values.origin)) throw new Error('--origin needs a local directory');
+  const { DirectoryOrigin, streamPath } = await import('./origin.mjs');
+  const origin = new DirectoryOrigin(values.origin), privateKey = createPrivateKey(readFileSync(values.key));
+  if (privateKey.asymmetricKeyType !== 'ed25519') throw new Error('the tools producer needs an Ed25519 private key');
+  const git = (...args) => {
+    const result = spawnSync('git', ['-C', ROOT, ...args], { encoding: 'utf8' });
+    if (result.status !== 0) throw new Error(`git ${args[0]}: ${result.stderr}`);
+    return result.stdout.trim();
+  };
+  const revision = () => {
+    if (git('status', '--porcelain')) throw new Error('publish needs a clean producer checkout');
+    return git('rev-parse', 'HEAD');
+  };
+  const commit = revision(), triple = hostTriple();
+  const base = streamPath({ channel: 'tools', compatibilityId: triple });
+  const lookup = await origin.get(`${base}/recent.json`);
+  const publicKey = createPublicKey(privateKey);
+  for (const id of lookup === null ? [] : JSON.parse(lookup.toString('utf8'))) {
+    if (typeof id !== 'string' || !/^[0-9a-f]{64}$/.test(id)) throw new Error('invalid tool manifest digest in recent lookup');
+    const bytes = await origin.get(`${base}/manifests/${id}.json`);
+    if (!bytes) throw new Error(`missing published tool manifest ${id}`);
+    const manifest = readToolManifest(bytes, id, triple, publicKey);
+    if (Object.values(manifest.products).some(product => differs(product)) || !setMetadata({ manifest })) continue;
+    if (revision() !== commit) throw new Error('producer checkout changed during input comparison');
+    await origin.put(`${base}/commits/${commit}.json`, Buffer.from(JSON.stringify(id)));
+    console.log(`tools: ${short(commit)} matches published set ${id}`);
+    return;
+  }
+  const set = await keep();
+  runProducts(set);
+  if (revision() !== commit || set.manifest.commit !== commit) throw new Error('producer checkout changed during build');
+  const id = await publishToolSet(origin, set, privateKey);
+  console.log(`tools: published ${triple} set ${id} for ${short(commit)}`);
+}
+
+
 const USAGE = `usage: bun scripts/tools.mjs keep
+       bun scripts/tools.mjs publish --origin <directory> --key <producer.pem>
 
 keep  build this checkout's tool set (the Contract compiler, the web compiler, the
       filesystem helper and the web's four leaf modules) from its committed sources, and keep it in
       ~/.cache/exact/tools/${hostTriple()}/, where a checkout with the same input bytes
-      takes it in place of building with Rust (LLP 1174).`;
+      takes it in place of building with Rust (LLP 1174).
+publish  sign and publish this revision’s tool set, or record its commit against a matching published set.`;
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const [verb] = process.argv.slice(2);
+  const [verb, ...args] = process.argv.slice(2);
   // Not awaited at the top level: this module is in an import cycle with filesystem.mjs, and with a top-level await
   // a dynamic import of a module in that cycle waits for this module's evaluation, so `keep` never finishes.
-  if (verb === 'keep') {
-    keep().catch((error) => { console.error(`tools: ${error.message}`); process.exit(1); });
+  if (verb === 'keep' || verb === 'publish') {
+    (verb === 'keep' ? keep() : publish(args)).catch((error) => { console.error(`tools: ${error.message}`); process.exit(1); });
   } else {
     console.log(USAGE);
     process.exit(verb === '--help' || verb === '-h' ? 0 : 2);

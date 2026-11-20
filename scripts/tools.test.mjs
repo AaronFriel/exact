@@ -1,13 +1,14 @@
 // A tool set is taken by its inputs' bytes, and a fetched one only where it may run (LLP 1174 D3, D5).
 import { test } from 'bun:test';
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
+import { createHash, generateKeyPairSync } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { digest, lockClosure, workspaceManifest } from './kept.mjs';
 import { cargoOnPath } from './cargo-check.mjs';
-import { ROOT, RustMissing, fromSet, fromSets, hostTriple, rustMissing } from './tools.mjs';
+import { ROOT, RustMissing, fromSet, fromSets, hostTriple, publishToolSet, readToolManifest, rustMissing } from './tools.mjs';
+import { DirectoryOrigin, blobPath } from './origin.mjs';
 import { offlineMiss } from './filesystem.mjs';
 
 const pin = Bun.TOML.parse(readFileSync(resolve(ROOT, 'rust-toolchain.toml'), 'utf8')).toolchain.channel;
@@ -34,6 +35,41 @@ function machine(sets, { rust }) {
 }
 
 const ours = ['rust-toolchain.toml', 'contract/syntax/src'].map(file => [file, digest(resolve(ROOT, file))]);
+
+test('publish exposes a verified manifest and complete blobs before updating either lookup', async () => {
+  const dir = mkdtempSync(resolve(tmpdir(), 'exact-tools-publish-'));
+  try {
+    const publication = resolve(dir, 'origin');
+    mkdirSync(publication);
+    const origin = new DirectoryOrigin(publication);
+    const { privateKey, publicKey } = generateKeyPairSync('ed25519');
+    const triple = hostTriple(), base = `.exact/tools/${triple}`, commit = 'b'.repeat(40);
+    const body = Buffer.from('a compiled tool'), digest = sha(body);
+    writeFileSync(resolve(dir, 'contract'), body);
+    const set = { dir, manifest: { version: 1, source: 'built', commit, triple, products: {
+      contract: { file: 'contract', size: body.length, sha256: digest },
+    } } };
+    const publish = (revision) => publishToolSet(origin, { dir, manifest: { ...set.manifest, commit: revision } }, privateKey);
+    const id = await publish(commit);
+    assert.deepEqual(await origin.get(blobPath(digest)), body);
+    const bytes = await origin.get(`${base}/manifests/${id}.json`);
+    const manifest = readToolManifest(bytes, id, triple, publicKey);
+    assert.deepEqual(manifest.products, set.manifest.products);
+    assert.equal(manifest.source, 'fetched');
+    assert.throws(() => readToolManifest(bytes, id, triple, generateKeyPairSync('ed25519').publicKey), /signature/);
+    const altered = Buffer.from(JSON.stringify({ ...manifest, commit: 'a'.repeat(40) }));
+    assert.throws(() => readToolManifest(altered, id, triple, publicKey), /digest/);
+    assert.throws(() => readToolManifest(altered, sha(altered), triple, publicKey), /signature/);
+    assert.equal(await publish(commit), id);
+    assert.equal(JSON.parse(await origin.get(`${base}/commits/${commit}.json`)), id);
+    assert.deepEqual(JSON.parse(await origin.get(`${base}/recent.json`)), [id]);
+    writeFileSync(resolve(dir, 'contract'), 'changed');
+    const next = 'c'.repeat(40);
+    await assert.rejects(publish(next), /contract differs/);
+    assert.equal(await origin.get(`${base}/commits/${next}.json`), null);
+    assert.deepEqual(JSON.parse(await origin.get(`${base}/recent.json`)), [id]);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
 
 test('a set is taken while its inputs are these bytes, and a miss names the first that differs', () => {
   const changed = [ours[0], ['contract/syntax/src', 'f'.repeat(64)]];
