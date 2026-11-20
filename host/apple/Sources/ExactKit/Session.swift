@@ -741,7 +741,8 @@ public final class ExactSession {
     private func wire() {
         runtime.topLayer = { [weak self] in self?.presenter.openTopLayer ?? ([], nil, nil) }
         runtime.setInlineGeometry({ [weak self] id in self?.presenter.inlineFrame(id) },
-                                  range: { [weak self] id, start, end in self?.presenter.rangeFrame(id, start: start, end: end) })
+                                  range: { [weak self] id, start, end in self?.presenter.rangeFrame(id, start: start, end: end) },
+                                  metrics: { [weak self] id in self?.presenter.textareaScrollMetrics(id) })
         if ExactSession.asyncFills {
             // @ref LLP 1072 §8.5 — main does not wait for a canvas's draw.
             SurfacesLink.installed?.deferDraws(runtime)

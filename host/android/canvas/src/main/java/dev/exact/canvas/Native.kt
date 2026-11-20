@@ -142,6 +142,7 @@ object Native {
      * field its own text; once it ends, the value the app then shows (LLP 1115.000 §5, ruling 6). */
     @JvmStatic external fun fieldComposing(id: Int, generation: Int, composing: Boolean, value: String)
     /** Hosted field [id] moved its selection with no edit. */
+    @JvmStatic external fun fieldScrolled(id: Int, generation: Int, x: Int, y: Int)
     @JvmStatic external fun fieldSelected(id: Int, generation: Int, start: Int, end: Int)
     /** Hosted field [id] had its action key pressed, or Enter or Tab on a hardware keyboard. [action] is what the
      * key said it does: 0 Enter with no action, 2 done, 3 go, 4 next, 5 previous, 6 search, 7 send, 16 Tab, 17

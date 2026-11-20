@@ -59,11 +59,16 @@ impl<D: DataSource> Bridge<D> {
         &mut self,
         read: Option<crate::geometry::InlineFrameFn>,
         range: Option<crate::geometry::RangeFrameFn>,
+        metrics: Option<crate::geometry::ScrollMetricsFn>,
         ctx: *mut std::ffi::c_void,
     ) {
         self.inline_geometry = read.map(|read| {
-            std::rc::Rc::new(crate::geometry::InlineGeometry { read, range, ctx })
-                as std::rc::Rc<dyn exact_runner::geometry::InlineGeometry>
+            std::rc::Rc::new(crate::geometry::InlineGeometry {
+                read,
+                range,
+                metrics,
+                ctx,
+            }) as std::rc::Rc<dyn exact_runner::geometry::InlineGeometry>
         });
         if let Some(host) = self.host.as_mut() {
             host.runner_mut()

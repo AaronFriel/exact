@@ -64,6 +64,26 @@ pub(crate) fn line_left(align: TextAlign, direction: Direction, width: f32, w: f
     share * (width - w)
 }
 
+impl Paragraph {
+    /// The editor keeps a final empty line for the caret after a hard break.
+    pub(crate) fn textarea_scroll_max(
+        &self,
+        value: &str,
+        (width, height): (f32, f32),
+    ) -> (f32, f32) {
+        let mut bottom = self.line_bottoms().last().copied().unwrap_or_default();
+        if value.ends_with([
+            '\n', '\r', '\u{1c}', '\u{1d}', '\u{1e}', '\u{85}', '\u{2029}',
+        ]) {
+            bottom += self.source.flow_box(std::iter::empty(), &[]).1;
+        }
+        (
+            (self.width + 1. - width).max(0.),
+            (self.height.max(bottom) - height).max(0.),
+        )
+    }
+}
+
 impl Geometry {
     pub(crate) fn new(
         paragraph: &Paragraph,
@@ -222,11 +242,6 @@ impl Geometry {
             .or_else(|| line.spans.last().map(|s| s.right))
             .unwrap_or(line.empty_x);
         (x, line.top, 1., line.height)
-    }
-
-    /// The editable last line may follow the paragraph's final hard break.
-    pub(crate) fn height(&self) -> f32 {
-        self.lines.last().map_or(0., |line| line.top + line.height)
     }
 
     pub(crate) fn horizontal_bounds(&self) -> (f32, f32) {

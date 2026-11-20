@@ -66,6 +66,7 @@ class ScrollTouchTest {
             @JvmStatic @Implementation fun fieldAction(id: Int, generation: Int, action: Int) {}
             @JvmStatic @Implementation fun fieldEdited(id: Int, generation: Int, seq: Int, value: String, start: Int, end: Int) {}
             @JvmStatic @Implementation fun fieldFocused(id: Int, generation: Int, focused: Boolean) {}
+            @JvmStatic @Implementation fun fieldScrolled(id: Int, generation: Int, x: Int, y: Int) {}
             @JvmStatic @Implementation fun fieldSelected(id: Int, generation: Int, start: Int, end: Int) {}
             /** What exact2's thread was told of scrolling, in order: each move, and each drag's start and end. */
             val told = ArrayList<String>()

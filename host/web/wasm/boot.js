@@ -531,6 +531,12 @@ export async function main() {
         return 1;
       },
       read: (op, view, out) => host.geometry?.read(op, views.get(view), new Float64Array(host.memory.buffer, out, 4)) ?? 0,
+      scroll_metrics: (view, out) => {
+        const values = host.geometry?.scrollMetrics(views.get(view));
+        if (!values) return 0;
+        new Float64Array(host.memory.buffer, out, 6).set(values);
+        return 1;
+      },
       range: (view, start, end, out) => host.geometry?.range(views.get(view), start, end, new Float64Array(host.memory.buffer, out, 4)) ?? 0,
       point: (x, y) => {
         const el = host.geometry?.point(x, y)?.closest("[data-view]"), id = el && root.contains(el) ? Number(el.dataset.view) : NaN;

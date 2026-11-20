@@ -555,6 +555,7 @@ pub fn emit(plan: &Plan, site_attrs: bool, dev_reload: bool) -> Result<Output, S
         "x_frame",
         "x_measure",
         "x_rangeFrame",
+        "x_scrollMetrics",
         "x_elementFromPoint",
         "x_elementsFromPoint",
     ]

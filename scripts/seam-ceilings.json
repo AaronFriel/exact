@@ -1653,7 +1653,7 @@
         "host/apple/src/abi/exports.rs: exact_set_display_scale",
         "host/apple/src/abi/exports.rs: exact_set_fonts",
         "host/apple/src/abi/exports.rs: exact_set_inline_boxes",
-        "host/apple/src/abi/exports.rs: exact_set_inline_geometry",
+        "host/apple/src/abi/exports.rs: exact_set_text_geometry",
         "host/apple/src/abi/exports.rs: exact_set_launch_direction",
         "host/apple/src/abi/exports.rs: exact_set_launch_location",
         "host/apple/src/abi/exports.rs: exact_set_launch_place",

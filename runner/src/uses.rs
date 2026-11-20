@@ -813,6 +813,7 @@ fn stdlib_calls(plan: &Plan) -> (bool, bool, bool) {
                     Some(
                         Stdlib::Frame
                         | Stdlib::RangeFrame
+                        | Stdlib::ScrollMetrics
                         | Stdlib::Measure
                         | Stdlib::ElementFromPoint
                         | Stdlib::ElementsFromPoint

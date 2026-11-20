@@ -38,7 +38,7 @@ export const classifications = [
     "runner/src/runner/viewport.rs and page.rs settle facts of the live session, and geometry_facts.rs answers the geometry facts from its layout, counting their answers and a chain's commits; these entries carry no app/account operation identity. painted presenter/zoom.rs sync_zoom retains zoom state only for matching live node keys; settle_zoom reconciles authored values with the current gesture.", [
     ["apple:host/apple/src/abi/exports.rs",
       "exact_control_text_changed exact_insets exact_orientation_applied exact_resize exact_scrolled exact_segments exact_set_button_measure exact_set_console " +
-      "exact_set_control_text exact_set_display_scale exact_set_fonts exact_set_inline_boxes exact_set_inline_geometry exact_set_lines exact_set_measure exact_set_mode " +
+      "exact_set_control_text exact_set_display_scale exact_set_fonts exact_set_inline_boxes exact_set_text_geometry exact_set_lines exact_set_measure exact_set_mode " +
       "exact_set_page exact_set_place exact_set_preferences exact_set_root_font_size exact_set_symbol_measure exact_set_time exact_set_time_format exact_set_wake " +
       "exact_surface_record exact_text_scale_changed exact_timeline_scrolled exact_top_layer exact_transform_motion"],
     ["painted:host/painted/src/agent.rs", "prefer prefer_fold retell_offset"],
@@ -110,12 +110,12 @@ export const classifications = [
     "runner/src/runner/event.rs dispatches through a mounted view and its action binding; no independent operation identity is supplied. runner/advance.rs dispatch_at and advance/inputs.rs dispatch_at_with_receipt deliver input at the host clock after due timers. painted presenter/zoom.rs targets live zoomable nodes for pinch, wheel and double tap; canvas/scroll.rs and jni_scroll.rs forward shell gestures. contact.rs press_lifted validates the live activation target.", [
     ["apple:host/apple/src/abi/exports.rs", "exact_dispatch"],
     ["painted:host/painted/src/canvas/access.rs", "CanvasHost::access CanvasHost::access_act CanvasHost::access_off"],
-    ["painted:host/painted/src/canvas/field.rs", "CanvasHost::field_action CanvasHost::field_composing CanvasHost::field_edited CanvasHost::field_focused CanvasHost::field_input CanvasHost::field_selected"],
+    ["painted:host/painted/src/canvas/field.rs", "CanvasHost::field_action CanvasHost::field_composing CanvasHost::field_edited CanvasHost::field_focused CanvasHost::field_input CanvasHost::field_scrolled CanvasHost::field_selected"],
     ["painted:host/painted/src/canvas/input.rs", "CanvasHost::finger CanvasHost::scroll CanvasHost::touch CanvasHost::touching"],
     ["painted:host/painted/src/canvas/jni.rs",
       "Java_dev_exact_canvas_Native_accessAct Java_dev_exact_canvas_Native_fieldAction Java_dev_exact_canvas_Native_fieldComposing " +
       "Java_dev_exact_canvas_Native_fieldEdited Java_dev_exact_canvas_Native_fieldFocused Java_dev_exact_canvas_Native_fieldInput " +
-      "Java_dev_exact_canvas_Native_fieldSelected Java_dev_exact_canvas_Native_finger Java_dev_exact_canvas_Native_scroll Java_dev_exact_canvas_Native_touch " +
+      "Java_dev_exact_canvas_Native_fieldScrolled Java_dev_exact_canvas_Native_fieldSelected Java_dev_exact_canvas_Native_finger Java_dev_exact_canvas_Native_scroll Java_dev_exact_canvas_Native_touch " +
       "Java_dev_exact_canvas_Native_touching"],
     ["painted:host/painted/src/canvas/jni_keys.rs", "Java_dev_exact_canvas_Native_key Java_dev_exact_canvas_Native_namedKey"],
     ["painted:host/painted/src/canvas/jni_pad.rs", "Java_dev_exact_canvas_Native_pad"],
@@ -147,7 +147,7 @@ export const classifications = [
     ["painted:host/painted/src/presenter/hatch.rs", "Presenter::hatch_act"],
     ["painted:host/painted/src/presenter/hosted.rs",
       "Presenter::field_look Presenter::reader_field_action Presenter::reader_field_composing Presenter::reader_field_edited Presenter::reader_field_focused " +
-      "Presenter::reader_field_input Presenter::reader_field_selected"],
+      "Presenter::reader_field_input Presenter::reader_field_scrolled Presenter::reader_field_selected"],
     ["painted:host/painted/src/presenter/ime.rs", "Presenter::ime_begin Presenter::ime_commit Presenter::ime_end Presenter::ime_preedit Presenter::ime_target Presenter::ime_unconverted"],
     ["painted:host/painted/src/presenter/links.rs", "Presenter::follow Presenter::open_location"],
     ["painted:host/painted/src/presenter/picker.rs", "Presenter::open_document"],

@@ -32,7 +32,7 @@
 #include <stdint.h>
 
 /* The ABI's version: part of the compatibility id (LLP 1030 D3a). */
-#define EXACT_ABI_VERSION 19
+#define EXACT_ABI_VERSION 20
 
 #ifdef __cplusplus
 extern "C" {
@@ -670,7 +670,13 @@ void exact_scrolled(ExactRuntime rt, uint32_t page, uint32_t view, double left, 
 typedef struct { double x, y, width, height; uint32_t available; } ExactInlineFrame;
 typedef ExactInlineFrame (*ExactInlineFrameFn)(void *ctx, uint32_t view);
 typedef ExactInlineFrame (*ExactRangeFrameFn)(void *ctx, uint32_t view, uint32_t start, uint32_t end);
-void exact_set_inline_geometry(ExactRuntime rt, ExactInlineFrameFn read, ExactRangeFrameFn range, void *ctx);
+/* Writes scrollLeft, scrollTop, scrollWidth, scrollHeight, clientWidth and
+ * clientHeight in CSS pixels. Returns zero when the textarea is unavailable. */
+typedef uint32_t (*ExactScrollMetricsFn)(void *ctx, uint32_t view, double *six);
+void exact_set_text_geometry(ExactRuntime rt, ExactInlineFrameFn read, ExactRangeFrameFn range, ExactScrollMetricsFn metrics, void *ctx);
+static inline void exact_set_inline_geometry(ExactRuntime rt, ExactInlineFrameFn read, ExactRangeFrameFn range, void *ctx) {
+    exact_set_text_geometry(rt, read, range, NULL, ctx);
+}
 /* A textarea's decorations (LLP 1114.007): UTF-8 JSON {record, current, styles} in,
  * {provisional, spans, styles} out, valid until the next call on this thread; null when
  * the request does not parse. */

@@ -596,6 +596,14 @@ macro_rules! canvas_jni {
                 });
             }
 
+            /// The hosted editor's own scroll offset, in display pixels.
+            #[no_mangle]
+            pub extern "system" fn Java_dev_exact_canvas_Native_fieldScrolled(
+                _env: *mut JNIEnv, _class: jclass, id: jint, generation: jint, x: jint, y: jint,
+            ) {
+                with(|h| h.field_scrolled(id as u32, generation as u32, x, y));
+            }
+
             /// The reader's field `id` moved its selection with no edit.
             #[no_mangle]
             pub unsafe extern "system" fn Java_dev_exact_canvas_Native_fieldSelected(
