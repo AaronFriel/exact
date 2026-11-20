@@ -65,7 +65,18 @@ impl<D: DataSource> Presenter<D> {
         }
         let id = self.focus?;
         let field = self.brush.field_text.get(&id)?;
-        let next = field.reveal_cursor(self.field_cursor(id));
+        let key = self.host.kernel().node(id)?.key;
+        let next = self
+            .field_drag
+            .as_mut()
+            .and_then(|drag| drag.take_scroll(key, &field.value))
+            .map(|(x, y)| {
+                (
+                    x.clamp(0., field.scroll_max.0),
+                    y.clamp(0., field.scroll_max.1),
+                )
+            })
+            .unwrap_or_else(|| field.reveal_cursor(self.field_cursor(id)));
         if self.scroll_of(id) == next {
             return None;
         }
