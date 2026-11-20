@@ -198,7 +198,7 @@ mod tests {
     selected = s.text
   view
     column
-      text "Hello **world**. More words." testId="reader" markup="markdown" user-select="text" selectionchange=remember
+      text "One.\u2029Hello **world**. More words." testId="reader" markup="markdown" user-select="text" selectionchange=remember
         width=120 font-size=18
       text `Selection: ${selected}` testId="count"
 "#).unwrap().encode();

@@ -204,11 +204,12 @@ fn selection_drag_retires_on_cancel_value_change_or_focus_loss() {
 #[test]
 fn word_and_paragraph_units_preserve_unicode_and_password_privacy() {
     assert_eq!(range("🦀 two", 0, Unit::Word), (0, 2));
-    let value = "café 🦀 two\r\nnext";
+    let value = "café 🦀 two\r\nnext\u{2029}last";
     assert_eq!(range(value, 2, Unit::Word), (0, 4));
     assert_eq!(range(value, 5, Unit::Word), (5, 7));
     assert_eq!(range(value, 9, Unit::Word), (8, 11));
     assert_eq!(range(value, 9, Unit::Paragraph), (0, 13));
+    assert_eq!(range(value, 14, Unit::Paragraph), (13, 18));
     assert_eq!(range(value, 2, Unit::Password), (0, utf16_len(value)));
 }
 

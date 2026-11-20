@@ -133,9 +133,7 @@ impl Paragraph {
         (width, height): (f32, f32),
     ) -> (f32, f32) {
         let mut bottom = self.line_bottoms().last().copied().unwrap_or_default();
-        if value.ends_with([
-            '\n', '\r', '\u{1c}', '\u{1d}', '\u{1e}', '\u{85}', '\u{2029}',
-        ]) {
+        if value.ends_with(super::PARAGRAPH_BREAKS) {
             bottom += self.source.flow_box(std::iter::empty(), &[]).1;
         }
         (
@@ -253,12 +251,7 @@ impl Geometry {
         let mut after_cr = false;
         for (byte, c) in value.char_indices() {
             units += c.len_utf16() as u32;
-            if !masked
-                && matches!(
-                    c,
-                    '\n' | '\r' | '\u{1c}' | '\u{1d}' | '\u{1e}' | '\u{85}' | '\u{2029}'
-                )
-            {
+            if !masked && super::PARAGRAPH_BREAKS.contains(&c) {
                 let next = (byte + c.len_utf8(), units);
                 if c == '\n' && after_cr {
                     *hard_starts.last_mut().unwrap() = next

@@ -294,9 +294,7 @@ fn hard_lines(spec: &Spec) -> Vec<(usize, String, Pieces, Boxes, Empties)> {
         }
         let mut rest = run.text.as_str();
         while !rest.is_empty() {
-            let split = rest.find([
-                '\n', '\r', '\u{1c}', '\u{1d}', '\u{1e}', '\u{85}', '\u{2029}',
-            ]);
+            let split = rest.find(super::PARAGRAPH_BREAKS);
             let (piece, sep) = match split {
                 Some(at) => {
                     let ch = rest[at..].chars().next().expect("found");

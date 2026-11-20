@@ -54,11 +54,19 @@ pub(super) fn range(value: &str, at: u32, unit: Unit) -> (u32, u32) {
         Unit::Password => (0, utf16_len(value)),
         Unit::Paragraph => {
             let byte = byte_at(value, at);
-            let start = value[..byte].rfind('\n').map_or(0, |i| i + 1);
-            let end = value[byte..]
-                .find('\n')
-                .map_or(value.len(), |i| byte + i + 1);
-            (utf16_len(&value[..start]), utf16_len(&value[..end]))
+            let mut start = 0;
+            for (i, sep) in value.match_indices(crate::text::PARAGRAPH_BREAKS) {
+                let end = i + sep.len();
+                // CRLF is one paragraph break.
+                if sep == "\r" && value[end..].starts_with('\n') {
+                    continue;
+                }
+                if byte < end {
+                    return (utf16_len(&value[..start]), utf16_len(&value[..end]));
+                }
+                start = end;
+            }
+            (utf16_len(&value[..start]), utf16_len(value))
         }
         Unit::Word => {
             #[cfg(target_os = "windows")]
