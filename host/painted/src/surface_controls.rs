@@ -979,7 +979,12 @@ impl<D: DataSource> Presenter<D> {
             self.brush.ringless = ringless;
         }
         if moves {
-            if let Some(e) = self.set_focus_ring(focus, now_ms, false) {
+            let painted_field = focus.is_some_and(|id| {
+                self.host.kernel().node(id).is_some_and(|n| {
+                    n.node_type == NodeType::TextInput && !crate::fields::hosts(&n)
+                })
+            });
+            if let Some(e) = self.set_focus_press(focus, now_ms, !painted_field) {
                 eprintln!("exact: {e}");
             }
             self.queue_collections();

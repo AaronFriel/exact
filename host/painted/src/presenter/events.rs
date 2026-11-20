@@ -257,7 +257,7 @@ impl<D: DataSource> Presenter<D> {
         self.disabled_blur.push(id);
         let now = self.host.now();
         // Every event first, then one servicing, as a removed focus's path.
-        let (sent, mut error) = self.move_focus_serviced(None, now, false, None);
+        let (sent, mut error) = self.move_focus_serviced(None, now, false, None, true);
         if sent {
             error = error.or(self.sync_commit());
         }
@@ -446,7 +446,7 @@ impl<D: DataSource> Presenter<D> {
     /// Move the focus in DOM order, with both bubbling paths fixed before an
     /// action on either path can change the tree.
     pub(crate) fn set_focus(&mut self, next: Option<ViewId>, now_ms: f64) -> Option<String> {
-        self.move_focus_serviced(next, now_ms, true, None).1
+        self.move_focus_serviced(next, now_ms, true, None, true).1
     }
 
     pub(crate) fn set_focus_ring(
@@ -455,7 +455,21 @@ impl<D: DataSource> Presenter<D> {
         now_ms: f64,
         ring: bool,
     ) -> Option<String> {
-        self.move_focus_serviced(next, now_ms, true, Some(ring)).1
+        self.move_focus_serviced(next, now_ms, true, Some(ring), true)
+            .1
+    }
+
+    /// Pointer focus onto a painted field defers caret reveal until `press_field`
+    /// places the caret at the clicked point, so a horizontally scrolled field
+    /// does not jump to its previous caret before hit-testing.
+    pub(crate) fn set_focus_press(
+        &mut self,
+        next: Option<ViewId>,
+        now_ms: f64,
+        reveal: bool,
+    ) -> Option<String> {
+        self.move_focus_serviced(next, now_ms, true, Some(false), reveal)
+            .1
     }
 
     /// [`Self::set_focus`]; `service` false leaves its handlers' commits to the
@@ -468,6 +482,7 @@ impl<D: DataSource> Presenter<D> {
         now_ms: f64,
         service: bool,
         ring: Option<bool>,
+        reveal: bool,
     ) -> (bool, Option<String>) {
         if next.is_some_and(|id| !self.alert_allows(id)) {
             return (
@@ -504,7 +519,9 @@ impl<D: DataSource> Presenter<D> {
             .map(|id| self.host.runner().focus_bubble(id, previous, true))
             .unwrap_or_default();
         self.focus = next;
-        self.field_reveal = true;
+        if reveal {
+            self.field_reveal = true;
+        }
         if next.is_some() {
             self.pads_follow_focus();
         }

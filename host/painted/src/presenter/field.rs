@@ -466,6 +466,9 @@ impl<D: DataSource> Presenter<D> {
         {
             return;
         }
+        // Defer any pending caret reveal until after hit-testing against the
+        // text currently visible under the pointer.
+        let deferred_reveal = std::mem::take(&mut self.field_reveal);
         self.boxes();
         let (x, y) = self
             .boxes
@@ -483,6 +486,8 @@ impl<D: DataSource> Presenter<D> {
             if let Some(mark) = self.fields.get_mut(&id) {
                 mark.upstream = cursor.upstream;
             }
+        } else {
+            self.field_reveal |= deferred_reveal;
         }
     }
 
