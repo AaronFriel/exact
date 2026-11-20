@@ -1088,14 +1088,14 @@ impl Em<'_> {
                     .map(|(k, v)| format!(
                         "{}:{}",
                         serde_json::to_string(k).unwrap(),
-                        serde_json::to_string(v).unwrap()
+                        scope.operand(serde_json::to_string(v).unwrap())
                     ))
                     .collect::<Vec<_>>()
                     .join(",")
             )
         };
         let text = content
-            .map(|t| serde_json::to_string(&t).unwrap())
+            .map(|t| scope.operand(serde_json::to_string(&t).unwrap()))
             .unwrap_or("0".into());
         // An SVG node's element is in SVG's namespace (element.rs's tag).
         let h = self
@@ -1426,10 +1426,11 @@ impl Em<'_> {
             // Its arguments are evaluated in the action's commit (`.t`): one
             // that traps refuses it, as the runner's handler evaluation does
             // (LLP 1090 D1).
+            let action = scope.operand(format!("a_{}", h.action.0));
             let handler = if args.is_empty() {
-                format!("a_{}", h.action.0)
+                action
             } else {
-                format!("a_{}.t(()=>[{}])", h.action.0, args.join(","))
+                format!("{action}.t(()=>[{}])", args.join(","))
             };
             // The motion and input pieces' events (rt.js), only where used.
             let piece = crate::events::piece(h.event);

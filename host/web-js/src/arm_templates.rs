@@ -1,61 +1,84 @@
-//! Conditional arms are mount functions. Identical functions in the same lexical
-//! scope share code. Each call still creates its own elements and effects.
+//! Conditional arms share a mount function within their lexical scope. Root
+//! getters, handlers and literal props may differ at each call. The function
+//! takes those differences as arguments and creates fresh elements and effects.
 
 use super::Em;
 use crate::code::{self, Scope};
 use std::{collections::HashMap, fmt::Write as _, rc::Rc};
 
-#[derive(Hash, Eq, PartialEq)]
+#[derive(Clone, Hash, Eq, PartialEq)]
+enum Value {
+    Js(Rc<str>),
+    Param(usize),
+}
+
+#[derive(Clone, Hash, Eq, PartialEq)]
+struct Call {
+    id: usize,
+    base: Option<u32>,
+    args: Vec<Value>,
+}
+
+#[derive(Clone, Hash, Eq, PartialEq)]
 enum Part {
     Js(Box<str>),
     Site(u32),
-    Arm(usize, Option<u32>),
+    Value(Value),
+    Arm(Call),
 }
 
 impl Part {
     fn site(&mut self) -> Option<&mut u32> {
         match self {
-            Self::Site(n) | Self::Arm(_, Some(n)) => Some(n),
+            Self::Site(n) | Self::Arm(Call { base: Some(n), .. }) => Some(n),
             _ => None,
+        }
+    }
+    fn values(&mut self) -> &mut [Value] {
+        match self {
+            Self::Value(value) => std::slice::from_mut(value),
+            Self::Arm(call) => &mut call.args,
+            _ => &mut [],
+        }
+    }
+}
+
+struct Template {
+    body: Rc<[Part]>,
+    site: bool,
+    columns: Vec<Column>,
+}
+
+struct Column {
+    fixed: Option<Rc<str>>,
+    /// First occurrence with the same argument at every call seen so far.
+    first: usize,
+}
+
+impl Template {
+    fn observe(&mut self, args: &[Rc<str>]) {
+        let mut firsts = HashMap::new();
+        for (i, (column, arg)) in self.columns.iter_mut().zip(args).enumerate() {
+            if column.fixed.as_ref() != Some(arg) {
+                column.fixed = None;
+            }
+            column.first = *firsts.entry((column.first, arg)).or_insert(i);
         }
     }
 }
 
 #[derive(Default)]
 pub(super) struct Templates {
-    bodies: Vec<Rc<[Part]>>,
+    depth: usize,
+    bodies: Vec<Template>,
     index: HashMap<Rc<[Part]>, usize>,
+    calls: Vec<Call>,
 }
 
-// Intermediate operands live only in the emitter's buffer. The JavaScript
-// writer quotes strings, so even an authored NUL reaches the buffer escaped.
-fn parts(source: &str) -> Vec<Part> {
-    let mut result = Vec::new();
-    let mut slices = source.split('\0');
-    while let Some(js) = slices.next() {
-        if !js.is_empty() {
-            result.push(Part::Js(js.into()));
-        }
-        if let Some(operand) = slices.next() {
-            result.push(if let Some(site) = operand.strip_prefix('s') {
-                Part::Site(site.parse().expect("site"))
-            } else {
-                let (id, base) = operand
-                    .split_once(':')
-                    .map_or((operand, None), |(id, base)| {
-                        (id, Some(base.parse().expect("arm site")))
-                    });
-                Part::Arm(id.parse().expect("arm"), base)
-            });
-        }
-    }
-    result
-}
-
-/// A plan site at the call, or an offset from the shared function's parameter.
 #[derive(Clone, Copy)]
 enum Base {
     Absolute(u32),
+    Enclosing(u32),
     Relative(u32),
 }
 
@@ -63,111 +86,232 @@ impl Base {
     fn plus(self, n: u32) -> Base {
         match self {
             Self::Absolute(base) => Self::Absolute(base + n),
+            Self::Enclosing(base) => Self::Enclosing(base + n),
             Self::Relative(base) => Self::Relative(base + n),
         }
     }
 
-    fn write(self, out: &mut String) {
+    fn js(self) -> String {
         match self {
-            Self::Absolute(n) => write!(out, "{n}").unwrap(),
-            Self::Relative(0) => out.push_str("$site"),
-            Self::Relative(n) => write!(out, "$site+{n}").unwrap(),
+            Self::Absolute(n) => n.to_string(),
+            Self::Enclosing(n) => format!("\0s{n}\0"),
+            Self::Relative(0) => "$site".into(),
+            Self::Relative(n) => format!("$site+{n}"),
         }
     }
 }
 
 impl Templates {
-    pub fn arm(&mut self, source: String) -> String {
-        let mut body = parts(&source);
+    // The JS writer quotes authored strings, so source NULs arrive escaped.
+    fn parts(&self, source: &str) -> Vec<Part> {
+        let mut result = Vec::new();
+        let mut slices = source.split('\0');
+        while let Some(js) = slices.next() {
+            if !js.is_empty() {
+                result.push(Part::Js(js.into()));
+            }
+            if let Some(op) = slices.next() {
+                result.push(if let Some(site) = op.strip_prefix('s') {
+                    Part::Site(site.parse().expect("site"))
+                } else if let Some(js) = op.strip_prefix("v:") {
+                    Part::Value(Value::Js(js.into()))
+                } else {
+                    let i: usize = op.parse().expect("arm call");
+                    Part::Arm(self.calls[i].clone())
+                });
+            }
+        }
+        result
+    }
+
+    pub fn arm(&mut self, source: String, parent_site: u32) -> String {
+        let mut body = self.parts(&source);
+        // A region subject can report its enclosing element. Two uses under
+        // the same element move their descendants while keeping that site.
+        for part in &mut body {
+            if matches!(part, Part::Site(n) if *n == parent_site) {
+                *part = Part::Value(Value::Js(parent_site.to_string().into()));
+            }
+        }
         let base = body.iter_mut().filter_map(Part::site).map(|n| *n).min();
         if let Some(base) = base {
             for site in body.iter_mut().filter_map(Part::site) {
                 *site -= base;
             }
         }
+
+        let mut args = Vec::new();
+        for value in body.iter_mut().flat_map(Part::values) {
+            let i = args.len();
+            let Value::Js(js) = std::mem::replace(value, Value::Param(i)) else {
+                unreachable!()
+            };
+            args.push(js);
+        }
         let id = match self.index.get(body.as_slice()) {
             Some(&id) => id,
             None => {
                 let id = self.bodies.len();
-                let body = Rc::<[Part]>::from(body);
-                self.bodies.push(body.clone());
-                self.index.insert(body, id);
+                let body: Rc<[Part]> = body.into();
+                self.index.insert(body.clone(), id);
+                self.bodies.push(Template {
+                    body,
+                    site: base.is_some(),
+                    columns: args
+                        .iter()
+                        .map(|js| Column {
+                            fixed: Some(js.clone()),
+                            first: 0,
+                        })
+                        .collect(),
+                });
                 id
             }
         };
-        match base {
-            Some(base) => format!("\0{id}:{base}\0"),
-            None => format!("\0{id}\0"),
-        }
+        self.bodies[id].observe(&args);
+        let call = self.calls.len();
+        self.calls.push(Call {
+            id,
+            base,
+            args: args.into_iter().map(Value::Js).collect(),
+        });
+        format!("\0{call}\0")
     }
 
-    pub fn write(self, view: &str, out: &mut String) {
+    pub fn write(self, view: &str, enclosing: bool, out: &mut String) {
         if self.bodies.is_empty() && !view.contains('\0') {
             out.push_str(view);
             return;
         }
-        let view = parts(view);
+        let view = self.parts(view);
         let mut uses = vec![0usize; self.bodies.len()];
-        for part in self.bodies.iter().flat_map(|body| body.iter()).chain(&view) {
-            if let Part::Arm(id, _) = part {
-                uses[*id] += 1;
+        for part in self.bodies.iter().flat_map(|t| t.body.iter()).chain(&view) {
+            if let Part::Arm(call) = part {
+                uses[call.id] += 1;
             }
         }
         // Count edges in the shared graph. A child of one shared parent can
         // stay inline there, however often that parent is called.
-        let names: Vec<_> = uses
+        let names: Vec<_> = self
+            .bodies
             .iter()
             .enumerate()
-            .map(|(id, &n)| {
-                let name = format!("$v{id}");
-                let len: usize = self.bodies[id]
+            .map(|(i, t)| {
+                let name = format!("$v{i}");
+                let len: usize = t
+                    .body
                     .iter()
-                    .map(|p| match p {
-                        Part::Js(js) => js.len(),
-                        _ => 1,
-                    })
+                    .map(|p| if let Part::Js(js) = p { js.len() } else { 1 })
                     .sum();
+                let n = uses[i];
                 (n > 1 && (n - 1) * len > 8 + (n + 1) * name.len()).then_some(name)
             })
             .collect();
+        let render = Render {
+            templates: &self,
+            names: &names,
+            enclosing,
+        };
         let scoped = names.iter().any(Option::is_some);
         if scoped {
             out.push('{');
         }
         for (i, name) in names.iter().enumerate() {
             if let Some(name) = name {
-                write!(out, "const {name}=").unwrap();
-                if self.bodies[i]
-                    .iter()
-                    .any(|p| matches!(p, Part::Site(_) | Part::Arm(_, Some(_))))
-                {
-                    out.push_str("$site=>");
+                let t = &self.bodies[i];
+                let mut params = Vec::new();
+                if t.site {
+                    params.push("$site".to_string());
                 }
-                self.expand(&self.bodies[i], Base::Relative(0), &names, out);
+                let mut captures = HashMap::new();
+                let env = format!("$c{}", self.depth);
+                let values: Vec<_> = t
+                    .columns
+                    .iter()
+                    .map(|column| {
+                        if let Some(js) = &column.fixed {
+                            render.operand(js)
+                        } else {
+                            let next = captures.len();
+                            let index = captures.entry(column.first).or_insert(next);
+                            Rc::from(format!("{env}[{index}]"))
+                        }
+                    })
+                    .collect();
+                if !captures.is_empty() {
+                    params.push(env);
+                }
+                write!(out, "const {name}=").unwrap();
+                if !params.is_empty() {
+                    write!(out, "({})=>", params.join(",")).unwrap();
+                }
+                render.expand(&t.body, Base::Relative(0), &values, out);
                 out.push(';');
             }
         }
-        self.expand(&view, Base::Absolute(0), &names, out);
+        let base = if enclosing {
+            Base::Enclosing(0)
+        } else {
+            Base::Absolute(0)
+        };
+        render.expand(&view, base, &[], out);
         if scoped {
             out.push('}');
         }
     }
+}
 
-    fn expand(&self, body: &[Part], base: Base, names: &[Option<String>], out: &mut String) {
+struct Render<'a> {
+    templates: &'a Templates,
+    names: &'a [Option<String>],
+    enclosing: bool,
+}
+
+impl Render<'_> {
+    fn operand(&self, js: &Rc<str>) -> Rc<str> {
+        if self.enclosing {
+            Rc::from(format!("\0v:{js}\0"))
+        } else {
+            js.clone()
+        }
+    }
+
+    fn value(&self, value: &Value, args: &[Rc<str>]) -> Rc<str> {
+        match value {
+            Value::Js(js) => self.operand(js),
+            Value::Param(i) => args[*i].clone(),
+        }
+    }
+
+    fn expand(&self, body: &[Part], base: Base, args: &[Rc<str>], out: &mut String) {
         for part in body {
             match part {
                 Part::Js(js) => out.push_str(js),
-                Part::Site(n) => base.plus(*n).write(out),
-                Part::Arm(id, site) => {
-                    if let Some(name) = &names[*id] {
+                Part::Site(n) => out.push_str(&base.plus(*n).js()),
+                Part::Value(value) => out.push_str(&self.value(value, args)),
+                Part::Arm(call) => {
+                    let t = &self.templates.bodies[call.id];
+                    if let Some(name) = &self.names[call.id] {
                         out.push_str(name);
-                        if let Some(site) = site {
-                            out.push('(');
-                            base.plus(*site).write(out);
-                            out.push(')');
+                        let mut inputs: Vec<_> =
+                            call.base.map(|n| base.plus(n).js()).into_iter().collect();
+                        let captures: Vec<_> = t
+                            .columns
+                            .iter()
+                            .enumerate()
+                            .filter(|(i, column)| column.fixed.is_none() && column.first == *i)
+                            .map(|(i, _)| self.value(&call.args[i], args))
+                            .collect();
+                        if !captures.is_empty() {
+                            inputs.push(format!("[{}]", captures.join(",")));
+                        }
+                        if !inputs.is_empty() {
+                            write!(out, "({})", inputs.join(",")).unwrap();
                         }
                     } else {
-                        self.expand(&self.bodies[*id], base.plus(site.unwrap_or(0)), names, out);
+                        let values: Vec<_> =
+                            call.args.iter().map(|v| self.value(v, args)).collect();
+                        self.expand(&t.body, base.plus(call.base.unwrap_or(0)), &values, out);
                     }
                 }
             }
@@ -213,10 +357,15 @@ impl Em<'_> {
             return render(self);
         }
         let outer = std::mem::take(&mut self.arm_templates);
+        self.arm_templates.depth = outer.depth + 1;
         let saved = std::mem::take(&mut self.out);
         render(self)?;
         let built = std::mem::replace(&mut self.out, saved);
-        std::mem::replace(&mut self.arm_templates, outer).write(&built, &mut self.out);
+        std::mem::replace(&mut self.arm_templates, outer).write(
+            &built,
+            self.arm_element.is_some(),
+            &mut self.out,
+        );
         Ok(())
     }
 }

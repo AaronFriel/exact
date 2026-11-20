@@ -32,6 +32,10 @@ pub struct Scope {
     /// JavaScript getters for the enclosing region frames, innermost last:
     /// (item, index, bound).
     pub frames: Vec<Frame>,
+    /// Arm-owned derives are lexical bindings. Their local names are independent of the plan row.
+    pub local_derives: std::rc::Rc<BTreeMap<usize, String>>,
+    /// Release mount functions can take root getters, handlers and literals as arguments.
+    pub capture: bool,
     /// Whether this is an action body (writes and commands are allowed).
     pub action: bool,
     /// A shared at-read body accepts its reader's budget.
@@ -45,6 +49,23 @@ pub struct Scope {
     /// plan has a child's resource (LLP 1035.005.004 D8): each region
     /// crossed, with its arm or its row's key.
     pub path: Option<String>,
+}
+
+impl Scope {
+    pub fn operand(&self, js: String) -> String {
+        if self.capture {
+            format!("\0v:{js}\0")
+        } else {
+            js
+        }
+    }
+
+    pub fn derive(&self, i: usize) -> String {
+        self.local_derives
+            .get(&i)
+            .cloned()
+            .unwrap_or_else(|| self.operand(format!("d_{i}")))
+    }
 }
 
 /// One region frame's getters.
@@ -481,8 +502,11 @@ impl Translator<'_> {
                 depth_at.push((target, me.stack.len(), me.locals));
             };
             match x.op {
-                Opcode::Number => self.push(number(x.number)),
-                Opcode::Bool => self.push(if x.args[0] != 0 { "!0" } else { "!1" }.into()),
+                Opcode::Number => self.push(self.scope.operand(number(x.number))),
+                Opcode::Bool => self.push(
+                    self.scope
+                        .operand(if x.args[0] != 0 { "!0" } else { "!1" }.into()),
+                ),
                 Opcode::Str => {
                     let s = self.plan.str(exact_plan::StrId(x.args[0] as u32));
                     let s = serde_json::to_string(s).unwrap();
@@ -492,7 +516,7 @@ impl Translator<'_> {
                     } else {
                         s
                     };
-                    self.push(s)
+                    self.push(self.scope.operand(s))
                 }
                 Opcode::None | Opcode::Unit => self.push("null".into()),
                 Opcode::Some | Opcode::Unwrap => {}
@@ -504,22 +528,28 @@ impl Translator<'_> {
                             .rows
                             .clone()
                             .ok_or("a row slot read with no row in force")?;
-                        self.push(format!("{rows}[{}]()", x.args[0]))
+                        self.push(format!(
+                            "{rows}[{}]()",
+                            self.scope.operand(x.args[0].to_string())
+                        ))
                     } else {
-                        self.push(format!("s_{}()", x.args[0]))
+                        self.push(format!(
+                            "{}()",
+                            self.scope.operand(format!("s_{}", x.args[0]))
+                        ))
                     }
                 }
                 Opcode::LoadDerive => {
                     if self.plan.unsettled_body(x.args[0] as u32).is_some() {
                         self.uses.budget("$enter");
                         self.push(format!(
-                            "d_{}({},{})",
-                            x.args[0],
+                            "{}({},{})",
+                            self.scope.derive(x.args[0] as usize),
                             if self.shared { "$budget" } else { "undefined" },
                             x.pc
                         ));
                     } else {
-                        self.push(format!("d_{}()", x.args[0]));
+                        self.push(format!("{}()", self.scope.derive(x.args[0] as usize)));
                     }
                 }
                 Opcode::LoadResource => {
@@ -734,7 +764,7 @@ impl Translator<'_> {
                             .rows
                             .clone()
                             .ok_or("a row slot write with no row in force")?;
-                        format!("{rows}[{}]", x.args[0])
+                        format!("{rows}[{}]", self.scope.operand(x.args[0].to_string()))
                     } else {
                         format!("s_{}", x.args[0])
                     };
@@ -949,6 +979,11 @@ pub fn number(n: f64) -> String {
 /// Whether a translated expression is a primitive literal, so `===` is the
 /// VM's equality for it.
 fn primitive(e: &str) -> bool {
+    let e = e
+        .strip_prefix("\0v:")
+        .and_then(|operand| operand.strip_suffix('\0'))
+        .filter(|operand| !operand.contains('\0'))
+        .unwrap_or(e);
     e.starts_with('"')
         || e.starts_with("$$s")
         || e == "!0"
