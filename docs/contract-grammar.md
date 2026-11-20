@@ -1803,8 +1803,8 @@ makes no network requests.
   on the web, Markdown shown as it reads, with the syntax hidden away from the
   caret; on macOS and iOS, the platform's text view with the syntax dimmed and
   each link's `](destination)` hidden, as the web hides it. Linux, Windows and
-  Android edit it as a plain textarea of the source, and `format` changes
-  nothing there. Without `markup` the same source is a plain textarea: the
+  Android edit the source as plain text. `setSelectionRange` selects source
+  offsets. `format` and `setRangeText` report a refusal in the app log. Without `markup` the same source is a plain textarea: the
   source mode.
 - A thematic break (`---`) is drawn in the colour of the text around it,
   dimmed, so that it reads on a dark ground as on a light one: on the web a
@@ -2700,7 +2700,8 @@ handler of a press that focuses the field stays once the press ends, as in
 Chrome (an address bar selects its URL as a click focuses it); a press that
 drags or double-clicks keeps what it selected.
 
-On **web (JS and wasm), macOS, iOS and Linux**, `setRangeText(id, text)` replaces the
+On **web (JS and wasm), macOS, iOS, Linux, Windows and Android**,
+`setRangeText(id, text)` on a plain text field replaces the
 current selection; `setRangeText(id, text, start, end[, selectionMode])`
 replaces the given UTF-16 range. `selectionMode` is `preserve` by default,
 or `select`, `start`, `end`, following HTML. It does not focus the field or
@@ -2713,8 +2714,9 @@ app's own is, clearing only that field's undo history. On the web it is HTML's,
 which Chrome makes no undo step, and Linux keeps no field undo history. Invalid
 ranges, modes, unsupported input types and missing ids log a refusal without editing. On the Markdown
 editor (web, macOS and iOS) the offsets are the source's and each call is one
-undo step ([Markdown](#markdown-markup-format-select)); Linux refuses it there.
-Windows, Android and terminal do not support this command yet.
+undo step ([Markdown](#markdown-markup-format-select)). Linux, Windows and
+Android refuse range replacement in Markdown textareas. The terminal host
+refuses the command for every field.
 
 **Deliberate deviation (Charlie, 2026-10-12):** unlike the DOM method,
 Exact fires one noncancelable `input` after a successful replacement, even

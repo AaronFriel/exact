@@ -6951,7 +6951,7 @@ long press or a double tap selects a word of text its author made selectable
 selected (under `--touch platform`, `tap <id> drag 0 0 press 900` is a real
 long press).
 
-For a plain text field on the **web, macOS, iOS and Linux**, `setRangeText(id, text[, start,
+For a plain text field on the **web, macOS, iOS, Linux, Windows and Android**, `setRangeText(id, text[, start,
 end[, selectionMode]])` replaces its selection or a UTF-16 range. Selection
 is preserved by default (`select`, `start`, `end` are the other modes).
 Exact deliberately fires one `input` so its action can update the bound
@@ -6961,7 +6961,10 @@ type also covers hatch replacements and browser spelling
 corrections, so it does not uniquely identify this command. `select` follows
 input only when the selection changes. URL inputs trim surrounding ASCII
 whitespace. Markdown editors on web and Apple use source offsets and add one
-undo step. Windows, Android and terminal do not support it yet. Field
+undo step. On Linux, Windows and Android, range replacement requires a plain
+field. To edit and preview Markdown there, bind a plain textarea and a
+`text markup="markdown"` reader to the same string. The terminal host
+refuses `setRangeText`. Field
 `selectionchange` reports caret moves through `InputEvent`, and
 `beforeinput` reports the proposed edit's `inputType` and optional `data`.
 Call `preventDefault()` to reject a cancelable edit; composition events
